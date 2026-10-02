@@ -45,6 +45,8 @@
 上記は提案スキーマの例であり、稼働中製品の設定形式ではない。
 色空間の指定がない色入力（`#F59E0B` など）は sRGB として解釈し、保存時に `{space, components}` の明示表現へ正規化する（[ADR-0024](../adr/0024-working-color-space.md)）。
 
+色入力は straight RGB と独立 alpha（省略時 1）で、作業空間の値と取り違えない（[ADR-0044](../adr/0044-color-and-alpha-contracts.md)）。Number 入力の単位・範囲は bind 先の Property と整合させ、秒・設計単位・度・倍率を暗黙に混用しない（[ADR-0043](../adr/0043-semantic-dependencies-and-units.md)）。
+
 ## 実装段階
 
 | 段階 | タスク | 内容 |

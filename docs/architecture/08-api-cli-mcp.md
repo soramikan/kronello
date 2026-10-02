@@ -48,6 +48,8 @@ inspect -> draft operations -> edit.plan -> preview(candidate snapshot)
 
 要求と応答の JSON は、版付きの公開スキーマに従う（[ADR-0029](../adr/0029-public-json-schema.md)）。
 
+文書値の型定義は共有するが、要求・応答の envelope をプロジェクト全体と同じ形にする規約ではない。構造・意味・実行能力を分けて判定し、未知内容の保持と安全な変更の条件は [ADR-0045](../adr/0045-snapshot-compatibility-boundaries.md) に従う。`capabilities.get` と `project.validate` は render compile / worker と共通の互換性判定を使う。
+
 ### ジョブ
 
 `render.submit` はジョブを記録して worker プロセスを切り離して起動し、すぐに job ID を返す。`job.cancel` で取り消し、`job.resume` で中断したジョブを再開し、`job.prune` で古いジョブディレクトリを掃除する。詳細は [14 ジョブ](14-jobs.md)。

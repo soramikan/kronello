@@ -11,6 +11,17 @@ Property<T> = Source + ordered Modifiers<T>
 
 位置、回転、スケール、不透明度、色、線幅、マスク、エフェクト、公開入力は同じ Property 基盤に乗せる。
 
+### 単位と範囲
+
+[ADR-0043](../adr/0043-semantic-dependencies-and-units.md)「単位と座標」に従い、Property の descriptor に単位・座標空間・有効範囲を宣言する。
+
+- 位置・anchor・Path・線幅・フォントサイズ・余白・bounds は設計単位 `design_px`。Composition の左上原点、+X は右、+Y は下とし、ノード内容はローカル座標で保持する。
+- rotation / skew は度、scale は無次元倍率（1 が等倍）。+rotation は画面上の時計回りで、連続角を剰余化しない。
+- opacity / alpha / coverage は有限の `[0, 1]`。非有限値・範囲違反はエラーにし、暗黙に clamp しない。範囲を制限する Modifier は明示する。
+- 保存 Color は色空間タグ付き straight RGB と独立 alpha。線形 RGB は負値・1 超を許す（[ADR-0044](../adr/0044-color-and-alpha-contracts.md)）。
+
+組版に必要な Property と、確定した Layout bounds を読む下流 Property は依存 DAG で分ける。意味的な結果を入力として渡し、animation / expr から layout / scene / render への循環 import を作らない。
+
 ## 変換
 
 編集時の変換は 2D で次のとおり定義する。
@@ -27,7 +38,7 @@ T(position) * R(rotation) * K(skew) * S(scale) * T(-anchor)
 |---|---|
 | Scalar / Vec2 / Vec3 | Hold / Linear / Cubic |
 | Angle | 巻き戻さない連続角。0→720 度の 2 回転を保持 |
-| Color | 補間色空間を明示。既定は作業用線形空間 |
+| Color | 補間色空間を明示。既定は作業用線形空間の straight RGB と alpha の独立補間（ADR-0044）。画像の premultiplied フィルタリングとは区別 |
 | Bool / Enum / String / AssetRef | 離散切り替えのみ |
 | Path | 点数・セグメント型・対応が一致する場合のみ morph |
 | Transform3D | 将来の独立型。Quaternion 等の意味を版管理 |

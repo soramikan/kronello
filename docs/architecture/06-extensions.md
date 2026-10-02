@@ -14,6 +14,8 @@
 通常のアニメーションは `value = f(snapshot, time, instance)`。
 状態を要する粒子等だけ `state(k+1) = step(state(k), inputs(k))`。
 
+通常 Property の純粋評価・依存境界は [ADR-0043](../adr/0043-semantic-dependencies-and-units.md) に従う。Simulation の状態・アルゴリズム版は snapshot の `semantic_versions` に固定し、未対応の必要機能は最終レンダーで拒否する（[ADR-0045](../adr/0045-snapshot-compatibility-boundaries.md)）。
+
 - 固定刻み、固定 seed、版付き状態、入力ハッシュ、チェックポイントを使う。
 - シーク時は必要な時刻より前の有効な checkpoint から再計算する。
 - 逆再生は元の正方向シミュレーション時刻を参照し、数値積分を逆方向に巻き戻さない。
@@ -41,3 +43,5 @@
 - 2D の描画順と 3D の depth / transparency 処理を同一の z 値だけで統一しない。
 - 将来の glTF、キャラクター等は明示した 3D 境界から取り込み、外部レンダラーの色・alpha・必要な補助チャンネルを合成できるようにする。
 - フル 3D、リグ、物理、パストレーサーを動画編集 MVP の必須条件にしない。
+
+外部レンダーの Color 入力にも [ADR-0044](../adr/0044-color-and-alpha-contracts.md) の色空間・alpha 表現・変換順を適用する。3D の座標軸・変換型の詳細は本段階では固定しない。補助チャンネルや未知ノードを保持できることと、描画できることは区別する。
