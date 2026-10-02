@@ -5,7 +5,7 @@ Kronello は Rust / FFmpeg / wgpu を基盤とする動画編集・モーショ�
 
 ## 現在の状態
 
-- 設計段階。コードはまだない（`crates/`、`apps/` は未作成）。
+- 実装基盤を整備済み。Cargo workspace と `kronello-time` / `kronello-model` の骨格、CI 設定がある。機能実装・`apps/` は未着手。
 - 文書中の API・CLI・スキーマは提案であり、実装済みと書かない・扱わない。
 
 ## 最初に読むもの
@@ -21,6 +21,13 @@ Kronello は Rust / FFmpeg / wgpu を基盤とする動画編集・モーショ�
 - 識別子、コード、コードコメント、コミットメッセージは英語。
 - 型名・API 名・エラーコード（`UNSUPPORTED_FEATURE` など）は文書内でも英語のまま書く。
 - 名称は `kronello` に統一する: CLI は `kronello`、crate は `kronello-*`、プロジェクトファイルは `.kronello`。旧称 `ved`、`koma`、`cinewright` を新しく書かない。
+
+## Rust と検証
+
+- Rust 1.95.0 / edition 2024 を使い、`Cargo.lock` を管理する。
+- 新しい crate は `[workspace.package]` の設定と `[workspace.lints]` を継承する。純粋層の `unsafe_code = "forbid"` を緩めない。
+- `cargo fmt --all --check`、`cargo clippy --workspace --all-targets --locked -- -D warnings`、`cargo test --workspace --locked` を通す。
+- 意味的比較は通常のテストに含める。GPU 画素の固定環境比較は [golden 比較手順](docs/testing/golden-comparison.md)（GPU-001 / QA-001 向けの提案）に従う。
 
 ## タスクの進め方
 

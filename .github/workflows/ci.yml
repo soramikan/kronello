@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  macos:
+    name: macOS (Apple Silicon)
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: Verify Apple Silicon
+        run: test "$(uname -m)" = arm64
+      - name: Install pinned Rust toolchain
+        run: |
+          rustup show
+          rustc --version --verbose
+      - name: Cache Cargo dependencies and build artifacts
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: cargo-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', '**/Cargo.toml', 'Cargo.lock') }}
+      - name: Check formatting
+        run: cargo fmt --all --check
+      - name: Lint with warnings denied
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Install fixture generation tools
+        run: brew list ffmpeg >/dev/null 2>&1 || brew install ffmpeg
+      - name: Fetch hash-pinned test fixtures
+        run: python3 scripts/fetch_fixtures.py
+      - name: Generate and validate fixtures
+        run: |
+          python3 scripts/fixtures.py generate
+          python3 scripts/fixtures.py check --generated target/fixtures/generated
+          python3 -m unittest discover -s scripts/tests -v
+      - name: Run workspace tests
+        run: cargo test --workspace --locked
+      - name: Validate backlog
+        run: python3 scripts/backlog.py check
+
+  linux-software-vulkan:
+    name: Linux (Mesa lavapipe)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      WGPU_BACKEND: vulkan
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: Install and select Mesa lavapipe
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes mesa-vulkan-drivers vulkan-tools
+          lavapipe_icd="$(find /usr/share/vulkan/icd.d -maxdepth 1 -name 'lvp_icd*.json' -print)"
+          test -f "$lavapipe_icd"
+          export VK_DRIVER_FILES="$lavapipe_icd"
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/kronello-xdg"
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          printf 'VK_DRIVER_FILES=%s\n' "$VK_DRIVER_FILES" >> "$GITHUB_ENV"
+          printf 'XDG_RUNTIME_DIR=%s\n' "$XDG_RUNTIME_DIR" >> "$GITHUB_ENV"
+          vulkaninfo --summary | tee "$RUNNER_TEMP/kronello-vulkan-summary.txt"
+          grep -Eq 'deviceType[[:space:]]*=[[:space:]]*PHYSICAL_DEVICE_TYPE_CPU' "$RUNNER_TEMP/kronello-vulkan-summary.txt"
+          grep -Eq 'driverName[[:space:]]*=[[:space:]]*(llvmpipe|lavapipe)' "$RUNNER_TEMP/kronello-vulkan-summary.txt"
+      - name: Install pinned Rust toolchain
+        run: |
+          rustup show
+          rustc --version --verbose
+      - name: Cache Cargo dependencies and build artifacts
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: cargo-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', '**/Cargo.toml', 'Cargo.lock') }}
+      - name: Check formatting
+        run: cargo fmt --all --check
+      - name: Lint with warnings denied
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Install fixture generation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ffmpeg
+      - name: Fetch hash-pinned test fixtures
+        run: python3 scripts/fetch_fixtures.py
+      - name: Generate and validate fixtures
+        run: |
+          python3 scripts/fixtures.py generate
+          python3 scripts/fixtures.py check --generated target/fixtures/generated
+          python3 -m unittest discover -s scripts/tests -v
+      - name: Run workspace tests
+        run: cargo test --workspace --locked
+      - name: Validate backlog
+        run: python3 scripts/backlog.py check
