@@ -37,7 +37,9 @@ T(position) * R(rotation) * K(skew) * S(scale) * T(-anchor)
 
 ## 式
 
-最初は型付き AST と許可された組み込み関数で実装する。人間向け DSL は後から同じ AST へ変換する。
+最初は型付き AST と許可された組み込み関数で実装する。式の正本は常に AST である。
+
+人間向けには、中置演算と関数呼び出しだけの小さな式言語を後から追加する（[ADR-0040](../adr/0040-expression-language-policy.md)）。文・ループ・代入は持たず、AST と一対一に往復でき、JavaScript 互換にはしない。構文の詳細は未決（[OQ-17](../open-questions.md)）。
 
 対象とする機能:
 

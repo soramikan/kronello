@@ -4,11 +4,11 @@
 
 [ADR-0015](../adr/0015-macos-first-platform-priority.md) により macOS (Apple Silicon) を先行する。
 
-| プラットフォーム | GPU | デコード / エンコード | 保証水準（M2 時点の目標） |
-|---|---|---|---|
-| macOS (Apple Silicon) | Metal | VideoToolbox | 第一級。GPU 常駐経路の保証を最初に昇格 |
-| Windows | D3D12 / Vulkan | 未定 | 互換経路（CPU 往復を許容）で CI を通す |
-| Linux | Vulkan | 未定 | 互換経路（CPU 往復を許容）で CI を通す |
+| プラットフォーム | GPU | デコード / エンコード | GUI | 保証水準（M2 時点の目標） |
+|---|---|---|---|---|
+| macOS (Apple Silicon) | Metal | VideoToolbox | SwiftUI / AppKit（M3） | 第一級。GPU 常駐経路の保証を最初に昇格 |
+| Windows | D3D12 / Vulkan | 未定 | WinUI 3（macOS 版の後） | 互換経路（CPU 往復を許容） |
+| Linux | Vulkan | 未定 | GTK4（macOS 版の後） | 互換経路（CPU 往復を許容）で CI を通す |
 
 「互換経路」でも結果の意味は同じでなければならない。差が出るのは転送コストと速度であり、`render.explain` で使用経路を報告する。
 
@@ -24,7 +24,28 @@
 - 利用者が自分で別構成の FFmpeg に差し替えることは妨げない。実行時に検出した codec / hwaccel を `capabilities.get` で報告し、存在しないものを対応済みと表示しない。
 - 通常の API から任意の FFmpeg 引数を渡せるようにしない（[08 API・CLI・MCP](08-api-cli-mcp.md)）。
 
-未決: 同梱かシステムのものを使うか、対応する版の範囲（[OQ-13](../open-questions.md)）。ハードウェアエンコーダーがない環境の既定エンコーダー（[OQ-12](../open-questions.md)）。
+### 配布
+
+[ADR-0036](../adr/0036-ffmpeg-distribution.md) による。
+
+- リリースの配布物には、版と構成を固定した LGPL ビルドの共有ライブラリを同梱する。
+- ビルドスクリプトと native dependencies manifest（版、configure オプション、hash）をリポジトリで管理する。
+- 開発時は、pkg-config で見つけたシステムの FFmpeg でもビルドできる。システムの FFmpeg は GPL 構成のことが多いため、リリース前の検証は同梱ビルドで行う。
+- 対応する FFmpeg は単一のメジャー版に固定する。
+- 利用者は環境変数で別の FFmpeg に差し替えられる。
+
+### エンコーダー
+
+[ADR-0035](../adr/0035-software-encoders.md) による。
+
+| 用途 | エンコーダー | 提供条件 |
+|---|---|---|
+| 配信用（H.264 / HEVC） | OS・ハードウェアのエンコーダー（macOS では VideoToolbox） | 利用できる環境のみ |
+| 配信用（AV1） | SVT-AV1（ソフトウェア） | 常に。同梱する FFmpeg に含める |
+| 中間・納品用 | FFmpeg 内蔵の ProRes | 常に |
+| 画像連番 | — | 常に |
+
+H.264 / HEVC のエンコーダーがない環境で要求された場合は `ENCODER_UNAVAILABLE` を返し、代替を案内する。音声コーデックの選定は AUDIO-000 で行う。
 
 ## 主な Rust 依存の候補
 
@@ -47,5 +68,5 @@ Cinewright 本体は `MIT OR Apache-2.0`（[ADR-0019](../adr/0019-dual-license-m
 
 - 依存 crate は MIT / Apache-2.0 / BSD 系など、デュアルライセンスと両立するものに限る。GPL / AGPL の依存を追加しない。
 - LGPL の FFmpeg は動的リンクとし、利用者が差し替えられる状態を保つ。配布物には FFmpeg のライセンス表示と入手方法を含める。
-- H.264 / HEVC などのコーデックには特許ライセンスの論点がある。OS のエンコーダーを使う経路を主とし、それ以外は [OQ-12](../open-questions.md) で扱う。
-- フォントとテスト素材の権利確認は [OQ-16](../open-questions.md)。
+- H.264 / HEVC などのコーデックには特許ライセンスの論点がある。H.264 / HEVC は OS・ハードウェアのエンコーダーがある場合だけ提供し、ソフトウェアエンコードは AV1 と ProRes とする。
+- テスト素材は生成したものと CC0 / 自作に限り、フォントは OFL のものを使う（[ADR-0039](../adr/0039-test-fixtures.md)）。

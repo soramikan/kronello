@@ -4,7 +4,7 @@
 
 | 段階 | 成果物 | 主な完了条件 | タスク数 |
 |---|---|---|---:|
-| M0 | 基盤契約・テスト素材・技術スパイク | 有理数時刻 / ID / Property / 色 / alpha 規約、2D title から GPU 出力の最短経路（macOS） | 5 |
+| M0 | 基盤契約・テスト素材・CI・技術スパイク | 有理数時刻 / ID / Property / 色 / alpha 規約、ツールチェーンと CI、2D title から GPU 出力の最短経路（macOS） | 6 |
 | M1 | Headless 2D Motion Core | Shape / Text / Group / Null、キーフレーム、任意時刻レンダー、画像連番 | 10 |
 | M2 | NLE 統合・CLI / MCP | CompositionClip、日本語 title、基本音声、基本エフェクト、固定 snapshot、計画 / 適用、書き出し、縦断デモ第 1 段階 | 10 |
 | M3 | 実用的な Motion Authoring | macOS ネイティブ GUI（canvas / curve editor）、テンプレート拡張、基本式、responsive layout、リアルタイム再生、縦断デモ第 2 段階 | 10 |

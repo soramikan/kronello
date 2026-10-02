@@ -1,6 +1,6 @@
 # 名称の衝突調査
 
-調査日: 2026-10-02。結論は [ADR-0023](adr/0023-naming-cinewright.md)（名称を Cinewright に変更）。
+調査日: 2026-10-02。[ADR-0023](adr/0023-naming-cinewright.md) で名称を Cinewright に変更したが、その後の追加調査を受けて再検討中（[OQ-02](open-questions.md)）。
 
 調べた範囲は crates.io、npm、PyPI、Homebrew（formula / cask）、GitHub のリポジトリ検索、Web 検索。
 **商標データベース（J-PlatPat、USPTO、EUIPO）は照会していない。** public にする前に確認する（[OQ-02](open-questions.md)）。
@@ -27,7 +27,10 @@
 
 実行ファイル名の衝突と、同じ分野の既存製品との混同の両方があるため撤回した。
 
-## `cinewright`（採用）
+## `cinewright`（採用後に再検討）
+
+採用時の検索は他の候補名と OR でまとめていたため、同名の事業者を見落とした。単独で検索し直して見つかったため、名称を再検討することにした（[OQ-02](open-questions.md)）。以後の調査では、候補ごとに単独で Web 検索し、主要ドメインも確認する。
+
 
 | 対象 | 結果 |
 |---|---|
@@ -36,7 +39,8 @@
 | PyPI | 未登録 |
 | Homebrew | formula / cask ともなし |
 | GitHub | 同名のリポジトリは検索に現れず |
-| Web 検索 | 同名の製品・サービスは見つからず |
+| Web 検索（採用時） | 他の候補とまとめた検索では同名の製品・サービスが見つからなかった |
+| Web 検索（採用後、単独で再検索） | **同名の事業者あり。** 米国メイン州の [Cinewright](https://cinewright.com/who-we-are/)（cinewright.com）。ドキュメンタリー映画制作のワークショップを運営。ソフトウェアは提供していない。サイト上に ™ / ® の表記は見当たらないが、商標登録の有無は未確認 |
 
 拡張子:
 

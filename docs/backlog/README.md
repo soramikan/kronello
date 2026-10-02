@@ -37,6 +37,19 @@ python3 scripts/backlog.py render
 | `dependencies` | 先に完了している必要があるタスクの ID |
 | `acceptance_criteria` | 完了の判定条件。すべて確認できて初めて `done` |
 
+## 0.4 からの変更（schema_version 0.5）
+
+ADR-0027〜0041 の決定を反映した。50 → 51 タスク。
+
+- 追加: CI-001（M0、ツールチェーン固定と CI）。
+- STORE-001: WAL と安全モード、公開 JSON スキーマの export / import、`history.compact`。
+- MEDIA-001: 素材の解決と再リンク、ソフトウェアエンコーダー、同梱 FFmpeg の manifest。
+- FFI-001 / GUI-001: C ABI + JSON、UI 状態の保存先。
+- JOB-001: ジョブディレクトリの掃除。
+- QA-001: テスト素材の方針。
+- EXPR-001: AST を正本とする構造。
+- COLOR-001: HDR の方針。
+
 ## 0.3 からの変更（schema_version 0.4）
 
 色・ジョブ・Undo の決定（ADR-0024〜0026）を受け入れ条件へ反映した。タスク数は 50 のまま。

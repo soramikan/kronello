@@ -2,15 +2,15 @@
 
 <!-- このファイルは scripts/backlog.py render が生成する。直接編集しない。正本は backlog.json。 -->
 
-- schema_version: 0.4
+- schema_version: 0.5
 - 更新日: 2026-10-02
-- タスク数: 50
+- タスク数: 51
 
 ## 集計
 
 | マイルストーン | planned | in_progress | done | dropped | 計 |
 |---|---:|---:|---:|---:|---:|
-| M0 | 5 | 0 | 0 | 0 | 5 |
+| M0 | 6 | 0 | 0 | 0 | 6 |
 | M1 | 10 | 0 | 0 | 0 | 10 |
 | M2 | 10 | 0 | 0 | 0 | 10 |
 | M3 | 10 | 0 | 0 | 0 | 10 |
@@ -62,6 +62,18 @@
 - 受け入れ条件:
   - 日本語・alpha・異なるfps・VFR・HDRの権利確認済みfixtureを用意する
   - 固定環境の画像比較と意味的比較を別に定義する
+  - 素材は生成またはCC0/自作、フォントはOFLに限り、出典とライセンスを台帳に記録する
+  - 大きい素材はhash固定の取得スクリプトで取得し、取得失敗時は該当テストを失敗として扱う
+
+### CI-001 ツールチェーン固定とCI
+
+- 優先度: P0 / 領域: infra / 状態: planned
+- 依存: ARC-001
+- 受け入れ条件:
+  - rust-toolchain.tomlでstableの特定版に固定し、edition 2024とする
+  - rustfmtとclippy(警告をエラー扱い)をCIで必須にする
+  - GitHub ActionsでmacOSと、ソフトウェアVulkanのLinuxを実行する
+  - GPU画素のgolden比較を固定環境で実行する手順を文書化する
 
 
 ## M1
@@ -76,6 +88,10 @@
   - 単一SQLiteファイル(.cinewright)を正本とし、レンダーキャッシュをプロジェクト外へ分離する
   - 別プロセスからの同時書き込みをrevision照合で直列化し、古いbase_revisionを拒否する
   - イベントごとにsession・変更したキーの集合・逆操作情報を保存する
+  - WALで開き、最後のプロセスが閉じると付随ファイルが残らない。異常終了後は次回に回復する
+  - 同期フォルダ等では安全モード(非WAL・単一プロセス)で開き、他プロセスにはPROJECT_LOCKEDを返す
+  - 公開JSONスキーマによるproject.export/importが往復し、未知フィールドを保持する
+  - history.compactが指定revisionより前の履歴を切り捨て、基点の完全snapshotを残す
 
 ### COMP-001 Composition/Instance/Group/Nullモデル
 
@@ -160,6 +176,10 @@
   - VFR/B-frame/seek後の対象PTSを確認する
   - 使用中のdecode/encode/transfer経路を報告する
   - LGPL構成のFFmpegを動的リンクし、検出したcodec/hwaccelをcapabilitiesへ報告する
+  - 素材を相対パス・絶対パスの順に解決してhashを照合し、ASSET_MISSING/ASSET_HASH_MISMATCHを報告する
+  - asset.relinkがhash一致のファイルだけを再リンクし、project.collectが相対パスのフォルダを書き出す
+  - ソフトウェアエンコードはAV1とProResを提供し、H.264/HEVCのエンコーダーがない環境ではENCODER_UNAVAILABLEを返す
+  - 同梱用FFmpegのビルドスクリプトとnative dependencies manifestを管理する
 
 ### AUDIO-000 基本音声: デコード・ミックス・音声付き書き出し
 
@@ -234,6 +254,7 @@
   - workerの異常終了をheartbeatの途絶で検出しinterruptedとして報告する
   - ジョブの進行で.cinewrightへ書き込まない
   - 一時出力を検証してから確定名へ切り替える
+  - 終了から30日を過ぎたジョブディレクトリを次の投入時に掃除し、interruptedは対象外とする。job.pruneで手動掃除できる
 
 ### INTEGRATION-001 縦断デモ第1段階: 日本語lower-third (CLI/MCP)
 
@@ -254,6 +275,7 @@
 - 受け入れ条件:
   - 静的依存列挙と命令/メモリ/サンプル予算を実装する
   - 固定seedのnoiseと禁止機能の拒否をテストする
+  - ASTを式の正本とし、将来の式言語と一対一に往復できる構造にする
 
 ### LAYOUT-001 responsive layoutとbounds段階
 
@@ -280,6 +302,7 @@
   - 選択・pan/zoomなどUI状態を作品から分離する
   - CLI/MCPなど外部プロセスによるrevision変化を検知して再読込する
   - GUIのUndoは自セッションの操作だけを取り消し、競合時は理由を表示する
+  - UI状態をユーザーごとの状態領域に保存し、.cinewrightへ書き込まない
 
 ### GUI-002 Dope sheetとCurve editor
 
@@ -313,6 +336,9 @@
   - SwiftからCommand/Query APIを呼び、CLIと同じrevision/eventへ到達する
   - ネイティブ側のCAMetalLayerをwgpu surfaceとして受け取りプレビューを表示する
   - FFI境界にwgpu/SQLite/Tokioの型を露出しない
+  - C ABIの関数は少数に保ち、Command/QueryはCLI/MCPと同じJSONで受け渡す
+  - Swiftの型を公開JSON Schemaから生成する
+  - 高頻度経路でのJSON直列化コストを計測する
 
 ### QA-002 GUI/CLI/MCP同等性と日本語IME
 
@@ -357,7 +383,7 @@
 - 受け入れ条件:
   - HDRの表示変換を最終出力へ勝手に焼き込まない
   - 文字・mask・glowを含む8K offline出力を検証する
-  - HDRの基準白・表示変換・色域マッピングの規約を決定し検証する
+  - 基準白203cd/m2(BT.2408)とRec.2100 PQ/HLG出力を検証し、トーンマップは表示と明示的なSDR変換出力に限る
 
 ### CACHE-002 temporal/region cacheと無効化
 

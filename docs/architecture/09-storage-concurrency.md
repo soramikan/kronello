@@ -1,6 +1,6 @@
 # 09 保存と同時編集
 
-v0.2 仕様の §3.3 を具体化した章。関連: [ADR-0006](../adr/0006-document-vs-render-cache.md)、[ADR-0011](../adr/0011-local-sqlite-source-of-truth.md)、[ADR-0016](../adr/0016-single-file-project.md)、[ADR-0017](../adr/0017-multi-process-optimistic-concurrency.md)、[ADR-0026](../adr/0026-selective-undo.md)。
+v0.2 仕様の §3.3 を具体化した章。関連: [ADR-0006](../adr/0006-document-vs-render-cache.md)、[ADR-0011](../adr/0011-local-sqlite-source-of-truth.md)、[ADR-0016](../adr/0016-single-file-project.md)、[ADR-0017](../adr/0017-multi-process-optimistic-concurrency.md)、[ADR-0026](../adr/0026-selective-undo.md)〜[ADR-0030](../adr/0030-history-retention.md)。
 
 ## 保存形態
 
@@ -10,8 +10,8 @@ v0.2 仕様の §3.3 を具体化した章。関連: [ADR-0006](../adr/0006-docu
 | 素材 | プロジェクト外。locator + content hash で参照 | 不変の外部ファイル |
 | レンダーキャッシュ | OS のキャッシュ領域 | 削除してよい |
 | ジョブの記録と固定スナップショット | ユーザーごとの状態領域（[14 ジョブ](14-jobs.md)） | このマシンでの実行記録 |
-| GUI の UI 状態 | 未決（[OQ-10](../open-questions.md)） | 作品から分離 |
-| 受け渡し用アーカイブ | 別機能として書き出す（形式は未決、[OQ-06](../open-questions.md)） | 素材同梱 |
+| GUI の UI 状態 | ユーザーごとの状態領域。プロジェクト ID で紐付け（[10 デスクトップ GUI](10-desktop-gui.md)） | 作品から分離 |
+| 受け渡し用フォルダ | `project.collect` で書き出す | プロジェクトの複製と素材を相対パスでまとめたもの |
 
 キャッシュの削除で作品データを失わない。素材の content hash が一致しない場合は検証で報告する。
 
@@ -26,7 +26,7 @@ SQLite の現在状態、イベント、逆操作情報、リビジョンを一�
 - **完全スナップショット**: バージョン付き。イベントだけを唯一の保存形式にすると過去コマンドの意味変更が問題になるため保持する。
 - **idempotency の記録**: `idempotency_key` と適用結果。
 
-JSON は不変スナップショットまたはインポート形式であり、SQLite と並行して書き換える第二の正本にしない。
+JSON は不変スナップショットまたはインポート形式であり、SQLite と並行して書き換える第二の正本にしない。JSON の形式は「JSON スナップショット」を参照。
 
 ## 版と移行
 
@@ -95,8 +95,52 @@ GUI・CLI・MCP サーバーはそれぞれ別プロセスとして同じ `.cine
 
 逆操作情報とイベントは `.cinewright` に永続化するため、GUI を再起動した後や別プロセスからも、event ID を指定すれば同じ規則で取り消せる。別プロセス（エージェント）が加えた変更を GUI の Cmd+Z が取り消すことはない。
 
-## 未決事項
+## 履歴の保持
 
-- WAL モードの付随ファイルと、クラウド同期フォルダ上の安全性（[OQ-05](../open-questions.md)）。
-- JSON スナップショットのスキーマ（[OQ-07](../open-questions.md)）。
-- イベントと逆操作情報の保持期間・圧縮（[OQ-19](../open-questions.md)）。
+[ADR-0030](../adr/0030-history-retention.md) による。
+
+- 履歴（イベントと逆操作情報）を自動では削除しない。
+- `history.compact` は、指定した revision より前の履歴を切り捨て、その時点の完全スナップショットを基点として残す。
+- 切り捨てた範囲のイベントは Undo できない。
+- 履歴が大きくなった場合は `project.validate` が警告する。
+
+## ジャーナル方式
+
+[ADR-0027](../adr/0027-wal-single-file-on-close.md) による。
+
+- 通常は WAL モードで開く。GUI が読みながら、別プロセスが書ける。
+- 開いている間は付随ファイル（`-wal`、`-shm`）ができる。最後のプロセスが閉じるときに checkpoint し、付随ファイルを残さない。
+- 異常終了で付随ファイルが残った場合は、次に開いたときに回復する。
+- 開いている最中のファイルを直接コピーすることはサポートしない。複製には `project.export` や `project.collect` を使う。
+
+### 安全モード
+
+ネットワークファイルシステムやクラウド同期フォルダ上と判定した場合は、警告を出して安全モードで開く。
+
+- 非 WAL で、開けるプロセスは一つだけ。
+- 安全モード中に他のプロセスが開こうとすると `PROJECT_LOCKED` を返す。
+- したがって、同期フォルダ上ではエージェントとの同時編集はできない。
+
+保存場所の判定方法と、誤判定時に利用者が上書きする手段は STORE-001 で設計する。
+
+## 素材の参照
+
+[ADR-0028](../adr/0028-asset-references-and-relink.md) による。
+
+- Asset の locator は、プロジェクトファイルの場所を基準にした相対パスと、絶対パスの両方を持つ。
+- 解決は相対パス、絶対パスの順に試し、見つかったファイルの content hash を照合する。
+- 見つからなければ `ASSET_MISSING`、hash が一致しなければ `ASSET_HASH_MISMATCH` として報告する。別のファイルへ自動で差し替えない。
+- `asset.relink` は、指定したフォルダから hash が一致するファイルを探してパスを更新する。
+- 内容の違うファイルへの差し替えは `asset.replace` で明示的に行う。
+- `project.collect` は、プロジェクトの複製と素材を相対パスでまとめたフォルダを書き出す。別のマシンへ渡すときに使う。
+
+hash 照合の頻度と高速化は MEDIA-001 で設計する。
+
+## JSON スナップショット
+
+[ADR-0029](../adr/0029-public-json-schema.md) による。
+
+- 文書モデルの JSON 表現を、版付きの公開スキーマとして一つ定義する。Rust の文書モデル型から JSON Schema を生成し、リポジトリで管理する。
+- ジョブの固定スナップショット、`project.export`、`project.import`、Command / Query API の payload、FFI の payload は同じ型定義を共有する。
+- `schema_version` を持ち、未知のフィールドを保持する。有理数は 10 進文字列で表す。
+- JSON は書き出した時点の不変の写しであり、`.cinewright` と並行して編集する正本ではない。

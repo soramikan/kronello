@@ -56,5 +56,13 @@
 | 作業用色空間 | Sequence ごとに選択、既定は線形 Rec.709。タグなしの色入力は sRGB | [0024](adr/0024-working-color-space.md) |
 | レンダージョブ | ジョブごとに切り離した worker プロセス、記録はユーザーごとの状態 DB | [0025](adr/0025-detached-render-workers.md) |
 | Undo | 逆操作を新しいコマンドとして発行、競合時は拒否 | [0026](adr/0026-selective-undo.md) |
+| 保存の細部 | WAL と安全モード、素材の参照と再リンク、公開 JSON スキーマ、履歴の保持 | [0027](adr/0027-wal-single-file-on-close.md)〜[0030](adr/0030-history-retention.md) |
+| GUI の細部 | C ABI + JSON の FFI、Windows は WinUI 3・Linux は GTK4、UI 状態の保存先 | [0031](adr/0031-ffi-c-abi-json.md)〜[0033](adr/0033-ui-state-in-user-state-area.md) |
+| ジョブの保持 | 記録は残し、ジョブディレクトリは 30 日で掃除 | [0034](adr/0034-job-retention.md) |
+| エンコードと FFmpeg | ソフトウェアは AV1・ProRes・連番、リリースは自前 LGPL ビルドを同梱 | [0035](adr/0035-software-encoders.md)、[0036](adr/0036-ffmpeg-distribution.md) |
+| HDR | BT.2408 の基準白、Rec.2100 の PQ / HLG | [0037](adr/0037-hdr-policy.md) |
+| 開発基盤 | stable 固定と GitHub Actions、テスト素材の方針 | [0038](adr/0038-toolchain-and-ci.md)、[0039](adr/0039-test-fixtures.md) |
+| 式言語 | 正本は AST、小さな式言語を後から追加 | [0040](adr/0040-expression-language-policy.md) |
+| 優先順 | コア契約 → API → GUI | [0041](adr/0041-core-api-gui-order.md) |
 
 バックログは 45 → 50 タスク。追加: `AUDIO-000`（基本音声）、`FX-001`（基本エフェクト）、`FFI-001`（ネイティブ GUI 境界）、`AUDIO-002`（リアルタイム再生）、`INTEGRATION-002`（縦断デモ第 2 段階）。

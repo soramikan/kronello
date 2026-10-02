@@ -36,9 +36,21 @@ inspect -> draft operations -> edit.plan -> preview(candidate snapshot)
 
 `edit.undo` は、指定したイベントの逆操作を新しいコマンドとして発行する（[ADR-0026](../adr/0026-selective-undo.md)）。他の変更 API と同じく `base_revision` と `idempotency_key` を取る。対象イベントが変更したキーに、それより後の取り消されていないイベントが触れていれば `UNDO_CONFLICT` で拒否する。詳細は [09 保存と同時編集](09-storage-concurrency.md)。
 
+### 素材とプロジェクト
+
+| API | 内容 |
+|---|---|
+| `asset.relink` | 指定したフォルダから content hash が一致するファイルを探し、素材のパスを更新する |
+| `asset.replace` | 素材を内容の違うファイルへ明示的に差し替える |
+| `project.collect` | プロジェクトの複製と素材を、相対パスでまとめたフォルダとして書き出す |
+| `project.export` / `project.import` | 公開 JSON スキーマでプロジェクトを書き出す・取り込む |
+| `history.compact` | 指定した revision より前の履歴を切り捨てる |
+
+要求と応答の JSON は、版付きの公開スキーマに従う（[ADR-0029](../adr/0029-public-json-schema.md)）。
+
 ### ジョブ
 
-`render.submit` はジョブを記録して worker プロセスを切り離して起動し、すぐに job ID を返す。`job.cancel` で取り消し、`job.resume` で中断したジョブを再開する。詳細は [14 ジョブ](14-jobs.md)。
+`render.submit` はジョブを記録して worker プロセスを切り離して起動し、すぐに job ID を返す。`job.cancel` で取り消し、`job.resume` で中断したジョブを再開し、`job.prune` で古いジョブディレクトリを掃除する。詳細は [14 ジョブ](14-jobs.md)。
 
 revision 照合と idempotency の記録は `.cinewright` 内で行うため、別プロセスからの再送や競合にも同じ規則が適用される（[09 保存と同時編集](09-storage-concurrency.md)）。
 

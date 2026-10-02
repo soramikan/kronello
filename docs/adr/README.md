@@ -40,6 +40,21 @@
 | [0024](0024-working-color-space.md) | 作業用色空間は Sequence ごとに選択し、既定を線形 Rec.709 とする | 採用 | 2026-10-02 |
 | [0025](0025-detached-render-workers.md) | レンダージョブは切り離した worker プロセスで実行する | 採用 | 2026-10-02 |
 | [0026](0026-selective-undo.md) | Undo は逆操作の発行とし、競合時は拒否する | 採用 | 2026-10-02 |
+| [0027](0027-wal-single-file-on-close.md) | 開いている間は WAL、閉じるときに単一ファイルへ戻す | 採用 | 2026-10-02 |
+| [0028](0028-asset-references-and-relink.md) | 素材は相対パスと絶対パスの両方で参照し、hash で検証する | 採用 | 2026-10-02 |
+| [0029](0029-public-json-schema.md) | 版付きの公開 JSON スキーマを一つ定義する | 採用 | 2026-10-02 |
+| [0030](0030-history-retention.md) | 履歴は既定で全保持し、明示的な compact で切り詰める | 採用 | 2026-10-02 |
+| [0031](0031-ffi-c-abi-json.md) | FFI は細い C ABI と JSON payload で構成する | 採用 | 2026-10-02 |
+| [0032](0032-windows-winui-linux-gtk.md) | Windows の GUI は WinUI 3、Linux の GUI は GTK4 とする | 採用 | 2026-10-02 |
+| [0033](0033-ui-state-in-user-state-area.md) | GUI の UI 状態はユーザーごとの状態領域に保存する | 採用 | 2026-10-02 |
+| [0034](0034-job-retention.md) | ジョブの記録は残し、ジョブディレクトリは 30 日で掃除する | 採用 | 2026-10-02 |
+| [0035](0035-software-encoders.md) | ソフトウェアエンコードは AV1・ProRes・画像連番とする | 採用 | 2026-10-02 |
+| [0036](0036-ffmpeg-distribution.md) | リリースには自前の LGPL ビルドの FFmpeg を同梱する | 採用 | 2026-10-02 |
+| [0037](0037-hdr-policy.md) | HDR は BT.2408 の基準白と Rec.2100 の PQ / HLG に従う | 採用 | 2026-10-02 |
+| [0038](0038-toolchain-and-ci.md) | Rust は stable の特定版に固定し、CI は GitHub Actions とする | 採用 | 2026-10-02 |
+| [0039](0039-test-fixtures.md) | テスト素材は生成と CC0 / OFL に限り、小さいものだけ同梱する | 採用 | 2026-10-02 |
+| [0040](0040-expression-language-policy.md) | 式の正本は AST とし、人間向けには小さな式言語を後から追加する | 採用 | 2026-10-02 |
+| [0041](0041-core-api-gui-order.md) | 実装の優先順はコア契約、API、GUI の順とする | 採用 | 2026-10-02 |
 
 ## 追加と変更の規則
 

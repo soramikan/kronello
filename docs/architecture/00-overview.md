@@ -81,6 +81,8 @@ GUI・CLI・MCP はそれぞれ別プロセスになりうる。各プロセス�
 
 ## 優先順位
 
+実装の優先順は、コアの契約、Command / Query API、GUI の順とする（[ADR-0041](../adr/0041-core-api-gui-order.md)）。機能はまず API として完成させて CLI / MCP で検証できる状態にし、GUI はその上に載せる。GUI にしかない編集機能は作らない。
+
 最優先は TIME、MODEL、PROP、SCENE、TEXT、RENDER の契約。
 GUI の装飾、プラグイン数、完全な 3D、クラウド分散はこの後。
 タスクの依存関係と受け入れ条件は [backlog](../backlog/README.md) に記載する。

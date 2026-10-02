@@ -47,6 +47,11 @@ model / time
 - FFmpeg や wgpu の API 差分はアダプターで吸収し、`Cargo.lock` と native dependencies manifest を固定する。
 - cli / mcp / ffi は service の薄いアダプターとし、編集の意味を持たない。
 
-## 未決事項
+## ツールチェーンと CI
 
-MSRV、edition、lint、CI は [OQ-15](../open-questions.md)。
+[ADR-0038](../adr/0038-toolchain-and-ci.md) による。
+
+- `rust-toolchain.toml` で stable の特定版に固定する。MSRV はその版とし、定期的に更新する。edition は 2024。
+- rustfmt と clippy を必須とし、警告をエラーとして扱う。
+- CI は GitHub Actions。macOS runner を主とし、Linux はソフトウェア実装の Vulkan で互換経路を検証する。
+- CI では値とレイアウトの意味的比較を必須とする。GPU 画素の golden 比較は固定環境（参照機）で実行する。
