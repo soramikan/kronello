@@ -16,7 +16,7 @@ FrameBridge とハードウェアデコード / エンコードは OS・GPU ご�
 ## 影響
 
 - Windows / Linux では当面、性能が劣る経路になる。使用経路は `render.explain` で報告する。
-- プラットフォーム固有の前提がコアに漏れないよう、相互運用は `koma-framebridge` に隔離する。
+- プラットフォーム固有の前提がコアに漏れないよう、相互運用は `cinewright-framebridge` に隔離する。
 
 ## 関連
 

@@ -10,15 +10,15 @@ v0.2 仕様は GUI を Rust crate（`ved-desktop`）としていたが、フレ�
 ## 決定
 
 - GUI は OS ごとのネイティブフレームワークで実装する。macOS は SwiftUI / AppKit を先行する。Windows / Linux は候補（WinUI 3 / GTK4）に留め、後で決める。
-- ネイティブアプリは Rust コアを同じプロセスにライブラリとして読み込み、`koma-ffi` 経由で Command / Query API を呼ぶ。
+- ネイティブアプリは Rust コアを同じプロセスにライブラリとして読み込み、`cinewright-ffi` 経由で Command / Query API を呼ぶ。
 - プレビューは、ネイティブ側が用意した描画面（CAMetalLayer 等）を wgpu の surface として渡して直接描画する。
-- `ved-desktop` crate は廃し、`koma-ffi` crate と `apps/<os>/` に置き換える。
+- `ved-desktop` crate は廃し、`cinewright-ffi` crate と `apps/<os>/` に置き換える。
 
 ## 影響
 
 - OS ごとに GUI を実装する必要があり、GUI の総工数は増える。編集の意味をすべて Rust 側に置くことで重複を UI 層に限定する。
 - GUI・CLI・MCP が別プロセスになるため、プロセス間の同時編集の規則が必要になる（ADR-0017）。
-- 常駐デーモンがないため、長時間ジョブの実行主体を別途決める必要がある（OQ-03）。
+- 常駐デーモンがないため、長時間ジョブの実行主体を別途決める必要がある（ADR-0025 で決定）。
 - 検討した代替案: Rust ネイティブ GUI（egui / Iced 等）、Tauri + Web UI、別プロセスのコア + IPC、ハイブリッド。
 
 ## 関連

@@ -37,6 +37,16 @@ python3 scripts/backlog.py render
 | `dependencies` | 先に完了している必要があるタスクの ID |
 | `acceptance_criteria` | 完了の判定条件。すべて確認できて初めて `done` |
 
+## 0.3 からの変更（schema_version 0.4）
+
+色・ジョブ・Undo の決定（ADR-0024〜0026）を受け入れ条件へ反映した。タスク数は 50 のまま。
+
+- ARC-001 / GPU-001: 作業用色空間と sRGB 色入力の規約。
+- STORE-001 / SERVICE-001 / API-001 / GUI-001: イベントの session・変更キー・逆操作情報、`edit.undo` と `UNDO_CONFLICT`、`history.list`。
+- JOB-001: 切り離した worker、状態 DB、同時 1 ジョブ、heartbeat。
+- RECOVERY-001: `interrupted` ジョブの再開。
+- COLOR-001: HDR の基準白・表示変換・色域マッピング。
+
 ## v0.2 からの変更（schema_version 0.3）
 
 元のバックログは [archive](../archive/motion_editor_backlog_v0_2.json) に保管している。45 → 50 タスク。
@@ -53,7 +63,7 @@ python3 scripts/backlog.py render
 
 変更:
 
-- STORE-001: 単一 `.koma` ファイル、複数プロセスからの書き込みの revision 照合を受け入れ条件に追加。
+- STORE-001: 単一 `.cinewright` ファイル、複数プロセスからの書き込みの revision 照合を受け入れ条件に追加。
 - SERVICE-001: idempotency の記録をプロジェクト内に保存する条件を追加。
 - TEMPLATE-001: 背景帯の単方向追従と overflow 検出を追加（縦断テスト第 1 段階に必要）。
 - INTEGRATION-001: 第 1 段階（CLI / MCP）に限定。依存に AUDIO-000、FX-001 を追加。

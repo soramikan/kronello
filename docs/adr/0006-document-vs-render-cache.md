@@ -10,7 +10,7 @@
 ## 決定
 
 - 作品データとレンダーキャッシュを別の場所・別の寿命で管理する。
-- キャッシュは `.koma` の外（OS のキャッシュ領域）に置く。
+- キャッシュは `.cinewright` の外（OS のキャッシュ領域）に置く。
 
 ## 影響
 
@@ -20,4 +20,4 @@
 ## 関連
 
 - [09 保存と同時編集](../architecture/09-storage-concurrency.md)
-- [ADR-0016](0016-single-file-koma-project.md)
+- [ADR-0016](0016-single-file-project.md)

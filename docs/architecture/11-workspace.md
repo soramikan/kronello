@@ -6,32 +6,32 @@
 
 ```text
 crates/
-  koma-model/          # IDs, document types, property descriptors, versions
-  koma-time/           # rational time, ranges, TimeMap, sampling
-  koma-animation/      # curves, interpolation, modifier contracts
-  koma-expr/           # typed AST, dependencies, bounded evaluator
-  koma-scene/          # composition, parenting, masks, Scene IR
-  koma-layout/         # responsive constraints, metrics, bounds
-  koma-text/           # fonts, Japanese layout, glyph/cluster mappings
-  koma-vector/         # paths, shape IR, geometry operations
-  koma-render/         # DAG compiler, region/time planner, scheduler
-  koma-gpu/            # wgpu, pipelines, color/alpha, texture pools
-  koma-media/          # FFmpeg integration, seek, decode/encode
-  koma-framebridge/    # OS/GPU specific interop and synchronization
-  koma-audio/          # mixer, buses, feature-data integration
-  koma-store/          # SQLite, snapshots, migrations, event journal
-  koma-template/       # typed inputs, bindings, duration, versions
-  koma-service/        # commands, queries, policies, job orchestration
-  koma-cli/            # machine-oriented CLI adapter (binary: koma)
-  koma-mcp/            # MCP adapter
-  koma-ffi/            # FFI boundary for native GUI apps
+  cinewright-model/          # IDs, document types, property descriptors, versions
+  cinewright-time/           # rational time, ranges, TimeMap, sampling
+  cinewright-animation/      # curves, interpolation, modifier contracts
+  cinewright-expr/           # typed AST, dependencies, bounded evaluator
+  cinewright-scene/          # composition, parenting, masks, Scene IR
+  cinewright-layout/         # responsive constraints, metrics, bounds
+  cinewright-text/           # fonts, Japanese layout, glyph/cluster mappings
+  cinewright-vector/         # paths, shape IR, geometry operations
+  cinewright-render/         # DAG compiler, region/time planner, scheduler
+  cinewright-gpu/            # wgpu, pipelines, color/alpha, texture pools
+  cinewright-media/          # FFmpeg integration, seek, decode/encode
+  cinewright-framebridge/    # OS/GPU specific interop and synchronization
+  cinewright-audio/          # mixer, buses, feature-data integration
+  cinewright-store/          # SQLite, snapshots, migrations, event journal
+  cinewright-template/       # typed inputs, bindings, duration, versions
+  cinewright-service/        # commands, queries, policies, job orchestration
+  cinewright-cli/            # machine-oriented CLI adapter (binary: cinewright)
+  cinewright-mcp/            # MCP adapter
+  cinewright-ffi/            # FFI boundary for native GUI apps
 apps/
-  macos/               # Swift (SwiftUI / AppKit) desktop app
-  windows/             # 将来
-  linux/               # 将来
+  macos/                     # Swift (SwiftUI / AppKit) desktop app
+  windows/                   # 将来
+  linux/                     # 将来
 ```
 
-v0.2 仕様からの変更: 接頭辞 `ved-` → `koma-`。`ved-desktop` を廃し、`koma-ffi` と `apps/` に置き換えた（[10 デスクトップ GUI](10-desktop-gui.md)）。
+v0.2 仕様からの変更: 接頭辞 `ved-` → `cinewright-`。`ved-desktop` を廃し、`cinewright-ffi` と `apps/` に置き換えた（[10 デスクトップ GUI](10-desktop-gui.md)）。
 
 ## 依存の向き
 

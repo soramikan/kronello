@@ -21,5 +21,5 @@
 ## 関連
 
 - [09 保存と同時編集](../architecture/09-storage-concurrency.md)
-- [ADR-0016](0016-single-file-koma-project.md)
+- [ADR-0016](0016-single-file-project.md)
 - [ADR-0017](0017-multi-process-optimistic-concurrency.md)

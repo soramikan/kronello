@@ -14,6 +14,8 @@ GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001
 | `render.explain` | 使用経路、CPU / GPU 転送、中間メモリ、キャッシュ再利用を報告 |
 | `preview.render` | フレーム・短区間・コンタクトシートの成果物を生成 |
 | `project.validate` | 構造・文字・資産・機能・性能予算の診断を返す |
+| `history.list` | イベント（適用されたコマンド）を revision 順に返す。session、変更したキー、取り消し状態を含む |
+| `job.get` / `job.list` | ジョブの状態・進捗・成果物を返す |
 
 ## 変更 API
 
@@ -30,27 +32,35 @@ inspect -> draft operations -> edit.plan -> preview(candidate snapshot)
 - 計画後に文書が変わった場合は競合とし、勝手に古い計画を適用しない。
 - 大きな計画の validation / compile は commit の前に行うが、commit 時に基準 revision を再確認する。
 
-revision 照合と idempotency の記録は `.koma` 内で行うため、別プロセスからの再送や競合にも同じ規則が適用される（[09 保存と同時編集](09-storage-concurrency.md)）。
+### Undo
+
+`edit.undo` は、指定したイベントの逆操作を新しいコマンドとして発行する（[ADR-0026](../adr/0026-selective-undo.md)）。他の変更 API と同じく `base_revision` と `idempotency_key` を取る。対象イベントが変更したキーに、それより後の取り消されていないイベントが触れていれば `UNDO_CONFLICT` で拒否する。詳細は [09 保存と同時編集](09-storage-concurrency.md)。
+
+### ジョブ
+
+`render.submit` はジョブを記録して worker プロセスを切り離して起動し、すぐに job ID を返す。`job.cancel` で取り消し、`job.resume` で中断したジョブを再開する。詳細は [14 ジョブ](14-jobs.md)。
+
+revision 照合と idempotency の記録は `.cinewright` 内で行うため、別プロセスからの再送や競合にも同じ規則が適用される（[09 保存と同時編集](09-storage-concurrency.md)）。
 
 ## 操作例（提案 CLI）
 
 ```bash
-koma template instantiate \
-  --project demo.koma \
+cinewright template instantiate \
+  --project demo.cinewright \
   --template lower_third_ja@1.0.0 \
   --inputs inputs.json \
   --duration 8s --plan-out plan.json
 
-koma edit apply --project demo.koma --plan plan.json --json
+cinewright edit apply --project demo.cinewright --plan plan.json --json
 
-koma preview render --project demo.koma \
+cinewright preview render --project demo.cinewright \
   --composition comp_lower_third \
   --times 0s,0.2s,0.4s,4s,7.7s,7.9s \
   --quality final --out-dir ./preview --json
 
-koma validate --project demo.koma --profile delivery --json
+cinewright validate --project demo.cinewright --profile delivery --json
 
-koma render --project demo.koma --profile hevc-4k \
+cinewright render --project demo.cinewright --profile hevc-4k \
   --out ./output.mp4 --wait --events ndjson
 ```
 
@@ -61,7 +71,7 @@ koma render --project demo.koma --profile hevc-4k \
 
 - プロトコル対応版を交渉し、JSON Schema と structuredContent で構造化結果を返す。
 - クライアント接続状態に暗黙の対象 Project を保持しない。対象は毎回の要求で明示する。
-- 長時間レンダーは永続ジョブにし、MCP 接続の寿命に依存させない。ジョブの実行主体は未決（[OQ-03](../open-questions.md)）。
+- 長時間レンダーは永続ジョブにし、MCP 接続の寿命に依存させない。ジョブは切り離した worker プロセスが実行する（[14 ジョブ](14-jobs.md)）。
 
 ## 安全性
 

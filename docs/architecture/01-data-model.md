@@ -39,7 +39,7 @@ InstancePath は、親からたどった CompositionInstance の安定 ID 列で
 
 未知の機能は保存時に失わない設計にするが、必要な機能が不足している場合の最終レンダーは `UNSUPPORTED_FEATURE` で拒否する（[ADR-0010](../adr/0010-unsupported-features-fail-final-render.md)）。
 
-保存の具体的な形態（`.koma`、イベント、スナップショット）は [09 保存と同時編集](09-storage-concurrency.md) を参照。
+保存の具体的な形態（`.cinewright`、イベント、スナップショット）は [09 保存と同時編集](09-storage-concurrency.md) を参照。
 
 ## 意味的スナップショットと GPU 資源の分離
 

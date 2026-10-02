@@ -2,7 +2,7 @@
 
 <!-- このファイルは scripts/backlog.py render が生成する。直接編集しない。正本は backlog.json。 -->
 
-- schema_version: 0.3
+- schema_version: 0.4
 - 更新日: 2026-10-02
 - タスク数: 50
 
@@ -27,6 +27,7 @@
 - 受け入れ条件:
   - Timeline/Composition/Property/Renderの依存方向を文書化する
   - 単位・alpha・未知機能・スナップショット版の規約をレビューする
+  - 作業用色空間（既定は線形Rec.709、HDRは線形Rec.2020）とタグなし色入力のsRGB解釈を規約として固定する
 
 ### TIME-001 有理数時間・半開区間・時間マッピング
 
@@ -52,6 +53,7 @@
   - 2D素材からRGBA16F出力までの色とalphaを検証する
   - CPU往復とGPU内コピーを区別して各候補経路の可否を記録する
   - macOS (Metal / VideoToolbox) を最初の検証対象とする
+  - sRGB色入力から線形Rec.709作業空間への変換と、線形Rec.2020作業空間での同じ色の一致を検証する
 
 ### QA-001 参照素材とgolden sceneを整備
 
@@ -71,8 +73,9 @@
 - 受け入れ条件:
   - 文書とイベントとrevisionを同一transactionで更新する
   - 完全snapshotからの復元と失敗migrationの非破壊性を確認する
-  - 単一SQLiteファイル(.koma)を正本とし、レンダーキャッシュをプロジェクト外へ分離する
+  - 単一SQLiteファイル(.cinewright)を正本とし、レンダーキャッシュをプロジェクト外へ分離する
   - 別プロセスからの同時書き込みをrevision照合で直列化し、古いbase_revisionを拒否する
+  - イベントごとにsession・変更したキーの集合・逆操作情報を保存する
 
 ### COMP-001 Composition/Instance/Group/Nullモデル
 
@@ -191,6 +194,8 @@
   - base_revision/plan_hash/idempotency_keyを検証する
   - 同じキー同じpayloadは重複適用せず異なるpayloadは拒否する
   - idempotency_keyと適用結果をプロジェクト内に保存し、別プロセスからの再送にも同一結果を返す
+  - edit.undoが対象イベントの逆操作を新しいrevisionとして発行し、後続の未取り消しイベントが同じキーに触れていればUNDO_CONFLICTで何も適用せず拒否する
+  - 値変更は(オブジェクト,Property)単位、構造変更はオブジェクトと親コンテナ単位で競合を判定する
 
 ### TEMPLATE-001 公開入力と保護時間区間の最小template
 
@@ -208,6 +213,7 @@
 - 受け入れ条件:
   - scene query/property sample/capabilitiesを構造化結果で返す
   - APIの任意シェル/外部URL実行を禁止する
+  - history.listでイベント・session・変更したキー・取り消し状態を返す
 
 ### MCP-001 MCPアダプター
 
@@ -222,7 +228,11 @@
 - 優先度: P0 / 領域: jobs / 状態: planned
 - 依存: SERVICE-001, MEDIA-001, RENDER-001
 - 受け入れ条件:
-  - 切断後も保存されたjob IDで状態取得できる
+  - render.submitが固定snapshotをプロジェクト外へ保存し、ユーザーごとの状態DBへジョブを記録して、切り離したworkerプロセスを起動する
+  - 投入したプロセスやMCP接続が終了してもジョブが継続し、保存されたjob IDで状態取得できる
+  - 既定で同時実行は1ジョブとし、残りはqueuedで待機する
+  - workerの異常終了をheartbeatの途絶で検出しinterruptedとして報告する
+  - ジョブの進行で.cinewrightへ書き込まない
   - 一時出力を検証してから確定名へ切り替える
 
 ### INTEGRATION-001 縦断デモ第1段階: 日本語lower-third (CLI/MCP)
@@ -269,6 +279,7 @@
   - GUI操作が共通command/eventを使う
   - 選択・pan/zoomなどUI状態を作品から分離する
   - CLI/MCPなど外部プロセスによるrevision変化を検知して再読込する
+  - GUIのUndoは自セッションの操作だけを取り消し、競合時は理由を表示する
 
 ### GUI-002 Dope sheetとCurve editor
 
@@ -294,7 +305,7 @@
   - opacity/active range/parent/mask/asset不足を要因別に返す
   - 過大処理と転送/メモリ/キャッシュを構造化して表示する
 
-### FFI-001 koma-ffi: ネイティブGUI向けCommand/Query境界
+### FFI-001 cinewright-ffi: ネイティブGUI向けCommand/Query境界
 
 - 優先度: P1 / 領域: ffi / 状態: planned
 - 依存: API-001
@@ -346,6 +357,7 @@
 - 受け入れ条件:
   - HDRの表示変換を最終出力へ勝手に焼き込まない
   - 文字・mask・glowを含む8K offline出力を検証する
+  - HDRの基準白・表示変換・色域マッピングの規約を決定し検証する
 
 ### CACHE-002 temporal/region cacheと無効化
 
@@ -370,6 +382,7 @@
 - 受け入れ条件:
   - 失敗でProjectや確定済み成果物が壊れない
   - 出力fileへの無条件appendを再開方法に使わない
+  - interruptedのジョブをjob.resumeで再開でき、完了済み区間の扱いを検証する
 
 
 ## M5

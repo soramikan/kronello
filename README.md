@@ -1,4 +1,4 @@
-# Koma
+# Cinewright
 
 カット編集（NLE）とモーショングラフィックスを、同じ時間・プロパティ・組版・合成・レンダー基盤の上で扱う動画編集ソフトウェア。
 人間が使う GUI と、スクリプトや AI エージェントが使う CLI / MCP を同格の入口とし、どこから操作しても同じ Command / Query API・同じ revision・同じレンダー結果に到達することを設計の中心に置く。
@@ -19,12 +19,12 @@
 
 | 領域 | 採用・候補 |
 |---|---|
-| コア | Rust（Cargo workspace、`koma-*` crate） |
+| コア | Rust（Cargo workspace、`cinewright-*` crate） |
 | GPU | wgpu。macOS (Metal) を最初の保証経路とする |
 | メディア I/O | FFmpeg（LGPL 構成を動的リンク） |
-| 保存 | 単一 SQLite ファイル `.koma` |
+| 保存 | 単一 SQLite ファイル `.cinewright` |
 | GUI | OS ごとのネイティブフレームワーク + 同一プロセス FFI（macOS: SwiftUI / AppKit を先行） |
-| 自動化 | 機械向け CLI `koma`、MCP サーバー |
+| 自動化 | 機械向け CLI `cinewright`、MCP サーバー |
 
 ## ドキュメント
 

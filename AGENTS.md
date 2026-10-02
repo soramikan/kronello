@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Koma は Rust / FFmpeg / wgpu を基盤とする動画編集・モーショングラフィックスソフトウェア。
+Cinewright は Rust / FFmpeg / wgpu を基盤とする動画編集・モーショングラフィックスソフトウェア。
 個人開発者とコーディングエージェントが主体となって開発する。この文書はエージェントが作業を始める前に読む規約である。
 
 ## 現在の状態
@@ -20,7 +20,7 @@ Koma は Rust / FFmpeg / wgpu を基盤とする動画編集・モーション�
 - 設計文書・ADR・バックログは日本語が正本。
 - 識別子、コード、コードコメント、コミットメッセージは英語。
 - 型名・API 名・エラーコード（`UNSUPPORTED_FEATURE` など）は文書内でも英語のまま書く。
-- 名称は `koma` に統一する: CLI は `koma`、crate は `koma-*`、プロジェクトファイルは `.koma`。旧称 `ved` を新しく書かない。
+- 名称は `cinewright` に統一する: CLI は `cinewright`、crate は `cinewright-*`、プロジェクトファイルは `.cinewright`。旧称 `ved`、`koma` を新しく書かない。
 
 ## タスクの進め方
 
@@ -45,7 +45,7 @@ Koma は Rust / FFmpeg / wgpu を基盤とする動画編集・モーション�
 - 通常のアニメーションは `(snapshot, time, instance)` の純粋関数。評価順・呼び出し履歴に依存させない。
 - 時刻の正本は正規化された有理数。区間は `[start, end)`。浮動小数点の時刻を保存しない。
 - ID を配列番号や表示名から導出しない。
-- 純粋モデル層（`koma-model` / `koma-time` など）に `wgpu::Texture`、`AVFrame`、SQLite connection、Tokio runtime の型を漏らさない。
+- 純粋モデル層（`cinewright-model` / `cinewright-time` など）に `wgpu::Texture`、`AVFrame`、SQLite connection、Tokio runtime の型を漏らさない。
 - 評価エンジンは store / service / UI へ逆依存しない。
 - 未対応機能・式の失敗・資産の欠落で最終レンダーを黙って続行しない。型付きエラーにする。
 - 式評価にネットワーク・ファイル・時計・非固定乱数を与えない。

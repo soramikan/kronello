@@ -9,7 +9,7 @@ OSS として公開する方針。Rust エコシステムでは MIT と Apache-2
 
 ## 決定
 
-- Koma 本体は `MIT OR Apache-2.0` のデュアルライセンスとする。
+- Cinewright 本体は `MIT OR Apache-2.0` のデュアルライセンスとする。
 - GPL / AGPL の依存を追加しない。
 
 ## 影響

@@ -1,5 +1,5 @@
 .DS_Store
 /target/
 __pycache__/
-*.koma-wal
-*.koma-shm
+*.cinewright-wal
+*.cinewright-shm
