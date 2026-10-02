@@ -1,0 +1,744 @@
+{
+  "schema_version": "0.2",
+  "created": "2026-10-01",
+  "status": "design_only",
+  "description": "未実装の実装計画。GitHub等へ登録したIssueではない。",
+  "specification": "motion_editor_architecture_v0_2.md",
+  "task_count": 45,
+  "items": [
+    {
+      "id": "ARC-001",
+      "milestone": "M0",
+      "priority": "P0",
+      "area": "architecture",
+      "title": "意味規約と互換性境界をADRに固定",
+      "status": "planned",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "Timeline/Composition/Property/Renderの依存方向を文書化する",
+        "単位・alpha・未知機能・スナップショット版の規約をレビューする"
+      ]
+    },
+    {
+      "id": "TIME-001",
+      "milestone": "M0",
+      "priority": "P0",
+      "area": "time",
+      "title": "有理数時間・半開区間・時間マッピング",
+      "status": "planned",
+      "dependencies": [
+        "ARC-001"
+      ],
+      "acceptance_criteria": [
+        "整数overflowを検出しJSONの整数精度を失わない",
+        "30000/1001fpsと48kHz音声の境界をproperty-based testで検証する"
+      ]
+    },
+    {
+      "id": "PROP-001",
+      "milestone": "M0",
+      "priority": "P0",
+      "area": "model",
+      "title": "型付きPropertyとschema registry",
+      "status": "planned",
+      "dependencies": [
+        "ARC-001"
+      ],
+      "acceptance_criteria": [
+        "型・単位・補間可否・範囲・安定IDを共通schemaで表す",
+        "Constant/Curve/Expressionの主値源を排他的に保持する"
+      ]
+    },
+    {
+      "id": "GPU-001",
+      "milestone": "M0",
+      "priority": "P0",
+      "area": "gpu",
+      "title": "最短GPU描画とFrameBridge技術スパイク",
+      "status": "planned",
+      "dependencies": [
+        "ARC-001"
+      ],
+      "acceptance_criteria": [
+        "2D素材からRGBA16F出力までの色とalphaを検証する",
+        "CPU往復とGPU内コピーを区別して各候補経路の可否を記録する"
+      ]
+    },
+    {
+      "id": "QA-001",
+      "milestone": "M0",
+      "priority": "P0",
+      "area": "test",
+      "title": "参照素材とgolden sceneを整備",
+      "status": "planned",
+      "dependencies": [
+        "ARC-001"
+      ],
+      "acceptance_criteria": [
+        "日本語・alpha・異なるfps・VFR・HDRの権利確認済みfixtureを用意する",
+        "固定環境の画像比較と意味的比較を別に定義する"
+      ]
+    },
+    {
+      "id": "STORE-001",
+      "milestone": "M1",
+      "priority": "P0",
+      "area": "storage",
+      "title": "文書・イベント・スナップショット保存",
+      "status": "planned",
+      "dependencies": [
+        "TIME-001",
+        "PROP-001"
+      ],
+      "acceptance_criteria": [
+        "文書とイベントとrevisionを同一transactionで更新する",
+        "完全snapshotからの復元と失敗migrationの非破壊性を確認する"
+      ]
+    },
+    {
+      "id": "COMP-001",
+      "milestone": "M1",
+      "priority": "P0",
+      "area": "scene",
+      "title": "Composition/Instance/Group/Nullモデル",
+      "status": "planned",
+      "dependencies": [
+        "TIME-001",
+        "PROP-001"
+      ],
+      "acceptance_criteria": [
+        "InstancePathで共有定義の複数配置を区別する",
+        "所有・変換・参照の循環を個別に診断する"
+      ]
+    },
+    {
+      "id": "ANIM-001",
+      "milestone": "M1",
+      "priority": "P0",
+      "area": "animation",
+      "title": "基本キーフレームと補間",
+      "status": "planned",
+      "dependencies": [
+        "TIME-001",
+        "PROP-001"
+      ],
+      "acceptance_criteria": [
+        "Hold/Linear/Cubicと連続角の複数回転を実装する",
+        "同時刻key upsertと任意時刻評価の結果を固定する"
+      ]
+    },
+    {
+      "id": "EVAL-001",
+      "milestone": "M1",
+      "priority": "P0",
+      "area": "evaluation",
+      "title": "Property依存グラフと任意時刻評価",
+      "status": "planned",
+      "dependencies": [
+        "COMP-001",
+        "ANIM-001"
+      ],
+      "acceptance_criteria": [
+        "順序・逆順・ランダム順の評価で同じ意味的結果を返す",
+        "依存循環の経路と原因Propertyを報告する"
+      ]
+    },
+    {
+      "id": "VEC-001",
+      "milestone": "M1",
+      "priority": "P0",
+      "area": "vector",
+      "title": "Shape/Path/Fill/Stroke IR",
+      "status": "planned",
+      "dependencies": [
+        "COMP-001"
+      ],
+      "acceptance_criteria": [
+        "角丸矩形・楕円・ベジェ・基本fill/strokeを保持する",
+        "拡大と解像度変更で文書をビットマップ化しない"
+      ]
+    },
+    {
+      "id": "TEXT-001",
+      "milestone": "M1",
+      "priority": "P0",
+      "area": "text",
+      "title": "日本語組版とクラスタ/グリフ対応",
+      "status": "planned",
+      "dependencies": [
+        "COMP-001",
+        "QA-001"
+      ],
+      "acceptance_criteria": [
+        "横書き日本語・基本禁則・フォント固定・欠落検査を実装する",
+        "書記素とグリフが一対一でないfixtureで対応を検証する"
+      ]
+    },
+    {
+      "id": "GPU-002",
+      "milestone": "M1",
+      "priority": "P0",
+      "area": "gpu",
+      "title": "線形色合成・mask・isolated group",
+      "status": "planned",
+      "dependencies": [
+        "GPU-001",
+        "VEC-001",
+        "TEXT-001"
+      ],
+      "acceptance_criteria": [
+        "Group opacityを子ごとに適用した誤結果をgolden testで区別する",
+        "mask/alpha edge/色変換を固定環境で検証する"
+      ]
+    },
+    {
+      "id": "RENDER-001",
+      "milestone": "M1",
+      "priority": "P0",
+      "area": "render",
+      "title": "Scene IRからRender DAGと画像連番",
+      "status": "planned",
+      "dependencies": [
+        "EVAL-001",
+        "GPU-002"
+      ],
+      "acceptance_criteria": [
+        "指定有理数時刻と領域を入力に一枚の画像を描画する",
+        "出力の色/alpha規約をmetadataへ記録する"
+      ]
+    },
+    {
+      "id": "CACHE-001",
+      "milestone": "M1",
+      "priority": "P0",
+      "area": "cache",
+      "title": "値・layout・geometry・rasterの分離cache",
+      "status": "planned",
+      "dependencies": [
+        "RENDER-001"
+      ],
+      "acceptance_criteria": [
+        "位置変更で組版cacheを再利用する",
+        "色・本文・フォント変更が必要な範囲だけを無効化する"
+      ]
+    },
+    {
+      "id": "CLI-001",
+      "milestone": "M1",
+      "priority": "P0",
+      "area": "cli",
+      "title": "ヘッドレス生成と機械向けCLI",
+      "status": "planned",
+      "dependencies": [
+        "STORE-001",
+        "RENDER-001"
+      ],
+      "acceptance_criteria": [
+        "stdin JSON/stdout JSONとstderr logを分離する",
+        "GUIなしでShapeと日本語Textのアニメーション連番を生成する"
+      ]
+    },
+    {
+      "id": "MEDIA-001",
+      "milestone": "M2",
+      "priority": "P0",
+      "area": "media",
+      "title": "FFmpeg素材I/Oと時刻精度",
+      "status": "planned",
+      "dependencies": [
+        "TIME-001",
+        "QA-001",
+        "GPU-001"
+      ],
+      "acceptance_criteria": [
+        "VFR/B-frame/seek後の対象PTSを確認する",
+        "使用中のdecode/encode/transfer経路を報告する"
+      ]
+    },
+    {
+      "id": "NLE-001",
+      "milestone": "M2",
+      "priority": "P0",
+      "area": "timeline",
+      "title": "CompositionClipとマルチトラック統合",
+      "status": "planned",
+      "dependencies": [
+        "COMP-001",
+        "MEDIA-001",
+        "RENDER-001"
+      ],
+      "acceptance_criteria": [
+        "同じCompositionを異なる長さ/時刻で複数配置する",
+        "trim/stretch/instance retimeを別操作としてテストする"
+      ]
+    },
+    {
+      "id": "SERVICE-001",
+      "milestone": "M2",
+      "priority": "P0",
+      "area": "service",
+      "title": "計画・適用・競合・冪等性",
+      "status": "planned",
+      "dependencies": [
+        "STORE-001",
+        "CLI-001"
+      ],
+      "acceptance_criteria": [
+        "base_revision/plan_hash/idempotency_keyを検証する",
+        "同じキー同じpayloadは重複適用せず異なるpayloadは拒否する"
+      ]
+    },
+    {
+      "id": "TEMPLATE-001",
+      "milestone": "M2",
+      "priority": "P0",
+      "area": "template",
+      "title": "公開入力と保護時間区間の最小template",
+      "status": "planned",
+      "dependencies": [
+        "COMP-001",
+        "SERVICE-001"
+      ],
+      "acceptance_criteria": [
+        "定義とinstance入力を分離し版を固定する",
+        "5秒から8秒にしてintro/outroの長さが変わらない"
+      ]
+    },
+    {
+      "id": "API-001",
+      "milestone": "M2",
+      "priority": "P0",
+      "area": "api",
+      "title": "共通schemaとquery/command公開",
+      "status": "planned",
+      "dependencies": [
+        "SERVICE-001",
+        "PROP-001",
+        "EVAL-001"
+      ],
+      "acceptance_criteria": [
+        "scene query/property sample/capabilitiesを構造化結果で返す",
+        "APIの任意シェル/外部URL実行を禁止する"
+      ]
+    },
+    {
+      "id": "MCP-001",
+      "milestone": "M2",
+      "priority": "P0",
+      "area": "mcp",
+      "title": "MCPアダプター",
+      "status": "planned",
+      "dependencies": [
+        "API-001"
+      ],
+      "acceptance_criteria": [
+        "交渉したprotocol versionでschemaとstructuredContentを返す",
+        "クライアント接続状態に暗黙の対象Projectを保持しない"
+      ]
+    },
+    {
+      "id": "JOB-001",
+      "milestone": "M2",
+      "priority": "P0",
+      "area": "jobs",
+      "title": "固定snapshot書き出しjob",
+      "status": "planned",
+      "dependencies": [
+        "SERVICE-001",
+        "MEDIA-001",
+        "RENDER-001"
+      ],
+      "acceptance_criteria": [
+        "切断後も保存されたjob IDで状態取得できる",
+        "一時出力を検証してから確定名へ切り替える"
+      ]
+    },
+    {
+      "id": "INTEGRATION-001",
+      "milestone": "M2",
+      "priority": "P0",
+      "area": "integration",
+      "title": "最初の日本語lower-third縦断デモ",
+      "status": "planned",
+      "dependencies": [
+        "NLE-001",
+        "TEMPLATE-001",
+        "MCP-001",
+        "JOB-001"
+      ],
+      "acceptance_criteria": [
+        "CLIで作成しMCPで確認して固定snapshotから4K出力する",
+        "別instanceの文字/色/長さが干渉しない"
+      ]
+    },
+    {
+      "id": "EXPR-001",
+      "milestone": "M3",
+      "priority": "P1",
+      "area": "expression",
+      "title": "型付きASTと有界式評価",
+      "status": "planned",
+      "dependencies": [
+        "EVAL-001",
+        "API-001"
+      ],
+      "acceptance_criteria": [
+        "静的依存列挙と命令/メモリ/サンプル予算を実装する",
+        "固定seedのnoiseと禁止機能の拒否をテストする"
+      ]
+    },
+    {
+      "id": "LAYOUT-001",
+      "milestone": "M3",
+      "priority": "P1",
+      "area": "layout",
+      "title": "responsive layoutとbounds段階",
+      "status": "planned",
+      "dependencies": [
+        "TEXT-001",
+        "VEC-001",
+        "EVAL-001"
+      ],
+      "acceptance_criteria": [
+        "layout/ink/visual boundsを区別する",
+        "文字幅と背景幅の循環およびoverflowを診断する"
+      ]
+    },
+    {
+      "id": "TEMPLATE-002",
+      "milestone": "M3",
+      "priority": "P1",
+      "area": "template",
+      "title": "長さ・縦横比variant・data入力・版移行",
+      "status": "planned",
+      "dependencies": [
+        "TEMPLATE-001",
+        "LAYOUT-001"
+      ],
+      "acceptance_criteria": [
+        "短尺拒否/hold/loop/stretchを明示する",
+        "版更新の差分計画とプレビューを生成し勝手に既存作品を更新しない"
+      ]
+    },
+    {
+      "id": "GUI-001",
+      "milestone": "M3",
+      "priority": "P1",
+      "area": "gui",
+      "title": "Canvas・階層・変換操作",
+      "status": "planned",
+      "dependencies": [
+        "API-001",
+        "RENDER-001"
+      ],
+      "acceptance_criteria": [
+        "GUI操作が共通command/eventを使う",
+        "選択・pan/zoomなどUI状態を作品から分離する"
+      ]
+    },
+    {
+      "id": "GUI-002",
+      "milestone": "M3",
+      "priority": "P1",
+      "area": "gui",
+      "title": "Dope sheetとCurve editor",
+      "status": "planned",
+      "dependencies": [
+        "GUI-001",
+        "ANIM-001"
+      ],
+      "acceptance_criteria": [
+        "キー移動/接線編集/UndoがCLIで読める同じモデルを変更する",
+        "空間パスと時間イージングを区別して表示する"
+      ]
+    },
+    {
+      "id": "INSPECT-001",
+      "milestone": "M3",
+      "priority": "P1",
+      "area": "inspection",
+      "title": "非表示原因・依存・レンダー経路のexplain",
+      "status": "planned",
+      "dependencies": [
+        "API-001",
+        "LAYOUT-001",
+        "CACHE-001"
+      ],
+      "acceptance_criteria": [
+        "opacity/active range/parent/mask/asset不足を要因別に返す",
+        "過大処理と転送/メモリ/キャッシュを構造化して表示する"
+      ]
+    },
+    {
+      "id": "QA-002",
+      "milestone": "M3",
+      "priority": "P1",
+      "area": "test",
+      "title": "GUI/CLI/MCP同等性と日本語IME",
+      "status": "planned",
+      "dependencies": [
+        "GUI-002",
+        "MCP-001",
+        "INTEGRATION-001"
+      ],
+      "acceptance_criteria": [
+        "同じ編集操作の結果snapshotが一致する",
+        "未確定IME文字列を作品履歴へ大量commitしない"
+      ]
+    },
+    {
+      "id": "RENDER-002",
+      "milestone": "M4",
+      "priority": "P1",
+      "area": "render",
+      "title": "時間サンプルと高品質モーションブラー",
+      "status": "planned",
+      "dependencies": [
+        "RENDER-001",
+        "CACHE-001",
+        "ANIM-001"
+      ],
+      "acceptance_criteria": [
+        "サブ時刻ごとの全体合成を基準に比較する",
+        "カット境界/ネスト/露光位相/重複サンプルを扱う"
+      ]
+    },
+    {
+      "id": "GPU-003",
+      "milestone": "M4",
+      "priority": "P1",
+      "area": "gpu",
+      "title": "各OSのFrameBridge保証経路",
+      "status": "planned",
+      "dependencies": [
+        "GPU-001",
+        "GPU-002",
+        "MEDIA-001"
+      ],
+      "acceptance_criteria": [
+        "対応形式ごとにデバイス/所有権/同期/寿命を検証する",
+        "非対応経路は明示fallbackまたはrequire_gpu_residentエラー"
+      ]
+    },
+    {
+      "id": "COLOR-001",
+      "milestone": "M4",
+      "priority": "P1",
+      "area": "color",
+      "title": "HDR/alpha/高解像度品質",
+      "status": "planned",
+      "dependencies": [
+        "GPU-002",
+        "RENDER-002",
+        "QA-001"
+      ],
+      "acceptance_criteria": [
+        "HDRの表示変換を最終出力へ勝手に焼き込まない",
+        "文字・mask・glowを含む8K offline出力を検証する"
+      ]
+    },
+    {
+      "id": "CACHE-002",
+      "milestone": "M4",
+      "priority": "P1",
+      "area": "cache",
+      "title": "temporal/region cacheと無効化",
+      "status": "planned",
+      "dependencies": [
+        "CACHE-001",
+        "RENDER-002"
+      ],
+      "acceptance_criteria": [
+        "ROI haloと複数時刻依存をkeyに含める",
+        "ネストやTimeMap変更が古いフレームを再利用しない"
+      ]
+    },
+    {
+      "id": "PERF-001",
+      "milestone": "M4",
+      "priority": "P1",
+      "area": "performance",
+      "title": "参照シーンbenchmarkと資源予算",
+      "status": "planned",
+      "dependencies": [
+        "GPU-003",
+        "COLOR-001",
+        "CACHE-002"
+      ],
+      "acceptance_criteria": [
+        "warm/cold・proxy/full・preview/finalを分けてp50/p95を出す",
+        "decode面/atlas/accumulation/encoderを含めたpeak memoryを記録する"
+      ]
+    },
+    {
+      "id": "RECOVERY-001",
+      "milestone": "M4",
+      "priority": "P1",
+      "area": "reliability",
+      "title": "GPU lost/容量不足/worker停止の復旧",
+      "status": "planned",
+      "dependencies": [
+        "JOB-001",
+        "GPU-003",
+        "STORE-001"
+      ],
+      "acceptance_criteria": [
+        "失敗でProjectや確定済み成果物が壊れない",
+        "出力fileへの無条件appendを再開方法に使わない"
+      ]
+    },
+    {
+      "id": "VEC-002",
+      "milestone": "M5",
+      "priority": "P1",
+      "area": "vector",
+      "title": "Trim path・morph・SVG対応表",
+      "status": "planned",
+      "dependencies": [
+        "VEC-001",
+        "ANIM-001",
+        "QA-001"
+      ],
+      "acceptance_criteria": [
+        "morphは点/segment対応を検証し不整合を拒否する",
+        "SVGのunsupported機能と外部参照を報告する"
+      ]
+    },
+    {
+      "id": "REPEAT-001",
+      "milestone": "M5",
+      "priority": "P1",
+      "area": "motion",
+      "title": "Repeaterとinstanceごとの制御",
+      "status": "planned",
+      "dependencies": [
+        "COMP-001",
+        "EXPR-001",
+        "VEC-002"
+      ],
+      "acceptance_criteria": [
+        "Source共有とinstance ID/seedを保持する",
+        "個別編集のexpandを明示し元templateを変更しない"
+      ]
+    },
+    {
+      "id": "TEXT-002",
+      "milestone": "M5",
+      "priority": "P1",
+      "area": "text",
+      "title": "文字単位selector・ルビ・縦書き",
+      "status": "planned",
+      "dependencies": [
+        "TEXT-001",
+        "ANIM-001",
+        "LAYOUT-001"
+      ],
+      "acceptance_criteria": [
+        "クラスタを壊さない文字演出と親文字/ルビの結合を実装する",
+        "再組版時に古いglyph indexへ誤適用しない"
+      ]
+    },
+    {
+      "id": "AUDIO-001",
+      "milestone": "M5",
+      "priority": "P1",
+      "area": "audio",
+      "title": "音声特徴量DataAssetと連動",
+      "status": "planned",
+      "dependencies": [
+        "MEDIA-001",
+        "EXPR-001",
+        "TIME-001"
+      ],
+      "acceptance_criteria": [
+        "分析版/窓/ホップ/時間写像と入力hashを固定する",
+        "同じ出力フレームごとに音声全体を再分析しない"
+      ]
+    },
+    {
+      "id": "SIM-001",
+      "milestone": "M5",
+      "priority": "P2",
+      "area": "simulation",
+      "title": "固定刻み・checkpoint・particle基盤",
+      "status": "planned",
+      "dependencies": [
+        "EVAL-001",
+        "CACHE-002",
+        "REPEAT-001"
+      ],
+      "acceptance_criteria": [
+        "順次再生とcheckpointからのseekを固定環境で比較する",
+        "入力変更で影響するcheckpointを無効化する"
+      ]
+    },
+    {
+      "id": "DIM-001",
+      "milestone": "M6",
+      "priority": "P2",
+      "area": "3d",
+      "title": "2.5D Scene3D境界とカメラ",
+      "status": "planned",
+      "dependencies": [
+        "COLOR-001",
+        "COMP-001",
+        "RENDER-002"
+      ],
+      "acceptance_criteria": [
+        "2D描画順と3D depthを別仕様として持つ",
+        "Color/Maskと必要な補助ポートを型検証する"
+      ]
+    },
+    {
+      "id": "INTEROP-001",
+      "milestone": "M6",
+      "priority": "P2",
+      "area": "interop",
+      "title": "OTIO/SVG/外部レンダーの交換アダプター",
+      "status": "planned",
+      "dependencies": [
+        "NLE-001",
+        "VEC-002",
+        "JOB-001"
+      ],
+      "acceptance_criteria": [
+        "保持/変換/欠落した機能をレポートする",
+        "完全互換でない表現のbakeを明示承認にする"
+      ]
+    },
+    {
+      "id": "PLUGIN-001",
+      "milestone": "M6",
+      "priority": "P2",
+      "area": "plugins",
+      "title": "有界WASM拡張と信頼区分",
+      "status": "planned",
+      "dependencies": [
+        "EXPR-001",
+        "RENDER-001",
+        "API-001"
+      ],
+      "acceptance_criteria": [
+        "CPU fuel/host call/メモリ/外部権限を別々に制限する",
+        "WASM制限がGPU処理時間を保証しないことを診断設計へ反映する"
+      ]
+    },
+    {
+      "id": "DIST-001",
+      "milestone": "M6",
+      "priority": "P2",
+      "area": "distributed",
+      "title": "レンダーファームとsimulation bake境界",
+      "status": "planned",
+      "dependencies": [
+        "SIM-001",
+        "JOB-001",
+        "RECOVERY-001"
+      ],
+      "acceptance_criteria": [
+        "素材/フォント/engine versionsをworker間で照合する",
+        "未ベイクstateful区間を任意frameへ自由分割しない"
+      ]
+    }
+  ]
+}
