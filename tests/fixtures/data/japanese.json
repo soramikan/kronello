@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "normalization": "none",
+  "cases": [
+    {
+      "id": "combining",
+      "text": "が",
+      "codepoints": [
+        12363,
+        12441
+      ]
+    },
+    {
+      "id": "ivs",
+      "text": "葛󠄀",
+      "codepoints": [
+        33883,
+        917760
+      ]
+    },
+    {
+      "id": "emoji",
+      "text": "👩‍💻",
+      "codepoints": [
+        128105,
+        8205,
+        128187
+      ]
+    },
+    {
+      "id": "variants",
+      "text": "髙﨑"
+    },
+    {
+      "id": "kinsoku",
+      "text": "「日本語」、句読点。"
+    },
+    {
+      "id": "ruby",
+      "text": "漢字",
+      "ruby": "かんじ"
+    },
+    {
+      "id": "vertical",
+      "text": "縦書き１２３。",
+      "direction": "vertical-rl"
+    }
+  ]
+}

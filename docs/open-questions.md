@@ -37,7 +37,6 @@
 | 素材の hash 照合の頻度と高速化 | MEDIA-001 |
 | 同梱する FFmpeg の版と configure オプション | MEDIA-001 |
 | 音声コーデックの選定 | AUDIO-000 |
-| テスト素材をリポジトリに含めるサイズの閾値と、大きい素材の取得元 | QA-001 |
 | 高頻度経路での FFI の JSON 直列化コストの計測と対策 | FFI-001 |
 | 外部変更が来たときの GUI 上の扱い（選択中のオブジェクトの消失など） | GUI-001 |
 | 中断したジョブの再開で、完了済み区間をどこまで再利用できるか | RECOVERY-001 |
@@ -65,4 +64,5 @@
 | OQ-18 HDR の基準白・表示変換・色域マッピング | [ADR-0037](adr/0037-hdr-policy.md) |
 | OQ-19 イベントと逆操作情報の保持期間 | [ADR-0030](adr/0030-history-retention.md) |
 | OQ-20 ジョブ記録の保持期間 | [ADR-0034](adr/0034-job-retention.md) |
+| テスト素材の同梱サイズの閾値と大きい素材の取得元（QA-001 で設計） | [fixture と解析的 golden scene](testing/fixtures.md) |
 | OQ-02 のうち名称の衝突 | [ADR-0042](adr/0042-naming-kronello.md) |
