@@ -32,14 +32,16 @@ worker の sandbox では Metal adapter が列挙されず、GPU テストは `A
 
 各 `SpikePath::measure` は一回の操作を完了 fence まで待って計測する。スパイクの可否を確認するための host elapsed で、GPU timestamp・帯域・定常性能の benchmark ではない。CPU upload / copy の検証用 readback と準備 upload は計測対象・転送 counters から除く。IOSurface は allocation / seed / import / shader setup / 検証を含む全体時間を報告し、allocation と native texture + HAL import の時間も別記する。
 
-| 候補経路 | 実装・検証内容 | 初回 / 再実測 |
+| 候補経路 | 実装・検証内容 | 初回 / 再実測、追加スパイク |
 |---|---|---|
 | CPU → GPU upload | 64×64 RGBA16F、32768 bytes、upload と completion fence、画素照合 | 成功、1.568084 / 1.694250 ms、32768 B / 1 op |
 | GPU 内コピー | 同サイズ texture-to-texture、32768 bytes、画素照合 | 成功、623.166 / 1385.916 µs、32768 B / 1 op |
 | GPU → CPU readback | 同サイズ、32768 bytes（row padding なし）、map と全画素照合 | 成功、1.054292 / 1.016875 ms、32768 B / 1 op |
 | IOSurface → MTLTexture → wgpu | 2×2 BGRA8 単一面を生成、lock 中に既知画素を seed、`Device::as_hal` の同じ MTLDevice で texture 化、`texture_from_raw` / `create_texture_from_hal` で import、shader で RGBA8 に読出し全画素照合 | 成功、125.329375 / 6.688875 ms（shader setup を含む）、確認用 readback 512 B |
 | wgpu → IOSurface | imported texture を render target として clear、completion fence の後 lock read で BGRA を照合 | 成功、909.209 / 737.709 µs、staging 転送 0 B |
-| VideoToolbox | API 調査のみ。`SpikePath::measure(VideoToolbox)` は `UNSUPPORTED_FEATURE` | decode / encode / CVPixelBuffer / FFmpeg interop は**未実測・未実装** |
+| CvPixelBufferImport | IOSurface 裏付け BGRA8 CVPixelBuffer → CVMetalTextureCache → HAL → shader、既知画素を完全照合 | M1 / Metal 実測で可、430.951041 ms、readback 512 B / 1 op |
+| VideoToolboxDecodeBgra8 | 64×64 H.264 3 frame encode → BGRA8 decode → IOSurface / CV cache / HAL → shader | M1 / Metal 実測で可、106.183208 ms、hardware_decoder=Some(true)、max_error=1、readback 49152 B / 3 op |
+| VideoToolboxDecodeNv12Biplanar | 64×64 H.264 3 frame encode → NV12 decode、R8 / RG8 plane import と plane bytes 完全照合 | M1 / Metal 実測で可、242.804792 ms、hardware_decoder=Some(true)、readback 49152 B / 3 op、YCbCr→RGB は未検証 |
 
 IOSurfaceCreate の初回 / 再実測は入力 351.917 / 375.500 µs、出力 100.417 / 76.084 µs。同じ device での MTLTexture + HAL import は入力 93.416 / 87.083 µs、出力 114.125 / 81.000 µs。入力全体時間の初回の大きさを allocation / import の時間だけで説明できない。shader / pipeline 生成や待機を含むが、原因の内訳は未計測。
 
@@ -47,7 +49,30 @@ IOSurface の入力 seed は 16 bytes の CPU 書込みで、外部 producer を
 
 unsafe の前提は、同一 device・固定 2×2 BGRA8 / 1 plane / 1 mip / 1 sample、所有 surface の retain、lock による CPU access、GPU completion 後の CPU read、native resource と descriptor の一致。HAL の drop callback は surface の寿命 token のみを持ち、pixel access を公開しない。別 device・別形式・複数 producer の同期・外部プロセス・YUV / HDR の interop 保証は行っていない。
 
-VideoToolbox は [VTDecompressionSession](https://developer.apple.com/documentation/videotoolbox/vtdecompressionsession-api-collection?language=objc) で session を作り、decoded CVPixelBuffer から [CVMetalTextureCacheCreateTextureFromImage](https://developer.apple.com/documentation/corevideo/cvmetaltexturecachecreatetexturefromimage(_:_:_:_:_:_:_:_:_:)?language=objc) へ接続する API 経路がある。M0 の IOSurface テストからこのデコード経路の性能・形式・寿命を推定しない。MEDIA-001 / FRAME-001 で session、pixel format、plane、色 metadata、解放順、decoder と GPU の同期を検証する。
+VideoToolbox は `VTDecompressionSession` の出力 CVPixelBuffer を `CVMetalTextureCacheCreateTextureFromImage` へ接続し、同一 MTLDevice の HAL texture として wgpu に取り込む経路を実装した。追加スパイクで M1 / Metal の BGRA8 と NV12 biplanar の decode / import / readback を確認した。任意の pixel format、色 metadata、外部 producer との同期の保証へ一般化せず、MEDIA-001 / FRAME-001 で拡張する。
+
+## CoreVideo / VideoToolbox 追加スパイク
+
+追加実装は macOS の [`videotoolbox` module](../../crates/kronello-framebridge/src/videotoolbox.rs) に隔離した。`CvPixelBufferImport`、`VideoToolboxDecodeBgra8`、`VideoToolboxDecodeNv12Biplanar` を経路として区別する。形式を指定しない旧 `PathKind::VideoToolbox` と、Linux でのこれらの測定は型付き `UNSUPPORTED_FEATURE` とする。
+
+段階 A は `CVPixelBufferCreate` で IOSurface 裏付け・Metal compatibility=true の 2×2 BGRA8 バッファを作り、CPU lock 中に既知の 4 画素を書き込む。同じ wgpu device の `Device::as_hal` から得た MTLDevice で `CVMetalTextureCache` を作り、CVMetalTexture を HAL import、shader で RGBA8 にサンプリングして全 byte を照合する。呼び出し元の pixel buffer / cache 参照は submission 前に drop し、HAL の drop callback が保持する token に CVPixelBuffer / CVMetalTexture / cache を所有させる。通常の `test_cvpixelbuffer_import_to_gpu` は adapter 不在を成功に変えない。
+
+段階 B は 64×64 の grayscale 4 分割パターン（32 / 96 / 160 / 224）を 3 frame、H.264 にメモリ内 encode し、保持した CMSampleBuffer の format description から decoder を作る。出力に IOSurface / Metal compatibility / BGRA8 を指定し、callback 出力を retain、完了待ち後に IOSurface を検査、段階 A の経路でサンプリングする。BGRA の最大 channel 誤差は 2 byte 以下を要求する。`UsingHardwareAcceleratedVideoDecoder` の boolean と query の OSStatus を記録し、query 失敗を software と推定しない。
+
+BGRA が使えない段階では失敗した `NativeStage` と OSStatus を出力して、NV12 を明示的に試す。R8 / RG8 の各 plane を import し、shader 出力の Y / Cb / Cr bytes を lock read した decoder 出力と完全照合する。YCbCr→RGB は実装しない。BGRA の色比較失敗を NV12 成功で隠さない。NV12 だけを明示実測する ignored test も備える。両 decoder 形式の失敗は段階ごとの `NativeError` を返す。`TransferPath` 互換入口では診断を出した上で `UNSUPPORTED_FEATURE` へ変換する。
+
+session guard は早期失敗でも invalidate を行い、callback context と encode 入力を session teardown まで保持する。出力 CVPixelBuffer と CMSampleBuffer は callback 内で retain し、decode の完了後も texture の HAL token が buffer / CV texture / cache を保持する。unsafe の対象は FFI、retained handle の受け渡し、lock 中の画素アクセス、同一 device の HAL import に限定する。
+
+転送 counters には検証用 staging readback を含める。段階 A は seed の CPU 書込み 16 B を準備として除外し、readback は row padding を含む 512 B / 1 op。段階 B は 3 frame の readback 49152 B / 3 op。CPU seed と codec 内部の形式変換は counters の対象外であり、動画処理全体の CPU 転送ゼロを主張しない。段階 B の elapsed は decode / import / shader / validation を含み、encode は除く。
+
+worker sandbox で macOS build、fmt、workspace clippy、Linux `--all-targets` cross-check、`cargo test -p kronello-framebridge --lib --locked` の診断保持 1 test が成功した。`--lib` は integration の段階 A/B を実行するコマンドではない。2026-10-03 に提供された実測結果は Apple M1 MacBook / macOS 27.0 / Rust 1.95.0 / wgpu 30.0.1 / Metal で取得され、通常の段階 A と明示実行した段階 B の BGRA8 / NV12 のすべてが成功した。両 decode 形式で hardware_decoder=Some(true)、BGRA8 は max_error=1 で許容誤差 2 以下。上の経路表はこの単発実測値を記録している。
+
+```sh
+WGPU_BACKEND=metal cargo test -p kronello-framebridge --locked -- --nocapture
+WGPU_BACKEND=metal cargo test -p kronello-framebridge --test videotoolbox --locked -- --ignored --nocapture
+```
+
+[`tests/videotoolbox.rs`](../../crates/kronello-framebridge/tests/videotoolbox.rs) の段階 B の 2 test は通常実行で ignored。段階 A は通常実行に含まれる。ignored の codec test は実測成功に数えず、必要な実測時に明示実行する。FFmpeg の interop、外部ストリーム、色 metadata からの変換、HDR、producer の並行書込み、性能の定常値はこの追加スパイクの保証外。
 
 ## golden
 
@@ -71,15 +96,40 @@ WGPU_BACKEND=metal cargo test -p kronello-gpu -p kronello-framebridge --locked -
 cargo check -p kronello-gpu -p kronello-framebridge --all-targets --target x86_64-unknown-linux-gnu --locked
 ```
 
-`cargo fmt --all --check`、`cargo clippy --workspace --all-targets --locked -- -D warnings` は worker で成功。sandbox 外の Metal で上記 2 crate の `cargo test` は supervisor が実行し、ログを worker が読んで確認した。`cargo test --workspace --locked` 全体の最終統合実行は supervisor が担当する。
+`cargo fmt --all --check`、`cargo clippy --workspace --all-targets --locked -- -D warnings` は worker で成功。sandbox 外の Metal で上記 2 crate の `cargo test` は supervisor が実行し、ログを worker が読んで確認した。追加実装を含む作業ツリーの `cargo test --workspace --locked` 全体の最終統合実行は supervisor が担当する。
 
-Linux の `cargo check --all-targets` は macOS からの cross-check で成功した。Linux 実行・Vulkan/lavapipe の画素比較成功はこの結果から主張しない。Linux CI は `mesa-vulkan-drivers` / `libvulkan1`、`WGPU_BACKEND=vulkan`、lavapipe ICD を必要とする。親が CI に `mesa-vulkan-drivers` / `vulkan-tools`、`WGPU_BACKEND=vulkan`、検出した lavapipe ICD の `VK_DRIVER_FILES` と `XDG_RUNTIME_DIR`、`vulkaninfo` の CPU driver 照合を設定した。CI を worker が編集したものではなく、push 前のため実走は未実施。GPU adapter を確保した上で通常の `cargo test --workspace --locked` に含める。
+今回の文書更新時にも sandbox 内で `cargo test --workspace --locked` を実行した。診断保持と residency 契約は各 1 test 成功したが、`measure_transfer_paths` と `iosurface_import_and_output` は Metal adapter 不在の `ADAPTER_UNAVAILABLE` で失敗し、後続テストは実行されなかった。この結果を workspace 全体の成功とは扱わない。
+
+### Linux / macOS CI
+
+Linux の `cargo check --all-targets` は macOS からの cross-check で成功した。さらに [GitHub Actions run 37072973888](https://github.com/soramikan/kronello/actions/runs/37072973888) は macOS (Apple Silicon) と Linux (Mesa lavapipe) の両ジョブが成功した。対象 revision は `07a78ede6203575085b0a1a4a978a2d98877e8bd`、完了は 2026-10-03（JST）。`gh run view 37072973888 --repo soramikan/kronello --json conclusion,status,headSha,jobs` と `--log` で結果を確認した。
+
+両 OS で `cargo test --workspace --locked` が成功し、FrameBridge の `tests/paths.rs` は各 3 passed / 0 failed / 0 ignored。macOS は IOSurface import / output、Linux は native 経路の型付き非対応を含む。Linux では CPU upload / GPU copy / readback の画素照合を Vulkan / lavapipe 上で実行した。Linux CI は `mesa-vulkan-drivers` / `vulkan-tools`、`WGPU_BACKEND=vulkan`、検出した lavapipe ICD の `VK_DRIVER_FILES`、`XDG_RUNTIME_DIR`、`vulkaninfo` の CPU driver 照合を設定している（[workflow](../../.github/workflows/ci.yml)）。
+
+この run は追加の CoreVideo / VideoToolbox 実装前の revision を検証したもので、今回の作業ツリーの CI 成功や VideoToolbox codec 提供を示すものではない。H.264 decode の成功は上記 M1 実測の結果として扱う。追加実装の codec test は通常実行で ignored であり、CI runner の codec 実測は未確認。固定環境の golden 比較もこの CI 成功には含めない。
 
 ## 依存とライセンス
 
-crates.io の [wgpu 30.0.1](https://docs.rs/crate/wgpu/30.0.1)、pollster 1.0.1 を確認し lockfile に解決した。`cargo metadata --locked --format-version 1` の 176 packages（全 workspace・全 target を含む）を調べ、ライセンス metadata の欠落・GPL / AGPL 専用依存はなかった。`r-efi` 等の LGPL 選択肢を持つ OR 式は MIT / Apache-2.0 側を選ぶ。Unicode-3.0、ISC、Zlib、BSD、0BSD、Unlicense の表示義務等は release packaging で管理する。この確認は Cargo metadata に基づき、配布バイナリと license notices の監査を代替しない。FFmpeg を追加・リンクしていない。
+`Cargo.lock` の wgpu 30.0.1 は `MIT OR Apache-2.0`、pollster 1.0.1 は `Apache-2.0/MIT`。`cargo metadata --locked --format-version 1` の 181 packages（全 workspace・全 target を含む）を調べ、ライセンス metadata の欠落・GPL / AGPL 専用依存はなかった。`r-efi` 等の LGPL 選択肢を持つ OR 式は MIT / Apache-2.0 側を選ぶ。Unicode-3.0、ISC、Zlib、BSD、0BSD、Unlicense の表示義務等は release packaging で管理する。この確認は Cargo metadata に基づき、配布バイナリと license notices の監査を代替しない。FFmpeg を追加・リンクしていない。
+
+`Cargo.lock` と `cargo metadata --locked --format-version 1` を再照合した objc2 系の解決版とライセンスは以下のとおり。objc2 suite の本体・framework binding は 0.3.2〜0.6.4（objc2-encode は 4.1.0）で、MIT を選択できる。追加依存は macOS target のみで、Apple の system framework を使う。
+
+| crate | 解決版 | ライセンス | 今回追加 |
+|---|---|---|---|
+| objc2 | 0.6.4 | MIT | — |
+| objc2-encode | 4.1.0 | MIT | — |
+| objc2-foundation | 0.3.2 | MIT | — |
+| objc2-core-foundation / objc2-core-graphics / objc2-io-surface / objc2-metal / objc2-quartz-core | 各 0.3.2 | Zlib OR Apache-2.0 OR MIT | — |
+| objc2-core-video / objc2-core-media / objc2-video-toolbox | 各 0.3.2 | Zlib OR Apache-2.0 OR MIT | 直接依存 |
+| objc2-core-audio / objc2-core-audio-types | 各 0.3.2 | Zlib OR Apache-2.0 OR MIT | 推移依存 |
+
+追加した 5 crate のライセンスに GPL / LGPL はない。workspace 全体では既存の `r-efi` 5.3.0 / 6.0.0 が `MIT OR Apache-2.0 OR LGPL-2.1-or-later` を提示するため、「metadata に LGPL が一切ない」とは記録しない。MIT / Apache-2.0 を選択でき、GPL / LGPL 専用依存の追加はない。
 
 ## 未確認事項
 
-- Linux lavapipe の実行結果、M4 参照機での基準採取と閾値校正は未確認。
-- VideoToolbox 実デコード・エンコード、ゼロコピーの全形式保証、定常性能、HDR 出力は後続タスク。
+- VideoToolbox encoder への wgpu 出力投入。wgpu → IOSurface 出力までは確認済みだが、今回の encoder 入力は CPU seed した CVPixelBuffer。
+- NV12 の YCbCr→RGB 変換と色精度、色 metadata に基づく変換。
+- 10bit / HDR / 4K、外部ストリーム、FFmpeg hwaccel、zero-copy の全形式保証、定常性能。
+- 追加の CoreVideo / VideoToolbox 実装を含む revision の CI 実行。run 37072973888 の両 OS 成功は追加実装前の結果。
+- CI runner での VideoToolbox codec 提供と実デコード。段階 B は ignored。
+- M4 参照機の実測、基準画像採取と閾値校正。M1 候補を基準として登録していない。

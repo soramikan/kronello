@@ -126,4 +126,6 @@ cache_key = hash(
 
 ## M0 GPU スパイクの実装範囲
 
-GPU-001 の `kronello-gpu` は wgpu 30.0.1 / pollster 1.0.1 を使い、矩形・PAM 素材から線形 premultiplied RGBA16F までの最短経路を実装した。CPU upload / GPU 内コピー / GPU→CPU readback を別の `TransferStats` として記録する。`kronello-framebridge` の unsafe native interop は macOS のモジュール内に隔離し、IOSurface の BGRA8 単一面取り込み・出力を検証する。通常 renderer / Render DAG / VideoToolbox デコード・エンコード / 他形式の GPU 常駐保証は未実装。実測結果と制約は [スパイク報告](../testing/gpu-spike-m0.md)、基準未登録の golden harness は [比較手順](../testing/golden-comparison.md) を参照。
+GPU-001 の `kronello-gpu` は wgpu 30.0.1 / pollster 1.0.1 を使い、矩形・PAM 素材から線形 premultiplied RGBA16F までの最短経路を実装した。CPU upload / GPU 内コピー / GPU→CPU readback を別の `TransferStats` として記録する。`kronello-framebridge` の unsafe native interop は macOS のモジュール内に隔離し、IOSurface の BGRA8 単一面取り込み・出力を検証する。通常 renderer / Render DAG / 他形式の GPU 常駐保証は未実装。実測結果と制約は [スパイク報告](../testing/gpu-spike-m0.md)、基準未登録の golden harness は [比較手順](../testing/golden-comparison.md) を参照。
+
+M1 / Metal の追加実測では、wgpu 30.0.1 の同一 MTLDevice による IOSurface の零コピー import / output と、CVPixelBuffer → CVMetalTextureCache → HAL import が成功した。VideoToolbox の H.264 decode 出力は BGRA8 および NV12 biplanar（R8 / RG8）を取り込めた。H.264 3 frame は両形式で hardware decoder 使用を確認し、BGRA8 のテストパターン最大 channel 誤差は 1。wgpu 出力の VideoToolbox encoder 投入と YCbCr→RGB 精度は未検証。形式ごとの実測値・寿命・同期・転送 counters の範囲は [追加スパイク報告](../testing/gpu-spike-m0.md#corevideo--videotoolbox-追加スパイク) を参照。

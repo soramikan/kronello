@@ -105,4 +105,6 @@ QA-001 の `compare_pixels` はこの暫定値を既定値として実装済み�
 
 実測・候補に `environment.json` / `manifest.json` / `provenance.json`、実行先に `report.json`、失敗時に `failure.json` と失敗の `report.json` を出す。失敗レポートも test / scene / frame 数を記録し、frame 数は実際に保存できた RGBA16F の枚数とする。基準欠落・環境不一致は描画前に失敗するため、その場合は fingerprint / failure のみで画素差分はない。旧 fingerprint が存在すれば `environment-diff.json` も保存する。描画コード、shader、比較コード、fixture、lockfile の hash と Git revision / dirty 状態を記録する。未追跡入力の完全なアーカイブではないため、未コミット候補を基準として採用しない。
 
+通常テストは [CI run 37072973888](https://github.com/soramikan/kronello/actions/runs/37072973888) の macOS / Linux (Mesa lavapipe) で成功した（revision `07a78ede6203575085b0a1a4a978a2d98877e8bd`）。FrameBridge の `tests/paths.rs` は両 OS で各 3 passed。Linux の Vulkan 転送経路・画素照合の成功を含むが、ignored の固定環境 golden 比較や M4 基準への登録・比較合格は含まない。検証範囲は [CI 記録](gpu-spike-m0.md#linux--macos-ci) を参照。
+
 実行環境・実測結果・未確認事項は [M0 GPU スパイク報告](gpu-spike-m0.md) を参照。

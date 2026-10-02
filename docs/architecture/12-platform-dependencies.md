@@ -73,4 +73,12 @@ Kronello 本体は `MIT OR Apache-2.0`（[ADR-0019](../adr/0019-dual-license-mit
 
 ## M0 GPU スパイクの実装範囲
 
-GPU-001 の `kronello-gpu` は wgpu 30.0.1 / pollster 1.0.1 を使い、矩形・PAM 素材から線形 premultiplied RGBA16F までの最短経路を実装した。CPU upload / GPU 内コピー / GPU→CPU readback を別の `TransferStats` として記録する。`kronello-framebridge` の unsafe native interop は macOS のモジュール内に隔離し、IOSurface の BGRA8 単一面取り込み・出力を検証する。通常 renderer / Render DAG / VideoToolbox デコード・エンコード / 他形式の GPU 常駐保証は未実装。実測結果と制約は [スパイク報告](../testing/gpu-spike-m0.md)、基準未登録の golden harness は [比較手順](../testing/golden-comparison.md) を参照。
+GPU-001 の `kronello-gpu` は wgpu 30.0.1 / pollster 1.0.1 を使い、矩形・PAM 素材から線形 premultiplied RGBA16F までの最短経路を実装した。CPU upload / GPU 内コピー / GPU→CPU readback を別の `TransferStats` として記録する。`kronello-framebridge` の unsafe native interop は macOS のモジュール内に隔離し、IOSurface の BGRA8 単一面取り込み・出力を検証する。通常 renderer / Render DAG / 他形式の GPU 常駐保証は未実装。実測結果と制約は [スパイク報告](../testing/gpu-spike-m0.md)、基準未登録の golden harness は [比較手順](../testing/golden-comparison.md) を参照。
+
+## VideoToolbox / CoreVideo の M0 実測
+
+macOS target の `kronello-framebridge` に CVPixelBuffer import と H.264 decode のスパイクを実装した。M1 / Metal で、IOSurface 裏付け BGRA8 CVPixelBuffer を同じ MTLDevice の CVMetalTextureCache から wgpu 30.0.1 に取り込み、shader readback を照合した。メモリ内の H.264 3 frame encode / decode は BGRA8 と NV12 biplanar（R8 / RG8）の両経路で成功し、両形式で hardware decoder 使用、BGRA8 は最大 channel 誤差 1 を確認した。CVPixelBuffer / CVMetalTexture / cache は HAL drop token で保持する。NV12 の YCbCr→RGB と wgpu 出力の encoder 投入は未検証。詳細は [GPU / FrameBridge スパイク](../testing/gpu-spike-m0.md) を参照。
+
+追加の objc2-core-video / objc2-core-media / objc2-video-toolbox と推移依存の objc2-core-audio / objc2-core-audio-types は `Cargo.lock` で各 0.3.2、ライセンスは `Zlib OR Apache-2.0 OR MIT` から MIT を選択できる。wgpu 30.0.1 は `MIT OR Apache-2.0`。Apple の system framework のみを使い、GPL / LGPL 依存と FFmpeg を追加していない。既存 objc2 系を含む解決版・ライセンス一覧は [スパイク報告の依存確認](../testing/gpu-spike-m0.md#依存とライセンス) に記録する。
+
+追加実装前の revision `07a78ede6203575085b0a1a4a978a2d98877e8bd` は [CI run 37072973888](https://github.com/soramikan/kronello/actions/runs/37072973888) で macOS / Linux (Mesa lavapipe) の workspace テストが成功し、FrameBridge の `tests/paths.rs` は両 OS で各 3 passed。Linux の Vulkan 転送経路の実行結果であり、追加の VideoToolbox 実装の CI 検証は含まない。codec test は通常実行で ignored。CI runner の codec 提供は未確認。検証範囲は [スパイク報告](../testing/gpu-spike-m0.md#linux--macos-ci) を参照。

@@ -3,6 +3,8 @@ use kronello_gpu::{GpuContext, GpuError, TransferStats};
 use std::time::{Duration, Instant};
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(target_os = "macos")]
+pub mod videotoolbox;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PathKind {
     CpuUpload,
@@ -11,6 +13,9 @@ pub enum PathKind {
     IoSurfaceImport,
     IoSurfaceOutput,
     VideoToolbox,
+    CvPixelBufferImport,
+    VideoToolboxDecodeBgra8,
+    VideoToolboxDecodeNv12Biplanar,
 }
 impl PathKind {
     pub fn require_gpu_resident(self) -> Result<(), GpuError> {
@@ -22,7 +27,11 @@ impl PathKind {
                 "VideoToolbox decode/encode unimplemented",
             )),
             Self::GpuCopy => Ok(()),
-            Self::IoSurfaceImport | Self::IoSurfaceOutput => {
+            Self::IoSurfaceImport
+            | Self::IoSurfaceOutput
+            | Self::CvPixelBufferImport
+            | Self::VideoToolboxDecodeBgra8
+            | Self::VideoToolboxDecodeNv12Biplanar => {
                 if cfg!(target_os = "macos") {
                     Ok(())
                 } else {
@@ -51,6 +60,31 @@ impl TransferPath for SpikePath {
         self.0
     }
     fn measure(&self, gpu: &GpuContext) -> Result<Measurement, GpuError> {
+        if matches!(
+            self.0,
+            PathKind::CvPixelBufferImport
+                | PathKind::VideoToolboxDecodeBgra8
+                | PathKind::VideoToolboxDecodeNv12Biplanar
+        ) {
+            #[cfg(target_os = "macos")]
+            {
+                let result = match self.0 {
+                    PathKind::CvPixelBufferImport => videotoolbox::probe_cvpixelbuffer_import(gpu),
+                    PathKind::VideoToolboxDecodeBgra8 => {
+                        videotoolbox::probe_videotoolbox_decode(gpu, false)
+                    }
+                    _ => videotoolbox::probe_videotoolbox_decode(gpu, true),
+                };
+                return result.map_err(|error| {
+                    eprintln!("{error}");
+                    GpuError::UnsupportedFeature("CoreVideo/VideoToolbox probe failed; see native stage and OSStatus diagnostic")
+                });
+            }
+            #[cfg(not(target_os = "macos"))]
+            return Err(GpuError::UnsupportedFeature(
+                "CoreVideo/VideoToolbox requires macOS",
+            ));
+        }
         if matches!(
             self.0,
             PathKind::IoSurfaceImport | PathKind::IoSurfaceOutput

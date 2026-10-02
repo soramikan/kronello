@@ -14,7 +14,13 @@ fn gpu_residency_is_explicit() {
     }
     assert!(PathKind::GpuCopy.require_gpu_resident().is_ok());
     #[cfg(not(target_os = "macos"))]
-    for path in [PathKind::IoSurfaceImport, PathKind::IoSurfaceOutput] {
+    for path in [
+        PathKind::IoSurfaceImport,
+        PathKind::IoSurfaceOutput,
+        PathKind::CvPixelBufferImport,
+        PathKind::VideoToolboxDecodeBgra8,
+        PathKind::VideoToolboxDecodeNv12Biplanar,
+    ] {
         assert!(matches!(
             path.require_gpu_resident(),
             Err(GpuError::UnsupportedFeature(_))
@@ -88,7 +94,13 @@ fn iosurface_import_and_output() {
 #[test]
 fn native_paths_are_typed_unsupported() {
     let gpu = GpuContext::new().expect("Vulkan adapter required");
-    for kind in [PathKind::IoSurfaceImport, PathKind::IoSurfaceOutput] {
+    for kind in [
+        PathKind::IoSurfaceImport,
+        PathKind::IoSurfaceOutput,
+        PathKind::CvPixelBufferImport,
+        PathKind::VideoToolboxDecodeBgra8,
+        PathKind::VideoToolboxDecodeNv12Biplanar,
+    ] {
         assert!(matches!(
             SpikePath(kind).measure(&gpu),
             Err(GpuError::UnsupportedFeature(_))
