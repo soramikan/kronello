@@ -57,7 +57,7 @@
       "priority": "P0",
       "area": "gpu",
       "title": "最短GPU描画とFrameBridge技術スパイク",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "ARC-001"
       ],
@@ -91,7 +91,7 @@
       "priority": "P0",
       "area": "infra",
       "title": "ツールチェーン固定とCI",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "ARC-001"
       ],

@@ -5,7 +5,7 @@ Kronello は Rust / FFmpeg / wgpu を基盤とする動画編集・モーショ�
 
 ## 現在の状態
 
-- 実装基盤を整備済み。Cargo workspace と `kronello-time` / `kronello-model` の骨格、CI 設定がある。機能実装・`apps/` は未着手。
+- M0 を実装済み（`kronello-time` / `kronello-model` / `kronello-testkit` / `kronello-gpu` / `kronello-framebridge`、CI）。M1 以降の機能と `apps/` は未着手。
 - 文書中の API・CLI・スキーマは提案であり、実装済みと書かない・扱わない。
 
 ## 最初に読むもの

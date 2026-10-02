@@ -10,7 +10,7 @@
 
 | マイルストーン | planned | in_progress | done | dropped | 計 |
 |---|---:|---:|---:|---:|---:|
-| M0 | 0 | 2 | 4 | 0 | 6 |
+| M0 | 0 | 0 | 6 | 0 | 6 |
 | M1 | 10 | 0 | 0 | 0 | 10 |
 | M2 | 10 | 0 | 0 | 0 | 10 |
 | M3 | 10 | 0 | 0 | 0 | 10 |
@@ -47,7 +47,7 @@
 
 ### GPU-001 最短GPU描画とFrameBridge技術スパイク
 
-- 優先度: P0 / 領域: gpu / 状態: in_progress
+- 優先度: P0 / 領域: gpu / 状態: done
 - 依存: ARC-001
 - 受け入れ条件:
   - 2D素材からRGBA16F出力までの色とalphaを検証する
@@ -67,7 +67,7 @@
 
 ### CI-001 ツールチェーン固定とCI
 
-- 優先度: P0 / 領域: infra / 状態: in_progress
+- 優先度: P0 / 領域: infra / 状態: done
 - 依存: ARC-001
 - 受け入れ条件:
   - rust-toolchain.tomlでstableの特定版に固定し、edition 2024とする
