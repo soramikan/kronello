@@ -1,6 +1,6 @@
 # 名称の衝突調査
 
-調査日: 2026-10-02。[ADR-0023](adr/0023-naming-cinewright.md) で名称を Cinewright に変更したが、その後の追加調査を受けて再検討中（[OQ-02](open-questions.md)）。
+調査日: 2026-10-02。結論は [ADR-0042](adr/0042-naming-kronello.md)（名称を Kronello に変更）。`koma`、Cinewright の順に採用と撤回を経ている。
 
 調べた範囲は crates.io、npm、PyPI、Homebrew（formula / cask）、GitHub のリポジトリ検索、Web 検索。
 **商標データベース（J-PlatPat、USPTO、EUIPO）は照会していない。** public にする前に確認する（[OQ-02](open-questions.md)）。
@@ -27,9 +27,9 @@
 
 実行ファイル名の衝突と、同じ分野の既存製品との混同の両方があるため撤回した。
 
-## `cinewright`（採用後に再検討）
+## `cinewright`（撤回）
 
-採用時の検索は他の候補名と OR でまとめていたため、同名の事業者を見落とした。単独で検索し直して見つかったため、名称を再検討することにした（[OQ-02](open-questions.md)）。以後の調査では、候補ごとに単独で Web 検索し、主要ドメインも確認する。
+採用時の検索は他の候補名と OR でまとめていたため、同名の事業者を見落とした。単独で検索し直して見つかったため撤回した。以後の調査では、候補ごとに単独で Web 検索し、`.com` は whois で確認している。
 
 
 | 対象 | 結果 |
@@ -49,12 +49,39 @@
 | `.cwr` | 不採用。SAP Crystal Reports のレポート、SolidWorks Simulation の結果ファイルなどが使用 |
 | `.cinewright` | 採用 |
 
+## `kronello`（採用）
+
+chrono（時間）に由来する造語。
+
+| 対象 | 結果 |
+|---|---|
+| crates.io / npm / PyPI / Homebrew | いずれも未登録 |
+| GitHub | 同名のリポジトリは検索に現れず |
+| `kronello.com` | whois で未登録 |
+| Web 検索（単独） | 同名の製品・企業は見つからず |
+| 綴りの近い名称 | Kronel（ブラジルの衛生用品ブランド）、Kronell Kft.（ハンガリーの建設会社）。いずれも別分野 |
+| 商標データベース | 未照会 |
+
+## 調査方法についての注意
+
+- DNS に応答がないドメインでも、whois では登録済みのものが多かった。5〜6 文字の造語の `.com` はほぼすべて登録済みである。
+- 複数の候補名を OR でまとめた検索は、個々の名前の衝突を見落とす。
+- パッケージレジストリが空いていても、同名の事業者や製品が存在することがある。
+
 ## 検討した他の候補
 
 いずれも各レジストリの登録状況と GitHub の上位リポジトリを確認した。
 
 | 候補 | 状況 |
 |---|---|
+| Twenora、Sekvaro、Tweenza、Twenello、Tweniva、Sekvito、Reelello、Cutanta、Temexo | 全レジストリ空き、`.com` は whois で未登録、GitHub に同名なし。Twenora・Sekvaro・Tweenza は単独検索でも同名の製品なし |
+| Tweenloom、Timelathe、Glyphreel、Kinetitle、Banctitre、Tweenwright、Holdcel | 全レジストリ空き、`.com` は whois で未登録、単独検索で同名の製品なし。Banctitre はフランス語の一般名詞 |
+| Sekvenza | 空きだが、綴りの近い Sekvenca（クロアチアの映画制作会社）がある |
+| Tweenery | 同名の米国 SNS 企業（閉鎖済み）があった |
+| Cutloom | 同名の Web 動画エディターと macOS の CAM アプリがある |
+| Tweencel | 同名の Aseprite 拡張がある |
+| Kinewright、Reelwright、Timewright、Shotwright、Raccord | 同名のリポジトリ、または `.com` の使用がある |
+| Roughcut、Finecut、Workprint、Dropframe、Onionskin など映像用語の実在語 | `.com` が使用中、または同名の製品がある |
 | Hakobi、Komaori、Tokiori | 全レジストリ空き。和風の名前は見送り |
 | Tweenery | 全レジストリ空き、同名の製品なし。モーション寄りでカット編集の印象が薄い |
 | Multiplane | 全レジストリ空き。OpenToonz、TVPaint、Toon Boom などが機能名として使う一般語 |
@@ -74,3 +101,9 @@
 - [CWR File Extension（filext.com）](https://filext.com/file-extension/CWR)
 - [intercut.ai](https://www.intercut.ai/)
 - [danallison/PEGBAR](https://github.com/danallison/PEGBAR)
+- [Cinewright（cinewright.com）](https://cinewright.com/who-we-are/)
+- [Tweenery（Crunchbase）](https://www.crunchbase.com/organization/tweenery)
+- [FrankOrozcoGT/cutloom-web](https://github.com/FrankOrozcoGT/cutloom-web)
+- [Tweencel for Aseprite](https://devkidd.itch.io/tweencel)
+- [Sekvenca](https://sekvenca.hr/)
+- [Kronell Kft.](https://www.facebook.com/kronellkft/)

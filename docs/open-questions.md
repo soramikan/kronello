@@ -7,19 +7,14 @@
 
 ## 未決
 
-### OQ-02 名称の再検討と商標の確認
+### OQ-02 商標の確認と名前の確保
 
-Cinewright（[ADR-0023](adr/0023-naming-cinewright.md)）を採用した後の追加調査で、同名の事業者が見つかった。米国メイン州でドキュメンタリー映画制作のワークショップを運営する Cinewright（cinewright.com）である。ソフトウェアは提供していないが、映像制作という隣接分野であり、`.com` ドメインは取得できない。このため名称を再検討する。経緯は [naming.md](naming.md)。
+名称は Kronello に決定した（[ADR-0042](adr/0042-naming-kronello.md)、経緯は [naming.md](naming.md)）。残っているのは次の 2 点。
 
-新しい名称を決める際は、候補ごとに次を確認する。
+- 商標データベース（J-PlatPat、USPTO、EUIPO）の照会。これまでの調査では一度も照会していない。
+- crates.io の `kronello` と主要な `kronello-*`、ドメイン（調査時点で `kronello.com` は未登録）の確保。いずれも先着順。
 
-- パッケージレジストリ（crates.io、npm、PyPI、Homebrew）と GitHub
-- 候補名単独での Web 検索と、主要ドメインの使用状況
-- 商標データベース（J-PlatPat、USPTO、EUIPO）。これまでの調査では一度も照会していない
-
-名称が決まったら、crates.io の名前を早めに確保する（先着順）。
-
-決定時期: 公開前。コードの着手前に決めると crate 名の変更が不要になる。
+決定時期: 公開前。名前の確保は早いほどよい。
 
 ### OQ-14 性能目標の確定
 
@@ -70,3 +65,4 @@ Cinewright（[ADR-0023](adr/0023-naming-cinewright.md)）を採用した後の�
 | OQ-18 HDR の基準白・表示変換・色域マッピング | [ADR-0037](adr/0037-hdr-policy.md) |
 | OQ-19 イベントと逆操作情報の保持期間 | [ADR-0030](adr/0030-history-retention.md) |
 | OQ-20 ジョブ記録の保持期間 | [ADR-0034](adr/0034-job-retention.md) |
+| OQ-02 のうち名称の衝突 | [ADR-0042](adr/0042-naming-kronello.md) |

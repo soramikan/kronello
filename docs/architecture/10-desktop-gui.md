@@ -9,15 +9,15 @@ apps/macos (Swift: SwiftUI / AppKit)
        |
        |  同一プロセス FFI
        v
-cinewright-ffi  --->  cinewright-service (Command / Query API)
+kronello-ffi  --->  kronello-service (Command / Query API)
                     |
-                cinewright-render / cinewright-gpu (wgpu)
+                kronello-render / kronello-gpu (wgpu)
                     |
        ネイティブ側が用意した描画面 (CAMetalLayer 等)
 ```
 
 - ネイティブアプリは Rust コアを同じプロセスにライブラリとして読み込む。
-- 編集操作はすべて `cinewright-ffi` 経由で Command / Query API を呼ぶ。GUI 専用の作品状態を作らない。
+- 編集操作はすべて `kronello-ffi` 経由で Command / Query API を呼ぶ。GUI 専用の作品状態を作らない。
 - プレビューは、ネイティブ側が用意した描画面（macOS では CAMetalLayer）を wgpu の surface として渡して直接描画する。画素を CPU 経由で受け渡さない。
 - GUI ができるまで、Windows / Linux は CLI / MCP を対象とする。Windows / Linux でのプレビュー面の受け渡しは未検証で、各 GUI の着手時にスパイクを行う。
 
@@ -31,7 +31,7 @@ cinewright-ffi  --->  cinewright-service (Command / Query API)
 
 [ADR-0031](../adr/0031-ffi-c-abi-json.md) による。
 
-- `cinewright-ffi` は少数の関数からなる C ABI を公開する: プロジェクトを開く・閉じる、Command / Query の呼び出し、通知（revision の変化、ジョブの進捗）の購読、プレビュー面の接続・サイズ変更・再描画要求、メモリの解放。
+- `kronello-ffi` は少数の関数からなる C ABI を公開する: プロジェクトを開く・閉じる、Command / Query の呼び出し、通知（revision の変化、ジョブの進捗）の購読、プレビュー面の接続・サイズ変更・再描画要求、メモリの解放。
 - Command / Query の要求と応答は、CLI / MCP と同じ JSON で受け渡す。Swift・C#・C の型付きラッパーは公開 JSON Schema から生成する。
 - 画素は JSON を通さず、GPU の描画面で直接受け渡す。
 - wgpu、SQLite、Tokio の型を境界に露出しない。
@@ -40,9 +40,9 @@ cinewright-ffi  --->  cinewright-service (Command / Query API)
 
 ## UI 状態と作品の分離
 
-選択、pan / zoom、パネル配置、未確定の IME 文字列は UI 状態であり、作品（`.cinewright` の revision）に含めない。
+選択、pan / zoom、パネル配置、未確定の IME 文字列は UI 状態であり、作品（`.kronello` の revision）に含めない。
 
-UI 状態は、ユーザーごとの状態領域にプロジェクト ID で紐付けて保存する（[ADR-0033](../adr/0033-ui-state-in-user-state-area.md)）。`.cinewright` には書き込まないため、GUI で開いて眺めただけではプロジェクトファイルは変わらない。別のマシンで開くと表示状態は初期値になる。
+UI 状態は、ユーザーごとの状態領域にプロジェクト ID で紐付けて保存する（[ADR-0033](../adr/0033-ui-state-in-user-state-area.md)）。`.kronello` には書き込まないため、GUI で開いて眺めただけではプロジェクトファイルは変わらない。別のマシンで開くと表示状態は初期値になる。
 
 - 未確定の IME 文字列を作品履歴へ大量に commit しない。確定時にコマンドを発行する。
 - ドラッグなど連続操作は、操作中はプレビュー用の候補スナップショットで表示し、確定時に一つのコマンドとして発行する。
@@ -59,7 +59,7 @@ CLI / MCP（エージェント）が同じプロジェクトを編集してい�
 
 | タスク | 内容 |
 |---|---|
-| FFI-001 | `cinewright-ffi`、Swift からの Command / Query 呼び出し、CAMetalLayer へのプレビュー表示 |
+| FFI-001 | `kronello-ffi`、Swift からの Command / Query 呼び出し、CAMetalLayer へのプレビュー表示 |
 | GUI-001 | Canvas、階層、変換操作、外部変更の検知 |
 | GUI-002 | Dope sheet、Curve editor（空間パスと時間イージングを区別して表示） |
 | AUDIO-002 | リアルタイム音声再生と A/V 同期 |

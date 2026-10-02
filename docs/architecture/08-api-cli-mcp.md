@@ -52,27 +52,27 @@ inspect -> draft operations -> edit.plan -> preview(candidate snapshot)
 
 `render.submit` はジョブを記録して worker プロセスを切り離して起動し、すぐに job ID を返す。`job.cancel` で取り消し、`job.resume` で中断したジョブを再開し、`job.prune` で古いジョブディレクトリを掃除する。詳細は [14 ジョブ](14-jobs.md)。
 
-revision 照合と idempotency の記録は `.cinewright` 内で行うため、別プロセスからの再送や競合にも同じ規則が適用される（[09 保存と同時編集](09-storage-concurrency.md)）。
+revision 照合と idempotency の記録は `.kronello` 内で行うため、別プロセスからの再送や競合にも同じ規則が適用される（[09 保存と同時編集](09-storage-concurrency.md)）。
 
 ## 操作例（提案 CLI）
 
 ```bash
-cinewright template instantiate \
-  --project demo.cinewright \
+kronello template instantiate \
+  --project demo.kronello \
   --template lower_third_ja@1.0.0 \
   --inputs inputs.json \
   --duration 8s --plan-out plan.json
 
-cinewright edit apply --project demo.cinewright --plan plan.json --json
+kronello edit apply --project demo.kronello --plan plan.json --json
 
-cinewright preview render --project demo.cinewright \
+kronello preview render --project demo.kronello \
   --composition comp_lower_third \
   --times 0s,0.2s,0.4s,4s,7.7s,7.9s \
   --quality final --out-dir ./preview --json
 
-cinewright validate --project demo.cinewright --profile delivery --json
+kronello validate --project demo.kronello --profile delivery --json
 
-cinewright render --project demo.cinewright --profile hevc-4k \
+kronello render --project demo.kronello --profile hevc-4k \
   --out ./output.mp4 --wait --events ndjson
 ```
 

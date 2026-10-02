@@ -10,9 +10,9 @@ v0.2 仕様は GUI を Rust crate（`ved-desktop`）としていたが、フレ�
 ## 決定
 
 - GUI は OS ごとのネイティブフレームワークで実装する。macOS は SwiftUI / AppKit を先行する。Windows / Linux は候補（WinUI 3 / GTK4）に留め、後で決める。
-- ネイティブアプリは Rust コアを同じプロセスにライブラリとして読み込み、`cinewright-ffi` 経由で Command / Query API を呼ぶ。
+- ネイティブアプリは Rust コアを同じプロセスにライブラリとして読み込み、`kronello-ffi` 経由で Command / Query API を呼ぶ。
 - プレビューは、ネイティブ側が用意した描画面（CAMetalLayer 等）を wgpu の surface として渡して直接描画する。
-- `ved-desktop` crate は廃し、`cinewright-ffi` crate と `apps/<os>/` に置き換える。
+- `ved-desktop` crate は廃し、`kronello-ffi` crate と `apps/<os>/` に置き換える。
 
 ## 影響
 

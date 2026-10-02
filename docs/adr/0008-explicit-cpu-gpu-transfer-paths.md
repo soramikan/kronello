@@ -10,7 +10,7 @@
 ## 決定
 
 - GPU 内コピーと CPU 往復を区別し、使用した経路を `render.explain` で報告する。
-- OS / GPU 依存の相互運用は `cinewright-framebridge` に隔離する。
+- OS / GPU 依存の相互運用は `kronello-framebridge` に隔離する。
 - 非対応経路は明示的な fallback とし、`require_gpu_resident` 指定時はエラーにする。
 
 ## 影響

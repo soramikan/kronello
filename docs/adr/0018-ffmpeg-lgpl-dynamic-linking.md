@@ -5,7 +5,7 @@
 
 ## 背景
 
-Cinewright は MIT OR Apache-2.0 で配布する（ADR-0019）。FFmpeg は構成によって LGPL / GPL / nonfree になり、リンク方法によって配布条件が変わる。外部の ffmpeg 実行ファイルをパイプで使う方式は、フレーム精度の seek や GPU 面の受け渡しが難しい。
+Kronello は MIT OR Apache-2.0 で配布する（ADR-0019）。FFmpeg は構成によって LGPL / GPL / nonfree になり、リンク方法によって配布条件が変わる。外部の ffmpeg 実行ファイルをパイプで使う方式は、フレーム精度の seek や GPU 面の受け渡しが難しい。
 
 ## 決定
 

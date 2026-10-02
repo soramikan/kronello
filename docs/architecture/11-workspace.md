@@ -6,32 +6,32 @@
 
 ```text
 crates/
-  cinewright-model/          # IDs, document types, property descriptors, versions
-  cinewright-time/           # rational time, ranges, TimeMap, sampling
-  cinewright-animation/      # curves, interpolation, modifier contracts
-  cinewright-expr/           # typed AST, dependencies, bounded evaluator
-  cinewright-scene/          # composition, parenting, masks, Scene IR
-  cinewright-layout/         # responsive constraints, metrics, bounds
-  cinewright-text/           # fonts, Japanese layout, glyph/cluster mappings
-  cinewright-vector/         # paths, shape IR, geometry operations
-  cinewright-render/         # DAG compiler, region/time planner, scheduler
-  cinewright-gpu/            # wgpu, pipelines, color/alpha, texture pools
-  cinewright-media/          # FFmpeg integration, seek, decode/encode
-  cinewright-framebridge/    # OS/GPU specific interop and synchronization
-  cinewright-audio/          # mixer, buses, feature-data integration
-  cinewright-store/          # SQLite, snapshots, migrations, event journal
-  cinewright-template/       # typed inputs, bindings, duration, versions
-  cinewright-service/        # commands, queries, policies, job orchestration
-  cinewright-cli/            # machine-oriented CLI adapter (binary: cinewright)
-  cinewright-mcp/            # MCP adapter
-  cinewright-ffi/            # FFI boundary for native GUI apps
+  kronello-model/          # IDs, document types, property descriptors, versions
+  kronello-time/           # rational time, ranges, TimeMap, sampling
+  kronello-animation/      # curves, interpolation, modifier contracts
+  kronello-expr/           # typed AST, dependencies, bounded evaluator
+  kronello-scene/          # composition, parenting, masks, Scene IR
+  kronello-layout/         # responsive constraints, metrics, bounds
+  kronello-text/           # fonts, Japanese layout, glyph/cluster mappings
+  kronello-vector/         # paths, shape IR, geometry operations
+  kronello-render/         # DAG compiler, region/time planner, scheduler
+  kronello-gpu/            # wgpu, pipelines, color/alpha, texture pools
+  kronello-media/          # FFmpeg integration, seek, decode/encode
+  kronello-framebridge/    # OS/GPU specific interop and synchronization
+  kronello-audio/          # mixer, buses, feature-data integration
+  kronello-store/          # SQLite, snapshots, migrations, event journal
+  kronello-template/       # typed inputs, bindings, duration, versions
+  kronello-service/        # commands, queries, policies, job orchestration
+  kronello-cli/            # machine-oriented CLI adapter (binary: kronello)
+  kronello-mcp/            # MCP adapter
+  kronello-ffi/            # FFI boundary for native GUI apps
 apps/
   macos/                     # Swift (SwiftUI / AppKit) desktop app
   windows/                   # 将来
   linux/                     # 将来
 ```
 
-v0.2 仕様からの変更: 接頭辞 `ved-` → `cinewright-`。`ved-desktop` を廃し、`cinewright-ffi` と `apps/` に置き換えた（[10 デスクトップ GUI](10-desktop-gui.md)）。
+v0.2 仕様からの変更: 接頭辞 `ved-` → `kronello-`。`ved-desktop` を廃し、`kronello-ffi` と `apps/` に置き換えた（[10 デスクトップ GUI](10-desktop-gui.md)）。
 
 ## 依存の向き
 

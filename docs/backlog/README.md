@@ -76,7 +76,7 @@ ADR-0027〜0041 の決定を反映した。50 → 51 タスク。
 
 変更:
 
-- STORE-001: 単一 `.cinewright` ファイル、複数プロセスからの書き込みの revision 照合を受け入れ条件に追加。
+- STORE-001: 単一 `.kronello` ファイル、複数プロセスからの書き込みの revision 照合を受け入れ条件に追加。
 - SERVICE-001: idempotency の記録をプロジェクト内に保存する条件を追加。
 - TEMPLATE-001: 背景帯の単方向追従と overflow 検出を追加（縦断テスト第 1 段階に必要）。
 - INTEGRATION-001: 第 1 段階（CLI / MCP）に限定。依存に AUDIO-000、FX-001 を追加。

@@ -1,6 +1,6 @@
 # ADR-0023: 名称を Cinewright に変更する
 
-- 状態: 採用
+- 状態: 置換（[ADR-0042](0042-naming-kronello.md)）
 - 日付: 2026-10-02
 - 置換対象: [ADR-0013](0013-naming-koma.md)
 

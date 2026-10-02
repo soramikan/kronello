@@ -1,5 +1,5 @@
 .DS_Store
 /target/
 __pycache__/
-*.cinewright-wal
-*.cinewright-shm
+*.kronello-wal
+*.kronello-shm

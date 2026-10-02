@@ -74,7 +74,7 @@ RGBA16F の 3840x2160 は 63.28125 MiB、7680x4320 は 253.125 MiB（画像デ�
 - デコード面、参照フレーム、中間テクスチャ、字形アトラス、蓄積バッファ、エンコーダーを別に予算化する。
 - macOS の共有メモリを独立した VRAM と同じ予算計算にしない。
 - CPU / GPU 往復、GPU 内コピー、FrameBridge の同期待ちを計測する（[ADR-0008](../adr/0008-explicit-cpu-gpu-transfer-paths.md)）。
-- Vulkan / Metal / D3D12 との相互運用は専用モジュール（`cinewright-framebridge`）に隔離し、参照デバイス・所有権・同期の契約をテストする。
+- Vulkan / Metal / D3D12 との相互運用は専用モジュール（`kronello-framebridge`）に隔離し、参照デバイス・所有権・同期の契約をテストする。
 
 ### GPU 経路の保証
 
@@ -114,4 +114,4 @@ cache_key = hash(
 - 厳密モードの画素キャッシュはデバイス・ドライバー・エンジンの fingerprint で分ける。
 - 時間依存や Simulation の変更では将来方向への無効化を適切に広げる。
 
-レンダーキャッシュは作品データではない。`.cinewright` の外（OS のキャッシュ領域）に置き、削除しても作品を失わない（[ADR-0006](../adr/0006-document-vs-render-cache.md)）。
+レンダーキャッシュは作品データではない。`.kronello` の外（OS のキャッシュ領域）に置き、削除しても作品を失わない（[ADR-0006](../adr/0006-document-vs-render-cache.md)）。

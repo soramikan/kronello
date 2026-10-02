@@ -10,7 +10,7 @@ GUI / CLI / MCP
    v
 1. 固定スナップショットを直列化してジョブディレクトリへ保存
 2. 状態 DB にジョブを記録 (queued)
-3. worker プロセスを切り離して起動  --->  cinewright worker --job <id>
+3. worker プロセスを切り離して起動  --->  kronello worker --job <id>
 4. job ID を返す                              |
                                               |  実行スロットを取得 (running)
    job.get / job.list / job.cancel            |  heartbeat と進捗を状態 DB へ記録
@@ -27,12 +27,12 @@ GUI / CLI / MCP
 
 | 対象 | 場所 |
 |---|---|
-| 状態 DB | ユーザーごとの状態領域（macOS では `~/Library/Application Support/Cinewright/`） |
+| 状態 DB | ユーザーごとの状態領域（macOS では `~/Library/Application Support/Kronello/`） |
 | ジョブディレクトリ（固定スナップショット、ログ） | 同じ状態領域の下 |
 | 一時出力 | 出力先と同じボリューム上の一時ファイル |
 | 成果物 | 利用者が指定した出力先 |
 
-ジョブは「このマシンでの実行」であり、作品の内容ではない。ジョブの進行で `.cinewright` へ書き込まない。
+ジョブは「このマシンでの実行」であり、作品の内容ではない。ジョブの進行で `.kronello` へ書き込まない。
 
 ## ジョブの記録
 

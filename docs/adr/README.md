@@ -29,14 +29,14 @@
 | [0013](0013-naming-koma.md) | 名称を koma に統一する | 置換（0023） | 2026-10-02 |
 | [0014](0014-native-gui-in-process-ffi.md) | GUI は OS ネイティブフレームワークで実装し、Rust コアを同一プロセス FFI で呼ぶ | 採用 | 2026-10-02 |
 | [0015](0015-macos-first-platform-priority.md) | macOS (Apple Silicon) を先行プラットフォームとする | 採用 | 2026-10-02 |
-| [0016](0016-single-file-project.md) | プロジェクトは単一の SQLite ファイル .cinewright とする | 採用 | 2026-10-02 |
+| [0016](0016-single-file-project.md) | プロジェクトは単一の SQLite ファイル .kronello とする | 採用 | 2026-10-02 |
 | [0017](0017-multi-process-optimistic-concurrency.md) | 複数プロセスからの編集を楽観的 revision 検証で直列化する | 採用 | 2026-10-02 |
 | [0018](0018-ffmpeg-lgpl-dynamic-linking.md) | FFmpeg は LGPL 構成を動的リンクする | 採用 | 2026-10-02 |
 | [0019](0019-dual-license-mit-apache.md) | ライセンスは MIT OR Apache-2.0 とする | 採用 | 2026-10-02 |
 | [0020](0020-backlog-in-repository.md) | バックログの正本をリポジトリ内のファイルとする | 採用 | 2026-10-02 |
 | [0021](0021-two-stage-vertical-slice.md) | 最初の縦断テストを M2 と M3 の 2 段階に分ける | 採用 | 2026-10-02 |
 | [0022](0022-japanese-canonical-docs.md) | 設計文書は日本語を正本とする | 採用 | 2026-10-02 |
-| [0023](0023-naming-cinewright.md) | 名称を Cinewright に変更する | 採用 | 2026-10-02 |
+| [0023](0023-naming-cinewright.md) | 名称を Cinewright に変更する | 置換（0042） | 2026-10-02 |
 | [0024](0024-working-color-space.md) | 作業用色空間は Sequence ごとに選択し、既定を線形 Rec.709 とする | 採用 | 2026-10-02 |
 | [0025](0025-detached-render-workers.md) | レンダージョブは切り離した worker プロセスで実行する | 採用 | 2026-10-02 |
 | [0026](0026-selective-undo.md) | Undo は逆操作の発行とし、競合時は拒否する | 採用 | 2026-10-02 |
@@ -55,6 +55,7 @@
 | [0039](0039-test-fixtures.md) | テスト素材は生成と CC0 / OFL に限り、小さいものだけ同梱する | 採用 | 2026-10-02 |
 | [0040](0040-expression-language-policy.md) | 式の正本は AST とし、人間向けには小さな式言語を後から追加する | 採用 | 2026-10-02 |
 | [0041](0041-core-api-gui-order.md) | 実装の優先順はコア契約、API、GUI の順とする | 採用 | 2026-10-02 |
+| [0042](0042-naming-kronello.md) | 名称を Kronello に変更する | 採用 | 2026-10-02 |
 
 ## 追加と変更の規則
 

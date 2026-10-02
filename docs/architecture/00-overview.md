@@ -1,7 +1,7 @@
 # 00 概要
 
 状態: 提案仕様。ソフトウェアの実装・実機性能検証を完了したものではない。
-対象: Rust / FFmpeg / wgpu を基盤とする、GUI・CLI・MCP 共通の動画編集ソフトウェア Cinewright。
+対象: Rust / FFmpeg / wgpu を基盤とする、GUI・CLI・MCP 共通の動画編集ソフトウェア Kronello。
 元仕様: [v0.2](../archive/motion_editor_architecture_v0_2.md)（2026-10-01）。本書群は 2026-10-02 の検討結果を反映した改訂版。
 
 ## 結論
@@ -39,7 +39,7 @@ macOS (Apple Silicon) を先行し、Metal + VideoToolbox を最初の保証経�
 ## 共通実行経路
 
 ```text
-ネイティブ GUI (cinewright-ffi) / CLI / MCP
+ネイティブ GUI (kronello-ffi) / CLI / MCP
        |
 Command API / Query API
        |
@@ -62,7 +62,7 @@ Text/Vector raster / Video decode / GPU effects / Audio mixer
 Preview / Still image / Image sequence / Encoder
 ```
 
-GUI・CLI・MCP はそれぞれ別プロセスになりうる。各プロセスが同じライブラリ（`cinewright-service`）を内包し、同じ `.cinewright` ファイルを開く。プロセスをまたぐ書き込みの直列化は SQLite のトランザクションと revision 照合で行う（[09 保存と同時編集](09-storage-concurrency.md)）。
+GUI・CLI・MCP はそれぞれ別プロセスになりうる。各プロセスが同じライブラリ（`kronello-service`）を内包し、同じ `.kronello` ファイルを開く。プロセスをまたぐ書き込みの直列化は SQLite のトランザクションと revision 照合で行う（[09 保存と同時編集](09-storage-concurrency.md)）。
 
 リアルタイム音声コールバックとプロジェクト更新、ディスク読み出し、重い式評価は別の実行系にする。
 素材分析（ASR、音声特徴量、人物マスク等）は不変の DataAsset を生成する外部ジョブとして取り込む。

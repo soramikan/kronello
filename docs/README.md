@@ -1,4 +1,4 @@
-# Cinewright ドキュメント
+# Kronello ドキュメント
 
 状態: 設計段階（2026-10-02 時点）。実装・実機性能検証を完了したものではない。
 
@@ -23,7 +23,7 @@
 | [06 拡張点](architecture/06-extensions.md) | Repeater、Simulation、音声連動、2.5D / 3D |
 | [07 テンプレート](architecture/07-templates.md) | 公開入力、尺の伸縮、版 |
 | [08 API・CLI・MCP](architecture/08-api-cli-mcp.md) | Query / Command、計画と適用、安全性 |
-| [09 保存と同時編集](architecture/09-storage-concurrency.md) | `.cinewright`、イベント、複数プロセス |
+| [09 保存と同時編集](architecture/09-storage-concurrency.md) | `.kronello`、イベント、複数プロセス |
 | [10 デスクトップ GUI](architecture/10-desktop-gui.md) | ネイティブ GUI、FFI 境界、プレビュー面 |
 | [11 ワークスペース](architecture/11-workspace.md) | crate 構成と依存の向き |
 | [12 プラットフォームと依存](architecture/12-platform-dependencies.md) | 対象 OS、FFmpeg、ライセンス |
@@ -43,10 +43,10 @@
 
 | 項目 | 変更 | ADR |
 |---|---|---|
-| 名称 | `ved` → Cinewright（CLI・crate は `cinewright`、拡張子は `.cinewright`）。途中案の `koma` は名前衝突のため撤回 | [0023](adr/0023-naming-cinewright.md)、[調査](naming.md) |
-| GUI | Rust crate `ved-desktop` → OS ネイティブアプリ + `cinewright-ffi`（同一プロセス FFI） | [0014](adr/0014-native-gui-in-process-ffi.md) |
+| 名称 | `ved` → Kronello（CLI・crate は `kronello`、拡張子は `.kronello`）。途中案の `koma`、Cinewright は名前衝突のため撤回 | [0042](adr/0042-naming-kronello.md)、[調査](naming.md) |
+| GUI | Rust crate `ved-desktop` → OS ネイティブアプリ + `kronello-ffi`（同一プロセス FFI） | [0014](adr/0014-native-gui-in-process-ffi.md) |
 | 対象 OS | macOS (Apple Silicon) 先行 | [0015](adr/0015-macos-first-platform-priority.md) |
-| 保存形態 | 単一 SQLite ファイル `.cinewright`、キャッシュは外部 | [0016](adr/0016-single-file-project.md) |
+| 保存形態 | 単一 SQLite ファイル `.kronello`、キャッシュは外部 | [0016](adr/0016-single-file-project.md) |
 | 同時編集 | 複数プロセス + 楽観的 revision 検証 | [0017](adr/0017-multi-process-optimistic-concurrency.md) |
 | FFmpeg | LGPL 構成を動的リンク | [0018](adr/0018-ffmpeg-lgpl-dynamic-linking.md) |
 | ライセンス | MIT OR Apache-2.0 | [0019](adr/0019-dual-license-mit-apache.md) |

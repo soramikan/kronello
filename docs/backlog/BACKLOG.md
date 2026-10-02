@@ -85,7 +85,7 @@
 - 受け入れ条件:
   - 文書とイベントとrevisionを同一transactionで更新する
   - 完全snapshotからの復元と失敗migrationの非破壊性を確認する
-  - 単一SQLiteファイル(.cinewright)を正本とし、レンダーキャッシュをプロジェクト外へ分離する
+  - 単一SQLiteファイル(.kronello)を正本とし、レンダーキャッシュをプロジェクト外へ分離する
   - 別プロセスからの同時書き込みをrevision照合で直列化し、古いbase_revisionを拒否する
   - イベントごとにsession・変更したキーの集合・逆操作情報を保存する
   - WALで開き、最後のプロセスが閉じると付随ファイルが残らない。異常終了後は次回に回復する
@@ -252,7 +252,7 @@
   - 投入したプロセスやMCP接続が終了してもジョブが継続し、保存されたjob IDで状態取得できる
   - 既定で同時実行は1ジョブとし、残りはqueuedで待機する
   - workerの異常終了をheartbeatの途絶で検出しinterruptedとして報告する
-  - ジョブの進行で.cinewrightへ書き込まない
+  - ジョブの進行で.kronelloへ書き込まない
   - 一時出力を検証してから確定名へ切り替える
   - 終了から30日を過ぎたジョブディレクトリを次の投入時に掃除し、interruptedは対象外とする。job.pruneで手動掃除できる
 
@@ -302,7 +302,7 @@
   - 選択・pan/zoomなどUI状態を作品から分離する
   - CLI/MCPなど外部プロセスによるrevision変化を検知して再読込する
   - GUIのUndoは自セッションの操作だけを取り消し、競合時は理由を表示する
-  - UI状態をユーザーごとの状態領域に保存し、.cinewrightへ書き込まない
+  - UI状態をユーザーごとの状態領域に保存し、.kronelloへ書き込まない
 
 ### GUI-002 Dope sheetとCurve editor
 
@@ -328,7 +328,7 @@
   - opacity/active range/parent/mask/asset不足を要因別に返す
   - 過大処理と転送/メモリ/キャッシュを構造化して表示する
 
-### FFI-001 cinewright-ffi: ネイティブGUI向けCommand/Query境界
+### FFI-001 kronello-ffi: ネイティブGUI向けCommand/Query境界
 
 - 優先度: P1 / 領域: ffi / 状態: planned
 - 依存: API-001

@@ -6,7 +6,7 @@
 
 | 用語 | 意味 |
 |---|---|
-| Project | 作品全体。資産、Sequence、Composition、Template を持つ。1 プロジェクト = 1 つの `.cinewright` ファイル |
+| Project | 作品全体。資産、Sequence、Composition、Template を持つ。1 プロジェクト = 1 つの `.kronello` ファイル |
 | Timeline | カット編集（NLE）の編集モデル。クリップ配置、トリム、リップル、リンクを扱う |
 | Sequence | Timeline の具体的な入れ物。尺、フレームレート、音声レート、作業色空間、トラックを持つ |
 | Clip | トラック上の配置単位。SourceRef と時間範囲、TimeMap を持つ |
@@ -86,7 +86,7 @@
 | `semantic_version` | 補間・合成などの意味の版 |
 | job | 長時間処理（レンダー等）。接続の寿命から独立した永続的な単位 |
 | worker | ジョブを実行するために切り離して起動されるプロセス。1 ジョブに 1 プロセス |
-| 状態 DB | ユーザーごとの、ジョブ記録などを持つ DB。`.cinewright` の外にある |
+| 状態 DB | ユーザーごとの、ジョブ記録などを持つ DB。`.kronello` の外にある |
 | event | 適用されたコマンドの記録。session と変更したキーの集合を持つ |
 | session | プロジェクトを開いてから閉じるまでの単位。GUI の Undo の範囲 |
 | `UNDO_CONFLICT` | Undo の対象が後から変更されているため取り消せないことを示すエラー |
