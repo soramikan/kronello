@@ -1,9 +1,9 @@
 {
   "schema_version": "0.5",
   "created": "2026-10-01",
-  "updated": "2026-10-02",
-  "status": "design_only",
-  "description": "未実装の実装計画。このファイルがバックログの正本であり、GitHub等へ登録したIssueではない。",
+  "updated": "2026-10-03",
+  "status": "implementation_started",
+  "description": "設計と実装の計画・進捗。このファイルがバックログの正本であり、GitHub等へ登録したIssueではない。",
   "specification": "docs/architecture/",
   "task_count": 51,
   "items": [
@@ -13,7 +13,7 @@
       "priority": "P0",
       "area": "architecture",
       "title": "意味規約と互換性境界をADRに固定",
-      "status": "planned",
+      "status": "done",
       "dependencies": [],
       "acceptance_criteria": [
         "Timeline/Composition/Property/Renderの依存方向を文書化する",
@@ -27,7 +27,7 @@
       "priority": "P0",
       "area": "time",
       "title": "有理数時間・半開区間・時間マッピング",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "ARC-001"
       ],
@@ -42,7 +42,7 @@
       "priority": "P0",
       "area": "model",
       "title": "型付きPropertyとschema registry",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "ARC-001"
       ],
@@ -57,7 +57,7 @@
       "priority": "P0",
       "area": "gpu",
       "title": "最短GPU描画とFrameBridge技術スパイク",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "ARC-001"
       ],
@@ -74,7 +74,7 @@
       "priority": "P0",
       "area": "test",
       "title": "参照素材とgolden sceneを整備",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "ARC-001"
       ],
@@ -91,7 +91,7 @@
       "priority": "P0",
       "area": "infra",
       "title": "ツールチェーン固定とCI",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "ARC-001"
       ],
