@@ -468,7 +468,7 @@
       "priority": "P0",
       "area": "mcp",
       "title": "MCPアダプター",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "API-001"
       ],

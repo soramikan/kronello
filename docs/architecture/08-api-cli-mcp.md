@@ -1,10 +1,10 @@
 # 08 API・CLI・MCP・エージェント
 
-GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001-shared-command-query-api.md)）。M1 CLI-001 と M2 SERVICE-001 / API-001 / TEMPLATE-001 の実装範囲を次節に示す。それ以外の後続 API・CLI・MCP は提案であり、実装済みではない。
+GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001-shared-command-query-api.md)）。M1 CLI-001 と M2 SERVICE-001 / API-001 / TEMPLATE-001 / MCP-001 の実装範囲を次節に示す。それ以外の後続 API・CLI は提案であり、実装済みではない。
 
 ## M1 CLI-001 の実装範囲
 
-`kronello-service` は同期 Command / Query の入口を提供し、`kronello-cli` の binary `kronello` は transport adapter とする。以下の 6 操作を実装した。編集計画・適用・Undo・最小の history.list は後述の SERVICE-001 で実装した。公開 API schema と構造化 query は後述の API-001 で実装した。永続ジョブ、MCP 等は引き続き提案である。
+`kronello-service` は同期 Command / Query の入口を提供し、`kronello-cli` の binary `kronello` は transport adapter とする。以下の 6 操作を実装した。編集計画・適用・Undo・最小の history.list は後述の SERVICE-001 で実装した。公開 API schema と構造化 query は後述の API-001 で実装した。永続ジョブ等は引き続き提案である。MCP stdio は後述の MCP-001 で実装した。
 
 | service `Request.operation` | CLI subcommand | payload / 応答 |
 |---|---|---|
@@ -63,7 +63,7 @@ printf '%s\n' '{"operation":"project.export","project":"/private/tmp/kronello-m1
 
 ## M2 SERVICE-001 の実装範囲
 
-`kronello-service` に次の四つの同期操作を追加した。CLI は既存と同じ stdin JSON / `--request-json` の transport を使い、編集状態・競合規則を持たない。公開 envelope の schema は後述の API-001 で正式化した。GUI / MCP の入口は後続タスクである。
+`kronello-service` に次の四つの同期操作を追加した。CLI は既存と同じ stdin JSON / `--request-json` の transport を使い、編集状態・競合規則を持たない。公開 envelope の schema は後述の API-001 で正式化した。GUI の入口は後続タスク、MCP stdio は後述の MCP-001 で実装した。
 
 | service operation | CLI | payload / 応答 |
 |---|---|---|
@@ -241,11 +241,36 @@ kronello render --project demo.kronello --profile hevc-4k \
 - 標準出力は JSON / NDJSON、標準エラーはログ。
 - 非対話モードでは質問せず、必要な権限・入力がなければ型付きエラーを返す。
 
-## MCP
+## M2 MCP-001 の実装範囲
 
-- プロトコル対応版を交渉し、JSON Schema と structuredContent で構造化結果を返す。
-- クライアント接続状態に暗黙の対象 Project を保持しない。対象は毎回の要求で明示する。
-- 長時間レンダーは永続ジョブにし、MCP 接続の寿命に依存させない。ジョブは切り離した worker プロセスが実行する（[14 ジョブ](14-jobs.md)）。
+`kronello-mcp` crate の同名 binary は、同期 stdio の薄い JSON-RPC 2.0 adapter。UTF-8 の一行一メッセージで要求・応答を交換し、stdout は protocol のみ、診断・使用法は stderr に出す。各入力の上限は改行を除き16 MiB。stdin の EOF で終了する。HTTP transport、resources、prompts、sampling、MCP task、進捗通知、実行中要求のキャンセルは未実装。`notifications/cancelled` 等の通知は応答も操作実行もしない。
+
+対応版は `2025-06-18` と `2025-11-25`。[MCP lifecycle](https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle) に沿って initialize → notifications/initialized → tools/list または tools/call の順に使う。対応版の initialize は要求と同じ `protocolVersion` と tools capability（listChanged: false）を返す。本実装は要求された版が対応外なら JSON-RPC `-32602` と `UNSUPPORTED_PROTOCOL_VERSION`、requested / supported を返し、他の版へ自動変更しない。初期化前の tool 要求は `-32002`。ping は初期化前後とも可能。同一接続の再 initialize は拒否する。
+
+未対応版の拒否は MCP-001 の委任条件に従う。[MCP の版交渉規定](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle#version-negotiation) はサーバーが別の対応版を返すよう定めており、この点は本 adapter の明示的な差異である。
+
+`tools/list` は `kronello-service::command_registry()` の全操作を同名で公開する。固定の MCP 操作一覧は持たず、MEDIA-001 等で registry と service Request を拡張すれば同じ経路で公開される。request_schema / response_schema が指す公開 API 型から `api_json_schema()` を生成し、各 schema に必要な `$defs` の参照閉包を同梱する。外部 schema fetch は不要。inputSchema は operation を除いた service payload と同一。outputSchema は成功値の schema と公開 Response の error branch の union で、エラー結果も schema に適合する。`_meta.kronello` に元の schema refs と readOnlyProject を返す。read_only は作品に対する性質であり、render.sequence の成果物書き出しも含むため MCP の readOnlyHint に置き換えない。
+
+`tools/call` の name を operation tag に変換し、arguments の生 JSON を `Service::execute_json` に渡す。重複 field・未知 field の拒否、revision、idempotency、Undo、local path policy 等は service と共有する。成功の structuredContent は service result.value、失敗は `{ "status":"error", "error": ServiceError }` と isError: true。[対応2版の tools 契約](https://modelcontextprotocol.io/specification/2025-11-25/server/tools) に従い、両方で同じ structuredContent を serialize した TextContent も必ず返す。成功値への部分結果や代替値は加えない。未知 method / tool や不正な JSON-RPC envelope は protocol error、既知 tool の入力不正・実行失敗は tool error とする。
+
+作品を対象とする全操作は毎回 `project` を明示する（render は `input.project`）。省略は INVALID_REQUEST。接続は初期化状態だけを持ち、暗黙の current project / session、project.open tool、接続に跨る ProjectStore を持たない。`capabilities.get` は共有 API の空 payload `{}` のまま、対象作品を持たないグローバル discovery とする。編集 session_id は service payload に毎回明示する。
+
+backend は CLI と同じ GPU 既定、`--backend gpu|cpu-reference` で明示選択する。GPU 不在時の暗黙 CPU fallback はない。同期 render.frame / render.sequence は既存 service 操作を公開する。長時間レンダーを永続ジョブにする API と、接続寿命に依存しない worker は JOB-001 の提案であり、MCP-001 では実装しない（[14 ジョブ](14-jobs.md)）。検証方法と境界は [MCP-001 の検証](../testing/mcp-001.md)。
+
+実行例:
+
+```sh
+cargo run -p kronello-mcp --locked -- --backend cpu-reference
+```
+
+クライアントから stdin へ送る例（各行の応答を読み取る）:
+
+```json
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"example","version":"1"}}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"project.info","arguments":{"project":"/private/tmp/demo.kronello"}}}
+```
 
 ## 安全性
 

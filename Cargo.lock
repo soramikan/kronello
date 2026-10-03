@@ -869,6 +869,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "kronello-mcp"
+version = "0.0.0"
+dependencies = [
+ "jsonschema",
+ "kronello-service",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "kronello-model"
 version = "0.0.0"
 dependencies = [
