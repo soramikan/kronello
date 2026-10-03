@@ -36,6 +36,7 @@ fn constant(key: &str, value: Value) -> Property {
 }
 fn node(properties: Vec<Property>) -> SceneNode {
     SceneNode {
+        effects: vec![],
         id: NodeId::new(),
         kind: NodeKind::Null,
         containment_parent: None,

@@ -398,7 +398,7 @@
       "priority": "P0",
       "area": "effects",
       "title": "基本エフェクト: drop shadow / gaussian blur",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "GPU-002",
         "RENDER-001"

@@ -2,8 +2,10 @@
 //! is injected through RenderBackend; this crate imports no GPU or store API.
 mod cache;
 mod dag;
+mod effect;
 mod output;
 mod snapshot;
+pub use effect::*;
 
 pub use cache::*;
 pub use dag::*;
@@ -26,6 +28,8 @@ pub enum RenderError {
     #[error(transparent)]
     Evaluation(#[from] EvaluationError),
     #[error(transparent)]
+    Effect(#[from] kronello_model::EffectError),
+    #[error(transparent)]
     Shape(#[from] ShapeError),
     #[error(transparent)]
     Text(#[from] TextError),
@@ -47,7 +51,8 @@ pub enum RenderError {
 impl RenderError {
     pub fn code(&self) -> &'static str {
         match self {
-            Self::UnsupportedFeature(_) => "UNSUPPORTED_FEATURE",
+            Self::Effect(kronello_model::EffectError::UnsupportedFeature)
+            | Self::UnsupportedFeature(_) => "UNSUPPORTED_FEATURE",
             Self::UnsupportedSchema(_) => "UNSUPPORTED_SCHEMA",
             Self::Evaluation(e) => e.code(),
             Self::Layout(LayoutError::MissingFont { .. }) => "ASSET_MISSING",

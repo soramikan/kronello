@@ -55,6 +55,7 @@ fn fixture() -> (Project, SchemaRegistry) {
         alignment: properties[4].id(),
     };
     let node = SceneNode {
+        effects: vec![],
         id: NodeId::new(),
         kind: NodeKind::Text {
             content_ref: text.id,

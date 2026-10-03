@@ -1,6 +1,12 @@
 # 06 拡張点: Repeater・Simulation・音声・3D
 
-初期リリースでは実装しないが、境界を先に確保する機能。基本音声だけは M2 で実装する。
+基本エフェクトは FX-001 で実装し、基本音声は M2 で実装する。その他は初期リリースでは実装しないが、境界を先に確保する機能。
+
+## 版付きエフェクト
+
+基本エフェクト（FX-001）は `SceneNode.effects` に authored 順で保存する。`EffectDefinition` の `effect_id` は `kronello.gaussian_blur` / `kronello.drop_shadow`、`version` はそれぞれ **1**。parameters は型付きの PropertyId 参照で、局所 sigma / offset は `design_px`、色はタグ付き straight、opacity は無次元。未知 id・版・parameter variant・field を保存しても実行能力とは扱わず、必要な未知 effect は最終レンダーで `UNSUPPORTED_FEATURE`。
+
+`ResolvedEffect` → `PixelEffect` → DAG effect / GPU pass の境界に具象 GPU 資源を漏らさない。`required_input` は effect の halo を宣言し、stack の逆順で伝播する。`RenderSnapshot.semantic_versions.effects` は id ごとの意味版を固定し、kernel 版を含む cache identity を使う。処理順・変換制約・ROI・kernel 定義は [05 章](05-render-gpu.md#基本エフェクト)、受け入れ証拠は [FX-001](../testing/fx-001.md) を参照。
 
 ## Repeater
 

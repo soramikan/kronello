@@ -52,6 +52,7 @@ fn constant(key: &str, value: Value) -> Property {
 }
 fn node(kind: NodeKind, properties: Vec<Property>) -> SceneNode {
     SceneNode {
+        effects: vec![],
         id: NodeId::new(),
         kind,
         containment_parent: None,
@@ -1904,4 +1905,336 @@ fn text_gradient_is_preserved_as_opaque_and_snapshot_refuses_it() {
             .code(),
         "UNSUPPORTED_FEATURE"
     );
+}
+
+fn fx_project() -> (Project, CompositionId) {
+    let (mut n, shape) = rectangle(
+        [4.0, 6.0],
+        Color::new(ColorSpace::Srgb, [0.8, 0.2, 0.1], 0.65).unwrap(),
+    );
+    let sigma = constant("kronello.effect.sigma", scalar(1.0));
+    let offset = constant("kronello.effect.offset", v2(2.25, -1.5));
+    let color = constant(
+        "kronello.effect.color",
+        Value::Color(Color::new(ColorSpace::Srgb, [0.2, 0.5, 0.9], 0.7).unwrap()),
+    );
+    let opacity = constant("kronello.effect.opacity", scalar(0.6));
+    n.effects.push(Effect::Known(EffectDefinition {
+        effect_id: DROP_SHADOW_ID.into(),
+        version: 1,
+        parameters: EffectParameters::DropShadow {
+            sigma: sigma.id(),
+            offset: offset.id(),
+            color: color.id(),
+            opacity: opacity.id(),
+        },
+    }));
+    n.properties.extend([
+        sigma,
+        offset,
+        color,
+        opacity,
+        constant("kronello.transform.position", v2(6.0, 8.0)),
+    ]);
+    let c = composition(vec![n]);
+    let id = c.id;
+    (
+        Project {
+            compositions: vec![DocumentObject::Known(c)],
+            shapes: vec![DocumentObject::Known(shape)],
+            ..Project::default()
+        },
+        id,
+    )
+}
+fn fx_region() -> OutputRegion {
+    OutputRegion {
+        origin: [0.0; 2],
+        extent: [24.0; 2],
+        pixels: [24; 2],
+    }
+}
+fn fx_dag(p: &Project, id: CompositionId, region: OutputRegion) -> RenderDag {
+    let snapshot = RenderSnapshot::new(p, id, 0, RenderProfile::default()).unwrap();
+    let scene = build_scene_ir(&snapshot, t(0, 1), &[]).unwrap();
+    build_render_dag(&scene, RenderProfile::default(), region).unwrap()
+}
+#[test]
+fn fx_halo_requests_and_transformed_visual_bounds_are_analytical() {
+    let (p, id) = fx_project();
+    let dag = fx_dag(&p, id, fx_region());
+    let effect_index = dag
+        .nodes()
+        .iter()
+        .position(|n| matches!(n, DagNode::Effect { .. }))
+        .unwrap();
+    let b = dag.bounds()[effect_index];
+    assert_eq!(
+        b.ink_bounds,
+        Some(PixelBounds {
+            min: [6.0, 8.0],
+            max: [10.0, 14.0]
+        })
+    );
+    assert_eq!(
+        b.visual_bounds,
+        Some(PixelBounds {
+            min: [5.0, 3.0],
+            max: [16.0, 16.0]
+        })
+    );
+    let DagNode::Effect { source, .. } = dag.nodes()[effect_index] else {
+        unreachable!()
+    };
+    assert_eq!(
+        dag.input_requests()[source],
+        Some(PixelBounds {
+            min: [-6.0, -2.0],
+            max: [25.0, 29.0]
+        })
+    );
+    assert_eq!(
+        dag.execution_region(),
+        OutputRegion {
+            origin: [-6.0, -2.0],
+            extent: [31.0, 31.0],
+            pixels: [31; 2]
+        }
+    );
+}
+fn assert_fx_crop(backend: &dyn RenderBackend) {
+    let (mut p, id) = fx_project();
+    // A second blur forces multiple backward halo expansions.
+    let DocumentObject::Known(c) = &mut p.compositions[0] else {
+        unreachable!()
+    };
+    let sigma = c.nodes[0]
+        .properties
+        .iter()
+        .find(|p| p.descriptor().key.as_str() == "kronello.effect.sigma")
+        .unwrap()
+        .id();
+    c.nodes[0].effects.push(Effect::Known(EffectDefinition {
+        effect_id: GAUSSIAN_BLUR_ID.into(),
+        version: 1,
+        parameters: EffectParameters::GaussianBlur { sigma },
+    }));
+    for scale in [0.5, 1.0, 2.0] {
+        let full = OutputRegion {
+            pixels: [(24.0 * scale) as u32; 2],
+            ..fx_region()
+        };
+        let crop = OutputRegion {
+            origin: [4.0, 6.0],
+            extent: [12.0, 10.0],
+            pixels: [(12.0 * scale) as u32, (10.0 * scale) as u32],
+        };
+        let a = backend.execute(&fx_dag(&p, id, full)).unwrap();
+        let b = backend.execute(&fx_dag(&p, id, crop)).unwrap();
+        for y in 0..crop.pixels[1] as usize {
+            for x in 0..crop.pixels[0] as usize {
+                let src = a.linear[(y + (6.0 * scale) as usize) * full.pixels[0] as usize
+                    + x
+                    + (4.0 * scale) as usize];
+                let dst = b.linear[y * crop.pixels[0] as usize + x];
+                if backend.name() == "cpu_reference_float32" {
+                    assert_eq!(src, dst);
+                }
+                for ch in 0..4 {
+                    assert!(
+                        (src[ch] - dst[ch]).abs() < 1.0 / 1024.0,
+                        "{scale} {x} {y} {ch}: {src:?} {dst:?}"
+                    );
+                }
+            }
+        }
+    }
+}
+#[test]
+fn fx_cropped_roi_matches_full_render_with_stacked_effects_at_three_scales() {
+    assert_fx_crop(&CpuReferenceBackend);
+}
+#[test]
+fn gpu_fx_cropped_roi_matches_full_render_with_stacked_effects() {
+    assert_fx_crop(&kronello_gpu::GpuContext::new().unwrap());
+}
+#[test]
+fn fx_effect_animation_versions_and_cache_identity() {
+    let (mut p, id) = fx_project();
+    let curve = AnimationCurve::new(
+        CurveId::new(),
+        ValueType::Scalar,
+        vec![
+            Keyframe {
+                time: t(0, 1),
+                value: scalar(0.0),
+                interpolation: CurveInterpolation::Linear,
+            },
+            Keyframe {
+                time: t(1, 1),
+                value: scalar(2.0),
+                interpolation: CurveInterpolation::Linear,
+            },
+        ],
+    )
+    .unwrap();
+    let DocumentObject::Known(c) = &mut p.compositions[0] else {
+        unreachable!()
+    };
+    let prop = c.nodes[0]
+        .properties
+        .iter_mut()
+        .find(|p| p.descriptor().key.as_str() == "kronello.effect.sigma")
+        .unwrap();
+    prop.set_source(PropertySource::Curve(curve.id()), &render_registry())
+        .unwrap();
+    p.curves.push(DocumentObject::Known(curve));
+    let snapshot = RenderSnapshot::new(&p, id, 0, RenderProfile::default()).unwrap();
+    assert_eq!(
+        snapshot.semantic_versions().effects,
+        BTreeMap::from([(GAUSSIAN_BLUR_ID.into(), 1), (DROP_SHADOW_ID.into(), 1)])
+    );
+    let mut cache = RenderCache::new(CacheConfig::default());
+    let mut identities = vec![];
+    for (time, expected) in [(t(0, 1), 0.0), (t(1, 2), 1.0), (t(1, 1), 2.0)] {
+        let scene = build_scene_ir(&snapshot, time, &[]).unwrap();
+        let ResolvedEffect::DropShadow { sigma, .. } = scene.nodes[0].effects[0] else {
+            unreachable!()
+        };
+        assert_eq!(sigma, expected);
+        let dag = build_render_dag(&scene, RenderProfile::default(), fx_region()).unwrap();
+        let keys = RasterCacheKey::for_dag(&dag, "cpu-reference-f32-v1").unwrap();
+        let i = dag
+            .nodes()
+            .iter()
+            .position(|n| matches!(n, DagNode::Effect { .. }))
+            .unwrap();
+        identities.push(keys[i]);
+        let plain = CpuReferenceBackend.execute(&dag).unwrap();
+        let cached = CpuReferenceBackend
+            .execute_with_cache(&dag, &mut cache)
+            .unwrap();
+        assert_eq!(plain, cached);
+        assert_eq!(
+            cached,
+            CpuReferenceBackend
+                .execute_with_cache(&dag, &mut cache)
+                .unwrap()
+        );
+    }
+    assert!(identities.windows(2).all(|v| v[0] != v[1]));
+    assert!(cache.stats().raster.hits >= 3);
+    let mut wire = serde_json::to_value(snapshot).unwrap();
+    wire["semantic_versions"]["effects"][GAUSSIAN_BLUR_ID] = serde_json::json!(2);
+    let restored: RenderSnapshot = serde_json::from_value(wire).unwrap();
+    assert_eq!(
+        restored.validate().unwrap_err().code(),
+        "UNSUPPORTED_FEATURE"
+    );
+}
+#[test]
+fn fx_unknown_effects_roundtrip_and_fail_final_render() {
+    let (p, id) = fx_project();
+    for unknown in [
+        serde_json::json!({"effect_id":"vendor.future","version":1,"parameters":{"kind":"future","raw":[1,2]}}),
+        serde_json::json!({"effect_id":GAUSSIAN_BLUR_ID,"version":99,"parameters":{"kind":"gaussian_blur","sigma":PropertyId::new()}}),
+    ] {
+        let mut wire = serde_json::to_value(&p).unwrap();
+        wire["compositions"][0]["nodes"][0]["effects"] = serde_json::json!([unknown]);
+        let restored: Project = serde_json::from_value(wire.clone()).unwrap();
+        assert_eq!(serde_json::to_value(&restored).unwrap(), wire);
+        assert!(restored.ensure_editable().is_err());
+        let snapshot = RenderSnapshot::new(&restored, id, 0, RenderProfile::default()).unwrap();
+        assert_eq!(
+            build_scene_ir(&snapshot, t(0, 1), &[]).unwrap_err().code(),
+            "UNSUPPORTED_FEATURE"
+        );
+    }
+}
+
+#[test]
+fn fx_local_halos_offsets_follow_uniform_scale_rotation_and_reject_anisotropy() {
+    let (mut p, id) = fx_project();
+    let DocumentObject::Known(c) = &mut p.compositions[0] else {
+        unreachable!()
+    };
+    c.nodes[0].properties.extend([
+        constant("kronello.transform.scale", v2(2.0, 2.0)),
+        constant("kronello.transform.rotation", Value::Angle(f(90.0))),
+    ]);
+    let dag = fx_dag(&p, id, fx_region());
+    let i = dag
+        .nodes()
+        .iter()
+        .position(|n| matches!(n, DagNode::Effect { .. }))
+        .unwrap();
+    let b = dag.bounds()[i].visual_bounds.unwrap();
+    for (actual, expected) in b.min.into_iter().chain(b.max).zip([-9.0, 6.0, 15.0, 27.0]) {
+        assert!((actual - expected).abs() < 1e-10);
+    }
+    let DocumentObject::Known(c) = &mut p.compositions[0] else {
+        unreachable!()
+    };
+    c.nodes[0]
+        .properties
+        .iter_mut()
+        .find(|p| p.descriptor().key.as_str() == "kronello.transform.scale")
+        .unwrap()
+        .set_source(PropertySource::Constant(v2(2.0, 1.0)), &render_registry())
+        .unwrap();
+    let snapshot = RenderSnapshot::new(&p, id, 0, RenderProfile::default()).unwrap();
+    let scene = build_scene_ir(&snapshot, t(0, 1), &[]).unwrap();
+    assert_eq!(
+        build_render_dag(&scene, RenderProfile::default(), fx_region())
+            .unwrap_err()
+            .code(),
+        "UNSUPPORTED_FEATURE"
+    );
+}
+
+#[test]
+fn fx_stack_order_is_semantic_and_group_isolation_is_retained() {
+    let (mut p, id) = fx_project();
+    let DocumentObject::Known(c) = &mut p.compositions[0] else {
+        unreachable!()
+    };
+    let sigma = c.nodes[0]
+        .properties
+        .iter()
+        .find(|p| p.descriptor().key.as_str() == "kronello.effect.sigma")
+        .unwrap()
+        .id();
+    c.nodes[0].effects.push(Effect::Known(EffectDefinition {
+        effect_id: GAUSSIAN_BLUR_ID.into(),
+        version: 1,
+        parameters: EffectParameters::GaussianBlur { sigma },
+    }));
+    let a = fx_dag(&p, id, fx_region());
+    let DocumentObject::Known(c) = &mut p.compositions[0] else {
+        unreachable!()
+    };
+    c.nodes[0].effects.reverse();
+    let b = fx_dag(&p, id, fx_region());
+    assert_ne!(
+        CpuReferenceBackend.execute(&a).unwrap(),
+        CpuReferenceBackend.execute(&b).unwrap()
+    );
+    assert_ne!(
+        RasterCacheKey::for_dag(&a, "cpu").unwrap().last(),
+        RasterCacheKey::for_dag(&b, "cpu").unwrap().last()
+    );
+    for dag in [&a, &b] {
+        let effect_index = dag
+            .nodes()
+            .iter()
+            .position(|n| matches!(n, DagNode::Effect { .. }))
+            .unwrap();
+        let DagNode::Effect { source, .. } = dag.nodes()[effect_index] else {
+            unreachable!()
+        };
+        assert!(matches!(
+            dag.nodes()[source],
+            DagNode::IsolatedComposite { .. }
+        ));
+    }
 }

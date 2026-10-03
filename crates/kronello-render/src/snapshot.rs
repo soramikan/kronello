@@ -30,6 +30,7 @@ pub struct SemanticVersions {
     pub coverage: String,
     pub stroke_geometry: String,
     pub gradient_interpolation: String,
+    pub effects: BTreeMap<String, u32>,
 }
 impl SemanticVersions {
     /// Pins explicitly at snapshot creation, never at execution or resume.
@@ -44,6 +45,10 @@ impl SemanticVersions {
             coverage: COVERAGE_VERSION.into(),
             stroke_geometry: STROKE_GEOMETRY_VERSION.into(),
             gradient_interpolation: GRADIENT_INTERPOLATION_VERSION.into(),
+            effects: BTreeMap::from([
+                (GAUSSIAN_BLUR_ID.into(), EFFECT_VERSION),
+                (DROP_SHADOW_ID.into(), EFFECT_VERSION),
+            ]),
         }
     }
 }
@@ -293,6 +298,7 @@ pub struct SceneNodeIr {
     pub parent: Option<SceneKey>,
     pub world_transform: kronello_eval::Affine2,
     pub opacity: f64,
+    pub effects: Vec<ResolvedEffect>,
     pub content: SceneContent,
     pub layout_content_hash: Option<String>,
 }
@@ -410,6 +416,18 @@ pub fn build_scene_ir_with_cache(
             .iter()
             .find(|v| v.id == n.key.node)
             .expect("evaluated node");
+        if authored.effects.len() > 16 {
+            return Err(EffectError::StackBudget.into());
+        }
+        let effects = authored
+            .effects
+            .iter()
+            .map(|e| {
+                let d = e.definition()?;
+                d.validate(&authored.properties, &registry)?;
+                Ok(d.resolve(&values)?)
+            })
+            .collect::<Result<Vec<_>, RenderError>>()?;
         let mut layout_content_hash = None;
         let content = match n.kind {
             NodeKind::Shape { content_ref } => {
@@ -442,6 +460,7 @@ pub fn build_scene_ir_with_cache(
             parent: n.containment_parent.as_ref().map(Into::into),
             world_transform: n.world_transform,
             opacity: n.transform.opacity,
+            effects,
             content,
             layout_content_hash,
         });
@@ -463,7 +482,11 @@ pub fn build_scene_ir_with_cache(
 
 pub fn render_registry() -> SchemaRegistry {
     let mut registry = SchemaRegistry::with_builtin();
-    for descriptor in shape_descriptors().into_iter().chain(text_descriptors()) {
+    for descriptor in shape_descriptors()
+        .into_iter()
+        .chain(text_descriptors())
+        .chain(effect_descriptors())
+    {
         registry
             .register(descriptor)
             .expect("distinct built-in render descriptors");

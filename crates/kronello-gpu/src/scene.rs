@@ -74,6 +74,10 @@ pub enum DrawNode {
     },
     /// Matte is an input reference. It is visible only if explicitly listed in
     /// roots/children. Luma is linear working-space Y times alpha, clamped to [0,1].
+    Effect {
+        source: usize,
+        effect: crate::PixelEffect,
+    },
     Masked {
         source: usize,
         matte: usize,
@@ -158,6 +162,9 @@ impl DrawScene {
                         return Err(GpuError::InvalidInput("invalid group opacity"));
                     }
                 }
+                DrawNode::Effect { effect, .. } => effect
+                    .validate()
+                    .map_err(|_| GpuError::InvalidInput("invalid effect parameters"))?,
                 DrawNode::Masked { .. } => {}
             }
         }
@@ -215,6 +222,7 @@ pub(crate) fn inputs(node: &DrawNode) -> Vec<usize> {
     match node {
         DrawNode::Path(_) => vec![],
         DrawNode::Group { children, .. } => children.clone(),
+        DrawNode::Effect { source, .. } => vec![*source],
         DrawNode::Masked { source, matte, .. } => vec![*source, *matte],
     }
 }
@@ -442,6 +450,7 @@ pub(crate) fn check_scene_budget(
             .iter()
             .map(|n| match n {
                 DrawNode::Group { children, .. } => children.len() + 1,
+                DrawNode::Effect { .. } => 3,
                 _ => 0,
             })
             .sum::<usize>()
@@ -549,6 +558,19 @@ pub(crate) fn render_scene_reference_with_raster(
     working: WorkingSpace,
     raster: &mut RasterResolver<'_>,
 ) -> Result<Vec<[f32; 4]>, GpuError> {
+    render_scene_reference_with_resolvers(size, scene, working, raster, &mut |_, source, effect| {
+        crate::effect::apply_reference(source, size.output_resolution, effect, working)
+    })
+}
+type EffectResolver<'a> =
+    dyn FnMut(usize, &[[f32; 4]], &crate::PixelEffect) -> Result<Vec<[f32; 4]>, GpuError> + 'a;
+pub(crate) fn render_scene_reference_with_resolvers(
+    size: RenderSize,
+    scene: &DrawScene,
+    working: WorkingSpace,
+    raster: &mut RasterResolver<'_>,
+    effects: &mut EffectResolver<'_>,
+) -> Result<Vec<[f32; 4]>, GpuError> {
     size.validate()?;
     scene.validate()?;
     check_scene_budget(size, scene, 16)?;
@@ -559,6 +581,7 @@ pub(crate) fn render_scene_reference_with_raster(
         working: WorkingSpace,
         cache: &mut [Option<Vec<[f32; 4]>>],
         raster: &mut RasterResolver<'_>,
+        effects: &mut EffectResolver<'_>,
     ) -> Result<Vec<[f32; 4]>, GpuError> {
         if let Some(p) = &cache[id] {
             return Ok(p.clone());
@@ -571,7 +594,7 @@ pub(crate) fn render_scene_reference_with_raster(
             }
             DrawNode::Group { children, opacity } => {
                 for &child in children {
-                    let src = node(size, scene, child, working, cache, raster)?;
+                    let src = node(size, scene, child, working, cache, raster, effects)?;
                     for (d, s) in pixels.iter_mut().zip(src) {
                         *d = color::source_over(s, *d);
                     }
@@ -581,13 +604,17 @@ pub(crate) fn render_scene_reference_with_raster(
                     *p = p.map(|v| v * opacity);
                 }
             }
+            DrawNode::Effect { source, effect } => {
+                let source = node(size, scene, *source, working, cache, raster, effects)?;
+                pixels = effects(id, &source, effect)?;
+            }
             DrawNode::Masked {
                 source,
                 matte,
                 kind,
             } => {
-                pixels = node(size, scene, *source, working, cache, raster)?;
-                let mask = node(size, scene, *matte, working, cache, raster)?;
+                pixels = node(size, scene, *source, working, cache, raster, effects)?;
+                let mask = node(size, scene, *matte, working, cache, raster, effects)?;
                 let weights = luma_weights(working);
                 for (p, m) in pixels.iter_mut().zip(mask) {
                     let coverage = match kind {
@@ -609,7 +636,7 @@ pub(crate) fn render_scene_reference_with_raster(
     let mut pixels =
         vec![[0.0; 4]; pixel_count(size.output_resolution[0], size.output_resolution[1])?];
     for &id in &scene.roots {
-        let src = node(size, scene, id, working, &mut cache, raster)?;
+        let src = node(size, scene, id, working, &mut cache, raster, effects)?;
         for (d, s) in pixels.iter_mut().zip(src) {
             *d = color::source_over(s, *d);
         }
