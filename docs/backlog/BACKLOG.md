@@ -11,7 +11,7 @@
 | マイルストーン | planned | in_progress | done | dropped | 計 |
 |---|---:|---:|---:|---:|---:|
 | M0 | 0 | 0 | 6 | 0 | 6 |
-| M1 | 4 | 0 | 10 | 0 | 14 |
+| M1 | 3 | 0 | 11 | 0 | 14 |
 | M2 | 11 | 0 | 0 | 0 | 11 |
 | M3 | 12 | 0 | 0 | 0 | 12 |
 | M4 | 8 | 0 | 0 | 0 | 8 |
@@ -167,7 +167,7 @@
 
 ### STORE-002 完全snapshotの間引き保存
 
-- 優先度: P1 / 領域: storage / 状態: planned
+- 優先度: P1 / 領域: storage / 状態: done
 - 依存: STORE-001
 - 受け入れ条件:
   - 完全snapshotを初期revision・64 revisionごと・history.compactの基点にだけ保存する

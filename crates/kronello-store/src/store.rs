@@ -13,6 +13,7 @@ use crate::{DetectedLocation, LocationDetector, OpenMode, OpenOptions, SystemLoc
 pub type Revision = u64;
 pub const HISTORY_WARNING_BYTES: u64 = 256 * 1024 * 1024;
 const INTERNAL_SCHEMA_VERSION: u32 = 1;
+const SNAPSHOT_INTERVAL: Revision = 64;
 
 #[derive(Debug, Error)]
 pub enum StoreError {
@@ -30,6 +31,8 @@ pub enum StoreError {
     InvalidMutation(String),
     #[error("snapshot not found: {0}")]
     SnapshotNotFound(Revision),
+    #[error("history replay failed at revision {revision}: {reason}")]
+    HistoryReplayFailed { revision: Revision, reason: String },
     #[error("idempotency key already recorded")]
     IdempotencyKeyExists,
     #[error("invalid location: {0}")]
@@ -51,6 +54,7 @@ impl StoreError {
             Self::UnsupportedFeature => "UNSUPPORTED_FEATURE",
             Self::InvalidMutation(_) => "INVALID_MUTATION",
             Self::SnapshotNotFound(_) => "SNAPSHOT_NOT_FOUND",
+            Self::HistoryReplayFailed { .. } => "HISTORY_REPLAY_FAILED",
             Self::IdempotencyKeyExists => "IDEMPOTENCY_KEY_EXISTS",
             Self::InvalidLocation(_) => "INVALID_LOCATION",
             Self::Io(_) => "IO_ERROR",
@@ -364,18 +368,12 @@ impl ProjectStore {
         read_snapshot(&self.connection)
     }
     pub fn snapshot_at(&self, revision: Revision) -> Result<Snapshot, StoreError> {
-        let document: String = self
-            .connection
-            .query_row(
-                "SELECT document FROM snapshots WHERE revision=?1",
-                [sql_revision(revision)?],
-                |r| r.get(0),
-            )
-            .optional()?
-            .ok_or(StoreError::SnapshotNotFound(revision))?;
-        let document: Project = serde_json::from_str(&document)?;
-        document.validate_storage()?;
-        Ok(Snapshot { revision, document })
+        // Keep the base, range and events in one SQLite read view even when a
+        // different connection compacts or commits concurrently.
+        let tx = self.connection.unchecked_transaction()?;
+        let snapshot = read_snapshot_at(&tx, revision)?;
+        tx.commit()?;
+        Ok(snapshot)
     }
     pub fn export_json(&self) -> Result<String, StoreError> {
         Ok(serde_json::to_string_pretty(&self.snapshot()?.document)?)
@@ -492,10 +490,12 @@ impl ProjectStore {
                 event.undo_of.map(|id| id.to_string())
             ],
         )?;
-        tx.execute(
-            "INSERT INTO snapshots VALUES(?1,?2)",
-            params![sql_revision(revision)?, document],
-        )?;
+        if revision.is_multiple_of(SNAPSHOT_INTERVAL) {
+            tx.execute(
+                "INSERT INTO snapshots VALUES(?1,?2)",
+                params![sql_revision(revision)?, document],
+            )?;
+        }
         if let Some(key) = &request.idempotency_key {
             tx.execute(
                 "INSERT INTO idempotency VALUES(?1,?2,?3,?4,?5)",
@@ -556,22 +556,19 @@ impl ProjectStore {
         Ok(result)
     }
     /// Prunes strictly before the supplied revision; its full snapshot and event
-    /// are retained. No replay of historical command semantics is necessary.
+    /// are retained. Replay storage patches to materialize the boundary first.
     pub fn compact(&mut self, revision: Revision) -> Result<(), StoreError> {
         let tx = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let exists = tx
-            .query_row(
-                "SELECT 1 FROM snapshots WHERE revision=?1",
-                [sql_revision(revision)?],
-                |_| Ok(()),
-            )
-            .optional()?
-            .is_some();
-        if !exists {
-            return Err(StoreError::SnapshotNotFound(revision));
-        }
+        let snapshot = read_snapshot_at(&tx, revision)?;
+        tx.execute(
+            "INSERT OR IGNORE INTO snapshots VALUES(?1,?2)",
+            params![
+                sql_revision(revision)?,
+                serde_json::to_string(&snapshot.document)?
+            ],
+        )?;
         tx.execute(
             "DELETE FROM events WHERE revision<?1",
             [sql_revision(revision)?],
@@ -585,6 +582,8 @@ impl ProjectStore {
         Ok(())
     }
     pub fn history_size(&self) -> Result<HistorySize, StoreError> {
+        // Only persisted full snapshots contribute; replayed revisions do not
+        // add a second copy of their document to this logical history size.
         let events: u64 = self.connection.query_row("SELECT coalesce(sum(length(CAST(mutations AS BLOB))+length(CAST(inverse AS BLOB))+length(CAST(changed_keys AS BLOB))),0) FROM events", [], |r| read_u64(r, 0))?;
         let snapshots: u64 = self.connection.query_row("SELECT coalesce(sum(length(CAST(document AS BLOB))),0) FROM snapshots WHERE revision != (SELECT revision FROM project)", [], |r| read_u64(r, 0))?;
         let bytes = events.saturating_add(snapshots);
@@ -637,6 +636,60 @@ fn read_snapshot(connection: &Connection) -> Result<Snapshot, StoreError> {
     )?;
     let document: Project = serde_json::from_str(&document)?;
     document.validate_storage()?;
+    Ok(Snapshot { revision, document })
+}
+
+fn read_snapshot_at(connection: &Connection, revision: Revision) -> Result<Snapshot, StoreError> {
+    let target = sql_revision(revision)?;
+    let current: Revision =
+        connection.query_row("SELECT revision FROM project WHERE singleton=1", [], |r| {
+            read_u64(r, 0)
+        })?;
+    if revision > current {
+        return Err(StoreError::SnapshotNotFound(revision));
+    }
+    let (base, document): (Revision, String) = connection.query_row(
+        "SELECT revision,document FROM snapshots WHERE revision<=?1 ORDER BY revision DESC LIMIT 1",
+        [target], |r| Ok((read_u64(r, 0)?, r.get(1)?)),
+    ).optional()?.ok_or(StoreError::SnapshotNotFound(revision))?;
+    let replay_error = |at, reason| StoreError::HistoryReplayFailed {
+        revision: at,
+        reason,
+    };
+    if revision - base >= SNAPSHOT_INTERVAL {
+        return Err(replay_error(
+            base + SNAPSHOT_INTERVAL,
+            "missing periodic full snapshot".into(),
+        ));
+    }
+    let mut document: Project = serde_json::from_str(&document)?;
+    document.validate_storage()?;
+    let mut statement = connection.prepare(
+        "SELECT revision,mutations FROM events WHERE revision>?1 AND revision<=?2 ORDER BY revision",
+    )?;
+    let mut rows = statement.query(params![sql_revision(base)?, target])?;
+    for expected in base + 1..=revision {
+        let row = rows
+            .next()?
+            .ok_or_else(|| replay_error(expected, "missing event patch".into()))?;
+        if read_u64(row, 0)? != expected {
+            return Err(replay_error(expected, "missing event patch".into()));
+        }
+        let replay = || -> Result<Project, StoreError> {
+            let mutations: Vec<Mutation> = serde_json::from_str(&row.get::<_, String>(1)?)?;
+            let mut value = serde_json::to_value(&document)?;
+            for mutation in mutations {
+                mutation.apply(&mut value)?;
+            }
+            // Apply performs this same decode/validation at every revision.
+            // Preserve its normalization without invoking command semantics or
+            // editability checks (imports may preserve unsupported content).
+            let next: Project = serde_json::from_str(&value.to_string())?;
+            next.validate_storage()?;
+            Ok(next)
+        };
+        document = replay().map_err(|error| replay_error(expected, error.to_string()))?;
+    }
     Ok(Snapshot { revision, document })
 }
 

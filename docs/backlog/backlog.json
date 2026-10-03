@@ -274,7 +274,7 @@
       "priority": "P1",
       "area": "storage",
       "title": "完全snapshotの間引き保存",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "STORE-001"
       ],

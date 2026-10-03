@@ -22,12 +22,12 @@ GPU が利用できる環境の workspace 全体の確認は `cargo test --works
 
 ## 受け入れ条件とテスト
 
-以下は `crates/kronello-store/tests/storage.rs` のテスト名。26 件には子プロセス用の入口 `subprocess_actor` も 1 件として含む。通常の単独実行ではこの入口は処理せず、下表の親テストが環境変数を設定して起動する。
+以下は `crates/kronello-store/tests/storage.rs` の STORE-001 テスト名。STORE-002 の追加検証は [STORE-002 の検証](store-002.md) に記載する。STORE-001 時点の 26 件には子プロセス用の入口 `subprocess_actor` も 1 件として含む。通常の単独実行ではこの入口は処理せず、下表の親テストが環境変数を設定して起動する。
 
 | 条件 | テスト | 確認内容 |
 |---|---|---|
 | 1. 同一 transaction | `atomic_apply_persists_event_keys_inverse_receipt_and_snapshot` / `failure_after_document_update_rolls_back_all_tables` / `invalid_patch_is_atomic_and_inverse_reverses_a_batch` | 第 2 connection から状態・event・revision・snapshot・receipt の一致を見る。event INSERT の失敗を trigger で注入し、先に更新した document を含む全変更が rollback する |
-| 2. 復元・migration | `restore_full_snapshot_without_replaying_events` / `failed_migration_is_nondestructive_including_ddl_and_internal_version` / `unsupported_versions_and_unknown_database_leave_original_unchanged` | 旧 command の解釈不能な記録でも完全 snapshot から新 revision に復元する。migration の DDL・文書・履歴・user_version の rollback と、元ファイルの byte 一致を確認する |
+| 2. 復元・migration | `restore_full_snapshot_without_replaying_events` / `failed_migration_is_nondestructive_including_ddl_and_internal_version` / `unsupported_versions_and_unknown_database_leave_original_unchanged` | 全 revision snapshot を持つ旧形式では、解釈不能な記録でも保存済みの完全 snapshot から新 revision に復元する。migration の DDL・文書・履歴・user_version の rollback と、元ファイルの byte 一致を確認する |
 | 3. 単一ファイル・cache 分離 | `cache_is_outside_single_file_project_and_database_has_no_cache_tables` | OS cache path がプロジェクトの外、table は 4 個で cache table なし、閉じた後の project directory は `.kronello` 一つ |
 | 4. 別プロセスの直列化 | `separate_process_writers_serialize_and_reject_one_stale_base` / `creation_is_serialized_when_separate_processes_open_a_new_project` / `stale_revision_rejected_across_connections` | 2 子プロセスが同じ base を読み barrier 後に競争し、成功一つ・REVISION_CONFLICT 一つ。別 connection でも stale write を拒否。新規 DB の同時初期化も確認 |
 | 5. session・keys・inverse | `atomic_apply_persists_event_keys_inverse_receipt_and_snapshot` / `property_source_patch_and_generated_inverse_roundtrip_real_model_data` | Value / Structure 両キー、session、undo_of を保存。実 PropertySource を Constant から Curve に変え、生成した逆操作で元値に戻す |
