@@ -227,7 +227,7 @@
       "priority": "P0",
       "area": "render",
       "title": "Scene IRからRender DAGと画像連番",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "EVAL-001",
         "GPU-002"

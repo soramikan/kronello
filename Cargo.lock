@@ -839,6 +839,7 @@ version = "0.0.0"
 dependencies = [
  "half",
  "kronello-model",
+ "kronello-render",
  "kronello-testkit",
  "kronello-text",
  "kronello-vector",
@@ -860,6 +861,27 @@ dependencies = [
  "serde_json",
  "thiserror",
  "unicode-segmentation",
+ "uuid",
+]
+
+[[package]]
+name = "kronello-render"
+version = "0.0.0"
+dependencies = [
+ "half",
+ "kronello-eval",
+ "kronello-gpu",
+ "kronello-model",
+ "kronello-testkit",
+ "kronello-text",
+ "kronello-time",
+ "kronello-vector",
+ "png",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror",
  "uuid",
 ]
 

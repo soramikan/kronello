@@ -1,5 +1,6 @@
 //! GPU rendering boundary, independent of the pure document model.
 pub mod color;
+pub mod render_adapter;
 mod renderer;
 mod scene;
 mod scene_gpu;
