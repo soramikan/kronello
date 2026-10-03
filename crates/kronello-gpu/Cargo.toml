@@ -1,0 +1,22 @@
+[package]
+name = "kronello-gpu"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+wgpu = "30.0.1"
+pollster = "1.0.1"
+half = "2.7"
+
+[dev-dependencies]
+kronello-testkit = { path = "../kronello-testkit" }
+serde_json = "1"
+sha2 = "0.10"
+png = "0.18"

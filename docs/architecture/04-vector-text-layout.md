@@ -21,6 +21,8 @@ Trim path、線端・破線のアニメーション、Path boolean、morph は�
 Composition の design_extent と出力画素数を分ける。同じ 16:9 で解像度だけを変える場合は原則再レイアウトしない。
 16:9 → 9:16 等のアスペクト比変更は、明示した responsive variant / constraint で再レイアウトする。
 
+設計寸法・Path・線幅・フォントサイズ・bounds は `design_px` を用い、Composition の左上原点、+X は右、+Y は下とする。ノードのローカル座標から親空間への変換と、出力画素への写像を分ける。外部 SVG 等の単位は import 境界で変換する（[ADR-0043](../adr/0043-semantic-dependencies-and-units.md)「単位と座標」）。
+
 ## 日本語テキスト
 
 ```text
@@ -70,3 +72,5 @@ Position / Opacity の変更では原則組版を再実行しない。本文、�
 - 文字や単色形状の coverage マスクを生成して、RGBA16F 側で色を適用する構成を優先する。
 - 任意のグラデーションや色付き SVG まで「coverage だけで完全再現できる」とは扱わず、必要な色処理は独自 GPU 描画パスで実装する。
 - 同じベクター IR から異なるラスタライザーへ渡せるようにし、Vello を作品の保存形式にしない。
+
+coverage は `[0, 1]` の無次元値で、色の伝達関数を適用しない。色付き raster のアダプターは色空間と alpha 表現を明示し、作業用線形空間の premultiplied 画像へ変換する（[ADR-0044](../adr/0044-color-and-alpha-contracts.md)）。

@@ -1,0 +1,192 @@
+{
+  "schema_version": 1,
+  "limits": {
+    "bundled_file_bytes": 262144,
+    "bundled_total_bytes": 1048576
+  },
+  "fixtures": [
+    {
+      "id": "japanese",
+      "storage": "bundled",
+      "path": "tests/fixtures/data/japanese.json",
+      "bytes": 781,
+      "sha256": "6a771b869004c6254ebb9dd02ff7997d9ba8c70065231fa5231f0b3ed66a8cfd",
+      "source": "scripts/fixtures.py canonical_data (original generated data)",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "結合濁点・IVS・emoji・異体字・禁則・ruby・縦書きの入力。glyph coverage は別途 TEXT-001 で確認する。",
+      "format": {
+        "encoding": "UTF-8",
+        "normalization": "none"
+      }
+    },
+    {
+      "id": "timing",
+      "storage": "bundled",
+      "path": "tests/fixtures/data/timing.json",
+      "bytes": 3385,
+      "sha256": "b8b05a35a0727dc57077cfd5826dac5b41cab48964c087fd252a17bd64265087",
+      "source": "scripts/fixtures.py canonical_data (original generated data)",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "有理数の CFR/VFR サンプルと長尺フレーム時刻。num/den は正規化した decimal string。",
+      "format": {
+        "time_unit": "seconds",
+        "rational_encoding": "{\"num\":\"normalized numerator\",\"den\":\"positive denominator\"} (decimal strings)"
+      }
+    },
+    {
+      "id": "alpha",
+      "storage": "bundled",
+      "path": "tests/fixtures/data/alpha.pam",
+      "bytes": 81,
+      "sha256": "c2be23b7b47acb5317dd9f4e2eda9cc95e67f2e5058bcfddb8efcc2f6794157d",
+      "source": "scripts/fixtures.py canonical_data (original generated data)",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "straight alpha の透明有色・半透明・不透明・低 alpha。",
+      "format": {
+        "format": "PAM RGBA8",
+        "size": [
+          4,
+          1
+        ],
+        "space": "srgb",
+        "alpha": "straight"
+      }
+    },
+    {
+      "id": "linear-hdr",
+      "storage": "bundled",
+      "path": "tests/fixtures/data/linear-hdr.rgba16f",
+      "bytes": 32,
+      "sha256": "b5c7e0dae6d806a7094af17791e8516f9d59750f5b7fdcc5998baca2208266b1",
+      "source": "scripts/fixtures.py canonical_data (original generated data)",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "線形 premultiplied Rec.2020。負 RGB・1 超・ゼロ alpha・微小 alpha。",
+      "format": {
+        "format": "little-endian RGBA binary16",
+        "size": [
+          4,
+          1
+        ],
+        "space": "linear-rec2020",
+        "alpha": "premultiplied",
+        "reference_white_cd_m2": 203
+      }
+    },
+    {
+      "id": "sine-48k-stereo",
+      "storage": "bundled",
+      "path": "tests/fixtures/data/sine-48k-stereo.wav",
+      "bytes": 19244,
+      "sha256": "13054c066312975457f90f4acb1fcb29c798981528fce7a5c6375485d7d7e540",
+      "source": "scripts/fixtures.py canonical_data (original generated data)",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "48kHz stereo PCM16 の固定 1kHz sine。後半で右チャンネルを有効化。",
+      "format": {
+        "format": "WAV PCM16 little-endian",
+        "sample_rate": 48000,
+        "channels": 2,
+        "sample_frames": 4800
+      }
+    },
+    {
+      "id": "noto-license",
+      "storage": "bundled",
+      "path": "tests/fixtures/licenses/NotoSansCJK-OFL.txt",
+      "bytes": 4301,
+      "sha256": "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2",
+      "source": "https://raw.githubusercontent.com/notofonts/noto-cjk/523d033d6cb47f4a80c58a35753646f5c3608a78/LICENSE",
+      "license": "OFL-1.1",
+      "purpose": "取得フォントに付属する原文ライセンス。変更せず保存。"
+    },
+    {
+      "id": "cfr-24-1",
+      "storage": "generated",
+      "path": "media/cfr-24-1.nut",
+      "recipe": "cfr",
+      "rate": "24/1",
+      "source": "scripts/fixtures.py media_command; FFmpeg testsrc2; rawvideo/NUT",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "24/1 fps、16x16、6 frames。各 PTS を有理数で照合。"
+    },
+    {
+      "id": "cfr-25-1",
+      "storage": "generated",
+      "path": "media/cfr-25-1.nut",
+      "recipe": "cfr",
+      "rate": "25/1",
+      "source": "scripts/fixtures.py media_command; FFmpeg testsrc2; rawvideo/NUT",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "25/1 fps、16x16、6 frames。各 PTS を有理数で照合。"
+    },
+    {
+      "id": "cfr-30-1",
+      "storage": "generated",
+      "path": "media/cfr-30-1.nut",
+      "recipe": "cfr",
+      "rate": "30/1",
+      "source": "scripts/fixtures.py media_command; FFmpeg testsrc2; rawvideo/NUT",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "30/1 fps、16x16、6 frames。各 PTS を有理数で照合。"
+    },
+    {
+      "id": "cfr-30000-1001",
+      "storage": "generated",
+      "path": "media/cfr-30000-1001.nut",
+      "recipe": "cfr",
+      "rate": "30000/1001",
+      "source": "scripts/fixtures.py media_command; FFmpeg testsrc2; rawvideo/NUT",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "30000/1001 fps、16x16、6 frames。各 PTS を有理数で照合。"
+    },
+    {
+      "id": "cfr-60000-1001",
+      "storage": "generated",
+      "path": "media/cfr-60000-1001.nut",
+      "recipe": "cfr",
+      "rate": "60000/1001",
+      "source": "scripts/fixtures.py media_command; FFmpeg testsrc2; rawvideo/NUT",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "60000/1001 fps、16x16、6 frames。各 PTS を有理数で照合。"
+    },
+    {
+      "id": "vfr",
+      "storage": "generated",
+      "path": "media/vfr.nut",
+      "recipe": "vfr",
+      "source": "scripts/fixtures.py media_command; FFmpeg testsrc2/select; rawvideo/NUT",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "PTS=0,1/30,1/10,1/5,1/3,1/2 秒。平均 fps で VFR を推定しない。"
+    },
+    {
+      "id": "hdr-pq",
+      "storage": "generated",
+      "path": "media/hdr-pq.mkv",
+      "recipe": "pq",
+      "source": "scripts/fixtures.py media_command; original geq grayscale ramp; FFV1/Matroska",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "BT.2020 10bit limited range PQ metadata/decode input。輝度校正・tone mapping の正しさは保証しない。"
+    },
+    {
+      "id": "hdr-hlg",
+      "storage": "generated",
+      "path": "media/hdr-hlg.mkv",
+      "recipe": "hlg",
+      "source": "scripts/fixtures.py media_command; original geq grayscale ramp; FFV1/Matroska",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "BT.2020 10bit limited range HLG metadata/decode input。輝度校正・tone mapping の正しさは保証しない。"
+    },
+    {
+      "id": "noto-sans-cjk-jp",
+      "storage": "external",
+      "path": "external/NotoSansCJKjp-Regular.otf",
+      "revision": "523d033d6cb47f4a80c58a35753646f5c3608a78",
+      "url": "https://raw.githubusercontent.com/notofonts/noto-cjk/523d033d6cb47f4a80c58a35753646f5c3608a78/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf",
+      "bytes": 16467736,
+      "sha256": "68a3fc98800b2a27b371f2fb79991daf3633bd89309d4ffaa6946fd587f375b5",
+      "source": "notofonts/noto-cjk Sans2.004; Noto Sans CJK JP Regular; Google/Adobe upstream",
+      "license": "OFL-1.1",
+      "license_fixture": "noto-license",
+      "purpose": "日本語組版の固定フォント。emoji/IVS 全 coverage の保証はしない。"
+    }
+  ]
+}

@@ -15,9 +15,11 @@
 | Property | id, type, units, source, modifiers, validation, capabilities |
 | AnimationCurve | id, value_type, keys, interpolation_version |
 | TemplateDefinition | id, version, composition_ref, public_inputs, duration_policy, constraints |
-| RenderSnapshot | content_hash, revision, asset/font/data locks, semantic_versions, profile |
+| RenderSnapshot | content_hash, schema_version, revision, asset/font/data locks, semantic_versions, profile |
 
 SourceRef は Asset、Composition、Generator を区別する。SourceRef の型が増えても Clip の編集意味は変えない。
+
+Timeline の文書型（Sequence / Clip）と Composition / Property descriptor は `kronello-model` に置き、評価実装は分離する。意味の参照と論理モジュールの依存境界は [ADR-0043](../adr/0043-semantic-dependencies-and-units.md) を参照。
 
 初期の SceneNode 種類は Group、Null、Shape、Text、Media、CompositionInstance とする。
 Mask / Matte は入力参照として表現でき、見えるレイヤーとして重複描画しない。Repeater / Particles / Scene3D は拡張種類とする。
@@ -37,10 +39,16 @@ InstancePath は、親からたどった CompositionInstance の安定 ID 列で
 - `semantic_version` は補間・合成などの意味の版。
 - 各 effect / template の version は実装依存を区別する。
 
+RenderSnapshot は公開 `schema_version` を持ち、`semantic_versions` に文書の `semantic_version` と利用する補間・TimeMap・組版・色処理などの意味の版を固定する。revision・エンジン版とこれらの版を同一視せず、実行側の最新で補わない（[ADR-0045](../adr/0045-snapshot-compatibility-boundaries.md)「版の境界」「RenderSnapshot」）。
+
 未知の機能は保存時に失わない設計にするが、必要な機能が不足している場合の最終レンダーは `UNSUPPORTED_FEATURE` で拒否する（[ADR-0010](../adr/0010-unsupported-features-fail-final-render.md)）。
+
+対応する外枠内の未知内容は opaque に保持する。構造を安全に保持できない版は原本を変更せず型付き互換性エラーで拒否し、未知の意味に依存する変更は許さない。保存可能性と実行可能性の判定は ADR-0045 に従う。
 
 保存の具体的な形態（`.kronello`、イベント、スナップショット）は [09 保存と同時編集](09-storage-concurrency.md) を参照。
 
 ## 意味的スナップショットと GPU 資源の分離
 
 文書モデルと RenderSnapshot は意味的な値だけを持つ。`wgpu::Texture` や `AVFrame` など、バックエンド・GUI・GPU 資源の寿命に依存する型を保持しない（[ADR-0005](../adr/0005-semantic-snapshot-vs-gpu-resources.md)）。
+
+Property の単位・座標系・範囲は ADR-0043 に従う。保存 Color は色空間タグ付きの straight RGB と独立 alpha とし、内部画像の premultiplied 表現とは区別する（[ADR-0044](../adr/0044-color-and-alpha-contracts.md)）。

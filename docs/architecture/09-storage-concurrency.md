@@ -33,6 +33,10 @@ JSON は不変スナップショットまたはインポート形式であり、
 `schema_version` は構造、`semantic_version` は補間・合成などの意味を表す（[01 データモデル](01-data-model.md)）。
 migration が失敗した場合に元データを壊さない。未知の機能は保存時に失わない。
 
+[ADR-0045](../adr/0045-snapshot-compatibility-boundaries.md) に従い、構造と意味を別々に検証し、対応する外枠の未知内容は opaque に保持する。lossless な保持が保証できない構造版は原本を変更せず拒否する。構造を読めても、未知の意味に依存する変更・最終レンダーは許さない。
+
+migration は原本を保全し、検証成功後に原子的に確定する。意味だけの変更も意味の版を管理し、過去の固定ジョブ入力を上書きしない。旧イベントを新しいコマンド意味で無条件に再実行しない。公開 `schema_version`、SQLite 内部版、アプリ版、revision は別の境界とする。
+
 ## 複数プロセスからの同時編集
 
 GUI・CLI・MCP サーバーはそれぞれ別プロセスとして同じ `.kronello` を開ける。エージェントが CLI / MCP で加えた変更を、開いている GUI がそのまま確認できることを目的とする。
@@ -144,3 +148,5 @@ hash 照合の頻度と高速化は MEDIA-001 で設計する。
 - ジョブの固定スナップショット、`project.export`、`project.import`、Command / Query API の payload、FFI の payload は同じ型定義を共有する。
 - `schema_version` を持ち、未知のフィールドを保持する。有理数は 10 進文字列で表す。
 - JSON は書き出した時点の不変の写しであり、`.kronello` と並行して編集する正本ではない。
+
+RenderSnapshot は同じ公開構造版と文書の意味の版を含む `semantic_versions` を持ち、資産・フォント・データの lock と profile を固定する（ADR-0045「RenderSnapshot」）。未知内容の round-trip は値・型・所属・参照の保持であり、JSON の空白・キー順の byte 一致を要求しない。安全に保持できない import / export を成功扱いにしない。

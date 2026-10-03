@@ -29,6 +29,7 @@
 | TimeMap | 親の時刻からローカル時刻への写像（線形、区分線形、将来は逆再生・ループ等） |
 | edit rate | 編集用フレームグリッド。評価時刻とは別で、フレーム間でも評価できる |
 | posterize / hold | 内部レートを保持して評価時刻を量子化する明示的な指定 |
+| `design_px` | 2D の設計座標の単位。出力画素・GUI の point・DPI と区別する。Composition は左上原点、+X は右、+Y は下（[ADR-0043](adr/0043-semantic-dependencies-and-units.md)） |
 
 ## 資産
 
@@ -63,6 +64,9 @@
 | isolated group | 子を一度まとめて合成してから opacity や効果を適用する Group |
 | FrameBridge | デコーダー / エンコーダーと wgpu の間でフレームを受け渡す OS・GPU 依存のモジュール |
 | Simulation | 状態を持つ評価（粒子等）。固定刻みと checkpoint を使う専用ノード |
+| straight alpha | RGB に alpha を掛けていない表現。保存 Color Property はこの表現（[ADR-0044](adr/0044-color-and-alpha-contracts.md)） |
+| premultiplied alpha | RGB に alpha を掛けた画像表現。内部 Color 画像は作業用線形空間でこの表現を使う |
+| working space | Sequence の作業用線形色空間。SDR の既定は線形 Rec.709、HDR / 広色域の既定は線形 Rec.2020 |
 
 ## テンプレート
 
@@ -84,6 +88,8 @@
 | idempotency key | 同じ要求の再送を同一結果にするためのキー |
 | `schema_version` | 保存構造の版 |
 | `semantic_version` | 補間・合成などの意味の版 |
+| `semantic_versions` | RenderSnapshot が固定する意味の版の集合。文書の `semantic_version` と利用する評価・色処理等の版を含む（[ADR-0045](adr/0045-snapshot-compatibility-boundaries.md)） |
+| `UNSUPPORTED_FEATURE` | 出力に必要な機能・意味の版が未対応で、最終レンダーを拒否するエラー。未知内容を保存できることとは別 |
 | job | 長時間処理（レンダー等）。接続の寿命から独立した永続的な単位 |
 | worker | ジョブを実行するために切り離して起動されるプロセス。1 ジョブに 1 プロセス |
 | 状態 DB | ユーザーごとの、ジョブ記録などを持つ DB。`.kronello` の外にある |

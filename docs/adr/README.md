@@ -56,6 +56,9 @@
 | [0040](0040-expression-language-policy.md) | 式の正本は AST とし、人間向けには小さな式言語を後から追加する | 採用 | 2026-10-02 |
 | [0041](0041-core-api-gui-order.md) | 実装の優先順はコア契約、API、GUI の順とする | 採用 | 2026-10-02 |
 | [0042](0042-naming-kronello.md) | 名称を Kronello に変更する | 採用 | 2026-10-02 |
+| [0043](0043-semantic-dependencies-and-units.md) | 編集モデル・評価・レンダーの依存境界と単位を固定する | 採用 | 2026-10-03 |
+| [0044](0044-color-and-alpha-contracts.md) | 作業用線形色と alpha の入出力契約を固定する | 採用 | 2026-10-03 |
+| [0045](0045-snapshot-compatibility-boundaries.md) | 保存・意味・実行能力の互換性を分けて判定する | 採用 | 2026-10-03 |
 
 ## 追加と変更の規則
 

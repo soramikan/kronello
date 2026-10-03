@@ -22,6 +22,8 @@
 - CI（GitHub Actions）では、値とレイアウトの意味的比較を必須とする。
 - GPU 画素の golden 比較は固定環境（参照機）で実行する（[ADR-0038](../adr/0038-toolchain-and-ci.md)）。
 
+固定環境の fingerprint、実行・更新コマンド、許容誤差と失敗時の扱いは [golden 比較手順](../testing/golden-comparison.md) に記載する。GPU-001 / QA-001 実装前の提案であり、GPU 比較を実行済みとするものではない。
+
 ## 正しさ
 
 - 24、25、30、30000/1001、60000/1001 fps、VFR、48kHz 音声、長尺。
@@ -32,6 +34,8 @@
 - template version update、未知機能の保持、migration 失敗時の元データ保全。
 - GUI / CLI / MCP の同じ編集操作が同じ snapshot に到達すること。
 - 複数プロセスからの同時書き込みで、古い `base_revision` が必ず拒否されること。
+
+ARC-001 で固定した規約の具体的な検証契約は [ADR-0043](../adr/0043-semantic-dependencies-and-units.md)（TIME-001 / PROP-001）、[ADR-0044](../adr/0044-color-and-alpha-contracts.md)（GPU-001 / COLOR-001）、[ADR-0045](../adr/0045-snapshot-compatibility-boundaries.md)（PROP-001 / STORE-001 / RENDER-001 / JOB-001）を参照。これらは今後の受け入れ検証項目であり、実行済みテストの結果ではない。
 
 ## 障害
 

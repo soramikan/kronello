@@ -3,7 +3,7 @@
 カット編集（NLE）とモーショングラフィックスを、同じ時間・プロパティ・組版・合成・レンダー基盤の上で扱う動画編集ソフトウェア。
 人間が使う GUI と、スクリプトや AI エージェントが使う CLI / MCP を同格の入口とし、どこから操作しても同じ Command / Query API・同じ revision・同じレンダー結果に到達することを設計の中心に置く。
 
-> **状態: 設計段階。** このリポジトリには現在ドキュメントしかなく、ソフトウェアの実装・実機性能検証は未着手。
+> **状態: M0（基盤契約・テスト素材・CI・技術スパイク）を実装済み。** 有理数時刻（`kronello-time`）、型付き Property（`kronello-model`）、テスト素材と比較（`kronello-testkit`）、GPU 描画と FrameBridge のスパイク（`kronello-gpu` / `kronello-framebridge`）がある。動画編集機能（M1 以降）と参照機での性能検証は未着手。
 > 文書中の API・CLI・スキーマはすべて提案であり、稼働中の製品の仕様ではない。
 
 ## 何を作るか
@@ -40,6 +40,19 @@
 | [docs/open-questions.md](docs/open-questions.md) | 未決事項 |
 | [docs/glossary.md](docs/glossary.md) | 用語集 |
 | [AGENTS.md](AGENTS.md) | コーディングエージェント向けの作業規約 |
+
+## 開発時の検証
+
+Rust は `rust-toolchain.toml` の 1.95.0（edition 2024）に固定する。rustup を導入した環境で、リポジトリのルートから実行する。
+
+```sh
+cargo fmt --all --check
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --locked
+python3 scripts/backlog.py check
+```
+
+CI は macOS (Apple Silicon) と Linux (Mesa lavapipe) で同じ検証を行う。GPU 画素の比較は [固定環境の golden 比較手順](docs/testing/golden-comparison.md) を参照（harness は実装済み、参照機の基準画像は未作成）。
 
 ## ライセンス
 

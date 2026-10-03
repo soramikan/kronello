@@ -2,12 +2,14 @@
 
 状態: 提案仕様。ソフトウェアの実装・実機性能検証を完了したものではない。
 対象: Rust / FFmpeg / wgpu を基盤とする、GUI・CLI・MCP 共通の動画編集ソフトウェア Kronello。
-元仕様: [v0.2](../archive/motion_editor_architecture_v0_2.md)（2026-10-01）。本書群は 2026-10-02 の検討結果を反映した改訂版。
+元仕様: [v0.2](../archive/motion_editor_architecture_v0_2.md)（2026-10-01）。本書群は 2026-10-03 までの検討結果を反映した改訂版。
 
 ## 結論
 
 NLE（カット編集）の Timeline と、モーショングラフィックスの Composition を別の編集モデルとし、同じ時間・プロパティ・組版・合成・レンダー基盤へコンパイルする。
 Composition は SourceRef として Timeline へ配置できる。Composition の中から別の Composition も参照できるが、参照循環は禁止する。
+
+配置から Composition、Property、Render へ至る意味の追跡順と、crate のコード依存は区別する。依存境界と単位は [ADR-0043](../adr/0043-semantic-dependencies-and-units.md)、色・alpha は [ADR-0044](../adr/0044-color-and-alpha-contracts.md)、保存と実行の互換性は [ADR-0045](../adr/0045-snapshot-compatibility-boundaries.md) を契約とする。これらは採用した設計規約であり、実装による検証は未了。
 
 GUI・CLI・MCP は同格の入口であり、同じ Command / Query API を通る（[ADR-0001](../adr/0001-shared-command-query-api.md)）。
 

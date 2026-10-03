@@ -3,14 +3,14 @@
 <!-- このファイルは scripts/backlog.py render が生成する。直接編集しない。正本は backlog.json。 -->
 
 - schema_version: 0.5
-- 更新日: 2026-10-02
+- 更新日: 2026-10-03
 - タスク数: 51
 
 ## 集計
 
 | マイルストーン | planned | in_progress | done | dropped | 計 |
 |---|---:|---:|---:|---:|---:|
-| M0 | 6 | 0 | 0 | 0 | 6 |
+| M0 | 0 | 0 | 6 | 0 | 6 |
 | M1 | 10 | 0 | 0 | 0 | 10 |
 | M2 | 10 | 0 | 0 | 0 | 10 |
 | M3 | 10 | 0 | 0 | 0 | 10 |
@@ -22,7 +22,7 @@
 
 ### ARC-001 意味規約と互換性境界をADRに固定
 
-- 優先度: P0 / 領域: architecture / 状態: planned
+- 優先度: P0 / 領域: architecture / 状態: done
 - 依存: なし
 - 受け入れ条件:
   - Timeline/Composition/Property/Renderの依存方向を文書化する
@@ -31,7 +31,7 @@
 
 ### TIME-001 有理数時間・半開区間・時間マッピング
 
-- 優先度: P0 / 領域: time / 状態: planned
+- 優先度: P0 / 領域: time / 状態: done
 - 依存: ARC-001
 - 受け入れ条件:
   - 整数overflowを検出しJSONの整数精度を失わない
@@ -39,7 +39,7 @@
 
 ### PROP-001 型付きPropertyとschema registry
 
-- 優先度: P0 / 領域: model / 状態: planned
+- 優先度: P0 / 領域: model / 状態: done
 - 依存: ARC-001
 - 受け入れ条件:
   - 型・単位・補間可否・範囲・安定IDを共通schemaで表す
@@ -47,7 +47,7 @@
 
 ### GPU-001 最短GPU描画とFrameBridge技術スパイク
 
-- 優先度: P0 / 領域: gpu / 状態: planned
+- 優先度: P0 / 領域: gpu / 状態: done
 - 依存: ARC-001
 - 受け入れ条件:
   - 2D素材からRGBA16F出力までの色とalphaを検証する
@@ -57,7 +57,7 @@
 
 ### QA-001 参照素材とgolden sceneを整備
 
-- 優先度: P0 / 領域: test / 状態: planned
+- 優先度: P0 / 領域: test / 状態: done
 - 依存: ARC-001
 - 受け入れ条件:
   - 日本語・alpha・異なるfps・VFR・HDRの権利確認済みfixtureを用意する
@@ -67,7 +67,7 @@
 
 ### CI-001 ツールチェーン固定とCI
 
-- 優先度: P0 / 領域: infra / 状態: planned
+- 優先度: P0 / 領域: infra / 状態: done
 - 依存: ARC-001
 - 受け入れ条件:
   - rust-toolchain.tomlでstableの特定版に固定し、edition 2024とする

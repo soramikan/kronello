@@ -1,0 +1,524 @@
+{
+  "schema_version": 1,
+  "status": "analytic-contracts; renderer integration pending GPU-001/TEXT-001",
+  "pixel_comparison": {
+    "version": 1,
+    "rgb_absolute": 0.0009765625,
+    "rgb_relative": 0.0009765625,
+    "alpha_absolute": 0.0009765625,
+    "status": "provisional; fixed-machine calibration pending GPU-001"
+  },
+  "scenes": [
+    {
+      "id": "linear-property-midpoint",
+      "operation": "linear-interpolation",
+      "fixtures": [
+        "timing"
+      ],
+      "descriptor": {
+        "size": [
+          1,
+          1
+        ],
+        "origin": [
+          0,
+          0
+        ],
+        "time": {
+          "num": "1",
+          "den": "4"
+        },
+        "working_space": "linear-rec709",
+        "alpha": "premultiplied",
+        "color_pipeline_id": "qa001-linear-v1",
+        "output_transform": "none",
+        "samples_per_frame": 1,
+        "seed": 0
+      },
+      "input": {
+        "start": [
+          0,
+          8
+        ],
+        "end": [
+          8,
+          0
+        ],
+        "fraction": {
+          "num": "1",
+          "den": "4"
+        }
+      },
+      "expected": {
+        "value": [
+          2,
+          6
+        ]
+      }
+    },
+    {
+      "id": "half-open-boundary",
+      "operation": "half-open-interval",
+      "fixtures": [
+        "timing"
+      ],
+      "descriptor": {
+        "size": [
+          1,
+          1
+        ],
+        "origin": [
+          0,
+          0
+        ],
+        "time": {
+          "num": "0",
+          "den": "1"
+        },
+        "working_space": "linear-rec709",
+        "alpha": "premultiplied",
+        "color_pipeline_id": "qa001-linear-v1",
+        "output_transform": "none",
+        "samples_per_frame": 1,
+        "seed": 0
+      },
+      "input": {
+        "interval": [
+          {
+            "num": "0",
+            "den": "1"
+          },
+          {
+            "num": "1",
+            "den": "1"
+          }
+        ],
+        "times": [
+          {
+            "num": "0",
+            "den": "1"
+          },
+          {
+            "num": "999",
+            "den": "1000"
+          },
+          {
+            "num": "1",
+            "den": "1"
+          },
+          {
+            "num": "1001",
+            "den": "1000"
+          }
+        ]
+      },
+      "expected": {
+        "contains": [
+          true,
+          true,
+          false,
+          false
+        ]
+      }
+    },
+    {
+      "id": "transformed-bounds",
+      "operation": "affine-bounds",
+      "fixtures": [],
+      "descriptor": {
+        "size": [
+          1,
+          1
+        ],
+        "origin": [
+          0,
+          0
+        ],
+        "time": {
+          "num": "0",
+          "den": "1"
+        },
+        "working_space": "linear-rec709",
+        "alpha": "premultiplied",
+        "color_pipeline_id": "qa001-linear-v1",
+        "output_transform": "none",
+        "samples_per_frame": 1,
+        "seed": 0
+      },
+      "input": {
+        "bounds": [
+          0,
+          0,
+          4,
+          2
+        ],
+        "matrix": [
+          2,
+          0,
+          0,
+          3,
+          10,
+          -2
+        ]
+      },
+      "expected": {
+        "bounds": [
+          10,
+          -2,
+          18,
+          4
+        ]
+      }
+    },
+    {
+      "id": "source-over",
+      "operation": "source-over",
+      "fixtures": [
+        "alpha"
+      ],
+      "descriptor": {
+        "size": [
+          1,
+          1
+        ],
+        "origin": [
+          0,
+          0
+        ],
+        "time": {
+          "num": "0",
+          "den": "1"
+        },
+        "working_space": "linear-rec709",
+        "alpha": "premultiplied",
+        "color_pipeline_id": "qa001-linear-v1",
+        "output_transform": "none",
+        "samples_per_frame": 1,
+        "seed": 0
+      },
+      "input": {
+        "source": [
+          0.5,
+          0,
+          0,
+          0.5
+        ],
+        "destination": [
+          0,
+          0,
+          1,
+          1
+        ]
+      },
+      "expected": {
+        "rgba": [
+          0.5,
+          0,
+          0.5,
+          1
+        ]
+      }
+    },
+    {
+      "id": "isolated-group-opacity",
+      "operation": "isolated-group-opacity",
+      "fixtures": [
+        "alpha"
+      ],
+      "descriptor": {
+        "size": [
+          1,
+          1
+        ],
+        "origin": [
+          0,
+          0
+        ],
+        "time": {
+          "num": "0",
+          "den": "1"
+        },
+        "working_space": "linear-rec709",
+        "alpha": "premultiplied",
+        "color_pipeline_id": "qa001-linear-v1",
+        "output_transform": "none",
+        "samples_per_frame": 1,
+        "seed": 0
+      },
+      "input": {
+        "children": [
+          [
+            1,
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            1
+          ]
+        ],
+        "opacity": 0.5
+      },
+      "expected": {
+        "rgba": [
+          0,
+          0,
+          0.5,
+          0.5
+        ]
+      }
+    },
+    {
+      "id": "hdr-no-clamp",
+      "operation": "linear-pixels",
+      "fixtures": [
+        "linear-hdr",
+        "hdr-pq",
+        "hdr-hlg"
+      ],
+      "descriptor": {
+        "size": [
+          4,
+          1
+        ],
+        "origin": [
+          0,
+          0
+        ],
+        "time": {
+          "num": "0",
+          "den": "1"
+        },
+        "working_space": "linear-rec2020",
+        "alpha": "premultiplied",
+        "color_pipeline_id": "qa001-linear-v1",
+        "output_transform": "none",
+        "samples_per_frame": 1,
+        "seed": 0
+      },
+      "input": {
+        "fixture": "linear-hdr"
+      },
+      "expected": {
+        "rgba": [
+          [
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0.5,
+            0,
+            0,
+            0.5
+          ],
+          [
+            4,
+            2,
+            -0.125,
+            1
+          ],
+          [
+            1.52587890625e-05,
+            0,
+            0,
+            1.52587890625e-05
+          ]
+        ]
+      }
+    },
+    {
+      "id": "alpha-boundary",
+      "operation": "external-unpremultiply",
+      "fixtures": [
+        "alpha",
+        "linear-hdr"
+      ],
+      "descriptor": {
+        "size": [
+          4,
+          1
+        ],
+        "origin": [
+          0,
+          0
+        ],
+        "time": {
+          "num": "0",
+          "den": "1"
+        },
+        "working_space": "linear-rec709",
+        "alpha": "premultiplied",
+        "color_pipeline_id": "qa001-linear-v1",
+        "output_transform": "none",
+        "samples_per_frame": 1,
+        "seed": 0
+      },
+      "input": {
+        "epsilon": 1.52587890625e-05,
+        "rgba": [
+          [
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            7.62939453125e-06,
+            0,
+            0,
+            7.62939453125e-06
+          ],
+          [
+            1.52587890625e-05,
+            0,
+            0,
+            1.52587890625e-05
+          ],
+          [
+            3.0517578125e-05,
+            0,
+            0,
+            3.0517578125e-05
+          ]
+        ]
+      },
+      "expected": {
+        "straight_rgba": [
+          [
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            7.62939453125e-06
+          ],
+          [
+            0,
+            0,
+            0,
+            1.52587890625e-05
+          ],
+          [
+            1,
+            0,
+            0,
+            3.0517578125e-05
+          ]
+        ]
+      }
+    },
+    {
+      "id": "japanese-preserve-codepoints",
+      "operation": "text-codepoints",
+      "fixtures": [
+        "japanese",
+        "noto-sans-cjk-jp"
+      ],
+      "descriptor": {
+        "size": [
+          1,
+          1
+        ],
+        "origin": [
+          0,
+          0
+        ],
+        "time": {
+          "num": "0",
+          "den": "1"
+        },
+        "working_space": "linear-rec709",
+        "alpha": "premultiplied",
+        "color_pipeline_id": "qa001-linear-v1",
+        "output_transform": "none",
+        "samples_per_frame": 1,
+        "seed": 0
+      },
+      "input": {
+        "fixture": "japanese",
+        "case_ids": [
+          "combining",
+          "ivs",
+          "emoji"
+        ]
+      },
+      "expected": {
+        "codepoints": [
+          [
+            12363,
+            12441
+          ],
+          [
+            33883,
+            917760
+          ],
+          [
+            128105,
+            8205,
+            128187
+          ]
+        ]
+      }
+    },
+    {
+      "id": "audio-channel-switch",
+      "operation": "pcm-sample",
+      "fixtures": [
+        "sine-48k-stereo"
+      ],
+      "descriptor": {
+        "size": [
+          1,
+          1
+        ],
+        "origin": [
+          0,
+          0
+        ],
+        "time": {
+          "num": "0",
+          "den": "1"
+        },
+        "working_space": "linear-rec709",
+        "alpha": "premultiplied",
+        "color_pipeline_id": "qa001-linear-v1",
+        "output_transform": "none",
+        "samples_per_frame": 1,
+        "seed": 0
+      },
+      "input": {
+        "fixture": "sine-48k-stereo",
+        "indices": [
+          0,
+          12,
+          2412
+        ]
+      },
+      "expected": {
+        "samples": [
+          [
+            0,
+            0
+          ],
+          [
+            16384,
+            0
+          ],
+          [
+            16384,
+            16384
+          ]
+        ]
+      }
+    }
+  ]
+}

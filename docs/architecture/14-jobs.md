@@ -59,6 +59,8 @@ GUI / CLI / MCP
 
 素材は外部参照のままであり、worker が content hash を照合する。一致しなければジョブは失敗する。フォントやデータの lock も同様に照合する。
 
+固定 snapshot には公開 `schema_version` と、文書の `semantic_version` を含む `semantic_versions` を記録する。worker は開始・再開時に構造・意味の版、必要機能、lock を検証する。同じエンジン版から起動したことだけで省略せず、未知の必要機能は `UNSUPPORTED_FEATURE` とする。migration や再開時に固定入力を最新の Project / 意味へ上書きしない（[ADR-0045](../adr/0045-snapshot-compatibility-boundaries.md)）。
+
 ## 同時実行
 
 - 既定の同時実行は 1 ジョブ。4K / 8K では GPU メモリとエンコーダーが競合するためである。
