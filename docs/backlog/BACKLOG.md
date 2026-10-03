@@ -11,7 +11,7 @@
 | マイルストーン | planned | in_progress | done | dropped | 計 |
 |---|---:|---:|---:|---:|---:|
 | M0 | 0 | 0 | 6 | 0 | 6 |
-| M1 | 10 | 0 | 0 | 0 | 10 |
+| M1 | 9 | 0 | 1 | 0 | 10 |
 | M2 | 10 | 0 | 0 | 0 | 10 |
 | M3 | 10 | 0 | 0 | 0 | 10 |
 | M4 | 6 | 0 | 0 | 0 | 6 |
@@ -95,7 +95,7 @@
 
 ### COMP-001 Composition/Instance/Group/Nullモデル
 
-- 優先度: P0 / 領域: scene / 状態: planned
+- 優先度: P0 / 領域: scene / 状態: done
 - 依存: TIME-001, PROP-001
 - 受け入れ条件:
   - InstancePathで共有定義の複数配置を区別する

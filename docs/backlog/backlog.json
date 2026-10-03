@@ -131,7 +131,7 @@
       "priority": "P0",
       "area": "scene",
       "title": "Composition/Instance/Group/Nullモデル",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "TIME-001",
         "PROP-001"

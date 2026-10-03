@@ -5,6 +5,7 @@
 //! crate stores source and modifier descriptions but never evaluates them.
 
 mod builtin;
+mod composition;
 mod error;
 mod id;
 mod property;
@@ -15,8 +16,15 @@ pub use builtin::{
     FILL_COLOR_ID, OPACITY_ID, STROKE_WIDTH_ID, TRANSFORM_ANCHOR_ID, TRANSFORM_POSITION_ID,
     TRANSFORM_ROTATION_ID, TRANSFORM_SCALE_ID, TRANSFORM_SKEW_ID,
 };
+pub use composition::{
+    Composition, CompositionError, CompositionInstance, CompositionReference, DesignExtent,
+    InstancePath, NodeKind, ParentGraph, PropertyKey, SceneNode, validate_compositions,
+};
 pub use error::{JsonError, ModelError, from_json};
-pub use id::{AssetId, CurveId, DescriptorId, ExpressionId, ModifierId, PropertyId, SchemaKey};
+pub use id::{
+    AssetId, CompositionId, CompositionInstanceId, ContentId, CurveId, DescriptorId, ExpressionId,
+    ModifierId, NodeId, PropertyId, SchemaKey,
+};
 pub use property::{DescriptorRef, Modifier, Property, PropertySource, SourceResolver};
 pub use schema::{
     Capabilities, CoordinateSpace, DescriptorDefinition, InterpolationMode, NumericBound,

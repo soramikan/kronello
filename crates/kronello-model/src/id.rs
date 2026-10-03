@@ -46,6 +46,10 @@ stable_id!(ExpressionId);
 stable_id!(DescriptorId);
 stable_id!(AssetId);
 stable_id!(ModifierId);
+stable_id!(CompositionId);
+stable_id!(NodeId);
+stable_id!(CompositionInstanceId);
+stable_id!(ContentId);
 
 /// Immutable namespaced schema identity, such as `kronello.transform.opacity`.
 /// It is supplied by the schema author, independently of a localized label.

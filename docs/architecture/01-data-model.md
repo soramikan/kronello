@@ -31,6 +31,10 @@ NodeId や PropertyId を配列番号や名前から導出しない。表示名�
 InstancePath は、親からたどった CompositionInstance の安定 ID 列であり、配列の現在位置ではない。
 共有定義を編集する操作と、公開入力を上書きする操作を別 API にする。
 
+COMP-001 の文書型では、配置ノードの `NodeId` と `CompositionInstanceId` を分け、後者の列を `InstancePath` に保存する。`nodes` の保存順と所有する子の順序を分離し、`root_nodes` と各ノードの `child_order` を順序付き NodeId 列とする。`containment_parent` とこの列の一致を検証し、`transform_parent` は描画順に影響させない。Shape / Text は `ContentId` の参照枠のみで、内容・描画は後続タスク。
+
+読取・変更後は `validate_compositions` で定義集合を検証する。所有・変換の循環はそれぞれ `ContainmentCycle` / `TransformCycle` と閉じた NodeId 経路、定義参照の循環は `CompositionReferenceCycle` と参照元・参照先・Node / Instance を含む辺列で診断する。入力束縛は参照先 Composition の既存 Property を上書きする値源として保持し、型・範囲等の契約を照合する。公開入力・テンプレート方針、Scene IR と評価はこの文書型の実装範囲に含めない。
+
 複数プロセスが同時に編集するため（[09 保存と同時編集](09-storage-concurrency.md)）、ID は中央の採番に依存せず、各プロセスが衝突なく生成できる形式にする。
 
 ## 版と互換性

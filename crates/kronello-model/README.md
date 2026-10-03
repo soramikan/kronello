@@ -1,6 +1,8 @@
-# kronello-model: PROP-001
+# kronello-model: Property・Composition モデル
 
 型付き Property と schema registry の純粋モデル層。保存・検証する型を実装し、曲線・式・Modifier の評価、GPU 資源、ストレージは含まない。
+
+COMP-001 は Composition / SceneNode / CompositionInstance の文書型、InstancePath、所有・変換・定義参照の検証を実装する。Scene IR の構築・変換の評価・Shape / Text の内容・描画は含まない。
 
 ## 公開 API
 
@@ -16,6 +18,21 @@
 - `ModelError` / `JsonError`: 検証エラーと JSON 構造の互換性エラーを分ける。
 
 ## 実装上の決定
+
+### Composition と配置（COMP-001）
+
+- `CompositionId` / `NodeId` / `CompositionInstanceId` / `ContentId` は既存の UUID 型と同じ生成・保存規約を使う。配置ノードの `NodeId` と配置の `CompositionInstanceId` は別の identity。
+- `Composition` は `Duration`、正の有限な `DesignExtent`（`design_px`）、`FrameRate`、順序付き `root_nodes`、`nodes`、既存の `Property` を保持する。
+- `SceneNode` は `NodeKind`、独立した `containment_parent` / `transform_parent`、所有する子の順序付き ID 列 `child_order`、有理数の半開区間 `active_range`、`properties` を保持する。`nodes` の保存順は描画順を決めない。
+- `NodeKind` は Group / Null / Shape / Text / CompositionInstance。Shape / Text は `ContentId` の `content_ref` だけを持ち、内容の存在確認は後続層に残す。Media 等の種類はまだ実装しない。
+- `CompositionInstance` は安定 ID、`definition_ref`、参照先 Composition の PropertyId から `PropertySource<Value>` への `input_bindings`、既存の `TimeMap` による `local_time_map`、固定 `seed` を保持する。入力上書きは既存 Property の型・範囲・能力・Modifier 契約で検証し、共有定義を変更しない。公開入力の宣言・テンプレート方針、Curve / Expression の catalog 照合は後続タスクに残す。
+- `InstancePath::root` / `new` / `child` / `ids` は root からの配置 ID 列を扱う。`resolve(root, compositions)` は各階層の配置と参照先を照合する。空の path は root 定義。同じ末端配置でも祖先の配置が違えば異なる path になる。`PropertyKey` は `(InstancePath, NodeId, PropertyId)` を構造として保持する。
+
+`Composition` / `SceneNode` は編集・serde のため公開フィールドを持つ。読取・変更後は **`validate_compositions(compositions, registry)` の成功を確認してから文書を受け入れる**。ID の重複、親・定義・入力参照の欠落、所有親と root / child の順序列の不整合、Property の metadata を検証する。Node / Instance / Property の ID は定義集合全体で重複を拒否する。`InstancePath::resolve` も検証済みの定義集合を前提とする。
+
+失敗時は `Vec<CompositionError>` で独立した診断を集める。`ContainmentCycle` / `TransformCycle` は対象 Composition と先頭 ID を末尾にも含む閉じた NodeId 経路を返す。`CompositionReferenceCycle` は参照元・参照先 Composition と責任のある Node / Instance を含む `CompositionReference` の閉じた辺列を返す。各グラフを別に検証し、複数種類の循環を同時に返す。循環探索は安定 ID 順の反復 DFS で、共有定義への合流を循環と誤認せず、深いネストでプロセスの再帰 stack に依存しない。すべての単純循環を列挙する API ではない。
+
+新しい文書型も `deny_unknown_fields` による厳密な JSON 境界を使う。未知構造は汎用 `from_json` で `JsonError::IncompatibleStructure` として拒否し、opaque 保持・公開スキーマ・migration を実装済みとは扱わない。
 
 ### ID とキー
 
@@ -101,3 +118,4 @@ cargo test -p kronello-model
 
 `tests/property_schema.rs` は受け入れ条件と ADR-0043 / 0044 / 0045 のモデル境界を検証する。`PropertySource` の compile-fail doctest は異なる Constant 型と同時に複数の値源を構築する操作がコンパイルできないことを確認する。
 `tests/builtin_registry.rs` は固定 UUID・キー、再構築と列挙の決定性、標準 descriptor の既定値・契約、範囲違反、連続角の保存、重複登録と衝突の拒否を検証する。
+`tests/composition.rs` は共有定義の複数配置と入れ子の InstancePath、3 種類の循環と閉じた経路、独立した親グラフ、参照・ID・順序・入力束縛の検証、有理数時刻と全ノード種類の JSON 往復、未知構造の拒否、4,096 ノードの深い親グラフを検証する。
