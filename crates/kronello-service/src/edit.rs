@@ -618,8 +618,25 @@ fn content_keys(project: &Project, id: Uuid, keys: &mut BTreeSet<ChangedKey>) {
         }
     }
 }
-/// Diff ID-bearing document collections member by member. Scalar order arrays
-/// remain atomic; structure conflicts protect their parent containers.
+/// Only these model collections have nonsemantic storage order. All other
+/// arrays (including modifiers, draw order, curve keys, paths, gradient stops,
+/// text styles/ruby and instance paths) are replaced as a unit.
+fn unordered_collection(path: &[String]) -> bool {
+    match path {
+        [collection] => matches!(
+            collection.as_str(),
+            "compositions" | "curves" | "shapes" | "texts"
+        ),
+        [compositions, _, collection] if compositions == "compositions" => {
+            matches!(collection.as_str(), "nodes" | "properties")
+        }
+        [compositions, _, nodes, _, properties] => {
+            compositions == "compositions" && nodes == "nodes" && properties == "properties"
+        }
+        _ => false,
+    }
+}
+/// Diff unordered model collections by stable ID; preserve all ordered arrays.
 fn diff(old: &Json, new: &Json, path: &mut Vec<String>, out: &mut Vec<Mutation>) {
     if old == new {
         return;
@@ -655,9 +672,10 @@ fn diff(old: &Json, new: &Json, path: &mut Vec<String>, out: &mut Vec<Mutation>)
             }
         }
         (Json::Array(a), Json::Array(b))
-            if a.iter()
-                .chain(b)
-                .all(|v| v.get("id").and_then(Json::as_str).is_some()) =>
+            if unordered_collection(path)
+                && a.iter()
+                    .chain(b)
+                    .all(|v| v.get("id").and_then(Json::as_str).is_some()) =>
         {
             let a: BTreeMap<_, _> = a.iter().map(|v| (v["id"].as_str().unwrap(), v)).collect();
             let b: BTreeMap<_, _> = b.iter().map(|v| (v["id"].as_str().unwrap(), v)).collect();
@@ -715,7 +733,7 @@ fn build(
         inverse.push(m.apply(&mut value)?);
     }
     inverse.reverse();
-    // Use the exact patch-normalized candidate (collection order is nonsemantic).
+    // Normalize only unordered collection storage; ordered arrays retain the request order.
     let candidate: Project = serde_json::from_str(&value.to_string())?;
     validate(&candidate)?;
     let mut plan = EditPlan {
@@ -854,7 +872,58 @@ fn overlap(a: &ChangedKey, b: &ChangedKey) -> bool {
         ) => object_id == other,
     }
 }
+fn validate_undo<'a>(
+    snapshot: &kronello_store::Snapshot,
+    events: &'a [Event],
+    event_id: Uuid,
+) -> Result<&'a Event, ServiceError> {
+    let target = events
+        .iter()
+        .find(|e| e.id == event_id)
+        .ok_or_else(|| ServiceError::new("EVENT_NOT_FOUND", "event is unavailable or compacted"))?;
+    let active = active(events);
+    if !active.contains(&target.id) {
+        return Err(ServiceError::new(
+            "EVENT_ALREADY_UNDONE",
+            "undo the undo event to redo",
+        ));
+    }
+    let mut conflicts = Vec::new();
+    for e in events {
+        if e.revision > target.revision && active.contains(&e.id) {
+            let keys: BTreeSet<_> = e
+                .changed_keys
+                .iter()
+                .filter(|key| target.changed_keys.iter().any(|t| overlap(t, key)))
+                .cloned()
+                .collect();
+            if !keys.is_empty() {
+                conflicts.push(UndoConflict {
+                    event_id: e.id,
+                    keys,
+                });
+            }
+        }
+    }
+    if !conflicts.is_empty() {
+        let mut error =
+            ServiceError::new("UNDO_CONFLICT", "later active events touch the target keys");
+        error.details = Some(json!({"conflicts":conflicts}));
+        return Err(error);
+    }
+    let mut candidate = serde_json::to_value(&snapshot.document)?;
+    for m in &target.inverse {
+        m.apply(&mut candidate)?;
+    }
+    validate(&serde_json::from_str(&candidate.to_string())?)?;
+    Ok(target)
+}
 pub(crate) fn undo(r: UndoRequest) -> Result<Event, ServiceError> {
+    undo_before_apply(r, || {})
+}
+// The callback permits deterministic interleavings in unit tests. It runs after
+// the preliminary read validation and before acquiring the writer transaction.
+fn undo_before_apply(r: UndoRequest, before_apply: impl FnOnce()) -> Result<Event, ServiceError> {
     key(&r.idempotency_key)?;
     let base = parse_revision(&r.base_revision)?;
     let payload = json!({"operation":"edit.undo","base_revision":base.to_string(),"session_id":r.session_id,"event_id":r.event_id});
@@ -873,44 +942,7 @@ pub(crate) fn undo(r: UndoRequest) -> Result<Event, ServiceError> {
                 .into()
             });
         }
-        let target = events.iter().find(|e| e.id == r.event_id).ok_or_else(|| {
-            ServiceError::new("EVENT_NOT_FOUND", "event is unavailable or compacted")
-        })?;
-        let active = active(&events);
-        if !active.contains(&target.id) {
-            return Err(ServiceError::new(
-                "EVENT_ALREADY_UNDONE",
-                "undo the undo event to redo",
-            ));
-        }
-        let mut conflicts = Vec::new();
-        for e in &events {
-            if e.revision > target.revision && active.contains(&e.id) {
-                let keys: BTreeSet<_> = e
-                    .changed_keys
-                    .iter()
-                    .filter(|key| target.changed_keys.iter().any(|t| overlap(t, key)))
-                    .cloned()
-                    .collect();
-                if !keys.is_empty() {
-                    conflicts.push(UndoConflict {
-                        event_id: e.id,
-                        keys,
-                    });
-                }
-            }
-        }
-        if !conflicts.is_empty() {
-            let mut error =
-                ServiceError::new("UNDO_CONFLICT", "later active events touch the target keys");
-            error.details = Some(json!({"conflicts":conflicts}));
-            return Err(error);
-        }
-        let mut candidate = serde_json::to_value(s.document)?;
-        for m in &target.inverse {
-            m.apply(&mut candidate)?;
-        }
-        validate(&serde_json::from_str(&candidate.to_string())?)?;
+        let target = validate_undo(&s, &events, r.event_id)?;
         let request = ApplyRequest {
             base_revision: base,
             session_id: r.session_id,
@@ -919,13 +951,15 @@ pub(crate) fn undo(r: UndoRequest) -> Result<Event, ServiceError> {
             idempotency_key: Some(r.idempotency_key.clone()),
             undo_of: Some(target.id),
         };
-        match store.apply_with_payload(request, payload.clone()) {
+        before_apply();
+        match store.apply_with_payload_checked(request, payload.clone(), |snapshot, events| {
+            validate_undo(snapshot, events, r.event_id).map(|_| ())
+        }) {
             Ok(e) => Ok(e),
-            Err(StoreError::RevisionConflict { base, current }) => {
-                retry(&store, &r.idempotency_key, &payload)?
-                    .ok_or_else(|| StoreError::RevisionConflict { base, current }.into())
+            Err(e) if e.code == "REVISION_CONFLICT" => {
+                retry(&store, &r.idempotency_key, &payload)?.ok_or(e)
             }
-            Err(e) => Err(e.into()),
+            Err(e) => Err(e),
         }
     })();
     store.close()?;
@@ -948,4 +982,341 @@ pub(crate) fn history(r: HistoryRequest) -> Result<HistoryResult, ServiceError> 
             })
             .collect(),
     })
+}
+
+#[cfg(test)]
+mod regression_tests {
+    use super::*;
+    use kronello_store::OpenOptions;
+
+    #[test]
+    fn unordered_collections_keep_member_patches_for_selective_undo() {
+        let old = json!([{"id":"b", "value":1}, {"id":"a", "value":2}]);
+        let reordered = json!([{"id":"a", "value":2}, {"id":"b", "value":1}]);
+        let changed = json!([{"id":"a", "value":3}, {"id":"b", "value":1}]);
+        for (segments, pointer) in [
+            (vec!["compositions"], "/compositions"),
+            (vec!["curves"], "/curves"),
+            (vec!["shapes"], "/shapes"),
+            (vec!["texts"], "/texts"),
+            (
+                vec!["compositions", "comp", "nodes"],
+                "/compositions/0/nodes",
+            ),
+            (
+                vec!["compositions", "comp", "properties"],
+                "/compositions/0/properties",
+            ),
+            (
+                vec!["compositions", "comp", "nodes", "node", "properties"],
+                "/compositions/0/nodes/0/properties",
+            ),
+        ] {
+            let mut path: Vec<String> = segments.into_iter().map(String::from).collect();
+            let mut mutations = Vec::new();
+            diff(&old, &reordered, &mut path, &mut mutations);
+            assert!(mutations.is_empty(), "storage order is nonsemantic");
+            diff(&old, &changed, &mut path, &mut mutations);
+            let mut member_path = path.clone();
+            member_path.extend(["a".into(), "value".into()]);
+            assert_eq!(
+                mutations,
+                vec![Mutation::Set {
+                    path: member_path,
+                    value: json!(3),
+                }]
+            );
+            let mut document = json!({
+                "compositions": [{
+                    "id":"comp",
+                    "nodes":[{"id":"node", "properties":[]}],
+                    "properties":[]
+                }],
+                "curves":[], "shapes":[], "texts":[]
+            });
+            *document.pointer_mut(pointer).unwrap() = old.clone();
+            let inverse = mutations[0].apply(&mut document).unwrap();
+            let mut other_path = path.clone();
+            other_path.extend(["b".into(), "value".into()]);
+            Mutation::Set {
+                path: other_path,
+                value: json!(99),
+            }
+            .apply(&mut document)
+            .unwrap();
+            inverse.apply(&mut document).unwrap();
+            assert_eq!(
+                document.pointer(pointer).unwrap(),
+                &json!([{"id":"b", "value":99}, {"id":"a", "value":2}]),
+                "Undo must retain an independent member edit"
+            );
+        }
+    }
+
+    #[test]
+    fn ordered_arrays_with_id_members_are_atomic_and_invert_exactly() {
+        let old = json!([{"id":"b", "value":1}, {"id":"a", "value":2}]);
+        let new = json!([{"id":"a", "value":2}, {"id":"b", "value":1}, {"id":"c", "value":3}]);
+        for path in [
+            vec![
+                "compositions",
+                "comp",
+                "nodes",
+                "node",
+                "properties",
+                "prop",
+                "modifiers",
+            ],
+            vec!["compositions", "comp", "nodes", "node", "child_order"],
+            vec!["compositions", "comp", "root_nodes"],
+            vec!["curves", "curve", "keys"],
+            vec!["shapes", "shape", "geometry", "segments"],
+            vec!["shapes", "shape", "fill", "stops"],
+            vec!["texts", "text", "styles"],
+            vec!["texts", "text", "ruby"],
+            vec![
+                "compositions",
+                "comp",
+                "nodes",
+                "node",
+                "kind",
+                "value",
+                "instance_path",
+            ],
+        ] {
+            let mut path: Vec<String> = path.into_iter().map(String::from).collect();
+            let mut mutations = Vec::new();
+            diff(&old, &new, &mut path, &mut mutations);
+            assert_eq!(
+                mutations,
+                vec![Mutation::Set {
+                    path: path.clone(),
+                    value: new.clone()
+                }]
+            );
+            let mut document = old.clone();
+            for segment in path.iter().rev() {
+                document = json!({segment: document});
+            }
+            let before = document.clone();
+            let inverse = mutations[0].apply(&mut document).unwrap();
+            let redo = inverse.apply(&mut document).unwrap();
+            assert_eq!(document, before);
+            redo.apply(&mut document).unwrap();
+            let mut actual = &document;
+            for segment in &path {
+                actual = &actual[segment];
+            }
+            assert_eq!(actual, &new);
+        }
+    }
+
+    #[test]
+    fn concurrent_compact_between_undo_validation_and_commit_rejects_target() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("compact-undo.kronello");
+        let document: Project =
+            serde_json::from_str(include_str!("../../../examples/m1-demo.project.json")).unwrap();
+        let mut store = ProjectStore::open(&path, OpenOptions::default()).unwrap();
+        store
+            .import_json(
+                0,
+                Uuid::new_v4(),
+                &serde_json::to_string(&document).unwrap(),
+            )
+            .unwrap();
+        let DocumentObject::Known(composition) = &document.compositions[0] else {
+            panic!("fixture composition must be known");
+        };
+        let node = &composition.nodes[0];
+        // Use genuine service plans on distinct properties, so the Undo passes
+        // preliminary conflict validation with service-derived, nonempty keys.
+        let change = |property: usize, value: f64| EditCommand::PropertySourceSet {
+            object: node.id.as_uuid(),
+            property: node.properties[property].id(),
+            source: serde_json::from_value(json!({
+                "kind":"constant", "value":{"kind":"scalar", "value":value}
+            }))
+            .unwrap(),
+            curve: None,
+        };
+        let prepare = |plan: EditPlan| ApplyRequest {
+            base_revision: plan.base_revision.parse().unwrap(),
+            session_id: Uuid::new_v4(),
+            mutations: plan.mutations,
+            changed_keys: plan.changed_keys,
+            idempotency_key: None,
+            undo_of: None,
+        };
+        let target = store
+            .apply(prepare(
+                build(document.clone(), 1, vec![change(1, 1.0)]).unwrap(),
+            ))
+            .unwrap();
+        let later = store
+            .apply(prepare(
+                build(store.snapshot().unwrap().document, 2, vec![change(4, 0.5)]).unwrap(),
+            ))
+            .unwrap();
+        assert!(!target.changed_keys.is_empty());
+        assert!(!later.changed_keys.is_empty());
+        assert!(target.changed_keys.is_disjoint(&later.changed_keys));
+        let before = store.snapshot().unwrap();
+        let r = UndoRequest {
+            project: path.clone(),
+            base_revision: "3".into(),
+            session_id: Uuid::new_v4(),
+            idempotency_key: "compacted-undo".into(),
+            event_id: target.id,
+        };
+        let error = undo_before_apply(r, || {
+            // This independent connection commits compact only after A's Undo
+            // has passed read validation. Revision remains 3.
+            store.compact(3).unwrap();
+            assert_eq!(store.snapshot().unwrap(), before);
+            assert!(
+                !store
+                    .events_since(0)
+                    .unwrap()
+                    .iter()
+                    .any(|e| e.id == target.id)
+            );
+        })
+        .unwrap_err();
+        assert_eq!(error.code, "EVENT_NOT_FOUND");
+        assert_eq!(store.snapshot().unwrap(), before);
+        assert_eq!(store.events_since(0).unwrap().len(), 1);
+        assert!(
+            store
+                .idempotency_record("compacted-undo")
+                .unwrap()
+                .is_none()
+        );
+        store.close().unwrap();
+    }
+    #[test]
+    fn concurrent_undo_retry_receipt_precedes_compacted_target_validation() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("compact-retry.kronello");
+        let mut store = ProjectStore::open(&path, OpenOptions::default()).unwrap();
+        let target = store
+            .apply(ApplyRequest {
+                base_revision: 0,
+                session_id: Uuid::new_v4(),
+                mutations: vec![Mutation::Set {
+                    path: vec!["name".into()],
+                    value: json!("target"),
+                }],
+                changed_keys: BTreeSet::new(),
+                idempotency_key: None,
+                undo_of: None,
+            })
+            .unwrap();
+        let r = UndoRequest {
+            project: path.clone(),
+            base_revision: "1".into(),
+            session_id: Uuid::new_v4(),
+            idempotency_key: "retry-undo".into(),
+            event_id: target.id,
+        };
+        let mut committed = None;
+        let event = undo_before_apply(r.clone(), || {
+            // B wins the same exact request, then deletes the original target.
+            committed = Some(undo(r).unwrap());
+            store.compact(2).unwrap();
+            assert!(
+                !store
+                    .events_since(0)
+                    .unwrap()
+                    .iter()
+                    .any(|e| e.id == target.id)
+            );
+        })
+        .unwrap();
+        assert_eq!(event, committed.unwrap());
+        assert_eq!(store.snapshot().unwrap().revision, 2);
+        assert_eq!(store.events_since(0).unwrap(), vec![event]);
+        store.close().unwrap();
+    }
+    #[test]
+    fn locked_undo_validation_rejects_conflicts_and_already_undone_targets() {
+        for already_undone in [false, true] {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("locked-validation.kronello");
+            let mut store = ProjectStore::open(&path, OpenOptions::default()).unwrap();
+            let document = store.snapshot().unwrap().document;
+            let changed_keys = BTreeSet::from([ChangedKey::Structure {
+                object_id: document.id,
+                parent_container_id: document.id,
+            }]);
+            let target = store
+                .apply(ApplyRequest {
+                    base_revision: 0,
+                    session_id: Uuid::new_v4(),
+                    mutations: vec![Mutation::Set {
+                        path: vec!["name".into()],
+                        value: json!("target"),
+                    }],
+                    changed_keys: changed_keys.clone(),
+                    idempotency_key: None,
+                    undo_of: None,
+                })
+                .unwrap();
+            let later = if already_undone {
+                undo(UndoRequest {
+                    project: path.clone(),
+                    base_revision: "1".into(),
+                    session_id: Uuid::new_v4(),
+                    idempotency_key: "first-undo".into(),
+                    event_id: target.id,
+                })
+                .unwrap()
+            } else {
+                store
+                    .apply(ApplyRequest {
+                        base_revision: 1,
+                        session_id: Uuid::new_v4(),
+                        mutations: vec![Mutation::Set {
+                            path: vec!["name".into()],
+                            value: json!("later"),
+                        }],
+                        changed_keys: changed_keys.clone(),
+                        idempotency_key: None,
+                        undo_of: None,
+                    })
+                    .unwrap()
+            };
+            let before = store.snapshot().unwrap();
+            let events_before = store.events_since(0).unwrap();
+            // Feed a previously prepared inverse directly to the locked path:
+            // it must recheck active status and conflicts before writing.
+            let error = store
+                .apply_with_payload_checked(
+                    ApplyRequest {
+                        base_revision: 2,
+                        session_id: Uuid::new_v4(),
+                        mutations: target.inverse.clone(),
+                        changed_keys,
+                        idempotency_key: Some("locked-check".into()),
+                        undo_of: Some(target.id),
+                    },
+                    json!({"operation":"test.undo"}),
+                    |snapshot, events| validate_undo(snapshot, events, target.id).map(|_| ()),
+                )
+                .unwrap_err();
+            if already_undone {
+                assert_eq!(error.code, "EVENT_ALREADY_UNDONE");
+            } else {
+                assert_eq!(error.code, "UNDO_CONFLICT");
+                assert_eq!(
+                    error.details.unwrap()["conflicts"][0]["event_id"],
+                    later.id.to_string()
+                );
+            }
+            assert_eq!(store.snapshot().unwrap(), before);
+            assert_eq!(store.events_since(0).unwrap(), events_before);
+            assert!(store.idempotency_record("locked-check").unwrap().is_none());
+            store.close().unwrap();
+        }
+    }
 }

@@ -974,3 +974,130 @@ fn composition_inverse_and_instance_reference_conflicts() {
         placed.id.to_string()
     );
 }
+
+#[test]
+fn ordered_modifiers_replacement_undo_redo_and_periodic_replay() {
+    let (_dir, path, p) = setup();
+    let composition = comp(&p).id;
+    let leaf = comp(&p).nodes[0].clone();
+    assert!(leaf.child_order.is_empty());
+    let modifier = |id| Modifier {
+        id: ModifierId::from_uuid(Uuid::from_u128(id)),
+        key: SchemaKey::new("kronello.test.modifier").unwrap(),
+        version: 1,
+        enabled: false,
+        parameters: Default::default(),
+    };
+    // IDs deliberately oppose the requested insertion order.
+    let a = modifier(40);
+    let b = modifier(10);
+    let c = modifier(30);
+    let d = modifier(20);
+    let replace = |modifiers: Vec<Modifier>| {
+        let mut node = serde_json::to_value(&leaf).unwrap();
+        node["properties"][1]["modifiers"] = serde_json::to_value(modifiers).unwrap();
+        let node: SceneNode = serde_json::from_str(&node.to_string()).unwrap();
+        vec![
+            EditCommand::NodeRemove {
+                composition,
+                node: leaf.id,
+            },
+            EditCommand::NodeAdd {
+                composition,
+                node,
+                index: 0,
+            },
+        ]
+    };
+    let order = |document: &Project| {
+        comp(document)
+            .nodes
+            .iter()
+            .find(|n| n.id == leaf.id)
+            .unwrap()
+            .properties[1]
+            .modifiers()
+            .iter()
+            .map(|m| m.id)
+            .collect::<Vec<_>>()
+    };
+    let ids = |modifiers: &[Modifier]| modifiers.iter().map(|m| m.id).collect::<Vec<_>>();
+    apply(
+        &path,
+        replace(vec![a.clone(), b.clone()]),
+        "modifiers-initial",
+    );
+    assert_eq!(order(&export(&path).document), ids(&[a.clone(), b.clone()]));
+    let before = export(&path).document;
+    let planned = plan(&path, "2", replace(vec![b.clone(), a.clone()]));
+    assert_eq!(order(&planned.candidate), ids(&[b.clone(), a.clone()]));
+    assert_eq!(planned.mutations.len(), 1);
+    let kronello_store::Mutation::Set {
+        path: patch_path, ..
+    } = &planned.mutations[0]
+    else {
+        panic!("modifier reorder must persist a whole-array Set");
+    };
+    assert_eq!(patch_path.last().unwrap(), "modifiers");
+    let reordered = apply_request(request(&path, &planned, "modifiers-reorder")).unwrap();
+    let after = export(&path).document;
+    assert_eq!(order(&after), ids(&[b.clone(), a.clone()]));
+    let undone = undo(&path, &reordered, "modifiers-undo");
+    assert_eq!(export(&path).document, before);
+    undo(&path, &undone, "modifiers-redo");
+    assert_eq!(export(&path).document, after);
+    let extended = vec![b.clone(), a.clone(), c.clone(), d.clone()];
+    let added = apply(&path, replace(extended.clone()), "modifiers-multiple");
+    assert_eq!(order(&export(&path).document), ids(&extended));
+    let undone = undo(&path, &added, "modifiers-multiple-undo");
+    assert_eq!(export(&path).document, after);
+    undo(&path, &undone, "modifiers-multiple-redo");
+    assert_eq!(order(&export(&path).document), ids(&extended));
+    for revision in 9..64 {
+        apply(
+            &path,
+            vec![change(&p, 0, 4, 0.5)],
+            &format!("advance-{revision}"),
+        );
+    }
+    let at_63 = export(&path).document;
+    let periodic_order = vec![c, b, d, a];
+    let boundary = apply(&path, replace(periodic_order.clone()), "modifiers-at-64");
+    assert_eq!(boundary.revision, 64);
+    let at_64 = export(&path).document;
+    assert_eq!(order(&at_64), ids(&periodic_order));
+    let undone = undo(&path, &boundary, "modifiers-at-65");
+    let at_65 = export(&path).document;
+    assert_eq!(order(&at_65), ids(&extended));
+    undo(&path, &undone, "modifiers-at-66");
+    let at_66 = export(&path).document;
+    assert_eq!(at_66, at_64);
+    let mut store = ProjectStore::open(&path, OpenOptions::default()).unwrap();
+    for (revision, expected) in [
+        (2, &before),
+        (3, &after),
+        (63, &at_63),
+        (64, &at_64),
+        (65, &at_65),
+        (66, &at_66),
+    ] {
+        assert_eq!(&store.snapshot_at(revision).unwrap().document, expected);
+    }
+    store.compact(63).unwrap();
+    for (revision, expected) in [(63, &at_63), (64, &at_64), (65, &at_65), (66, &at_66)] {
+        assert_eq!(&store.snapshot_at(revision).unwrap().document, expected);
+    }
+    store.compact(65).unwrap();
+    assert_eq!(store.snapshot_at(65).unwrap().document, at_65);
+    assert_eq!(store.snapshot_at(66).unwrap().document, at_66);
+    assert_eq!(
+        store
+            .idempotency_record("modifiers-at-64")
+            .unwrap()
+            .unwrap()
+            .result,
+        boundary
+    );
+    store.close().unwrap();
+    assert_eq!(export(&path).document, at_66);
+}

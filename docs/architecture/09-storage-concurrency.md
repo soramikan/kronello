@@ -105,7 +105,7 @@ GUI・CLI・MCP サーバーはそれぞれ別プロセスとして同じ `.kron
 
 - 履歴（イベントと逆操作情報）を自動では削除しない。
 - `history.compact` は、指定した revision より前の履歴を切り捨て、その時点の完全スナップショットを基点として残す。
-- 切り捨てた範囲のイベントは Undo できない。
+- 切り捨てた範囲のイベントは Undo できず、`EVENT_NOT_FOUND` で拒否する。事前検証後に別 connection が対象を compact した場合も、逆操作を書き込む transaction 内で同じ判定を行う。
 - 履歴が大きくなった場合は `project.validate` が警告する。STORE-001 の `history_size()` は、イベントの patch / inverse / changed keys と、現在以外の完全 snapshot の UTF-8 payload 合計が **256 MiB 以上**なら `warning=true` を返す。検証応答への反映は `project.validate` の service 公開時に行う（SERVICE-001 の edit / history 操作には含めない）。SQLite の空きページや index、現在文書、idempotency receipt はこの論理量に含めない。
 - STORE-002 以降は初期 revision 0、`revision % 64 == 0`、`compact(r)` の基点だけに完全 snapshot を保存する。サイズによる追加保存は STORE-003 に委ねる。任意 revision は直前の完全 snapshot と連続したイベント patch を最大 63 個再適用して復元する。
 - `compact(r)` は同じ書き込み transaction 内で `r` を復元して完全 snapshot を確保し、`< r` を削除する。`r` のイベントと現在文書・revision は変えない。idempotency receipt は compact 後も残り、キーの再適用を防ぐ。失敗時は基点の追加を含め rollback する。DB ファイルの物理縮小は保証しない。
@@ -168,7 +168,7 @@ RenderSnapshot は同じ公開構造版と文書の意味の版を含む `semant
 | `snapshots` | 初期・64 revision ごと・compact 基点の完全文書 JSON。旧ファイルの全 revision snapshot も保持・読込する。公開構造版と文書意味版を内包 |
 | `idempotency` | unique key / payload / event ID / revision / 完全な適用結果（Event）。SERVICE-001 の canonical service_payload を payload 内に保持し、同じ key / payload の結果を復元 |
 
-`apply` は `BEGIN IMMEDIATE` 後に revision を照合し、文書・event・逆操作・該当 revision の完全 snapshot・receipt を同じ transaction で更新する。patch はオブジェクトメンバーの経路に対する `Set` / `Remove`（root の `Set` は完全文書の差し替え）。SERVICE-001 の patch は ID を持つ配列 member を UUID で選択する。描画順等の scalar 配列は集合ごと置き換え、配列位置を ID に使わない。逆操作は保存層が元値から自動生成する。変更キーの算出と通常のモデル意味検証は呼び出し側の責務とし、import / restore は対象集合のキーを保守的に列挙する。低水準 `apply` の既存キーは `IDEMPOTENCY_KEY_EXISTS` として拒否する。SERVICE-001 は下記 `apply_with_payload` で同一 payload の元 Event を復元し、service の selective undo が保存済み inverse / changed keys / undo linkage から競合を判定する。
+`apply` は `BEGIN IMMEDIATE` 後に revision を照合し、文書・event・逆操作・該当 revision の完全 snapshot・receipt を同じ transaction で更新する。patch はオブジェクトメンバーの経路に対する `Set` / `Remove`（root の `Set` は完全文書の差し替え）。SERVICE-001 の patch は順序に意味のない document / node / Property 集合の member を UUID で選択する。Modifier・描画順・keyframe 等の順序付き配列は全体を置き換え、配列位置を ID に使わない。逆操作は保存層が元値から自動生成する。変更キーの算出と通常のモデル意味検証は呼び出し側の責務とし、import / restore は対象集合のキーを保守的に列挙する。低水準 `apply` の既存キーは `IDEMPOTENCY_KEY_EXISTS` として拒否する。SERVICE-001 は下記 `apply_with_payload` で同一 payload の元 Event を復元し、service の selective undo が保存済み inverse / changed keys / undo linkage から競合を判定する。
 
 `kronello-model::Project` の初期版は schema / semantic version 1、UUID id、name、Composition / Curve 集合と未知フィールドを持つ。`DocumentObject<T>` の既知型で decode できなければ全 object を opaque に保持し、未知ノード・enum・入れ子フィールドも失わない。通常変更は未知の意味や opaque 内容があると `UNSUPPORTED_FEATURE`。import / export / snapshot 復元は保持を許す。[公開 JSON Schema](../../schemas/project-v1.schema.json) は型から生成し、rational の num / den は 10 進文字列。未知内容を含む保存外枠に適合することと、その内容を実行できることは区別する。
 
@@ -182,6 +182,6 @@ SQLite は bundled の `rusqlite` を使用する。`rusqlite` / `libsqlite3-sys
 
 ## SERVICE-001 の保存層追加
 
-`ProjectStore::apply_with_payload` は service の canonical payload を receipt に保存する。`BEGIN IMMEDIATE` 内で receipt を先に照合し、一致すれば元の Event、異なれば `IDEMPOTENCY_KEY_REUSED`。新規要求だけ revision を照合して通常の atomic apply を行う。既存 `apply` の生 patch caller の契約は変えない。`snapshot_and_events` は文書と履歴を一つの読み取り transaction で取得する。
+`ProjectStore::apply_with_payload` は service の canonical payload を receipt に保存する。`BEGIN IMMEDIATE` 内で receipt を先に照合し、一致すれば元の Event、異なれば `IDEMPOTENCY_KEY_REUSED`。新規要求だけ revision を照合して通常の atomic apply を行う。既存 `apply` の生 patch caller の契約は変えない。`snapshot_and_events` は文書と履歴を一つの読み取り transaction で取得する。Undo は `apply_with_payload_checked` に service の検証 callback を渡し、同じ `BEGIN IMMEDIATE` 内で receipt / revision 照合後に対象の存在・未取り消し状態・後続 active Event の競合・inverse 後候補を再検証してから保存する。revision を変更しない compact も同じ writer lock で直列化されるため、消えた対象の逆操作を commit しない。
 
-保存 `Set` / `Remove` の path は、object member のほか ID を持つ配列 member を UUID で選択できる。配列番号は使わない。追加・削除・逆操作が別 Property の後続変更を上書きしない。空の optional shapes / texts は公開 serializer が省略するため、member Set で collection を作り、inverse は member Remove とする。所有順序など scalar 配列は従来どおり全体を置換し、service が親コンテナの競合を判定する。64 revision ごとの完全 snapshot、既存 patch の読み込み、compact の receipt 保持は従来どおり。詳細は [08 API](08-api-cli-mcp.md#m2-service-001-の実装範囲) と [検証](../testing/service-001.md) を参照する。
+保存 `Set` / `Remove` の path は、object member のほか ID を持つ配列 member を UUID で選択できる。配列番号は使わない。追加・削除・逆操作が別 Property の後続変更を上書きしない。空の optional shapes / texts は公開 serializer が省略するため、member Set で collection を作り、inverse は member Remove とする。UUID member 指定は Project の compositions / curves / shapes / texts、Composition の nodes / properties、SceneNode の properties に限定する。Modifier を含むその他の配列は全体を置換し、service が親コンテナの競合を判定する。64 revision ごとの完全 snapshot、既存 patch の読み込み、compact の receipt 保持は従来どおり。詳細は [08 API](08-api-cli-mcp.md#m2-service-001-の実装範囲) と [検証](../testing/service-001.md) を参照する。
