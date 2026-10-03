@@ -1,4 +1,5 @@
 //! Explicit fixed-environment comparison. UPDATE produces candidates only.
+mod common;
 use kronello_gpu::{color::srgb_encode, *};
 use kronello_testkit::{FrameDescriptor, LinearFrame, PixelTolerance, compare_pixels};
 use serde_json::{Value, json};
@@ -37,6 +38,8 @@ struct Scene {
     height: u32,
     space: WorkingSpace,
     layers: Vec<Layer>,
+    draw: Option<DrawScene>,
+    output: Option<OutputTransform>,
 }
 fn scenes(pam: Image) -> Vec<Scene> {
     let mut rotated = Layer::rectangle([2.0, 3.0], [0.5, 0.25, 0.8, 0.5], InputSpace::Srgb);
@@ -47,8 +50,10 @@ fn scenes(pam: Image) -> Vec<Scene> {
         [4.0, 2.0, -0.125, 1.0],
         InputSpace::LinearRec2020,
     )];
-    vec![
+    let mut scenes = vec![
         Scene {
+            draw: None,
+            output: None,
             id: "source-over",
             width: 8,
             height: 8,
@@ -59,6 +64,8 @@ fn scenes(pam: Image) -> Vec<Scene> {
             ],
         },
         Scene {
+            draw: None,
+            output: None,
             id: "srgb-pam",
             width: pam.width,
             height: pam.height,
@@ -71,6 +78,8 @@ fn scenes(pam: Image) -> Vec<Scene> {
             }],
         },
         Scene {
+            draw: None,
+            output: None,
             id: "translated-rotation",
             width: 8,
             height: 8,
@@ -78,6 +87,8 @@ fn scenes(pam: Image) -> Vec<Scene> {
             layers: vec![rotated],
         },
         Scene {
+            draw: None,
+            output: None,
             id: "rec2020-conversion",
             width: 4,
             height: 4,
@@ -89,6 +100,8 @@ fn scenes(pam: Image) -> Vec<Scene> {
             )],
         },
         Scene {
+            draw: None,
+            output: None,
             id: "hdr-no-clamp",
             width: 1,
             height: 1,
@@ -96,6 +109,8 @@ fn scenes(pam: Image) -> Vec<Scene> {
             layers: hdr,
         },
         Scene {
+            draw: None,
+            output: None,
             id: "alpha-boundary",
             width: 1,
             height: 1,
@@ -106,7 +121,33 @@ fn scenes(pam: Image) -> Vec<Scene> {
                 InputSpace::LinearRec709,
             )],
         },
-    ]
+    ];
+    scenes.extend(
+        common::scenes()
+            .into_iter()
+            .map(|(id, n, space, draw)| Scene {
+                id,
+                width: n,
+                height: n,
+                space,
+                layers: vec![],
+                draw: Some(draw),
+                output: None,
+            }),
+    );
+    scenes.push(Scene {
+        id: "srgb-output-roundtrip",
+        width: 8,
+        height: 8,
+        space: WorkingSpace::LinearRec2020,
+        layers: vec![],
+        draw: Some(common::edges()),
+        output: Some(OutputTransform {
+            space: InputSpace::Srgb,
+            alpha: OutputAlpha::Straight,
+        }),
+    });
+    scenes
 }
 fn descriptor(scene: &Scene) -> FrameDescriptor {
     FrameDescriptor {
@@ -119,14 +160,27 @@ fn descriptor(scene: &Scene) -> FrameDescriptor {
         } else {
             kronello_testkit::WorkingSpace::LinearRec2020
         },
-        color_pipeline_id: "gpu001-linear-v1".into(),
-        samples_per_frame: 1,
+        color_pipeline_id: if scene.draw.is_some() {
+            "gpu002-grid4-v1"
+        } else {
+            "gpu001-linear-v1"
+        }
+        .into(),
+        samples_per_frame: if scene.draw.is_some() { 16 } else { 1 },
         seed: 0,
     }
 }
-fn manifest(scenes: &[Scene], fixture_hash: &str) -> Value {
-    json!({"schema_version":1,"comparison_version":1,"rgb_absolute":1.0/1024.0,"rgb_relative":1.0/1024.0,"alpha_absolute":1.0/1024.0,"fixture_hash":fixture_hash,"font_hash":null,"font_reason":"no text scenes; TEXT-001 pending","scenes":scenes.iter().map(|s| json!({"id":s.id,"sample_id":"frame-0","size":[s.width,s.height],"design_extent":[s.width,s.height],"origin":[0,0],"time":{"num":"0","den":"1"},"working_space":format!("{:?}",s.space),"alpha":"premultiplied","output_transform":"none","display_transform":"external-unpremultiply-then-srgb-clamp; visualization only","color_pipeline_id":"gpu001-linear-v1","samples_per_frame":1,"seed":0,"layers":s.layers.iter().map(|l| json!({"size":l.size,"translation":l.translation,"rotation_degrees":l.rotation_degrees,"input_space":format!("{:?}",l.image.space),"input_size":[l.image.width,l.image.height],"straight_pixels":l.image.pixels})).collect::<Vec<_>>()})).collect::<Vec<_>>()})
+fn draw_manifest(scene: &DrawScene) -> Value {
+    json!({"roots":scene.roots,"nodes":scene.nodes.iter().map(|node| match node {
+        DrawNode::Path(p)=>json!({"kind":"path","contours":p.contours.iter().map(|c| json!({"points":c.points,"closed":c.closed})).collect::<Vec<_>>(),"fill":p.fill.map(|f| json!({"rgba":f.paint.rgba,"space":format!("{:?}",f.paint.space),"rule":format!("{:?}",f.rule)})),"stroke":p.stroke.map(|s| json!({"rgba":s.paint.rgba,"space":format!("{:?}",s.paint.space),"width":s.width,"cap":"round","join":"round"}))}),
+        DrawNode::Group {children,opacity}=>json!({"kind":"isolated-group","children":children,"opacity":opacity}),
+        DrawNode::Masked {source,matte,kind}=>json!({"kind":"masked","source":source,"matte":matte,"mode":format!("{:?}",kind)})
+    }).collect::<Vec<_>>()})
 }
+fn manifest(scenes: &[Scene], fixture_hash: &str, font_hash: &str) -> Value {
+    json!({"schema_version":2,"comparison_version":1,"rgb_absolute":1.0/1024.0,"rgb_relative":1.0/1024.0,"alpha_absolute":1.0/1024.0,"fixture_hash":fixture_hash,"font_hash":font_hash,"flatten_tolerance_px":0.02,"catalog":serde_json::from_str::<Value>(include_str!("../../../tests/golden/m4-macos-metal/scenes.json")).unwrap(),"scenes":scenes.iter().map(|s| json!({"id":s.id,"sample_id":"frame-0","size":[s.width,s.height],"design_extent":[s.width,s.height],"origin":[0,0],"time":{"num":"0","den":"1"},"working_space":format!("{:?}",s.space),"alpha":"premultiplied","output_transform":s.output.map(|o| format!("{:?}",o)),"comparison_space":"linear working-space premultiplied; external output decoded back before comparison","display_transform":"external-unpremultiply-then-srgb-clamp; visualization only","color_pipeline_id":if s.draw.is_some() {"gpu002-grid4-v1"} else {"gpu001-linear-v1"},"samples_per_frame":if s.draw.is_some() {16} else {1},"seed":0,"draw":s.draw.as_ref().map(draw_manifest),"layers":s.layers.iter().map(|l| json!({"size":l.size,"translation":l.translation,"rotation_degrees":l.rotation_degrees,"input_space":format!("{:?}",l.image.space),"input_size":[l.image.width,l.image.height],"straight_pixels":l.image.pixels})).collect::<Vec<_>>()})).collect::<Vec<_>>()})
+}
+
 fn png(path: &Path, scene: &Scene, pixels: &[[f32; 4]]) -> Result<()> {
     // Display aid only: convert straight RGB to Rec.709 and encode sRGB. Negative
     // and HDR values remain untouched in the .rgba16f comparison artifact.
@@ -209,8 +263,18 @@ fn run(output: &Path) -> Result<Value> {
     if scenes.is_empty() {
         return Err("zero scenes".into());
     }
-    let manifest = manifest(&scenes, &hash(&pam_bytes));
-    let provenance = json!({"revision":command("git",&["rev-parse","HEAD"],&root)?,"status":command("git",&["status","--short"],&root)?,"shader_sha256":hash(SHADER.as_bytes()),"cargo_lock_sha256":hash(&fs::read(root.join("Cargo.lock"))?),"fixture_manifest_sha256":hash(&fs::read(root.join("tests/fixtures/manifest.json"))?),"scene_code_sha256":hash(include_bytes!("golden.rs")),"comparison_code_sha256":hash(&fs::read(root.join("crates/kronello-testkit/src/lib.rs"))?),"renderer_code_sha256":hash(include_bytes!("../src/renderer.rs")),"color_code_sha256":hash(include_bytes!("../src/color.rs"))});
+    let font_hash = hash(&fs::read(kronello_testkit::resolve_fixture(
+        "noto-sans-cjk-jp",
+    )?)?);
+    let manifest = manifest(&scenes, &hash(&pam_bytes), &font_hash);
+    let ids: Vec<_> = scenes.iter().map(|s| s.id).collect();
+    let catalog: Value = serde_json::from_str(include_str!(
+        "../../../tests/golden/m4-macos-metal/scenes.json"
+    ))?;
+    if catalog["scene_ids"] != json!(ids) {
+        return Err("scene catalog differs from harness".into());
+    }
+    let provenance = json!({"revision":command("git",&["rev-parse","HEAD"],&root)?,"status":command("git",&["status","--short"],&root)?,"shader_sha256":hash(SHADER.as_bytes()),"scene_shader_sha256":hash(SCENE_SHADER.as_bytes()),"scene_gpu_code_sha256":hash(include_bytes!("../src/scene_gpu.rs")),"scene_reference_code_sha256":hash(include_bytes!("../src/scene.rs")),"draw_fixture_code_sha256":hash(include_bytes!("common/mod.rs")),"cargo_lock_sha256":hash(&fs::read(root.join("Cargo.lock"))?),"fixture_manifest_sha256":hash(&fs::read(root.join("tests/fixtures/manifest.json"))?),"scene_code_sha256":hash(include_bytes!("golden.rs")),"comparison_code_sha256":hash(&fs::read(root.join("crates/kronello-testkit/src/lib.rs"))?),"renderer_code_sha256":hash(include_bytes!("../src/renderer.rs")),"color_code_sha256":hash(include_bytes!("../src/color.rs"))});
     fs::write(
         output.join("working-tree.patch"),
         command("git", &["diff", "--binary", "HEAD"], &root)?,
@@ -254,18 +318,53 @@ fn run(output: &Path) -> Result<Value> {
     let mut reports = Vec::new();
     let mut failed = false;
     for scene in &scenes {
-        let actual = gpu.render(
-            RenderSize::pixels(scene.width, scene.height),
-            &scene.layers,
-            scene.space,
-        )?;
+        let size = RenderSize::pixels(scene.width, scene.height);
+        let mut actual = if let Some(draw) = &scene.draw {
+            gpu.render_scene(size, draw, scene.space)?
+        } else {
+            gpu.render(size, &scene.layers, scene.space)?
+        };
         let d = descriptor(scene);
         // Even UPDATE validates every pixel against the independent CPU oracle.
-        let oracle = render_reference(
-            RenderSize::pixels(scene.width, scene.height),
-            &scene.layers,
-            scene.space,
-        )?;
+        let mut oracle = if let Some(draw) = &scene.draw {
+            render_scene_reference(size, draw, scene.space)?
+        } else {
+            render_reference(size, &scene.layers, scene.space)?
+        };
+        let mut external_bytes = None;
+        if let Some(transform) = scene.output {
+            let external = gpu.render_scene_output(
+                size,
+                scene.draw.as_ref().unwrap(),
+                scene.space,
+                transform,
+            )?;
+            external_bytes = Some(external.rgba16f);
+            actual.pixels = external
+                .pixels
+                .into_iter()
+                .map(|p| color::to_working(p, InputSpace::Srgb, scene.space))
+                .collect();
+            actual.rgba16f = actual
+                .pixels
+                .iter()
+                .flatten()
+                .flat_map(|&v| half::f16::from_f32(v).to_le_bytes())
+                .collect();
+            oracle = oracle
+                .into_iter()
+                .map(|p| {
+                    convert_output_reference(p, scene.space, transform)
+                        .map(|q| color::to_working(q, InputSpace::Srgb, scene.space))
+                })
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+        }
+        if scene.id == "isolated-nested-overlap" {
+            let wrong = color::source_over([0.0, 0.0, 0.25, 0.25], [0.25, 0.0, 0.0, 0.25]);
+            if (actual.pixels[27][3] - wrong[3]).abs() <= 0.1 {
+                return Err("isolated group indistinguishable from distributed opacity".into());
+            }
+        }
         compare_pixels(
             LinearFrame {
                 descriptor: &d,
@@ -281,6 +380,9 @@ fn run(output: &Path) -> Result<Value> {
         fs::create_dir_all(&dir)?;
         fs::write(dir.join("frame-0.rgba16f"), &actual.rgba16f)?;
         png(&dir.join("frame-0.png"), scene, &actual.pixels)?;
+        if let Some(bytes) = external_bytes {
+            fs::write(dir.join("external-srgb-straight.rgba16f"), bytes)?;
+        }
         if !update {
             let expected =
                 decode_rgba16f(&fs::read(baseline.join(scene.id).join("frame-0.rgba16f"))?)?;

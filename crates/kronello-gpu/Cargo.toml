@@ -20,3 +20,7 @@ kronello-testkit = { path = "../kronello-testkit" }
 serde_json = "1"
 sha2 = "0.10"
 png = "0.18"
+naga = { version = "30.0.1", features = ["wgsl-in"] }
+kronello-model = { path = "../kronello-model" }
+kronello-vector = { path = "../kronello-vector" }
+kronello-text = { path = "../kronello-text" }

@@ -838,7 +838,11 @@ name = "kronello-gpu"
 version = "0.0.0"
 dependencies = [
  "half",
+ "kronello-model",
  "kronello-testkit",
+ "kronello-text",
+ "kronello-vector",
+ "naga",
  "png",
  "pollster",
  "serde_json",

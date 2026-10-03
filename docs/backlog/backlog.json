@@ -210,7 +210,7 @@
       "priority": "P0",
       "area": "gpu",
       "title": "線形色合成・mask・isolated group",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "GPU-001",
         "VEC-001",

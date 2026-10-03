@@ -129,3 +129,25 @@ cache_key = hash(
 GPU-001 の `kronello-gpu` は wgpu 30.0.1 / pollster 1.0.1 を使い、矩形・PAM 素材から線形 premultiplied RGBA16F までの最短経路を実装した。CPU upload / GPU 内コピー / GPU→CPU readback を別の `TransferStats` として記録する。`kronello-framebridge` の unsafe native interop は macOS のモジュール内に隔離し、IOSurface の BGRA8 単一面取り込み・出力を検証する。通常 renderer / Render DAG / 他形式の GPU 常駐保証は未実装。実測結果と制約は [スパイク報告](../testing/gpu-spike-m0.md)、基準未登録の golden harness は [比較手順](../testing/golden-comparison.md) を参照。
 
 M1 / Metal の追加実測では、wgpu 30.0.1 の同一 MTLDevice による IOSurface の零コピー import / output と、CVPixelBuffer → CVMetalTextureCache → HAL import が成功した。VideoToolbox の H.264 decode 出力は BGRA8 および NV12 biplanar（R8 / RG8）を取り込めた。H.264 3 frame は両形式で hardware decoder 使用を確認し、BGRA8 のテストパターン最大 channel 誤差は 1。wgpu 出力の VideoToolbox encoder 投入と YCbCr→RGB 精度は未検証。形式ごとの実測値・寿命・同期・転送 counters の範囲は [追加スパイク報告](../testing/gpu-spike-m0.md#corevideo--videotoolbox-追加スパイク) を参照。
+
+## M1 GPU-002 の描画境界
+
+`kronello-gpu::DrawScene` は plain data の `DrawNode` と root のノード参照を受ける。`PathDraw` は出力要求に合わせて flatten・変換済みの `Contour`（design_px）とタグ付き straight `Paint`、`Fill`、`RoundStroke` を保持する。文書モデル・store・フォント探索には依存しない。呼出側が `kronello-vector::flatten` の polyline、または `kronello-text::layout` の positioned outline を flatten した結果を写す。未変換の曲線・モデルの stroke style を暗黙に解釈しない。
+
+### Coverage の定義（gpu002-grid4-v1）
+
+- GPU compute で各画素の 4×4 固定サンプルを検査する。画素内位置は `((sx+0.5)/4, (sy+0.5)/4)`、`sx, sy = 0..3`。出力画素から design_px への倍率は `RenderSize` で指定し、被覆率は hit 数 / 16。ハードウェア MSAA のサンプル配置には依存しない。
+- fill は Nonzero / Evenodd。開いた contour も fill では暗黙に閉じる。水平辺は winding に寄与せず、Y crossing は半開区間、cross product の符号は厳密な正負で判定する。点が辺上にある場合も同じ判定規約を使う。
+- 基本 stroke は幅 / 2 を半径とする線分 capsule の和集合（round cap / round join）。距離が半径に一致すれば hit。閉じる辺は `Contour.closed` のときだけ stroke に含める。幅 0 は無被覆。miter / bevel / butt / square / dash はこの API の対応 style ではなく、上位で対応形状へ展開するか未対応エラーにする。
+- fill と stroke は別々に coverage を resolve し、stroke を fill の上に source-over する。coverage のヒット処理と色変換を分離し、色は sRGB decode → Rec.709 / Rec.2020 原色変換 → premultiply → coverage の順に処理する。coverage に伝達関数を適用しない。RGBA8 の色付き raster を経由しない。
+- `render_scene_reference` は同じサンプル配置・辺判定・stroke・描画順の CPU 参照。CPU は binary16 丸めを行わない。AA は画素面積の厳密積分ではなく、この版付きサンプリング契約。辺を比較から除外しない。GPU の各中間面は RGBA16F。
+
+### Group、mask、外部出力
+
+`DrawNode::Group` は子の source-over を透明な offscreen RGBA16F へまとめ、opacity を RGB / alpha に一度だけ掛ける。ネストも同じ手順。`DrawNode::Masked` は source と matte の参照を入力とし、matte を表示順に自動挿入しない。共有入力は要求内で一度描画して再利用する。matte 自身を表示したい場合だけ root / children に明示する。
+
+`MaskKind::Alpha` は matte alpha、`MaskKind::Luminance` は作業用線形空間の premultiplied RGB から求めた Y（straight Y × alpha）を `[0,1]` に clamp して coverage にする。Rec.709 は `(0.2126, 0.7152, 0.0722)`、Rec.2020 は `(0.2627, 0.6780, 0.0593)`。alpha を二重に掛けず、encoded sRGB の明度を使わない。色入力を coverage に変える明示ノードであり、既存 coverage を再度色変換するものではない。
+
+`GpuContext::render_scene` は作業用線形 premultiplied `RenderOutput` を返す。`render_scene_output` は `OutputTransform`（sRGB / linear Rec.709 / linear Rec.2020、straight / premultiplied）を必須とし、外部 epsilon に従う unpremultiply → 原色変換 → 必要なら sRGB encode → 指定空間で再 premultiply の順で処理する。`ExternalFrame` に関連付け空間を明示し、encoded premultiplied を内部画像と混同しない。alpha の破棄・背景の推測・HDR の PQ/HLG・tone mapping は提供しない。RGB は clamp せず、各 RGBA16F 面への書き込み前に有限・alpha 範囲・RGB の絶対値 65,504 以下を検証する。GPU は全 pass で共有する sticky status に失敗を記録し、Metal 等が範囲超過値を有限最大値へ飽和させても型付きエラーを返す。後の不透明描画や group opacity で隠れる中間 overflow も拒否する。CPU 参照も各面境界で同じ範囲を検証する。binary16 alpha がゼロへ丸められるときだけ RGB もゼロに正規化し、正の内部 alpha に外部 epsilon を適用しない。
+
+scene は参照欠落・循環・不正 opacity / 色 / 幾何を型付きエラーで拒否する。保守的な予算は 1,024 nodes、各 group / roots 1,024 references、合計 65,536 edges、深さ 32、座標の絶対値・stroke 幅 1,000,000 以下、GPU 中間面の上限推計 512 MiB（CPU 参照にも float32 の面サイズで同じ予算を適用）。デバイス限界超過もエラー。GPU 不在では skip / CPU fallback しない。CPU upload は幾何と制御データのみで、合成・mask は GPU 常駐。`TransferStats` はこれらを control upload として計上し、最終 GPU copy / image readback と、4 bytes の validation status readback（1 回）を計上する。性能・資源プール・tiling・高品質 AA は今後の検証対象。

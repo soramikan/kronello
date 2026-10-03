@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "status": "scene definitions only; M4 baselines and fingerprint pending",
+  "coverage": {
+    "version": "gpu002-grid4-v1",
+    "samples_per_pixel": 16,
+    "pattern": "4x4 regular grid, offsets ((sx+0.5)/4,(sy+0.5)/4), top-left origin",
+    "fill": "nonzero or evenodd, implicit contour closure, half-open Y crossings and strict signed cross product",
+    "stroke": "centered union of segment capsules; round cap and round join; inclusive radius boundary",
+    "resolve": "fill and stroke coverage separately, color in linear premultiplied RGBA16F; stroke over fill"
+  },
+  "scene_ids": [
+    "source-over", "srgb-pam", "translated-rotation", "rec2020-conversion", "hdr-no-clamp", "alpha-boundary",
+    "isolated-nested-overlap", "alpha-matte-reference", "luma-matte-rec709", "luma-matte-rec2020",
+    "coverage-fill-stroke", "coverage-srgb-rec2020", "fill-evenodd-hole", "fill-nonzero-winding", "glyph-outline-edges",
+    "srgb-output-roundtrip"
+  ]
+}
