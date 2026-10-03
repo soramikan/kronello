@@ -38,6 +38,12 @@
       "items": {
         "$ref": "#/$defs/DocumentObject3"
       }
+    },
+    "texts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DocumentObject4"
+      }
     }
   },
   "additionalProperties": true,
@@ -349,6 +355,17 @@
         }
       ]
     },
+    "DocumentObject4": {
+      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TextDocument"
+        },
+        {
+          "$ref": "#/$defs/OpaqueObject"
+        }
+      ]
+    },
     "Duration": {
       "description": "A nonnegative length in seconds. Zero is permitted.",
       "type": "object",
@@ -401,6 +418,33 @@
       "description": "No non-finite value can be constructed or deserialized through the public API.",
       "type": "number",
       "format": "double"
+    },
+    "FontRef": {
+      "description": "File hash plus face index fixes the actual bytes; names are verified too.\nNo family lookup or implicit system-font fallback is permitted.",
+      "type": "object",
+      "properties": {
+        "face_index": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "family": {
+          "type": "string"
+        },
+        "postscript_name": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "postscript_name",
+        "sha256",
+        "face_index"
+      ]
     },
     "FrameRate": {
       "description": "A positive exact number of frames per second.",
@@ -872,6 +916,22 @@
         "den"
       ]
     },
+    "RubyAssociation": {
+      "type": "object",
+      "properties": {
+        "base": {
+          "$ref": "#/$defs/TextRange"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "base",
+        "text"
+      ]
+    },
     "SceneNode": {
       "type": "object",
       "properties": {
@@ -1083,6 +1143,114 @@
         "join",
         "cap",
         "miter_limit"
+      ]
+    },
+    "TextDirection": {
+      "type": "string",
+      "enum": [
+        "horizontal",
+        "vertical_rl"
+      ]
+    },
+    "TextDocument": {
+      "type": "object",
+      "properties": {
+        "alignment": {
+          "description": "Enum Property: \"start\", \"center\", or \"end\".",
+          "$ref": "#/$defs/PropertyId"
+        },
+        "direction": {
+          "$ref": "#/$defs/TextDirection"
+        },
+        "id": {
+          "$ref": "#/$defs/ContentId"
+        },
+        "layout_version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "line_height": {
+          "description": "Absolute baseline spacing in design_px, not a font-size multiplier.",
+          "$ref": "#/$defs/PropertyId"
+        },
+        "ruby": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RubyAssociation"
+          }
+        },
+        "styles": {
+          "description": "Ordered, nonoverlapping, complete coverage at grapheme boundaries.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TextStyleSpan"
+          }
+        },
+        "text": {
+          "type": "string"
+        },
+        "wrap_width": {
+          "$ref": "#/$defs/PropertyId"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "layout_version",
+        "text",
+        "styles",
+        "direction",
+        "wrap_width",
+        "line_height",
+        "alignment"
+      ]
+    },
+    "TextRange": {
+      "description": "Half-open UTF-8 byte range in the original, unnormalized text.",
+      "type": "object",
+      "properties": {
+        "end": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "start": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "end"
+      ]
+    },
+    "TextStyleSpan": {
+      "type": "object",
+      "properties": {
+        "fill": {
+          "description": "Tagged straight Color Property.",
+          "$ref": "#/$defs/PropertyId"
+        },
+        "font": {
+          "$ref": "#/$defs/FontRef"
+        },
+        "range": {
+          "$ref": "#/$defs/TextRange"
+        },
+        "size": {
+          "description": "Positive Scalar Property in design_px.",
+          "$ref": "#/$defs/PropertyId"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "range",
+        "font",
+        "size",
+        "fill"
       ]
     },
     "TimeBezier": {

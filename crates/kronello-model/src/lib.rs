@@ -51,3 +51,10 @@ pub use shape::{
     ShapeError, ShapeGeometry, Stroke, StrokeCap, StrokeJoin, shape_descriptors, validate_path,
     validate_shape_contents,
 };
+
+mod text;
+pub use text::{
+    FontRef, ResolvedText, ResolvedTextStyle, RubyAssociation, TEXT_LAYOUT_VERSION, TextAlignment,
+    TextDirection, TextDocument, TextError, TextRange, TextStyleSpan, text_descriptors,
+    validate_text_contents,
+};

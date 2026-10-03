@@ -11,6 +11,18 @@
       ]
     },
     {
+      "id": "multi-glyph-grapheme",
+      "text": "x゙",
+      "codepoints": [
+        120,
+        12441
+      ]
+    },
+    {
+      "id": "ligature",
+      "text": "office"
+    },
+    {
       "id": "ivs",
       "text": "葛󠄀",
       "codepoints": [

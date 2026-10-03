@@ -4,7 +4,7 @@
 
 | ID | 保存 | ライセンス | 出典・用途 |
 |---|---|---|---|
-| `japanese` | bundled | MIT OR Apache-2.0 | scripts/fixtures.py canonical_data (original generated data) — 結合濁点・IVS・emoji・異体字・禁則・ruby・縦書きの入力。glyph coverage は別途 TEXT-001 で確認する。 |
+| `japanese` | bundled | MIT OR Apache-2.0 | scripts/fixtures.py canonical_data (original generated data) — 結合濁点・1 書記素複数 glyph・合字・IVS・emoji・異体字・禁則・ruby・縦書きの入力。TEXT-001 は固定フォントの組版対応と欠落・未対応エラーを確認する。 |
 | `timing` | bundled | MIT OR Apache-2.0 | scripts/fixtures.py canonical_data (original generated data) — 有理数の CFR/VFR サンプルと長尺フレーム時刻。num/den は正規化した decimal string。 |
 | `alpha` | bundled | MIT OR Apache-2.0 | scripts/fixtures.py canonical_data (original generated data) — straight alpha の透明有色・半透明・不透明・低 alpha。 |
 | `linear-hdr` | bundled | MIT OR Apache-2.0 | scripts/fixtures.py canonical_data (original generated data) — 線形 premultiplied Rec.2020。負 RGB・1 超・ゼロ alpha・微小 alpha。 |

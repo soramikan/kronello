@@ -67,6 +67,8 @@ def validate_timing(value):
 def canonical_data():
     text = {"schema_version": 1, "normalization": "none", "cases": [
         {"id": "combining", "text": "か\u3099", "codepoints": [0x304B, 0x3099]},
+        {"id": "multi-glyph-grapheme", "text": "x\u3099", "codepoints": [0x78, 0x3099]},
+        {"id": "ligature", "text": "office"},
         {"id": "ivs", "text": "葛\U000E0100", "codepoints": [0x845B, 0xE0100]},
         {"id": "emoji", "text": "👩\u200d💻", "codepoints": [0x1F469, 0x200D, 0x1F4BB]},
         {"id": "variants", "text": "髙﨑"},
