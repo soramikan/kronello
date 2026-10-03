@@ -100,3 +100,6 @@ pub trait RenderBackend {
         self.execute(dag)
     }
 }
+
+mod media;
+pub use media::{DecodedVideoFrame, VideoDecodeBackend};

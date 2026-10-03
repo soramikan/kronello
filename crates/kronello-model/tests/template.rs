@@ -85,3 +85,49 @@ fn template_identity_collisions_and_shadowed_collections_are_rejected() {
     project.unknown_fields.insert("templates".into(), json!([]));
     assert!(project.validate_storage().is_err());
 }
+
+#[test]
+fn templates_instances_and_assets_share_identity_validation_and_round_trip() {
+    let mut project = fixture();
+    let asset = Asset {
+        id: AssetId::new(),
+        content_hash: "a".repeat(64),
+        kind: AssetKind::Video,
+        streams: vec![],
+        locator: AssetLocator {
+            relative: Some("movie.mp4".into()),
+            absolute: None,
+        },
+    };
+    project.assets.push(DocumentObject::Known(asset));
+    project.validate_storage().unwrap();
+    let encoded = serde_json::to_value(&project).unwrap();
+    assert_eq!(serde_json::from_value::<Project>(encoded).unwrap(), project);
+    let DocumentObject::Known(instance) = &project.template_instances[0] else {
+        panic!()
+    };
+    let DocumentObject::Known(definition) = &project.templates[0] else {
+        panic!()
+    };
+    for id in [project.id, instance.id.as_uuid(), definition.id] {
+        let mut duplicate = project.clone();
+        let DocumentObject::Known(asset) = &mut duplicate.assets[0] else {
+            panic!()
+        };
+        asset.id = AssetId::from_uuid(id);
+        assert!(duplicate.validate_storage().is_err());
+    }
+    for collection in ["templates", "template_instances", "assets"] {
+        let mut shadow = project.clone();
+        shadow.unknown_fields.insert(collection.into(), json!([]));
+        assert!(shadow.validate_storage().is_err());
+    }
+    let mut shadow = project.clone();
+    shadow.assets[0] = DocumentObject::Opaque(OpaqueObject {
+        id: uuid::Uuid::new_v4(),
+        fields: [("id".into(), json!(uuid::Uuid::new_v4()))].into(),
+    });
+    assert!(shadow.validate_storage().is_err());
+    let legacy = serde_json::to_value(Project::default()).unwrap();
+    assert!(legacy.get("assets").is_none());
+}

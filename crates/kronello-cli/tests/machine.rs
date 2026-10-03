@@ -585,7 +585,7 @@ fn structured_api_queries_and_empty_capabilities_payload_from_real_cli() {
             .as_array()
             .unwrap()
             .len(),
-        17
+        19
     );
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("query.kronello");
@@ -759,4 +759,56 @@ fn template_commands_share_schema_service_and_report_final_overflow() {
     assert_eq!(result["error"]["code"], "TEMPLATE_OVERFLOW");
     assert_eq!(result["error"]["details"]["actual_lines"], 3);
     assert!(!output.exists());
+}
+
+#[test]
+fn unavailable_ffmpeg_returns_typed_error_without_default_library_fallback() {
+    let dir = tempfile::tempdir().unwrap();
+    let missing = dir.path().join("missing-ffmpeg");
+    let (result, _) = invoke_with_env(
+        &["capabilities", "get"],
+        "{}",
+        false,
+        Some(("KRONELLO_FFMPEG_LIB_DIR", missing.to_str().unwrap())),
+    );
+    assert_eq!(error_code(&result), "FFMPEG_UNAVAILABLE");
+}
+
+#[test]
+fn media_commands_use_shared_service_and_preserve_source_revision_on_collect() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("media.kronello");
+    let source = dir.path().join("asset.bin");
+    std::fs::write(&source, b"media cli").unwrap();
+    let asset = kronello_model::AssetId::new();
+    let mut doc = document();
+    doc["assets"] = json!([{
+        "id":asset, "content_hash":format!("{:x}", Sha256::digest(b"media cli")),
+        "kind":"video", "streams":[], "locator":{"relative":"asset.bin", "absolute":null}
+    }]);
+    call(
+        &["project", "create"],
+        json!({"project":path, "document":doc}),
+        true,
+    );
+    let search = dir.path().join("search");
+    std::fs::create_dir(&search).unwrap();
+    std::fs::rename(source, search.join("renamed.bin")).unwrap();
+    let updated = call(
+        &["asset", "relink"],
+        json!({"project":path, "base_revision":"1", "asset":asset, "search_directory":search}),
+        true,
+    );
+    let collected = call(
+        &["project", "collect"],
+        json!({"project":path, "output_directory":dir.path().join("collected")}),
+        true,
+    );
+    assert_eq!(collected["result"]["kind"], "collected");
+    assert_eq!(collected["result"]["value"]["asset_count"], 1);
+    let info = call(&["project", "info"], json!({"project":path}), true);
+    assert_eq!(
+        info["result"]["value"]["revision"],
+        updated["result"]["value"]["revision"]
+    );
 }

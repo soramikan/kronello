@@ -8,7 +8,7 @@ use thiserror::Error;
 use uuid::Uuid;
 
 use crate::{
-    AnimationCurve, Composition, Shape, TemplateDefinition, TemplateInstance, TextDocument,
+    AnimationCurve, Asset, Composition, Shape, TemplateDefinition, TemplateInstance, TextDocument,
 };
 
 pub const PROJECT_SCHEMA_VERSION: u32 = 1;
@@ -47,6 +47,8 @@ pub struct Project {
     pub templates: Vec<DocumentObject<TemplateDefinition>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub template_instances: Vec<DocumentObject<TemplateInstance>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub assets: Vec<DocumentObject<Asset>>,
     #[serde(flatten)]
     pub unknown_fields: BTreeMap<String, Value>,
 }
@@ -74,6 +76,7 @@ impl Default for Project {
             texts: Vec::new(),
             templates: Vec::new(),
             template_instances: Vec::new(),
+            assets: Vec::new(),
             unknown_fields: BTreeMap::new(),
         }
     }
@@ -97,6 +100,7 @@ impl Project {
                     | "texts"
                     | "templates"
                     | "template_instances"
+                    | "assets"
             )
         }) {
             return Err(ProjectError::InvalidDocument(
@@ -176,19 +180,34 @@ impl Project {
                 ));
             }
         }
-        let mut placements = std::collections::BTreeSet::new();
         for object in &self.template_instances {
             let (id, fields) = match object {
                 DocumentObject::Known(value) => (value.id.as_uuid(), None),
                 DocumentObject::Opaque(value) => (value.id, Some(&value.fields)),
             };
-            if ids.contains(&id)
-                || !placements.insert(id)
-                || fields.is_some_and(|f| f.contains_key("id"))
-            {
+            if !ids.insert(id) || fields.is_some_and(|f| f.contains_key("id")) {
                 return Err(ProjectError::InvalidDocument(
                     "duplicate or shadowed template instance id".into(),
                 ));
+            }
+        }
+        for object in &self.assets {
+            let id = match object {
+                DocumentObject::Known(asset) => {
+                    asset.validate()?;
+                    asset.id.as_uuid()
+                }
+                DocumentObject::Opaque(value) => {
+                    if value.fields.contains_key("id") {
+                        return Err(ProjectError::InvalidDocument(
+                            "opaque extension shadows id".into(),
+                        ));
+                    }
+                    value.id
+                }
+            };
+            if !ids.insert(id) {
+                return Err(ProjectError::InvalidDocument("duplicate object id".into()));
             }
         }
         Ok(())
@@ -212,6 +231,7 @@ impl Project {
                 .shapes
                 .iter()
                 .any(|v| matches!(v, DocumentObject::Opaque(_)))
+            || self.assets.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
             || self.templates.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
             || self.template_instances.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
             || self.texts.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
@@ -282,6 +302,11 @@ impl<'de> Deserialize<'de> for Project {
             },
             template_instances: if fields.contains_key("template_instances") {
                 take_field::<_, D::Error>(&mut fields, "template_instances")?
+            } else {
+                Vec::new()
+            },
+            assets: if fields.contains_key("assets") {
+                take_field::<_, D::Error>(&mut fields, "assets")?
             } else {
                 Vec::new()
             },

@@ -63,6 +63,7 @@
 | [0046](0046-store-format-and-location-policy.md) | 保存の外枠・安全モード判定・履歴警告を固定する | 採用 | 2026-10-03 |
 
 | [0047](0047-apple-silicon-metal-golden.md) | GPU golden は Apple Silicon + Metal の共通基準で比較する | 採用 | 2026-10-03 |
+| [0048](0048-media-native-build-and-asset-verification.md) | FFmpeg ABI 境界・同梱ビルド・素材検証を固定する | 採用 | 2026-10-03 |
 
 ## 追加と変更の規則
 

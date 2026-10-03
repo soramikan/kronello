@@ -1,6 +1,6 @@
 # 08 API・CLI・MCP・エージェント
 
-GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001-shared-command-query-api.md)）。M1 CLI-001 と M2 SERVICE-001 / API-001 / TEMPLATE-001 の実装範囲を次節に示す。それ以外の後続 API・CLI・MCP は提案であり、実装済みではない。
+GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001-shared-command-query-api.md)）。M1 CLI-001 と M2 SERVICE-001 / API-001 / TEMPLATE-001 / MEDIA-001 の実装範囲を次節に示す。それ以外の後続 API・CLI・MCP は提案であり、実装済みではない。
 
 ## M1 CLI-001 の実装範囲
 
@@ -23,7 +23,7 @@ GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001
 
 - subcommand を指定した場合は、その payload の JSON object を stdin に渡す（`operation` を含めない）。subcommand なしの場合は `operation` を含む完全な service Request を渡す。
 - `--request-json 'JSON'` は stdin の代わりに一つの要求を渡す。入力上限は UTF-8 16 MiB。一回の起動につき一つの要求、一つの結果 JSON document と改行を stdout に出力する。NDJSON event stream は未実装。
-- 成功は `{ "status": "success", "result": { "kind": "project|export|frame|sequence|plan|edit|history|scene|samples|capabilities", "value": ... } }`、失敗は `{ "status": "error", "error": { "code": "INVALID_REQUEST", "message": "..." } }`。成功の exit code は 0、失敗は非 0。診断は stderr にだけ出力する。`--help` も `USAGE` JSON error と stderr の使用法（非 0）を返す。
+- 成功は `{ "status": "success", "result": { "kind": "project|export|frame|sequence|plan|edit|history|scene|samples|capabilities|collected", "value": ... } }`、失敗は `{ "status": "error", "error": { "code": "INVALID_REQUEST", "message": "..." } }`。成功の exit code は 0、失敗は非 0。診断は stderr にだけ出力する。`--help` も `USAGE` JSON error と stderr の使用法（非 0）を返す。
 - backend の既定は GPU。`--backend gpu` も指定可。adapter / device を作れなければ型付きエラーを返す。GPU 不在時の暗黙の CPU fallback はない。GPU は render 操作でのみ初期化する。
 - `--backend cpu-reference` は検証用の float32 参照 backend の明示選択。metadata に `cpu_reference_float32` と記録する。通常の GPU は `wgpu_rgba16f`。両者のビット一致や性能保証は提供しない。
 - `render.frame` は有理数の任意時刻を評価して画素を JSON 応答する。画像ファイルが必要な場合は `render.sequence` を使う。連番は新しい directory にだけ出力し、既存成果物を上書きしない。PNG / RGBA16F / metadata の契約は [05 レンダー](05-render-gpu.md) を参照。
@@ -132,25 +132,27 @@ Undo は対象 Event の保存 inverse を現在文書に適用した候補を�
 
 ## M2 API-001 の実装範囲
 
-`kronello-service` が次の同期 query を実装し、CLI は同名の二語 subcommand または `operation` 付き stdin JSON で呼ぶ。GPU / font bytes の初期化は不要。scene.query / property.sample は一つの保存 revision の不変文書を読み、revision を10進文字列で返す。capabilities.get は Project を指定せず実装能力を返す。
+`kronello-service` が API-001 の同期 query と MEDIA-001 の素材操作を実装し、CLI は同名の二語 subcommand または `operation` 付き stdin JSON で呼ぶ。GPU / font bytes の初期化は不要。scene.query / property.sample は一つの保存 revision の不変文書を読み、revision を10進文字列で返す。capabilities.get は Project を指定せず実装能力を返す。
 
 | operation / result kind | request | 構造化結果 |
 |---|---|---|
 | `scene.query` / `scene` | `project`、`composition`、任意の `expand_instances`（既定 false） | duration、design_extent、root keys、所有順の pre-order nodes。node の kind、所有親、変換親、children、local time の `[start,end)` active_range |
 | `property.sample` / `samples` | `project`、root `composition`、`keys`、`times` | key ごとの value_type / unit / 型付き Value 配列。values は times の順序を保持し、curve・placement binding 適用後の値 |
-| `capabilities.get` / `capabilities` | 空 payload `{}` | api_schema_version 1、engine_version、SemanticVersions、commands、features、effects、backends、任意の media |
+| `capabilities.get` / `capabilities` | 空 payload `{}` | api_schema_version 1、engine_version、SemanticVersions、commands、features、effects、backends、検出した media |
+| `asset.relink` / `project` | `project`、`base_revision`、`asset`、`search_directory` | hash 一致する素材だけを明示再リンクし、更新後の ProjectInfo を返す |
+| `project.collect` / `collected` | `project`、`output_directory` | 元プロジェクトの revision を変えず、移動可能な複製を作り directory / project / asset_count を返す |
 
 scene の key は `{instance_path, node}`。expand_instances を指定すると、placement の authored children より前に参照 definition の roots を展開する。同じ definition の二配置は NodeId が同じでも InstancePath が異なる。definition root の所有親と、明示変換親のない内部 node の変換親は enclosing placement となる。active_range は各 definition の local time の値を保持し、時刻による絞り込みや祖先との区間交差はしない。展開を含む最大 node 数は100000で、超過は `INVALID_REQUEST`。範囲・タグ・種類による検索、scene ページング、評価済み transform の返却は未実装。
 
 sample key は `{ "kind":"node", "instance_path":[], "node":"UUID", "property":"UUID" }` または `{ "kind":"composition", "instance_path":[], "composition":"UUID", "property":"UUID" }`。root composition は要求に明示し、各 path はそこから解決する。time は `{ "num":"1", "den":"2" }` の有理数。keys / times は非空で、その積は100000以下。評価には `kronello-eval` を使い、時刻をフレームに丸めない。composition input は placement override と local TimeMap を含めて解決する。欠落 key・無効時刻・式・有効な Modifier 等の未対応評価を代替値で継続せず、`INVALID_REQUEST` / `EVALUATION_ERROR` / `UNSUPPORTED_FEATURE` 等を返す。units は共有 descriptor の `design_px` / `degrees` / `dimensionless`。
 
-capabilities はコンパイル済み対応範囲を示し、GPU adapter の稼働を保証しない。effects はこの worktree では空。media は未提供なら null であり、FFmpeg 実行・自動探索は API-001 では行わない。`Service::with_media_capabilities(MediaCapabilities)` で runtime_version / decoders / encoders / hwaccels を上位から渡せる。MEDIA-001 はこの拡張点に実測情報を追加できる。
+capabilities はコンパイル済み対応範囲を示し、GPU adapter の稼働を保証しない。effects の列挙はこの実装では空。media は MEDIA-001 の `MediaRuntime::load` で実際に読み込んだ FFmpeg の情報を返す。既存の runtime_version / decoders / encoders / hwaccels に加え、schema_version、ffmpeg_version、library_directory、substituted、全 libraries の version / license / configuration、codecs の encoder / decoder / hardware、distribution_eligible、development_only を含む。`Service::with_media_capabilities(MediaCapabilities)` で明示したレポートを渡す場合は再検出しない。未指定時の FFmpeg の欠落・不正な override・ABI 不一致は `FFMPEG_UNAVAILABLE` とし、null や既定ライブラリへ暗黙に戻さない。物理 hardware の稼働保証と配布適格性は区別する（[ADR-0048](../adr/0048-media-native-build-and-asset-verification.md)）。
 
 ### 公開 schema と registry
 
-[schemas/api-v1.schema.json](../../schemas/api-v1.schema.json) は Draft 2020-12。Request / Response envelope、全17操作の payload / successful result、型付き EditCommand を共有 Rust 型から生成する。`api_json_schema()` と committed schema の一致を通常テストで確認する。再生成は `cargo run -p kronello-service --example api_schema --locked > schemas/api-v1.schema.json`。版はファイル名・`$id`・`x-api-schema-version` で固定し、既存 Request に必須 version field を追加しない。Project document は従来の公開型 / schema を共有する。
+[schemas/api-v1.schema.json](../../schemas/api-v1.schema.json) は Draft 2020-12。Request / Response envelope、全19操作の payload / successful result、型付き EditCommand を共有 Rust 型から生成する。`api_json_schema()` と committed schema の一致を通常テストで確認する。再生成は `cargo run -p kronello-service --example api_schema --locked > schemas/api-v1.schema.json`。版はファイル名・`$id`・`x-api-schema-version` で固定し、既存 Request に必須 version field を追加しない。Project document は従来の公開型 / schema を共有する。
 
-`command_registry()` の CommandDescriptor は name / read_only / request_schema / response_schema を持つ。schema refs は同ファイルの `$defs` を指す。request_schema は operation tag を除いた payload、response_schema は status / kind を除いた successful value。MCP-001 / FFI-001 は同じ registry と execute / execute_json を使用できる。registry の17操作は project.create / import / export / info、render.frame / sequence、edit.plan / apply / undo、history.list、scene.query、property.sample、capabilities.get、template.define / instantiate / set_input / set_duration。project.create / import / edit.apply / undo と template の4操作が mutating。他は project に対し read-only（render.sequence は output directory に成果物を作る）。
+`command_registry()` の CommandDescriptor は name / read_only / request_schema / response_schema を持つ。schema refs は同ファイルの `$defs` を指す。request_schema は operation tag を除いた payload、response_schema は status / kind を除いた successful value。MCP-001 / FFI-001 は同じ registry と execute / execute_json を使用できる。registry の19操作は project.create / import / export / info / collect、asset.relink、render.frame / sequence、edit.plan / apply / undo、history.list、scene.query、property.sample、capabilities.get、template.define / instantiate / set_input / set_duration。project.create / import / asset.relink / edit.apply / undo と template の4操作が mutating。他は project に対し read-only（render.sequence と project.collect は output directory に成果物を作る）。project.collect の read_only は元プロジェクトを変更しないことを表し、複製と hash 検証済み素材を新しいフォルダに保存する。
 
 request envelope・既知 payload は未知 field と重複 field を拒否する。schema に任意 shell、外部 URL fetch、raw FFmpeg args の実行 field は設けない。project / font / output path と assets 内の locator の URI scheme は filesystem access の前に `INVALID_REQUEST` とする。Windows drive path は local path として許す。素材の name / text や未知 Project 内容は不活性なデータであり、命令として実行しない。Project の未知 field 保持と、API envelope の厳格な decode は別の契約である。
 

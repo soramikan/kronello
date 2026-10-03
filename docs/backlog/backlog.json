@@ -342,7 +342,7 @@
       "priority": "P0",
       "area": "media",
       "title": "FFmpeg素材I/Oと時刻精度",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "TIME-001",
         "QA-001",
