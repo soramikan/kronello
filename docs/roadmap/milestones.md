@@ -1,14 +1,14 @@
 # マイルストーン
 
-状態: M0・M1 は完了（2026-10-03）。M1 の統合点は `scripts/demo_cli_m1.py`（[CLI-001 の検証](../testing/cli-001.md)）。M2 以降は未着手。タスクの詳細は [backlog](../backlog/BACKLOG.md)。
+状態: M0 は完了。M1 は P0 の 10 タスクが完了し（2026-10-03、統合点は `scripts/demo_cli_m1.py`、[CLI-001 の検証](../testing/cli-001.md)）、追補の P1 4 タスク（STORE-002 / VEC-003 / QA-003 / CLI-002）を実施中。M2 以降は未着手。タスクの詳細は [backlog](../backlog/BACKLOG.md)。
 
 | 段階 | 成果物 | 主な完了条件 | タスク数 |
 |---|---|---|---:|
 | M0 | 基盤契約・テスト素材・CI・技術スパイク | 有理数時刻 / ID / Property / 色 / alpha 規約、ツールチェーンと CI、2D title から GPU 出力の最短経路（macOS） | 6 |
-| M1 | Headless 2D Motion Core | Shape / Text / Group / Null、キーフレーム、任意時刻レンダー、画像連番 | 10 |
-| M2 | NLE 統合・CLI / MCP | CompositionClip、日本語 title、基本音声、基本エフェクト、固定 snapshot、計画 / 適用、書き出し、縦断デモ第 1 段階 | 10 |
-| M3 | 実用的な Motion Authoring | macOS ネイティブ GUI（canvas / curve editor）、テンプレート拡張、基本式、responsive layout、リアルタイム再生、縦断デモ第 2 段階 | 10 |
-| M4 | 高品質・高解像度 | サブフレームブラー、temporal cache、8K / HDR 品質、GPU 経路診断 | 6 |
+| M1 | Headless 2D Motion Core | Shape / Text / Group / Null、キーフレーム、任意時刻レンダー、画像連番 | 14 |
+| M2 | NLE 統合・CLI / MCP | CompositionClip、日本語 title、基本音声、基本エフェクト、固定 snapshot、計画 / 適用、書き出し、縦断デモ第 1 段階 | 11 |
+| M3 | 実用的な Motion Authoring | macOS ネイティブ GUI（canvas / curve editor）、テンプレート拡張、基本式、responsive layout、リアルタイム再生、縦断デモ第 2 段階 | 12 |
+| M4 | 高品質・高解像度 | サブフレームブラー、temporal cache、8K / HDR 品質、GPU 経路診断 | 8 |
 | M5 | 高度な 2D Motion | Repeater、path 演出、音声連動、ルビ・縦書き、Simulation | 5 |
 | M6 | 拡張 | 2.5D、外部レンダー、互換アダプター、プラグイン、分散 | 4 |
 

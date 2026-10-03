@@ -26,6 +26,25 @@ Trim path、線端・破線のアニメーション、Path boolean、morph は�
 - `Project.shapes` は省略可能な追加フィールドとし、空集合は出力しない。旧 schema_version 1 の Shape を持たない文書は同じ値で往復する。未知フィールド・形状 variant は既存 `DocumentObject::Opaque` に保持し、編集・実行可能とは扱わない。公開 JSON Schema は共通 Rust 型から再生成する。
 - 純粋な `kronello-vector::flatten` は kurbo 0.13.1（MIT OR Apache-2.0）で評価値からローカル `design_px` の polyline を導出する。`FlattenRequest` の出力 scale と画素 tolerance は保存しない。高 scale では設計単位の tolerance を小さくする。kurbo の近似 tolerance は厳密な誤差保証ではない。極端な座標・精度・命令数は保守的な計算予算エラーで拒否する。アスペクト比変更は自動で再レイアウトしない。
 
+### 線とグラデーションの実装範囲
+
+M1 で実装する範囲（VEC-003）と後続タスクの境界を固定する。後続の機能を含む文書は保存時に失わないが、最終レンダーは `UNSUPPORTED_FEATURE` で拒否する（[ADR-0010](../adr/0010-unsupported-features-fail-final-render.md)）。
+
+| 項目 | M1（VEC-003） | 後続 |
+|---|---|---|
+| 線の join / cap | miter（miter limit 既定 4）/ bevel / round、butt / square / round | — |
+| 破線 | なし | dash 配列・offset とそのアニメーション（VEC-005） |
+| 線の位置 | 中央のみ | 内側・外側（VEC-005） |
+| 非一様 scale / skew 下の線幅 | `UNSUPPORTED_FEATURE` | 意味を定義して解消（VEC-005） |
+| グラデーションの種類 | 線形、放射（中心と半径） | 焦点付き放射（焦点位置・焦点半径）、円錐 / sweep（VEC-004） |
+| 範囲外の扱い（spread） | pad のみ | repeat / reflect（VEC-004） |
+| 色の補間空間 | 作業用線形空間の premultiplied に固定 | グラデーションごとの明示指定（sRGB・straight 等）と補間空間の意味の版（VEC-004） |
+| 座標系 | 図形のローカル `design_px` | bounding box 基準の座標、gradient transform（VEC-004） |
+| 適用先 | Shape の fill / stroke | Text の fill（組版クラスタを壊さない、VEC-004） |
+| stop のアニメーション | 色と位置 | — |
+| SDR 8bit 出力の banding | 対策なし | dither の要否判断。採用時は固定 seed で決定的にする（VEC-004） |
+| Trim path、morph、SVG 対応表 | なし | VEC-002（M5） |
+
 ### 設計寸法と出力解像度
 
 Composition の design_extent と出力画素数を分ける。同じ 16:9 で解像度だけを変える場合は原則再レイアウトしない。
