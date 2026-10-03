@@ -258,7 +258,7 @@
       "priority": "P0",
       "area": "cli",
       "title": "ヘッドレス生成と機械向けCLI",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "STORE-001",
         "RENDER-001"

@@ -1,0 +1,29 @@
+[package]
+name = "kronello-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "kronello"
+path = "src/main.rs"
+
+[dependencies]
+kronello-service = { path = "../kronello-service" }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+
+[dev-dependencies]
+kronello-model = { path = "../kronello-model" }
+kronello-render = { path = "../kronello-render" }
+kronello-testkit = { path = "../kronello-testkit" }
+tempfile = "3"
+sha2 = "0.10"
+png = "0.18"
+kronello-store = { path = "../kronello-store" }
+jsonschema = { version = "0.46", default-features = false }

@@ -808,6 +808,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "kronello-cli"
+version = "0.0.0"
+dependencies = [
+ "jsonschema",
+ "kronello-model",
+ "kronello-render",
+ "kronello-service",
+ "kronello-store",
+ "kronello-testkit",
+ "png",
+ "serde_json",
+ "sha2",
+ "tempfile",
+]
+
+[[package]]
 name = "kronello-eval"
 version = "0.0.0"
 dependencies = [
@@ -882,6 +898,23 @@ dependencies = [
  "sha2",
  "tempfile",
  "thiserror",
+ "uuid",
+]
+
+[[package]]
+name = "kronello-service"
+version = "0.0.0"
+dependencies = [
+ "kronello-gpu",
+ "kronello-model",
+ "kronello-render",
+ "kronello-store",
+ "kronello-text",
+ "kronello-time",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
  "uuid",
 ]
 
