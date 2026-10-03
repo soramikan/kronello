@@ -1,7 +1,12 @@
-//! M0 GPU spike, independent of the pure document model. Not a production renderer.
+//! GPU rendering boundary, independent of the pure document model.
 pub mod color;
+pub mod render_adapter;
 mod renderer;
+mod scene;
+mod scene_gpu;
 pub use renderer::{GpuContext, RenderOutput, SHADER, decode_rgba16f};
+pub use scene::*;
+pub use scene_gpu::ExternalFrame;
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone, PartialEq, Eq)]

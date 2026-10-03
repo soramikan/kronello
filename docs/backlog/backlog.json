@@ -5,7 +5,7 @@
   "status": "implementation_started",
   "description": "設計と実装の計画・進捗。このファイルがバックログの正本であり、GitHub等へ登録したIssueではない。",
   "specification": "docs/architecture/",
-  "task_count": 51,
+  "task_count": 60,
   "items": [
     {
       "id": "ARC-001",
@@ -108,7 +108,7 @@
       "priority": "P0",
       "area": "storage",
       "title": "文書・イベント・スナップショット保存",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "TIME-001",
         "PROP-001"
@@ -131,7 +131,7 @@
       "priority": "P0",
       "area": "scene",
       "title": "Composition/Instance/Group/Nullモデル",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "TIME-001",
         "PROP-001"
@@ -147,7 +147,7 @@
       "priority": "P0",
       "area": "animation",
       "title": "基本キーフレームと補間",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "TIME-001",
         "PROP-001"
@@ -163,7 +163,7 @@
       "priority": "P0",
       "area": "evaluation",
       "title": "Property依存グラフと任意時刻評価",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "COMP-001",
         "ANIM-001"
@@ -179,7 +179,7 @@
       "priority": "P0",
       "area": "vector",
       "title": "Shape/Path/Fill/Stroke IR",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "COMP-001"
       ],
@@ -194,7 +194,7 @@
       "priority": "P0",
       "area": "text",
       "title": "日本語組版とクラスタ/グリフ対応",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "COMP-001",
         "QA-001"
@@ -210,7 +210,7 @@
       "priority": "P0",
       "area": "gpu",
       "title": "線形色合成・mask・isolated group",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "GPU-001",
         "VEC-001",
@@ -227,7 +227,7 @@
       "priority": "P0",
       "area": "render",
       "title": "Scene IRからRender DAGと画像連番",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "EVAL-001",
         "GPU-002"
@@ -243,7 +243,7 @@
       "priority": "P0",
       "area": "cache",
       "title": "値・layout・geometry・rasterの分離cache",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "RENDER-001"
       ],
@@ -258,7 +258,7 @@
       "priority": "P0",
       "area": "cli",
       "title": "ヘッドレス生成と機械向けCLI",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "STORE-001",
         "RENDER-001"
@@ -266,6 +266,74 @@
       "acceptance_criteria": [
         "stdin JSON/stdout JSONとstderr logを分離する",
         "GUIなしでShapeと日本語Textのアニメーション連番を生成する"
+      ]
+    },
+    {
+      "id": "STORE-002",
+      "milestone": "M1",
+      "priority": "P1",
+      "area": "storage",
+      "title": "完全snapshotの間引き保存",
+      "status": "done",
+      "dependencies": [
+        "STORE-001"
+      ],
+      "acceptance_criteria": [
+        "完全snapshotを初期revision・64 revisionごと・history.compactの基点にだけ保存する",
+        "任意revisionを直前の完全snapshotとイベントのpatch(最大63個)の再適用で復元し、全revision保存時と同じ文書を返す",
+        "全revisionを保存した既存の.kronelloを開いて同じ復元結果を返し、元ファイルを壊さない",
+        "間引き後もrevision照合・逆操作情報・idempotencyの記録とcompactの意味を変えない"
+      ]
+    },
+    {
+      "id": "VEC-003",
+      "milestone": "M1",
+      "priority": "P1",
+      "area": "vector",
+      "title": "線のjoin/capと線形・放射グラデーション",
+      "status": "done",
+      "dependencies": [
+        "VEC-001",
+        "GPU-002",
+        "RENDER-001"
+      ],
+      "acceptance_criteria": [
+        "strokeのjoin(miter/bevel/round、miter limit既定4)とcap(butt/square/round)をGPUとCPU参照で同じ定義で描画する",
+        "線形・放射(中心と半径)グラデーションをShapeのfill/strokeのpaintとして保持し、範囲外はpadとする",
+        "グラデーションの色は作業用線形空間のpremultipliedで補間し、stopの色と位置をアニメーションできる",
+        "補間・描画の意味の版をRenderSnapshotのmetadataへ記録し、後続(VEC-004/VEC-005)の機能を含む文書は最終レンダーでUNSUPPORTED_FEATUREとする"
+      ]
+    },
+    {
+      "id": "QA-003",
+      "milestone": "M1",
+      "priority": "P1",
+      "area": "qa",
+      "title": "Apple Silicon/Metal共通のgolden基準画像",
+      "status": "done",
+      "dependencies": [
+        "GPU-002",
+        "VEC-003"
+      ],
+      "acceptance_criteria": [
+        "ADR-0038のgolden固定環境の決定を新しいADRで置き換え、Apple SiliconのMetalを共通の比較環境とする(性能計測の基準機はM4 Mac miniのまま)",
+        "M1開発機で基準画像を登録し、明示実行のgoldenが許容誤差2^-10で比較・合格する",
+        "adapter・OS・機種はprovenanceとして記録し、比較の可否判定に使わない"
+      ]
+    },
+    {
+      "id": "CLI-002",
+      "milestone": "M1",
+      "priority": "P1",
+      "area": "cli",
+      "title": "GPU不在時の型付きエラー",
+      "status": "done",
+      "dependencies": [
+        "CLI-001"
+      ],
+      "acceptance_criteria": [
+        "テスト専用の仕組みでadapter取得を失敗させ、CLIがADAPTER_UNAVAILABLEを返して非0で終了することを通常テストで確認する",
+        "GPU不在時にCPU参照backendへ暗黙に切り替えない"
       ]
     },
     {
@@ -453,6 +521,22 @@
       ]
     },
     {
+      "id": "STORE-003",
+      "milestone": "M2",
+      "priority": "P2",
+      "area": "storage",
+      "title": "保存の運用検証と適応的snapshot",
+      "status": "planned",
+      "dependencies": [
+        "STORE-002"
+      ],
+      "acceptance_criteria": [
+        "patchの累計が文書サイズを超えたときにも完全snapshotを取る方式を評価し、採否を記録する",
+        "iCloud Drive・Dropbox等の実際の同期フォルダとネットワークファイルシステムで、安全モードとPROJECT_LOCKEDを手順で確認して記録する",
+        "Linux/Windowsで複数プロセスの競合と強制終了後の回復を確認する"
+      ]
+    },
+    {
       "id": "EXPR-001",
       "milestone": "M3",
       "priority": "P1",
@@ -624,6 +708,41 @@
       ]
     },
     {
+      "id": "VEC-004",
+      "milestone": "M3",
+      "priority": "P2",
+      "area": "vector",
+      "title": "グラデーションの拡張",
+      "status": "planned",
+      "dependencies": [
+        "VEC-003"
+      ],
+      "acceptance_criteria": [
+        "repeat/reflectのspreadを実装する",
+        "焦点付き放射(焦点位置・焦点半径)と円錐(sweep)グラデーションを実装する",
+        "グラデーションごとに補間空間(sRGB・straight等)を明示指定でき、補間空間の意味の版を管理する",
+        "図形のbounding box基準の座標とgradient transformを扱う",
+        "テキストのfillにグラデーションを適用し、組版クラスタを壊さない",
+        "SDR 8bit出力のbanding対策(dither)の要否を判断し、採用する場合は固定seedで決定的にする"
+      ]
+    },
+    {
+      "id": "VEC-005",
+      "milestone": "M3",
+      "priority": "P2",
+      "area": "vector",
+      "title": "線の拡張: 破線・線の位置・非一様変換",
+      "status": "planned",
+      "dependencies": [
+        "VEC-003"
+      ],
+      "acceptance_criteria": [
+        "破線(dash配列・offset)とoffsetのアニメーションを実装する",
+        "線の位置(中央・内側・外側)を指定できる",
+        "非一様scale/skew下の線幅の意味を定義し、現状のUNSUPPORTED_FEATUREを解消する"
+      ]
+    },
+    {
       "id": "RENDER-002",
       "milestone": "M4",
       "priority": "P1",
@@ -725,6 +844,38 @@
         "失敗でProjectや確定済み成果物が壊れない",
         "出力fileへの無条件appendを再開方法に使わない",
         "interruptedのジョブをjob.resumeで再開でき、完了済み区間の扱いを検証する"
+      ]
+    },
+    {
+      "id": "QA-004",
+      "milestone": "M4",
+      "priority": "P1",
+      "area": "qa",
+      "title": "Vulkan/Windowsのgolden基準と許容誤差の校正",
+      "status": "planned",
+      "dependencies": [
+        "QA-003",
+        "GPU-003"
+      ],
+      "acceptance_criteria": [
+        "Linux(Vulkan)とWindowsの比較環境ごとに基準画像を持ち、明示実行で比較する",
+        "M4 Mac miniを含む複数のApple Silicon世代で共通基準との差を測り、許容誤差2^-10の妥当性を記録する"
+      ]
+    },
+    {
+      "id": "CACHE-003",
+      "milestone": "M4",
+      "priority": "P2",
+      "area": "cache",
+      "title": "GPU資源とディスクのraster cache",
+      "status": "planned",
+      "dependencies": [
+        "CACHE-001",
+        "CACHE-002"
+      ],
+      "acceptance_criteria": [
+        "GPU textureのcacheを容量予算つきで持ち、意味的keyをCPU側のcacheと共有する",
+        "プロジェクト外のcache領域へraster結果を永続化し、削除しても描画結果が変わらない"
       ]
     },
     {

@@ -2,7 +2,7 @@ use crate::{Rational, Time, TimeError};
 use serde::{Deserialize, Serialize};
 
 /// An exact parent/local control point.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct TimeMapPoint {
     pub parent: Time,
@@ -12,7 +12,7 @@ pub struct TimeMapPoint {
 /// Exact, stateless mappings. Reverse playback, looping, stopping and nonlinear
 /// mapping are unsupported. Future nonlinear variants require a versioned
 /// quantization, rounding and evaluation contract; no floating time is stored.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(try_from = "MapWire", into = "MapWire")]
 #[non_exhaustive]
 pub enum TimeMap {
@@ -101,7 +101,7 @@ impl PiecewiseTimeMap {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 enum MapWire {
     Linear { offset: Time, speed: Rational },

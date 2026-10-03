@@ -1,16 +1,16 @@
 # fixture と解析的 golden scene
 
-QA-001 の実装: fixture の生成・取得・台帳検証、`kronello-testkit` の意味的比較と CPU 画素比較、解析的期待値を持つ scene 定義を提供する。実際の編集モデル・組版・レンダーへの接続は後続タスクである。GPU の固定環境比較は [golden-comparison.md](golden-comparison.md) に分ける。
+QA-001 の実装: fixture の生成・取得・台帳検証、`kronello-testkit` の意味的比較と CPU 画素比較、解析的期待値を持つ scene 定義を提供する。日本語 fixture と実際の組版の接続は TEXT-001 で行い、golden scene と編集モデル・レンダーの接続は後続タスクである。GPU の Apple Silicon + Metal 共通基準比較は [golden-comparison.md](golden-comparison.md) に分ける。
 
 ## 素材と権利
 
 [ADR-0039](../adr/0039-test-fixtures.md) に従い、生成データは本プロジェクトの MIT OR Apache-2.0、取得フォントは OFL-1.1 とする。実写などの CC0 素材は現在未使用。出典・ライセンス・用途の台帳は [LEDGER.md](../../tests/fixtures/LEDGER.md)、機械可読の正本は [manifest.json](../../tests/fixtures/manifest.json)。
 
-同梱の上限は **1 ファイル 256 KiB、素材合計 1 MiB**。同梱データは約 27 KiB。大きい素材は `target/fixtures/external/` に取得する。Noto Sans CJK JP Regular（Sans2.004、約 16 MiB）は upstream commit `523d033d6cb47f4a80c58a35753646f5c3608a78` と SHA-256、byte 数を固定し、OFL 原文を同梱する。結合濁点・IVS・emoji の入力があっても、この単一フォントに全 glyph があると保証しない。fallback と組版の期待値は TEXT-001 で追加する。
+同梱の上限は **1 ファイル 256 KiB、素材合計 1 MiB**。同梱データは約 27 KiB。大きい素材は `target/fixtures/external/` に取得する。Noto Sans CJK JP Regular（Sans2.004、約 16 MiB）は upstream commit `523d033d6cb47f4a80c58a35753646f5c3608a78` と SHA-256、byte 数を固定し、OFL 原文を同梱する。結合濁点・IVS・emoji の入力があっても、この単一フォントに全 glyph があると保証しない。TEXT-001 は固定フォントで組版を検証し、欠落時に fallback せず型付きエラーにする。[TEXT-001 の検証](text-001.md) を参照。
 
 | 種類 | 内容 | 検証 |
 |---|---|---|
-| 日本語 JSON | 結合濁点、IVS、ZWJ emoji、異体字、禁則、ruby、縦書きの入力 | UTF-8 の byte hash、再生成一致、代表例の codepoint |
+| 日本語 JSON | 結合濁点、1 書記素複数 glyph、合字、IVS、ZWJ emoji、異体字、禁則、ruby、縦書きの入力 | UTF-8 の byte hash、再生成一致、代表例の codepoint |
 | 時刻 JSON | 24 / 25 / 30 / 30000/1001 / 60000/1001 fps、VFR、長尺フレーム | `{"num":"1","den":"24"}` の decimal string による正規化有理数。浮動小数点時刻は保存しない |
 | straight alpha PAM | 透明有色、半透明、不透明、低 alpha | 固定 byte hash、再生成一致。内部画像へ取り込む際は変換が必要 |
 | 線形 HDR RGBA16F | linear Rec.2020、premultiplied、little-endian binary16、4x1 | 負 RGB、1 超、alpha=0、微小 alpha の解析値。tone mapping を行わない |
@@ -69,7 +69,7 @@ cargo test -p kronello-testkit --locked
 - `compare_finite_values` は有限性を確認したうえで浮動小数点の値を厳密比較する。意味値に画素の誤差を適用しない。
 - `compare_pixels` は CPU の `f32` RGBA 配列を比較する。入力型 `LinearFrame` は線形作業空間・premultiplied alpha を契約とする。RGBA16F の呼出側は binary16 を復号し、色変換や clamp を挟まない。
 
-画素 API は解像度、region origin、正規化有理数時刻、色空間、color pipeline、sample 数、seed の一致を要求する。空画像、buffer 長不一致、NaN/Infinity、範囲外 alpha、alpha=0 の非ゼロ RGB は失敗する。負 RGB と 1 超、正の微小 alpha は保持する。全画素が許容誤差を満たすことを要求し、超過時は最大 RGB/alpha 誤差・超過画素数・最初の index を返す。環境 fingerprint の検証・画像保存は GPU harness の責務。
+画素 API は解像度、region origin、正規化有理数時刻、色空間、color pipeline、sample 数、seed の一致を要求する。空画像、buffer 長不一致、NaN/Infinity、範囲外 alpha、alpha=0 の非ゼロ RGB は失敗する。負 RGB と 1 超、正の微小 alpha は保持する。全画素が許容誤差を満たすことを要求し、超過時は最大 RGB/alpha 誤差・超過画素数・最初の index を返す。環境 provenance の記録・対象 platform / backend の検証・画像保存は GPU harness の責務。
 
 既定許容値は暫定版 1: RGB は `2^-10 * max(1, abs(expected))`、alpha は絶対誤差 `2^-10`。参照機での妥当性確認は未実施。閾値変更は scene の比較方式の版・理由と一緒にレビューする。
 
@@ -79,4 +79,4 @@ cargo test -p kronello-testkit --locked
 
 `.github/workflows/ci.yml` の macOS と Linux ジョブで、workspace test 前にフォント取得、fixture 生成・検証と Python の失敗経路テストを必須実行する。外部取得の失敗はジョブの失敗。通常の Rust テストには CPU の比較 API と解析値の整合性を含める。
 
-未実装: GPU render adapter、参照機の fingerprint 採取、実測 RGBA16F/PNG の基準、画像差分 artifact、基準更新 harness、実測に基づく許容誤差の校正。`tests/golden/m4-macos-metal/` には未測定を示す README だけを置く。GPU-001 で参照機上にて実装・確認し、通常 CI の成功を Metal golden の成功と扱わない。
+GPU-001 / GPU-002 / VEC-003 で GPU render adapter、候補生成・全画素 CPU oracle 比較と差分 artifact を実装済み。[QA-003](qa-003.md) は `tests/golden/apple-silicon-metal/` の 21 シーンを M1 共通基準へ登録し、全シーン比較に成功した。明示採用スクリプトは candidate と同梱 fixture / golden の 256 KiB・合計 1 MiB 上限を検証する。実測による世代間の許容誤差校正は QA-004 の範囲。通常 CI の成功を Metal golden の成功と扱わない。

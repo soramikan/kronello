@@ -365,7 +365,7 @@ impl GpuContext {
         self.queue.submit([encoder.finish()]);
         self.finish_render(size, &output, working, stats)
     }
-    fn finish_render(
+    pub(crate) fn finish_render(
         &self,
         size: RenderSize,
         texture: &wgpu::Texture,

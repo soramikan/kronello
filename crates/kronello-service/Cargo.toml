@@ -1,0 +1,28 @@
+[package]
+name = "kronello-service"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+# Fault injection for CLI integration tests; also requires debug assertions.
+test-adapter-unavailable = []
+
+[dependencies]
+kronello-model = { path = "../kronello-model" }
+kronello-time = { path = "../kronello-time" }
+kronello-store = { path = "../kronello-store" }
+kronello-render = { path = "../kronello-render" }
+kronello-gpu = { path = "../kronello-gpu" }
+kronello-text = { path = "../kronello-text" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip", "raw_value"] }
+uuid = { version = "1", features = ["v4"] }
+sha2 = "0.10"
+tempfile = "3"

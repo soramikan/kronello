@@ -1,6 +1,65 @@
 # 08 API・CLI・MCP・エージェント
 
-GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001-shared-command-query-api.md)）。以下の名前・引数はすべて提案であり、実装済みではない。
+GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001-shared-command-query-api.md)）。M1 CLI-001 の実装範囲を次節に示す。後続の API・CLI・MCP は提案であり、実装済みではない。
+
+## M1 CLI-001 の実装範囲
+
+`kronello-service` は同期 Command / Query の入口を提供し、`kronello-cli` の binary `kronello` は transport adapter とする。以下の 6 操作を実装した。それ以降の章の編集計画、Undo、永続ジョブ、MCP 等は引き続き提案であり、SERVICE-001 / API-001 の完了を意味しない。
+
+| service `Request.operation` | CLI subcommand | payload / 応答 |
+|---|---|---|
+| `project.create` | `project create` | `project`（新規 `.kronello` path）、`document`（公開 Project）→ ProjectInfo |
+| `project.import` | `project import` | `project`、`base_revision`（10進文字列）、`document` → ProjectInfo |
+| `project.export` | `project export` | `project` → revision と公開 Project |
+| `project.info` | `project info` | `project` → ID、name、revision、構造 / 意味版、content hash、既知 Composition ID |
+| `render.frame` | `render frame` | `input`、`time` → FrameMetadata と row-major float32 `linear` / `display` RGBA 配列 |
+| `render.sequence` | `render sequence` | `input`、`range`、`frame_rate`、`output_directory` → SequenceMetadata とディスク上の連番 |
+
+`document` は [公開 schema 1](../../schemas/project-v1.schema.json) の `Project` 型を共有する。request envelope は別の型であり、未知 field と重複 field を拒否する。Project 内の未知内容は store の規約で保持する。`project.create` は一時ファイル内で import / close を完了してから上書き禁止で公開する。`project.import` は既存ファイルを対象とし、明示した revision に一致する場合だけ更新する。これらの操作は store の event を記録するが、変更計画や再送の冪等性 API は未実装。読み取りと render で存在しない project を作成しない。
+
+`RenderInput` は `project`、`composition`（stable UUID）、`region`（origin / extent / pixels）、任意の `profile`（既定は linear Rec.709 / tolerance 0.02 px）、任意の `fonts` を持つ。fonts は `{ "identity": FontRef, "path": "local/file.otf" }` の配列とし、snapshot が必要とする font lock をすべて明示する。hash・face index・family・PostScript 名を照合し、システムフォント探索や外部取得はしない。path は process の作業ディレクトリ基準（絶対 path も可）。有理数は `{ "num": "1", "den": "2" }`、range は `{ "start": ..., "end": ... }` とする。
+
+### 機械向け I/O
+
+- subcommand を指定した場合は、その payload の JSON object を stdin に渡す（`operation` を含めない）。subcommand なしの場合は `operation` を含む完全な service Request を渡す。
+- `--request-json 'JSON'` は stdin の代わりに一つの要求を渡す。入力上限は UTF-8 16 MiB。一回の起動につき一つの要求、一つの結果 JSON document と改行を stdout に出力する。NDJSON event stream は未実装。
+- 成功は `{ "status": "success", "result": { "kind": "project|export|frame|sequence", "value": ... } }`、失敗は `{ "status": "error", "error": { "code": "INVALID_REQUEST", "message": "..." } }`。成功の exit code は 0、失敗は非 0。診断は stderr にだけ出力する。`--help` も `USAGE` JSON error と stderr の使用法（非 0）を返す。
+- backend の既定は GPU。`--backend gpu` も指定可。adapter / device を作れなければ型付きエラーを返す。GPU 不在時の暗黙の CPU fallback はない。GPU は render 操作でのみ初期化する。
+- `--backend cpu-reference` は検証用の float32 参照 backend の明示選択。metadata に `cpu_reference_float32` と記録する。通常の GPU は `wgpu_rgba16f`。両者のビット一致や性能保証は提供しない。
+- `render.frame` は有理数の任意時刻を評価して画素を JSON 応答する。画像ファイルが必要な場合は `render.sequence` を使う。連番は新しい directory にだけ出力し、既存成果物を上書きしない。PNG / RGBA16F / metadata の契約は [05 レンダー](05-render-gpu.md) を参照。
+
+安定したエラー code は `INVALID_REQUEST`、`PROJECT_NOT_FOUND`、`PROJECT_EXISTS`、`PROJECT_LOCKED`、`REVISION_CONFLICT`、`UNSUPPORTED_FEATURE`、`FONT_MISSING`、`ASSET_HASH_MISMATCH`、`GLYPH_MISSING`、`ADAPTER_UNAVAILABLE`、`DEVICE_UNAVAILABLE`、`IO_ERROR`、`OUTPUT_IO_ERROR` 等。store / render の既存 code（`UNSUPPORTED_SCHEMA_VERSION`、`RENDER_ERROR` 等）も伝播する。message は診断用であり分岐には code を使う。フォントが欠落・不一致のときも最終出力を代替フォントで続行しない。
+
+### CLI-002: adapter 不在のテスト専用注入
+
+`kronello-service` の GPU backend factory は、`GpuContext` の生成に失敗した場合、`GpuError::AdapterUnavailable` を `ADAPTER_UNAVAILABLE` に変換して処理を終了する。CPU 参照 backend は明示選択した場合だけ呼び出す。factory の失敗時には render 処理へ進まず、連番の output directory・frame・metadata を作らない。
+
+GPU を持たない sandbox でもこの経路を検証するため、service の Cargo feature `test-adapter-unavailable` と `debug_assertions` が両方有効なときだけ、factory が環境変数 `KRONELLO_TEST_ADAPTER_UNAVAILABLE=1` を読み、実際の adapter 取得前に `GpuError::AdapterUnavailable` を返す。CLI の dev dependency がこの service feature を有効にするため、通常の `cargo test` で実 binary の失敗経路を検証できる。CLI にも同名の転送 feature があり、検証ビルドで明示的に有効化できる。注入は GPU factory だけを対象とし、project 操作や明示的な `--backend cpu-reference` には影響しない。
+
+通常の `cargo build -p kronello-cli` は dev dependency の feature を有効にしない。標準の release profile では `debug_assertions` が無効なので、feature を明示的に指定しても環境変数の読み取りと故障注入はコンパイルされない。これはテスト専用の仕組みであり、公開 Request・CLI option・配布用設定には追加しない。service の単体テストでは private factory を直接差し替え、プロセス全体の環境変数を変更せずに既定 GPU 経路の失敗伝播を確認する。[CLI-002 の検証](../testing/cli-002.md) に条件とコマンドを記録する。
+
+### 再現可能な Shape + 日本語 Text デモ
+
+[examples/m1-demo.project.json](../../examples/m1-demo.project.json) は赤い rectangle の position curve と緑の「日本語」Text を持つ。ID と Noto Sans CJK JP の font lock を固定している。font bytes は配布物に追加せず、既存 fixture を使用する。
+
+```bash
+python3 scripts/fetch_fixtures.py --offline
+cargo build -p kronello-cli --locked
+python3 scripts/demo_cli_m1.py --backend cpu-reference --output-root /private/tmp/kronello-m1-cpu-demo
+# Metal / Vulkan adapter を持つホストで GPU を確認する。
+python3 scripts/demo_cli_m1.py --backend gpu --output-root /private/tmp/kronello-m1-gpu-demo
+```
+
+output root は未作成の path を選ぶ。デモは binary を呼び、create → export → import → render.sequence を実行する。0 秒から 1 秒未満を 4 fps で出力し、4 PNG、4 RGBA16F、4 frame JSON、`sequence.json`、project、各要求・stdout・stderr を保存する。file count、全 artifact の byte count / SHA-256、revision、font lock、backend、frame index、時刻による画素 hash の変化を検証する。PNG は supervisor / 利用者が目視できる。
+
+個別の問い合わせ例:
+
+```bash
+printf '%s\n' '{"project":"/private/tmp/kronello-m1-cpu-demo/demo.kronello"}' | target/debug/kronello project info
+printf '%s\n' '{"operation":"project.export","project":"/private/tmp/kronello-m1-cpu-demo/demo.kronello"}' | target/debug/kronello
+```
+
+受け入れテストは `crates/kronello-cli/tests/machine.rs`。built binary を起動し、stdout 全体の JSON parse、非 0 exit と stderr 診断、create / import / export / info、revision conflict / lock、font 欠落 / hash、未対応機能、CPU 連番を検証する。GPU を必要とするテストは `gpu_headless_default_backend_animated_shape_japanese_text_sequence`。service は `Service::with_backend(&dyn RenderBackend)` で backend を注入でき、CLI 固有の作品状態は持たない。 CPU と Apple M1 / Metal の実行結果は [CLI-001 の検証](../testing/cli-001.md) に記録する。
 
 ## 読み取り API
 

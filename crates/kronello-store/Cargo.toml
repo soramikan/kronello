@@ -1,0 +1,28 @@
+[package]
+name = "kronello-store"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+kronello-model = { path = "../kronello-model" }
+rusqlite = { version = "0.38", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip", "arbitrary_precision"] }
+thiserror = "2"
+uuid = { version = "1", features = ["serde", "v4"] }
+directories = "6"
+sha2 = "0.10"
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.31", features = ["fs"] }
+
+[dev-dependencies]
+jsonschema = { version = "0.46", default-features = false }
+tempfile = "3"
+kronello-time = { path = "../kronello-time" }
+
+[lints]
+workspace = true

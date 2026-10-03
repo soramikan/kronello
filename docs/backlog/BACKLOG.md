@@ -4,17 +4,17 @@
 
 - schema_version: 0.5
 - 更新日: 2026-10-03
-- タスク数: 51
+- タスク数: 60
 
 ## 集計
 
 | マイルストーン | planned | in_progress | done | dropped | 計 |
 |---|---:|---:|---:|---:|---:|
 | M0 | 0 | 0 | 6 | 0 | 6 |
-| M1 | 10 | 0 | 0 | 0 | 10 |
-| M2 | 10 | 0 | 0 | 0 | 10 |
-| M3 | 10 | 0 | 0 | 0 | 10 |
-| M4 | 6 | 0 | 0 | 0 | 6 |
+| M1 | 0 | 0 | 14 | 0 | 14 |
+| M2 | 11 | 0 | 0 | 0 | 11 |
+| M3 | 12 | 0 | 0 | 0 | 12 |
+| M4 | 8 | 0 | 0 | 0 | 8 |
 | M5 | 5 | 0 | 0 | 0 | 5 |
 | M6 | 4 | 0 | 0 | 0 | 4 |
 
@@ -80,7 +80,7 @@
 
 ### STORE-001 文書・イベント・スナップショット保存
 
-- 優先度: P0 / 領域: storage / 状態: planned
+- 優先度: P0 / 領域: storage / 状態: done
 - 依存: TIME-001, PROP-001
 - 受け入れ条件:
   - 文書とイベントとrevisionを同一transactionで更新する
@@ -95,7 +95,7 @@
 
 ### COMP-001 Composition/Instance/Group/Nullモデル
 
-- 優先度: P0 / 領域: scene / 状態: planned
+- 優先度: P0 / 領域: scene / 状態: done
 - 依存: TIME-001, PROP-001
 - 受け入れ条件:
   - InstancePathで共有定義の複数配置を区別する
@@ -103,7 +103,7 @@
 
 ### ANIM-001 基本キーフレームと補間
 
-- 優先度: P0 / 領域: animation / 状態: planned
+- 優先度: P0 / 領域: animation / 状態: done
 - 依存: TIME-001, PROP-001
 - 受け入れ条件:
   - Hold/Linear/Cubicと連続角の複数回転を実装する
@@ -111,7 +111,7 @@
 
 ### EVAL-001 Property依存グラフと任意時刻評価
 
-- 優先度: P0 / 領域: evaluation / 状態: planned
+- 優先度: P0 / 領域: evaluation / 状態: done
 - 依存: COMP-001, ANIM-001
 - 受け入れ条件:
   - 順序・逆順・ランダム順の評価で同じ意味的結果を返す
@@ -119,7 +119,7 @@
 
 ### VEC-001 Shape/Path/Fill/Stroke IR
 
-- 優先度: P0 / 領域: vector / 状態: planned
+- 優先度: P0 / 領域: vector / 状態: done
 - 依存: COMP-001
 - 受け入れ条件:
   - 角丸矩形・楕円・ベジェ・基本fill/strokeを保持する
@@ -127,7 +127,7 @@
 
 ### TEXT-001 日本語組版とクラスタ/グリフ対応
 
-- 優先度: P0 / 領域: text / 状態: planned
+- 優先度: P0 / 領域: text / 状態: done
 - 依存: COMP-001, QA-001
 - 受け入れ条件:
   - 横書き日本語・基本禁則・フォント固定・欠落検査を実装する
@@ -135,7 +135,7 @@
 
 ### GPU-002 線形色合成・mask・isolated group
 
-- 優先度: P0 / 領域: gpu / 状態: planned
+- 優先度: P0 / 領域: gpu / 状態: done
 - 依存: GPU-001, VEC-001, TEXT-001
 - 受け入れ条件:
   - Group opacityを子ごとに適用した誤結果をgolden testで区別する
@@ -143,7 +143,7 @@
 
 ### RENDER-001 Scene IRからRender DAGと画像連番
 
-- 優先度: P0 / 領域: render / 状態: planned
+- 優先度: P0 / 領域: render / 状態: done
 - 依存: EVAL-001, GPU-002
 - 受け入れ条件:
   - 指定有理数時刻と領域を入力に一枚の画像を描画する
@@ -151,7 +151,7 @@
 
 ### CACHE-001 値・layout・geometry・rasterの分離cache
 
-- 優先度: P0 / 領域: cache / 状態: planned
+- 優先度: P0 / 領域: cache / 状態: done
 - 依存: RENDER-001
 - 受け入れ条件:
   - 位置変更で組版cacheを再利用する
@@ -159,11 +159,48 @@
 
 ### CLI-001 ヘッドレス生成と機械向けCLI
 
-- 優先度: P0 / 領域: cli / 状態: planned
+- 優先度: P0 / 領域: cli / 状態: done
 - 依存: STORE-001, RENDER-001
 - 受け入れ条件:
   - stdin JSON/stdout JSONとstderr logを分離する
   - GUIなしでShapeと日本語Textのアニメーション連番を生成する
+
+### STORE-002 完全snapshotの間引き保存
+
+- 優先度: P1 / 領域: storage / 状態: done
+- 依存: STORE-001
+- 受け入れ条件:
+  - 完全snapshotを初期revision・64 revisionごと・history.compactの基点にだけ保存する
+  - 任意revisionを直前の完全snapshotとイベントのpatch(最大63個)の再適用で復元し、全revision保存時と同じ文書を返す
+  - 全revisionを保存した既存の.kronelloを開いて同じ復元結果を返し、元ファイルを壊さない
+  - 間引き後もrevision照合・逆操作情報・idempotencyの記録とcompactの意味を変えない
+
+### VEC-003 線のjoin/capと線形・放射グラデーション
+
+- 優先度: P1 / 領域: vector / 状態: done
+- 依存: VEC-001, GPU-002, RENDER-001
+- 受け入れ条件:
+  - strokeのjoin(miter/bevel/round、miter limit既定4)とcap(butt/square/round)をGPUとCPU参照で同じ定義で描画する
+  - 線形・放射(中心と半径)グラデーションをShapeのfill/strokeのpaintとして保持し、範囲外はpadとする
+  - グラデーションの色は作業用線形空間のpremultipliedで補間し、stopの色と位置をアニメーションできる
+  - 補間・描画の意味の版をRenderSnapshotのmetadataへ記録し、後続(VEC-004/VEC-005)の機能を含む文書は最終レンダーでUNSUPPORTED_FEATUREとする
+
+### QA-003 Apple Silicon/Metal共通のgolden基準画像
+
+- 優先度: P1 / 領域: qa / 状態: done
+- 依存: GPU-002, VEC-003
+- 受け入れ条件:
+  - ADR-0038のgolden固定環境の決定を新しいADRで置き換え、Apple SiliconのMetalを共通の比較環境とする(性能計測の基準機はM4 Mac miniのまま)
+  - M1開発機で基準画像を登録し、明示実行のgoldenが許容誤差2^-10で比較・合格する
+  - adapter・OS・機種はprovenanceとして記録し、比較の可否判定に使わない
+
+### CLI-002 GPU不在時の型付きエラー
+
+- 優先度: P1 / 領域: cli / 状態: done
+- 依存: CLI-001
+- 受け入れ条件:
+  - テスト専用の仕組みでadapter取得を失敗させ、CLIがADAPTER_UNAVAILABLEを返して非0で終了することを通常テストで確認する
+  - GPU不在時にCPU参照backendへ暗黙に切り替えない
 
 
 ## M2
@@ -265,6 +302,15 @@
   - 別instanceの文字/色/長さが干渉しない
   - 5秒から8秒への尺変更と別テキストで、背景帯追従・overflow検出・基本shadowを検証する
 
+### STORE-003 保存の運用検証と適応的snapshot
+
+- 優先度: P2 / 領域: storage / 状態: planned
+- 依存: STORE-002
+- 受け入れ条件:
+  - patchの累計が文書サイズを超えたときにも完全snapshotを取る方式を評価し、採否を記録する
+  - iCloud Drive・Dropbox等の実際の同期フォルダとネットワークファイルシステムで、安全モードとPROJECT_LOCKEDを手順で確認して記録する
+  - Linux/Windowsで複数プロセスの競合と強制終了後の回復を確認する
+
 
 ## M3
 
@@ -356,6 +402,27 @@
   - 第1段階と同じプロジェクトをmacOS GUIで開き、CLI/MCPと同じ値・layout boundsを表示する
   - 同じtemplate定義を縦型variantで再利用し、再レイアウト結果を検証する
 
+### VEC-004 グラデーションの拡張
+
+- 優先度: P2 / 領域: vector / 状態: planned
+- 依存: VEC-003
+- 受け入れ条件:
+  - repeat/reflectのspreadを実装する
+  - 焦点付き放射(焦点位置・焦点半径)と円錐(sweep)グラデーションを実装する
+  - グラデーションごとに補間空間(sRGB・straight等)を明示指定でき、補間空間の意味の版を管理する
+  - 図形のbounding box基準の座標とgradient transformを扱う
+  - テキストのfillにグラデーションを適用し、組版クラスタを壊さない
+  - SDR 8bit出力のbanding対策(dither)の要否を判断し、採用する場合は固定seedで決定的にする
+
+### VEC-005 線の拡張: 破線・線の位置・非一様変換
+
+- 優先度: P2 / 領域: vector / 状態: planned
+- 依存: VEC-003
+- 受け入れ条件:
+  - 破線(dash配列・offset)とoffsetのアニメーションを実装する
+  - 線の位置(中央・内側・外側)を指定できる
+  - 非一様scale/skew下の線幅の意味を定義し、現状のUNSUPPORTED_FEATUREを解消する
+
 
 ## M4
 
@@ -409,6 +476,22 @@
   - 失敗でProjectや確定済み成果物が壊れない
   - 出力fileへの無条件appendを再開方法に使わない
   - interruptedのジョブをjob.resumeで再開でき、完了済み区間の扱いを検証する
+
+### QA-004 Vulkan/Windowsのgolden基準と許容誤差の校正
+
+- 優先度: P1 / 領域: qa / 状態: planned
+- 依存: QA-003, GPU-003
+- 受け入れ条件:
+  - Linux(Vulkan)とWindowsの比較環境ごとに基準画像を持ち、明示実行で比較する
+  - M4 Mac miniを含む複数のApple Silicon世代で共通基準との差を測り、許容誤差2^-10の妥当性を記録する
+
+### CACHE-003 GPU資源とディスクのraster cache
+
+- 優先度: P2 / 領域: cache / 状態: planned
+- 依存: CACHE-001, CACHE-002
+- 受け入れ条件:
+  - GPU textureのcacheを容量予算つきで持ち、意味的keyをCPU側のcacheと共有する
+  - プロジェクト外のcache領域へraster結果を永続化し、削除しても描画結果が変わらない
 
 
 ## M5

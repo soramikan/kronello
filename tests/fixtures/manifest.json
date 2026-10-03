@@ -9,11 +9,11 @@
       "id": "japanese",
       "storage": "bundled",
       "path": "tests/fixtures/data/japanese.json",
-      "bytes": 781,
-      "sha256": "6a771b869004c6254ebb9dd02ff7997d9ba8c70065231fa5231f0b3ed66a8cfd",
+      "bytes": 969,
+      "sha256": "f087c4389734695bb72471a4bd0ba51648a15eab3bace55e2e0c26ea683c09c2",
       "source": "scripts/fixtures.py canonical_data (original generated data)",
       "license": "MIT OR Apache-2.0",
-      "purpose": "結合濁点・IVS・emoji・異体字・禁則・ruby・縦書きの入力。glyph coverage は別途 TEXT-001 で確認する。",
+      "purpose": "結合濁点・1 書記素複数 glyph・合字・IVS・emoji・異体字・禁則・ruby・縦書きの入力。TEXT-001 は固定フォントの組版対応と欠落・未対応エラーを確認する。",
       "format": {
         "encoding": "UTF-8",
         "normalization": "none"

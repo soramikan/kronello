@@ -2,7 +2,9 @@ use crate::{AssetId, ModelError};
 use serde::{Deserialize, Serialize};
 
 /// No non-finite value can be constructed or deserialized through the public API.
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize, schemars::JsonSchema,
+)]
 #[serde(try_from = "f64", into = "f64")]
 pub struct FiniteF64(f64);
 
@@ -30,7 +32,7 @@ impl From<FiniteF64> for f64 {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ValueType {
     Scalar,
@@ -45,7 +47,7 @@ pub enum ValueType {
     Path,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ColorSpace {
     Srgb,
@@ -55,7 +57,7 @@ pub enum ColorSpace {
 
 /// Straight RGB with independent alpha. Alpha defaults only at input; saved
 /// colors always emit all four components and an explicit color space.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ColorComponents {
     pub r: FiniteF64,
@@ -68,14 +70,14 @@ fn opaque_alpha() -> FiniteF64 {
     FiniteF64(1.0)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(try_from = "ColorWire", into = "ColorWire")]
 pub struct Color {
     space: ColorSpace,
     components: ColorComponents,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct ColorWire {
     space: ColorSpace,
@@ -167,13 +169,13 @@ impl From<Color> for ColorWire {
 
 /// A document geometry container only. Topology checking/morph evaluation is
 /// deferred to the vector/animation layer; Path currently supports Hold only.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Path {
     pub segments: Vec<PathSegment>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(
     tag = "kind",
     content = "value",
@@ -183,6 +185,10 @@ pub struct Path {
 pub enum PathSegment {
     MoveTo([FiniteF64; 2]),
     LineTo([FiniteF64; 2]),
+    QuadTo {
+        control: [FiniteF64; 2],
+        end: [FiniteF64; 2],
+    },
     CubicTo {
         control1: [FiniteF64; 2],
         control2: [FiniteF64; 2],
@@ -191,7 +197,7 @@ pub enum PathSegment {
     Close,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(
     tag = "kind",
     content = "value",

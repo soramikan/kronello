@@ -106,7 +106,9 @@ GUI・CLI・MCP サーバーはそれぞれ別プロセスとして同じ `.kron
 - 履歴（イベントと逆操作情報）を自動では削除しない。
 - `history.compact` は、指定した revision より前の履歴を切り捨て、その時点の完全スナップショットを基点として残す。
 - 切り捨てた範囲のイベントは Undo できない。
-- 履歴が大きくなった場合は `project.validate` が警告する。
+- 履歴が大きくなった場合は `project.validate` が警告する。STORE-001 の `history_size()` は、イベントの patch / inverse / changed keys と、現在以外の完全 snapshot の UTF-8 payload 合計が **256 MiB 以上**なら `warning=true` を返す。SERVICE-001 がこれを検証応答に反映する。SQLite の空きページや index、現在文書、idempotency receipt はこの論理量に含めない。
+- STORE-002 以降は初期 revision 0、`revision % 64 == 0`、`compact(r)` の基点だけに完全 snapshot を保存する。サイズによる追加保存は STORE-003 に委ねる。任意 revision は直前の完全 snapshot と連続したイベント patch を最大 63 個再適用して復元する。
+- `compact(r)` は同じ書き込み transaction 内で `r` を復元して完全 snapshot を確保し、`< r` を削除する。`r` のイベントと現在文書・revision は変えない。idempotency receipt は compact 後も残り、キーの再適用を防ぐ。失敗時は基点の追加を含め rollback する。DB ファイルの物理縮小は保証しない。
 
 ## ジャーナル方式
 
@@ -125,7 +127,11 @@ GUI・CLI・MCP サーバーはそれぞれ別プロセスとして同じ `.kron
 - 安全モード中に他のプロセスが開こうとすると `PROJECT_LOCKED` を返す。
 - したがって、同期フォルダ上ではエージェントとの同時編集はできない。
 
-保存場所の判定方法と、誤判定時に利用者が上書きする手段は STORE-001 で設計する。
+判定と上書き手段は [ADR-0046](../adr/0046-store-format-and-location-policy.md) で具体化した。
+
+`OpenMode::Auto` は canonical path と実ファイルシステムを調べる。macOS の home 配下 `Library/CloudStorage` / `Library/Mobile Documents`、Dropbox / OneDrive / Google Drive 系フォルダ名、および `statfs` の smbfs / nfs / afpfs / webdav 等を安全モードにする。Linux は NFS / SMB / CIFS / SMB2 / FUSE、Windows は UNC を検出する。`ForceNormal` / `ForceSafe` で誤判定を上書きできるが、既存プロセスの排他ロックは突破しない。判定器は `LocationDetector` として注入できる。非標準同期先や Windows のドライブ文字でのネットワーク接続は完全には検出できず、`ForceSafe` を指定する。
+
+安全モードは DELETE journal と SQLite exclusive locking を併用する。同一 OS 内では一時領域の小さな shared / exclusive lock ファイルでモードを調停する。これは作品の正本・キャッシュではなく、プロジェクトの外に置く。プロジェクト本体への追加 whole-file lock は macOS で SQLite と干渉するため使わない。ロックの identity は Unix では device / inode、それ以外は canonical path に基づく。二重ロックを避けるため終了時に unlink しない。close / Drop では SQLite connection を閉じた後に明示的に unlock する。open の失敗時と初期化用ロックの終了時にも unlock する。descriptor の close だけでは、並行する子プロセス生成で継承された descriptor が exec までロックを延命しうる。プロセス終了でも OS がロックを解放する。同じ領域の一時的な exclusive open lock で、新規 DB の初期化と journal mode の切り替えも直列化する。
 
 ## 素材の参照
 
@@ -150,3 +156,26 @@ hash 照合の頻度と高速化は MEDIA-001 で設計する。
 - JSON は書き出した時点の不変の写しであり、`.kronello` と並行して編集する正本ではない。
 
 RenderSnapshot は同じ公開構造版と文書の意味の版を含む `semantic_versions` を持ち、資産・フォント・データの lock と profile を固定する（ADR-0045「RenderSnapshot」）。未知内容の round-trip は値・型・所属・参照の保持であり、JSON の空白・キー順の byte 一致を要求しない。安全に保持できない import / export を成功扱いにしない。
+
+## STORE-001 / STORE-002 の実装境界
+
+`crates/kronello-store` は SQLite 保存層を実装した。ここで記載した `project.export/import`、`history.compact` に相当する Rust の保存 API は存在するが、CLI / MCP / Service の Command / Query 自体は後続タスクである。公開型・判定方針は [ADR-0046](../adr/0046-store-format-and-location-policy.md)、受け入れ条件の検証は [STORE-001 の検証](../testing/store-001.md) を参照する。
+
+| テーブル | 内容 |
+|---|---|
+| `project` | singleton の現在文書 JSON と revision |
+| `events` | revision / UUID event ID / session / mutations / inverse / changed keys / optional idempotency key / optional undo_of |
+| `snapshots` | 初期・64 revision ごと・compact 基点の完全文書 JSON。旧ファイルの全 revision snapshot も保持・読込する。公開構造版と文書意味版を内包 |
+| `idempotency` | unique key / payload / event ID / revision / 完全な適用結果（Event）。SERVICE-001 の照合・結果復元の材料 |
+
+`apply` は `BEGIN IMMEDIATE` 後に revision を照合し、文書・event・逆操作・該当 revision の完全 snapshot・receipt を同じ transaction で更新する。patch はオブジェクトメンバーの経路に対する `Set` / `Remove`（root の `Set` は完全文書の差し替え）。配列は集合ごと置き換え、配列位置を ID に使わない。逆操作は保存層が元値から自動生成する。変更キーの算出と通常のモデル意味検証は呼び出し側の責務とし、import / restore は対象集合のキーを保守的に列挙する。idempotency の既存キーは保存層では `IDEMPOTENCY_KEY_EXISTS` として拒否し、同じ payload への成功応答は SERVICE-001 で実装する。undo linkage は保存するが、selective undo の競合規則はまだ実装していない。
+
+`kronello-model::Project` の初期版は schema / semantic version 1、UUID id、name、Composition / Curve 集合と未知フィールドを持つ。`DocumentObject<T>` の既知型で decode できなければ全 object を opaque に保持し、未知ノード・enum・入れ子フィールドも失わない。通常変更は未知の意味や opaque 内容があると `UNSUPPORTED_FEATURE`。import / export / snapshot 復元は保持を許す。[公開 JSON Schema](../../schemas/project-v1.schema.json) は型から生成し、rational の num / den は 10 進文字列。未知内容を含む保存外枠に適合することと、その内容を実行できることは区別する。
+
+内部版は `PRAGMA user_version=1` で、公開構造版・意味版・revision とは別。認識できない DB / 構造版は拒否する。`migrate_schema` は信頼された Rust コード専用の transaction hook で、SQL を Command payload として公開しない。失敗は DDL・データ・内部版を rollback する。旧版の具体的な migration 経路はまだなく、新規 DB の初期化のみ実装した。
+
+`snapshot_at(r)` は一つの読み取り transaction で直前の完全 snapshot と `r` までの連続 patch を読む。他 connection の apply / compact と混ざった状態を読まない。patch ごとに文書を decode・構造検証し、通常保存と同じ正規化を保つ。必要な patch の欠落・破損・適用不能・文書不適合や周期 snapshot の欠落による 64 個以上の再適用は、revision を持つ `HISTORY_REPLAY_FAILED`。保持範囲外は `SNAPSHOT_NOT_FOUND`。`restore_snapshot` はこうして復元した文書を新 revision として保存し、Command の意味や逆操作を再評価しない。既存の全 revision snapshot は削除・変換せず優先して使う。保存 schema と `user_version=1` の変更・migration は不要。[STORE-002 の検証](../testing/store-002.md) を参照する。
+
+`render_cache_location` は OS cache dir の `render` namespace を返し、プロジェクトの親領域との重なりを拒否する。`.kronello` に cache table はない。文書の `content_hash` は全未知内容・schema / semantic version を含むキー順整列済み JSON を UTF-8 compact に serialize した SHA-256。`float_roundtrip` と `arbitrary_precision` により未知 JSON の大きな整数・数値の綴りも保持する。数値表記の違いは別 hash になりうる。RenderSnapshot の lock / profile を含む identity は後続の実装で組み合わせる。
+
+SQLite は bundled の `rusqlite` を使用する。`rusqlite` / `libsqlite3-sys` の配布 crate は MIT、同梱 SQLite 本体は [public domain](https://www.sqlite.org/copyright.html) で、GPL 構成の FFmpeg を新たに取り込まない。

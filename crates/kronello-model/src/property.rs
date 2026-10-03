@@ -21,7 +21,7 @@ use std::collections::{BTreeMap, BTreeSet};
 ///     curve: CurveId::new(),
 /// };
 /// ```
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(
     tag = "kind",
     content = "value",
@@ -34,7 +34,7 @@ pub enum PropertySource<T> {
     Expression(ExpressionId),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct DescriptorRef {
     pub key: SchemaKey,
@@ -66,7 +66,7 @@ impl DescriptorRef {
 /// Ordered modifier frame only, with semantic parameters and a stable identity.
 /// No modifier algorithm or execution capability is implemented here. The
 /// animation compiler must resolve kind/version and reject unsupported kinds.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Modifier {
     pub id: ModifierId,
@@ -85,7 +85,7 @@ pub trait SourceResolver {
 /// Deserialization checks intrinsic invariants only; use from_json(input,
 /// registry) or validate(registry) to resolve the descriptor before accepting
 /// an imported property. Source catalogs are checked by validate_sources.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(try_from = "PropertyWire", into = "PropertyWire")]
 pub struct Property {
     id: PropertyId,
@@ -93,7 +93,7 @@ pub struct Property {
     source: PropertySource<Value>,
     modifiers: Vec<Modifier>,
 }
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct PropertyWire {
     id: PropertyId,

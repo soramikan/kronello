@@ -17,6 +17,8 @@
 | TemplateDefinition | id, version, composition_ref, public_inputs, duration_policy, constraints |
 | RenderSnapshot | content_hash, schema_version, revision, asset/font/data locks, semantic_versions, profile |
 
+STORE-001 では `Project` の最小保存外枠として UUID `id`、`name`、構造版・意味版、Composition / Curve 集合、未知フィールドを実装した。上表の assets / sequences / templates 等は後続タスクの提案のまま。未知内容の保持と編集可否、公開 JSON Schema は [09 保存と同時編集](09-storage-concurrency.md) と [ADR-0046](../adr/0046-store-format-and-location-policy.md) を参照する。
+
 SourceRef は Asset、Composition、Generator を区別する。SourceRef の型が増えても Clip の編集意味は変えない。
 
 Timeline の文書型（Sequence / Clip）と Composition / Property descriptor は `kronello-model` に置き、評価実装は分離する。意味の参照と論理モジュールの依存境界は [ADR-0043](../adr/0043-semantic-dependencies-and-units.md) を参照。
@@ -30,6 +32,10 @@ NodeId や PropertyId を配列番号や名前から導出しない。表示名�
 同じ Composition を複数回使うため、実行時の参照キーは概ね `(InstancePath, NodeId, PropertyId)` とする。
 InstancePath は、親からたどった CompositionInstance の安定 ID 列であり、配列の現在位置ではない。
 共有定義を編集する操作と、公開入力を上書きする操作を別 API にする。
+
+COMP-001 の文書型では、配置ノードの `NodeId` と `CompositionInstanceId` を分け、後者の列を `InstancePath` に保存する。`nodes` の保存順と所有する子の順序を分離し、`root_nodes` と各ノードの `child_order` を順序付き NodeId 列とする。`containment_parent` とこの列の一致を検証し、`transform_parent` は描画順に影響させない。Shape / Text は `ContentId` で内容を参照する。VEC-001 は `Project.shapes` の意味的形状、TEXT-001 は `Project.texts` の UTF-8 本文・style・固定フォントと評価 Property の参照を実装した。詳細は [04 ベクター・日本語テキスト・レイアウト](04-vector-text-layout.md)。GPU の coverage 描画との接続は後続タスク。
+
+読取・変更後は `validate_compositions` で定義集合を検証する。所有・変換の循環はそれぞれ `ContainmentCycle` / `TransformCycle` と閉じた NodeId 経路、定義参照の循環は `CompositionReferenceCycle` と参照元・参照先・Node / Instance を含む辺列で診断する。入力束縛は参照先 Composition の既存 Property を上書きする値源として保持し、型・範囲等の契約を照合する。公開入力・テンプレート方針、Scene IR と評価はこの文書型の実装範囲に含めない。
 
 複数プロセスが同時に編集するため（[09 保存と同時編集](09-storage-concurrency.md)）、ID は中央の採番に依存せず、各プロセスが衝突なく生成できる形式にする。
 

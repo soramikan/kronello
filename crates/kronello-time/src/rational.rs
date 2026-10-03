@@ -163,3 +163,22 @@ impl<'de> Deserialize<'de> for Rational {
         Self::new(decimal(&wire.num)?, decimal(&wire.den)?).map_err(serde::de::Error::custom)
     }
 }
+
+// Keep the public schema aligned with the decimal-string serde representation.
+impl schemars::JsonSchema for Rational {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "Rational".into()
+    }
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        #[derive(schemars::JsonSchema)]
+        #[allow(dead_code)]
+        #[schemars(deny_unknown_fields)]
+        struct RationalWire {
+            #[schemars(regex(pattern = r"^-?[0-9]+$"))]
+            num: String,
+            #[schemars(regex(pattern = r"^-?[0-9]+$"))]
+            den: String,
+        }
+        RationalWire::json_schema(generator)
+    }
+}

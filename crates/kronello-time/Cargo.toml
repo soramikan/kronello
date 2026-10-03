@@ -11,6 +11,7 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+schemars = { version = "1", features = ["uuid1"] }
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"
 
