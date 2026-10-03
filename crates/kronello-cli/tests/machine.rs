@@ -575,3 +575,119 @@ fn concurrent_cli_same_key_returns_one_event_and_different_keys_conflict() {
         "3"
     );
 }
+
+#[test]
+fn structured_api_queries_and_empty_capabilities_payload_from_real_cli() {
+    let capabilities = call(&["capabilities", "get"], json!({}), true);
+    assert_eq!(capabilities["result"]["kind"], "capabilities");
+    assert_eq!(
+        capabilities["result"]["value"]["commands"]
+            .as_array()
+            .unwrap()
+            .len(),
+        13
+    );
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("query.kronello");
+    create(&path);
+    let doc = document();
+    let composition = &doc["compositions"][0]["id"];
+    let scene = call(
+        &["scene", "query"],
+        json!({"project":path, "composition":composition}),
+        true,
+    );
+    assert_eq!(scene["result"]["kind"], "scene");
+    assert_eq!(
+        scene["result"]["value"]["nodes"].as_array().unwrap().len(),
+        2
+    );
+    let sample = call(
+        &["property", "sample"],
+        json!({"project":path, "composition":composition,
+        "keys":[{"kind":"node", "instance_path":[], "node":doc["compositions"][0]["nodes"][0]["id"],
+            "property":doc["compositions"][0]["nodes"][0]["properties"][0]["id"]}],
+        "times":[{"num":"1","den":"2"}]}),
+        true,
+    );
+    assert_eq!(sample["result"]["kind"], "samples");
+    assert_eq!(sample["result"]["value"]["samples"][0]["unit"], "design_px");
+    let error = call(
+        &["capabilities", "get"],
+        json!({"shell":"touch /tmp/never"}),
+        false,
+    );
+    assert_eq!(error_code(&error), "INVALID_REQUEST");
+}
+
+#[test]
+fn history_pagination_and_execution_input_rejection_from_real_cli() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("history.kronello");
+    create(&path);
+    let payload = edit_payload(&path, "1", "change", edit_commands(2.0));
+    let session = payload["session_id"].clone();
+    let event = call(&["edit", "apply"], payload, true);
+    let event_id = &event["result"]["value"]["id"];
+    call(
+        &["edit", "undo"],
+        json!({"project":path,"base_revision":"2","session_id":session,
+            "event_id":event_id,"idempotency_key":"undo"}),
+        true,
+    );
+    let first = call(
+        &["history", "list"],
+        json!({"project":path,"since_revision":"1","limit":1,"session_id":session}),
+        true,
+    );
+    let history = &first["result"]["value"];
+    assert_eq!(history["revision"], "3");
+    assert_eq!(history["events"][0]["event"]["id"], *event_id);
+    assert_eq!(history["events"][0]["event"]["session_id"], session);
+    assert!(
+        !history["events"][0]["event"]["changed_keys"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(history["events"][0]["undone"], true);
+    let last = call(
+        &[],
+        json!({"operation":"history.list","project":path,"limit":1,"session_id":session,
+            "since_revision":history["next_since_revision"]}),
+        true,
+    );
+    assert_eq!(
+        last["result"]["value"]["events"][0]["event"]["undo_of"],
+        *event_id
+    );
+    assert!(last["result"]["value"]["next_since_revision"].is_null());
+    let before = call(&["project", "export"], json!({"project":path}), true);
+    for field in ["shell", "url", "ffmpeg_args"] {
+        let mut request = json!({"project":path});
+        request[field] = json!("untrusted");
+        assert_eq!(
+            error_code(&call(&["project", "info"], request, false)),
+            "INVALID_REQUEST"
+        );
+    }
+    assert_eq!(
+        error_code(&call(
+            &["project", "info"],
+            json!({"project":"https://example.invalid/movie.kronello"}),
+            false
+        )),
+        "INVALID_REQUEST"
+    );
+    let duplicate = invoke(
+        &["capabilities", "get"],
+        r#"{"operation":"capabilities.get"}"#,
+        false,
+    )
+    .0;
+    assert_eq!(error_code(&duplicate), "INVALID_REQUEST");
+    assert_eq!(
+        call(&["project", "export"], json!({"project":path}), true),
+        before
+    );
+}

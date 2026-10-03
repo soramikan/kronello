@@ -81,7 +81,7 @@ impl From<ProjectError> for StoreError {
 /// Paths use object-member segments, avoiding ambiguous JSON pointer escaping.
 /// An array segment selects an object by its UUID `id`, never by position.
 /// Arrays of scalar values (including draw order) are replaced as a unit.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "operation", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Mutation {
     Set { path: Vec<String>, value: Value },
@@ -180,7 +180,9 @@ impl Mutation {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, schemars::JsonSchema,
+)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ChangedKey {
     Value {
@@ -208,7 +210,7 @@ pub struct Snapshot {
     pub revision: Revision,
     pub document: Project,
 }
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct Event {
     pub id: Uuid,
     pub revision: Revision,

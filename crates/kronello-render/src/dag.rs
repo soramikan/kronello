@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{MatteKind, RenderError, RenderProfile, SceneContent, SceneIr, SceneKey};
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct OutputRegion {
     pub origin: [f64; 2],

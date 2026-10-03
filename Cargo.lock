@@ -893,6 +893,7 @@ dependencies = [
  "kronello-time",
  "kronello-vector",
  "png",
+ "schemars",
  "serde",
  "serde_json",
  "sha2",
@@ -905,12 +906,15 @@ dependencies = [
 name = "kronello-service"
 version = "0.0.0"
 dependencies = [
+ "jsonschema",
+ "kronello-eval",
  "kronello-gpu",
  "kronello-model",
  "kronello-render",
  "kronello-store",
  "kronello-text",
  "kronello-time",
+ "schemars",
  "serde",
  "serde_json",
  "sha2",
@@ -928,6 +932,7 @@ dependencies = [
  "kronello-time",
  "nix",
  "rusqlite",
+ "schemars",
  "serde",
  "serde_json",
  "sha2",

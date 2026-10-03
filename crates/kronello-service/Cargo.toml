@@ -15,6 +15,8 @@ workspace = true
 test-adapter-unavailable = []
 
 [dependencies]
+schemars = { version = "1", features = ["uuid1"] }
+kronello-eval = { path = "../kronello-eval" }
 kronello-model = { path = "../kronello-model" }
 kronello-time = { path = "../kronello-time" }
 kronello-store = { path = "../kronello-store" }
@@ -26,3 +28,6 @@ serde_json = { version = "1", features = ["float_roundtrip", "raw_value"] }
 uuid = { version = "1", features = ["v4"] }
 sha2 = "0.10"
 tempfile = "3"
+
+[dev-dependencies]
+jsonschema = { version = "0.46", default-features = false }

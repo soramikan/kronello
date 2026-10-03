@@ -19,7 +19,7 @@ use uuid::Uuid;
 
 /// Externally tagged commands decode directly, retaining strict fields and
 /// concrete model number decoding instead of serde's tagged Content buffer.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum EditCommand {
     PropertySourceSet {
@@ -85,14 +85,14 @@ pub enum EditCommand {
         index: usize,
     },
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PlanRequest {
     pub project: PathBuf,
     pub base_revision: String,
     pub commands: Vec<EditCommand>,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct EditApplyRequest {
     pub project: PathBuf,
@@ -102,7 +102,7 @@ pub struct EditApplyRequest {
     pub session_id: Uuid,
     pub commands: Vec<EditCommand>,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct UndoRequest {
     pub project: PathBuf,
@@ -111,17 +111,25 @@ pub struct UndoRequest {
     pub idempotency_key: String,
     pub event_id: Uuid,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct HistoryRequest {
     pub project: PathBuf,
     #[serde(default = "zero")]
     pub since_revision: String,
+    #[serde(default = "history_limit")]
+    #[schemars(range(min = 1, max = 1000))]
+    pub limit: usize,
+    #[serde(default)]
+    pub session_id: Option<Uuid>,
+}
+fn history_limit() -> usize {
+    100
 }
 fn zero() -> String {
     "0".into()
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct EditPlan {
     pub project_id: Uuid,
@@ -133,19 +141,20 @@ pub struct EditPlan {
     pub candidate: Project,
     pub plan_hash: String,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct HistoryEntry {
     pub event: Event,
     pub undone: bool,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct HistoryResult {
     pub revision: String,
     pub events: Vec<HistoryEntry>,
+    pub next_since_revision: Option<String>,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct UndoConflict {
     pub event_id: Uuid,
@@ -161,7 +170,7 @@ fn revision(base: u64, current: u64) -> Result<(), ServiceError> {
     }
     Ok(())
 }
-fn registry() -> SchemaRegistry {
+pub(crate) fn registry() -> SchemaRegistry {
     let mut r = SchemaRegistry::with_builtin();
     for d in kronello_model::shape_descriptors()
         .into_iter()
@@ -933,19 +942,30 @@ pub(crate) fn undo(r: UndoRequest) -> Result<Event, ServiceError> {
 }
 pub(crate) fn history(r: HistoryRequest) -> Result<HistoryResult, ServiceError> {
     let since = parse_revision(&r.since_revision)?;
+    if r.limit == 0 || r.limit > 1000 {
+        return Err(ServiceError::invalid("history limit must be 1..=1000"));
+    }
     let store = open_existing(&r.project)?;
     let (s, events) = store.snapshot_and_events()?;
     store.close()?;
     let active = active(&events);
+    let mut selected = events.into_iter().filter(|e| {
+        e.revision > since && r.session_id.is_none_or(|session| e.session_id == session)
+    });
+    let entries: Vec<_> = selected
+        .by_ref()
+        .take(r.limit)
+        .map(|event| HistoryEntry {
+            undone: !active.contains(&event.id),
+            event,
+        })
+        .collect();
+    let next_since_revision = selected
+        .next()
+        .and_then(|_| entries.last().map(|e| e.event.revision.to_string()));
     Ok(HistoryResult {
         revision: s.revision.to_string(),
-        events: events
-            .into_iter()
-            .filter(|e| e.revision > since)
-            .map(|event| HistoryEntry {
-                undone: !active.contains(&event.id),
-                event,
-            })
-            .collect(),
+        events: entries,
+        next_since_revision,
     })
 }

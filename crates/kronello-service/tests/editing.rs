@@ -111,6 +111,8 @@ fn history(path: &Path, since: &str) -> HistoryResult {
         .dispatch(Request::HistoryList(HistoryRequest {
             project: path.into(),
             since_revision: since.into(),
+            limit: 100,
+            session_id: None,
         }))
         .unwrap()
     else {

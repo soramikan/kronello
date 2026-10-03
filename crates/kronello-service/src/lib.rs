@@ -1,6 +1,10 @@
 //! Shared synchronous Command/Query boundary for headless rendering and edits.
 //! Entry points own transport only; storage, fonts and rendering compose here.
+mod api;
 mod edit;
+mod query;
+pub use api::*;
+pub use query::*;
 mod wire;
 pub use edit::{
     EditApplyRequest, EditCommand, EditPlan, HistoryEntry, HistoryRequest, HistoryResult,
@@ -21,7 +25,7 @@ use kronello_time::{FrameRate, Time, TimeRange};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
 #[serde(tag = "operation", deny_unknown_fields)]
 pub enum Request {
     #[serde(rename = "project.create")]
@@ -44,14 +48,20 @@ pub enum Request {
     EditUndo(UndoRequest),
     #[serde(rename = "history.list")]
     HistoryList(HistoryRequest),
+    #[serde(rename = "scene.query")]
+    SceneQuery(SceneQueryRequest),
+    #[serde(rename = "property.sample")]
+    PropertySample(PropertySampleRequest),
+    #[serde(rename = "capabilities.get")]
+    CapabilitiesGet(CapabilitiesRequest),
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateRequest {
     pub project: PathBuf,
     pub document: Project,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ImportRequest {
     pub project: PathBuf,
@@ -59,18 +69,18 @@ pub struct ImportRequest {
     pub base_revision: String,
     pub document: Project,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectRequest {
     pub project: PathBuf,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FontInput {
     pub identity: FontRef,
     pub path: PathBuf,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RenderInput {
     pub project: PathBuf,
@@ -81,13 +91,13 @@ pub struct RenderInput {
     #[serde(default)]
     pub fonts: Vec<FontInput>,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FrameRenderRequest {
     pub input: RenderInput,
     pub time: Time,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SequenceRenderRequest {
     pub input: RenderInput,
@@ -95,7 +105,7 @@ pub struct SequenceRenderRequest {
     pub frame_rate: FrameRate,
     pub output_directory: PathBuf,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectInfo {
     pub project_id: String,
@@ -106,21 +116,26 @@ pub struct ProjectInfo {
     pub content_hash: String,
     pub compositions: Vec<CompositionId>,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ExportResult {
     pub revision: String,
     pub document: Project,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FrameResult {
     pub metadata: FrameMetadata,
     pub linear: Vec<[f32; 4]>,
     pub display: Vec<[f32; 4]>,
 }
-#[derive(Debug, Clone, Serialize)]
-#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
+#[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
+#[serde(
+    tag = "kind",
+    content = "value",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
 pub enum ResultData {
     Project(ProjectInfo),
     Export(ExportResult),
@@ -129,14 +144,17 @@ pub enum ResultData {
     Plan(Box<EditPlan>),
     Edit(kronello_store::Event),
     History(HistoryResult),
+    Scene(SceneQueryResult),
+    Samples(PropertySampleResult),
+    Capabilities(Box<CapabilitiesResult>),
 }
-#[derive(Debug, Clone, Serialize)]
-#[serde(tag = "status", rename_all = "snake_case")]
+#[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
+#[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Response {
     Success { result: ResultData },
     Error { error: ServiceError },
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ServiceError {
     pub code: String,
@@ -205,12 +223,14 @@ enum Backend<'a> {
 pub struct Service<'a> {
     backend: Backend<'a>,
     gpu_factory: fn() -> Result<GpuContext, GpuError>,
+    media_capabilities: Option<MediaCapabilities>,
 }
 impl Service<'_> {
     pub fn new(selection: BackendSelection) -> Self {
         Self {
             backend: Backend::Selected(selection),
             gpu_factory: create_gpu_context,
+            media_capabilities: None,
         }
     }
 }
@@ -219,6 +239,19 @@ impl<'a> Service<'a> {
         Self {
             backend: Backend::Injected(backend),
             gpu_factory: create_gpu_context,
+            media_capabilities: None,
+        }
+    }
+    pub fn with_media_capabilities(mut self, capabilities: MediaCapabilities) -> Self {
+        self.media_capabilities = Some(capabilities);
+        self
+    }
+    pub fn execute_json(&self, json: &str) -> Response {
+        match serde_json::from_str(json) {
+            Ok(request) => self.execute(request),
+            Err(error) => Response::Error {
+                error: error.into(),
+            },
         }
     }
     pub fn execute(&self, request: Request) -> Response {
@@ -228,7 +261,13 @@ impl<'a> Service<'a> {
         }
     }
     pub fn dispatch(&self, request: Request) -> Result<ResultData, ServiceError> {
+        validate_request_locators(&request)?;
         match request {
+            Request::SceneQuery(r) => query::scene(r).map(ResultData::Scene),
+            Request::PropertySample(r) => query::sample(r).map(ResultData::Samples),
+            Request::CapabilitiesGet(_) => Ok(ResultData::Capabilities(Box::new(
+                CapabilitiesResult::current(self.media_capabilities.clone()),
+            ))),
             Request::EditPlan(r) => edit::plan(r).map(|p| ResultData::Plan(Box::new(p))),
             Request::EditApply(r) => edit::apply(r).map(ResultData::Edit),
             Request::EditUndo(r) => edit::undo(r).map(ResultData::Edit),
@@ -481,6 +520,93 @@ fn create(request: CreateRequest) -> Result<ProjectInfo, ServiceError> {
         )
     })?;
     Ok(info)
+}
+
+/// Reject URI schemes at local-file boundaries, before any storage/font/output
+/// access. Material text and other opaque document strings remain inert data.
+fn local_locator(path: &Path) -> Result<(), ServiceError> {
+    local_locator_text(&path.to_string_lossy())
+}
+fn local_locator_text(value: &str) -> Result<(), ServiceError> {
+    if let Some((scheme, tail)) = value.split_once(':') {
+        let windows_drive = scheme.len() == 1
+            && scheme.as_bytes()[0].is_ascii_alphabetic()
+            && (tail.starts_with('/') || tail.starts_with('\\'));
+        if !windows_drive
+            && !scheme.is_empty()
+            && scheme
+                .bytes()
+                .all(|c| c.is_ascii_alphanumeric() || b"+-.".contains(&c))
+        {
+            return Err(ServiceError::invalid(
+                "locators must be local filesystem paths, not URIs",
+            ));
+        }
+    }
+    Ok(())
+}
+fn document_asset_locators(document: &Project) -> Result<(), ServiceError> {
+    // Asset objects are an additive document extension owned by MEDIA-001.
+    // Only locator slots are interpreted here; captions/names are never code.
+    fn visit(value: &serde_json::Value) -> Result<(), ServiceError> {
+        match value {
+            serde_json::Value::Object(object) => {
+                for (name, value) in object {
+                    if matches!(
+                        name.as_str(),
+                        "relative" | "absolute" | "relative_path" | "absolute_path" | "locator"
+                    ) && let Some(text) = value.as_str()
+                    {
+                        local_locator_text(text)?;
+                    }
+                    visit(value)?;
+                }
+            }
+            serde_json::Value::Array(values) => {
+                for value in values {
+                    visit(value)?;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+    if let Some(assets) = serde_json::to_value(document)?.get("assets") {
+        visit(assets)?;
+    }
+    Ok(())
+}
+fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
+    match request {
+        Request::ProjectCreate(r) => {
+            local_locator(&r.project)?;
+            document_asset_locators(&r.document)
+        }
+        Request::ProjectImport(r) => {
+            local_locator(&r.project)?;
+            document_asset_locators(&r.document)
+        }
+        Request::ProjectExport(r) | Request::ProjectInfo(r) => local_locator(&r.project),
+        Request::EditPlan(r) => local_locator(&r.project),
+        Request::EditApply(r) => local_locator(&r.project),
+        Request::EditUndo(r) => local_locator(&r.project),
+        Request::HistoryList(r) => local_locator(&r.project),
+        Request::SceneQuery(r) => local_locator(&r.project),
+        Request::PropertySample(r) => local_locator(&r.project),
+        Request::RenderFrame(r) => render_locators(&r.input),
+        Request::RenderSequence(r) => {
+            local_locator(&r.output_directory)?;
+            render_locators(&r.input)
+        }
+        Request::CapabilitiesGet(_) => Ok(()),
+    }
+}
+fn render_locators(input: &RenderInput) -> Result<(), ServiceError> {
+    local_locator(&input.project)?;
+    for font in &input.fonts {
+        local_locator(&font.path)?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

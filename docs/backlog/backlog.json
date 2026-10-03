@@ -450,7 +450,7 @@
       "priority": "P0",
       "area": "api",
       "title": "共通schemaとquery/command公開",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "SERVICE-001",
         "PROP-001",
