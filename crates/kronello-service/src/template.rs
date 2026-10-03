@@ -189,6 +189,7 @@ pub(crate) fn mutate(
                 active_range: TimeRange::from_start_duration(Time::ZERO, instance.duration)
                     .map_err(|e| ServiceError::invalid(e.to_string()))?,
                 properties: vec![],
+                effects: vec![],
             });
             project
                 .template_instances

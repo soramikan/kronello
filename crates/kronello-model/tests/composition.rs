@@ -20,6 +20,7 @@ fn instance_id(value: u128) -> CompositionInstanceId {
 }
 fn node(id: u128, kind: NodeKind) -> SceneNode {
     SceneNode {
+        effects: vec![],
         id: node_id(id),
         kind,
         containment_parent: None,

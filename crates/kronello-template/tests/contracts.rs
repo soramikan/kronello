@@ -180,6 +180,7 @@ fn nested_template_inputs_and_definition_are_frozen() {
         active_range: kronello_time::TimeRange::from_start_duration(Time::ZERO, instance.duration)
             .unwrap(),
         properties: vec![],
+        effects: vec![],
     };
     root.root_nodes.push(node.id);
     root.nodes.push(node);

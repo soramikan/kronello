@@ -129,6 +129,7 @@ fn node(kind: NodeKind, p: &Project, parent: Option<NodeId>) -> SceneNode {
         child_order: vec![],
         active_range: comp(p).nodes[0].active_range,
         properties: vec![],
+        effects: vec![],
     }
 }
 

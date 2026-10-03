@@ -203,6 +203,7 @@ impl Project {
                 .compositions
                 .iter()
                 .any(|v| matches!(v, DocumentObject::Opaque(_)))
+            || self.compositions.iter().any(|v| matches!(v, DocumentObject::Known(c) if c.nodes.iter().flat_map(|n| &n.effects).any(|e| e.definition().is_err())))
             || self
                 .curves
                 .iter()

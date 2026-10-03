@@ -85,6 +85,7 @@ fn fixture() -> (Project, SchemaRegistry) {
         }),
     };
     let node = SceneNode {
+        effects: vec![],
         id: NodeId::new(),
         kind: NodeKind::Shape {
             content_ref: shape.id,

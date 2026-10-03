@@ -92,6 +92,7 @@ fn scene_tree_preserves_order_parents_ranges_and_instance_identity() {
             child_order: vec![],
             active_range: original.nodes[0].active_range,
             properties: vec![],
+            effects: vec![],
         });
     }
     let root_id = root.id;
@@ -576,6 +577,7 @@ fn sampling_resolves_composition_inputs_placement_bindings_and_local_time() {
         child_order: vec![],
         active_range: definition.nodes[0].active_range,
         properties: vec![],
+        effects: vec![],
     });
     let root_id = root.id;
     p.compositions.push(DocumentObject::Known(root));

@@ -60,5 +60,7 @@ pub use text::{
     validate_text_contents,
 };
 
+mod effect;
 mod template;
+pub use effect::*;
 pub use template::*;

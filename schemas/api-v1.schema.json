@@ -1020,6 +1020,87 @@
       ],
       "type": "object"
     },
+    "Effect": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EffectDefinition"
+        },
+        true
+      ],
+      "description": "Unknown ids, parameters, fields and variants are retained verbatim."
+    },
+    "EffectDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "effect_id": {
+          "type": "string"
+        },
+        "parameters": {
+          "$ref": "#/$defs/EffectParameters"
+        },
+        "version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "effect_id",
+        "version",
+        "parameters"
+      ],
+      "type": "object"
+    },
+    "EffectParameters": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "gaussian_blur",
+              "type": "string"
+            },
+            "sigma": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "required": [
+            "kind",
+            "sigma"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "color": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "const": "drop_shadow",
+              "type": "string"
+            },
+            "offset": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "opacity": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "sigma": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "required": [
+            "kind",
+            "sigma",
+            "offset",
+            "color",
+            "opacity"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "Event": {
       "properties": {
         "changed_keys": {
@@ -3309,6 +3390,12 @@
             }
           ]
         },
+        "effects": {
+          "items": {
+            "$ref": "#/$defs/Effect"
+          },
+          "type": "array"
+        },
         "id": {
           "$ref": "#/$defs/NodeId"
         },
@@ -3487,6 +3574,14 @@
           "minimum": 0,
           "type": "integer"
         },
+        "effects": {
+          "additionalProperties": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "object"
+        },
         "gradient_interpolation": {
           "type": "string"
         },
@@ -3521,7 +3616,8 @@
         "color",
         "coverage",
         "stroke_geometry",
-        "gradient_interpolation"
+        "gradient_interpolation",
+        "effects"
       ],
       "type": "object"
     },

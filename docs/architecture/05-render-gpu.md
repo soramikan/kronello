@@ -73,7 +73,9 @@ OpenFX の入力領域 / 必要フレームの問い合わせに似た契約を�
 
 ## 基本エフェクト
 
-M2 で drop shadow と gaussian blur を実装する（FX-001）。エフェクトは必要な入力領域（ROI の halo）を宣言し、結果は visual_bounds に反映する。エフェクトのパラメーターは Property 基盤に乗せる。
+FX-001 は `SceneNode.effects` の順序付き stack と `DagNode::Effect` を実装する。sigma / offset / color / opacity はノード所有 Property で、評価済み `ResolvedEffect` を Scene IR に保持する。blur はローカル `design_px` の sigma を変換・出力倍率で画素へ写し、`radius = ceil(3σ)` の正規化 Gaussian を水平・垂直に畳み込む。透明 edge mode、内部線形 premultiplied RGBA16F と明示した binary16 RNE 面境界（CPU oracle も同じ丸め）を使い、shadow は blurred source alpha にタグ付き straight 色・opacity を掛けて source の下へ合成する。等方変換に対応し、正の sigma に対する非一様変換は型付き未対応。
+
+`PixelEffect::required_input` が output → input ROI を宣言し、DAG の逆順で Group / mask / 共有入力へ union を伝播する。初期 executor は必要領域の union を元の画素格子で描画し、要求画素へ crop する。`RenderDag::bounds()` の ink / visual は変換と離散 halo を含む output pixel bounds。effect params・意味版・upstream identities・ROI・色・backend namespace を cache key に含める。metadata は effect id ごとの意味版を固定する。GPU / golden の採用検証は [FX-001 の検証記録](../testing/fx-001.md) に分けて記録する。
 
 ## 高解像度
 
@@ -140,7 +142,7 @@ M1 / Metal の追加実測では、wgpu 30.0.1 の同一 MTLDevice による IOS
 - fill は Nonzero / Evenodd。開いた contour も fill では暗黙に閉じる。水平辺は winding に寄与せず、Y crossing は半開区間、cross product の符号は厳密な正負で判定する。点が辺上にある場合も同じ判定規約を使う。
 - stroke は miter / bevel / round、butt / square / round に対応する。共通の CPU 展開で中央線の矩形・接合三角形・円を生成し、GPU へ同じ領域を渡す。miter limit（既定 4）を越えた接合は bevel。閉じる辺は `Contour.closed` のときだけ stroke に含める。幅 0 は無被覆。幾何定義・退化処理は [04 章の VEC-003 規約](04-vector-text-layout.md#vec-003-の実装規約) を参照。dash・stroke alignment は未対応。
 - fill と stroke は別々に coverage を resolve し、stroke を fill の上に source-over する。単色または線形 / 放射 gradient の各 stop は sRGB decode → Rec.709 / Rec.2020 原色変換 → premultiply の順で処理する。各サンプル位置の線形 premultiplied paint を被覆に応じて蓄積・平均する。coverage に伝達関数を適用しない。RGBA8 の色付き raster を経由しない。
-- `render_scene_reference` は同じサンプル配置・辺判定・stroke・描画順の CPU 参照。CPU は binary16 丸めを行わない。AA は画素面積の厳密積分ではなく、この版付きサンプリング契約。辺を比較から除外しない。GPU の各中間面は RGBA16F。
+- `render_scene_reference` は同じサンプル配置・辺判定・stroke・描画順の CPU 参照。coverage の CPU は binary16 丸めを行わない（FX-001 の effect 面境界は別に明示した RNE を行う）。AA は画素面積の厳密積分ではなく、この版付きサンプリング契約。辺を比較から除外しない。GPU の各中間面は RGBA16F。
 
 ### Group、mask、外部出力
 

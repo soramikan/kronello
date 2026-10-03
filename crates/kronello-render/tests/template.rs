@@ -61,6 +61,7 @@ fn place(
         child_order: vec![],
         active_range: TimeRange::from_start_duration(Time::ZERO, duration).unwrap(),
         properties: vec![],
+        effects: vec![],
     };
     let DocumentObject::Known(root) = &mut p.compositions[0] else {
         panic!()
@@ -246,6 +247,7 @@ fn inactive_placement_parent_skips_layout_and_overflow() {
         child_order: vec![composition.nodes[0].id],
         active_range: TimeRange::new(Time::ZERO, Time::ONE).unwrap(),
         properties: vec![],
+        effects: vec![],
     });
     let frozen = snapshot(&project, root);
     with_fonts(|fonts| {

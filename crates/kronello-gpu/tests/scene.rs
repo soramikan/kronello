@@ -756,3 +756,109 @@ fn gpu_stroke_styles_and_gradients_match_cpu_in_both_working_spaces() {
         }
     }
 }
+
+#[test]
+fn cpu_fx_shader_parses_and_validates() {
+    let module = naga::front::wgsl::parse_str(EFFECT_SHADER).unwrap();
+    naga::valid::Validator::new(
+        naga::valid::ValidationFlags::all(),
+        naga::valid::Capabilities::empty(),
+    )
+    .validate(&module)
+    .unwrap();
+}
+#[test]
+fn cpu_fx_gaussian_impulse_is_linear_premultiplied_and_transparent_edges() {
+    let scene = DrawScene {
+        nodes: vec![
+            rectangle(
+                [3.0, 3.0],
+                [4.0, 4.0],
+                paint([0.5, 0.0, 0.0, 0.5], InputSpace::Srgb),
+            ),
+            DrawNode::Effect {
+                source: 0,
+                effect: PixelEffect::GaussianBlur { sigma: [1.0; 2] },
+            },
+        ],
+        roots: vec![1],
+    };
+    let pixels =
+        render_scene_reference(RenderSize::pixels(8, 8), &scene, WorkingSpace::LinearRec709)
+            .unwrap();
+    let kernel = kronello_render::gaussian_kernel(1.0).unwrap();
+    let norm: f32 = kernel.iter().sum();
+    let half = |v| half::f16::from_f32(v).to_f32();
+    let input = half(color::srgb_decode(0.5) * 0.5);
+    let mut expected_sum = 0.0;
+    for y in 0..8 {
+        for x in 0..8 {
+            // Independent impulse derivation includes horizontal and vertical stores.
+            let rgb = if x < 7 && y < 7 {
+                half(half(input * kernel[x] / norm) * kernel[y] / norm)
+            } else {
+                0.0
+            };
+            let alpha = if x < 7 && y < 7 {
+                half(half(0.5 * kernel[x] / norm) * kernel[y] / norm)
+            } else {
+                0.0
+            };
+            let p = pixels[y * 8 + x];
+            assert_eq!(p, [rgb, 0.0, 0.0, alpha]);
+            expected_sum += alpha;
+        }
+    }
+    assert_eq!(pixels.iter().map(|p| p[3]).sum::<f32>(), expected_sum);
+}
+#[test]
+fn cpu_fx_shadow_zero_sigma_fractional_offset_color_opacity_and_under_source() {
+    let shadow_color =
+        kronello_model::Color::new(kronello_model::ColorSpace::Srgb, [0.5, 0.0, 0.0], 0.5).unwrap();
+    let scene = DrawScene {
+        nodes: vec![
+            rectangle(
+                [2.0; 2],
+                [3.0; 2],
+                paint([0.0, 1.0, 0.0, 0.5], InputSpace::LinearRec709),
+            ),
+            DrawNode::Effect {
+                source: 0,
+                effect: PixelEffect::DropShadow {
+                    sigma: [0.0; 2],
+                    offset: [0.5, 0.0],
+                    color: shadow_color,
+                    opacity: 0.5,
+                },
+            },
+        ],
+        roots: vec![1],
+    };
+    let pixels =
+        render_scene_reference(RenderSize::pixels(6, 6), &scene, WorkingSpace::LinearRec709)
+            .unwrap();
+    let alpha = 0.5 * 0.5 * 0.5 * 0.5;
+    assert!(
+        (pixels[2 * 6 + 3][0] - half::f16::from_f32(color::srgb_decode(0.5) * alpha).to_f32())
+            .abs()
+            < 1e-7
+    );
+    assert_eq!(pixels[2 * 6 + 3][3], alpha);
+    assert_eq!(pixels[2 * 6 + 2][1], 0.5);
+    assert_eq!(pixels[2 * 6 + 2][3], 0.5 + alpha * 0.5);
+}
+#[test]
+fn gpu_fx_blur_shadow_match_cpu_reference_in_both_working_spaces() {
+    for working in [WorkingSpace::LinearRec709, WorkingSpace::LinearRec2020] {
+        for shadow in [false, true] {
+            let scene = effect_scene(shadow, working);
+            let expected =
+                render_scene_reference(RenderSize::pixels(16, 16), &scene, working).unwrap();
+            let actual = gpu()
+                .render_scene(RenderSize::pixels(16, 16), &scene, working)
+                .unwrap();
+            compare(16, working, &expected, &actual.pixels);
+            assert_eq!(actual.transfers.cpu_upload_pixel_operations, 0);
+        }
+    }
+}
