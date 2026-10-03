@@ -45,7 +45,7 @@
 | 中間・納品用 | FFmpeg 内蔵の ProRes | 常に |
 | 画像連番 | — | 常に |
 
-H.264 / HEVC のエンコーダーがない環境で要求された場合は `ENCODER_UNAVAILABLE` を返し、代替を案内する。音声コーデックの選定は AUDIO-000 で行う。
+H.264 / HEVC のエンコーダーがない環境で要求された場合は `ENCODER_UNAVAILABLE` を返し、代替を案内する。音声付き納品の初期経路は MOV / ProRes + 48 kHz stereo PCM24（FFmpeg native `pcm_s24le`）とする（[ADR-0049](../adr/0049-audio-bus-timing-and-codec.md)）。圧縮音声出力は未実装。
 
 ## 主な Rust 依存の候補
 
@@ -100,3 +100,9 @@ VideoToolbox の codec 登録は `AV_CODEC_CAP_HYBRID` を含めて検出し、o
 Project の `assets` は stable AssetId、SHA-256 content_hash、kind、rational stream metadata、relative / absolute locator を持つ。未知 Asset は opaque のまま保持する。共有 service の `asset.relink` は base_revision を照合して hash 一致だけを更新し、`project.collect` は store で保存したプロジェクトコピーと素材の相対パス directory を生成する。
 
 再現手順と検証の実施範囲は [MEDIA-001](../testing/media-001.md) に記録する。
+
+## AUDIO-000 の音声境界
+
+`kronello-audio` の純粋な 48 kHz stereo f32 Bus と、media の native decode / libswresample / PCM24 encode / MOV mux を実装する。libswresample は他の 4 library と同じ directory / ABI policy で動的ロードし、capabilities は全 5 library の license / configuration と PCM24 codec を検証する。mono は等倍複製、stereo は保持、多チャンネルの暗黙 downmix は拒否する。同梱 build の configure は swresample と native PCM を無効化しておらず、追加の外部 codec 依存はない。ビルドスクリプトの既存 verify-only は 4 library を調べるため、音声を含む配布の検証では新しい media capabilities の verify_distribution と audio tests も実行する。
+
+音量・量子化・snapshot / 時間の詳細は [基本音声](audio-000.md)、crate 単位の検証と host の残り範囲は [AUDIO-000 の検証](../testing/audio-000.md) を参照。

@@ -166,6 +166,7 @@ pub struct EncodeRequest {
 }
 #[derive(Debug, Clone)]
 pub struct EncodeFrame {
+    /// Exact presentation time; each frame spans one EncodeRequest.time_base tick.
     pub pts: Rational,
     pub rgba: Vec<u8>,
 }

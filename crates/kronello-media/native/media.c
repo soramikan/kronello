@@ -7,6 +7,7 @@
 #include <libavutil/pixdesc.h>
 #include <libavutil/hwcontext.h>
 #include <libswscale/swscale.h>
+#include <libswresample/swresample.h>
 #include <dlfcn.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -16,7 +17,7 @@
 #define STR_(x) #x
 #define STR(x) STR_(x)
 typedef struct Km {
-    void *libs[4];
+    void *libs[5];
     char error[512];
     int error_code;
     char error_operation[256];
@@ -91,6 +92,22 @@ typedef struct Km {
     __typeof__(&sws_setColorspaceDetails) sws_setColorspaceDetails;
     __typeof__(&sws_scale) sws_scale;
     __typeof__(&sws_freeContext) sws_freeContext;
+    __typeof__(&av_channel_layout_copy) av_channel_layout_copy;
+    __typeof__(&av_channel_layout_uninit) av_channel_layout_uninit;
+    __typeof__(&av_channel_layout_default) av_channel_layout_default;
+    __typeof__(&av_rescale_rnd) av_rescale_rnd;
+    __typeof__(&av_compare_ts) av_compare_ts;
+    __typeof__(&av_dict_get) av_dict_get;
+    __typeof__(&avcodec_parameters_copy) avcodec_parameters_copy;
+    __typeof__(&avcodec_get_name) avcodec_get_name;
+    __typeof__(&swresample_version) swresample_version;
+    __typeof__(&swresample_license) swresample_license;
+    __typeof__(&swresample_configuration) swresample_configuration;
+    __typeof__(&swr_alloc_set_opts2) swr_alloc_set_opts2;
+    __typeof__(&swr_init) swr_init;
+    __typeof__(&swr_convert) swr_convert;
+    __typeof__(&swr_get_delay) swr_get_delay;
+    __typeof__(&swr_free) swr_free;
 } Km;
 static int fail(Km *k, int code, const char *where) {
     char detail[256] = {0};
@@ -103,7 +120,7 @@ static int fail(Km *k, int code, const char *where) {
 }
 void km_close(Km *k) {
     if (!k) return;
-    for (int i=3; i>=0; --i) if (k->libs[i]) dlclose(k->libs[i]);
+    for (int i=4; i>=0; --i) if (k->libs[i]) dlclose(k->libs[i]);
     free(k);
 }
 const char *km_error(Km *k) { return k->error; }
@@ -113,9 +130,9 @@ const char *km_error_detail(Km *k) { return k->error_detail; }
 Km *km_open(const char *directory, char *error, size_t capacity) {
     Km *k = calloc(1, sizeof(*k));
     if (!k) { snprintf(error, capacity, "allocation failed"); return NULL; }
-    const char *names[4] = {"avutil", "avcodec", "avformat", "swscale"};
-    int majors[4] = {LIBAVUTIL_VERSION_MAJOR, LIBAVCODEC_VERSION_MAJOR, LIBAVFORMAT_VERSION_MAJOR, LIBSWSCALE_VERSION_MAJOR};
-    for (int i=0; i<4; ++i) {
+    const char *names[5] = {"avutil", "avcodec", "avformat", "swscale", "swresample"};
+    int majors[5] = {LIBAVUTIL_VERSION_MAJOR, LIBAVCODEC_VERSION_MAJOR, LIBAVFORMAT_VERSION_MAJOR, LIBSWSCALE_VERSION_MAJOR, LIBSWRESAMPLE_VERSION_MAJOR};
+    for (int i=0; i<5; ++i) {
         char path[4096];
 #ifdef __APPLE__
         int n=snprintf(path, sizeof(path), "%s/lib%s.%d.dylib", directory, names[i], majors[i]);
@@ -197,9 +214,25 @@ Km *km_open(const char *directory, char *error, size_t capacity) {
     LOAD(3, sws_setColorspaceDetails);
     LOAD(3, sws_scale);
     LOAD(3, sws_freeContext);
+    LOAD(0, av_channel_layout_copy);
+    LOAD(0, av_channel_layout_uninit);
+    LOAD(0, av_channel_layout_default);
+    LOAD(0, av_rescale_rnd);
+    LOAD(0, av_compare_ts);
+    LOAD(0, av_dict_get);
+    LOAD(1, avcodec_parameters_copy);
+    LOAD(1, avcodec_get_name);
+    LOAD(4, swresample_version);
+    LOAD(4, swresample_license);
+    LOAD(4, swresample_configuration);
+    LOAD(4, swr_alloc_set_opts2);
+    LOAD(4, swr_init);
+    LOAD(4, swr_convert);
+    LOAD(4, swr_get_delay);
+    LOAD(4, swr_free);
 #undef LOAD
-    unsigned versions[4] = {k->avutil_version(), k->avcodec_version(), k->avformat_version(), k->swscale_version()};
-    for (int i=0;i<4;++i) if ((versions[i]>>16)!=(unsigned)majors[i]) { snprintf(error, capacity, "FFmpeg ABI major mismatch"); km_close(k); return NULL; }
+    unsigned versions[5] = {k->avutil_version(), k->avcodec_version(), k->avformat_version(), k->swscale_version(), k->swresample_version()};
+    for (int i=0;i<5;++i) if ((versions[i]>>16)!=(unsigned)majors[i]) { snprintf(error, capacity, "FFmpeg ABI major mismatch"); km_close(k); return NULL; }
     return k;
 }
 const char *km_info(Km *k, int index) {
@@ -213,11 +246,13 @@ const char *km_info(Km *k, int index) {
         case 6:return k->avformat_configuration();
         case 7:return k->swscale_license();
         case 8:return k->swscale_configuration();
+        case 9:return k->swresample_license();
+        case 10:return k->swresample_configuration();
         default:return "";
     }
 }
 unsigned km_version(Km *k, int index) {
-    switch(index) {case 0:return k->avutil_version(); case 1:return k->avcodec_version(); case 2:return k->avformat_version(); default:return k->swscale_version();}
+    switch(index) {case 0:return k->avutil_version(); case 1:return k->avcodec_version(); case 2:return k->avformat_version(); case 3:return k->swscale_version(); default:return k->swresample_version();}
 }
 int km_codec_hardware_capable(int capabilities) {
     /* VideoToolbox is HYBRID because its wrapper can allow software. The
@@ -250,7 +285,7 @@ void km_decoder_close(Decoder *d) {
     k->av_frame_free(&d->frame); k->av_packet_free(&d->packet);
     k->avcodec_free_context(&d->codec); k->avformat_close_input(&d->format); free(d);
 }
-Decoder *km_decoder_open(Km *k, const char *path) {
+static Decoder *decoder_open(Km *k, const char *path, enum AVMediaType kind, int stream) {
     Decoder *d=calloc(1,sizeof(*d));
     if(!d) { fail(k,AVERROR(ENOMEM),"decoder allocation"); return NULL; }
     d->k=k; d->format=k->avformat_alloc_context();
@@ -266,8 +301,8 @@ Decoder *km_decoder_open(Km *k, const char *path) {
     ret=k->avformat_find_stream_info(d->format,NULL);
     if(ret<0) { fail(k,ret,"stream info"); goto failed; }
     const AVCodec *codec=NULL;
-    d->stream=k->av_find_best_stream(d->format,AVMEDIA_TYPE_VIDEO,-1,-1,&codec,0);
-    if(d->stream<0) { fail(k,d->stream,"video stream"); goto failed; }
+    d->stream=k->av_find_best_stream(d->format,kind,stream,-1,&codec,0);
+    if(d->stream<0) { fail(k,d->stream,"requested stream"); goto failed; }
     if(d->format->streams[d->stream]->codecpar->codec_id==AV_CODEC_ID_AV1) {
         codec=k->avcodec_find_decoder_by_name("libdav1d");
         if(!codec)codec=k->avcodec_find_decoder_by_name("libaom-av1");
@@ -286,6 +321,7 @@ Decoder *km_decoder_open(Km *k, const char *path) {
 alloc_failed:fail(k,AVERROR(ENOMEM),"decoder allocation");
 failed:km_decoder_close(d);return NULL;
 }
+Decoder *km_decoder_open(Km *k, const char *path) { return decoder_open(k,path,AVMEDIA_TYPE_VIDEO,-1); }
 const char *km_decoder_name(Decoder *d) { return d->codec->codec->name; }
 void km_decoder_time_base(Decoder *d, int *num, int *den) { AVRational t=d->format->streams[d->stream]->time_base; *num=t.num; *den=t.den; }
 int64_t km_decoder_origin(Decoder *d) { int64_t start=d->format->streams[d->stream]->start_time; return start==AV_NOPTS_VALUE ? 0 : start; }
@@ -387,6 +423,8 @@ static int write_packets(Encoder *e) {
         int ret=e->k->avcodec_receive_packet(e->codec,e->packet);
         if(ret==AVERROR(EAGAIN)||ret==AVERROR_EOF)return 0;
         if(ret<0)return fail(e->k,ret,"receive packet");
+        /* Input contract: every submitted frame spans one time_base tick. */
+        e->packet->duration=1;
         e->k->av_packet_rescale_ts(e->packet,e->codec->time_base,e->stream->time_base);e->packet->stream_index=e->stream->index;
         ret=e->k->av_interleaved_write_frame(e->format,e->packet);e->k->av_packet_unref(e->packet);
         if(ret<0)return fail(e->k,ret,"write packet");
@@ -397,7 +435,7 @@ int km_encoder_frame(Encoder *e,const uint8_t *rgba,int64_t pts) {
     const uint8_t *data[4]={rgba,NULL,NULL,NULL};int stride[4]={e->codec->width*4,0,0,0};
     ret=e->k->sws_scale(e->sws,data,stride,0,e->codec->height,e->frame->data,e->frame->linesize);
     if(ret!=e->codec->height)return fail(e->k,AVERROR_INVALIDDATA,"pixel conversion");
-    e->frame->pts=pts;
+    e->frame->pts=pts; e->frame->duration=1;
     ret=e->k->avcodec_send_frame(e->codec,e->frame);if(ret<0)return fail(e->k,ret,"send frame");return write_packets(e);
 }
 int km_encoder_finish(Encoder *e) {
@@ -409,3 +447,236 @@ int km_encoder_finish(Encoder *e) {
 const char *km_encoder_format(Encoder *e){return e->k->av_get_pix_fmt_name(e->codec->pix_fmt);}
 
 int km_encoder_frame_size(Encoder *e){return e->k->av_image_get_buffer_size(e->codec->pix_fmt,e->codec->width,e->codec->height,1);}
+
+/* Audio decoder owns one swresample context. Mono is duplicated at unity;
+ * only an explicit mono/stereo layout is accepted, never an implicit downmix. */
+typedef struct AudioDecoder {
+    Decoder *d; SwrContext *swr; float *samples; int count, rate, channels, format;
+    int initialized, eof; int64_t pts; int input_samples;
+} AudioDecoder;
+void km_audio_close(AudioDecoder *a) {
+    if(!a)return;
+    if(a->swr)a->d->k->swr_free(&a->swr);
+    free(a->samples);km_decoder_close(a->d);free(a);
+}
+AudioDecoder *km_audio_open(Km *k,const char *path,int stream) {
+    AudioDecoder *a=calloc(1,sizeof(*a));
+    if(!a){fail(k,AVERROR(ENOMEM),"audio allocation");return NULL;}
+    a->d=decoder_open(k,path,AVMEDIA_TYPE_AUDIO,stream);
+    if(!a->d){free(a);return NULL;}
+    return a;
+}
+void km_audio_time_base(AudioDecoder *a,int *num,int *den) { km_decoder_time_base(a->d,num,den); }
+int km_audio_rate(AudioDecoder *a) { return a->rate; }
+int km_audio_channels(AudioDecoder *a) { return a->channels; }
+int64_t km_audio_pts(AudioDecoder *a) { return a->pts; }
+int km_audio_input_samples(AudioDecoder *a) { return a->input_samples; }
+int km_audio_count(AudioDecoder *a) { return a->count; }
+int km_audio_copy(AudioDecoder *a,float *out,int capacity) {
+    if(capacity!=a->count*2)return -1;
+    if(capacity)memcpy(out,a->samples,(size_t)capacity*sizeof(float));
+    return capacity;
+}
+int km_audio_next(AudioDecoder *a) {
+    Km *k=a->d->k;
+    if(a->eof)return 0;
+    int ret=km_decoder_next(a->d);
+    if(ret<0)return ret;
+    AVFrame *f=a->d->frame;
+    a->input_samples=ret?f->nb_samples:0;
+    a->pts=ret?f->best_effort_timestamp:AV_NOPTS_VALUE;
+    if(ret) {
+        int channels=f->ch_layout.nb_channels;
+        if(f->sample_rate<=0 || f->sample_rate>768000 || f->nb_samples<=0 || f->nb_samples>1048576)
+            return fail(k,AVERROR_INVALIDDATA,"invalid audio rate or frame size");
+        /* Basic WAV records a channel count without a speaker mask. Define
+         * its one/two-channel order explicitly as mono or left/right. */
+        if(channels>=1 && channels<=2 && f->ch_layout.order==AV_CHANNEL_ORDER_UNSPEC) {
+            k->av_channel_layout_uninit(&f->ch_layout);
+            k->av_channel_layout_default(&f->ch_layout,channels);
+        }
+        if(channels<1 || channels>2 || f->ch_layout.order!=AV_CHANNEL_ORDER_NATIVE ||
+            f->ch_layout.u.mask!=(channels==1?AV_CH_LAYOUT_MONO:AV_CH_LAYOUT_STEREO))
+            return fail(k,AVERROR(ENOSYS),"unsupported audio channel layout (mono/stereo only)");
+        if(!a->initialized) {
+            a->rate=f->sample_rate;a->channels=channels;a->format=f->format;
+            AVChannelLayout layout=AV_CHANNEL_LAYOUT_STEREO;
+            ret=k->swr_alloc_set_opts2(&a->swr,&layout,AV_SAMPLE_FMT_FLT,48000,
+                &f->ch_layout,f->format,f->sample_rate,0,NULL);
+            if(ret<0)return fail(k,ret,"allocate resampler");
+            /* Disable the default -3 dB mono matrix: duplicate mono at unity. */
+            if(channels==1) {
+                /* Keep swresample mono, then duplicate the converted samples. */
+                k->swr_free(&a->swr);
+                layout=(AVChannelLayout)AV_CHANNEL_LAYOUT_MONO;
+                ret=k->swr_alloc_set_opts2(&a->swr,&layout,AV_SAMPLE_FMT_FLT,48000,
+                    &f->ch_layout,f->format,f->sample_rate,0,NULL);
+                if(ret<0)return fail(k,ret,"allocate mono resampler");
+            }
+            ret=k->swr_init(a->swr);if(ret<0)return fail(k,ret,"initialize resampler");
+            a->initialized=1;
+        } else if(a->rate!=f->sample_rate || a->channels!=channels || a->format!=f->format) {
+            return fail(k,AVERROR(ENOSYS),"audio format changes within stream");
+        }
+    } else if(!a->initialized) { a->eof=1;return 0; }
+    int64_t capacity=k->av_rescale_rnd(k->swr_get_delay(a->swr,a->rate)+a->input_samples,48000,a->rate,AV_ROUND_UP);
+    if(capacity<0 || capacity>2097152)return fail(k,AVERROR_INVALIDDATA,"resampler buffer budget");
+    if(capacity==0){a->eof=1;return 0;}
+    float *samples=realloc(a->samples,(size_t)capacity*2*sizeof(float));
+    if(!samples)return fail(k,AVERROR(ENOMEM),"resampler output allocation");
+    a->samples=samples;
+    uint8_t *out=(uint8_t *)samples;
+    int count=k->swr_convert(a->swr,&out,(int)capacity,
+        a->input_samples?(const uint8_t **)f->extended_data:NULL,a->input_samples);
+    if(count<0)return fail(k,count,"convert audio");
+    if(a->channels==1)for(int i=count-1;i>=0;--i){samples[2*i]=samples[i];samples[2*i+1]=samples[i];}
+    a->count=count;
+    if(!a->input_samples && !count){a->eof=1;return 0;}
+    return 1;
+}
+
+/* Native PCM24 encoder uses packed S32 with its low eight bits zero. */
+int km_audio_encode(Km *k,const char *path,const int32_t *samples,int64_t count) {
+    AVFormatContext *format=NULL;AVCodecContext *codec=NULL;AVFrame *frame=NULL;AVPacket *packet=NULL;
+    const AVCodec *encoder=k->avcodec_find_encoder_by_name("pcm_s24le");
+    int ret=AVERROR_ENCODER_NOT_FOUND;
+    if(!encoder){fail(k,ret,"PCM24 encoder unavailable");goto done;}
+    ret=k->avformat_alloc_output_context2(&format,NULL,"mov",path);
+    if(ret<0 || !format){ret=fail(k,ret<0?ret:AVERROR(ENOMEM),"audio output context");goto done;}
+    codec=k->avcodec_alloc_context3(encoder);frame=k->av_frame_alloc();packet=k->av_packet_alloc();
+    AVStream *stream=k->avformat_new_stream(format,NULL);
+    if(!codec || !frame || !packet || !stream){ret=fail(k,AVERROR(ENOMEM),"PCM allocation");goto done;}
+    codec->sample_rate=48000;codec->sample_fmt=AV_SAMPLE_FMT_S32;codec->time_base=(AVRational){1,48000};
+    k->av_channel_layout_default(&codec->ch_layout,2);
+    if(format->oformat->flags & AVFMT_GLOBALHEADER)codec->flags|=AV_CODEC_FLAG_GLOBAL_HEADER;
+    ret=k->avcodec_open2(codec,encoder,NULL);if(ret<0){fail(k,ret,"open PCM encoder");goto done;}
+    stream->time_base=codec->time_base;
+    ret=k->avcodec_parameters_from_context(stream->codecpar,codec);if(ret<0){fail(k,ret,"PCM parameters");goto done;}
+    ret=k->avio_open(&format->pb,path,AVIO_FLAG_WRITE);if(ret<0){fail(k,ret,"open PCM output");goto done;}
+    ret=k->avformat_write_header(format,NULL);if(ret<0){fail(k,ret,"PCM header");goto done;}
+    frame->format=codec->sample_fmt;frame->sample_rate=48000;frame->nb_samples=1024;
+    ret=k->av_channel_layout_copy(&frame->ch_layout,&codec->ch_layout);if(ret<0){fail(k,ret,"PCM channel layout");goto done;}
+    ret=k->av_frame_get_buffer(frame,0);if(ret<0){fail(k,ret,"PCM frame buffer");goto done;}
+    for(int64_t i=0;i<count;i+=1024) {
+        ret=k->av_frame_make_writable(frame);if(ret<0){fail(k,ret,"PCM writable buffer");goto done;}
+        frame->nb_samples=(int)((count-i)<1024?(count-i):1024);frame->pts=i;
+        memcpy(frame->data[0],samples+i*2,(size_t)frame->nb_samples*2*sizeof(int32_t));
+        ret=k->avcodec_send_frame(codec,frame);if(ret<0){fail(k,ret,"send PCM frame");goto done;}
+        for(;;) {
+            ret=k->avcodec_receive_packet(codec,packet);
+            if(ret==AVERROR(EAGAIN))break;
+            if(ret<0){fail(k,ret,"receive PCM packet");goto done;}
+            k->av_packet_rescale_ts(packet,codec->time_base,stream->time_base);packet->stream_index=stream->index;
+            ret=k->av_interleaved_write_frame(format,packet);k->av_packet_unref(packet);
+            if(ret<0){fail(k,ret,"write PCM packet");goto done;}
+        }
+    }
+    ret=k->avcodec_send_frame(codec,NULL);if(ret<0){fail(k,ret,"flush PCM encoder");goto done;}
+    for(;;) {
+        ret=k->avcodec_receive_packet(codec,packet);
+        if(ret==AVERROR_EOF)break;
+        if(ret<0){fail(k,ret,"drain PCM packet");goto done;}
+        k->av_packet_rescale_ts(packet,codec->time_base,stream->time_base);packet->stream_index=stream->index;
+        ret=k->av_interleaved_write_frame(format,packet);k->av_packet_unref(packet);
+        if(ret<0){fail(k,ret,"write drained PCM packet");goto done;}
+    }
+    ret=k->av_write_trailer(format);if(ret<0){fail(k,ret,"PCM trailer");goto done;}
+    ret=k->avio_closep(&format->pb);if(ret<0)fail(k,ret,"close PCM output");
+done:
+    k->av_packet_free(&packet);k->av_frame_free(&frame);k->avcodec_free_context(&codec);
+    if(format){if(format->pb)k->avio_closep(&format->pb);k->avformat_free_context(format);}
+    return ret;
+}
+
+/* File-only probe and mux share the same bounded demuxer/protocol policy. */
+AVFormatContext *km_probe_open(Km *k,const char *path) {
+    AVFormatContext *format=NULL;AVDictionary *options=NULL;
+    k->av_dict_set(&options,"protocol_whitelist","file",0);
+    k->av_dict_set(&options,"format_whitelist","nut,matroska,webm,mov,avi,mpegts,mpeg,ogg,wav",0);
+    int ret=k->avformat_open_input(&format,path,NULL,&options);k->av_dict_free(&options);
+    if(ret<0){fail(k,ret,"probe open");goto failed;}
+    ret=k->avformat_find_stream_info(format,NULL);if(ret<0){fail(k,ret,"probe streams");goto failed;}
+    return format;
+failed:k->avformat_close_input(&format);return NULL;
+}
+void km_probe_close(Km *k,AVFormatContext *format) { k->avformat_close_input(&format); }
+int km_probe_count(AVFormatContext *format) { return (int)format->nb_streams; }
+typedef struct StreamInfo {
+    int64_t start,duration;int kind,num,den,rate,channels,width,height;
+} StreamInfo;
+void km_probe_stream(AVFormatContext *format,int i,StreamInfo *out) {
+    AVStream *s=format->streams[i];AVCodecParameters *p=s->codecpar;
+    *out=(StreamInfo){s->start_time,s->duration,p->codec_type,s->time_base.num,s->time_base.den,
+        p->sample_rate,p->ch_layout.nb_channels,p->width,p->height};
+}
+const char *km_probe_codec(Km *k,AVFormatContext *format,int i) { return k->avcodec_get_name(format->streams[i]->codecpar->codec_id); }
+const char *km_probe_tag(Km *k,AVFormatContext *format,const char *key) {
+    const AVDictionaryEntry *entry=k->av_dict_get(format->metadata,key,NULL,0);
+    return entry?entry->value:"";
+}
+static int read_mux_packet(Km *k,AVFormatContext *f,AVPacket *p,int stream) {
+    for(;;){
+        int ret=k->av_read_frame(f,p);
+        if(ret==AVERROR_EOF)return 0;
+        if(ret<0)return fail(k,ret,"read mux input");
+        if(p->stream_index==stream) {
+            if(p->pts==AV_NOPTS_VALUE || p->dts==AV_NOPTS_VALUE || p->duration<=0)
+                return fail(k,AVERROR_INVALIDDATA,"mux input has missing timing");
+            return 1;
+        }
+        k->av_packet_unref(p);
+    }
+}
+int km_mux_av(Km *k,const char *video,const char *audio,const char *path,
+    const char *render_hash,const char *export_hash) {
+    AVFormatContext *input[2]={NULL,NULL},*out=NULL;AVPacket *packets[2]={NULL,NULL};
+    AVStream *streams[2]={NULL,NULL};int index[2]={-1,-1},ready[2]={0,0};
+    int ret=0;
+    const char *paths[2]={video,audio};
+    for(int i=0;i<2;++i) {
+        input[i]=km_probe_open(k,paths[i]);if(!input[i]){ret=-1;goto done;}
+        index[i]=k->av_find_best_stream(input[i],i?AVMEDIA_TYPE_AUDIO:AVMEDIA_TYPE_VIDEO,-1,-1,NULL,0);
+        if(index[i]<0){ret=fail(k,index[i],"mux stream missing");goto done;}
+        AVStream *s=input[i]->streams[index[i]];
+        if(s->start_time!=0 || s->duration<=0 || s->codecpar->codec_id!=(i?AV_CODEC_ID_PCM_S24LE:AV_CODEC_ID_PRORES)) {
+            ret=fail(k,AVERROR_INVALIDDATA,"mux requires zero-origin ProRes and PCM24");goto done;
+        }
+        if(i && (s->codecpar->sample_rate!=48000 || s->codecpar->ch_layout.nb_channels!=2)) {
+            ret=fail(k,AVERROR_INVALIDDATA,"mux requires stereo 48 kHz PCM");goto done;
+        }
+        packets[i]=k->av_packet_alloc();if(!packets[i]){ret=fail(k,AVERROR(ENOMEM),"mux packet allocation");goto done;}
+    }
+    ret=k->avformat_alloc_output_context2(&out,NULL,"mov",path);
+    if(ret<0 || !out){ret=fail(k,ret<0?ret:AVERROR(ENOMEM),"mux output context");goto done;}
+    for(int i=0;i<2;++i) {
+        streams[i]=k->avformat_new_stream(out,NULL);if(!streams[i]){ret=fail(k,AVERROR(ENOMEM),"mux stream allocation");goto done;}
+        AVStream *s=input[i]->streams[index[i]];
+        ret=k->avcodec_parameters_copy(streams[i]->codecpar,s->codecpar);if(ret<0){fail(k,ret,"mux codec parameters");goto done;}
+        streams[i]->codecpar->codec_tag=0;streams[i]->time_base=s->time_base;
+    }
+    k->av_dict_set(&out->metadata,"kronello_render_snapshot_hash",render_hash,0);
+    k->av_dict_set(&out->metadata,"kronello_export_snapshot_hash",export_hash,0);
+    ret=k->avio_open(&out->pb,path,AVIO_FLAG_WRITE);if(ret<0){fail(k,ret,"mux output open");goto done;}
+    AVDictionary *options=NULL;char timescale[32];
+    snprintf(timescale,sizeof(timescale),"%d",streams[0]->time_base.den);
+    k->av_dict_set(&options,"video_track_timescale",timescale,0);
+    k->av_dict_set(&options,"movflags","use_metadata_tags",0);
+    ret=k->avformat_write_header(out,&options);k->av_dict_free(&options);if(ret<0){fail(k,ret,"mux header");goto done;}
+    for(int i=0;i<2;++i){ready[i]=read_mux_packet(k,input[i],packets[i],index[i]);if(ready[i]<0){ret=ready[i];goto done;}}
+    while(ready[0] || ready[1]) {
+        int i=!ready[0]?1:!ready[1]?0:
+            (k->av_compare_ts(packets[0]->dts,input[0]->streams[index[0]]->time_base,
+                packets[1]->dts,input[1]->streams[index[1]]->time_base)<=0?0:1);
+        k->av_packet_rescale_ts(packets[i],input[i]->streams[index[i]]->time_base,streams[i]->time_base);
+        packets[i]->stream_index=streams[i]->index;packets[i]->pos=-1;
+        ret=k->av_interleaved_write_frame(out,packets[i]);k->av_packet_unref(packets[i]);
+        if(ret<0){fail(k,ret,"mux write packet");goto done;}
+        ready[i]=read_mux_packet(k,input[i],packets[i],index[i]);if(ready[i]<0){ret=ready[i];goto done;}
+    }
+    ret=k->av_write_trailer(out);if(ret<0){fail(k,ret,"mux trailer");goto done;}
+    ret=k->avio_closep(&out->pb);if(ret<0)fail(k,ret,"mux output close");
+done:
+    for(int i=0;i<2;++i){k->av_packet_free(&packets[i]);k->avformat_close_input(&input[i]);}
+    if(out){if(out->pb)k->avio_closep(&out->pb);k->avformat_free_context(out);}
+    return ret;
+}

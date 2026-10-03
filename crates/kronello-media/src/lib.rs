@@ -1,10 +1,14 @@
 //! Local-file media backend. Native resources are confined to the audited FFI.
 #![deny(unsafe_code)]
 mod assets;
+mod audio;
+mod export;
 #[allow(unsafe_code)]
 mod ffi;
 mod video;
 pub use assets::*;
+pub use audio::*;
+pub use export::*;
 pub use video::*;
 
 use serde::{Deserialize, Serialize};
@@ -25,6 +29,12 @@ pub enum MediaError {
     },
     #[error("FFMPEG_UNAVAILABLE: {0}")]
     FfmpegUnavailable(String),
+    #[error("UNSUPPORTED_FEATURE: {0}")]
+    UnsupportedFeature(String),
+    #[error(transparent)]
+    Audio(#[from] kronello_audio::AudioError),
+    #[error(transparent)]
+    Render(#[from] kronello_render::RenderError),
     #[error("DECODE_ERROR: {0}")]
     Decode(String),
     #[error("ENCODE_ERROR: {0}")]
@@ -53,6 +63,9 @@ impl MediaError {
             Self::AssetHashMismatch(_) => "ASSET_HASH_MISMATCH",
             Self::EncoderUnavailable { .. } => "ENCODER_UNAVAILABLE",
             Self::FfmpegUnavailable(_) => "FFMPEG_UNAVAILABLE",
+            Self::UnsupportedFeature(_) => "UNSUPPORTED_FEATURE",
+            Self::Audio(e) => e.code(),
+            Self::Render(e) => e.code(),
             Self::Decode(_) => "DECODE_ERROR",
             Self::Encode(_) => "ENCODE_ERROR",
             Self::FrameNotFound(_) => "FRAME_NOT_FOUND",
@@ -109,6 +122,15 @@ impl MediaCapabilities {
         }
         self.select_encoder(EncodeCodec::Av1)?;
         self.select_encoder(EncodeCodec::ProRes)?;
+        if !self
+            .codecs
+            .iter()
+            .any(|c| c.encoder && c.name == "pcm_s24le")
+        {
+            return Err(MediaError::DistributionLicense(
+                "PCM24 encoder required".into(),
+            ));
+        }
         if !self
             .codecs
             .iter()

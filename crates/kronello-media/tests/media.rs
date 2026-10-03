@@ -111,7 +111,7 @@ fn native_hdr_preserves_ten_bit_planes_and_tags() {
 fn loaded_libraries_report_configuration_and_override_errors() {
     let runtime = MediaRuntime::load().unwrap();
     let cap = runtime.capabilities();
-    assert_eq!(cap.libraries.len(), 4);
+    assert_eq!(cap.libraries.len(), 5);
     assert!(cap.codecs.iter().any(|c| c.decoder && c.name == "mpeg4"));
     assert!(!cap.ffmpeg_version.is_empty());
     assert_eq!(cap.development_only, !cap.distribution_eligible);

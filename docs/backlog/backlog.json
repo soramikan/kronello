@@ -364,7 +364,7 @@
       "priority": "P0",
       "area": "audio",
       "title": "基本音声: デコード・ミックス・音声付き書き出し",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "TIME-001",
         "MEDIA-001"
