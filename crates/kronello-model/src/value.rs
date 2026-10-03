@@ -185,6 +185,10 @@ pub struct Path {
 pub enum PathSegment {
     MoveTo([FiniteF64; 2]),
     LineTo([FiniteF64; 2]),
+    QuadTo {
+        control: [FiniteF64; 2],
+        end: [FiniteF64; 2],
+    },
     CubicTo {
         control1: [FiniteF64; 2],
         control2: [FiniteF64; 2],
