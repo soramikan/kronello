@@ -11,3 +11,5 @@ STORE-001 の同期 SQLite 保存層。作品は単一の `.kronello`、レン�
 未知フィールド・意味版・opaque object は保存 / export / restore で保持し、通常の変更は拒否する。`migrate_schema` は信頼された Rust 内部実装専用の transaction hook。任意 SQL を Command / Query payload として受け付ける API ではない。idempotency の payload 比較・成功再送応答と selective undo は SERVICE-001 で実装する。
 
 [保存設計](../../docs/architecture/09-storage-concurrency.md)、[ADR-0046](../../docs/adr/0046-store-format-and-location-policy.md)、[受け入れ条件とテスト](../../docs/testing/store-001.md) を参照。
+
+STORE-003 のサイズ閾値による追加 snapshot は比較測定の結果、既定採用を見送った。保存条件は初期・64 revision 周期・compact 基点のまま。[ADR-0052](../../docs/adr/0052-snapshot-policy-evaluation.md) と [運用検証](../../docs/testing/store-003.md) に測定結果、`sync_folder_check` example の実同期フォルダ確認手順、Linux / Windows のプロセステストを記載する。

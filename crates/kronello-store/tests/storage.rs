@@ -644,6 +644,30 @@ fn subprocess_actor() {
     };
     let mut store = ProjectStore::open(&project, options(open_mode)).unwrap();
     let base_revision = store.snapshot().unwrap().revision;
+    if mode == "crash_safe" {
+        // Use the store's exclusive connection: a second SQLite connection
+        // cannot start a transaction while safe mode holds the database.
+        store.close().unwrap();
+        let mut store = ProjectStore::open(&project, options(OpenMode::ForceSafe)).unwrap();
+        store
+            .apply(request(0, "durable before safe crash"))
+            .unwrap();
+        store
+            .migrate_schema(1, |tx| {
+                // Force cache spill so recovery must undo actual database
+                // page writes, rather than merely losing an in-memory update.
+                tx.execute_batch("PRAGMA cache_size=1; UPDATE project SET revision=99,document=json_set(document,'$.name','uncommitted' || hex(zeroblob(65536)));")?;
+                fs::write(&ready, b"ready")?;
+                let deadline = Instant::now() + Duration::from_secs(30);
+                while !release.exists() {
+                    assert!(Instant::now() < deadline, "parent kill timed out");
+                    thread::sleep(Duration::from_millis(10));
+                }
+                panic!("crash actor must be killed while the transaction is open");
+            })
+            .unwrap();
+        return;
+    }
     let mut crashing_connection = None;
     if mode == "crash" {
         assert_eq!(base_revision, 0);
@@ -755,6 +779,46 @@ fn killed_process_recovers_committed_wal_and_discards_inflight_write() {
 }
 
 #[test]
+fn killed_safe_process_releases_lock_and_rolls_back_inflight_write() {
+    let (directory, path, store) = fixture();
+    store.close().unwrap();
+    let mut crashing = Actor::spawn(directory.path(), &path, "crash_safe");
+    crashing.wait_ready();
+    let journal = fs::read(sidecar(&path, "-journal")).unwrap();
+    assert_eq!(
+        &journal[..8],
+        &[0xd9, 0xd5, 0x05, 0xf9, 0x20, 0xa1, 0x63, 0xd7]
+    );
+    assert_eq!(
+        ProjectStore::open(&path, options(OpenMode::ForceNormal))
+            .err()
+            .unwrap()
+            .code(),
+        "PROJECT_LOCKED"
+    );
+    crashing.child.kill().unwrap();
+    assert!(!crashing.child.wait().unwrap().success());
+    // wait() reaps the child before reopening or removing files, including on
+    // Windows where live handles can prevent deletion and journal recovery.
+    let mut recovered = ProjectStore::open(&path, options(OpenMode::ForceSafe)).unwrap();
+    assert_eq!(recovered.journal_mode().unwrap(), "delete");
+    assert_eq!(recovered.snapshot().unwrap().revision, 1);
+    assert_eq!(
+        recovered.snapshot().unwrap().document.name,
+        "durable before safe crash"
+    );
+    assert_eq!(recovered.events_since(0).unwrap().len(), 1);
+    recovered
+        .apply(request(1, "safe write after recovery"))
+        .unwrap();
+    recovered.close().unwrap();
+    assert!(!sidecar(&path, "-journal").exists());
+    let normal = open(&path);
+    assert_eq!(normal.snapshot().unwrap().revision, 2);
+    normal.close().unwrap();
+}
+
+#[test]
 fn history_warning_threshold_is_inclusive_and_never_prunes_automatically() {
     use kronello_store::{HISTORY_WARNING_BYTES, HistorySize};
     assert!(!HistorySize::from_bytes(HISTORY_WARNING_BYTES - 1).warning);
@@ -791,7 +855,7 @@ fn public_schema_validates_known_and_opaque_exports() {
 #[test]
 fn system_detector_uses_actual_filesystem_and_mode_lock_covers_symlinks() {
     use kronello_store::SystemLocationDetector;
-    let (directory, path, store) = fixture();
+    let (_directory, path, store) = fixture();
     assert_eq!(
         SystemLocationDetector.detect(&path).unwrap(),
         DetectedLocation::Local
@@ -799,7 +863,7 @@ fn system_detector_uses_actual_filesystem_and_mode_lock_covers_symlinks() {
     store.close().unwrap();
     #[cfg(unix)]
     {
-        let alias = directory.path().join("alias.kronello");
+        let alias = _directory.path().join("alias.kronello");
         std::os::unix::fs::symlink(&path, &alias).unwrap();
         let store = ProjectStore::open_with_detector(
             &alias,

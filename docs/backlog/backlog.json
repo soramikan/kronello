@@ -526,7 +526,7 @@
       "priority": "P2",
       "area": "storage",
       "title": "保存の運用検証と適応的snapshot",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "STORE-002"
       ],

@@ -107,7 +107,7 @@ GUI・CLI・MCP サーバーはそれぞれ別プロセスとして同じ `.kron
 - `history.compact` は、指定した revision より前の履歴を切り捨て、その時点の完全スナップショットを基点として残す。
 - 切り捨てた範囲のイベントは Undo できず、`EVENT_NOT_FOUND` で拒否する。事前検証後に別 connection が対象を compact した場合も、逆操作を書き込む transaction 内で同じ判定を行う。
 - 履歴が大きくなった場合は `project.validate` が警告する。STORE-001 の `history_size()` は、イベントの patch / inverse / changed keys と、現在以外の完全 snapshot の UTF-8 payload 合計が **256 MiB 以上**なら `warning=true` を返す。検証応答への反映は `project.validate` の service 公開時に行う（SERVICE-001 の edit / history 操作には含めない）。SQLite の空きページや index、現在文書、idempotency receipt はこの論理量に含めない。
-- STORE-002 以降は初期 revision 0、`revision % 64 == 0`、`compact(r)` の基点だけに完全 snapshot を保存する。サイズによる追加保存は STORE-003 に委ねる。任意 revision は直前の完全 snapshot と連続したイベント patch を最大 63 個再適用して復元する。
+- STORE-002 以降は初期 revision 0、`revision % 64 == 0`、`compact(r)` の基点だけに完全 snapshot を保存する。STORE-003 では、直前の完全 snapshot 以降の保存 patch の UTF-8 byte 累計が現在文書サイズを超える追加保存を比較した。合成履歴では復元を約 12〜13 倍短縮したが、DB 容量が 17〜50%、論理書き込み量が 13〜34% 増え、root patch で毎回完全 snapshot が作られるため、既定採用を見送った（[ADR-0052](../adr/0052-snapshot-policy-evaluation.md)、[測定手順と結果](../testing/store-003.md)）。固定周期を維持し、任意 revision は直前の完全 snapshot と連続したイベント patch を最大 63 個再適用して復元する。
 - `compact(r)` は同じ書き込み transaction 内で `r` を復元して完全 snapshot を確保し、`< r` を削除する。`r` のイベントと現在文書・revision は変えない。idempotency receipt は compact 後も残り、キーの再適用を防ぐ。失敗時は基点の追加を含め rollback する。DB ファイルの物理縮小は保証しない。
 
 ## ジャーナル方式
@@ -128,6 +128,8 @@ GUI・CLI・MCP サーバーはそれぞれ別プロセスとして同じ `.kron
 - したがって、同期フォルダ上ではエージェントとの同時編集はできない。
 
 判定と上書き手段は [ADR-0046](../adr/0046-store-format-and-location-policy.md) で具体化した。
+
+実同期フォルダ・ネットワーク FS での確認用に `kronello-store` の `sync_folder_check` example を用意した。[STORE-003 の検証](../testing/store-003.md) のコマンドで実際の `Auto` 判定、journal mode、別プロセスの `PROJECT_LOCKED`、close 後の再 open と清掃を確認する。macOS のローカル対照試験は実行済みだが、iCloud Drive / Dropbox / ネットワーク FS と Linux / Windows の実行は未確認。Windows の保存層専用 CI job を追加したが、CI 結果はまだない。
 
 `OpenMode::Auto` は canonical path と実ファイルシステムを調べる。macOS の home 配下 `Library/CloudStorage` / `Library/Mobile Documents`、Dropbox / OneDrive / Google Drive 系フォルダ名、および `statfs` の smbfs / nfs / afpfs / webdav 等を安全モードにする。Linux は NFS / SMB / CIFS / SMB2 / FUSE、Windows は UNC を検出する。`ForceNormal` / `ForceSafe` で誤判定を上書きできるが、既存プロセスの排他ロックは突破しない。判定器は `LocationDetector` として注入できる。非標準同期先や Windows のドライブ文字でのネットワーク接続は完全には検出できず、`ForceSafe` を指定する。
 
