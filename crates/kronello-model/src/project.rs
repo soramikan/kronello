@@ -7,7 +7,7 @@ use serde_json::Value;
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::{AnimationCurve, Composition, Shape, TextDocument};
+use crate::{AnimationCurve, Asset, Composition, Shape, TextDocument};
 
 pub const PROJECT_SCHEMA_VERSION: u32 = 1;
 pub const PROJECT_SEMANTIC_VERSION: u32 = 1;
@@ -41,6 +41,8 @@ pub struct Project {
     pub shapes: Vec<DocumentObject<Shape>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub texts: Vec<DocumentObject<TextDocument>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub assets: Vec<DocumentObject<Asset>>,
     #[serde(flatten)]
     pub unknown_fields: BTreeMap<String, Value>,
 }
@@ -66,6 +68,7 @@ impl Default for Project {
             curves: Vec::new(),
             shapes: Vec::new(),
             texts: Vec::new(),
+            assets: Vec::new(),
             unknown_fields: BTreeMap::new(),
         }
     }
@@ -87,6 +90,7 @@ impl Project {
                     | "curves"
                     | "shapes"
                     | "texts"
+                    | "assets"
             )
         }) {
             return Err(ProjectError::InvalidDocument(
@@ -155,6 +159,25 @@ impl Project {
                 return Err(ProjectError::InvalidDocument("duplicate object id".into()));
             }
         }
+        for object in &self.assets {
+            let id = match object {
+                DocumentObject::Known(asset) => {
+                    asset.validate()?;
+                    asset.id.as_uuid()
+                }
+                DocumentObject::Opaque(value) => {
+                    if value.fields.contains_key("id") {
+                        return Err(ProjectError::InvalidDocument(
+                            "opaque extension shadows id".into(),
+                        ));
+                    }
+                    value.id
+                }
+            };
+            if !ids.insert(id) {
+                return Err(ProjectError::InvalidDocument("duplicate object id".into()));
+            }
+        }
         Ok(())
     }
 
@@ -175,6 +198,7 @@ impl Project {
                 .shapes
                 .iter()
                 .any(|v| matches!(v, DocumentObject::Opaque(_)))
+            || self.assets.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
             || self.texts.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
             || self.texts.iter().any(|v| matches!(v, DocumentObject::Known(t) if t.layout_version != crate::TEXT_LAYOUT_VERSION))
             || self.curves.iter().any(
@@ -233,6 +257,11 @@ impl<'de> Deserialize<'de> for Project {
             },
             texts: if fields.contains_key("texts") {
                 take_field::<_, D::Error>(&mut fields, "texts")?
+            } else {
+                Vec::new()
+            },
+            assets: if fields.contains_key("assets") {
+                take_field::<_, D::Error>(&mut fields, "assets")?
             } else {
                 Vec::new()
             },

@@ -51,6 +51,9 @@ impl<'de> Deserialize<'de> for Request {
         let mut fields = fields(d)?;
         let tag: String = take(&mut fields, "operation")?;
         match tag.as_str() {
+            "capabilities.get" => payload(&fields).map(Self::CapabilitiesGet),
+            "asset.relink" => payload(&fields).map(Self::AssetRelink),
+            "project.collect" => payload(&fields).map(Self::ProjectCollect),
             "project.create" => payload(&fields).map(Self::ProjectCreate),
             "project.import" => payload(&fields).map(Self::ProjectImport),
             "project.export" => payload(&fields).map(Self::ProjectExport),
@@ -66,6 +69,8 @@ impl<'de> Deserialize<'de> for ResultData {
         let mut fields = fields(d)?;
         let tag: String = take(&mut fields, "kind")?;
         let result = match tag.as_str() {
+            "capabilities" => Self::Capabilities(take(&mut fields, "value")?),
+            "collected" => Self::Collected(take(&mut fields, "value")?),
             "project" => Self::Project(take(&mut fields, "value")?),
             "export" => Self::Export(take(&mut fields, "value")?),
             "frame" => Self::Frame(take(&mut fields, "value")?),

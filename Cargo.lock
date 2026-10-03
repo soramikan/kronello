@@ -868,6 +868,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "kronello-media"
+version = "0.0.0"
+dependencies = [
+ "cc",
+ "kronello-model",
+ "kronello-render",
+ "kronello-time",
+ "pkg-config",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror",
+ "uuid",
+]
+
+[[package]]
 name = "kronello-model"
 version = "0.0.0"
 dependencies = [
@@ -906,6 +923,7 @@ name = "kronello-service"
 version = "0.0.0"
 dependencies = [
  "kronello-gpu",
+ "kronello-media",
  "kronello-model",
  "kronello-render",
  "kronello-store",

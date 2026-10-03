@@ -3,6 +3,12 @@
   "title": "Project",
   "type": "object",
   "properties": {
+    "assets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DocumentObject5"
+      }
+    },
     "compositions": {
       "type": "array",
       "items": {
@@ -86,10 +92,69 @@
         "interpolation_version"
       ]
     },
+    "Asset": {
+      "type": "object",
+      "properties": {
+        "content_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "id": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "kind": {
+          "$ref": "#/$defs/AssetKind"
+        },
+        "locator": {
+          "$ref": "#/$defs/AssetLocator"
+        },
+        "streams": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StreamMetadata"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "content_hash",
+        "kind",
+        "streams",
+        "locator"
+      ]
+    },
     "AssetId": {
       "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
       "type": "string",
       "format": "uuid"
+    },
+    "AssetKind": {
+      "type": "string",
+      "enum": [
+        "video",
+        "audio",
+        "image",
+        "data"
+      ]
+    },
+    "AssetLocator": {
+      "type": "object",
+      "properties": {
+        "absolute": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "relative": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
     },
     "Color": {
       "type": "object",
@@ -360,6 +425,17 @@
       "anyOf": [
         {
           "$ref": "#/$defs/TextDocument"
+        },
+        {
+          "$ref": "#/$defs/OpaqueObject"
+        }
+      ]
+    },
+    "DocumentObject5": {
+      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Asset"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -1214,6 +1290,84 @@
             "value"
           ]
         }
+      ]
+    },
+    "StreamMetadata": {
+      "type": "object",
+      "properties": {
+        "codec": {
+          "type": "string"
+        },
+        "color_matrix": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "color_primaries": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "color_range": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "color_transfer": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "duration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rational"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "height": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "index": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "pixel_format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "time_base": {
+          "$ref": "#/$defs/Rational"
+        },
+        "width": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "index",
+        "codec",
+        "time_base"
       ]
     },
     "Stroke": {

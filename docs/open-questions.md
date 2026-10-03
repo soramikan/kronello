@@ -32,8 +32,6 @@
 
 | 事項 | タスク |
 |---|---|
-| 素材の hash 照合の頻度と高速化 | MEDIA-001 |
-| 同梱する FFmpeg の版と configure オプション | MEDIA-001 |
 | 音声コーデックの選定 | AUDIO-000 |
 | 高頻度経路での FFI の JSON 直列化コストの計測と対策 | FFI-001 |
 | 外部変更が来たときの GUI 上の扱い（選択中のオブジェクトの消失など） | GUI-001 |
@@ -66,3 +64,4 @@
 | OQ-02 のうち名称の衝突 | [ADR-0042](adr/0042-naming-kronello.md) |
 | 保存場所の判定・上書き手段（STORE-001） | [ADR-0046](adr/0046-store-format-and-location-policy.md) |
 | 履歴警告の閾値（STORE-001） | [ADR-0046](adr/0046-store-format-and-location-policy.md) |
+| 素材の hash 照合頻度・同梱 FFmpeg の版と configure（MEDIA-001） | [ADR-0048](adr/0048-media-native-build-and-asset-verification.md) |

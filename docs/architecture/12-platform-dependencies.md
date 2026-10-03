@@ -82,3 +82,21 @@ macOS target の `kronello-framebridge` に CVPixelBuffer import と H.264 decod
 追加の objc2-core-video / objc2-core-media / objc2-video-toolbox と推移依存の objc2-core-audio / objc2-core-audio-types は `Cargo.lock` で各 0.3.2、ライセンスは `Zlib OR Apache-2.0 OR MIT` から MIT を選択できる。wgpu 30.0.1 は `MIT OR Apache-2.0`。Apple の system framework のみを使い、GPL / LGPL 依存と FFmpeg を追加していない。既存 objc2 系を含む解決版・ライセンス一覧は [スパイク報告の依存確認](../testing/gpu-spike-m0.md#依存とライセンス) に記録する。
 
 追加実装前の revision `07a78ede6203575085b0a1a4a978a2d98877e8bd` は [CI run 37072973888](https://github.com/soramikan/kronello/actions/runs/37072973888) で macOS / Linux (Mesa lavapipe) の workspace テストが成功し、FrameBridge の `tests/paths.rs` は両 OS で各 3 passed。Linux の Vulkan 転送経路の実行結果であり、追加の VideoToolbox 実装の CI 検証は含まない。codec test は通常実行で ignored。CI runner の codec 提供は未確認。検証範囲は [スパイク報告](../testing/gpu-spike-m0.md#linux--macos-ci) を参照。
+
+## MEDIA-001 の実装境界
+
+`kronello-media` は render の `VideoDecodeBackend` / `DecodedVideoFrame` 契約を使う backend。純粋層に AVFrame を公開しない。FFmpeg の構造体アクセスを C shim、Rust の unsafe を `ffi.rs` に隔離し、libavutil / libavcodec / libavformat / libswscale の共有ライブラリを runtime に動的ロードする。system headers で build した開発用 binary と、配布用 LGPL build の検証を分ける。
+
+[ADR-0048](../adr/0048-media-native-build-and-asset-verification.md) で FFmpeg 9.0.2 / SVT-AV1 4.2.0 / dav1d 1.5.4、configure と source SHA-256、毎回全 hash を確認する素材解決を固定した。`scripts/build_ffmpeg_lgpl.py` と `scripts/native-dependencies.json` が正本。`KRONELLO_FFMPEG_LIB_DIR` は実行時の共有ライブラリ directory、`PKG_CONFIG_PATH` は build 時の headers / ABI の選択。runtime override を指定して失敗した場合に system へ戻らない。
+
+`capabilities.get` は schema_version=1 の media capabilities（FFmpeg version、canonical library directory、substituted、各 library の version / license / configuration、distribution_eligible / development_only、検出 codec と compiled hwaccel type）を返す。compiled hardware type の存在は physical device の利用成功を意味しない。GPL / nonfree は development_only とし、`verify_distribution` は LGPL と FFmpeg 9 と必須 AV1 / ProRes を要求する。Ubuntu の distribution FFmpeg / libav*-dev は開発・CI 専用として扱う。
+
+CFR / VFR / B-frame は stream start へ seek・flush して前から decode し、次 PTS を presentation interval の上端とする。平均 fps や decode 順の DTS で frame を選ばない。source planes と color tags を返すため PQ / HLG の bit depth は保持する。hardware decode / GPU resident media integration と、source color の working-space 変換は後続の契約。
+
+AV1 / ProRes の software encode と VideoToolbox H.264 / HEVC encode は公開 enum から選ぶ。入力は opaque BT.709 RGBA8。BT.709 matrix を明示して native YUV に変換し、MOV / MP4 の track timescale によって rational PTS を保持する。path report の CPU copy / conversion / upload counters は logical payload bytes であり、driver の内部転送・待機の実測と区別する。
+
+VideoToolbox の codec 登録は `AV_CODEC_CAP_HYBRID` を含めて検出し、open 時に `allow_sw=0` を指定する。`ENCODER_UNAVAILABLE` は encoder 名と理由、native 初期化失敗時には `FfmpegErrorDetail`（元の戻り値、処理名、`av_strerror` の説明）を保持する。`avcodec_open2` 失敗では pixel format・寸法・time_base も処理名に記録する。
+
+Project の `assets` は stable AssetId、SHA-256 content_hash、kind、rational stream metadata、relative / absolute locator を持つ。未知 Asset は opaque のまま保持する。共有 service の `asset.relink` は base_revision を照合して hash 一致だけを更新し、`project.collect` は store で保存したプロジェクトコピーと素材の相対パス directory を生成する。
+
+再現手順と検証の実施範囲は [MEDIA-001](../testing/media-001.md) に記録する。

@@ -15,6 +15,7 @@ workspace = true
 test-adapter-unavailable = []
 
 [dependencies]
+kronello-media = { path = "../kronello-media" }
 kronello-model = { path = "../kronello-model" }
 kronello-time = { path = "../kronello-time" }
 kronello-store = { path = "../kronello-store" }

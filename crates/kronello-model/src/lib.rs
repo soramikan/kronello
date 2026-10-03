@@ -59,3 +59,6 @@ pub use text::{
     TextDirection, TextDocument, TextError, TextRange, TextStyleSpan, text_descriptors,
     validate_text_contents,
 };
+
+mod asset;
+pub use asset::{Asset, AssetKind, AssetLocator, StreamMetadata};

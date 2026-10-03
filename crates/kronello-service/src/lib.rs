@@ -1,6 +1,8 @@
 //! Shared synchronous Command/Query boundary for the M1 headless workflow.
 //! Entry points own transport only; storage, fonts and rendering compose here.
+mod media;
 mod wire;
+pub use media::{CapabilitiesRequest, CollectRequest, RelinkRequest};
 
 use std::path::{Path, PathBuf};
 
@@ -19,6 +21,12 @@ use sha2::{Digest, Sha256};
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "operation", deny_unknown_fields)]
 pub enum Request {
+    #[serde(rename = "capabilities.get")]
+    CapabilitiesGet(CapabilitiesRequest),
+    #[serde(rename = "asset.relink")]
+    AssetRelink(RelinkRequest),
+    #[serde(rename = "project.collect")]
+    ProjectCollect(CollectRequest),
     #[serde(rename = "project.create")]
     ProjectCreate(CreateRequest),
     #[serde(rename = "project.import")]
@@ -109,6 +117,8 @@ pub struct FrameResult {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "kind", content = "value", rename_all = "snake_case")]
 pub enum ResultData {
+    Capabilities(kronello_media::MediaCapabilities),
+    Collected(kronello_media::CollectedProject),
     Project(ProjectInfo),
     Export(ExportResult),
     Frame(Box<FrameResult>),
@@ -210,6 +220,9 @@ impl<'a> Service<'a> {
     }
     pub fn dispatch(&self, request: Request) -> Result<ResultData, ServiceError> {
         match request {
+            Request::CapabilitiesGet(r) => media::capabilities(r).map(ResultData::Capabilities),
+            Request::AssetRelink(r) => media::relink(r).map(ResultData::Project),
+            Request::ProjectCollect(r) => media::collect(r).map(ResultData::Collected),
             Request::ProjectCreate(r) => create(r).map(ResultData::Project),
             Request::ProjectImport(r) => {
                 let revision = parse_revision(&r.base_revision)?;
