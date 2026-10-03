@@ -1,10 +1,10 @@
 # 08 API・CLI・MCP・エージェント
 
-GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001-shared-command-query-api.md)）。M1 CLI-001 と M2 SERVICE-001 の実装範囲を次節に示す。それ以外の後続 API・CLI・MCP は提案であり、実装済みではない。
+GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001-shared-command-query-api.md)）。M1 CLI-001 と M2 SERVICE-001 / API-001 の実装範囲を次節に示す。それ以外の後続 API・CLI・MCP は提案であり、実装済みではない。
 
 ## M1 CLI-001 の実装範囲
 
-`kronello-service` は同期 Command / Query の入口を提供し、`kronello-cli` の binary `kronello` は transport adapter とする。以下の 6 操作を実装した。編集計画・適用・Undo・最小の history.list は後述の SERVICE-001 で実装した。公開 API schema の正式化、永続ジョブ、MCP 等は引き続き提案であり、API-001 等の完了を意味しない。
+`kronello-service` は同期 Command / Query の入口を提供し、`kronello-cli` の binary `kronello` は transport adapter とする。以下の 6 操作を実装した。編集計画・適用・Undo・最小の history.list は後述の SERVICE-001 で実装した。公開 API schema と構造化 query は後述の API-001 で実装した。永続ジョブ、MCP 等は引き続き提案である。
 
 | service `Request.operation` | CLI subcommand | payload / 応答 |
 |---|---|---|
@@ -23,7 +23,7 @@ GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001
 
 - subcommand を指定した場合は、その payload の JSON object を stdin に渡す（`operation` を含めない）。subcommand なしの場合は `operation` を含む完全な service Request を渡す。
 - `--request-json 'JSON'` は stdin の代わりに一つの要求を渡す。入力上限は UTF-8 16 MiB。一回の起動につき一つの要求、一つの結果 JSON document と改行を stdout に出力する。NDJSON event stream は未実装。
-- 成功は `{ "status": "success", "result": { "kind": "project|export|frame|sequence|plan|edit|history", "value": ... } }`、失敗は `{ "status": "error", "error": { "code": "INVALID_REQUEST", "message": "..." } }`。成功の exit code は 0、失敗は非 0。診断は stderr にだけ出力する。`--help` も `USAGE` JSON error と stderr の使用法（非 0）を返す。
+- 成功は `{ "status": "success", "result": { "kind": "project|export|frame|sequence|plan|edit|history|scene|samples|capabilities", "value": ... } }`、失敗は `{ "status": "error", "error": { "code": "INVALID_REQUEST", "message": "..." } }`。成功の exit code は 0、失敗は非 0。診断は stderr にだけ出力する。`--help` も `USAGE` JSON error と stderr の使用法（非 0）を返す。
 - backend の既定は GPU。`--backend gpu` も指定可。adapter / device を作れなければ型付きエラーを返す。GPU 不在時の暗黙の CPU fallback はない。GPU は render 操作でのみ初期化する。
 - `--backend cpu-reference` は検証用の float32 参照 backend の明示選択。metadata に `cpu_reference_float32` と記録する。通常の GPU は `wgpu_rgba16f`。両者のビット一致や性能保証は提供しない。
 - `render.frame` は有理数の任意時刻を評価して画素を JSON 応答する。画像ファイルが必要な場合は `render.sequence` を使う。連番は新しい directory にだけ出力し、既存成果物を上書きしない。PNG / RGBA16F / metadata の契約は [05 レンダー](05-render-gpu.md) を参照。
@@ -63,14 +63,14 @@ printf '%s\n' '{"operation":"project.export","project":"/private/tmp/kronello-m1
 
 ## M2 SERVICE-001 の実装範囲
 
-`kronello-service` に次の四つの同期操作を追加した。CLI は既存と同じ stdin JSON / `--request-json` の transport を使い、編集状態・競合規則を持たない。公開 envelope の schema 正式化は API-001、GUI / MCP の入口は後続タスクである。
+`kronello-service` に次の四つの同期操作を追加した。CLI は既存と同じ stdin JSON / `--request-json` の transport を使い、編集状態・競合規則を持たない。公開 envelope の schema は後述の API-001 で正式化した。GUI / MCP の入口は後続タスクである。
 
 | service operation | CLI | payload / 応答 |
 |---|---|---|
 | `edit.plan` | `edit plan` | `project`、`base_revision`、`commands` → `kind: plan` の EditPlan |
 | `edit.apply` | `edit apply` | 上記に `plan_hash`、`session_id`、`idempotency_key` を追加 → `kind: edit` の保存済み Event |
 | `edit.undo` | `edit undo` | `project`、`base_revision`、`session_id`、`idempotency_key`、`event_id` → 新しい Event |
-| `history.list` | `history list` | `project`、任意の `since_revision`（既定 `"0"`）→ 現在 revision と、それより後の Event / `undone` |
+| `history.list` | `history list` | `project`、任意の `since_revision`（既定 `"0"`）/ `limit` / `session_id` → 現在 revision、Event / `undone`、次ページ cursor（API-001） |
 
 `base_revision` / `since_revision` は10進文字列、ID は UUID。Plan / HistoryResult の revision も10進文字列だが、既存 store の Event は JSON 整数の revision を返す。`idempotency_key` は空でない UTF-8 文字列（256 bytes 以下）を明示する。session は呼び出し元が決める。history は一つの SQLite 読み取り transaction で現在文書とイベントを取得し、revision 順に session・変更キー・undo_of・取り消し状態を返す。revision が進む前の receipt 再送でも元の Event 全体を返し、現在文書をその時点へ戻さない。
 
@@ -130,14 +130,44 @@ Undo は対象 Event の保存 inverse を現在文書に適用した候補を�
 
 既存の `PROJECT_NOT_FOUND` / `PROJECT_LOCKED` / `STORAGE_ERROR` / `IO_ERROR` 等も伝播する。これらの受け入れ条件と再現コマンドは [SERVICE-001 の検証](../testing/service-001.md) に記録する。
 
-## 読み取り API（history.list 以外は提案）
+## M2 API-001 の実装範囲
+
+`kronello-service` が次の同期 query を実装し、CLI は同名の二語 subcommand または `operation` 付き stdin JSON で呼ぶ。GPU / font bytes の初期化は不要。scene.query / property.sample は一つの保存 revision の不変文書を読み、revision を10進文字列で返す。capabilities.get は Project を指定せず実装能力を返す。
+
+| operation / result kind | request | 構造化結果 |
+|---|---|---|
+| `scene.query` / `scene` | `project`、`composition`、任意の `expand_instances`（既定 false） | duration、design_extent、root keys、所有順の pre-order nodes。node の kind、所有親、変換親、children、local time の `[start,end)` active_range |
+| `property.sample` / `samples` | `project`、root `composition`、`keys`、`times` | key ごとの value_type / unit / 型付き Value 配列。values は times の順序を保持し、curve・placement binding 適用後の値 |
+| `capabilities.get` / `capabilities` | 空 payload `{}` | api_schema_version 1、engine_version、SemanticVersions、commands、features、effects、backends、任意の media |
+
+scene の key は `{instance_path, node}`。expand_instances を指定すると、placement の authored children より前に参照 definition の roots を展開する。同じ definition の二配置は NodeId が同じでも InstancePath が異なる。definition root の所有親と、明示変換親のない内部 node の変換親は enclosing placement となる。active_range は各 definition の local time の値を保持し、時刻による絞り込みや祖先との区間交差はしない。展開を含む最大 node 数は100000で、超過は `INVALID_REQUEST`。範囲・タグ・種類による検索、scene ページング、評価済み transform の返却は未実装。
+
+sample key は `{ "kind":"node", "instance_path":[], "node":"UUID", "property":"UUID" }` または `{ "kind":"composition", "instance_path":[], "composition":"UUID", "property":"UUID" }`。root composition は要求に明示し、各 path はそこから解決する。time は `{ "num":"1", "den":"2" }` の有理数。keys / times は非空で、その積は100000以下。評価には `kronello-eval` を使い、時刻をフレームに丸めない。composition input は placement override と local TimeMap を含めて解決する。欠落 key・無効時刻・式・有効な Modifier 等の未対応評価を代替値で継続せず、`INVALID_REQUEST` / `EVALUATION_ERROR` / `UNSUPPORTED_FEATURE` 等を返す。units は共有 descriptor の `design_px` / `degrees` / `dimensionless`。
+
+capabilities はコンパイル済み対応範囲を示し、GPU adapter の稼働を保証しない。effects はこの worktree では空。media は未提供なら null であり、FFmpeg 実行・自動探索は API-001 では行わない。`Service::with_media_capabilities(MediaCapabilities)` で runtime_version / decoders / encoders / hwaccels を上位から渡せる。MEDIA-001 はこの拡張点に実測情報を追加できる。
+
+### 公開 schema と registry
+
+[schemas/api-v1.schema.json](../../schemas/api-v1.schema.json) は Draft 2020-12。Request / Response envelope、全13操作の payload / successful result、型付き EditCommand を共有 Rust 型から生成する。`api_json_schema()` と committed schema の一致を通常テストで確認する。再生成は `cargo run -p kronello-service --example api_schema --locked > schemas/api-v1.schema.json`。版はファイル名・`$id`・`x-api-schema-version` で固定し、既存 Request に必須 version field を追加しない。Project document は従来の公開型 / schema を共有する。
+
+`command_registry()` の CommandDescriptor は name / read_only / request_schema / response_schema を持つ。schema refs は同ファイルの `$defs` を指す。request_schema は operation tag を除いた payload、response_schema は status / kind を除いた successful value。MCP-001 / FFI-001 は同じ registry と execute / execute_json を使用できる。registry の13操作は project.create / import / export / info、render.frame / sequence、edit.plan / apply / undo、history.list、scene.query、property.sample、capabilities.get。project.create / import / edit.apply / undo が mutating。他は project に対し read-only（render.sequence は output directory に成果物を作る）。
+
+request envelope・既知 payload は未知 field と重複 field を拒否する。schema に任意 shell、外部 URL fetch、raw FFmpeg args の実行 field は設けない。project / font / output path と assets 内の locator の URI scheme は filesystem access の前に `INVALID_REQUEST` とする。Windows drive path は local path として許す。素材の name / text や未知 Project 内容は不活性なデータであり、命令として実行しない。Project の未知 field 保持と、API envelope の厳格な decode は別の契約である。
+
+### history.list のページング
+
+`since_revision` は exclusive cursor（既定 `"0"`）、limit は既定100、範囲1..=1000。任意の session_id で filter した Event を revision 昇順で返す。続きがあれば `next_since_revision` は最後に返した Event の10進 revision、なければ null。同じ filter で次の要求に cursor を渡す。結果は Event 全体（id / session_id / changed_keys / undo_of 等）、undone、現在 revision を含む。undone はページング・session filter の前に全保持履歴の Undo chain から計算するため、別 session や後続ページの Undo も反映する。各ページは一つの read transaction で整合するが、複数ページ全体を固定する snapshot cursor は提供しない。compact された Event は返さない。
+
+受け入れ条件、CPU 検証と未確認範囲は [API-001 の検証](../testing/api-001.md) を参照する。
+
+## 読み取り API（実装済み範囲は上記参照）
 
 | API | 内容 |
 |---|---|
-| `capabilities.get` | 対応ノード、補間、出力、色、GPU 処理経路、検出した codec / hwaccel |
-| `scene.query` | 範囲・タグ・種類・ID で検索。ページング |
+| `capabilities.get` | API-001: engine / semantic versions、command registry、features / effects / backends、media 拡張 |
+| `scene.query` | API-001: Composition tree と任意の InstancePath 展開。範囲・タグ検索とページングは提案 |
 | `property.schema` | 型、単位、アニメーション可否、参照可能段階 |
-| `property.sample` | 指定時刻列で値、source、modifier 結果を返す |
+| `property.sample` | API-001: runtime key と有理数時刻列を指定し、評価済みの型付き値・単位を返す。source / modifier 中間結果の説明は提案 |
 | `scene.explain` | 親変換、マスク、opacity、時刻範囲、欠落資産などを診断 |
 | `render.explain` | 使用経路、CPU / GPU 転送、中間メモリ、キャッシュ再利用を報告 |
 | `preview.render` | フレーム・短区間・コンタクトシートの成果物を生成 |

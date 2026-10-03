@@ -61,6 +61,9 @@ impl<'de> Deserialize<'de> for Request {
             "edit.apply" => payload(&fields).map(Self::EditApply),
             "edit.undo" => payload(&fields).map(Self::EditUndo),
             "history.list" => payload(&fields).map(Self::HistoryList),
+            "scene.query" => payload(&fields).map(Self::SceneQuery),
+            "property.sample" => payload(&fields).map(Self::PropertySample),
+            "capabilities.get" => payload(&fields).map(Self::CapabilitiesGet),
             _ => Err(D::Error::custom("unknown operation")),
         }
     }
@@ -77,6 +80,9 @@ impl<'de> Deserialize<'de> for ResultData {
             "plan" => Self::Plan(take(&mut fields, "value")?),
             "edit" => Self::Edit(take(&mut fields, "value")?),
             "history" => Self::History(take(&mut fields, "value")?),
+            "scene" => Self::Scene(take(&mut fields, "value")?),
+            "samples" => Self::Samples(take(&mut fields, "value")?),
+            "capabilities" => Self::Capabilities(take(&mut fields, "value")?),
             _ => return Err(D::Error::custom("unknown result kind")),
         };
         exhausted::<D::Error>(&fields)?;

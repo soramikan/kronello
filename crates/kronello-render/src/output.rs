@@ -18,7 +18,7 @@ pub struct FrameRequest {
     pub region: OutputRegion,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ImageFormat {
     pub color_space: ColorSpace,
@@ -31,7 +31,7 @@ pub struct ImageFormat {
     pub byte_order: String,
     pub clipping: String,
 }
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FrameMetadata {
     pub schema_version: u32,
@@ -196,14 +196,14 @@ pub struct SequenceRequest {
     pub frame_rate: FrameRate,
     pub region: OutputRegion,
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct OutputFile {
     pub name: String,
     pub bytes: u64,
     pub sha256: String,
 }
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SequenceFrame {
     pub metadata: FrameMetadata,
@@ -211,7 +211,7 @@ pub struct SequenceFrame {
     pub display: OutputFile,
     pub metadata_file: String,
 }
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SequenceMetadata {
     pub schema_version: u32,

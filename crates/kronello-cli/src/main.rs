@@ -3,7 +3,7 @@ use std::io::{Read, Write};
 
 use kronello_service::{BackendSelection, Request, Response, Service, ServiceError};
 
-const USAGE: &str = "kronello [--backend gpu|cpu-reference] [--request-json JSON] [project create|import|export|info | render frame|sequence | edit plan|apply|undo | history list]; otherwise read a tagged service Request from stdin";
+const USAGE: &str = "kronello [--backend gpu|cpu-reference] [--request-json JSON] [project create|import|export|info | render frame|sequence | edit plan|apply|undo | history list | scene query | property sample | capabilities get]; otherwise read a tagged service Request from stdin";
 fn run() -> Result<Response, ServiceError> {
     let mut selection = BackendSelection::Gpu;
     let mut literal = None;
@@ -48,6 +48,9 @@ fn run() -> Result<Response, ServiceError> {
         ["render", verb @ ("frame" | "sequence")] => Some(format!("render.{verb}")),
         ["edit", verb @ ("plan" | "apply" | "undo")] => Some(format!("edit.{verb}")),
         ["history", "list"] => Some("history.list".into()),
+        ["scene", "query"] => Some("scene.query".into()),
+        ["property", "sample"] => Some("property.sample".into()),
+        ["capabilities", "get"] => Some("capabilities.get".into()),
         _ => return Err(ServiceError::invalid(USAGE)),
     };
     let json = if let Some(json) = literal {
@@ -69,7 +72,12 @@ fn run() -> Result<Response, ServiceError> {
             .ok_or_else(|| ServiceError::invalid("request must be an object"))?;
         // Prefix the transport tag without a Value round trip, so duplicate
         // payload fields remain visible to strict typed deserialization.
-        serde_json::from_str(&format!("{{\"operation\":\"{operation}\",{tail}"))?
+        let separator = if tail.trim_start().starts_with('}') {
+            ""
+        } else {
+            ","
+        };
+        serde_json::from_str(&format!("{{\"operation\":\"{operation}\"{separator}{tail}"))?
     } else {
         serde_json::from_str(&json)?
     };
