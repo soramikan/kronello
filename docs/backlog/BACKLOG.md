@@ -151,7 +151,7 @@
 
 ### CACHE-001 値・layout・geometry・rasterの分離cache
 
-- 優先度: P0 / 領域: cache / 状態: planned
+- 優先度: P0 / 領域: cache / 状態: done
 - 依存: RENDER-001
 - 受け入れ条件:
   - 位置変更で組版cacheを再利用する

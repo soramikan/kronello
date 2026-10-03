@@ -160,7 +160,7 @@ scene は参照欠落・循環・不正 opacity / 色 / 幾何を型付きエラ
 
 - `RenderSnapshot::new(&Project, CompositionId, revision, RenderProfile)` は文書を複製し、選択した Composition、revision、profile、必要な `FontRef` と意味の版を固定する。`RenderProfile` は作業用線形 Rec.709 / Rec.2020 と flatten tolerance（既定 0.02 output px）。元の Project を編集しても snapshot は変わらない。
 - `RenderSnapshot::with_contract` は `SemanticVersions` と `MatteBinding` も明示入力する。公開 snapshot schema は **1**。Serde の strict な envelope を使い、復元時に欠けた版・lock を最新値で補わない。文書意味版・補間版・TimeMap 版・組版版は **1**、vector は `render001-kurbo-flatten-v1`、色は `gpu002-color-v1`、coverage は `gpu002-grid4-v1`。実行時は対応する版と文書の意味版との一致を検証する。
-- `content_hash()` は snapshot 全体を `serde_json::Value` の sorted object keys → compact UTF-8 → SHA-256 にする。STORE-001 の正規化規約を再利用し、独立した opaque 内容も hash に含める。schema、文書、revision、lock、profile、matte、意味の版を除外しない。time / region は個別の要求と metadata に保持し、将来の cache key は snapshot identity と合わせて区別する。
+- `content_hash()` は snapshot 全体を `serde_json::Value` の sorted object keys → compact UTF-8 → SHA-256 にする。STORE-001 の正規化規約を再利用し、独立した opaque 内容も hash に含める。schema、文書、revision、lock、profile、matte、意味の版を除外しない。time / region は個別の要求と metadata に保持する。CACHE-001 の values key は下記の rendering content identity と Time を使い、layout / geometry / raster はそれぞれ必要な内容だけで区別する。
 - `build_scene_ir(&snapshot, Time, &[FontData])` と `build_render_dag(&SceneIr, RenderProfile, OutputRegion)` は GPU・ファイル I/O を使わない。
 - `render_frame(&snapshot, &[FontData], &dyn RenderBackend, FrameRequest)` は `RenderedFrame`（作業用線形 premultiplied と外部 straight sRGB の画素、`FrameMetadata`）を返す。
 - `render_sequence(&snapshot, &[FontData], &dyn RenderBackend, SequenceRequest, output_directory)` は同期 offline 出力を行い、`SequenceMetadata` を返す。CLI-001 / service が文書・font bytes・backend・出力先を渡す。素材の自動取得、システムフォント検索、store 参照は含めない。
@@ -188,7 +188,7 @@ DAG は topological なノード列と明示 input index を持つ。index は�
 
 現行文書型には matte 欄がないため `MatteBinding` を snapshot の明示レンダー入力とする。source / matte とも stable SceneKey。matte は表示 root / children から除外し、`visible = true` の場合だけ表示する。source ごとの binding は一つ、共有 matte の DAG は再利用する。欠落・非アクティブ参照・containment / matte を合わせた循環は失敗する。
 
-scene 1,024 node、DAG 4,096 node、containment / matte recursion 24、出力 16,777,216 pixel の保守的上限を設ける。backend は GPU-002 の 1,024 draw node・32 depth・65,536 edge・512 MiB 面予算をさらに適用し、限界を超えた要求はエラーにする。全画面合成であり、ROI tiling・cache・資源 pool・性能保証は未実装。
+scene 1,024 node、DAG 4,096 node、containment / matte recursion 24、出力 16,777,216 pixel の保守的上限を設ける。backend は GPU-002 の 1,024 draw node・32 depth・65,536 edge・512 MiB 面予算をさらに適用し、限界を超えた要求はエラーにする。全画面合成であり、ROI tiling・GPU texture cache・資源 pool・性能保証は未実装。CACHE-001 のインメモリ cache は下記の範囲で実装した。
 
 GPU adapter は同じ lowering 済み DrawScene について `render_scene` と `render_scene_output` を各一回呼ぶ。両経路とも合成・mask・色変換を GPU 上で行い、それぞれ image と validation status を readback する。CPU へ持ち帰った線形画素を出力変換する GPU 名義の経路ではない。二回の描画を統合する最適化と renderer API での転送統計の集約は後続課題。
 
@@ -217,3 +217,35 @@ RGBA16F の各 component は有限、alpha は `[0,1]`、RGB の絶対値は 65,
 出力先は新しい directory を排他的に作り、既存 directory は拒否する。全 frame を内部 staging へ生成・検証・sync してから確定名に rename し、最後に `sequence.json` を確定する。通常エラーでは今回作った directory を rollback する。既存成果物は上書きしない。プロセス強制終了時の orphan 回収・resume・directory 全体の crash durability は JOB / RECOVERY の未実装範囲。
 
 受け入れ条件と CPU / host 検証の区別は [RENDER-001 の検証](../testing/render-001.md) を参照。
+
+## M1 CACHE-001 の分離 cache
+
+`kronello-render::RenderCache` は呼出側が所有する削除可能な導出データで、Project / `.kronello` に保存しない。ディスク cache は追加せず、将来追加する場合も ADR-0006 と `kronello-store::render_cache_location` に従う。GPU / SQLite の型や pointer identity を key に使わない。
+
+key は `cache001-json-sha256-v1` と level namespace を付けた入力を、sorted object keys の compact UTF-8 JSON にして SHA-256 で生成する。文書の編集 revision だけで区別しない。下流への伝播は content hash で行い、別ノードの entry を一括削除しない。過去の key の entry は容量内で残り、同じ内容に戻した場合も再利用できる。
+
+| level | key の意味的入力 | 保持する導出値 |
+|---|---|---|
+| values | snapshot の全内容（revision だけ除外）、schema / semantic_versions、font lock、profile、matte、Composition と、完全な `RuntimePropertyKey`、正規化有理数 Time | 最終 `Value` |
+| layout | 本文、style span の byte range / FontRef（hash・face・名前）/ size、wrap_width、line_height、alignment、direction、ruby、layout semantic version | paint を中立色にした `LayoutResult` |
+| geometry | vector semantic version、評価済み geometry の形状種別・寸法・半径・Path、design-space flatten tolerance。glyph は layout content hash も含む | ローカル設計座標の `FlattenedPath` |
+| raster | geometry content hash、変換済み contours、fill 色・色空間・fill rule、stroke 色・幅、OutputRegion、working space、vector / coverage / color semantic version、backend 実行 namespace | 作業用線形 premultiplied float32 画素 |
+
+geometry の scale bucket は丸めない exact tolerance とする。現行 flatten は `tolerance_px / conservative_magnification` だけに依存するため、同じ tolerance を持つ要求が同じ key を共有する。量子化による輪郭変化を導入しない。Position / Opacity は layout とローカル geometry の入力ではない。Rotation / Scale も layout に影響せず、必要な flatten tolerance や出力写像だけを変える。
+
+layout の取得後に、その時刻の各 style の fill を `style_index` で glyph に付け直す。色変更だけでは組版・輪郭を作り直さない。本文・font lock・size・wrap・行高・alignment の変更は当該 layout と、その hash を持つ glyph geometry / raster を区別する。同じ outline を持つ別 font bytes でも lock の変更を下流へ伝える。warm layout hit でも明示 font bytes の hash・face・名前・重複を照合し、欠落・破損を成功に変えない。
+
+各 level は独立の LRU で、`CacheConfig` の `CacheCapacity { entries, bytes }` に従う。既定は各 256 entries / payload weight 64 MiB。bytes は allocator overhead を含む process RSS の保証ではなく、layout / geometry / raster の保持データ量と Value の JSON byte 数を用いた重みである。単一 entry が byte 上限を超えた場合は保持せず正常に計算する。容量 0 でも同じ意味の結果を計算する。失敗した計算は保持しない。
+
+`stats()` は各 level の hits / misses / inserts / evictions と現在 entries / bytes を返す。`clear()` は entry を削除し、累積 counter は残す。`reset_stats()` は entry を残して counter をリセットする。
+
+### 公開経路と backend
+
+- `build_scene_ir_with_cache`、`build_render_dag_with_cache`、`render_frame_with_cache`、`render_sequence_with_cache` は `&mut RenderCache` を明示入力する。frame / sequence 間で同じ cache を渡せる。既存 API は zero-capacity cache を使い、戻り値と metadata の意味を維持する。
+- `RenderSnapshot::evaluation_content_hash()` は `content_hash()` と同じ入力から revision だけ除外する。metadata の `content_hash()` は従来どおり revision も含む。
+- `layout_content_hash(&ResolvedText)`、`SceneNodeIr.layout_content_hash`、`CoveragePath.geometry_content_hash` は意味的 key の下流伝播に使う。
+- `RenderBackend::execute_with_cache` の既定実装は `execute` を呼ぶ。`CpuReferenceBackend` は `RasterCacheKey` と `RenderCache::rasterize` を使い、実際の path raster だけを再利用する。Group の opacity・合成順・mask・display transform は毎回既存の CPU 参照演算で計算する。
+- raster namespace `cpu-reference-f32-v1` は CPU の float32 演算を区別する。GPU backend は今回は texture / raster を保持しない。将来 GPU cache を追加する場合は backend・device・driver の fingerprint を namespace へ固定する。backend 名だけで異なる GPU の画素を共有しない。
+- `kronello-eval::DependencyGraph::evaluate_scene_with_properties` は値の取得を純粋な callback として受け、render cache へ逆依存しない。`kronello-text::validate_fonts` は導出 layout 再利用時の明示 byte 照合を提供する。
+
+受け入れ条件の per-level counter、CPU の cached / disabled / direct 実行、cold / warm / 逆順 / eviction / clear、連番ファイル一致の検証は [CACHE-001 の検証](../testing/cache-001.md) を参照。GPU 実機での画素 cache、ディスク永続化、性能目標の実測は今回の保証範囲に含めない。

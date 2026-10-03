@@ -136,6 +136,49 @@ impl RenderBackend for CpuReferenceBackend {
             .collect::<Result<_, _>>()?;
         Ok(BackendFrame { linear, display })
     }
+    fn execute_with_cache(
+        &self,
+        dag: &RenderDag,
+        cache: &mut kronello_render::RenderCache,
+    ) -> Result<BackendFrame, RenderError> {
+        let (size, scene, working) = lower(dag)?;
+        // Keep the exact lowering order; DAG indices are never cache identities.
+        let keys: Vec<_> = dag
+            .nodes()
+            .iter()
+            .filter_map(|node| match node {
+                DagNode::Geometry { .. }
+                | DagNode::TextLayout { .. }
+                | DagNode::OutputTransform { .. } => None,
+                DagNode::CoverageDraw { path, .. } => Some(
+                    kronello_render::RasterCacheKey::new(
+                        path,
+                        dag.region(),
+                        dag.working_space(),
+                        "cpu-reference-f32-v1",
+                    )
+                    .map(Some),
+                ),
+                _ => Some(Ok(None)),
+            })
+            .collect::<Result<_, RenderError>>()?;
+        let linear = crate::scene::render_scene_reference_with_raster(
+            size,
+            &scene,
+            working,
+            &mut |id, path| {
+                cache.rasterize(keys[id].expect("lowered path key"), || {
+                    crate::scene::raster_path_reference(size, path, working)
+                })
+            },
+        )
+        .map_err(error)?;
+        let display = linear
+            .iter()
+            .map(|p| convert_output_reference(*p, working, DISPLAY).map_err(error))
+            .collect::<Result<_, _>>()?;
+        Ok(BackendFrame { linear, display })
+    }
 }
 impl RenderBackend for GpuContext {
     fn name(&self) -> &str {

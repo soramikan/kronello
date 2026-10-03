@@ -10,7 +10,6 @@ use sha2::{Digest, Sha256};
 
 use crate::{
     BackendFrame, OutputRegion, RenderBackend, RenderError, RenderSnapshot, SemanticVersions,
-    build_render_dag, build_scene_ir,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -68,10 +67,27 @@ pub fn render_frame(
     backend: &dyn RenderBackend,
     request: FrameRequest,
 ) -> Result<RenderedFrame, RenderError> {
+    render_frame_with_cache(
+        snapshot,
+        fonts,
+        backend,
+        request,
+        &mut crate::RenderCache::new(crate::CacheConfig::disabled()),
+    )
+}
+
+pub fn render_frame_with_cache(
+    snapshot: &RenderSnapshot,
+    fonts: &[FontData<'_>],
+    backend: &dyn RenderBackend,
+    request: FrameRequest,
+    cache: &mut crate::RenderCache,
+) -> Result<RenderedFrame, RenderError> {
     request.region.validate()?;
-    let scene = build_scene_ir(snapshot, request.time, fonts)?;
-    let dag = build_render_dag(&scene, snapshot.profile(), request.region)?;
-    let pixels = backend.execute(&dag)?;
+    let scene = crate::build_scene_ir_with_cache(snapshot, request.time, fonts, cache)?;
+    let dag =
+        crate::build_render_dag_with_cache(&scene, snapshot.profile(), request.region, cache)?;
+    let pixels = backend.execute_with_cache(&dag, cache)?;
     let count = u64::from(request.region.pixels[0]) * u64::from(request.region.pixels[1]);
     if pixels.linear.len() as u64 != count || pixels.display.len() as u64 != count {
         return Err(RenderError::InvalidInput(
@@ -262,6 +278,24 @@ pub fn render_sequence(
     request: SequenceRequest,
     directory: impl AsRef<Path>,
 ) -> Result<SequenceMetadata, RenderError> {
+    render_sequence_with_cache(
+        snapshot,
+        fonts,
+        backend,
+        request,
+        directory,
+        &mut crate::RenderCache::new(crate::CacheConfig::disabled()),
+    )
+}
+
+pub fn render_sequence_with_cache(
+    snapshot: &RenderSnapshot,
+    fonts: &[FontData<'_>],
+    backend: &dyn RenderBackend,
+    request: SequenceRequest,
+    directory: impl AsRef<Path>,
+    cache: &mut crate::RenderCache,
+) -> Result<SequenceMetadata, RenderError> {
     snapshot.validate()?;
     request.region.validate()?;
     let samples = frame_samples(request.range, request.frame_rate)?;
@@ -276,7 +310,7 @@ pub fn render_sequence(
         .tempdir_in(directory)?;
     let mut frames = Vec::with_capacity(samples.len());
     for (ordinal, (index, time)) in samples.into_iter().enumerate() {
-        let mut frame = render_frame(
+        let mut frame = render_frame_with_cache(
             snapshot,
             fonts,
             backend,
@@ -284,6 +318,7 @@ pub fn render_sequence(
                 time,
                 region: request.region,
             },
+            cache,
         )?;
         frame.metadata.frame_index = Some(index.to_string());
         frame.metadata.sequence_number = Some(ordinal as u64);
