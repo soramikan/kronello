@@ -1,6 +1,6 @@
 # マイルストーン
 
-状態: M0 は完了。M1 は P0 の 10 タスクが完了し（2026-10-03、統合点は `scripts/demo_cli_m1.py`、[CLI-001 の検証](../testing/cli-001.md)）、追補の P1 4 タスク（STORE-002 / VEC-003 / QA-003 / CLI-002）を実施中。M2 以降は未着手。タスクの詳細は [backlog](../backlog/BACKLOG.md)。
+状態: M0 は完了。M1 は全 14 タスクが完了（2026-10-03。統合点は `scripts/demo_cli_m1.py`、[CLI-001 の検証](../testing/cli-001.md)）。M1 で見送った範囲は後続タスク（VEC-004 / VEC-005 / STORE-003 / QA-004 / CACHE-003）に記録した。M2 以降は未着手。タスクの詳細は [backlog](../backlog/BACKLOG.md)。
 
 | 段階 | 成果物 | 主な完了条件 | タスク数 |
 |---|---|---|---:|

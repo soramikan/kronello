@@ -79,4 +79,4 @@ cargo test -p kronello-testkit --locked
 
 `.github/workflows/ci.yml` の macOS と Linux ジョブで、workspace test 前にフォント取得、fixture 生成・検証と Python の失敗経路テストを必須実行する。外部取得の失敗はジョブの失敗。通常の Rust テストには CPU の比較 API と解析値の整合性を含める。
 
-GPU-001 / GPU-002 / VEC-003 で GPU render adapter、候補生成・全画素 CPU oracle 比較と差分 artifact を実装済み。QA-003 は `tests/golden/apple-silicon-metal/` の 21 シーンを共通基準へ登録する。明示採用スクリプトは candidate と同梱 fixture / golden の 256 KiB・合計 1 MiB 上限を検証する。実測による世代間の許容誤差校正は QA-004 の範囲。通常 CI の成功を Metal golden の成功と扱わない。
+GPU-001 / GPU-002 / VEC-003 で GPU render adapter、候補生成・全画素 CPU oracle 比較と差分 artifact を実装済み。[QA-003](qa-003.md) は `tests/golden/apple-silicon-metal/` の 21 シーンを M1 共通基準へ登録し、全シーン比較に成功した。明示採用スクリプトは candidate と同梱 fixture / golden の 256 KiB・合計 1 MiB 上限を検証する。実測による世代間の許容誤差校正は QA-004 の範囲。通常 CI の成功を Metal golden の成功と扱わない。

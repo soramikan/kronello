@@ -310,7 +310,7 @@
       "priority": "P1",
       "area": "qa",
       "title": "Apple Silicon/Metal共通のgolden基準画像",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "GPU-002",
         "VEC-003"

@@ -1,6 +1,6 @@
 # GPU 画素の golden 比較（Apple Silicon + Metal）
 
-QA-003 は [ADR-0047](../adr/0047-apple-silicon-metal-golden.md) に従い、GPU-001 / GPU-002 / VEC-003 の **21 シーン・21 comparison frames** を共通の基準へ比較する。初回の M1 基準登録・比較の検証記録は QA-003 完了時に追加する。許容誤差は QA-001 の `compare_pixels` 既定値 `2^-10` を維持する。
+QA-003 は [ADR-0047](../adr/0047-apple-silicon-metal-golden.md) に従い、GPU-001 / GPU-002 / VEC-003 の **21 シーン・21 comparison frames** を共通の基準へ比較する。初回の M1 基準登録・全シーン比較は成功した（[QA-003 の検証記録](qa-003.md)）。許容誤差は QA-001 の `compare_pixels` 既定値 `2^-10` を維持する。
 
 値・レイアウトの意味的比較は通常テストで行う。GPU golden は `#[ignore]` とし、明示実行する。GitHub Actions の必須ジョブではない。UPDATE の成功は候補生成と CPU oracle 検証の成功であり、基準画像との比較結果ではない。
 

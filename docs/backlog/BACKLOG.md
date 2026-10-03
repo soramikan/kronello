@@ -11,7 +11,7 @@
 | マイルストーン | planned | in_progress | done | dropped | 計 |
 |---|---:|---:|---:|---:|---:|
 | M0 | 0 | 0 | 6 | 0 | 6 |
-| M1 | 0 | 1 | 13 | 0 | 14 |
+| M1 | 0 | 0 | 14 | 0 | 14 |
 | M2 | 11 | 0 | 0 | 0 | 11 |
 | M3 | 12 | 0 | 0 | 0 | 12 |
 | M4 | 8 | 0 | 0 | 0 | 8 |
@@ -187,7 +187,7 @@
 
 ### QA-003 Apple Silicon/Metal共通のgolden基準画像
 
-- 優先度: P1 / 領域: qa / 状態: in_progress
+- 優先度: P1 / 領域: qa / 状態: done
 - 依存: GPU-002, VEC-003
 - 受け入れ条件:
   - ADR-0038のgolden固定環境の決定を新しいADRで置き換え、Apple SiliconのMetalを共通の比較環境とする(性能計測の基準機はM4 Mac miniのまま)
