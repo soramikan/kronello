@@ -147,7 +147,7 @@
       "priority": "P0",
       "area": "animation",
       "title": "基本キーフレームと補間",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "TIME-001",
         "PROP-001"

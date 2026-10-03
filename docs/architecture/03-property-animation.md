@@ -46,6 +46,18 @@ T(position) * R(rotation) * K(skew) * S(scale) * T(-anchor)
 時間方向のイージングと空間的な移動パスを分ける。ベジェ曲線の時間ハンドルは時刻方向の単調性を検証する。
 キーフレームの同時刻重複は暗黙に許容せず、upsert / replace を操作として選ばせる。
 
+### ANIM-001 の実装規約
+
+文書型 `AnimationCurve` / `Keyframe` / `CurveInterpolation` / `TimeBezier` は `kronello-model`、純粋評価 `sample` / `sample_in_space` は `kronello-animation` に実装する。既存の `CurveId`、`Value`、`ValueType`、`kronello-time::Time` を再利用し、Property / Modifier 全体の評価は EVAL-001 以降で扱う。
+
+- 曲線は `id`、`value_type`、厳密な時刻順の `keys`、意味の版 `interpolation_version` を保存する。版 1 のみ編集・評価する。未知の版は既知構造として読み取り・再保存できるが、最新の意味に置換しない。未知フィールド・補間 variant などを保持できない構造は拒否し、呼び出し側が原本を保全する。
+- キーの時刻は秒の正規化有理数。`insert_key` は同時刻を拒否し、`upsert_key` は挿入または置換、`replace_key` は既存キーだけを置換する。失敗時は曲線を変更しない。構築・復元時も重複や順序違反を拒否し、暗黙に並べ替えない。
+- 各キーの補間方式は次のキーまでの `[key.time, next.time)` に適用する。キー時刻そのものは当該キー値、最初より前・最後より後は端の値を保持する。空曲線の評価は型付きエラー、1 キーは全時刻で保持する。Color は端点・Hold も作業空間へ変換して返す。
+- Cubic は正規化した `(0, 0)` から `(1, 1)` への時間・値進行のベジェとする。有限の制御点で `0 <= x1 <= x2 <= 1` を要求し、時刻方向の単調性を保証する。y は有限の overshoot を許す。空間移動パスの接線ではない。版 1 は有理数で区間内の比を求めてから f64 に変換し、64 回の二分法で x を反転して y を評価する。表現不能な有理数演算・非有限の評価結果は型付きエラー。
+- Scalar / Vec2 / Vec3 / Angle は各成分を補間し、角度を剰余化しない。Bool / Enum / String / AssetRef と現段階の Path は Hold のみ。Path morph は VEC-002 で扱う。
+- Color は sRGB の伝達関数を復号し、必要なら既存 GPU 参照と同じ D65 原色変換係数を f64 で適用する。`sample` は単体要求の線形 Rec.709、`sample_in_space` は明示した線形 Rec.709 / Rec.2020 を使い、straight RGB と alpha を独立に補間する。Sequence の作業空間や descriptor の明示空間は呼び出し側から渡す。負値・1 超の線形 RGB は保持し、alpha の `[0, 1]` 違反は clamp せずエラーとする。Rec.2020 の値変換は HDR 出力対応の宣言ではない。
+- descriptor の範囲は Modifier 列の適用後に既存の `validate_final_value` で検証する。曲線評価は範囲 clamp や暗黙の代替値を行わない。数値 golden、境界、編集の原子性、および 128 個の生成曲線の順方向・逆順・固定 seed の順序変更と JSON 往復を通常テストで確認する。
+
 ## 式
 
 最初は型付き AST と許可された組み込み関数で実装する。式の正本は常に AST である。

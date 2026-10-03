@@ -6,6 +6,7 @@
 
 mod builtin;
 mod composition;
+mod curve;
 mod error;
 mod id;
 mod property;
@@ -19,6 +20,10 @@ pub use builtin::{
 pub use composition::{
     Composition, CompositionError, CompositionInstance, CompositionReference, DesignExtent,
     InstancePath, NodeKind, ParentGraph, PropertyKey, SceneNode, validate_compositions,
+};
+pub use curve::{
+    AnimationCurve, CurveDefinition, CurveError, CurveInterpolation, INTERPOLATION_VERSION,
+    Keyframe, TimeBezier,
 };
 pub use error::{JsonError, ModelError, from_json};
 pub use id::{
