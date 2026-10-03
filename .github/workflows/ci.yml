@@ -39,12 +39,12 @@ jobs:
             ~/.cargo/git/db
             target
           key: cargo-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', '**/Cargo.toml', 'Cargo.lock') }}
+      - name: Install FFmpeg development dependencies
+        run: brew list ffmpeg >/dev/null 2>&1 || brew install ffmpeg
       - name: Check formatting
         run: cargo fmt --all --check
       - name: Lint with warnings denied
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - name: Install fixture generation tools
-        run: brew list ffmpeg >/dev/null 2>&1 || brew install ffmpeg
       - name: Fetch hash-pinned test fixtures
         run: python3 scripts/fetch_fixtures.py
       - name: Generate and validate fixtures
@@ -95,14 +95,14 @@ jobs:
             ~/.cargo/git/db
             target
           key: cargo-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', '**/Cargo.toml', 'Cargo.lock') }}
+      - name: Install FFmpeg development dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes pkg-config libavcodec-dev libavformat-dev libavutil-dev libswscale-dev ffmpeg
       - name: Check formatting
         run: cargo fmt --all --check
       - name: Lint with warnings denied
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - name: Install fixture generation tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes ffmpeg
       - name: Fetch hash-pinned test fixtures
         run: python3 scripts/fetch_fixtures.py
       - name: Generate and validate fixtures

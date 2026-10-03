@@ -16,6 +16,8 @@ pub use template::{
     TemplateCommand, TemplateDefineRequest, TemplateInstantiateRequest, TemplateSetDurationRequest,
     TemplateSetInputRequest,
 };
+mod media;
+pub use media::{CollectRequest, RelinkRequest};
 
 use std::path::{Path, PathBuf};
 
@@ -42,6 +44,10 @@ pub enum Request {
     TemplateInstantiate(TemplateInstantiateRequest),
     #[serde(rename = "template.set_input")]
     TemplateSetInput(TemplateSetInputRequest),
+    #[serde(rename = "asset.relink")]
+    AssetRelink(RelinkRequest),
+    #[serde(rename = "project.collect")]
+    ProjectCollect(CollectRequest),
     #[serde(rename = "project.create")]
     ProjectCreate(CreateRequest),
     #[serde(rename = "project.import")]
@@ -151,6 +157,7 @@ pub struct FrameResult {
     deny_unknown_fields
 )]
 pub enum ResultData {
+    Collected(kronello_media::CollectedProject),
     Project(ProjectInfo),
     Export(ExportResult),
     Frame(Box<FrameResult>),
@@ -290,7 +297,10 @@ impl<'a> Service<'a> {
             Request::SceneQuery(r) => query::scene(r).map(ResultData::Scene),
             Request::PropertySample(r) => query::sample(r).map(ResultData::Samples),
             Request::CapabilitiesGet(_) => Ok(ResultData::Capabilities(Box::new(
-                CapabilitiesResult::current(self.media_capabilities.clone()),
+                CapabilitiesResult::current(Some(match &self.media_capabilities {
+                    Some(capabilities) => capabilities.clone(),
+                    None => media::capabilities()?,
+                })),
             ))),
             Request::TemplateSetDuration(r) => template::set_duration(r).map(ResultData::Edit),
             Request::TemplateDefine(r) => template::define(r).map(ResultData::Edit),
@@ -300,6 +310,8 @@ impl<'a> Service<'a> {
             Request::EditApply(r) => edit::apply(r).map(ResultData::Edit),
             Request::EditUndo(r) => edit::undo(r).map(ResultData::Edit),
             Request::HistoryList(r) => edit::history(r).map(ResultData::History),
+            Request::AssetRelink(r) => media::relink(r).map(ResultData::Project),
+            Request::ProjectCollect(r) => media::collect(r).map(ResultData::Collected),
             Request::ProjectCreate(r) => create(r).map(ResultData::Project),
             Request::ProjectImport(r) => {
                 let revision = parse_revision(&r.base_revision)?;
@@ -632,6 +644,14 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
         Request::RenderSequence(r) => {
             local_locator(&r.output_directory)?;
             render_locators(&r.input)
+        }
+        Request::AssetRelink(r) => {
+            local_locator(&r.project)?;
+            local_locator(&r.search_directory)
+        }
+        Request::ProjectCollect(r) => {
+            local_locator(&r.project)?;
+            local_locator(&r.output_directory)
         }
         Request::CapabilitiesGet(_) => Ok(()),
     }

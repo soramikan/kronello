@@ -19,3 +19,4 @@
 | `hdr-pq` | generated | MIT OR Apache-2.0 | scripts/fixtures.py media_command; original geq grayscale ramp; FFV1/Matroska — BT.2020 10bit limited range PQ metadata/decode input。輝度校正・tone mapping の正しさは保証しない。 |
 | `hdr-hlg` | generated | MIT OR Apache-2.0 | scripts/fixtures.py media_command; original geq grayscale ramp; FFV1/Matroska — BT.2020 10bit limited range HLG metadata/decode input。輝度校正・tone mapping の正しさは保証しない。 |
 | `noto-sans-cjk-jp` | external | OFL-1.1 | notofonts/noto-cjk Sans2.004; Noto Sans CJK JP Regular; Google/Adobe upstream — 日本語組版の固定フォント。emoji/IVS 全 coverage の保証はしない。 |
+| `bframes` | generated | MIT OR Apache-2.0 | scripts/fixtures.py media_command; FFmpeg testsrc2 / native MPEG-4 (`-bf 2`) / NUT — 24 fps、6 frames、PTS=1/24〜6/24、B-frame reorder / drain / seek の整数 PTS 検証 |

@@ -173,12 +173,28 @@ fn property_samples_use_rational_times_typed_values_units_and_failures() {
 
 #[test]
 fn capabilities_registry_media_extension_without_device_initialization() {
-    let media = MediaCapabilities {
-        runtime_version: "test-runtime".into(),
-        decoders: vec!["h264".into()],
-        encoders: vec!["prores".into()],
+    let media: MediaCapabilities = kronello_media::MediaCapabilities {
+        schema_version: 1,
+        ffmpeg_version: "test-runtime".into(),
+        library_directory: "test-libraries".into(),
+        substituted: true,
+        libraries: vec![kronello_media::LibraryCapability {
+            name: "avcodec".into(),
+            version: 1,
+            license: "LGPL".into(),
+            configuration: "--disable-gpl".into(),
+        }],
+        distribution_eligible: true,
+        development_only: false,
+        codecs: vec![kronello_media::CodecCapability {
+            name: "prores".into(),
+            encoder: true,
+            decoder: true,
+            hardware: false,
+        }],
         hwaccels: vec!["videotoolbox".into()],
-    };
+    }
+    .into();
     let ResultData::Capabilities(c) = success(
         service()
             .with_media_capabilities(media)
@@ -186,10 +202,17 @@ fn capabilities_registry_media_extension_without_device_initialization() {
     ) else {
         panic!()
     };
-    assert_eq!(c.commands.len(), 17);
+    assert_eq!(c.commands.len(), 19);
     assert_eq!(c.api_schema_version, 1);
     assert_eq!(c.semantic_versions.document, PROJECT_SEMANTIC_VERSION);
-    assert_eq!(c.media.unwrap().hwaccels, vec!["videotoolbox"]);
+    let media = c.media.unwrap();
+    assert_eq!(media.hwaccels, vec!["videotoolbox"]);
+    assert_eq!(media.runtime_version, "test-runtime");
+    assert_eq!(media.ffmpeg_version, media.runtime_version);
+    assert_eq!(media.encoders, vec!["prores"]);
+    assert_eq!(media.decoders, vec!["prores"]);
+    assert_eq!(media.libraries[0].license, "LGPL");
+    assert!(media.substituted && media.distribution_eligible && !media.development_only);
     assert!(c.effects.is_empty());
     assert!(c.backends.contains(&"cpu_reference_float32".into()));
     let mutating: Vec<_> = c
@@ -203,6 +226,7 @@ fn capabilities_registry_media_extension_without_device_initialization() {
         [
             "project.create",
             "project.import",
+            "asset.relink",
             "edit.apply",
             "edit.undo",
             "template.define",
@@ -216,7 +240,20 @@ fn capabilities_registry_media_extension_without_device_initialization() {
     else {
         panic!()
     };
-    assert!(c.media.is_none());
+    let actual = kronello_media::MediaRuntime::load()
+        .unwrap()
+        .capabilities()
+        .clone();
+    let reported = c.media.unwrap();
+    assert_eq!(reported.ffmpeg_version, actual.ffmpeg_version);
+    assert_eq!(reported.libraries, actual.libraries);
+    assert_eq!(reported.codecs, actual.codecs);
+    assert_eq!(reported.hwaccels, actual.hwaccels);
+    assert_eq!(reported.schema_version, actual.schema_version);
+    assert_eq!(reported.library_directory, actual.library_directory);
+    assert_eq!(reported.substituted, actual.substituted);
+    assert_eq!(reported.distribution_eligible, actual.distribution_eligible);
+    assert_eq!(reported.development_only, actual.development_only);
 }
 
 #[test]
@@ -324,9 +361,35 @@ fn execution_fields_uris_and_duplicate_envelopes_are_invalid_requests() {
         "data:text/plain,test",
     ] {
         invalid(json!({"operation":"project.info", "project":path}));
+        for field in ["project", "search_directory"] {
+            let mut request = json!({"operation":"asset.relink", "project":"local.kronello",
+                "base_revision":"1", "asset":Uuid::new_v4(), "search_directory":"assets"});
+            request[field] = json!(path);
+            invalid(request);
+        }
+        for field in ["project", "output_directory"] {
+            let mut request = json!({"operation":"project.collect", "project":"local.kronello",
+                "output_directory":"collected"});
+            request[field] = json!(path);
+            invalid(request);
+        }
+        for field in ["relative", "absolute"] {
+            let mut document = serde_json::to_value(fixture()).unwrap();
+            let mut asset = json!({"id":Uuid::new_v4(), "content_hash":"a".repeat(64),
+                "kind":"video", "streams":[], "locator":{"relative":null,"absolute":null}});
+            asset["locator"][field] = json!(path);
+            document["assets"] = json!([asset]);
+            invalid(
+                json!({"operation":"project.create", "project":"local.kronello", "document":document}),
+            );
+            invalid(
+                json!({"operation":"project.import", "project":"local.kronello", "base_revision":"1", "document":document}),
+            );
+        }
     }
     let mut document = serde_json::to_value(fixture()).unwrap();
-    document["assets"] = json!([{"locator":{"absolute":"https://example.invalid/movie.mp4"}}]);
+    document["assets"] =
+        json!([{"id":Uuid::new_v4(), "locator":{"absolute":"https://example.invalid/movie.mp4"}}]);
     invalid(
         json!({"operation":"project.create", "project":"/tmp/no-file.kronello", "document": document}),
     );
@@ -477,6 +540,8 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
         json!({"operation":"property.sample", "project":path, "composition":composition, "keys":[
             {"kind":"node", "instance_path":[], "node":comp(&p).nodes[0].id,"property":comp(&p).nodes[0].properties[0].id()}], "times":[time]}),
         json!({"operation":"capabilities.get"}),
+        json!({"operation":"asset.relink", "project":path, "base_revision":"1", "asset":uuid, "search_directory":"assets"}),
+        json!({"operation":"project.collect", "project":path, "output_directory":"collected"}),
         json!({"operation":"template.define", "project":path, "base_revision":"1", "session_id":uuid, "idempotency_key":"define", "definition":definition}),
         json!({"operation":"template.instantiate", "project":path, "base_revision":"1", "session_id":uuid, "idempotency_key":"place", "composition":composition, "node":uuid, "index":0, "instance":instance}),
         json!({"operation":"template.set_input", "project":path, "base_revision":"1", "session_id":uuid, "idempotency_key":"input", "instance":uuid, "name":"headline", "value":{"kind":"string", "value":"text"}}),
@@ -505,7 +570,16 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
                 .is_valid(&payload),
             "{payload}"
         );
-        for field in ["shell", "url", "ffmpeg_args"] {
+        for field in [
+            "shell",
+            "exec",
+            "script",
+            "url",
+            "fetch_url",
+            "ffmpeg_args",
+            "raw_ffmpeg_args",
+            "command_line",
+        ] {
             let mut bad = request.clone();
             bad[field] = json!("execute");
             assert!(!validator.is_valid(&bad), "{bad}");
@@ -780,6 +854,33 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
     execute(
         json!({"operation":"template.set_duration", "project":template_path, "base_revision":"4", "session_id":session, "idempotency_key":"duration", "instance":instance, "duration":{"num":"8", "den":"1"}}),
     );
+    let media_path = dir.path().join("media-contracts.kronello");
+    let source = dir.path().join("asset.bin");
+    std::fs::write(&source, b"media contract").unwrap();
+    let asset = Asset {
+        id: AssetId::new(),
+        content_hash: kronello_media::content_hash(&source).unwrap(),
+        kind: AssetKind::Video,
+        streams: vec![],
+        locator: AssetLocator {
+            relative: Some("asset.bin".into()),
+            absolute: None,
+        },
+    };
+    let media_document = Project {
+        assets: vec![DocumentObject::Known(asset.clone())],
+        ..Project::default()
+    };
+    execute(json!({"operation":"project.create", "project":media_path, "document":media_document}));
+    let search = dir.path().join("search");
+    std::fs::create_dir(&search).unwrap();
+    std::fs::rename(source, search.join("renamed.bin")).unwrap();
+    execute(
+        json!({"operation":"asset.relink", "project":media_path, "base_revision":"1", "asset":asset.id, "search_directory":search}),
+    );
+    execute(
+        json!({"operation":"project.collect", "project":media_path, "output_directory":dir.path().join("collected")}),
+    );
     assert_eq!(
         checked,
         command_registry().into_iter().map(|c| c.name).collect()
@@ -818,6 +919,24 @@ fn all_filesystem_boundaries_reject_uris_before_access() {
     ] {
         invalid_locator(request);
     }
+    for uri in [
+        "https://example.invalid/media",
+        "file:///tmp/media",
+        "pipe:0",
+    ] {
+        invalid_locator(
+            json!({"operation":"asset.relink", "project":uri, "base_revision":"1", "asset":uuid, "search_directory":"local"}),
+        );
+        invalid_locator(
+            json!({"operation":"asset.relink", "project":"missing.kronello", "base_revision":"1", "asset":uuid, "search_directory":uri}),
+        );
+        invalid_locator(
+            json!({"operation":"project.collect", "project":uri, "output_directory":"local"}),
+        );
+        invalid_locator(
+            json!({"operation":"project.collect", "project":"missing.kronello", "output_directory":uri}),
+        );
+    }
     let mut font_input = input.clone();
     font_input["fonts"] = json!([{"identity":document["texts"][0]["styles"][0]["font"], "path":"https://example.invalid/font.otf"}]);
     invalid_locator(json!({"operation":"render.frame", "input":font_input, "time":time}));
@@ -836,7 +955,8 @@ fn all_filesystem_boundaries_reject_uris_before_access() {
         "locator",
     ] {
         let mut document = document.clone();
-        document["assets"] = json!([{"locator":{slot:"https://example.invalid/movie.mp4"}}]);
+        document["assets"] =
+            json!([{"id":Uuid::new_v4(), "locator":{slot:"https://example.invalid/movie.mp4"}}]);
         for operation in ["project.create", "project.import"] {
             let mut request =
                 json!({"operation":operation, "project":"missing.kronello", "document":document});

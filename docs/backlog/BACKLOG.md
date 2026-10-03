@@ -207,7 +207,7 @@
 
 ### MEDIA-001 FFmpeg素材I/Oと時刻精度
 
-- 優先度: P0 / 領域: media / 状態: planned
+- 優先度: P0 / 領域: media / 状態: done
 - 依存: TIME-001, QA-001, GPU-001
 - 受け入れ条件:
   - VFR/B-frame/seek後の対象PTSを確認する

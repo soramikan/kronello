@@ -64,3 +64,5 @@ mod effect;
 mod template;
 pub use effect::*;
 pub use template::*;
+mod asset;
+pub use asset::{Asset, AssetKind, AssetLocator, StreamMetadata};

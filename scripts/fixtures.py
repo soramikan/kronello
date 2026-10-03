@@ -139,6 +139,9 @@ def media_command(entry, output):
                 "select='eq(n,0)+eq(n,1)+eq(n,3)+eq(n,6)+eq(n,10)+eq(n,15)'",
                 "-frames:v", "6", "-fps_mode", "vfr"]
         codec = ["-c:v", "rawvideo", "-pix_fmt", "yuv420p", "-f", "nut"]
+    elif recipe == "bframes":
+        args = ["-f", "lavfi", "-i", "testsrc2=size=16x16:rate=24", "-frames:v", "6"]
+        codec = ["-c:v", "mpeg4", "-bf", "2", "-g", "12", "-q:v", "2", "-pix_fmt", "yuv420p", "-f", "nut"]
     elif recipe in {"pq", "hlg"}:
         transfer = "smpte2084" if recipe == "pq" else "arib-std-b67"
         args = ["-f", "lavfi", "-i", "nullsrc=size=16x16:rate=24,format=yuv420p10le,"
@@ -159,11 +162,16 @@ def probe_media(entry, path):
     require(stream["width"] == stream["height"] == 16, "wrong fixture dimensions")
     recipe = entry["recipe"]
     require(len(frames) == (2 if recipe in {"pq", "hlg"} else 6), "wrong frame count")
-    if recipe in {"cfr", "vfr"}:
-        require(stream["codec_name"] == "rawvideo" and stream["pix_fmt"] == "yuv420p", "wrong codec/pixel format")
+    if recipe in {"cfr", "vfr", "bframes"}:
+        require(stream["codec_name"] == ("mpeg4" if recipe == "bframes" else "rawvideo") and stream["pix_fmt"] == "yuv420p", "wrong codec/pixel format")
         times = [Fraction(frame["pts"]) * Fraction(stream["time_base"]) for frame in frames]
-        expected = [Fraction(i) / Fraction(entry["rate"]) for i in range(6)] if recipe == "cfr" else [Fraction(i, 30) for i in VFR_INDICES]
+        expected = [Fraction(i) / Fraction(entry["rate"]) for i in range(6)] if recipe in {"cfr", "bframes"} else [Fraction(i, 30) for i in VFR_INDICES]
+        if recipe == "bframes":
+            expected = [Fraction(i + 1, 24) for i in range(6)]
         require(times == expected, f"{entry['id']}: timestamps differ: {times}")
+        if recipe == "bframes":
+            require(any(f.get("pict_type") == "B" for f in frames), "B-frames required")
+            require(any(f.get("pkt_dts") != f["pts"] for f in frames), "reordered decode/presentation timestamps required")
         if recipe == "cfr":
             require(Fraction(stream["r_frame_rate"]) == Fraction(entry["rate"]), "wrong frame rate")
     else:

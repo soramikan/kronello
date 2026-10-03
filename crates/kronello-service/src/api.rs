@@ -1,5 +1,5 @@
 //! Versioned discovery for transports. Capabilities describe compiled support;
-//! they do not claim that a device or external media runtime was probed.
+//! they do not claim physical device availability. Media reports the loaded runtime.
 use serde::{Deserialize, Serialize};
 
 use crate::*;
@@ -14,7 +14,8 @@ pub struct CapabilitiesRequest {}
 #[serde(deny_unknown_fields)]
 pub struct CommandDescriptor {
     pub name: String,
-    /// Read-only refers to the project: render.sequence writes output files.
+    /// Read-only refers to the source project: render.sequence and
+    /// project.collect write output files without changing that project.
     pub read_only: bool,
     /// Payload schema (without transport operation tag).
     pub request_schema: String,
@@ -28,6 +29,42 @@ pub struct MediaCapabilities {
     pub decoders: Vec<String>,
     pub encoders: Vec<String>,
     pub hwaccels: Vec<String>,
+    pub schema_version: u32,
+    pub ffmpeg_version: String,
+    pub library_directory: std::path::PathBuf,
+    pub substituted: bool,
+    pub libraries: Vec<kronello_media::LibraryCapability>,
+    pub distribution_eligible: bool,
+    pub development_only: bool,
+    pub codecs: Vec<kronello_media::CodecCapability>,
+}
+impl From<kronello_media::MediaCapabilities> for MediaCapabilities {
+    fn from(runtime: kronello_media::MediaCapabilities) -> Self {
+        Self {
+            runtime_version: runtime.ffmpeg_version.clone(),
+            decoders: runtime
+                .codecs
+                .iter()
+                .filter(|c| c.decoder)
+                .map(|c| c.name.clone())
+                .collect(),
+            encoders: runtime
+                .codecs
+                .iter()
+                .filter(|c| c.encoder)
+                .map(|c| c.name.clone())
+                .collect(),
+            hwaccels: runtime.hwaccels,
+            schema_version: runtime.schema_version,
+            ffmpeg_version: runtime.ffmpeg_version,
+            library_directory: runtime.library_directory,
+            substituted: runtime.substituted,
+            libraries: runtime.libraries,
+            distribution_eligible: runtime.distribution_eligible,
+            development_only: runtime.development_only,
+            codecs: runtime.codecs,
+        }
+    }
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -39,8 +76,8 @@ pub struct CapabilitiesResult {
     pub features: Vec<String>,
     pub effects: Vec<String>,
     pub backends: Vec<String>,
-    /// None means media runtime discovery was not supplied. MEDIA-001 can
-    /// populate this extension without changing transport request semantics.
+    /// Loaded FFmpeg capabilities; discovery failures return a typed error.
+    /// An explicitly supplied report avoids runtime initialization.
     pub media: Option<MediaCapabilities>,
 }
 
@@ -51,6 +88,8 @@ macro_rules! commands {
             ("project.import", false, ImportRequest, ProjectInfo),
             ("project.export", true, ProjectRequest, ExportResult),
             ("project.info", true, ProjectRequest, ProjectInfo),
+            ("asset.relink", false, RelinkRequest, ProjectInfo),
+            ("project.collect", true, CollectRequest, kronello_media::CollectedProject),
             ("render.frame", true, FrameRenderRequest, FrameResult),
             ("render.sequence", true, SequenceRenderRequest, kronello_render::SequenceMetadata),
             ("edit.plan", true, PlanRequest, EditPlan),
