@@ -179,6 +179,11 @@ impl RenderCache {
     ) -> Result<Value, EvaluationError> {
         // Serialize the complete typed runtime identity without relying on Debug.
         let runtime_json = match runtime {
+            RuntimePropertyKey::LayoutValue {
+                instance_path,
+                text,
+                consumer,
+            } => json!(["layout", instance_path, text, consumer]),
             RuntimePropertyKey::Node(k) => json!(["node", k.instance_path, k.node, k.property]),
             RuntimePropertyKey::Composition {
                 instance_path,

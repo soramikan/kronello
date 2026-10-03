@@ -172,6 +172,25 @@ impl<'a> DependencyGraph<'a> {
             .cloned()
             .map(|key| (key, BTreeSet::new()))
             .collect();
+        for target in snapshot.dependencies.keys() {
+            if let RuntimePropertyKey::LayoutValue {
+                instance_path,
+                text,
+                ..
+            } = target
+            {
+                if !graph.scopes.get(instance_path).is_some_and(|scope| {
+                    scope
+                        .composition
+                        .nodes
+                        .iter()
+                        .any(|node| node.id == *text && matches!(node.kind, NodeKind::Text { .. }))
+                }) {
+                    return Err(EvaluationError::PropertyNotFound(target.clone()));
+                }
+                graph.edges.insert(target.clone(), BTreeSet::new());
+            }
+        }
         for (target, sources) in snapshot.dependencies {
             graph.require_key(target)?;
             for source in sources {
@@ -195,10 +214,13 @@ impl<'a> DependencyGraph<'a> {
                 ),
                 _ => false,
             };
+            if !valid || !graph.entries.contains_key(target) || !graph.entries.contains_key(source)
+            {
+                return Err(EvaluationError::InvalidReferenceBinding(target.clone()));
+            }
             let target_contract = self_contract(&graph.entries[target], snapshot.registry);
             let source_contract = self_contract(&graph.entries[source], snapshot.registry);
-            if !valid
-                || target_contract.value_type != source_contract.value_type
+            if target_contract.value_type != source_contract.value_type
                 || target_contract.unit != source_contract.unit
                 || target_contract.coordinate_space != source_contract.coordinate_space
             {
@@ -211,7 +233,7 @@ impl<'a> DependencyGraph<'a> {
     }
 
     fn require_key(&self, key: &RuntimePropertyKey) -> Result<(), EvaluationError> {
-        if self.entries.contains_key(key) {
+        if self.edges.contains_key(key) {
             Ok(())
         } else {
             Err(EvaluationError::PropertyNotFound(key.clone()))
@@ -310,9 +332,45 @@ impl<'a> DependencyGraph<'a> {
         keys: &[RuntimePropertyKey],
         time: Time,
     ) -> Result<BTreeMap<RuntimePropertyKey, Value>, EvaluationError> {
+        self.evaluate_properties_with_inputs(keys, time, &BTreeMap::new())
+    }
+
+    /// Upper compilation supplies semantic layout results and instance inputs.
+    /// Layout consumers must declare their upstream text property dependencies
+    /// when compiling this graph; the evaluator imports no text/template crate.
+    /// Inputs replace values only for this immutable query, never document data.
+    pub fn evaluate_properties_with_inputs(
+        &self,
+        keys: &[RuntimePropertyKey],
+        time: Time,
+        inputs: &BTreeMap<RuntimePropertyKey, Value>,
+    ) -> Result<BTreeMap<RuntimePropertyKey, Value>, EvaluationError> {
+        for (key, value) in inputs {
+            self.require_key(key)?;
+            if matches!(key, RuntimePropertyKey::LayoutValue { .. }) {
+                if !matches!(value, Value::Vec2(_)) {
+                    return Err(EvaluationError::MissingLayoutInput(key.clone()));
+                }
+                continue;
+            }
+            self.entries[key]
+                .property
+                .validate_final_value(value, self.registry)
+                .map_err(|source| EvaluationError::InvalidValue {
+                    key: key.clone(),
+                    source,
+                })?;
+        }
         let order = self.order(keys.iter().cloned())?;
         let mut values: BTreeMap<RuntimePropertyKey, Value> = BTreeMap::new();
         for key in order {
+            if matches!(key, RuntimePropertyKey::LayoutValue { .. }) {
+                let value = inputs
+                    .get(&key)
+                    .ok_or_else(|| EvaluationError::MissingLayoutInput(key.clone()))?;
+                values.insert(key, value.clone());
+                continue;
+            }
             let entry = &self.entries[&key];
             if let Some(modifier) = entry.property.modifiers().iter().find(|m| m.enabled) {
                 return Err(EvaluationError::UnsupportedFeature {
@@ -320,7 +378,17 @@ impl<'a> DependencyGraph<'a> {
                     feature: format!("modifier {} version {}", modifier.key, modifier.version),
                 });
             }
-            let value = if let Some(source) = self.references.get(&key) {
+            let value = if let Some(value) = inputs.get(&key) {
+                value.clone()
+            } else if let Some(source) = self.edges[&key]
+                .iter()
+                .find(|source| matches!(source, RuntimePropertyKey::LayoutValue { .. }))
+            {
+                if self.edges[&key].len() != 1 {
+                    return Err(EvaluationError::MissingLayoutInput(key.clone()));
+                }
+                values[source].clone()
+            } else if let Some(source) = self.references.get(&key) {
                 values[source].clone()
             } else {
                 match entry.source {

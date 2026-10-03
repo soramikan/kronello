@@ -185,7 +185,7 @@ fn capabilities_registry_media_extension_without_device_initialization() {
     ) else {
         panic!()
     };
-    assert_eq!(c.commands.len(), 13);
+    assert_eq!(c.commands.len(), 17);
     assert_eq!(c.api_schema_version, 1);
     assert_eq!(c.semantic_versions.document, PROJECT_SEMANTIC_VERSION);
     assert_eq!(c.media.unwrap().hwaccels, vec!["videotoolbox"]);
@@ -203,7 +203,11 @@ fn capabilities_registry_media_extension_without_device_initialization() {
             "project.create",
             "project.import",
             "edit.apply",
-            "edit.undo"
+            "edit.undo",
+            "template.define",
+            "template.instantiate",
+            "template.set_input",
+            "template.set_duration"
         ]
     );
     let ResultData::Capabilities(c) =
@@ -450,6 +454,11 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
     let input = json!({"project":path, "composition":composition,
         "region":{"origin":[0.0,0.0],"extent":[64.0,32.0],"pixels":[64,32]}});
     let time = json!({"num":"1", "den":"2"});
+    let definition: Json = serde_json::from_str(include_str!(
+        "../../../examples/template-001.definition.json"
+    ))
+    .unwrap();
+    let instance = json!({"id":uuid, "definition_ref":definition["id"], "version":"1.0.0", "duration":time, "inputs":{}});
     let requests = vec![
         json!({"operation":"project.create", "project":path, "document":p}),
         json!({"operation":"project.import", "project":path, "base_revision":"1", "document":p}),
@@ -467,6 +476,10 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
         json!({"operation":"property.sample", "project":path, "composition":composition, "keys":[
             {"kind":"node", "instance_path":[], "node":comp(&p).nodes[0].id,"property":comp(&p).nodes[0].properties[0].id()}], "times":[time]}),
         json!({"operation":"capabilities.get"}),
+        json!({"operation":"template.define", "project":path, "base_revision":"1", "session_id":uuid, "idempotency_key":"define", "definition":definition}),
+        json!({"operation":"template.instantiate", "project":path, "base_revision":"1", "session_id":uuid, "idempotency_key":"place", "composition":composition, "node":uuid, "index":0, "instance":instance}),
+        json!({"operation":"template.set_input", "project":path, "base_revision":"1", "session_id":uuid, "idempotency_key":"input", "instance":uuid, "name":"headline", "value":{"kind":"string", "value":"text"}}),
+        json!({"operation":"template.set_duration", "project":path, "base_revision":"1", "session_id":uuid, "idempotency_key":"duration", "instance":uuid, "duration":time}),
     ];
     assert_eq!(requests.len(), command_registry().len());
     for request in requests {
@@ -742,6 +755,29 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
     execute(json!({"operation":"render.sequence", "input":input,
         "range":{"start":{"num":"0","den":"1"}, "end":{"num":"1","den":"1"}},
         "frame_rate":{"num":"1","den":"1"}, "output_directory":dir.path().join("frames")}));
+    let template_document: Json =
+        serde_json::from_str(include_str!("../../../examples/template-001.project.json")).unwrap();
+    let definition: Json = serde_json::from_str(include_str!(
+        "../../../examples/template-001.definition.json"
+    ))
+    .unwrap();
+    let template_path = dir.path().join("template-contracts.kronello");
+    execute(
+        json!({"operation":"project.create", "project":template_path, "document":template_document}),
+    );
+    execute(
+        json!({"operation":"template.define", "project":template_path, "base_revision":"1", "session_id":session, "idempotency_key":"define", "definition":definition}),
+    );
+    let instance = Uuid::new_v4();
+    execute(
+        json!({"operation":"template.instantiate", "project":template_path, "base_revision":"2", "session_id":session, "idempotency_key":"place", "composition":template_document["compositions"][0]["id"], "node":Uuid::new_v4(), "index":0, "instance":{"id":instance, "definition_ref":definition["id"], "version":"1.0.0", "duration":{"num":"5", "den":"1"}, "inputs":{}}}),
+    );
+    execute(
+        json!({"operation":"template.set_input", "project":template_path, "base_revision":"3", "session_id":session, "idempotency_key":"input", "instance":instance, "name":"headline", "value":{"kind":"string", "value":"日本語"}}),
+    );
+    execute(
+        json!({"operation":"template.set_duration", "project":template_path, "base_revision":"4", "session_id":session, "idempotency_key":"duration", "instance":instance, "duration":{"num":"8", "den":"1"}}),
+    );
     assert_eq!(
         checked,
         command_registry().into_iter().map(|c| c.name).collect()
@@ -766,6 +802,20 @@ fn all_filesystem_boundaries_reject_uris_before_access() {
     let input = json!({"project":"missing.kronello", "composition":composition,
         "region":{"origin":[0.0,0.0],"extent":[64.0,32.0],"pixels":[8,4]}});
     let time = json!({"num":"0","den":"1"});
+    let definition: Json = serde_json::from_str(include_str!(
+        "../../../examples/template-001.definition.json"
+    ))
+    .unwrap();
+    let uuid = Uuid::new_v4();
+    let project = "https://example.invalid/template.kronello";
+    for request in [
+        json!({"operation":"template.define", "project":project, "base_revision":"1", "session_id":uuid, "idempotency_key":"define", "definition":definition}),
+        json!({"operation":"template.instantiate", "project":project, "base_revision":"1", "session_id":uuid, "idempotency_key":"place", "composition":composition, "node":uuid, "index":0, "instance":{"id":uuid,"definition_ref":definition["id"],"version":"1.0.0","duration":{"num":"5","den":"1"},"inputs":{}}}),
+        json!({"operation":"template.set_input", "project":project, "base_revision":"1", "session_id":uuid, "idempotency_key":"input", "instance":uuid, "name":"headline", "value":{"kind":"string", "value":"text"}}),
+        json!({"operation":"template.set_duration", "project":project, "base_revision":"1", "session_id":uuid, "idempotency_key":"duration", "instance":uuid, "duration":{"num":"5","den":"1"}}),
+    ] {
+        invalid_locator(request);
+    }
     let mut font_input = input.clone();
     font_input["fonts"] = json!([{"identity":document["texts"][0]["styles"][0]["font"], "path":"https://example.invalid/font.otf"}]);
     invalid_locator(json!({"operation":"render.frame", "input":font_input, "time":time}));

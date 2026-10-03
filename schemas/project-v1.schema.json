@@ -39,6 +39,18 @@
         "$ref": "#/$defs/DocumentObject3"
       }
     },
+    "template_instances": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DocumentObject6"
+      }
+    },
+    "templates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DocumentObject5"
+      }
+    },
     "texts": {
       "type": "array",
       "items": {
@@ -360,6 +372,28 @@
       "anyOf": [
         {
           "$ref": "#/$defs/TextDocument"
+        },
+        {
+          "$ref": "#/$defs/OpaqueObject"
+        }
+      ]
+    },
+    "DocumentObject5": {
+      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TemplateDefinition"
+        },
+        {
+          "$ref": "#/$defs/OpaqueObject"
+        }
+      ]
+    },
+    "DocumentObject6": {
+      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TemplateInstance"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -1255,6 +1289,266 @@
         "join",
         "cap",
         "miter_limit"
+      ]
+    },
+    "TemplateBandBinding": {
+      "type": "object",
+      "properties": {
+        "band_node": {
+          "$ref": "#/$defs/NodeId"
+        },
+        "padding": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FiniteF64"
+          },
+          "maxItems": 2,
+          "minItems": 2
+        },
+        "position_property": {
+          "$ref": "#/$defs/PropertyId"
+        },
+        "size_property": {
+          "$ref": "#/$defs/PropertyId"
+        },
+        "text_node": {
+          "$ref": "#/$defs/NodeId"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "text_node",
+        "band_node",
+        "size_property",
+        "position_property",
+        "padding"
+      ]
+    },
+    "TemplateConstraints": {
+      "type": "object",
+      "properties": {
+        "bands": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/TemplateBandBinding"
+          }
+        },
+        "max_lines": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "default": {}
+        }
+      },
+      "additionalProperties": false
+    },
+    "TemplateDefinition": {
+      "type": "object",
+      "properties": {
+        "composition_ref": {
+          "$ref": "#/$defs/CompositionId"
+        },
+        "constraints": {
+          "$ref": "#/$defs/TemplateConstraints"
+        },
+        "content_hash": {
+          "description": "Hash of the complete reachable authoring content, fixed by define.",
+          "type": "string"
+        },
+        "duration_policy": {
+          "$ref": "#/$defs/TemplateDurationPolicy"
+        },
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "public_inputs": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/TemplateInput"
+          }
+        },
+        "template_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "template_id",
+        "version",
+        "composition_ref",
+        "public_inputs",
+        "duration_policy",
+        "constraints",
+        "content_hash"
+      ]
+    },
+    "TemplateDurationPolicy": {
+      "type": "object",
+      "properties": {
+        "intro": {
+          "$ref": "#/$defs/Duration"
+        },
+        "middle_mode": {
+          "$ref": "#/$defs/TemplateMiddleMode"
+        },
+        "minimum_middle": {
+          "$ref": "#/$defs/Duration"
+        },
+        "outro": {
+          "$ref": "#/$defs/Duration"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "intro",
+        "outro",
+        "minimum_middle",
+        "middle_mode"
+      ]
+    },
+    "TemplateInput": {
+      "type": "object",
+      "properties": {
+        "choices": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "default": {
+          "$ref": "#/$defs/Value"
+        },
+        "maximum": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FiniteF64"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "minimum": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FiniteF64"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target": {
+          "$ref": "#/$defs/TemplateInputTarget"
+        },
+        "value_type": {
+          "$ref": "#/$defs/ValueType"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "value_type",
+        "default",
+        "target"
+      ]
+    },
+    "TemplateInputTarget": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "property": {
+              "type": "object",
+              "properties": {
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                },
+                "property": {
+                  "$ref": "#/$defs/PropertyId"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "node",
+                "property"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "property"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "object",
+              "properties": {
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "node"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "text"
+          ]
+        }
+      ]
+    },
+    "TemplateInstance": {
+      "type": "object",
+      "properties": {
+        "definition_ref": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "duration": {
+          "$ref": "#/$defs/Duration"
+        },
+        "id": {
+          "$ref": "#/$defs/CompositionInstanceId"
+        },
+        "inputs": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Value"
+          },
+          "default": {}
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "definition_ref",
+        "version",
+        "duration"
+      ]
+    },
+    "TemplateMiddleMode": {
+      "type": "string",
+      "enum": [
+        "stretch"
       ]
     },
     "TextDirection": {

@@ -53,3 +53,22 @@
 |---|---|---|
 | M2 | TEMPLATE-001 | 公開入力、定義と instance 入力の分離、版固定、保護時間区間、背景帯の単方向追従と overflow 検出 |
 | M3 | TEMPLATE-002 | 短尺拒否 / hold / loop / stretch、縦横比 variant、data 入力、版移行の差分計画 |
+
+### TEMPLATE-001 の実装規約（M2）
+
+`Project.templates` の `TemplateDefinition` は版ごとに不変の ID と version、composition_ref、型付き public_inputs（default / 数値範囲 / Enum choices / target）、duration_policy、constraints、到達内容の content_hash を保持する。
+`Project.template_instances` は placement ID、定義 ID、固定 version、duration、入力上書きを別保存する。
+`template.define` と `template.set_input` は別の共通 service command。`template.instantiate` で配置し、`template.set_duration` で尺を変更する。
+同じ版の再公開、暗黙の版移行、固定した authoring 内容の編集は拒否する。新版の公開入力変更は既存 instance へ伝播しない。
+到達内容の hash には入れ子の template の版・既定値・instance 入力も含め、内側の変更で外側の固定版が暗黙に変わることを防ぐ。
+未知の定義・instance は `DocumentObject::Opaque` として create / import / export で保存する。保存できることと編集・実行できることを区別し、最終レンダーでは選択 Composition から到達する template だけを検証する。
+既存の公開版の内容を未知フィールドで opaque に変える import は、版固定を回避する変更として拒否する。
+
+M2 は有理数の `PiecewiseLinear` TimeMap により中間を stretch し、intro / outro の長さを保持する。
+hold / loop、variant、data、移行の差分・比較は M3 の TEMPLATE-002 に残す。
+保護区間と minimum_middle を満たせない尺は TimeMap を構築せず `DURATION_TOO_SHORT`。
+
+背景帯の `size` / `position` は text の `layout_bounds` に padding を加えた値だけを読む。
+上位 compiler が組版後に外部 `LayoutValue` を供給し、評価 DAG は text の Property → LayoutValue → 背景帯 Property を宣言する。
+`max_lines` 超過は `TEMPLATE_OVERFLOW` として最終レンダーを拒否する。
+実装範囲・制約・受け入れ条件とテストの対応は [TEMPLATE-001 検証](../testing/template-001.md) を参照。

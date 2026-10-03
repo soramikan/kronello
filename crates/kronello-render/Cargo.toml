@@ -12,6 +12,7 @@ workspace = true
 
 [dependencies]
 schemars = { version = "1", features = ["uuid1"] }
+kronello-template = { path = "../kronello-template" }
 kronello-model = { path = "../kronello-model" }
 kronello-time = { path = "../kronello-time" }
 kronello-eval = { path = "../kronello-eval" }

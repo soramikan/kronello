@@ -113,7 +113,10 @@ impl Mutation {
                     // collection without a whole-array inverse that could erase
                     // a later, independent content insertion.
                     if depth == 0
-                        && matches!(part.as_str(), "shapes" | "texts")
+                        && matches!(
+                            part.as_str(),
+                            "shapes" | "texts" | "templates" | "template_instances"
+                        )
                         && !object.contains_key(part)
                     {
                         object.insert(part.clone(), Value::Array(Vec::new()));

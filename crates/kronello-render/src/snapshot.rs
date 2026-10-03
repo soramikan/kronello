@@ -1,8 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use kronello_eval::{
-    DependencyDeclarations, DependencyGraph, EvaluationSnapshot, ReferenceBindings,
-};
+use kronello_eval::{DependencyGraph, EvaluationSnapshot, ReferenceBindings};
 use kronello_model::*;
 use kronello_text::{FontData, LayoutResult};
 use kronello_time::Time;
@@ -229,6 +227,7 @@ impl RenderSnapshot {
                 "working space must be linear and flatten tolerance positive".into(),
             ));
         }
+        kronello_template::validate_reachable(&self.project, self.composition)?;
         self.definitions()?;
         Ok(())
     }
@@ -363,7 +362,12 @@ pub fn build_scene_ir_with_cache(
         curves.push(curve.clone());
     }
     let refs = ReferenceBindings::new();
-    let deps = DependencyDeclarations::new();
+    let mut templates = crate::template::TemplateRuntime::compile(
+        &snapshot.project,
+        &definitions,
+        snapshot.composition,
+    )?;
+    let deps = templates.dependencies.clone();
     let graph = DependencyGraph::compile(
         EvaluationSnapshot {
             compositions: &definitions,
@@ -375,11 +379,16 @@ pub fn build_scene_ir_with_cache(
         },
         snapshot.composition,
     )?;
+    templates.layout_inputs(&snapshot.project, &definitions, &graph, time, fonts, cache)?;
     let identity = snapshot.evaluation_content_hash()?;
     let evaluated = graph.evaluate_scene_with_properties(time, &mut |keys, time| {
-        keys.iter()
-            .map(|key| Ok((key.clone(), cache.evaluate(&graph, &identity, key, time)?)))
-            .collect()
+        if snapshot.project.template_instances.is_empty() {
+            keys.iter()
+                .map(|key| Ok((key.clone(), cache.evaluate(&graph, &identity, key, time)?)))
+                .collect()
+        } else {
+            graph.evaluate_properties_with_inputs(keys, time, &templates.inputs)
+        }
     })?;
     if evaluated.nodes.len() > 1024 {
         return Err(RenderError::UnsupportedFeature(
@@ -430,10 +439,12 @@ pub fn build_scene_ir_with_cache(
                 })?
                 .ok_or(TextError::MissingContent { id: content_ref })?;
                 text.validate(&authored.properties, &registry)?;
-                let resolved = text.resolve(&values)?;
+                let mut resolved = text.resolve(&values)?;
+                templates.text_override(&n.key, &mut resolved)?;
                 layout_content_hash = Some(crate::layout_content_hash(&resolved)?);
                 used_fonts.extend(resolved.styles.iter().map(|s| s.font.clone()));
-                SceneContent::Text(cache.layout(&resolved, fonts)?)
+                let layout = cache.layout(&resolved, fonts)?;
+                SceneContent::Text(layout)
             }
             _ => SceneContent::Empty,
         };

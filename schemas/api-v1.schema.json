@@ -467,6 +467,28 @@
       ],
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
     },
+    "DocumentObject5": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TemplateDefinition"
+        },
+        {
+          "$ref": "#/$defs/OpaqueObject"
+        }
+      ],
+      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
+    },
+    "DocumentObject6": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TemplateInstance"
+        },
+        {
+          "$ref": "#/$defs/OpaqueObject"
+        }
+      ],
+      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
+    },
     "Duration": {
       "additionalProperties": false,
       "description": "A nonnegative length in seconds. Zero is permitted.",
@@ -525,6 +547,18 @@
     "EditCommand": {
       "description": "Externally tagged commands decode directly, retaining strict fields and\nconcrete model number decoding instead of serde's tagged Content buffer.",
       "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "template": {
+              "$ref": "#/$defs/TemplateCommand"
+            }
+          },
+          "required": [
+            "template"
+          ],
+          "type": "object"
+        },
         {
           "additionalProperties": false,
           "properties": {
@@ -1668,7 +1702,7 @@
       "type": "string"
     },
     "Mutation": {
-      "description": "Paths use object-member segments, avoiding ambiguous JSON pointer escaping.\nAn array segment selects an object by its UUID `id`, never by position.\nArrays of scalar values (including draw order) are replaced as a unit.",
+      "description": "Paths use object-member segments, avoiding ambiguous JSON pointer escaping.\nAn array segment selects an object by its UUID `id`, never by position.\nThe service replaces ordered arrays (including modifiers and draw order)\nas a unit; only unordered model collections use member paths.",
       "oneOf": [
         {
           "additionalProperties": false,
@@ -2121,6 +2155,18 @@
           },
           "type": "array"
         },
+        "template_instances": {
+          "items": {
+            "$ref": "#/$defs/DocumentObject6"
+          },
+          "type": "array"
+        },
+        "templates": {
+          "items": {
+            "$ref": "#/$defs/DocumentObject5"
+          },
+          "type": "array"
+        },
         "texts": {
           "items": {
             "$ref": "#/$defs/DocumentObject4"
@@ -2445,6 +2491,168 @@
     },
     "Request": {
       "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "base_revision": {
+              "type": "string"
+            },
+            "duration": {
+              "$ref": "#/$defs/Duration"
+            },
+            "idempotency_key": {
+              "type": "string"
+            },
+            "instance": {
+              "$ref": "#/$defs/CompositionInstanceId"
+            },
+            "operation": {
+              "const": "template.set_duration",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "session_id": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "base_revision",
+            "session_id",
+            "idempotency_key",
+            "instance",
+            "duration"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "base_revision": {
+              "type": "string"
+            },
+            "definition": {
+              "$ref": "#/$defs/TemplateDefinition"
+            },
+            "idempotency_key": {
+              "type": "string"
+            },
+            "operation": {
+              "const": "template.define",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "session_id": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "base_revision",
+            "session_id",
+            "idempotency_key",
+            "definition"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "base_revision": {
+              "type": "string"
+            },
+            "composition": {
+              "$ref": "#/$defs/CompositionId"
+            },
+            "idempotency_key": {
+              "type": "string"
+            },
+            "index": {
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "instance": {
+              "$ref": "#/$defs/TemplateInstance"
+            },
+            "node": {
+              "$ref": "#/$defs/NodeId"
+            },
+            "operation": {
+              "const": "template.instantiate",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "session_id": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "base_revision",
+            "session_id",
+            "idempotency_key",
+            "composition",
+            "node",
+            "index",
+            "instance"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "base_revision": {
+              "type": "string"
+            },
+            "idempotency_key": {
+              "type": "string"
+            },
+            "instance": {
+              "$ref": "#/$defs/CompositionInstanceId"
+            },
+            "name": {
+              "type": "string"
+            },
+            "operation": {
+              "const": "template.set_input",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "session_id": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/Value"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "base_revision",
+            "session_id",
+            "idempotency_key",
+            "instance",
+            "name",
+            "value"
+          ],
+          "type": "object"
+        },
         {
           "additionalProperties": false,
           "properties": {
@@ -3576,6 +3784,522 @@
         "join",
         "cap",
         "miter_limit"
+      ],
+      "type": "object"
+    },
+    "TemplateBandBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "band_node": {
+          "$ref": "#/$defs/NodeId"
+        },
+        "padding": {
+          "items": {
+            "$ref": "#/$defs/FiniteF64"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "position_property": {
+          "$ref": "#/$defs/PropertyId"
+        },
+        "size_property": {
+          "$ref": "#/$defs/PropertyId"
+        },
+        "text_node": {
+          "$ref": "#/$defs/NodeId"
+        }
+      },
+      "required": [
+        "text_node",
+        "band_node",
+        "size_property",
+        "position_property",
+        "padding"
+      ],
+      "type": "object"
+    },
+    "TemplateCommand": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "define": {
+              "additionalProperties": false,
+              "properties": {
+                "definition": {
+                  "$ref": "#/$defs/TemplateDefinition"
+                }
+              },
+              "required": [
+                "definition"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "define"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "instantiate": {
+              "additionalProperties": false,
+              "properties": {
+                "composition": {
+                  "$ref": "#/$defs/CompositionId"
+                },
+                "index": {
+                  "format": "uint",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "instance": {
+                  "$ref": "#/$defs/TemplateInstance"
+                },
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                }
+              },
+              "required": [
+                "composition",
+                "node",
+                "index",
+                "instance"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "instantiate"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "set_input": {
+              "additionalProperties": false,
+              "properties": {
+                "instance": {
+                  "$ref": "#/$defs/CompositionInstanceId"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "value": {
+                  "$ref": "#/$defs/Value"
+                }
+              },
+              "required": [
+                "instance",
+                "name",
+                "value"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "set_input"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "set_duration": {
+              "additionalProperties": false,
+              "properties": {
+                "duration": {
+                  "$ref": "#/$defs/Duration"
+                },
+                "instance": {
+                  "$ref": "#/$defs/CompositionInstanceId"
+                }
+              },
+              "required": [
+                "instance",
+                "duration"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "set_duration"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "TemplateConstraints": {
+      "additionalProperties": false,
+      "properties": {
+        "bands": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/TemplateBandBinding"
+          },
+          "type": "array"
+        },
+        "max_lines": {
+          "additionalProperties": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "default": {},
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "TemplateDefineRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision": {
+          "type": "string"
+        },
+        "definition": {
+          "$ref": "#/$defs/TemplateDefinition"
+        },
+        "idempotency_key": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "session_id": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "base_revision",
+        "session_id",
+        "idempotency_key",
+        "definition"
+      ],
+      "type": "object"
+    },
+    "TemplateDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "composition_ref": {
+          "$ref": "#/$defs/CompositionId"
+        },
+        "constraints": {
+          "$ref": "#/$defs/TemplateConstraints"
+        },
+        "content_hash": {
+          "description": "Hash of the complete reachable authoring content, fixed by define.",
+          "type": "string"
+        },
+        "duration_policy": {
+          "$ref": "#/$defs/TemplateDurationPolicy"
+        },
+        "id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "public_inputs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/TemplateInput"
+          },
+          "type": "object"
+        },
+        "template_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "template_id",
+        "version",
+        "composition_ref",
+        "public_inputs",
+        "duration_policy",
+        "constraints",
+        "content_hash"
+      ],
+      "type": "object"
+    },
+    "TemplateDurationPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "intro": {
+          "$ref": "#/$defs/Duration"
+        },
+        "middle_mode": {
+          "$ref": "#/$defs/TemplateMiddleMode"
+        },
+        "minimum_middle": {
+          "$ref": "#/$defs/Duration"
+        },
+        "outro": {
+          "$ref": "#/$defs/Duration"
+        }
+      },
+      "required": [
+        "intro",
+        "outro",
+        "minimum_middle",
+        "middle_mode"
+      ],
+      "type": "object"
+    },
+    "TemplateInput": {
+      "additionalProperties": false,
+      "properties": {
+        "choices": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "default": {
+          "$ref": "#/$defs/Value"
+        },
+        "maximum": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FiniteF64"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "minimum": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FiniteF64"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target": {
+          "$ref": "#/$defs/TemplateInputTarget"
+        },
+        "value_type": {
+          "$ref": "#/$defs/ValueType"
+        }
+      },
+      "required": [
+        "value_type",
+        "default",
+        "target"
+      ],
+      "type": "object"
+    },
+    "TemplateInputTarget": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "property": {
+              "additionalProperties": false,
+              "properties": {
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                },
+                "property": {
+                  "$ref": "#/$defs/PropertyId"
+                }
+              },
+              "required": [
+                "node",
+                "property"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "property"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "text": {
+              "additionalProperties": false,
+              "properties": {
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                }
+              },
+              "required": [
+                "node"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "TemplateInstance": {
+      "additionalProperties": false,
+      "properties": {
+        "definition_ref": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "duration": {
+          "$ref": "#/$defs/Duration"
+        },
+        "id": {
+          "$ref": "#/$defs/CompositionInstanceId"
+        },
+        "inputs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Value"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "definition_ref",
+        "version",
+        "duration"
+      ],
+      "type": "object"
+    },
+    "TemplateInstantiateRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision": {
+          "type": "string"
+        },
+        "composition": {
+          "$ref": "#/$defs/CompositionId"
+        },
+        "idempotency_key": {
+          "type": "string"
+        },
+        "index": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "instance": {
+          "$ref": "#/$defs/TemplateInstance"
+        },
+        "node": {
+          "$ref": "#/$defs/NodeId"
+        },
+        "project": {
+          "type": "string"
+        },
+        "session_id": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "base_revision",
+        "session_id",
+        "idempotency_key",
+        "composition",
+        "node",
+        "index",
+        "instance"
+      ],
+      "type": "object"
+    },
+    "TemplateMiddleMode": {
+      "enum": [
+        "stretch"
+      ],
+      "type": "string"
+    },
+    "TemplateSetDurationRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision": {
+          "type": "string"
+        },
+        "duration": {
+          "$ref": "#/$defs/Duration"
+        },
+        "idempotency_key": {
+          "type": "string"
+        },
+        "instance": {
+          "$ref": "#/$defs/CompositionInstanceId"
+        },
+        "project": {
+          "type": "string"
+        },
+        "session_id": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "base_revision",
+        "session_id",
+        "idempotency_key",
+        "instance",
+        "duration"
+      ],
+      "type": "object"
+    },
+    "TemplateSetInputRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision": {
+          "type": "string"
+        },
+        "idempotency_key": {
+          "type": "string"
+        },
+        "instance": {
+          "$ref": "#/$defs/CompositionInstanceId"
+        },
+        "name": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "session_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/Value"
+        }
+      },
+      "required": [
+        "project",
+        "base_revision",
+        "session_id",
+        "idempotency_key",
+        "instance",
+        "name",
+        "value"
       ],
       "type": "object"
     },

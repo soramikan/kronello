@@ -17,6 +17,7 @@ test-adapter-unavailable = []
 [dependencies]
 schemars = { version = "1", features = ["uuid1"] }
 kronello-eval = { path = "../kronello-eval" }
+kronello-template = { path = "../kronello-template" }
 kronello-model = { path = "../kronello-model" }
 kronello-time = { path = "../kronello-time" }
 kronello-store = { path = "../kronello-store" }

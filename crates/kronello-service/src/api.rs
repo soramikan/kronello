@@ -59,7 +59,11 @@ macro_rules! commands {
             ("history.list", true, HistoryRequest, HistoryResult),
             ("scene.query", true, SceneQueryRequest, SceneQueryResult),
             ("property.sample", true, PropertySampleRequest, PropertySampleResult),
-            ("capabilities.get", true, CapabilitiesRequest, CapabilitiesResult)
+            ("capabilities.get", true, CapabilitiesRequest, CapabilitiesResult),
+            ("template.define", false, TemplateDefineRequest, kronello_store::Event),
+            ("template.instantiate", false, TemplateInstantiateRequest, kronello_store::Event),
+            ("template.set_input", false, TemplateSetInputRequest, kronello_store::Event),
+            ("template.set_duration", false, TemplateSetDurationRequest, kronello_store::Event)
         }
     };
 }
@@ -94,6 +98,7 @@ impl CapabilitiesResult {
                 "constant",
                 "curve",
                 "selective_undo",
+                "template",
             ]
             .map(String::from)
             .to_vec(),

@@ -1,6 +1,6 @@
 # 08 API・CLI・MCP・エージェント
 
-GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001-shared-command-query-api.md)）。M1 CLI-001 と M2 SERVICE-001 / API-001 の実装範囲を次節に示す。それ以外の後続 API・CLI・MCP は提案であり、実装済みではない。
+GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001-shared-command-query-api.md)）。M1 CLI-001 と M2 SERVICE-001 / API-001 / TEMPLATE-001 の実装範囲を次節に示す。それ以外の後続 API・CLI・MCP は提案であり、実装済みではない。
 
 ## M1 CLI-001 の実装範囲
 
@@ -148,9 +148,9 @@ capabilities はコンパイル済み対応範囲を示し、GPU adapter の稼�
 
 ### 公開 schema と registry
 
-[schemas/api-v1.schema.json](../../schemas/api-v1.schema.json) は Draft 2020-12。Request / Response envelope、全13操作の payload / successful result、型付き EditCommand を共有 Rust 型から生成する。`api_json_schema()` と committed schema の一致を通常テストで確認する。再生成は `cargo run -p kronello-service --example api_schema --locked > schemas/api-v1.schema.json`。版はファイル名・`$id`・`x-api-schema-version` で固定し、既存 Request に必須 version field を追加しない。Project document は従来の公開型 / schema を共有する。
+[schemas/api-v1.schema.json](../../schemas/api-v1.schema.json) は Draft 2020-12。Request / Response envelope、全17操作の payload / successful result、型付き EditCommand を共有 Rust 型から生成する。`api_json_schema()` と committed schema の一致を通常テストで確認する。再生成は `cargo run -p kronello-service --example api_schema --locked > schemas/api-v1.schema.json`。版はファイル名・`$id`・`x-api-schema-version` で固定し、既存 Request に必須 version field を追加しない。Project document は従来の公開型 / schema を共有する。
 
-`command_registry()` の CommandDescriptor は name / read_only / request_schema / response_schema を持つ。schema refs は同ファイルの `$defs` を指す。request_schema は operation tag を除いた payload、response_schema は status / kind を除いた successful value。MCP-001 / FFI-001 は同じ registry と execute / execute_json を使用できる。registry の13操作は project.create / import / export / info、render.frame / sequence、edit.plan / apply / undo、history.list、scene.query、property.sample、capabilities.get。project.create / import / edit.apply / undo が mutating。他は project に対し read-only（render.sequence は output directory に成果物を作る）。
+`command_registry()` の CommandDescriptor は name / read_only / request_schema / response_schema を持つ。schema refs は同ファイルの `$defs` を指す。request_schema は operation tag を除いた payload、response_schema は status / kind を除いた successful value。MCP-001 / FFI-001 は同じ registry と execute / execute_json を使用できる。registry の17操作は project.create / import / export / info、render.frame / sequence、edit.plan / apply / undo、history.list、scene.query、property.sample、capabilities.get、template.define / instantiate / set_input / set_duration。project.create / import / edit.apply / undo と template の4操作が mutating。他は project に対し read-only（render.sequence は output directory に成果物を作る）。
 
 request envelope・既知 payload は未知 field と重複 field を拒否する。schema に任意 shell、外部 URL fetch、raw FFmpeg args の実行 field は設けない。project / font / output path と assets 内の locator の URI scheme は filesystem access の前に `INVALID_REQUEST` とする。Windows drive path は local path として許す。素材の name / text や未知 Project 内容は不活性なデータであり、命令として実行しない。Project の未知 field 保持と、API envelope の厳格な decode は別の契約である。
 
@@ -177,9 +177,9 @@ request envelope・既知 payload は未知 field と重複 field を拒否す�
 
 ## 変更 API
 
-以下の直接操作名は提案。SERVICE-001 の実装は `edit.plan` / `edit.apply` 内の型付き `EditCommand` を使う。
+以下の直接操作名は提案。SERVICE-001 の実装は `edit.plan` / `edit.apply` 内の型付き `EditCommand` を使う。TEMPLATE-001 の実装済みの4操作は後述の「TEMPLATE-001 の Command」を参照し、`EditCommand::Template` としても利用できる。
 
-`composition.create`、`scene.node.add`、`scene.parent.set`、`animation.keyframes.upsert`、`expression.bind`、`template.instantiate`、`template.inputs.set`、`instance.retime` 等の型付き操作を transaction へ格納する。
+`composition.create`、`scene.node.add`、`scene.parent.set`、`animation.keyframes.upsert`、`expression.bind`、`instance.retime` 等の型付き操作を transaction へ格納する。
 GUI からも同じ操作を使う。
 
 ```text
@@ -254,3 +254,7 @@ kronello render --project demo.kronello --profile hevc-4k \
 - WASM 拡張を導入する場合も WASI 権限を原則与えず、fuel / epoch、メモリ、host call の制限を別々に設定する。
 - WASM の CPU 命令制限は、そこから発行した GPU 処理時間を制限するものではない。
 - 未知のシェーダーやネイティブプラグインは別信頼区分にし、初期の自動化は組み込みノードに限定する。
+
+### TEMPLATE-001 の Command
+
+`template.define` / `template.instantiate` / `template.set_input` / `template.set_duration` は同名の二語 CLI subcommand で呼ぶ。すべて `project`、`base_revision`、`session_id`、`idempotency_key` を持ち、成功時は `kind: edit` の Event を返す。定義・配置・入力・尺の payload と制約は [07 テンプレート](07-templates.md) を参照。これらも registry と公開 schema、revision・idempotency・Undo の共通経路を使う。

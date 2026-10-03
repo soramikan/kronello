@@ -1,0 +1,80 @@
+{
+  "id": "66f4eafb-9865-43cd-9438-1c0b00e0ac80",
+  "template_id": "9b131e76-d1cf-41aa-a621-f142d71447d0",
+  "version": "1.0.0",
+  "composition_ref": "e706c050-13fa-4654-9350-dcef30f1d792",
+  "public_inputs": {
+    "headline": {
+      "value_type": "string",
+      "default": {
+        "kind": "string",
+        "value": "日本語"
+      },
+      "target": {
+        "text": {
+          "node": "955f3ce9-88f6-4025-978a-6d42e5c08d31"
+        }
+      },
+      "minimum": null,
+      "maximum": null,
+      "choices": []
+    },
+    "accent": {
+      "value_type": "color",
+      "default": {
+        "kind": "color",
+        "value": {
+          "space": "srgb",
+          "components": {
+            "r": 0.7843137254901961,
+            "g": 0.1568627450980392,
+            "b": 0.0392156862745098,
+            "alpha": 1.0
+          }
+        }
+      },
+      "target": {
+        "property": {
+          "node": "adcfcd01-95a0-4292-ba82-61369bf4ac8c",
+          "property": "4e4837d7-b8f7-47e6-a455-cc35e5b00cdd"
+        }
+      },
+      "minimum": null,
+      "maximum": null,
+      "choices": []
+    }
+  },
+  "duration_policy": {
+    "intro": {
+      "num": "2",
+      "den": "5"
+    },
+    "outro": {
+      "num": "3",
+      "den": "10"
+    },
+    "minimum_middle": {
+      "num": "1",
+      "den": "2"
+    },
+    "middle_mode": "stretch"
+  },
+  "constraints": {
+    "bands": [
+      {
+        "text_node": "955f3ce9-88f6-4025-978a-6d42e5c08d31",
+        "band_node": "adcfcd01-95a0-4292-ba82-61369bf4ac8c",
+        "size_property": "1d77434e-64ef-4de4-9e38-98bb71bb03fe",
+        "position_property": "cecd9404-ac4e-4245-9d6a-84aa26590fc6",
+        "padding": [
+          4.0,
+          2.0
+        ]
+      }
+    ],
+    "max_lines": {
+      "955f3ce9-88f6-4025-978a-6d42e5c08d31": 2
+    }
+  },
+  "content_hash": ""
+}

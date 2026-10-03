@@ -14,10 +14,11 @@
 | CompositionInstance | id, definition_ref, input_bindings, local_time_map, seed |
 | Property | id, type, units, source, modifiers, validation, capabilities |
 | AnimationCurve | id, value_type, keys, interpolation_version |
-| TemplateDefinition | id, version, composition_ref, public_inputs, duration_policy, constraints |
+| TemplateDefinition | id, template_id, version, composition_ref, public_inputs, duration_policy, constraints, content_hash |
+| TemplateInstance | id, definition_ref, version, duration, inputs |
 | RenderSnapshot | content_hash, schema_version, revision, asset/font/data locks, semantic_versions, profile |
 
-STORE-001 では `Project` の最小保存外枠として UUID `id`、`name`、構造版・意味版、Composition / Curve 集合、未知フィールドを実装した。上表の assets / sequences / templates 等は後続タスクの提案のまま。未知内容の保持と編集可否、公開 JSON Schema は [09 保存と同時編集](09-storage-concurrency.md) と [ADR-0046](../adr/0046-store-format-and-location-policy.md) を参照する。
+STORE-001 では `Project` の最小保存外枠として UUID `id`、`name`、構造版・意味版、Composition / Curve 集合、未知フィールドを実装した。TEMPLATE-001 は省略可能な `templates` / `template_instances` を追加し、定義の不変な版と配置ごとの入力を別保存する。assets / sequences 等は後続タスクの提案のまま。未知内容の保持と編集可否、公開 JSON Schema は [09 保存と同時編集](09-storage-concurrency.md) と [ADR-0046](../adr/0046-store-format-and-location-policy.md) を参照する。
 
 SourceRef は Asset、Composition、Generator を区別する。SourceRef の型が増えても Clip の編集意味は変えない。
 

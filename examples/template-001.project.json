@@ -1,0 +1,365 @@
+{
+  "id": "d5808faa-5b6f-4921-9797-8bbc0dcf5416",
+  "schema_version": 1,
+  "semantic_version": 1,
+  "name": "TEMPLATE-001 日本語 lower-third",
+  "compositions": [
+    {
+      "id": "89028f05-042b-49dc-a813-a45ab80c20d3",
+      "duration": {
+        "num": "8",
+        "den": "1"
+      },
+      "design_extent": {
+        "width": 64.0,
+        "height": 32.0
+      },
+      "edit_rate": {
+        "num": "24",
+        "den": "1"
+      },
+      "root_nodes": [],
+      "nodes": [],
+      "properties": []
+    },
+    {
+      "id": "e706c050-13fa-4654-9350-dcef30f1d792",
+      "duration": {
+        "num": "5",
+        "den": "1"
+      },
+      "design_extent": {
+        "width": 64.0,
+        "height": 32.0
+      },
+      "edit_rate": {
+        "num": "24",
+        "den": "1"
+      },
+      "root_nodes": [
+        "adcfcd01-95a0-4292-ba82-61369bf4ac8c",
+        "955f3ce9-88f6-4025-978a-6d42e5c08d31"
+      ],
+      "nodes": [
+        {
+          "id": "adcfcd01-95a0-4292-ba82-61369bf4ac8c",
+          "kind": {
+            "kind": "shape",
+            "value": {
+              "content_ref": "36bbe1b1-f5c0-46ba-90f3-3b4cb000e200"
+            }
+          },
+          "containment_parent": null,
+          "transform_parent": null,
+          "child_order": [],
+          "active_range": {
+            "start": {
+              "num": "0",
+              "den": "1"
+            },
+            "end": {
+              "num": "5",
+              "den": "1"
+            }
+          },
+          "properties": [
+            {
+              "id": "1d77434e-64ef-4de4-9e38-98bb71bb03fe",
+              "descriptor": {
+                "key": "kronello.shape.size",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "vec2",
+                  "value": [
+                    16.0,
+                    12.0
+                  ]
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "561797a3-732d-406d-8755-57fd074c0050",
+              "descriptor": {
+                "key": "kronello.shape.corner_radius",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 0.0
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "4e4837d7-b8f7-47e6-a455-cc35e5b00cdd",
+              "descriptor": {
+                "key": "kronello.fill_color",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "color",
+                  "value": {
+                    "space": "srgb",
+                    "components": {
+                      "r": 0.7843137254901961,
+                      "g": 0.1568627450980392,
+                      "b": 0.0392156862745098,
+                      "alpha": 1.0
+                    }
+                  }
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "cecd9404-ac4e-4245-9d6a-84aa26590fc6",
+              "descriptor": {
+                "key": "kronello.transform.position",
+                "version": 1
+              },
+              "source": {
+                "kind": "curve",
+                "value": "a06bc70e-d4cd-48d2-87f3-c7b5d8984c93"
+              },
+              "modifiers": []
+            },
+            {
+              "id": "04f5a966-c8a3-45b0-a1a9-ee990e09ab0e",
+              "descriptor": {
+                "key": "kronello.opacity",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 0.75
+                }
+              },
+              "modifiers": []
+            }
+          ]
+        },
+        {
+          "id": "955f3ce9-88f6-4025-978a-6d42e5c08d31",
+          "kind": {
+            "kind": "text",
+            "value": {
+              "content_ref": "295fc1de-bbfb-4744-8bcf-1f3875a93ed1"
+            }
+          },
+          "containment_parent": null,
+          "transform_parent": null,
+          "child_order": [],
+          "active_range": {
+            "start": {
+              "num": "0",
+              "den": "1"
+            },
+            "end": {
+              "num": "5",
+              "den": "1"
+            }
+          },
+          "properties": [
+            {
+              "id": "e84691d5-ae83-453b-a30d-5580455c224a",
+              "descriptor": {
+                "key": "kronello.text.font_size",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 12.0
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "8ab51dda-b6ed-4e08-9342-ba0c44f35a8d",
+              "descriptor": {
+                "key": "kronello.fill_color",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "color",
+                  "value": {
+                    "space": "srgb",
+                    "components": {
+                      "r": 0.0784313725490196,
+                      "g": 0.6274509803921569,
+                      "b": 0.23529411764705882,
+                      "alpha": 1.0
+                    }
+                  }
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "e9de66ef-6359-4dbb-ae53-19289e9acce2",
+              "descriptor": {
+                "key": "kronello.text.wrap_width",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 50.0
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "a506f1e9-55f2-4187-bbc6-3e1b4c8830cf",
+              "descriptor": {
+                "key": "kronello.text.line_height",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 16.0
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "f5cb616d-6566-46a3-9999-45e432b573b2",
+              "descriptor": {
+                "key": "kronello.text.alignment",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "enum",
+                  "value": "start"
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "4bdb44e9-7c70-47e4-8b37-de23c38efb21",
+              "descriptor": {
+                "key": "kronello.transform.position",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "vec2",
+                  "value": [
+                    20.0,
+                    5.0
+                  ]
+                }
+              },
+              "modifiers": []
+            }
+          ]
+        }
+      ],
+      "properties": []
+    }
+  ],
+  "curves": [
+    {
+      "id": "a06bc70e-d4cd-48d2-87f3-c7b5d8984c93",
+      "value_type": "vec2",
+      "keys": [
+        {
+          "time": {
+            "num": "0",
+            "den": "1"
+          },
+          "value": {
+            "kind": "vec2",
+            "value": [
+              1.0,
+              1.0
+            ]
+          },
+          "interpolation": {
+            "kind": "linear"
+          }
+        },
+        {
+          "time": {
+            "num": "1",
+            "den": "1"
+          },
+          "value": {
+            "kind": "vec2",
+            "value": [
+              9.0,
+              1.0
+            ]
+          },
+          "interpolation": {
+            "kind": "linear"
+          }
+        }
+      ],
+      "interpolation_version": 1
+    }
+  ],
+  "shapes": [
+    {
+      "id": "36bbe1b1-f5c0-46ba-90f3-3b4cb000e200",
+      "geometry": {
+        "kind": "rectangle",
+        "value": {
+          "size": "1d77434e-64ef-4de4-9e38-98bb71bb03fe",
+          "corner_radius": "561797a3-732d-406d-8755-57fd074c0050"
+        }
+      },
+      "fill": {
+        "color": "4e4837d7-b8f7-47e6-a455-cc35e5b00cdd",
+        "rule": "nonzero"
+      },
+      "stroke": null
+    }
+  ],
+  "texts": [
+    {
+      "id": "295fc1de-bbfb-4744-8bcf-1f3875a93ed1",
+      "layout_version": 1,
+      "text": "日本語",
+      "styles": [
+        {
+          "range": {
+            "start": 0,
+            "end": 9
+          },
+          "font": {
+            "family": "Noto Sans CJK JP",
+            "postscript_name": "NotoSansCJKjp-Regular",
+            "sha256": "68a3fc98800b2a27b371f2fb79991daf3633bd89309d4ffaa6946fd587f375b5",
+            "face_index": 0
+          },
+          "size": "e84691d5-ae83-453b-a30d-5580455c224a",
+          "fill": "8ab51dda-b6ed-4e08-9342-ba0c44f35a8d"
+        }
+      ],
+      "direction": "horizontal",
+      "wrap_width": "e9de66ef-6359-4dbb-ae53-19289e9acce2",
+      "line_height": "a506f1e9-55f2-4187-bbc6-3e1b4c8830cf",
+      "alignment": "f5cb616d-6566-46a3-9999-45e432b573b2"
+    }
+  ]
+}

@@ -4,6 +4,7 @@ mod cache;
 mod dag;
 mod output;
 mod snapshot;
+mod template;
 
 pub use cache::*;
 pub use dag::*;
@@ -17,6 +18,8 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum RenderError {
+    #[error(transparent)]
+    Template(#[from] kronello_template::TemplateError),
     #[error("UNSUPPORTED_FEATURE: {0}")]
     UnsupportedFeature(String),
     #[error("unsupported snapshot structure: {0}")]
@@ -47,6 +50,7 @@ pub enum RenderError {
 impl RenderError {
     pub fn code(&self) -> &'static str {
         match self {
+            Self::Template(e) => e.code(),
             Self::UnsupportedFeature(_) => "UNSUPPORTED_FEATURE",
             Self::UnsupportedSchema(_) => "UNSUPPORTED_SCHEMA",
             Self::Evaluation(e) => e.code(),
