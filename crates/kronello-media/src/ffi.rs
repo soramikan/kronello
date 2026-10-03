@@ -111,6 +111,7 @@ impl NativeRuntime {
                 ("avcodec", 1, 3, 4),
                 ("avformat", 2, 5, 6),
                 ("swscale", 3, 7, 8),
+                ("swresample", 4, 9, 10),
             ]
             .into_iter()
             .map(|(name, index, license, config)| LibraryCapability {
@@ -413,5 +414,255 @@ mod tests {
         assert!(!detail.message.is_empty());
         assert!(display.contains(&detail.code.to_string()));
         assert!(display.contains(&detail.message));
+    }
+}
+
+#[repr(C)]
+#[derive(Default)]
+struct NativeStreamInfo {
+    start: i64,
+    duration: i64,
+    kind: c_int,
+    num: c_int,
+    den: c_int,
+    rate: c_int,
+    channels: c_int,
+    width: c_int,
+    height: c_int,
+}
+unsafe extern "C" {
+    fn km_audio_open(k: *mut c_void, path: *const c_char, stream: c_int) -> *mut c_void;
+    fn km_audio_close(a: *mut c_void);
+    fn km_audio_time_base(a: *mut c_void, num: *mut c_int, den: *mut c_int);
+    fn km_audio_rate(a: *mut c_void) -> c_int;
+    fn km_audio_channels(a: *mut c_void) -> c_int;
+    fn km_audio_pts(a: *mut c_void) -> i64;
+    fn km_audio_input_samples(a: *mut c_void) -> c_int;
+    fn km_audio_count(a: *mut c_void) -> c_int;
+    fn km_audio_copy(a: *mut c_void, out: *mut f32, capacity: c_int) -> c_int;
+    fn km_audio_next(a: *mut c_void) -> c_int;
+    fn km_audio_encode(
+        k: *mut c_void,
+        path: *const c_char,
+        samples: *const i32,
+        count: i64,
+    ) -> c_int;
+    fn km_probe_open(k: *mut c_void, path: *const c_char) -> *mut c_void;
+    fn km_probe_close(k: *mut c_void, format: *mut c_void);
+    fn km_probe_count(format: *mut c_void) -> c_int;
+    fn km_probe_stream(format: *mut c_void, index: c_int, out: *mut NativeStreamInfo);
+    fn km_probe_codec(k: *mut c_void, format: *mut c_void, index: c_int) -> *const c_char;
+    fn km_probe_tag(k: *mut c_void, format: *mut c_void, key: *const c_char) -> *const c_char;
+    fn km_mux_av(
+        k: *mut c_void,
+        video: *const c_char,
+        audio: *const c_char,
+        path: *const c_char,
+        render_hash: *const c_char,
+        export_hash: *const c_char,
+    ) -> c_int;
+}
+
+pub(crate) struct AudioChunk {
+    pub pts: Option<Rational>,
+    pub input_samples: usize,
+    pub rate: u32,
+    pub channels: u32,
+    pub frames: Vec<[f32; 2]>,
+}
+pub(crate) struct NativeAudioDecoder<'a> {
+    ptr: NonNull<c_void>,
+    runtime: &'a NativeRuntime,
+    pub time_base: Rational,
+}
+impl<'a> NativeAudioDecoder<'a> {
+    pub(crate) fn open(
+        runtime: &'a NativeRuntime,
+        path: &Path,
+        stream: u32,
+    ) -> Result<Self, MediaError> {
+        let path = path_string(path)?;
+        let stream = i32::try_from(stream)
+            .map_err(|_| MediaError::InvalidInput("stream index overflow".into()))?;
+        // SAFETY: runtime and path live through the call, handle ownership is transferred.
+        let ptr = NonNull::new(unsafe { km_audio_open(runtime.0.as_ptr(), path.as_ptr(), stream) })
+            .ok_or_else(|| MediaError::Decode(runtime.error()))?;
+        let (mut num, mut den) = (0, 0);
+        unsafe { km_audio_time_base(ptr.as_ptr(), &mut num, &mut den) };
+        let time_base = match Rational::new(i64::from(num), i64::from(den)) {
+            Ok(v) if v > Rational::ZERO => v,
+            _ => {
+                unsafe { km_audio_close(ptr.as_ptr()) };
+                return Err(MediaError::Decode("invalid audio stream time base".into()));
+            }
+        };
+        Ok(Self {
+            ptr,
+            runtime,
+            time_base,
+        })
+    }
+    pub(crate) fn next(&mut self) -> Result<Option<AudioChunk>, MediaError> {
+        // SAFETY: the uniquely owned live handle is unchanged during the queried copy.
+        unsafe {
+            let ret = km_audio_next(self.ptr.as_ptr());
+            if ret < 0 {
+                let detail = self.runtime.error_detail();
+                return Err(
+                    if matches!(
+                        detail.operation.as_str(),
+                        "unsupported audio channel layout (mono/stereo only)"
+                            | "audio format changes within stream"
+                    ) {
+                        MediaError::UnsupportedFeature(self.runtime.error())
+                    } else {
+                        MediaError::Decode(self.runtime.error())
+                    },
+                );
+            }
+            if ret == 0 {
+                return Ok(None);
+            }
+            let count = km_audio_count(self.ptr.as_ptr());
+            if !(0..=2_097_152).contains(&count) {
+                return Err(MediaError::Decode("invalid audio copy size".into()));
+            }
+            let mut samples = vec![0.0; count as usize * 2];
+            if km_audio_copy(self.ptr.as_ptr(), samples.as_mut_ptr(), count * 2) != count * 2 {
+                return Err(MediaError::Decode("audio copy failed".into()));
+            }
+            let pts = km_audio_pts(self.ptr.as_ptr());
+            let input_samples = km_audio_input_samples(self.ptr.as_ptr());
+            let rate = km_audio_rate(self.ptr.as_ptr());
+            let channels = km_audio_channels(self.ptr.as_ptr());
+            if input_samples < 0 || rate <= 0 || !(1..=2).contains(&channels) {
+                return Err(MediaError::Decode("invalid decoded audio metadata".into()));
+            }
+            Ok(Some(AudioChunk {
+                pts: if pts == i64::MIN {
+                    None
+                } else {
+                    Some(Rational::from_integer(pts).checked_mul(self.time_base)?)
+                },
+                input_samples: input_samples as usize,
+                rate: rate as u32,
+                channels: channels as u32,
+                frames: samples.chunks_exact(2).map(|s| [s[0], s[1]]).collect(),
+            }))
+        }
+    }
+}
+impl Drop for NativeAudioDecoder<'_> {
+    fn drop(&mut self) {
+        unsafe { km_audio_close(self.ptr.as_ptr()) }
+    }
+}
+struct NativeProbe<'a> {
+    ptr: NonNull<c_void>,
+    runtime: &'a NativeRuntime,
+}
+impl Drop for NativeProbe<'_> {
+    fn drop(&mut self) {
+        unsafe { km_probe_close(self.runtime.0.as_ptr(), self.ptr.as_ptr()) }
+    }
+}
+impl NativeRuntime {
+    pub(crate) fn encode_audio(&self, output: &Path, samples: &[i32]) -> Result<(), MediaError> {
+        let path = path_string(output)?;
+        let count = i64::try_from(samples.len() / 2)
+            .map_err(|_| MediaError::InvalidInput("PCM size overflow".into()))?;
+        // SAFETY: exactly two S32 samples per frame, live for the entire synchronous call.
+        if unsafe { km_audio_encode(self.0.as_ptr(), path.as_ptr(), samples.as_ptr(), count) } < 0 {
+            return Err(MediaError::Encode(self.error()));
+        }
+        Ok(())
+    }
+    pub(crate) fn probe(&self, path: &Path) -> Result<MediaProbe, MediaError> {
+        let path = path_string(path)?;
+        // SAFETY: all native stream accesses are bounded by the queried count;
+        // strings are copied while the probe is live. RAII frees on every error.
+        unsafe {
+            let ptr = NonNull::new(km_probe_open(self.0.as_ptr(), path.as_ptr()))
+                .ok_or_else(|| MediaError::Decode(self.error()))?;
+            let probe = NativeProbe { ptr, runtime: self };
+            let count = km_probe_count(ptr.as_ptr());
+            if !(0..=1024).contains(&count) {
+                return Err(MediaError::Decode("stream budget exceeded".into()));
+            }
+            let mut streams = Vec::new();
+            for index in 0..count {
+                let mut info = NativeStreamInfo::default();
+                km_probe_stream(ptr.as_ptr(), index, &mut info);
+                let time_base = Rational::new(i64::from(info.num), i64::from(info.den))?;
+                if time_base <= Rational::ZERO {
+                    return Err(MediaError::Decode("invalid probe time base".into()));
+                }
+                let time = |tick: i64| -> Result<Option<Rational>, MediaError> {
+                    if tick == i64::MIN {
+                        Ok(None)
+                    } else {
+                        Ok(Some(Rational::from_integer(tick).checked_mul(time_base)?))
+                    }
+                };
+                streams.push(MediaStream {
+                    index: index as u32,
+                    kind: match info.kind {
+                        0 => StreamKind::Video,
+                        1 => StreamKind::Audio,
+                        _ => StreamKind::Other,
+                    },
+                    codec: string(km_probe_codec(self.0.as_ptr(), ptr.as_ptr(), index)),
+                    time_base,
+                    start: time(info.start)?,
+                    duration: time(info.duration)?,
+                    sample_rate: u32::try_from(info.rate).ok().filter(|v| *v != 0),
+                    channels: u32::try_from(info.channels).ok().filter(|v| *v != 0),
+                    width: u32::try_from(info.width).ok().filter(|v| *v != 0),
+                    height: u32::try_from(info.height).ok().filter(|v| *v != 0),
+                });
+            }
+            let tag = |name: &str| {
+                let key = CString::new(name).expect("constant tag without NUL");
+                string(km_probe_tag(self.0.as_ptr(), ptr.as_ptr(), key.as_ptr()))
+            };
+            let result = MediaProbe {
+                streams,
+                render_snapshot_hash: tag("kronello_render_snapshot_hash"),
+                export_snapshot_hash: tag("kronello_export_snapshot_hash"),
+            };
+            drop(probe);
+            Ok(result)
+        }
+    }
+    pub(crate) fn mux_av(
+        &self,
+        video: &Path,
+        audio: &Path,
+        output: &Path,
+        render_hash: &str,
+        export_hash: &str,
+    ) -> Result<(), MediaError> {
+        let video = path_string(video)?;
+        let audio = path_string(audio)?;
+        let output = path_string(output)?;
+        let render_hash = CString::new(render_hash)
+            .map_err(|_| MediaError::InvalidInput("hash contains NUL".into()))?;
+        let export_hash = CString::new(export_hash)
+            .map_err(|_| MediaError::InvalidInput("hash contains NUL".into()))?;
+        // SAFETY: all strings and the runtime live throughout the synchronous mux.
+        if unsafe {
+            km_mux_av(
+                self.0.as_ptr(),
+                video.as_ptr(),
+                audio.as_ptr(),
+                output.as_ptr(),
+                render_hash.as_ptr(),
+                export_hash.as_ptr(),
+            )
+        } < 0
+        {
+            return Err(MediaError::Encode(self.error()));
+        }
+        Ok(())
     }
 }

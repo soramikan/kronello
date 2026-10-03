@@ -2,7 +2,13 @@ fn main() {
     println!("cargo:rerun-if-changed=native/media.c");
     let mut build = cc::Build::new();
     build.file("native/media.c").flag_if_supported("-std=gnu11");
-    for name in ["libavutil", "libavcodec", "libavformat", "libswscale"] {
+    for name in [
+        "libavutil",
+        "libavcodec",
+        "libavformat",
+        "libswscale",
+        "libswresample",
+    ] {
         let lib = pkg_config::Config::new()
             .cargo_metadata(false)
             .probe(name)

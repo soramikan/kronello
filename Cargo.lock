@@ -808,6 +808,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "kronello-audio"
+version = "0.0.0"
+dependencies = [
+ "kronello-model",
+ "kronello-time",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
 name = "kronello-cli"
 version = "0.0.0"
 dependencies = [
@@ -872,8 +882,11 @@ name = "kronello-media"
 version = "0.0.0"
 dependencies = [
  "cc",
+ "kronello-audio",
+ "kronello-gpu",
  "kronello-model",
  "kronello-render",
+ "kronello-text",
  "kronello-time",
  "pkg-config",
  "serde",

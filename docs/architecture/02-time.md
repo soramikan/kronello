@@ -56,3 +56,7 @@ Composition は既定で親の連続時刻で評価する。編集レートが 2
 `clip.trim`、`clip.stretch`、`template_instance.retime` は別操作とする。
 尺の変更によって、保護されたイントロ・アウトロを黙って伸縮しない。
 音声のリタイム方針も別に宣言する。複雑な非単調 TimeMap に対する音声処理が未対応なら検証で拒否する。
+
+## AUDIO-000 の sample grid
+
+実装した `kronello-audio::sample_index` / `sample_range` は TIME-001 の SampleRate を再利用する。sample 境界は絶対 rational 時刻の数学的 floor、整数中間演算は checked i128。24 / 30000/1001 / 60000/1001 fps、非整数 sample 境界、負時刻、長尺と分割要求を検証する。最終 A/V export は frame に整列した絶対 range を要求し、音声の floor 境界と映像の rational duration の差を 1 sample 未満として報告する。両 stream はファイル上で PTS 0 に揃える。source trim と codec の決定は [ADR-0049](../adr/0049-audio-bus-timing-and-codec.md)、手順は [AUDIO-000](../testing/audio-000.md)。

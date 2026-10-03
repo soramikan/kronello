@@ -14,6 +14,8 @@ unsafe_code = "allow"
 all = "warn"
 
 [dependencies]
+kronello-audio = { path = "../kronello-audio" }
+kronello-text = { path = "../kronello-text" }
 kronello-model = { path = "../kronello-model" }
 kronello-time = { path = "../kronello-time" }
 kronello-render = { path = "../kronello-render" }
@@ -28,4 +30,5 @@ cc = "1"
 pkg-config = "0.3"
 
 [dev-dependencies]
+kronello-gpu = { path = "../kronello-gpu" }
 uuid = { version = "1", features = ["v4"] }
