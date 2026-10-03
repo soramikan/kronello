@@ -1,16 +1,16 @@
 # fixture と解析的 golden scene
 
-QA-001 の実装: fixture の生成・取得・台帳検証、`kronello-testkit` の意味的比較と CPU 画素比較、解析的期待値を持つ scene 定義を提供する。実際の編集モデル・組版・レンダーへの接続は後続タスクである。GPU の固定環境比較は [golden-comparison.md](golden-comparison.md) に分ける。
+QA-001 の実装: fixture の生成・取得・台帳検証、`kronello-testkit` の意味的比較と CPU 画素比較、解析的期待値を持つ scene 定義を提供する。日本語 fixture と実際の組版の接続は TEXT-001 で行い、golden scene と編集モデル・レンダーの接続は後続タスクである。GPU の固定環境比較は [golden-comparison.md](golden-comparison.md) に分ける。
 
 ## 素材と権利
 
 [ADR-0039](../adr/0039-test-fixtures.md) に従い、生成データは本プロジェクトの MIT OR Apache-2.0、取得フォントは OFL-1.1 とする。実写などの CC0 素材は現在未使用。出典・ライセンス・用途の台帳は [LEDGER.md](../../tests/fixtures/LEDGER.md)、機械可読の正本は [manifest.json](../../tests/fixtures/manifest.json)。
 
-同梱の上限は **1 ファイル 256 KiB、素材合計 1 MiB**。同梱データは約 27 KiB。大きい素材は `target/fixtures/external/` に取得する。Noto Sans CJK JP Regular（Sans2.004、約 16 MiB）は upstream commit `523d033d6cb47f4a80c58a35753646f5c3608a78` と SHA-256、byte 数を固定し、OFL 原文を同梱する。結合濁点・IVS・emoji の入力があっても、この単一フォントに全 glyph があると保証しない。fallback と組版の期待値は TEXT-001 で追加する。
+同梱の上限は **1 ファイル 256 KiB、素材合計 1 MiB**。同梱データは約 27 KiB。大きい素材は `target/fixtures/external/` に取得する。Noto Sans CJK JP Regular（Sans2.004、約 16 MiB）は upstream commit `523d033d6cb47f4a80c58a35753646f5c3608a78` と SHA-256、byte 数を固定し、OFL 原文を同梱する。結合濁点・IVS・emoji の入力があっても、この単一フォントに全 glyph があると保証しない。TEXT-001 は固定フォントで組版を検証し、欠落時に fallback せず型付きエラーにする。[TEXT-001 の検証](text-001.md) を参照。
 
 | 種類 | 内容 | 検証 |
 |---|---|---|
-| 日本語 JSON | 結合濁点、IVS、ZWJ emoji、異体字、禁則、ruby、縦書きの入力 | UTF-8 の byte hash、再生成一致、代表例の codepoint |
+| 日本語 JSON | 結合濁点、1 書記素複数 glyph、合字、IVS、ZWJ emoji、異体字、禁則、ruby、縦書きの入力 | UTF-8 の byte hash、再生成一致、代表例の codepoint |
 | 時刻 JSON | 24 / 25 / 30 / 30000/1001 / 60000/1001 fps、VFR、長尺フレーム | `{"num":"1","den":"24"}` の decimal string による正規化有理数。浮動小数点時刻は保存しない |
 | straight alpha PAM | 透明有色、半透明、不透明、低 alpha | 固定 byte hash、再生成一致。内部画像へ取り込む際は変換が必要 |
 | 線形 HDR RGBA16F | linear Rec.2020、premultiplied、little-endian binary16、4x1 | 負 RGB、1 超、alpha=0、微小 alpha の解析値。tone mapping を行わない |

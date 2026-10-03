@@ -194,7 +194,7 @@
       "priority": "P0",
       "area": "text",
       "title": "日本語組版とクラスタ/グリフ対応",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "COMP-001",
         "QA-001"

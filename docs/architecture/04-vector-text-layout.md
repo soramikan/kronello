@@ -45,13 +45,28 @@ UTF-8 + style spans + ruby associations
  -> linear-HDR compositing
 ```
 
-Parley / Fontique を基礎候補とするが、禁則、ルビ、縦書きの要件充足は個別に検証・補完する。
+TEXT-001 の横書きは下記の決定的な構成で実装した。Parley / Fontique は、将来の高度な組版で比較する候補として残す。禁則、ルビ、縦書きの要件充足は個別に検証・補完する。
 
 - Unicode の書記素クラスタとグリフは一対一ではない。元テキスト範囲から組版クラスタ・グリフへの対応を保持する。
 - 「一文字ずつ」は既定で組版クラスタを壊さない AnimationUnit に変換する。
 - ルビ付き文字は親文字 + ルビを一体の単位にする既定動作を用意し、独立演出は明示指定とする。
 - セレクターは文字、行、語、範囲、タグに対応するが、語分割の辞書・アルゴリズムを版管理する。
 - テキスト更新で範囲指定が無効になった場合は再計算を報告し、曖昧な古いグリフ番号をそのまま使用しない。
+
+### TEXT-001 の実装規約（組版意味版 1）
+
+`kronello-model::TextDocument` は正規化しない UTF-8 本文、半開 byte range の `TextStyleSpan`、`FontRef`、横書き / 縦書きの方向、ルビ関連、`layout_version` を持つ。`Project.texts` に保存し、`NodeKind::Text.content_ref` で参照する。本文と style の範囲更新は一体で行う。style は本文を隙間・重複なく覆い、拡張書記素の境界に限る。未知フィールド・方向 variant は `DocumentObject::Opaque` に保持し、未知組版版は `Project.ensure_editable` と組版入口で拒否する。旧 schema_version 1 文書では `texts` の省略を空集合として読み、空集合は出力しない。公開 Schema は共通 Rust 型から再生成する。
+
+- size / fill はノード所有の `PropertyId`、wrap_width / line_height / alignment も同じ評価基盤の参照とする。`text_descriptors()` を `SchemaRegistry::with_builtin()` に追加登録する。font_size・wrap_width・line_height は正の `design_px`、fill は既存の `kronello.fill_color`、alignment は `start` / `center` / `end` の Hold enum。`validate_text_contents` は内容の参照・Property の型と単位・定数の制約を照合する。`TextDocument::resolve` は任意時刻・instance の最終評価値を受け、再検証して `ResolvedText` を生成する。本文・FontRef・style 範囲は今回 Property にしない。
+- `FontRef` は family、PostScript 名、SHA-256（小文字 hex）、face index を固定する。純粋な `pin_font(bytes, face_index)` は import 境界用の identity を生成する。`layout(&ResolvedText, &[FontData])` は呼出側が渡した bytes の hash・face・metadata を照合し、システム探索や代替フォントを使わない。identity と一致する入力が欠ければ `MissingFont`、異なる bytes は `FontHashMismatch`、名前違いは `FontIdentityMismatch`。同じ identity の入力が複数あれば曖昧な選択を拒否する。
+- ライブラリは rustybuzz **0.20.1（MIT）** の OpenType shaping、ttf-parser **0.25.1（MIT OR Apache-2.0）** の metrics / cmap / outline、unicode-segmentation **1.12.0（MIT OR Apache-2.0、Unicode 16）**、unicode-linebreak **0.1.5（Apache-2.0、Unicode 15）**、unicode-script **0.5.8（MIT OR Apache-2.0）**、sha2 **0.10.9（MIT OR Apache-2.0）**。前 5 者を exact dependency、全体を Cargo.lock で固定する。少数の純粋な部品で font bytes とクラスタを直接追跡できるためこの構成を選んだ。Parley / Fontique の自動フォント解決や高度な行組版は今回必要としない。[rustybuzz API](https://docs.rs/rustybuzz/0.20.1/rustybuzz/)、[ttf-parser API](https://docs.rs/ttf-parser/0.25.1/ttf_parser/) を参照。
+- style / script / 明示改行ごとに language `ja`、左から右の shaping を行う。Unicode の拡張書記素内の各 codepoint に同じ元 cluster を割り当て、書記素を壊さない monotone cluster で、元 byte range ↔ 書記素 ↔ shaping cluster ↔ glyph の対応を保持する。既定 `AnimationUnit` は shaping cluster を分割せず、shaper の unsafe-to-break 境界も隣と一体化する。これらの index は導出値で、保存 ID や本文変更後の stable selector にしない。
+- soft break は Unicode 改行候補、cluster 境界、shaper の安全境界、基本禁則の積集合から貪欲に選ぶ。行頭禁止は句読点・閉じ括弧・長音・小書きかな等、行末禁止は開き括弧等。LF / CR / CRLF / U+2028 / U+2029 は禁則より優先する明示改行として、glyph のない source cluster を保持する。空本文・末尾改行は空の行 box を持つ。空白を削除・圧縮せず、ぶら下げ・追い込みは行わない。分割不能な語や禁則区間が幅を超えた場合は `LayoutLine.overflow = true` を返し、clip や cluster の強制分割をしない。後続 template の overflow 方針で許可・拒否を決める。
+- line_height は絶対 baseline 間隔。先頭 baseline は全文 style の最大 ascender、各行はそこから line_height ずつ下げる。行 box の高さも line_height とする。字形が box を越えることを許し、`layout_bounds` と分けて `ink_bounds` で表す。`layout_bounds` は `(0, 0)` から wrap_width × 行数 × line_height の矩形、`ink_bounds` は配置した outline の字形矩形の union（無 ink は `None`）。glyph の `position` と `Path` は text-local の `design_px`、+Y は下。Path は配置済みで、再度 position を足さない。fill はタグ付き straight Color のまま保持し、coverage raster と色付き合成は GPU-002 / RENDER-001 へ渡す。
+- `.notdef` が出た cluster は元の文字列・range・FontRef を列挙する `MissingGlyphs`。IVS / variation selector は cmap の対応も必須とし、shaper に selector が黙って捨てられる場合も拒否する。固定 Noto fixture の ZWJ emoji は欠落エラー、IVS は指定字形を選ぶ。bitmap / SVG / color glyph 表現は `UnsupportedGlyphOutline`。縦書き・ルビ・可変フォント軸・RTL / bidi・tab / control は型付き未対応とし、通常の横書きへ置換しない。
+- 意味版は `TextDocument.layout_version`、`TEXT_LAYOUT_VERSION` / `kronello-text::LAYOUT_VERSION` とも **1**。shaping・Unicode 分割・禁則・metrics・配置規約を変えると版を上げる。RenderSnapshot との対応付けは RENDER-001 の compile 境界で行う。関数は text IR の最終値・明示 bytes だけで結果を生成し、出力解像度・OS・呼出履歴を入力にしない。永続 cache は CACHE-001。本文 65,536 byte、style 4,096、glyph 131,072、導出 outline 合計 1,048,576 segment の保守的上限と非有限 geometry 検査を設ける。
+
+受け入れ条件と再現手順は [TEXT-001 の検証](../testing/text-001.md) に記録する。ルビ・縦書きの実行、単語辞書、高度な selector は TEXT-002 の未実装範囲として残す。
 
 ## レイアウトと描画の分離
 
