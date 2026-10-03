@@ -10,6 +10,10 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[features]
+# Fault injection for CLI integration tests; also requires debug assertions.
+test-adapter-unavailable = []
+
 [dependencies]
 kronello-model = { path = "../kronello-model" }
 kronello-time = { path = "../kronello-time" }

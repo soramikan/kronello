@@ -10,6 +10,9 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[features]
+test-adapter-unavailable = ["kronello-service/test-adapter-unavailable"]
+
 [[bin]]
 name = "kronello"
 path = "src/main.rs"
@@ -19,6 +22,7 @@ kronello-service = { path = "../kronello-service" }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 
 [dev-dependencies]
+kronello-service = { path = "../kronello-service", features = ["test-adapter-unavailable"] }
 kronello-model = { path = "../kronello-model" }
 kronello-render = { path = "../kronello-render" }
 kronello-testkit = { path = "../kronello-testkit" }

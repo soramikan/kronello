@@ -186,7 +186,13 @@ fn restore_full_snapshot_without_replaying_events() {
     let saved = store.snapshot_at(1).unwrap();
     store.apply(request(1, "later")).unwrap();
     let sql = Connection::open(&path).unwrap();
-    // Old command meanings are not necessary for restoration.
+    // Legacy files have a full snapshot at every revision. Keep using it even
+    // when an old event patch cannot be interpreted.
+    sql.execute(
+        "INSERT INTO snapshots VALUES(1,?1)",
+        [serde_json::to_string(&saved.document).unwrap()],
+    )
+    .unwrap();
     sql.execute(
         "UPDATE events SET mutations='opaque historical command' WHERE revision=1",
         [],
@@ -939,4 +945,383 @@ fn duplicate_public_envelope_fields_are_rejected_without_changes() {
     assert_ne!(input, duplicate);
     assert!(store.import_json(0, Uuid::new_v4(), &duplicate).is_err());
     assert_eq!(store.snapshot().unwrap(), before);
+}
+
+fn snapshot_revisions(sql: &Connection) -> Vec<u64> {
+    sql.prepare("SELECT revision FROM snapshots ORDER BY revision")
+        .unwrap()
+        .query_map([], |row| Ok(row.get::<_, i64>(0)? as u64))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap()
+}
+
+#[test]
+fn selective_snapshots_and_compact_bases_bound_replay_to_63_patches() {
+    let (_directory, path, mut store) = fixture();
+    for base in 0..130 {
+        store
+            .apply(request(base, &format!("revision {}", base + 1)))
+            .unwrap();
+    }
+    let sql = Connection::open(&path).unwrap();
+    assert_eq!(snapshot_revisions(&sql), vec![0, 64, 128]);
+    for revision in [1, 63, 64, 65, 127, 128, 130] {
+        assert_eq!(
+            store.snapshot_at(revision).unwrap().document.name,
+            format!("revision {revision}")
+        );
+    }
+    let before = store.snapshot().unwrap();
+    store.compact(70).unwrap();
+    assert_eq!(snapshot_revisions(&sql), vec![70, 128]);
+    assert_eq!(store.snapshot().unwrap(), before);
+    assert_eq!(
+        store.snapshot_at(69).unwrap_err().code(),
+        "SNAPSHOT_NOT_FOUND"
+    );
+    assert_eq!(
+        store.snapshot_at(127).unwrap().document.name,
+        "revision 127"
+    );
+    store.compact(130).unwrap();
+    assert_eq!(snapshot_revisions(&sql), vec![130]);
+    for base in 130..193 {
+        store
+            .apply(request(base, &format!("revision {}", base + 1)))
+            .unwrap();
+    }
+    assert_eq!(snapshot_revisions(&sql), vec![130, 192]);
+    assert_eq!(
+        store.snapshot_at(191).unwrap().document.name,
+        "revision 191"
+    );
+    store.compact(193).unwrap();
+    store.compact(193).unwrap();
+    assert_eq!(snapshot_revisions(&sql), vec![193]);
+    drop(sql);
+    store.close().unwrap();
+    assert_eq!(
+        open(&path).snapshot_at(193).unwrap().document.name,
+        "revision 193"
+    );
+}
+
+#[test]
+fn snapshot_insert_and_compact_failures_roll_back_all_tables() {
+    let (_directory, path, mut store) = fixture();
+    for base in 0..63 {
+        store.apply(request(base, "before checkpoint")).unwrap();
+    }
+    let sql = Connection::open(&path).unwrap();
+    sql.execute_batch("CREATE TRIGGER reject_snapshot BEFORE INSERT ON snapshots BEGIN SELECT RAISE(ABORT,'injected snapshot failure'); END;").unwrap();
+    let before = store.snapshot().unwrap();
+    let bytes = store.history_size().unwrap();
+    let mut update = request(63, "checkpoint rollback");
+    update.idempotency_key = Some("failed-checkpoint".into());
+    assert!(store.apply(update).is_err());
+    assert_eq!(store.snapshot().unwrap(), before);
+    assert_eq!(store.events_since(0).unwrap().len(), 63);
+    assert!(
+        store
+            .idempotency_record("failed-checkpoint")
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(snapshot_revisions(&sql), vec![0]);
+    assert!(store.compact(10).is_err());
+    assert_eq!(store.snapshot_at(0).unwrap().revision, 0);
+    assert_eq!(store.history_size().unwrap(), bytes);
+    sql.execute_batch("DROP TRIGGER reject_snapshot; CREATE TRIGGER reject_prune BEFORE DELETE ON events BEGIN SELECT RAISE(ABORT,'injected pruning failure'); END;").unwrap();
+    assert!(store.compact(10).is_err());
+    assert_eq!(snapshot_revisions(&sql), vec![0]);
+    assert_eq!(store.history_size().unwrap(), bytes);
+    assert_eq!(store.snapshot().unwrap(), before);
+    sql.execute_batch("DROP TRIGGER reject_prune;").unwrap();
+    store.apply(request(63, "checkpoint succeeds")).unwrap();
+    assert_eq!(snapshot_revisions(&sql), vec![0, 64]);
+}
+
+#[test]
+fn missing_or_corrupt_replay_patches_fail_without_writes() {
+    for damage in [
+        "DELETE FROM events WHERE revision=2",
+        "UPDATE events SET mutations='broken JSON' WHERE revision=2",
+        "UPDATE events SET mutations='[{\"operation\":\"future\"}]' WHERE revision=2",
+        "UPDATE events SET mutations='[{\"operation\":\"remove\",\"path\":[\"absent\"]}]' WHERE revision=2",
+        "UPDATE events SET mutations='[{\"operation\":\"set\",\"path\":[\"name\"],\"value\":42}]' WHERE revision=2",
+        "UPDATE events SET mutations=x'00' WHERE revision=2",
+    ] {
+        let (_directory, path, mut store) = fixture();
+        for base in 0..3 {
+            store.apply(request(base, "saved")).unwrap();
+        }
+        let sql = Connection::open(&path).unwrap();
+        sql.execute_batch(damage).unwrap();
+        let before = store.snapshot().unwrap();
+        let bytes = store.history_size().unwrap();
+        for error in [
+            store.snapshot_at(3).unwrap_err(),
+            store.restore_snapshot(3, Uuid::new_v4(), 3).unwrap_err(),
+            store.compact(3).unwrap_err(),
+        ] {
+            assert!(
+                matches!(error, StoreError::HistoryReplayFailed { revision: 2, .. }),
+                "{damage}: {error}"
+            );
+            assert_eq!(error.code(), "HISTORY_REPLAY_FAILED");
+        }
+        assert_eq!(store.snapshot().unwrap(), before);
+        assert_eq!(store.history_size().unwrap(), bytes);
+        assert_eq!(snapshot_revisions(&sql), vec![0]);
+        assert_eq!(
+            store.snapshot_at(4).unwrap_err().code(),
+            "SNAPSHOT_NOT_FOUND"
+        );
+    }
+    let (_directory, path, mut store) = fixture();
+    for base in 0..65 {
+        store.apply(request(base, "saved")).unwrap();
+    }
+    let sql = Connection::open(&path).unwrap();
+    sql.execute("DELETE FROM snapshots WHERE revision=64", [])
+        .unwrap();
+    assert!(matches!(
+        store.snapshot_at(65),
+        Err(StoreError::HistoryReplayFailed { revision: 64, .. })
+    ));
+}
+
+#[test]
+fn legacy_every_revision_snapshots_open_and_restore_without_rewriting_history() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("legacy.kronello");
+    let mut store = ProjectStore::open(&path, options(OpenMode::ForceSafe)).unwrap();
+    let mut reference = vec![store.snapshot().unwrap().document];
+    // The v1 schema and serialized events are unchanged. Materialize the old
+    // every-revision layout explicitly, rather than testing another sparse DB.
+    for base in 0..66 {
+        store
+            .apply(request(base, &format!("legacy {}", base + 1)))
+            .unwrap();
+        reference.push(store.snapshot().unwrap().document);
+    }
+    store
+        .migrate_schema(1, |tx| {
+            for (revision, document) in reference.iter().enumerate() {
+                tx.execute(
+                    "INSERT OR IGNORE INTO snapshots VALUES(?1,?2)",
+                    rusqlite::params![revision as i64, serde_json::to_string(document)?],
+                )?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    store.close().unwrap();
+    let original = fs::read(&path).unwrap();
+    let store = ProjectStore::open(&path, options(OpenMode::ForceSafe)).unwrap();
+    for (revision, expected) in reference.iter().enumerate() {
+        assert_eq!(
+            &store.snapshot_at(revision as u64).unwrap().document,
+            expected
+        );
+    }
+    store.close().unwrap();
+    assert_eq!(fs::read(&path).unwrap(), original);
+    let mut store = ProjectStore::open(&path, options(OpenMode::ForceSafe)).unwrap();
+    store.restore_snapshot(66, Uuid::new_v4(), 17).unwrap();
+    assert_eq!(store.snapshot().unwrap().document, reference[17]);
+    store.close().unwrap();
+    let sql = Connection::open(&path).unwrap();
+    assert_eq!(snapshot_revisions(&sql), (0..=66).collect::<Vec<_>>());
+    assert_eq!(
+        sql.pragma_query_value(None, "user_version", |r| r.get::<_, u32>(0))
+            .unwrap(),
+        1
+    );
+    for (revision, expected) in reference.iter().enumerate() {
+        let stored: String = sql
+            .query_row(
+                "SELECT document FROM snapshots WHERE revision=?1",
+                [revision as i64],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(serde_json::from_str::<Project>(&stored).unwrap(), *expected);
+    }
+}
+
+#[test]
+fn history_size_counts_only_persisted_snapshots_across_checkpoints_and_compact() {
+    let (_directory, path, mut store) = fixture();
+    let sql = Connection::open(&path).unwrap();
+    for base in 0..65 {
+        store.apply(request(base, "é日本語")).unwrap();
+        let events = store.events_since(0).unwrap();
+        let event_bytes: usize = events
+            .iter()
+            .map(|event| {
+                serde_json::to_vec(&event.mutations).unwrap().len()
+                    + serde_json::to_vec(&event.inverse).unwrap().len()
+                    + serde_json::to_vec(&event.changed_keys).unwrap().len()
+            })
+            .sum();
+        let snapshot_bytes: usize = snapshot_revisions(&sql)
+            .into_iter()
+            .filter(|revision| *revision != base + 1)
+            .map(|revision| {
+                serde_json::to_vec(&store.snapshot_at(revision).unwrap().document)
+                    .unwrap()
+                    .len()
+            })
+            .sum();
+        assert_eq!(
+            store.history_size().unwrap().bytes,
+            (event_bytes + snapshot_bytes) as u64
+        );
+    }
+    store.compact(65).unwrap();
+    let event = store.events_since(64).unwrap().remove(0);
+    let expected = serde_json::to_vec(&event.mutations).unwrap().len()
+        + serde_json::to_vec(&event.inverse).unwrap().len()
+        + serde_json::to_vec(&event.changed_keys).unwrap().len();
+    assert_eq!(store.history_size().unwrap().bytes, expected as u64);
+}
+
+#[test]
+fn randomized_edit_histories_match_an_every_revision_reference() {
+    // Deterministic xorshift seeds make failures reproducible without adding a
+    // dependency. The reference stores every resulting Project in memory and
+    // updates it independently of storage mutation/replay code.
+    for seed in 1..=16_u64 {
+        let (_directory, path, mut store) = fixture();
+        let mut random = seed;
+        let mut next_random = || {
+            random ^= random << 13;
+            random ^= random >> 7;
+            random ^= random << 17;
+            random
+        };
+        let mut reference = vec![store.snapshot().unwrap().document];
+        let mut compact_base = 0;
+        for base in 0..(192 + seed) {
+            let draw = next_random();
+            let mut expected = reference.last().unwrap().clone();
+            let mut update = request(base, "unused");
+            if expected.ensure_editable().is_err() || draw % 7 == 0 {
+                // Restore a randomly chosen retained revision, including opaque
+                // imports. This adds a new revision with the selected document.
+                let target = compact_base + draw % (base - compact_base + 1);
+                expected = reference[target as usize].clone();
+                store
+                    .restore_snapshot(base, update.session_id, target)
+                    .unwrap();
+            } else {
+                match draw % 7 {
+                    1 => {
+                        expected = project_with_data();
+                        store
+                            .import_json(
+                                base,
+                                update.session_id,
+                                &serde_json::to_string(&expected).unwrap(),
+                            )
+                            .unwrap();
+                    }
+                    2 => {
+                        let mut opaque = serde_json::to_value(&expected).unwrap();
+                        opaque["future"] = serde_json::from_str(
+                            "{\"n\":18446744073709551616001,\"nested\":[true,null,\"日本語\"]}",
+                        )
+                        .unwrap();
+                        opaque["semantic_version"] = json!(999);
+                        expected = serde_json::from_str(&opaque.to_string()).unwrap();
+                        store
+                            .import_json(base, update.session_id, &opaque.to_string())
+                            .unwrap();
+                    }
+                    3 => {
+                        // Exercise Remove and decode normalization of optional
+                        // arrays inside a batch, alongside a repeated Set.
+                        expected.name = format!("batch-{draw}");
+                        update.mutations = vec![
+                            Mutation::Set {
+                                path: vec!["shapes".into()],
+                                value: json!([]),
+                            },
+                            Mutation::Remove {
+                                path: vec!["shapes".into()],
+                            },
+                            Mutation::Set {
+                                path: vec!["name".into()],
+                                value: json!("intermediate"),
+                            },
+                            Mutation::Set {
+                                path: vec!["name".into()],
+                                value: json!(expected.name),
+                            },
+                        ];
+                        store.apply(update).unwrap();
+                    }
+                    4 => {
+                        expected.compositions.clear();
+                        expected.curves.clear();
+                        update.mutations = vec![
+                            Mutation::Set {
+                                path: vec!["compositions".into()],
+                                value: json!([]),
+                            },
+                            Mutation::Set {
+                                path: vec!["curves".into()],
+                                value: json!([]),
+                            },
+                        ];
+                        store.apply(update).unwrap();
+                    }
+                    _ => {
+                        expected.name = format!("edit-{draw}-é日本語");
+                        update.mutations = vec![Mutation::Set {
+                            path: vec!["name".into()],
+                            value: json!(expected.name),
+                        }];
+                        store.apply(update).unwrap();
+                    }
+                }
+            }
+            reference.push(expected.clone());
+            assert_eq!(
+                store.snapshot().unwrap().document,
+                expected,
+                "seed {seed}, revision {}",
+                base + 1
+            );
+            assert_eq!(
+                store.snapshot_at(base + 1).unwrap().document,
+                expected,
+                "seed {seed}, revision {}",
+                base + 1
+            );
+            if base == 81 || base == 147 {
+                compact_base = base - draw % 20;
+                store.compact(compact_base).unwrap();
+            }
+        }
+        store.close().unwrap();
+        let mut store = open(&path);
+        for revision in compact_base..reference.len() as u64 {
+            assert_eq!(
+                store.snapshot_at(revision).unwrap().document,
+                reference[revision as usize],
+                "seed {seed}, reopened revision {revision}"
+            );
+        }
+        let target = compact_base + next_random() % (reference.len() as u64 - compact_base);
+        store
+            .restore_snapshot(reference.len() as u64 - 1, Uuid::new_v4(), target)
+            .unwrap();
+        assert_eq!(
+            store.snapshot().unwrap().document,
+            reference[target as usize]
+        );
+    }
 }

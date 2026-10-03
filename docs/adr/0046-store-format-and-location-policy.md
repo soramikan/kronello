@@ -2,7 +2,7 @@
 
 - 状態: 採用
 - 日付: 2026-10-03
-- 対象: STORE-001
+- 対象: STORE-001 / STORE-002
 
 ## 背景
 
@@ -18,7 +18,9 @@ ADR-0027 / ADR-0030 / ADR-0045 が STORE-001 に委ねた、保存場所の判�
 - `Auto` は canonical path とファイルシステムを判定する。macOS は `statfs` の種類（smbfs / nfs / afpfs / webdav 等）と、home 配下の `Library/CloudStorage`、`Library/Mobile Documents`、Dropbox / OneDrive / Google Drive 系のフォルダ名を使う。Linux は NFS / SMB / CIFS / SMB2 の magic と FUSE を安全側に判定する。Windows は UNC を検出する。
 - 誤検出には `ForceNormal` / `ForceSafe` を指定できる。強制指定でも、既に開いている相反するモードのロックは突破できない。`LocationDetector` を注入可能にする。非標準同期フォルダ、Windows のネットワークドライブ文字、別名の同期サービスは自動検出の限界であり `ForceSafe` を使う。
 - 履歴の警告閾値は **256 MiB 以上**。イベントの patch / inverse / changed keys と、現在 revision 以外の完全 snapshot の UTF-8 payload 合計を測る。SQLite の空きページ、index、現在文書、idempotency receipt はこの論理量に含めない。自動削除しない。
-- M1 は全 revision の完全 snapshot を保存する。`compact(r)` は revision `< r` のイベント・snapshot を transaction 内で削除し、`r` の完全 snapshot とイベントを残す。idempotency receipt は再適用防止のため残す。ファイルの物理縮小を保証する API ではない。
+- STORE-002 以降の完全 snapshot は初期 revision 0、`revision % 64 == 0`、明示的な `compact(r)` の基点だけに保存する。サイズによる追加保存は STORE-003 の対象とする。任意 revision は直前の完全 snapshot に連続したイベントの保存 patch (`Set` / `Remove`) を最大 63 個再適用して復元する。Command の意味や逆操作は再評価しない。各段階で通常の保存と同じ文書 decode・構造検証を行い、opaque 内容を許す。必要な patch の欠落・JSON 破損・適用不能・文書不適合は revision を持つ `HISTORY_REPLAY_FAILED` とし、黙って現在文書や別 revision に置き換えない。
+- SQLite の schema と `user_version=1` は変更しない。全 revision に完全 snapshot を持つ既存ファイルも直前の snapshot をそのまま読み、open 時に削除・変換しない。完全 snapshot のある revision は過去イベントを読まずに復元できる。
+- `compact(r)` は `BEGIN IMMEDIATE` 内で `r` を復元して完全 snapshot を確保した後、revision `< r` のイベント・snapshot を削除する。`r` のイベント、現在文書と revision、idempotency receipt は残す。復元や削除の失敗は全体を rollback する。ファイルの物理縮小を保証する API ではない。
 - 文書の content hash は全未知内容・構造版・意味版を含む JSON 値をキー順で整列し、UTF-8 compact JSON の SHA-256 とする。`serde_json` の `float_roundtrip` と `arbitrary_precision` を維持し、未知 JSON の大きな整数・数値の綴りも失わない。数値表記の異なる未知 JSON は別 identity になりうる。ジョブ用 RenderSnapshot の lock / profile と複合する identity は後続のジョブ実装の対象であり、文書 hash のみでレンダーキャッシュを同一視しない。
 
 ## 影響と範囲
@@ -31,3 +33,4 @@ ADR-0027 / ADR-0030 / ADR-0045 が STORE-001 に委ねた、保存場所の判�
 
 - [09 保存と同時編集](../architecture/09-storage-concurrency.md)
 - [STORE-001 の検証](../testing/store-001.md)
+- [STORE-002 の検証](../testing/store-002.md)
