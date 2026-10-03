@@ -16,6 +16,16 @@ SVG 読み込みは対応表を持つ。外部 URL、script、外部フォント
 初期から矩形、角丸矩形、楕円、ベジェパス、単色塗り・線・基本グラデーションを扱う。
 Trim path、線端・破線のアニメーション、Path boolean、morph は段階実装する。
 
+### VEC-001 の実装規約
+
+`kronello-model` の `Shape` / `ShapeGeometry` / `Fill` / `Stroke` を `Project.shapes` に保存し、`NodeKind::Shape.content_ref` の `ContentId` で参照する。矩形（共通の角丸半径）、楕円、複数 subpath の Move / Line / Quad / Cubic / Close を保持する。矩形・楕円はローカル原点 `(0, 0)` から size の矩形内に収める。角丸半径は非負値を正本に保持し、導出時だけ短辺の半分を上限にする。
+
+- size・corner_radius・Path・fill/stroke の Color・stroke_width・join・cap・miter_limit は描画ノードの既存 `Property` を `PropertyId` で参照する。`shape_descriptors()` を `SchemaRegistry::with_builtin()` に追加登録する。fill は `kronello.fill_color`、幅は `kronello.stroke_width`、独立した線色は `kronello.shape.stroke_color` を用いる。join / cap と Path の現段階の補間は Hold のみ。miter_limit は無次元で 1 以上、size・半径・幅は非負の `design_px`。
+- fill は単色と Nonzero / Evenodd を保持する。色は既存 `Color` のタグ付き straight RGB と独立 alpha を再利用する。グラデーション、ClipPath、破線、stroke tessellation、Path morph は今回未実装。
+- `validate_shape_contents` で参照先・ノード内 Property の型・単位・ローカル座標を照合する。`Shape::resolve` には任意時刻・instance の評価後の値を渡し、負寸法・半径・幅、不正な enum、miter_limit、不正 Path 順序を型付きエラーにする。非有限値は既存 `FiniteF64` が拒否する。Property descriptor の範囲は Modifier 適用後に評価層でも検証する。
+- `Project.shapes` は省略可能な追加フィールドとし、空集合は出力しない。旧 schema_version 1 の Shape を持たない文書は同じ値で往復する。未知フィールド・形状 variant は既存 `DocumentObject::Opaque` に保持し、編集・実行可能とは扱わない。公開 JSON Schema は共通 Rust 型から再生成する。
+- 純粋な `kronello-vector::flatten` は kurbo 0.13.1（MIT OR Apache-2.0）で評価値からローカル `design_px` の polyline を導出する。`FlattenRequest` の出力 scale と画素 tolerance は保存しない。高 scale では設計単位の tolerance を小さくする。kurbo の近似 tolerance は厳密な誤差保証ではない。極端な座標・精度・命令数は保守的な計算予算エラーで拒否する。アスペクト比変更は自動で再レイアウトしない。
+
 ### 設計寸法と出力解像度
 
 Composition の design_extent と出力画素数を分ける。同じ 16:9 で解像度だけを変える場合は原則再レイアウトしない。

@@ -179,7 +179,7 @@
       "priority": "P0",
       "area": "vector",
       "title": "Shape/Path/Fill/Stroke IR",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "COMP-001"
       ],

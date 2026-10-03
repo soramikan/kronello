@@ -44,3 +44,10 @@ pub use project::{
     DocumentObject, OpaqueObject, PROJECT_SCHEMA_VERSION, PROJECT_SEMANTIC_VERSION, Project,
     ProjectError, project_json_schema,
 };
+
+mod shape;
+pub use shape::{
+    Fill, FillRule, ResolvedFill, ResolvedGeometry, ResolvedShape, ResolvedStroke, Shape,
+    ShapeError, ShapeGeometry, Stroke, StrokeCap, StrokeJoin, shape_descriptors, validate_path,
+    validate_shape_contents,
+};
