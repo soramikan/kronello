@@ -180,9 +180,20 @@ pub struct IdempotencyRecord {
 pub struct ProjectStore {
     // Connection must close before the lifetime lock is released.
     connection: Connection,
-    _lifetime_lock: File,
+    _lifetime_lock: FileLock,
     safe_mode: bool,
     location: DetectedLocation,
+}
+
+struct FileLock(File);
+
+impl Drop for FileLock {
+    fn drop(&mut self) {
+        // Closing our descriptor alone can retain flock while a concurrently
+        // spawned child holds an inherited descriptor before close-on-exec.
+        // Unlock the shared open file description explicitly on every exit path.
+        let _ = self.0.unlock();
+    }
 }
 
 const SCHEMA: &str = "
@@ -264,6 +275,7 @@ impl ProjectStore {
             std::fs::TryLockError::WouldBlock => StoreError::ProjectLocked,
             std::fs::TryLockError::Error(error) => StoreError::Io(error),
         })?;
+        let lifetime_lock = FileLock(lifetime_lock);
         // Serialize bootstrap/journal-mode changes too: SQLite may reject a
         // competing WAL switch immediately without invoking its busy handler.
         let bootstrap_lock = std::fs::OpenOptions::new()
@@ -273,6 +285,7 @@ impl ProjectStore {
             .truncate(false)
             .open(lock_directory.join(format!("{identity}.open")))?;
         bootstrap_lock.lock()?;
+        let _bootstrap_lock = FileLock(bootstrap_lock);
         let mut connection = Connection::open(&canonical)?;
         if safe_mode {
             connection.pragma_update(None, "locking_mode", "EXCLUSIVE")?;
@@ -717,5 +730,46 @@ impl HistorySize {
             bytes,
             warning: bytes >= HISTORY_WARNING_BYTES,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn check_release_with_duplicated_descriptor(close_explicitly: bool) {
+        for (mode, next_mode) in [
+            (OpenMode::ForceNormal, OpenMode::ForceSafe),
+            (OpenMode::ForceSafe, OpenMode::ForceNormal),
+        ] {
+            let directory = tempfile::tempdir().unwrap();
+            let path = directory.path().join("release.kronello");
+            let store = ProjectStore::open(&path, OpenOptions { mode }).unwrap();
+            // A dup shares the lock's open file description, just as an inherited
+            // descriptor does between process creation and close-on-exec.
+            let inherited = store._lifetime_lock.0.try_clone().unwrap();
+            assert!(matches!(
+                ProjectStore::open(&path, OpenOptions { mode: next_mode }),
+                Err(StoreError::ProjectLocked)
+            ));
+            if close_explicitly {
+                store.close().unwrap();
+            } else {
+                drop(store);
+            }
+            let reopened = ProjectStore::open(&path, OpenOptions { mode: next_mode }).unwrap();
+            reopened.close().unwrap();
+            drop(inherited);
+        }
+    }
+
+    #[test]
+    fn close_releases_mode_lock_with_a_duplicated_descriptor() {
+        check_release_with_duplicated_descriptor(true);
+    }
+
+    #[test]
+    fn drop_releases_mode_lock_with_a_duplicated_descriptor() {
+        check_release_with_duplicated_descriptor(false);
     }
 }

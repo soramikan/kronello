@@ -130,7 +130,7 @@ GUI・CLI・MCP サーバーはそれぞれ別プロセスとして同じ `.kron
 
 `OpenMode::Auto` は canonical path と実ファイルシステムを調べる。macOS の home 配下 `Library/CloudStorage` / `Library/Mobile Documents`、Dropbox / OneDrive / Google Drive 系フォルダ名、および `statfs` の smbfs / nfs / afpfs / webdav 等を安全モードにする。Linux は NFS / SMB / CIFS / SMB2 / FUSE、Windows は UNC を検出する。`ForceNormal` / `ForceSafe` で誤判定を上書きできるが、既存プロセスの排他ロックは突破しない。判定器は `LocationDetector` として注入できる。非標準同期先や Windows のドライブ文字でのネットワーク接続は完全には検出できず、`ForceSafe` を指定する。
 
-安全モードは DELETE journal と SQLite exclusive locking を併用する。同一 OS 内では一時領域の小さな shared / exclusive lock ファイルでモードを調停する。これは作品の正本・キャッシュではなく、プロジェクトの外に置く。プロジェクト本体への追加 whole-file lock は macOS で SQLite と干渉するため使わない。ロックの identity は Unix では device / inode、それ以外は canonical path に基づく。二重ロックを避けるため終了時に unlink せず、プロセス終了で OS がロックを解放する。同じ領域の一時的な exclusive open lock で、新規 DB の初期化と journal mode の切り替えも直列化する。
+安全モードは DELETE journal と SQLite exclusive locking を併用する。同一 OS 内では一時領域の小さな shared / exclusive lock ファイルでモードを調停する。これは作品の正本・キャッシュではなく、プロジェクトの外に置く。プロジェクト本体への追加 whole-file lock は macOS で SQLite と干渉するため使わない。ロックの identity は Unix では device / inode、それ以外は canonical path に基づく。二重ロックを避けるため終了時に unlink しない。close / Drop では SQLite connection を閉じた後に明示的に unlock する。open の失敗時と初期化用ロックの終了時にも unlock する。descriptor の close だけでは、並行する子プロセス生成で継承された descriptor が exec までロックを延命しうる。プロセス終了でも OS がロックを解放する。同じ領域の一時的な exclusive open lock で、新規 DB の初期化と journal mode の切り替えも直列化する。
 
 ## 素材の参照
 

@@ -36,6 +36,18 @@ GPU が利用できる環境の workspace 全体の確認は `cargo test --works
 | 8. 公開 JSON | `public_json_roundtrips_rationals_and_nested_opaque_content` / `opaque_json_retains_integer_precision_beyond_u64` / `unknown_semantic_version_is_preserved_but_not_editable` / `duplicate_public_envelope_fields_are_rejected_without_changes` / `committed_schema_matches_rust_types` / `public_schema_validates_known_and_opaque_exports` | rational decimal strings、未知の enum / 入れ子 / 大きな整数を保持して再 open / export。未知の意味で編集を拒否。Schema の生成一致と実 validator による適合・不適合を確認 |
 | 9. compact | `compact_retains_boundary_snapshot_and_event_without_changing_document` / `history_warning_threshold_is_inclusive_and_never_prunes_automatically` | boundary より前を削除し boundary の完全 snapshot と event を残す。現在状態・revision と receipt の完全結果は保持し、boundary から復元できる。UTF-8 payload 量と警告の 256 MiB 境界を検証する |
 
+## モードロックの解放の回帰テスト
+
+`crates/kronello-store/src/store.rs` の unit test `close_releases_mode_lock_with_a_duplicated_descriptor` / `drop_releases_mode_lock_with_a_duplicated_descriptor` は、子プロセス生成時の継承と同じ open file description を `try_clone()` で保持する。保持中の相反するモードを拒否し、close / Drop 後には複製 descriptor が生きていても反対のモードで開けることを、normal → safe と safe → normal の両方向で確認する。明示的な unlock がない旧実装では両テストが失敗する。
+
+並行する子プロセス生成との競合を反復確認する場合:
+
+```sh
+for i in $(seq 1 50); do
+  cargo test -p kronello-store --locked --test storage || exit 1
+done
+```
+
 ## 未確認の環境
 
 ローカル macOS でのプロセス実行を検証する。実 SMB / NFS / AFP / WebDAV マウント、実同期クライアント、Windows / Linux のプロセス実行は確認していない。これらについて、検出器の注入テストや cross target の compile を OS 実行成功として扱わない。OS のロックを正しく提供しないネットワークサービスを保証しない。
