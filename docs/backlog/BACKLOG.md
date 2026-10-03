@@ -274,7 +274,7 @@
 
 ### MCP-001 MCPアダプター
 
-- 優先度: P0 / 領域: mcp / 状態: planned
+- 優先度: P0 / 領域: mcp / 状態: done
 - 依存: API-001
 - 受け入れ条件:
   - 交渉したprotocol versionでschemaとstructuredContentを返す
