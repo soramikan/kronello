@@ -58,6 +58,17 @@ T(position) * R(rotation) * K(skew) * S(scale) * T(-anchor)
 - Color は sRGB の伝達関数を復号し、必要なら既存 GPU 参照と同じ D65 原色変換係数を f64 で適用する。`sample` は単体要求の線形 Rec.709、`sample_in_space` は明示した線形 Rec.709 / Rec.2020 を使い、straight RGB と alpha を独立に補間する。Sequence の作業空間や descriptor の明示空間は呼び出し側から渡す。負値・1 超の線形 RGB は保持し、alpha の `[0, 1]` 違反は clamp せずエラーとする。Rec.2020 の値変換は HDR 出力対応の宣言ではない。
 - descriptor の範囲は Modifier 列の適用後に既存の `validate_final_value` で検証する。曲線評価は範囲 clamp や暗黙の代替値を行わない。数値 golden、境界、編集の原子性、および 128 個の生成曲線の順方向・逆順・固定 seed の順序変更と JSON 往復を通常テストで確認する。
 
+### EVAL-001 の実装規約
+
+純粋 crate `kronello-eval` の `EvaluationSnapshot` は Composition / Curve / descriptor と評価側の依存宣言を借用する。`DependencyGraph::compile` は配置ごとにグラフを構築し、`evaluate_property` / `evaluate_properties` / `evaluate_scene` は呼び出し内だけのメモ化で任意の有理数時刻を評価する。保存・版・資産 lock の互換性検証は、この型付き入力を生成する呼び出し側の責務であり、保存層への依存や最新 Project の暗黙参照は持たない。
+
+- ノードの実行時キーは既存 `PropertyKey`（`InstancePath`, `NodeId`, `PropertyId`）を使う。所有 Node のない Composition 入力は `RuntimePropertyKey::Composition`（`InstancePath`, `CompositionId`, `PropertyId`）として区別し、仮の NodeId は生成しない。
+- 保存された `PropertySource` は Constant / Curve / Expression のまま保つ。評価側だけの `ReferenceBindings` は既存の配置入力束縛を親スコープの Property 参照で上書きし、型・単位・座標空間を照合する。`DependencyDeclarations` は一般の静的依存辺を表し、将来 EXPR-001 が AST から生成する接続点とする。AST 自体を実行する機能ではない。循環は閉じた全実行時キー経路を持つ `DependencyCycle` として報告する。
+- 定義の Curve は配置の `local_time_map` を親から順に適用したローカル時刻で評価する。配置に記された入力束縛の Curve は、その束縛を記した親 Composition の時刻で評価する。`sample_in_space` に作業用線形色空間（descriptor の指定があればそれ）を渡し、値源・参照束縛の結果を `validate_final_value` で検証する。Expression、有効な未実装 Modifier、未知の補間版は `UNSUPPORTED_FEATURE` とする。無効な Modifier は実行しない。
+- `EvaluatedScene` は containment の `root_nodes` / `child_order` による前順序で配置を展開する。Group / Null / CompositionInstance の枠と containment 親、ローカル opacity、各配置の入力値を保持し、後続 RENDER-001 が隔離合成を判断できる。配置の内部ルートは配置枠の直後、配置自身の所有する子より先に並ぶ。`active_range` は各スコープのローカル時刻に対する `[start, end)` で判定し、非アクティブな所有親の子・配置内容は展開しない。
+- 変換は既存 builtin descriptor の既定値を使い、`T(position)*R(rotation)*K(skew)*S(scale)*T(-anchor)` を計算する。`K(skew)` は度で指定する X shear（`x' = x + tan(skew)*y`, `y' = y`）とする。world 変換は `transform_parent` の鎖と外側の配置変換を継承し、containment や描画順から導出しない。非アクティブな transform 親も必要な変換値を供給する。計算で非有限の行列が生じた場合は型付きエラーとする。
+- 通常テストで 257 個の有理数時刻、Property 要求順、ノード保存順の順方向・逆順・固定 seed のシャッフルを比較する。入れ子の時刻変換、参照束縛、自己循環・複数 Property / 配置間の循環、半開区間、未対応機能、最終値の型・範囲、変換行列を検証する。
+
 ## 式
 
 最初は型付き AST と許可された組み込み関数で実装する。式の正本は常に AST である。

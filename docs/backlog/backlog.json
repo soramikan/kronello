@@ -163,7 +163,7 @@
       "priority": "P0",
       "area": "evaluation",
       "title": "Property依存グラフと任意時刻評価",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "COMP-001",
         "ANIM-001"
