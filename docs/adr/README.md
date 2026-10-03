@@ -8,6 +8,7 @@
 |---|---|
 | 継承 | v0.2 仕様の決定表（ADR-001〜012）から引き継いだもの。採用済みだが、実装による検証は未了 |
 | 採用 | 2026-10-02 以降の検討で決定したもの |
+| 部分置換 | 決定の一部だけを後の ADR に置き換えたもの。置換範囲と維持する条項を明記する |
 | 置換 | 後の ADR に置き換えられたもの。ファイルは残し、置き換えた ADR へリンクする |
 
 ## 一覧
@@ -51,7 +52,7 @@
 | [0035](0035-software-encoders.md) | ソフトウェアエンコードは AV1・ProRes・画像連番とする | 採用 | 2026-10-02 |
 | [0036](0036-ffmpeg-distribution.md) | リリースには自前の LGPL ビルドの FFmpeg を同梱する | 採用 | 2026-10-02 |
 | [0037](0037-hdr-policy.md) | HDR は BT.2408 の基準白と Rec.2100 の PQ / HLG に従う | 採用 | 2026-10-02 |
-| [0038](0038-toolchain-and-ci.md) | Rust は stable の特定版に固定し、CI は GitHub Actions とする | 採用 | 2026-10-02 |
+| [0038](0038-toolchain-and-ci.md) | Rust は stable の特定版に固定し、CI は GitHub Actions とする | 部分置換（0047: golden 環境のみ） | 2026-10-02 |
 | [0039](0039-test-fixtures.md) | テスト素材は生成と CC0 / OFL に限り、小さいものだけ同梱する | 採用 | 2026-10-02 |
 | [0040](0040-expression-language-policy.md) | 式の正本は AST とし、人間向けには小さな式言語を後から追加する | 採用 | 2026-10-02 |
 | [0041](0041-core-api-gui-order.md) | 実装の優先順はコア契約、API、GUI の順とする | 採用 | 2026-10-02 |
@@ -61,9 +62,12 @@
 | [0045](0045-snapshot-compatibility-boundaries.md) | 保存・意味・実行能力の互換性を分けて判定する | 採用 | 2026-10-03 |
 | [0046](0046-store-format-and-location-policy.md) | 保存の外枠・安全モード判定・履歴警告を固定する | 採用 | 2026-10-03 |
 
+| [0047](0047-apple-silicon-metal-golden.md) | GPU golden は Apple Silicon + Metal の共通基準で比較する | 採用 | 2026-10-03 |
+
 ## 追加と変更の規則
 
 - 新しい決定は次の番号で追加する。[0000-template.md](0000-template.md) を複製して使う。
 - 採用済みの ADR の決定内容は書き換えない。変える場合は新しい ADR を追加し、旧 ADR の状態を「置換（ADR-NNNN）」にする。
+- 一部だけを変える場合は旧 ADR を「部分置換（ADR-NNNN）」とし、旧 ADR と新 ADR に置換範囲・維持する条項を明記する。
 - 決定を変えたら、対応する `docs/architecture/` の章を同じ変更で更新する。
 - まだ決められない論点は [未決事項](../open-questions.md) に置く。

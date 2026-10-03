@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "scene definitions only; M4 baselines and fingerprint pending",
+  "status": "scene catalog for shared Apple Silicon + Metal baselines",
   "coverage": {
     "version": "vec003-grid4-v2",
     "samples_per_pixel": 16,

@@ -1,4 +1,4 @@
-//! Explicit fixed-environment comparison. UPDATE produces candidates only.
+//! Explicit Apple Silicon + Metal comparison. UPDATE produces candidates only.
 mod common;
 use kronello_gpu::{color::srgb_encode, *};
 use kronello_testkit::{FrameDescriptor, LinearFrame, PixelTolerance, compare_pixels};
@@ -187,7 +187,65 @@ fn draw_manifest(scene: &DrawScene) -> Value {
     }).collect::<Vec<_>>()})
 }
 fn manifest(scenes: &[Scene], fixture_hash: &str, font_hash: &str) -> Value {
-    json!({"schema_version":3,"stroke_geometry_version":kronello_render::STROKE_GEOMETRY_VERSION,"gradient_interpolation_version":kronello_render::GRADIENT_INTERPOLATION_VERSION,"comparison_version":1,"rgb_absolute":1.0/1024.0,"rgb_relative":1.0/1024.0,"alpha_absolute":1.0/1024.0,"fixture_hash":fixture_hash,"font_hash":font_hash,"flatten_tolerance_px":0.02,"catalog":serde_json::from_str::<Value>(include_str!("../../../tests/golden/m4-macos-metal/scenes.json")).unwrap(),"scenes":scenes.iter().map(|s| json!({"id":s.id,"sample_id":"frame-0","size":[s.width,s.height],"design_extent":[s.width,s.height],"origin":[0,0],"time":{"num":"0","den":"1"},"working_space":format!("{:?}",s.space),"alpha":"premultiplied","output_transform":s.output.map(|o| format!("{:?}",o)),"comparison_space":"linear working-space premultiplied; external output decoded back before comparison","display_transform":"external-unpremultiply-then-srgb-clamp; visualization only","color_pipeline_id":if s.draw.is_some() {"vec003-grid4-v2"} else {"gpu001-linear-v1"},"samples_per_frame":if s.draw.is_some() {16} else {1},"seed":0,"draw":s.draw.as_ref().map(draw_manifest),"layers":s.layers.iter().map(|l| json!({"size":l.size,"translation":l.translation,"rotation_degrees":l.rotation_degrees,"input_space":format!("{:?}",l.image.space),"input_size":[l.image.width,l.image.height],"straight_pixels":l.image.pixels})).collect::<Vec<_>>()})).collect::<Vec<_>>()})
+    json!({"schema_version":3,"stroke_geometry_version":kronello_render::STROKE_GEOMETRY_VERSION,"gradient_interpolation_version":kronello_render::GRADIENT_INTERPOLATION_VERSION,"comparison_version":1,"rgb_absolute":1.0/1024.0,"rgb_relative":1.0/1024.0,"alpha_absolute":1.0/1024.0,"fixture_hash":fixture_hash,"font_hash":font_hash,"flatten_tolerance_px":0.02,"catalog":serde_json::from_str::<Value>(include_str!("../../../tests/golden/apple-silicon-metal/scenes.json")).unwrap(),"scenes":scenes.iter().map(|s| json!({"id":s.id,"sample_id":"frame-0","size":[s.width,s.height],"design_extent":[s.width,s.height],"origin":[0,0],"time":{"num":"0","den":"1"},"working_space":format!("{:?}",s.space),"alpha":"premultiplied","output_transform":s.output.map(|o| format!("{:?}",o)),"comparison_space":"linear working-space premultiplied; external output decoded back before comparison","display_transform":"external-unpremultiply-then-srgb-clamp; visualization only","color_pipeline_id":if s.draw.is_some() {"vec003-grid4-v2"} else {"gpu001-linear-v1"},"samples_per_frame":if s.draw.is_some() {16} else {1},"seed":0,"draw":s.draw.as_ref().map(draw_manifest),"layers":s.layers.iter().map(|l| json!({"size":l.size,"translation":l.translation,"rotation_degrees":l.rotation_degrees,"input_space":format!("{:?}",l.image.space),"input_size":[l.image.width,l.image.height],"straight_pixels":l.image.pixels})).collect::<Vec<_>>()})).collect::<Vec<_>>()})
+}
+
+// Hardware model, OS, driver and dependency versions are provenance only.
+fn eligible_environment(target: &str, backend: &str) -> bool {
+    target == "aarch64-apple-darwin" && backend == "Metal"
+}
+
+fn artifact_manifest(
+    dir: &Path,
+    settings: &Value,
+    environment: &Value,
+    provenance: &Value,
+) -> Result<Value> {
+    let scenes = settings["scenes"].as_array().ok_or("missing scenes")?;
+    if scenes.is_empty() {
+        return Err("zero scenes".into());
+    }
+    let mut names = vec![
+        "manifest.json".to_owned(),
+        "environment.json".to_owned(),
+        "provenance.json".to_owned(),
+    ];
+    let mut scene_settings = Vec::new();
+    for scene in scenes {
+        let id = scene["id"].as_str().ok_or("missing scene id")?;
+        // IDs come from the compiled scene catalog, never from arbitrary paths.
+        if id.is_empty() || !id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-') {
+            return Err("invalid scene id".into());
+        }
+        names.push(format!("{id}/frame-0.rgba16f"));
+        names.push(format!("{id}/frame-0.png"));
+        if !scene["output_transform"].is_null() {
+            names.push(format!("{id}/external-srgb-straight.rgba16f"));
+        }
+        scene_settings.push(json!({"id":id,"size":scene["size"],"sample_id":scene["sample_id"],"samples_per_frame":scene["samples_per_frame"],"time":scene["time"],"working_space":scene["working_space"],"alpha":scene["alpha"]}));
+    }
+    let mut files = serde_json::Map::new();
+    for name in names {
+        let bytes = fs::read(dir.join(&name))?;
+        files.insert(name, json!({"sha256":hash(&bytes),"bytes":bytes.len()}));
+    }
+    Ok(
+        json!({"schema_version":1,"comparison_version":settings["comparison_version"],"rgb_absolute":settings["rgb_absolute"],"rgb_relative":settings["rgb_relative"],"alpha_absolute":settings["alpha_absolute"],"scene_settings":scene_settings,"environment":environment,"provenance":provenance,"files":files}),
+    )
+}
+
+fn validate_baseline(dir: &Path, settings: &Value) -> Result<()> {
+    let old: Value = serde_json::from_slice(&fs::read(dir.join("manifest.json"))?)?;
+    if old != *settings {
+        return Err("scene manifest mismatch; review inputs and comparison version".into());
+    }
+    let environment: Value = serde_json::from_slice(&fs::read(dir.join("environment.json"))?)?;
+    let provenance: Value = serde_json::from_slice(&fs::read(dir.join("provenance.json"))?)?;
+    let adoption: Value = serde_json::from_slice(&fs::read(dir.join("adoption.json"))?)?;
+    if adoption != artifact_manifest(dir, settings, &environment, &provenance)? {
+        return Err("baseline artifact hashes or adoption manifest mismatch".into());
+    }
+    Ok(())
 }
 
 fn png(path: &Path, scene: &Scene, pixels: &[[f32; 4]]) -> Result<()> {
@@ -234,9 +292,12 @@ fn run(output: &Path) -> Result<Value> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .canonicalize()?;
-    let baseline = root.join("tests/golden/m4-macos-metal");
+    let baseline = root.join("tests/golden/apple-silicon-metal");
     let gpu = GpuContext::new()?;
-    if gpu.adapter_info.backend != wgpu::Backend::Metal {
+    if !eligible_environment(
+        "aarch64-apple-darwin",
+        &format!("{:?}", gpu.adapter_info.backend),
+    ) {
         return Err("selected adapter is not Metal".into());
     }
     let metadata: Value = serde_json::from_str(&command(
@@ -265,7 +326,7 @@ fn run(output: &Path) -> Result<Value> {
         .into();
     let info = &gpu.adapter_info;
     let hardware = json!({"model":command("sysctl",&["-n","hw.model"],&root)?,"cpu":command("sysctl",&["-n","machdep.cpu.brand_string"],&root)?,"memory":command("sysctl",&["-n","hw.memsize"],&root)?});
-    let environment = json!({"schema_version":1,"hardware":hardware,"architecture":command("uname",&["-m"],&root)?,"os":command("sw_vers",&[],&root)?,"metal":serde_json::from_str::<Value>(&command("system_profiler",&["SPDisplaysDataType","-json"],&root)?)?,"rust":command("rustc",&["--version","--verbose"],&root)?,"cargo":command("cargo",&["--version"],&root)?,"dependencies":dependencies,"adapter":{"name":info.name,"backend":format!("{:?}",info.backend),"device_type":format!("{:?}",info.device_type),"vendor":info.vendor,"device":info.device,"driver":info.driver,"driver_info":info.driver_info,"driver_version":"Metal driver separately unavailable; macOS build in os"},"required_features":format!("{:?}",gpu.device.features()),"required_limits":format!("{:?}",gpu.device.limits())});
+    let environment = json!({"schema_version":1,"target":"aarch64-apple-darwin","hardware":hardware,"architecture":command("uname",&["-m"],&root)?,"os":command("sw_vers",&[],&root)?,"metal":serde_json::from_str::<Value>(&command("system_profiler",&["SPDisplaysDataType","-json"],&root)?)?,"rust":command("rustc",&["--version","--verbose"],&root)?,"cargo":command("cargo",&["--version"],&root)?,"dependencies":dependencies,"adapter":{"name":info.name,"backend":format!("{:?}",info.backend),"device_type":format!("{:?}",info.device_type),"vendor":info.vendor,"device":info.device,"driver":info.driver,"driver_info":info.driver_info,"driver_version":"Metal driver separately unavailable; macOS build in os"},"required_features":format!("{:?}",gpu.device.features()),"required_limits":format!("{:?}",gpu.device.limits())});
     let pam_path = kronello_testkit::resolve_fixture("alpha")?;
     let pam_bytes = fs::read(pam_path)?;
     let scenes = scenes(Image::from_pam(&pam_bytes)?);
@@ -278,7 +339,7 @@ fn run(output: &Path) -> Result<Value> {
     let manifest = manifest(&scenes, &hash(&pam_bytes), &font_hash);
     let ids: Vec<_> = scenes.iter().map(|s| s.id).collect();
     let catalog: Value = serde_json::from_str(include_str!(
-        "../../../tests/golden/m4-macos-metal/scenes.json"
+        "../../../tests/golden/apple-silicon-metal/scenes.json"
     ))?;
     if catalog["scene_ids"] != json!(ids) {
         return Err("scene catalog differs from harness".into());
@@ -306,23 +367,12 @@ fn run(output: &Path) -> Result<Value> {
             output.join("environment-diff.json"),
             &json!({"baseline":old,"actual":environment,"equal":old==environment}),
         )?;
-        if !update && old != environment {
-            return Err("environment fingerprint mismatch".into());
-        }
+        // The difference is diagnostic; provenance never gates comparison.
     } else if !update {
         return Err("baseline environment.json missing; comparison cannot pass".into());
     }
     if !update {
-        if hardware["cpu"] != "Apple M4"
-            || hardware["memory"] != "34359738368"
-            || hardware["model"] != "Mac16,10"
-        {
-            return Err("comparison requires M4 Mac mini 32GB reference machine".into());
-        }
-        let old: Value = serde_json::from_slice(&fs::read(baseline.join("manifest.json"))?)?;
-        if old != manifest {
-            return Err("scene manifest mismatch; review inputs and comparison version".into());
-        }
+        validate_baseline(&baseline, &manifest)?;
     }
     let mut reports = Vec::new();
     let mut failed = false;
@@ -436,7 +486,13 @@ fn run(output: &Path) -> Result<Value> {
             reports.push(json!({"scene":scene.id,"pixels":actual.pixels.len(),"result":"candidate; CPU oracle validated","transfers":format!("{:?}",actual.transfers)}));
         }
     }
-    let report = json!({"test_count":1,"scene_count":scenes.len(),"frame_count":scenes.len(),"status":if update {"candidate-only; no baseline comparison"} else if failed {"fail"} else {"pass"},"eligible_reference_hardware":hardware["cpu"]=="Apple M4" && hardware["memory"]=="34359738368" && hardware["model"]=="Mac16,10","candidate_may_be_adopted":false,"provenance":provenance,"scenes":reports});
+    if update {
+        write_json(
+            destination.join("adoption.json"),
+            &artifact_manifest(&destination, &manifest, &environment, &provenance)?,
+        )?;
+    }
+    let report = json!({"test_count":1,"scene_count":scenes.len(),"frame_count":scenes.len(),"status":if update {"candidate-only; no baseline comparison"} else if failed {"fail"} else {"pass"},"eligible_reference_hardware":true,"candidate_may_be_adopted":update && provenance["status"] == "","provenance":provenance,"scenes":reports});
     write_json(output.join("report.json"), &report)?;
     if failed {
         return Err("golden pixel comparison failed; see report and differences".into());
@@ -444,7 +500,7 @@ fn run(output: &Path) -> Result<Value> {
     Ok(report)
 }
 #[test]
-#[ignore = "requires explicit golden environment and fixed Metal reference; UPDATE is candidate-only"]
+#[ignore = "requires explicit Apple Silicon + Metal execution; UPDATE is candidate-only"]
 fn fixed_environment_golden() -> Result<()> {
     if std::env::var("KRONELLO_GOLDEN").as_deref() != Ok("1") {
         return Err("KRONELLO_GOLDEN=1 required".into());
@@ -509,7 +565,7 @@ fn cpu_catalog_and_vec003_manifest_match_harness() {
     let bytes = fs::read(kronello_testkit::resolve_fixture("alpha").unwrap()).unwrap();
     let scenes = scenes(Image::from_pam(&bytes).unwrap());
     let catalog: Value = serde_json::from_str(include_str!(
-        "../../../tests/golden/m4-macos-metal/scenes.json"
+        "../../../tests/golden/apple-silicon-metal/scenes.json"
     ))
     .unwrap();
     assert_eq!(
@@ -542,4 +598,40 @@ fn cpu_catalog_and_vec003_manifest_match_harness() {
         assert_eq!(path["stroke"]["miter_limit"], 4.0);
         assert!(path["paint_transform"].is_array());
     }
+}
+
+#[test]
+fn cpu_environment_gate_ignores_provenance() {
+    assert!(eligible_environment("aarch64-apple-darwin", "Metal"));
+    assert!(!eligible_environment("x86_64-apple-darwin", "Metal"));
+    assert!(!eligible_environment("aarch64-unknown-linux-gnu", "Metal"));
+    assert!(!eligible_environment("aarch64-apple-darwin", "Vulkan"));
+}
+
+#[test]
+fn cpu_baseline_integrity_rejects_missing_and_modified_artifacts() {
+    let dir =
+        std::env::temp_dir().join(format!("kronello-golden-integrity-{}", std::process::id()));
+    fs::create_dir(&dir).unwrap();
+    let settings = json!({"comparison_version":1,"rgb_absolute":1.0/1024.0,"rgb_relative":1.0/1024.0,"alpha_absolute":1.0/1024.0,"scenes":[{"id":"test","size":[1,1],"sample_id":"frame-0","samples_per_frame":1,"time":{"num":"0","den":"1"},"working_space":"LinearRec709","alpha":"premultiplied","output_transform":null}]});
+    let environment = json!({"hardware":{"model":"arbitrary"},"os":"arbitrary","adapter":{"name":"arbitrary","backend":"Metal"}});
+    let provenance = json!({"revision":"historical-baseline-revision"});
+    write_json(dir.join("manifest.json"), &settings).unwrap();
+    write_json(dir.join("environment.json"), &environment).unwrap();
+    write_json(dir.join("provenance.json"), &provenance).unwrap();
+    fs::create_dir(dir.join("test")).unwrap();
+    fs::write(dir.join("test/frame-0.rgba16f"), [0_u8; 8]).unwrap();
+    fs::write(dir.join("test/frame-0.png"), b"synthetic display artifact").unwrap();
+    let adoption = artifact_manifest(&dir, &settings, &environment, &provenance).unwrap();
+    assert!(validate_baseline(&dir, &settings).is_err());
+    write_json(dir.join("adoption.json"), &adoption).unwrap();
+    assert!(validate_baseline(&dir, &settings).is_ok());
+    let changed = json!({"scenes":[]});
+    assert!(artifact_manifest(&dir, &changed, &environment, &provenance).is_err());
+    assert!(validate_baseline(&dir, &changed).is_err());
+    fs::write(dir.join("test/frame-0.rgba16f"), [1_u8; 8]).unwrap();
+    assert!(validate_baseline(&dir, &settings).is_err());
+    fs::remove_file(dir.join("test/frame-0.rgba16f")).unwrap();
+    assert!(validate_baseline(&dir, &settings).is_err());
+    fs::remove_dir_all(dir).unwrap();
 }

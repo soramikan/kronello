@@ -1,6 +1,6 @@
 # ADR-0038: Rust は stable の特定版に固定し、CI は GitHub Actions とする
 
-- 状態: 採用
+- 状態: 部分置換（[ADR-0047](0047-apple-silicon-metal-golden.md): GPU 画素 golden の固定環境条項のみ。ツールチェーン・CI の決定は維持）
 - 日付: 2026-10-02
 
 ## 背景

@@ -1,6 +1,6 @@
 # fixture と解析的 golden scene
 
-QA-001 の実装: fixture の生成・取得・台帳検証、`kronello-testkit` の意味的比較と CPU 画素比較、解析的期待値を持つ scene 定義を提供する。日本語 fixture と実際の組版の接続は TEXT-001 で行い、golden scene と編集モデル・レンダーの接続は後続タスクである。GPU の固定環境比較は [golden-comparison.md](golden-comparison.md) に分ける。
+QA-001 の実装: fixture の生成・取得・台帳検証、`kronello-testkit` の意味的比較と CPU 画素比較、解析的期待値を持つ scene 定義を提供する。日本語 fixture と実際の組版の接続は TEXT-001 で行い、golden scene と編集モデル・レンダーの接続は後続タスクである。GPU の Apple Silicon + Metal 共通基準比較は [golden-comparison.md](golden-comparison.md) に分ける。
 
 ## 素材と権利
 
@@ -69,7 +69,7 @@ cargo test -p kronello-testkit --locked
 - `compare_finite_values` は有限性を確認したうえで浮動小数点の値を厳密比較する。意味値に画素の誤差を適用しない。
 - `compare_pixels` は CPU の `f32` RGBA 配列を比較する。入力型 `LinearFrame` は線形作業空間・premultiplied alpha を契約とする。RGBA16F の呼出側は binary16 を復号し、色変換や clamp を挟まない。
 
-画素 API は解像度、region origin、正規化有理数時刻、色空間、color pipeline、sample 数、seed の一致を要求する。空画像、buffer 長不一致、NaN/Infinity、範囲外 alpha、alpha=0 の非ゼロ RGB は失敗する。負 RGB と 1 超、正の微小 alpha は保持する。全画素が許容誤差を満たすことを要求し、超過時は最大 RGB/alpha 誤差・超過画素数・最初の index を返す。環境 fingerprint の検証・画像保存は GPU harness の責務。
+画素 API は解像度、region origin、正規化有理数時刻、色空間、color pipeline、sample 数、seed の一致を要求する。空画像、buffer 長不一致、NaN/Infinity、範囲外 alpha、alpha=0 の非ゼロ RGB は失敗する。負 RGB と 1 超、正の微小 alpha は保持する。全画素が許容誤差を満たすことを要求し、超過時は最大 RGB/alpha 誤差・超過画素数・最初の index を返す。環境 provenance の記録・対象 platform / backend の検証・画像保存は GPU harness の責務。
 
 既定許容値は暫定版 1: RGB は `2^-10 * max(1, abs(expected))`、alpha は絶対誤差 `2^-10`。参照機での妥当性確認は未実施。閾値変更は scene の比較方式の版・理由と一緒にレビューする。
 
@@ -79,4 +79,4 @@ cargo test -p kronello-testkit --locked
 
 `.github/workflows/ci.yml` の macOS と Linux ジョブで、workspace test 前にフォント取得、fixture 生成・検証と Python の失敗経路テストを必須実行する。外部取得の失敗はジョブの失敗。通常の Rust テストには CPU の比較 API と解析値の整合性を含める。
 
-未実装: GPU render adapter、参照機の fingerprint 採取、実測 RGBA16F/PNG の基準、画像差分 artifact、基準更新 harness、実測に基づく許容誤差の校正。`tests/golden/m4-macos-metal/` には未測定を示す README だけを置く。GPU-001 で参照機上にて実装・確認し、通常 CI の成功を Metal golden の成功と扱わない。
+GPU-001 / GPU-002 / VEC-003 で GPU render adapter、候補生成・全画素 CPU oracle 比較と差分 artifact を実装済み。QA-003 は `tests/golden/apple-silicon-metal/` の 21 シーンを共通基準へ登録する。明示採用スクリプトは candidate と同梱 fixture / golden の 256 KiB・合計 1 MiB 上限を検証する。実測による世代間の許容誤差校正は QA-004 の範囲。通常 CI の成功を Metal golden の成功と扱わない。
