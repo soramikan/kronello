@@ -1,10 +1,10 @@
 # 08 API・CLI・MCP・エージェント
 
-GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001-shared-command-query-api.md)）。M1 CLI-001 の実装範囲を次節に示す。後続の API・CLI・MCP は提案であり、実装済みではない。
+GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001-shared-command-query-api.md)）。M1 CLI-001 と M2 SERVICE-001 の実装範囲を次節に示す。それ以外の後続 API・CLI・MCP は提案であり、実装済みではない。
 
 ## M1 CLI-001 の実装範囲
 
-`kronello-service` は同期 Command / Query の入口を提供し、`kronello-cli` の binary `kronello` は transport adapter とする。以下の 6 操作を実装した。それ以降の章の編集計画、Undo、永続ジョブ、MCP 等は引き続き提案であり、SERVICE-001 / API-001 の完了を意味しない。
+`kronello-service` は同期 Command / Query の入口を提供し、`kronello-cli` の binary `kronello` は transport adapter とする。以下の 6 操作を実装した。編集計画・適用・Undo・最小の history.list は後述の SERVICE-001 で実装した。公開 API schema の正式化、永続ジョブ、MCP 等は引き続き提案であり、API-001 等の完了を意味しない。
 
 | service `Request.operation` | CLI subcommand | payload / 応答 |
 |---|---|---|
@@ -15,7 +15,7 @@ GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001
 | `render.frame` | `render frame` | `input`、`time` → FrameMetadata と row-major float32 `linear` / `display` RGBA 配列 |
 | `render.sequence` | `render sequence` | `input`、`range`、`frame_rate`、`output_directory` → SequenceMetadata とディスク上の連番 |
 
-`document` は [公開 schema 1](../../schemas/project-v1.schema.json) の `Project` 型を共有する。request envelope は別の型であり、未知 field と重複 field を拒否する。Project 内の未知内容は store の規約で保持する。`project.create` は一時ファイル内で import / close を完了してから上書き禁止で公開する。`project.import` は既存ファイルを対象とし、明示した revision に一致する場合だけ更新する。これらの操作は store の event を記録するが、変更計画や再送の冪等性 API は未実装。読み取りと render で存在しない project を作成しない。
+`document` は [公開 schema 1](../../schemas/project-v1.schema.json) の `Project` 型を共有する。request envelope は別の型であり、未知 field と重複 field を拒否する。Project 内の未知内容は store の規約で保持する。`project.create` は一時ファイル内で import / close を完了してから上書き禁止で公開する。`project.import` は既存ファイルを対象とし、明示した revision に一致する場合だけ更新する。project.create / project.import は store の event を記録するが、これら二つの操作の変更計画・再送の冪等性 API は未実装（以下の edit.* は対応済み）。読み取りと render で存在しない project を作成しない。
 
 `RenderInput` は `project`、`composition`（stable UUID）、`region`（origin / extent / pixels）、任意の `profile`（既定は linear Rec.709 / tolerance 0.02 px）、任意の `fonts` を持つ。fonts は `{ "identity": FontRef, "path": "local/file.otf" }` の配列とし、snapshot が必要とする font lock をすべて明示する。hash・face index・family・PostScript 名を照合し、システムフォント探索や外部取得はしない。path は process の作業ディレクトリ基準（絶対 path も可）。有理数は `{ "num": "1", "den": "2" }`、range は `{ "start": ..., "end": ... }` とする。
 
@@ -23,7 +23,7 @@ GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001
 
 - subcommand を指定した場合は、その payload の JSON object を stdin に渡す（`operation` を含めない）。subcommand なしの場合は `operation` を含む完全な service Request を渡す。
 - `--request-json 'JSON'` は stdin の代わりに一つの要求を渡す。入力上限は UTF-8 16 MiB。一回の起動につき一つの要求、一つの結果 JSON document と改行を stdout に出力する。NDJSON event stream は未実装。
-- 成功は `{ "status": "success", "result": { "kind": "project|export|frame|sequence", "value": ... } }`、失敗は `{ "status": "error", "error": { "code": "INVALID_REQUEST", "message": "..." } }`。成功の exit code は 0、失敗は非 0。診断は stderr にだけ出力する。`--help` も `USAGE` JSON error と stderr の使用法（非 0）を返す。
+- 成功は `{ "status": "success", "result": { "kind": "project|export|frame|sequence|plan|edit|history", "value": ... } }`、失敗は `{ "status": "error", "error": { "code": "INVALID_REQUEST", "message": "..." } }`。成功の exit code は 0、失敗は非 0。診断は stderr にだけ出力する。`--help` も `USAGE` JSON error と stderr の使用法（非 0）を返す。
 - backend の既定は GPU。`--backend gpu` も指定可。adapter / device を作れなければ型付きエラーを返す。GPU 不在時の暗黙の CPU fallback はない。GPU は render 操作でのみ初期化する。
 - `--backend cpu-reference` は検証用の float32 参照 backend の明示選択。metadata に `cpu_reference_float32` と記録する。通常の GPU は `wgpu_rgba16f`。両者のビット一致や性能保証は提供しない。
 - `render.frame` は有理数の任意時刻を評価して画素を JSON 応答する。画像ファイルが必要な場合は `render.sequence` を使う。連番は新しい directory にだけ出力し、既存成果物を上書きしない。PNG / RGBA16F / metadata の契約は [05 レンダー](05-render-gpu.md) を参照。
@@ -61,7 +61,76 @@ printf '%s\n' '{"operation":"project.export","project":"/private/tmp/kronello-m1
 
 受け入れテストは `crates/kronello-cli/tests/machine.rs`。built binary を起動し、stdout 全体の JSON parse、非 0 exit と stderr 診断、create / import / export / info、revision conflict / lock、font 欠落 / hash、未対応機能、CPU 連番を検証する。GPU を必要とするテストは `gpu_headless_default_backend_animated_shape_japanese_text_sequence`。service は `Service::with_backend(&dyn RenderBackend)` で backend を注入でき、CLI 固有の作品状態は持たない。 CPU と Apple M1 / Metal の実行結果は [CLI-001 の検証](../testing/cli-001.md) に記録する。
 
-## 読み取り API
+## M2 SERVICE-001 の実装範囲
+
+`kronello-service` に次の四つの同期操作を追加した。CLI は既存と同じ stdin JSON / `--request-json` の transport を使い、編集状態・競合規則を持たない。公開 envelope の schema 正式化は API-001、GUI / MCP の入口は後続タスクである。
+
+| service operation | CLI | payload / 応答 |
+|---|---|---|
+| `edit.plan` | `edit plan` | `project`、`base_revision`、`commands` → `kind: plan` の EditPlan |
+| `edit.apply` | `edit apply` | 上記に `plan_hash`、`session_id`、`idempotency_key` を追加 → `kind: edit` の保存済み Event |
+| `edit.undo` | `edit undo` | `project`、`base_revision`、`session_id`、`idempotency_key`、`event_id` → 新しい Event |
+| `history.list` | `history list` | `project`、任意の `since_revision`（既定 `"0"`）→ 現在 revision と、それより後の Event / `undone` |
+
+`base_revision` / `since_revision` は10進文字列、ID は UUID。Plan / HistoryResult の revision も10進文字列だが、既存 store の Event は JSON 整数の revision を返す。`idempotency_key` は空でない UTF-8 文字列（256 bytes 以下）を明示する。session は呼び出し元が決める。history は一つの SQLite 読み取り transaction で現在文書とイベントを取得し、revision 順に session・変更キー・undo_of・取り消し状態を返す。revision が進む前の receipt 再送でも元の Event 全体を返し、現在文書をその時点へ戻さない。
+
+### 型付き編集操作
+
+`commands` は `EditCommand` の配列。一つの外部 tag を持つ JSON object を各操作とし、未知 field・重複 field を拒否する。たとえば Constant の変更は次の形である（UUID は対象文書の stable ID）。
+
+```json
+{"property_source_set":{"object":"adcfcd01-95a0-4292-ba82-61369bf4ac8c","property":"561797a3-732d-406d-8755-57fd074c0050","source":{"kind":"constant","value":{"kind":"scalar","value":2.5}}}}
+```
+
+| EditCommand tag | 内容 |
+|---|---|
+| `property_source_set` | `object`、`property`、`source`（Constant / Curve）。任意の `curve` は同じ ID の AnimationCurve を新規保存・置換する。Curve の参照閉包・型を検証 |
+| `keyframe_insert` / `keyframe_upsert` / `keyframe_replace` | `curve` と `key`。それぞれ重複時拒否 / 挿入か置換 / 既存の有理数時刻だけ置換 |
+| `keyframe_remove` | `curve` と `time`。存在するキーだけ削除 |
+| `node_add` | `composition`、完全な SceneNode の `node`、親内の `index`。親は node.containment_parent |
+| `node_remove` | `composition` と NodeId の `node`。所有子孫をまとめて削除。残る参照の適合は候補全体の検証で確認 |
+| `node_reparent` | `composition`、NodeId の `node`、新 `parent`（root は null）、`index`。変換親は別管理 |
+| `transform_parent_set` | `composition`、NodeId の `node`、変換 `parent`（null 可） |
+| `node_reorder` | `composition`、所有 `parent`（root は null）、全子 ID の `order`。欠落・重複・外部の子を拒否 |
+| `shape_set` / `text_set` | 完全な既知 `shape` / `text` を stable content ID で保存・置換 |
+| `composition_create` | 完全な Composition の `composition`。既存 ID は拒否 |
+| `instance_place` | `composition`、CompositionInstance kind の SceneNode の `node`、`index`。definition・入力・TimeMap・seed は共有モデル型 |
+
+生の patch、inverse、changed_keys をクライアントから受け付けない。Expression の設定、Timeline 編集、テンプレートの公開入力 policy、Modifier 編集、ジョブはこの実装の対象外。opaque / 未知意味版の通常編集は引き続き保守的に `UNSUPPORTED_FEATURE` として拒否する。
+
+### 計画・適用と receipt
+
+plan は指定 revision の不変文書から候補を作り、`validate_compositions`、Property descriptor / curve source catalog、Shape / Text content、instance binding を検証する。中間操作ではなく batch の最終候補を検証するため、一つの計画内で content・node・definition を追加できる。plan は文書・revision・履歴を変更しない。型なし object UUID による参照と競合判定を曖昧にしないため、node と project / composition / curve / content の UUID の重複も拒否する。
+
+EditPlan は `project_id`、正規化した `base_revision`、commands、生成 mutations / inverse / changed_keys、候補 `candidate`、`plan_hash` を返す。hash は `plan_hash` を空文字列にしたこの内容全体を、JSON object key 順・compact UTF-8 に正規化して SHA-256 にした小文字 hex。クライアントの path・session・idempotency key は plan identity に含めない。同一 project / revision / commands に対し決定的で、候補を別の計画へすり替えられない。
+
+apply は commands から計画を再構築し、hash と候補の検証を確認する。store の `BEGIN IMMEDIATE` 内で revision を再照合し、文書・Event・inverse・receipt を一緒に commit する。競合や保存失敗は全変更を rollback する。保存 patch の配列参照は UUID `id` を使い、別 Property の後続変更を逆操作で上書きしない。draw order や keyframe の配列は単位として置換する。ID 配列の格納順は意味を持たず、候補は patch 適用後の格納順に正規化する。描画順の正本は root_nodes / child_order。
+
+receipt の canonical payload は operation・正規化 revision・session・commands・plan_hash（Undo では event_id）である。project path は各 `.kronello` 内のキーの名前空間で識別し、payload に含めない。同じキー・同じ payload の再送は revision 判定より先に保存結果を返す。同じキー・異なる payload は拒否する。再送判定は service の事前 lookup に加え、store の書き込み transaction 内でも行い、同時プロセスでも重複 Event を作らない。receipt は既存 `idempotency.payload` 内の `service_payload` と完全な Event で永続化し、SQLite table / user_version を変えない。旧 store caller の receipt と SERVICE-001 の receipt は混同しない。
+
+### Selective Undo の実装
+
+Undo は対象 Event の保存 inverse を現在文書に適用した候補を検証し、新しい revision / undo_of を発行する。Redo は Undo Event を対象とする `edit.undo`。history の `undone` は undo_of chain を末尾から走査し、Undo の取り消しも反映する。compact で失った Event は Undo できず、receipt は残る。
+
+値変更は `(object_id, property_id)` が一致したときに競合する。同じ node の別 Property は独立。共有 curve の編集はその curve の直接消費者すべての Property キーを導出する。構造変更は対象 ID または親コンテナ ID の重なりで競合し、構造変更と値変更は対象 object ID の一致で競合する。reparent は旧・新の親を記録する。content / curve / definition の直接参照を新規作成する操作も resource ID を記録し、後続の参照を残したまま作成元を取り消さない。式・評価 DAG の間接的な依存を競合キーへ拡張しない。
+
+対象より後の未取り消し Event が上記キーに触れれば、一切適用せず `UNDO_CONFLICT`。`error.details.conflicts` は `{event_id, keys}` の配列で、競合した後続 Event のキーを返す。Undo 自体も未取り消し Event であり、同じキーを持つ逆操作も競合対象になる。先の操作を Undo した後に同じ領域を操作する場合は、履歴の最新の Undo / Redo Event を対象にする。
+
+| 実装済み error code | 条件 |
+|---|---|
+| `INVALID_REQUEST` | request decode 不正、revision 文字列不正、空 / 長過ぎる idempotency key |
+| `INVALID_EDIT` | 編集対象欠落、key 時刻重複 / 欠落、型・descriptor・参照・所有順序・循環等の候補不適合 |
+| `REVISION_CONFLICT` | plan / apply / undo の基準 revision が古い（同じ payload の保存済み再送は成功） |
+| `PLAN_HASH_MISMATCH` | 現在 revision に対する生成 plan と要求 hash が一致しない |
+| `IDEMPOTENCY_KEY_REUSED` | 同じ project 内の key が異なる canonical payload で使われた |
+| `UNDO_CONFLICT` | 後続の未取り消し Event とキーが重なる。details に Event ID とキー |
+| `EVENT_NOT_FOUND` | Undo の対象 Event が存在しない、または compact 済み |
+| `EVENT_ALREADY_UNDONE` | 対象 Event は既に取り消されている。Redo はその Undo Event を指定 |
+| `UNSUPPORTED_FEATURE` | Expression の設定、opaque / 未知意味版の通常編集 |
+
+既存の `PROJECT_NOT_FOUND` / `PROJECT_LOCKED` / `STORAGE_ERROR` / `IO_ERROR` 等も伝播する。これらの受け入れ条件と再現コマンドは [SERVICE-001 の検証](../testing/service-001.md) に記録する。
+
+## 読み取り API（history.list 以外は提案）
 
 | API | 内容 |
 |---|---|
@@ -77,6 +146,8 @@ printf '%s\n' '{"operation":"project.export","project":"/private/tmp/kronello-m1
 | `job.get` / `job.list` | ジョブの状態・進捗・成果物を返す |
 
 ## 変更 API
+
+以下の直接操作名は提案。SERVICE-001 の実装は `edit.plan` / `edit.apply` 内の型付き `EditCommand` を使う。
 
 `composition.create`、`scene.node.add`、`scene.parent.set`、`animation.keyframes.upsert`、`expression.bind`、`template.instantiate`、`template.inputs.set`、`instance.retime` 等の型付き操作を transaction へ格納する。
 GUI からも同じ操作を使う。
@@ -115,7 +186,7 @@ inspect -> draft operations -> edit.plan -> preview(candidate snapshot)
 
 revision 照合と idempotency の記録は `.kronello` 内で行うため、別プロセスからの再送や競合にも同じ規則が適用される（[09 保存と同時編集](09-storage-concurrency.md)）。
 
-## 操作例（提案 CLI）
+## 操作例（以下の flag 形式は提案 CLI）
 
 ```bash
 kronello template instantiate \

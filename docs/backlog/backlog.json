@@ -414,7 +414,7 @@
       "priority": "P0",
       "area": "service",
       "title": "計画・適用・競合・冪等性",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "STORE-001",
         "CLI-001"

@@ -1,6 +1,11 @@
-//! Shared synchronous Command/Query boundary for the M1 headless workflow.
+//! Shared synchronous Command/Query boundary for headless rendering and edits.
 //! Entry points own transport only; storage, fonts and rendering compose here.
+mod edit;
 mod wire;
+pub use edit::{
+    EditApplyRequest, EditCommand, EditPlan, HistoryEntry, HistoryRequest, HistoryResult,
+    PlanRequest, UndoConflict, UndoRequest,
+};
 
 use std::path::{Path, PathBuf};
 
@@ -31,6 +36,14 @@ pub enum Request {
     RenderFrame(FrameRenderRequest),
     #[serde(rename = "render.sequence")]
     RenderSequence(SequenceRenderRequest),
+    #[serde(rename = "edit.plan")]
+    EditPlan(PlanRequest),
+    #[serde(rename = "edit.apply")]
+    EditApply(EditApplyRequest),
+    #[serde(rename = "edit.undo")]
+    EditUndo(UndoRequest),
+    #[serde(rename = "history.list")]
+    HistoryList(HistoryRequest),
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -113,6 +126,9 @@ pub enum ResultData {
     Export(ExportResult),
     Frame(Box<FrameResult>),
     Sequence(SequenceMetadata),
+    Plan(Box<EditPlan>),
+    Edit(kronello_store::Event),
+    History(HistoryResult),
 }
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
@@ -125,12 +141,15 @@ pub enum Response {
 pub struct ServiceError {
     pub code: String,
     pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub details: Option<serde_json::Value>,
 }
 impl ServiceError {
     pub fn new(code: &str, message: impl Into<String>) -> Self {
         Self {
             code: code.into(),
             message: message.into(),
+            details: None,
         }
     }
     pub fn invalid(message: impl Into<String>) -> Self {
@@ -210,6 +229,10 @@ impl<'a> Service<'a> {
     }
     pub fn dispatch(&self, request: Request) -> Result<ResultData, ServiceError> {
         match request {
+            Request::EditPlan(r) => edit::plan(r).map(|p| ResultData::Plan(Box::new(p))),
+            Request::EditApply(r) => edit::apply(r).map(ResultData::Edit),
+            Request::EditUndo(r) => edit::undo(r).map(ResultData::Edit),
+            Request::HistoryList(r) => edit::history(r).map(ResultData::History),
             Request::ProjectCreate(r) => create(r).map(ResultData::Project),
             Request::ProjectImport(r) => {
                 let revision = parse_revision(&r.base_revision)?;

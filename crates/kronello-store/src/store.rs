@@ -35,6 +35,8 @@ pub enum StoreError {
     HistoryReplayFailed { revision: Revision, reason: String },
     #[error("idempotency key already recorded")]
     IdempotencyKeyExists,
+    #[error("idempotency key reused with a different payload")]
+    IdempotencyKeyReused,
     #[error("invalid location: {0}")]
     InvalidLocation(String),
     #[error(transparent)]
@@ -56,6 +58,7 @@ impl StoreError {
             Self::SnapshotNotFound(_) => "SNAPSHOT_NOT_FOUND",
             Self::HistoryReplayFailed { .. } => "HISTORY_REPLAY_FAILED",
             Self::IdempotencyKeyExists => "IDEMPOTENCY_KEY_EXISTS",
+            Self::IdempotencyKeyReused => "IDEMPOTENCY_KEY_REUSED",
             Self::InvalidLocation(_) => "INVALID_LOCATION",
             Self::Io(_) => "IO_ERROR",
             Self::Sqlite(_) => "STORAGE_ERROR",
@@ -76,8 +79,8 @@ impl From<ProjectError> for StoreError {
 }
 
 /// Paths use object-member segments, avoiding ambiguous JSON pointer escaping.
-/// Arrays are replaced as a unit. A service can use stable IDs before preparing
-/// these storage patches; array positions are never object identities.
+/// An array segment selects an object by its UUID `id`, never by position.
+/// Arrays of scalar values (including draw order) are replaced as a unit.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "operation", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Mutation {
@@ -85,7 +88,7 @@ pub enum Mutation {
     Remove { path: Vec<String> },
 }
 impl Mutation {
-    fn apply(&self, document: &mut Value) -> Result<Self, StoreError> {
+    pub fn apply(&self, document: &mut Value) -> Result<Self, StoreError> {
         let path = match self {
             Self::Set { path, .. } | Self::Remove { path } => path,
         };
@@ -101,11 +104,59 @@ impl Mutation {
             ));
         }
         let mut parent = document;
-        for part in &path[..path.len() - 1] {
-            parent = parent
-                .as_object_mut()
-                .and_then(|object| object.get_mut(part))
-                .ok_or_else(|| StoreError::InvalidMutation("missing object parent".into()))?;
+        for (depth, part) in path[..path.len() - 1].iter().enumerate() {
+            parent = match parent {
+                Value::Object(object) => {
+                    // Empty optional document collections are omitted by the
+                    // public serializer. Stable member patches materialize the
+                    // collection without a whole-array inverse that could erase
+                    // a later, independent content insertion.
+                    if depth == 0
+                        && matches!(part.as_str(), "shapes" | "texts")
+                        && !object.contains_key(part)
+                    {
+                        object.insert(part.clone(), Value::Array(Vec::new()));
+                    }
+                    object.get_mut(part)
+                }
+                Value::Array(array) => array
+                    .iter_mut()
+                    .find(|v| v.get("id").and_then(Value::as_str) == Some(part)),
+                _ => None,
+            }
+            .ok_or_else(|| StoreError::InvalidMutation("missing object parent".into()))?;
+        }
+        if let Value::Array(array) = parent {
+            let key = path.last().unwrap();
+            let index = array
+                .iter()
+                .position(|v| v.get("id").and_then(Value::as_str) == Some(key));
+            let previous = match self {
+                Self::Set { value, .. } => {
+                    if value.get("id").and_then(Value::as_str) != Some(key) {
+                        return Err(StoreError::InvalidMutation(
+                            "array value must match stable id".into(),
+                        ));
+                    }
+                    match index {
+                        Some(i) => Some(std::mem::replace(&mut array[i], value.clone())),
+                        None => {
+                            array.push(value.clone());
+                            None
+                        }
+                    }
+                }
+                Self::Remove { .. } => Some(array.remove(index.ok_or_else(|| {
+                    StoreError::InvalidMutation("missing removal target".into())
+                })?)),
+            };
+            return Ok(match previous {
+                Some(value) => Self::Set {
+                    path: path.clone(),
+                    value,
+                },
+                None => Self::Remove { path: path.clone() },
+            });
         }
         let object = parent
             .as_object_mut()
@@ -179,6 +230,8 @@ pub struct IdempotencyRecord {
     pub key: String,
     pub payload: ApplyRequest,
     pub result: Event,
+    /// Canonical service command envelope, absent for legacy storage callers.
+    pub service_payload: Option<Value>,
 }
 
 pub struct ProjectStore {
@@ -407,7 +460,7 @@ impl ProjectStore {
             idempotency_key: None,
             undo_of: None,
         };
-        self.apply_inner(request, true)
+        self.apply_inner(request, true, None)
     }
     pub fn restore_snapshot(
         &mut self,
@@ -423,13 +476,43 @@ impl ProjectStore {
         )
     }
     pub fn apply(&mut self, request: ApplyRequest) -> Result<Event, StoreError> {
-        self.apply_inner(request, false)
+        self.apply_inner(request, false, None)
     }
-    fn apply_inner(&mut self, request: ApplyRequest, import: bool) -> Result<Event, StoreError> {
+    /// Atomically checks the service receipt before revision validation. Exact
+    /// retries return the original Event even after subsequent edits/compaction.
+    pub fn apply_with_payload(
+        &mut self,
+        request: ApplyRequest,
+        payload: Value,
+    ) -> Result<Event, StoreError> {
+        self.apply_inner(request, false, Some(payload))
+    }
+    fn apply_inner(
+        &mut self,
+        request: ApplyRequest,
+        import: bool,
+        service_payload: Option<Value>,
+    ) -> Result<Event, StoreError> {
         let tx = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         let snapshot = read_snapshot(&tx)?;
+        if let (Some(key), Some(payload)) = (&request.idempotency_key, &service_payload) {
+            let receipt: Option<(String, String)> = tx
+                .query_row(
+                    "SELECT payload,result FROM idempotency WHERE key=?1",
+                    [key],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+                .optional()?;
+            if let Some((stored, result)) = receipt {
+                let stored: Value = serde_json::from_str(&stored)?;
+                if stored.get("service_payload") != Some(payload) {
+                    return Err(StoreError::IdempotencyKeyReused);
+                }
+                return Ok(serde_json::from_str(&result)?);
+            }
+        }
         if request.base_revision != snapshot.revision {
             return Err(StoreError::RevisionConflict {
                 base: request.base_revision,
@@ -497,11 +580,18 @@ impl ProjectStore {
             )?;
         }
         if let Some(key) = &request.idempotency_key {
+            let mut payload = serde_json::to_value(&request)?;
+            if let Some(service_payload) = service_payload {
+                payload
+                    .as_object_mut()
+                    .unwrap()
+                    .insert("service_payload".into(), service_payload);
+            }
             tx.execute(
                 "INSERT INTO idempotency VALUES(?1,?2,?3,?4,?5)",
                 params![
                     key,
-                    serde_json::to_string(&request)?,
+                    serde_json::to_string(&payload)?,
                     event.id.to_string(),
                     sql_revision(revision)?,
                     serde_json::to_string(&event)?
@@ -527,6 +617,9 @@ impl ProjectStore {
                     key: key.to_owned(),
                     payload: serde_json::from_str(&payload)?,
                     result: serde_json::from_str(&result)?,
+                    service_payload: serde_json::from_str::<Value>(&payload)?
+                        .get("service_payload")
+                        .cloned(),
                 })
             })
             .transpose()
@@ -554,6 +647,14 @@ impl ProjectStore {
             });
         }
         Ok(result)
+    }
+    /// Current document and history from one read view for service undo/query.
+    pub fn snapshot_and_events(&self) -> Result<(Snapshot, Vec<Event>), StoreError> {
+        let tx = self.connection.unchecked_transaction()?;
+        let snapshot = read_snapshot(&tx)?;
+        let events = self.events_since(0)?;
+        tx.commit()?;
+        Ok((snapshot, events))
     }
     /// Prunes strictly before the supplied revision; its full snapshot and event
     /// are retained. Replay storage patches to materialize the boundary first.

@@ -57,6 +57,10 @@ impl<'de> Deserialize<'de> for Request {
             "project.info" => payload(&fields).map(Self::ProjectInfo),
             "render.frame" => payload(&fields).map(Self::RenderFrame),
             "render.sequence" => payload(&fields).map(Self::RenderSequence),
+            "edit.plan" => payload(&fields).map(Self::EditPlan),
+            "edit.apply" => payload(&fields).map(Self::EditApply),
+            "edit.undo" => payload(&fields).map(Self::EditUndo),
+            "history.list" => payload(&fields).map(Self::HistoryList),
             _ => Err(D::Error::custom("unknown operation")),
         }
     }
@@ -70,6 +74,9 @@ impl<'de> Deserialize<'de> for ResultData {
             "export" => Self::Export(take(&mut fields, "value")?),
             "frame" => Self::Frame(take(&mut fields, "value")?),
             "sequence" => Self::Sequence(take(&mut fields, "value")?),
+            "plan" => Self::Plan(take(&mut fields, "value")?),
+            "edit" => Self::Edit(take(&mut fields, "value")?),
+            "history" => Self::History(take(&mut fields, "value")?),
             _ => return Err(D::Error::custom("unknown result kind")),
         };
         exhausted::<D::Error>(&fields)?;

@@ -459,3 +459,119 @@ fn locked_project_and_invalid_create_leave_existing_state_intact() {
     assert!(!missing.exists());
     assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
 }
+
+fn edit_commands(value: f64) -> Value {
+    let d = document();
+    json!([{"property_source_set": {
+        "object":d["compositions"][0]["nodes"][0]["id"],
+        "property":d["compositions"][0]["nodes"][0]["properties"][1]["id"],
+        "source":{"kind":"constant","value":{"kind":"scalar","value":value}}
+    }}])
+}
+fn edit_payload(path: &Path, base: &str, key: &str, commands: Value) -> Value {
+    let planned = call(
+        &["edit", "plan"],
+        json!({"project":path,"base_revision":base,"commands":commands}),
+        true,
+    );
+    json!({"project":path,"base_revision":base,"plan_hash":planned["result"]["value"]["plan_hash"],
+        "idempotency_key":key,"session_id":"1b549e15-9862-4168-a638-0cd2f2b0e6b1","commands":commands})
+}
+
+#[test]
+fn persisted_edit_receipts_replay_from_real_cli_processes_after_edits_and_compact() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("receipts.kronello");
+    create(&path);
+    let payload = edit_payload(&path, "1", "first", edit_commands(2.0));
+    let first = call(&["edit", "apply"], payload.clone(), true);
+    // Every call starts a fresh CLI process; no process memory can hold receipts.
+    assert_eq!(call(&["edit", "apply"], payload.clone(), true), first);
+    let second_payload = edit_payload(&path, "2", "second", edit_commands(3.0));
+    let second = call(&["edit", "apply"], second_payload, true);
+    let undo = json!({"project":path,"base_revision":"3","event_id":second["result"]["value"]["id"],"idempotency_key":"undo","session_id":"1b549e15-9862-4168-a638-0cd2f2b0e6b1"});
+    let undone = call(&["edit", "undo"], undo.clone(), true);
+    assert_eq!(call(&["edit", "undo"], undo, true), undone);
+    assert_eq!(call(&["edit", "apply"], payload.clone(), true), first);
+    let mut changed = payload.clone();
+    changed["commands"] = edit_commands(3.0);
+    assert_eq!(
+        error_code(&call(&["edit", "apply"], changed, false)),
+        "IDEMPOTENCY_KEY_REUSED"
+    );
+    let mut stale = payload.clone();
+    stale["idempotency_key"] = json!("stale");
+    assert_eq!(
+        error_code(&call(&["edit", "apply"], stale, false)),
+        "REVISION_CONFLICT"
+    );
+    let h = call(
+        &["history", "list"],
+        json!({"project":path,"since_revision":"1"}),
+        true,
+    );
+    assert_eq!(h["result"]["value"]["revision"], "4");
+    assert_eq!(h["result"]["value"]["events"].as_array().unwrap().len(), 3);
+    let mut store =
+        kronello_store::ProjectStore::open(&path, kronello_store::OpenOptions::default()).unwrap();
+    store.compact(3).unwrap();
+    store.close().unwrap();
+    // The complete receipt remains even when the original event is compacted.
+    assert_eq!(call(&["edit", "apply"], payload, true), first);
+    let h = call(&["history", "list"], json!({"project":path}), true);
+    assert_eq!(h["result"]["value"]["revision"], "4");
+    assert_eq!(
+        call(&["project", "info"], json!({"project":path}), true)["result"]["value"]["revision"],
+        "4"
+    );
+}
+
+#[test]
+fn concurrent_cli_same_key_returns_one_event_and_different_keys_conflict() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("concurrent.kronello");
+    create(&path);
+    let payload = edit_payload(&path, "1", "same", edit_commands(2.0));
+    let spawn = |payload: &Value| {
+        let mut child = Command::new(env!("CARGO_BIN_EXE_kronello"))
+            .args(["edit", "apply"])
+            .env_remove("KRONELLO_TEST_ADAPTER_UNAVAILABLE")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(payload.to_string().as_bytes())
+            .unwrap();
+        child
+    };
+    let a = spawn(&payload);
+    let b = spawn(&payload);
+    let a = a.wait_with_output().unwrap();
+    let b = b.wait_with_output().unwrap();
+    assert!(a.status.success(), "{}", String::from_utf8_lossy(&a.stderr));
+    assert!(b.status.success(), "{}", String::from_utf8_lossy(&b.stderr));
+    let a: Value = serde_json::from_slice(&a.stdout).unwrap();
+    let b: Value = serde_json::from_slice(&b.stdout).unwrap();
+    assert_eq!(a, b);
+    assert_eq!(a["result"]["value"]["revision"], 2);
+    let first = edit_payload(&path, "2", "left", edit_commands(2.25));
+    let mut second = first.clone();
+    second["idempotency_key"] = json!("right");
+    let a = spawn(&first);
+    let b = spawn(&second);
+    let a = a.wait_with_output().unwrap();
+    let b = b.wait_with_output().unwrap();
+    assert_ne!(a.status.success(), b.status.success());
+    let error = if a.status.success() { b } else { a };
+    let error: Value = serde_json::from_slice(&error.stdout).unwrap();
+    assert_eq!(error_code(&error), "REVISION_CONFLICT");
+    assert_eq!(
+        call(&["project", "info"], json!({"project":path}), true)["result"]["value"]["revision"],
+        "3"
+    );
+}
