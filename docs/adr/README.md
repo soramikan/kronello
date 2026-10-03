@@ -59,6 +59,7 @@
 | [0043](0043-semantic-dependencies-and-units.md) | 編集モデル・評価・レンダーの依存境界と単位を固定する | 採用 | 2026-10-03 |
 | [0044](0044-color-and-alpha-contracts.md) | 作業用線形色と alpha の入出力契約を固定する | 採用 | 2026-10-03 |
 | [0045](0045-snapshot-compatibility-boundaries.md) | 保存・意味・実行能力の互換性を分けて判定する | 採用 | 2026-10-03 |
+| [0046](0046-store-format-and-location-policy.md) | 保存の外枠・安全モード判定・履歴警告を固定する | 採用 | 2026-10-03 |
 
 ## 追加と変更の規則
 

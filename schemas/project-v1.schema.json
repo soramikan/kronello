@@ -1,0 +1,1161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Project",
+  "type": "object",
+  "properties": {
+    "compositions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DocumentObject"
+      }
+    },
+    "curves": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DocumentObject2"
+      }
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "name": {
+      "type": "string"
+    },
+    "schema_version": {
+      "type": "integer",
+      "format": "uint32",
+      "maximum": 1,
+      "minimum": 1
+    },
+    "semantic_version": {
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    }
+  },
+  "additionalProperties": true,
+  "required": [
+    "id",
+    "schema_version",
+    "semantic_version",
+    "name",
+    "compositions",
+    "curves"
+  ],
+  "$defs": {
+    "AnimationCurve": {
+      "description": "Validated, strictly time-ordered document data; evaluation lives in\nkronello-animation. Unknown meaning versions can be retained and serialized,\nbut cannot be edited or evaluated as version 1. Empty curves are editable;\nevaluating one is an explicit error, never an implicit default value.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/CurveId"
+        },
+        "interpolation_version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "keys": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Keyframe"
+          }
+        },
+        "value_type": {
+          "$ref": "#/$defs/ValueType"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "value_type",
+        "keys",
+        "interpolation_version"
+      ]
+    },
+    "AssetId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "Color": {
+      "type": "object",
+      "properties": {
+        "components": {
+          "$ref": "#/$defs/ColorComponents"
+        },
+        "space": {
+          "$ref": "#/$defs/ColorSpace"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "space",
+        "components"
+      ]
+    },
+    "ColorComponents": {
+      "description": "Straight RGB with independent alpha. Alpha defaults only at input; saved\ncolors always emit all four components and an explicit color space.",
+      "type": "object",
+      "properties": {
+        "alpha": {
+          "$ref": "#/$defs/FiniteF64",
+          "default": 1.0
+        },
+        "b": {
+          "$ref": "#/$defs/FiniteF64"
+        },
+        "g": {
+          "$ref": "#/$defs/FiniteF64"
+        },
+        "r": {
+          "$ref": "#/$defs/FiniteF64"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "r",
+        "g",
+        "b"
+      ]
+    },
+    "ColorSpace": {
+      "type": "string",
+      "enum": [
+        "srgb",
+        "linear_rec709",
+        "linear_rec2020"
+      ]
+    },
+    "Composition": {
+      "description": "Editable document frame. After editing or decoding, validate the complete\ndefinition set with validate_compositions before accepting it. Node storage\norder has no semantic meaning; root_nodes and child_order carry draw order.",
+      "type": "object",
+      "properties": {
+        "design_extent": {
+          "$ref": "#/$defs/DesignExtent"
+        },
+        "duration": {
+          "$ref": "#/$defs/Duration"
+        },
+        "edit_rate": {
+          "$ref": "#/$defs/FrameRate"
+        },
+        "id": {
+          "$ref": "#/$defs/CompositionId"
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SceneNode"
+          }
+        },
+        "properties": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Property"
+          }
+        },
+        "root_nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/NodeId"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "duration",
+        "design_extent",
+        "edit_rate",
+        "root_nodes",
+        "nodes",
+        "properties"
+      ]
+    },
+    "CompositionId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "CompositionInstance": {
+      "type": "object",
+      "properties": {
+        "definition_ref": {
+          "$ref": "#/$defs/CompositionId"
+        },
+        "id": {
+          "$ref": "#/$defs/CompositionInstanceId"
+        },
+        "input_bindings": {
+          "description": "Targets are properties on the referenced Composition. Curve/expression\nmetadata resolution and public template input policy are later layers.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/PropertySource"
+          }
+        },
+        "local_time_map": {
+          "$ref": "#/$defs/TimeMap"
+        },
+        "seed": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "definition_ref",
+        "input_bindings",
+        "local_time_map",
+        "seed"
+      ]
+    },
+    "CompositionInstanceId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "ContentId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "CurveId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "CurveInterpolation": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "hold"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "linear"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "cubic"
+            },
+            "value": {
+              "$ref": "#/$defs/TimeBezier"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        }
+      ]
+    },
+    "DescriptorRef": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/SchemaKey"
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "version"
+      ]
+    },
+    "DesignExtent": {
+      "description": "Design units, independent of output pixels or display DPI.",
+      "type": "object",
+      "properties": {
+        "height": {
+          "$ref": "#/$defs/FiniteF64"
+        },
+        "width": {
+          "$ref": "#/$defs/FiniteF64"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "width",
+        "height"
+      ]
+    },
+    "DocumentObject": {
+      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Composition"
+        },
+        {
+          "$ref": "#/$defs/OpaqueObject"
+        }
+      ]
+    },
+    "DocumentObject2": {
+      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AnimationCurve"
+        },
+        {
+          "$ref": "#/$defs/OpaqueObject"
+        }
+      ]
+    },
+    "Duration": {
+      "description": "A nonnegative length in seconds. Zero is permitted.",
+      "type": "object",
+      "properties": {
+        "den": {
+          "type": "string",
+          "pattern": "^-?[0-9]+$"
+        },
+        "num": {
+          "type": "string",
+          "pattern": "^-?[0-9]+$"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "num",
+        "den"
+      ]
+    },
+    "ExpressionId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "FiniteF64": {
+      "description": "No non-finite value can be constructed or deserialized through the public API.",
+      "type": "number",
+      "format": "double"
+    },
+    "FrameRate": {
+      "description": "A positive exact number of frames per second.",
+      "type": "object",
+      "properties": {
+        "den": {
+          "type": "string",
+          "pattern": "^-?[0-9]+$"
+        },
+        "num": {
+          "type": "string",
+          "pattern": "^-?[0-9]+$"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "num",
+        "den"
+      ]
+    },
+    "Keyframe": {
+      "type": "object",
+      "properties": {
+        "interpolation": {
+          "description": "Applies to [this key, next key). Validated even on the last key.",
+          "$ref": "#/$defs/CurveInterpolation"
+        },
+        "time": {
+          "$ref": "#/$defs/Rational"
+        },
+        "value": {
+          "$ref": "#/$defs/Value"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "time",
+        "value",
+        "interpolation"
+      ]
+    },
+    "Modifier": {
+      "description": "Ordered modifier frame only, with semantic parameters and a stable identity.\nNo modifier algorithm or execution capability is implemented here. The\nanimation compiler must resolve kind/version and reject unsupported kinds.",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "id": {
+          "$ref": "#/$defs/ModifierId"
+        },
+        "key": {
+          "$ref": "#/$defs/SchemaKey"
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Value"
+          }
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "key",
+        "version",
+        "enabled",
+        "parameters"
+      ]
+    },
+    "ModifierId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "NodeId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "NodeKind": {
+      "description": "Content hooks only; geometry, text layout, and rendering are later layers.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "group"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "null"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "shape"
+            },
+            "value": {
+              "type": "object",
+              "properties": {
+                "content_ref": {
+                  "$ref": "#/$defs/ContentId"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "content_ref"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "text"
+            },
+            "value": {
+              "type": "object",
+              "properties": {
+                "content_ref": {
+                  "$ref": "#/$defs/ContentId"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "content_ref"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "composition_instance"
+            },
+            "value": {
+              "$ref": "#/$defs/CompositionInstance"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        }
+      ]
+    },
+    "OpaqueObject": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "additionalProperties": true,
+      "required": [
+        "id"
+      ]
+    },
+    "Path": {
+      "description": "A document geometry container only. Topology checking/morph evaluation is\ndeferred to the vector/animation layer; Path currently supports Hold only.",
+      "type": "object",
+      "properties": {
+        "segments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PathSegment"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "segments"
+      ]
+    },
+    "PathSegment": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "move_to"
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/FiniteF64"
+              },
+              "maxItems": 2,
+              "minItems": 2
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "line_to"
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/FiniteF64"
+              },
+              "maxItems": 2,
+              "minItems": 2
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "cubic_to"
+            },
+            "value": {
+              "type": "object",
+              "properties": {
+                "control1": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/FiniteF64"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2
+                },
+                "control2": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/FiniteF64"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2
+                },
+                "end": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/FiniteF64"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "control1",
+                "control2",
+                "end"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "close"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        }
+      ]
+    },
+    "Property": {
+      "description": "Deserialization checks intrinsic invariants only; use from_json(input,\nregistry) or validate(registry) to resolve the descriptor before accepting\nan imported property. Source catalogs are checked by validate_sources.",
+      "type": "object",
+      "properties": {
+        "descriptor": {
+          "$ref": "#/$defs/DescriptorRef"
+        },
+        "id": {
+          "$ref": "#/$defs/PropertyId"
+        },
+        "modifiers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Modifier"
+          }
+        },
+        "source": {
+          "$ref": "#/$defs/PropertySource"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "descriptor",
+        "source",
+        "modifiers"
+      ]
+    },
+    "PropertyId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "PropertySource": {
+      "description": "One source at a time, in memory and JSON. Adjacent tagging represents scalar\nconstants and UUID references uniformly, while deny_unknown_fields rejects\ncompeting payloads rather than applying an implicit priority.\n\n```compile_fail\nuse kronello_model::PropertySource;\nlet source: PropertySource<bool> = PropertySource::Constant(\"wrong type\");\n```\n\n```compile_fail\nuse kronello_model::{CurveId, PropertySource};\nlet source = PropertySource::<bool> {\n    constant: true,\n    curve: CurveId::new(),\n};\n```",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "constant"
+            },
+            "value": {
+              "$ref": "#/$defs/Value"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "curve"
+            },
+            "value": {
+              "$ref": "#/$defs/CurveId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "expression"
+            },
+            "value": {
+              "$ref": "#/$defs/ExpressionId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        }
+      ]
+    },
+    "Rational": {
+      "type": "object",
+      "properties": {
+        "den": {
+          "type": "string",
+          "pattern": "^-?[0-9]+$"
+        },
+        "num": {
+          "type": "string",
+          "pattern": "^-?[0-9]+$"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "num",
+        "den"
+      ]
+    },
+    "SceneNode": {
+      "type": "object",
+      "properties": {
+        "active_range": {
+          "$ref": "#/$defs/TimeRange"
+        },
+        "child_order": {
+          "description": "Ordered owned children, independent of transform parenting.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/NodeId"
+          }
+        },
+        "containment_parent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NodeId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "$ref": "#/$defs/NodeId"
+        },
+        "kind": {
+          "$ref": "#/$defs/NodeKind"
+        },
+        "properties": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Property"
+          }
+        },
+        "transform_parent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NodeId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "child_order",
+        "active_range",
+        "properties"
+      ]
+    },
+    "SchemaKey": {
+      "description": "Immutable namespaced schema identity, such as `kronello.transform.opacity`.\nIt is supplied by the schema author, independently of a localized label.",
+      "type": "string"
+    },
+    "TimeBezier": {
+      "description": "Normalized time/value-progress handles between (0, 0) and (1, 1).\nOrdered x handles guarantee monotonic time. Finite y handles may overshoot.\nThese are dimensionless progress values, never stored timestamps.",
+      "type": "object",
+      "properties": {
+        "control1": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FiniteF64"
+          },
+          "maxItems": 2,
+          "minItems": 2
+        },
+        "control2": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FiniteF64"
+          },
+          "maxItems": 2,
+          "minItems": 2
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "control1",
+        "control2"
+      ]
+    },
+    "TimeMap": {
+      "description": "Exact, stateless mappings. Reverse playback, looping, stopping and nonlinear\nmapping are unsupported. Future nonlinear variants require a versioned\nquantization, rounding and evaluation contract; no floating time is stored.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "linear"
+            },
+            "offset": {
+              "$ref": "#/$defs/Rational"
+            },
+            "speed": {
+              "$ref": "#/$defs/Rational"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "offset",
+            "speed"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "piecewise_linear"
+            },
+            "points": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/TimeMapPoint"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "points"
+          ]
+        }
+      ]
+    },
+    "TimeMapPoint": {
+      "description": "An exact parent/local control point.",
+      "type": "object",
+      "properties": {
+        "local": {
+          "$ref": "#/$defs/Rational"
+        },
+        "parent": {
+          "$ref": "#/$defs/Rational"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "parent",
+        "local"
+      ]
+    },
+    "TimeRange": {
+      "description": "A half-open interval [start, end). Equal endpoints describe an empty range.",
+      "type": "object",
+      "properties": {
+        "end": {
+          "$ref": "#/$defs/Rational"
+        },
+        "start": {
+          "$ref": "#/$defs/Rational"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "end"
+      ]
+    },
+    "Value": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "scalar"
+            },
+            "value": {
+              "$ref": "#/$defs/FiniteF64"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "vec2"
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/FiniteF64"
+              },
+              "maxItems": 2,
+              "minItems": 2
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "vec3"
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/FiniteF64"
+              },
+              "maxItems": 3,
+              "minItems": 3
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        },
+        {
+          "description": "Continuous degrees: never reduced modulo 360.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "angle"
+            },
+            "value": {
+              "$ref": "#/$defs/FiniteF64"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "color"
+            },
+            "value": {
+              "$ref": "#/$defs/Color"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "bool"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "enum"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "asset_ref"
+            },
+            "value": {
+              "$ref": "#/$defs/AssetId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "path"
+            },
+            "value": {
+              "$ref": "#/$defs/Path"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        }
+      ]
+    },
+    "ValueType": {
+      "type": "string",
+      "enum": [
+        "scalar",
+        "vec2",
+        "vec3",
+        "angle",
+        "color",
+        "bool",
+        "enum",
+        "string",
+        "asset_ref",
+        "path"
+      ]
+    }
+  }
+}

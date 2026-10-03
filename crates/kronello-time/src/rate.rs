@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::{Rational, Time, TimeError, TimeRange};
 
 /// A positive exact number of frames per second.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(try_from = "Rational", into = "Rational")]
 pub struct FrameRate(Rational);
 
@@ -69,7 +69,7 @@ impl From<FrameRate> for Rational {
 }
 
 /// Positive integer samples per second. Indices share the time-zero origin.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(try_from = "u32", into = "u32")]
 pub struct SampleRate(u32);
 

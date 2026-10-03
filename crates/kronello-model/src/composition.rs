@@ -8,14 +8,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error;
 
 /// Design units, independent of output pixels or display DPI.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(try_from = "ExtentWire", into = "ExtentWire")]
 pub struct DesignExtent {
     width: FiniteF64,
     height: FiniteF64,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct ExtentWire {
     width: FiniteF64,
@@ -56,7 +56,7 @@ impl From<DesignExtent> for ExtentWire {
 /// Editable document frame. After editing or decoding, validate the complete
 /// definition set with validate_compositions before accepting it. Node storage
 /// order has no semantic meaning; root_nodes and child_order carry draw order.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Composition {
     pub id: CompositionId,
@@ -68,7 +68,7 @@ pub struct Composition {
     pub properties: Vec<Property>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SceneNode {
     pub id: NodeId,
@@ -82,7 +82,7 @@ pub struct SceneNode {
 }
 
 /// Content hooks only; geometry, text layout, and rendering are later layers.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(
     tag = "kind",
     content = "value",
@@ -97,7 +97,7 @@ pub enum NodeKind {
     CompositionInstance(CompositionInstance),
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CompositionInstance {
     pub id: CompositionInstanceId,
@@ -111,7 +111,19 @@ pub struct CompositionInstance {
 
 /// Root-to-leaf stable placement identities. Empty denotes the root definition.
 /// A path is contextual: resolve it from a root Composition to validate it.
-#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    schemars::JsonSchema,
+)]
 #[serde(transparent)]
 pub struct InstancePath(Vec<CompositionInstanceId>);
 
@@ -195,7 +207,9 @@ impl InstancePath {
 }
 
 /// Property evaluation identity for a particular placement of a shared node.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, schemars::JsonSchema,
+)]
 #[serde(deny_unknown_fields)]
 pub struct PropertyKey {
     pub instance_path: InstancePath,
@@ -203,7 +217,7 @@ pub struct PropertyKey {
     pub property: PropertyId,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ParentGraph {
     Containment,
@@ -211,7 +225,7 @@ pub enum ParentGraph {
 }
 
 /// An edge preserves the placement responsible for a definition-reference cycle.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CompositionReference {
     pub composition: CompositionId,

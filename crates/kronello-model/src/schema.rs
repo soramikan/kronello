@@ -2,7 +2,7 @@ use crate::{ColorSpace, DescriptorId, FiniteF64, ModelError, SchemaKey, Value, V
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Unit {
     Dimensionless,
@@ -32,7 +32,7 @@ impl Unit {
 }
 
 /// Design coordinates in node content, its transform parent, or the Composition.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum CoordinateSpace {
     /// Node content coordinates before anchor and transform application.
@@ -43,7 +43,9 @@ pub enum CoordinateSpace {
     CompositionDesign,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, schemars::JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum InterpolationMode {
     Hold,
@@ -76,14 +78,14 @@ impl ValueType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct NumericBound {
     pub value: FiniteF64,
     pub inclusive: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct NumericRange {
     pub min: Option<NumericBound>,
@@ -132,7 +134,7 @@ impl NumericRange {
 }
 
 /// Vector bounds are declared per component, without scalar broadcasting.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(
     tag = "kind",
     content = "value",
@@ -183,7 +185,7 @@ impl ValueRange {
 }
 
 /// Allowed document features, not a claim that an evaluator supports them.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Capabilities {
     pub curves: bool,
@@ -192,7 +194,7 @@ pub struct Capabilities {
 }
 
 /// Editable schema input. Convert to PropertyDescriptor before registration.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct DescriptorDefinition {
     pub id: DescriptorId,
@@ -255,7 +257,7 @@ impl DescriptorDefinition {
 
 /// Validated immutable descriptor. Display labels can change; ID, key, version,
 /// and all semantic metadata stay fixed after registration.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(try_from = "DescriptorDefinition", into = "DescriptorDefinition")]
 pub struct PropertyDescriptor(DescriptorDefinition);
 impl PropertyDescriptor {

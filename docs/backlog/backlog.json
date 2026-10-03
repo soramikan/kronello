@@ -108,7 +108,7 @@
       "priority": "P0",
       "area": "storage",
       "title": "文書・イベント・スナップショット保存",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "TIME-001",
         "PROP-001"

@@ -3,7 +3,19 @@ use serde::{Deserialize, Serialize};
 use crate::{Rational, Time, TimeError};
 
 /// A nonnegative length in seconds. Zero is permitted.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    schemars::JsonSchema,
+)]
 #[serde(try_from = "Rational", into = "Rational")]
 pub struct Duration(Time);
 
@@ -46,7 +58,7 @@ impl From<Duration> for Rational {
 }
 
 /// A half-open interval [start, end). Equal endpoints describe an empty range.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(try_from = "RangeWire", into = "RangeWire")]
 pub struct TimeRange {
     start: Time,
@@ -101,7 +113,7 @@ impl TimeRange {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct RangeWire {
     start: Time,

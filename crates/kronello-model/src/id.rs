@@ -10,7 +10,17 @@ macro_rules! stable_id {
         /// central counter. Allocate once during editing and persist it; ID
         /// generation is not part of deterministic property evaluation.
         #[derive(
-            Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+            Debug,
+            Clone,
+            Copy,
+            PartialEq,
+            Eq,
+            PartialOrd,
+            Ord,
+            Hash,
+            Serialize,
+            Deserialize,
+            schemars::JsonSchema,
         )]
         #[serde(transparent)]
         pub struct $name(Uuid);
@@ -53,7 +63,9 @@ stable_id!(ContentId);
 
 /// Immutable namespaced schema identity, such as `kronello.transform.opacity`.
 /// It is supplied by the schema author, independently of a localized label.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, schemars::JsonSchema,
+)]
 #[serde(try_from = "String", into = "String")]
 pub struct SchemaKey(String);
 

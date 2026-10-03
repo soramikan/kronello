@@ -1,4 +1,4 @@
-# kronello-model: Property・Composition モデル
+# kronello-model: Project・Property・Composition モデル
 
 型付き Property と schema registry の純粋モデル層。保存・検証する型を実装し、曲線・式・Modifier の評価、GPU 資源、ストレージは含まない。
 
@@ -16,6 +16,8 @@ COMP-001 は Composition / SceneNode / CompositionInstance の文書型、Instan
 - `PropertySource<T>` / `Property` / `DescriptorRef` / `Modifier`: 排他的な主値源、版固定 descriptor 参照、順序付き Modifier の記述枠。
 - `SourceResolver`: Curve / Expression の存在・戻り値型を意味的 metadata だけで照合するインターフェース。
 - `ModelError` / `JsonError`: 検証エラーと JSON 構造の互換性エラーを分ける。
+- `Project` / `ProjectError` / `DocumentObject<T>` / `OpaqueObject`: 版付きの保存外枠と、未知内容を失わない object の保持。
+- `project_json_schema()`: 公開型から Schema を生成する。成果物は `schemas/project-v1.schema.json`。
 
 ## 実装上の決定
 
@@ -32,7 +34,13 @@ COMP-001 は Composition / SceneNode / CompositionInstance の文書型、Instan
 
 失敗時は `Vec<CompositionError>` で独立した診断を集める。`ContainmentCycle` / `TransformCycle` は対象 Composition と先頭 ID を末尾にも含む閉じた NodeId 経路を返す。`CompositionReferenceCycle` は参照元・参照先 Composition と責任のある Node / Instance を含む `CompositionReference` の閉じた辺列を返す。各グラフを別に検証し、複数種類の循環を同時に返す。循環探索は安定 ID 順の反復 DFS で、共有定義への合流を循環と誤認せず、深いネストでプロセスの再帰 stack に依存しない。すべての単純循環を列挙する API ではない。
 
-新しい文書型も `deny_unknown_fields` による厳密な JSON 境界を使う。未知構造は汎用 `from_json` で `JsonError::IncompatibleStructure` として拒否し、opaque 保持・公開スキーマ・migration を実装済みとは扱わない。
+個別の文書型は `deny_unknown_fields` による厳密な JSON 境界を使う。未知構造は汎用 `from_json` で `JsonError::IncompatibleStructure` として拒否する。STORE-001 の `Project` 外枠は、個別型として読めない object を全体で opaque に保持し、入れ子の未知内容も保存する。公開 Schema は実装したが、具体的な旧版 migration は未実装。
+
+### Project 保存外枠（STORE-001）
+
+`Project` は UUID の `id`、`name`、`schema_version=1`、`semantic_version=1`、Composition / Curve 集合、未知フィールドを持つ。`validate_storage()` は保存外枠・重複 ID・既知フィールドとの衝突を検証する。未知内容・未知意味版の文書も lossless に保持できるが、`ensure_editable()` は通常の変更を安全側に拒否する。実行の能力判定と、既知部分だけを独立に変更する証明は後続層の責務。`serde_json` の `float_roundtrip` / `arbitrary_precision` により既知 f64 と未知の大きな JSON 数値を保持する。Composition の参照・親グラフ等の意味検証は従来どおり `validate_compositions` を呼ぶ。
+
+SQLite・イベント・revision・migration transaction は [kronello-store](../kronello-store/README.md) に分離した。[ADR-0046](../../docs/adr/0046-store-format-and-location-policy.md) と [STORE-001 検証](../../docs/testing/store-001.md) を参照。
 
 ### ID とキー
 

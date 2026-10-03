@@ -38,3 +38,9 @@ pub use schema::{
 pub use value::{
     Color, ColorComponents, ColorSpace, FiniteF64, Path, PathSegment, Value, ValueType,
 };
+
+mod project;
+pub use project::{
+    DocumentObject, OpaqueObject, PROJECT_SCHEMA_VERSION, PROJECT_SEMANTIC_VERSION, Project,
+    ProjectError, project_json_schema,
+};

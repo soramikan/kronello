@@ -17,6 +17,8 @@
 | TemplateDefinition | id, version, composition_ref, public_inputs, duration_policy, constraints |
 | RenderSnapshot | content_hash, schema_version, revision, asset/font/data locks, semantic_versions, profile |
 
+STORE-001 では `Project` の最小保存外枠として UUID `id`、`name`、構造版・意味版、Composition / Curve 集合、未知フィールドを実装した。上表の assets / sequences / templates 等は後続タスクの提案のまま。未知内容の保持と編集可否、公開 JSON Schema は [09 保存と同時編集](09-storage-concurrency.md) と [ADR-0046](../adr/0046-store-format-and-location-policy.md) を参照する。
+
 SourceRef は Asset、Composition、Generator を区別する。SourceRef の型が増えても Clip の編集意味は変えない。
 
 Timeline の文書型（Sequence / Clip）と Composition / Property descriptor は `kronello-model` に置き、評価実装は分離する。意味の参照と論理モジュールの依存境界は [ADR-0043](../adr/0043-semantic-dependencies-and-units.md) を参照。

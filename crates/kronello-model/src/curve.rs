@@ -25,14 +25,14 @@ pub enum CurveError {
 /// Normalized time/value-progress handles between (0, 0) and (1, 1).
 /// Ordered x handles guarantee monotonic time. Finite y handles may overshoot.
 /// These are dimensionless progress values, never stored timestamps.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(try_from = "BezierWire", into = "BezierWire")]
 pub struct TimeBezier {
     control1: [FiniteF64; 2],
     control2: [FiniteF64; 2],
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct BezierWire {
     control1: [FiniteF64; 2],
@@ -74,7 +74,7 @@ impl From<TimeBezier> for BezierWire {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(
     tag = "kind",
     content = "value",
@@ -96,7 +96,7 @@ impl CurveInterpolation {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Keyframe {
     pub time: Time,
@@ -105,7 +105,7 @@ pub struct Keyframe {
     pub interpolation: CurveInterpolation,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CurveDefinition {
     pub id: CurveId,
@@ -118,7 +118,7 @@ pub struct CurveDefinition {
 /// kronello-animation. Unknown meaning versions can be retained and serialized,
 /// but cannot be edited or evaluated as version 1. Empty curves are editable;
 /// evaluating one is an explicit error, never an implicit default value.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(try_from = "CurveDefinition", into = "CurveDefinition")]
 pub struct AnimationCurve(CurveDefinition);
 

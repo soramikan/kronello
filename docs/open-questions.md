@@ -32,8 +32,6 @@
 
 | 事項 | タスク |
 |---|---|
-| 保存場所（同期フォルダ等）の判定方法と、誤判定時の上書き手段 | STORE-001 |
-| 履歴の大きさを警告する閾値 | STORE-001 |
 | 素材の hash 照合の頻度と高速化 | MEDIA-001 |
 | 同梱する FFmpeg の版と configure オプション | MEDIA-001 |
 | 音声コーデックの選定 | AUDIO-000 |
@@ -66,3 +64,5 @@
 | OQ-20 ジョブ記録の保持期間 | [ADR-0034](adr/0034-job-retention.md) |
 | テスト素材の同梱サイズの閾値と大きい素材の取得元（QA-001 で設計） | [fixture と解析的 golden scene](testing/fixtures.md) |
 | OQ-02 のうち名称の衝突 | [ADR-0042](adr/0042-naming-kronello.md) |
+| 保存場所の判定・上書き手段（STORE-001） | [ADR-0046](adr/0046-store-format-and-location-policy.md) |
+| 履歴警告の閾値（STORE-001） | [ADR-0046](adr/0046-store-format-and-location-policy.md) |
