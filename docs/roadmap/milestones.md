@@ -1,6 +1,6 @@
 # マイルストーン
 
-状態: M0 は完了（2026-10-03）。M1 以降は未着手。タスクの詳細は [backlog](../backlog/BACKLOG.md)。
+状態: M0・M1 は完了（2026-10-03）。M1 の統合点は `scripts/demo_cli_m1.py`（[CLI-001 の検証](../testing/cli-001.md)）。M2 以降は未着手。タスクの詳細は [backlog](../backlog/BACKLOG.md)。
 
 | 段階 | 成果物 | 主な完了条件 | タスク数 |
 |---|---|---|---:|

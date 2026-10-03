@@ -1,6 +1,6 @@
 # 11 ワークスペースと実装責務
 
-状態: Cargo workspace を整備済み。GPU-001 の `kronello-gpu` / `kronello-framebridge` スパイクを実装した（実装範囲・実測は下記）。以下の全体構成は引き続き構成案であり、全 crate の機能実装や `apps/` の作成を完了したものではない。
+状態: Cargo workspace を整備済み。GPU-001 の `kronello-gpu` / `kronello-framebridge` スパイクと、M1 の store / animation / eval / vector / text / render / service / cli の各 crate を実装した（実装範囲・実測は下記と各タスクの検証記録）。`kronello-service` は CLI-001 に必要な操作だけを持つ最小版で、Command / Query API の全体は SERVICE-001 以降。以下の全体構成は引き続き構成案であり、全 crate の機能実装や `apps/` の作成を完了したものではない。
 
 初期は以下を論理モジュールとして開始し、ビルド依存やテスト境界に応じて crate 分割する。過度な micro-crate 化はしない。
 
