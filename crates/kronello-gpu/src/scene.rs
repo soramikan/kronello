@@ -275,12 +275,71 @@ pub(crate) fn validate_surface_pixels(pixels: &[[f32; 4]]) -> Result<(), GpuErro
     }
     Ok(())
 }
+pub(crate) fn raster_path_reference(
+    size: RenderSize,
+    path: &PathDraw,
+    working: WorkingSpace,
+) -> Result<Vec<[f32; 4]>, GpuError> {
+    let [w, h] = size.output_resolution;
+    let mut pixels = vec![[0.0; 4]; (w as usize) * (h as usize)];
+    let e = edges(path);
+    let scale = size.pixel_scale();
+    let fill = path
+        .fill
+        .map(|f| color::to_working(f.paint.rgba, f.paint.space, working))
+        .unwrap_or([0.0; 4]);
+    let stroke = path
+        .stroke
+        .map(|s| color::to_working(s.paint.rgba, s.paint.space, working))
+        .unwrap_or([0.0; 4]);
+    for y in 0..h {
+        for x in 0..w {
+            let mut fc = 0;
+            let mut sc = 0;
+            for sy in 0..4 {
+                for sx in 0..4 {
+                    let p = [
+                        (x as f32 + (sx as f32 + 0.5) / 4.0) * scale[0],
+                        (y as f32 + (sy as f32 + 0.5) / 4.0) * scale[1],
+                    ];
+                    let (f, s) = hit(
+                        p,
+                        &e,
+                        path.fill.map_or(FillRule::Nonzero, |f| f.rule),
+                        path.stroke.map_or(0.0, |s| s.width / 2.0),
+                    );
+                    fc += u32::from(f);
+                    sc += u32::from(s);
+                }
+            }
+            pixels[(y * w + x) as usize] = color::source_over(
+                stroke.map(|v| v * sc as f32 / 16.0),
+                fill.map(|v| v * fc as f32 / 16.0),
+            );
+        }
+    }
+    validate_surface_pixels(&pixels)?;
+    Ok(pixels)
+}
+
 /// CPU oracle: same 4x4 point-sampling contract as WGSL, no binary16 rounding.
 /// Offsets are ((sx+0.5)/4,(sy+0.5)/4). Coverage is the fraction of hits.
 pub fn render_scene_reference(
     size: RenderSize,
     scene: &DrawScene,
     working: WorkingSpace,
+) -> Result<Vec<[f32; 4]>, GpuError> {
+    render_scene_reference_with_raster(size, scene, working, &mut |_, path| {
+        raster_path_reference(size, path, working)
+    })
+}
+
+type RasterResolver<'a> = dyn FnMut(usize, &PathDraw) -> Result<Vec<[f32; 4]>, GpuError> + 'a;
+pub(crate) fn render_scene_reference_with_raster(
+    size: RenderSize,
+    scene: &DrawScene,
+    working: WorkingSpace,
+    raster: &mut RasterResolver<'_>,
 ) -> Result<Vec<[f32; 4]>, GpuError> {
     size.validate()?;
     scene.validate()?;
@@ -291,6 +350,7 @@ pub fn render_scene_reference(
         id: usize,
         working: WorkingSpace,
         cache: &mut [Option<Vec<[f32; 4]>>],
+        raster: &mut RasterResolver<'_>,
     ) -> Result<Vec<[f32; 4]>, GpuError> {
         if let Some(p) = &cache[id] {
             return Ok(p.clone());
@@ -299,46 +359,11 @@ pub fn render_scene_reference(
         let mut pixels = vec![[0.0; 4]; (w as usize) * (h as usize)];
         match &scene.nodes[id] {
             DrawNode::Path(path) => {
-                let e = edges(path);
-                let scale = size.pixel_scale();
-                let fill = path
-                    .fill
-                    .map(|f| color::to_working(f.paint.rgba, f.paint.space, working))
-                    .unwrap_or([0.0; 4]);
-                let stroke = path
-                    .stroke
-                    .map(|s| color::to_working(s.paint.rgba, s.paint.space, working))
-                    .unwrap_or([0.0; 4]);
-                for y in 0..h {
-                    for x in 0..w {
-                        let mut fc = 0;
-                        let mut sc = 0;
-                        for sy in 0..4 {
-                            for sx in 0..4 {
-                                let p = [
-                                    (x as f32 + (sx as f32 + 0.5) / 4.0) * scale[0],
-                                    (y as f32 + (sy as f32 + 0.5) / 4.0) * scale[1],
-                                ];
-                                let (f, s) = hit(
-                                    p,
-                                    &e,
-                                    path.fill.map_or(FillRule::Nonzero, |f| f.rule),
-                                    path.stroke.map_or(0.0, |s| s.width / 2.0),
-                                );
-                                fc += u32::from(f);
-                                sc += u32::from(s);
-                            }
-                        }
-                        pixels[(y * w + x) as usize] = color::source_over(
-                            stroke.map(|v| v * sc as f32 / 16.0),
-                            fill.map(|v| v * fc as f32 / 16.0),
-                        );
-                    }
-                }
+                pixels = raster(id, path)?;
             }
             DrawNode::Group { children, opacity } => {
                 for &child in children {
-                    let src = node(size, scene, child, working, cache)?;
+                    let src = node(size, scene, child, working, cache, raster)?;
                     for (d, s) in pixels.iter_mut().zip(src) {
                         *d = color::source_over(s, *d);
                     }
@@ -353,8 +378,8 @@ pub fn render_scene_reference(
                 matte,
                 kind,
             } => {
-                pixels = node(size, scene, *source, working, cache)?;
-                let mask = node(size, scene, *matte, working, cache)?;
+                pixels = node(size, scene, *source, working, cache, raster)?;
+                let mask = node(size, scene, *matte, working, cache, raster)?;
                 let weights = luma_weights(working);
                 for (p, m) in pixels.iter_mut().zip(mask) {
                     let coverage = match kind {
@@ -376,7 +401,7 @@ pub fn render_scene_reference(
     let mut pixels =
         vec![[0.0; 4]; pixel_count(size.output_resolution[0], size.output_resolution[1])?];
     for &id in &scene.roots {
-        let src = node(size, scene, id, working, &mut cache)?;
+        let src = node(size, scene, id, working, &mut cache, raster)?;
         for (d, s) in pixels.iter_mut().zip(src) {
             *d = color::source_over(s, *d);
         }

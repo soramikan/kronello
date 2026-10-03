@@ -183,6 +183,16 @@ impl RenderSnapshot {
         let value = serde_json::to_value(self)?;
         Ok(format!("{:x}", Sha256::digest(serde_json::to_vec(&value)?)))
     }
+    /// Rendering content identity, excluding transaction bookkeeping only.
+    /// Every document field, lock, profile, and semantic version remains hashed.
+    pub fn evaluation_content_hash(&self) -> Result<String, RenderError> {
+        let mut value = serde_json::to_value(self)?;
+        value
+            .as_object_mut()
+            .expect("snapshot object")
+            .remove("revision");
+        Ok(format!("{:x}", Sha256::digest(serde_json::to_vec(&value)?)))
+    }
     pub fn validate(&self) -> Result<(), RenderError> {
         if self.schema_version != SNAPSHOT_SCHEMA_VERSION {
             return Err(RenderError::UnsupportedSchema(self.schema_version));
@@ -278,6 +288,7 @@ pub struct SceneNodeIr {
     pub world_transform: kronello_eval::Affine2,
     pub opacity: f64,
     pub content: SceneContent,
+    pub layout_content_hash: Option<String>,
 }
 /// Resolution-independent text layout and shape values, in local design_px.
 /// Output region/scale appear only in DAG construction. No backend objects.
@@ -294,6 +305,20 @@ pub fn build_scene_ir(
     snapshot: &RenderSnapshot,
     time: Time,
     fonts: &[FontData<'_>],
+) -> Result<SceneIr, RenderError> {
+    build_scene_ir_with_cache(
+        snapshot,
+        time,
+        fonts,
+        &mut crate::RenderCache::new(crate::CacheConfig::disabled()),
+    )
+}
+
+pub fn build_scene_ir_with_cache(
+    snapshot: &RenderSnapshot,
+    time: Time,
+    fonts: &[FontData<'_>],
+    cache: &mut crate::RenderCache,
 ) -> Result<SceneIr, RenderError> {
     snapshot.validate()?;
     let definitions = snapshot.definitions()?;
@@ -344,7 +369,12 @@ pub fn build_scene_ir(
         },
         snapshot.composition,
     )?;
-    let evaluated = graph.evaluate_scene(time)?;
+    let identity = snapshot.evaluation_content_hash()?;
+    let evaluated = graph.evaluate_scene_with_properties(time, &mut |keys, time| {
+        keys.iter()
+            .map(|key| Ok((key.clone(), cache.evaluate(&graph, &identity, key, time)?)))
+            .collect()
+    })?;
     if evaluated.nodes.len() > 1024 {
         return Err(RenderError::UnsupportedFeature(
             "scene node budget exceeded".into(),
@@ -374,6 +404,7 @@ pub fn build_scene_ir(
             .iter()
             .find(|v| v.id == n.key.node)
             .expect("evaluated node");
+        let mut layout_content_hash = None;
         let content = match n.kind {
             NodeKind::Shape { content_ref } => {
                 let shape = content(&snapshot.project.shapes, content_ref.as_uuid(), |s| {
@@ -394,8 +425,9 @@ pub fn build_scene_ir(
                 .ok_or(TextError::MissingContent { id: content_ref })?;
                 text.validate(&authored.properties, &registry)?;
                 let resolved = text.resolve(&values)?;
+                layout_content_hash = Some(crate::layout_content_hash(&resolved)?);
                 used_fonts.extend(resolved.styles.iter().map(|s| s.font.clone()));
-                SceneContent::Text(kronello_text::layout(&resolved, fonts)?)
+                SceneContent::Text(cache.layout(&resolved, fonts)?)
             }
             _ => SceneContent::Empty,
         };
@@ -405,6 +437,7 @@ pub fn build_scene_ir(
             world_transform: n.world_transform,
             opacity: n.transform.opacity,
             content,
+            layout_content_hash,
         });
     }
     // Imported snapshots must retain every required lock; no latest-font filling.

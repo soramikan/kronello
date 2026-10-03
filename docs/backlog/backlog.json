@@ -243,7 +243,7 @@
       "priority": "P0",
       "area": "cache",
       "title": "値・layout・geometry・rasterの分離cache",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "RENDER-001"
       ],

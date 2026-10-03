@@ -37,6 +37,8 @@ let sequence = render_sequence(
 
 `kronello-render` は GPU / store へ通常依存しない。backend は trait 引数で明示する。CPU 参照は `kronello_gpu::render_adapter::CpuReferenceBackend` を選び、GPU の暗黙 fallback には使わない。
 
-連番は新規 directory に RGBA16F（作業用線形 premultiplied・little endian の数値正本）、16-bit PNG（straight sRGB の閲覧用）、各 frame の JSON と `sequence.json` を書く。既存出力先を上書きしない。異なる実行 backend のビット一致・HDR tone mapping・tiling・cache・job resume は保証しない。
+連番は新規 directory に RGBA16F（作業用線形 premultiplied・little endian の数値正本）、16-bit PNG（straight sRGB の閲覧用）、各 frame の JSON と `sequence.json` を書く。既存出力先を上書きしない。異なる実行 backend のビット一致・HDR tone mapping・tiling・GPU texture cache・job resume は保証しない。
 
 型、版、出力形式、制限は [05 レンダラーと GPU](../../docs/architecture/05-render-gpu.md)、受け入れ検証は [RENDER-001](../../docs/testing/render-001.md) を参照。
+
+CACHE-001 は呼出側が所有する `RenderCache` と、scene / DAG / frame / sequence の `*_with_cache` API を追加した。values / layout / geometry / raster は独立した LRU と entry / payload weight の上限を持ち、hit / miss / eviction counter を公開する。layout key には paint・transform を含めず、glyph geometry に layout identity を渡す。CPU 参照 adapter は path の raster 画素を再利用する。GPU raster / texture cache とディスク永続化は未実装。[cache 設計](../../docs/architecture/05-render-gpu.md) と [検証](../../docs/testing/cache-001.md) を参照。

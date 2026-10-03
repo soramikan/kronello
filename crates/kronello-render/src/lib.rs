@@ -1,9 +1,11 @@
 //! Immutable scene compilation and image-sequence export. Concrete execution
 //! is injected through RenderBackend; this crate imports no GPU or store API.
+mod cache;
 mod dag;
 mod output;
 mod snapshot;
 
+pub use cache::*;
 pub use dag::*;
 pub use output::*;
 pub use snapshot::*;
@@ -79,4 +81,13 @@ pub struct BackendFrame {
 pub trait RenderBackend {
     fn name(&self) -> &str;
     fn execute(&self, dag: &RenderDag) -> Result<BackendFrame, RenderError>;
+    /// Backends opt in only with a stable execution namespace/fingerprint.
+    /// The default deliberately does not cache device results.
+    fn execute_with_cache(
+        &self,
+        dag: &RenderDag,
+        _cache: &mut RenderCache,
+    ) -> Result<BackendFrame, RenderError> {
+        self.execute(dag)
+    }
 }

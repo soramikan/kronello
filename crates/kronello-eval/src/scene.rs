@@ -106,12 +106,19 @@ pub struct EvaluatedScene {
     pub inputs: BTreeMap<RuntimePropertyKey, Value>,
 }
 
+type PropertyResolver<'a> = dyn FnMut(
+        &[RuntimePropertyKey],
+        Time,
+    ) -> Result<BTreeMap<RuntimePropertyKey, Value>, EvaluationError>
+    + 'a;
+
 impl DependencyGraph<'_> {
     fn transform_values(
         &self,
         key: &NodeKey,
         time: Time,
         all_properties: bool,
+        resolve: &mut PropertyResolver<'_>,
     ) -> Result<(TransformValues, BTreeMap<RuntimePropertyKey, Value>), EvaluationError> {
         let node = self.scopes[&key.instance_path]
             .composition
@@ -142,7 +149,7 @@ impl DependencyGraph<'_> {
                 .into()
             })
             .collect();
-        let properties = self.evaluate_properties(&keys, time)?;
+        let properties = resolve(&keys, time)?;
         let builtin = kronello_model::SchemaRegistry::with_builtin();
         let value = |name: &str| -> Result<Value, EvaluationError> {
             let schema = SchemaKey::new(name).expect("valid builtin key");
@@ -208,6 +215,7 @@ impl DependencyGraph<'_> {
         key: &NodeKey,
         time: Time,
         cache: &mut BTreeMap<NodeKey, Affine2>,
+        resolve: &mut PropertyResolver<'_>,
     ) -> Result<Affine2, EvaluationError> {
         // Iterative parent chain includes the enclosing placement transform but
         // never the containment parent unless explicitly transform-parented.
@@ -241,7 +249,7 @@ impl DependencyGraph<'_> {
             chain.push(key);
         }
         for key in chain.into_iter().rev() {
-            let (transform, _) = self.transform_values(&key, time, false)?;
+            let (transform, _) = self.transform_values(&key, time, false, resolve)?;
             let local = transform.affine().finite(&key)?;
             world = world.compose(local).finite(&key)?;
             cache.insert(key, world);
@@ -250,6 +258,18 @@ impl DependencyGraph<'_> {
     }
 
     pub fn evaluate_scene(&self, time: Time) -> Result<EvaluatedScene, EvaluationError> {
+        self.evaluate_scene_with_properties(time, &mut |keys, time| {
+            self.evaluate_properties(keys, time)
+        })
+    }
+
+    /// Injects derived-value memoization without exposing a cache or backend type.
+    /// The resolver must preserve evaluate_properties semantics for this graph.
+    pub fn evaluate_scene_with_properties(
+        &self,
+        time: Time,
+        resolve: &mut PropertyResolver<'_>,
+    ) -> Result<EvaluatedScene, EvaluationError> {
         let path = InstancePath::root();
         let scope = &self.scopes[&path];
         let mut pending: Vec<_> = scope
@@ -277,7 +297,7 @@ impl DependencyGraph<'_> {
                 property: p.id(),
             })
             .collect();
-        let mut inputs = self.evaluate_properties(&input_keys, time)?;
+        let mut inputs = resolve(&input_keys, time)?;
         let mut nodes = Vec::new();
         let mut cache = BTreeMap::new();
         while let Some((key, parent)) = pending.pop() {
@@ -292,9 +312,9 @@ impl DependencyGraph<'_> {
             if !node.active_range.contains(local_time) {
                 continue;
             }
-            let (transform, properties) = self.transform_values(&key, time, true)?;
+            let (transform, properties) = self.transform_values(&key, time, true, resolve)?;
             let local_transform = transform.affine().finite(&key)?;
-            let world_transform = self.world_transform(&key, time, &mut cache)?;
+            let world_transform = self.world_transform(&key, time, &mut cache, resolve)?;
             nodes.push(EvaluatedNode {
                 key: key.clone(),
                 composition: scope.composition.id,
@@ -330,7 +350,7 @@ impl DependencyGraph<'_> {
                         property: p.id(),
                     })
                     .collect();
-                inputs.extend(self.evaluate_properties(&keys, time)?);
+                inputs.extend(resolve(&keys, time)?);
                 for child in nested.composition.root_nodes.iter().rev() {
                     pending.push((
                         NodeKey {

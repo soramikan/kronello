@@ -203,6 +203,12 @@ fn verified_faces<'a>(
         .map(|s| verified[&s.font].clone())
         .collect())
 }
+/// Verifies supplied locked bytes even when a caller reuses derived layout.
+pub fn validate_fonts(text: &ResolvedText, fonts: &[FontData<'_>]) -> Result<(), LayoutError> {
+    text.validate()?;
+    verified_faces(text, fonts)?;
+    Ok(())
+}
 fn separator(text: &str) -> bool {
     matches!(text, "\n" | "\r" | "\r\n" | "\u{2028}" | "\u{2029}")
 }

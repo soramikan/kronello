@@ -49,6 +49,8 @@ impl OutputRegion {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CoveragePath {
+    /// Semantic local geometry identity before output mapping or paint.
+    pub geometry_content_hash: String,
     /// Coordinates mapped to output pixels; +Y is down. Paint remains explicitly
     /// tagged straight RGB until coverage execution in the working space.
     pub contours: FlattenedPath,
@@ -127,6 +129,7 @@ struct Builder<'a> {
     cache: BTreeMap<usize, usize>,
     visiting: BTreeSet<usize>,
     nodes: Vec<DagNode>,
+    semantic_cache: &'a mut crate::RenderCache,
 }
 impl Builder<'_> {
     fn push(&mut self, node: DagNode) -> Result<usize, RenderError> {
@@ -185,10 +188,12 @@ impl Builder<'_> {
                     key: n.key.clone(),
                     resolved: resolved.clone(),
                 })?;
-                let contours = map_contours(
-                    kronello_vector::flatten(definition, values, flatten)?,
-                    transform,
-                )?;
+                let (geometry_content_hash, contours) =
+                    self.semantic_cache
+                        .geometry(&resolved.geometry, None, flatten, || {
+                            Ok(kronello_vector::flatten(definition, values, flatten)?)
+                        })?;
+                let contours = map_contours(contours, transform)?;
                 let stroke = if let Some(stroke) = &resolved.stroke {
                     if stroke.join != StrokeJoin::Round || stroke.cap != StrokeCap::Round {
                         return Err(RenderError::UnsupportedFeature(format!(
@@ -214,6 +219,7 @@ impl Builder<'_> {
                 children.push(self.push(DagNode::CoverageDraw {
                     geometry,
                     path: CoveragePath {
+                        geometry_content_hash,
                         contours,
                         fill: resolved.fill.as_ref().map(|f| (f.color, f.rule)),
                         stroke,
@@ -226,11 +232,17 @@ impl Builder<'_> {
                     layout: layout.clone(),
                 })?;
                 for glyph in &layout.glyphs {
-                    let contours =
-                        map_contours(flatten_outline(&glyph.outline, flatten)?, transform)?;
+                    let (geometry_content_hash, contours) = self.semantic_cache.geometry(
+                        &kronello_model::ResolvedGeometry::BezierPath(glyph.outline.clone()),
+                        n.layout_content_hash.as_deref(),
+                        flatten,
+                        || flatten_outline(&glyph.outline, flatten),
+                    )?;
+                    let contours = map_contours(contours, transform)?;
                     children.push(self.push(DagNode::CoverageDraw {
                         geometry,
                         path: CoveragePath {
+                            geometry_content_hash,
                             contours,
                             fill: Some((glyph.fill, FillRule::Nonzero)),
                             stroke: None,
@@ -310,6 +322,20 @@ pub fn build_render_dag(
     profile: RenderProfile,
     region: OutputRegion,
 ) -> Result<RenderDag, RenderError> {
+    build_render_dag_with_cache(
+        scene,
+        profile,
+        region,
+        &mut crate::RenderCache::new(crate::CacheConfig::disabled()),
+    )
+}
+
+pub fn build_render_dag_with_cache(
+    scene: &SceneIr,
+    profile: RenderProfile,
+    region: OutputRegion,
+    semantic_cache: &mut crate::RenderCache,
+) -> Result<RenderDag, RenderError> {
     region.validate()?;
     if profile.working_space == ColorSpace::Srgb
         || !profile.flatten_tolerance_px.is_finite()
@@ -362,6 +388,7 @@ pub fn build_render_dag(
         cache: BTreeMap::new(),
         visiting: BTreeSet::new(),
         nodes: vec![],
+        semantic_cache,
     };
     let mut roots = vec![];
     for (i, n) in scene.nodes.iter().enumerate() {

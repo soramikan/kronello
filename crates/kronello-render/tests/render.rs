@@ -1125,3 +1125,445 @@ fn later_frame_failure_rolls_back_staged_files_and_hdr_numeric_truth_is_unclippe
             .contains("no_tone_mapping")
     );
 }
+
+fn cache_project() -> (Project, CompositionId) {
+    let (mut p, id) = project();
+    let mut text_node = comp_mut(&mut p).nodes[1].clone();
+    text_node.id = NodeId::new();
+    let mut ids = BTreeMap::new();
+    for property in &mut text_node.properties {
+        let replacement = prop(
+            property.descriptor().key.as_str(),
+            property.source().clone(),
+        );
+        ids.insert(property.id(), replacement.id());
+        *property = replacement;
+    }
+    let DocumentObject::Known(mut text) = p.texts[0].clone() else {
+        panic!()
+    };
+    text.id = ContentId::new();
+    text.text = "文字".into();
+    text.styles[0].range.end = text.text.len();
+    text.styles[0].size = ids[&text.styles[0].size];
+    text.styles[0].fill = ids[&text.styles[0].fill];
+    text.wrap_width = ids[&text.wrap_width];
+    text.line_height = ids[&text.line_height];
+    text.alignment = ids[&text.alignment];
+    text_node.kind = NodeKind::Text {
+        content_ref: text.id,
+    };
+    comp_mut(&mut p).root_nodes.push(text_node.id);
+    comp_mut(&mut p).nodes.push(text_node);
+    p.texts.push(DocumentObject::Known(text));
+    (p, id)
+}
+fn change_text_property(p: &mut Project, key: &str, value: Value) {
+    let node = &mut comp_mut(p).nodes[1];
+    if let Some(property) = node
+        .properties
+        .iter_mut()
+        .find(|p| p.descriptor().key.as_str() == key)
+    {
+        property
+            .set_source(PropertySource::Constant(value), &render_registry())
+            .unwrap();
+    } else {
+        node.properties.push(constant(key, value));
+    }
+}
+fn text_mut(p: &mut Project) -> &mut TextDocument {
+    let DocumentObject::Known(text) = &mut p.texts[0] else {
+        panic!()
+    };
+    text
+}
+fn cached_frame(
+    s: &RenderSnapshot,
+    time: Time,
+    region: OutputRegion,
+    cache: &mut RenderCache,
+) -> RenderedFrame {
+    render_frame_with_cache(
+        s,
+        &fonts(),
+        &CpuReferenceBackend,
+        FrameRequest { time, region },
+        cache,
+    )
+    .unwrap()
+}
+
+#[test]
+fn cache_position_opacity_rotation_scale_reuse_layout_across_renders_and_frames() {
+    let (p, id) = cache_project();
+    for (key, value) in [
+        ("kronello.transform.position", v2(25.0, 6.0)),
+        ("kronello.opacity", scalar(0.5)),
+        ("kronello.transform.rotation", Value::Angle(f(30.0))),
+        ("kronello.transform.scale", v2(2.0, 2.0)),
+    ] {
+        let mut cache = RenderCache::default();
+        cached_frame(&snapshot(&p, id), t(0, 1), region(), &mut cache);
+        cache.reset_stats();
+        let mut changed = p.clone();
+        change_text_property(&mut changed, key, value);
+        let s = snapshot(&changed, id);
+        assert_eq!(
+            cached_frame(&s, t(0, 1), region(), &mut cache),
+            frame(&s, t(0, 1))
+        );
+        assert_eq!(cache.stats().layout.hits, 2, "{key}");
+        assert_eq!(cache.stats().layout.misses, 0, "{key}");
+        if key == "kronello.transform.position" {
+            assert_eq!(cache.stats().geometry.hits, 6);
+            assert_eq!(cache.stats().geometry.misses, 0);
+            assert_eq!(cache.stats().raster.hits, 3);
+            assert_eq!(cache.stats().raster.misses, 3);
+        }
+        cache.reset_stats();
+        cached_frame(&s, t(1, 3), region(), &mut cache);
+        assert_eq!(cache.stats().layout.hits, 2);
+        assert_eq!(cache.stats().layout.misses, 0);
+    }
+}
+
+#[test]
+fn cache_color_invalidates_only_changed_text_raster() {
+    let (mut p, id) = cache_project();
+    let mut cache = RenderCache::default();
+    cached_frame(&snapshot(&p, id), t(0, 1), region(), &mut cache);
+    cache.reset_stats();
+    change_text_property(
+        &mut p,
+        "kronello.fill_color",
+        Value::Color(Color::from_srgb8([230, 80, 20], None)),
+    );
+    let s = snapshot(&p, id);
+    assert_eq!(
+        cached_frame(&s, t(0, 1), region(), &mut cache),
+        frame(&s, t(0, 1))
+    );
+    let stats = cache.stats();
+    assert_eq!((stats.layout.hits, stats.layout.misses), (2, 0));
+    assert_eq!((stats.geometry.hits, stats.geometry.misses), (6, 0));
+    assert_eq!((stats.raster.hits, stats.raster.misses), (3, 3));
+}
+
+#[test]
+fn cache_text_size_wrap_line_height_alignment_invalidate_only_affected_layout_and_downstream() {
+    let (p, id) = cache_project();
+    for change in 0..5 {
+        let mut cache = RenderCache::default();
+        cached_frame(&snapshot(&p, id), t(0, 1), region(), &mut cache);
+        cache.reset_stats();
+        let mut changed = p.clone();
+        match change {
+            0 => text_mut(&mut changed).text = "本語日".into(),
+            1 => change_text_property(&mut changed, "kronello.text.font_size", scalar(14.0)),
+            2 => change_text_property(&mut changed, "kronello.text.wrap_width", scalar(22.0)),
+            3 => change_text_property(&mut changed, "kronello.text.line_height", scalar(20.0)),
+            _ => change_text_property(
+                &mut changed,
+                "kronello.text.alignment",
+                Value::Enum("end".into()),
+            ),
+        }
+        let s = snapshot(&changed, id);
+        assert_eq!(
+            cached_frame(&s, t(0, 1), region(), &mut cache),
+            frame(&s, t(0, 1))
+        );
+        let stats = cache.stats();
+        assert_eq!(
+            (stats.layout.hits, stats.layout.misses),
+            (1, 1),
+            "change {change}"
+        );
+        assert_eq!(
+            (stats.geometry.hits, stats.geometry.misses),
+            (3, 3),
+            "change {change}"
+        );
+        assert_eq!(
+            (stats.raster.hits, stats.raster.misses),
+            (3, 3),
+            "change {change}"
+        );
+    }
+}
+
+#[test]
+fn cache_font_lock_change_invalidates_downstream_even_with_identical_outlines() {
+    let (mut p, id) = cache_project();
+    let mut cache = RenderCache::default();
+    let before = cached_frame(&snapshot(&p, id), t(0, 1), region(), &mut cache);
+    cache.reset_stats();
+    // Valid trailing font bytes change the lock, while preserving every glyph.
+    let mut changed_bytes = font().0.clone();
+    changed_bytes.push(0);
+    let changed_font = pin_font(&changed_bytes, 0).unwrap();
+    assert_ne!(changed_font.sha256, font().1.sha256);
+    text_mut(&mut p).styles[0].font = changed_font.clone();
+    let sources = [
+        fonts()[0],
+        FontData {
+            identity: &changed_font,
+            bytes: &changed_bytes,
+        },
+    ];
+    let s = snapshot(&p, id);
+    let request = FrameRequest {
+        time: t(0, 1),
+        region: region(),
+    };
+    let actual =
+        render_frame_with_cache(&s, &sources, &CpuReferenceBackend, request, &mut cache).unwrap();
+    assert_eq!(
+        actual,
+        render_frame(&s, &sources, &CpuReferenceBackend, request).unwrap()
+    );
+    assert_eq!(actual.pixels, before.pixels);
+    let stats = cache.stats();
+    assert_eq!((stats.layout.hits, stats.layout.misses), (1, 1));
+    assert_eq!((stats.geometry.hits, stats.geometry.misses), (3, 3));
+    assert_eq!((stats.raster.hits, stats.raster.misses), (3, 3));
+}
+
+#[test]
+fn cache_values_use_content_runtime_property_and_exact_time_excluding_revision() {
+    let (p, id) = cache_project();
+    let s = snapshot(&p, id);
+    let mut cache = RenderCache::default();
+    let expected = cached_frame(&s, t(1, 3), region(), &mut cache);
+    let first = cache.stats();
+    assert!(first.values.misses > 0);
+    assert_eq!(first.values.inserts, first.values.misses);
+    cache.reset_stats();
+    let revision = RenderSnapshot::new(&p, id, 900, RenderProfile::default()).unwrap();
+    assert_ne!(revision.content_hash().unwrap(), s.content_hash().unwrap());
+    assert_eq!(
+        revision.evaluation_content_hash().unwrap(),
+        s.evaluation_content_hash().unwrap()
+    );
+    assert_eq!(
+        cached_frame(&revision, t(2, 6), region(), &mut cache).pixels,
+        expected.pixels
+    );
+    assert_eq!(cache.stats().values.misses, 0);
+    assert!(cache.stats().values.hits >= first.values.misses);
+    cache.reset_stats();
+    cached_frame(&s, t(1, 2), region(), &mut cache);
+    assert_eq!(cache.stats().values.misses, first.values.misses);
+    let mut changed = p.clone();
+    change_text_property(&mut changed, "kronello.opacity", scalar(0.6));
+    cache.reset_stats();
+    cached_frame(&snapshot(&changed, id), t(1, 3), region(), &mut cache);
+    assert!(cache.stats().values.misses > 0);
+}
+
+#[test]
+fn cache_state_order_eviction_clear_resolution_match_direct_cpu_execution() {
+    let (p, id) = cache_project();
+    let s = snapshot(&p, id);
+    let tiny = CacheCapacity {
+        entries: 1,
+        bytes: 4096,
+    };
+    let mut tiny_cache = RenderCache::new(CacheConfig {
+        values: tiny,
+        layout: tiny,
+        geometry: tiny,
+        raster: tiny,
+    });
+    let mut warm = RenderCache::default();
+    let mut disabled = RenderCache::new(CacheConfig::disabled());
+    let requests = [
+        (t(0, 1), region()),
+        (t(1, 3), region()),
+        (
+            t(1, 1),
+            OutputRegion {
+                pixels: [32, 16],
+                ..region()
+            },
+        ),
+        (
+            t(0, 1),
+            OutputRegion {
+                origin: [4.0, 2.0],
+                ..region()
+            },
+        ),
+    ];
+    for i in [3, 0, 2, 1, 0, 3] {
+        let (time, r) = requests[i];
+        let scene = build_scene_ir(&s, time, &fonts()).unwrap();
+        let dag = build_render_dag(&scene, s.profile(), r).unwrap();
+        let direct = CpuReferenceBackend.execute(&dag).unwrap();
+        for cache in [&mut warm, &mut tiny_cache, &mut disabled] {
+            let actual = cached_frame(&s, time, r, cache);
+            assert_eq!(actual.pixels, direct);
+            assert_eq!(
+                encode_rgba16f(&actual.pixels.linear).unwrap(),
+                encode_rgba16f(&direct.linear).unwrap()
+            );
+        }
+    }
+    assert!(tiny_cache.stats().values.evictions > 0);
+    for stats in [
+        tiny_cache.stats().values,
+        tiny_cache.stats().layout,
+        tiny_cache.stats().geometry,
+        tiny_cache.stats().raster,
+    ] {
+        assert!(stats.entries <= 1 && stats.bytes <= 4096);
+    }
+    for stats in [
+        disabled.stats().values,
+        disabled.stats().layout,
+        disabled.stats().geometry,
+        disabled.stats().raster,
+    ] {
+        assert_eq!(stats.entries, 0);
+    }
+    let before = cached_frame(&s, t(0, 1), region(), &mut warm);
+    warm.clear();
+    assert_eq!(warm.stats().layout.entries, 0);
+    assert_eq!(cached_frame(&s, t(0, 1), region(), &mut warm), before);
+}
+
+#[test]
+fn cache_warm_layout_still_rejects_missing_corrupt_and_duplicate_fonts() {
+    let (p, id) = cache_project();
+    let s = snapshot(&p, id);
+    let mut cache = RenderCache::default();
+    cached_frame(&s, t(0, 1), region(), &mut cache);
+    let request = FrameRequest {
+        time: t(0, 1),
+        region: region(),
+    };
+    for (sources, code) in [
+        (vec![], "ASSET_MISSING"),
+        (
+            vec![FontData {
+                identity: &font().1,
+                bytes: b"broken",
+            }],
+            "ASSET_HASH_MISMATCH",
+        ),
+        (vec![fonts()[0], fonts()[0]], "UNSUPPORTED_FEATURE"),
+    ] {
+        assert_eq!(
+            render_frame_with_cache(&s, &sources, &CpuReferenceBackend, request, &mut cache)
+                .unwrap_err()
+                .code(),
+            code
+        );
+    }
+}
+
+#[test]
+fn cache_sequence_matches_uncached_artifacts_and_reports_cross_frame_hits() {
+    let (p, id) = cache_project();
+    let s = snapshot(&p, id);
+    let root = tempfile::tempdir().unwrap();
+    let request = SequenceRequest {
+        range: TimeRange::new(t(0, 1), t(1, 12)).unwrap(),
+        frame_rate: FrameRate::new(24, 1).unwrap(),
+        region: region(),
+    };
+    let mut cache = RenderCache::default();
+    let cached = render_sequence_with_cache(
+        &s,
+        &fonts(),
+        &CpuReferenceBackend,
+        request,
+        root.path().join("cached"),
+        &mut cache,
+    )
+    .unwrap();
+    let direct = render_sequence(
+        &s,
+        &fonts(),
+        &CpuReferenceBackend,
+        request,
+        root.path().join("direct"),
+    )
+    .unwrap();
+    assert_eq!(cached, direct);
+    for entry in std::fs::read_dir(root.path().join("direct")).unwrap() {
+        let name = entry.unwrap().file_name();
+        assert_eq!(
+            std::fs::read(root.path().join("direct").join(&name)).unwrap(),
+            std::fs::read(root.path().join("cached").join(&name)).unwrap()
+        );
+    }
+    assert_eq!(
+        (cache.stats().layout.hits, cache.stats().layout.misses),
+        (2, 2)
+    );
+    assert_eq!(
+        (cache.stats().geometry.hits, cache.stats().geometry.misses),
+        (6, 6)
+    );
+    assert_eq!(
+        (cache.stats().raster.hits, cache.stats().raster.misses),
+        (5, 7)
+    );
+}
+
+#[test]
+fn cache_shape_color_and_output_mapping_invalidate_at_their_own_levels() {
+    let (mut p, id) = cache_project();
+    let mut cache = RenderCache::default();
+    cached_frame(&snapshot(&p, id), t(0, 1), region(), &mut cache);
+    cache.reset_stats();
+    comp_mut(&mut p).nodes[0]
+        .properties
+        .iter_mut()
+        .find(|p| p.descriptor().key.as_str() == "kronello.fill_color")
+        .unwrap()
+        .set_source(
+            PropertySource::Constant(Value::Color(Color::from_srgb8([10, 80, 230], None))),
+            &render_registry(),
+        )
+        .unwrap();
+    let s = snapshot(&p, id);
+    assert_eq!(
+        cached_frame(&s, t(0, 1), region(), &mut cache),
+        frame(&s, t(0, 1))
+    );
+    let stats = cache.stats();
+    assert_eq!((stats.layout.hits, stats.layout.misses), (2, 0));
+    assert_eq!((stats.geometry.hits, stats.geometry.misses), (6, 0));
+    assert_eq!((stats.raster.hits, stats.raster.misses), (5, 1));
+    cache.reset_stats();
+    cached_frame(
+        &s,
+        t(0, 1),
+        OutputRegion {
+            origin: [1.0, 2.0],
+            ..region()
+        },
+        &mut cache,
+    );
+    let stats = cache.stats();
+    assert_eq!((stats.layout.hits, stats.layout.misses), (2, 0));
+    assert_eq!((stats.geometry.hits, stats.geometry.misses), (6, 0));
+    assert_eq!((stats.raster.hits, stats.raster.misses), (0, 6));
+    cache.reset_stats();
+    cached_frame(
+        &s,
+        t(0, 1),
+        OutputRegion {
+            pixels: [32, 16],
+            ..region()
+        },
+        &mut cache,
+    );
+    let stats = cache.stats();
+    assert_eq!((stats.layout.hits, stats.layout.misses), (2, 0));
+    assert_eq!((stats.geometry.hits, stats.geometry.misses), (0, 6));
+    assert_eq!((stats.raster.hits, stats.raster.misses), (0, 6));
+}
