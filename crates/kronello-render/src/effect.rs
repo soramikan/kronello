@@ -3,7 +3,7 @@ use crate::RenderError;
 use kronello_model::{Color, ResolvedEffect};
 use serde::{Deserialize, Serialize};
 
-pub const EFFECT_KERNEL_VERSION: &str = "fx001-separable-gaussian-transparent-v1";
+pub const EFFECT_KERNEL_VERSION: &str = "fx001-separable-gaussian-transparent-rne16-v1";
 /// Half-open rectangle on the original requested output pixel lattice.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct PixelBounds {

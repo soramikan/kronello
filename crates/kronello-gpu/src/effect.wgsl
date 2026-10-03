@@ -16,6 +16,19 @@ fn bilinear(p:vec2<f32>)->vec4<f32> {
     let top=a+(b-a)*f.x; let bottom=c+(d-c)*f.x;
     return top+(bottom-top)*f.y;
 }
+// Explicit IEEE binary16 RNE prevents backend storage conversion from choosing
+// a different rounding mode. The returned f32 is exactly half-representable.
+fn half_rne(value:f32)->f32 {
+    let bits=bitcast<u32>(value); let sign=bits & 0x80000000u; let magnitude=bits & 0x7fffffffu;
+    if magnitude>=0x38800000u {
+        let rounded=(magnitude+0xfffu+((magnitude>>13u)&1u))&0xffffe000u;
+        return bitcast<f32>(sign|rounded);
+    }
+    let scaled=abs(value)*16777216.0; let base=u32(floor(scaled)); let fraction=scaled-f32(base);
+    let increment=select(0u,1u,fraction>0.5 || (fraction==0.5 && (base&1u)==1u));
+    let rounded=f32(base+increment)/16777216.0;
+    return select(rounded,-rounded,sign!=0u);
+}
 @compute @workgroup_size(8,8)
 fn main(@builtin(global_invocation_id) id:vec3<u32>) {
     if any(id.xy>=textureDimensions(output)) {return;}
@@ -33,6 +46,7 @@ fn main(@builtin(global_invocation_id) id:vec3<u32>) {
         result=s+shadow*(1.0-s.a);
     }
     if any(abs(result.rgb)>vec3<f32>(65504.0)) || any(result!=result) || result.a<0.0 || result.a>1.0 {atomicStore(&validation,1u);}
-    if result.a<=1.0/33554432.0 {result=vec4<f32>(0.0);}
+    result=vec4<f32>(half_rne(result.r),half_rne(result.g),half_rne(result.b),half_rne(result.a));
+    if result.a==0.0 {result=vec4<f32>(0.0);}
     textureStore(output,p,result);
 }

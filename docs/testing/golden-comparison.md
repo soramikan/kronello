@@ -84,7 +84,7 @@ GPU-002 の 10 シーンは `isolated-nested-overlap` / `alpha-matte-reference` 
 
 VEC-003 の 5 シーンは `stroke-joins` / `stroke-caps` / `stroke-miter-limit` / `gradient-linear-fill-stroke` / `gradient-radial-fill-stroke`。
 
-FX-001 の 3 シーンは `fx-gaussian-alpha` / `fx-shadow-srgb` / `fx-shadow-rec2020`。kernel は `fx001-separable-gaussian-transparent-v1`、effect id ごとの意味版は 1。全 sigma / offset / straight color / opacity と GPU shader・CPU effect / kernel code の hash を manifest / provenance に記録する。
+FX-001 の 3 シーンは `fx-gaussian-alpha` / `fx-shadow-srgb` / `fx-shadow-rec2020`。kernel は `fx001-separable-gaussian-transparent-rne16-v1`、effect id ごとの意味版は 1。全 sigma / offset / straight color / opacity と GPU shader・CPU effect / kernel code の hash を manifest / provenance に記録する。
 
 manifest schema は 3。coverage は `vec003-grid4-v2`、stroke は `vec003-centered-stroke-v1`、gradient は `vec003-linear-premultiplied-pad-v1`。固定 4×4 の pixel sample pattern を GPU / CPU で共有する。`samples_per_frame=16` は空間 AA であり、時間・motion blur のサンプル数ではない。全 draw-list、font hash、flatten tolerance 0.02 px、gradient stops / paint transform / stroke join・cap・miter limit を記録する。
 

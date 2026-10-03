@@ -35,6 +35,18 @@ pub(crate) fn shadow_color(effect: &PixelEffect, working: WorkingSpace) -> [f32;
     )
     .map(|v| v * opacity)
 }
+/// A surface boundary uses binary16 round-to-nearest, ties-to-even. Normalize
+/// RGB only when stored alpha becomes zero, never at the external epsilon.
+pub(crate) fn surface_pixels(pixels: &[[f32; 4]]) -> Result<Vec<[f32; 4]>, GpuError> {
+    validate_surface_pixels(pixels)?;
+    Ok(pixels
+        .iter()
+        .map(|p| {
+            let p = p.map(|v| half::f16::from_f32(v).to_f32());
+            if p[3] == 0.0 { [0.0; 4] } else { p }
+        })
+        .collect())
+}
 fn load(pixels: &[[f32; 4]], size: [u32; 2], x: i32, y: i32) -> [f32; 4] {
     if x < 0 || y < 0 || x >= size[0] as i32 || y >= size[1] as i32 {
         [0.0; 4]
@@ -69,8 +81,7 @@ fn convolve(
             output[(y as u32 * size[0] + x as u32) as usize] = result.map(|v| v / norm);
         }
     }
-    validate_surface_pixels(&output)?;
-    Ok(output)
+    surface_pixels(&output)
 }
 fn bilinear(source: &[[f32; 4]], size: [u32; 2], p: [f32; 2]) -> [f32; 4] {
     let x = p[0].floor() as i32;
@@ -95,8 +106,9 @@ pub(crate) fn apply_reference(
     effect
         .validate()
         .map_err(|_| GpuError::InvalidInput("invalid effect parameters"))?;
+    let source = surface_pixels(source)?;
     let [sx, sy] = effect.sigma();
-    let horizontal = convolve(source, size, &kernel(sx)?, 0)?;
+    let horizontal = convolve(&source, size, &kernel(sx)?, 0)?;
     let blurred = convolve(&horizontal, size, &kernel(sy)?, 1)?;
     if let PixelEffect::DropShadow { offset, .. } = effect {
         let color = shadow_color(effect, working);
@@ -109,9 +121,58 @@ pub(crate) fn apply_reference(
                 output[i] = color::source_over(source[i], color.map(|v| v * alpha));
             }
         }
-        validate_surface_pixels(&output)?;
-        Ok(output)
+        surface_pixels(&output)
     } else {
         Ok(blurred)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn cpu_fx_binary16_rounding_and_alpha_underflow_are_explicit() {
+        let input = [
+            [0.3333, -0.3333, 2.0007, 0.6501],
+            [0.001, 0.0, 0.0, 1.0 / 67_108_864.0],
+        ];
+        let rounded = surface_pixels(&input).unwrap();
+        assert_ne!(rounded[0], input[0]);
+        assert_eq!(rounded[0], [0.33325195, -0.33325195, 2.0, 0.64990234]);
+        assert_eq!(rounded[1], [0.0; 4]);
+        // Positive half subnormal alpha retains RGB despite external epsilon.
+        let tiny = surface_pixels(&[[0.001, 0.0, 0.0, 1.0 / 16_777_216.0]]).unwrap();
+        assert!(tiny[0][0] > 0.0);
+        assert_eq!(tiny[0][3], 1.0 / 16_777_216.0);
+    }
+    #[test]
+    fn cpu_fx_vertical_pass_consumes_rounded_horizontal_surface() {
+        let size = [3, 3];
+        let source = vec![[0.25, 0.0, 0.0, 0.65]; 9];
+        let stored = surface_pixels(&source).unwrap();
+        let weights = kernel(1.2).unwrap();
+        let horizontal = convolve(&stored, size, &weights, 0).unwrap();
+        let norm: f32 = weights.iter().sum();
+        let r = weights.len() as i32 / 2;
+        let mut value = [0.0; 4];
+        let mut full_precision = 0.0;
+        for (i, &w) in weights.iter().enumerate() {
+            let p = load(&horizontal, size, 1, 1 + i as i32 - r);
+            for c in 0..4 {
+                value[c] += p[c] * w;
+            }
+            // Analytic unrounded horizontal/vertical response to a flat 3x3 patch.
+            if (0..3).contains(&(1 + i as i32 - r)) {
+                let horizontal_sum: f32 = weights[(r - 1) as usize..=(r + 1) as usize].iter().sum();
+                full_precision += 0.65 * horizontal_sum / norm * w;
+            }
+        }
+        let expected = surface_pixels(&[value.map(|v| v / norm)]).unwrap()[0];
+        let effect = PixelEffect::GaussianBlur { sigma: [1.2; 2] };
+        let actual =
+            apply_reference(&source, size, &effect, WorkingSpace::LinearRec709).unwrap()[4];
+        assert_eq!(actual, expected);
+        assert_ne!(actual[3], full_precision / norm);
+        assert_eq!(actual.map(|v| half::f16::from_f32(v).to_f32()), actual);
     }
 }

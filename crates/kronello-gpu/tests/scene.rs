@@ -788,21 +788,28 @@ fn cpu_fx_gaussian_impulse_is_linear_premultiplied_and_transparent_edges() {
             .unwrap();
     let kernel = kronello_render::gaussian_kernel(1.0).unwrap();
     let norm: f32 = kernel.iter().sum();
+    let half = |v| half::f16::from_f32(v).to_f32();
+    let input = half(color::srgb_decode(0.5) * 0.5);
+    let mut expected_sum = 0.0;
     for y in 0..8 {
         for x in 0..8 {
-            let weight = if x < 7 && y < 7 {
-                kernel[x] * kernel[y] / (norm * norm)
+            // Independent impulse derivation includes horizontal and vertical stores.
+            let rgb = if x < 7 && y < 7 {
+                half(half(input * kernel[x] / norm) * kernel[y] / norm)
+            } else {
+                0.0
+            };
+            let alpha = if x < 7 && y < 7 {
+                half(half(0.5 * kernel[x] / norm) * kernel[y] / norm)
             } else {
                 0.0
             };
             let p = pixels[y * 8 + x];
-            assert!((p[0] - color::srgb_decode(0.5) * 0.5 * weight).abs() < 1e-7);
-            assert!((p[3] - 0.5 * weight).abs() < 1e-7);
-            assert_eq!([p[1], p[2]], [0.0; 2]);
+            assert_eq!(p, [rgb, 0.0, 0.0, alpha]);
+            expected_sum += alpha;
         }
     }
-    let sum: f32 = pixels.iter().map(|p| p[3]).sum();
-    assert!((sum - 0.5).abs() < 1e-6);
+    assert_eq!(pixels.iter().map(|p| p[3]).sum::<f32>(), expected_sum);
 }
 #[test]
 fn cpu_fx_shadow_zero_sigma_fractional_offset_color_opacity_and_under_source() {
@@ -831,7 +838,11 @@ fn cpu_fx_shadow_zero_sigma_fractional_offset_color_opacity_and_under_source() {
         render_scene_reference(RenderSize::pixels(6, 6), &scene, WorkingSpace::LinearRec709)
             .unwrap();
     let alpha = 0.5 * 0.5 * 0.5 * 0.5;
-    assert!((pixels[2 * 6 + 3][0] - color::srgb_decode(0.5) * alpha).abs() < 1e-7);
+    assert!(
+        (pixels[2 * 6 + 3][0] - half::f16::from_f32(color::srgb_decode(0.5) * alpha).to_f32())
+            .abs()
+            < 1e-7
+    );
     assert_eq!(pixels[2 * 6 + 3][3], alpha);
     assert_eq!(pixels[2 * 6 + 2][1], 0.5);
     assert_eq!(pixels[2 * 6 + 2][3], 0.5 + alpha * 0.5);

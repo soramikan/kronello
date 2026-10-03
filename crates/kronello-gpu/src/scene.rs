@@ -539,7 +539,8 @@ pub(crate) fn raster_path_reference(
     Ok(pixels)
 }
 
-/// CPU oracle: same 4x4 point-sampling contract as WGSL, no binary16 rounding.
+/// CPU oracle: same 4x4 point sampling as WGSL. Coverage/groups use float32;
+/// effects explicitly round their surface boundaries to binary16 RNE.
 /// Offsets are ((sx+0.5)/4,(sy+0.5)/4). Coverage is the fraction of hits.
 pub fn render_scene_reference(
     size: RenderSize,
