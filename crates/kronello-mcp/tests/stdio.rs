@@ -173,13 +173,6 @@ fn versions_negotiate_and_registry_schemas_are_self_contained() {
             client.request("tools/list", json!({}))["error"]["code"],
             -32002
         );
-        let unsupported = client.initialize("1900-01-01");
-        assert_eq!(unsupported["error"]["code"], -32602);
-        assert_eq!(
-            unsupported["error"]["data"]["supported"],
-            json!(SUPPORTED_PROTOCOL_VERSIONS)
-        );
-        assert_eq!(unsupported["error"]["data"]["requested"], "1900-01-01");
         let initialized = client.initialize(version);
         assert_eq!(initialized["result"]["protocolVersion"], version);
         assert_eq!(
@@ -245,6 +238,35 @@ fn versions_negotiate_and_registry_schemas_are_self_contained() {
             -32601
         );
         assert!(client.finish().contains("INVALID_REQUEST"));
+    }
+}
+
+#[test]
+fn unsupported_versions_negotiate_latest_and_tools_list_works() {
+    for requested in ["1900-01-01", "2099-01-01", "not-a-version", ""] {
+        let mut client = Client::spawn(&[], false);
+        let initialized = client.initialize(requested);
+        assert!(initialized.get("error").is_none(), "{initialized}");
+        assert_eq!(initialized["result"]["protocolVersion"], "2025-11-25");
+        assert_eq!(
+            initialized["result"]["capabilities"],
+            json!({"tools":{"listChanged":false}})
+        );
+        assert_eq!(
+            client.request("tools/list", json!({}))["error"]["code"],
+            -32002
+        );
+        client.send(&json!({"jsonrpc":"2.0","method":"notifications/initialized"}));
+        let schemas = client.schemas();
+        assert_eq!(
+            schemas.keys().cloned().collect::<BTreeSet<_>>(),
+            kronello_service::command_registry()
+                .into_iter()
+                .map(|command| command.name)
+                .collect()
+        );
+        assert_eq!(client.initialize("2025-11-25")["error"]["code"], -32602);
+        assert!(client.finish().is_empty());
     }
 }
 

@@ -241,15 +241,15 @@ impl Server {
                 Ok(initialize) => initialize,
                 Err(error) => return Some(invalid_params(id, error)),
             };
-            if !SUPPORTED_PROTOCOL_VERSIONS.contains(&initialize.protocol_version.as_str()) {
-                return Some(rpc_error(
-                    id,
-                    -32602,
-                    "Unsupported protocol version",
-                    json!({"code":"UNSUPPORTED_PROTOCOL_VERSION", "supported":SUPPORTED_PROTOCOL_VERSIONS,
-                        "requested":initialize.protocol_version}),
-                ));
-            }
+            let protocol_version =
+                if SUPPORTED_PROTOCOL_VERSIONS.contains(&initialize.protocol_version.as_str()) {
+                    initialize.protocol_version.as_str()
+                } else {
+                    SUPPORTED_PROTOCOL_VERSIONS
+                        .into_iter()
+                        .max()
+                        .expect("supported protocol versions")
+                };
             let _ = (
                 initialize.capabilities,
                 initialize.client_info.name,
@@ -258,7 +258,7 @@ impl Server {
             self.lifecycle = Lifecycle::AwaitingInitialized;
             return Some(result(
                 id,
-                json!({"protocolVersion":initialize.protocol_version,
+                json!({"protocolVersion":protocol_version,
                 "capabilities":{"tools":{"listChanged":false}},
                 "serverInfo":{"name":"kronello-mcp","version":env!("CARGO_PKG_VERSION")}}),
             ));
