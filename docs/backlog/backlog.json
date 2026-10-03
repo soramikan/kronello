@@ -327,7 +327,7 @@
       "priority": "P1",
       "area": "cli",
       "title": "GPU不在時の型付きエラー",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "CLI-001"
       ],

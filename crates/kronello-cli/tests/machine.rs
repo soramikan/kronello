@@ -25,7 +25,21 @@ fn example_conforms_to_public_schema_and_pins_fixture() {
     );
 }
 fn invoke(args: &[&str], input: &str, success: bool) -> (Value, String) {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_kronello"))
+    invoke_with_env(args, input, success, None)
+}
+fn invoke_with_env(
+    args: &[&str],
+    input: &str,
+    success: bool,
+    environment: Option<(&str, &str)>,
+) -> (Value, String) {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_kronello"));
+    // Keep ambient fault injection from changing unrelated tests.
+    command.env_remove("KRONELLO_TEST_ADAPTER_UNAVAILABLE");
+    if let Some((name, value)) = environment {
+        command.env(name, value);
+    }
+    let mut child = command
         .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -47,6 +61,7 @@ fn invoke(args: &[&str], input: &str, success: bool) -> (Value, String) {
     assert_eq!(output.status.success(), success, "{stdout}\n{stderr}");
     assert_eq!(result["status"], if success { "success" } else { "error" });
     if !success {
+        assert!(output.status.code().is_some_and(|code| code != 0));
         assert!(stderr.contains(result["error"]["code"].as_str().unwrap()));
     }
     (result, stderr)
@@ -287,6 +302,51 @@ fn cpu_headless_animated_shape_japanese_text_sequence_and_metadata() {
 #[test]
 fn gpu_headless_default_backend_animated_shape_japanese_text_sequence() {
     headless(None);
+}
+
+#[test]
+#[cfg(debug_assertions)]
+fn adapter_unavailable_default_backend_is_typed_without_fallback() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("demo.kronello");
+    create(&path);
+    let out = dir.path().join("frames");
+    let injected = Some(("KRONELLO_TEST_ADAPTER_UNAVAILABLE", "1"));
+    // Exercise both the implicit default and explicit GPU selection. Neither
+    // may invoke the CPU renderer or publish frames/metadata after failure.
+    for args in [
+        vec!["render", "sequence"],
+        vec!["--backend", "gpu", "render", "sequence"],
+    ] {
+        let (response, stderr) =
+            invoke_with_env(&args, &sequence(&path, &out).to_string(), false, injected);
+        assert_eq!(error_code(&response), "ADAPTER_UNAVAILABLE");
+        assert_eq!(response.as_object().unwrap().len(), 2);
+        assert!(response.get("result").is_none());
+        let message = response["error"]["message"].as_str().unwrap();
+        assert!(message.contains("test-only injected adapter unavailability"));
+        assert_eq!(stderr, format!("ADAPTER_UNAVAILABLE: {message}\n"));
+        assert!(!response.to_string().contains("cpu_reference_float32"));
+        assert!(!stderr.contains("cpu_reference_float32"));
+        assert!(
+            !out.exists(),
+            "failure must not publish any output directory"
+        );
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+    }
+    // A positive control proves this same request is renderable and that the
+    // factory fault does not disable explicitly requested CPU execution.
+    let (response, _) = invoke_with_env(
+        &["--backend", "cpu-reference", "render", "sequence"],
+        &sequence(&path, &out).to_string(),
+        true,
+        injected,
+    );
+    assert_eq!(
+        response["result"]["value"]["frames"][0]["metadata"]["backend"],
+        "cpu_reference_float32"
+    );
+    assert!(out.join("sequence.json").is_file());
 }
 
 #[test]

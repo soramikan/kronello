@@ -30,6 +30,14 @@ GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001
 
 安定したエラー code は `INVALID_REQUEST`、`PROJECT_NOT_FOUND`、`PROJECT_EXISTS`、`PROJECT_LOCKED`、`REVISION_CONFLICT`、`UNSUPPORTED_FEATURE`、`FONT_MISSING`、`ASSET_HASH_MISMATCH`、`GLYPH_MISSING`、`ADAPTER_UNAVAILABLE`、`DEVICE_UNAVAILABLE`、`IO_ERROR`、`OUTPUT_IO_ERROR` 等。store / render の既存 code（`UNSUPPORTED_SCHEMA_VERSION`、`RENDER_ERROR` 等）も伝播する。message は診断用であり分岐には code を使う。フォントが欠落・不一致のときも最終出力を代替フォントで続行しない。
 
+### CLI-002: adapter 不在のテスト専用注入
+
+`kronello-service` の GPU backend factory は、`GpuContext` の生成に失敗した場合、`GpuError::AdapterUnavailable` を `ADAPTER_UNAVAILABLE` に変換して処理を終了する。CPU 参照 backend は明示選択した場合だけ呼び出す。factory の失敗時には render 処理へ進まず、連番の output directory・frame・metadata を作らない。
+
+GPU を持たない sandbox でもこの経路を検証するため、service の Cargo feature `test-adapter-unavailable` と `debug_assertions` が両方有効なときだけ、factory が環境変数 `KRONELLO_TEST_ADAPTER_UNAVAILABLE=1` を読み、実際の adapter 取得前に `GpuError::AdapterUnavailable` を返す。CLI の dev dependency がこの service feature を有効にするため、通常の `cargo test` で実 binary の失敗経路を検証できる。CLI にも同名の転送 feature があり、検証ビルドで明示的に有効化できる。注入は GPU factory だけを対象とし、project 操作や明示的な `--backend cpu-reference` には影響しない。
+
+通常の `cargo build -p kronello-cli` は dev dependency の feature を有効にしない。標準の release profile では `debug_assertions` が無効なので、feature を明示的に指定しても環境変数の読み取りと故障注入はコンパイルされない。これはテスト専用の仕組みであり、公開 Request・CLI option・配布用設定には追加しない。service の単体テストでは private factory を直接差し替え、プロセス全体の環境変数を変更せずに既定 GPU 経路の失敗伝播を確認する。[CLI-002 の検証](../testing/cli-002.md) に条件とコマンドを記録する。
+
 ### 再現可能な Shape + 日本語 Text デモ
 
 [examples/m1-demo.project.json](../../examples/m1-demo.project.json) は赤い rectangle の position curve と緑の「日本語」Text を持つ。ID と Noto Sans CJK JP の font lock を固定している。font bytes は配布物に追加せず、既存 fixture を使用する。

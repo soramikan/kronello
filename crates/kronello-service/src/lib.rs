@@ -185,11 +185,13 @@ enum Backend<'a> {
 }
 pub struct Service<'a> {
     backend: Backend<'a>,
+    gpu_factory: fn() -> Result<GpuContext, GpuError>,
 }
 impl Service<'_> {
     pub fn new(selection: BackendSelection) -> Self {
         Self {
             backend: Backend::Selected(selection),
+            gpu_factory: create_gpu_context,
         }
     }
 }
@@ -197,6 +199,7 @@ impl<'a> Service<'a> {
     pub fn with_backend(backend: &'a dyn RenderBackend) -> Self {
         Self {
             backend: Backend::Injected(backend),
+            gpu_factory: create_gpu_context,
         }
     }
     pub fn execute(&self, request: Request) -> Response {
@@ -341,7 +344,7 @@ impl<'a> Service<'a> {
                 run(&snapshot, &fonts, &CpuReferenceBackend)
             }
             Backend::Selected(BackendSelection::Gpu) => {
-                let gpu = GpuContext::new().map_err(|e| {
+                let gpu = (self.gpu_factory)().map_err(|e| {
                     let code = match e {
                         GpuError::AdapterUnavailable(_) => "ADAPTER_UNAVAILABLE",
                         GpuError::DeviceUnavailable(_) => "DEVICE_UNAVAILABLE",
@@ -354,6 +357,20 @@ impl<'a> Service<'a> {
         }
     }
 }
+fn create_gpu_context() -> Result<GpuContext, GpuError> {
+    // Never honor fault injection in a release-profile build, even if a
+    // dependency enables the test feature through Cargo feature unification.
+    #[cfg(all(feature = "test-adapter-unavailable", debug_assertions))]
+    if std::env::var_os("KRONELLO_TEST_ADAPTER_UNAVAILABLE").as_deref()
+        == Some(std::ffi::OsStr::new("1"))
+    {
+        return Err(GpuError::AdapterUnavailable(
+            "test-only injected adapter unavailability".into(),
+        ));
+    }
+    GpuContext::new()
+}
+
 fn parse_revision(value: &str) -> Result<u64, ServiceError> {
     if value.is_empty() || !value.bytes().all(|b| b.is_ascii_digit()) {
         return Err(ServiceError::invalid(
@@ -441,4 +458,68 @@ fn create(request: CreateRequest) -> Result<ProjectInfo, ServiceError> {
         )
     })?;
     Ok(info)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_backend_adapter_unavailable_never_falls_back() {
+        let directory = tempfile::tempdir().unwrap();
+        let project = directory.path().join("empty.kronello");
+        let output_directory = directory.path().join("frames");
+        // An empty composition needs neither external fonts nor a GPU fixture.
+        let mut document: serde_json::Value =
+            serde_json::from_str(include_str!("../../../examples/m1-demo.project.json")).unwrap();
+        document["compositions"][0]["root_nodes"] = serde_json::json!([]);
+        document["compositions"][0]["nodes"] = serde_json::json!([]);
+        document["texts"] = serde_json::json!([]);
+        let document: Project = serde_json::from_value(document).unwrap();
+        let composition = match &document.compositions[0] {
+            kronello_model::DocumentObject::Known(composition) => composition.id,
+            _ => panic!("known composition required"),
+        };
+        let mut service = Service::new(BackendSelection::default());
+        service
+            .dispatch(Request::ProjectCreate(CreateRequest {
+                project: project.clone(),
+                document,
+            }))
+            .unwrap();
+        // Inject at construction, before a RenderBackend exists. This runs the
+        // production GPU selection/error mapping without global env mutation.
+        service.gpu_factory = || Err(GpuError::AdapterUnavailable("unit-test factory".into()));
+        let request = Request::RenderSequence(SequenceRenderRequest {
+            input: RenderInput {
+                project,
+                composition,
+                region: OutputRegion {
+                    origin: [0.0, 0.0],
+                    extent: [64.0, 32.0],
+                    pixels: [64, 32],
+                },
+                profile: RenderProfile::default(),
+                fonts: Vec::new(),
+            },
+            range: TimeRange::new(Time::ZERO, Time::new(1, 1).unwrap()).unwrap(),
+            frame_rate: FrameRate::new(1, 1).unwrap(),
+            output_directory: output_directory.clone(),
+        });
+        let Response::Error { error } = service.execute(request.clone()) else {
+            panic!("default GPU must propagate adapter failure")
+        };
+        assert_eq!(error.code, "ADAPTER_UNAVAILABLE");
+        assert!(error.message.contains("unit-test factory"));
+        assert!(!output_directory.exists());
+        assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 1);
+
+        service.backend = Backend::Selected(BackendSelection::CpuReference);
+        let ResultData::Sequence(metadata) = service.dispatch(request).unwrap() else {
+            panic!("explicit CPU selection must render the positive control")
+        };
+        assert_eq!(metadata.frames.len(), 1);
+        assert_eq!(metadata.frames[0].metadata.backend, "cpu_reference_float32");
+        assert!(output_directory.join("sequence.json").is_file());
+    }
 }
