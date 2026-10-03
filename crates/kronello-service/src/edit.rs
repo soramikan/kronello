@@ -22,6 +22,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum EditCommand {
+    Template(Box<crate::TemplateCommand>),
     PropertySourceSet {
         object: Uuid,
         property: PropertyId,
@@ -185,6 +186,7 @@ impl SourceResolver for Catalog<'_> {
 }
 pub(crate) fn validate(project: &Project) -> Result<(), ServiceError> {
     project.ensure_editable().map_err(StoreError::from)?;
+    kronello_template::validate_project(project)?;
     let r = registry();
     let compositions: Vec<_> = project
         .compositions
@@ -209,6 +211,10 @@ pub(crate) fn validate(project: &Project) -> Result<(), ServiceError> {
     object_ids.extend(project.texts.iter().filter_map(|t| match t {
         DocumentObject::Known(t) => Some(t.id.as_uuid()),
         DocumentObject::Opaque(_) => None,
+    }));
+    object_ids.extend(project.templates.iter().filter_map(|d| match d {
+        DocumentObject::Known(d) => Some(d.id),
+        _ => None,
     }));
     for c in &compositions {
         if !object_ids.insert(c.id.as_uuid()) {
@@ -363,6 +369,7 @@ fn apply_command(
     keys: &mut BTreeSet<ChangedKey>,
 ) -> Result<(), ServiceError> {
     match command {
+        EditCommand::Template(command) => crate::template::mutate(project, command, keys)?,
         EditCommand::PropertySourceSet {
             object,
             property,
@@ -631,7 +638,12 @@ fn diff(old: &Json, new: &Json, path: &mut Vec<String>, out: &mut Vec<Mutation>)
                 if let Some(next) = b.get(key) {
                     diff(value, next, path, out);
                 } else {
-                    if path.len() == 1 && matches!(key.as_str(), "shapes" | "texts") {
+                    if path.len() == 1
+                        && matches!(
+                            key.as_str(),
+                            "shapes" | "texts" | "templates" | "template_instances"
+                        )
+                    {
                         diff(value, &Json::Array(vec![]), path, out);
                     } else {
                         out.push(Mutation::Remove { path: path.clone() });
@@ -642,7 +654,12 @@ fn diff(old: &Json, new: &Json, path: &mut Vec<String>, out: &mut Vec<Mutation>)
             for (key, value) in b {
                 if !a.contains_key(key) {
                     path.push(key.clone());
-                    if path.len() == 1 && matches!(key.as_str(), "shapes" | "texts") {
+                    if path.len() == 1
+                        && matches!(
+                            key.as_str(),
+                            "shapes" | "texts" | "templates" | "template_instances"
+                        )
+                    {
                         diff(&Json::Array(vec![]), value, path, out);
                     } else {
                         out.push(Mutation::Set {
@@ -701,6 +718,7 @@ fn build(
     for command in &commands {
         apply_command(&mut candidate, command, &mut changed_keys)?;
     }
+    kronello_template::validate_transition(&document, &candidate)?;
     validate(&candidate)?;
     let mut mutations = Vec::new();
     let mut value = serde_json::to_value(&document)?;
@@ -763,6 +781,11 @@ pub(crate) fn apply(r: EditApplyRequest) -> Result<Event, ServiceError> {
     key(&r.idempotency_key)?;
     let base = parse_revision(&r.base_revision)?;
     let payload = json!({"operation":"edit.apply", "base_revision":base.to_string(), "plan_hash":r.plan_hash, "session_id":r.session_id, "commands":r.commands});
+    apply_template(r, payload)
+}
+pub(crate) fn apply_template(r: EditApplyRequest, payload: Json) -> Result<Event, ServiceError> {
+    key(&r.idempotency_key)?;
+    let base = parse_revision(&r.base_revision)?;
     let mut store = open_existing(&r.project)?;
     let result = (|| {
         if let Some(event) = retry(&store, &r.idempotency_key, &payload)? {

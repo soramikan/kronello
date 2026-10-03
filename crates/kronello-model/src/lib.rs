@@ -59,3 +59,6 @@ pub use text::{
     TextDirection, TextDocument, TextError, TextRange, TextStyleSpan, text_descriptors,
     validate_text_contents,
 };
+
+mod template;
+pub use template::*;

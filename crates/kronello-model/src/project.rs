@@ -7,7 +7,9 @@ use serde_json::Value;
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::{AnimationCurve, Composition, Shape, TextDocument};
+use crate::{
+    AnimationCurve, Composition, Shape, TemplateDefinition, TemplateInstance, TextDocument,
+};
 
 pub const PROJECT_SCHEMA_VERSION: u32 = 1;
 pub const PROJECT_SEMANTIC_VERSION: u32 = 1;
@@ -41,6 +43,10 @@ pub struct Project {
     pub shapes: Vec<DocumentObject<Shape>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub texts: Vec<DocumentObject<TextDocument>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub templates: Vec<DocumentObject<TemplateDefinition>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub template_instances: Vec<DocumentObject<TemplateInstance>>,
     #[serde(flatten)]
     pub unknown_fields: BTreeMap<String, Value>,
 }
@@ -66,6 +72,8 @@ impl Default for Project {
             curves: Vec::new(),
             shapes: Vec::new(),
             texts: Vec::new(),
+            templates: Vec::new(),
+            template_instances: Vec::new(),
             unknown_fields: BTreeMap::new(),
         }
     }
@@ -87,6 +95,8 @@ impl Project {
                     | "curves"
                     | "shapes"
                     | "texts"
+                    | "templates"
+                    | "template_instances"
             )
         }) {
             return Err(ProjectError::InvalidDocument(
@@ -155,6 +165,32 @@ impl Project {
                 return Err(ProjectError::InvalidDocument("duplicate object id".into()));
             }
         }
+        for object in &self.templates {
+            let (id, fields) = match object {
+                DocumentObject::Known(value) => (value.id, None),
+                DocumentObject::Opaque(value) => (value.id, Some(&value.fields)),
+            };
+            if !ids.insert(id) || fields.is_some_and(|f| f.contains_key("id")) {
+                return Err(ProjectError::InvalidDocument(
+                    "duplicate or shadowed template id".into(),
+                ));
+            }
+        }
+        let mut placements = std::collections::BTreeSet::new();
+        for object in &self.template_instances {
+            let (id, fields) = match object {
+                DocumentObject::Known(value) => (value.id.as_uuid(), None),
+                DocumentObject::Opaque(value) => (value.id, Some(&value.fields)),
+            };
+            if ids.contains(&id)
+                || !placements.insert(id)
+                || fields.is_some_and(|f| f.contains_key("id"))
+            {
+                return Err(ProjectError::InvalidDocument(
+                    "duplicate or shadowed template instance id".into(),
+                ));
+            }
+        }
         Ok(())
     }
 
@@ -175,6 +211,8 @@ impl Project {
                 .shapes
                 .iter()
                 .any(|v| matches!(v, DocumentObject::Opaque(_)))
+            || self.templates.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
+            || self.template_instances.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
             || self.texts.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
             || self.texts.iter().any(|v| matches!(v, DocumentObject::Known(t) if t.layout_version != crate::TEXT_LAYOUT_VERSION))
             || self.curves.iter().any(
@@ -233,6 +271,16 @@ impl<'de> Deserialize<'de> for Project {
             },
             texts: if fields.contains_key("texts") {
                 take_field::<_, D::Error>(&mut fields, "texts")?
+            } else {
+                Vec::new()
+            },
+            templates: if fields.contains_key("templates") {
+                take_field::<_, D::Error>(&mut fields, "templates")?
+            } else {
+                Vec::new()
+            },
+            template_instances: if fields.contains_key("template_instances") {
+                take_field::<_, D::Error>(&mut fields, "template_instances")?
             } else {
                 Vec::new()
             },

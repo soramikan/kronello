@@ -830,6 +830,7 @@ dependencies = [
  "kronello-animation",
  "kronello-model",
  "kronello-time",
+ "serde_json",
  "thiserror",
 ]
 
@@ -888,6 +889,7 @@ dependencies = [
  "kronello-eval",
  "kronello-gpu",
  "kronello-model",
+ "kronello-template",
  "kronello-testkit",
  "kronello-text",
  "kronello-time",
@@ -909,6 +911,7 @@ dependencies = [
  "kronello-model",
  "kronello-render",
  "kronello-store",
+ "kronello-template",
  "kronello-text",
  "kronello-time",
  "serde",
@@ -932,6 +935,19 @@ dependencies = [
  "serde_json",
  "sha2",
  "tempfile",
+ "thiserror",
+ "uuid",
+]
+
+[[package]]
+name = "kronello-template"
+version = "0.0.0"
+dependencies = [
+ "kronello-animation",
+ "kronello-model",
+ "kronello-time",
+ "serde_json",
+ "sha2",
  "thiserror",
  "uuid",
 ]

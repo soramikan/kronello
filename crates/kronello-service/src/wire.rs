@@ -51,6 +51,10 @@ impl<'de> Deserialize<'de> for Request {
         let mut fields = fields(d)?;
         let tag: String = take(&mut fields, "operation")?;
         match tag.as_str() {
+            "template.set_duration" => payload(&fields).map(Self::TemplateSetDuration),
+            "template.define" => payload(&fields).map(Self::TemplateDefine),
+            "template.instantiate" => payload(&fields).map(Self::TemplateInstantiate),
+            "template.set_input" => payload(&fields).map(Self::TemplateSetInput),
             "project.create" => payload(&fields).map(Self::ProjectCreate),
             "project.import" => payload(&fields).map(Self::ProjectImport),
             "project.export" => payload(&fields).map(Self::ProjectExport),

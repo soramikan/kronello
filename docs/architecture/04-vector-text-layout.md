@@ -129,3 +129,12 @@ Position / Opacity の変更では原則組版を再実行しない。本文、�
 - 同じベクター IR から異なるラスタライザーへ渡せるようにし、Vello を作品の保存形式にしない。
 
 coverage は `[0, 1]` の無次元値で、色の伝達関数を適用しない。色付き raster のアダプターは色空間と alpha 表現を明示し、作業用線形空間の premultiplied 画像へ変換する（[ADR-0044](../adr/0044-color-and-alpha-contracts.md)）。
+
+### TEMPLATE-001 の背景帯と overflow（M2 実装）
+
+背景帯は同一親空間の Rectangle とし、size / position へ text の確定 `layout_bounds` と design_px の padding を束縛する。
+組版は render compiler が実行し、`RuntimePropertyKey::LayoutValue` と `DependencyDeclarations` を介して `kronello-eval` へ意味的値を渡す。
+text / template の実装への evaluator の逆依存はない。
+text の wrap_width を背景帯から読む循環は拒否する。公開 text 置換は水平・単一 style・ruby なしを対象とする。
+max_lines 超過は node・実際の行数・最大行数を持つ `TemplateError::Overflow`、最終レンダーでは `TEMPLATE_OVERFLOW`。
+検証手順は [TEMPLATE-001](../testing/template-001.md) を参照。

@@ -575,3 +575,72 @@ fn concurrent_cli_same_key_returns_one_event_and_different_keys_conflict() {
         "3"
     );
 }
+
+#[test]
+fn template_commands_share_schema_service_and_report_final_overflow() {
+    let dir = tempfile::tempdir().unwrap();
+    let project = dir.path().join("template.kronello");
+    let document: Value =
+        serde_json::from_str(include_str!("../../../examples/template-001.project.json")).unwrap();
+    let definition: Value = serde_json::from_str(include_str!(
+        "../../../examples/template-001.definition.json"
+    ))
+    .unwrap();
+    call(
+        &["project", "create"],
+        json!({"project":project,"document":document}),
+        true,
+    );
+    let session = "d42e2df2-f299-4e2d-811d-52dab580a772";
+    let instance = "9e2d1247-479c-47db-ad74-c89b362e00aa";
+    call(
+        &["template", "define"],
+        json!({"project":project,"base_revision":"1","session_id":session,"idempotency_key":"define","definition":definition}),
+        true,
+    );
+    call(
+        &["template", "instantiate"],
+        json!({"project":project,"base_revision":"2","session_id":session,"idempotency_key":"place","composition":document["compositions"][0]["id"],"node":"7706a562-00d9-4a1b-9467-2cd97c57d3d4","index":0,"instance":{"id":instance,"definition_ref":definition["id"],"version":"1.0.0","duration":{"num":"5","den":"1"},"inputs":{}}}),
+        true,
+    );
+    call(
+        &["template", "set_duration"],
+        json!({"project":project,"base_revision":"3","session_id":session,"idempotency_key":"duration","instance":instance,"duration":{"num":"8","den":"1"}}),
+        true,
+    );
+    let exported = call(&["project", "export"], json!({"project":project}), true);
+    let saved = &exported["result"]["value"]["document"];
+    let schema: Value =
+        serde_json::from_str(include_str!("../../../schemas/project-v1.schema.json")).unwrap();
+    jsonschema::validator_for(&schema)
+        .unwrap()
+        .validate(saved)
+        .unwrap();
+    assert_eq!(
+        saved["template_instances"][0]["duration"],
+        json!({"num":"8","den":"1"})
+    );
+    assert_eq!(saved["template_instances"][0]["version"], "1.0.0");
+    assert_eq!(
+        saved["templates"][0]["content_hash"]
+            .as_str()
+            .unwrap()
+            .len(),
+        64
+    );
+    call(
+        &["template", "set_input"],
+        json!({"project":project,"base_revision":"4","session_id":session,"idempotency_key":"headline","instance":instance,"name":"headline","value":{"kind":"string","value":"一\n二\n三"}}),
+        true,
+    );
+    let output = dir.path().join("frames");
+    let input = json!({"project":project,"composition":document["compositions"][0]["id"],"region":{"origin":[0,0],"extent":[64,32],"pixels":[64,32]},"fonts":[{"identity":document["texts"][0]["styles"][0]["font"],"path":kronello_testkit::resolve_fixture("noto-sans-cjk-jp").unwrap()}]});
+    let result = call(
+        &["--backend", "cpu-reference", "render", "sequence"],
+        json!({"input":input,"range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"1"}},"frame_rate":{"num":"1","den":"1"},"output_directory":output}),
+        false,
+    );
+    assert_eq!(result["error"]["code"], "TEMPLATE_OVERFLOW");
+    assert_eq!(result["error"]["details"]["actual_lines"], 3);
+    assert!(!output.exists());
+}

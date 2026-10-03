@@ -433,7 +433,7 @@
       "priority": "P0",
       "area": "template",
       "title": "公開入力と保護時間区間の最小template",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "COMP-001",
         "SERVICE-001"

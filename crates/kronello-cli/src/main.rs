@@ -3,7 +3,7 @@ use std::io::{Read, Write};
 
 use kronello_service::{BackendSelection, Request, Response, Service, ServiceError};
 
-const USAGE: &str = "kronello [--backend gpu|cpu-reference] [--request-json JSON] [project create|import|export|info | render frame|sequence | edit plan|apply|undo | history list]; otherwise read a tagged service Request from stdin";
+const USAGE: &str = "kronello [--backend gpu|cpu-reference] [--request-json JSON] [project create|import|export|info | render frame|sequence | edit plan|apply|undo | history list | template define|instantiate|set_input|set_duration]; otherwise read a tagged service Request from stdin";
 fn run() -> Result<Response, ServiceError> {
     let mut selection = BackendSelection::Gpu;
     let mut literal = None;
@@ -47,6 +47,10 @@ fn run() -> Result<Response, ServiceError> {
         }
         ["render", verb @ ("frame" | "sequence")] => Some(format!("render.{verb}")),
         ["edit", verb @ ("plan" | "apply" | "undo")] => Some(format!("edit.{verb}")),
+        [
+            "template",
+            verb @ ("define" | "instantiate" | "set_input" | "set_duration"),
+        ] => Some(format!("template.{verb}")),
         ["history", "list"] => Some("history.list".into()),
         _ => return Err(ServiceError::invalid(USAGE)),
     };

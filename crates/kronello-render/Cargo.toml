@@ -11,6 +11,7 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+kronello-template = { path = "../kronello-template" }
 kronello-model = { path = "../kronello-model" }
 kronello-time = { path = "../kronello-time" }
 kronello-eval = { path = "../kronello-eval" }

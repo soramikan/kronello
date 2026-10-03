@@ -7,6 +7,12 @@ pub use edit::{
     PlanRequest, UndoConflict, UndoRequest,
 };
 
+mod template;
+pub use template::{
+    TemplateCommand, TemplateDefineRequest, TemplateInstantiateRequest, TemplateSetDurationRequest,
+    TemplateSetInputRequest,
+};
+
 use std::path::{Path, PathBuf};
 
 use kronello_gpu::{GpuContext, GpuError, render_adapter::CpuReferenceBackend};
@@ -24,6 +30,14 @@ use sha2::{Digest, Sha256};
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "operation", deny_unknown_fields)]
 pub enum Request {
+    #[serde(rename = "template.set_duration")]
+    TemplateSetDuration(TemplateSetDurationRequest),
+    #[serde(rename = "template.define")]
+    TemplateDefine(TemplateDefineRequest),
+    #[serde(rename = "template.instantiate")]
+    TemplateInstantiate(TemplateInstantiateRequest),
+    #[serde(rename = "template.set_input")]
+    TemplateSetInput(TemplateSetInputRequest),
     #[serde(rename = "project.create")]
     ProjectCreate(CreateRequest),
     #[serde(rename = "project.import")]
@@ -177,7 +191,17 @@ impl From<RenderError> for ServiceError {
         } else {
             e.code()
         };
-        Self::new(code, e.to_string())
+        let mut error = Self::new(code, e.to_string());
+        if let RenderError::Template(kronello_template::TemplateError::Overflow {
+            node,
+            actual,
+            maximum,
+        }) = e
+        {
+            error.details =
+                Some(serde_json::json!({"node":node,"actual_lines":actual,"max_lines":maximum}));
+        }
+        error
     }
 }
 impl From<serde_json::Error> for ServiceError {
@@ -229,6 +253,10 @@ impl<'a> Service<'a> {
     }
     pub fn dispatch(&self, request: Request) -> Result<ResultData, ServiceError> {
         match request {
+            Request::TemplateSetDuration(r) => template::set_duration(r).map(ResultData::Edit),
+            Request::TemplateDefine(r) => template::define(r).map(ResultData::Edit),
+            Request::TemplateInstantiate(r) => template::instantiate(r).map(ResultData::Edit),
+            Request::TemplateSetInput(r) => template::set_input(r).map(ResultData::Edit),
             Request::EditPlan(r) => edit::plan(r).map(|p| ResultData::Plan(Box::new(p))),
             Request::EditApply(r) => edit::apply(r).map(ResultData::Edit),
             Request::EditUndo(r) => edit::undo(r).map(ResultData::Edit),
@@ -238,6 +266,8 @@ impl<'a> Service<'a> {
                 let revision = parse_revision(&r.base_revision)?;
                 let json = serde_json::to_string(&r.document)?;
                 let mut store = open_existing(&r.project)?;
+                let previous = store.snapshot()?;
+                kronello_template::validate_stored_transition(&previous.document, &r.document)?;
                 store.import_json(revision, uuid::Uuid::new_v4(), &json)?;
                 let info = info(&store)?;
                 store.close()?;
@@ -454,6 +484,7 @@ fn create(request: CreateRequest) -> Result<ProjectInfo, ServiceError> {
             "project must use .kronello extension",
         ));
     }
+    kronello_template::validate_stored_project(&request.document)?;
     let json = serde_json::to_string(&request.document)?;
     let parent = request
         .project
