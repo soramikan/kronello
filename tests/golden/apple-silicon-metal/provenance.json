@@ -1,0 +1,15 @@
+{
+  "cargo_lock_sha256": "e01846f40a2a5a42f88a73ce349e6a47aaa7f3c9d11d42e7c18e535b243ef1d5",
+  "color_code_sha256": "bd0c5e95f8be0f9bcf0bc78010d1b82dbbf4907d51a549c0086513223968a66f",
+  "comparison_code_sha256": "0f09357830b18b3abd193030880e442a65171954f5774e399a4bb0d17f7b2112",
+  "draw_fixture_code_sha256": "0e247366e9adf307ddf3efdfd25c66b36dec83382f9f2c4804a33f2fe3bacbbd",
+  "fixture_manifest_sha256": "23b6aa0470bc2500a6995e31f64918b1fceed158bde7e12a4557941fcf1d4dd3",
+  "renderer_code_sha256": "3e401aebbb2fc48b17fb4dd0a624e5d862ddaace22b8c055324055ea4cc9b1cb",
+  "revision": "96babb20c76c19d2dd12e8fe7d4ad8391ca3ea59",
+  "scene_code_sha256": "057816b9d9342b487dc4137287e499403a2ed92460bc24f3d555b6111164dd76",
+  "scene_gpu_code_sha256": "77b4ec6e23afb5bb4e095116112b09e9776556b92853b513e1b29897105e1384",
+  "scene_reference_code_sha256": "89da482fb9e8a877668ce6290330c087469ffec8fdb842a95314e107e00c5f6c",
+  "scene_shader_sha256": "bca46978684f4aab0b6f41db5ce74964bf221e26e13d64b00df10e5a2ded1b09",
+  "shader_sha256": "f78694ed5b0dbc653a28601fb6f2d319e9b8d9ed0e02cb60cc8dfad6b5b8c069",
+  "status": ""
+}
