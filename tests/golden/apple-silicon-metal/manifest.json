@@ -9,6 +9,11 @@
       "stroke": "centered union of segment rectangles, outer join triangles (miter-limit fallback to bevel), and exact round join/cap disks; inclusive boundaries",
       "version": "vec003-grid4-v2"
     },
+    "effect_kernel_version": "fx001-separable-gaussian-transparent-rne16-v1",
+    "effect_semantic_versions": {
+      "kronello.drop_shadow": 1,
+      "kronello.gaussian_blur": 1
+    },
     "gradient_interpolation_version": "vec003-linear-premultiplied-pad-v1",
     "scene_ids": [
       "source-over",
@@ -17,6 +22,9 @@
       "rec2020-conversion",
       "hdr-no-clamp",
       "alpha-boundary",
+      "fx-gaussian-alpha",
+      "fx-shadow-srgb",
+      "fx-shadow-rec2020",
       "isolated-nested-overlap",
       "alpha-matte-reference",
       "luma-matte-rec709",
@@ -38,6 +46,11 @@
     "stroke_geometry_version": "vec003-centered-stroke-v1"
   },
   "comparison_version": 1,
+  "effect_kernel_version": "fx001-separable-gaussian-transparent-rne16-v1",
+  "effect_semantic_versions": {
+    "kronello.drop_shadow": 1,
+    "kronello.gaussian_blur": 1
+  },
   "fixture_hash": "c2be23b7b47acb5317dd9f4e2eda9cc95e67f2e5058bcfddb8efcc2f6794157d",
   "flatten_tolerance_px": 0.02,
   "font_hash": "68a3fc98800b2a27b371f2fb79991daf3633bd89309d4ffaa6946fd587f375b5",
@@ -416,6 +429,337 @@
         "num": "0"
       },
       "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "color_pipeline_id": "vec003-grid4-v2",
+      "comparison_space": "linear working-space premultiplied; external output decoded back before comparison",
+      "design_extent": [
+        16,
+        16
+      ],
+      "display_transform": "external-unpremultiply-then-srgb-clamp; visualization only",
+      "draw": {
+        "nodes": [
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    5.25,
+                    5.5
+                  ],
+                  [
+                    10.25,
+                    5.5
+                  ],
+                  [
+                    10.25,
+                    11.5
+                  ],
+                  [
+                    5.25,
+                    11.5
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.8,
+                0.2,
+                0.1,
+                0.65
+              ],
+              "rule": "Nonzero",
+              "space": "Srgb"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_gradient": null
+          },
+          {
+            "effect": {
+              "GaussianBlur": {
+                "sigma": [
+                  1.2,
+                  0.7
+                ]
+              }
+            },
+            "kernel_version": "fx001-separable-gaussian-transparent-rne16-v1",
+            "kind": "effect",
+            "semantic_version": 1,
+            "source": 0
+          }
+        ],
+        "roots": [
+          1
+        ]
+      },
+      "id": "fx-gaussian-alpha",
+      "layers": [],
+      "origin": [
+        0,
+        0
+      ],
+      "output_transform": null,
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "seed": 0,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "color_pipeline_id": "vec003-grid4-v2",
+      "comparison_space": "linear working-space premultiplied; external output decoded back before comparison",
+      "design_extent": [
+        16,
+        16
+      ],
+      "display_transform": "external-unpremultiply-then-srgb-clamp; visualization only",
+      "draw": {
+        "nodes": [
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    5.25,
+                    5.5
+                  ],
+                  [
+                    10.25,
+                    5.5
+                  ],
+                  [
+                    10.25,
+                    11.5
+                  ],
+                  [
+                    5.25,
+                    11.5
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.8,
+                0.2,
+                0.1,
+                0.65
+              ],
+              "rule": "Nonzero",
+              "space": "Srgb"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_gradient": null
+          },
+          {
+            "effect": {
+              "DropShadow": {
+                "color": {
+                  "components": {
+                    "alpha": 0.7,
+                    "b": 0.9,
+                    "g": 0.5,
+                    "r": 0.2
+                  },
+                  "space": "srgb"
+                },
+                "offset": [
+                  2.25,
+                  -1.5
+                ],
+                "opacity": 0.6,
+                "sigma": [
+                  1.2,
+                  0.7
+                ]
+              }
+            },
+            "kernel_version": "fx001-separable-gaussian-transparent-rne16-v1",
+            "kind": "effect",
+            "semantic_version": 1,
+            "source": 0
+          }
+        ],
+        "roots": [
+          1
+        ]
+      },
+      "id": "fx-shadow-srgb",
+      "layers": [],
+      "origin": [
+        0,
+        0
+      ],
+      "output_transform": null,
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "seed": 0,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "color_pipeline_id": "vec003-grid4-v2",
+      "comparison_space": "linear working-space premultiplied; external output decoded back before comparison",
+      "design_extent": [
+        16,
+        16
+      ],
+      "display_transform": "external-unpremultiply-then-srgb-clamp; visualization only",
+      "draw": {
+        "nodes": [
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    5.25,
+                    5.5
+                  ],
+                  [
+                    10.25,
+                    5.5
+                  ],
+                  [
+                    10.25,
+                    11.5
+                  ],
+                  [
+                    5.25,
+                    11.5
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.8,
+                0.2,
+                0.1,
+                0.65
+              ],
+              "rule": "Nonzero",
+              "space": "Srgb"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_gradient": null
+          },
+          {
+            "effect": {
+              "DropShadow": {
+                "color": {
+                  "components": {
+                    "alpha": 0.7,
+                    "b": 0.9,
+                    "g": 0.5,
+                    "r": 0.2
+                  },
+                  "space": "srgb"
+                },
+                "offset": [
+                  2.25,
+                  -1.5
+                ],
+                "opacity": 0.6,
+                "sigma": [
+                  1.2,
+                  0.7
+                ]
+              }
+            },
+            "kernel_version": "fx001-separable-gaussian-transparent-rne16-v1",
+            "kind": "effect",
+            "semantic_version": 1,
+            "source": 0
+          }
+        ],
+        "roots": [
+          1
+        ]
+      },
+      "id": "fx-shadow-rec2020",
+      "layers": [],
+      "origin": [
+        0,
+        0
+      ],
+      "output_transform": null,
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "seed": 0,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec2020"
     },
     {
       "alpha": "premultiplied",
