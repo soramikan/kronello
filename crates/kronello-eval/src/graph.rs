@@ -123,7 +123,14 @@ impl<'a> DependencyGraph<'a> {
             for node in &scope.composition.nodes {
                 let mut descriptors = BTreeSet::new();
                 for property in &node.properties {
-                    if !descriptors.insert(property.descriptor().key.clone()) {
+                    // Gradient stops are keyed by PropertyId, not descriptor name.
+                    // Singleton transform/opacity descriptors retain their ambiguity check.
+                    if !descriptors.insert(property.descriptor().key.clone())
+                        && !matches!(
+                            property.descriptor().key.as_str(),
+                            "kronello.shape.gradient_color" | "kronello.shape.gradient_offset"
+                        )
+                    {
                         return Err(EvaluationError::DuplicateNodeDescriptor {
                             node: crate::NodeKey {
                                 instance_path: path.clone(),

@@ -87,6 +87,7 @@ fn rectangle(size: [f64; 2], color: Color) -> (SceneNode, Shape) {
             corner_radius: radius.id(),
         },
         fill: Some(Fill {
+            gradient: None,
             color: fill.id(),
             rule: FillRule::Nonzero,
         }),
@@ -958,7 +959,7 @@ fn gpu_isolated_alpha_and_luma_mattes_and_sequence_match_reference() {
 }
 
 #[test]
-fn round_stroke_unsupported_style_nonuniform_transform_and_zero_scale() {
+fn supported_stroke_styles_nonuniform_transform_and_zero_scale() {
     let (mut n, mut shape) = rectangle([16.0; 2], Color::from_srgb8([255, 0, 0], None));
     let color = constant(
         "kronello.shape.stroke_color",
@@ -969,6 +970,7 @@ fn round_stroke_unsupported_style_nonuniform_transform_and_zero_scale() {
     let cap = constant("kronello.shape.stroke_cap", Value::Enum("round".into()));
     let miter = constant("kronello.shape.miter_limit", scalar(4.0));
     shape.stroke = Some(Stroke {
+        gradient: None,
         color: color.id(),
         width: width.id(),
         join: join.id(),
@@ -1021,20 +1023,16 @@ fn round_stroke_unsupported_style_nonuniform_transform_and_zero_scale() {
         )
         .unwrap();
     let s = snapshot(&p, id);
-    assert_eq!(
-        render_frame(
-            &s,
-            &[],
-            &CpuReferenceBackend,
-            FrameRequest {
-                time: t(0, 1),
-                region: region()
-            }
-        )
-        .unwrap_err()
-        .code(),
-        "UNSUPPORTED_FEATURE"
-    );
+    render_frame(
+        &s,
+        &[],
+        &CpuReferenceBackend,
+        FrameRequest {
+            time: t(0, 1),
+            region: region(),
+        },
+    )
+    .unwrap();
     let DocumentObject::Known(shape) = &mut p.shapes[0] else {
         panic!()
     };
@@ -1566,4 +1564,344 @@ fn cache_shape_color_and_output_mapping_invalidate_at_their_own_levels() {
     assert_eq!((stats.layout.hits, stats.layout.misses), (2, 0));
     assert_eq!((stats.geometry.hits, stats.geometry.misses), (0, 6));
     assert_eq!((stats.raster.hits, stats.raster.misses), (0, 6));
+}
+
+fn gradient_project(animated: bool) -> (Project, CompositionId) {
+    let (mut n, mut shape) = rectangle([16.0; 2], Color::from_srgb8([255, 0, 0], None));
+    let initial = constant(
+        "kronello.shape.gradient_color",
+        Value::Color(Color::from_srgb8([255, 0, 0], None)),
+    );
+    shape.fill.as_mut().unwrap().color = initial.id();
+    n.properties[2] = initial;
+    let color_curve = AnimationCurve::new(
+        CurveId::new(),
+        ValueType::Color,
+        vec![
+            Keyframe {
+                time: t(0, 1),
+                value: Value::Color(
+                    Color::new(ColorSpace::LinearRec709, [0.0, 1.0, 0.0], 1.0).unwrap(),
+                ),
+                interpolation: CurveInterpolation::Linear,
+            },
+            Keyframe {
+                time: t(1, 1),
+                value: Value::Color(
+                    Color::new(ColorSpace::LinearRec709, [0.0, 0.0, 1.0], 1.0).unwrap(),
+                ),
+                interpolation: CurveInterpolation::Linear,
+            },
+        ],
+    )
+    .unwrap();
+    let offset_curve = AnimationCurve::new(
+        CurveId::new(),
+        ValueType::Scalar,
+        vec![
+            Keyframe {
+                time: t(0, 1),
+                value: scalar(0.5),
+                interpolation: CurveInterpolation::Linear,
+            },
+            Keyframe {
+                time: t(1, 1),
+                value: scalar(1.0),
+                interpolation: CurveInterpolation::Linear,
+            },
+        ],
+    )
+    .unwrap();
+    let color = if animated {
+        prop(
+            "kronello.shape.gradient_color",
+            PropertySource::Curve(color_curve.id()),
+        )
+    } else {
+        constant(
+            "kronello.shape.gradient_color",
+            Value::Color(Color::from_srgb8([0, 0, 255], None)),
+        )
+    };
+    let start = constant("kronello.shape.gradient_offset", scalar(0.0));
+    let end = if animated {
+        prop(
+            "kronello.shape.gradient_offset",
+            PropertySource::Curve(offset_curve.id()),
+        )
+    } else {
+        constant("kronello.shape.gradient_offset", scalar(1.0))
+    };
+    let fill = shape.fill.as_mut().unwrap();
+    fill.gradient = Some(Box::new(Gradient::Linear {
+        start: [f(0.0); 2],
+        end: [f(16.0), f(0.0)],
+        stops: vec![
+            GradientStop {
+                color: fill.color,
+                offset: start.id(),
+            },
+            GradientStop {
+                color: color.id(),
+                offset: end.id(),
+            },
+        ],
+    }));
+    n.properties.extend([color, start, end]);
+    let c = composition(vec![n]);
+    let id = c.id;
+    (
+        Project {
+            compositions: vec![DocumentObject::Known(c)],
+            shapes: vec![DocumentObject::Known(shape)],
+            curves: if animated {
+                vec![
+                    DocumentObject::Known(color_curve),
+                    DocumentObject::Known(offset_curve),
+                ]
+            } else {
+                vec![]
+            },
+            ..Project::default()
+        },
+        id,
+    )
+}
+#[test]
+fn gradient_stop_color_and_offset_animate_through_scene_evaluator() {
+    let (p, id) = gradient_project(true);
+    let s = snapshot(&p, id);
+    for (time, offset, green, blue) in [
+        (t(0, 1), 0.5, 1.0, 0.0),
+        (t(1, 2), 0.75, 0.5, 0.5),
+        (t(1, 1), 1.0, 0.0, 1.0),
+    ] {
+        let ir = build_scene_ir(&s, time, &[]).unwrap();
+        let SceneContent::Shape { resolved, .. } = &ir.nodes[0].content else {
+            panic!()
+        };
+        let gradient = resolved.fill.as_ref().unwrap().gradient.as_ref().unwrap();
+        assert_eq!(gradient.stops[1].offset, offset);
+        let color = gradient.stops[1].color.components();
+        assert_eq!(color.g.get(), green);
+        assert_eq!(color.b.get(), blue);
+        render_frame(
+            &s,
+            &[],
+            &CpuReferenceBackend,
+            FrameRequest {
+                time,
+                region: region(),
+            },
+        )
+        .unwrap();
+    }
+    let versions = s.semantic_versions();
+    assert_eq!(versions.stroke_geometry, STROKE_GEOMETRY_VERSION);
+    assert_eq!(
+        versions.gradient_interpolation,
+        GRADIENT_INTERPOLATION_VERSION
+    );
+    assert_eq!(versions.coverage, COVERAGE_VERSION);
+}
+#[test]
+fn gradient_color_changes_invalidate_raster_and_geometry_changes_invalidate_both() {
+    let (mut p, id) = gradient_project(false);
+    let mut cache = RenderCache::default();
+    let first = cached_frame(&snapshot(&p, id), t(0, 1), region(), &mut cache);
+    cache.reset_stats();
+    comp_mut(&mut p).nodes[0].properties[3]
+        .set_source(
+            PropertySource::Constant(Value::Color(Color::from_srgb8([0, 255, 0], None))),
+            &render_registry(),
+        )
+        .unwrap();
+    let second = cached_frame(&snapshot(&p, id), t(0, 1), region(), &mut cache);
+    assert_ne!(first, second);
+    assert_eq!(
+        (cache.stats().geometry.hits, cache.stats().geometry.misses),
+        (1, 0)
+    );
+    assert_eq!(
+        (cache.stats().raster.hits, cache.stats().raster.misses),
+        (0, 1)
+    );
+    cache.reset_stats();
+    comp_mut(&mut p).nodes[0].properties[0]
+        .set_source(PropertySource::Constant(v2(12.0, 16.0)), &render_registry())
+        .unwrap();
+    cached_frame(&snapshot(&p, id), t(0, 1), region(), &mut cache);
+    assert_eq!(
+        (cache.stats().geometry.hits, cache.stats().geometry.misses),
+        (0, 1)
+    );
+    assert_eq!(
+        (cache.stats().raster.hits, cache.stats().raster.misses),
+        (0, 1)
+    );
+}
+#[test]
+fn invalid_gradient_stops_and_geometry_fail_with_typed_shape_errors() {
+    let (p, id) = gradient_project(false);
+    for invalid in [-0.1, 1.1] {
+        let DocumentObject::Known(shape) = &p.shapes[0] else {
+            panic!()
+        };
+        let DocumentObject::Known(c) = &p.compositions[0] else {
+            panic!()
+        };
+        let mut values: BTreeMap<_, _> = c.nodes[0]
+            .properties
+            .iter()
+            .map(|p| match p.source() {
+                PropertySource::Constant(v) => (p.id(), v.clone()),
+                _ => panic!(),
+            })
+            .collect();
+        values.insert(c.nodes[0].properties[5].id(), scalar(invalid));
+        assert!(matches!(
+            shape.resolve(&values),
+            Err(ShapeError::InvalidParameter { .. })
+        ));
+    }
+    let mut bad = p.clone();
+    comp_mut(&mut bad).nodes[0].properties[4]
+        .set_source(PropertySource::Constant(scalar(1.0)), &render_registry())
+        .unwrap();
+    comp_mut(&mut bad).nodes[0].properties[5]
+        .set_source(PropertySource::Constant(scalar(0.5)), &render_registry())
+        .unwrap();
+    assert!(matches!(
+        build_scene_ir(&snapshot(&bad, id), t(0, 1), &[]),
+        Err(RenderError::Shape(ShapeError::InvalidGradient))
+    ));
+    for geometry in [
+        Gradient::Linear {
+            start: [f(0.0); 2],
+            end: [f(0.0); 2],
+            stops: vec![],
+        },
+        Gradient::Radial {
+            center: [f(0.0); 2],
+            radius: f(0.0),
+            stops: vec![],
+        },
+    ] {
+        let mut bad = p.clone();
+        let DocumentObject::Known(shape) = &mut bad.shapes[0] else {
+            panic!()
+        };
+        shape.fill.as_mut().unwrap().gradient = Some(Box::new(geometry));
+        assert!(matches!(
+            build_scene_ir(&snapshot(&bad, id), t(0, 1), &[]),
+            Err(RenderError::Shape(ShapeError::InvalidGradient))
+        ));
+    }
+}
+#[test]
+fn vec004_vec005_payloads_roundtrip_but_fail_final_render() {
+    let (mut p, id) = gradient_project(false);
+    let width = constant("kronello.stroke_width", scalar(2.0));
+    let join = constant("kronello.shape.stroke_join", Value::Enum("miter".into()));
+    let cap = constant("kronello.shape.stroke_cap", Value::Enum("butt".into()));
+    let limit = constant("kronello.shape.miter_limit", scalar(4.0));
+    let DocumentObject::Known(shape) = &mut p.shapes[0] else {
+        panic!()
+    };
+    shape.stroke = Some(Stroke {
+        gradient: None,
+        color: shape.fill.as_ref().unwrap().color,
+        width: width.id(),
+        join: join.id(),
+        cap: cap.id(),
+        miter_limit: limit.id(),
+    });
+    comp_mut(&mut p).nodes[0]
+        .properties
+        .extend([width, join, cap, limit]);
+    let base = serde_json::to_value(&p).unwrap();
+    for (target, field, value) in [
+        ("gradient", "spread", serde_json::json!("repeat")),
+        ("gradient", "spread", serde_json::json!("reflect")),
+        ("gradient", "focal", serde_json::json!([1.0, 2.0])),
+        ("gradient", "kind", serde_json::json!("conic")),
+        ("gradient", "interpolation_space", serde_json::json!("srgb")),
+        ("gradient", "units", serde_json::json!("bounding_box")),
+        (
+            "gradient",
+            "transform",
+            serde_json::json!([1, 0, 0, 1, 0, 0]),
+        ),
+        ("stroke", "dash", serde_json::json!([2, 3])),
+        ("stroke", "alignment", serde_json::json!("inside")),
+    ] {
+        let mut value_json = base.clone();
+        let shape = value_json["shapes"][0].as_object_mut().unwrap();
+        if target == "gradient" {
+            shape.get_mut("fill").unwrap()["gradient"][field] = value;
+        } else {
+            shape.get_mut("stroke").unwrap()[field] = value;
+        }
+        let imported: Project = serde_json::from_value(value_json.clone()).unwrap();
+        assert_eq!(serde_json::to_value(&imported).unwrap(), value_json);
+        assert!(matches!(imported.shapes[0], DocumentObject::Opaque(_)));
+        let error = render_frame(
+            &snapshot(&imported, id),
+            &[],
+            &CpuReferenceBackend,
+            FrameRequest {
+                time: t(0, 1),
+                region: region(),
+            },
+        )
+        .unwrap_err();
+        assert_eq!(error.code(), "UNSUPPORTED_FEATURE");
+    }
+}
+#[test]
+fn gpu_gradient_dag_transform_and_animation_match_cpu_reference() {
+    let gpu = kronello_gpu::GpuContext::new().expect("GPU required");
+    let (mut p, id) = gradient_project(true);
+    comp_mut(&mut p).nodes[0].properties.extend([
+        constant("kronello.transform.position", v2(24.0, 8.0)),
+        constant("kronello.transform.rotation", Value::Angle(f(25.0))),
+        constant("kronello.transform.scale", v2(1.3, 1.3)),
+    ]);
+    for working in [ColorSpace::LinearRec709, ColorSpace::LinearRec2020] {
+        let s = RenderSnapshot::new(
+            &p,
+            id,
+            1,
+            RenderProfile {
+                working_space: working,
+                ..RenderProfile::default()
+            },
+        )
+        .unwrap();
+        for time in [t(0, 1), t(1, 2), t(1, 1)] {
+            let request = FrameRequest {
+                time,
+                region: region(),
+            };
+            let cpu = render_frame(&s, &[], &CpuReferenceBackend, request).unwrap();
+            let actual = render_frame(&s, &[], &gpu, request).unwrap();
+            compare(&cpu.pixels.linear, &actual.pixels.linear, 2.0_f32.powi(-10));
+        }
+    }
+}
+
+#[test]
+fn text_gradient_is_preserved_as_opaque_and_snapshot_refuses_it() {
+    let (p, id) = cache_project();
+    let mut value = serde_json::to_value(&p).unwrap();
+    value["texts"][0]["styles"][0]["gradient"] = serde_json::json!({"kind":"linear","stops":[{"offset":0,"color":"red"},{"offset":1,"color":"blue"}]});
+    let imported: Project = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(serde_json::to_value(&imported).unwrap(), value);
+    assert!(matches!(imported.texts[0], DocumentObject::Opaque(_)));
+    assert_eq!(
+        RenderSnapshot::new(&imported, id, 1, RenderProfile::default())
+            .unwrap_err()
+            .code(),
+        "UNSUPPORTED_FEATURE"
+    );
 }

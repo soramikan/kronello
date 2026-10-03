@@ -132,14 +132,14 @@ M1 / Metal の追加実測では、wgpu 30.0.1 の同一 MTLDevice による IOS
 
 ## M1 GPU-002 の描画境界
 
-`kronello-gpu::DrawScene` は plain data の `DrawNode` と root のノード参照を受ける。`PathDraw` は出力要求に合わせて flatten・変換済みの `Contour`（design_px）とタグ付き straight `Paint`、`Fill`、`RoundStroke` を保持する。文書モデル・store・フォント探索には依存しない。呼出側が `kronello-vector::flatten` の polyline、または `kronello-text::layout` の positioned outline を flatten した結果を写す。未変換の曲線・モデルの stroke style を暗黙に解釈しない。
+`kronello-gpu::DrawScene` は plain data の `DrawNode` と root のノード参照を受ける。`PathDraw` は出力要求に合わせて flatten・変換済みの `Contour`（design_px）とタグ付き straight `Paint`、`Fill`、`RoundStroke` を保持する。store・フォント探索には依存しない。StrokeJoin / StrokeCap は backend-free なモデル enum を共有する。呼出側が `kronello-vector::flatten` の polyline、または `kronello-text::layout` の positioned outline を flatten した結果を写す。未変換の曲線・モデルの stroke style を暗黙に解釈しない。
 
-### Coverage の定義（gpu002-grid4-v1）
+### Coverage の定義（vec003-grid4-v2）
 
 - GPU compute で各画素の 4×4 固定サンプルを検査する。画素内位置は `((sx+0.5)/4, (sy+0.5)/4)`、`sx, sy = 0..3`。出力画素から design_px への倍率は `RenderSize` で指定し、被覆率は hit 数 / 16。ハードウェア MSAA のサンプル配置には依存しない。
 - fill は Nonzero / Evenodd。開いた contour も fill では暗黙に閉じる。水平辺は winding に寄与せず、Y crossing は半開区間、cross product の符号は厳密な正負で判定する。点が辺上にある場合も同じ判定規約を使う。
-- 基本 stroke は幅 / 2 を半径とする線分 capsule の和集合（round cap / round join）。距離が半径に一致すれば hit。閉じる辺は `Contour.closed` のときだけ stroke に含める。幅 0 は無被覆。miter / bevel / butt / square / dash はこの API の対応 style ではなく、上位で対応形状へ展開するか未対応エラーにする。
-- fill と stroke は別々に coverage を resolve し、stroke を fill の上に source-over する。coverage のヒット処理と色変換を分離し、色は sRGB decode → Rec.709 / Rec.2020 原色変換 → premultiply → coverage の順に処理する。coverage に伝達関数を適用しない。RGBA8 の色付き raster を経由しない。
+- stroke は miter / bevel / round、butt / square / round に対応する。共通の CPU 展開で中央線の矩形・接合三角形・円を生成し、GPU へ同じ領域を渡す。miter limit（既定 4）を越えた接合は bevel。閉じる辺は `Contour.closed` のときだけ stroke に含める。幅 0 は無被覆。幾何定義・退化処理は [04 章の VEC-003 規約](04-vector-text-layout.md#vec-003-の実装規約) を参照。dash・stroke alignment は未対応。
+- fill と stroke は別々に coverage を resolve し、stroke を fill の上に source-over する。単色または線形 / 放射 gradient の各 stop は sRGB decode → Rec.709 / Rec.2020 原色変換 → premultiply の順で処理する。各サンプル位置の線形 premultiplied paint を被覆に応じて蓄積・平均する。coverage に伝達関数を適用しない。RGBA8 の色付き raster を経由しない。
 - `render_scene_reference` は同じサンプル配置・辺判定・stroke・描画順の CPU 参照。CPU は binary16 丸めを行わない。AA は画素面積の厳密積分ではなく、この版付きサンプリング契約。辺を比較から除外しない。GPU の各中間面は RGBA16F。
 
 ### Group、mask、外部出力
@@ -159,7 +159,7 @@ scene は参照欠落・循環・不正 opacity / 色 / 幾何を型付きエラ
 ### 固定 snapshot と公開 API
 
 - `RenderSnapshot::new(&Project, CompositionId, revision, RenderProfile)` は文書を複製し、選択した Composition、revision、profile、必要な `FontRef` と意味の版を固定する。`RenderProfile` は作業用線形 Rec.709 / Rec.2020 と flatten tolerance（既定 0.02 output px）。元の Project を編集しても snapshot は変わらない。
-- `RenderSnapshot::with_contract` は `SemanticVersions` と `MatteBinding` も明示入力する。公開 snapshot schema は **1**。Serde の strict な envelope を使い、復元時に欠けた版・lock を最新値で補わない。文書意味版・補間版・TimeMap 版・組版版は **1**、vector は `render001-kurbo-flatten-v1`、色は `gpu002-color-v1`、coverage は `gpu002-grid4-v1`。実行時は対応する版と文書の意味版との一致を検証する。
+- `RenderSnapshot::with_contract` は `SemanticVersions` と `MatteBinding` も明示入力する。公開 snapshot schema は **1**。Serde の strict な envelope を使い、復元時に欠けた版・lock を最新値で補わない。文書意味版・補間版・TimeMap 版・組版版は **1**、vector は `render001-kurbo-flatten-v1`、色は `gpu002-color-v1`、coverage は `vec003-grid4-v2`、stroke geometry は `vec003-centered-stroke-v1`、gradient interpolation は `vec003-linear-premultiplied-pad-v1`。実行時は対応する版と文書の意味版との一致を検証する。
 - `content_hash()` は snapshot 全体を `serde_json::Value` の sorted object keys → compact UTF-8 → SHA-256 にする。STORE-001 の正規化規約を再利用し、独立した opaque 内容も hash に含める。schema、文書、revision、lock、profile、matte、意味の版を除外しない。time / region は個別の要求と metadata に保持する。CACHE-001 の values key は下記の rendering content identity と Time を使い、layout / geometry / raster はそれぞれ必要な内容だけで区別する。
 - `build_scene_ir(&snapshot, Time, &[FontData])` と `build_render_dag(&SceneIr, RenderProfile, OutputRegion)` は GPU・ファイル I/O を使わない。
 - `render_frame(&snapshot, &[FontData], &dyn RenderBackend, FrameRequest)` は `RenderedFrame`（作業用線形 premultiplied と外部 straight sRGB の画素、`FrameMetadata`）を返す。
@@ -184,7 +184,7 @@ DAG は topological なノード列と明示 input index を持つ。index は�
 
 `OutputRegion { origin, extent, pixels }` は設計座標の矩形を出力画素へ写す。`p = diag(pixels / extent) × (design_position - origin)`、左上原点・+Y 下向き。ROI / 解像度を変えても文書・組版は変えない。異なるアスペクト比を要求したときは、この明示写像で伸縮し、responsive variant の再組版を暗黙に行わない。flatten の最大拡大率は node world transform と ROI 写像を合成した行列の Frobenius norm で保守的に求める。
 
-単色 fill と GPU-002 の round cap / round join stroke を接続する。その他の stroke style、stroke の非一様 scale / shear は形状展開をまだ提供せず `UNSUPPORTED_FEATURE`。fill / text の非一様変換は対応する。miter 等を round として描かない。glyph ごとに coverage を作り、text の opacity は glyph 全体の合成に一度掛ける。Group / Null / 配置の containment 枠も局所 opacity と順序を保持する。
+Shape の単色 / 線形・放射 gradient fill / stroke と miter / bevel / round join、butt / square / round cap を接続する。stroke の非一様 scale / shear は `UNSUPPORTED_FEATURE`。fill / text の非一様変換は対応する。後続 paint / stroke 機能は opaque で保持し、必要な最終出力は拒否する。glyph ごとに coverage を作り、text の opacity は glyph 全体の合成に一度掛ける。Group / Null / 配置の containment 枠も局所 opacity と順序を保持する。
 
 現行文書型には matte 欄がないため `MatteBinding` を snapshot の明示レンダー入力とする。source / matte とも stable SceneKey。matte は表示 root / children から除外し、`visible = true` の場合だけ表示する。source ごとの binding は一つ、共有 matte の DAG は再利用する。欠落・非アクティブ参照・containment / matte を合わせた循環は失敗する。
 
@@ -208,7 +208,7 @@ RGBA16F の各 component は有限、alpha は `[0,1]`、RGB の絶対値は 65,
 `FrameMetadata` の必須項目は次のとおり。
 
 - `schema_version` / `snapshot_schema_version` / `project_schema_version`、`snapshot_content_hash`、元の `revision`（10進文字列）、選択 `composition`。
-- `semantic_versions`（document / interpolation / time_map / layout / vector / color / coverage）、`font_locks`（family / PostScript 名 / hash / face index）。
+- `semantic_versions`（document / interpolation / time_map / layout / vector / color / coverage / stroke_geometry / gradient_interpolation）、`font_locks`（family / PostScript 名 / hash / face index）。
 - 正規化有理数 `time`（num / den は10進文字列）、連番時の `frame_index`（10進文字列）と `sequence_number`。任意時刻の still では後二項目は null。
 - `design_extent`、`region`（origin / extent / pixels）、2×3 の `design_to_pixel`、`working_space`、`flatten_tolerance_px`。
 - `numeric` / `display` の各 `ImageFormat`（color_space、transfer_function、alpha、association_space、pixel_format、channel_order、row_order、byte_order、clipping）。
@@ -229,7 +229,7 @@ key は `cache001-json-sha256-v1` と level namespace を付けた入力を、so
 | values | snapshot の全内容（revision だけ除外）、schema / semantic_versions、font lock、profile、matte、Composition と、完全な `RuntimePropertyKey`、正規化有理数 Time | 最終 `Value` |
 | layout | 本文、style span の byte range / FontRef（hash・face・名前）/ size、wrap_width、line_height、alignment、direction、ruby、layout semantic version | paint を中立色にした `LayoutResult` |
 | geometry | vector semantic version、評価済み geometry の形状種別・寸法・半径・Path、design-space flatten tolerance。glyph は layout content hash も含む | ローカル設計座標の `FlattenedPath` |
-| raster | geometry content hash、変換済み contours、fill 色・色空間・fill rule、stroke 色・幅、OutputRegion、working space、vector / coverage / color semantic version、backend 実行 namespace | 作業用線形 premultiplied float32 画素 |
+| raster | geometry content hash、変換済み contours、fill 色・色空間・fill rule、stroke 色・幅・join / cap / miter limit、fill / stroke gradient の geometry・stop 色 / offset・逆写像、OutputRegion、working space、vector / coverage / color / stroke_geometry / gradient_interpolation semantic version、backend 実行 namespace | 作業用線形 premultiplied float32 画素 |
 
 geometry の scale bucket は丸めない exact tolerance とする。現行 flatten は `tolerance_px / conservative_magnification` だけに依存するため、同じ tolerance を持つ要求が同じ key を共有する。量子化による輪郭変化を導入しない。Position / Opacity は layout とローカル geometry の入力ではない。Rotation / Scale も layout に影響せず、必要な flatten tolerance や出力写像だけを変える。
 

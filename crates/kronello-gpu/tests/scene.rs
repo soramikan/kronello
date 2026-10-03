@@ -22,7 +22,7 @@ fn compare(n: u32, working: WorkingSpace, expected: &[[f32; 4]], actual: &[[f32;
         } else {
             kronello_testkit::WorkingSpace::LinearRec2020
         },
-        color_pipeline_id: "gpu002-grid4-v1".into(),
+        color_pipeline_id: "vec003-grid4-v2".into(),
         samples_per_frame: 16,
         seed: 0,
     };
@@ -92,6 +92,9 @@ fn cpu_known_coverage_winding_stroke_and_empty_scene() {
     }];
     path.fill = None;
     path.stroke = Some(RoundStroke {
+        join: StrokeJoin::Round,
+        cap: StrokeCap::Round,
+        miter_limit: 4.0,
         paint: paint([1.0; 4], InputSpace::LinearRec709),
         width: 1.0,
     });
@@ -405,12 +408,18 @@ fn cpu_all_catalog_scenes_are_finite_with_zero_transparent_rgb() {
 fn gpu_round_stroke_open_contour_and_design_scale_match_analytic_values() {
     let scene = DrawScene {
         nodes: vec![DrawNode::Path(PathDraw {
+            fill_gradient: None,
+            stroke_gradient: None,
+            paint_transform: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
             contours: vec![Contour {
                 points: vec![[0.5, 0.5], [2.5, 0.5]],
                 closed: false,
             }],
             fill: None,
             stroke: Some(RoundStroke {
+                join: StrokeJoin::Round,
+                cap: StrokeCap::Round,
+                miter_limit: 4.0,
                 paint: paint([1.0; 4], InputSpace::LinearRec709),
                 width: 1.0,
             }),
@@ -610,4 +619,140 @@ fn gpu_surface_overflow_status_is_sticky_and_output_association_is_checked() {
             )
             .is_ok()
     );
+}
+
+#[test]
+fn cpu_gradient_pad_premultiplied_equal_offsets_and_working_conversion() {
+    let mut g = GradientPaint {
+        geometry: GradientGeometry::Linear {
+            start: [0.0, 0.0],
+            end: [2.0, 0.0],
+        },
+        stops: vec![
+            GradientStop {
+                offset: 0.0,
+                paint: paint([1.0, 0.0, 0.0, 1.0], InputSpace::Srgb),
+            },
+            GradientStop {
+                offset: 1.0,
+                paint: paint([0.0, 0.0, 1.0, 0.0], InputSpace::Srgb),
+            },
+        ],
+    };
+    g.validate().unwrap();
+    assert_eq!(
+        g.sample([-2.0, 0.0], WorkingSpace::LinearRec709),
+        [1.0, 0.0, 0.0, 1.0]
+    );
+    assert_eq!(g.sample([3.0, 0.0], WorkingSpace::LinearRec709), [0.0; 4]);
+    let midpoint = g.sample([1.0, 0.0], WorkingSpace::LinearRec709);
+    assert_eq!(midpoint, [0.5, 0.0, 0.0, 0.5]);
+    assert_eq!(
+        color::unpremultiply_external(midpoint),
+        [1.0, 0.0, 0.0, 0.5]
+    );
+    let wrong_straight_then_premultiply = color::premultiply([0.5, 0.0, 0.5, 0.5]);
+    assert!(midpoint[0] > wrong_straight_then_premultiply[0]);
+    let converted = g.sample([1.0, 0.0], WorkingSpace::LinearRec2020);
+    let red = color::to_working(
+        [1.0, 0.0, 0.0, 1.0],
+        InputSpace::Srgb,
+        WorkingSpace::LinearRec2020,
+    );
+    assert_eq!(converted, red.map(|v| v * 0.5));
+    g.geometry = GradientGeometry::Radial {
+        center: [2.0, 3.0],
+        radius: 2.0,
+    };
+    assert_eq!(
+        g.sample([2.0, 3.0], WorkingSpace::LinearRec709),
+        [1.0, 0.0, 0.0, 1.0]
+    );
+    assert_eq!(g.sample([3.0, 3.0], WorkingSpace::LinearRec709), midpoint);
+    assert_eq!(g.sample([5.0, 3.0], WorkingSpace::LinearRec709), [0.0; 4]);
+    g.stops.insert(
+        1,
+        GradientStop {
+            offset: 0.0,
+            paint: paint([0.0, 1.0, 0.0, 1.0], InputSpace::LinearRec709),
+        },
+    );
+    assert_eq!(
+        g.sample([2.0, 3.0], WorkingSpace::LinearRec709),
+        [0.0, 1.0, 0.0, 1.0]
+    );
+    assert_eq!(
+        g.sample([3.0, 3.0], WorkingSpace::LinearRec709),
+        [0.0, 0.5, 0.0, 0.5]
+    );
+    let mut linear = g.clone();
+    linear.geometry = GradientGeometry::Linear {
+        start: [0.0, 0.0],
+        end: [2.0, 0.0],
+    };
+    linear.stops = vec![
+        GradientStop {
+            offset: 0.0,
+            paint: paint([1.0, 0.0, 0.0, 1.0], InputSpace::LinearRec709),
+        },
+        GradientStop {
+            offset: 0.5,
+            paint: paint([0.0, 1.0, 0.0, 1.0], InputSpace::LinearRec709),
+        },
+        GradientStop {
+            offset: 0.5,
+            paint: paint([0.0, 0.0, 1.0, 1.0], InputSpace::LinearRec709),
+        },
+        GradientStop {
+            offset: 1.0,
+            paint: paint([0.0, 0.0, 0.0, 1.0], InputSpace::LinearRec709),
+        },
+    ];
+    assert_eq!(
+        linear.sample([0.5, 0.0], WorkingSpace::LinearRec709),
+        [0.5, 0.5, 0.0, 1.0]
+    );
+    assert_eq!(
+        linear.sample([1.0, 0.0], WorkingSpace::LinearRec709),
+        [0.0, 0.0, 1.0, 1.0]
+    );
+    for geometry in [
+        GradientGeometry::Linear {
+            start: [0.0; 2],
+            end: [0.0; 2],
+        },
+        GradientGeometry::Radial {
+            center: [0.0; 2],
+            radius: 0.0,
+        },
+    ] {
+        let mut invalid = linear.clone();
+        invalid.geometry = geometry;
+        assert!(invalid.validate().is_err());
+    }
+    for count in [0, 1, 257] {
+        let mut invalid = linear.clone();
+        invalid.stops = vec![linear.stops[0]; count];
+        assert!(invalid.validate().is_err());
+    }
+    g.stops[1].offset = -0.1;
+    assert!(g.validate().is_err());
+    g.stops[1].offset = 1.1;
+    assert!(g.validate().is_err());
+    g.stops[1].offset = f32::NAN;
+    assert!(g.validate().is_err());
+}
+#[test]
+fn gpu_stroke_styles_and_gradients_match_cpu_in_both_working_spaces() {
+    for (id, n, _, scene) in vec003_scenes() {
+        for working in [WorkingSpace::LinearRec709, WorkingSpace::LinearRec2020] {
+            eprintln!("VEC-003 {id}: {working:?}");
+            let expected =
+                render_scene_reference(RenderSize::pixels(n, n), &scene, working).unwrap();
+            let actual = gpu()
+                .render_scene(RenderSize::pixels(n, n), &scene, working)
+                .unwrap();
+            compare(n, working, &expected, &actual.pixels);
+        }
+    }
 }

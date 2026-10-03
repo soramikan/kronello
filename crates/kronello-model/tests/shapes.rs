@@ -71,10 +71,12 @@ fn fixture() -> (Project, SchemaRegistry) {
             corner_radius: ids[1],
         },
         fill: Some(Fill {
+            gradient: None,
             color: ids[2],
             rule: FillRule::Evenodd,
         }),
         stroke: Some(Stroke {
+            gradient: None,
             color: ids[7],
             width: ids[3],
             join: ids[4],

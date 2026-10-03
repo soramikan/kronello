@@ -161,7 +161,7 @@ fn descriptor(scene: &Scene) -> FrameDescriptor {
             kronello_testkit::WorkingSpace::LinearRec2020
         },
         color_pipeline_id: if scene.draw.is_some() {
-            "gpu002-grid4-v1"
+            "vec003-grid4-v2"
         } else {
             "gpu001-linear-v1"
         }
@@ -170,15 +170,24 @@ fn descriptor(scene: &Scene) -> FrameDescriptor {
         seed: 0,
     }
 }
+fn gradient_manifest(g: &GradientPaint) -> Value {
+    let geometry = match g.geometry {
+        GradientGeometry::Linear { start, end } => json!({"kind":"linear","start":start,"end":end}),
+        GradientGeometry::Radial { center, radius } => {
+            json!({"kind":"radial","center":center,"radius":radius})
+        }
+    };
+    json!({"geometry":geometry,"spread":"pad","interpolation":"working-linear-premultiplied","equal_offsets":"last wins at offset","stops":g.stops.iter().map(|s|json!({"offset":s.offset,"rgba":s.paint.rgba,"space":format!("{:?}",s.paint.space)})).collect::<Vec<_>>()})
+}
 fn draw_manifest(scene: &DrawScene) -> Value {
     json!({"roots":scene.roots,"nodes":scene.nodes.iter().map(|node| match node {
-        DrawNode::Path(p)=>json!({"kind":"path","contours":p.contours.iter().map(|c| json!({"points":c.points,"closed":c.closed})).collect::<Vec<_>>(),"fill":p.fill.map(|f| json!({"rgba":f.paint.rgba,"space":format!("{:?}",f.paint.space),"rule":format!("{:?}",f.rule)})),"stroke":p.stroke.map(|s| json!({"rgba":s.paint.rgba,"space":format!("{:?}",s.paint.space),"width":s.width,"cap":"round","join":"round"}))}),
+        DrawNode::Path(p)=>json!({"kind":"path","fill_gradient":p.fill_gradient.as_ref().map(gradient_manifest),"stroke_gradient":p.stroke_gradient.as_ref().map(gradient_manifest),"paint_transform":p.paint_transform,"contours":p.contours.iter().map(|c| json!({"points":c.points,"closed":c.closed})).collect::<Vec<_>>(),"fill":p.fill.map(|f| json!({"rgba":f.paint.rgba,"space":format!("{:?}",f.paint.space),"rule":format!("{:?}",f.rule)})),"stroke":p.stroke.map(|s| json!({"rgba":s.paint.rgba,"space":format!("{:?}",s.paint.space),"width":s.width,"cap":format!("{:?}",s.cap),"join":format!("{:?}",s.join),"miter_limit":s.miter_limit}))}),
         DrawNode::Group {children,opacity}=>json!({"kind":"isolated-group","children":children,"opacity":opacity}),
         DrawNode::Masked {source,matte,kind}=>json!({"kind":"masked","source":source,"matte":matte,"mode":format!("{:?}",kind)})
     }).collect::<Vec<_>>()})
 }
 fn manifest(scenes: &[Scene], fixture_hash: &str, font_hash: &str) -> Value {
-    json!({"schema_version":2,"comparison_version":1,"rgb_absolute":1.0/1024.0,"rgb_relative":1.0/1024.0,"alpha_absolute":1.0/1024.0,"fixture_hash":fixture_hash,"font_hash":font_hash,"flatten_tolerance_px":0.02,"catalog":serde_json::from_str::<Value>(include_str!("../../../tests/golden/m4-macos-metal/scenes.json")).unwrap(),"scenes":scenes.iter().map(|s| json!({"id":s.id,"sample_id":"frame-0","size":[s.width,s.height],"design_extent":[s.width,s.height],"origin":[0,0],"time":{"num":"0","den":"1"},"working_space":format!("{:?}",s.space),"alpha":"premultiplied","output_transform":s.output.map(|o| format!("{:?}",o)),"comparison_space":"linear working-space premultiplied; external output decoded back before comparison","display_transform":"external-unpremultiply-then-srgb-clamp; visualization only","color_pipeline_id":if s.draw.is_some() {"gpu002-grid4-v1"} else {"gpu001-linear-v1"},"samples_per_frame":if s.draw.is_some() {16} else {1},"seed":0,"draw":s.draw.as_ref().map(draw_manifest),"layers":s.layers.iter().map(|l| json!({"size":l.size,"translation":l.translation,"rotation_degrees":l.rotation_degrees,"input_space":format!("{:?}",l.image.space),"input_size":[l.image.width,l.image.height],"straight_pixels":l.image.pixels})).collect::<Vec<_>>()})).collect::<Vec<_>>()})
+    json!({"schema_version":3,"stroke_geometry_version":kronello_render::STROKE_GEOMETRY_VERSION,"gradient_interpolation_version":kronello_render::GRADIENT_INTERPOLATION_VERSION,"comparison_version":1,"rgb_absolute":1.0/1024.0,"rgb_relative":1.0/1024.0,"alpha_absolute":1.0/1024.0,"fixture_hash":fixture_hash,"font_hash":font_hash,"flatten_tolerance_px":0.02,"catalog":serde_json::from_str::<Value>(include_str!("../../../tests/golden/m4-macos-metal/scenes.json")).unwrap(),"scenes":scenes.iter().map(|s| json!({"id":s.id,"sample_id":"frame-0","size":[s.width,s.height],"design_extent":[s.width,s.height],"origin":[0,0],"time":{"num":"0","den":"1"},"working_space":format!("{:?}",s.space),"alpha":"premultiplied","output_transform":s.output.map(|o| format!("{:?}",o)),"comparison_space":"linear working-space premultiplied; external output decoded back before comparison","display_transform":"external-unpremultiply-then-srgb-clamp; visualization only","color_pipeline_id":if s.draw.is_some() {"vec003-grid4-v2"} else {"gpu001-linear-v1"},"samples_per_frame":if s.draw.is_some() {16} else {1},"seed":0,"draw":s.draw.as_ref().map(draw_manifest),"layers":s.layers.iter().map(|l| json!({"size":l.size,"translation":l.translation,"rotation_degrees":l.rotation_degrees,"input_space":format!("{:?}",l.image.space),"input_size":[l.image.width,l.image.height],"straight_pixels":l.image.pixels})).collect::<Vec<_>>()})).collect::<Vec<_>>()})
 }
 
 fn png(path: &Path, scene: &Scene, pixels: &[[f32; 4]]) -> Result<()> {
@@ -492,5 +501,45 @@ fn fixed_environment_golden() -> Result<()> {
             }
             Err(error)
         }
+    }
+}
+
+#[test]
+fn cpu_catalog_and_vec003_manifest_match_harness() {
+    let bytes = fs::read(kronello_testkit::resolve_fixture("alpha").unwrap()).unwrap();
+    let scenes = scenes(Image::from_pam(&bytes).unwrap());
+    let catalog: Value = serde_json::from_str(include_str!(
+        "../../../tests/golden/m4-macos-metal/scenes.json"
+    ))
+    .unwrap();
+    assert_eq!(
+        catalog["scene_ids"],
+        json!(scenes.iter().map(|s| s.id).collect::<Vec<_>>())
+    );
+    assert_eq!(scenes.len(), 21);
+    let m = manifest(&scenes, "fixture-test", "font-test");
+    assert_eq!(
+        m["stroke_geometry_version"],
+        kronello_render::STROKE_GEOMETRY_VERSION
+    );
+    assert_eq!(
+        m["gradient_interpolation_version"],
+        kronello_render::GRADIENT_INTERPOLATION_VERSION
+    );
+    for id in ["gradient-linear-fill-stroke", "gradient-radial-fill-stroke"] {
+        let scene = m["scenes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["id"] == id)
+            .unwrap();
+        let path = &scene["draw"]["nodes"][0];
+        assert_eq!(path["fill_gradient"]["stops"].as_array().unwrap().len(), 4);
+        assert_eq!(
+            path["stroke_gradient"]["stops"].as_array().unwrap().len(),
+            4
+        );
+        assert_eq!(path["stroke"]["miter_limit"], 4.0);
+        assert!(path["paint_transform"].is_array());
     }
 }

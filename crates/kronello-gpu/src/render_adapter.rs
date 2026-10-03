@@ -59,6 +59,9 @@ fn lower(dag: &RenderDag) -> Result<(RenderSize, DrawScene, WorkingSpace), Rende
         let draw = match node {
             DagNode::Geometry { .. } | DagNode::TextLayout { .. } => continue,
             DagNode::CoverageDraw { path, .. } => DrawNode::Path(PathDraw {
+                fill_gradient: path.fill_gradient.as_ref().map(gradient),
+                stroke_gradient: path.stroke_gradient.as_ref().map(gradient),
+                paint_transform: path.paint_transform.map(|r| r.map(|v| v as f32)),
                 contours: path
                     .contours
                     .subpaths
@@ -75,10 +78,15 @@ fn lower(dag: &RenderDag) -> Result<(RenderSize, DrawScene, WorkingSpace), Rende
                         kronello_model::FillRule::Evenodd => FillRule::Evenodd,
                     },
                 }),
-                stroke: path.stroke.map(|(color, width)| RoundStroke {
-                    paint: paint(color),
-                    width: width as f32,
-                }),
+                stroke: path
+                    .stroke
+                    .map(|(color, width, join, cap, miter_limit)| RoundStroke {
+                        join,
+                        cap,
+                        miter_limit: miter_limit as f32,
+                        paint: paint(color),
+                        width: width as f32,
+                    }),
             }),
             DagNode::IsolatedComposite { children, opacity } => DrawNode::Group {
                 children: children
@@ -197,5 +205,32 @@ impl RenderBackend for GpuContext {
             .map_err(error)?
             .pixels;
         Ok(BackendFrame { linear, display })
+    }
+}
+
+fn gradient(g: &kronello_model::ResolvedGradient) -> crate::GradientPaint {
+    crate::GradientPaint {
+        geometry: match g.geometry {
+            kronello_model::GradientGeometry::Linear { start, end } => {
+                crate::GradientGeometry::Linear {
+                    start: start.map(|v| v as f32),
+                    end: end.map(|v| v as f32),
+                }
+            }
+            kronello_model::GradientGeometry::Radial { center, radius } => {
+                crate::GradientGeometry::Radial {
+                    center: center.map(|v| v as f32),
+                    radius: radius as f32,
+                }
+            }
+        },
+        stops: g
+            .stops
+            .iter()
+            .map(|s| crate::GradientStop {
+                offset: s.offset as f32,
+                paint: paint(s.color),
+            })
+            .collect(),
     }
 }

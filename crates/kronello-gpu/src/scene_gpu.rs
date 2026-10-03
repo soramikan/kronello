@@ -1,5 +1,5 @@
 use crate::{
-    scene::{check_scene_budget, edges},
+    scene::{StrokePrimitive, check_scene_budget, edges, stroke_primitives},
     *,
 };
 use wgpu::util::DeviceExt;
@@ -62,9 +62,22 @@ impl ScenePass<'_> {
                     .into_iter()
                     .flat_map(u32::to_le_bytes),
             );
+            edge_bytes.extend([0.0f32; 4].into_iter().flat_map(f32::to_le_bytes));
+        }
+        let primitives = path.map(stroke_primitives).unwrap_or_default();
+        for primitive in &primitives {
+            let (points, extra, kind) = match *primitive {
+                StrokePrimitive::Triangle([a, b, c]) => {
+                    ([a[0], a[1], b[0], b[1]], [c[0], c[1], 0.0, 0.0], 1u32)
+                }
+                StrokePrimitive::Circle(c, r) => ([c[0], c[1], 0.0, 0.0], [r, 0.0, 0.0, 0.0], 2u32),
+            };
+            edge_bytes.extend(points.into_iter().flat_map(f32::to_le_bytes));
+            edge_bytes.extend([0, kind, 0, 0].into_iter().flat_map(u32::to_le_bytes));
+            edge_bytes.extend(extra.into_iter().flat_map(f32::to_le_bytes));
         }
         if edge_bytes.is_empty() {
-            edge_bytes.resize(32, 0);
+            edge_bytes.resize(48, 0);
         }
         if edge_bytes.len() as u64 > self.gpu.device.limits().max_storage_buffer_binding_size {
             return Err(GpuError::UnsupportedFeature(
@@ -77,7 +90,7 @@ impl ScenePass<'_> {
         params.extend(
             [
                 mode,
-                edge_list.len() as u32,
+                (edge_list.len() + primitives.len()) as u32,
                 u32::from(fill.is_some_and(|f| f.rule == FillRule::Evenodd)),
                 u32::from(self.working == WorkingSpace::LinearRec2020),
             ]
@@ -121,6 +134,61 @@ impl ScenePass<'_> {
             .into_iter()
             .flat_map(u32::to_le_bytes),
         );
+        let mut stop_bytes = Vec::new();
+        let mut stop_count = 0u32;
+        for g in [
+            path.and_then(|p| p.fill_gradient.as_ref()),
+            path.and_then(|p| p.stroke_gradient.as_ref()),
+        ] {
+            let (kind, geometry) = match g.map(|g| g.geometry) {
+                Some(crate::GradientGeometry::Linear { start, end }) => {
+                    (1u32, [start[0], start[1], end[0], end[1]])
+                }
+                Some(crate::GradientGeometry::Radial { center, radius }) => {
+                    (2u32, [center[0], center[1], radius, 0.0])
+                }
+                None => (0u32, [0.0; 4]),
+            };
+            let stops = g.map_or(&[][..], |g| g.stops.as_slice());
+            params.extend(
+                [kind, stop_count, stops.len() as u32, 0]
+                    .into_iter()
+                    .flat_map(u32::to_le_bytes),
+            );
+            params.extend(geometry.into_iter().flat_map(f32::to_le_bytes));
+            for stop in stops {
+                stop_bytes.extend(stop.paint.rgba.into_iter().flat_map(f32::to_le_bytes));
+                stop_bytes.extend(
+                    [stop.offset, 0.0, 0.0, 0.0]
+                        .into_iter()
+                        .flat_map(f32::to_le_bytes),
+                );
+                stop_bytes.extend(
+                    [space(stop.paint.space), 0, 0, 0]
+                        .into_iter()
+                        .flat_map(u32::to_le_bytes),
+                );
+            }
+            stop_count += stops.len() as u32;
+        }
+        for row in path.map_or([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], |p| p.paint_transform) {
+            params.extend(
+                [row[0], row[1], row[2], 0.0]
+                    .into_iter()
+                    .flat_map(f32::to_le_bytes),
+            );
+        }
+        if stop_bytes.is_empty() {
+            stop_bytes.resize(48, 0);
+        }
+        let stop_buffer = self
+            .gpu
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("VEC-003 gradient stops"),
+                contents: &stop_bytes,
+                usage: wgpu::BufferUsages::STORAGE,
+            });
         let uniform = self
             .gpu
             .device
@@ -137,8 +205,9 @@ impl ScenePass<'_> {
                 contents: &edge_bytes,
                 usage: wgpu::BufferUsages::STORAGE,
             });
-        self.stats.cpu_upload_control_bytes += (params.len() + edge_bytes.len()) as u64;
-        self.stats.cpu_upload_control_operations += 2;
+        self.stats.cpu_upload_control_bytes +=
+            (params.len() + edge_bytes.len() + stop_bytes.len()) as u64;
+        self.stats.cpu_upload_control_operations += 3;
         let views = [
             source.create_view(&Default::default()),
             previous.create_view(&Default::default()),
@@ -170,6 +239,10 @@ impl ScenePass<'_> {
                     wgpu::BindGroupEntry {
                         binding: 4,
                         resource: edge_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 6,
+                        resource: stop_buffer.as_entire_binding(),
                     },
                     wgpu::BindGroupEntry {
                         binding: 5,

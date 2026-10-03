@@ -7,6 +7,9 @@ pub fn paint(rgba: [f32; 4], space: InputSpace) -> Paint {
 }
 pub fn rectangle(min: [f32; 2], max: [f32; 2], color: Paint) -> DrawNode {
     DrawNode::Path(PathDraw {
+        fill_gradient: None,
+        stroke_gradient: None,
+        paint_transform: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
         contours: vec![Contour {
             points: vec![min, [max[0], min[1]], max, [min[0], max[1]]],
             closed: true,
@@ -68,6 +71,9 @@ pub fn matte(kind: MaskKind) -> DrawScene {
 pub fn edges() -> DrawScene {
     DrawScene {
         nodes: vec![DrawNode::Path(PathDraw {
+            fill_gradient: None,
+            stroke_gradient: None,
+            paint_transform: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
             contours: vec![Contour {
                 points: vec![[0.3, 0.4], [7.3, 2.1], [2.6, 7.3]],
                 closed: true,
@@ -77,6 +83,9 @@ pub fn edges() -> DrawScene {
                 rule: FillRule::Nonzero,
             }),
             stroke: Some(RoundStroke {
+                join: StrokeJoin::Round,
+                cap: StrokeCap::Round,
+                miter_limit: 4.0,
                 paint: paint([1.0, 0.2, 0.1, 0.6], InputSpace::Srgb),
                 width: 0.7,
             }),
@@ -129,6 +138,9 @@ pub fn glyph() -> DrawScene {
         )
         .unwrap();
         nodes.push(DrawNode::Path(PathDraw {
+            fill_gradient: None,
+            stroke_gradient: None,
+            paint_transform: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
             contours: path
                 .subpaths
                 .into_iter()
@@ -158,6 +170,9 @@ pub fn fill_rules(rule: FillRule) -> DrawScene {
     };
     DrawScene {
         nodes: vec![DrawNode::Path(PathDraw {
+            fill_gradient: None,
+            stroke_gradient: None,
+            paint_transform: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
             contours: vec![contour([0.3; 2], [7.7; 2]), contour([2.3; 2], [5.7; 2])],
             fill: Some(Fill {
                 paint: paint([1.0; 4], InputSpace::LinearRec709),
@@ -169,7 +184,7 @@ pub fn fill_rules(rule: FillRule) -> DrawScene {
     }
 }
 pub fn scenes() -> Vec<(&'static str, u32, WorkingSpace, DrawScene)> {
-    vec![
+    let mut scenes = vec![
         (
             "isolated-nested-overlap",
             8,
@@ -223,6 +238,130 @@ pub fn scenes() -> Vec<(&'static str, u32, WorkingSpace, DrawScene)> {
             32,
             WorkingSpace::LinearRec709,
             glyph(),
+        ),
+    ];
+    scenes.extend(vec003_scenes());
+    scenes
+}
+
+pub fn stroke_styles(caps: bool, fallback: bool) -> DrawScene {
+    let mut nodes = Vec::new();
+    for i in 0..3 {
+        let x = 2.0 + 10.0 * i as f32;
+        nodes.push(DrawNode::Path(PathDraw {
+            fill_gradient: None,
+            stroke_gradient: None,
+            paint_transform: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+            contours: vec![Contour {
+                points: if caps {
+                    vec![[x + 2.0, 5.0], [x + 2.0, 25.0]]
+                } else {
+                    vec![[x, 10.0], [x + 5.0, 10.0], [x + 5.0, 22.0]]
+                },
+                closed: false,
+            }],
+            fill: None,
+            stroke: Some(RoundStroke {
+                paint: paint([0.8, 0.2, 0.7, 0.7], InputSpace::Srgb),
+                width: 4.0,
+                join: [StrokeJoin::Miter, StrokeJoin::Bevel, StrokeJoin::Round][i],
+                cap: if caps {
+                    [StrokeCap::Butt, StrokeCap::Square, StrokeCap::Round][i]
+                } else {
+                    StrokeCap::Butt
+                },
+                miter_limit: if fallback { 1.0 } else { 4.0 },
+            }),
+        }));
+    }
+    DrawScene {
+        nodes,
+        roots: vec![0, 1, 2],
+    }
+}
+pub fn gradient_scene(radial: bool) -> DrawScene {
+    let mut path = match rectangle([1.3, 1.7], [29.2, 29.7], paint([1.0; 4], InputSpace::Srgb)) {
+        DrawNode::Path(p) => p,
+        _ => unreachable!(),
+    };
+    let geometry = if radial {
+        GradientGeometry::Radial {
+            center: [14.0, 15.0],
+            radius: 10.0,
+        }
+    } else {
+        GradientGeometry::Linear {
+            start: [5.0, 4.0],
+            end: [24.0, 25.0],
+        }
+    };
+    let gradient = GradientPaint {
+        geometry,
+        stops: vec![
+            GradientStop {
+                offset: 0.1,
+                paint: paint([1.0, 0.1, 0.0, 1.0], InputSpace::Srgb),
+            },
+            GradientStop {
+                offset: 0.45,
+                paint: paint([0.0, 0.0, 1.0, 0.0], InputSpace::Srgb),
+            },
+            GradientStop {
+                offset: 0.45,
+                paint: paint([0.1, 0.8, 0.2, 0.6], InputSpace::LinearRec2020),
+            },
+            GradientStop {
+                offset: 0.85,
+                paint: paint([1.8, -0.1, 0.2, 0.8], InputSpace::LinearRec709),
+            },
+        ],
+    };
+    path.fill_gradient = Some(gradient.clone());
+    path.stroke_gradient = Some(gradient);
+    path.stroke = Some(RoundStroke {
+        paint: paint([1.0; 4], InputSpace::Srgb),
+        width: 2.4,
+        join: StrokeJoin::Miter,
+        cap: StrokeCap::Square,
+        miter_limit: 4.0,
+    });
+    path.paint_transform = [[0.9, 0.1, -0.3], [-0.1, 1.1, 0.7]];
+    DrawScene {
+        nodes: vec![DrawNode::Path(path)],
+        roots: vec![0],
+    }
+}
+pub fn vec003_scenes() -> Vec<(&'static str, u32, WorkingSpace, DrawScene)> {
+    vec![
+        (
+            "stroke-joins",
+            32,
+            WorkingSpace::LinearRec709,
+            stroke_styles(false, false),
+        ),
+        (
+            "stroke-caps",
+            32,
+            WorkingSpace::LinearRec709,
+            stroke_styles(true, false),
+        ),
+        (
+            "stroke-miter-limit",
+            32,
+            WorkingSpace::LinearRec709,
+            stroke_styles(false, true),
+        ),
+        (
+            "gradient-linear-fill-stroke",
+            32,
+            WorkingSpace::LinearRec709,
+            gradient_scene(false),
+        ),
+        (
+            "gradient-radial-fill-stroke",
+            32,
+            WorkingSpace::LinearRec2020,
+            gradient_scene(true),
         ),
     ]
 }

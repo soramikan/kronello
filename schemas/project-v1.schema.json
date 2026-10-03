@@ -397,6 +397,16 @@
           "description": "Color Property: explicitly tagged straight RGB and independent alpha.",
           "$ref": "#/$defs/PropertyId"
         },
+        "gradient": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Gradient"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "rule": {
           "$ref": "#/$defs/FillRule"
         }
@@ -463,6 +473,98 @@
       "required": [
         "num",
         "den"
+      ]
+    },
+    "Gradient": {
+      "description": "Local design-space, pad-only paint. Unknown fields/variants are retained by\nthe owning DocumentObject as opaque content and cannot execute.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "end": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/FiniteF64"
+              },
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "kind": {
+              "type": "string",
+              "const": "linear"
+            },
+            "start": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/FiniteF64"
+              },
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "stops": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/GradientStop"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "start",
+            "end",
+            "stops"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "center": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/FiniteF64"
+              },
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "kind": {
+              "type": "string",
+              "const": "radial"
+            },
+            "radius": {
+              "$ref": "#/$defs/FiniteF64"
+            },
+            "stops": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/GradientStop"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "center",
+            "radius",
+            "stops"
+          ]
+        }
+      ]
+    },
+    "GradientStop": {
+      "type": "object",
+      "properties": {
+        "color": {
+          "$ref": "#/$defs/PropertyId"
+        },
+        "offset": {
+          "$ref": "#/$defs/PropertyId"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "color",
+        "offset"
       ]
     },
     "Keyframe": {
@@ -1123,6 +1225,16 @@
         },
         "color": {
           "$ref": "#/$defs/PropertyId"
+        },
+        "gradient": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Gradient"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "join": {
           "description": "Enum Property: \"miter\", \"round\", or \"bevel\" (Hold interpolation).",

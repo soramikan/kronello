@@ -312,6 +312,11 @@ impl RasterCacheKey {
                 contours,
                 path.fill,
                 path.stroke,
+                &path.fill_gradient,
+                &path.stroke_gradient,
+                path.paint_transform,
+                crate::STROKE_GEOMETRY_VERSION,
+                crate::GRADIENT_INTERPOLATION_VERSION,
                 region,
                 working,
             ),
@@ -388,6 +393,9 @@ mod tests {
     fn failed_raster_computations_are_not_cached_and_namespaces_are_distinct() {
         let path = CoveragePath {
             geometry_content_hash: "shape-v1".into(),
+            fill_gradient: None,
+            stroke_gradient: None,
+            paint_transform: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
             contours: FlattenedPath { subpaths: vec![] },
             fill: None,
             stroke: None,

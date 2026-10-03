@@ -5,8 +5,16 @@ struct Params {
     stroke: vec4<f32>,
     spaces: vec4<u32>, // fill space, stroke space, mask kind, output space
     boundary: vec4<u32>, // output alpha association
+    fill_gradient: vec4<u32>,
+    fill_geometry: vec4<f32>,
+    stroke_gradient: vec4<u32>,
+    stroke_geometry: vec4<f32>,
+    paint_x: vec4<f32>,
+    paint_y: vec4<f32>,
 }
-struct Edge { points: vec4<f32>, flags: vec4<u32> }
+struct Edge { points: vec4<f32>, flags: vec4<u32>, extra: vec4<f32> }
+struct Stop { rgba: vec4<f32>, offset: vec4<f32>, space: vec4<u32> }
+@group(0) @binding(6) var<storage,read> stops: array<Stop>;
 @group(0) @binding(0) var source: texture_2d<f32>;
 @group(0) @binding(1) var previous: texture_2d<f32>;
 @group(0) @binding(2) var output: texture_storage_2d<rgba16float,write>;
@@ -37,6 +45,33 @@ fn paint(p: vec4<f32>, space: u32) -> vec4<f32> {
     return vec4<f32>(primaries(rgb,space==2u,params.config.w==1u)*p.a,p.a);
 }
 fn over(s: vec4<f32>, d: vec4<f32>) -> vec4<f32> { return s+d*(1.0-s.a); }
+fn cross2(a:vec2<f32>,b:vec2<f32>)->f32 { return a.x*b.y-a.y*b.x; }
+fn primitive_hit(p:vec2<f32>,e:Edge)->bool {
+    let a=e.points.xy; let b=e.points.zw; let c=e.extra.xy;
+    if e.flags.y==2u { let d=p-a; return dot(d,d)<=e.extra.x*e.extra.x; }
+    if cross2(b-a,c-a)==0.0 { return false; }
+    let x=cross2(b-a,p-a); let y=cross2(c-b,p-b); let z=cross2(a-c,p-c);
+    return (x>=0.0 && y>=0.0 && z>=0.0)||(x<=0.0 && y<=0.0 && z<=0.0);
+}
+fn gradient_paint(solid:vec4<f32>,space:u32,g:vec4<u32>,geometry:vec4<f32>,p:vec2<f32>)->vec4<f32> {
+    if g.x==0u { return paint(solid,space); }
+    let local=vec2<f32>(dot(params.paint_x.xy,p)+params.paint_x.z,dot(params.paint_y.xy,p)+params.paint_y.z);
+    var t=0.0;
+    if g.x==1u { let d=geometry.zw-geometry.xy; t=dot(local-geometry.xy,d)/dot(d,d); }
+    else { t=length(local-geometry.xy)/geometry.z; }
+    var previous=stops[g.y];
+    if t<previous.offset.x { return paint(previous.rgba,previous.space.x); }
+    for (var i=1u;i<g.z;i++) {
+        let stop=stops[g.y+i];
+        if t<stop.offset.x {
+            let f=(t-previous.offset.x)/(stop.offset.x-previous.offset.x);
+            let a=paint(previous.rgba,previous.space.x); let b=paint(stop.rgba,stop.space.x);
+            return a+(b-a)*f;
+        }
+        previous=stop;
+    }
+    return paint(previous.rgba,previous.space.x);
+}
 @compute @workgroup_size(8,8)
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     if any(id.xy >= textureDimensions(output)) { return; }
@@ -44,36 +79,28 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     var result = vec4<f32>(0.0);
     switch params.config.x {
         case 0u: {
-            var fill_hits = 0u;
-            var stroke_hits = 0u;
+            var fill_color=vec4<f32>(0.0);
+            var stroke_color=vec4<f32>(0.0);
             for (var sy=0u; sy<4u; sy++) {
                 for (var sx=0u; sx<4u; sx++) {
                     let p = (vec2<f32>(id.xy)+(vec2<f32>(f32(sx),f32(sy))+0.5)/4.0)*params.scale.xy;
                     var winding = 0i;
                     var stroked = false;
                     for (var e=0u; e<params.config.y; e++) {
-                        let a = edges[e].points.xy;
-                        let b = edges[e].points.zw;
-                        let d = b-a;
-                        let q = p-a;
-                        let cross = d.x*q.y-d.y*q.x;
-                        if a.y<=p.y && b.y>p.y && cross>0.0 { winding++; }
-                        if b.y<=p.y && a.y>p.y && cross<0.0 { winding--; }
-                        if edges[e].flags.x==1u && params.scale.w>0.0 {
-                            let length = dot(d,d);
-                            var t = 0.0;
-                            if length>0.0 { t=clamp(dot(q,d)/length,0.0,1.0); }
-                            let v=q-t*d;
-                            stroked = stroked || dot(v,v)<=params.scale.w*params.scale.w*0.25;
+                        if edges[e].flags.y!=0u {
+                            stroked=stroked || primitive_hit(p,edges[e]);
+                        } else {
+                            let a=edges[e].points.xy; let b=edges[e].points.zw;
+                            let cross=cross2(b-a,p-a);
+                            if a.y<=p.y && b.y>p.y && cross>0.0 { winding++; }
+                            if b.y<=p.y && a.y>p.y && cross<0.0 { winding--; }
                         }
                     }
-                    if (params.config.z==0u && winding!=0i) || (params.config.z==1u && winding%2i!=0i) { fill_hits++; }
-                    if stroked { stroke_hits++; }
+                    if (params.config.z==0u && winding!=0i) || (params.config.z==1u && winding%2i!=0i) { fill_color+=gradient_paint(params.fill,params.spaces.x,params.fill_gradient,params.fill_geometry,p)/16.0; }
+                    if stroked { stroke_color+=gradient_paint(params.stroke,params.spaces.y,params.stroke_gradient,params.stroke_geometry,p)/16.0; }
                 }
             }
-            let f=paint(params.fill,params.spaces.x)*f32(fill_hits)/16.0;
-            let s=paint(params.stroke,params.spaces.y)*f32(stroke_hits)/16.0;
-            result=over(s,f);
+            result=over(stroke_color,fill_color);
         }
         case 1u: { result=over(textureLoad(source,position,0),textureLoad(previous,position,0)); }
         case 2u: { result=textureLoad(source,position,0)*params.scale.z; }

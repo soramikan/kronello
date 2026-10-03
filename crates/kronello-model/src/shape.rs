@@ -54,6 +54,8 @@ pub enum FillRule {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Fill {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gradient: Option<Box<Gradient>>,
     /// Color Property: explicitly tagged straight RGB and independent alpha.
     pub color: PropertyId,
     pub rule: FillRule,
@@ -62,6 +64,8 @@ pub struct Fill {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Stroke {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gradient: Option<Box<Gradient>>,
     pub color: PropertyId,
     pub width: PropertyId,
     /// Enum Property: "miter", "round", or "bevel" (Hold interpolation).
@@ -72,17 +76,107 @@ pub struct Stroke {
     pub miter_limit: PropertyId,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StrokeJoin {
     Miter,
     Round,
     Bevel,
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StrokeCap {
     Butt,
     Round,
     Square,
+}
+
+/// Local design-space, pad-only paint. Unknown fields/variants are retained by
+/// the owning DocumentObject as opaque content and cannot execute.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum Gradient {
+    Linear {
+        start: [FiniteF64; 2],
+        end: [FiniteF64; 2],
+        stops: Vec<GradientStop>,
+    },
+    Radial {
+        center: [FiniteF64; 2],
+        radius: FiniteF64,
+        stops: Vec<GradientStop>,
+    },
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct GradientStop {
+    pub color: PropertyId,
+    pub offset: PropertyId,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ResolvedGradient {
+    pub geometry: GradientGeometry,
+    pub stops: Vec<ResolvedGradientStop>,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum GradientGeometry {
+    Linear { start: [f64; 2], end: [f64; 2] },
+    Radial { center: [f64; 2], radius: f64 },
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ResolvedGradientStop {
+    pub color: Color,
+    pub offset: f64,
+}
+impl Gradient {
+    fn stops(&self) -> &[GradientStop] {
+        match self {
+            Self::Linear { stops, .. } | Self::Radial { stops, .. } => stops,
+        }
+    }
+    fn validate_geometry(&self) -> Result<(), ShapeError> {
+        let valid = match self {
+            Self::Linear { start, end, .. } => start != end,
+            Self::Radial { radius, .. } => radius.get() > 0.0,
+        };
+        if !valid || !(2..=256).contains(&self.stops().len()) {
+            return Err(ShapeError::InvalidGradient);
+        }
+        Ok(())
+    }
+    fn resolve(
+        &self,
+        values: &BTreeMap<PropertyId, Value>,
+    ) -> Result<ResolvedGradient, ShapeError> {
+        self.validate_geometry()?;
+        let mut stops = Vec::new();
+        let mut previous = -1.0;
+        for stop in self.stops() {
+            let Value::Color(color) = values[&stop.color] else {
+                unreachable!()
+            };
+            let Value::Scalar(offset) = values[&stop.offset] else {
+                unreachable!()
+            };
+            if offset.get() < previous {
+                return Err(ShapeError::InvalidGradient);
+            }
+            previous = offset.get();
+            stops.push(ResolvedGradientStop {
+                color,
+                offset: previous,
+            });
+        }
+        let geometry = match self {
+            Self::Linear { start, end, .. } => GradientGeometry::Linear {
+                start: start.map(FiniteF64::get),
+                end: end.map(FiniteF64::get),
+            },
+            Self::Radial { center, radius, .. } => GradientGeometry::Radial {
+                center: center.map(FiniteF64::get),
+                radius: radius.get(),
+            },
+        };
+        Ok(ResolvedGradient { geometry, stops })
+    }
 }
 
 /// Evaluated, validated design-space values, never a serialized bitmap/cache.
@@ -105,11 +199,13 @@ pub enum ResolvedGeometry {
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResolvedFill {
+    pub gradient: Option<Box<ResolvedGradient>>,
     pub color: Color,
     pub rule: FillRule,
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResolvedStroke {
+    pub gradient: Option<Box<ResolvedGradient>>,
     pub color: Color,
     pub width: FiniteF64,
     pub join: StrokeJoin,
@@ -119,6 +215,8 @@ pub struct ResolvedStroke {
 
 #[derive(Debug, Clone, PartialEq, Error)]
 pub enum ShapeError {
+    #[error("invalid gradient geometry or stops (2..=256, ordered offsets in [0,1])")]
+    InvalidGradient,
     #[error("missing shape content {id}")]
     MissingContent { id: ContentId },
     #[error("opaque content is unsupported")]
@@ -149,6 +247,7 @@ enum Parameter {
     Join,
     Cap,
     Miter,
+    Offset,
 }
 impl Parameter {
     fn value_type(self) -> ValueType {
@@ -171,6 +270,7 @@ impl Parameter {
             (Self::Size, Value::Vec2(v)) => v.iter().all(|v| v.get() >= 0.0),
             (Self::Radius | Self::Width, Value::Scalar(v)) => v.get() >= 0.0,
             (Self::Miter, Value::Scalar(v)) => v.get() >= 1.0,
+            (Self::Offset, Value::Scalar(v)) => (0.0..=1.0).contains(&v.get()),
             (Self::Path, Value::Path(path)) => {
                 validate_path(path)?;
                 true
@@ -228,6 +328,20 @@ impl Shape {
                 (stroke.miter_limit, Parameter::Miter),
             ]);
         }
+        for gradient in self
+            .fill
+            .as_ref()
+            .and_then(|f| f.gradient.as_ref())
+            .into_iter()
+            .chain(self.stroke.as_ref().and_then(|s| s.gradient.as_ref()))
+        {
+            for stop in gradient.stops() {
+                refs.extend([
+                    (stop.color, Parameter::Color),
+                    (stop.offset, Parameter::Offset),
+                ]);
+            }
+        }
         refs
     }
     /// Stable Property IDs to pass to the instance-aware evaluator. Repeated
@@ -247,6 +361,15 @@ impl Shape {
         properties: &[Property],
         registry: &SchemaRegistry,
     ) -> Result<(), ShapeError> {
+        for gradient in self
+            .fill
+            .as_ref()
+            .and_then(|f| f.gradient.as_ref())
+            .into_iter()
+            .chain(self.stroke.as_ref().and_then(|s| s.gradient.as_ref()))
+        {
+            gradient.validate_geometry()?;
+        }
         let mut by_id = BTreeMap::new();
         for property in properties {
             if by_id.insert(property.id(), property).is_some() {
@@ -268,6 +391,30 @@ impl Shape {
                 && let PropertySource::Constant(value) = property.source()
             {
                 parameter.validate(id, value)?;
+            }
+        }
+        let constants: BTreeMap<_, _> = properties
+            .iter()
+            .filter_map(|p| match p.source() {
+                PropertySource::Constant(v) if !p.modifiers().iter().any(|m| m.enabled) => {
+                    Some((p.id(), v.clone()))
+                }
+                _ => None,
+            })
+            .collect();
+        for gradient in self
+            .fill
+            .as_ref()
+            .and_then(|f| f.gradient.as_ref())
+            .into_iter()
+            .chain(self.stroke.as_ref().and_then(|s| s.gradient.as_ref()))
+        {
+            if gradient
+                .stops()
+                .iter()
+                .all(|s| constants.contains_key(&s.color) && constants.contains_key(&s.offset))
+            {
+                gradient.resolve(&constants)?;
             }
         }
         Ok(())
@@ -311,11 +458,25 @@ impl Shape {
                 _ => unreachable!(),
             },
         };
+        let fill_gradient = self
+            .fill
+            .as_ref()
+            .and_then(|f| f.gradient.as_ref())
+            .map(|g| g.resolve(values))
+            .transpose()?;
+        let stroke_gradient = self
+            .stroke
+            .as_ref()
+            .and_then(|s| s.gradient.as_ref())
+            .map(|g| g.resolve(values))
+            .transpose()?;
         let fill = self.fill.as_ref().map(|f| ResolvedFill {
+            gradient: fill_gradient.map(Box::new),
             color: color(f.color),
             rule: f.rule,
         });
         let stroke = self.stroke.as_ref().map(|s| ResolvedStroke {
+            gradient: stroke_gradient.map(Box::new),
             color: color(s.color),
             width: scalar(s.width),
             miter_limit: scalar(s.miter_limit),
@@ -381,6 +542,18 @@ pub fn shape_descriptors() -> Vec<PropertyDescriptor> {
     let n = |v| FiniteF64::new(v).expect("finite descriptor default");
     let entries = [
         (
+            0x3d761408_24b1_4281_a10c_be02f8b0d876,
+            "gradient_color",
+            Unit::Dimensionless,
+            Value::Color(Color::from_srgb8([0; 3], None)),
+        ),
+        (
+            0x2797a303_a6ae_4ca8_8d35_adf3a21baabb,
+            "gradient_offset",
+            Unit::Dimensionless,
+            Value::Scalar(n(0.0)),
+        ),
+        (
             0x25e0da11_a016_488f_a65b_0173c694d5ec,
             "stroke_color",
             Unit::Dimensionless,
@@ -444,6 +617,18 @@ pub fn shape_descriptors() -> Vec<PropertyDescriptor> {
             match suffix {
                 "size" => definition.range = Some(crate::ValueRange::Vec2([range(0.0); 2])),
                 "corner_radius" => definition.range = Some(crate::ValueRange::Scalar(range(0.0))),
+                "gradient_offset" => {
+                    definition.range = Some(crate::ValueRange::Scalar(crate::NumericRange {
+                        min: Some(crate::NumericBound {
+                            value: n(0.0),
+                            inclusive: true,
+                        }),
+                        max: Some(crate::NumericBound {
+                            value: n(1.0),
+                            inclusive: true,
+                        }),
+                    }))
+                }
                 "miter_limit" => definition.range = Some(crate::ValueRange::Scalar(range(1.0))),
                 _ => (),
             }

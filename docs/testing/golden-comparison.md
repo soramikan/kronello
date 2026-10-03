@@ -143,3 +143,9 @@ supervisor の Apple M1 MacBook Pro / Metal / macOS 27.0（build 26A428）で、
 - 初回 host 実行では範囲外 RGB の拒否テストが失敗した。Metal の half 出力で有限値へ飽和しうるため、readback の非有限検査だけでは不足することを確認した。GPU の書き込み前 sticky status / CPU の面境界検査を追加し、後の不透明描画で隠れる overflow と外部 straight 出力だけの overflow の回帰も通した。
 
 これらは supervisor が host で実行して返した結果。worker sandbox は Metal adapter 不在で、GPU 実行を確認していない。M4 の基準画像・固定環境比較・許容誤差校正、Windows / Linux での新しい scene pipeline 実行、性能測定は未実施。
+
+## VEC-003 の追加シーン
+
+VEC-003 は `stroke-joins` / `stroke-caps` / `stroke-miter-limit` / `gradient-linear-fill-stroke` / `gradient-radial-fill-stroke` を追加し、現行カタログは **21 シーン・21 comparison frames**。coverage の現行意味版は `vec003-grid4-v2`、stroke geometry は `vec003-centered-stroke-v1`、gradient interpolation は `vec003-linear-premultiplied-pad-v1`。固定 4×4 サンプルと QA-001 の比較許容誤差を維持する。
+
+manifest schema は 3。全 stop の色・色空間・offset、線幅・join / cap / miter limit、ローカル paint への逆写像、追加意味版を記録する。通常の CPU カタログテストも harness の順序・数・paint 記録を照合する。M1 host の通常 GPU テストと 21 シーンの UPDATE 候補は成功したが、M4 baseline の比較合格ではない。コマンド・環境・初回失敗と修正・未実施条件は [VEC-003 の検証](vec-003.md) を参照。

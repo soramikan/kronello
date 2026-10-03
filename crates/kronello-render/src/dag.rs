@@ -2,8 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use kronello_eval::Affine2;
 use kronello_model::{
-    Color, ColorSpace, FillRule, PropertyId, ResolvedShape, Shape, ShapeGeometry, StrokeCap,
-    StrokeJoin, Value,
+    Color, ColorSpace, FillRule, PropertyId, ResolvedGradient, ResolvedShape, Shape, ShapeGeometry,
+    Value,
 };
 use kronello_vector::{FlattenRequest, FlattenedPath};
 use serde::{Deserialize, Serialize};
@@ -55,7 +55,16 @@ pub struct CoveragePath {
     /// tagged straight RGB until coverage execution in the working space.
     pub contours: FlattenedPath,
     pub fill: Option<(Color, FillRule)>,
-    pub stroke: Option<(Color, f64)>,
+    pub stroke: Option<(
+        Color,
+        f64,
+        kronello_model::StrokeJoin,
+        kronello_model::StrokeCap,
+        f64,
+    )>,
+    pub fill_gradient: Option<ResolvedGradient>,
+    pub stroke_gradient: Option<ResolvedGradient>,
+    pub paint_transform: [[f64; 3]; 2],
 }
 #[derive(Debug, Clone, PartialEq)]
 pub enum DagNode {
@@ -195,12 +204,6 @@ impl Builder<'_> {
                         })?;
                 let contours = map_contours(contours, transform)?;
                 let stroke = if let Some(stroke) = &resolved.stroke {
-                    if stroke.join != StrokeJoin::Round || stroke.cap != StrokeCap::Round {
-                        return Err(RenderError::UnsupportedFeature(format!(
-                            "stroke cap/join on {:?}",
-                            n.key
-                        )));
-                    }
                     let x = a[0].hypot(b[0]);
                     let y = a[1].hypot(b[1]);
                     let dot = a[0] * a[1] + b[0] * b[1];
@@ -212,19 +215,48 @@ impl Builder<'_> {
                             n.key
                         )));
                     }
-                    Some((stroke.color, stroke.width.get() * x))
+                    Some((
+                        stroke.color,
+                        stroke.width.get() * x,
+                        stroke.join,
+                        stroke.cap,
+                        stroke.miter_limit.get(),
+                    ))
                 } else {
                     None
                 };
-                children.push(self.push(DagNode::CoverageDraw {
-                    geometry,
-                    path: CoveragePath {
-                        geometry_content_hash,
-                        contours,
-                        fill: resolved.fill.as_ref().map(|f| (f.color, f.rule)),
-                        stroke,
-                    },
-                })?);
+                children.push(
+                    self.push(DagNode::CoverageDraw {
+                        geometry,
+                        path: CoveragePath {
+                            geometry_content_hash,
+                            contours,
+                            fill: resolved.fill.as_ref().map(|f| (f.color, f.rule)),
+                            fill_gradient: resolved
+                                .fill
+                                .as_ref()
+                                .and_then(|f| f.gradient.as_deref().cloned()),
+                            stroke_gradient: resolved
+                                .stroke
+                                .as_ref()
+                                .and_then(|s| s.gradient.as_deref().cloned()),
+                            paint_transform: if resolved
+                                .fill
+                                .as_ref()
+                                .is_some_and(|f| f.gradient.is_some())
+                                || resolved
+                                    .stroke
+                                    .as_ref()
+                                    .is_some_and(|s| s.gradient.is_some())
+                            {
+                                inverse(transform)?
+                            } else {
+                                Affine2::IDENTITY.0
+                            },
+                            stroke,
+                        },
+                    })?,
+                );
             }
             SceneContent::Text(layout) => {
                 let geometry = self.push(DagNode::TextLayout {
@@ -245,6 +277,9 @@ impl Builder<'_> {
                             geometry_content_hash,
                             contours,
                             fill: Some((glyph.fill, FillRule::Nonzero)),
+                            fill_gradient: None,
+                            stroke_gradient: None,
+                            paint_transform: Affine2::IDENTITY.0,
                             stroke: None,
                         },
                     })?);
@@ -413,4 +448,24 @@ pub fn build_render_dag_with_cache(
         region,
         working_space: profile.working_space,
     })
+}
+
+fn inverse(transform: Affine2) -> Result<[[f64; 3]; 2], RenderError> {
+    let [a, b] = transform.0;
+    let det = a[0] * b[1] - a[1] * b[0];
+    if det == 0.0 {
+        return Err(RenderError::InvalidInput(
+            "singular gradient mapping".into(),
+        ));
+    }
+    let result = [
+        [b[1] / det, -a[1] / det, (a[1] * b[2] - b[1] * a[2]) / det],
+        [-b[0] / det, a[0] / det, (b[0] * a[2] - a[0] * b[2]) / det],
+    ];
+    if result.iter().flatten().any(|v| !v.is_finite()) {
+        return Err(RenderError::InvalidInput(
+            "non-finite gradient mapping".into(),
+        ));
+    }
+    Ok(result)
 }

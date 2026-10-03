@@ -45,6 +45,17 @@ M1 で実装する範囲（VEC-003）と後続タスクの境界を固定する�
 | SDR 8bit 出力の banding | 対策なし | dither の要否判断。採用時は固定 seed で決定的にする（VEC-004） |
 | Trim path、morph、SVG 対応表 | なし | VEC-002（M5） |
 
+### VEC-003 の実装規約
+
+- 既存の join / cap / miter_limit Property（既定 miter / butt / 4）をそのまま評価する。中央線の各線分を幅の矩形へ展開し、外側接合を三角形で埋める。miter は offset 線の交点まで延長し、交点の中心からの距離 / 半幅が limit を越えれば bevel とする。round join / cap は半幅の円、square cap は端を半幅延長した矩形、butt cap は端で終了する。閉 contour に cap を付けず、連続同一点は方向のない線分として除去する。全点同一の開 contour は round cap の円だけを持ち、その他は無被覆。幅 0 は無被覆。三角形の辺・円周は含み、面積 0 の三角形は無被覆。平行な接合（単位方向の cross = 0）は追加三角形を作らない。
+- `Fill.gradient` / `Stroke.gradient` は省略可能な `Gradient`。指定すると従来の `color` に代わって paint を与える（従来の color Property も参照・型検証を維持する）。`Linear { start, end, stops }` と `Radial { center, radius, stops }` はローカル `design_px`、線形の両端は異なり、放射の半径は正。spread は常に pad。ノードと出力 region の affine 写像の逆でサンプル位置をローカル座標へ戻す。この導出写像は保存された gradient transform 機能ではない。逆写像が存在しない gradient は型付き入力エラーにする。
+- `GradientStop` の color / offset はノード所有の `PropertyId`。再利用可能な `kronello.shape.gradient_color` / `kronello.shape.gradient_offset` descriptor を登録する。stop descriptor は一つのノードに複数配置でき、評価は PropertyId ごとに行う。transform / opacity 等の singleton descriptor 重複は引き続き拒否する。offset は有限の `[0,1]`、stop 数は 2〜256、保存順は offset の非減少順。評価後にも検証し、アニメーションで順序が逆転したら `ShapeError::InvalidGradient` とする。並べ替え・clamp で修正しない。同位置ではその位置の最後の stop が勝つ右連続の段差とし、直前の区間は最初の同位置 stop に向かう。
+- stop の色を個別に sRGB decode / 原色変換 → 作業用線形空間 → premultiply し、その値を補間する。各 4×4 AA サンプルで paint を評価・被覆に応じて蓄積し、fill / stroke を別々に平均して stroke を fill へ source-over する。内部補間を unpremultiply しない。透明 stop の RGB を持ち込まず、HDR の負値・1 超も clamp しない。
+- CPU / GPU は同じ float32 の展開済み三角形・円を使う。curve の flatten は既存の画素 tolerance（既定 0.02 px）。snapshot の coverage は `vec003-grid4-v2`、stroke geometry は `vec003-centered-stroke-v1`、gradient interpolation は `vec003-linear-premultiplied-pad-v1`。vector flatten / color の既存意味版は変更しない。raster key は stop 値・gradient geometry・逆写像・線幅 / join / cap / limit・追加意味版を含む。paint 変更ではローカル輪郭の geometry cache を再利用する。
+- 表の VEC-004 / VEC-005 のフィールド・variant は strict な既知 Shape / Text として解釈せず、`DocumentObject::Opaque` で値と所属を保持する。選択出力が必要とする opaque content は最終レンダーで `UNSUPPORTED_FEATURE`。非一様変換の線も同じエラー。機能を既定値へ置換しない。
+
+受け入れ条件のテスト対応と検証範囲は [VEC-003 の検証](../testing/vec-003.md) を参照。
+
 ### 設計寸法と出力解像度
 
 Composition の design_extent と出力画素数を分ける。同じ 16:9 で解像度だけを変える場合は原則再レイアウトしない。

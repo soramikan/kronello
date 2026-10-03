@@ -14,7 +14,9 @@ use crate::RenderError;
 pub const SNAPSHOT_SCHEMA_VERSION: u32 = 1;
 pub const COLOR_VERSION: &str = "gpu002-color-v1";
 pub const VECTOR_VERSION: &str = "render001-kurbo-flatten-v1";
-pub const COVERAGE_VERSION: &str = "gpu002-grid4-v1";
+pub const COVERAGE_VERSION: &str = "vec003-grid4-v2";
+pub const STROKE_GEOMETRY_VERSION: &str = "vec003-centered-stroke-v1";
+pub const GRADIENT_INTERPOLATION_VERSION: &str = "vec003-linear-premultiplied-pad-v1";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -26,6 +28,8 @@ pub struct SemanticVersions {
     pub vector: String,
     pub color: String,
     pub coverage: String,
+    pub stroke_geometry: String,
+    pub gradient_interpolation: String,
 }
 impl SemanticVersions {
     /// Pins explicitly at snapshot creation, never at execution or resume.
@@ -38,6 +42,8 @@ impl SemanticVersions {
             vector: VECTOR_VERSION.into(),
             color: COLOR_VERSION.into(),
             coverage: COVERAGE_VERSION.into(),
+            stroke_geometry: STROKE_GEOMETRY_VERSION.into(),
+            gradient_interpolation: GRADIENT_INTERPOLATION_VERSION.into(),
         }
     }
 }

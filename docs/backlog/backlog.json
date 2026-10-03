@@ -291,7 +291,7 @@
       "priority": "P1",
       "area": "vector",
       "title": "線のjoin/capと線形・放射グラデーション",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "VEC-001",
         "GPU-002",
