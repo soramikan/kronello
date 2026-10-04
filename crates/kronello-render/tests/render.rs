@@ -2054,6 +2054,52 @@ fn assert_fx_crop(backend: &dyn RenderBackend) {
 fn fx_cropped_roi_matches_full_render_with_stacked_effects_at_three_scales() {
     assert_fx_crop(&CpuReferenceBackend);
 }
+
+#[test]
+fn tiled_frame_matches_full_frame_across_shadow_halo_and_partial_tiles() {
+    let (mut project, id) = fx_project();
+    let DocumentObject::Known(c) = &mut project.compositions[0] else {
+        unreachable!()
+    };
+    let sigma = c.nodes[0]
+        .properties
+        .iter()
+        .find(|p| p.descriptor().key.as_str() == "kronello.effect.sigma")
+        .unwrap()
+        .id();
+    c.nodes[0].effects.push(Effect::Known(EffectDefinition {
+        effect_id: GAUSSIAN_BLUR_ID.into(),
+        version: 1,
+        parameters: EffectParameters::GaussianBlur { sigma },
+    }));
+    for scale in [0.5, 1.0, 2.0] {
+        // The shape and two effect halos straddle x=512; final tile is partial.
+        let region = OutputRegion {
+            origin: [6.0 - 510.0 / scale, 0.0],
+            extent: [529.0 / scale, 35.0 / scale],
+            pixels: [529, 35],
+        };
+        let snapshot = RenderSnapshot::new(&project, id, 7, RenderProfile::default()).unwrap();
+        let expected = CpuReferenceBackend
+            .execute(&fx_dag(&project, id, region))
+            .unwrap();
+        let actual = render_frame(
+            &snapshot,
+            &[],
+            &CpuReferenceBackend,
+            FrameRequest {
+                time: t(0, 1),
+                region,
+            },
+        )
+        .unwrap();
+        assert_eq!(actual.pixels, expected, "scale {scale}");
+        assert_eq!(actual.metadata.region, region);
+        assert_eq!(actual.metadata.revision, "7");
+        assert_eq!(actual.metadata.design_to_pixel, region.design_to_pixel().0);
+        assert!(actual.pixels.linear.iter().any(|p| p[3] > 0.0));
+    }
+}
 #[test]
 fn gpu_fx_cropped_roi_matches_full_render_with_stacked_effects() {
     assert_fx_crop(&kronello_gpu::GpuContext::new().unwrap());

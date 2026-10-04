@@ -389,6 +389,9 @@ pub struct SceneNodeIr {
     pub world_transform: kronello_eval::Affine2,
     pub opacity: f64,
     pub effects: Vec<ResolvedEffect>,
+    /// Final node values, including template and layout inputs.
+    pub properties: BTreeMap<PropertyId, Value>,
+    pub text: Option<String>,
     pub content: SceneContent,
     pub layout_content_hash: Option<String>,
 }
@@ -529,6 +532,8 @@ pub fn build_scene_ir_with_cache(
             })
             .collect::<Result<Vec<_>, RenderError>>()?;
         let mut layout_content_hash = None;
+        let properties = values.clone();
+        let mut evaluated_text = None;
         let content = match n.kind {
             NodeKind::Shape { content_ref } => {
                 let shape = content(&snapshot.project.shapes, content_ref.as_uuid(), |s| {
@@ -550,6 +555,7 @@ pub fn build_scene_ir_with_cache(
                 text.validate(&authored.properties, &registry)?;
                 let mut resolved = text.resolve(&values)?;
                 templates.text_override(&n.key, &mut resolved)?;
+                evaluated_text = Some(resolved.text.clone());
                 layout_content_hash = Some(crate::layout_content_hash(&resolved)?);
                 used_fonts.extend(resolved.styles.iter().map(|s| s.font.clone()));
                 let layout = cache.layout(&resolved, fonts)?;
@@ -563,6 +569,8 @@ pub fn build_scene_ir_with_cache(
             world_transform: n.world_transform,
             opacity: n.transform.opacity,
             effects,
+            properties,
+            text: evaluated_text,
             content,
             layout_content_hash,
         });

@@ -177,6 +177,7 @@ pub(crate) fn registry() -> SchemaRegistry {
     for d in kronello_model::shape_descriptors()
         .into_iter()
         .chain(kronello_model::text_descriptors())
+        .chain(kronello_model::effect_descriptors())
     {
         r.register(d).expect("built-in descriptors are distinct");
     }

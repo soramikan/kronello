@@ -192,7 +192,7 @@ Shape の単色 / 線形・放射 gradient fill / stroke と miter / bevel / rou
 
 現行文書型には matte 欄がないため `MatteBinding` を snapshot の明示レンダー入力とする。source / matte とも stable SceneKey。matte は表示 root / children から除外し、`visible = true` の場合だけ表示する。source ごとの binding は一つ、共有 matte の DAG は再利用する。欠落・非アクティブ参照・containment / matte を合わせた循環は失敗する。
 
-scene 1,024 node、DAG 4,096 node、containment / matte recursion 24、出力 16,777,216 pixel の保守的上限を設ける。backend は GPU-002 の 1,024 draw node・32 depth・65,536 edge・512 MiB 面予算をさらに適用し、限界を超えた要求はエラーにする。全画面合成であり、ROI tiling・GPU texture cache・資源 pool・性能保証は未実装。CACHE-001 のインメモリ cache は下記の範囲で実装した。
+scene 1,024 node、DAG 4,096 node、containment / matte recursion 24、出力 16,777,216 pixel の保守的上限を設ける。backend は GPU-002 の 1,024 draw node・32 depth・65,536 edge・512 MiB 面予算をさらに適用し、限界を超えた要求はエラーにする。INTEGRATION-001 / [ADR-0053](../adr/0053-integration-evaluated-queries-and-render-tiles.md) で幅または高さが512 pixelsを超える出力を最大512×512のtileへ分け、元画素格子と既存effect ROI haloを保って同じbackendで実行する。metadataは元のregion、最終linear / display面は全画面のまま。tile / haloの予算は維持し、巨大halo・streaming export・GPU texture cache・資源pool・性能保証は未実装。CACHE-001 のインメモリ cache は下記の範囲で実装した。
 
 GPU adapter は同じ lowering 済み DrawScene について `render_scene` と `render_scene_output` を各一回呼ぶ。両経路とも合成・mask・色変換を GPU 上で行い、それぞれ image と validation status を readback する。CPU へ持ち帰った線形画素を出力変換する GPU 名義の経路ではない。二回の描画を統合する最適化と renderer API での転送統計の集約は後続課題。
 

@@ -18,6 +18,29 @@ pub struct SceneQueryRequest {
     pub composition: CompositionId,
     #[serde(default)]
     pub expand_instances: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evaluation: Option<SceneEvaluationRequest>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SceneEvaluationRequest {
+    pub time: Time,
+    pub fonts: Vec<crate::FontInput>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct QueryBounds {
+    pub min: [f64; 2],
+    pub max: [f64; 2],
+}
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SceneNodeEvaluation {
+    pub properties: std::collections::BTreeMap<PropertyId, Value>,
+    pub text: Option<String>,
+    pub layout_bounds: Option<QueryBounds>,
+    pub world_transform: [[f64; 3]; 2],
+    pub effects: Vec<kronello_model::ResolvedEffect>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -37,6 +60,9 @@ pub struct SceneQueryNode {
     pub children: Vec<SceneNodeKey>,
     /// Authored half-open range in this instance's local composition time.
     pub active_range: TimeRange,
+    /// Present only for active nodes when evaluation was requested.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evaluated: Option<SceneNodeEvaluation>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -99,6 +125,9 @@ pub struct PropertySampleRequest {
     pub keys: Vec<SampleKey>,
     #[schemars(length(min = 1, max = 100000))]
     pub times: Vec<Time>,
+    /// Explicitly selects render-consistent active node values with font locks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fonts: Option<Vec<crate::FontInput>>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -141,6 +170,19 @@ pub(crate) fn scene(r: SceneQueryRequest) -> Result<SceneQueryResult, ServiceErr
     let snapshot = store.snapshot()?;
     store.close()?;
     let compositions = definitions(&snapshot.document)?;
+    let evaluated = r
+        .evaluation
+        .as_ref()
+        .map(|request| {
+            evaluated_scene(
+                &snapshot,
+                &r.project,
+                r.composition,
+                request.time,
+                &request.fonts,
+            )
+        })
+        .transpose()?;
     kronello_model::validate_compositions(&compositions, &edit::registry())
         .map_err(|e| ServiceError::new("EVALUATION_ERROR", format!("{e:?}")))?;
     let root = compositions
@@ -205,6 +247,26 @@ pub(crate) fn scene(r: SceneQueryRequest) -> Result<SceneQueryResult, ServiceErr
             pending.push((child.clone(), enclosing));
         }
         nodes.push(SceneQueryNode {
+            evaluated: evaluated
+                .as_ref()
+                .and_then(|scene| {
+                    scene.nodes.iter().find(|n| {
+                        n.key.instance_path == node_key.instance_path && n.key.node == node_key.node
+                    })
+                })
+                .map(|n| SceneNodeEvaluation {
+                    properties: n.properties.clone(),
+                    text: n.text.clone(),
+                    layout_bounds: match &n.content {
+                        kronello_render::SceneContent::Text(layout) => Some(QueryBounds {
+                            min: layout.layout_bounds.min,
+                            max: layout.layout_bounds.max,
+                        }),
+                        _ => None,
+                    },
+                    world_transform: n.world_transform.0,
+                    effects: n.effects.clone(),
+                }),
             key: node_key,
             composition: c.id,
             kind: n.kind.clone(),
@@ -258,6 +320,16 @@ pub(crate) fn sample(r: PropertySampleRequest) -> Result<PropertySampleResult, S
     let snapshot = store.snapshot()?;
     store.close()?;
     let compositions = definitions(&snapshot.document)?;
+    let scenes = r
+        .fonts
+        .as_ref()
+        .map(|fonts| {
+            r.times
+                .iter()
+                .map(|time| evaluated_scene(&snapshot, &r.project, r.composition, *time, fonts))
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .transpose()?;
     let curves: Vec<_> = snapshot
         .document
         .curves
@@ -318,11 +390,37 @@ pub(crate) fn sample(r: PropertySampleRequest) -> Result<PropertySampleResult, S
             .resolve(&registry)
             .map_err(|e| ServiceError::invalid(e.to_string()))?
             .definition();
-        let values = r
-            .times
-            .iter()
-            .map(|time| graph.evaluate_property(&runtime, *time).map_err(evaluation))
-            .collect::<Result<Vec<_>, _>>()?;
+        let values = if let Some(scenes) = &scenes {
+            let SampleKey::Node {
+                instance_path,
+                node,
+                property,
+            } = key
+            else {
+                return Err(ServiceError::invalid(
+                    "render-consistent samples require node keys",
+                ));
+            };
+            scenes
+                .iter()
+                .map(|scene| {
+                    scene
+                        .nodes
+                        .iter()
+                        .find(|n| n.key.instance_path == *instance_path && n.key.node == *node)
+                        .and_then(|n| n.properties.get(property))
+                        .cloned()
+                        .ok_or_else(|| {
+                            ServiceError::invalid("sample node is inactive or property missing")
+                        })
+                })
+                .collect::<Result<Vec<_>, _>>()?
+        } else {
+            r.times
+                .iter()
+                .map(|time| graph.evaluate_property(&runtime, *time).map_err(evaluation))
+                .collect::<Result<Vec<_>, _>>()?
+        };
         samples.push(PropertySample {
             key: key.clone(),
             unit: descriptor.unit,
@@ -336,4 +434,34 @@ pub(crate) fn sample(r: PropertySampleRequest) -> Result<PropertySampleResult, S
         times: r.times,
         samples,
     })
+}
+
+fn evaluated_scene(
+    stored: &kronello_store::Snapshot,
+    project: &std::path::Path,
+    composition: CompositionId,
+    time: Time,
+    fonts: &[crate::FontInput],
+) -> Result<kronello_render::SceneIr, ServiceError> {
+    let input = crate::RenderInput {
+        project: project.into(),
+        composition: Some(composition),
+        target: None,
+        region: kronello_render::OutputRegion {
+            origin: [0.0; 2],
+            extent: [1.0; 2],
+            pixels: [1; 2],
+        },
+        profile: Default::default(),
+        fonts: fonts.to_vec(),
+    };
+    let snapshot = crate::freeze_render_input(stored, &input)?;
+    let bytes = crate::load_locked_fonts(&snapshot, &input)?;
+    let fonts: Vec<_> = snapshot
+        .font_locks()
+        .iter()
+        .zip(&bytes)
+        .map(|(identity, bytes)| kronello_text::FontData { identity, bytes })
+        .collect();
+    Ok(kronello_render::build_scene_ir(&snapshot, time, &fonts)?)
 }

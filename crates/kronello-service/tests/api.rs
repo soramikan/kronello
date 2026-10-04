@@ -46,6 +46,7 @@ fn invalid(json: Json) {
 fn scene(path: &Path, composition: CompositionId, expand_instances: bool) -> SceneQueryResult {
     let ResultData::Scene(r) = service()
         .dispatch(Request::SceneQuery(SceneQueryRequest {
+            evaluation: None,
             project: path.into(),
             composition,
             expand_instances,
@@ -140,6 +141,7 @@ fn property_samples_use_rational_times_typed_values_units_and_failures() {
         Time::new(1, 2).unwrap(),
     ];
     let request = PropertySampleRequest {
+        fonts: None,
         project: path.clone(),
         composition,
         keys: vec![key],
@@ -213,7 +215,10 @@ fn capabilities_registry_media_extension_without_device_initialization() {
     assert_eq!(media.decoders, vec!["prores"]);
     assert_eq!(media.libraries[0].license, "LGPL");
     assert!(media.substituted && media.distribution_eligible && !media.development_only);
-    assert!(c.effects.is_empty());
+    assert_eq!(
+        c.effects,
+        ["kronello.gaussian_blur", "kronello.drop_shadow"]
+    );
     assert!(c.backends.contains(&"cpu_reference_float32".into()));
     let mutating: Vec<_> = c
         .commands
@@ -687,6 +692,7 @@ fn sampling_resolves_composition_inputs_placement_bindings_and_local_time() {
     let (_dir, path) = setup(p);
     let ResultData::Samples(result) = service()
         .dispatch(Request::PropertySample(PropertySampleRequest {
+            fonts: None,
             project: path.clone(),
             composition: root_id,
             times: vec![Time::ZERO],
@@ -713,6 +719,7 @@ fn sampling_resolves_composition_inputs_placement_bindings_and_local_time() {
     );
     let ResultData::Samples(direct) = service()
         .dispatch(Request::PropertySample(PropertySampleRequest {
+            fonts: None,
             project: path.clone(),
             composition: definition.id,
             times: vec![Time::new(1, 2).unwrap()],
@@ -729,6 +736,7 @@ fn sampling_resolves_composition_inputs_placement_bindings_and_local_time() {
     assert_eq!(result.samples[1].values, direct.samples[0].values);
     let error = service()
         .dispatch(Request::PropertySample(PropertySampleRequest {
+            fonts: None,
             project: path,
             composition: root_id,
             times: vec![Time::ZERO],
@@ -765,6 +773,7 @@ fn unsupported_expression_and_enabled_modifier_fail_without_partial_samples() {
         let (_dir, path) = setup(p);
         let error = service()
             .dispatch(Request::PropertySample(PropertySampleRequest {
+                fonts: None,
                 project: path,
                 composition,
                 times: vec![Time::ZERO, Time::new(1, 2).unwrap()],

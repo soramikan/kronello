@@ -86,9 +86,7 @@ pub fn render_frame_with_cache(
 ) -> Result<RenderedFrame, RenderError> {
     request.region.validate()?;
     let scene = crate::build_scene_ir_with_cache(snapshot, request.time, fonts, cache)?;
-    let dag =
-        crate::build_render_dag_with_cache(&scene, snapshot.profile(), request.region, cache)?;
-    let pixels = backend.execute_with_cache(&dag, cache)?;
+    let pixels = execute_tiles(&scene, snapshot.profile(), request.region, backend, cache)?;
     let count = u64::from(request.region.pixels[0]) * u64::from(request.region.pixels[1]);
     if pixels.linear.len() as u64 != count || pixels.display.len() as u64 != count {
         return Err(RenderError::InvalidInput(
@@ -141,6 +139,66 @@ pub fn render_frame_with_cache(
         backend: backend.name().into(),
     };
     Ok(RenderedFrame { pixels, metadata })
+}
+
+/// Bound intermediate surfaces while retaining the output's absolute sample
+/// lattice. Each tile uses the existing backwards ROI/halo compiler and the
+/// same selected backend; failures never retry on another execution path.
+fn execute_tiles(
+    scene: &crate::SceneIr,
+    profile: crate::RenderProfile,
+    region: OutputRegion,
+    backend: &dyn RenderBackend,
+    cache: &mut crate::RenderCache,
+) -> Result<BackendFrame, RenderError> {
+    const EDGE: u32 = 512;
+    if region.pixels.iter().all(|v| *v <= EDGE) {
+        let dag = crate::build_render_dag_with_cache(scene, profile, region, cache)?;
+        return backend.execute_with_cache(&dag, cache);
+    }
+    let count = region.pixels[0] as usize * region.pixels[1] as usize;
+    let mut frame = BackendFrame {
+        linear: vec![[0.0; 4]; count],
+        display: vec![[0.0; 4]; count],
+    };
+    let units = [0, 1].map(|axis| region.extent[axis] / f64::from(region.pixels[axis]));
+    for y in (0..region.pixels[1]).step_by(EDGE as usize) {
+        for x in (0..region.pixels[0]).step_by(EDGE as usize) {
+            let pixels = [
+                EDGE.min(region.pixels[0] - x),
+                EDGE.min(region.pixels[1] - y),
+            ];
+            let tile = OutputRegion {
+                origin: [
+                    region.origin[0] + f64::from(x) * units[0],
+                    region.origin[1] + f64::from(y) * units[1],
+                ],
+                extent: [
+                    f64::from(pixels[0]) * units[0],
+                    f64::from(pixels[1]) * units[1],
+                ],
+                pixels,
+            };
+            let dag = crate::build_render_dag_with_cache(scene, profile, tile, cache)?;
+            let output = backend.execute_with_cache(&dag, cache)?;
+            let tile_count = pixels[0] as usize * pixels[1] as usize;
+            if output.linear.len() != tile_count || output.display.len() != tile_count {
+                return Err(RenderError::InvalidInput(
+                    "backend returned wrong tile pixel count".into(),
+                ));
+            }
+            for row in 0..pixels[1] as usize {
+                let start = (y as usize + row) * region.pixels[0] as usize + x as usize;
+                let source = row * pixels[0] as usize;
+                let width = pixels[0] as usize;
+                frame.linear[start..start + width]
+                    .copy_from_slice(&output.linear[source..source + width]);
+                frame.display[start..start + width]
+                    .copy_from_slice(&output.display[source..source + width]);
+            }
+        }
+    }
+    Ok(frame)
 }
 
 fn validate_pixels(pixels: &[[f32; 4]], internal: bool) -> Result<(), RenderError> {

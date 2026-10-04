@@ -155,7 +155,10 @@ impl CapabilitiesResult {
             ]
             .map(String::from)
             .to_vec(),
-            effects: vec![],
+            effects: vec![
+                kronello_model::GAUSSIAN_BLUR_ID.into(),
+                kronello_model::DROP_SHADOW_ID.into(),
+            ],
             backends: ["wgpu_rgba16f", "cpu_reference_float32"]
                 .map(String::from)
                 .to_vec(),

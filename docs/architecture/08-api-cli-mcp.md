@@ -132,7 +132,7 @@ Undo は対象 Event の保存 inverse を現在文書に適用した候補を�
 
 ## M2 API-001 の実装範囲
 
-`kronello-service` が API-001 の同期 query と MEDIA-001 の素材操作を実装し、CLI は同名の二語 subcommand または `operation` 付き stdin JSON で呼ぶ。GPU / font bytes の初期化は不要。scene.query / property.sample は一つの保存 revision の不変文書を読み、revision を10進文字列で返す。capabilities.get は Project を指定せず実装能力を返す。
+`kronello-service` が API-001 の同期 query と MEDIA-001 の素材操作を実装し、CLI は同名の二語 subcommand または `operation` 付き stdin JSON で呼ぶ。従来の構造 / evaluator query は GPU / font bytes の初期化不要。INTEGRATION-001 の評価 query は明示した font bytes を読むが GPU を初期化しない。scene.query / property.sample は一つの保存 revision の不変文書を読み、revision を10進文字列で返す。capabilities.get は Project を指定せず実装能力を返す。
 
 | operation / result kind | request | 構造化結果 |
 |---|---|---|
@@ -141,6 +141,8 @@ Undo は対象 Event の保存 inverse を現在文書に適用した候補を�
 | `capabilities.get` / `capabilities` | 空 payload `{}` | api_schema_version 1、engine_version、SemanticVersions、commands、features、effects、backends、検出した media |
 | `asset.relink` / `project` | `project`、`base_revision`、`asset`、`search_directory` | hash 一致する素材だけを明示再リンクし、更新後の ProjectInfo を返す |
 | `project.collect` / `collected` | `project`、`output_directory` | 元プロジェクトの revision を変えず、移動可能な複製を作り directory / project / asset_count を返す |
+
+INTEGRATION-001 / [ADR-0053](../adr/0053-integration-evaluated-queries-and-render-tiles.md) で `scene.query` に任意の `evaluation: {time, fonts}` を追加した。指定時は render と同じ compiler で active node の `evaluated`（properties、text、text-local layout_bounds、world_transform、resolved effects）を返す。inactive node に evaluated は付けない。`property.sample` の任意 `fonts` 指定も同じ active node 値を times 順に返す。必要 font の欠落は `FONT_MISSING`、この mode の inactive / Composition key は `INVALID_REQUEST`。省略時の既存 evaluator mode は template の文字置換や組版由来の帯値を適用しないため、template のレンダー値確認には明示 mode を使う。capabilities の effects は `kronello.gaussian_blur` / `kronello.drop_shadow` を列挙する。
 
 scene の key は `{instance_path, node}`。expand_instances を指定すると、placement の authored children より前に参照 definition の roots を展開する。同じ definition の二配置は NodeId が同じでも InstancePath が異なる。definition root の所有親と、明示変換親のない内部 node の変換親は enclosing placement となる。active_range は各 definition の local time の値を保持し、時刻による絞り込みや祖先との区間交差はしない。展開を含む最大 node 数は100000で、超過は `INVALID_REQUEST`。範囲・タグ・種類による検索、scene ページング、評価済み transform の返却は未実装。
 

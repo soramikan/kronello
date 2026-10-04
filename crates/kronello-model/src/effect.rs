@@ -37,7 +37,7 @@ pub enum EffectParameters {
         opacity: PropertyId,
     },
 }
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum ResolvedEffect {
     GaussianBlur {
         sigma: f64,

@@ -505,7 +505,7 @@
       "priority": "P0",
       "area": "integration",
       "title": "縦断デモ第1段階: 日本語lower-third (CLI/MCP)",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "NLE-001",
         "TEMPLATE-001",

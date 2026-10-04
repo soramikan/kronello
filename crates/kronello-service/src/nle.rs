@@ -456,7 +456,8 @@ pub(crate) fn template_instance_retime(
 }
 
 /// Offline 48 kHz bus from an immutable project value. Image rendering does not
-/// mux audio; INTEGRATION-001 will connect this to sequence A/V export.
+/// mux audio. Movie jobs accept explicit audio clips; sequence-track mux is
+/// outside the INTEGRATION-001 image-sequence demo.
 pub fn mix_sequence_audio(
     project: &Project,
     sequence: SequenceId,

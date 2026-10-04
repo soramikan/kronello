@@ -3065,6 +3065,16 @@
         "composition": {
           "$ref": "#/$defs/CompositionId"
         },
+        "fonts": {
+          "description": "Explicitly selects render-consistent active node values with font locks.",
+          "items": {
+            "$ref": "#/$defs/FontInput"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "keys": {
           "items": {
             "$ref": "#/$defs/SampleKey"
@@ -3192,6 +3202,34 @@
       },
       "required": [
         "pruned"
+      ],
+      "type": "object"
+    },
+    "QueryBounds": {
+      "additionalProperties": false,
+      "properties": {
+        "max": {
+          "items": {
+            "format": "double",
+            "type": "number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "min": {
+          "items": {
+            "format": "double",
+            "type": "number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "min",
+        "max"
       ],
       "type": "object"
     },
@@ -4222,6 +4260,16 @@
             "composition": {
               "$ref": "#/$defs/CompositionId"
             },
+            "evaluation": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/SceneEvaluationRequest"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "expand_instances": {
               "default": false,
               "type": "boolean"
@@ -4246,6 +4294,16 @@
           "properties": {
             "composition": {
               "$ref": "#/$defs/CompositionId"
+            },
+            "fonts": {
+              "description": "Explicitly selects render-consistent active node values with font locks.",
+              "items": {
+                "$ref": "#/$defs/FontInput"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
             },
             "keys": {
               "items": {
@@ -4290,6 +4348,71 @@
           },
           "required": [
             "operation"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ResolvedEffect": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "GaussianBlur": {
+              "properties": {
+                "sigma": {
+                  "format": "double",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "sigma"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "GaussianBlur"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "DropShadow": {
+              "properties": {
+                "color": {
+                  "$ref": "#/$defs/Color"
+                },
+                "offset": {
+                  "items": {
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                },
+                "opacity": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "sigma": {
+                  "format": "double",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "sigma",
+                "offset",
+                "color",
+                "opacity"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "DropShadow"
           ],
           "type": "object"
         }
@@ -4652,6 +4775,25 @@
       "minimum": 0,
       "type": "integer"
     },
+    "SceneEvaluationRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "fonts": {
+          "items": {
+            "$ref": "#/$defs/FontInput"
+          },
+          "type": "array"
+        },
+        "time": {
+          "$ref": "#/$defs/Rational"
+        }
+      },
+      "required": [
+        "time",
+        "fonts"
+      ],
+      "type": "object"
+    },
     "SceneNode": {
       "additionalProperties": false,
       "properties": {
@@ -4713,6 +4855,59 @@
       ],
       "type": "object"
     },
+    "SceneNodeEvaluation": {
+      "additionalProperties": false,
+      "properties": {
+        "effects": {
+          "items": {
+            "$ref": "#/$defs/ResolvedEffect"
+          },
+          "type": "array"
+        },
+        "layout_bounds": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/QueryBounds"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "properties": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Value"
+          },
+          "type": "object"
+        },
+        "text": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "world_transform": {
+          "items": {
+            "items": {
+              "format": "double",
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "properties",
+        "world_transform",
+        "effects"
+      ],
+      "type": "object"
+    },
     "SceneNodeKey": {
       "additionalProperties": false,
       "properties": {
@@ -4756,6 +4951,17 @@
             }
           ]
         },
+        "evaluated": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SceneNodeEvaluation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Present only for active nodes when evaluation was requested."
+        },
         "key": {
           "$ref": "#/$defs/SceneNodeKey"
         },
@@ -4787,6 +4993,16 @@
       "properties": {
         "composition": {
           "$ref": "#/$defs/CompositionId"
+        },
+        "evaluation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SceneEvaluationRequest"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "expand_instances": {
           "default": false,

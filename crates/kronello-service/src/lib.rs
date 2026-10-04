@@ -751,8 +751,24 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
         Request::EditApply(r) => local_locator(&r.project),
         Request::EditUndo(r) => local_locator(&r.project),
         Request::HistoryList(r) => local_locator(&r.project),
-        Request::SceneQuery(r) => local_locator(&r.project),
-        Request::PropertySample(r) => local_locator(&r.project),
+        Request::SceneQuery(r) => {
+            local_locator(&r.project)?;
+            if let Some(evaluation) = &r.evaluation {
+                for font in &evaluation.fonts {
+                    local_locator(&font.path)?;
+                }
+            }
+            Ok(())
+        }
+        Request::PropertySample(r) => {
+            local_locator(&r.project)?;
+            if let Some(fonts) = &r.fonts {
+                for font in fonts {
+                    local_locator(&font.path)?;
+                }
+            }
+            Ok(())
+        }
         Request::RenderFrame(r) => render_locators(&r.input),
         Request::RenderSequence(r) => {
             local_locator(&r.output_directory)?;

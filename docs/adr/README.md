@@ -67,6 +67,7 @@
 | [0050](0050-fixed-job-execution-and-publication.md) | 固定ジョブ入力・実行 lease・成果物確定を共有 service で扱う | 採用 | 2026-10-04 |
 | [0051](0051-nle-placement-and-retime.md) | Sequence の配置・合成順序と三つの時間編集を固定する | 採用 | 2026-10-04 |
 | [0052](0052-snapshot-policy-evaluation.md) | サイズ閾値による追加 snapshot の既定採用を見送る | 採用 | 2026-10-04 |
+| [0053](0053-integration-evaluated-queries-and-render-tiles.md) | 縦断デモの評価 query と大解像度の tile 実行 | 採用 | 2026-10-04 |
 
 ## 追加と変更の規則
 
