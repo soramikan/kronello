@@ -1,6 +1,6 @@
-# macOS FFI package
+# macOS package
 
-FFI-001 の検証用 SwiftPM package。実アプリの画面・デザイントークンは含まない。
+macOS アプリの SwiftPM package。FFI-001 の native 境界（`CKronelloFFI` / `KronelloCore`、検証用 harness）と、デザインシステムの SwiftUI 部品（`KronelloDesign`、後半の節）を含む。
 package 名は `Kronello`、Swift tools 5.10、macOS 14 以上。
 後続の `KronelloDesign` / `Kronello` targets はこの変更では作成しない。
 
