@@ -1,0 +1,195 @@
+{
+  "id": "d5808faa-5b6f-4921-9797-8bbc0dcf5416",
+  "schema_version": 1,
+  "semantic_version": 1,
+  "name": "FFI preview",
+  "compositions": [
+    {
+      "id": "e706c050-13fa-4654-9350-dcef30f1d792",
+      "duration": {
+        "num": "3",
+        "den": "1"
+      },
+      "design_extent": {
+        "width": 64.0,
+        "height": 32.0
+      },
+      "edit_rate": {
+        "num": "24",
+        "den": "1"
+      },
+      "root_nodes": [
+        "adcfcd01-95a0-4292-ba82-61369bf4ac8c"
+      ],
+      "nodes": [
+        {
+          "id": "adcfcd01-95a0-4292-ba82-61369bf4ac8c",
+          "kind": {
+            "kind": "shape",
+            "value": {
+              "content_ref": "36bbe1b1-f5c0-46ba-90f3-3b4cb000e200"
+            }
+          },
+          "containment_parent": null,
+          "transform_parent": null,
+          "child_order": [],
+          "active_range": {
+            "start": {
+              "num": "-2",
+              "den": "1"
+            },
+            "end": {
+              "num": "3",
+              "den": "1"
+            }
+          },
+          "properties": [
+            {
+              "id": "1d77434e-64ef-4de4-9e38-98bb71bb03fe",
+              "descriptor": {
+                "key": "kronello.shape.size",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "vec2",
+                  "value": [
+                    16.0,
+                    12.0
+                  ]
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "561797a3-732d-406d-8755-57fd074c0050",
+              "descriptor": {
+                "key": "kronello.shape.corner_radius",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 0.0
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "4e4837d7-b8f7-47e6-a455-cc35e5b00cdd",
+              "descriptor": {
+                "key": "kronello.fill_color",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "color",
+                  "value": {
+                    "space": "srgb",
+                    "components": {
+                      "r": 0.7843137254901961,
+                      "g": 0.1568627450980392,
+                      "b": 0.0392156862745098,
+                      "alpha": 1.0
+                    }
+                  }
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "cecd9404-ac4e-4245-9d6a-84aa26590fc6",
+              "descriptor": {
+                "key": "kronello.transform.position",
+                "version": 1
+              },
+              "source": {
+                "kind": "curve",
+                "value": "a06bc70e-d4cd-48d2-87f3-c7b5d8984c93"
+              },
+              "modifiers": []
+            },
+            {
+              "id": "04f5a966-c8a3-45b0-a1a9-ee990e09ab0e",
+              "descriptor": {
+                "key": "kronello.opacity",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 0.75
+                }
+              },
+              "modifiers": []
+            }
+          ]
+        }
+      ],
+      "properties": []
+    }
+  ],
+  "curves": [
+    {
+      "id": "a06bc70e-d4cd-48d2-87f3-c7b5d8984c93",
+      "value_type": "vec2",
+      "keys": [
+        {
+          "time": {
+            "num": "0",
+            "den": "1"
+          },
+          "value": {
+            "kind": "vec2",
+            "value": [
+              1.0,
+              1.0
+            ]
+          },
+          "interpolation": {
+            "kind": "linear"
+          }
+        },
+        {
+          "time": {
+            "num": "1",
+            "den": "1"
+          },
+          "value": {
+            "kind": "vec2",
+            "value": [
+              9.0,
+              1.0
+            ]
+          },
+          "interpolation": {
+            "kind": "linear"
+          }
+        }
+      ],
+      "interpolation_version": 1
+    }
+  ],
+  "shapes": [
+    {
+      "id": "36bbe1b1-f5c0-46ba-90f3-3b4cb000e200",
+      "geometry": {
+        "kind": "rectangle",
+        "value": {
+          "size": "1d77434e-64ef-4de4-9e38-98bb71bb03fe",
+          "corner_radius": "561797a3-732d-406d-8755-57fd074c0050"
+        }
+      },
+      "fill": {
+        "color": "4e4837d7-b8f7-47e6-a455-cc35e5b00cdd",
+        "rule": "nonzero"
+      },
+      "stroke": null
+    }
+  ],
+  "texts": []
+}

@@ -1,0 +1,23 @@
+{
+  "operation": "property.sample",
+  "project": "benchmark.kronello",
+  "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+  "keys": [
+    {
+      "kind": "node",
+      "property": "1d77434e-64ef-4de4-9e38-98bb71bb03fe",
+      "node": "adcfcd01-95a0-4292-ba82-61369bf4ac8c",
+      "instance_path": []
+    }
+  ],
+  "times": [
+    {
+      "num": "0",
+      "den": "1"
+    },
+    {
+      "num": "1",
+      "den": "60"
+    }
+  ]
+}

@@ -73,6 +73,14 @@ jobs:
         run: |
           cargo build -p kronello-cli -p kronello-mcp --locked
           python3 -m unittest scripts.tests.test_integration_m2.IntegrationM2.test_small_cpu_reference -v
+      - name: Build and test the macOS FFI package
+        env:
+          CARGO_BUILD_JOBS: "3"
+          KRONELLO_STATE_ROOT: ${{ runner.temp }}/kronello-swift-state
+        run: |
+          python3 scripts/build_ffi.py
+          swift build --package-path apps/macos -j 3
+          swift test --package-path apps/macos -j 3
       - name: Validate backlog
         run: python3 scripts/backlog.py check
 
