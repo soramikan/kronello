@@ -7,8 +7,8 @@
 | M0 | 基盤契約・テスト素材・CI・技術スパイク | 有理数時刻 / ID / Property / 色 / alpha 規約、ツールチェーンと CI、2D title から GPU 出力の最短経路（macOS） | 6 |
 | M1 | Headless 2D Motion Core | Shape / Text / Group / Null、キーフレーム、任意時刻レンダー、画像連番 | 14 |
 | M2 | NLE 統合・CLI / MCP | CompositionClip、日本語 title、基本音声、基本エフェクト、固定 snapshot、計画 / 適用、書き出し、縦断デモ第 1 段階 | 11 |
-| M3 | 実用的な Motion Authoring | macOS ネイティブ GUI（canvas / curve editor）、テンプレート拡張、基本式、responsive layout、リアルタイム再生、M2 の後続機能、縦断デモ第 2 段階 | 23 |
-| M4 | 高品質・高解像度 | サブフレームブラー、temporal cache、8K / HDR 品質、GPU 経路診断 | 8 |
+| M3 | 実用的な Motion Authoring | macOS ネイティブ GUI（canvas / curve editor、編集・テンプレート・書き出しページ）、テンプレート拡張、基本式、responsive layout、リアルタイム再生、M2 の後続機能、縦断デモ第 2 段階 | 25 |
+| M4 | 高品質・高解像度 | サブフレームブラー、temporal cache、8K / HDR 品質、GPU 経路診断、Composition の Media ノード | 9 |
 | M5 | 高度な 2D Motion | Repeater、path 演出、音声連動、ルビ・縦書き、Simulation | 5 |
 | M6 | 拡張 | 2.5D、外部レンダー、互換アダプター、プラグイン、分散 | 4 |
 

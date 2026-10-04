@@ -4,7 +4,7 @@
 
 - schema_version: 0.5
 - 更新日: 2026-10-04
-- タスク数: 71
+- タスク数: 74
 
 ## 集計
 
@@ -13,8 +13,8 @@
 | M0 | 0 | 0 | 6 | 0 | 6 |
 | M1 | 0 | 0 | 14 | 0 | 14 |
 | M2 | 0 | 1 | 10 | 0 | 11 |
-| M3 | 18 | 3 | 2 | 0 | 23 |
-| M4 | 8 | 0 | 0 | 0 | 8 |
+| M3 | 20 | 3 | 2 | 0 | 25 |
+| M4 | 9 | 0 | 0 | 0 | 9 |
 | M5 | 5 | 0 | 0 | 0 | 5 |
 | M6 | 4 | 0 | 0 | 0 | 4 |
 
@@ -408,6 +408,23 @@
   - 第1段階と同じプロジェクトをmacOS GUIで開き、CLI/MCPと同じ値・layout boundsを表示する
   - 同じtemplate定義を縦型variantで再利用し、再レイアウト結果を検証する
 
+### GUI-003 macOS GUI: 編集ページ（Sequence のトラック・素材一覧・クリップの Inspector）
+
+- 優先度: P2 / 領域: gui / 状態: planned
+- 依存: GUI-001, NLE-002
+- 受け入れ条件:
+  - docs/design-system/screens/edit.md の配置で Project の素材一覧・Sequence の Viewer・クリップの Inspector・トラックを表示し、種類の色・選択・ASSET_MISSING を仕様どおりに示す
+  - クリップの配置・トリム・ブレードを共通 command/event で行い、ドラッグ中は候補表示、確定時に 1 コマンドを発行する。Undo・外部変更・競合は GUI-001 と同じ扱いにする
+  - Composition クリップからモーションページへ移り、その Composition を開ける
+
+### GUI-004 macOS GUI: テンプレートページと書き出しページ
+
+- 優先度: P2 / 領域: gui / 状態: planned
+- 依存: GUI-001, TEMPLATE-002, INSPECT-001
+- 受け入れ条件:
+  - docs/design-system/screens/template.md の配置で variant を並べて layout/ink/visual bounds と TEMPLATE_OVERFLOW 等の診断を表示し、公開入力・版の差分計画・尺のポリシーを共通 API で扱う。既存配置を暗黙に更新しない
+  - docs/design-system/screens/export.md の配置で書き出し設定・書き出し前の確認・ジョブ一覧を表示し、型付きエラーがある間は書き出しを開始できない。投入した job は固定 snapshot の独立 worker で実行し、進捗・失敗を JobRow で示す
+
 ### VEC-004 グラデーションの拡張
 
 - 優先度: P2 / 領域: vector / 状態: planned
@@ -615,6 +632,14 @@
   - プロジェクト外のcache領域へraster結果を永続化し、削除しても描画結果が変わらない
   - GPU texture/surface poolの所有権・寿命・予算とtile/halo再利用を検証し、非対応資源をCPU cacheへ黙って置換しない
   - 厳密raster cacheのbackend/GPU/driver fingerprintと意味版をkeyへ固定し、異なる実行環境の結果を誤再利用しない
+
+### COMP-002 Composition の Media ノード（画像・映像）と MediaSlot の描画
+
+- 優先度: P1 / 領域: render / 状態: planned
+- 依存: TEMPLATE-002, NLE-002
+- 受け入れ条件:
+  - Composition の Media ノードを素材参照・source time・色契約つきで描画し、CPU 参照と明示 GPU 実行で検証する
+  - TEMPLATE-002 の MediaSlot 入力を最終レンダーへ接続し、素材不足・hash 不一致は型付き失敗にする
 
 
 ## M5
