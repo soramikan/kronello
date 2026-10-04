@@ -753,7 +753,7 @@
       "priority": "P2",
       "area": "vector",
       "title": "グラデーションの拡張",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "VEC-003"
       ],
@@ -969,7 +969,7 @@
       "priority": "P1",
       "area": "release",
       "title": "同梱FFmpegを含む配布packageの再配置・署名検証",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "MEDIA-001",
         "AUDIO-000",

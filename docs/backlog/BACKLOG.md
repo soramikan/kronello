@@ -13,7 +13,7 @@
 | M0 | 0 | 0 | 6 | 0 | 6 |
 | M1 | 0 | 0 | 14 | 0 | 14 |
 | M2 | 0 | 1 | 10 | 0 | 11 |
-| M3 | 16 | 3 | 6 | 0 | 25 |
+| M3 | 14 | 5 | 6 | 0 | 25 |
 | M4 | 11 | 0 | 0 | 0 | 11 |
 | M5 | 5 | 0 | 0 | 0 | 5 |
 | M6 | 4 | 0 | 0 | 0 | 4 |
@@ -427,7 +427,7 @@
 
 ### VEC-004 グラデーションの拡張
 
-- 優先度: P2 / 領域: vector / 状態: planned
+- 優先度: P2 / 領域: vector / 状態: in_progress
 - 依存: VEC-003
 - 受け入れ条件:
   - repeat/reflectのspreadを実装する
@@ -546,7 +546,7 @@
 
 ### RELEASE-001 同梱FFmpegを含む配布packageの再配置・署名検証
 
-- 優先度: P1 / 領域: release / 状態: planned
+- 優先度: P1 / 領域: release / 状態: in_progress
 - 依存: MEDIA-001, AUDIO-000, CLI-001, MCP-001
 - 受け入れ条件:
   - macOSの配布packageに同梱するFFmpeg共有library・SVT-AV1・dav1d・license原文・PATENTS・source manifestを固定し、GPL/nonfree・開発用system libraryを含めないことを検証する
