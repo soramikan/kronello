@@ -154,7 +154,7 @@ impl Client {
         assert_eq!(response["result"]["protocolVersion"], version);
         assert_eq!(
             response["result"]["capabilities"],
-            json!({"tools":{"listChanged":false}})
+            json!({"tools":{"listChanged":false},"resources":{"subscribe":false,"listChanged":false},"prompts":{"listChanged":false}})
         );
         self.send(&json!({"jsonrpc":"2.0","method":"notifications/initialized"}));
     }
@@ -394,14 +394,20 @@ fn versions_negotiate_and_registry_schemas_are_self_contained() {
 
 #[test]
 fn unsupported_versions_negotiate_latest_and_tools_list_works() {
-    for requested in ["1900-01-01", "2099-01-01", "not-a-version", ""] {
+    for requested in [
+        "1900-01-01",
+        "2099-01-01",
+        "2026-07-28",
+        "not-a-version",
+        "",
+    ] {
         let mut client = Client::spawn(&[], false);
         let initialized = client.initialize(requested);
         assert!(initialized.get("error").is_none(), "{initialized}");
         assert_eq!(initialized["result"]["protocolVersion"], "2025-11-25");
         assert_eq!(
             initialized["result"]["capabilities"],
-            json!({"tools":{"listChanged":false}})
+            json!({"tools":{"listChanged":false},"resources":{"subscribe":false,"listChanged":false},"prompts":{"listChanged":false}})
         );
         assert_eq!(
             client.request("tools/list", json!({}))["error"]["code"],

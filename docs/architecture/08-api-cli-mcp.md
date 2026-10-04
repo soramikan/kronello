@@ -1,6 +1,6 @@
 # 08 API・CLI・MCP・エージェント
 
-GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001-shared-command-query-api.md)）。M1 CLI-001 と M2 SERVICE-001 / API-001 / TEMPLATE-001 / MEDIA-001 / MCP-001 / NLE-001 / JOB-001 と M3 EXPR-001 の実装範囲を次節に示す。それ以外の後続 API・CLI は提案であり、実装済みではない。
+GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001-shared-command-query-api.md)）。M1 CLI-001 と M2 SERVICE-001 / API-001 / TEMPLATE-001 / MEDIA-001 / MCP-001 / NLE-001 / JOB-001 と M3 EXPR-001 / MCP-002 の実装範囲を次節に示す。それ以外の後続 API・CLI は提案であり、実装済みではない。
 
 ## M1 CLI-001 の実装範囲
 
@@ -272,15 +272,15 @@ kronello render --project demo.kronello --profile hevc-4k \
 
 ## M2 MCP-001 の実装範囲
 
-`kronello-mcp` crate の同名 binary は、同期 stdio の薄い JSON-RPC 2.0 adapter。UTF-8 の一行一メッセージで要求・応答を交換し、stdout は protocol のみ、診断・使用法は stderr に出す。各入力の上限は改行を除き16 MiB。stdin の EOF で終了する。HTTP transport、resources、prompts、sampling、MCP task、進捗通知、実行中要求のキャンセルは未実装。`notifications/cancelled` 等の通知は応答も操作実行もしない。
+`kronello-mcp` crate の同名 binary は、同期 stdio の薄い JSON-RPC 2.0 adapter。UTF-8 の一行一メッセージで要求・応答を交換し、stdout は protocol のみ、診断・使用法は stderr に出す。各入力の上限は改行を除き16 MiB。stdin の EOF で終了する。HTTP transport、resources、prompts、進捗と request cancellation は後述の M3 MCP-002 で追加した。sampling / MCP tasks は未対応。MCP-001 時点の同期 stdio は同じ共有 registry を使う非同期 request dispatcher に拡張した。
 
-対応版は `2025-06-18` と `2025-11-25`。[MCP lifecycle](https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle) に沿って initialize → notifications/initialized → tools/list または tools/call の順に使う。[MCP の版交渉規定](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle#version-negotiation) に従い、対応版の initialize は要求と同じ `protocolVersion` を返し、対応外の文字列なら最新対応版 `2025-11-25` を返して初期化を継続する。クライアントが応答版に対応していなければ接続を切断する判断を行う。いずれも tools capability（listChanged: false）を返す。初期化前および完了通知前の tool 要求は `-32002`。ping は初期化前後とも可能。同一接続の再 initialize は拒否する。
+対応版は `2025-06-18` と `2025-11-25`。[MCP lifecycle](https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle) に沿って initialize → notifications/initialized → tools/list または tools/call の順に使う。[MCP の版交渉規定](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle#version-negotiation) に従い、対応版の initialize は要求と同じ `protocolVersion` を返し、対応外の文字列なら最新対応版 `2025-11-25` を返して初期化を継続する。クライアントが応答版に対応していなければ接続を切断する判断を行う。いずれも tools capability（listChanged: false）を返す。MCP-002 は resources / prompts の capability も広告する（後述）。初期化前および完了通知前の tool 要求は `-32002`。ping は初期化前後とも可能。同一接続の再 initialize は拒否する。
 
 `tools/list` は `kronello-service::command_registry()` の全操作を同名で公開する。固定の MCP 操作一覧は持たず、MEDIA-001 等で registry と service Request を拡張すれば同じ経路で公開される。request_schema / response_schema が指す公開 API 型から `api_json_schema()` を生成し、各 schema に必要な `$defs` の参照閉包を同梱する。外部 schema fetch は不要。inputSchema は operation を除いた service payload と同一。outputSchema は成功値の schema と公開 Response の error branch の union で、エラー結果も schema に適合する。`_meta.kronello` に元の schema refs と readOnlyProject を返す。read_only は作品に対する性質であり、render.sequence の成果物書き出しも含むため MCP の readOnlyHint に置き換えない。
 
 `tools/call` の name を operation tag に変換し、arguments の生 JSON を `Service::execute_json` に渡す。重複 field・未知 field の拒否、revision、idempotency、Undo、local path policy 等は service と共有する。成功の structuredContent は service result.value、失敗は `{ "status":"error", "error": ServiceError }` と isError: true。[対応2版の tools 契約](https://modelcontextprotocol.io/specification/2025-11-25/server/tools) に従い、両方で同じ structuredContent を serialize した TextContent も必ず返す。成功値への部分結果や代替値は加えない。未知 method / tool や不正な JSON-RPC envelope は protocol error、既知 tool の入力不正・実行失敗は tool error とする。
 
-作品を対象とする全操作は毎回 `project` を明示する（同期 render は `input.project`、render.submit は `render.input.project`）。省略は INVALID_REQUEST。接続は初期化状態だけを持ち、暗黙の current project / session、project.open tool、接続に跨る ProjectStore を持たない。`capabilities.get` は共有 API の空 payload `{}` のまま、対象作品を持たないグローバル discovery とする。編集 session_id は service payload に毎回明示する。
+作品を対象とする全操作は毎回 `project` を明示する（同期 render は `input.project`、render.submit は `render.input.project`）。省略は INVALID_REQUEST。接続は protocol の初期化状態・交渉版・active request control だけを持ち、暗黙の current project / session、project.open tool、接続に跨る ProjectStore を持たない。`capabilities.get` は共有 API の空 payload `{}` のまま、対象作品を持たないグローバル discovery とする。編集 session_id は service payload に毎回明示する。
 
 backend は CLI と同じ GPU 既定、`--backend gpu|cpu-reference` で明示選択する。GPU 不在時の暗黙 CPU fallback はない。同期 render.frame / render.sequence は既存 service 操作を公開する。JOB-001 が render.submit と job.*、接続寿命から独立した同じ binary の worker を追加した（[14 ジョブ](14-jobs.md)、[JOB-001 の検証](../testing/job-001.md)）。検証方法と境界は [MCP-001 の検証](../testing/mcp-001.md)。
 
@@ -298,6 +298,57 @@ cargo run -p kronello-mcp --locked -- --backend cpu-reference
 {"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}
 {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"project.info","arguments":{"project":"/private/tmp/demo.kronello"}}}
 ```
+
+## M3 MCP-002 の実装範囲
+
+詳細は [ADR-0064](../adr/0064-mcp-http-resources-and-request-control.md)、再現手順と実行記録は [MCP-002 の検証](../testing/mcp-002.md)。protocol 基準は固定した `2025-11-25`。`2025-06-18` と合わせて既存 initialize lifecycle を保持する。最新 `2026-07-28` は未対応で、その版の initialize は最新対応版 `2025-11-25` を返す。`server/discover` は `-32601` / `UNSUPPORTED_PROTOCOL_VERSION` と対応版一覧、対応外 HTTP version header は400を返す。
+
+### HTTP 接続と認証
+
+`kronello-mcp --http` は既定で `http://127.0.0.1:8765/mcp` を開く。`--bind IP:port` と `--auth-token-env NAME` は HTTP を選択し、非 loopback bind は明示 token がないと socket を開く前に失敗する。token は32 byte以上の可視 ASCII、全 method の `Authorization: Bearer ...` で照合する。loopback token は任意。資格情報を URL / CLI 引数 / protocol stdout に出さない。
+
+POST は `application/json` の単一 JSON-RPC message、Accept は `application/json,text/event-stream` の両方を必須とする。即時応答は JSON、service work の progress / response は POST SSE。notification は空 body の202。GET は405（独立 SSE stream なし）、DELETE は204で protocol session を閉じる。SSE replay、旧 HTTP+SSE、batch は未対応。
+
+initialize に `MCP-Session-Id` を返し、後続要求に必須とする。session 欠落400、未知 / 失効404。`MCP-Protocol-Version` は交渉版と一致させ、省略なら保存された交渉版を用いる。最大64 session、最終 HTTP request から30分の idle expiry。Ctrl-C は listener と request work を協調停止する。bind address と診断は stderr、HTTP stdout は空。
+
+Origin があれば全接続を403とし、browser allowlist / CORS は提供しない。loopback の Host は bind authority または同 port の localhost に制限する。非 loopback 運用の TLS terminator / network 制限は運用側が明示構成する。組込み TLS / OAuth / multi-user ACL はない。credential の保持者は共有 API を通して OS ユーザー権限の Project / asset / output を扱える。local token なしの endpoint は同じ host の信頼された client に限って使う。
+
+```sh
+cargo run -p kronello-mcp --locked -- --http --backend cpu-reference
+# 認証が必要な場合、外部で設定した KRONELLO_MCP_TOKEN を指定する
+cargo run -p kronello-mcp --locked -- --http --auth-token-env KRONELLO_MCP_TOKEN
+```
+
+### resource / prompt の schema と明示 Project
+
+| method / 対象 | 入力・結果 | 作品への作用 |
+|---|---|---|
+| `resources/list` | 空 params、global `kronello://schema/api-v1` 一つ | 作品探索なし |
+| `resources/read` schema | `{uri:"kronello://schema/api-v1"}` → `api_json_schema()` の JSON text / `application/schema+json` | Project 不要の global schema |
+| `resources/templates/list` | `/info` と `/snapshot` の二 template | Project 一覧や暗黙 target なし |
+| `resources/read` Project | `{uri:"kronello://project/{project}/info"}` または `/snapshot` → `ProjectInfo` / `ExportResult` の JSON text / `application/json` | project segment に UTF-8 local locator を一度だけ canonical percent encode。毎要求で明示 |
+| `prompts/list` | `inspect-project` 一つ、required argument `project:string` | 固定の template 一覧 |
+| `prompts/get` | `{name:"inspect-project",arguments:{project:"local.kronello"}}` → 固定 TextContent と別の EmbeddedResource | 指定 snapshot の読取りだけ。編集 / sampling を実行しない |
+
+list は非ページング、cursor は拒否する。typed params / prompt arguments の未知 field と全 JSON object の重複 member は拒否する。resource URI は既知 scheme / kind と canonical encoding を検査し、空 Project / 外部 URL / 任意 file fetch は拒否する。例えば `/absolute/demo.kronello` は `kronello://project/%2Fabsolute%2Fdemo.kronello/snapshot`。省略した Project を直前の要求から補わない。
+
+resource / prompt は共有 service の `with_read_only_inspection` を選択し、既存 `project.info` / `project.export` の同じ Request / Result 型で `ProjectStore::read_snapshot` を利用する。READ_ONLY / query_only、snapshot schema 検査、migration / checkpoint なし、作品内容・revision の書込みと writer / exclusive lock なし。SQLite reader lock と WAL / SHM sidecar 利用・作成はありうる。通常 CLI / tool の writable open/close、ForceSafe lock、sidecar cleanup 契約は維持する。
+
+素材・作品名・text / 字幕は instruction text に補間せず、別の resource の untrusted JSON data として返す。server は素材文字列を shell / FFmpeg / URL / model instruction として実行しない。返した data を model がどう解釈するかは client の責任で、prompt text に data 境界を明示する。
+
+### 要求の進捗と取り消し
+
+両 transport は同じ `Connection` dispatcher と共有 service registry / schema / typed results を利用する。最大3 service work を同時実行し、各 connection の outstanding work は最大32。active ID と active progress token の重複は `-32602`。integer / string ID は区別する。
+
+`_meta.progressToken` は string / integer。指定時だけ `notifications/progress` に同じ token を返し、受付0 / 処理完了1を通知する。`render.sequence` は共有 `ExecutionControl` と既存 renderer checkpoint で完了 frame 数 / total を通知する。中間通知は100 ms以上の間隔で間引き、通知値は厳密増加、最終値は保持する。完了・取消後の新しい通知はない。
+
+`notifications/cancelled.params.requestId` はその接続の in-flight 要求を照合する。未知 / 完了済み / initialize の取消は無応答。queued work は待機を解除して実行せず、service は dispatch 前、sequence は frame 境界と manifest 公開前に取り消しを確認し、部分出力を既存 OutputGuard で除去する。単一 frame / codec / transaction は途中で強制停止しない。取消後の response は抑制するが、先に送った response、commit 済み編集、最後の checkpoint 後の成果物、投入済み job は rollback しない。
+
+stdio EOF、HTTP DELETE / expiry、server shutdown は request work を協調停止する。HTTP POST stream の切断は cancellation とみなさない。どの接続終了・要求取消も `job.cancel` に変換しない。detached job は共有 ID で新接続から query / cancel する。
+
+### 採用しない capability
+
+tools (`listChanged:false`)、resources (`subscribe:false,listChanged:false`)、prompts (`listChanged:false`) のみを広告する。sampling、MCP tasks、elicitation、completion、resource subscription、list change notification は未対応で、client capability から有効化しない。該当 method は `-32601`、task を付けた tool call は `-32602`。共有 `render.submit` / `job.*` を MCP tasks と表示しない。将来採用する際も共有 service の権限・job 契約へ接続する。
 
 ## 安全性
 
