@@ -13,7 +13,7 @@
 | M0 | 0 | 0 | 6 | 0 | 6 |
 | M1 | 0 | 0 | 14 | 0 | 14 |
 | M2 | 0 | 1 | 10 | 0 | 11 |
-| M3 | 19 | 3 | 3 | 0 | 25 |
+| M3 | 18 | 4 | 3 | 0 | 25 |
 | M4 | 9 | 0 | 0 | 0 | 9 |
 | M5 | 5 | 0 | 0 | 0 | 5 |
 | M6 | 4 | 0 | 0 | 0 | 4 |
@@ -448,7 +448,7 @@
 
 ### NLE-002 動画Asset/Generator ClipとTimeline編集の拡張
 
-- 優先度: P1 / 領域: timeline / 状態: planned
+- 優先度: P1 / 領域: timeline / 状態: in_progress
 - 依存: NLE-001, MEDIA-001, FX-001
 - 受け入れ条件:
   - 動画Asset Clipを明示stream・source_in・TimeMapで描画し、CFR/VFR/B-frameの正確なseekと配置境界、異なる配置の独立性を検証する
