@@ -666,7 +666,7 @@
       "priority": "P1",
       "area": "ffi",
       "title": "kronello-ffi: ネイティブGUI向けCommand/Query境界",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "API-001"
       ],

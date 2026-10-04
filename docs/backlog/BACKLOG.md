@@ -13,7 +13,7 @@
 | M0 | 0 | 0 | 6 | 0 | 6 |
 | M1 | 0 | 0 | 14 | 0 | 14 |
 | M2 | 0 | 1 | 10 | 0 | 11 |
-| M3 | 19 | 3 | 1 | 0 | 23 |
+| M3 | 19 | 2 | 2 | 0 | 23 |
 | M4 | 8 | 0 | 0 | 0 | 8 |
 | M5 | 5 | 0 | 0 | 0 | 5 |
 | M6 | 4 | 0 | 0 | 0 | 4 |
@@ -382,7 +382,7 @@
 
 ### FFI-001 kronello-ffi: ネイティブGUI向けCommand/Query境界
 
-- 優先度: P1 / 領域: ffi / 状態: in_progress
+- 優先度: P1 / 領域: ffi / 状態: done
 - 依存: API-001
 - 受け入れ条件:
   - SwiftからCommand/Query APIを呼び、CLIと同じrevision/eventへ到達する
