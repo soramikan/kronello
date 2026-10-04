@@ -1,6 +1,6 @@
 # 08 API・CLI・MCP・エージェント
 
-GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001-shared-command-query-api.md)）。M1 CLI-001 と M2 SERVICE-001 / API-001 / TEMPLATE-001 / MEDIA-001 / MCP-001 / NLE-001 / JOB-001 の実装範囲を次節に示す。それ以外の後続 API・CLI は提案であり、実装済みではない。
+GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001-shared-command-query-api.md)）。M1 CLI-001 と M2 SERVICE-001 / API-001 / TEMPLATE-001 / MEDIA-001 / MCP-001 / NLE-001 / JOB-001 と M3 EXPR-001 の実装範囲を次節に示す。それ以外の後続 API・CLI は提案であり、実装済みではない。
 
 ## M1 CLI-001 の実装範囲
 
@@ -61,6 +61,18 @@ printf '%s\n' '{"operation":"project.export","project":"/private/tmp/kronello-m1
 
 受け入れテストは `crates/kronello-cli/tests/machine.rs`。built binary を起動し、stdout 全体の JSON parse、非 0 exit と stderr 診断、create / import / export / info、revision conflict / lock、font 欠落 / hash、未対応機能、CPU 連番を検証する。GPU を必要とするテストは `gpu_headless_default_backend_animated_shape_japanese_text_sequence`。service は `Service::with_backend(&dyn RenderBackend)` で backend を注入でき、CLI 固有の作品状態は持たない。 CPU と Apple M1 / Metal の実行結果は [CLI-001 の検証](../testing/cli-001.md) に記録する。
 
+## M3 EXPR-001 の実装範囲
+
+`edit.plan/apply` の `commands` に `{"expression_set":{"expression":Expression}}` を追加した。同じ batch 内で既存の `{"property_source_set":{"object":"UUID","property":"UUID","source":{"kind":"expression","value":"Expression UUID"}}}` を使う。capabilities の features に `expression` を追加した。操作 registry の追加はなく、CLI の `edit plan/apply`、MCP の同名 tool が同じ型付き command を解釈する。
+
+Expression は `{"id":"UUID","version":1,"value_type":"scalar","budget":{"instructions":4096,"memory_bytes":1048576,"samples":64,"nodes":1024,"dependencies":64},"nodes":[{"literal":{"kind":"scalar","value":0.4}}]}` の形。budget の省略時はこの既定値。Project の `expressions` は省略可能な `DocumentObject<Expression>` 配列として保存する。公開 project / API schema は Rust 型から再生成する。
+
+AST node は externally tagged の一要素 object。`"time"` は unit variant、`{"property":{"node":"Node UUID または null","property":"Property UUID","value_type":"scalar"}}` は authored scope の静的参照、`{"curve_sample":{"curve":"Curve UUID","offset":{"num":"1","den":"4"},"value_type":"scalar"}}` は明示した Curve sample。`add/subtract/multiply/divide` は `{left,right}`、`clamp` は `{value,min,max}`、`lerp` は `{from,to,amount}`、`sin` は `{input}`、`vec2/vec3` は `{x,y[,z]}`、`angle` は `{degrees}`、`noise` は `{seed,element,input}` を持つ。operand は先行 node の u32 index で、nodes は operand 順の postorder 木、最後が root。人間向け構文は未定義。
+
+候補は AST 型と参照 / 依存 DAG を検証する。新しい `EXPRESSION_BUDGET_EXCEEDED` に加え、`EVALUATION_ERROR`、経路付き `PROPERTY_DEPENDENCY_CYCLE`、`UNSUPPORTED_FEATURE` が sample / render / 編集検証から伝播する。編集対象や source catalog の不適合には既存 `INVALID_EDIT` を使う。禁止能力や未知 field を command に含めた場合は `INVALID_REQUEST`。revision / idempotency / Undo は既存の transaction 契約を使う。式の root ごとに同じ予算を適用し、最終レンダーは式の失敗時に停止する。RenderSnapshot の `semantic_versions.expression` と Project 内の AST を固定し、現在文書へ読み替えない。
+
+詳細は [ADR-0058](../adr/0058-bounded-canonical-expression-ast.md)、検証結果は [EXPR-001](../testing/expr-001.md) を参照する。DataAsset / 動的 Property sample / 人間向け parser は未実装。
+
 ## M2 SERVICE-001 の実装範囲
 
 `kronello-service` に次の四つの同期操作を追加した。CLI は既存と同じ stdin JSON / `--request-json` の transport を使い、編集状態・競合規則を持たない。公開 envelope の schema は後述の API-001 で正式化した。GUI の入口は後続タスク、MCP stdio は後述の MCP-001 で実装した。
@@ -96,7 +108,7 @@ printf '%s\n' '{"operation":"project.export","project":"/private/tmp/kronello-m1
 | `composition_create` | 完全な Composition の `composition`。既存 ID は拒否 |
 | `instance_place` | `composition`、CompositionInstance kind の SceneNode の `node`、`index`。definition・入力・TimeMap・seed は共有モデル型 |
 
-生の patch、inverse、changed_keys をクライアントから受け付けない。Expression の設定、Modifier 編集、ジョブは SERVICE-001 の実装対象外。Timeline 編集とテンプレートの公開入力 policy は後述の NLE-001 / TEMPLATE-001 で追加した。opaque / 未知意味版の通常編集は引き続き保守的に `UNSUPPORTED_FEATURE` として拒否する。
+生の patch、inverse、changed_keys をクライアントから受け付けない。Modifier 編集、ジョブは SERVICE-001 の実装対象外。Expression の設定は後述の EXPR-001 で追加した。Timeline 編集とテンプレートの公開入力 policy は後述の NLE-001 / TEMPLATE-001 で追加した。opaque / 未知意味版の通常編集は引き続き保守的に `UNSUPPORTED_FEATURE` として拒否する。
 
 ### 計画・適用と receipt
 
@@ -126,7 +138,7 @@ Undo は対象 Event の保存 inverse を現在文書に適用した候補を�
 | `UNDO_CONFLICT` | 後続の未取り消し Event とキーが重なる。details に Event ID とキー |
 | `EVENT_NOT_FOUND` | Undo の対象 Event が存在しない、または compact 済み |
 | `EVENT_ALREADY_UNDONE` | 対象 Event は既に取り消されている。Redo はその Undo Event を指定 |
-| `UNSUPPORTED_FEATURE` | Expression の設定、opaque / 未知意味版の通常編集 |
+| `UNSUPPORTED_FEATURE` | opaque / 未知意味版の通常編集 |
 
 既存の `PROJECT_NOT_FOUND` / `PROJECT_LOCKED` / `STORAGE_ERROR` / `IO_ERROR` 等も伝播する。これらの受け入れ条件と再現コマンドは [SERVICE-001 の検証](../testing/service-001.md) に記録する。
 
@@ -146,7 +158,7 @@ INTEGRATION-001 / [ADR-0053](../adr/0053-integration-evaluated-queries-and-rende
 
 scene の key は `{instance_path, node}`。expand_instances を指定すると、placement の authored children より前に参照 definition の roots を展開する。同じ definition の二配置は NodeId が同じでも InstancePath が異なる。definition root の所有親と、明示変換親のない内部 node の変換親は enclosing placement となる。active_range は各 definition の local time の値を保持し、時刻による絞り込みや祖先との区間交差はしない。展開を含む最大 node 数は100000で、超過は `INVALID_REQUEST`。範囲・タグ・種類による検索、scene ページング、評価済み transform の返却は未実装。
 
-sample key は `{ "kind":"node", "instance_path":[], "node":"UUID", "property":"UUID" }` または `{ "kind":"composition", "instance_path":[], "composition":"UUID", "property":"UUID" }`。root composition は要求に明示し、各 path はそこから解決する。time は `{ "num":"1", "den":"2" }` の有理数。keys / times は非空で、その積は100000以下。評価には `kronello-eval` を使い、時刻をフレームに丸めない。composition input は placement override と local TimeMap を含めて解決する。欠落 key・無効時刻・式・有効な Modifier 等の未対応評価を代替値で継続せず、`INVALID_REQUEST` / `EVALUATION_ERROR` / `UNSUPPORTED_FEATURE` 等を返す。units は共有 descriptor の `design_px` / `degrees` / `dimensionless`。
+sample key は `{ "kind":"node", "instance_path":[], "node":"UUID", "property":"UUID" }` または `{ "kind":"composition", "instance_path":[], "composition":"UUID", "property":"UUID" }`。root composition は要求に明示し、各 path はそこから解決する。time は `{ "num":"1", "den":"2" }` の有理数。keys / times は非空で、その積は100000以下。評価には `kronello-eval` を使い、時刻をフレームに丸めない。composition input は placement override と local TimeMap を含めて解決する。欠落 key・無効時刻・式の失敗・有効な Modifier 等の未対応評価を代替値で継続せず、`INVALID_REQUEST` / `EVALUATION_ERROR` / `UNSUPPORTED_FEATURE` 等を返す。units は共有 descriptor の `design_px` / `degrees` / `dimensionless`。
 
 capabilities はコンパイル済み対応範囲を示し、GPU adapter の稼働を保証しない。effects の列挙はこの実装では空。media は MEDIA-001 の `MediaRuntime::load` で実際に読み込んだ FFmpeg の情報を返す。既存の runtime_version / decoders / encoders / hwaccels に加え、schema_version、ffmpeg_version、library_directory、substituted、全 libraries の version / license / configuration、codecs の encoder / decoder / hardware、distribution_eligible、development_only を含む。`Service::with_media_capabilities(MediaCapabilities)` で明示したレポートを渡す場合は再検出しない。未指定時の FFmpeg の欠落・不正な override・ABI 不一致は `FFMPEG_UNAVAILABLE` とし、null や既定ライブラリへ暗黙に戻さない。物理 hardware の稼働保証と配布適格性は区別する（[ADR-0048](../adr/0048-media-native-build-and-asset-verification.md)）。
 

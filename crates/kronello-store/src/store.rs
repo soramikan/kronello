@@ -115,7 +115,12 @@ impl Mutation {
                     if depth == 0
                         && matches!(
                             part.as_str(),
-                            "shapes" | "texts" | "templates" | "template_instances" | "sequences"
+                            "expressions"
+                                | "shapes"
+                                | "texts"
+                                | "templates"
+                                | "template_instances"
+                                | "sequences"
                         )
                         && !object.contains_key(part)
                     {

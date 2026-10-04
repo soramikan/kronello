@@ -9,6 +9,49 @@ use sha2::{Digest, Sha256};
 fn document() -> Value {
     serde_json::from_str(include_str!("../../../examples/m1-demo.project.json")).unwrap()
 }
+
+#[test]
+fn expression_commands_and_samples_use_the_shared_cli_api() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("expression.kronello");
+    let doc = document();
+    call(
+        &["project", "create"],
+        json!({"project":path,"document":doc}),
+        true,
+    );
+    let c = &doc["compositions"][0];
+    let node = &c["nodes"][0];
+    let property = node["properties"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["descriptor"]["key"] == "kronello.opacity")
+        .unwrap();
+    let id = "173087e0-c21b-43de-9371-8e1da051095a";
+    let commands = json!([
+        {"expression_set":{"expression":{"id":id,"version":1,"value_type":"scalar","nodes":[{"literal":{"kind":"scalar","value":0.4}}]}}},
+        {"property_source_set":{"object":node["id"],"property":property["id"],"source":{"kind":"expression","value":id}}}
+    ]);
+    let planned = call(
+        &["edit", "plan"],
+        json!({"project":path,"base_revision":"1","commands":commands}),
+        true,
+    );
+    let payload = json!({"project":path,"base_revision":"1","commands":commands,"plan_hash":planned["result"]["value"]["plan_hash"],"session_id":"96607679-eefd-407a-a3a8-59943f2bd82f","idempotency_key":"expression"});
+    let applied = call(&["edit", "apply"], payload.clone(), true);
+    assert_eq!(call(&["edit", "apply"], payload, true), applied);
+    let samples = call(
+        &["property", "sample"],
+        json!({"project":path,"composition":c["id"],"keys":[{"kind":"node","instance_path":[],"node":node["id"],"property":property["id"]}],"times":[{"num":"1","den":"2"}]}),
+        true,
+    );
+    assert_eq!(samples["result"]["value"]["revision"], "2");
+    assert_eq!(
+        samples["result"]["value"]["samples"][0]["values"][0],
+        json!({"kind":"scalar","value":0.4})
+    );
+}
 #[test]
 fn example_conforms_to_public_schema_and_pins_fixture() {
     let schema: Value =

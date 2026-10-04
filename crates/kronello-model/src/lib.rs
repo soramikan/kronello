@@ -8,6 +8,7 @@ mod builtin;
 mod composition;
 mod curve;
 mod error;
+mod expression;
 mod id;
 mod property;
 mod schema;
@@ -26,6 +27,10 @@ pub use curve::{
     Keyframe, TimeBezier,
 };
 pub use error::{JsonError, ModelError, from_json};
+pub use expression::{
+    EXPRESSION_VERSION, Expression, ExpressionBudget, ExpressionDependency, ExpressionError,
+    ExpressionNode, expression_value_bytes,
+};
 pub use id::{
     AssetId, ClipId, CompositionId, CompositionInstanceId, ContentId, CurveId, DescriptorId,
     ExpressionId, ModifierId, NodeId, PropertyId, SchemaKey, SequenceId, TrackId,

@@ -6,7 +6,7 @@
     "assets": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject7"
+        "$ref": "#/$defs/DocumentObject8"
       }
     },
     "compositions": {
@@ -19,6 +19,12 @@
       "type": "array",
       "items": {
         "$ref": "#/$defs/DocumentObject2"
+      }
+    },
+    "expressions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DocumentObject3"
       }
     },
     "id": {
@@ -42,31 +48,31 @@
     "sequences": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject8"
+        "$ref": "#/$defs/DocumentObject9"
       }
     },
     "shapes": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject3"
+        "$ref": "#/$defs/DocumentObject4"
       }
     },
     "template_instances": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject6"
+        "$ref": "#/$defs/DocumentObject7"
       }
     },
     "templates": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject5"
+        "$ref": "#/$defs/DocumentObject6"
       }
     },
     "texts": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject4"
+        "$ref": "#/$defs/DocumentObject5"
       }
     }
   },
@@ -498,7 +504,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/Shape"
+          "$ref": "#/$defs/Expression"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -509,7 +515,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/TextDocument"
+          "$ref": "#/$defs/Shape"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -520,7 +526,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/TemplateDefinition"
+          "$ref": "#/$defs/TextDocument"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -531,7 +537,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/TemplateInstance"
+          "$ref": "#/$defs/TemplateDefinition"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -542,7 +548,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/Asset"
+          "$ref": "#/$defs/TemplateInstance"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -550,6 +556,17 @@
       ]
     },
     "DocumentObject8": {
+      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Asset"
+        },
+        {
+          "$ref": "#/$defs/OpaqueObject"
+        }
+      ]
+    },
+    "DocumentObject9": {
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
@@ -660,10 +677,508 @@
         }
       ]
     },
+    "Expression": {
+      "type": "object",
+      "properties": {
+        "budget": {
+          "$ref": "#/$defs/ExpressionBudget",
+          "default": {
+            "dependencies": 64,
+            "instructions": 4096,
+            "memory_bytes": 1048576,
+            "nodes": 1024,
+            "samples": 64
+          }
+        },
+        "id": {
+          "$ref": "#/$defs/ExpressionId"
+        },
+        "nodes": {
+          "description": "Ordered postorder tree; the last node is the root. No sharing or dead nodes.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExpressionNode"
+          }
+        },
+        "value_type": {
+          "$ref": "#/$defs/ValueType"
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "value_type",
+        "nodes"
+      ]
+    },
+    "ExpressionBudget": {
+      "type": "object",
+      "properties": {
+        "dependencies": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "instructions": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "memory_bytes": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "nodes": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "samples": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "instructions",
+        "memory_bytes",
+        "samples",
+        "nodes",
+        "dependencies"
+      ]
+    },
     "ExpressionId": {
       "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
       "type": "string",
       "format": "uuid"
+    },
+    "ExpressionNode": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "literal": {
+              "$ref": "#/$defs/Value"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "literal"
+          ]
+        },
+        {
+          "description": "Seconds in the authored source scope, after its rational time mapping.",
+          "type": "string",
+          "const": "time"
+        },
+        {
+          "description": "Stable property in the authored source scope; None means composition input.",
+          "type": "object",
+          "properties": {
+            "property": {
+              "type": "object",
+              "properties": {
+                "node": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/NodeId"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "property": {
+                  "$ref": "#/$defs/PropertyId"
+                },
+                "value_type": {
+                  "$ref": "#/$defs/ValueType"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "property",
+                "value_type"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "property"
+          ]
+        },
+        {
+          "description": "Explicit rational offset; no dynamic property sampling or recursion.",
+          "type": "object",
+          "properties": {
+            "curve_sample": {
+              "type": "object",
+              "properties": {
+                "curve": {
+                  "$ref": "#/$defs/CurveId"
+                },
+                "offset": {
+                  "$ref": "#/$defs/Rational"
+                },
+                "value_type": {
+                  "$ref": "#/$defs/ValueType"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "curve",
+                "offset",
+                "value_type"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "curve_sample"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "add": {
+              "type": "object",
+              "properties": {
+                "left": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "right": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "left",
+                "right"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "add"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "subtract": {
+              "type": "object",
+              "properties": {
+                "left": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "right": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "left",
+                "right"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "subtract"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "multiply": {
+              "type": "object",
+              "properties": {
+                "left": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "right": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "left",
+                "right"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "multiply"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "divide": {
+              "type": "object",
+              "properties": {
+                "left": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "right": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "left",
+                "right"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "divide"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "clamp": {
+              "type": "object",
+              "properties": {
+                "max": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "min": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "value": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "value",
+                "min",
+                "max"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "clamp"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "lerp": {
+              "type": "object",
+              "properties": {
+                "amount": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "from": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "to": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "from",
+                "to",
+                "amount"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "lerp"
+          ]
+        },
+        {
+          "description": "Radians, explicitly dimensionless scalar input.",
+          "type": "object",
+          "properties": {
+            "sin": {
+              "type": "object",
+              "properties": {
+                "input": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "input"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "sin"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "vec2": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "y": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "x",
+                "y"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "vec2"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "vec3": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "y": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "z": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "x",
+                "y",
+                "z"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "vec3"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "angle": {
+              "type": "object",
+              "properties": {
+                "degrees": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "degrees"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "angle"
+          ]
+        },
+        {
+          "description": "Fixed hash noise in [-1, 1], keyed by seed, instance, element and input.",
+          "type": "object",
+          "properties": {
+            "noise": {
+              "type": "object",
+              "properties": {
+                "element": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "input": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "seed": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "seed",
+                "element",
+                "input"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "noise"
+          ]
+        }
+      ]
     },
     "Fill": {
       "type": "object",

@@ -751,7 +751,7 @@ fn sampling_resolves_composition_inputs_placement_bindings_and_local_time() {
 }
 
 #[test]
-fn unsupported_expression_and_enabled_modifier_fail_without_partial_samples() {
+fn missing_expression_and_enabled_modifier_fail_without_partial_samples() {
     for expression in [false, true] {
         let mut json = serde_json::to_value(fixture()).unwrap();
         if expression {
@@ -780,7 +780,14 @@ fn unsupported_expression_and_enabled_modifier_fail_without_partial_samples() {
                 keys: vec![key],
             }))
             .unwrap_err();
-        assert_eq!(error.code, "UNSUPPORTED_FEATURE");
+        assert_eq!(
+            error.code,
+            if expression {
+                "EVALUATION_ERROR"
+            } else {
+                "UNSUPPORTED_FEATURE"
+            }
+        );
     }
 }
 

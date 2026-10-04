@@ -60,22 +60,28 @@ T(position) * R(rotation) * K(skew) * S(scale) * T(-anchor)
 
 ### EVAL-001 の実装規約
 
-純粋 crate `kronello-eval` の `EvaluationSnapshot` は Composition / Curve / descriptor と評価側の依存宣言を借用する。`DependencyGraph::compile` は配置ごとにグラフを構築し、`evaluate_property` / `evaluate_properties` / `evaluate_scene` は呼び出し内だけのメモ化で任意の有理数時刻を評価する。保存・版・資産 lock の互換性検証は、この型付き入力を生成する呼び出し側の責務であり、保存層への依存や最新 Project の暗黙参照は持たない。
+純粋 crate `kronello-eval` の `EvaluationSnapshot` は Composition / Curve / Expression / descriptor と評価側の依存宣言を借用する。`DependencyGraph::compile` は配置ごとにグラフを構築し、`evaluate_property` / `evaluate_properties` / `evaluate_scene` は呼び出し内だけのメモ化で任意の有理数時刻を評価する。保存・版・資産 lock の互換性検証は、この型付き入力を生成する呼び出し側の責務であり、保存層への依存や最新 Project の暗黙参照は持たない。
 
 - ノードの実行時キーは既存 `PropertyKey`（`InstancePath`, `NodeId`, `PropertyId`）を使う。所有 Node のない Composition 入力は `RuntimePropertyKey::Composition`（`InstancePath`, `CompositionId`, `PropertyId`）として区別し、仮の NodeId は生成しない。
-- 保存された `PropertySource` は Constant / Curve / Expression のまま保つ。評価側だけの `ReferenceBindings` は既存の配置入力束縛を親スコープの Property 参照で上書きし、型・単位・座標空間を照合する。`DependencyDeclarations` は一般の静的依存辺を表し、将来 EXPR-001 が AST から生成する接続点とする。AST 自体を実行する機能ではない。循環は閉じた全実行時キー経路を持つ `DependencyCycle` として報告する。
-- 定義の Curve は配置の `local_time_map` を親から順に適用したローカル時刻で評価する。配置に記された入力束縛の Curve は、その束縛を記した親 Composition の時刻で評価する。`sample_in_space` に作業用線形色空間（descriptor の指定があればそれ）を渡し、値源・参照束縛の結果を `validate_final_value` で検証する。Expression、有効な未実装 Modifier、未知の補間版は `UNSUPPORTED_FEATURE` とする。無効な Modifier は実行しない。
+- 保存された `PropertySource` は Constant / Curve / Expression のまま保つ。評価側だけの `ReferenceBindings` は既存の配置入力束縛を親スコープの Property 参照で上書きし、型・単位・座標空間を照合する。`DependencyDeclarations` は Layout 等の追加の静的依存辺を表す。EXPR-001 の Property 辺は AST から直接生成する。循環は閉じた全実行時キー経路を持つ `DependencyCycle` として報告する。
+- 定義の Curve は配置の `local_time_map` を親から順に適用したローカル時刻で評価する。配置に記された入力束縛の Curve は、その束縛を記した親 Composition の時刻で評価する。`sample_in_space` に作業用線形色空間（descriptor の指定があればそれ）を渡し、値源・参照束縛の結果を `validate_final_value` で検証する。有効な未実装 Modifier、未知の補間版は `UNSUPPORTED_FEATURE` とする。無効な Modifier は実行しない。
 - `EvaluatedScene` は containment の `root_nodes` / `child_order` による前順序で配置を展開する。Group / Null / CompositionInstance の枠と containment 親、ローカル opacity、各配置の入力値を保持し、後続 RENDER-001 が隔離合成を判断できる。配置の内部ルートは配置枠の直後、配置自身の所有する子より先に並ぶ。`active_range` は各スコープのローカル時刻に対する `[start, end)` で判定し、非アクティブな所有親の子・配置内容は展開しない。
 - 変換は既存 builtin descriptor の既定値を使い、`T(position)*R(rotation)*K(skew)*S(scale)*T(-anchor)` を計算する。`K(skew)` は度で指定する X shear（`x' = x + tan(skew)*y`, `y' = y`）とする。world 変換は `transform_parent` の鎖と外側の配置変換を継承し、containment や描画順から導出しない。非アクティブな transform 親も必要な変換値を供給する。計算で非有限の行列が生じた場合は型付きエラーとする。
 - 通常テストで 257 個の有理数時刻、Property 要求順、ノード保存順の順方向・逆順・固定 seed のシャッフルを比較する。入れ子の時刻変換、参照束縛、自己循環・複数 Property / 配置間の循環、半開区間、未対応機能、最終値の型・範囲、変換行列を検証する。
 
 ## 式
 
-最初は型付き AST と許可された組み込み関数で実装する。式の正本は常に AST である。
+EXPR-001 は `kronello-model::Expression` の型付き AST と `kronello-eval` の予算付き評価を実装した。式の正本は常に AST である。実装契約は [ADR-0058](../adr/0058-bounded-canonical-expression-ast.md)、証拠は [検証記録](../testing/expr-001.md) を参照する。
+
+AST は `id / version / value_type / budget / nodes` を保存する。nodes は operand 順の正規 postorder 木で、最後が root。先行 node index のみ参照し、共有・未使用 node を拒否する。Literal、Time、Scalar の加減乗除 / Clamp / Lerp / Sin、Vec2 / Vec3 / Angle の構築、固定 seed Noise、静的 Property 参照、CurveSample の有理数 offset を実装した。Property 参照の型・unit・coordinate space を静的検証し、既存 DAG へ辺を追加する。定義の値源は配置のローカル scope、placement binding の値源は親 scope で評価する。
+
+既定かつ上限は 1024 nodes、64 参照先、4096 命令、1048576 bytes の保守的一時メモリ、64 sample 要求。budget は上限を下げられる。同じ要求 Property の transitive dependency closure にも既定上限を課し、batch の各 root は独立に評価する。式の失敗は `EVALUATION_ERROR`、予算超過は `EXPRESSION_BUDGET_EXCEEDED`、循環は経路付き `PROPERTY_DEPENDENCY_CYCLE`、未知版は `UNSUPPORTED_FEATURE`。Property.sample と render は同じ評価器を使い、代替値を返さない。
+
+DataAsset 参照、動的な過去 Property sample、連続補間 noise は未実装。保存された未知能力は opaque に保持できるが実行しない。
 
 人間向けには、中置演算と関数呼び出しだけの小さな式言語を後から追加する（[ADR-0040](../adr/0040-expression-language-policy.md)）。文・ループ・代入は持たず、AST と一対一に往復でき、JavaScript 互換にはしない。構文の詳細は未決（[OQ-17](../open-questions.md)）。
 
-対象とする機能:
+設計上の対象（上記に未実装範囲を明記）:
 
 - 演算、clamp、lerp、周期関数
 - 固定 seed の noise
@@ -91,8 +97,8 @@ T(position) * R(rotation) * K(skew) * S(scale) * T(-anchor)
 
 ### 乱数と決定性
 
-`random(seed, instance_id, element_id)` は評価呼び出し順に依存させない。
-時間変化する noise は時刻を明示引数とする。
+固定 seed、InstancePath、element、明示した Scalar input による Noise は評価呼び出し順に依存させない。
+時間変化する noise は Time node 等の明示した input を使う。
 異なる GPU / CPU 間の浮動小数点まで無条件にビット一致するとは約束しない。
 
 ### 自己参照と失敗

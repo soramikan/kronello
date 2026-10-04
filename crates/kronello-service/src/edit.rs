@@ -23,6 +23,9 @@ use uuid::Uuid;
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum EditCommand {
     Timeline(Box<crate::TimelineCommand>),
+    ExpressionSet {
+        expression: kronello_model::Expression,
+    },
     Template(Box<crate::TemplateCommand>),
     PropertySourceSet {
         object: Uuid,
@@ -191,8 +194,11 @@ impl SourceResolver for Catalog<'_> {
             _ => None,
         })
     }
-    fn expression_value_type(&self, _: ExpressionId) -> Option<ValueType> {
-        None
+    fn expression_value_type(&self, id: ExpressionId) -> Option<ValueType> {
+        self.0.expressions.iter().find_map(|e| match e {
+            DocumentObject::Known(e) if e.id == id => Some(e.value_type),
+            _ => None,
+        })
     }
 }
 pub(crate) fn validate(project: &Project) -> Result<(), ServiceError> {
@@ -214,6 +220,10 @@ pub(crate) fn validate(project: &Project) -> Result<(), ServiceError> {
     object_ids.extend(project.curves.iter().filter_map(|c| match c {
         DocumentObject::Known(c) => Some(c.id().as_uuid()),
         DocumentObject::Opaque(_) => None,
+    }));
+    object_ids.extend(project.expressions.iter().filter_map(|e| match e {
+        DocumentObject::Known(e) => Some(e.id.as_uuid()),
+        _ => None,
     }));
     object_ids.extend(project.shapes.iter().filter_map(|s| match s {
         DocumentObject::Known(s) => Some(s.id.as_uuid()),
@@ -273,6 +283,43 @@ pub(crate) fn validate(project: &Project) -> Result<(), ServiceError> {
                 }
             }
         }
+    }
+    let expressions: Vec<_> = project
+        .expressions
+        .iter()
+        .filter_map(|e| match e {
+            DocumentObject::Known(e) => Some(e.clone()),
+            _ => None,
+        })
+        .collect();
+    for e in &expressions {
+        e.validate()
+            .map_err(|e| ServiceError::new(e.code(), e.to_string()))?;
+    }
+    let curves: Vec<_> = project
+        .curves
+        .iter()
+        .filter_map(|c| match c {
+            DocumentObject::Known(c) => Some(c.clone()),
+            _ => None,
+        })
+        .collect();
+    let refs = Default::default();
+    let deps = Default::default();
+    for c in &compositions {
+        kronello_eval::DependencyGraph::compile(
+            kronello_eval::EvaluationSnapshot {
+                compositions: &compositions,
+                curves: &curves,
+                expressions: &expressions,
+                registry: &r,
+                reference_bindings: &refs,
+                dependencies: &deps,
+                working_space: kronello_model::ColorSpace::LinearRec709,
+            },
+            c.id,
+        )
+        .map_err(|e| ServiceError::new(e.code(), e.to_string()))?;
     }
     Ok(())
 }
@@ -391,6 +438,47 @@ fn apply_command(
     keys: &mut BTreeSet<ChangedKey>,
 ) -> Result<(), ServiceError> {
     match command {
+        EditCommand::ExpressionSet { expression } => {
+            expression
+                .validate()
+                .map_err(|e| ServiceError::new(e.code(), e.to_string()))?;
+            structure(keys, expression.id.as_uuid(), expression.id.as_uuid());
+            for (object, p) in properties(project) {
+                if p.source() == &PropertySource::Expression(expression.id) {
+                    keys.insert(ChangedKey::Value {
+                        object_id: object,
+                        property_id: p.id(),
+                    });
+                }
+            }
+            for c in &project.compositions {
+                if let DocumentObject::Known(c) = c {
+                    for n in &c.nodes {
+                        if let NodeKind::CompositionInstance(i) = &n.kind {
+                            for (property, source) in &i.input_bindings {
+                                if source == &PropertySource::Expression(expression.id) {
+                                    keys.insert(ChangedKey::Value {
+                                        object_id: n.id.as_uuid(),
+                                        property_id: *property,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if let Some(existing) = project
+                .expressions
+                .iter_mut()
+                .find(|e| matches!(e, DocumentObject::Known(e) if e.id == expression.id))
+            {
+                *existing = DocumentObject::Known(expression.clone());
+            } else {
+                project
+                    .expressions
+                    .push(DocumentObject::Known(expression.clone()));
+            }
+        }
         EditCommand::Timeline(command) => crate::nle::mutate(project, command, keys)?,
         EditCommand::Template(command) => crate::template::mutate(project, command, keys)?,
         EditCommand::PropertySourceSet {
@@ -399,11 +487,8 @@ fn apply_command(
             source,
             curve,
         } => {
-            if matches!(source, PropertySource::Expression(_)) {
-                return Err(ServiceError::new(
-                    "UNSUPPORTED_FEATURE",
-                    "expression edits are not implemented",
-                ));
+            if let PropertySource::Expression(id) = source {
+                structure(keys, id.as_uuid(), id.as_uuid());
             }
             if let Some(curve) = curve {
                 if source != &PropertySource::Curve(curve.id()) {
@@ -613,6 +698,9 @@ fn apply_command(
 }
 fn node_references(node: &SceneNode, keys: &mut BTreeSet<ChangedKey>) {
     for p in &node.properties {
+        if let PropertySource::Expression(id) = p.source() {
+            structure(keys, id.as_uuid(), id.as_uuid());
+        }
         if let PropertySource::Curve(id) = p.source() {
             structure(keys, id.as_uuid(), id.as_uuid());
         }
@@ -624,6 +712,9 @@ fn node_references(node: &SceneNode, keys: &mut BTreeSet<ChangedKey>) {
         NodeKind::CompositionInstance(i) => {
             structure(keys, i.definition_ref.as_uuid(), i.definition_ref.as_uuid());
             for source in i.input_bindings.values() {
+                if let PropertySource::Expression(id) = source {
+                    structure(keys, id.as_uuid(), id.as_uuid());
+                }
                 if let PropertySource::Curve(id) = source {
                     structure(keys, id.as_uuid(), id.as_uuid());
                 }
@@ -655,7 +746,7 @@ fn unordered_collection(path: &[String]) -> bool {
     match path {
         [collection] => matches!(
             collection.as_str(),
-            "compositions" | "curves" | "shapes" | "texts" | "sequences"
+            "compositions" | "curves" | "expressions" | "shapes" | "texts" | "sequences"
         ),
         [compositions, _, collection] if compositions == "compositions" => {
             matches!(collection.as_str(), "nodes" | "properties")
@@ -681,7 +772,12 @@ fn diff(old: &Json, new: &Json, path: &mut Vec<String>, out: &mut Vec<Mutation>)
                     if path.len() == 1
                         && matches!(
                             key.as_str(),
-                            "shapes" | "texts" | "templates" | "template_instances" | "sequences"
+                            "expressions"
+                                | "shapes"
+                                | "texts"
+                                | "templates"
+                                | "template_instances"
+                                | "sequences"
                         )
                     {
                         diff(value, &Json::Array(vec![]), path, out);
@@ -697,7 +793,12 @@ fn diff(old: &Json, new: &Json, path: &mut Vec<String>, out: &mut Vec<Mutation>)
                     if path.len() == 1
                         && matches!(
                             key.as_str(),
-                            "shapes" | "texts" | "templates" | "template_instances" | "sequences"
+                            "expressions"
+                                | "shapes"
+                                | "texts"
+                                | "templates"
+                                | "template_instances"
+                                | "sequences"
                         )
                     {
                         diff(&Json::Array(vec![]), value, path, out);

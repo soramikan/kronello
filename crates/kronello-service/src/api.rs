@@ -150,6 +150,7 @@ impl CapabilitiesResult {
                 "composition_instance",
                 "constant",
                 "curve",
+                "expression",
                 "selective_undo",
                 "template",
             ]

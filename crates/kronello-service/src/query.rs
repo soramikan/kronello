@@ -342,11 +342,21 @@ pub(crate) fn sample(r: PropertySampleRequest) -> Result<PropertySampleResult, S
             _ => None,
         })
         .collect();
+    let expressions: Vec<_> = snapshot
+        .document
+        .expressions
+        .iter()
+        .filter_map(|e| match e {
+            DocumentObject::Known(e) => Some(e.clone()),
+            _ => None,
+        })
+        .collect();
     let registry = edit::registry();
     let references = Default::default();
     let dependencies = Default::default();
     let graph = DependencyGraph::compile(
         EvaluationSnapshot {
+            expressions: &expressions,
             compositions: &compositions,
             curves: &curves,
             registry: &registry,
