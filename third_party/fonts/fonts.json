@@ -1,0 +1,21 @@
+{
+  "note": "UI fonts bundled with the macOS app (SIL OFL 1.1). Fetched by scripts/fetch_ui_fonts.py; the font binaries are not committed.",
+  "fonts": [
+    {
+      "family": "Noto Sans JP",
+      "file": "NotoSansJP[wght].ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/66a36c8c94b1a5d992ee4e7f392fccfe4945767c/ofl/notosansjp/NotoSansJP%5Bwght%5D.ttf",
+      "sha256": "c2f3b4d463500a2ddcd3849cded1fceeb9fd6d1c32e6cbecd568453ba50fc68f",
+      "bytes": 9589900,
+      "license": "third_party/fonts/OFL-NotoSansJP.txt"
+    },
+    {
+      "family": "Noto Sans Mono",
+      "file": "NotoSansMono[wdth,wght].ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/097bc1b8c04c3224087c2ae95f7a923859b778cf/ofl/notosansmono/NotoSansMono%5Bwdth,wght%5D.ttf",
+      "sha256": "2cb2adb378a8f574213e23df697050b83c54c27df465a2015552740b2769a081",
+      "bytes": 1708408,
+      "license": "third_party/fonts/OFL-NotoSansMono.txt"
+    }
+  ]
+}
