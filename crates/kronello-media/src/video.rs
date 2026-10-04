@@ -4,8 +4,8 @@ use kronello_time::Rational;
 use std::path::Path;
 
 pub struct VideoDecoder<'a> {
-    native: ffi::NativeDecoder<'a>,
-    report: MediaPathReport,
+    pub(crate) native: ffi::NativeDecoder<'a>,
+    pub(crate) report: MediaPathReport,
 }
 impl MediaRuntime {
     /// Open a canonical local file. URL and playlist sources are rejected.
@@ -188,6 +188,7 @@ impl VideoDecoder<'_> {
             codec: self.native.name.clone(),
             time_base: self.native.time_base,
             duration: self.native.duration()?,
+            start_time: Some(frame.pts),
             width: Some(frame.width),
             height: Some(frame.height),
             pixel_format: Some(pixel_format),

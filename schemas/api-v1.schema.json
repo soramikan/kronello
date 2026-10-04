@@ -248,6 +248,13 @@
           },
           "type": "array"
         },
+        "properties": {
+          "description": "Placement transform and effect parameters, evaluated in sequence time.",
+          "items": {
+            "$ref": "#/$defs/Property"
+          },
+          "type": "array"
+        },
         "source_in": {
           "$ref": "#/$defs/Rational"
         },
@@ -273,6 +280,16 @@
     "ClipId": {
       "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
       "format": "uuid",
+      "type": "string"
+    },
+    "ClipKind": {
+      "enum": [
+        "video",
+        "image",
+        "audio",
+        "composition",
+        "generator"
+      ],
       "type": "string"
     },
     "ClipPlaceRequest": {
@@ -308,6 +325,42 @@
         "idempotency_key",
         "sequence",
         "track",
+        "clip"
+      ],
+      "type": "object"
+    },
+    "ClipQuery": {
+      "additionalProperties": false,
+      "properties": {
+        "clip": {
+          "$ref": "#/$defs/Clip"
+        },
+        "kind": {
+          "$ref": "#/$defs/ClipKind"
+        },
+        "track": {
+          "$ref": "#/$defs/TrackId"
+        },
+        "unsupported_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "video_color": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VideoColorPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "track",
+        "kind",
         "clip"
       ],
       "type": "object"
@@ -2204,6 +2257,9 @@
             "null"
           ]
         },
+        "input_path": {
+          "type": "string"
+        },
         "numeric": {
           "$ref": "#/$defs/ImageFormat"
         },
@@ -2270,7 +2326,8 @@
         "flatten_tolerance_px",
         "numeric",
         "display",
-        "backend"
+        "backend",
+        "input_path"
       ],
       "type": "object"
     },
@@ -4053,6 +4110,27 @@
         {
           "additionalProperties": false,
           "properties": {
+            "operation": {
+              "const": "sequence.query",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "sequence": {
+              "$ref": "#/$defs/SequenceId"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "sequence"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
             "base_revision": {
               "type": "string"
             },
@@ -5072,6 +5150,23 @@
           "additionalProperties": false,
           "properties": {
             "kind": {
+              "const": "timeline",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/SequenceQueryResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
               "const": "job",
               "type": "string"
             },
@@ -5711,6 +5806,17 @@
           "minimum": 0,
           "type": "integer"
         },
+        "generators": {
+          "additionalProperties": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "default": {
+            "kronello.solid": 1
+          },
+          "type": "object"
+        },
         "gradient_interpolation": {
           "type": "string"
         },
@@ -5733,6 +5839,10 @@
           "type": "integer"
         },
         "vector": {
+          "type": "string"
+        },
+        "video_input": {
+          "default": "nle002-sdr-rgba8-nearest-v1",
           "type": "string"
         }
       },
@@ -5769,6 +5879,12 @@
           "description": "Authored bottom-to-top compositing order.",
           "items": {
             "$ref": "#/$defs/Track"
+          },
+          "type": "array"
+        },
+        "transitions": {
+          "items": {
+            "$ref": "#/$defs/Transition"
           },
           "type": "array"
         },
@@ -5874,6 +5990,45 @@
         "frame_rate",
         "frame_grid",
         "frames"
+      ],
+      "type": "object"
+    },
+    "SequenceQueryRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "project": {
+          "type": "string"
+        },
+        "sequence": {
+          "$ref": "#/$defs/SequenceId"
+        }
+      },
+      "required": [
+        "project",
+        "sequence"
+      ],
+      "type": "object"
+    },
+    "SequenceQueryResult": {
+      "additionalProperties": false,
+      "properties": {
+        "clips": {
+          "items": {
+            "$ref": "#/$defs/ClipQuery"
+          },
+          "type": "array"
+        },
+        "revision": {
+          "type": "string"
+        },
+        "sequence": {
+          "$ref": "#/$defs/Sequence"
+        }
+      },
+      "required": [
+        "revision",
+        "sequence",
+        "clips"
       ],
       "type": "object"
     },
@@ -6086,12 +6241,30 @@
         {
           "additionalProperties": false,
           "properties": {
+            "color": {
+              "$ref": "#/$defs/Color",
+              "default": {
+                "components": {
+                  "alpha": 1.0,
+                  "b": 0.0,
+                  "g": 0.0,
+                  "r": 0.0
+                },
+                "space": "srgb"
+              }
+            },
             "generator": {
               "type": "string"
             },
             "kind": {
               "const": "generator",
               "type": "string"
+            },
+            "version": {
+              "default": 1,
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
             }
           },
           "required": [
@@ -6160,6 +6333,17 @@
             "string",
             "null"
           ]
+        },
+        "start_time": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rational"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Absolute PTS origin. Missing legacy metadata means zero, never latest."
         },
         "time_base": {
           "$ref": "#/$defs/Rational"
@@ -7101,6 +7285,203 @@
         },
         {
           "additionalProperties": false,
+          "description": "Move one placement or its transitive reciprocal link component.",
+          "properties": {
+            "clip_move": {
+              "additionalProperties": false,
+              "properties": {
+                "clip": {
+                  "$ref": "#/$defs/ClipId"
+                },
+                "delta": {
+                  "$ref": "#/$defs/Rational"
+                },
+                "linked": {
+                  "type": "boolean"
+                },
+                "sequence": {
+                  "$ref": "#/$defs/SequenceId"
+                }
+              },
+              "required": [
+                "sequence",
+                "clip",
+                "delta",
+                "linked"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "clip_move"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Replace the selected clips' links with one reciprocal group. Old edges\nincident to the group are removed at both endpoints.",
+          "properties": {
+            "clip_link": {
+              "additionalProperties": false,
+              "properties": {
+                "clips": {
+                  "items": {
+                    "$ref": "#/$defs/ClipId"
+                  },
+                  "type": "array"
+                },
+                "sequence": {
+                  "$ref": "#/$defs/SequenceId"
+                }
+              },
+              "required": [
+                "sequence",
+                "clips"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "clip_link"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Shift placements starting at/after pivot on explicit tracks. Reject a\nclip straddling pivot. linked=true includes complete link components.",
+          "properties": {
+            "ripple": {
+              "additionalProperties": false,
+              "properties": {
+                "delta": {
+                  "$ref": "#/$defs/Rational"
+                },
+                "linked": {
+                  "type": "boolean"
+                },
+                "pivot": {
+                  "$ref": "#/$defs/Rational"
+                },
+                "sequence": {
+                  "$ref": "#/$defs/SequenceId"
+                },
+                "tracks": {
+                  "items": {
+                    "$ref": "#/$defs/TrackId"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "sequence",
+                "tracks",
+                "pivot",
+                "delta",
+                "linked"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "ripple"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "transition_set": {
+              "additionalProperties": false,
+              "properties": {
+                "sequence": {
+                  "$ref": "#/$defs/SequenceId"
+                },
+                "transition": {
+                  "$ref": "#/$defs/Transition"
+                }
+              },
+              "required": [
+                "sequence",
+                "transition"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "transition_set"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "transition_remove": {
+              "additionalProperties": false,
+              "properties": {
+                "incoming": {
+                  "$ref": "#/$defs/ClipId"
+                },
+                "outgoing": {
+                  "$ref": "#/$defs/ClipId"
+                },
+                "sequence": {
+                  "$ref": "#/$defs/SequenceId"
+                }
+              },
+              "required": [
+                "sequence",
+                "outgoing",
+                "incoming"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "transition_remove"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "clip_set_effects": {
+              "additionalProperties": false,
+              "properties": {
+                "clip": {
+                  "$ref": "#/$defs/ClipId"
+                },
+                "effects": {
+                  "items": {
+                    "$ref": "#/$defs/Effect"
+                  },
+                  "type": "array"
+                },
+                "properties": {
+                  "items": {
+                    "$ref": "#/$defs/Property"
+                  },
+                  "type": "array"
+                },
+                "sequence": {
+                  "$ref": "#/$defs/SequenceId"
+                }
+              },
+              "required": [
+                "sequence",
+                "clip",
+                "properties",
+                "effects"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "clip_set_effects"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "properties": {
             "instance_retime": {
               "additionalProperties": false,
@@ -7187,6 +7568,42 @@
       "enum": [
         "video",
         "audio"
+      ],
+      "type": "string"
+    },
+    "Transition": {
+      "additionalProperties": false,
+      "properties": {
+        "incoming": {
+          "$ref": "#/$defs/ClipId"
+        },
+        "kind": {
+          "$ref": "#/$defs/TransitionKind"
+        },
+        "outgoing": {
+          "$ref": "#/$defs/ClipId"
+        },
+        "range": {
+          "$ref": "#/$defs/TimeRange"
+        },
+        "version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "outgoing",
+        "incoming",
+        "range",
+        "kind",
+        "version"
+      ],
+      "type": "object"
+    },
+    "TransitionKind": {
+      "enum": [
+        "crossfade"
       ],
       "type": "string"
     },
@@ -7427,6 +7844,38 @@
         "path"
       ],
       "type": "string"
+    },
+    "VideoColorPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "assumptions": {
+          "description": "Missing tags are visible assumptions, never inferred from image pixels.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "matrix": {
+          "type": "string"
+        },
+        "primaries": {
+          "type": "string"
+        },
+        "range": {
+          "type": "string"
+        },
+        "transfer": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "primaries",
+        "transfer",
+        "matrix",
+        "range",
+        "assumptions"
+      ],
+      "type": "object"
     }
   },
   "$id": "https://kronello.dev/schemas/api-v1.schema.json",

@@ -84,6 +84,7 @@ pub struct CapabilitiesResult {
 macro_rules! commands {
     ($emit:ident) => {
         $emit! {
+            ("sequence.query", true, SequenceQueryRequest, SequenceQueryResult),
             ("sequence.create", false, SequenceCreateRequest, kronello_store::Event),
             ("clip.place", false, ClipPlaceRequest, kronello_store::Event),
             ("clip.trim", false, ClipTrimRequest, kronello_store::Event),
@@ -142,6 +143,12 @@ impl CapabilitiesResult {
             features: [
                 "sequence",
                 "composition_clip",
+                "video_clip",
+                "generator_clip",
+                "clip_effects",
+                "crossfade",
+                "ripple",
+                "linked_move",
                 "composition",
                 "shape",
                 "text",
@@ -171,7 +178,7 @@ impl CapabilitiesResult {
 #[schemars(untagged)]
 #[allow(dead_code)]
 enum ApiEnvelope {
-    Request(Request),
+    Request(Box<Request>),
     Response(Response),
 }
 

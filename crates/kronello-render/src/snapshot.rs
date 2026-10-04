@@ -16,6 +16,10 @@ pub const COVERAGE_VERSION: &str = "vec003-grid4-v2";
 pub const STROKE_GEOMETRY_VERSION: &str = "vec003-centered-stroke-v1";
 pub const GRADIENT_INTERPOLATION_VERSION: &str = "vec003-linear-premultiplied-pad-v1";
 pub const LAYOUT_BOUNDS_VERSION: u32 = 1;
+pub const VIDEO_INPUT_VERSION: &str = "nle002-sdr-rgba8-nearest-v1";
+fn initial_video_version() -> String {
+    VIDEO_INPUT_VERSION.into()
+}
 fn initial_bounds_version() -> u32 {
     1
 }
@@ -38,6 +42,13 @@ pub struct SemanticVersions {
     pub stroke_geometry: String,
     pub gradient_interpolation: String,
     pub effects: BTreeMap<String, u32>,
+    #[serde(default = "generator_versions")]
+    pub generators: BTreeMap<String, u32>,
+    #[serde(default = "initial_video_version")]
+    pub video_input: String,
+}
+fn generator_versions() -> BTreeMap<String, u32> {
+    BTreeMap::from([(SOLID_GENERATOR_ID.into(), 1)])
 }
 fn expression_version() -> u32 {
     EXPRESSION_VERSION
@@ -61,6 +72,8 @@ impl SemanticVersions {
                 (GAUSSIAN_BLUR_ID.into(), EFFECT_VERSION),
                 (DROP_SHADOW_ID.into(), EFFECT_VERSION),
             ]),
+            generators: generator_versions(),
+            video_input: initial_video_version(),
         }
     }
 }
@@ -385,6 +398,14 @@ fn content<T>(
     }
     Ok(None)
 }
+fn content_asset(project: &Project, id: AssetId) -> Result<&Asset, RenderError> {
+    content(&project.assets, id.as_uuid(), |a| a.id.as_uuid())?.ok_or_else(|| {
+        RenderError::Backend {
+            code: "ASSET_MISSING",
+            message: id.to_string(),
+        }
+    })
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SceneContent {
@@ -395,6 +416,12 @@ pub enum SceneContent {
         resolved: ResolvedShape,
     },
     Text(LayoutResult),
+    Video {
+        asset: Asset,
+        stream_index: u32,
+        time: Time,
+        extent: [f64; 2],
+    },
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct SceneNodeIr {
@@ -402,6 +429,7 @@ pub struct SceneNodeIr {
     pub parent: Option<SceneKey>,
     pub world_transform: kronello_eval::Affine2,
     pub opacity: f64,
+    pub post_effect_opacity: f64,
     pub effects: Vec<ResolvedEffect>,
     /// Final node values, including template and layout inputs.
     pub properties: BTreeMap<PropertyId, Value>,
@@ -590,7 +618,7 @@ pub fn build_scene_ir_with_cache(
         let mut layout_content_hash = None;
         let properties = values.clone();
         let mut evaluated_text = None;
-        let content = match n.kind {
+        let mut content = match n.kind {
             NodeKind::Shape { content_ref } => {
                 let shape = content(&snapshot.project.shapes, content_ref.as_uuid(), |s| {
                     s.id.as_uuid()
@@ -620,11 +648,71 @@ pub fn build_scene_ir_with_cache(
             }
             _ => SceneContent::Empty,
         };
+        let mut post_effect_opacity = 1.0;
+        if let Some(sequence) = snapshot
+            .sequence
+            .filter(|_| n.composition == snapshot.composition)
+        {
+            let sequence = snapshot
+                .project
+                .sequences
+                .iter()
+                .find_map(|s| match s {
+                    DocumentObject::Known(s) if s.id == sequence => Some(s),
+                    _ => None,
+                })
+                .expect("validated sequence");
+            let clip = sequence
+                .tracks
+                .iter()
+                .flat_map(|t| &t.clips)
+                .find(|c| c.id.as_uuid() == n.key.node.as_uuid())
+                .expect("lowered clip");
+            content = match &clip.source_ref {
+                SourceRef::Asset {
+                    asset,
+                    stream_index,
+                } => {
+                    let asset = content_asset(&snapshot.project, *asset)?;
+                    let stream = asset
+                        .streams
+                        .iter()
+                        .find(|s| s.index == *stream_index)
+                        .expect("validated stream");
+                    let extent = [stream.width, stream.height].map(|x| x.map(f64::from));
+                    let [Some(w), Some(h)] = extent else {
+                        return Err(RenderError::UnsupportedFeature(
+                            "video dimensions unavailable".into(),
+                        ));
+                    };
+                    SceneContent::Video {
+                        asset: asset.clone(),
+                        stream_index: *stream_index,
+                        time: clip.local_time(time)?,
+                        extent: [w, h],
+                    }
+                }
+                SourceRef::Generator { color, .. } => {
+                    crate::sequence::solid_content(*color, sequence.extent)?
+                }
+                _ => content,
+            };
+            for tr in &sequence.transitions {
+                if tr.incoming == clip.id && tr.range.contains(time) {
+                    let progress = time
+                        .checked_sub(tr.range.start())?
+                        .checked_div(tr.range.duration()?.as_time())?;
+                    post_effect_opacity *=
+                        progress.numerator() as f64 / progress.denominator() as f64;
+                }
+            }
+        }
         nodes.push(SceneNodeIr {
             key: (&n.key).into(),
             parent: n.containment_parent.as_ref().map(Into::into),
             world_transform: n.world_transform,
             opacity: n.transform.opacity,
+            post_effect_opacity,
             effects,
             properties,
             text: evaluated_text,

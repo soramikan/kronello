@@ -431,6 +431,54 @@ impl ScenePass<'_> {
         }
         let blank = self.blank.clone();
         let t = match &scene.nodes[id] {
+            DrawNode::Raster(pixels) => {
+                if pixels.len()
+                    != pixel_count(
+                        self.size.output_resolution[0],
+                        self.size.output_resolution[1],
+                    )?
+                {
+                    return Err(GpuError::InvalidInput("raster input dimensions"));
+                }
+                let texture = self.gpu.texture(
+                    self.size.output_resolution[0],
+                    self.size.output_resolution[1],
+                    wgpu::TextureFormat::Rgba16Float,
+                    wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                )?;
+                let bytes: Vec<_> = pixels
+                    .iter()
+                    .flat_map(|p| {
+                        let mut p = p.map(half::f16::from_f32);
+                        if p[3] == half::f16::ZERO {
+                            p[..3].fill(half::f16::ZERO);
+                        }
+                        p.into_iter().flat_map(|v| v.to_bits().to_le_bytes())
+                    })
+                    .collect();
+                self.gpu.queue.write_texture(
+                    wgpu::TexelCopyTextureInfo {
+                        texture: &texture,
+                        mip_level: 0,
+                        origin: wgpu::Origin3d::ZERO,
+                        aspect: wgpu::TextureAspect::All,
+                    },
+                    &bytes,
+                    wgpu::TexelCopyBufferLayout {
+                        offset: 0,
+                        bytes_per_row: Some(self.size.output_resolution[0] * 8),
+                        rows_per_image: Some(self.size.output_resolution[1]),
+                    },
+                    wgpu::Extent3d {
+                        width: self.size.output_resolution[0],
+                        height: self.size.output_resolution[1],
+                        depth_or_array_layers: 1,
+                    },
+                );
+                self.stats.cpu_upload_pixel_bytes += bytes.len() as u64;
+                self.stats.cpu_upload_pixel_operations += 1;
+                texture
+            }
             DrawNode::Path(path) => {
                 self.pass(0, (&blank, &blank), Some(path), 1.0, MaskKind::Alpha, None)?
             }

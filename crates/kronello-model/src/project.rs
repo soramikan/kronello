@@ -316,6 +316,7 @@ impl Project {
                 .iter()
                 .any(|v| matches!(v, DocumentObject::Opaque(_)))
             || self.sequences.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
+            || self.sequences.iter().any(|v| matches!(v, DocumentObject::Known(s) if s.tracks.iter().flat_map(|t| &t.clips).flat_map(|c| &c.effects).any(|e| e.definition().is_err())))
             || self.assets.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
             || self.templates.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
             || self.template_instances.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))

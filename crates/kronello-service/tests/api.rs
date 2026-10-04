@@ -204,7 +204,7 @@ fn capabilities_registry_media_extension_without_device_initialization() {
     ) else {
         panic!()
     };
-    assert_eq!(c.commands.len(), 30);
+    assert_eq!(c.commands.len(), 31);
     assert_eq!(c.api_schema_version, 1);
     assert_eq!(c.semantic_versions.document, PROJECT_SEMANTIC_VERSION);
     let media = c.media.unwrap();
@@ -546,6 +546,7 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
     let sequence = json!({"id":Uuid::new_v4(), "extent":{"width":64.0,"height":32.0}, "frame_rate":{"num":"24","den":"1"}, "audio_rate":48000, "working_space":"linear_rec709", "tracks":[]});
     let clip = json!({"id":Uuid::new_v4(), "source_ref":{"kind":"composition","composition":composition}, "timeline_range":{"start":{"num":"0","den":"1"},"end":time}, "source_in":{"num":"0","den":"1"}, "time_map":{"kind":"linear","offset":{"num":"0","den":"1"},"speed":{"num":"1","den":"1"}}, "links":[],"effects":[]});
     let requests = vec![
+        json!({"operation":"sequence.query", "project":path,"sequence":uuid}),
         json!({"operation":"sequence.create", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"seq","sequence":sequence}),
         json!({"operation":"clip.place", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"clip","sequence":uuid,"track":uuid,"clip":clip}),
         json!({"operation":"clip.trim", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"trim","sequence":uuid,"clip":uuid,"range":clip["timeline_range"]}),
@@ -929,6 +930,7 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
     execute(
         json!({"operation":"clip.place","project":path,"base_revision":"5","session_id":session,"idempotency_key":"place-clip","sequence":sequence_id,"track":track_id,"clip":{"id":clip_id,"source_ref":{"kind":"composition","composition":composition},"timeline_range":{"start":{"num":"0","den":"1"},"end":{"num":"2","den":"1"}},"source_in":{"num":"0","den":"1"},"time_map":{"kind":"linear","offset":{"num":"0","den":"1"},"speed":{"num":"1","den":"1"}},"links":[],"effects":[]}}),
     );
+    execute(json!({"operation":"sequence.query","project":path,"sequence":sequence_id}));
     execute(
         json!({"operation":"clip.trim","project":path,"base_revision":"6","session_id":session,"idempotency_key":"trim-clip","sequence":sequence_id,"clip":clip_id,"range":{"start":{"num":"1","den":"4"},"end":{"num":"7","den":"4"}}}),
     );

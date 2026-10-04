@@ -628,7 +628,7 @@ fn structured_api_queries_and_empty_capabilities_payload_from_real_cli() {
             .as_array()
             .unwrap()
             .len(),
-        30
+        31
     );
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("query.kronello");
@@ -886,4 +886,52 @@ fn nle_sequence_target_and_clip_trim_use_shared_machine_commands() {
         true,
     );
     assert_eq!(exported["result"]["value"]["document"], p);
+}
+#[test]
+fn nle2_generator_query_and_move_use_shared_cli_plan_apply() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("generator.kronello");
+    let mut doc: Value =
+        serde_json::from_str(include_str!("../../../examples/nle-001.project.json")).unwrap();
+    doc["sequences"][0]["tracks"][0]["clips"][0]["source_ref"] = json!({"kind":"generator","generator":"kronello.solid","version":1,"color":{"space":"srgb","components":{"r":1.0,"g":0.0,"b":0.0,"alpha":1.0}}});
+    call(
+        &["project", "create"],
+        json!({"project":path,"document":doc}),
+        true,
+    );
+    let sequence = &doc["sequences"][0]["id"];
+    let clip = &doc["sequences"][0]["tracks"][0]["clips"][0]["id"];
+    let query = call(
+        &["sequence", "query"],
+        json!({"project":path,"sequence":sequence}),
+        true,
+    );
+    assert_eq!(query["result"]["kind"], "timeline");
+    assert_eq!(query["result"]["value"]["clips"][0]["kind"], "generator");
+    let commands = json!([{"timeline":{"clip_move":{"sequence":sequence,"clip":clip,"delta":{"num":"1","den":"1"},"linked":false}}}]);
+    let plan = call(
+        &["edit", "plan"],
+        json!({"project":path,"base_revision":"1","commands":commands}),
+        true,
+    );
+    let payload = json!({"project":path,"base_revision":"1","commands":commands,"plan_hash":plan["result"]["value"]["plan_hash"],"session_id":"ab12cd34-0000-4000-8000-000000000001","idempotency_key":"nle2-cli"});
+    let event = call(&["edit", "apply"], payload.clone(), true);
+    assert_eq!(call(&["edit", "apply"], payload, true), event);
+    let query = call(
+        &["sequence", "query"],
+        json!({"project":path,"sequence":sequence}),
+        true,
+    );
+    assert_eq!(query["result"]["value"]["revision"], "2");
+    call(
+        &["edit", "undo"],
+        json!({"project":path,"base_revision":"2","event_id":event["result"]["value"]["id"],"session_id":"ab12cd34-0000-4000-8000-000000000001","idempotency_key":"nle2-cli-undo"}),
+        true,
+    );
+    let restored = call(
+        &["sequence", "query"],
+        json!({"project":path,"sequence":sequence}),
+        true,
+    );
+    assert_eq!(restored["result"]["value"]["sequence"], doc["sequences"][0]);
 }

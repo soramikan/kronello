@@ -67,6 +67,9 @@ pub enum MaskKind {
 }
 #[derive(Debug, Clone)]
 pub enum DrawNode {
+    /// CPU-prepared premultiplied working-space image. GPU execution uploads it
+    /// explicitly; this is never reported as a GPU-resident decode path.
+    Raster(Vec<[f32; 4]>),
     Path(PathDraw),
     Group {
         children: Vec<usize>,
@@ -110,6 +113,15 @@ impl DrawScene {
         let mut edges = 0;
         for node in &self.nodes {
             match node {
+                DrawNode::Raster(pixels) => {
+                    if pixels.iter().any(|p| {
+                        p.iter().any(|v| !v.is_finite() || v.abs() > 65504.0)
+                            || !(0.0..=1.0).contains(&p[3])
+                            || (p[3] == 0.0 && p[..3].iter().any(|v| *v != 0.0))
+                    }) {
+                        return Err(GpuError::InvalidInput("invalid raster input"));
+                    }
+                }
                 DrawNode::Path(path) => {
                     for g in path.fill_gradient.iter().chain(&path.stroke_gradient) {
                         g.validate()?;
@@ -220,7 +232,7 @@ impl DrawScene {
 }
 pub(crate) fn inputs(node: &DrawNode) -> Vec<usize> {
     match node {
-        DrawNode::Path(_) => vec![],
+        DrawNode::Path(_) | DrawNode::Raster(_) => vec![],
         DrawNode::Group { children, .. } => children.clone(),
         DrawNode::Effect { source, .. } => vec![*source],
         DrawNode::Masked { source, matte, .. } => vec![*source, *matte],
@@ -590,6 +602,14 @@ pub(crate) fn render_scene_reference_with_resolvers(
         let [w, h] = size.output_resolution;
         let mut pixels = vec![[0.0; 4]; (w as usize) * (h as usize)];
         match &scene.nodes[id] {
+            DrawNode::Raster(pixels) => {
+                if pixels.len()
+                    != pixel_count(size.output_resolution[0], size.output_resolution[1])?
+                {
+                    return Err(GpuError::InvalidInput("raster input dimensions"));
+                }
+                return Ok(pixels.clone());
+            }
             DrawNode::Path(path) => {
                 pixels = raster(id, path)?;
             }

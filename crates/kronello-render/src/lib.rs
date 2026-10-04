@@ -106,6 +106,9 @@ pub struct BackendFrame {
 
 pub trait RenderBackend {
     fn name(&self) -> &str;
+    fn input_path(&self) -> &str {
+        "semantic_scene"
+    }
     fn execute(&self, dag: &RenderDag) -> Result<BackendFrame, RenderError>;
     /// Backends opt in only with a stable execution namespace/fingerprint.
     /// The default deliberately does not cache device results.
@@ -119,7 +122,7 @@ pub trait RenderBackend {
 }
 
 mod media;
-pub use media::{DecodedVideoFrame, VideoDecodeBackend};
+pub use media::{DecodedVideoFrame, VideoDecodeBackend, VideoImage};
 
 mod sequence;
-pub use sequence::RenderTarget;
+pub use sequence::{RenderTarget, lower_sequence};

@@ -7,9 +7,9 @@
 | Project | schema_version, semantic_version, assets, sequences, compositions, templates |
 | Asset | id, content_hash, kind, stream_metadata, immutable_locator |
 | DataAsset | id, schema, content_hash, values, time_mapping, analyzer_version |
-| Sequence | id, extent, frame_rate, audio_rate, working_space, tracks |
+| Sequence | id, extent, frame_rate, audio_rate, working_space, tracks, transitions |
 | Track | id, kind（video / audio）, clips |
-| Clip | id, source_ref, timeline_range, source_in, time_map, links, effects |
+| Clip | id, source_ref, timeline_range, source_in, time_map, links, properties, effects |
 | Composition | id, duration, design_extent, edit_rate, root_nodes, properties, inputs, markers, output_ports |
 | SceneNode | id, kind, containment_parent, transform_parent, child_order, active_range, transform_ref, content_ref |
 | CompositionInstance | id, definition_ref, input_bindings, local_time_map, seed |
@@ -25,10 +25,14 @@ SourceRef は Asset、Composition、Generator を区別する。SourceRef の型
 
 Timeline の文書型（Sequence / Clip）と Composition / Property descriptor は `kronello-model` に置き、評価実装は分離する。意味の参照と論理モジュールの依存境界は [ADR-0043](../adr/0043-semantic-dependencies-and-units.md) を参照。
 
-NLE-001 は `Sequence`、video / audio `Track`、`Clip`、タグ付き `SourceRef` を実装した。track 配列順は下→上。同一 track の重複は `CLIP_OVERLAP`、端点で接する配置は許す。ClipId が同じ Composition の配置を区別し、source_in と TimeMap が独立した local time を決める。Sequence / Track / Clip の UUID 重複・scene ID との衝突、欠落 source、source bounds / map domain を検証する。未知 Sequence / Track / Clip / SourceRef は Sequence 全体を opaque に保持し、通常編集と選択対象の最終レンダーを拒否する。初期の動画描画 source は Composition のみ。Asset 音声の unity-speed ミックスは実装し、Asset / Generator 動画描画、リンク連動編集、clip effects は後続範囲。[ADR-0051](../adr/0051-nle-placement-and-retime.md)、[検証](../testing/nle-001.md) を参照。
+NLE-001 は `Sequence`、video / audio `Track`、`Clip`、タグ付き `SourceRef` を実装した。track 配列順は下→上。同一 track の重複は `CLIP_OVERLAP`、端点で接する配置は許す。ClipId が同じ Composition の配置を区別し、source_in と TimeMap が独立した local time を決める。Sequence / Track / Clip の UUID 重複・scene ID との衝突、欠落 source、source bounds / map domain を検証する。未知 Sequence / Track / Clip / SourceRef は Sequence 全体を opaque に保持し、通常編集と選択対象の最終レンダーを拒否する。NLE-001 時点の動画描画 source は Composition のみ。Asset 音声の unity-speed ミックスは実装し、Asset / Generator 動画描画、リンク連動編集、clip effects は NLE-002 で追加した（下記）。[ADR-0051](../adr/0051-nle-placement-and-retime.md)、[検証](../testing/nle-001.md) を参照。
 
 初期の SceneNode 種類は Group、Null、Shape、Text、Media、CompositionInstance とする。
 Mask / Matte は入力参照として表現でき、見えるレイヤーとして重複描画しない。Repeater / Particles / Scene3D は拡張種類とする。
+
+## NLE-002 の配置拡張
+
+NLE-002 は動画 Asset / `kronello.solid` version 1 Generator の描画、`Clip.properties` による配置 transform / effect parameters、既存 DAG の clip effects、明示 crossfade transition、move / ripple / reciprocal link group を追加した。同一 track の重複は `Sequence.transitions` が intersection 全体を明示する二 clip だけ許す。動画の source_in / TimeMap は絶対 presentation PTS、`StreamMetadata.start_time` は最初の decoded PTS を保存する。audio の source_in は decoded sample 原点のまま。Generator は version と straight Color を snapshot に固定し、未知 id / version を画像で代替しない。`sequence.query` が ClipKind と動画色の effective tags / assumptions を返す。image 描画・字幕・adjustment は追加していない。詳細は [ADR-0062](../adr/0062-video-generator-and-timeline-edits.md) と [NLE-002 の検証](../testing/nle-002.md)。
 
 ## ID とインスタンス
 

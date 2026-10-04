@@ -1,6 +1,6 @@
 # ADR-0048: FFmpeg ABI 境界・同梱ビルド・素材検証を固定する
 
-- 状態: 採用
+- 状態: 部分置換（[ADR-0062](0062-video-generator-and-timeline-edits.md): SDR 動画の色変換境界だけ。native plane / HDR 保持、LGPL、ABI、hash と seek の契約は維持）
 - 日付: 2026-10-03
 - 対象: MEDIA-001
 

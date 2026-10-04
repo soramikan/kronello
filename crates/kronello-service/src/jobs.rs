@@ -288,6 +288,11 @@ impl Service<'_> {
             })
         };
         let rendered = self.with_selected_backend(|backend| {
+            let video_backend = kronello_media::VideoRenderBackend {
+                backend,
+                project_path: &fixed.request.render.input.project,
+            };
+            let backend = &video_backend;
             let request = &fixed.request.render;
             let result = match &fixed.request.output {
                 JobOutput::ImageSequence => {

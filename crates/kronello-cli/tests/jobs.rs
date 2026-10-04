@@ -855,3 +855,53 @@ fn invalid_temporary_mov_is_rejected_before_final_filename_exists() {
             .starts_with(".kronello-job-")
     }));
 }
+#[test]
+fn nle2_video_generator_fixed_job_survives_clip_edit_and_project_removal() {
+    let f = Fixture::new();
+    let source = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/fixtures/generated/media/cfr-24-1.nut")
+        .canonicalize()
+        .unwrap();
+    let asset = "00620000-0000-4000-8000-000000000001";
+    let sequence = "00620000-0000-4000-8000-000000000002";
+    let clip = "00620000-0000-4000-8000-000000000004";
+    let mut doc = f.document.clone();
+    doc["assets"] = json!([{"id":asset,"kind":"video","content_hash":format!("{:x}",Sha256::digest(std::fs::read(&source).unwrap())),"locator":{"relative":null,"absolute":source},"streams":[{"index":0,"codec":"rawvideo","time_base":{"num":"1","den":"24"},"duration":null,"start_time":{"num":"0","den":"1"},"width":16,"height":16,"pixel_format":"yuv420p","color_primaries":null,"color_transfer":null,"color_matrix":null,"color_range":null}]}]);
+    doc["sequences"] = json!([{"id":sequence,"extent":{"width":16.0,"height":16.0},"frame_rate":{"num":"24","den":"1"},"audio_rate":48000,"working_space":"linear_rec709","tracks":[{"id":"00620000-0000-4000-8000-000000000003","kind":"video","clips":[{"id":clip,"source_ref":{"kind":"asset","asset":asset,"stream_index":0},"timeline_range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"8"}},"source_in":{"num":"0","den":"1"},"time_map":{"kind":"linear","offset":{"num":"0","den":"1"},"speed":{"num":"1","den":"1"}},"links":[],"effects":[],"audio_retime":"reject"}]},{"id":"00620000-0000-4000-8000-000000000005","kind":"video","clips":[{"id":"00620000-0000-4000-8000-000000000006","source_ref":{"kind":"generator","generator":"kronello.solid","version":1,"color":{"space":"srgb","components":{"r":1.0,"g":0.0,"b":0.0,"alpha":0.25}}},"timeline_range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"8"}},"source_in":{"num":"0","den":"1"},"time_map":{"kind":"linear","offset":{"num":"0","den":"1"},"speed":{"num":"1","den":"1"}},"links":[],"effects":[],"audio_retime":"reject"}]}]}]);
+    f.service(json!({"operation":"project.import","project":f.project,"base_revision":"1","document":doc}));
+    let reference = f.temp.path().join("video-reference");
+    let destination = f.temp.path().join("video-fixed");
+    let gate = f.temp.path().join("release-video");
+    let mut render = f.render(&reference);
+    render["input"]
+        .as_object_mut()
+        .unwrap()
+        .remove("composition");
+    render["input"]["target"] = json!({"kind":"sequence","sequence":sequence});
+    render["input"]["region"] = json!({"origin":[0,0],"extent":[16,16],"pixels":[16,16]});
+    let mut request = render.clone();
+    request["operation"] = json!("render.sequence");
+    f.cli(request, None, false);
+    render["output_directory"] = json!(destination);
+    let job = f.submit_request(
+        json!({"operation":"render.submit","render":render}),
+        Some(&gate),
+        false,
+    );
+    f.wait(&job.id, JobStatus::Running);
+    let commands = json!([{"timeline":{"clip_trim":{"sequence":sequence,"clip":clip,"range":{"start":{"num":"1","den":"24"},"end":{"num":"1","den":"8"}}}}}]);
+    let plan=f.service(json!({"operation":"edit.plan","project":f.project,"base_revision":"2","commands":commands}));
+    f.service(json!({"operation":"edit.apply","project":f.project,"base_revision":"2","commands":commands,"plan_hash":plan["plan_hash"],"session_id":"00620000-0000-4000-8000-000000000007","idempotency_key":"trim-video-after-submit"}));
+    std::fs::remove_file(&f.project).unwrap();
+    std::fs::write(&gate, b"release").unwrap();
+    f.wait(&job.id, JobStatus::Succeeded);
+    for entry in std::fs::read_dir(&reference).unwrap() {
+        let path = entry.unwrap().path();
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            std::fs::read(destination.join(path.file_name().unwrap())).unwrap(),
+            "{}",
+            path.display()
+        );
+    }
+}

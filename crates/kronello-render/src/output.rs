@@ -55,6 +55,7 @@ pub struct FrameMetadata {
     pub numeric: ImageFormat,
     pub display: ImageFormat,
     pub backend: String,
+    pub input_path: String,
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct RenderedFrame {
@@ -137,6 +138,15 @@ pub fn render_frame_with_cache(
             clipping: "unit_interval_after_output_transform; no_tone_mapping".into(),
         },
         backend: backend.name().into(),
+        input_path: if scene
+            .nodes
+            .iter()
+            .any(|n| matches!(n.content, crate::SceneContent::Video { .. }))
+        {
+            backend.input_path().into()
+        } else {
+            "semantic_scene".into()
+        },
     };
     Ok(RenderedFrame { pixels, metadata })
 }

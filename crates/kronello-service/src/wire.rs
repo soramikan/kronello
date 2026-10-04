@@ -79,6 +79,7 @@ impl<'de> Deserialize<'de> for Request {
         let mut fields = fields(d)?;
         let tag: String = take(&mut fields, "operation")?;
         match tag.as_str() {
+            "sequence.query" => payload(&fields).map(Self::SequenceQuery),
             "sequence.create" => payload(&fields).map(Self::SequenceCreate),
             "clip.place" => payload(&fields).map(Self::ClipPlace),
             "clip.trim" => payload(&fields).map(Self::ClipTrim),
@@ -119,6 +120,7 @@ impl<'de> Deserialize<'de> for ResultData {
         let mut fields = fields(d)?;
         let tag: String = take(&mut fields, "kind")?;
         let result = match tag.as_str() {
+            "timeline" => Self::Timeline(take(&mut fields, "value")?),
             "job" => Self::Job(take(&mut fields, "value")?),
             "jobs" => Self::Jobs(take(&mut fields, "value")?),
             "pruned" => Self::Pruned(take(&mut fields, "value")?),

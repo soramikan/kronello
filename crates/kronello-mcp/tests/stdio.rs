@@ -781,3 +781,48 @@ fn nle_registry_clip_trim_undo_and_sequence_render_share_service() {
     assert_eq!(exported["structuredContent"]["document"], p);
     assert!(client.finish().is_empty());
 }
+#[test]
+fn nle2_generator_query_and_move_share_mcp_registry_and_transactions() {
+    let mut client = Client::spawn(&[], false);
+    client.ready(SUPPORTED_PROTOCOL_VERSIONS[0]);
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("generator.kronello");
+    let mut doc: Value =
+        serde_json::from_str(include_str!("../../../examples/nle-001.project.json")).unwrap();
+    doc["sequences"][0]["tracks"][0]["clips"][0]["source_ref"] = json!({"kind":"generator","generator":"kronello.solid","version":1,"color":{"space":"srgb","components":{"r":1.0,"g":0.0,"b":0.0,"alpha":1.0}}});
+    assert_eq!(
+        client.call("project.create", json!({"project":path,"document":doc}))["isError"],
+        false
+    );
+    let sequence = &doc["sequences"][0]["id"];
+    let clip = &doc["sequences"][0]["tracks"][0]["clips"][0]["id"];
+    let query = client.call(
+        "sequence.query",
+        json!({"project":path,"sequence":sequence}),
+    );
+    assert_eq!(query["isError"], false, "{query}");
+    assert_eq!(query["structuredContent"]["clips"][0]["kind"], "generator");
+    let commands = json!([{"timeline":{"clip_move":{"sequence":sequence,"clip":clip,"delta":{"num":"1","den":"1"},"linked":false}}}]);
+    let plan = client.call(
+        "edit.plan",
+        json!({"project":path,"base_revision":"1","commands":commands}),
+    );
+    assert_eq!(plan["isError"], false, "{plan}");
+    let payload = json!({"project":path,"base_revision":"1","commands":commands,"plan_hash":plan["structuredContent"]["plan_hash"],"session_id":"ab12cd34-0000-4000-8000-000000000002","idempotency_key":"nle2-mcp"});
+    let event = client.call("edit.apply", payload.clone());
+    assert_eq!(event["isError"], false, "{event}");
+    assert_eq!(
+        client.call("edit.apply", payload)["structuredContent"],
+        event["structuredContent"]
+    );
+    let undone=client.call("edit.undo",json!({"project":path,"base_revision":"2","event_id":event["structuredContent"]["id"],"session_id":"ab12cd34-0000-4000-8000-000000000002","idempotency_key":"nle2-mcp-undo"}));
+    assert_eq!(undone["isError"], false, "{undone}");
+    let restored = client.call(
+        "sequence.query",
+        json!({"project":path,"sequence":sequence}),
+    );
+    assert_eq!(
+        restored["structuredContent"]["sequence"],
+        doc["sequences"][0]
+    );
+}

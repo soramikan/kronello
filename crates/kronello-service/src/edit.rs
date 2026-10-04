@@ -202,10 +202,15 @@ impl SourceResolver for Catalog<'_> {
     }
 }
 pub(crate) fn validate(project: &Project) -> Result<(), ServiceError> {
+    for s in &project.sequences {
+        if let DocumentObject::Known(s) = s {
+            s.validate(project)?;
+        }
+    }
     project.ensure_editable().map_err(StoreError::from)?;
     kronello_template::validate_project(project)?;
     let r = registry();
-    let compositions: Vec<_> = project
+    let mut compositions: Vec<_> = project
         .compositions
         .iter()
         .map(|c| match c {
@@ -213,6 +218,11 @@ pub(crate) fn validate(project: &Project) -> Result<(), ServiceError> {
             _ => unreachable!(),
         })
         .collect();
+    for s in &project.sequences {
+        if let DocumentObject::Known(s) = s {
+            compositions.push(kronello_render::lower_sequence(project, s.id)?);
+        }
+    }
     // Commands and changed keys address objects by UUID without a type tag.
     // Reject cross-kind aliases that would make lookup or conflict checks
     // ambiguous even when each model collection is independently valid.
@@ -249,11 +259,15 @@ pub(crate) fn validate(project: &Project) -> Result<(), ServiceError> {
         }
     }
     for c in &compositions {
-        if !object_ids.insert(c.id.as_uuid()) {
+        let lowered = project
+            .sequences
+            .iter()
+            .any(|s| matches!(s, DocumentObject::Known(s) if s.id.as_uuid() == c.id.as_uuid()));
+        if !lowered && !object_ids.insert(c.id.as_uuid()) {
             return Err(invalid("ambiguous object id"));
         }
         for n in &c.nodes {
-            if !object_ids.insert(n.id.as_uuid()) {
+            if !lowered && !object_ids.insert(n.id.as_uuid()) {
                 return Err(invalid("ambiguous object id"));
             }
         }
@@ -325,6 +339,16 @@ pub(crate) fn validate(project: &Project) -> Result<(), ServiceError> {
 }
 fn properties(project: &Project) -> Vec<(Uuid, &Property)> {
     let mut result = Vec::new();
+    for s in &project.sequences {
+        if let DocumentObject::Known(s) = s {
+            result.extend(
+                s.tracks
+                    .iter()
+                    .flat_map(|t| &t.clips)
+                    .flat_map(|c| c.properties.iter().map(|p| (c.id.as_uuid(), p))),
+            );
+        }
+    }
     for c in &project.compositions {
         if let DocumentObject::Known(c) = c {
             result.extend(c.properties.iter().map(|p| (c.id.as_uuid(), p)));
@@ -340,6 +364,19 @@ fn property_mut(
     object: Uuid,
     id: PropertyId,
 ) -> Result<&mut Property, ServiceError> {
+    for s in &mut project.sequences {
+        if let DocumentObject::Known(s) = s {
+            for c in s.tracks.iter_mut().flat_map(|t| &mut t.clips) {
+                if c.id.as_uuid() == object {
+                    return c
+                        .properties
+                        .iter_mut()
+                        .find(|p| p.id() == id)
+                        .ok_or_else(|| invalid("clip property not found"));
+                }
+            }
+        }
+    }
     for c in &mut project.compositions {
         if let DocumentObject::Known(c) = c {
             if c.id.as_uuid() == object {

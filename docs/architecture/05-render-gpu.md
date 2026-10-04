@@ -1,5 +1,13 @@
 # 05 レンダラーと GPU
 
+## NLE-002 の動画 / Generator / clip effects
+
+Sequence compiler は Composition の独立 instance に加え、動画 Asset の明示 stream / rational PTS 要求と `kronello.solid` version 1 を同じ Scene IR / Render DAG へ lowering する。Clip.properties は配置 transform / effects を Sequence time で評価する。動画は native dimensions、Generator は Sequence extent を local rectangle とする。track 順は下→上、transition の同一 track 内は開始時刻順。effects の後に crossfade incoming の opacity を掛ける。
+
+`VideoRenderBackend` は固定 DAG に入った Asset hash / locator だけを解決する。元 Project を再読込しない。software seek / decode、明示 SDR RGBA8 color conversion / inverse transfer / premultiply、CPU nearest sampling、選択 GPU への明示 RGBA16F upload を通す。未知 format / HDR / 色 tag、asset 欠落 / hash mismatch は typed error。タグ欠落時の明示 default（YUV: BT.709 limited、RGB: sRGB full）は sequence.query に assumptions として見える。native plane decode API の HDR 保持をこの SDR renderer の対応と同一視しない。
+
+clip effects は FX-001 の ordered DAG、affine 制限、halo / backward ROI、raster identity を共有する。`FrameMetadata.input_path` は active video の CPU decode / color / sampling と selected backend の経路を表し、GPU の低層 TransferStats は upload bytes / operations を数える。GPU-resident decode、frame interpolation、tile 間の decode cache は追加していない。CPU / GPU 比較の実行範囲は [NLE-002 の検証](../testing/nle-002.md)、時間・色・Generator と transition の意味版は [ADR-0062](../adr/0062-video-generator-and-timeline-edits.md) を参照する。
+
 ## レンダー要求
 
 ```text
@@ -19,7 +27,7 @@ RenderRequest:
 ノードは要求に応じて必要な入力時刻・領域を返す。出力ポートは Color / Mask を初期実装し、Depth / MotionVector / Normal は将来の型として境界を確保する。
 値の評価と GPU コマンド発行を分離する。純粋モデル層は `wgpu::Texture` や `AVFrame` を保持しない。
 
-NLE-001 の `RenderTarget::Composition / Sequence` は `render.frame` / `render.sequence` の両方で使う。Sequence を ClipId による独立 instance と active_range を持つ実行用 Composition に lower し、既存 Scene IR / DAG で track の下→上に合成する。空白区間は透明。保存文書の Composition を追加・変更せず、snapshot の owned Project に元の Sequence と全配置を固定する。Sequence の working_space が profile の正本で、復元 snapshot の不一致は拒否する。CPU-reference は明示指定し、GPU の暗黙 fallback はない。画像連番には音声を含めず、音声 Bus は service の `mix_sequence_audio` へ明示入力する。Asset / Generator 動画 Clip、clip effects、Sequence A/V mux は後続範囲。[ADR-0051](../adr/0051-nle-placement-and-retime.md)、[検証記録](../testing/nle-001.md) を参照。
+NLE-001 の `RenderTarget::Composition / Sequence` は `render.frame` / `render.sequence` の両方で使う。Sequence を ClipId による独立 instance と active_range を持つ実行用 Composition に lower し、既存 Scene IR / DAG で track の下→上に合成する。空白区間は透明。保存文書の Composition を追加・変更せず、snapshot の owned Project に元の Sequence と全配置を固定する。Sequence の working_space が profile の正本で、復元 snapshot の不一致は拒否する。CPU-reference は明示指定し、GPU の暗黙 fallback はない。画像連番には音声を含めず、音声 Bus は service の `mix_sequence_audio` へ明示入力する。NLE-001 時点では Asset / Generator 動画 Clip と clip effects を延期し、NLE-002 が追加した（冒頭の節を参照）。Sequence A/V mux は後続範囲。[ADR-0051](../adr/0051-nle-placement-and-retime.md)、[検証記録](../testing/nle-001.md) を参照。
 
 render は Scene IR と評価値を受け取り、具象 backend の実装を上位から渡された契約越しに呼ぶ。コード依存の向きは [ADR-0043](../adr/0043-semantic-dependencies-and-units.md) に従う。出力領域は左上原点の画素単位で、画素 `(i, j)` の中心は `(i+0.5, j+0.5)`。設計単位 `design_px` と区別する。
 
@@ -212,11 +220,11 @@ RGBA16F の各 component は有限、alpha は `[0,1]`、RGB の絶対値は 65,
 `FrameMetadata` の必須項目は次のとおり。
 
 - `schema_version` / `snapshot_schema_version` / `project_schema_version`、`snapshot_content_hash`、元の `revision`（10進文字列）、選択 `target`。互換フィールド `composition` は Sequence の場合、lower した実行用 root の ID。
-- `semantic_versions`（document / interpolation / time_map / layout / vector / color / coverage / stroke_geometry / gradient_interpolation）、`font_locks`（family / PostScript 名 / hash / face index）。
+- `semantic_versions`（document / interpolation / time_map / layout / vector / color / coverage / stroke_geometry / gradient_interpolation、effects / generators の version map、video_input）、`font_locks`（family / PostScript 名 / hash / face index）。
 - 正規化有理数 `time`（num / den は10進文字列）、連番時の `frame_index`（10進文字列）と `sequence_number`。任意時刻の still では後二項目は null。
 - `design_extent`、`region`（origin / extent / pixels）、2×3 の `design_to_pixel`、`working_space`、`flatten_tolerance_px`。
 - `numeric` / `display` の各 `ImageFormat`（color_space、transfer_function、alpha、association_space、pixel_format、channel_order、row_order、byte_order、clipping）。
-- `backend`（`cpu_reference_float32` または `wgpu_rgba16f`）。厳密 cache の GPU / driver fingerprint 固定は CACHE / QA の後続範囲。
+- `backend`（`cpu_reference_float32` または `wgpu_rgba16f`）、`input_path`（通常の `semantic_scene`、または動画 CPU decode / color / sample と selected backend の明示経路）。厳密 cache の GPU / driver fingerprint 固定は CACHE / QA の後続範囲。
 
 出力先は新しい directory を排他的に作り、既存 directory は拒否する。全 frame を内部 staging へ生成・検証・sync してから確定名に rename し、最後に `sequence.json` を確定する。通常エラーでは今回作った directory を rollback する。既存成果物は上書きしない。プロセス強制終了時の orphan 回収・resume・directory 全体の crash durability は JOB / RECOVERY の未実装範囲。
 

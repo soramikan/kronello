@@ -1,5 +1,7 @@
 //! Local-file media backend. Native resources are confined to the audited FFI.
 #![deny(unsafe_code)]
+mod render;
+pub use render::*;
 mod assets;
 mod audio;
 mod export;
