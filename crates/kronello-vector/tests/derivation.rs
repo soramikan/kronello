@@ -302,6 +302,7 @@ fn existing_evaluator_animates_shape_size_and_radius_without_editing_ir() {
     let dependencies = BTreeMap::new();
     let graph = DependencyGraph::compile(
         EvaluationSnapshot {
+            expressions: &[],
             compositions: &compositions,
             curves: &curves,
             registry: &registry,

@@ -8,8 +8,8 @@ use thiserror::Error;
 use uuid::Uuid;
 
 use crate::{
-    AnimationCurve, Asset, Composition, Sequence, Shape, TemplateDefinition, TemplateInstance,
-    TextDocument,
+    AnimationCurve, Asset, Composition, Expression, Sequence, Shape, TemplateDefinition,
+    TemplateInstance, TextDocument,
 };
 
 pub const PROJECT_SCHEMA_VERSION: u32 = 1;
@@ -40,6 +40,8 @@ pub struct Project {
     pub name: String,
     pub compositions: Vec<DocumentObject<Composition>>,
     pub curves: Vec<DocumentObject<AnimationCurve>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub expressions: Vec<DocumentObject<Expression>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub shapes: Vec<DocumentObject<Shape>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -75,6 +77,7 @@ impl Default for Project {
             name: String::new(),
             compositions: Vec::new(),
             curves: Vec::new(),
+            expressions: Vec::new(),
             shapes: Vec::new(),
             texts: Vec::new(),
             templates: Vec::new(),
@@ -100,6 +103,7 @@ impl Project {
                     | "name"
                     | "compositions"
                     | "curves"
+                    | "expressions"
                     | "shapes"
                     | "texts"
                     | "templates"
@@ -154,6 +158,17 @@ impl Project {
             };
             if !ids.insert(id) {
                 return Err(ProjectError::InvalidDocument("duplicate object id".into()));
+            }
+        }
+        for object in &self.expressions {
+            let (id, fields) = match object {
+                DocumentObject::Known(value) => (value.id.as_uuid(), None),
+                DocumentObject::Opaque(value) => (value.id, Some(&value.fields)),
+            };
+            if !ids.insert(id) || fields.is_some_and(|f| f.contains_key("id")) {
+                return Err(ProjectError::InvalidDocument(
+                    "duplicate or shadowed expression id".into(),
+                ));
             }
         }
         for object in &self.shapes {
@@ -295,6 +310,7 @@ impl Project {
                 .curves
                 .iter()
                 .any(|v| matches!(v, DocumentObject::Opaque(_)))
+            || self.expressions.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(e) if e.version != crate::EXPRESSION_VERSION))
             || self
                 .shapes
                 .iter()
@@ -354,6 +370,11 @@ impl<'de> Deserialize<'de> for Project {
             name: take_field::<_, D::Error>(&mut fields, "name")?,
             compositions: take_field::<_, D::Error>(&mut fields, "compositions")?,
             curves: take_field::<_, D::Error>(&mut fields, "curves")?,
+            expressions: if fields.contains_key("expressions") {
+                take_field::<_, D::Error>(&mut fields, "expressions")?
+            } else {
+                Vec::new()
+            },
             shapes: if fields.contains_key("shapes") {
                 take_field::<_, D::Error>(&mut fields, "shapes")?
             } else {

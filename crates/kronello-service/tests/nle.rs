@@ -193,6 +193,7 @@ fn shared_composition_placements_evaluate_independently_and_render_cpu_pixels() 
     let refs = ReferenceBindings::new();
     let deps = DependencyDeclarations::new();
     let snapshot = EvaluationSnapshot {
+        expressions: &[],
         compositions: &comps,
         curves: &curves,
         registry: &registry,

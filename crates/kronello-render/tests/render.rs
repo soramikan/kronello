@@ -518,7 +518,7 @@ fn expression_missing_font_glyph_hash_and_failed_sequence_are_typed() {
         },
     )
     .unwrap_err();
-    assert_eq!(error.code(), "UNSUPPORTED_FEATURE");
+    assert_eq!(error.code(), "EVALUATION_ERROR");
     let dir = tempfile::tempdir().unwrap();
     let out = dir.path().join("failed");
     assert!(

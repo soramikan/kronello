@@ -748,6 +748,63 @@ fn worker_checks_saved_schema_semantics_features_and_input_hash() {
 }
 
 #[test]
+fn expression_job_pins_ast_and_renders_after_source_project_removal() {
+    let f = Fixture::new();
+    let node = &f.document["compositions"][0]["nodes"][0];
+    let property = node["properties"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["descriptor"]["key"] == "kronello.opacity")
+        .unwrap();
+    let id = "173087e0-c21b-43de-9371-8e1da051095a";
+    let expression = |value| json!({"expression_set":{"expression":{"id":id,"version":1,"value_type":"scalar","nodes":[{"literal":{"kind":"scalar","value":value}}]}}});
+    let commands = json!([expression(0.4), {"property_source_set":{"object":node["id"],"property":property["id"],"source":{"kind":"expression","value":id}}}]);
+    let plan = f.service(json!({"operation":"edit.plan","project":f.project,"base_revision":"1","commands":commands}));
+    f.service(json!({"operation":"edit.apply","project":f.project,"base_revision":"1","commands":commands,"plan_hash":plan["plan_hash"],"session_id":"96607679-eefd-407a-a3a8-59943f2bd82f","idempotency_key":"set-expression"}));
+    let gate = f.temp.path().join("expression-release");
+    let submitted = f.submit_request(json!({"operation":"render.submit","render":f.render(&f.temp.path().join("expression-output")),"required_features":["expression"]}), Some(&gate), false);
+    f.wait(&submitted.id, JobStatus::Running);
+    let commands = json!([expression(0.8)]);
+    let plan = f.service(json!({"operation":"edit.plan","project":f.project,"base_revision":"2","commands":commands}));
+    f.service(json!({"operation":"edit.apply","project":f.project,"base_revision":"2","commands":commands,"plan_hash":plan["plan_hash"],"session_id":"96607679-eefd-407a-a3a8-59943f2bd82f","idempotency_key":"change-expression"}));
+    std::fs::remove_file(&f.project).unwrap();
+    std::fs::write(gate, b"release").unwrap();
+    let finished = f.wait(&submitted.id, JobStatus::Succeeded);
+    assert_eq!(finished.revision, "2");
+    assert_eq!(finished.completed_frames, 3);
+    let input: Value = serde_json::from_slice(
+        &std::fs::read(
+            f.store()
+                .directory(&submitted.id)
+                .unwrap()
+                .join("input.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        input["snapshot"]["project"]["expressions"][0]["nodes"][0]["literal"]["value"],
+        0.4
+    );
+    assert_eq!(input["snapshot"]["semantic_versions"]["expression"], 1);
+    let snapshot: kronello_render::RenderSnapshot =
+        serde_json::from_str(&input["snapshot"].to_string()).unwrap();
+    let time = serde_json::from_value(json!({"num":"0","den":"1"})).unwrap();
+    let ir = kronello_render::build_scene_ir(&snapshot, time, &[]).unwrap();
+    assert_eq!(ir.nodes[0].opacity, 0.4);
+    let metadata: Value =
+        serde_json::from_slice(&std::fs::read(finished.destination.join("sequence.json")).unwrap())
+            .unwrap();
+    for frame in metadata["frames"].as_array().unwrap() {
+        assert_eq!(
+            frame["metadata"]["snapshot_content_hash"],
+            submitted.snapshot_hash
+        );
+    }
+}
+
+#[test]
 fn mov_export_uses_fixed_video_and_audio_snapshot() {
     let f = Fixture::new();
     let audio = Path::new(env!("CARGO_MANIFEST_DIR"))

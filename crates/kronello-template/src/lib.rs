@@ -9,6 +9,8 @@ use thiserror::Error;
 pub enum TemplateError {
     #[error("UNSUPPORTED_FEATURE: {0}")]
     Unsupported(String),
+    #[error(transparent)]
+    Expression(#[from] kronello_model::ExpressionError),
     #[error("invalid template: {0}")]
     Invalid(String),
     #[error("template definition content changed")]
@@ -29,6 +31,7 @@ pub enum TemplateError {
 impl TemplateError {
     pub fn code(&self) -> &'static str {
         match self {
+            Self::Expression(e) => e.code(),
             Self::Unsupported(_) => "UNSUPPORTED_FEATURE",
             Self::DefinitionChanged => "TEMPLATE_DEFINITION_CHANGED",
             Self::DurationTooShort => "DURATION_TOO_SHORT",
@@ -234,8 +237,31 @@ fn add_curve(
             .ok_or_else(|| invalid("curve missing"))?;
         objects.insert(id.as_uuid(), serde_json::to_value(c)?);
     }
-    if matches!(source, PropertySource::Expression(_)) {
-        return Err(TemplateError::Unsupported("expression templates".into()));
+    if let PropertySource::Expression(id) = source {
+        if project
+            .expressions
+            .iter()
+            .any(|e| matches!(e, DocumentObject::Opaque(e) if e.id == id.as_uuid()))
+        {
+            return Err(TemplateError::Unsupported(format!(
+                "opaque expression {id}"
+            )));
+        }
+        let e = project
+            .expressions
+            .iter()
+            .find_map(|e| match e {
+                DocumentObject::Known(e) if e.id == *id => Some(e),
+                _ => None,
+            })
+            .ok_or_else(|| invalid("expression missing"))?;
+        e.validate()?;
+        objects.insert(id.as_uuid(), serde_json::to_value(e)?);
+        for node in &e.nodes {
+            if let kronello_model::ExpressionNode::CurveSample { curve, .. } = node {
+                add_curve(project, &PropertySource::Curve(*curve), objects)?;
+            }
+        }
     }
     Ok(())
 }

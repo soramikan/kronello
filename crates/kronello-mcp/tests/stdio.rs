@@ -7,6 +7,50 @@ use std::time::Duration;
 use kronello_mcp::SUPPORTED_PROTOCOL_VERSIONS;
 use serde_json::{Value, json};
 
+#[test]
+fn expression_commands_and_samples_use_the_shared_mcp_api() {
+    let mut client = Client::spawn(&[], false);
+    client.ready(SUPPORTED_PROTOCOL_VERSIONS[0]);
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("expression.kronello");
+    let doc: Value =
+        serde_json::from_str(include_str!("../../../examples/m1-demo.project.json")).unwrap();
+    let created = client.call("project.create", json!({"project":path,"document":doc}));
+    assert_eq!(created["isError"], false);
+    let c = &doc["compositions"][0];
+    let node = &c["nodes"][0];
+    let property = node["properties"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["descriptor"]["key"] == "kronello.opacity")
+        .unwrap();
+    let id = "173087e0-c21b-43de-9371-8e1da051095a";
+    let commands = json!([
+        {"expression_set":{"expression":{"id":id,"version":1,"value_type":"scalar","nodes":[{"literal":{"kind":"scalar","value":0.4}}]}}},
+        {"property_source_set":{"object":node["id"],"property":property["id"],"source":{"kind":"expression","value":id}}}
+    ]);
+    let planned = client.call(
+        "edit.plan",
+        json!({"project":path,"base_revision":"1","commands":commands}),
+    );
+    assert_eq!(planned["isError"], false, "{planned}");
+    let payload = json!({"project":path,"base_revision":"1","commands":commands,"plan_hash":planned["structuredContent"]["plan_hash"],"session_id":"96607679-eefd-407a-a3a8-59943f2bd82f","idempotency_key":"expression"});
+    let applied = client.call("edit.apply", payload.clone());
+    assert_eq!(applied["isError"], false, "{applied}");
+    assert_eq!(
+        client.call("edit.apply", payload)["structuredContent"],
+        applied["structuredContent"]
+    );
+    let samples = client.call("property.sample", json!({"project":path,"composition":c["id"],"keys":[{"kind":"node","instance_path":[],"node":node["id"],"property":property["id"]}],"times":[{"num":"1","den":"2"}]}));
+    assert_eq!(samples["isError"], false, "{samples}");
+    assert_eq!(samples["structuredContent"]["revision"], "2");
+    assert_eq!(
+        samples["structuredContent"]["samples"][0]["values"][0],
+        json!({"kind":"scalar","value":0.4})
+    );
+}
+
 struct Client {
     _state: tempfile::TempDir,
     child: Child,

@@ -34,6 +34,21 @@ fn property(key: &str, source: PropertySource<Value>) -> Property {
 fn constant(key: &str, value: Value) -> Property {
     property(key, PropertySource::Constant(value))
 }
+fn unsupported_opacity() -> Property {
+    let mut p = constant("kronello.opacity", scalar(0.5));
+    p.set_modifiers(
+        vec![Modifier {
+            id: ModifierId::new(),
+            key: SchemaKey::new("future.unimplemented").unwrap(),
+            version: 1,
+            enabled: true,
+            parameters: BTreeMap::new(),
+        }],
+        &SchemaRegistry::with_builtin(),
+    )
+    .unwrap();
+    p
+}
 fn node(properties: Vec<Property>) -> SceneNode {
     SceneNode {
         effects: vec![],
@@ -102,6 +117,7 @@ fn graph<'a>(
 ) -> Result<DependencyGraph<'a>, EvaluationError> {
     DependencyGraph::compile(
         EvaluationSnapshot {
+            expressions: &[],
             compositions: comps,
             curves,
             registry,
@@ -415,7 +431,7 @@ fn cycle_across_placement_reference_and_declared_parent_dependency_is_diagnosed(
 }
 
 #[test]
-fn expressions_enabled_modifiers_and_unknown_curve_versions_are_unsupported() {
+fn missing_expressions_fail_compilation_and_modifiers_versions_are_unsupported() {
     let mut n = node(vec![property(
         "kronello.opacity",
         PropertySource::Expression(ExpressionId::new()),
@@ -425,10 +441,9 @@ fn expressions_enabled_modifiers_and_unknown_curve_versions_are_unsupported() {
     let deps = DependencyDeclarations::new();
     let registry = SchemaRegistry::with_builtin();
     let defs = vec![composition(vec![n.clone()])];
-    let g = graph(&defs, &[], &refs, &deps, &registry).unwrap();
-    let err = g.evaluate_property(&key, Time::ZERO).unwrap_err();
-    assert_eq!(err.code(), "UNSUPPORTED_FEATURE");
-    assert!(matches!(err,EvaluationError::UnsupportedFeature{key:k,..} if k==key));
+    let err = graph(&defs, &[], &refs, &deps, &registry).err().unwrap();
+    assert_eq!(err.code(), "EVALUATION_ERROR");
+    assert!(matches!(err,EvaluationError::InvalidValue{key:k,..} if k==key));
     n.properties[0]
         .set_source(PropertySource::Constant(scalar(0.5)), &registry)
         .unwrap();
@@ -482,10 +497,7 @@ fn expressions_enabled_modifiers_and_unknown_curve_versions_are_unsupported() {
 fn active_ranges_are_half_open_and_inactive_containment_skips_descendants_and_maps() {
     let mut parent = node(vec![]);
     parent.active_range = TimeRange::new(Time::ZERO, t(1, 1)).unwrap();
-    let mut child = node(vec![property(
-        "kronello.opacity",
-        PropertySource::Expression(ExpressionId::new()),
-    )]);
+    let mut child = node(vec![unsupported_opacity()]);
     child.containment_parent = Some(parent.id);
     parent.child_order.push(child.id);
     let nested = composition(vec![node(vec![])]);
@@ -685,10 +697,7 @@ fn dangling_edges_invalid_input_references_and_duplicate_descriptors_are_rejecte
 fn inactive_transform_parent_only_requires_transform_properties() {
     let mut parent = node(vec![
         constant("kronello.transform.position", vec2(3.0, 4.0)),
-        property(
-            "kronello.opacity",
-            PropertySource::Expression(ExpressionId::new()),
-        ),
+        unsupported_opacity(),
     ]);
     parent.active_range = TimeRange::new(t(1, 1), t(2, 1)).unwrap();
     let mut child = node(vec![]);
@@ -867,6 +876,7 @@ fn declared_layout_values_schedule_consumers_and_reject_reverse_wrap_cycle() {
     let compile = |deps| {
         DependencyGraph::compile(
             EvaluationSnapshot {
+                expressions: &[],
                 compositions: &definitions,
                 curves: &curves,
                 registry: &registry,

@@ -46,6 +46,7 @@ pub fn evaluate_sequence(
             let local_time = clip.local_time(time)?;
             let graph = DependencyGraph::compile(
                 EvaluationSnapshot {
+                    expressions: snapshot.expressions,
                     compositions: snapshot.compositions,
                     curves: snapshot.curves,
                     registry: snapshot.registry,

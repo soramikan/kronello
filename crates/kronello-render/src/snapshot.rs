@@ -20,6 +20,8 @@ pub const GRADIENT_INTERPOLATION_VERSION: &str = "vec003-linear-premultiplied-pa
 #[serde(deny_unknown_fields)]
 pub struct SemanticVersions {
     pub document: u32,
+    #[serde(default = "expression_version")]
+    pub expression: u32,
     pub interpolation: u32,
     pub time_map: u32,
     pub layout: u32,
@@ -30,11 +32,15 @@ pub struct SemanticVersions {
     pub gradient_interpolation: String,
     pub effects: BTreeMap<String, u32>,
 }
+fn expression_version() -> u32 {
+    EXPRESSION_VERSION
+}
 impl SemanticVersions {
     /// Pins explicitly at snapshot creation, never at execution or resume.
     pub fn current(document: u32) -> Self {
         Self {
             document,
+            expression: EXPRESSION_VERSION,
             interpolation: INTERPOLATION_VERSION,
             time_map: 1,
             layout: TEXT_LAYOUT_VERSION,
@@ -450,10 +456,49 @@ pub fn build_scene_ir_with_cache(
             }
         }
     }
+    let mut expressions = vec![];
+    let mut used_expressions = BTreeSet::new();
+    for c in &definitions {
+        for source in c
+            .properties
+            .iter()
+            .chain(c.nodes.iter().flat_map(|n| &n.properties))
+            .map(|p| p.source())
+            .chain(
+                c.nodes
+                    .iter()
+                    .filter_map(|n| match &n.kind {
+                        NodeKind::CompositionInstance(i) => Some(i.input_bindings.values()),
+                        _ => None,
+                    })
+                    .flatten(),
+            )
+        {
+            if let PropertySource::Expression(id) = source {
+                used_expressions.insert(*id);
+            }
+        }
+    }
+    for id in used_expressions {
+        let Some(e) = content(&snapshot.project.expressions, id.as_uuid(), |e| {
+            e.id.as_uuid()
+        })?
+        else {
+            continue;
+        };
+        for n in &e.nodes {
+            if let ExpressionNode::CurveSample { curve, .. } = n {
+                used_curves.insert(*curve);
+            }
+        }
+        expressions.push(e.clone());
+    }
     let mut curves = vec![];
     for id in used_curves {
-        let curve = content(&snapshot.project.curves, id.as_uuid(), |c| c.id().as_uuid())?
-            .ok_or_else(|| RenderError::InvalidInput(format!("missing curve {id}")))?;
+        let Some(curve) = content(&snapshot.project.curves, id.as_uuid(), |c| c.id().as_uuid())?
+        else {
+            continue;
+        };
         if curve.ensure_supported_version().is_err() {
             return Err(RenderError::UnsupportedFeature(format!(
                 "curve {id} interpolation version"
@@ -470,6 +515,7 @@ pub fn build_scene_ir_with_cache(
     let deps = templates.dependencies.clone();
     let graph = DependencyGraph::compile(
         EvaluationSnapshot {
+            expressions: &expressions,
             compositions: &definitions,
             curves: &curves,
             registry: &registry,

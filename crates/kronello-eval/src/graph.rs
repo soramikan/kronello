@@ -12,10 +12,9 @@ use crate::{EvaluationError, RuntimePropertyKey};
 /// Transient compiled input overrides, not an extension of PropertySource.
 /// Targets must be composition properties with an existing placement binding;
 /// sources must be properties in that placement's immediate parent scope.
-/// EXPR-001 may populate this hook from statically resolved expression ASTs.
 pub type ReferenceBindings = BTreeMap<RuntimePropertyKey, RuntimePropertyKey>;
-/// Generic static edges (dependent -> upstreams), including future expression
-/// dependencies. These declare scheduling only; they do not implement an AST.
+/// Additional static edges (dependent -> upstreams), for example layout inputs.
+/// Expression property edges are derived directly from the canonical AST.
 pub type DependencyDeclarations = BTreeMap<RuntimePropertyKey, Vec<RuntimePropertyKey>>;
 
 /// Borrowed immutable semantic input. The caller resolves storage/version/asset
@@ -23,6 +22,7 @@ pub type DependencyDeclarations = BTreeMap<RuntimePropertyKey, Vec<RuntimeProper
 /// implicit lookup of a latest document is involved.
 pub struct EvaluationSnapshot<'a> {
     pub compositions: &'a [Composition],
+    pub expressions: &'a [kronello_model::Expression],
     pub curves: &'a [AnimationCurve],
     pub registry: &'a SchemaRegistry,
     pub reference_bindings: &'a ReferenceBindings,
@@ -38,12 +38,12 @@ pub(crate) struct Scope<'a> {
         kronello_model::NodeId,
     )>,
 }
-struct Entry<'a> {
-    property: &'a Property,
+pub(crate) struct Entry<'a> {
+    pub(crate) property: &'a Property,
     source: &'a PropertySource<Value>,
     // An authored placement binding runs in the parent's time domain. The
     // definition's own curve runs in its mapped local time domain.
-    source_scope: InstancePath,
+    pub(crate) source_scope: InstancePath,
 }
 
 /// Immutable reusable compiled graph. Memoization is local to a single query.
@@ -53,9 +53,10 @@ pub struct DependencyGraph<'a> {
     entries: BTreeMap<RuntimePropertyKey, Entry<'a>>,
     edges: BTreeMap<RuntimePropertyKey, BTreeSet<RuntimePropertyKey>>,
     references: ReferenceBindings,
-    curves: BTreeMap<CurveId, &'a AnimationCurve>,
-    registry: &'a SchemaRegistry,
-    working_space: ColorSpace,
+    pub(crate) curves: BTreeMap<CurveId, &'a AnimationCurve>,
+    pub(crate) registry: &'a SchemaRegistry,
+    pub(crate) working_space: ColorSpace,
+    expressions: BTreeMap<kronello_model::ExpressionId, &'a kronello_model::Expression>,
 }
 
 impl<'a> DependencyGraph<'a> {
@@ -79,9 +80,13 @@ impl<'a> DependencyGraph<'a> {
             edges: BTreeMap::new(),
             references: snapshot.reference_bindings.clone(),
             curves: BTreeMap::new(),
+            expressions: snapshot.expressions.iter().map(|e| (e.id, e)).collect(),
             registry: snapshot.registry,
             working_space: snapshot.working_space,
         };
+        if graph.expressions.len() != snapshot.expressions.len() {
+            return Err(EvaluationError::DuplicateExpressionId);
+        }
         for curve in snapshot.curves {
             if graph.curves.insert(curve.id(), curve).is_some() {
                 return Err(EvaluationError::DuplicateCurveId(curve.id()));
@@ -228,6 +233,83 @@ impl<'a> DependencyGraph<'a> {
             }
             graph.edges.get_mut(target).unwrap().insert(source.clone());
         }
+        for (key, entry) in &graph.entries {
+            if graph.references.contains_key(key) {
+                continue;
+            }
+            if let PropertySource::Expression(id) = entry.source {
+                let expression =
+                    graph
+                        .expressions
+                        .get(id)
+                        .ok_or_else(|| EvaluationError::InvalidValue {
+                            key: key.clone(),
+                            source: ModelError::ExpressionNotFound { id: *id },
+                        })?;
+                expression
+                    .validate()
+                    .map_err(|source| crate::expression::error(key, source))?;
+                if expression.value_type != self_contract(entry, snapshot.registry).value_type {
+                    return Err(crate::expression::error(
+                        key,
+                        kronello_model::ExpressionError::TypeMismatch(expression.nodes.len() - 1),
+                    ));
+                }
+                for node in &expression.nodes {
+                    match node {
+                        kronello_model::ExpressionNode::Property {
+                            node,
+                            property,
+                            value_type,
+                        } => {
+                            let source =
+                                graph.expression_key(&entry.source_scope, *node, *property);
+                            graph.require_key(&source)?;
+                            let upstream =
+                                self_contract(&graph.entries[&source], snapshot.registry);
+                            let consumer = self_contract(entry, snapshot.registry);
+                            if upstream.value_type != *value_type
+                                || upstream.unit != consumer.unit
+                                || upstream.coordinate_space != consumer.coordinate_space
+                            {
+                                return Err(crate::expression::error(
+                                    key,
+                                    kronello_model::ExpressionError::InvalidAst(
+                                        "reference type, unit or coordinate space mismatch",
+                                    ),
+                                ));
+                            }
+                            graph.edges.get_mut(key).unwrap().insert(source);
+                        }
+                        kronello_model::ExpressionNode::CurveSample {
+                            curve, value_type, ..
+                        } => {
+                            let curve = graph.curves.get(curve).ok_or_else(|| {
+                                EvaluationError::InvalidValue {
+                                    key: key.clone(),
+                                    source: ModelError::CurveNotFound { id: *curve },
+                                }
+                            })?;
+                            curve.ensure_supported_version().map_err(|_| {
+                                EvaluationError::UnsupportedFeature {
+                                    key: key.clone(),
+                                    feature: "expression curve interpolation version".into(),
+                                }
+                            })?;
+                            if curve.value_type() != *value_type {
+                                return Err(crate::expression::error(
+                                    key,
+                                    kronello_model::ExpressionError::InvalidAst(
+                                        "curve type mismatch",
+                                    ),
+                                ));
+                            }
+                        }
+                        _ => (),
+                    }
+                }
+            }
+        }
         graph.order(graph.entries.keys().cloned())?;
         Ok(graph)
     }
@@ -345,6 +427,28 @@ impl<'a> DependencyGraph<'a> {
         time: Time,
         inputs: &BTreeMap<RuntimePropertyKey, Value>,
     ) -> Result<BTreeMap<RuntimePropertyKey, Value>, EvaluationError> {
+        if self.expressions.is_empty() {
+            return self.evaluate_closure(keys, time, inputs);
+        }
+        // A budget belongs to one requested property's dependency closure.
+        // Batching, renderer caches and sibling requests cannot change it.
+        let mut result = BTreeMap::new();
+        for key in keys.iter().collect::<BTreeSet<_>>() {
+            let value = self
+                .evaluate_closure(std::slice::from_ref(key), time, inputs)?
+                .remove(key)
+                .unwrap();
+            result.insert(key.clone(), value);
+        }
+        Ok(result)
+    }
+
+    fn evaluate_closure(
+        &self,
+        keys: &[RuntimePropertyKey],
+        time: Time,
+        inputs: &BTreeMap<RuntimePropertyKey, Value>,
+    ) -> Result<BTreeMap<RuntimePropertyKey, Value>, EvaluationError> {
         for (key, value) in inputs {
             self.require_key(key)?;
             if matches!(key, RuntimePropertyKey::LayoutValue { .. }) {
@@ -361,9 +465,60 @@ impl<'a> DependencyGraph<'a> {
                     source,
                 })?;
         }
-        let order = self.order(keys.iter().cloned())?;
+        let order = self.order(keys.iter().cloned().collect::<BTreeSet<_>>())?;
+        let expression_key = order
+            .iter()
+            .find(|key| {
+                self.entries
+                    .get(*key)
+                    .is_some_and(|e| matches!(e.source, PropertySource::Expression(_)))
+            })
+            .cloned();
         let mut values: BTreeMap<RuntimePropertyKey, Value> = BTreeMap::new();
+        let mut usage = crate::expression::Usage::default();
         for key in order {
+            if let Some(expression_key) = &expression_key {
+                let payload = if let Some(value) = inputs.get(&key) {
+                    kronello_model::expression_value_bytes(value)
+                } else if let Some(source) = self.references.get(&key) {
+                    kronello_model::expression_value_bytes(&values[source])
+                } else if let Some(entry) = self.entries.get(&key) {
+                    match entry.source {
+                        PropertySource::Constant(v) => kronello_model::expression_value_bytes(v),
+                        PropertySource::Curve(id) => {
+                            let curve = self.curves.get(id).ok_or_else(|| {
+                                EvaluationError::InvalidValue {
+                                    key: key.clone(),
+                                    source: ModelError::CurveNotFound { id: *id },
+                                }
+                            })?;
+                            usage
+                                .charge(65 + curve.keys().len(), 0, 1, Default::default())
+                                .map_err(|e| crate::expression::error(expression_key, e))?;
+                            curve
+                                .keys()
+                                .iter()
+                                .map(|k| kronello_model::expression_value_bytes(&k.value))
+                                .max()
+                                .unwrap_or(0)
+                        }
+                        _ => 0,
+                    }
+                } else {
+                    std::mem::size_of::<Value>()
+                };
+                usage
+                    .charge(
+                        1,
+                        payload
+                            + std::mem::size_of::<RuntimePropertyKey>()
+                            + 64
+                            + key.instance_path().ids().len().saturating_mul(16),
+                        0,
+                        Default::default(),
+                    )
+                    .map_err(|e| crate::expression::error(expression_key, e))?;
+            }
             if matches!(key, RuntimePropertyKey::LayoutValue { .. }) {
                 let value = inputs
                     .get(&key)
@@ -393,12 +548,16 @@ impl<'a> DependencyGraph<'a> {
             } else {
                 match entry.source {
                     PropertySource::Constant(value) => value.clone(),
-                    PropertySource::Expression(id) => {
-                        return Err(EvaluationError::UnsupportedFeature {
-                            key,
-                            feature: format!("expression {id}"),
-                        });
-                    }
+                    PropertySource::Expression(id) => self
+                        .run_expression(
+                            self.expressions[id],
+                            entry,
+                            key.instance_path(),
+                            self.local_time(&entry.source_scope, time)?,
+                            &values,
+                            &mut usage,
+                        )
+                        .map_err(|source| crate::expression::error(&key, source))?,
                     PropertySource::Curve(id) => {
                         let curve =
                             self.curves
@@ -454,7 +613,11 @@ impl<'a> DependencyGraph<'a> {
         }
         Ok(keys
             .iter()
-            .map(|key| (key.clone(), values[key].clone()))
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            // Move requested payloads out of the memo table. Cloning here
+            // would allocate a second large output outside the memory charge.
+            .map(|key| values.remove_entry(key).expect("evaluated requested key"))
             .collect())
     }
 }
