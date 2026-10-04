@@ -71,6 +71,12 @@ pub struct Composition {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SceneNode {
+    /// Display only; never used as identity.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Disabled containment subtrees do not enter the evaluated scene.
+    #[serde(default = "node_enabled", skip_serializing_if = "is_enabled")]
+    pub enabled: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<crate::Effect>,
     pub id: NodeId,
@@ -562,4 +568,11 @@ fn graph_cycles<K: Copy + Ord, E: Clone>(graph: &BTreeMap<K, Vec<(K, E)>>) -> Ve
         }
     }
     cycles
+}
+
+fn node_enabled() -> bool {
+    true
+}
+fn is_enabled(enabled: &bool) -> bool {
+    *enabled
 }

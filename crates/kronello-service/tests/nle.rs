@@ -396,6 +396,8 @@ fn instance_retime_changes_only_internal_map_with_undo_and_domain_rejections() {
         root_nodes: vec![node],
         properties: vec![],
         nodes: vec![SceneNode {
+            name: None,
+            enabled: true,
             id: node,
             kind: NodeKind::CompositionInstance(CompositionInstance {
                 id: CompositionInstanceId::new(),

@@ -1859,11 +1859,22 @@
             "$ref": "#/$defs/Effect"
           }
         },
+        "enabled": {
+          "description": "Disabled containment subtrees do not enter the evaluated scene.",
+          "type": "boolean"
+        },
         "id": {
           "$ref": "#/$defs/NodeId"
         },
         "kind": {
           "$ref": "#/$defs/NodeKind"
+        },
+        "name": {
+          "description": "Display only; never used as identity.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "properties": {
           "type": "array",

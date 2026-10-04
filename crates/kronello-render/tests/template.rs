@@ -48,6 +48,8 @@ fn place(
     )
     .unwrap();
     let n = SceneNode {
+        name: None,
+        enabled: true,
         id: NodeId::new(),
         kind: NodeKind::CompositionInstance(CompositionInstance {
             id,
@@ -240,6 +242,8 @@ fn inactive_placement_parent_skips_layout_and_overflow() {
     composition.nodes[0].containment_parent = Some(group);
     composition.root_nodes = vec![group];
     composition.nodes.push(SceneNode {
+        name: None,
+        enabled: true,
         id: group,
         kind: NodeKind::Group,
         containment_parent: None,
@@ -620,6 +624,8 @@ fn visual_following_in_shared_parent_space_and_singular_parent_is_diagnosed() {
                 node.transform_parent = Some(parent);
             }
             c.nodes.push(SceneNode {
+                name: None,
+                enabled: true,
                 id: parent,
                 kind: NodeKind::Group,
                 containment_parent: None,
@@ -709,6 +715,8 @@ fn nonleaf_text_follower_is_explicitly_unsupported() {
     let child_id = NodeId::new();
     c.nodes[1].child_order.push(child_id);
     c.nodes.push(SceneNode {
+        name: None,
+        enabled: true,
         id: child_id,
         kind: NodeKind::Null,
         containment_parent: Some(text_id),

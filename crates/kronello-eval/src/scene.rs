@@ -370,7 +370,7 @@ impl DependencyGraph<'_> {
                 .iter()
                 .find(|n| n.id == key.node)
                 .unwrap();
-            if !node.active_range.contains(local_time) {
+            if !node.enabled || !node.active_range.contains(local_time) {
                 continue;
             }
             let (transform, properties) = self.transform_values(&key, time, true, resolve)?;

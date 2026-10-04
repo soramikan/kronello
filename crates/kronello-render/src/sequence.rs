@@ -72,6 +72,8 @@ pub(crate) fn lower_sequence(
             };
             end = end.max(clip.timeline_range.end());
             nodes.push(SceneNode {
+                name: None,
+                enabled: true,
                 id: NodeId::from_uuid(clip.id.as_uuid()),
                 kind: NodeKind::CompositionInstance(CompositionInstance {
                     id: CompositionInstanceId::from_uuid(clip.id.as_uuid()),

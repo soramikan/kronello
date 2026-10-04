@@ -181,6 +181,8 @@ pub(crate) fn mutate(
             }
             c.root_nodes.insert(*index, *node);
             c.nodes.push(SceneNode {
+                name: None,
+                enabled: true,
                 id: *node,
                 kind: NodeKind::CompositionInstance(placement),
                 containment_parent: None,

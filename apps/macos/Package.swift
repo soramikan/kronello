@@ -9,12 +9,17 @@ let package = Package(
     name: "Kronello",
     platforms: [.macOS(.v14)],
     products: [
+        .executable(name: "Kronello", targets: ["Kronello"]),
         .library(name: "KronelloCore", targets: ["KronelloCore"]),
         .library(name: "KronelloDesign", targets: ["KronelloDesign"]),
         .executable(name: "KronelloPreviewHarness", targets: ["KronelloPreviewHarness"]),
         .executable(name: "KronelloJSONBenchmark", targets: ["KronelloJSONBenchmark"])
     ],
     targets: [
+        .target(name: "KronelloAppModel", dependencies: ["KronelloCore", "KronelloDesign"]),
+        .executableTarget(name: "Kronello", dependencies: ["KronelloCore", "KronelloDesign", "KronelloAppModel"],
+            linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]),
+        .testTarget(name: "KronelloAppModelTests", dependencies: ["KronelloAppModel", "KronelloCore", "KronelloDesign"]),
         // Native FFI boundary (FFI-001).
         .target(name: "CKronelloFFI", publicHeadersPath: "include"),
         .target(name: "KronelloCore", dependencies: ["CKronelloFFI"],

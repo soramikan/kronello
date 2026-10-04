@@ -10,11 +10,13 @@ public struct KRInspectorRow<Fields: View>: View {
     private let appearance: KRControlAppearance
     private let error: KRDiagnostic?
     private let fields: Fields
+    private let keyframeEditingEnabled: Bool
     public init(_ label: String, source: KRPropertySource = .constant, onKeyframe: Bool = false, selected: Bool = false,
-                error: KRDiagnostic? = nil, appearance: KRControlAppearance = .resting, previous: (() -> Void)? = nil, toggleKeyframe: @escaping () -> Void = {},
+                error: KRDiagnostic? = nil, appearance: KRControlAppearance = .resting, keyframeEditingEnabled: Bool = true, previous: (() -> Void)? = nil, toggleKeyframe: @escaping () -> Void = {},
                 next: (() -> Void)? = nil, @ViewBuilder fields: () -> Fields) {
-        self.label = label; navigator = KRKeyframeNavigator(source: source, onKeyframe: onKeyframe, previous: previous, toggle: toggleKeyframe, next: next)
+        self.label = label; navigator = KRKeyframeNavigator(source: source, onKeyframe: onKeyframe, previous: previous, toggle: toggleKeyframe, next: next, editingEnabled: keyframeEditingEnabled)
         self.selected = selected; self.error = error; self.appearance = appearance; self.fields = fields()
+        self.keyframeEditingEnabled = keyframeEditingEnabled
     }
     public var body: some View {
         VStack(alignment: .leading, spacing: 1) {

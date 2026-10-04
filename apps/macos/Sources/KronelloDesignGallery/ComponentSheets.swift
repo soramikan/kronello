@@ -29,7 +29,7 @@ enum ComponentSheets {
          .init("separator", kind: .separator), .init("delete", "削除", icon: .trash2, shortcut: "⌫", destructive: true)]
     }
     static var all: [(String, AnyView)] {
-        controls + hierarchy + timeline + viewer + feedback + overlays + [
+        controls + hierarchy + timeline + viewer + feedback + overlays + GUIStateSheets.all + [
             ("Icons", AnyView(IconSheet())), ("Typography", AnyView(TypeSheet())), ("Palette", AnyView(PaletteSheet()))
         ]
     }

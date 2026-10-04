@@ -1126,6 +1126,95 @@
         {
           "additionalProperties": false,
           "properties": {
+            "node_rename": {
+              "additionalProperties": false,
+              "properties": {
+                "composition": {
+                  "$ref": "#/$defs/CompositionId"
+                },
+                "name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                }
+              },
+              "required": [
+                "composition",
+                "node"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "node_rename"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "node_property_insert": {
+              "additionalProperties": false,
+              "properties": {
+                "composition": {
+                  "$ref": "#/$defs/CompositionId"
+                },
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                },
+                "property": {
+                  "$ref": "#/$defs/Property"
+                }
+              },
+              "required": [
+                "composition",
+                "node",
+                "property"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "node_property_insert"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "node_enabled_set": {
+              "additionalProperties": false,
+              "properties": {
+                "composition": {
+                  "$ref": "#/$defs/CompositionId"
+                },
+                "enabled": {
+                  "type": "boolean"
+                },
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                }
+              },
+              "required": [
+                "composition",
+                "node",
+                "enabled"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "node_enabled_set"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
             "node_remove": {
               "additionalProperties": false,
               "properties": {
@@ -3569,6 +3658,9 @@
         "name": {
           "type": "string"
         },
+        "open_mode": {
+          "$ref": "#/$defs/ProjectOpenMode"
+        },
         "project_id": {
           "type": "string"
         },
@@ -3587,6 +3679,7 @@
         }
       },
       "required": [
+        "open_mode",
         "project_id",
         "name",
         "revision",
@@ -3596,6 +3689,13 @@
         "compositions"
       ],
       "type": "object"
+    },
+    "ProjectOpenMode": {
+      "enum": [
+        "normal",
+        "safe"
+      ],
+      "type": "string"
     },
     "ProjectRequest": {
       "additionalProperties": false,
@@ -5433,11 +5533,22 @@
           },
           "type": "array"
         },
+        "enabled": {
+          "description": "Disabled containment subtrees do not enter the evaluated scene.",
+          "type": "boolean"
+        },
         "id": {
           "$ref": "#/$defs/NodeId"
         },
         "kind": {
           "$ref": "#/$defs/NodeKind"
+        },
+        "name": {
+          "description": "Display only; never used as identity.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "properties": {
           "items": {
@@ -5734,6 +5845,12 @@
         },
         "vector": {
           "type": "string"
+        },
+        "visibility": {
+          "default": 1,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [

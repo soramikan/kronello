@@ -166,6 +166,7 @@ pub struct SequenceRenderRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectInfo {
+    pub open_mode: ProjectOpenMode,
     pub project_id: String,
     pub name: String,
     pub revision: String,
@@ -656,6 +657,13 @@ fn open_existing(path: &Path) -> Result<ProjectStore, ServiceError> {
     }
     Ok(ProjectStore::open(path, OpenOptions::default())?)
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ProjectOpenMode {
+    Normal,
+    Safe,
+}
+
 fn info(store: &ProjectStore) -> Result<ProjectInfo, ServiceError> {
     let snapshot = store.snapshot()?;
     let content_hash = format!(
@@ -665,6 +673,11 @@ fn info(store: &ProjectStore) -> Result<ProjectInfo, ServiceError> {
         )?)?)
     );
     Ok(ProjectInfo {
+        open_mode: if store.safe_mode() {
+            ProjectOpenMode::Safe
+        } else {
+            ProjectOpenMode::Normal
+        },
         project_id: snapshot.document.id.to_string(),
         name: snapshot.document.name,
         revision: snapshot.revision.to_string(),
@@ -858,6 +871,27 @@ fn render_locators(input: &RenderInput) -> Result<(), ServiceError> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn project_info_reports_actual_normal_and_safe_open_mode() {
+        let folder = tempfile::tempdir().unwrap();
+        for (mode, expected) in [
+            (
+                kronello_store::OpenMode::ForceNormal,
+                super::ProjectOpenMode::Normal,
+            ),
+            (
+                kronello_store::OpenMode::ForceSafe,
+                super::ProjectOpenMode::Safe,
+            ),
+        ] {
+            let path = folder.path().join(format!("{expected:?}.kronello"));
+            let store =
+                kronello_store::ProjectStore::open(&path, kronello_store::OpenOptions { mode })
+                    .unwrap();
+            assert_eq!(super::info(&store).unwrap().open_mode, expected);
+            store.close().unwrap();
+        }
+    }
     use super::*;
 
     #[test]

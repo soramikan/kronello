@@ -429,6 +429,8 @@ mod tests {
                 panic!()
             };
             let node = SceneNode {
+                name: None,
+                enabled: true,
                 id: NodeId::new(),
                 kind: NodeKind::CompositionInstance(CompositionInstance {
                     id,
