@@ -29,6 +29,7 @@
 | [12 プラットフォームと依存](architecture/12-platform-dependencies.md) | 対象 OS、FFmpeg、ライセンス |
 | [13 品質と性能](architecture/13-quality-performance.md) | 検証項目、障害、性能目標 |
 | [14 ジョブ](architecture/14-jobs.md) | レンダージョブ、worker、状態 DB |
+| [デザインシステム](design-system/README.md) | GUI の色・書体・アイコン・寸法のトークンと部品の仕様 |
 | [参考資料](architecture/references.md) | 一次資料 |
 
 ## その他
