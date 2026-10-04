@@ -13,7 +13,7 @@
 | M0 | 0 | 0 | 6 | 0 | 6 |
 | M1 | 0 | 0 | 14 | 0 | 14 |
 | M2 | 0 | 1 | 10 | 0 | 11 |
-| M3 | 19 | 2 | 2 | 0 | 23 |
+| M3 | 18 | 3 | 2 | 0 | 23 |
 | M4 | 8 | 0 | 0 | 0 | 8 |
 | M5 | 5 | 0 | 0 | 0 | 5 |
 | M6 | 4 | 0 | 0 | 0 | 4 |
@@ -374,7 +374,7 @@
 
 ### INSPECT-001 非表示原因・依存・レンダー経路のexplain
 
-- 優先度: P1 / 領域: inspection / 状態: planned
+- 優先度: P1 / 領域: inspection / 状態: in_progress
 - 依存: API-001, LAYOUT-001, CACHE-001
 - 受け入れ条件:
   - opacity/active range/parent/mask/asset不足を要因別に返す

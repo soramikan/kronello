@@ -649,7 +649,7 @@
       "priority": "P1",
       "area": "inspection",
       "title": "非表示原因・依存・レンダー経路のexplain",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "API-001",
         "LAYOUT-001",
