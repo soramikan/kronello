@@ -579,7 +579,7 @@
       "priority": "P1",
       "area": "template",
       "title": "長さ・縦横比variant・data入力・版移行",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "TEMPLATE-001",
         "LAYOUT-001"
