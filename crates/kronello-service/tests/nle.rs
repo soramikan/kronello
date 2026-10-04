@@ -579,7 +579,7 @@ fn creation_placement_overlap_missing_and_map_domain_are_transactional() {
         TimelineCommand::ClipPlace {
             sequence: id,
             track,
-            clip: clip.clone(),
+            clip: Box::new(clip.clone()),
         },
         "place",
     );
@@ -590,7 +590,7 @@ fn creation_placement_overlap_missing_and_map_domain_are_transactional() {
         TimelineCommand::ClipPlace {
             sequence: id,
             track,
-            clip: overlap,
+            clip: Box::new(overlap),
         },
         "CLIP_OVERLAP",
     );
@@ -605,7 +605,7 @@ fn creation_placement_overlap_missing_and_map_domain_are_transactional() {
         TimelineCommand::ClipPlace {
             sequence: id,
             track,
-            clip: missing,
+            clip: Box::new(missing),
         },
         "SOURCE_MISSING",
     );
@@ -628,7 +628,7 @@ fn creation_placement_overlap_missing_and_map_domain_are_transactional() {
         TimelineCommand::ClipPlace {
             sequence: id,
             track,
-            clip: domain,
+            clip: Box::new(domain),
         },
         "TIME_MAP_OUT_OF_DOMAIN",
     );

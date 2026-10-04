@@ -433,7 +433,7 @@ fn transition_set_and_clip_effect_authoring_use_atomic_plans_and_undo() {
             TimelineCommand::ClipPlace {
                 sequence: id,
                 track,
-                clip: b.clone(),
+                clip: Box::new(b.clone()),
             },
             TimelineCommand::TransitionSet {
                 sequence: id,

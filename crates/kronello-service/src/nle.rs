@@ -16,7 +16,7 @@ pub enum TimelineCommand {
     ClipPlace {
         sequence: SequenceId,
         track: TrackId,
-        clip: Clip,
+        clip: Box<Clip>,
     },
     ClipTrim {
         sequence: SequenceId,
@@ -502,7 +502,7 @@ pub(crate) fn mutate(
                 .iter_mut()
                 .find(|t| t.id == *track)
                 .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "track missing"))?;
-            t.clips.push(clip.clone());
+            t.clips.push((**clip).clone());
             keys.insert(changed(sequence.as_uuid(), sequence.as_uuid()));
             keys.insert(changed(clip.id.as_uuid(), track.as_uuid()));
         }
@@ -692,7 +692,7 @@ pub(crate) fn clip_place(r: ClipPlaceRequest) -> Result<kronello_store::Event, S
         TimelineCommand::ClipPlace {
             sequence: r.sequence,
             track: r.track,
-            clip: r.clip,
+            clip: Box::new(r.clip),
         },
     ))];
     let plan = crate::edit::plan(PlanRequest {
