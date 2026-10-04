@@ -113,6 +113,46 @@ type PropertyResolver<'a> = dyn FnMut(
     + 'a;
 
 impl DependencyGraph<'_> {
+    /// Parent space used by a bounds follower. Includes enclosing placement
+    /// transforms and the explicit transform parent, independently of containment.
+    pub fn node_parent_world_transform_with_inputs(
+        &self,
+        key: &NodeKey,
+        time: Time,
+        inputs: &BTreeMap<RuntimePropertyKey, Value>,
+    ) -> Result<Affine2, EvaluationError> {
+        let scope = self
+            .scopes
+            .get(&key.instance_path)
+            .ok_or_else(|| EvaluationError::InstancePathNotFound(key.instance_path.clone()))?;
+        let node = scope
+            .composition
+            .nodes
+            .iter()
+            .find(|n| n.id == key.node)
+            .ok_or_else(|| EvaluationError::InstancePathNotFound(key.instance_path.clone()))?;
+        let parent = node
+            .transform_parent
+            .map(|node| NodeKey {
+                instance_path: key.instance_path.clone(),
+                node,
+            })
+            .or_else(|| {
+                scope.parent.as_ref().map(|(path, _, node)| NodeKey {
+                    instance_path: path.clone(),
+                    node: *node,
+                })
+            });
+        match parent {
+            Some(parent) => {
+                self.world_transform(&parent, time, &mut BTreeMap::new(), &mut |keys, time| {
+                    self.evaluate_properties_with_inputs(keys, time, inputs)
+                })
+            }
+            None => Ok(Affine2::IDENTITY),
+        }
+    }
+
     pub fn node_transform_with_inputs(
         &self,
         key: &NodeKey,

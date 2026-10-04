@@ -250,6 +250,14 @@ impl<'a> DependencyGraph<'a> {
             .get(key)
             .ok_or_else(|| EvaluationError::PropertyNotFound(key.clone()))
     }
+    /// Static upstream-first schedule, including externally supplied layout
+    /// projections. Upper compilers use it to produce inputs before consumers.
+    pub fn dependency_order(
+        &self,
+        keys: &[RuntimePropertyKey],
+    ) -> Result<Vec<RuntimePropertyKey>, EvaluationError> {
+        self.order(keys.iter().cloned())
+    }
     // Iterative DFS: active stack preserves the full closed cycle and convergent
     // dependencies are distinguished from back edges.
     fn order(

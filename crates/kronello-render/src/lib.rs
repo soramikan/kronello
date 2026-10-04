@@ -1,6 +1,8 @@
 //! Immutable scene compilation and image-sequence export. Concrete execution
 //! is injected through RenderBackend; this crate imports no GPU or store API.
+mod bounds;
 mod cache;
+pub use bounds::{DesignBounds, LayoutValue};
 mod dag;
 mod effect;
 mod output;
@@ -20,6 +22,16 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum RenderError {
+    #[error("text {node} line {line} advances {advance} beyond wrap width {wrap_width}")]
+    LayoutOverflow {
+        node: kronello_model::NodeId,
+        instance_path: kronello_model::InstancePath,
+        line: usize,
+        advance: f64,
+        wrap_width: f64,
+    },
+    #[error("visual bounds follower requires an invertible parent transform")]
+    SingularLayoutTransform,
     #[error(transparent)]
     Sequence(#[from] kronello_model::SequenceError),
     #[error(transparent)]
@@ -56,6 +68,8 @@ pub enum RenderError {
 impl RenderError {
     pub fn code(&self) -> &'static str {
         match self {
+            Self::LayoutOverflow { .. } => "LAYOUT_OVERFLOW",
+            Self::SingularLayoutTransform => "LAYOUT_SINGULAR_TRANSFORM",
             Self::Sequence(e) => e.code(),
             Self::Template(e) => e.code(),
             Self::Effect(kronello_model::EffectError::UnsupportedFeature)

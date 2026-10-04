@@ -15,6 +15,10 @@ pub const VECTOR_VERSION: &str = "render001-kurbo-flatten-v1";
 pub const COVERAGE_VERSION: &str = "vec003-grid4-v2";
 pub const STROKE_GEOMETRY_VERSION: &str = "vec003-centered-stroke-v1";
 pub const GRADIENT_INTERPOLATION_VERSION: &str = "vec003-linear-premultiplied-pad-v1";
+pub const LAYOUT_BOUNDS_VERSION: u32 = 1;
+fn initial_bounds_version() -> u32 {
+    1
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -23,6 +27,9 @@ pub struct SemanticVersions {
     pub interpolation: u32,
     pub time_map: u32,
     pub layout: u32,
+    /// Absent legacy snapshots use the initial bounds contract, never latest.
+    #[serde(default = "initial_bounds_version")]
+    pub bounds: u32,
     pub vector: String,
     pub color: String,
     pub coverage: String,
@@ -38,6 +45,7 @@ impl SemanticVersions {
             interpolation: INTERPOLATION_VERSION,
             time_map: 1,
             layout: TEXT_LAYOUT_VERSION,
+            bounds: LAYOUT_BOUNDS_VERSION,
             vector: VECTOR_VERSION.into(),
             color: COLOR_VERSION.into(),
             coverage: COVERAGE_VERSION.into(),
@@ -393,6 +401,8 @@ pub struct SceneNodeIr {
     pub properties: BTreeMap<PropertyId, Value>,
     pub text: Option<String>,
     pub content: SceneContent,
+    /// All three envelopes in root Composition design_px, before matte clipping.
+    pub bounds: crate::LayoutValue,
     pub layout_content_hash: Option<String>,
 }
 /// Resolution-independent text layout and shape values, in local design_px.
@@ -559,6 +569,7 @@ pub fn build_scene_ir_with_cache(
                 layout_content_hash = Some(crate::layout_content_hash(&resolved)?);
                 used_fonts.extend(resolved.styles.iter().map(|s| s.font.clone()));
                 let layout = cache.layout(&resolved, fonts)?;
+                crate::bounds::check_overflow(&n.key, &layout)?;
                 SceneContent::Text(layout)
             }
             _ => SceneContent::Empty,
@@ -572,6 +583,7 @@ pub fn build_scene_ir_with_cache(
             properties,
             text: evaluated_text,
             content,
+            bounds: crate::LayoutValue::default(),
             layout_content_hash,
         });
     }
@@ -581,6 +593,7 @@ pub fn build_scene_ir_with_cache(
             "snapshot missing required font lock".into(),
         ));
     }
+    crate::bounds::derive_scene_bounds(&mut nodes)?;
     Ok(SceneIr {
         composition: snapshot.composition,
         time,

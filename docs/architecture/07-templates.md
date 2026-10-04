@@ -68,7 +68,26 @@ M2 は有理数の `PiecewiseLinear` TimeMap により中間を stretch し、in
 hold / loop、variant、data、移行の差分・比較は M3 の TEMPLATE-002 に残す。
 保護区間と minimum_middle を満たせない尺は TimeMap を構築せず `DURATION_TOO_SHORT`。
 
-背景帯の `size` / `position` は text の `layout_bounds` に padding を加えた値だけを読む。
+M2 の背景帯の `size` / `position` は text の `layout_bounds` に padding を加えた値を読む。
+M3 の LAYOUT-001 は、この既定を維持して `TemplateBandBinding.bounds` に `ink` / `visual` の明示選択を追加した。
 上位 compiler が組版後に外部 `LayoutValue` を供給し、評価 DAG は text の Property → LayoutValue → 背景帯 Property を宣言する。
 `max_lines` 超過は `TEMPLATE_OVERFLOW` として最終レンダーを拒否する。
 実装範囲・制約・受け入れ条件とテストの対応は [TEMPLATE-001 検証](../testing/template-001.md) を参照。
+
+
+### LAYOUT-001 の帯 stage 選択
+
+`constraints.bands[]` に `bounds: "layout" | "ink" | "visual"` を追加した。省略時は従来の wrap_width 基準。
+`ink` は短文・空白を含めた字形の領域、`visual` は変換と blur / shadow を含む包含矩形に padding を加える。
+空の ink / visual は変換した text 原点に padding だけの帯を作り、layout box へ代替しない。
+帯と text の同一親空間・Rectangle・position のみという既存の制約を維持する。
+親変換が特異な visual 追従は `LAYOUT_SINGULAR_TRANSFORM`、text wrap と band size の静的循環は `PROPERTY_DEPENDENCY_CYCLE`。
+幅 overflow は `LAYOUT_OVERFLOW`、max_lines は従来の `TEMPLATE_OVERFLOW`。組版結果を clip / 縮小して最終出力を続けない。
+stage 選択も不変の template edition に保存され、既存 instance を暗黙に変更しない。
+
+比較 UI は `scene.query.evaluation: {time, fonts}` の active node の `evaluated.bounds` を使う。
+三段階を同時に root Composition の `design_px` で返し、既存の text-local `layout_bounds` も維持する。
+responsive variant 自体とその比較・移行操作は TEMPLATE-002 の後続範囲。
+詳細は [ADR-0057](../adr/0057-layout-bounds-stages.md) と [検証記録](../testing/layout-001.md) を参照。
+
+帯の対象 text は leaf node に限る。子の合成結果を組版時の字形 bounds へ混ぜず、子を持つ対象は `UNSUPPORTED_FEATURE` で拒否する。帯の対象でない text の子は通常の scene 合成と bounds 集約で扱う。

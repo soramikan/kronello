@@ -373,6 +373,11 @@ pub fn validate_definition(project: &Project, d: &TemplateDefinition) -> Result<
             .iter()
             .find(|n| n.id == b.text_node && matches!(n.kind, NodeKind::Text { .. }))
             .ok_or_else(|| invalid("text node missing"))?;
+        if !text.child_order.is_empty() {
+            return Err(TemplateError::Unsupported(
+                "bounds followers require leaf text nodes".into(),
+            ));
+        }
         let band = c
             .nodes
             .iter()
