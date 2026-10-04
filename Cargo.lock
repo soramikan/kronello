@@ -951,6 +951,7 @@ name = "kronello-service"
 version = "0.0.0"
 dependencies = [
  "jsonschema",
+ "kronello-audio",
  "kronello-eval",
  "kronello-gpu",
  "kronello-media",

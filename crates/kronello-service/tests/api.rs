@@ -202,7 +202,7 @@ fn capabilities_registry_media_extension_without_device_initialization() {
     ) else {
         panic!()
     };
-    assert_eq!(c.commands.len(), 19);
+    assert_eq!(c.commands.len(), 25);
     assert_eq!(c.api_schema_version, 1);
     assert_eq!(c.semantic_versions.document, PROJECT_SEMANTIC_VERSION);
     let media = c.media.unwrap();
@@ -224,6 +224,12 @@ fn capabilities_registry_media_extension_without_device_initialization() {
     assert_eq!(
         mutating,
         [
+            "sequence.create",
+            "clip.place",
+            "clip.trim",
+            "clip.stretch",
+            "instance.retime",
+            "template_instance.retime",
             "project.create",
             "project.import",
             "asset.relink",
@@ -523,7 +529,15 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
     ))
     .unwrap();
     let instance = json!({"id":uuid, "definition_ref":definition["id"], "version":"1.0.0", "duration":time, "inputs":{}});
+    let sequence = json!({"id":Uuid::new_v4(), "extent":{"width":64.0,"height":32.0}, "frame_rate":{"num":"24","den":"1"}, "audio_rate":48000, "working_space":"linear_rec709", "tracks":[]});
+    let clip = json!({"id":Uuid::new_v4(), "source_ref":{"kind":"composition","composition":composition}, "timeline_range":{"start":{"num":"0","den":"1"},"end":time}, "source_in":{"num":"0","den":"1"}, "time_map":{"kind":"linear","offset":{"num":"0","den":"1"},"speed":{"num":"1","den":"1"}}, "links":[],"effects":[]});
     let requests = vec![
+        json!({"operation":"sequence.create", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"seq","sequence":sequence}),
+        json!({"operation":"clip.place", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"clip","sequence":uuid,"track":uuid,"clip":clip}),
+        json!({"operation":"clip.trim", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"trim","sequence":uuid,"clip":uuid,"range":clip["timeline_range"]}),
+        json!({"operation":"clip.stretch", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"stretch","sequence":uuid,"clip":uuid,"range":clip["timeline_range"]}),
+        json!({"operation":"instance.retime", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"retime","composition":composition,"node":uuid,"time_map":clip["time_map"]}),
+        json!({"operation":"template_instance.retime", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"retime-template","instance":uuid,"duration":time}),
         json!({"operation":"project.create", "project":path, "document":p}),
         json!({"operation":"project.import", "project":path, "base_revision":"1", "document":p}),
         json!({"operation":"project.export", "project":path}),
@@ -795,6 +809,12 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
     let node = c.nodes[0].id;
     let property = c.nodes[0].properties[1].id();
     document.texts.clear();
+    let retime_composition = kronello_model::CompositionId::new();
+    let retime_node = kronello_model::NodeId::new();
+    document.compositions.push(kronello_model::DocumentObject::Known(serde_json::from_value(json!({
+        "id":retime_composition, "duration":{"num":"2","den":"1"}, "design_extent":{"width":64.0,"height":32.0}, "edit_rate":{"num":"24","den":"1"},
+        "root_nodes":[retime_node], "properties":[], "nodes":[{"id":retime_node,"kind":{"kind":"composition_instance","value":{"id":Uuid::new_v4(),"definition_ref":composition,"input_bindings":{},"local_time_map":{"kind":"linear","offset":{"num":"0","den":"1"},"speed":{"num":"1","den":"1"}},"seed":0}},"containment_parent":null,"transform_parent":null,"child_order":[],"active_range":{"start":{"num":"0","den":"1"},"end":{"num":"2","den":"1"}},"properties":[]}]
+    })).unwrap()));
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("contracts.kronello");
     execute(json!({"operation":"project.create", "project":path, "document":document}));
@@ -853,6 +873,27 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
     );
     execute(
         json!({"operation":"template.set_duration", "project":template_path, "base_revision":"4", "session_id":session, "idempotency_key":"duration", "instance":instance, "duration":{"num":"8", "den":"1"}}),
+    );
+    execute(
+        json!({"operation":"template_instance.retime","project":template_path,"base_revision":"5","session_id":session,"idempotency_key":"retime-template","instance":instance,"duration":{"num":"6","den":"1"}}),
+    );
+    let sequence_id = Uuid::new_v4();
+    let track_id = Uuid::new_v4();
+    let clip_id = Uuid::new_v4();
+    execute(
+        json!({"operation":"sequence.create","project":path,"base_revision":"4","session_id":session,"idempotency_key":"create-seq","sequence":{"id":sequence_id,"extent":{"width":64.0,"height":32.0},"frame_rate":{"num":"24","den":"1"},"audio_rate":48000,"working_space":"linear_rec709","tracks":[{"id":track_id,"kind":"video","clips":[]}]}}),
+    );
+    execute(
+        json!({"operation":"clip.place","project":path,"base_revision":"5","session_id":session,"idempotency_key":"place-clip","sequence":sequence_id,"track":track_id,"clip":{"id":clip_id,"source_ref":{"kind":"composition","composition":composition},"timeline_range":{"start":{"num":"0","den":"1"},"end":{"num":"2","den":"1"}},"source_in":{"num":"0","den":"1"},"time_map":{"kind":"linear","offset":{"num":"0","den":"1"},"speed":{"num":"1","den":"1"}},"links":[],"effects":[]}}),
+    );
+    execute(
+        json!({"operation":"clip.trim","project":path,"base_revision":"6","session_id":session,"idempotency_key":"trim-clip","sequence":sequence_id,"clip":clip_id,"range":{"start":{"num":"1","den":"4"},"end":{"num":"7","den":"4"}}}),
+    );
+    execute(
+        json!({"operation":"clip.stretch","project":path,"base_revision":"7","session_id":session,"idempotency_key":"stretch-clip","sequence":sequence_id,"clip":clip_id,"range":{"start":{"num":"1","den":"4"},"end":{"num":"9","den":"4"}}}),
+    );
+    execute(
+        json!({"operation":"instance.retime","project":path,"base_revision":"8","session_id":session,"idempotency_key":"retime-instance","composition":retime_composition,"node":retime_node,"time_map":{"kind":"linear","offset":{"num":"0","den":"1"},"speed":{"num":"1","den":"2"}}}),
     );
     let media_path = dir.path().join("media-contracts.kronello");
     let source = dir.path().join("asset.bin");

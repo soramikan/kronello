@@ -19,6 +19,8 @@ RenderRequest:
 ノードは要求に応じて必要な入力時刻・領域を返す。出力ポートは Color / Mask を初期実装し、Depth / MotionVector / Normal は将来の型として境界を確保する。
 値の評価と GPU コマンド発行を分離する。純粋モデル層は `wgpu::Texture` や `AVFrame` を保持しない。
 
+NLE-001 の `RenderTarget::Composition / Sequence` は `render.frame` / `render.sequence` の両方で使う。Sequence を ClipId による独立 instance と active_range を持つ実行用 Composition に lower し、既存 Scene IR / DAG で track の下→上に合成する。空白区間は透明。保存文書の Composition を追加・変更せず、snapshot の owned Project に元の Sequence と全配置を固定する。Sequence の working_space が profile の正本で、復元 snapshot の不一致は拒否する。CPU-reference は明示指定し、GPU の暗黙 fallback はない。画像連番には音声を含めず、音声 Bus は service の `mix_sequence_audio` へ明示入力する。Asset / Generator 動画 Clip、clip effects、Sequence A/V mux は後続範囲。[ADR-0051](../adr/0051-nle-placement-and-retime.md)、[検証記録](../testing/nle-001.md) を参照。
+
 render は Scene IR と評価値を受け取り、具象 backend の実装を上位から渡された契約越しに呼ぶ。コード依存の向きは [ADR-0043](../adr/0043-semantic-dependencies-and-units.md) に従う。出力領域は左上原点の画素単位で、画素 `(i, j)` の中心は `(i+0.5, j+0.5)`。設計単位 `design_px` と区別する。
 
 必要機能は要求と依存グラフから導出し、`required_features` と合わせて固定 snapshot の構造・意味の版を検証する。必要な未知機能・意味の版があれば最終レンダーを `UNSUPPORTED_FEATURE` で拒否する。プレビューの警告付き代替結果は最終結果・キャッシュと区別する（[ADR-0045](../adr/0045-snapshot-compatibility-boundaries.md)）。
@@ -209,7 +211,7 @@ RGBA16F の各 component は有限、alpha は `[0,1]`、RGB の絶対値は 65,
 
 `FrameMetadata` の必須項目は次のとおり。
 
-- `schema_version` / `snapshot_schema_version` / `project_schema_version`、`snapshot_content_hash`、元の `revision`（10進文字列）、選択 `composition`。
+- `schema_version` / `snapshot_schema_version` / `project_schema_version`、`snapshot_content_hash`、元の `revision`（10進文字列）、選択 `target`。互換フィールド `composition` は Sequence の場合、lower した実行用 root の ID。
 - `semantic_versions`（document / interpolation / time_map / layout / vector / color / coverage / stroke_geometry / gradient_interpolation）、`font_locks`（family / PostScript 名 / hash / face index）。
 - 正規化有理数 `time`（num / den は10進文字列）、連番時の `frame_index`（10進文字列）と `sequence_number`。任意時刻の still では後二項目は null。
 - `design_extent`、`region`（origin / extent / pixels）、2×3 の `design_to_pixel`、`working_space`、`flatten_tolerance_px`。

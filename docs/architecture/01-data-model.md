@@ -8,6 +8,7 @@
 | Asset | id, content_hash, kind, stream_metadata, immutable_locator |
 | DataAsset | id, schema, content_hash, values, time_mapping, analyzer_version |
 | Sequence | id, extent, frame_rate, audio_rate, working_space, tracks |
+| Track | id, kind（video / audio）, clips |
 | Clip | id, source_ref, timeline_range, source_in, time_map, links, effects |
 | Composition | id, duration, design_extent, edit_rate, root_nodes, properties, inputs, markers, output_ports |
 | SceneNode | id, kind, containment_parent, transform_parent, child_order, active_range, transform_ref, content_ref |
@@ -18,11 +19,13 @@
 | TemplateInstance | id, definition_ref, version, duration, inputs |
 | RenderSnapshot | content_hash, schema_version, revision, asset/font/data locks, semantic_versions, profile |
 
-STORE-001 では `Project` の最小保存外枠として UUID `id`、`name`、構造版・意味版、Composition / Curve 集合、未知フィールドを実装した。TEMPLATE-001 は省略可能な `templates` / `template_instances` を追加し、定義の不変な版と配置ごとの入力を別保存する。assets / sequences 等は後続タスクの提案のまま。未知内容の保持と編集可否、公開 JSON Schema は [09 保存と同時編集](09-storage-concurrency.md) と [ADR-0046](../adr/0046-store-format-and-location-policy.md) を参照する。
+STORE-001 では `Project` の最小保存外枠として UUID `id`、`name`、構造版・意味版、Composition / Curve 集合、未知フィールドを実装した。TEMPLATE-001 は省略可能な `templates` / `template_instances` を追加し、定義の不変な版と配置ごとの入力を別保存する。MEDIA-001 の `assets` と NLE-001 の `sequences` も省略可能な集合として実装した。未知内容の保持と編集可否、公開 JSON Schema は [09 保存と同時編集](09-storage-concurrency.md) と [ADR-0046](../adr/0046-store-format-and-location-policy.md) を参照する。
 
 SourceRef は Asset、Composition、Generator を区別する。SourceRef の型が増えても Clip の編集意味は変えない。
 
 Timeline の文書型（Sequence / Clip）と Composition / Property descriptor は `kronello-model` に置き、評価実装は分離する。意味の参照と論理モジュールの依存境界は [ADR-0043](../adr/0043-semantic-dependencies-and-units.md) を参照。
+
+NLE-001 は `Sequence`、video / audio `Track`、`Clip`、タグ付き `SourceRef` を実装した。track 配列順は下→上。同一 track の重複は `CLIP_OVERLAP`、端点で接する配置は許す。ClipId が同じ Composition の配置を区別し、source_in と TimeMap が独立した local time を決める。Sequence / Track / Clip の UUID 重複・scene ID との衝突、欠落 source、source bounds / map domain を検証する。未知 Sequence / Track / Clip / SourceRef は Sequence 全体を opaque に保持し、通常編集と選択対象の最終レンダーを拒否する。初期の動画描画 source は Composition のみ。Asset 音声の unity-speed ミックスは実装し、Asset / Generator 動画描画、リンク連動編集、clip effects は後続範囲。[ADR-0051](../adr/0051-nle-placement-and-retime.md)、[検証](../testing/nle-001.md) を参照。
 
 初期の SceneNode 種類は Group、Null、Shape、Text、Media、CompositionInstance とする。
 Mask / Matte は入力参照として表現でき、見えるレイヤーとして重複描画しない。Repeater / Particles / Scene3D は拡張種類とする。

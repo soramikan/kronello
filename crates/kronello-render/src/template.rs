@@ -45,7 +45,23 @@ impl TemplateRuntime {
         definitions: &[Composition],
         root: CompositionId,
     ) -> Result<Self, RenderError> {
-        kronello_template::validate_reachable(project, root)?;
+        if project
+            .compositions
+            .iter()
+            .any(|c| matches!(c, DocumentObject::Known(c) if c.id == root))
+        {
+            kronello_template::validate_reachable(project, root)?;
+        } else {
+            let lowered = definitions
+                .iter()
+                .find(|c| c.id == root)
+                .ok_or_else(|| RenderError::InvalidInput("missing root".into()))?;
+            for node in &lowered.nodes {
+                if let NodeKind::CompositionInstance(i) = &node.kind {
+                    kronello_template::validate_reachable(project, i.definition_ref)?;
+                }
+            }
+        }
         let mut runtime = Self::default();
         let mut pending = vec![(InstancePath::root(), root)];
         while let Some((path, id)) = pending.pop() {

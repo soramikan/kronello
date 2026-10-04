@@ -8,7 +8,8 @@ use thiserror::Error;
 use uuid::Uuid;
 
 use crate::{
-    AnimationCurve, Asset, Composition, Shape, TemplateDefinition, TemplateInstance, TextDocument,
+    AnimationCurve, Asset, Composition, Sequence, Shape, TemplateDefinition, TemplateInstance,
+    TextDocument,
 };
 
 pub const PROJECT_SCHEMA_VERSION: u32 = 1;
@@ -49,6 +50,8 @@ pub struct Project {
     pub template_instances: Vec<DocumentObject<TemplateInstance>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub assets: Vec<DocumentObject<Asset>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sequences: Vec<DocumentObject<Sequence>>,
     #[serde(flatten)]
     pub unknown_fields: BTreeMap<String, Value>,
 }
@@ -77,6 +80,7 @@ impl Default for Project {
             templates: Vec::new(),
             template_instances: Vec::new(),
             assets: Vec::new(),
+            sequences: Vec::new(),
             unknown_fields: BTreeMap::new(),
         }
     }
@@ -101,6 +105,7 @@ impl Project {
                     | "templates"
                     | "template_instances"
                     | "assets"
+                    | "sequences"
             )
         }) {
             return Err(ProjectError::InvalidDocument(
@@ -210,6 +215,69 @@ impl Project {
                 return Err(ProjectError::InvalidDocument("duplicate object id".into()));
             }
         }
+        for object in &self.sequences {
+            let id = match object {
+                DocumentObject::Known(sequence) => {
+                    sequence
+                        .validate(self)
+                        .map_err(|e| ProjectError::InvalidDocument(e.to_string()))?;
+                    for track in &sequence.tracks {
+                        if !ids.insert(track.id.as_uuid()) {
+                            return Err(ProjectError::InvalidDocument("duplicate track id".into()));
+                        }
+                        for clip in &track.clips {
+                            if !ids.insert(clip.id.as_uuid()) {
+                                return Err(ProjectError::InvalidDocument(
+                                    "duplicate clip id".into(),
+                                ));
+                            }
+                        }
+                    }
+                    sequence.id.as_uuid()
+                }
+                DocumentObject::Opaque(value) => {
+                    if value.fields.contains_key("id") {
+                        return Err(ProjectError::InvalidDocument(
+                            "opaque extension shadows id".into(),
+                        ));
+                    }
+                    value.id
+                }
+            };
+            if !ids.insert(id) {
+                return Err(ProjectError::InvalidDocument("duplicate object id".into()));
+            }
+        }
+        // Preserve existing scene validation policy while preventing timeline
+        // IDs from aliasing a scene placement or node.
+        let mut timeline_ids = std::collections::BTreeSet::new();
+        for object in &self.sequences {
+            match object {
+                DocumentObject::Known(sequence) => {
+                    timeline_ids.insert(sequence.id.as_uuid());
+                    for track in &sequence.tracks {
+                        timeline_ids.insert(track.id.as_uuid());
+                        timeline_ids.extend(track.clips.iter().map(|clip| clip.id.as_uuid()));
+                    }
+                }
+                DocumentObject::Opaque(value) => {
+                    timeline_ids.insert(value.id);
+                }
+            }
+        }
+        for object in &self.compositions {
+            if let DocumentObject::Known(c) = object {
+                for node in &c.nodes {
+                    if timeline_ids.contains(&node.id.as_uuid())
+                        || matches!(&node.kind, crate::NodeKind::CompositionInstance(i) if timeline_ids.contains(&i.id.as_uuid()))
+                    {
+                        return Err(ProjectError::InvalidDocument(
+                            "timeline id aliases scene identity".into(),
+                        ));
+                    }
+                }
+            }
+        }
         Ok(())
     }
 
@@ -231,6 +299,7 @@ impl Project {
                 .shapes
                 .iter()
                 .any(|v| matches!(v, DocumentObject::Opaque(_)))
+            || self.sequences.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
             || self.assets.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
             || self.templates.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
             || self.template_instances.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
@@ -307,6 +376,11 @@ impl<'de> Deserialize<'de> for Project {
             },
             assets: if fields.contains_key("assets") {
                 take_field::<_, D::Error>(&mut fields, "assets")?
+            } else {
+                Vec::new()
+            },
+            sequences: if fields.contains_key("sequences") {
+                take_field::<_, D::Error>(&mut fields, "sequences")?
             } else {
                 Vec::new()
             },

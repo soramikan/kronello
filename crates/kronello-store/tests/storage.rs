@@ -119,6 +119,63 @@ fn atomic_apply_persists_event_keys_inverse_receipt_and_snapshot() {
 }
 
 #[test]
+fn sequence_member_patches_reopen_replay_and_preserve_independent_sequences() {
+    let (_directory, path, mut store) = fixture();
+    let mut project: Project =
+        serde_json::from_str(include_str!("../../../examples/nle-001.project.json")).unwrap();
+    let DocumentObject::Known(sequence) = project.sequences.remove(0) else {
+        panic!("expected known sequence");
+    };
+    assert!(project.sequences.is_empty());
+    store
+        .import_json(0, Uuid::new_v4(), &serde_json::to_string(&project).unwrap())
+        .unwrap();
+    let mut update = request(1, "unused");
+    update.mutations = vec![Mutation::Set {
+        path: vec!["sequences".into(), sequence.id.to_string()],
+        value: serde_json::to_value(&sequence).unwrap(),
+    }];
+    let inserted = store.apply(update).unwrap();
+    assert_eq!(
+        inserted.inverse,
+        vec![Mutation::Remove {
+            path: vec!["sequences".into(), sequence.id.to_string()],
+        }]
+    );
+    project
+        .sequences
+        .push(DocumentObject::Known(sequence.clone()));
+    let first = project.clone();
+    let mut independent = sequence.clone();
+    independent.id = kronello_model::SequenceId::new();
+    independent.tracks.clear();
+    let mut update = request(2, "unused");
+    update.mutations = vec![Mutation::Set {
+        path: vec!["sequences".into(), independent.id.to_string()],
+        value: serde_json::to_value(&independent).unwrap(),
+    }];
+    store.apply(update).unwrap();
+    project
+        .sequences
+        .push(DocumentObject::Known(independent.clone()));
+    let both = project.clone();
+    let mut inverse = request(3, "unused");
+    inverse.mutations = inserted.inverse;
+    inverse.undo_of = Some(inserted.id);
+    store.apply(inverse).unwrap();
+    project.sequences = vec![DocumentObject::Known(independent)];
+    store.close().unwrap();
+    let reopened = open(&path);
+    assert_eq!(reopened.snapshot().unwrap().document, project);
+    assert_eq!(reopened.snapshot_at(1).unwrap().document.sequences, vec![]);
+    assert_eq!(reopened.snapshot_at(2).unwrap().document, first);
+    assert_eq!(reopened.snapshot_at(3).unwrap().document, both);
+    assert_eq!(reopened.snapshot_at(4).unwrap().document, project);
+    assert_eq!(reopened.events_since(1).unwrap().len(), 3);
+    reopened.close().unwrap();
+}
+
+#[test]
 fn failure_after_document_update_rolls_back_all_tables() {
     let (_directory, path, mut store) = fixture();
     let sql = Connection::open(&path).unwrap();

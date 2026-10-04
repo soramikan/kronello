@@ -22,6 +22,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum EditCommand {
+    Timeline(Box<crate::TimelineCommand>),
     Template(Box<crate::TemplateCommand>),
     PropertySourceSet {
         object: Uuid,
@@ -225,6 +226,17 @@ pub(crate) fn validate(project: &Project) -> Result<(), ServiceError> {
         DocumentObject::Known(d) => Some(d.id),
         _ => None,
     }));
+    for s in &project.sequences {
+        if let DocumentObject::Known(s) = s {
+            object_ids.insert(s.id.as_uuid());
+            for t in &s.tracks {
+                object_ids.insert(t.id.as_uuid());
+                for c in &t.clips {
+                    object_ids.insert(c.id.as_uuid());
+                }
+            }
+        }
+    }
     for c in &compositions {
         if !object_ids.insert(c.id.as_uuid()) {
             return Err(invalid("ambiguous object id"));
@@ -378,6 +390,7 @@ fn apply_command(
     keys: &mut BTreeSet<ChangedKey>,
 ) -> Result<(), ServiceError> {
     match command {
+        EditCommand::Timeline(command) => crate::nle::mutate(project, command, keys)?,
         EditCommand::Template(command) => crate::template::mutate(project, command, keys)?,
         EditCommand::PropertySourceSet {
             object,
@@ -641,7 +654,7 @@ fn unordered_collection(path: &[String]) -> bool {
     match path {
         [collection] => matches!(
             collection.as_str(),
-            "compositions" | "curves" | "shapes" | "texts"
+            "compositions" | "curves" | "shapes" | "texts" | "sequences"
         ),
         [compositions, _, collection] if compositions == "compositions" => {
             matches!(collection.as_str(), "nodes" | "properties")
@@ -667,7 +680,7 @@ fn diff(old: &Json, new: &Json, path: &mut Vec<String>, out: &mut Vec<Mutation>)
                     if path.len() == 1
                         && matches!(
                             key.as_str(),
-                            "shapes" | "texts" | "templates" | "template_instances"
+                            "shapes" | "texts" | "templates" | "template_instances" | "sequences"
                         )
                     {
                         diff(value, &Json::Array(vec![]), path, out);
@@ -683,7 +696,7 @@ fn diff(old: &Json, new: &Json, path: &mut Vec<String>, out: &mut Vec<Mutation>)
                     if path.len() == 1
                         && matches!(
                             key.as_str(),
-                            "shapes" | "texts" | "templates" | "template_instances"
+                            "shapes" | "texts" | "templates" | "template_instances" | "sequences"
                         )
                     {
                         diff(&Json::Array(vec![]), value, path, out);

@@ -15,6 +15,7 @@ workspace = true
 test-adapter-unavailable = []
 
 [dependencies]
+kronello-audio = { path = "../kronello-audio" }
 schemars = { version = "1", features = ["uuid1"] }
 kronello-eval = { path = "../kronello-eval" }
 kronello-template = { path = "../kronello-template" }

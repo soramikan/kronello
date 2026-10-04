@@ -1,6 +1,6 @@
 # 08 API・CLI・MCP・エージェント
 
-GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001-shared-command-query-api.md)）。M1 CLI-001 と M2 SERVICE-001 / API-001 / TEMPLATE-001 / MEDIA-001 / MCP-001 の実装範囲を次節に示す。それ以外の後続 API・CLI は提案であり、実装済みではない。
+GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001-shared-command-query-api.md)）。M1 CLI-001 と M2 SERVICE-001 / API-001 / TEMPLATE-001 / MEDIA-001 / MCP-001 / NLE-001 の実装範囲を次節に示す。それ以外の後続 API・CLI は提案であり、実装済みではない。
 
 ## M1 CLI-001 の実装範囲
 
@@ -17,7 +17,7 @@ GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001
 
 `document` は [公開 schema 1](../../schemas/project-v1.schema.json) の `Project` 型を共有する。request envelope は別の型であり、未知 field と重複 field を拒否する。Project 内の未知内容は store の規約で保持する。`project.create` は一時ファイル内で import / close を完了してから上書き禁止で公開する。`project.import` は既存ファイルを対象とし、明示した revision に一致する場合だけ更新する。project.create / project.import は store の event を記録するが、これら二つの操作の変更計画・再送の冪等性 API は未実装（以下の edit.* は対応済み）。読み取りと render で存在しない project を作成しない。
 
-`RenderInput` は `project`、`composition`（stable UUID）、`region`（origin / extent / pixels）、任意の `profile`（既定は linear Rec.709 / tolerance 0.02 px）、任意の `fonts` を持つ。fonts は `{ "identity": FontRef, "path": "local/file.otf" }` の配列とし、snapshot が必要とする font lock をすべて明示する。hash・face index・family・PostScript 名を照合し、システムフォント探索や外部取得はしない。path は process の作業ディレクトリ基準（絶対 path も可）。有理数は `{ "num": "1", "den": "2" }`、range は `{ "start": ..., "end": ... }` とする。
+`RenderInput` は `project`、`composition`（stable UUID）または NLE-001 の `target`、`region`（origin / extent / pixels）、任意の `profile`（既定は linear Rec.709 / tolerance 0.02 px）、任意の `fonts` を持つ。fonts は `{ "identity": FontRef, "path": "local/file.otf" }` の配列とし、snapshot が必要とする font lock をすべて明示する。hash・face index・family・PostScript 名を照合し、システムフォント探索や外部取得はしない。path は process の作業ディレクトリ基準（絶対 path も可）。有理数は `{ "num": "1", "den": "2" }`、range は `{ "start": ..., "end": ... }` とする。
 
 ### 機械向け I/O
 
@@ -96,7 +96,7 @@ printf '%s\n' '{"operation":"project.export","project":"/private/tmp/kronello-m1
 | `composition_create` | 完全な Composition の `composition`。既存 ID は拒否 |
 | `instance_place` | `composition`、CompositionInstance kind の SceneNode の `node`、`index`。definition・入力・TimeMap・seed は共有モデル型 |
 
-生の patch、inverse、changed_keys をクライアントから受け付けない。Expression の設定、Timeline 編集、テンプレートの公開入力 policy、Modifier 編集、ジョブはこの実装の対象外。opaque / 未知意味版の通常編集は引き続き保守的に `UNSUPPORTED_FEATURE` として拒否する。
+生の patch、inverse、changed_keys をクライアントから受け付けない。Expression の設定、Modifier 編集、ジョブは SERVICE-001 の実装対象外。Timeline 編集とテンプレートの公開入力 policy は後述の NLE-001 / TEMPLATE-001 で追加した。opaque / 未知意味版の通常編集は引き続き保守的に `UNSUPPORTED_FEATURE` として拒否する。
 
 ### 計画・適用と receipt
 
@@ -150,9 +150,9 @@ capabilities はコンパイル済み対応範囲を示し、GPU adapter の稼�
 
 ### 公開 schema と registry
 
-[schemas/api-v1.schema.json](../../schemas/api-v1.schema.json) は Draft 2020-12。Request / Response envelope、全19操作の payload / successful result、型付き EditCommand を共有 Rust 型から生成する。`api_json_schema()` と committed schema の一致を通常テストで確認する。再生成は `cargo run -p kronello-service --example api_schema --locked > schemas/api-v1.schema.json`。版はファイル名・`$id`・`x-api-schema-version` で固定し、既存 Request に必須 version field を追加しない。Project document は従来の公開型 / schema を共有する。
+[schemas/api-v1.schema.json](../../schemas/api-v1.schema.json) は Draft 2020-12。Request / Response envelope、全25操作の payload / successful result、型付き EditCommand を共有 Rust 型から生成する。`api_json_schema()` と committed schema の一致を通常テストで確認する。再生成は `cargo run -p kronello-service --example api_schema --locked > schemas/api-v1.schema.json`。版はファイル名・`$id`・`x-api-schema-version` で固定し、既存 Request に必須 version field を追加しない。Project document は従来の公開型 / schema を共有する。
 
-`command_registry()` の CommandDescriptor は name / read_only / request_schema / response_schema を持つ。schema refs は同ファイルの `$defs` を指す。request_schema は operation tag を除いた payload、response_schema は status / kind を除いた successful value。MCP-001 / FFI-001 は同じ registry と execute / execute_json を使用できる。registry の19操作は project.create / import / export / info / collect、asset.relink、render.frame / sequence、edit.plan / apply / undo、history.list、scene.query、property.sample、capabilities.get、template.define / instantiate / set_input / set_duration。project.create / import / asset.relink / edit.apply / undo と template の4操作が mutating。他は project に対し read-only（render.sequence と project.collect は output directory に成果物を作る）。project.collect の read_only は元プロジェクトを変更しないことを表し、複製と hash 検証済み素材を新しいフォルダに保存する。
+`command_registry()` の CommandDescriptor は name / read_only / request_schema / response_schema を持つ。schema refs は同ファイルの `$defs` を指す。request_schema は operation tag を除いた payload、response_schema は status / kind を除いた successful value。MCP-001 / FFI-001 は同じ registry と execute / execute_json を使用できる。registry の25操作は project.create / import / export / info / collect、asset.relink、render.frame / sequence、edit.plan / apply / undo、history.list、scene.query、property.sample、capabilities.get、template.define / instantiate / set_input / set_duration と後述の NLE-001 の6操作。project.create / import / asset.relink / edit.apply / undo、template の4操作、NLE-001 の6操作が mutating。他は project に対し read-only（render.sequence と project.collect は output directory に成果物を作る）。project.collect の read_only は元プロジェクトを変更しないことを表し、複製と hash 検証済み素材を新しいフォルダに保存する。
 
 request envelope・既知 payload は未知 field と重複 field を拒否する。schema に任意 shell、外部 URL fetch、raw FFmpeg args の実行 field は設けない。project / font / output path と assets 内の locator の URI scheme は filesystem access の前に `INVALID_REQUEST` とする。Windows drive path は local path として許す。素材の name / text や未知 Project 内容は不活性なデータであり、命令として実行しない。Project の未知 field 保持と、API envelope の厳格な decode は別の契約である。
 
@@ -283,3 +283,19 @@ cargo run -p kronello-mcp --locked -- --backend cpu-reference
 ### TEMPLATE-001 の Command
 
 `template.define` / `template.instantiate` / `template.set_input` / `template.set_duration` は同名の二語 CLI subcommand で呼ぶ。すべて `project`、`base_revision`、`session_id`、`idempotency_key` を持ち、成功時は `kind: edit` の Event を返す。定義・配置・入力・尺の payload と制約は [07 テンプレート](07-templates.md) を参照。これらも registry と公開 schema、revision・idempotency・Undo の共通経路を使う。
+
+## NLE-001 の Command と RenderTarget
+
+六つの操作を service registry、CLI の二語 subcommand、MCP stdio に共通登録した。すべて `project`、`base_revision`、`session_id`、`idempotency_key` を持ち、成功時は `kind: edit` の Event を返す。`EditCommand::Timeline` でも同じ plan / apply を呼べる。
+
+| operation | 固有 payload |
+|---|---|
+| `sequence.create` | 完全な `sequence`（tracks を含む） |
+| `clip.place` | `sequence`、`track`、完全な `clip` |
+| `clip.trim` / `clip.stretch` | `sequence`、`clip`、新しい `range` |
+| `instance.retime` | 親 `composition`、instance の `node`、`time_map` |
+| `template_instance.retime` | template `instance`、`duration` |
+
+三操作の意味、保護区間、音声範囲は [ADR-0051](../adr/0051-nle-placement-and-retime.md)。Undo は保存 inverse と候補検証を使い、tracks / clips の順序を厳密に復元する。同一 Sequence の構造編集は保守的に競合する。
+
+`render.frame` / `render.sequence` の `input` は既存 `composition: UUID`、または `target: {"kind":"composition","composition":"UUID"}` / `target: {"kind":"sequence","sequence":"UUID"}` を一つだけ指定する。未指定・両方指定・null・未知 field・重複 field は拒否する。frame / sequence metadata の `target` が対象を示す。`--backend cpu-reference` は明示 backend 選択であり、既定 GPU からの自動切替ではない。公開 project / API schema の生成一致と MCP / CLI からの trim・Undo・Sequence frame の確認は [NLE-001 の検証](../testing/nle-001.md) を参照。

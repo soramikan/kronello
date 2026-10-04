@@ -84,6 +84,13 @@ pub struct CapabilitiesResult {
 macro_rules! commands {
     ($emit:ident) => {
         $emit! {
+            ("sequence.create", false, SequenceCreateRequest, kronello_store::Event),
+            ("clip.place", false, ClipPlaceRequest, kronello_store::Event),
+            ("clip.trim", false, ClipTrimRequest, kronello_store::Event),
+            ("clip.stretch", false, ClipStretchRequest, kronello_store::Event),
+            ("instance.retime", false, InstanceRetimeRequest, kronello_store::Event),
+            ("template_instance.retime", false, TemplateInstanceRetimeRequest, kronello_store::Event),
+
             ("project.create", false, CreateRequest, ProjectInfo),
             ("project.import", false, ImportRequest, ProjectInfo),
             ("project.export", true, ProjectRequest, ExportResult),
@@ -128,6 +135,8 @@ impl CapabilitiesResult {
             ),
             commands: command_registry(),
             features: [
+                "sequence",
+                "composition_clip",
                 "composition",
                 "shape",
                 "text",

@@ -15,7 +15,7 @@ fn export(service: &Service<'_>, path: &std::path::Path) -> ExportResult {
     else {
         panic!()
     };
-    r
+    *r
 }
 fn error(result: Result<ResultData, ServiceError>, code: &str) {
     assert_eq!(result.unwrap_err().code, code);
