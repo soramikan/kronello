@@ -34,5 +34,11 @@ Kronello の UI は [Lucide](https://lucide.dev/) のアイコンだけを使う
 | 再読込・再リンク / 保存と revision | `refresh-cw` / `history` |
 | ジョブ: 実行中 / 待機 / 完了 / 中止 | `loader-circle` / `clock` / `circle-check` / `circle-x` |
 | プロジェクト / 新規 / 開く | `clapperboard` / `file-plus` / `folder-open` |
+| 道具（ToolStrip） | `mouse-pointer-2` / `hand` / `zoom-in` / `square` / `circle` / `pen-tool` / `type` / `scissors` |
+| ツール列の移動 / 折りたたみ | `grip-horizontal` / `chevrons-left` / `chevrons-right` |
+| スナップ / ガイド | `magnet` / `grid-3x3` |
+| 取り消す / やり直す | `undo-2` / `redo-2` |
+| ワークスペース | `layout-panel-left` |
+| 文字揃え | `align-left` / `align-center` |
 
 ここにないアイコンが必要になったら Lucide から選び、この表に追加する。他のアイコンセットや絵文字を混ぜない。

@@ -35,6 +35,7 @@ kronello-ffi  --->  kronello-service (Command / Query API)
 - メニューバー、ファイルダイアログ、ウインドウの枠など OS が描くものは OS のものを使う。
 - テーマは Dark（既定）と Light。書体は Noto Sans JP / Noto Sans Mono を同梱し、アイコンは Lucide を使う。
 - 値の正本は [tokens.json](../design-system/tokens.json)。各実装はトークン名を定数名として写し、値を直接書かない。
+- メインウインドウは 4 つのページ（編集・モーション・テンプレート・書き出し）で分け、各ページの配置はワークスペースとして保存する（[ADR-0055](../adr/0055-main-window-pages-and-workspaces.md)）。画面ごとの仕様は [画面](../design-system/screens/README.md)。
 
 ## FFI 境界の規約
 
