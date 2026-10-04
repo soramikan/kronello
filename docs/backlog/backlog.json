@@ -807,7 +807,7 @@
       "priority": "P1",
       "area": "audio",
       "title": "Sequence音声trackのA/V muxとclip音量",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "NLE-001",
         "AUDIO-000",
@@ -835,6 +835,7 @@
       "acceptance_criteria": [
         "retimed audioのTimeMap・補間・pitchの扱いを設計して意味版を固定し、線形/区分線形map、trim/stretch、非整数sample境界で同期とsource範囲を検証する",
         "audio effectsとGenerator音声の純粋評価・資源予算・固定入力の契約を定義し、同じsnapshotを任意順のbatchで評価して一致することを検証する",
+        "Sequenceのcrossfadeに含まれる音声clipの音声crossfade（曲線・意味版・sample境界）を定義して検証し、現行のUNSUPPORTED_FEATUREを対応範囲内で解消する",
         "未対応map・effect・Generator、予算超過や非有限値を型付きエラーにし、暗黙の速度1・無音・clampで続行しない"
       ]
     },
@@ -882,7 +883,7 @@
       "priority": "P1",
       "area": "mcp",
       "title": "MCP HTTP・resources/prompts・進捗とキャンセル",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "MCP-001",
         "JOB-001"

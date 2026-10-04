@@ -76,6 +76,8 @@
 | [0059](0059-template-duration-variants-and-migration.md) | テンプレートの保護尺・variant・data と明示した版移行を共有する | 採用 | 2026-10-05 |
 | [0060](0060-structured-read-only-inspection.md) | 非表示原因と実行前レンダー計画を読み取り Query で共有する | 採用 | 2026-10-05 |
 | [0062](0062-video-generator-and-timeline-edits.md) | 動画・Generator Clip と明示した Timeline 編集範囲 | 採用 | 2026-10-05 |
+| [0063](0063-document-audio-and-clip-volume.md) | 文書音声の配置・音量 Property と明示的な出力選択 | 採用 | 2026-10-05 |
+| [0064](0064-mcp-http-resources-and-request-control.md) | MCP HTTP・明示 resource・request 制御 | 採用 | 2026-10-05 |
 
 ## 追加と変更の規則
 
