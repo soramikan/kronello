@@ -13,7 +13,7 @@
 | M0 | 0 | 0 | 6 | 0 | 6 |
 | M1 | 0 | 0 | 14 | 0 | 14 |
 | M2 | 0 | 1 | 10 | 0 | 11 |
-| M3 | 20 | 3 | 0 | 0 | 23 |
+| M3 | 20 | 2 | 1 | 0 | 23 |
 | M4 | 8 | 0 | 0 | 0 | 8 |
 | M5 | 5 | 0 | 0 | 0 | 5 |
 | M6 | 4 | 0 | 0 | 0 | 4 |
@@ -327,7 +327,7 @@
 
 ### LAYOUT-001 responsive layoutとbounds段階
 
-- 優先度: P1 / 領域: layout / 状態: in_progress
+- 優先度: P1 / 領域: layout / 状態: done
 - 依存: TEXT-001, VEC-001, EVAL-001
 - 受け入れ条件:
   - layout/ink/visual boundsを区別する

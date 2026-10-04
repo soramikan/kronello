@@ -561,7 +561,7 @@
       "priority": "P1",
       "area": "layout",
       "title": "responsive layoutとbounds段階",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "TEXT-001",
         "VEC-001",
