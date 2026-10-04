@@ -827,7 +827,7 @@
       "priority": "P1",
       "area": "audio",
       "title": "リタイム音声・audio effects・Generator音声",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "AUDIO-003",
         "ANIM-001"
@@ -845,7 +845,7 @@
       "priority": "P1",
       "area": "media",
       "title": "追加movie job profileと圧縮音声",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "MEDIA-001",
         "AUDIO-000",
