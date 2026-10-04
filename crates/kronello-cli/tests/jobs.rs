@@ -13,6 +13,7 @@ struct Fixture {
     project: PathBuf,
     state: PathBuf,
     document: Value,
+    heartbeat_timeout: Duration,
 }
 impl Fixture {
     fn new() -> Self {
@@ -35,6 +36,7 @@ impl Fixture {
             project,
             state,
             document,
+            heartbeat_timeout: Duration::from_secs(30),
         };
         fixture.service(json!({"operation":"project.create","project":fixture.project,"document":fixture.document}));
         fixture
@@ -52,7 +54,10 @@ impl Fixture {
         c.args(["--backend", "cpu-reference"])
             .env("KRONELLO_STATE_ROOT", &self.state)
             .env("KRONELLO_JOB_HEARTBEAT_MS", "50")
-            .env("KRONELLO_JOB_TIMEOUT_MS", "3000")
+            .env(
+                "KRONELLO_JOB_TIMEOUT_MS",
+                self.heartbeat_timeout.as_millis().to_string(),
+            )
             .env_remove("KRONELLO_JOB_SLOTS")
             .env_remove("KRONELLO_JOB_RETENTION_SECONDS")
             .env_remove("KRONELLO_TEST_JOB_GATE")
@@ -113,7 +118,7 @@ impl Fixture {
     fn store(&self) -> JobStore {
         let mut c = JobConfig::at(&self.state);
         c.heartbeat_interval = Duration::from_millis(50);
-        c.heartbeat_timeout = Duration::from_millis(3000);
+        c.heartbeat_timeout = self.heartbeat_timeout;
         JobStore::open(c).unwrap()
     }
     fn wait(&self, id: &str, status: JobStatus) -> JobRecord {
@@ -130,8 +135,10 @@ impl Fixture {
                     .unwrap_or_default()
             );
             assert!(
-                start.elapsed() < Duration::from_secs(20),
-                "timed out: {r:?}"
+                start.elapsed() < Duration::from_secs(60),
+                "timed out: {r:?}; log: {}",
+                std::fs::read_to_string(self.store().directory(id).unwrap().join("worker.log"))
+                    .unwrap_or_default()
             );
             std::thread::sleep(Duration::from_millis(20));
         }
@@ -407,7 +414,8 @@ fn fifo_one_slot_and_fixed_snapshot_survive_project_edits() {
 
 #[test]
 fn sigkill_is_detected_by_heartbeat_and_releases_slot() {
-    let f = Fixture::new();
+    let mut f = Fixture::new();
+    f.heartbeat_timeout = Duration::from_secs(1);
     let first = f.submit("killed", Some(&f.temp.path().join("never")));
     let running = f.wait(&first.id, JobStatus::Running);
     let second = f.submit("next", None);
@@ -420,6 +428,88 @@ fn sigkill_is_detected_by_heartbeat_and_releases_slot() {
     assert_eq!(dead.error.unwrap().code, "JOB_INTERRUPTED");
     f.wait(&second.id, JobStatus::Succeeded);
     assert!(!first.destination.exists());
+}
+
+#[test]
+fn worker_heartbeat_retries_writer_contention_and_logs_recovery() {
+    let f = Fixture::new();
+    let gate = f.temp.path().join("release");
+    let submitted = f.submit("output", Some(&gate));
+    f.wait(&submitted.id, JobStatus::Running);
+    let log = f
+        .store()
+        .directory(&submitted.id)
+        .unwrap()
+        .join("worker.log");
+    let db = rusqlite::Connection::open(f.state.join("jobs.sqlite3")).unwrap();
+    db.execute_batch("BEGIN IMMEDIATE").unwrap();
+    let start = Instant::now();
+    let failed = loop {
+        if std::fs::read_to_string(&log)
+            .unwrap()
+            .contains("worker heartbeat failed")
+        {
+            break true;
+        }
+        if start.elapsed() > Duration::from_secs(5) {
+            break false;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    db.execute_batch("ROLLBACK").unwrap();
+    let start = Instant::now();
+    let recovered = loop {
+        if std::fs::read_to_string(&log)
+            .unwrap()
+            .contains("worker heartbeat recovered")
+        {
+            break true;
+        }
+        if start.elapsed() > Duration::from_secs(5) {
+            break false;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    std::fs::write(gate, b"release").unwrap();
+    f.wait(&submitted.id, JobStatus::Succeeded);
+    assert!(
+        failed && recovered,
+        "{}",
+        std::fs::read_to_string(&log).unwrap()
+    );
+    assert!(
+        std::fs::read_to_string(&log)
+            .unwrap()
+            .contains("worker startup pid=")
+    );
+}
+
+#[test]
+fn suspended_live_worker_is_not_interrupted_by_an_expired_heartbeat() {
+    struct ResumeWorker(nix::unistd::Pid);
+    impl Drop for ResumeWorker {
+        fn drop(&mut self) {
+            let _ = nix::sys::signal::kill(self.0, nix::sys::signal::Signal::SIGCONT);
+        }
+    }
+    let f = Fixture::new();
+    let gate = f.temp.path().join("release");
+    let submitted = f.submit("output", Some(&gate));
+    let running = f.wait(&submitted.id, JobStatus::Running);
+    let pid = nix::unistd::Pid::from_raw(running.worker_pid.unwrap() as i32);
+    let mut resume = None;
+    rewrite_record(&f, &submitted.id, |r| {
+        // Hold the writer lock before stopping the process, so SIGSTOP cannot
+        // freeze its heartbeat in the middle of a write transaction.
+        nix::sys::signal::kill(pid, nix::sys::signal::Signal::SIGSTOP).unwrap();
+        resume = Some(ResumeWorker(pid));
+        r.heartbeat_at_ms = kronello_jobs::now_ms() - 60000
+    });
+    let observed = f.store().get(&submitted.id).unwrap();
+    drop(resume);
+    std::fs::write(gate, b"release").unwrap();
+    assert_eq!(observed.status, JobStatus::Running);
+    f.wait(&submitted.id, JobStatus::Succeeded);
 }
 
 #[test]
@@ -507,17 +597,21 @@ fn output_validation_failure_and_destination_race_preserve_deliverables() {
 }
 
 fn rewrite_record(f: &Fixture, id: &str, edit: impl FnOnce(&mut JobRecord)) {
-    let db = rusqlite::Connection::open(f.state.join("jobs.sqlite3")).unwrap();
-    let text: String = db
+    let mut db = rusqlite::Connection::open(f.state.join("jobs.sqlite3")).unwrap();
+    let tx = db
+        .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+        .unwrap();
+    let text: String = tx
         .query_row("SELECT record FROM jobs WHERE id=?1", [id], |r| r.get(0))
         .unwrap();
     let mut record: JobRecord = serde_json::from_str(&text).unwrap();
     edit(&mut record);
-    db.execute(
+    tx.execute(
         "UPDATE jobs SET record=?1 WHERE id=?2",
         rusqlite::params![serde_json::to_string(&record).unwrap(), id],
     )
     .unwrap();
+    tx.commit().unwrap();
 }
 fn historical(f: &Fixture, status: JobStatus, age_days: i64) -> JobRecord {
     let r = f

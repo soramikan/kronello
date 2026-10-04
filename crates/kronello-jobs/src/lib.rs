@@ -33,6 +33,10 @@ impl JobError {
             Self::Json(_) => "INVALID_JOB_INPUT",
         }
     }
+    pub fn is_retryable_heartbeat(&self) -> bool {
+        matches!(self, Self::Sqlite(rusqlite::Error::SqliteFailure(error, _))
+            if matches!(error.code, rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked))
+    }
 }
 #[derive(Debug, Clone)]
 pub struct JobConfig {
@@ -199,7 +203,10 @@ fn save(db: &Connection, record: &JobRecord) -> Result<(), JobError> {
 fn recover(db: &Connection, timeout: Duration) -> Result<(), JobError> {
     let now = now_ms();
     for mut r in records(db)? {
-        if r.status.active() && now.saturating_sub(r.heartbeat_at_ms) > duration_ms(timeout) {
+        if r.status.active()
+            && now.saturating_sub(r.heartbeat_at_ms) > duration_ms(timeout)
+            && !r.worker_pid.is_some_and(worker_is_alive)
+        {
             r.status = JobStatus::Interrupted;
             r.finished_at_ms = Some(now);
             r.error = Some(JobFailure {
@@ -210,6 +217,27 @@ fn recover(db: &Connection, timeout: Duration) -> Result<(), JobError> {
         }
     }
     Ok(())
+}
+fn worker_is_alive(pid: u32) -> bool {
+    #[cfg(unix)]
+    {
+        let Ok(pid) = i32::try_from(pid) else {
+            return false;
+        };
+        if pid <= 0 {
+            return false;
+        }
+        // Signal zero only checks existence/permission; it sends no signal.
+        matches!(
+            nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid), None),
+            Ok(()) | Err(nix::errno::Errno::EPERM)
+        )
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = pid;
+        false
+    }
 }
 impl JobStore {
     pub fn open(config: JobConfig) -> Result<Self, JobError> {
@@ -227,8 +255,11 @@ impl JobStore {
         &self.config
     }
     fn connect(&self) -> Result<Connection, JobError> {
+        self.connect_with_timeout(Duration::from_secs(5))
+    }
+    fn connect_with_timeout(&self, timeout: Duration) -> Result<Connection, JobError> {
         let db = Connection::open(self.config.state_root.join("jobs.sqlite3"))?;
-        db.busy_timeout(Duration::from_secs(5))?;
+        db.busy_timeout(timeout)?;
         db.execute_batch("PRAGMA synchronous=FULL;")?;
         let version: u32 = db.query_row("PRAGMA user_version", [], |r| r.get(0))?;
         if version > 1 {
@@ -341,16 +372,23 @@ impl JobStore {
         })
     }
     pub fn heartbeat(&self, id: &str) -> Result<(), JobError> {
-        self.update(id, |r| {
-            if !r.status.active() || r.worker_pid.is_some_and(|pid| pid != std::process::id()) {
-                return Err(JobError::new(
-                    "JOB_INTERRUPTED",
-                    "worker no longer owns job",
-                ));
-            }
-            r.heartbeat_at_ms = now_ms();
-            Ok(())
-        })?;
+        // Apply the bound before any SQLite operation, including connection setup.
+        // A busy writer must not park this thread for the normal five seconds.
+        let budget = Duration::from_millis(100)
+            .min(self.config.heartbeat_interval)
+            .min(self.config.heartbeat_timeout / 4);
+        let mut db = self.connect_with_timeout(budget)?;
+        let tx = db.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let mut r = read(&tx, id)?;
+        if !r.status.active() || r.worker_pid.is_some_and(|pid| pid != std::process::id()) {
+            return Err(JobError::new(
+                "JOB_INTERRUPTED",
+                "worker no longer owns job",
+            ));
+        }
+        r.heartbeat_at_ms = now_ms();
+        save(&tx, &r)?;
+        tx.commit()?;
         Ok(())
     }
     pub fn claim(&self, id: &str) -> Result<bool, JobError> {
@@ -507,11 +545,35 @@ impl JobStore {
             .stderr(log);
         // The child calls setsid before opening state. It must not be a group
         // leader beforehand. No inherited transport pipe can keep a caller alive.
-        let child = command.spawn()?;
+        let mut child = None;
+        // Spawn and register under the writer lock, so recovery cannot observe
+        // an unregistered child even if either process is delayed at startup.
+        if let Err(error) = self.update(id, |r| {
+            if !r.status.active() {
+                return Err(JobError::new("JOB_INTERRUPTED", "job is terminal"));
+            }
+            if r.worker_pid.is_some() {
+                return Err(JobError::new(
+                    "JOB_ALREADY_OWNED",
+                    "another worker owns job",
+                ));
+            }
+            let spawned = command.spawn()?;
+            r.worker_pid = Some(spawned.id());
+            r.heartbeat_at_ms = now_ms();
+            child = Some(spawned);
+            Ok(())
+        }) {
+            if let Some(mut child) = child {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+            return Err(error);
+        }
+        let mut child = child.ok_or_else(|| JobError::new("JOB_SPAWN_ERROR", "child missing"))?;
         // Reap normal completion while the submitter is alive; on its exit the
         // OS reparents the independent worker. This thread does not block return.
         std::thread::spawn(move || {
-            let mut child = child;
             let _ = child.wait();
         });
         Ok(())

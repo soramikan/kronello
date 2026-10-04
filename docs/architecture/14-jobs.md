@@ -55,7 +55,7 @@ GUI / CLI / MCP
 | `succeeded` | 成果物を検証し、確定名へ切り替えた |
 | `failed` | 型付きエラーで終了した |
 | `canceled` | 取り消し要求を受けて停止した |
-| `interrupted` | heartbeat が途絶えた（worker の異常終了、マシンの停止など） |
+| `interrupted` | heartbeat が期限を超え、所有 worker の生存も確認できない（異常終了、マシンの停止など） |
 
 ## 入力の固定
 
@@ -73,14 +73,19 @@ GUI / CLI / MCP
 - worker は状態 DB のトランザクションで実行スロットを取得する。取得できない間は `queued` のまま待ち、投入順に実行する。
 - スロット数は設定で変更できる。
 - `KRONELLO_JOB_SLOTS=1` が既定。heartbeat は queued / running を別 thread で維持し、間隔1000 ms・期限30000 ms が既定（`KRONELLO_JOB_HEARTBEAT_MS` / `KRONELLO_JOB_TIMEOUT_MS`）。全入口は同じ設定を使う。slot 取得は `BEGIN IMMEDIATE` で DB の投入順 seq と running 数を照合する。
+- heartbeat 専用 connection の SQLite busy 待機は `min(100 ms, heartbeat_interval, heartbeat_timeout / 4)` とする。通常の状態操作の5秒待機を使わない。`SQLITE_BUSY` / `SQLITE_LOCKED` は worker.log に記録し、次の間隔で再試行する。所有喪失など他のエラーは記録して heartbeat thread を終了する。worker 起動・heartbeat 開始・書込み失敗・復帰・thread panic も stderr（切り離した worker では worker.log）へ記録する。
 - プレビュー（`preview.render`）はジョブではなく、呼び出したプロセス内で即時に実行する。スロットを消費しない。
 
 ## 中断と取り消し
 
 - `job.cancel` は状態 DB に取り消し要求を記録する。worker は処理の区切りで要求を確認し、一時出力を片付けて `canceled` にする。
-- heartbeat が一定時間途絶えたジョブは、次に状態を読んだプロセスが `interrupted` と判定し、スロットを解放する。
+- heartbeat が一定時間途絶え、所有 worker の生存も確認できないジョブは、次に状態を読んだプロセスが `interrupted` と判定し、スロットを解放する。
 - `interrupted` のジョブは自動では再開しない。`job.resume` は RECOVERY-001 の提案で、JOB-001 の registry / wire にはなく `INVALID_REQUEST`。出力ファイルへの無条件 append を再開方法に使わない。
 - 失敗や中断で、プロジェクトや確定済みの成果物を壊さない。
+
+中断判定は [ADR-0050](../adr/0050-fixed-job-execution-and-publication.md) のとおり、heartbeat の期限に Unix の生存確認を組み合わせる。起動側は child PID を DB に登録してから submit を返すため、worker が heartbeat thread を開始する前も確認できる。期限を超えた queued / running record でも `kill(pid, 0)` が成功、または `EPERM`（存在するが権限なし）なら中断させない。PID が未登録・不正、または生存を確認できない場合は従来どおり期限で中断する。get / list、slot 取得、prune は同じ判定を使う。terminal record の復活、自動再開、成果物の自動成功補正は行わず、publish の DB fence は維持する。
+
+この生存確認はプロセスの進捗や起動 identity を証明しない。停止・hang・未回収 zombie、PID 再利用では slot 解放が遅れる場合がある。生存中のプロセスを期限だけで中断する方法へ戻さず、進捗監視・起動 identity の強化は後続で設計する。Unix 以外の生存確認は実装しておらず、Windows detached worker の `UNSUPPORTED_FEATURE` は維持する。
 
 画像連番は destination volume の temporary directory に全 artifact を出力し、manifest・metadata・byte 長・hash・snapshot identity を再読検証する。MOV は ProRes + stereo 48 kHz PCM24、明示 background と clips を同じ AvExportSnapshot から出力し、stream / PTS / duration / snapshot metadata を probe する。frame 境界と確定前に cancel を確認する。DB transaction 内で lease / cancel を再確認し、atomic NOREPLACE rename で全 directory または MOV file を一度に確定する。既存成果物は空 directory も上書きしない。
 
