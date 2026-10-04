@@ -13,8 +13,11 @@ workspace = true
 [features]
 # Fault injection for CLI integration tests; also requires debug assertions.
 test-adapter-unavailable = []
+# Process integration checkpoints and corrupt-output validation injection.
+test-job-control = []
 
 [dependencies]
+kronello-jobs = { path = "../kronello-jobs" }
 kronello-audio = { path = "../kronello-audio" }
 schemars = { version = "1", features = ["uuid1"] }
 kronello-eval = { path = "../kronello-eval" }

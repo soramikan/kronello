@@ -483,7 +483,7 @@
       "priority": "P0",
       "area": "jobs",
       "title": "固定snapshot書き出しjob",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "SERVICE-001",
         "MEDIA-001",

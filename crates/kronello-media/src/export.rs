@@ -269,6 +269,21 @@ impl MediaRuntime {
         backend: &dyn RenderBackend,
         request: &AvExportRequest,
     ) -> Result<AvExportReport, MediaError> {
+        self.export_av_with_checkpoint(snapshot, project_path, fonts, backend, request, &mut |_| {
+            Ok(())
+        })
+    }
+    /// Cooperatively cancel at frame boundaries and before final muxing.
+    pub fn export_av_with_checkpoint(
+        &self,
+        snapshot: &AvExportSnapshot,
+        project_path: &Path,
+        fonts: &[FontData<'_>],
+        backend: &dyn RenderBackend,
+        request: &AvExportRequest,
+        checkpoint: &mut dyn FnMut(u64) -> Result<(), MediaError>,
+    ) -> Result<AvExportReport, MediaError> {
+        checkpoint(0)?;
         snapshot.validate()?;
         request.region.validate()?;
         if snapshot.render.profile().working_space != ColorSpace::LinearRec709 {
@@ -343,6 +358,7 @@ impl MediaRuntime {
         let mut frames = Vec::new();
         let mut metadata = Vec::new();
         for (index, time) in times {
+            checkpoint(frames.len() as u64)?;
             let mut rendered = render_frame(
                 &snapshot.render,
                 fonts,
@@ -366,6 +382,7 @@ impl MediaRuntime {
                 rgba,
             });
         }
+        checkpoint(frames.len() as u64)?;
         let parent = request
             .output
             .parent()
@@ -403,6 +420,7 @@ impl MediaRuntime {
                 video_probe.streams, audio_probe.streams
             )));
         }
+        checkpoint(frames.len() as u64)?;
         let probe = self.mux_av(
             &video_file,
             &audio_file,

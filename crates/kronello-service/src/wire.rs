@@ -11,6 +11,34 @@ use serde_json::value::RawValue;
 
 use crate::{Request, Response, ResultData};
 
+// Keep f32 audio/background values on the concrete JSON decoder as well.
+impl<'de> Deserialize<'de> for crate::JobOutput {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let mut fields = fields(d)?;
+        let format: String = take(&mut fields, "format")?;
+        match format.as_str() {
+            "image_sequence" => {
+                exhausted::<D::Error>(&fields)?;
+                Ok(Self::ImageSequence)
+            }
+            "pro_res_mov" => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct Mov {
+                    clips: Vec<crate::JobAudioClip>,
+                    background: [f32; 3],
+                }
+                let mov: Mov = payload(&fields)?;
+                Ok(Self::ProResMov {
+                    clips: mov.clips,
+                    background: mov.background,
+                })
+            }
+            _ => Err(D::Error::custom("unknown job output format")),
+        }
+    }
+}
+
 type Fields = BTreeMap<String, Box<RawValue>>;
 fn fields<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Fields, D::Error> {
     struct Unique;
@@ -58,6 +86,11 @@ impl<'de> Deserialize<'de> for Request {
             "instance.retime" => payload(&fields).map(Self::InstanceRetime),
             "template_instance.retime" => payload(&fields).map(Self::TemplateInstanceRetime),
 
+            "render.submit" => payload(&fields).map(Self::RenderSubmit),
+            "job.get" => payload(&fields).map(Self::JobGet),
+            "job.list" => payload(&fields).map(Self::JobList),
+            "job.cancel" => payload(&fields).map(Self::JobCancel),
+            "job.prune" => payload(&fields).map(Self::JobPrune),
             "template.set_duration" => payload(&fields).map(Self::TemplateSetDuration),
             "template.define" => payload(&fields).map(Self::TemplateDefine),
             "template.instantiate" => payload(&fields).map(Self::TemplateInstantiate),
@@ -86,6 +119,9 @@ impl<'de> Deserialize<'de> for ResultData {
         let mut fields = fields(d)?;
         let tag: String = take(&mut fields, "kind")?;
         let result = match tag.as_str() {
+            "job" => Self::Job(take(&mut fields, "value")?),
+            "jobs" => Self::Jobs(take(&mut fields, "value")?),
+            "pruned" => Self::Pruned(take(&mut fields, "value")?),
             "collected" => Self::Collected(take(&mut fields, "value")?),
             "project" => Self::Project(take(&mut fields, "value")?),
             "export" => Self::Export(take(&mut fields, "value")?),
