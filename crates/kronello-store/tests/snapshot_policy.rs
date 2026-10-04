@@ -49,6 +49,7 @@ fn template_document() -> Project {
             version: "1.0.0".into(),
             composition_ref: composition.id,
             public_inputs: Default::default(),
+            variants: Default::default(),
             duration_policy: TemplateDurationPolicy {
                 intro: Duration::new(Time::new(1, 1).unwrap()).unwrap(),
                 outro: Duration::new(Time::new(1, 1).unwrap()).unwrap(),
@@ -66,6 +67,7 @@ fn template_document() -> Project {
                 definition_ref: definitions[index % definitions.len()].id,
                 version: "1.0.0".into(),
                 duration,
+                variant: None,
                 inputs: Default::default(),
             })
         })

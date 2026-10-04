@@ -44,6 +44,7 @@ pub enum ValueType {
     Enum,
     String,
     AssetRef,
+    DataTable,
     Path,
 }
 
@@ -215,6 +216,7 @@ pub enum Value {
     Enum(String),
     String(String),
     AssetRef(AssetId),
+    DataTable(DataTable),
     Path(Path),
 }
 impl Value {
@@ -229,7 +231,16 @@ impl Value {
             Self::Enum(_) => ValueType::Enum,
             Self::String(_) => ValueType::String,
             Self::AssetRef(_) => ValueType::AssetRef,
+            Self::DataTable(_) => ValueType::DataTable,
             Self::Path(_) => ValueType::Path,
         }
     }
+}
+
+/// Inline material data; columns are explicit and every row has the same shape.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DataTable {
+    pub columns: std::collections::BTreeMap<String, ValueType>,
+    pub rows: Vec<std::collections::BTreeMap<String, Value>>,
 }

@@ -18,7 +18,9 @@ pub use edit::{
 
 mod template;
 pub use template::{
-    TemplateCommand, TemplateDefineRequest, TemplateInstantiateRequest, TemplateSetDurationRequest,
+    TemplateChange, TemplateCommand, TemplateDefineRequest, TemplateInstantiateRequest,
+    TemplateMigrationPlan, TemplateMigrationPlanRequest, TemplatePreviewNode,
+    TemplatePreviewRequest, TemplatePreviewResult, TemplateSetDurationRequest,
     TemplateSetInputRequest,
 };
 mod media;
@@ -64,6 +66,10 @@ pub enum Request {
     JobCancel(JobRequest),
     #[serde(rename = "job.prune")]
     JobPrune(JobPruneRequest),
+    #[serde(rename = "template.preview")]
+    TemplatePreview(TemplatePreviewRequest),
+    #[serde(rename = "template.migration_plan")]
+    TemplateMigrationPlan(TemplateMigrationPlanRequest),
     #[serde(rename = "template.set_duration")]
     TemplateSetDuration(TemplateSetDurationRequest),
     #[serde(rename = "template.define")]
@@ -204,6 +210,8 @@ pub enum ResultData {
     Frame(Box<FrameResult>),
     Sequence(SequenceMetadata),
     Plan(Box<EditPlan>),
+    TemplatePreview(Box<TemplatePreviewResult>),
+    TemplateMigrationPlan(Box<TemplateMigrationPlan>),
     Edit(kronello_store::Event),
     History(HistoryResult),
     Scene(SceneQueryResult),
@@ -411,6 +419,11 @@ impl<'a> Service<'a> {
                     None => media::capabilities()?,
                 })),
             ))),
+            Request::TemplatePreview(r) => {
+                template::preview(r, self).map(|r| ResultData::TemplatePreview(Box::new(r)))
+            }
+            Request::TemplateMigrationPlan(r) => template::migration_plan(r, self)
+                .map(|r| ResultData::TemplateMigrationPlan(Box::new(r))),
             Request::TemplateSetDuration(r) => template::set_duration(r).map(ResultData::Edit),
             Request::TemplateDefine(r) => template::define(r).map(ResultData::Edit),
             Request::TemplateInstantiate(r) => template::instantiate(r).map(ResultData::Edit),
@@ -781,6 +794,20 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
             document_asset_locators(&r.document)
         }
         Request::ProjectExport(r) | Request::ProjectInfo(r) => local_locator(&r.project),
+        Request::TemplatePreview(r) => {
+            local_locator(&r.project)?;
+            for font in &r.fonts {
+                local_locator(&font.path)?;
+            }
+            Ok(())
+        }
+        Request::TemplateMigrationPlan(r) => {
+            local_locator(&r.project)?;
+            for font in &r.fonts {
+                local_locator(&font.path)?;
+            }
+            Ok(())
+        }
         Request::TemplateDefine(r) => local_locator(&r.project),
         Request::TemplateInstantiate(r) => local_locator(&r.project),
         Request::TemplateSetInput(r) => local_locator(&r.project),

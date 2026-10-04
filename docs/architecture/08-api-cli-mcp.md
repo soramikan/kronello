@@ -336,3 +336,42 @@ GPU 初期化や作品 revision の更新を行わず、renderer と同じ固定
 任意の依存宣言・式を受け付ける公開 command は今回追加しない。
 max_lines の `TEMPLATE_OVERFLOW` と未対応エフェクトの型付き失敗は維持する。
 [ADR-0057](../adr/0057-layout-bounds-stages.md)、[LAYOUT-001 検証](../testing/layout-001.md) を参照。
+
+
+### TEMPLATE-002 の比較・移行 Query
+
+共有 registry / wire / Rust 生成 schema に次の read_only query を追加した。
+CLI は template preview / template migration_plan、MCP は同名 tool を registry から公開する。
+
+| operation | payload | result |
+|---|---|---|
+| template.preview | {project,instance,time,fonts,region?} | TemplatePreviewResult |
+| template.migration_plan | {project,base_revision,instance,definition,variant?,inputs?,time,fonts,region?} | TemplateMigrationPlan |
+
+preview の instance は版固定した完全な TemplateInstance。time は [0,duration)。
+result は revision、instance、選択 variant の definition（入力 schema / bindings / duration_policy / constraints）、
+design_extent、local_time、resolved_inputs、media_slots、nodes、frame、diagnostic。
+nodes は {key,evaluated}、evaluated は scene.query と同じ Property / text / effects / world_transform /
+layout_bounds / bounds。bounds の全段階は選択 variant の root Composition の design_px。
+region 省略は backend を初期化しない意味的 query、指定時は選択 backend の既存 FrameResult を返す。
+CLI の CPU は --backend cpu-reference で明示する。暗黙 fallback はない。
+overflow / font / media / backend の失敗は diagnostic として返し、frame は null。
+成功 envelope に diagnostic があることを成功した描画と表示しない。
+
+migration_plan の instance は既存 ID、definition は次の immutable edition ID。
+variant 省略 / null は base、inputs 省略は既存上書きを完全保持。
+result は {plan,changes,before,after}、changes は {field,before,after} の JSON pointer による差分。
+plan は既存 EditPlan。before / after は一つの基準 revision と同じ font locator で比較した preview。
+新版の公開・query・計画は既存 instance を更新しない。
+
+適用は edit.apply へ plan.commands / plan.plan_hash、base_revision、session_id、
+idempotency_key を渡す。EditCommand の template branch に
+migrate: {instance,definition,variant,inputs} を追加した。
+これが指定した instance だけを変更し、既存の hash 照合・revision・receipt・Undo を使う。
+import は pin を変更できない。
+新しい error は INVALID_DATA_TABLE、TEMPLATE_VARIANT_NOT_FOUND、TEMPLATE_MIGRATION_INCOMPATIBLE。
+MediaSlot の final compiler は既存 UNSUPPORTED_FEATURE、欠落は ASSET_MISSING。
+すべての新 font path と project path に既存 local locator policy を適用する。
+具体的な保存型・制約と MediaSlot の後続境界は
+[07 テンプレート](07-templates.md)、[ADR-0059](../adr/0059-template-duration-variants-and-migration.md)、
+[検証記録](../testing/template-002.md) を参照。

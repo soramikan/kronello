@@ -501,10 +501,29 @@ fn public_api_fixture_commands_return_schema_valid_success_from_real_binary() {
             json!({"project":template_path,"base_revision":"4","session_id":session,
         "idempotency_key":"duration","instance":instance,"duration":{"num":"8","den":"1"}}),
         );
-        // Success fixtures cover the 17 commands at MCP-001 implementation time.
+        let fonts = json!([{"identity":template_document["texts"][0]["styles"][0]["font"],
+            "path":std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/fixtures/external/NotoSansCJKjp-Regular.otf")}]);
+        let preview = execute(
+            "template.preview",
+            json!({"project":template_path,
+            "instance":{"id":instance,"definition_ref":definition["id"],"version":"1.0.0",
+            "duration":{"num":"8","den":"1"},"inputs":{}},"time":{"num":"1","den":"1"},"fonts":fonts}),
+        );
+        assert!(preview["diagnostic"].is_null());
+        let migration = execute(
+            "template.migration_plan",
+            json!({"project":template_path,
+            "base_revision":"5","instance":instance,"definition":definition["id"],
+            "time":{"num":"1","den":"1"},"fonts":fonts}),
+        );
+        assert!(
+            migration["before"]["diagnostic"].is_null()
+                && migration["after"]["diagnostic"].is_null()
+        );
+        // Success fixtures cover the original commands plus TEMPLATE-002 queries.
         // New registry entries are discovered/validated generically in the version
         // test and do not require a transport-specific command list here.
-        assert_eq!(checked.len(), 17);
+        assert_eq!(checked.len(), 19);
         assert!(client.finish().contains("INVALID_REQUEST"));
     }
 }

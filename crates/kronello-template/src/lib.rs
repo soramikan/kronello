@@ -1,6 +1,6 @@
 //! Pure template input, immutable edition, and exact duration contracts.
 use kronello_model::*;
-use kronello_time::{Duration, Time, TimeMap, TimeMapPoint};
+use kronello_time::{Duration, ProtectedMiddleMode, Time, TimeMap, TimeMapPoint};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error;
@@ -13,6 +13,12 @@ pub enum TemplateError {
     Invalid(String),
     #[error("template definition content changed")]
     DefinitionChanged,
+    #[error("invalid table shape, schema, or cell type")]
+    InvalidDataTable,
+    #[error("missing template asset {0}")]
+    AssetMissing(AssetId),
+    #[error("unknown template variant {0}")]
+    VariantMissing(String),
     #[error("duration is below the protected intervals and minimum middle")]
     DurationTooShort,
     #[error("text {node} has {actual} lines; maximum {maximum}")]
@@ -32,6 +38,9 @@ impl TemplateError {
             Self::Unsupported(_) => "UNSUPPORTED_FEATURE",
             Self::DefinitionChanged => "TEMPLATE_DEFINITION_CHANGED",
             Self::DurationTooShort => "DURATION_TOO_SHORT",
+            Self::InvalidDataTable => "INVALID_DATA_TABLE",
+            Self::AssetMissing(_) => "ASSET_MISSING",
+            Self::VariantMissing(_) => "TEMPLATE_VARIANT_NOT_FOUND",
             Self::Overflow { .. } => "TEMPLATE_OVERFLOW",
             _ => "INVALID_TEMPLATE",
         }
@@ -55,6 +64,19 @@ pub fn duration_map(
         || requested.as_time() <= protected
     {
         return Err(TemplateError::DurationTooShort);
+    }
+    if policy.middle_mode != TemplateMiddleMode::Stretch {
+        return Ok(TimeMap::protected(
+            authoring,
+            requested,
+            policy.intro,
+            policy.outro,
+            match policy.middle_mode {
+                TemplateMiddleMode::Hold => ProtectedMiddleMode::Hold,
+                TemplateMiddleMode::Loop => ProtectedMiddleMode::Loop,
+                TemplateMiddleMode::Stretch => unreachable!(),
+            },
+        )?);
     }
     let mut points = vec![TimeMapPoint {
         parent: Time::ZERO,
@@ -240,6 +262,15 @@ fn add_curve(
     Ok(())
 }
 pub fn validate_input(input: &TemplateInput, value: &Value) -> Result<(), TemplateError> {
+    if let Value::DataTable(table) = value {
+        validate_table(table)?;
+        let Value::DataTable(default) = &input.default else {
+            return Err(TemplateError::InvalidDataTable);
+        };
+        if table.columns != default.columns {
+            return Err(TemplateError::InvalidDataTable);
+        }
+    }
     if value.value_type() != input.value_type {
         return Err(invalid("input type mismatch"));
     }
@@ -260,6 +291,7 @@ pub fn resolved_inputs(
     d: &TemplateDefinition,
     i: &TemplateInstance,
 ) -> Result<BTreeMap<String, Value>, TemplateError> {
+    selected_definition(d, i.variant.as_deref())?;
     if i.definition_ref != d.id || i.version != d.version {
         return Err(invalid("pinned version mismatch"));
     }
@@ -274,11 +306,27 @@ pub fn resolved_inputs(
         .map(|(name, input)| {
             let v = i.inputs.get(name).unwrap_or(&input.default);
             validate_input(input, v)?;
+            if let TemplateInputTarget::DataTable { bindings } = &input.target {
+                project_table(bindings, v)?;
+            }
             Ok((name.clone(), v.clone()))
         })
         .collect()
 }
 pub fn validate_definition(project: &Project, d: &TemplateDefinition) -> Result<(), TemplateError> {
+    validate_selected_definition(project, d)?;
+    for name in d.variants.keys() {
+        if name.is_empty() {
+            return Err(invalid("empty variant name"));
+        }
+        validate_selected_definition(project, &selected_definition(d, Some(name))?)?;
+    }
+    Ok(())
+}
+fn validate_selected_definition(
+    project: &Project,
+    d: &TemplateDefinition,
+) -> Result<(), TemplateError> {
     if d.version.is_empty() {
         return Err(invalid("empty version"));
     }
@@ -288,10 +336,41 @@ pub fn validate_definition(project: &Project, d: &TemplateDefinition) -> Result<
         return Err(TemplateError::DefinitionChanged);
     }
     let mut targets = BTreeSet::new();
+    let mut projected = Vec::new();
     for input in d.public_inputs.values() {
+        validate_input(input, &input.default)?;
+        if let TemplateInputTarget::DataTable { bindings } = &input.target {
+            if input.value_type != ValueType::DataTable
+                || bindings.is_empty()
+                || input.minimum.is_some()
+                || input.maximum.is_some()
+                || !input.choices.is_empty()
+            {
+                return Err(TemplateError::InvalidDataTable);
+            }
+            for (target, value) in project_table(bindings, &input.default)? {
+                projected.push(TemplateInput {
+                    value_type: value.value_type(),
+                    default: value,
+                    target,
+                    minimum: None,
+                    maximum: None,
+                    choices: vec![],
+                });
+            }
+        } else {
+            projected.push(input.clone());
+        }
+    }
+    for input in &projected {
         if !matches!(
             input.value_type,
-            ValueType::Scalar | ValueType::String | ValueType::Enum | ValueType::Color
+            ValueType::Scalar
+                | ValueType::String
+                | ValueType::Enum
+                | ValueType::Color
+                | ValueType::AssetRef
+                | ValueType::Bool
         ) {
             return Err(invalid("unsupported public input type"));
         }
@@ -304,8 +383,9 @@ pub fn validate_definition(project: &Project, d: &TemplateDefinition) -> Result<
         if input.minimum.zip(input.maximum).is_some_and(|(a, b)| a > b) {
             return Err(invalid("reversed input range"));
         }
-        match input.target {
+        match &input.target {
             TemplateInputTarget::Property { node, property } => {
+                let (node, property) = (*node, *property);
                 let n = c
                     .nodes
                     .iter()
@@ -329,6 +409,7 @@ pub fn validate_definition(project: &Project, d: &TemplateDefinition) -> Result<
                 }
             }
             TemplateInputTarget::Text { node } => {
+                let node = *node;
                 if input.value_type != ValueType::String
                     || !c
                         .nodes
@@ -361,6 +442,23 @@ pub fn validate_definition(project: &Project, d: &TemplateDefinition) -> Result<
                     return Err(invalid("duplicate input target"));
                 }
             }
+            TemplateInputTarget::MediaSlot { node } => {
+                if input.value_type != ValueType::AssetRef
+                    || !c
+                        .nodes
+                        .iter()
+                        .any(|n| n.id == *node && n.kind == NodeKind::Null)
+                {
+                    return Err(invalid(
+                        "MediaSlot requires an AssetRef and explicit Null slot",
+                    ));
+                }
+                validate_asset(project, &input.default)?;
+                if !targets.insert((*node, None)) {
+                    return Err(invalid("duplicate input target"));
+                }
+            }
+            TemplateInputTarget::DataTable { .. } => unreachable!("projected above"),
         }
     }
     let mut bound = BTreeSet::new();
@@ -493,18 +591,24 @@ fn validate_project_with_opaque(
     Ok(())
 }
 
-fn validate_instance(project: &Project, i: &TemplateInstance) -> Result<(), TemplateError> {
-    let d = definition(project, i.definition_ref)?;
+pub fn validate_instance(project: &Project, i: &TemplateInstance) -> Result<(), TemplateError> {
+    let edition = definition(project, i.definition_ref)?;
+    validate_definition(project, edition)?;
+    let selected = selected_definition(edition, i.variant.as_deref())?;
+    let d = &selected;
     validate_definition(project, d)?;
-    let values = resolved_inputs(d, i)?;
+    let values = resolved_inputs(edition, i)?;
     let mut registry = SchemaRegistry::with_builtin();
     for descriptor in shape_descriptors().into_iter().chain(text_descriptors()) {
         registry
             .register(descriptor)
             .expect("distinct built-in descriptors");
     }
-    for (name, input) in &d.public_inputs {
-        if let TemplateInputTarget::Property { node, property } = input.target {
+    for (target, value) in input_bindings(d, &values)? {
+        if let TemplateInputTarget::MediaSlot { .. } = target {
+            validate_asset(project, &value)?;
+        }
+        if let TemplateInputTarget::Property { node, property } = target {
             let authored = composition(project, d.composition_ref)?
                 .nodes
                 .iter()
@@ -516,7 +620,7 @@ fn validate_instance(project: &Project, i: &TemplateInstance) -> Result<(), Temp
                 .find(|p| p.id() == property)
                 .unwrap();
             target
-                .validate_final_value(&values[name], &registry)
+                .validate_final_value(&value, &registry)
                 .map_err(|_| invalid("input violates target Property constraints"))?;
         }
     }
@@ -626,16 +730,29 @@ pub fn band_values(
 /// Shared imports and edits cannot republish an existing edition or migrate a
 /// placement implicitly. Edition removal is allowed once references are gone.
 pub fn validate_transition(old: &Project, new: &Project) -> Result<(), TemplateError> {
-    validate_pins(old, new)?;
+    validate_pins(old, new, &BTreeSet::new())?;
     validate_project(new)
 }
 
 pub fn validate_stored_transition(old: &Project, new: &Project) -> Result<(), TemplateError> {
-    validate_pins(old, new)?;
+    validate_pins(old, new, &BTreeSet::new())?;
     validate_stored_project(new)
 }
 
-fn validate_pins(old: &Project, new: &Project) -> Result<(), TemplateError> {
+/// Only service commands identifying an explicit migration may change these pins.
+pub fn validate_migration_transition(
+    old: &Project,
+    new: &Project,
+    migrations: &BTreeSet<CompositionInstanceId>,
+) -> Result<(), TemplateError> {
+    validate_pins(old, new, migrations)?;
+    validate_project(new)
+}
+fn validate_pins(
+    old: &Project,
+    new: &Project,
+    migrations: &BTreeSet<CompositionInstanceId>,
+) -> Result<(), TemplateError> {
     for object in &old.templates {
         let id = match object {
             DocumentObject::Known(d) => d.id,
@@ -653,8 +770,16 @@ fn validate_pins(old: &Project, new: &Project) -> Result<(), TemplateError> {
                 .templates
                 .iter()
                 .any(|v| matches!(v, DocumentObject::Known(v) if v.id == d.id))
-            && authoring_hash(old, d.composition_ref).is_ok()
-            && authoring_hash(new, d.composition_ref).ok().as_ref() != Some(&d.content_hash)
+            && std::iter::once((d.composition_ref, &d.content_hash))
+                .chain(
+                    d.variants
+                        .values()
+                        .map(|v| (v.composition_ref, &v.content_hash)),
+                )
+                .any(|(composition, hash)| {
+                    authoring_hash(old, composition).is_ok()
+                        && authoring_hash(new, composition).ok().as_ref() != Some(hash)
+                })
         {
             return Err(TemplateError::DefinitionChanged);
         }
@@ -678,10 +803,118 @@ fn validate_pins(old: &Project, new: &Project) -> Result<(), TemplateError> {
                 DocumentObject::Known(v) if v.id == i.id => Some(v),
                 _ => None,
             })
-            && (next.definition_ref != i.definition_ref || next.version != i.version)
+            && (next.definition_ref != i.definition_ref
+                || next.version != i.version
+                || next.variant != i.variant)
+            && !migrations.contains(&i.id)
         {
             return Err(invalid("implicit edition migration is unsupported"));
         }
+    }
+    Ok(())
+}
+
+/// Select explicit authoring content; resolution changes never choose a variant.
+pub fn selected_definition(
+    d: &TemplateDefinition,
+    variant: Option<&str>,
+) -> Result<TemplateDefinition, TemplateError> {
+    let mut selected = d.clone();
+    if let Some(name) = variant {
+        let v = d
+            .variants
+            .get(name)
+            .ok_or_else(|| TemplateError::VariantMissing(name.into()))?;
+        if v.targets.keys().ne(d.public_inputs.keys()) {
+            return Err(invalid("variant must bind every public input"));
+        }
+        selected.composition_ref = v.composition_ref;
+        selected.constraints = v.constraints.clone();
+        selected.content_hash = v.content_hash.clone();
+        for (name, input) in &mut selected.public_inputs {
+            input.target = v.targets[name].clone();
+        }
+    }
+    selected.variants.clear();
+    Ok(selected)
+}
+pub fn validate_table(table: &DataTable) -> Result<(), TemplateError> {
+    if table.columns.is_empty()
+        || table.columns.len() > 128
+        || table.rows.len() > 10000
+        || table.rows.len().saturating_mul(table.columns.len()) > 100000
+        || table.columns.iter().any(|(name, ty)| {
+            name.is_empty()
+                || !matches!(
+                    ty,
+                    ValueType::String | ValueType::Scalar | ValueType::Color | ValueType::Bool
+                )
+        })
+        || table.rows.iter().any(|row| {
+            row.keys().ne(table.columns.keys())
+                || row
+                    .iter()
+                    .any(|(name, value)| value.value_type() != table.columns[name])
+        })
+    {
+        return Err(TemplateError::InvalidDataTable);
+    }
+    Ok(())
+}
+fn project_table(
+    bindings: &[TemplateDataBinding],
+    value: &Value,
+) -> Result<Vec<(TemplateInputTarget, Value)>, TemplateError> {
+    let Value::DataTable(table) = value else {
+        return Err(TemplateError::InvalidDataTable);
+    };
+    validate_table(table)?;
+    bindings
+        .iter()
+        .map(|binding| {
+            let value = table
+                .rows
+                .get(binding.row)
+                .and_then(|row| row.get(&binding.column))
+                .ok_or(TemplateError::InvalidDataTable)?;
+            let target = match binding.target {
+                TemplateCellTarget::Property { node, property } => {
+                    TemplateInputTarget::Property { node, property }
+                }
+                TemplateCellTarget::Text { node } => TemplateInputTarget::Text { node },
+            };
+            Ok((target, value.clone()))
+        })
+        .collect()
+}
+/// Flatten data projections into the same explicit Text/Property/Media bindings.
+pub fn input_bindings(
+    d: &TemplateDefinition,
+    values: &BTreeMap<String, Value>,
+) -> Result<Vec<(TemplateInputTarget, Value)>, TemplateError> {
+    let mut result = Vec::new();
+    for (name, input) in &d.public_inputs {
+        let value = values.get(name).ok_or_else(|| invalid("input missing"))?;
+        validate_input(input, value)?;
+        match &input.target {
+            TemplateInputTarget::DataTable { bindings } => {
+                result.extend(project_table(bindings, value)?)
+            }
+            target => result.push((target.clone(), value.clone())),
+        }
+    }
+    Ok(result)
+}
+pub fn validate_asset(project: &Project, value: &Value) -> Result<(), TemplateError> {
+    let Value::AssetRef(id) = value else {
+        return Err(invalid("MediaSlot requires AssetRef"));
+    };
+    if !project
+        .assets
+        .iter()
+        .any(|asset| matches!(asset, DocumentObject::Known(asset) if asset.id == *id))
+    {
+        return Err(TemplateError::AssetMissing(*id));
     }
     Ok(())
 }

@@ -492,6 +492,7 @@ fn template_retime_preserves_intro_outro_rejects_short_duration_and_generic_over
                 definition_ref: definition.id,
                 version: definition.version.clone(),
                 duration: Duration::new(t(5, 1)).unwrap(),
+                variant: None,
                 inputs: Default::default(),
             },
         }))
@@ -1080,4 +1081,48 @@ fn stretching_a_clip_containing_protected_templates_is_rejected_transactionally(
         "PROTECTED_INTERVAL",
     );
     assert_ne!(root, definition.composition_ref);
+}
+
+#[test]
+fn variant_clip_stretch_cannot_bypass_protected_duration_policy() {
+    let p: Project =
+        serde_json::from_str(include_str!("../../../examples/template-002.project.json")).unwrap();
+    let (_dir, path) = setup(p);
+    let definition: TemplateDefinition = serde_json::from_str(include_str!(
+        "../../../examples/template-002.definition.json"
+    ))
+    .unwrap();
+    engine()
+        .dispatch(Request::TemplateDefine(TemplateDefineRequest {
+            project: path.clone(),
+            base_revision: "1".into(),
+            session_id: Uuid::new_v4(),
+            idempotency_key: "define".into(),
+            definition: definition.clone(),
+        }))
+        .unwrap();
+    let p = export(&path).document;
+    let mut s = sequence(&p);
+    s.tracks.truncate(1);
+    let c = &mut s.tracks[0].clips[0];
+    c.source_ref = SourceRef::Composition {
+        composition: definition.variants["portrait"].composition_ref,
+    };
+    c.timeline_range = range(Time::ZERO, t(1, 1));
+    let clip = c.id;
+    let id = s.id;
+    apply(
+        &path,
+        TimelineCommand::SequenceCreate { sequence: s },
+        "create",
+    );
+    reject(
+        &path,
+        TimelineCommand::ClipStretch {
+            sequence: id,
+            clip,
+            range: range(Time::ZERO, t(2, 1)),
+        },
+        "PROTECTED_INTERVAL",
+    );
 }

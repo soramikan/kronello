@@ -745,7 +745,7 @@ fn diff(old: &Json, new: &Json, path: &mut Vec<String>, out: &mut Vec<Mutation>)
         }),
     }
 }
-fn build(
+pub(crate) fn build(
     document: Project,
     base: u64,
     commands: Vec<EditCommand>,
@@ -759,7 +759,17 @@ fn build(
     for command in &commands {
         apply_command(&mut candidate, command, &mut changed_keys)?;
     }
-    kronello_template::validate_transition(&document, &candidate)?;
+    let migrations = commands
+        .iter()
+        .filter_map(|command| match command {
+            EditCommand::Template(command) => match command.as_ref() {
+                crate::TemplateCommand::Migrate { instance, .. } => Some(*instance),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect();
+    kronello_template::validate_migration_transition(&document, &candidate, &migrations)?;
     validate(&candidate)?;
     let mut mutations = Vec::new();
     let mut value = serde_json::to_value(&document)?;

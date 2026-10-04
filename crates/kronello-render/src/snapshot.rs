@@ -512,6 +512,11 @@ pub fn build_scene_ir_with_cache(
     let mut nodes = vec![];
     let mut used_fonts = BTreeSet::new();
     for n in evaluated.nodes {
+        if let Some(asset) = templates.media_slots.get(&n.key) {
+            return Err(RenderError::UnsupportedFeature(format!(
+                "Composition MediaSlot drawing for asset {asset}"
+            )));
+        }
         let values: BTreeMap<_, _> = n
             .properties
             .iter()

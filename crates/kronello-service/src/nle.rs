@@ -63,7 +63,7 @@ fn protected_content(project: &Project, root: CompositionId) -> bool {
         if project
             .templates
             .iter()
-            .any(|d| matches!(d, DocumentObject::Known(d) if d.composition_ref == id))
+            .any(|d| matches!(d, DocumentObject::Known(d) if d.composition_ref == id || d.variants.values().any(|v| v.composition_ref == id)))
         {
             return true;
         }

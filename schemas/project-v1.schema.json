@@ -437,6 +437,32 @@
         }
       ]
     },
+    "DataTable": {
+      "description": "Inline material data; columns are explicit and every row has the same shape.",
+      "type": "object",
+      "properties": {
+        "columns": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ValueType"
+          }
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/$defs/Value"
+            }
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "columns",
+        "rows"
+      ]
+    },
     "DescriptorRef": {
       "type": "object",
       "properties": {
@@ -1275,6 +1301,14 @@
         }
       ]
     },
+    "ProtectedMiddleMode": {
+      "description": "Only the middle is retimed; intro/outro retain unit speed.",
+      "type": "string",
+      "enum": [
+        "hold",
+        "loop"
+      ]
+    },
     "Rational": {
       "type": "object",
       "properties": {
@@ -1761,6 +1795,56 @@
         "padding"
       ]
     },
+    "TemplateCellTarget": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "property": {
+              "type": "object",
+              "properties": {
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                },
+                "property": {
+                  "$ref": "#/$defs/PropertyId"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "node",
+                "property"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "property"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "object",
+              "properties": {
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "node"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "text"
+          ]
+        }
+      ]
+    },
     "TemplateConstraints": {
       "type": "object",
       "properties": {
@@ -1782,6 +1866,28 @@
         }
       },
       "additionalProperties": false
+    },
+    "TemplateDataBinding": {
+      "type": "object",
+      "properties": {
+        "column": {
+          "type": "string"
+        },
+        "row": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "target": {
+          "$ref": "#/$defs/TemplateCellTarget"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "row",
+        "column",
+        "target"
+      ]
     },
     "TemplateDefinition": {
       "type": "object",
@@ -1812,6 +1918,12 @@
         "template_id": {
           "type": "string",
           "format": "uuid"
+        },
+        "variants": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/TemplateVariant"
+          }
         },
         "version": {
           "type": "string"
@@ -1947,6 +2059,51 @@
           "required": [
             "text"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "media_slot": {
+              "type": "object",
+              "properties": {
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "node"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "media_slot"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "data_table": {
+              "type": "object",
+              "properties": {
+                "bindings": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/TemplateDataBinding"
+                  }
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "bindings"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "data_table"
+          ]
         }
       ]
     },
@@ -1970,6 +2127,12 @@
           },
           "default": {}
         },
+        "variant": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "version": {
           "type": "string"
         }
@@ -1985,7 +2148,37 @@
     "TemplateMiddleMode": {
       "type": "string",
       "enum": [
+        "hold",
+        "loop",
         "stretch"
+      ]
+    },
+    "TemplateVariant": {
+      "description": "Each aspect variant freezes a separate authored Composition and bindings.",
+      "type": "object",
+      "properties": {
+        "composition_ref": {
+          "$ref": "#/$defs/CompositionId"
+        },
+        "constraints": {
+          "$ref": "#/$defs/TemplateConstraints"
+        },
+        "content_hash": {
+          "type": "string"
+        },
+        "targets": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/TemplateInputTarget"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "composition_ref",
+        "targets",
+        "constraints",
+        "content_hash"
       ]
     },
     "TextDirection": {
@@ -2124,7 +2317,7 @@
       ]
     },
     "TimeMap": {
-      "description": "Exact, stateless mappings. Reverse playback, looping, stopping and nonlinear\nmapping are unsupported. Future nonlinear variants require a versioned\nquantization, rounding and evaluation contract; no floating time is stored.",
+      "description": "Exact, stateless mappings. Protected middle segments support hold and loop.\nReverse and general nonlinear playback remain unsupported.",
       "oneOf": [
         {
           "type": "object",
@@ -2165,6 +2358,39 @@
           "required": [
             "kind",
             "points"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "authoring": {
+              "$ref": "#/$defs/Duration"
+            },
+            "intro": {
+              "$ref": "#/$defs/Duration"
+            },
+            "kind": {
+              "type": "string",
+              "const": "protected"
+            },
+            "mode": {
+              "$ref": "#/$defs/ProtectedMiddleMode"
+            },
+            "outro": {
+              "$ref": "#/$defs/Duration"
+            },
+            "requested": {
+              "$ref": "#/$defs/Duration"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "authoring",
+            "requested",
+            "intro",
+            "outro",
+            "mode"
           ]
         }
       ]
@@ -2409,6 +2635,23 @@
           "properties": {
             "kind": {
               "type": "string",
+              "const": "data_table"
+            },
+            "value": {
+              "$ref": "#/$defs/DataTable"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
               "const": "path"
             },
             "value": {
@@ -2435,6 +2678,7 @@
         "enum",
         "string",
         "asset_ref",
+        "data_table",
         "path"
       ]
     }

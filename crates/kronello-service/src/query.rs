@@ -439,7 +439,7 @@ pub(crate) fn sample(r: PropertySampleRequest) -> Result<PropertySampleResult, S
     })
 }
 
-fn evaluated_scene(
+pub(crate) fn evaluated_scene(
     stored: &kronello_store::Snapshot,
     project: &std::path::Path,
     composition: CompositionId,

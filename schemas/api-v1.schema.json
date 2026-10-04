@@ -686,6 +686,32 @@
         }
       ]
     },
+    "DataTable": {
+      "additionalProperties": false,
+      "description": "Inline material data; columns are explicit and every row has the same shape.",
+      "properties": {
+        "columns": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ValueType"
+          },
+          "type": "object"
+        },
+        "rows": {
+          "items": {
+            "additionalProperties": {
+              "$ref": "#/$defs/Value"
+            },
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "columns",
+        "rows"
+      ],
+      "type": "object"
+    },
     "DescriptorRef": {
       "additionalProperties": false,
       "properties": {
@@ -3264,6 +3290,14 @@
         }
       ]
     },
+    "ProtectedMiddleMode": {
+      "description": "Only the middle is retimed; intro/outro retain unit speed.",
+      "enum": [
+        "hold",
+        "loop"
+      ],
+      "type": "string"
+    },
     "PruneResult": {
       "additionalProperties": false,
       "properties": {
@@ -3842,6 +3876,121 @@
           },
           "required": [
             "operation"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "fonts": {
+              "items": {
+                "$ref": "#/$defs/FontInput"
+              },
+              "type": "array"
+            },
+            "instance": {
+              "$ref": "#/$defs/TemplateInstance"
+            },
+            "operation": {
+              "const": "template.preview",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "region": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/OutputRegion"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Omitted returns semantic preview data without initializing a backend."
+            },
+            "time": {
+              "$ref": "#/$defs/Rational"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "instance",
+            "time",
+            "fonts"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "base_revision": {
+              "type": "string"
+            },
+            "definition": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "fonts": {
+              "items": {
+                "$ref": "#/$defs/FontInput"
+              },
+              "type": "array"
+            },
+            "inputs": {
+              "additionalProperties": {
+                "$ref": "#/$defs/Value"
+              },
+              "default": null,
+              "description": "Omitted retains every existing override; incompatible inputs must be resolved explicitly.",
+              "type": [
+                "object",
+                "null"
+              ]
+            },
+            "instance": {
+              "$ref": "#/$defs/CompositionInstanceId"
+            },
+            "operation": {
+              "const": "template.migration_plan",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "region": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/OutputRegion"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Omitted returns semantic preview data without initializing a backend."
+            },
+            "time": {
+              "$ref": "#/$defs/Rational"
+            },
+            "variant": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "base_revision",
+            "instance",
+            "definition",
+            "time",
+            "fonts"
           ],
           "type": "object"
         },
@@ -4677,6 +4826,40 @@
             },
             "value": {
               "$ref": "#/$defs/EditPlan"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "template_preview",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/TemplatePreviewResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "template_migration_plan",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/TemplateMigrationPlan"
             }
           },
           "required": [
@@ -5716,6 +5899,72 @@
       ],
       "type": "object"
     },
+    "TemplateCellTarget": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "property": {
+              "additionalProperties": false,
+              "properties": {
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                },
+                "property": {
+                  "$ref": "#/$defs/PropertyId"
+                }
+              },
+              "required": [
+                "node",
+                "property"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "property"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "text": {
+              "additionalProperties": false,
+              "properties": {
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                }
+              },
+              "required": [
+                "node"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "TemplateChange": {
+      "additionalProperties": false,
+      "properties": {
+        "after": true,
+        "before": true,
+        "field": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "field",
+        "before",
+        "after"
+      ],
+      "type": "object"
+    },
     "TemplateCommand": {
       "oneOf": [
         {
@@ -5806,6 +6055,45 @@
         {
           "additionalProperties": false,
           "properties": {
+            "migrate": {
+              "additionalProperties": false,
+              "properties": {
+                "definition": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "inputs": {
+                  "additionalProperties": {
+                    "$ref": "#/$defs/Value"
+                  },
+                  "type": "object"
+                },
+                "instance": {
+                  "$ref": "#/$defs/CompositionInstanceId"
+                },
+                "variant": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "instance",
+                "definition",
+                "inputs"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "migrate"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
             "set_duration": {
               "additionalProperties": false,
               "properties": {
@@ -5850,6 +6138,28 @@
           "type": "object"
         }
       },
+      "type": "object"
+    },
+    "TemplateDataBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "column": {
+          "type": "string"
+        },
+        "row": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "target": {
+          "$ref": "#/$defs/TemplateCellTarget"
+        }
+      },
+      "required": [
+        "row",
+        "column",
+        "target"
+      ],
       "type": "object"
     },
     "TemplateDefineRequest": {
@@ -5910,6 +6220,12 @@
         "template_id": {
           "format": "uuid",
           "type": "string"
+        },
+        "variants": {
+          "additionalProperties": {
+            "$ref": "#/$defs/TemplateVariant"
+          },
+          "type": "object"
         },
         "version": {
           "type": "string"
@@ -6045,6 +6361,51 @@
             "text"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "media_slot": {
+              "additionalProperties": false,
+              "properties": {
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                }
+              },
+              "required": [
+                "node"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "media_slot"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "data_table": {
+              "additionalProperties": false,
+              "properties": {
+                "bindings": {
+                  "items": {
+                    "$ref": "#/$defs/TemplateDataBinding"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "bindings"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "data_table"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -6067,6 +6428,12 @@
           },
           "default": {},
           "type": "object"
+        },
+        "variant": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "version": {
           "type": "string"
@@ -6158,9 +6525,230 @@
     },
     "TemplateMiddleMode": {
       "enum": [
+        "hold",
+        "loop",
         "stretch"
       ],
       "type": "string"
+    },
+    "TemplateMigrationPlan": {
+      "additionalProperties": false,
+      "properties": {
+        "after": {
+          "$ref": "#/$defs/TemplatePreviewResult"
+        },
+        "before": {
+          "$ref": "#/$defs/TemplatePreviewResult"
+        },
+        "changes": {
+          "items": {
+            "$ref": "#/$defs/TemplateChange"
+          },
+          "type": "array"
+        },
+        "plan": {
+          "$ref": "#/$defs/EditPlan"
+        }
+      },
+      "required": [
+        "plan",
+        "changes",
+        "before",
+        "after"
+      ],
+      "type": "object"
+    },
+    "TemplateMigrationPlanRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision": {
+          "type": "string"
+        },
+        "definition": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "fonts": {
+          "items": {
+            "$ref": "#/$defs/FontInput"
+          },
+          "type": "array"
+        },
+        "inputs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Value"
+          },
+          "default": null,
+          "description": "Omitted retains every existing override; incompatible inputs must be resolved explicitly.",
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "instance": {
+          "$ref": "#/$defs/CompositionInstanceId"
+        },
+        "project": {
+          "type": "string"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OutputRegion"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Omitted returns semantic preview data without initializing a backend."
+        },
+        "time": {
+          "$ref": "#/$defs/Rational"
+        },
+        "variant": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "project",
+        "base_revision",
+        "instance",
+        "definition",
+        "time",
+        "fonts"
+      ],
+      "type": "object"
+    },
+    "TemplatePreviewNode": {
+      "additionalProperties": false,
+      "properties": {
+        "evaluated": {
+          "$ref": "#/$defs/SceneNodeEvaluation"
+        },
+        "key": {
+          "$ref": "#/$defs/SceneNodeKey"
+        }
+      },
+      "required": [
+        "key",
+        "evaluated"
+      ],
+      "type": "object"
+    },
+    "TemplatePreviewRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "fonts": {
+          "items": {
+            "$ref": "#/$defs/FontInput"
+          },
+          "type": "array"
+        },
+        "instance": {
+          "$ref": "#/$defs/TemplateInstance"
+        },
+        "project": {
+          "type": "string"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OutputRegion"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Omitted returns semantic preview data without initializing a backend."
+        },
+        "time": {
+          "$ref": "#/$defs/Rational"
+        }
+      },
+      "required": [
+        "project",
+        "instance",
+        "time",
+        "fonts"
+      ],
+      "type": "object"
+    },
+    "TemplatePreviewResult": {
+      "additionalProperties": false,
+      "properties": {
+        "definition": {
+          "$ref": "#/$defs/TemplateDefinition",
+          "description": "Effective variant bindings, public schemas, duration and bounds policies."
+        },
+        "design_extent": {
+          "$ref": "#/$defs/DesignExtent"
+        },
+        "diagnostic": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ServiceError"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A failed preview is diagnostic data, never a render success."
+        },
+        "frame": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FrameResult"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "instance": {
+          "$ref": "#/$defs/TemplateInstance"
+        },
+        "local_time": {
+          "$ref": "#/$defs/Rational"
+        },
+        "media_slots": {
+          "additionalProperties": {
+            "$ref": "#/$defs/AssetId"
+          },
+          "type": "object"
+        },
+        "nodes": {
+          "items": {
+            "$ref": "#/$defs/TemplatePreviewNode"
+          },
+          "type": "array"
+        },
+        "resolved_inputs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Value"
+          },
+          "type": "object"
+        },
+        "revision": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "revision",
+        "instance",
+        "definition",
+        "design_extent",
+        "local_time",
+        "resolved_inputs",
+        "media_slots",
+        "nodes"
+      ],
+      "type": "object"
     },
     "TemplateSetDurationRequest": {
       "additionalProperties": false,
@@ -6229,6 +6817,34 @@
         "instance",
         "name",
         "value"
+      ],
+      "type": "object"
+    },
+    "TemplateVariant": {
+      "additionalProperties": false,
+      "description": "Each aspect variant freezes a separate authored Composition and bindings.",
+      "properties": {
+        "composition_ref": {
+          "$ref": "#/$defs/CompositionId"
+        },
+        "constraints": {
+          "$ref": "#/$defs/TemplateConstraints"
+        },
+        "content_hash": {
+          "type": "string"
+        },
+        "targets": {
+          "additionalProperties": {
+            "$ref": "#/$defs/TemplateInputTarget"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "composition_ref",
+        "targets",
+        "constraints",
+        "content_hash"
       ],
       "type": "object"
     },
@@ -6368,7 +6984,7 @@
       "type": "object"
     },
     "TimeMap": {
-      "description": "Exact, stateless mappings. Reverse playback, looping, stopping and nonlinear\nmapping are unsupported. Future nonlinear variants require a versioned\nquantization, rounding and evaluation contract; no floating time is stored.",
+      "description": "Exact, stateless mappings. Protected middle segments support hold and loop.\nReverse and general nonlinear playback remain unsupported.",
       "oneOf": [
         {
           "additionalProperties": false,
@@ -6408,6 +7024,39 @@
           "required": [
             "kind",
             "points"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "authoring": {
+              "$ref": "#/$defs/Duration"
+            },
+            "intro": {
+              "$ref": "#/$defs/Duration"
+            },
+            "kind": {
+              "const": "protected",
+              "type": "string"
+            },
+            "mode": {
+              "$ref": "#/$defs/ProtectedMiddleMode"
+            },
+            "outro": {
+              "$ref": "#/$defs/Duration"
+            },
+            "requested": {
+              "$ref": "#/$defs/Duration"
+            }
+          },
+          "required": [
+            "kind",
+            "authoring",
+            "requested",
+            "intro",
+            "outro",
+            "mode"
           ],
           "type": "object"
         }
@@ -6856,6 +7505,23 @@
           "additionalProperties": false,
           "properties": {
             "kind": {
+              "const": "data_table",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/DataTable"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
               "const": "path",
               "type": "string"
             },
@@ -6882,6 +7548,7 @@
         "enum",
         "string",
         "asset_ref",
+        "data_table",
         "path"
       ],
       "type": "string"
