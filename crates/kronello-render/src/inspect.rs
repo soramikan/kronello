@@ -246,8 +246,16 @@ pub fn explain_render_path(
     transfer(
         "IMAGE_UPLOAD",
         "cpu_to_gpu",
-        if gpu { Some(image_upload_bytes) } else { known.then_some(0) },
-        if gpu { Some(image_uploads) } else { known.then_some(0) },
+        if gpu {
+            Some(image_upload_bytes)
+        } else {
+            known.then_some(0)
+        },
+        if gpu {
+            Some(image_uploads)
+        } else {
+            known.then_some(0)
+        },
     );
     transfer(
         "GPU_IMAGE_COPY",

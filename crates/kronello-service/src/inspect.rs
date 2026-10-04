@@ -447,6 +447,8 @@ fn paints_match(
             layout.glyphs.iter().all(|g| predicate(g.fill))
         }
         kronello_render::SceneContent::Empty => true,
+        // Decoded video pixels are not known here, so a video paint is never proven to match.
+        kronello_render::SceneContent::Video { .. } => false,
     }
 }
 fn leaf(scene: &SceneIr, node: &kronello_render::SceneNodeIr) -> bool {

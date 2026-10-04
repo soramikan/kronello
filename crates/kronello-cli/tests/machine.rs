@@ -1031,6 +1031,8 @@ fn template2_cli_previews_and_migration_plan_share_schema_and_explicit_apply() {
         saved["result"]["value"]["document"]["template_instances"][0]["version"],
         "2.0.0"
     );
+}
+
 #[test]
 fn nle2_generator_query_and_move_use_shared_cli_plan_apply() {
     let dir = tempfile::tempdir().unwrap();
