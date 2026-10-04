@@ -147,7 +147,7 @@ private struct KRShadowModifier: ViewModifier {
     let cornerRadius: CGFloat
 
     func body(content: Content) -> some View {
-        shadow.layers.reduce(AnyView(content)) { view, layer in
+        shadow.layers.reduce(AnyView(content.compositingGroup())) { view, layer in
             if layer.blur == 0 && layer.spread > 0 {
                 return AnyView(view.overlay(
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
