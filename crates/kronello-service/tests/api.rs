@@ -204,7 +204,7 @@ fn capabilities_registry_media_extension_without_device_initialization() {
     ) else {
         panic!()
     };
-    assert_eq!(c.commands.len(), 32);
+    assert_eq!(c.commands.len(), 34);
     assert_eq!(c.api_schema_version, 1);
     assert_eq!(c.semantic_versions.document, PROJECT_SEMANTIC_VERSION);
     let media = c.media.unwrap();
@@ -571,6 +571,8 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
         json!({"operation":"edit.undo", "project":path, "base_revision":"1", "session_id":uuid, "idempotency_key":"key", "event_id":uuid}),
         json!({"operation":"history.list", "project":path}),
         json!({"operation":"scene.query", "project":path, "composition":composition}),
+        json!({"operation":"node.explain", "project":path, "composition":composition,"key":{"instance_path":[],"node":uuid},"time":time}),
+        json!({"operation":"render.explain", "input":input, "time":time}),
         json!({"operation":"property.sample", "project":path, "composition":composition, "keys":[
             {"kind":"node", "instance_path":[], "node":comp(&p).nodes[0].id,"property":comp(&p).nodes[0].properties[0].id()}], "times":[time]}),
         json!({"operation":"capabilities.get"}),
@@ -886,6 +888,11 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
     let input = json!({"project":path, "composition":composition,
         "region":{"origin":[0.0,0.0], "extent":[64.0,32.0], "pixels":[8,4]}});
     execute(json!({"operation":"render.frame", "input":input, "time":{"num":"0", "den":"1"}}));
+    execute(json!({"operation":"render.explain", "input":input, "time":{"num":"0", "den":"1"}}));
+    execute(
+        json!({"operation":"node.explain", "project":path, "composition":composition,
+        "key":{"instance_path":[],"node":node}, "time":{"num":"0", "den":"1"}}),
+    );
     execute(json!({"operation":"render.sequence", "input":input,
         "range":{"start":{"num":"0","den":"1"}, "end":{"num":"1","den":"1"}},
         "frame_rate":{"num":"1","den":"1"}, "output_directory":dir.path().join("frames")}));

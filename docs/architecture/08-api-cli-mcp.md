@@ -1,6 +1,6 @@
 # 08 API・CLI・MCP・エージェント
 
-GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001-shared-command-query-api.md)）。M1 CLI-001 と M2 SERVICE-001 / API-001 / TEMPLATE-001 / MEDIA-001 / MCP-001 / NLE-001 / JOB-001 と M3 EXPR-001 の実装範囲を次節に示す。それ以外の後続 API・CLI は提案であり、実装済みではない。
+GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001-shared-command-query-api.md)）。M1 CLI-001 と M2 SERVICE-001 / API-001 / TEMPLATE-001 / MEDIA-001 / MCP-001 / NLE-001 / JOB-001 と M3 EXPR-001 / INSPECT-001 の実装範囲を次節に示す。それ以外の後続 API・CLI は提案であり、実装済みではない。
 
 ## M1 CLI-001 の実装範囲
 
@@ -23,7 +23,7 @@ GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001
 
 - subcommand を指定した場合は、その payload の JSON object を stdin に渡す（`operation` を含めない）。subcommand なしの場合は `operation` を含む完全な service Request を渡す。
 - `--request-json 'JSON'` は stdin の代わりに一つの要求を渡す。入力上限は UTF-8 16 MiB。一回の起動につき一つの要求、一つの結果 JSON document と改行を stdout に出力する。NDJSON event stream は未実装。
-- 成功は `{ "status": "success", "result": { "kind": "project|export|frame|sequence|plan|edit|history|scene|samples|capabilities|collected|job|jobs|pruned", "value": ... } }`、失敗は `{ "status": "error", "error": { "code": "INVALID_REQUEST", "message": "..." } }`。成功の exit code は 0、失敗は非 0。診断は stderr にだけ出力する。`--help` も `USAGE` JSON error と stderr の使用法（非 0）を返す。
+- 成功は `{ "status": "success", "result": { "kind": "project|export|frame|sequence|plan|edit|history|scene|node_explanation|render_explanation|samples|capabilities|collected|job|jobs|pruned", "value": ... } }`、失敗は `{ "status": "error", "error": { "code": "INVALID_REQUEST", "message": "..." } }`。成功の exit code は 0、失敗は非 0。診断は stderr にだけ出力する。`--help` も `USAGE` JSON error と stderr の使用法（非 0）を返す。
 - backend の既定は GPU。`--backend gpu` も指定可。adapter / device を作れなければ型付きエラーを返す。GPU 不在時の暗黙の CPU fallback はない。GPU は render 操作でのみ初期化する。
 - `--backend cpu-reference` は検証用の float32 参照 backend の明示選択。metadata に `cpu_reference_float32` と記録する。通常の GPU は `wgpu_rgba16f`。両者のビット一致や性能保証は提供しない。
 - `render.frame` は有理数の任意時刻を評価して画素を JSON 応答する。画像ファイルが必要な場合は `render.sequence` を使う。連番は新しい directory にだけ出力し、既存成果物を上書きしない。PNG / RGBA16F / metadata の契約は [05 レンダー](05-render-gpu.md) を参照。
@@ -164,9 +164,9 @@ capabilities はコンパイル済み対応範囲を示し、GPU adapter の稼�
 
 ### 公開 schema と registry
 
-[schemas/api-v1.schema.json](../../schemas/api-v1.schema.json) は Draft 2020-12。Request / Response envelope、全30操作の payload / successful result、型付き EditCommand を共有 Rust 型から生成する。`api_json_schema()` と committed schema の一致を通常テストで確認する。再生成は `cargo run -p kronello-service --example api_schema --locked > schemas/api-v1.schema.json`。版はファイル名・`$id`・`x-api-schema-version` で固定し、既存 Request に必須 version field を追加しない。Project document は従来の公開型 / schema を共有する。
+[schemas/api-v1.schema.json](../../schemas/api-v1.schema.json) は Draft 2020-12。Request / Response envelope、全32操作の payload / successful result、型付き EditCommand を共有 Rust 型から生成する。`api_json_schema()` と committed schema の一致を通常テストで確認する。再生成は `cargo run -p kronello-service --example api_schema --locked > schemas/api-v1.schema.json`。版はファイル名・`$id`・`x-api-schema-version` で固定し、既存 Request に必須 version field を追加しない。Project document は従来の公開型 / schema を共有する。
 
-`command_registry()` の CommandDescriptor は name / read_only / request_schema / response_schema を持つ。schema refs は同ファイルの `$defs` を指す。request_schema は operation tag を除いた payload、response_schema は status / kind を除いた successful value。MCP-001 / FFI-001 は同じ registry と execute / execute_json を使用できる。registry の30操作は project.create / import / export / info / collect、asset.relink、render.frame / sequence / submit、job.get / list / cancel / prune、edit.plan / apply / undo、history.list、scene.query、property.sample、capabilities.get、template.define / instantiate / set_input / set_duration と後述の NLE-001 の6操作。project.create / import / asset.relink / edit.apply / undo、template の4操作、NLE-001 の6操作が mutating。他は project に対し read-only（render.sequence と project.collect は output directory に成果物を作る）。project.collect の read_only は元プロジェクトを変更しないことを表し、複製と hash 検証済み素材を新しいフォルダに保存する。
+`command_registry()` の CommandDescriptor は name / read_only / request_schema / response_schema を持つ。schema refs は同ファイルの `$defs` を指す。request_schema は operation tag を除いた payload、response_schema は status / kind を除いた successful value。MCP-001 / FFI-001 は同じ registry と execute / execute_json を使用できる。registry の32操作は project.create / import / export / info / collect、asset.relink、render.frame / sequence / submit、job.get / list / cancel / prune、edit.plan / apply / undo、history.list、scene.query、property.sample、capabilities.get、template.define / instantiate / set_input / set_duration と後述の NLE-001 の6操作、INSPECT-001 の2操作。project.create / import / asset.relink / edit.apply / undo、template の4操作、NLE-001 の6操作が mutating。他は project に対し read-only（render.sequence と project.collect は output directory に成果物を作る）。project.collect の read_only は元プロジェクトを変更しないことを表し、複製と hash 検証済み素材を新しいフォルダに保存する。
 
 request envelope・既知 payload は未知 field と重複 field を拒否する。schema に任意 shell、外部 URL fetch、raw FFmpeg args の実行 field は設けない。project / font / output path と assets 内の locator の URI scheme は filesystem access の前に `INVALID_REQUEST` とする。Windows drive path は local path として許す。素材の name / text や未知 Project 内容は不活性なデータであり、命令として実行しない。Project の未知 field 保持と、API envelope の厳格な decode は別の契約である。
 
@@ -176,6 +176,25 @@ request envelope・既知 payload は未知 field と重複 field を拒否す�
 
 受け入れ条件、CPU 検証と未確認範囲は [API-001 の検証](../testing/api-001.md) を参照する。
 
+## M3 INSPECT-001 の共有 Query
+
+| operation / result kind | CLI / MCP | request / response |
+|---|---|---|
+| `node.explain` / `node_explanation` | `node explain` / `node.explain` | project、root composition、key `{instance_path,node}`、time、任意 fonts / mattes → revision、local_time / opacity、assessment、reasons、dependencies、render_diagnostics |
+| `render.explain` / `render_explanation` | `render explain` / `render.explain` | 既存 RenderInput、time、任意 mattes → revision、target、time、plan または null、diagnostics |
+
+両操作を read_only registry に追加した。FFI の `kronello_call` も同じ Request を専用 worker で実行する。CLI の `--backend gpu|cpu-reference` と MCP の backend 選択は render plan の予定経路を指定し、GPU を生成しない。注入 backend は `unknown`。Query 成功は実行成功を表さない。Project / fonts の locator、未知・重複 field は既存 policy で検証する。
+
+reasons の code は拡張可能な `VisibilityCode` enum。category は `opacity / active_range / parent / mask / asset / font / unsupported / evaluation`、impact は `hides / blocks / information`。subject は責任を持つ `{instance_path,node}`。details は原因の数値・range・resource 参照、error は必要時だけ元の型付き ServiceError。message を分岐に使わない。assessment は `hidden / blocked / potentially_visible / indeterminate`、`pixel_visibility_observed:false`。potentially_visible は画素が見えるという保証ではない。
+
+code は `OPACITY_ZERO`、`PAINT_ALPHA_ZERO`、`OUTSIDE_ACTIVE_RANGE`、`ANCESTOR_OPACITY_ZERO`、`ANCESTOR_OUTSIDE_ACTIVE_RANGE`、`TRANSFORM_COLLAPSED`、`MATTE_ONLY`、`MASK_ZERO_OPACITY`、`MASK_ZERO_COVERAGE`、`MASK_ZERO_LUMINANCE`、`MASK_INACTIVE`、`MASK_COVERAGE_UNRESOLVED`、`NO_DRAWABLE_CONTENT`、`ASSET_MISSING`、`FONT_MISSING`、`ASSET_HASH_MISMATCH`、`UNSUPPORTED_FEATURE`、`UNSUPPORTED_SCHEMA`、`GLYPH_MISSING`、`INVALID_REQUEST`、`ASSET_IO_ERROR`、`EVALUATION_FAILED`。最後の code は error 内の `EVALUATION_ERROR / EXPRESSION_BUDGET_EXCEEDED / PROPERTY_DEPENDENCY_CYCLE` 等を保持する。
+
+containment の opacity / active_range は祖先の原因として追跡し、transform parent の opacity / active_range は継承しない。inactive ancestor の下の別 instance scope は TimeMap を実行せず local_time を null とする。dependencies は containment / transform / matte の node 参照、content / font / curve / expression の resource 参照、Property / layout の静的 closure 辺。Property key は kind `node / composition / layout` で、layout は instance_path / text / consumer を持つ。Composition 全体の失敗は render_diagnostics に分け、別 node の欠落を対象 node の原因へ読み替えない。
+
+mattes は既存 `MatteBinding {source:SceneKey,matte:SceneKey,kind:"alpha"|"luminance",visible:bool}` の transient 入力。文書には保存しない。未測定の matte coverage は `MASK_COVERAGE_UNRESOLVED`。通常の render.frame に Query の matte 入力を暗黙に適用しない。
+
+plan は profile、backend、`executed:false`、tile ごとの requested / execution、stages（code / inputs / node / execution / image）、面数・メモリの `_estimate`、方向別 transfers（bytes_estimate / operations_estimate）、processing notices、実 compilation_cache counters を持つ。null の推定値は未推定であり0ではない。cache_scope は `isolated_query_compilation`、`raster_cache_observed:false`。renderer の cache / LRU / counters、作品の revision を変更しない。timing / runtime warm cache / GPU 可用性は測定しない。詳細は [ADR-0060](../adr/0060-structured-read-only-inspection.md)、[INSPECT-001 検証](../testing/inspect-001.md)。
+
 ## 読み取り API（実装済み範囲は上記参照）
 
 | API | 内容 |
@@ -184,14 +203,15 @@ request envelope・既知 payload は未知 field と重複 field を拒否す�
 | `scene.query` | API-001: Composition tree と任意の InstancePath 展開。範囲・タグ検索とページングは提案 |
 | `property.schema` | 型、単位、アニメーション可否、参照可能段階 |
 | `property.sample` | API-001: runtime key と有理数時刻列を指定し、評価済みの型付き値・単位を返す。source / modifier 中間結果の説明は提案 |
-| `scene.explain` | 親変換、マスク、opacity、時刻範囲、欠落資産などを診断 |
-| `render.explain` | 使用経路、CPU / GPU 転送、中間メモリ、キャッシュ再利用を報告 |
+| `node.explain` | INSPECT-001: instance / time の非表示原因、親・Property / layout / resource の依存を構造化診断 |
+| `render.explain` | INSPECT-001: Composition / Sequence の実行前経路、転送・中間メモリの推定、隔離 compile cache counters |
 | `preview.render` | フレーム・短区間・コンタクトシートの成果物を生成 |
 | `project.validate` | 構造・文字・資産・機能・性能予算の診断を返す |
 | `history.list` | イベント（適用されたコマンド）を revision 順に返す。session、変更したキー、取り消し状態を含む |
 | `job.get` / `job.list` | JOB-001: 状態・進捗・成果物・型付きエラー。作品 target は不要 |
 
 ## 変更 API
+
 
 以下の直接操作名は提案。SERVICE-001 の実装は `edit.plan` / `edit.apply` 内の型付き `EditCommand` を使う。TEMPLATE-001 の実装済みの4操作は後述の「TEMPLATE-001 の Command」を参照し、`EditCommand::Template` としても利用できる。
 

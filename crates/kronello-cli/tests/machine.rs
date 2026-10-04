@@ -11,6 +11,46 @@ fn document() -> Value {
 }
 
 #[test]
+fn explain_subcommands_and_tagged_requests_share_read_only_diagnostics() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("inspect.kronello");
+    let doc: Value =
+        serde_json::from_str(include_str!("../../../examples/ffi-preview.project.json")).unwrap();
+    call(
+        &["project", "create"],
+        json!({"project":path,"document":doc}),
+        true,
+    );
+    let node = json!({"project":path,"composition":doc["compositions"][0]["id"],"key":{"instance_path":[],"node":doc["compositions"][0]["nodes"][0]["id"]},"time":{"num":"0","den":"1"}});
+    let via_subcommand = call(&["node", "explain"], node.clone(), true);
+    assert_eq!(via_subcommand["result"]["kind"], "node_explanation");
+    let mut tagged = node;
+    tagged["operation"] = json!("node.explain");
+    assert_eq!(call(&[], tagged, true), via_subcommand);
+    let render = json!({"input":{"project":path,"composition":doc["compositions"][0]["id"],"region":{"origin":[0,0],"extent":[64,32],"pixels":[8,4]}},"time":{"num":"0","den":"1"}});
+    let (result, _) = invoke_with_env(
+        &["render", "explain"],
+        &render.to_string(),
+        true,
+        Some(("KRONELLO_TEST_ADAPTER_UNAVAILABLE", "1")),
+    );
+    assert_eq!(result["result"]["value"]["plan"]["executed"], false);
+    assert_eq!(result["result"]["value"]["plan"]["backend"], "gpu");
+    assert_eq!(
+        call(
+            &["--backend", "cpu-reference", "render", "explain"],
+            render,
+            true
+        )["result"]["value"]["plan"]["backend"],
+        "cpu_reference"
+    );
+    assert_eq!(
+        call(&["project", "info"], json!({"project":path}), true)["result"]["value"]["revision"],
+        "1"
+    );
+}
+
+#[test]
 fn expression_commands_and_samples_use_the_shared_cli_api() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("expression.kronello");

@@ -6,7 +6,7 @@ use kronello_model::{Color, ColorSpace, ResolvedGeometry, ResolvedText, Value};
 use kronello_text::{FontData, LayoutResult};
 use kronello_time::Time;
 use kronello_vector::{FlattenRequest, FlattenedPath};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
@@ -50,7 +50,10 @@ impl CacheConfig {
         }
     }
 }
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(deny_unknown_fields)]
 pub struct CacheStats {
     pub hits: u64,
     pub misses: u64,
@@ -60,7 +63,10 @@ pub struct CacheStats {
     /// Retained payload weight, excluding allocator overhead. Values use JSON byte size.
     pub bytes: usize,
 }
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(deny_unknown_fields)]
 pub struct RenderCacheStats {
     pub values: CacheStats,
     pub layout: CacheStats,

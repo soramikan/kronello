@@ -8,6 +8,28 @@ use std::{
 };
 
 #[test]
+fn explain_queries_cross_the_worker_abi_with_the_shared_schema() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("inspect.kronello");
+    let doc: Value =
+        serde_json::from_str(include_str!("../../../examples/ffi-preview.project.json")).unwrap();
+    assert_eq!(
+        service(json!({"operation":"project.create","project":path,"document":doc}))["status"],
+        "success"
+    );
+    let handle = open(path.to_str().unwrap());
+    wait(handle, 0);
+    let node = json!({"operation":"node.explain","project":path,"composition":doc["compositions"][0]["id"],"key":{"instance_path":[],"node":doc["compositions"][0]["nodes"][0]["id"]},"time":{"num":"0","den":"1"}});
+    assert_eq!(wait(handle, call(handle, &node.to_string())), service(node));
+    let render = json!({"operation":"render.explain","input":{"project":path,"composition":doc["compositions"][0]["id"],"region":{"origin":[0,0],"extent":[64,32],"pixels":[8,4]}},"time":{"num":"0","den":"1"}});
+    assert_eq!(
+        wait(handle, call(handle, &render.to_string())),
+        service(render)
+    );
+    kronello_close(handle);
+}
+
+#[test]
 fn detached_submit_requires_explicit_cli_worker_before_creating_job_state() {
     let h = open("missing.kronello");
     wait(h, 0);

@@ -5,6 +5,8 @@ mod cache;
 pub use bounds::{DesignBounds, LayoutValue};
 mod dag;
 mod effect;
+mod inspect;
+pub use inspect::*;
 mod output;
 mod snapshot;
 mod template;

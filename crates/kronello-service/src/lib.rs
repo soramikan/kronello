@@ -7,8 +7,10 @@ mod jobs;
 pub use jobs::*;
 mod api;
 mod edit;
+mod inspect;
 mod query;
 pub use api::*;
+pub use inspect::*;
 pub use query::*;
 mod wire;
 pub use edit::{
@@ -104,6 +106,10 @@ pub enum Request {
     HistoryList(HistoryRequest),
     #[serde(rename = "scene.query")]
     SceneQuery(SceneQueryRequest),
+    #[serde(rename = "node.explain")]
+    NodeExplain(NodeExplainRequest),
+    #[serde(rename = "render.explain")]
+    RenderExplain(RenderExplainRequest),
     #[serde(rename = "property.sample")]
     PropertySample(PropertySampleRequest),
     #[serde(rename = "capabilities.get")]
@@ -215,6 +221,8 @@ pub enum ResultData {
     Edit(kronello_store::Event),
     History(HistoryResult),
     Scene(SceneQueryResult),
+    NodeExplanation(Box<NodeExplainResult>),
+    RenderExplanation(Box<RenderExplainResult>),
     Samples(PropertySampleResult),
     Capabilities(Box<CapabilitiesResult>),
 }
@@ -428,6 +436,21 @@ impl<'a> Service<'a> {
             })),
             Request::JobPrune(_) => Ok(ResultData::Pruned(self.jobs()?.prune()?)),
             Request::SceneQuery(r) => query::scene(r).map(ResultData::Scene),
+            Request::NodeExplain(r) => {
+                inspect::node(r).map(|r| ResultData::NodeExplanation(Box::new(r)))
+            }
+            Request::RenderExplain(r) => {
+                let backend = match self.backend {
+                    Backend::Selected(BackendSelection::Gpu) => {
+                        kronello_render::ExplainBackend::Gpu
+                    }
+                    Backend::Selected(BackendSelection::CpuReference) => {
+                        kronello_render::ExplainBackend::CpuReference
+                    }
+                    Backend::Injected(_) => kronello_render::ExplainBackend::Unknown,
+                };
+                inspect::render(r, backend).map(|r| ResultData::RenderExplanation(Box::new(r)))
+            }
             Request::PropertySample(r) => query::sample(r).map(ResultData::Samples),
             Request::CapabilitiesGet(_) => Ok(ResultData::Capabilities(Box::new(
                 CapabilitiesResult::current(Some(match &self.media_capabilities {
@@ -850,6 +873,14 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
             }
             Ok(())
         }
+        Request::NodeExplain(r) => {
+            local_locator(&r.project)?;
+            for font in &r.fonts {
+                local_locator(&font.path)?;
+            }
+            Ok(())
+        }
+        Request::RenderExplain(r) => render_locators(&r.input),
         Request::PropertySample(r) => {
             local_locator(&r.project)?;
             if let Some(fonts) = &r.fonts {

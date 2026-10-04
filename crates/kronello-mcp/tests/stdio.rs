@@ -8,6 +8,42 @@ use kronello_mcp::SUPPORTED_PROTOCOL_VERSIONS;
 use serde_json::{Value, json};
 
 #[test]
+fn explain_tools_are_discovered_and_return_shared_results_without_a_device() {
+    let mut client = Client::spawn(&[], true);
+    client.ready(SUPPORTED_PROTOCOL_VERSIONS[0]);
+    let tools = client.schemas();
+    for name in ["node.explain", "render.explain"] {
+        assert_eq!(tools[name]["_meta"]["kronello"]["readOnlyProject"], true);
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("inspect.kronello");
+    let doc: Value =
+        serde_json::from_str(include_str!("../../../examples/ffi-preview.project.json")).unwrap();
+    assert_eq!(
+        client.call("project.create", json!({"project":path,"document":doc}))["isError"],
+        false
+    );
+    let node = json!({"project":path,"composition":doc["compositions"][0]["id"],"key":{"instance_path":[],"node":doc["compositions"][0]["nodes"][0]["id"]},"time":{"num":"0","den":"1"}});
+    let result = client.call("node.explain", node.clone());
+    validate(&tools["node.explain"], &result);
+    assert_eq!(
+        result["structuredContent"]["assessment"],
+        "potentially_visible"
+    );
+    let render = json!({"input":{"project":path,"composition":doc["compositions"][0]["id"],"region":{"origin":[0,0],"extent":[64,32],"pixels":[8,4]}},"time":{"num":"0","den":"1"}});
+    let result = client.call("render.explain", render);
+    validate(&tools["render.explain"], &result);
+    assert_eq!(result["structuredContent"]["plan"]["executed"], false);
+    assert!(
+        result["structuredContent"]["diagnostics"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert!(client.finish().is_empty());
+}
+
+#[test]
 fn expression_commands_and_samples_use_the_shared_mcp_api() {
     let mut client = Client::spawn(&[], false);
     client.ready(SUPPORTED_PROTOCOL_VERSIONS[0]);

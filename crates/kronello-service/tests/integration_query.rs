@@ -143,6 +143,28 @@ fn evaluated_template_queries_share_layout_inputs_and_do_not_initialize_gpu_or_e
 }
 
 #[test]
+fn node_explain_reports_renderer_layout_dependencies_for_template_band() {
+    let f = Fixture::new();
+    let before = f.ok(json!({"operation":"project.export","project":f.path}));
+    let result = f.ok(json!({"operation":"node.explain","project":f.path,"composition":f.composition,"key":{"instance_path":[f.instance],"node":f.band},"time":{"num":"0","den":"1"},"fonts":[f.font]}));
+    assert!(
+        result["render_diagnostics"].as_array().unwrap().is_empty(),
+        "{result}"
+    );
+    assert!(
+        result["dependencies"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|d| d["upstream"]["kind"] == "layout" && d["upstream"]["text"] == f.text)
+    );
+    assert_eq!(
+        f.ok(json!({"operation":"project.export","project":f.path})),
+        before
+    );
+}
+
+#[test]
 fn evaluated_queries_keep_font_errors_local_paths_and_inactive_node_boundaries() {
     let f = Fixture::new();
     for operation in ["scene", "sample"] {
