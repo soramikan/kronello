@@ -13,7 +13,7 @@
 | M0 | 0 | 0 | 6 | 0 | 6 |
 | M1 | 0 | 0 | 14 | 0 | 14 |
 | M2 | 0 | 1 | 10 | 0 | 11 |
-| M3 | 14 | 5 | 6 | 0 | 25 |
+| M3 | 13 | 6 | 6 | 0 | 25 |
 | M4 | 11 | 0 | 0 | 0 | 11 |
 | M5 | 5 | 0 | 0 | 0 | 5 |
 | M6 | 4 | 0 | 0 | 0 | 4 |
@@ -519,7 +519,7 @@
 
 ### FX-002 非一様affine下のblur/shadow
 
-- 優先度: P2 / 領域: effects / 状態: planned
+- 優先度: P2 / 領域: effects / 状態: in_progress
 - 依存: FX-001
 - 受け入れ条件:
   - 非一様scale/shear下の正sigmaのGaussian blur/drop shadowの意味を定義して版を管理し、現行のUNSUPPORTED_FEATUREを対応範囲内で解消する

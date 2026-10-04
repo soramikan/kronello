@@ -919,7 +919,7 @@
       "priority": "P2",
       "area": "effects",
       "title": "非一様affine下のblur/shadow",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "FX-001"
       ],
