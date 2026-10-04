@@ -314,3 +314,25 @@ cargo run -p kronello-mcp --locked -- --backend cpu-reference
 三操作の意味、保護区間、音声範囲は [ADR-0051](../adr/0051-nle-placement-and-retime.md)。Undo は保存 inverse と候補検証を使い、tracks / clips の順序を厳密に復元する。同一 Sequence の構造編集は保守的に競合する。
 
 `render.frame` / `render.sequence` の `input` は既存 `composition: UUID`、または `target: {"kind":"composition","composition":"UUID"}` / `target: {"kind":"sequence","sequence":"UUID"}` を一つだけ指定する。未指定・両方指定・null・未知 field・重複 field は拒否する。frame / sequence metadata の `target` が対象を示す。`--backend cpu-reference` は明示 backend 選択であり、既定 GPU からの自動切替ではない。公開 project / API schema の生成一致と MCP / CLI からの trim・Undo・Sequence frame の確認は [NLE-001 の検証](../testing/nle-001.md) を参照。
+
+
+### LAYOUT-001 の評価 bounds query
+
+既存 `scene.query` の `evaluation: {time, fonts}` を指定すると、active node の `evaluated.bounds` に
+`{layout_bounds, ink_bounds, visual_bounds}` を同時に返す。各値は `{min: [x,y], max: [x,y]}` または `null`。
+全段階・全 node は root Composition 座標、単位は `design_px`。Group / placement は子を集約し、visual に自身の effect を含む。
+mask 適用前の保守的な geometry / effect envelope であり、透明 paint の tight な alpha 矩形ではない。
+既存 `evaluated.layout_bounds` は text-local を維持する。evaluation 省略時、inactive node の契約も変更しない。
+GPU 初期化や作品 revision の更新を行わず、renderer と同じ固定 font・純粋 compiler を使用する。
+
+`TemplateBandBinding.bounds` は任意の `layout` / `ink` / `visual`、既定は `layout`。
+公開 Project / API schema は Rust 型から生成する。
+幅 overflow の error は `LAYOUT_OVERFLOW` と
+`details: {node, instance_path, line, advance, wrap_width}`（line は 0 始まり）。
+親の特異変換は `LAYOUT_SINGULAR_TRANSFORM`。
+閉じた静的依存経路の `PROPERTY_DEPENDENCY_CYCLE` は `details.path` に
+`{kind: "node", instance_path, node, property}`、`{kind: "layout", instance_path, text, consumer}`、
+または `{kind: "composition", instance_path, composition, property}` の列を返す。
+任意の依存宣言・式を受け付ける公開 command は今回追加しない。
+max_lines の `TEMPLATE_OVERFLOW` と未対応エフェクトの型付き失敗は維持する。
+[ADR-0057](../adr/0057-layout-bounds-stages.md)、[LAYOUT-001 検証](../testing/layout-001.md) を参照。

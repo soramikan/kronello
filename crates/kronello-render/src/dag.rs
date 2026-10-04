@@ -597,13 +597,8 @@ fn derive_bounds(nodes: &[DagNode]) -> Vec<crate::NodeBounds> {
                         }),
                     };
                     Some(b.expand(
-                        [path.stroke.map_or(0.0, |(_, w, join, _, m)| {
-                            w * 0.5
-                                * if join == kronello_model::StrokeJoin::Miter {
-                                    m
-                                } else {
-                                    1.0
-                                }
+                        [path.stroke.map_or(0.0, |(_, w, join, cap, m)| {
+                            crate::bounds::stroke_halo(w, join, cap, m)
                         }); 2],
                     ))
                 };
@@ -636,7 +631,7 @@ fn derive_bounds(nodes: &[DagNode]) -> Vec<crate::NodeBounds> {
     bounds
 }
 
-fn map_effect(
+pub(crate) fn map_effect(
     effect: &kronello_model::ResolvedEffect,
     transform: Affine2,
 ) -> Result<kronello_model::ResolvedEffect, RenderError> {

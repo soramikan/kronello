@@ -46,6 +46,32 @@ fn template_editions_and_separate_pinned_inputs_round_trip() {
 }
 
 #[test]
+fn bounds_selection_is_explicit_and_legacy_layout_default_round_trips() {
+    let project = fixture();
+    let original = serde_json::to_value(&project).unwrap();
+    assert!(
+        original["templates"][0]["constraints"]["bands"][0]
+            .get("bounds")
+            .is_none()
+    );
+    let DocumentObject::Known(d) = &project.templates[0] else {
+        panic!()
+    };
+    assert_eq!(d.constraints.bands[0].bounds, BoundsStage::Layout);
+    for stage in ["ink", "visual"] {
+        let mut encoded = original.clone();
+        encoded["templates"][0]["constraints"]["bands"][0]["bounds"] = json!(stage);
+        let decoded: Project = serde_json::from_value(encoded.clone()).unwrap();
+        assert_eq!(serde_json::to_value(decoded).unwrap(), encoded);
+    }
+    let mut future = original;
+    future["templates"][0]["constraints"]["bands"][0]["bounds"] = json!("unknown_stage");
+    let decoded: Project = serde_json::from_value(future.clone()).unwrap();
+    assert!(matches!(decoded.templates[0], DocumentObject::Opaque(_)));
+    assert_eq!(serde_json::to_value(decoded).unwrap(), future);
+}
+
+#[test]
 fn legacy_documents_omit_template_collections_and_future_contracts_remain_opaque() {
     let legacy = Project::default();
     let encoded = serde_json::to_value(&legacy).unwrap();

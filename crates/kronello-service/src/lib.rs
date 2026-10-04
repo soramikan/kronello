@@ -258,6 +258,44 @@ impl From<RenderError> for ServiceError {
             e.code()
         };
         let mut error = Self::new(code, e.to_string());
+        if let RenderError::LayoutOverflow {
+            node,
+            instance_path,
+            line,
+            advance,
+            wrap_width,
+        } = &e
+        {
+            error.details = Some(
+                serde_json::json!({"node":node,"instance_path":instance_path,
+                "line":line,"advance":advance,"wrap_width":wrap_width}),
+            );
+        }
+        if let RenderError::Evaluation(kronello_eval::EvaluationError::DependencyCycle { path }) =
+            &e
+        {
+            use kronello_eval::RuntimePropertyKey;
+            let path: Vec<_> = path
+                .iter()
+                .map(|k| match k {
+                    RuntimePropertyKey::Node(k) => serde_json::json!({"kind":"node",
+                    "instance_path":k.instance_path,"node":k.node,"property":k.property}),
+                    RuntimePropertyKey::LayoutValue {
+                        instance_path,
+                        text,
+                        consumer,
+                    } => serde_json::json!({"kind":"layout","instance_path":instance_path,
+                        "text":text,"consumer":consumer}),
+                    RuntimePropertyKey::Composition {
+                        instance_path,
+                        composition,
+                        property,
+                    } => serde_json::json!({"kind":"composition","instance_path":instance_path,
+                        "composition":composition,"property":property}),
+                })
+                .collect();
+            error.details = Some(serde_json::json!({"path":path}));
+        }
         if let RenderError::Template(kronello_template::TemplateError::Overflow {
             node,
             actual,

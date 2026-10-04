@@ -181,6 +181,15 @@
         "reject"
       ]
     },
+    "BoundsStage": {
+      "description": "Resolution-independent bounds stage selected by a layout consumer.",
+      "type": "string",
+      "enum": [
+        "layout",
+        "ink",
+        "visual"
+      ]
+    },
     "Clip": {
       "type": "object",
       "properties": {
@@ -1720,6 +1729,10 @@
       "properties": {
         "band_node": {
           "$ref": "#/$defs/NodeId"
+        },
+        "bounds": {
+          "description": "Explicit bounds stage; omitted legacy bindings keep the layout box.",
+          "$ref": "#/$defs/BoundsStage"
         },
         "padding": {
           "type": "array",

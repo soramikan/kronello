@@ -118,7 +118,7 @@ Position / Opacity の変更では原則組版を再実行しない。本文、�
 ### 実装段階
 
 - M2: テキストの layout_bounds への単方向参照による背景帯追従と、`max_lines` 超過の overflow 検出（TEMPLATE-001）。
-- M3: 3 種の bounds の区別、循環診断、responsive variant による再レイアウト（LAYOUT-001、TEMPLATE-002）。
+- M3: LAYOUT-001 で 3 種の bounds、明示した帯の stage 選択、静的循環と幅 overflow の診断を実装。responsive variant による再レイアウトは TEMPLATE-002 の後続範囲。
 
 ## 描画バックエンドの制約
 
@@ -138,3 +138,34 @@ text / template の実装への evaluator の逆依存はない。
 text の wrap_width を背景帯から読む循環は拒否する。公開 text 置換は水平・単一 style・ruby なしを対象とする。
 max_lines 超過は node・実際の行数・最大行数を持つ `TemplateError::Overflow`、最終レンダーでは `TEMPLATE_OVERFLOW`。
 検証手順は [TEMPLATE-001](../testing/template-001.md) を参照。
+
+
+### LAYOUT-001 の実装規約（M3）
+
+[ADR-0057](../adr/0057-layout-bounds-stages.md) により、`kronello-render::LayoutValue` は
+`layout_bounds` / `ink_bounds` / `visual_bounds` を同じ座標空間の `DesignBounds {min, max}` または `None` として保持する。
+Scene IR と `scene.query` の `evaluated.bounds` は、active node ごとの三段階を root Composition の `design_px` で同時に返す。
+既存の `evaluated.layout_bounds` は text-local のまま。非アクティブな node に evaluated を付けない。
+
+text の layout は wrap_width × 行数 × line_height、ink は組版 outline の union。
+Shape は解析した幾何 envelope と中央線 support を区別し、一般の Bezier 線は miter / cap の保守的な包含矩形を使う。
+各段階を world transform で写し、visual に renderer と同じ変換規約の blur / shadow を順に加える。
+Group / Null / placement は子の三段階を union し、自身の effect は visual だけへ適用する。
+mask、穴、透明 paint / opacity による tight な alpha 被覆の縮小は行わない。
+semantic な blur support は連続の `3 * sigma`、pixel DAG は出力格子へ外向きに丸めるので、その丸めを保存値や再組版に混ぜない。
+
+`TemplateBandBinding.bounds` は `layout`（既定・省略可）/ `ink` / `visual`。
+layout / ink は text の bounds を共通親空間へ写し、visual は Composition 空間の AABB を親へ逆変換する。
+親の特異変換は `LAYOUT_SINGULAR_TRANSFORM`。空 ink / visual は text 原点に padding だけの帯となる。
+`DependencyDeclarations` に text Property → `RuntimePropertyKey::LayoutValue` → band Property を静的宣言し、visual では変換親・placement の Property も含める。
+`DependencyGraph::dependency_order` で projection を供給し、帯の定義順へ依存させない。
+逆向きの text wrap → band size の宣言は閉経路付き `PROPERTY_DEPENDENCY_CYCLE`。
+公開 API に任意式や逆依存の authoring 入口を追加したものではなく、依存宣言は後続 compiler の接続点である。
+
+`LayoutLine.overflow` の幅超過を compiler が `LAYOUT_OVERFLOW` とし、template 以外の text も最終出力を拒否する。
+既存 max_lines の `TEMPLATE_OVERFLOW` と診断は維持する。幅超過は node / instance_path / line / advance / wrap_width を返す。
+`SemanticVersions.bounds = 1` を固定し、未知版を拒否する。
+正の Gaussian の非一様変換と glow は既存の未対応境界を維持する。
+検証範囲と host の残件は [LAYOUT-001 検証](../testing/layout-001.md) を参照。
+
+帯の対象 text は leaf node に限る。子の合成結果を組版時の字形 bounds へ混ぜず、子を持つ対象は `UNSUPPORTED_FEATURE` で拒否する。帯の対象でない text の子は通常の scene 合成と bounds 集約で扱う。

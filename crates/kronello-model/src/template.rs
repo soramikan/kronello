@@ -61,6 +61,9 @@ pub struct TemplateConstraints {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct TemplateBandBinding {
+    /// Explicit bounds stage; omitted legacy bindings keep the layout box.
+    #[serde(default, skip_serializing_if = "BoundsStage::is_layout")]
+    pub bounds: BoundsStage,
     pub text_node: NodeId,
     pub band_node: NodeId,
     pub size_property: PropertyId,
@@ -76,4 +79,21 @@ pub struct TemplateInstance {
     pub duration: Duration,
     #[serde(default)]
     pub inputs: BTreeMap<String, Value>,
+}
+
+/// Resolution-independent bounds stage selected by a layout consumer.
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum BoundsStage {
+    #[default]
+    Layout,
+    Ink,
+    Visual,
+}
+impl BoundsStage {
+    pub fn is_layout(&self) -> bool {
+        *self == Self::Layout
+    }
 }

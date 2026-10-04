@@ -458,6 +458,14 @@ fn snapshot_versions_hash_locks_profile_and_independent_unknown_content() {
             .code(),
         "UNSUPPORTED_FEATURE"
     );
+    let mut version = s.semantic_versions().clone();
+    version.bounds = 99;
+    assert_eq!(
+        RenderSnapshot::with_contract(&p, id, 7, s.profile(), version, vec![])
+            .unwrap_err()
+            .code(),
+        "UNSUPPORTED_FEATURE"
+    );
     let value = serde_json::to_value(&s).unwrap();
     let restored: RenderSnapshot = serde_json::from_value(value.clone()).unwrap();
     assert_eq!(restored.content_hash().unwrap(), hash);
@@ -987,6 +995,22 @@ fn supported_stroke_styles_nonuniform_transform_and_zero_scale() {
         ..Project::default()
     };
     let s = snapshot(&p, id);
+    let bounds = build_scene_ir(&s, t(0, 1), &[]).unwrap().nodes[0].bounds;
+    assert_eq!(
+        bounds.layout_bounds,
+        Some(DesignBounds {
+            min: [0.0; 2],
+            max: [16.0; 2]
+        })
+    );
+    assert_eq!(
+        bounds.ink_bounds,
+        Some(DesignBounds {
+            min: [-2.0; 2],
+            max: [18.0; 2]
+        })
+    );
+    assert_eq!(bounds.visual_bounds, bounds.ink_bounds);
     let frame = render_frame(
         &s,
         &[],
@@ -1962,6 +1986,21 @@ fn fx_dag(p: &Project, id: CompositionId, region: OutputRegion) -> RenderDag {
 #[test]
 fn fx_halo_requests_and_transformed_visual_bounds_are_analytical() {
     let (p, id) = fx_project();
+    let scene = build_scene_ir(&snapshot(&p, id), t(0, 1), &[]).unwrap();
+    assert_eq!(
+        scene.nodes[0].bounds.ink_bounds,
+        Some(DesignBounds {
+            min: [6.0, 8.0],
+            max: [10.0, 14.0],
+        })
+    );
+    assert_eq!(
+        scene.nodes[0].bounds.visual_bounds,
+        Some(DesignBounds {
+            min: [5.25, 3.5],
+            max: [15.25, 15.5],
+        })
+    );
     let dag = fx_dag(&p, id, fx_region());
     let effect_index = dag
         .nodes()
@@ -2000,6 +2039,36 @@ fn fx_halo_requests_and_transformed_visual_bounds_are_analytical() {
             extent: [31.0, 31.0],
             pixels: [31; 2]
         }
+    );
+}
+
+#[test]
+fn group_bounds_union_children_and_apply_group_effect_after_child_effects() {
+    let (mut p, id, group_id, _) = group_project();
+    let sigma = constant("kronello.effect.sigma", scalar(2.0));
+    let group = &mut comp_mut(&mut p).nodes[0];
+    group.effects.push(Effect::Known(EffectDefinition {
+        effect_id: GAUSSIAN_BLUR_ID.into(),
+        version: 1,
+        parameters: EffectParameters::GaussianBlur { sigma: sigma.id() },
+    }));
+    group.properties.push(sigma);
+    let scene = build_scene_ir(&snapshot(&p, id), Time::ZERO, &[]).unwrap();
+    let group = scene.nodes.iter().find(|n| n.key.node == group_id).unwrap();
+    assert_eq!(
+        group.bounds.layout_bounds,
+        Some(DesignBounds {
+            min: [0.0; 2],
+            max: [16.0; 2]
+        })
+    );
+    assert_eq!(group.bounds.ink_bounds, group.bounds.layout_bounds);
+    assert_eq!(
+        group.bounds.visual_bounds,
+        Some(DesignBounds {
+            min: [-6.0; 2],
+            max: [22.0; 2]
+        })
     );
 }
 fn assert_fx_crop(backend: &dyn RenderBackend) {
@@ -2218,6 +2287,11 @@ fn fx_local_halos_offsets_follow_uniform_scale_rotation_and_reject_anisotropy() 
     for (actual, expected) in b.min.into_iter().chain(b.max).zip([-9.0, 6.0, 15.0, 27.0]) {
         assert!((actual - expected).abs() < 1e-10);
     }
+    let scene = build_scene_ir(&snapshot(&p, id), Time::ZERO, &[]).unwrap();
+    let b = scene.nodes[0].bounds.visual_bounds.unwrap();
+    for (actual, expected) in b.min.into_iter().chain(b.max).zip([-9.0, 6.5, 15.0, 26.5]) {
+        assert!((actual - expected).abs() < 1e-10);
+    }
     let DocumentObject::Known(c) = &mut p.compositions[0] else {
         unreachable!()
     };
@@ -2229,11 +2303,8 @@ fn fx_local_halos_offsets_follow_uniform_scale_rotation_and_reject_anisotropy() 
         .set_source(PropertySource::Constant(v2(2.0, 1.0)), &render_registry())
         .unwrap();
     let snapshot = RenderSnapshot::new(&p, id, 0, RenderProfile::default()).unwrap();
-    let scene = build_scene_ir(&snapshot, t(0, 1), &[]).unwrap();
     assert_eq!(
-        build_render_dag(&scene, RenderProfile::default(), fx_region())
-            .unwrap_err()
-            .code(),
+        build_scene_ir(&snapshot, t(0, 1), &[]).unwrap_err().code(),
         "UNSUPPORTED_FEATURE"
     );
 }

@@ -39,6 +39,8 @@ pub struct SceneNodeEvaluation {
     pub properties: std::collections::BTreeMap<PropertyId, Value>,
     pub text: Option<String>,
     pub layout_bounds: Option<QueryBounds>,
+    /// Simultaneous stages in root Composition design_px (before matte clipping).
+    pub bounds: kronello_render::LayoutValue,
     pub world_transform: [[f64; 3]; 2],
     pub effects: Vec<kronello_model::ResolvedEffect>,
 }
@@ -265,6 +267,7 @@ pub(crate) fn scene(r: SceneQueryRequest) -> Result<SceneQueryResult, ServiceErr
                         _ => None,
                     },
                     world_transform: n.world_transform.0,
+                    bounds: n.bounds,
                     effects: n.effects.clone(),
                 }),
             key: node_key,

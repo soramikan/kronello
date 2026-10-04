@@ -101,6 +101,15 @@
       ],
       "type": "string"
     },
+    "BoundsStage": {
+      "description": "Resolution-independent bounds stage selected by a layout consumer.",
+      "enum": [
+        "layout",
+        "ink",
+        "visual"
+      ],
+      "type": "string"
+    },
     "CapabilitiesRequest": {
       "additionalProperties": false,
       "type": "object"
@@ -692,6 +701,34 @@
       "required": [
         "key",
         "version"
+      ],
+      "type": "object"
+    },
+    "DesignBounds": {
+      "additionalProperties": false,
+      "properties": {
+        "max": {
+          "items": {
+            "format": "double",
+            "type": "number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "min": {
+          "items": {
+            "format": "double",
+            "type": "number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "min",
+        "max"
       ],
       "type": "object"
     },
@@ -2310,6 +2347,43 @@
         "value",
         "interpolation"
       ],
+      "type": "object"
+    },
+    "LayoutValue": {
+      "additionalProperties": false,
+      "description": "Semantic bounds supplied by the upper compiler, without backend objects or\nevaluation history. None denotes no geometry at that stage, never a fallback.",
+      "properties": {
+        "ink_bounds": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DesignBounds"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "layout_bounds": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DesignBounds"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "visual_bounds": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DesignBounds"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
       "type": "object"
     },
     "LibraryCapability": {
@@ -4858,6 +4932,10 @@
     "SceneNodeEvaluation": {
       "additionalProperties": false,
       "properties": {
+        "bounds": {
+          "$ref": "#/$defs/LayoutValue",
+          "description": "Simultaneous stages in root Composition design_px (before matte clipping)."
+        },
         "effects": {
           "items": {
             "$ref": "#/$defs/ResolvedEffect"
@@ -4903,6 +4981,7 @@
       },
       "required": [
         "properties",
+        "bounds",
         "world_transform",
         "effects"
       ],
@@ -5064,6 +5143,13 @@
     "SemanticVersions": {
       "additionalProperties": false,
       "properties": {
+        "bounds": {
+          "default": 1,
+          "description": "Absent legacy snapshots use the initial bounds contract, never latest.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
         "color": {
           "type": "string"
         },
@@ -5598,6 +5684,10 @@
       "properties": {
         "band_node": {
           "$ref": "#/$defs/NodeId"
+        },
+        "bounds": {
+          "$ref": "#/$defs/BoundsStage",
+          "description": "Explicit bounds stage; omitted legacy bindings keep the layout box."
         },
         "padding": {
           "items": {
