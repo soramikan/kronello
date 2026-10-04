@@ -543,7 +543,7 @@
       "priority": "P1",
       "area": "expression",
       "title": "型付きASTと有界式評価",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "EVAL-001",
         "API-001"
@@ -909,7 +909,8 @@
       "acceptance_criteria": [
         "WindowsでCLI/MCPの終了から独立するworker起動・stdio/log・回収の契約を実装し、親終了後も固定入力のジョブが継続することを実機またはCIで検証する",
         "Windowsの上書き禁止publicationを設計し、同一volume・既存file/空directoryの拒否・cancel/lease競合を実プロセスで検証する",
-        "Linux/WindowsでFIFO slot・queued/running heartbeat・強制終了後のinterrupted・pruneを検証し、OS/版/コマンド/exitを記録する。未検証OSを保証経路に昇格しない"
+        "Linux/WindowsでFIFO slot・queued/running heartbeat・強制終了後のinterrupted・pruneを検証し、OS/版/コマンド/exitを記録する。未検証OSを保証経路に昇格しない",
+        "高負荷時（load average 50 前後）に CLI の job テスト（例: sequence_target_job_preserves_placements_after_trim_and_project_removal）が Queued のまま 60 秒で timeout する事象を再現・原因調査し、状態 DB の lock 競合下でも job が開始されることを検証する"
       ]
     },
     {

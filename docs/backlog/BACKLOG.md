@@ -13,7 +13,7 @@
 | M0 | 0 | 0 | 6 | 0 | 6 |
 | M1 | 0 | 0 | 14 | 0 | 14 |
 | M2 | 0 | 1 | 10 | 0 | 11 |
-| M3 | 20 | 3 | 2 | 0 | 25 |
+| M3 | 20 | 2 | 3 | 0 | 25 |
 | M4 | 9 | 0 | 0 | 0 | 9 |
 | M5 | 5 | 0 | 0 | 0 | 5 |
 | M6 | 4 | 0 | 0 | 0 | 4 |
@@ -317,7 +317,7 @@
 
 ### EXPR-001 型付きASTと有界式評価
 
-- 優先度: P1 / 領域: expression / 状態: in_progress
+- 優先度: P1 / 領域: expression / 状態: done
 - 依存: EVAL-001, API-001
 - 受け入れ条件:
   - 静的依存列挙と命令/メモリ/サンプル予算を実装する
@@ -515,6 +515,7 @@
   - WindowsでCLI/MCPの終了から独立するworker起動・stdio/log・回収の契約を実装し、親終了後も固定入力のジョブが継続することを実機またはCIで検証する
   - Windowsの上書き禁止publicationを設計し、同一volume・既存file/空directoryの拒否・cancel/lease競合を実プロセスで検証する
   - Linux/WindowsでFIFO slot・queued/running heartbeat・強制終了後のinterrupted・pruneを検証し、OS/版/コマンド/exitを記録する。未検証OSを保証経路に昇格しない
+  - 高負荷時（load average 50 前後）に CLI の job テスト（例: sequence_target_job_preserves_placements_after_trim_and_project_removal）が Queued のまま 60 秒で timeout する事象を再現・原因調査し、状態 DB の lock 競合下でも job が開始されることを検証する
 
 ### FX-002 非一様affine下のblur/shadow
 
