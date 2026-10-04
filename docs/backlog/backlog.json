@@ -597,7 +597,7 @@
       "priority": "P1",
       "area": "gui",
       "title": "macOSネイティブGUI: Canvas・階層・変換操作",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "FFI-001",
         "RENDER-001"
