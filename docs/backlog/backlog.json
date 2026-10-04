@@ -543,7 +543,7 @@
       "priority": "P1",
       "area": "expression",
       "title": "型付きASTと有界式評価",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "EVAL-001",
         "API-001"
@@ -561,7 +561,7 @@
       "priority": "P1",
       "area": "layout",
       "title": "responsive layoutとbounds段階",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "TEXT-001",
         "VEC-001",
@@ -666,7 +666,7 @@
       "priority": "P1",
       "area": "ffi",
       "title": "kronello-ffi: ネイティブGUI向けCommand/Query境界",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "API-001"
       ],
