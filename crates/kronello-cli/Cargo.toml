@@ -22,7 +22,10 @@ kronello-service = { path = "../kronello-service" }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 
 [dev-dependencies]
-kronello-service = { path = "../kronello-service", features = ["test-adapter-unavailable"] }
+kronello-service = { path = "../kronello-service", features = ["test-adapter-unavailable", "test-job-control"] }
+kronello-jobs = { path = "../kronello-jobs" }
+rusqlite = { version = "0.38", features = ["bundled"] }
+nix = { version = "0.31", features = ["process", "signal"] }
 kronello-model = { path = "../kronello-model" }
 kronello-render = { path = "../kronello-render" }
 kronello-testkit = { path = "../kronello-testkit" }

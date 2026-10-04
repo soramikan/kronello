@@ -822,12 +822,15 @@ name = "kronello-cli"
 version = "0.0.0"
 dependencies = [
  "jsonschema",
+ "kronello-jobs",
  "kronello-model",
  "kronello-render",
  "kronello-service",
  "kronello-store",
  "kronello-testkit",
+ "nix",
  "png",
+ "rusqlite",
  "serde_json",
  "sha2",
  "tempfile",
@@ -879,10 +882,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "kronello-jobs"
+version = "0.0.0"
+dependencies = [
+ "directories",
+ "nix",
+ "rusqlite",
+ "rustix",
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror",
+ "uuid",
+]
+
+[[package]]
 name = "kronello-mcp"
 version = "0.0.0"
 dependencies = [
  "jsonschema",
+ "kronello-jobs",
  "kronello-service",
  "serde",
  "serde_json",
@@ -951,8 +972,10 @@ name = "kronello-service"
 version = "0.0.0"
 dependencies = [
  "jsonschema",
+ "kronello-audio",
  "kronello-eval",
  "kronello-gpu",
+ "kronello-jobs",
  "kronello-media",
  "kronello-model",
  "kronello-render",

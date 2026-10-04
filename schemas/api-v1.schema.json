@@ -1820,6 +1820,244 @@
       },
       "type": "array"
     },
+    "JobAudioClip": {
+      "additionalProperties": false,
+      "properties": {
+        "asset": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "gain": {
+          "format": "float",
+          "type": "number"
+        },
+        "placement": {
+          "$ref": "#/$defs/TimeRange"
+        },
+        "source_in": {
+          "$ref": "#/$defs/Rational"
+        },
+        "stream_index": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "asset",
+        "stream_index",
+        "placement",
+        "source_in",
+        "gain"
+      ],
+      "type": "object"
+    },
+    "JobFailure": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "type": "object"
+    },
+    "JobListRequest": {
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "JobListResult": {
+      "additionalProperties": false,
+      "properties": {
+        "jobs": {
+          "items": {
+            "$ref": "#/$defs/JobRecord"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "jobs"
+      ],
+      "type": "object"
+    },
+    "JobOutput": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "format": {
+              "const": "image_sequence",
+              "type": "string"
+            }
+          },
+          "required": [
+            "format"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "background": {
+              "items": {
+                "format": "float",
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/JobAudioClip"
+              },
+              "type": "array"
+            },
+            "format": {
+              "const": "pro_res_mov",
+              "type": "string"
+            }
+          },
+          "required": [
+            "format",
+            "clips",
+            "background"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "JobPruneRequest": {
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "JobRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "cancel_requested": {
+          "type": "boolean"
+        },
+        "completed_frames": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "destination": {
+          "type": "string"
+        },
+        "directory_pruned": {
+          "type": "boolean"
+        },
+        "engine_version": {
+          "type": "string"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JobFailure"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "finished_at_ms": {
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "heartbeat_at_ms": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "id": {
+          "type": "string"
+        },
+        "input_hash": {
+          "type": "string"
+        },
+        "output_profile": true,
+        "project_id": {
+          "type": "string"
+        },
+        "result": true,
+        "revision": {
+          "type": "string"
+        },
+        "snapshot_hash": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/JobStatus"
+        },
+        "submitted_at_ms": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "total_frames": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "worker_pid": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "submitted_at_ms",
+        "engine_version",
+        "project_id",
+        "revision",
+        "snapshot_hash",
+        "input_hash",
+        "output_profile",
+        "destination",
+        "status",
+        "completed_frames",
+        "total_frames",
+        "heartbeat_at_ms",
+        "cancel_requested",
+        "directory_pruned"
+      ],
+      "type": "object"
+    },
+    "JobRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "job": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "job"
+      ],
+      "type": "object"
+    },
+    "JobStatus": {
+      "enum": [
+        "queued",
+        "running",
+        "succeeded",
+        "failed",
+        "canceled",
+        "interrupted"
+      ],
+      "type": "string"
+    },
     "Keyframe": {
       "additionalProperties": false,
       "properties": {
@@ -2703,6 +2941,21 @@
         }
       ]
     },
+    "PruneResult": {
+      "additionalProperties": false,
+      "properties": {
+        "pruned": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "pruned"
+      ],
+      "type": "object"
+    },
     "Rational": {
       "additionalProperties": false,
       "properties": {
@@ -2796,8 +3049,125 @@
       ],
       "type": "object"
     },
+    "RenderSubmitRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "output": {
+          "$ref": "#/$defs/JobOutput",
+          "default": {
+            "format": "image_sequence"
+          }
+        },
+        "render": {
+          "$ref": "#/$defs/SequenceRenderRequest",
+          "description": "Reuses the synchronous target and time/region request without a job-only\ntarget model. output_directory is the MOV filename for ProResMov."
+        },
+        "required_features": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "render"
+      ],
+      "type": "object"
+    },
     "Request": {
       "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "operation": {
+              "const": "render.submit",
+              "type": "string"
+            },
+            "output": {
+              "$ref": "#/$defs/JobOutput",
+              "default": {
+                "format": "image_sequence"
+              }
+            },
+            "render": {
+              "$ref": "#/$defs/SequenceRenderRequest",
+              "description": "Reuses the synchronous target and time/region request without a job-only\ntarget model. output_directory is the MOV filename for ProResMov."
+            },
+            "required_features": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "operation",
+            "render"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "job": {
+              "type": "string"
+            },
+            "operation": {
+              "const": "job.get",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "job"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "operation": {
+              "const": "job.list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "job": {
+              "type": "string"
+            },
+            "operation": {
+              "const": "job.cancel",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "job"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "operation": {
+              "const": "job.prune",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation"
+          ],
+          "type": "object"
+        },
         {
           "additionalProperties": false,
           "properties": {
@@ -3400,6 +3770,57 @@
     },
     "ResultData": {
       "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "job",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/JobRecord"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "jobs",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/JobListResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "pruned",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/PruneResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
         {
           "additionalProperties": false,
           "properties": {

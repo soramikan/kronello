@@ -267,6 +267,21 @@ CREATE TABLE idempotency (key TEXT PRIMARY KEY, payload TEXT NOT NULL, event_id 
 ";
 
 impl ProjectStore {
+    /// Capture the current revision without journal reconfiguration, checkpoint,
+    /// migration, or writes to the project file. SQLite supplies a consistent read.
+    pub fn read_snapshot(path: impl AsRef<Path>) -> Result<Snapshot, StoreError> {
+        let connection =
+            Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        connection.busy_timeout(Duration::from_secs(5))?;
+        connection.execute_batch("PRAGMA query_only=ON;")?;
+        let version: u32 = connection.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+        if version != INTERNAL_SCHEMA_VERSION {
+            return Err(StoreError::UnsupportedSchemaVersion(version));
+        }
+        let snapshot = read_snapshot(&connection)?;
+        snapshot.document.validate_storage()?;
+        Ok(snapshot)
+    }
     pub fn open(path: impl AsRef<Path>, options: OpenOptions) -> Result<Self, StoreError> {
         Self::open_with_detector(path, options, &SystemLocationDetector)
     }

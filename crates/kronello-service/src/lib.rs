@@ -1,5 +1,7 @@
 //! Shared synchronous Command/Query boundary for headless rendering and edits.
 //! Entry points own transport only; storage, fonts and rendering compose here.
+mod jobs;
+pub use jobs::*;
 mod api;
 mod edit;
 mod query;
@@ -36,6 +38,16 @@ use sha2::{Digest, Sha256};
 #[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
 #[serde(tag = "operation", deny_unknown_fields)]
 pub enum Request {
+    #[serde(rename = "render.submit")]
+    RenderSubmit(RenderSubmitRequest),
+    #[serde(rename = "job.get")]
+    JobGet(JobRequest),
+    #[serde(rename = "job.list")]
+    JobList(JobListRequest),
+    #[serde(rename = "job.cancel")]
+    JobCancel(JobRequest),
+    #[serde(rename = "job.prune")]
+    JobPrune(JobPruneRequest),
     #[serde(rename = "template.set_duration")]
     TemplateSetDuration(TemplateSetDurationRequest),
     #[serde(rename = "template.define")]
@@ -157,6 +169,9 @@ pub struct FrameResult {
     deny_unknown_fields
 )]
 pub enum ResultData {
+    Job(Box<kronello_jobs::JobRecord>),
+    Jobs(JobListResult),
+    Pruned(kronello_jobs::PruneResult),
     Collected(kronello_media::CollectedProject),
     Project(ProjectInfo),
     Export(ExportResult),
@@ -241,7 +256,8 @@ impl From<std::io::Error> for ServiceError {
 }
 
 /// Explicit execution choice. GPU initialization is lazy and never falls back.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum BackendSelection {
     #[default]
     Gpu,
@@ -255,6 +271,8 @@ pub struct Service<'a> {
     backend: Backend<'a>,
     gpu_factory: fn() -> Result<GpuContext, GpuError>,
     media_capabilities: Option<MediaCapabilities>,
+    job_config: Option<kronello_jobs::JobConfig>,
+    worker_executable: Option<PathBuf>,
 }
 impl Service<'_> {
     pub fn new(selection: BackendSelection) -> Self {
@@ -262,6 +280,8 @@ impl Service<'_> {
             backend: Backend::Selected(selection),
             gpu_factory: create_gpu_context,
             media_capabilities: None,
+            job_config: None,
+            worker_executable: None,
         }
     }
 }
@@ -271,6 +291,8 @@ impl<'a> Service<'a> {
             backend: Backend::Injected(backend),
             gpu_factory: create_gpu_context,
             media_capabilities: None,
+            job_config: None,
+            worker_executable: None,
         }
     }
     pub fn with_media_capabilities(mut self, capabilities: MediaCapabilities) -> Self {
@@ -294,6 +316,21 @@ impl<'a> Service<'a> {
     pub fn dispatch(&self, request: Request) -> Result<ResultData, ServiceError> {
         validate_request_locators(&request)?;
         match request {
+            Request::RenderSubmit(r) => self.submit_job(r).map(|r| ResultData::Job(Box::new(r))),
+            Request::JobGet(r) => self
+                .jobs()?
+                .get(&r.job)
+                .map(|r| ResultData::Job(Box::new(r)))
+                .map_err(Into::into),
+            Request::JobCancel(r) => self
+                .jobs()?
+                .cancel(&r.job)
+                .map(|r| ResultData::Job(Box::new(r)))
+                .map_err(Into::into),
+            Request::JobList(_) => Ok(ResultData::Jobs(JobListResult {
+                jobs: self.jobs()?.list()?,
+            })),
+            Request::JobPrune(_) => Ok(ResultData::Pruned(self.jobs()?.prune()?)),
             Request::SceneQuery(r) => query::scene(r).map(ResultData::Scene),
             Request::PropertySample(r) => query::sample(r).map(ResultData::Samples),
             Request::CapabilitiesGet(_) => Ok(ResultData::Capabilities(Box::new(
@@ -383,70 +420,23 @@ impl<'a> Service<'a> {
         let store = open_existing(&input.project)?;
         let stored = store.snapshot()?;
         store.close()?;
-        let snapshot = RenderSnapshot::new(
-            &stored.document,
-            input.composition,
-            stored.revision,
-            input.profile,
-        )?;
-        // File locators are explicit request inputs. Locked identity comes from
-        // the snapshot; never discover system fonts or silently re-pin bytes.
-        for font in &input.fonts {
-            if !snapshot.font_locks().contains(&font.identity) {
-                return Err(ServiceError::invalid("font input is not a snapshot lock"));
-            }
-        }
-        let mut bytes = Vec::new();
-        for identity in snapshot.font_locks() {
-            let matches: Vec<_> = input
-                .fonts
-                .iter()
-                .filter(|font| &font.identity == identity)
-                .collect();
-            if matches.len() > 1 {
-                return Err(ServiceError::invalid("duplicate font input"));
-            }
-            let font = matches
-                .first()
-                .ok_or_else(|| ServiceError::new("FONT_MISSING", "missing locked font locator"))?;
-            bytes.push(std::fs::read(&font.path).map_err(|e| {
-                ServiceError::new(
-                    if e.kind() == std::io::ErrorKind::NotFound {
-                        "FONT_MISSING"
-                    } else {
-                        "IO_ERROR"
-                    },
-                    e.to_string(),
-                )
-            })?);
-        }
-        for (identity, bytes) in snapshot.font_locks().iter().zip(&bytes) {
-            if format!("{:x}", Sha256::digest(bytes)) != identity.sha256 {
-                return Err(ServiceError::new(
-                    "ASSET_HASH_MISMATCH",
-                    "locked font hash differs",
-                ));
-            }
-            let actual =
-                kronello_text::pin_font(bytes, identity.face_index).map_err(RenderError::from)?;
-            if &actual != identity {
-                return Err(ServiceError::new(
-                    "ASSET_HASH_MISMATCH",
-                    "locked font identity differs",
-                ));
-            }
-        }
+        let snapshot = freeze_render_input(&stored, input)?;
+        let bytes = load_locked_fonts(&snapshot, input)?;
         let fonts: Vec<_> = snapshot
             .font_locks()
             .iter()
             .zip(&bytes)
             .map(|(identity, bytes)| FontData { identity, bytes })
             .collect();
+        self.with_selected_backend(|backend| run(&snapshot, &fonts, backend))
+    }
+    fn with_selected_backend<T>(
+        &self,
+        run: impl FnOnce(&dyn RenderBackend) -> Result<T, ServiceError>,
+    ) -> Result<T, ServiceError> {
         match self.backend {
-            Backend::Injected(backend) => run(&snapshot, &fonts, backend),
-            Backend::Selected(BackendSelection::CpuReference) => {
-                run(&snapshot, &fonts, &CpuReferenceBackend)
-            }
+            Backend::Injected(backend) => run(backend),
+            Backend::Selected(BackendSelection::CpuReference) => run(&CpuReferenceBackend),
             Backend::Selected(BackendSelection::Gpu) => {
                 let gpu = (self.gpu_factory)().map_err(|e| {
                     let code = match e {
@@ -456,10 +446,76 @@ impl<'a> Service<'a> {
                     };
                     ServiceError::new(code, e.to_string())
                 })?;
-                run(&snapshot, &fonts, &gpu)
+                run(&gpu)
             }
         }
     }
+}
+/// One target compiler for synchronous rendering and fixed asynchronous input.
+/// New render target variants belong here, never in a separate job target model.
+fn freeze_render_input(
+    stored: &kronello_store::Snapshot,
+    input: &RenderInput,
+) -> Result<RenderSnapshot, ServiceError> {
+    Ok(RenderSnapshot::new(
+        &stored.document,
+        input.composition,
+        stored.revision,
+        input.profile,
+    )?)
+}
+fn load_locked_fonts(
+    snapshot: &RenderSnapshot,
+    input: &RenderInput,
+) -> Result<Vec<Vec<u8>>, ServiceError> {
+    // File locators are explicit request inputs. Locked identity comes from
+    // the snapshot; never discover system fonts or silently re-pin bytes.
+    for font in &input.fonts {
+        if !snapshot.font_locks().contains(&font.identity) {
+            return Err(ServiceError::invalid("font input is not a snapshot lock"));
+        }
+    }
+    let mut bytes = Vec::new();
+    for identity in snapshot.font_locks() {
+        let matches: Vec<_> = input
+            .fonts
+            .iter()
+            .filter(|font| &font.identity == identity)
+            .collect();
+        if matches.len() > 1 {
+            return Err(ServiceError::invalid("duplicate font input"));
+        }
+        let font = matches
+            .first()
+            .ok_or_else(|| ServiceError::new("FONT_MISSING", "missing locked font locator"))?;
+        bytes.push(std::fs::read(&font.path).map_err(|e| {
+            ServiceError::new(
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    "FONT_MISSING"
+                } else {
+                    "IO_ERROR"
+                },
+                e.to_string(),
+            )
+        })?);
+    }
+    for (identity, bytes) in snapshot.font_locks().iter().zip(&bytes) {
+        if format!("{:x}", Sha256::digest(bytes)) != identity.sha256 {
+            return Err(ServiceError::new(
+                "ASSET_HASH_MISMATCH",
+                "locked font hash differs",
+            ));
+        }
+        let actual =
+            kronello_text::pin_font(bytes, identity.face_index).map_err(RenderError::from)?;
+        if &actual != identity {
+            return Err(ServiceError::new(
+                "ASSET_HASH_MISMATCH",
+                "locked font identity differs",
+            ));
+        }
+    }
+    Ok(bytes)
 }
 fn create_gpu_context() -> Result<GpuContext, GpuError> {
     // Never honor fault injection in a release-profile build, even if a
@@ -621,6 +677,13 @@ fn document_asset_locators(document: &Project) -> Result<(), ServiceError> {
 }
 fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
     match request {
+        Request::RenderSubmit(r) => {
+            local_locator(&r.render.output_directory)?;
+            render_locators(&r.render.input)
+        }
+        Request::JobGet(_) | Request::JobCancel(_) | Request::JobList(_) | Request::JobPrune(_) => {
+            Ok(())
+        }
         Request::ProjectCreate(r) => {
             local_locator(&r.project)?;
             document_asset_locators(&r.document)

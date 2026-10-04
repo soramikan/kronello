@@ -2,6 +2,9 @@
 use kronello_service::BackendSelection;
 
 fn main() -> std::process::ExitCode {
+    if let Some(exit) = kronello_service::worker_entry() {
+        return exit;
+    }
     let mut backend = BackendSelection::Gpu;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {

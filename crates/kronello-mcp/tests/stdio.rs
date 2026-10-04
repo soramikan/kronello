@@ -8,6 +8,7 @@ use kronello_mcp::SUPPORTED_PROTOCOL_VERSIONS;
 use serde_json::{Value, json};
 
 struct Client {
+    _state: tempfile::TempDir,
     child: Child,
     input: Option<ChildStdin>,
     lines: Receiver<String>,
@@ -16,10 +17,29 @@ struct Client {
 }
 impl Client {
     fn spawn(args: &[&str], inject_adapter_failure: bool) -> Self {
+        Self::spawn_job(args, inject_adapter_failure, None, None)
+    }
+    fn spawn_job(
+        args: &[&str],
+        inject_adapter_failure: bool,
+        state_root: Option<&std::path::Path>,
+        gate: Option<&std::path::Path>,
+    ) -> Self {
+        let state = tempfile::tempdir().unwrap();
         let mut command = Command::new(env!("CARGO_BIN_EXE_kronello-mcp"));
         command
             .args(args)
+            .env("KRONELLO_STATE_ROOT", state_root.unwrap_or(state.path()))
+            .env("KRONELLO_JOB_HEARTBEAT_MS", "50")
+            .env("KRONELLO_JOB_TIMEOUT_MS", "1000")
+            .env_remove("KRONELLO_TEST_JOB_GATE")
+            .env_remove("KRONELLO_TEST_JOB_CORRUPT_OUTPUT")
+            .env_remove("KRONELLO_JOB_SLOTS")
+            .env_remove("KRONELLO_JOB_RETENTION_SECONDS")
             .env_remove("KRONELLO_TEST_ADAPTER_UNAVAILABLE");
+        if let Some(gate) = gate {
+            command.env("KRONELLO_TEST_JOB_GATE", gate);
+        }
         if inject_adapter_failure {
             command.env("KRONELLO_TEST_ADAPTER_UNAVAILABLE", "1");
         }
@@ -40,6 +60,7 @@ impl Client {
             }
         });
         Self {
+            _state: state,
             child,
             input,
             lines,
@@ -162,6 +183,89 @@ fn render_input(path: &std::path::Path, document: &Value) -> Value {
 }
 
 #[test]
+fn submitted_job_survives_mcp_eof_and_is_queryable_on_new_connection() {
+    let temp = tempfile::tempdir().unwrap();
+    let state = temp.path().join("state");
+    let gate = temp.path().join("release");
+    let project = temp.path().join("source.kronello");
+    let destination = temp.path().join("frames");
+    let doc = document();
+    let mut client = Client::spawn_job(
+        &["--backend", "cpu-reference"],
+        false,
+        Some(&state),
+        Some(&gate),
+    );
+    client.ready("2025-11-25");
+    let schemas = client.schemas();
+    let created = client.call("project.create", json!({"project":project,"document":doc}));
+    assert_eq!(created["isError"], false);
+    let before = std::fs::read(&project).unwrap();
+    let mtime = std::fs::metadata(&project).unwrap().modified().unwrap();
+    let submitted = client.call(
+        "render.submit",
+        json!({"render":{"input":render_input(&project,&doc),
+        "range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"8"}},
+        "frame_rate":{"num":"24","den":"1"},"output_directory":destination}}),
+    );
+    assert_eq!(submitted["isError"], false, "{submitted}");
+    validate(&schemas["render.submit"], &submitted);
+    let id = submitted["structuredContent"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    // Closing the stdio server must not wait for worker completion or keep pipes.
+    assert!(client.finish().is_empty());
+    let mut config = kronello_jobs::JobConfig::at(&state);
+    config.heartbeat_interval = Duration::from_millis(50);
+    config.heartbeat_timeout = Duration::from_millis(1000);
+    let store = kronello_jobs::JobStore::open(config).unwrap();
+    let start = std::time::Instant::now();
+    loop {
+        let r = store.get(&id).unwrap();
+        if r.status == kronello_jobs::JobStatus::Running {
+            break;
+        }
+        assert!(r.status.active(), "{r:?}");
+        assert!(start.elapsed() < Duration::from_secs(20));
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert!(!destination.exists());
+    std::fs::write(gate, b"release").unwrap();
+    loop {
+        let r = store.get(&id).unwrap();
+        if r.status == kronello_jobs::JobStatus::Succeeded {
+            break;
+        }
+        assert!(r.status.active(), "{r:?}");
+        assert!(start.elapsed() < Duration::from_secs(20));
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let mut next = Client::spawn_job(&[], false, Some(&state), None);
+    next.ready("2025-06-18");
+    let queried = next.call("job.get", json!({"job":id}));
+    validate(&schemas["job.get"], &queried);
+    assert_eq!(queried["structuredContent"]["status"], "succeeded");
+    assert_eq!(queried["structuredContent"]["completed_frames"], 3);
+    let listed = next.call("job.list", json!({}));
+    validate(&schemas["job.list"], &listed);
+    assert_eq!(listed["structuredContent"]["jobs"][0]["id"], id);
+    let cancel = next.call("job.cancel", json!({"job":id}));
+    validate(&schemas["job.cancel"], &cancel);
+    assert_eq!(cancel["structuredContent"]["status"], "succeeded");
+    let prune = next.call("job.prune", json!({}));
+    validate(&schemas["job.prune"], &prune);
+    assert_eq!(prune["structuredContent"]["pruned"], json!([]));
+    next.finish();
+    assert_eq!(std::fs::read(&project).unwrap(), before);
+    assert_eq!(
+        std::fs::metadata(&project).unwrap().modified().unwrap(),
+        mtime
+    );
+    assert!(destination.join("sequence.json").is_file());
+}
+
+#[test]
 fn versions_negotiate_and_registry_schemas_are_self_contained() {
     let api = kronello_service::api_json_schema();
     let committed: Value =
@@ -212,7 +316,10 @@ fn versions_negotiate_and_registry_schemas_are_self_contained() {
                 tool["_meta"]["kronello"]["readOnlyProject"],
                 command.read_only
             );
-            if command.name != "capabilities.get" {
+            if !matches!(
+                command.name.as_str(),
+                "capabilities.get" | "job.list" | "job.prune"
+            ) {
                 let missing = client.call(&command.name, json!({}));
                 assert_error(&missing, "INVALID_REQUEST");
                 validate(tool, &missing);

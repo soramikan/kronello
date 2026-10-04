@@ -84,6 +84,11 @@ pub struct CapabilitiesResult {
 macro_rules! commands {
     ($emit:ident) => {
         $emit! {
+            ("render.submit", true, RenderSubmitRequest, kronello_jobs::JobRecord),
+            ("job.get", true, JobRequest, kronello_jobs::JobRecord),
+            ("job.list", true, JobListRequest, JobListResult),
+            ("job.cancel", true, JobRequest, kronello_jobs::JobRecord),
+            ("job.prune", true, JobPruneRequest, kronello_jobs::PruneResult),
             ("project.create", false, CreateRequest, ProjectInfo),
             ("project.import", false, ImportRequest, ProjectInfo),
             ("project.export", true, ProjectRequest, ExportResult),

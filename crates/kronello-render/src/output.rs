@@ -270,7 +270,7 @@ fn write_artifact(directory: &Path, name: String, bytes: &[u8]) -> Result<Output
 /// Creates an exclusively new output directory. Existing outputs are refused.
 /// All files are rendered into staging; the sequence manifest is published last.
 /// An error rolls back this invocation's new directory, never existing output.
-/// This is synchronous offline export; job cancellation/resume is a later task.
+/// Synchronous offline export; checkpoint callers can cancel between frames.
 pub fn render_sequence(
     snapshot: &RenderSnapshot,
     fonts: &[FontData<'_>],
@@ -296,10 +296,53 @@ pub fn render_sequence_with_cache(
     directory: impl AsRef<Path>,
     cache: &mut crate::RenderCache,
 ) -> Result<SequenceMetadata, RenderError> {
+    render_sequence_controlled(
+        snapshot,
+        fonts,
+        backend,
+        request,
+        directory.as_ref(),
+        (cache, &mut |_| Ok(())),
+    )
+}
+
+/// Checkpoints before every frame and before publishing the sequence manifest.
+pub fn render_sequence_with_checkpoint(
+    snapshot: &RenderSnapshot,
+    fonts: &[FontData<'_>],
+    backend: &dyn RenderBackend,
+    request: SequenceRequest,
+    directory: impl AsRef<Path>,
+    checkpoint: &mut dyn FnMut(u64) -> Result<(), RenderError>,
+) -> Result<SequenceMetadata, RenderError> {
+    render_sequence_controlled(
+        snapshot,
+        fonts,
+        backend,
+        request,
+        directory.as_ref(),
+        (
+            &mut crate::RenderCache::new(crate::CacheConfig::disabled()),
+            checkpoint,
+        ),
+    )
+}
+
+fn render_sequence_controlled(
+    snapshot: &RenderSnapshot,
+    fonts: &[FontData<'_>],
+    backend: &dyn RenderBackend,
+    request: SequenceRequest,
+    directory: &Path,
+    control: (
+        &mut crate::RenderCache,
+        &mut dyn FnMut(u64) -> Result<(), RenderError>,
+    ),
+) -> Result<SequenceMetadata, RenderError> {
+    let (cache, checkpoint) = control;
     snapshot.validate()?;
     request.region.validate()?;
     let samples = frame_samples(request.range, request.frame_rate)?;
-    let directory = directory.as_ref();
     fs::create_dir(directory)?;
     let mut guard = OutputGuard {
         path: directory,
@@ -310,6 +353,7 @@ pub fn render_sequence_with_cache(
         .tempdir_in(directory)?;
     let mut frames = Vec::with_capacity(samples.len());
     for (ordinal, (index, time)) in samples.into_iter().enumerate() {
+        checkpoint(ordinal as u64)?;
         let mut frame = render_frame_with_cache(
             snapshot,
             fonts,
@@ -345,6 +389,7 @@ pub fn render_sequence_with_cache(
             metadata_file,
         });
     }
+    checkpoint(frames.len() as u64)?;
     let metadata = SequenceMetadata {
         schema_version: 1,
         range: request.range,

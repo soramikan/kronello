@@ -1,10 +1,10 @@
 # 08 API・CLI・MCP・エージェント
 
-GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001-shared-command-query-api.md)）。M1 CLI-001 と M2 SERVICE-001 / API-001 / TEMPLATE-001 / MEDIA-001 / MCP-001 の実装範囲を次節に示す。それ以外の後続 API・CLI は提案であり、実装済みではない。
+GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001-shared-command-query-api.md)）。M1 CLI-001 と M2 SERVICE-001 / API-001 / TEMPLATE-001 / MEDIA-001 / MCP-001 / JOB-001 の実装範囲を次節に示す。それ以外の後続 API・CLI は提案であり、実装済みではない。
 
 ## M1 CLI-001 の実装範囲
 
-`kronello-service` は同期 Command / Query の入口を提供し、`kronello-cli` の binary `kronello` は transport adapter とする。以下の 6 操作を実装した。編集計画・適用・Undo・最小の history.list は後述の SERVICE-001 で実装した。公開 API schema と構造化 query は後述の API-001 で実装した。永続ジョブ等は引き続き提案である。MCP stdio は後述の MCP-001 で実装した。
+`kronello-service` は同期 Command / Query の入口を提供し、`kronello-cli` の binary `kronello` は transport adapter とする。以下の 6 操作を実装した。編集計画・適用・Undo・最小の history.list は後述の SERVICE-001 で実装した。公開 API schema と構造化 query は後述の API-001 で実装した。固定 snapshot の永続ジョブは後述の JOB-001 で実装した。MCP stdio は後述の MCP-001 で実装した。
 
 | service `Request.operation` | CLI subcommand | payload / 応答 |
 |---|---|---|
@@ -150,9 +150,9 @@ capabilities はコンパイル済み対応範囲を示し、GPU adapter の稼�
 
 ### 公開 schema と registry
 
-[schemas/api-v1.schema.json](../../schemas/api-v1.schema.json) は Draft 2020-12。Request / Response envelope、全19操作の payload / successful result、型付き EditCommand を共有 Rust 型から生成する。`api_json_schema()` と committed schema の一致を通常テストで確認する。再生成は `cargo run -p kronello-service --example api_schema --locked > schemas/api-v1.schema.json`。版はファイル名・`$id`・`x-api-schema-version` で固定し、既存 Request に必須 version field を追加しない。Project document は従来の公開型 / schema を共有する。
+[schemas/api-v1.schema.json](../../schemas/api-v1.schema.json) は Draft 2020-12。Request / Response envelope、全24操作の payload / successful result、型付き EditCommand を共有 Rust 型から生成する。`api_json_schema()` と committed schema の一致を通常テストで確認する。再生成は `cargo run -p kronello-service --example api_schema --locked > schemas/api-v1.schema.json`。版はファイル名・`$id`・`x-api-schema-version` で固定し、既存 Request に必須 version field を追加しない。Project document は従来の公開型 / schema を共有する。
 
-`command_registry()` の CommandDescriptor は name / read_only / request_schema / response_schema を持つ。schema refs は同ファイルの `$defs` を指す。request_schema は operation tag を除いた payload、response_schema は status / kind を除いた successful value。MCP-001 / FFI-001 は同じ registry と execute / execute_json を使用できる。registry の19操作は project.create / import / export / info / collect、asset.relink、render.frame / sequence、edit.plan / apply / undo、history.list、scene.query、property.sample、capabilities.get、template.define / instantiate / set_input / set_duration。project.create / import / asset.relink / edit.apply / undo と template の4操作が mutating。他は project に対し read-only（render.sequence と project.collect は output directory に成果物を作る）。project.collect の read_only は元プロジェクトを変更しないことを表し、複製と hash 検証済み素材を新しいフォルダに保存する。
+`command_registry()` の CommandDescriptor は name / read_only / request_schema / response_schema を持つ。schema refs は同ファイルの `$defs` を指す。request_schema は operation tag を除いた payload、response_schema は status / kind を除いた successful value。MCP-001 / FFI-001 は同じ registry と execute / execute_json を使用できる。registry の24操作は project.create / import / export / info / collect、asset.relink、render.frame / sequence / submit、job.get / list / cancel / prune、edit.plan / apply / undo、history.list、scene.query、property.sample、capabilities.get、template.define / instantiate / set_input / set_duration。project.create / import / asset.relink / edit.apply / undo と template の4操作が mutating。他は project に対し read-only（render.sequence と project.collect は output directory に成果物を作る）。project.collect の read_only は元プロジェクトを変更しないことを表し、複製と hash 検証済み素材を新しいフォルダに保存する。
 
 request envelope・既知 payload は未知 field と重複 field を拒否する。schema に任意 shell、外部 URL fetch、raw FFmpeg args の実行 field は設けない。project / font / output path と assets 内の locator の URI scheme は filesystem access の前に `INVALID_REQUEST` とする。Windows drive path は local path として許す。素材の name / text や未知 Project 内容は不活性なデータであり、命令として実行しない。Project の未知 field 保持と、API envelope の厳格な decode は別の契約である。
 
@@ -175,7 +175,7 @@ request envelope・既知 payload は未知 field と重複 field を拒否す�
 | `preview.render` | フレーム・短区間・コンタクトシートの成果物を生成 |
 | `project.validate` | 構造・文字・資産・機能・性能予算の診断を返す |
 | `history.list` | イベント（適用されたコマンド）を revision 順に返す。session、変更したキー、取り消し状態を含む |
-| `job.get` / `job.list` | ジョブの状態・進捗・成果物を返す |
+| `job.get` / `job.list` | JOB-001: 状態・進捗・成果物・型付きエラー。作品 target は不要 |
 
 ## 変更 API
 
@@ -214,7 +214,18 @@ inspect -> draft operations -> edit.plan -> preview(candidate snapshot)
 
 ### ジョブ
 
-`render.submit` はジョブを記録して worker プロセスを切り離して起動し、すぐに job ID を返す。`job.cancel` で取り消し、`job.resume` で中断したジョブを再開し、`job.prune` で古いジョブディレクトリを掃除する。詳細は [14 ジョブ](14-jobs.md)。
+JOB-001 で `render.submit` / `job.get` / `job.list` / `job.cancel` / `job.prune` を共有 registry / wire / schema に実装した。作品に対する read_only はすべて true。job.* は per-user 状態 DB の操作であり project target を持たない。render.submit は render.sequence と同じ `SequenceRenderRequest` を `render` member に受け取り、固定 snapshot の保存・queued 記録・独立 worker 起動後に JobRecord（id を含む）を返す。`job.resume` は RECOVERY-001 の提案で、未登録のため INVALID_REQUEST。検証と設定は [14 ジョブ](14-jobs.md)、[JOB-001 の検証](../testing/job-001.md)、[ADR-0050](../adr/0050-fixed-job-execution-and-publication.md)。
+
+| 操作 | payload | successful result |
+|---|---|---|
+| `render.submit` | `{render: SequenceRenderRequest, output?: JobOutput, required_features?: string[]}` | JobRecord |
+| `job.get` / `job.cancel` | `{job: UUID文字列}` | JobRecord |
+| `job.list` | `{}` | `{jobs: JobRecord[]}`（投入順） |
+| `job.prune` | `{}` | `{pruned: UUID文字列[]}` |
+
+output の既定は `{format:"image_sequence"}`。MOV は `{format:"pro_res_mov",background:[r,g,b],clips:[{asset,stream_index,placement,source_in,gain}]}`。clips の gain は非負の線形振幅倍率、clipping は Reject。`render.output_directory` は画像連番では新規 directory、MOV では新規 .mov file の path とする。MOV は同梱 LGPL runtime の ProRes + PCM24 のみで、暗黙の codec / CPU fallback はない。
+
+CLI は tagged stdin または `kronello render submit` / `kronello job get|list|cancel|prune` を使う。MCP tools は同名で自動公開し、MCP が EOF で終了しても独立した同じ binary の worker が継続する。job.cancel は永続要求を frame 境界で確認する操作で、JSON-RPC notifications/cancelled の transport キャンセルとは別である。
 
 revision 照合と idempotency の記録は `.kronello` 内で行うため、別プロセスからの再送や競合にも同じ規則が適用される（[09 保存と同時編集](09-storage-concurrency.md)）。
 
@@ -253,9 +264,9 @@ kronello render --project demo.kronello --profile hevc-4k \
 
 `tools/call` の name を operation tag に変換し、arguments の生 JSON を `Service::execute_json` に渡す。重複 field・未知 field の拒否、revision、idempotency、Undo、local path policy 等は service と共有する。成功の structuredContent は service result.value、失敗は `{ "status":"error", "error": ServiceError }` と isError: true。[対応2版の tools 契約](https://modelcontextprotocol.io/specification/2025-11-25/server/tools) に従い、両方で同じ structuredContent を serialize した TextContent も必ず返す。成功値への部分結果や代替値は加えない。未知 method / tool や不正な JSON-RPC envelope は protocol error、既知 tool の入力不正・実行失敗は tool error とする。
 
-作品を対象とする全操作は毎回 `project` を明示する（render は `input.project`）。省略は INVALID_REQUEST。接続は初期化状態だけを持ち、暗黙の current project / session、project.open tool、接続に跨る ProjectStore を持たない。`capabilities.get` は共有 API の空 payload `{}` のまま、対象作品を持たないグローバル discovery とする。編集 session_id は service payload に毎回明示する。
+作品を対象とする全操作は毎回 `project` を明示する（同期 render は `input.project`、render.submit は `render.input.project`）。省略は INVALID_REQUEST。接続は初期化状態だけを持ち、暗黙の current project / session、project.open tool、接続に跨る ProjectStore を持たない。`capabilities.get` は共有 API の空 payload `{}` のまま、対象作品を持たないグローバル discovery とする。編集 session_id は service payload に毎回明示する。
 
-backend は CLI と同じ GPU 既定、`--backend gpu|cpu-reference` で明示選択する。GPU 不在時の暗黙 CPU fallback はない。同期 render.frame / render.sequence は既存 service 操作を公開する。長時間レンダーを永続ジョブにする API と、接続寿命に依存しない worker は JOB-001 の提案であり、MCP-001 では実装しない（[14 ジョブ](14-jobs.md)）。検証方法と境界は [MCP-001 の検証](../testing/mcp-001.md)。
+backend は CLI と同じ GPU 既定、`--backend gpu|cpu-reference` で明示選択する。GPU 不在時の暗黙 CPU fallback はない。同期 render.frame / render.sequence は既存 service 操作を公開する。JOB-001 が render.submit と job.*、接続寿命から独立した同じ binary の worker を追加した（[14 ジョブ](14-jobs.md)、[JOB-001 の検証](../testing/job-001.md)）。検証方法と境界は [MCP-001 の検証](../testing/mcp-001.md)。
 
 実行例:
 

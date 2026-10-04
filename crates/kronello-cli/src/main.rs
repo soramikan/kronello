@@ -3,7 +3,7 @@ use std::io::{Read, Write};
 
 use kronello_service::{BackendSelection, Request, Response, Service, ServiceError};
 
-const USAGE: &str = "kronello [--backend gpu|cpu-reference] [--request-json JSON] [project create|import|export|info|collect | asset relink | render frame|sequence | edit plan|apply|undo | history list | scene query | property sample | capabilities get | template define|instantiate|set_input|set_duration]; otherwise read a tagged service Request from stdin";
+const USAGE: &str = "kronello [--backend gpu|cpu-reference] [--request-json JSON] [project create|import|export|info|collect | asset relink | render frame|sequence|submit | job get|list|cancel|prune | edit plan|apply|undo | history list | scene query | property sample | capabilities get | template define|instantiate|set_input|set_duration]; otherwise read a tagged service Request from stdin";
 fn run() -> Result<Response, ServiceError> {
     let mut selection = BackendSelection::Gpu;
     let mut literal = None;
@@ -45,12 +45,13 @@ fn run() -> Result<Response, ServiceError> {
         ["project", verb @ ("create" | "import" | "export" | "info")] => {
             Some(format!("project.{verb}"))
         }
-        ["render", verb @ ("frame" | "sequence")] => Some(format!("render.{verb}")),
+        ["render", verb @ ("frame" | "sequence" | "submit")] => Some(format!("render.{verb}")),
         ["edit", verb @ ("plan" | "apply" | "undo")] => Some(format!("edit.{verb}")),
         [
             "template",
             verb @ ("define" | "instantiate" | "set_input" | "set_duration"),
         ] => Some(format!("template.{verb}")),
+        ["job", verb @ ("get" | "list" | "cancel" | "prune")] => Some(format!("job.{verb}")),
         ["history", "list"] => Some("history.list".into()),
         ["scene", "query"] => Some("scene.query".into()),
         ["property", "sample"] => Some("property.sample".into()),
@@ -90,6 +91,9 @@ fn run() -> Result<Response, ServiceError> {
     Ok(Service::new(selection).execute(request))
 }
 fn main() -> std::process::ExitCode {
+    if let Some(exit) = kronello_service::worker_entry() {
+        return exit;
+    }
     let response = run().unwrap_or_else(|error| Response::Error { error });
     let failed = matches!(&response, Response::Error { .. });
     if let Response::Error { error } = &response {

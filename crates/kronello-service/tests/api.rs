@@ -202,7 +202,7 @@ fn capabilities_registry_media_extension_without_device_initialization() {
     ) else {
         panic!()
     };
-    assert_eq!(c.commands.len(), 19);
+    assert_eq!(c.commands.len(), 24);
     assert_eq!(c.api_schema_version, 1);
     assert_eq!(c.semantic_versions.document, PROJECT_SEMANTIC_VERSION);
     let media = c.media.unwrap();
@@ -259,6 +259,15 @@ fn capabilities_registry_media_extension_without_device_initialization() {
 #[test]
 fn public_schema_matches_and_all_registry_schemas_are_safe() {
     let generated = api_json_schema();
+    if std::env::var_os("KRONELLO_UPDATE_API_SCHEMA").as_deref() == Some(std::ffi::OsStr::new("1"))
+    {
+        std::fs::write(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../schemas/api-v1.schema.json"),
+            serde_json::to_string_pretty(&generated).unwrap() + "\n",
+        )
+        .unwrap();
+        return;
+    }
     let committed: Json =
         serde_json::from_str(include_str!("../../../schemas/api-v1.schema.json")).unwrap();
     assert_eq!(generated, committed);
@@ -524,6 +533,12 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
     .unwrap();
     let instance = json!({"id":uuid, "definition_ref":definition["id"], "version":"1.0.0", "duration":time, "inputs":{}});
     let requests = vec![
+        json!({"operation":"render.submit","render":{"input":input,"range":{"start":{"num":"0","den":"1"},"end":time},
+            "frame_rate":{"num":"24","den":"1"},"output_directory":"frames"}}),
+        json!({"operation":"job.get","job":uuid.to_string()}),
+        json!({"operation":"job.cancel","job":uuid.to_string()}),
+        json!({"operation":"job.list"}),
+        json!({"operation":"job.prune"}),
         json!({"operation":"project.create", "project":path, "document":p}),
         json!({"operation":"project.import", "project":path, "base_revision":"1", "document":p}),
         json!({"operation":"project.export", "project":path}),
@@ -750,7 +765,12 @@ fn unsupported_expression_and_enabled_modifier_fail_without_partial_samples() {
 fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
     let schema = api_json_schema();
     let envelope = jsonschema::validator_for(&schema).unwrap();
-    let engine = Service::new(BackendSelection::CpuReference);
+    let job_state = tempfile::tempdir().unwrap();
+    let engine = Service::new(BackendSelection::CpuReference)
+        .with_job_config(kronello_jobs::JobConfig::at(job_state.path()))
+        // This test covers submit's successful wire result. Actual detached
+        // execution and completion are checked by CLI/MCP process integration.
+        .with_worker_executable(PathBuf::from("/usr/bin/false"));
     let mut checked = BTreeSet::new();
     let mut execute = |request: Json| {
         envelope.validate(&request).unwrap();
@@ -831,6 +851,13 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
     execute(json!({"operation":"render.sequence", "input":input,
         "range":{"start":{"num":"0","den":"1"}, "end":{"num":"1","den":"1"}},
         "frame_rate":{"num":"1","den":"1"}, "output_directory":dir.path().join("frames")}));
+    let job = execute(json!({"operation":"render.submit", "render":{"input":input,
+        "range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"1"}},
+        "frame_rate":{"num":"1","den":"1"},"output_directory":dir.path().join("job-frames")}}));
+    execute(json!({"operation":"job.get","job":job["id"]}));
+    execute(json!({"operation":"job.cancel","job":job["id"]}));
+    execute(json!({"operation":"job.list"}));
+    execute(json!({"operation":"job.prune"}));
     let template_document: Json =
         serde_json::from_str(include_str!("../../../examples/template-001.project.json")).unwrap();
     let definition: Json = serde_json::from_str(include_str!(
