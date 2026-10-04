@@ -807,7 +807,7 @@
       "priority": "P1",
       "area": "audio",
       "title": "Sequence音声trackのA/V muxとclip音量",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "NLE-001",
         "AUDIO-000",
@@ -882,7 +882,7 @@
       "priority": "P1",
       "area": "mcp",
       "title": "MCP HTTP・resources/prompts・進捗とキャンセル",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "MCP-001",
         "JOB-001"

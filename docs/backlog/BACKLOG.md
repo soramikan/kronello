@@ -13,7 +13,7 @@
 | M0 | 0 | 0 | 6 | 0 | 6 |
 | M1 | 0 | 0 | 14 | 0 | 14 |
 | M2 | 0 | 1 | 10 | 0 | 11 |
-| M3 | 18 | 4 | 3 | 0 | 25 |
+| M3 | 16 | 6 | 3 | 0 | 25 |
 | M4 | 9 | 0 | 0 | 0 | 9 |
 | M5 | 5 | 0 | 0 | 0 | 5 |
 | M6 | 4 | 0 | 0 | 0 | 4 |
@@ -458,7 +458,7 @@
 
 ### AUDIO-003 Sequence音声trackのA/V muxとclip音量
 
-- 優先度: P1 / 領域: audio / 状態: planned
+- 優先度: P1 / 領域: audio / 状態: in_progress
 - 依存: NLE-001, AUDIO-000, JOB-001
 - 受け入れ条件:
   - Sequenceのaudio trackを同じ固定RenderSnapshotから音声配置へcompileし、映像と音声を同期exportおよびrender.submitのProRes/PCM24 MOVへmuxする
@@ -498,7 +498,7 @@
 
 ### MCP-002 MCP HTTP・resources/prompts・進捗とキャンセル
 
-- 優先度: P1 / 領域: mcp / 状態: planned
+- 優先度: P1 / 領域: mcp / 状態: in_progress
 - 依存: MCP-001, JOB-001
 - 受け入れ条件:
   - HTTP transportの接続・認証・版交渉・終了の契約を定義し、stdioと同じCommand/Query registry・schema・型付き結果へ到達することを実クライアントで検証する
