@@ -111,6 +111,8 @@ macro_rules! commands {
             ("scene.query", true, SceneQueryRequest, SceneQueryResult),
             ("property.sample", true, PropertySampleRequest, PropertySampleResult),
             ("capabilities.get", true, CapabilitiesRequest, CapabilitiesResult),
+            ("template.preview", true, TemplatePreviewRequest, TemplatePreviewResult),
+            ("template.migration_plan", true, TemplateMigrationPlanRequest, TemplateMigrationPlan),
             ("template.define", false, TemplateDefineRequest, kronello_store::Event),
             ("template.instantiate", false, TemplateInstantiateRequest, kronello_store::Event),
             ("template.set_input", false, TemplateSetInputRequest, kronello_store::Event),

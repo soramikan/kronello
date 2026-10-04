@@ -16,6 +16,7 @@ fn fixture() -> Project {
             definition_ref: definition.id,
             version: definition.version.clone(),
             duration: Duration::new(Time::from_integer(8)).unwrap(),
+            variant: None,
             inputs: std::collections::BTreeMap::from([(
                 "headline".into(),
                 Value::String("別の日本語".into()),
@@ -90,7 +91,7 @@ fn legacy_documents_omit_template_collections_and_future_contracts_remain_opaque
         assert_eq!(serde_json::to_value(future).unwrap(), encoded);
     }
     let mut encoded = serde_json::to_value(fixture()).unwrap();
-    encoded["templates"][0]["duration_policy"]["middle_mode"] = json!("loop");
+    encoded["templates"][0]["duration_policy"]["middle_mode"] = json!("future_middle_mode");
     let future: Project = serde_json::from_value(encoded.clone()).unwrap();
     assert!(matches!(future.templates[0], DocumentObject::Opaque(_)));
     assert_eq!(serde_json::to_value(future).unwrap(), encoded);

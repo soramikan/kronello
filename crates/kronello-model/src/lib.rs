@@ -41,7 +41,7 @@ pub use schema::{
     NumericRange, PropertyDescriptor, SchemaRegistry, Unit, ValueRange,
 };
 pub use value::{
-    Color, ColorComponents, ColorSpace, FiniteF64, Path, PathSegment, Value, ValueType,
+    Color, ColorComponents, ColorSpace, DataTable, FiniteF64, Path, PathSegment, Value, ValueType,
 };
 
 mod project;

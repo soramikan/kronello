@@ -3,7 +3,7 @@ use std::io::{Read, Write};
 
 use kronello_service::{BackendSelection, Request, Response, Service, ServiceError};
 
-const USAGE: &str = "kronello [--backend gpu|cpu-reference] [--request-json JSON] [project create|import|export|info|collect | asset relink | render frame|sequence|submit | job get|list|cancel|prune | edit plan|apply|undo | history list | scene query | property sample | capabilities get | sequence create | clip place|trim|stretch | instance retime | template_instance retime | template define|instantiate|set_input|set_duration] | worker --job <id>; otherwise read a tagged service Request from stdin";
+const USAGE: &str = "kronello [--backend gpu|cpu-reference] [--request-json JSON] [project create|import|export|info|collect | asset relink | render frame|sequence|submit | job get|list|cancel|prune | edit plan|apply|undo | history list | scene query | property sample | capabilities get | sequence create | clip place|trim|stretch | instance retime | template_instance retime | template define|instantiate|set_input|set_duration|preview|migration_plan] | worker --job <id>; otherwise read a tagged service Request from stdin";
 fn run() -> Result<Response, ServiceError> {
     let mut selection = BackendSelection::Gpu;
     let mut literal = None;
@@ -52,7 +52,8 @@ fn run() -> Result<Response, ServiceError> {
         ["edit", verb @ ("plan" | "apply" | "undo")] => Some(format!("edit.{verb}")),
         [
             "template",
-            verb @ ("define" | "instantiate" | "set_input" | "set_duration"),
+            verb @ ("define" | "instantiate" | "set_input" | "set_duration" | "preview"
+            | "migration_plan"),
         ] => Some(format!("template.{verb}")),
         ["job", verb @ ("get" | "list" | "cancel" | "prune")] => Some(format!("job.{verb}")),
         ["history", "list"] => Some("history.list".into()),
