@@ -51,6 +51,13 @@ impl<'de> Deserialize<'de> for Request {
         let mut fields = fields(d)?;
         let tag: String = take(&mut fields, "operation")?;
         match tag.as_str() {
+            "sequence.create" => payload(&fields).map(Self::SequenceCreate),
+            "clip.place" => payload(&fields).map(Self::ClipPlace),
+            "clip.trim" => payload(&fields).map(Self::ClipTrim),
+            "clip.stretch" => payload(&fields).map(Self::ClipStretch),
+            "instance.retime" => payload(&fields).map(Self::InstanceRetime),
+            "template_instance.retime" => payload(&fields).map(Self::TemplateInstanceRetime),
+
             "template.set_duration" => payload(&fields).map(Self::TemplateSetDuration),
             "template.define" => payload(&fields).map(Self::TemplateDefine),
             "template.instantiate" => payload(&fields).map(Self::TemplateInstantiate),
@@ -111,5 +118,47 @@ impl<'de> Deserialize<'de> for Response {
         };
         exhausted::<D::Error>(&fields)?;
         Ok(result)
+    }
+}
+
+impl<'de> Deserialize<'de> for crate::RenderInput {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let mut fields = fields(d)?;
+        let project = take(&mut fields, "project")?;
+        let composition = if fields.contains_key("composition") {
+            Some(take(&mut fields, "composition")?)
+        } else {
+            None
+        };
+        let target = if fields.contains_key("target") {
+            Some(take(&mut fields, "target")?)
+        } else {
+            None
+        };
+        if composition.is_some() == target.is_some() {
+            return Err(D::Error::custom(
+                "specify exactly one of composition or target",
+            ));
+        }
+        let region = take(&mut fields, "region")?;
+        let profile = if fields.contains_key("profile") {
+            take(&mut fields, "profile")?
+        } else {
+            Default::default()
+        };
+        let fonts = if fields.contains_key("fonts") {
+            take(&mut fields, "fonts")?
+        } else {
+            vec![]
+        };
+        exhausted::<D::Error>(&fields)?;
+        Ok(Self {
+            project,
+            composition,
+            target,
+            region,
+            profile,
+            fonts,
+        })
     }
 }

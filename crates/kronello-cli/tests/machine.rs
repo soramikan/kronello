@@ -585,7 +585,7 @@ fn structured_api_queries_and_empty_capabilities_payload_from_real_cli() {
             .as_array()
             .unwrap()
             .len(),
-        19
+        25
     );
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("query.kronello");
@@ -811,4 +811,36 @@ fn media_commands_use_shared_service_and_preserve_source_revision_on_collect() {
         info["result"]["value"]["revision"],
         updated["result"]["value"]["revision"]
     );
+}
+
+#[test]
+fn nle_sequence_target_and_clip_trim_use_shared_machine_commands() {
+    let p: Value =
+        serde_json::from_str(include_str!("../../../examples/nle-001.project.json")).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("nle-cli.kronello");
+    invoke(
+        &["project", "create"],
+        &json!({"project":path,"document":p}).to_string(),
+        true,
+    );
+    let seq = &p["sequences"][0];
+    let clip = &seq["tracks"][0]["clips"][0];
+    let (event,_)=invoke(&["clip","trim"],&json!({"project":path,"base_revision":"1","session_id":"e20090e7-c3de-44e7-bb91-fd15b94bcde4","idempotency_key":"trim","sequence":seq["id"],"clip":clip["id"],"range":{"start":{"num":"9","den":"4"},"end":{"num":"11","den":"4"}}}).to_string(),true);
+    let (pixels,_)=invoke(&["--backend","cpu-reference","render","frame"],&json!({"input":{"project":path,"target":{"kind":"sequence","sequence":seq["id"]},"region":{"origin":[0.0,0.0],"extent":[64.0,32.0],"pixels":[64,32]}},"time":{"num":"5","den":"2"}}).to_string(),true);
+    assert_eq!(
+        pixels["result"]["value"]["metadata"]["target"]["kind"],
+        "sequence"
+    );
+    assert_eq!(
+        pixels["result"]["value"]["metadata"]["backend"],
+        "cpu_reference_float32"
+    );
+    invoke(&["edit","undo"],&json!({"project":path,"base_revision":"2","session_id":"e20090e7-c3de-44e7-bb91-fd15b94bcde4","idempotency_key":"undo-trim","event_id":event["result"]["value"]["id"]}).to_string(),true);
+    let (exported, _) = invoke(
+        &["project", "export"],
+        &json!({"project":path}).to_string(),
+        true,
+    );
+    assert_eq!(exported["result"]["value"]["document"], p);
 }

@@ -381,7 +381,7 @@
       "priority": "P0",
       "area": "timeline",
       "title": "CompositionClipとマルチトラック統合",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "COMP-001",
         "MEDIA-001",

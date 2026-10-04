@@ -33,7 +33,7 @@ fn export(path: &Path) -> ExportResult {
     else {
         panic!()
     };
-    r
+    *r
 }
 fn comp(p: &Project) -> &Composition {
     let DocumentObject::Known(c) = &p.compositions[0] else {

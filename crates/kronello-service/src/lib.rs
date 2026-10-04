@@ -1,5 +1,8 @@
 //! Shared synchronous Command/Query boundary for headless rendering and edits.
 //! Entry points own transport only; storage, fonts and rendering compose here.
+mod nle;
+pub use kronello_render::RenderTarget;
+pub use nle::*;
 mod api;
 mod edit;
 mod query;
@@ -36,6 +39,19 @@ use sha2::{Digest, Sha256};
 #[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
 #[serde(tag = "operation", deny_unknown_fields)]
 pub enum Request {
+    #[serde(rename = "sequence.create")]
+    SequenceCreate(SequenceCreateRequest),
+    #[serde(rename = "clip.place")]
+    ClipPlace(ClipPlaceRequest),
+    #[serde(rename = "clip.trim")]
+    ClipTrim(ClipTrimRequest),
+    #[serde(rename = "clip.stretch")]
+    ClipStretch(ClipStretchRequest),
+    #[serde(rename = "instance.retime")]
+    InstanceRetime(InstanceRetimeRequest),
+    #[serde(rename = "template_instance.retime")]
+    TemplateInstanceRetime(TemplateInstanceRetimeRequest),
+
     #[serde(rename = "template.set_duration")]
     TemplateSetDuration(TemplateSetDurationRequest),
     #[serde(rename = "template.define")]
@@ -100,16 +116,26 @@ pub struct FontInput {
     pub identity: FontRef,
     pub path: PathBuf,
 }
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(transform = render_input_schema)]
 pub struct RenderInput {
     pub project: PathBuf,
-    pub composition: CompositionId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub composition: Option<CompositionId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target: Option<RenderTarget>,
     pub region: OutputRegion,
     #[serde(default)]
     pub profile: RenderProfile,
     #[serde(default)]
     pub fonts: Vec<FontInput>,
+}
+fn render_input_schema(schema: &mut schemars::Schema) {
+    schema.insert("oneOf".into(), serde_json::json!([
+        {"required":["composition"], "properties":{"composition":{"type":"string"}}, "not":{"required":["target"]}},
+        {"required":["target"], "properties":{"target":{"type":"object"}}, "not":{"required":["composition"]}}
+    ]));
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -159,7 +185,7 @@ pub struct FrameResult {
 pub enum ResultData {
     Collected(kronello_media::CollectedProject),
     Project(ProjectInfo),
-    Export(ExportResult),
+    Export(Box<ExportResult>),
     Frame(Box<FrameResult>),
     Sequence(SequenceMetadata),
     Plan(Box<EditPlan>),
@@ -294,6 +320,14 @@ impl<'a> Service<'a> {
     pub fn dispatch(&self, request: Request) -> Result<ResultData, ServiceError> {
         validate_request_locators(&request)?;
         match request {
+            Request::SequenceCreate(r) => nle::sequence_create(r).map(ResultData::Edit),
+            Request::ClipPlace(r) => nle::clip_place(r).map(ResultData::Edit),
+            Request::ClipTrim(r) => nle::clip_trim(r).map(ResultData::Edit),
+            Request::ClipStretch(r) => nle::clip_stretch(r).map(ResultData::Edit),
+            Request::InstanceRetime(r) => nle::instance_retime(r).map(ResultData::Edit),
+            Request::TemplateInstanceRetime(r) => {
+                nle::template_instance_retime(r).map(ResultData::Edit)
+            }
             Request::SceneQuery(r) => query::scene(r).map(ResultData::Scene),
             Request::PropertySample(r) => query::sample(r).map(ResultData::Samples),
             Request::CapabilitiesGet(_) => Ok(ResultData::Capabilities(Box::new(
@@ -334,10 +368,10 @@ impl<'a> Service<'a> {
                 let store = open_existing(&r.project)?;
                 let snapshot = store.snapshot()?;
                 store.close()?;
-                Ok(ResultData::Export(ExportResult {
+                Ok(ResultData::Export(Box::new(ExportResult {
                     revision: snapshot.revision.to_string(),
                     document: snapshot.document,
-                }))
+                })))
             }
             Request::RenderFrame(r) => self.render(&r.input, |snapshot, fonts, backend| {
                 let frame = render_frame(
@@ -383,12 +417,17 @@ impl<'a> Service<'a> {
         let store = open_existing(&input.project)?;
         let stored = store.snapshot()?;
         store.close()?;
-        let snapshot = RenderSnapshot::new(
-            &stored.document,
-            input.composition,
-            stored.revision,
-            input.profile,
-        )?;
+        let target = match (input.composition, input.target) {
+            (Some(composition), None) => composition.into(),
+            (None, Some(target)) => target,
+            _ => {
+                return Err(ServiceError::invalid(
+                    "specify exactly one of composition or target",
+                ));
+            }
+        };
+        let snapshot =
+            RenderSnapshot::for_target(&stored.document, target, stored.revision, input.profile)?;
         // File locators are explicit request inputs. Locked identity comes from
         // the snapshot; never discover system fonts or silently re-pin bytes.
         for font in &input.fonts {
@@ -621,6 +660,13 @@ fn document_asset_locators(document: &Project) -> Result<(), ServiceError> {
 }
 fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
     match request {
+        Request::SequenceCreate(r) => local_locator(&r.project),
+        Request::ClipPlace(r) => local_locator(&r.project),
+        Request::ClipTrim(r) => local_locator(&r.project),
+        Request::ClipStretch(r) => local_locator(&r.project),
+        Request::InstanceRetime(r) => local_locator(&r.project),
+        Request::TemplateInstanceRetime(r) => local_locator(&r.project),
+
         Request::ProjectCreate(r) => {
             local_locator(&r.project)?;
             document_asset_locators(&r.document)
@@ -697,7 +743,8 @@ mod tests {
         let request = Request::RenderSequence(SequenceRenderRequest {
             input: RenderInput {
                 project,
-                composition,
+                composition: Some(composition),
+                target: None,
                 region: OutputRegion {
                     origin: [0.0, 0.0],
                     extent: [64.0, 32.0],

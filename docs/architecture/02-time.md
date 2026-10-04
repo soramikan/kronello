@@ -57,6 +57,8 @@ Composition は既定で親の連続時刻で評価する。編集レートが 2
 尺の変更によって、保護されたイントロ・アウトロを黙って伸縮しない。
 音声のリタイム方針も別に宣言する。複雑な非単調 TimeMap に対する音声処理が未対応なら検証で拒否する。
 
+NLE-001 で三操作を実装した。trim は元区間の非空部分だけを残し、source_in / map 原点を移して同じ絶対時刻の source 内容と速度を保つ。stretch は source span と map の local 値を保ち、親時間を `new_duration / old_duration` 倍する。instance retime は内部 CompositionInstance の map だけを置換し、Clip の配置は変えない。template_instance.retime は TEMPLATE-001 の保護 intro / outro を保持する duration policy を再利用する。すべて有理数で処理し、map の両端 domain・source duration・overlap を適用前に検証する。音声は unity-speed の線形 map のみ対応し、速度変更は `UNSUPPORTED_FEATURE`。詳細は [ADR-0051](../adr/0051-nle-placement-and-retime.md)。
+
 ## AUDIO-000 の sample grid
 
 実装した `kronello-audio::sample_index` / `sample_range` は TIME-001 の SampleRate を再利用する。sample 境界は絶対 rational 時刻の数学的 floor、整数中間演算は checked i128。24 / 30000/1001 / 60000/1001 fps、非整数 sample 境界、負時刻、長尺と分割要求を検証する。最終 A/V export は frame に整列した絶対 range を要求し、音声の floor 境界と映像の rational duration の差を 1 sample 未満として報告する。両 stream はファイル上で PTS 0 に揃える。source trim と codec の決定は [ADR-0049](../adr/0049-audio-bus-timing-and-codec.md)、手順は [AUDIO-000](../testing/audio-000.md)。

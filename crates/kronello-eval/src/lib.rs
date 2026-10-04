@@ -106,3 +106,6 @@ impl EvaluationError {
         }
     }
 }
+
+mod sequence;
+pub use sequence::{EvaluatedClip, SequenceEvaluationError, evaluate_sequence};

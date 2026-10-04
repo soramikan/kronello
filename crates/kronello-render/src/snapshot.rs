@@ -75,6 +75,8 @@ pub struct RenderSnapshot {
     schema_version: u32,
     project: Project,
     composition: CompositionId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    sequence: Option<SequenceId>,
     revision: u64,
     semantic_versions: SemanticVersions,
     profile: RenderProfile,
@@ -131,6 +133,62 @@ impl RenderSnapshot {
             vec![],
         )
     }
+    pub fn for_target(
+        project: &Project,
+        target: crate::RenderTarget,
+        revision: u64,
+        mut profile: RenderProfile,
+    ) -> Result<Self, RenderError> {
+        match target {
+            crate::RenderTarget::Composition { composition } => {
+                Self::new(project, composition, revision, profile)
+            }
+            crate::RenderTarget::Sequence { sequence } => {
+                let root = crate::sequence::lower_sequence(project, sequence)?;
+                let source = project
+                    .sequences
+                    .iter()
+                    .find_map(|s| match s {
+                        DocumentObject::Known(s) if s.id == sequence => Some(s),
+                        _ => None,
+                    })
+                    .unwrap();
+                profile.working_space = source.working_space;
+                let mut value = Self {
+                    schema_version: SNAPSHOT_SCHEMA_VERSION,
+                    project: project.clone(),
+                    composition: root.id,
+                    sequence: Some(sequence),
+                    revision,
+                    semantic_versions: SemanticVersions::current(project.semantic_version),
+                    profile,
+                    mattes: vec![],
+                    font_locks: vec![],
+                };
+                value.validate()?;
+                let definitions = value.definitions()?;
+                let mut locks = BTreeSet::new();
+                for c in definitions {
+                    for n in c.nodes {
+                        if let NodeKind::Text { content_ref } = n.kind {
+                            let text =
+                                content(&project.texts, content_ref.as_uuid(), |t| t.id.as_uuid())?
+                                    .ok_or(TextError::MissingContent { id: content_ref })?;
+                            locks.extend(text.styles.iter().map(|s| s.font.clone()));
+                        }
+                    }
+                }
+                value.font_locks = locks.into_iter().collect();
+                Ok(value)
+            }
+        }
+    }
+    pub fn target(&self) -> crate::RenderTarget {
+        match self.sequence {
+            Some(sequence) => crate::RenderTarget::Sequence { sequence },
+            None => self.composition.into(),
+        }
+    }
     pub fn with_contract(
         project: &Project,
         composition: CompositionId,
@@ -143,6 +201,7 @@ impl RenderSnapshot {
             schema_version: SNAPSHOT_SCHEMA_VERSION,
             project: project.clone(),
             composition,
+            sequence: None,
             revision,
             semantic_versions,
             profile,
@@ -232,7 +291,33 @@ impl RenderSnapshot {
                 "working space must be linear and flatten tolerance positive".into(),
             ));
         }
-        kronello_template::validate_reachable(&self.project, self.composition)?;
+        if let Some(id) = self.sequence {
+            if self.composition.as_uuid() != id.as_uuid() {
+                return Err(RenderError::InvalidInput("sequence target mismatch".into()));
+            }
+            let root = crate::sequence::lower_sequence(&self.project, id)?;
+            let sequence = self
+                .project
+                .sequences
+                .iter()
+                .find_map(|s| match s {
+                    DocumentObject::Known(s) if s.id == id => Some(s),
+                    _ => None,
+                })
+                .expect("lowering validated the sequence target");
+            if self.profile.working_space != sequence.working_space {
+                return Err(RenderError::InvalidInput(
+                    "sequence working space mismatch".into(),
+                ));
+            }
+            for node in root.nodes {
+                if let NodeKind::CompositionInstance(i) = node.kind {
+                    kronello_template::validate_reachable(&self.project, i.definition_ref)?;
+                }
+            }
+        } else {
+            kronello_template::validate_reachable(&self.project, self.composition)?;
+        }
         self.definitions()?;
         Ok(())
     }
@@ -249,8 +334,14 @@ impl RenderSnapshot {
                     "composition budget exceeded".into(),
                 ));
             }
-            let c = content(&self.project.compositions, id.as_uuid(), |c| c.id.as_uuid())?
-                .ok_or(kronello_eval::EvaluationError::CompositionNotFound(id))?;
+            let lowered;
+            let c = if let Some(sequence) = self.sequence.filter(|_| id == self.composition) {
+                lowered = crate::sequence::lower_sequence(&self.project, sequence)?;
+                &lowered
+            } else {
+                content(&self.project.compositions, id.as_uuid(), |c| c.id.as_uuid())?
+                    .ok_or(kronello_eval::EvaluationError::CompositionNotFound(id))?
+            };
             for node in &c.nodes {
                 if let NodeKind::CompositionInstance(i) = &node.kind {
                     pending.push(i.definition_ref);

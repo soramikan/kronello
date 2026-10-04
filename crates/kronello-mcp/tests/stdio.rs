@@ -585,3 +585,48 @@ fn startup_options_keep_stdout_protocol_only() {
         assert_eq!(output.status.success(), args == ["--help"]);
     }
 }
+
+#[test]
+fn nle_registry_clip_trim_undo_and_sequence_render_share_service() {
+    let p: Value =
+        serde_json::from_str(include_str!("../../../examples/nle-001.project.json")).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("nle-mcp.kronello");
+    let mut client = Client::spawn(&["--backend", "cpu-reference"], false);
+    client.ready("2025-11-25");
+    let tools = client.schemas();
+    for name in [
+        "sequence.create",
+        "clip.place",
+        "clip.trim",
+        "clip.stretch",
+        "instance.retime",
+        "template_instance.retime",
+    ] {
+        assert!(tools.contains_key(name));
+    }
+    let created = client.call("project.create", json!({"project":path,"document":p}));
+    validate(&tools["project.create"], &created);
+    assert!(created.get("isError").is_none_or(|v| v == false));
+    let seq = &p["sequences"][0];
+    let clip = &seq["tracks"][0]["clips"][0];
+    let payload = json!({"project":path,"base_revision":"1","session_id":"e20090e7-c3de-44e7-bb91-fd15b94bcde4","idempotency_key":"trim","sequence":seq["id"],"clip":clip["id"],"range":{"start":{"num":"9","den":"4"},"end":{"num":"11","den":"4"}}});
+    jsonschema::validator_for(&tools["clip.trim"]["inputSchema"])
+        .unwrap()
+        .validate(&payload)
+        .unwrap();
+    let event = client.call("clip.trim", payload);
+    validate(&tools["clip.trim"], &event);
+    assert!(event.get("isError").is_none_or(|v| v == false));
+    let frame=client.call("render.frame",json!({"input":{"project":path,"target":{"kind":"sequence","sequence":seq["id"]},"region":{"origin":[0.0,0.0],"extent":[64.0,32.0],"pixels":[64,32]}},"time":{"num":"5","den":"2"}}));
+    validate(&tools["render.frame"], &frame);
+    assert_eq!(
+        frame["structuredContent"]["metadata"]["backend"],
+        "cpu_reference_float32"
+    );
+    let undone=client.call("edit.undo",json!({"project":path,"base_revision":"2","session_id":"e20090e7-c3de-44e7-bb91-fd15b94bcde4","idempotency_key":"undo","event_id":event["structuredContent"]["id"]}));
+    validate(&tools["edit.undo"], &undone);
+    let exported = client.call("project.export", json!({"project":path}));
+    assert_eq!(exported["structuredContent"]["document"], p);
+    assert!(client.finish().is_empty());
+}

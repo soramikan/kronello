@@ -21,6 +21,8 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum RenderError {
     #[error(transparent)]
+    Sequence(#[from] kronello_model::SequenceError),
+    #[error(transparent)]
     Template(#[from] kronello_template::TemplateError),
     #[error("UNSUPPORTED_FEATURE: {0}")]
     UnsupportedFeature(String),
@@ -54,6 +56,7 @@ pub enum RenderError {
 impl RenderError {
     pub fn code(&self) -> &'static str {
         match self {
+            Self::Sequence(e) => e.code(),
             Self::Template(e) => e.code(),
             Self::Effect(kronello_model::EffectError::UnsupportedFeature)
             | Self::UnsupportedFeature(_) => "UNSUPPORTED_FEATURE",
@@ -103,3 +106,6 @@ pub trait RenderBackend {
 
 mod media;
 pub use media::{DecodedVideoFrame, VideoDecodeBackend};
+
+mod sequence;
+pub use sequence::RenderTarget;
