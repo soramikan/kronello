@@ -133,6 +133,23 @@ const DISPLAY: OutputTransform = OutputTransform {
     alpha: OutputAlpha::Straight,
 };
 
+impl GpuContext {
+    /// Uses the same DAG lowering as export without image readback.
+    pub fn preview_texture(&self, dag: &RenderDag) -> Result<wgpu::Texture, RenderError> {
+        let (size, scene, working) = lower(dag)?;
+        self.render_scene_texture(
+            size,
+            &scene,
+            working,
+            OutputTransform {
+                space: InputSpace::LinearRec709,
+                alpha: OutputAlpha::Premultiplied,
+            },
+        )
+        .map_err(error)
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CpuReferenceBackend;
 impl RenderBackend for CpuReferenceBackend {

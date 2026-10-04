@@ -50,6 +50,10 @@ impl GpuContext {
             .request_adapter(&wgpu::RequestAdapterOptions::default())
             .await
             .map_err(|e| GpuError::AdapterUnavailable(e.to_string()))?;
+        Self::with_adapter(&adapter).await
+    }
+    /// Construct on the adapter selected for a native preview surface.
+    pub async fn with_adapter(adapter: &wgpu::Adapter) -> Result<Self, GpuError> {
         let usages = wgpu::TextureUsages::TEXTURE_BINDING
             | wgpu::TextureUsages::STORAGE_BINDING
             | wgpu::TextureUsages::COPY_SRC

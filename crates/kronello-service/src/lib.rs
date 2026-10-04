@@ -350,6 +350,22 @@ impl Service<'_> {
     }
 }
 impl<'a> Service<'a> {
+    /// Prepare a native preview through the same snapshot/font/compiler policy
+    /// as render.frame. Native adapters own presentation, never document edits.
+    pub fn preview_dag(
+        &self,
+        request: &FrameRenderRequest,
+    ) -> Result<(String, kronello_render::RenderDag), ServiceError> {
+        self.with_render_input(&request.input, |snapshot, fonts| {
+            let scene = kronello_render::build_scene_ir(snapshot, request.time, fonts)?;
+            let dag = kronello_render::build_render_dag(
+                &scene,
+                snapshot.profile(),
+                request.input.region,
+            )?;
+            Ok((snapshot.revision().to_string(), dag))
+        })
+    }
     pub fn with_backend(backend: &'a dyn RenderBackend) -> Self {
         Self {
             backend: Backend::Injected(backend),
@@ -479,15 +495,24 @@ impl<'a> Service<'a> {
             }),
         }
     }
-    fn render(
+    fn render<T>(
         &self,
         input: &RenderInput,
         run: impl FnOnce(
             &RenderSnapshot,
             &[FontData<'_>],
             &dyn RenderBackend,
-        ) -> Result<ResultData, ServiceError>,
-    ) -> Result<ResultData, ServiceError> {
+        ) -> Result<T, ServiceError>,
+    ) -> Result<T, ServiceError> {
+        self.with_render_input(input, |snapshot, fonts| {
+            self.with_selected_backend(|backend| run(snapshot, fonts, backend))
+        })
+    }
+    fn with_render_input<T>(
+        &self,
+        input: &RenderInput,
+        run: impl FnOnce(&RenderSnapshot, &[FontData<'_>]) -> Result<T, ServiceError>,
+    ) -> Result<T, ServiceError> {
         input.region.validate()?;
         let store = open_existing(&input.project)?;
         let stored = store.snapshot()?;
@@ -500,7 +525,7 @@ impl<'a> Service<'a> {
             .zip(&bytes)
             .map(|(identity, bytes)| FontData { identity, bytes })
             .collect();
-        self.with_selected_backend(|backend| run(&snapshot, &fonts, backend))
+        run(&snapshot, &fonts)
     }
     fn with_selected_backend<T>(
         &self,

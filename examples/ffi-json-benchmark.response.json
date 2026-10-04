@@ -1,0 +1,48 @@
+{
+  "status": "success",
+  "result": {
+    "kind": "samples",
+    "value": {
+      "revision": "1",
+      "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+      "times": [
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "1",
+          "den": "60"
+        }
+      ],
+      "samples": [
+        {
+          "key": {
+            "kind": "node",
+            "instance_path": [],
+            "node": "adcfcd01-95a0-4292-ba82-61369bf4ac8c",
+            "property": "1d77434e-64ef-4de4-9e38-98bb71bb03fe"
+          },
+          "value_type": "vec2",
+          "unit": "design_px",
+          "values": [
+            {
+              "kind": "vec2",
+              "value": [
+                16.0,
+                12.0
+              ]
+            },
+            {
+              "kind": "vec2",
+              "value": [
+                16.0,
+                12.0
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

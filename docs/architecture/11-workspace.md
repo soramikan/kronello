@@ -58,6 +58,17 @@ cli / mcp / ffi -> service
 - FFmpeg や wgpu の API 差分はアダプターで吸収し、`Cargo.lock` と native dependencies manifest を固定する。
 - cli / mcp / ffi は service の薄いアダプターとし、編集の意味を持たない。
 
+## FFI-001 の native 境界
+
+FFI-001 は `crates/kronello-ffi` と `apps/macos` の SwiftPM package を追加した。
+FFI は service の共有 decoder / Command / Query と preview DAG preparation、gpu の既存 lowering を利用する。
+純粋層への native 型の追加はない。C ABI は9関数、Swift 型は公開 API schema から stdlib Python script で生成する。
+FFI crate の package 設定は workspace を継承し、lint は framebridge と同じ明記方式で unsafe_code のみ allow にする。
+macOS CI に library build と Swift build/test を追加し、Linux / Windows job の手順は変更しない。
+SwiftPM targets と dynamic library の配置は [macOS README](../../apps/macos/README.md)、
+実装判断は [ADR-0056](../adr/0056-native-ffi-worker-and-swiftpm.md)、
+host 実行待ちの条件は [FFI-001 検証](../testing/ffi-001.md) を参照。
+
 ## ツールチェーンと CI
 
 [ADR-0038](../adr/0038-toolchain-and-ci.md) による。

@@ -589,4 +589,28 @@ impl GpuContext {
             transfers: pass.stats,
         })
     }
+    /// GPU-resident display output for native surfaces. Only the four-byte
+    /// shader validation status is read back; image pixels stay on the device.
+    pub fn render_scene_texture(
+        &self,
+        size: RenderSize,
+        scene: &DrawScene,
+        working: WorkingSpace,
+        transform: OutputTransform,
+    ) -> Result<wgpu::Texture, GpuError> {
+        let mut pass = self.scene_pass(size, scene, working)?;
+        let mut cache = vec![None; scene.nodes.len()];
+        let texture = pass.composite(scene, &scene.roots, &mut cache)?;
+        let blank = pass.blank.clone();
+        let output = pass.pass(
+            4,
+            (&texture, &blank),
+            None,
+            1.0,
+            MaskKind::Alpha,
+            Some(transform),
+        )?;
+        pass.validate()?;
+        Ok(output)
+    }
 }

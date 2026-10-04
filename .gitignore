@@ -3,3 +3,6 @@
 __pycache__/
 *.kronello-wal
 *.kronello-shm
+/apps/macos/.build/
+/apps/macos/.swiftpm/
+/apps/macos/Libraries/

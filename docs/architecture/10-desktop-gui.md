@@ -48,6 +48,19 @@ kronello-ffi  --->  kronello-service (Command / Query API)
 - 重い処理（compile、レンダー、ディスク I/O）は Rust 側の実行系で行い、UI スレッドをブロックしない。結果は通知で返す。
 - ドラッグ中の連続プレビューなど高頻度の経路での JSON 直列化コストは FFI-001 で計測する。
 
+## FFI-001 の実装範囲
+
+FFI-001 の実装は [ADR-0056](../adr/0056-native-ffi-worker-and-swiftpm.md) に記録した。
+`kronello-ffi` は9関数の C ABI、FIFO worker、非 blocking poll、revision / job snapshot 通知、
+CAMetalLayer の attach / resize / redraw を持つ。Command / Query は共有 Request decoder / Service に渡し、
+作品 path は各要求に明示する。native preview は共有 snapshot / font policy / DAG と GPU lowering を使い、
+画素を readback せず SDR surface に描く。SwiftPM の `CKronelloFFI` / `KronelloCore` は実装済みで、
+公開 schema 由来の Codable 型と検証専用 `KronelloPreviewHarness` を持つ。
+実 GUI、UI state の保存、drag 中の候補 snapshot は未実装。
+SwiftPM runner と Metal surface の host 検証は未了であり、
+実行済みの確認と境界は [FFI-001 の検証](../testing/ffi-001.md)、
+build / ownership は [macOS package README](../../apps/macos/README.md) を参照。
+
 ## UI 状態と作品の分離
 
 選択、pan / zoom、パネル配置、未確定の IME 文字列は UI 状態であり、作品（`.kronello` の revision）に含めない。

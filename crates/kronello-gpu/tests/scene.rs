@@ -1,4 +1,34 @@
 mod common;
+
+#[test]
+fn gpu_native_preview_texture_matches_export_color_conversion() {
+    let size = RenderSize::pixels(8, 8);
+    let scene = DrawScene {
+        nodes: vec![rectangle(
+            [0.0; 2],
+            [8.0; 2],
+            paint([0.8, 0.4, 0.2, 0.5], InputSpace::Srgb),
+        )],
+        roots: vec![0],
+    };
+    let transform = OutputTransform {
+        space: InputSpace::LinearRec709,
+        alpha: OutputAlpha::Premultiplied,
+    };
+    let texture = gpu()
+        .render_scene_texture(size, &scene, WorkingSpace::LinearRec709, transform)
+        .unwrap();
+    let mut readback = TransferStats::default();
+    let bytes = gpu().read_texture(&texture, 8, &mut readback).unwrap();
+    let actual = decode_rgba16f(&bytes).unwrap();
+    let expected = gpu()
+        .render_scene_output(size, &scene, WorkingSpace::LinearRec709, transform)
+        .unwrap();
+    assert_eq!(actual, expected.pixels);
+    assert_eq!(texture.size().width, 8);
+    assert_eq!(texture.size().height, 8);
+}
+
 use common::*;
 use kronello_gpu::*;
 use kronello_testkit::{FrameDescriptor, LinearFrame, PixelTolerance, compare_pixels};

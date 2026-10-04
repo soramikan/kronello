@@ -848,6 +848,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "kronello-ffi"
+version = "0.0.0"
+dependencies = [
+ "kronello-gpu",
+ "kronello-render",
+ "kronello-service",
+ "naga",
+ "objc2",
+ "pollster",
+ "serde_json",
+ "tempfile",
+ "wgpu",
+]
+
+[[package]]
 name = "kronello-framebridge"
 version = "0.0.0"
 dependencies = [
