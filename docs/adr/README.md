@@ -73,6 +73,7 @@
 | [0056](0056-native-ffi-worker-and-swiftpm.md) | native FFI の非同期 worker と SwiftPM 境界 | 採用 | 2026-10-04 |
 | [0057](0057-layout-bounds-stages.md) | bounds の三段階を純粋値と明示した帯追従 policy で共有する | 採用 | 2026-10-04 |
 | [0058](0058-bounded-canonical-expression-ast.md) | 正規 postorder AST と有界 Expression 評価 | 採用 | 2026-10-04 |
+| [0059](0059-template-duration-variants-and-migration.md) | テンプレートの保護尺・variant・data と明示した版移行を共有する | 採用 | 2026-10-05 |
 
 ## 追加と変更の規則
 
