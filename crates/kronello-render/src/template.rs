@@ -511,8 +511,10 @@ mod tests {
                     c.clone()
                 })
                 .collect();
+            let expressions = Vec::new();
             let error = DependencyGraph::compile(
                 EvaluationSnapshot {
+                    expressions: &expressions,
                     compositions: &definitions,
                     curves: &curves,
                     registry: &registry,
