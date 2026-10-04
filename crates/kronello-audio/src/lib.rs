@@ -8,6 +8,9 @@ use kronello_time::{SampleRate, Time, TimeRange};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+mod document;
+pub use document::{AudioSourceMode, AudioTarget, DocumentAudioPlan};
+
 pub const SAMPLE_RATE: SampleRate = SampleRate::HZ_48000;
 /// Conservative offline memory limit: ten minutes of stereo frames.
 pub const MAX_AUDIO_FRAMES: usize = 48_000 * 600;
@@ -20,6 +23,10 @@ pub enum AudioError {
     AssetMissing(AssetId),
     #[error("AUDIO_SOURCE_TOO_SHORT: {0}")]
     SourceTooShort(AssetId),
+    #[error(transparent)]
+    Sequence(#[from] kronello_model::SequenceError),
+    #[error("UNSUPPORTED_FEATURE: {0}")]
+    Unsupported(String),
     #[error("AUDIO_OVERFLOW: non-finite mixing result")]
     Overflow,
     #[error("AUDIO_CLIPPING: {samples} channel samples exceed full scale")]
@@ -33,6 +40,8 @@ impl AudioError {
             Self::InvalidInput(_) => "INVALID_AUDIO_INPUT",
             Self::AssetMissing(_) => "ASSET_MISSING",
             Self::SourceTooShort(_) => "AUDIO_SOURCE_TOO_SHORT",
+            Self::Sequence(e) => e.code(),
+            Self::Unsupported(_) => "UNSUPPORTED_FEATURE",
             Self::Overflow => "AUDIO_OVERFLOW",
             Self::Clipping { .. } => "AUDIO_CLIPPING",
             Self::Time(_) => "TIME_ERROR",
@@ -177,7 +186,7 @@ impl Bus {
         })
     }
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ClippingPolicy {
     Reject,
@@ -199,6 +208,16 @@ pub fn mix(
     sources: &AudioSources,
     range: TimeRange,
 ) -> Result<Bus, AudioError> {
+    mix_with_gain(clips, sources, range, &mut |_, _| Ok(Gain::UNITY))
+}
+
+/// Stateless per-sample gain hook. Sample indices are absolute, never accumulated.
+pub fn mix_with_gain(
+    clips: &[AudioClip],
+    sources: &AudioSources,
+    range: TimeRange,
+    gain: &mut dyn FnMut(usize, i64) -> Result<Gain, AudioError>,
+) -> Result<Bus, AudioError> {
     let output = sample_range(range)?;
     let length = output
         .end
@@ -207,7 +226,7 @@ pub fn mix(
         .filter(|v| *v <= MAX_AUDIO_FRAMES)
         .ok_or_else(|| AudioError::InvalidInput("bus sample budget exceeded".into()))?;
     let mut frames = vec![[0.0; 2]; length];
-    for clip in clips {
+    for (clip_index, clip) in clips.iter().enumerate() {
         clip.validate()?;
         let placement = sample_range(clip.placement)?;
         let source_in = sample_index(clip.source_in)?;
@@ -238,12 +257,14 @@ pub fn mix(
         let src = usize::try_from(source_in + (start - placement.start))
             .map_err(|_| AudioError::Overflow)?;
         let len = usize::try_from(end - start).map_err(|_| AudioError::Overflow)?;
-        for (out, input) in frames[dst..dst + len]
+        for (offset, (out, input)) in frames[dst..dst + len]
             .iter_mut()
             .zip(&source.frames[src..src + len])
+            .enumerate()
         {
+            let linear = gain(clip_index, start + offset as i64)?.linear() * clip.gain.0;
             for channel in 0..2 {
-                out[channel] += input[channel] * clip.gain.0;
+                out[channel] += input[channel] * linear;
                 if !out[channel].is_finite() {
                     return Err(AudioError::Overflow);
                 }

@@ -31,6 +31,7 @@ fn clip(color: [u8; 3], a: i64, b: i64) -> Clip {
         source_in: Time::ZERO,
         time_map: TimeMap::linear(Time::ZERO, Rational::ONE).unwrap(),
         audio_retime: AudioRetimePolicy::Reject,
+        volume: None,
         links: vec![],
         properties: vec![],
         effects: vec![],

@@ -9,7 +9,7 @@
 | DataAsset | id, schema, content_hash, values, time_mapping, analyzer_version |
 | Sequence | id, extent, frame_rate, audio_rate, working_space, tracks, transitions |
 | Track | id, kind（video / audio）, clips |
-| Clip | id, source_ref, timeline_range, source_in, time_map, links, properties, effects |
+| Clip | id, source_ref, timeline_range, source_in, time_map, volume, links, properties, effects |
 | Composition | id, duration, design_extent, edit_rate, root_nodes, properties, inputs, markers, output_ports |
 | SceneNode | id, kind, containment_parent, transform_parent, child_order, active_range, transform_ref, content_ref |
 | CompositionInstance | id, definition_ref, input_bindings, local_time_map, seed |
@@ -66,3 +66,15 @@ RenderSnapshot は公開 `schema_version` を持ち、`semantic_versions` に文
 文書モデルと RenderSnapshot は意味的な値だけを持つ。`wgpu::Texture` や `AVFrame` など、バックエンド・GUI・GPU 資源の寿命に依存する型を保持しない（[ADR-0005](../adr/0005-semantic-snapshot-vs-gpu-resources.md)）。
 
 Property の単位・座標系・範囲は ADR-0043 に従う。保存 Color は色空間タグ付きの straight RGB と独立 alpha とし、内部画像の premultiplied 表現とは区別する（[ADR-0044](../adr/0044-color-and-alpha-contracts.md)）。
+
+## AUDIO-003 の Media と volume
+
+`Clip.volume` は optional `kronello.audio.volume` Property（省略 / null は unity）。
+非負有限の dimensionless Scalar Gain を Constant / Curve から純粋評価する。
+`NodeKind::Media` は `MediaNode { asset, stream_index, source_in, time_map, volume }` を保存し、
+volume は同じ SceneNode の properties にある volume PropertyId。
+Media の音声と CompositionInstance の再帰音声を文書音声としてコンパイルする。
+Video / Image Media の描画は COMP-002 まで型付き未対応。
+Audio track も Composition source を持てる。Video CompositionClip は参照先の音声を一度継承する。
+出力 mode、時間写像、trim の sample phase と編集規則は
+[ADR-0063](../adr/0063-document-audio-and-clip-volume.md) と [基本音声](audio-000.md) を参照。

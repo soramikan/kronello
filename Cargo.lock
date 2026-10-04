@@ -811,9 +811,12 @@ dependencies = [
 name = "kronello-audio"
 version = "0.0.0"
 dependencies = [
+ "kronello-animation",
  "kronello-model",
  "kronello-time",
+ "schemars",
  "serde",
+ "serde_json",
  "thiserror",
 ]
 
@@ -823,6 +826,7 @@ version = "0.0.0"
 dependencies = [
  "jsonschema",
  "kronello-jobs",
+ "kronello-media",
  "kronello-model",
  "kronello-render",
  "kronello-service",

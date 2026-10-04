@@ -1,6 +1,6 @@
 # AUDIO-000 基本音声と A/V 書き出し
 
-設計契約: [ADR-0049](../adr/0049-audio-bus-timing-and-codec.md)。基本音声の library API を実装する。実時間 callback、音量アニメーション、リタイム、圧縮音声出力、service / CLI / MCP の新しい command は今回の範囲に含めない。
+設計契約: [ADR-0049](../adr/0049-audio-bus-timing-and-codec.md)。基本音声の library API を実装する。AUDIO-000 の範囲は定数音量の明示配置。AUDIO-003 で文書由来の再帰配置・音量 Property / Curve と共有 `render.export` / `render.submit` を追加した。実時間 callback、リタイム、圧縮音声出力は後続。
 
 ## 依存境界
 
@@ -13,7 +13,7 @@
   → kronello-media: ProRes / PCM24 encode / MOV mux / probe / publication
 ```
 
-`kronello-audio` は model / time の意味的な型と serde だけを利用する純粋層で、workspace の unsafe 禁止を継承する。具象 FFmpeg resource は media の C shim と `ffi.rs` だけに閉じる。render / model / time / service の API と RenderSnapshot schema は変更しない。
+`kronello-audio` は model / time / animation の意味的な型・評価と serde を利用する純粋層で、workspace の unsafe 禁止を継承する。具象 FFmpeg resource は media の C shim と `ffi.rs` だけに閉じる。AUDIO-000 は render / model / time / service の API と RenderSnapshot schema を変更しなかった。AUDIO-003 は model の Clip volume / Media node と service API を拡張し、純粋 audio compiler は model / time / animation に依存する。RenderSnapshot の構造版は維持する。
 
 ## 公開 API
 
@@ -43,10 +43,31 @@ frame に整列した range を元の絶対時刻で render し、encoded PTS �
 
 ## 不変入力と出力
 
-現行 Project に timeline audio placement の正本型がないため、`AvExportSnapshot` は純粋な明示入力 envelope として固定する。独立した編集状態や暫定の unknown Project field は作らない。audio asset は owned RenderSnapshot の Project.assets からだけ引く。
+AUDIO-000 時点で Project に timeline audio placement の正本型がなかったため、`AvExportSnapshot` は純粋な明示入力 envelope として固定する。独立した編集状態や暫定の unknown Project field は作らない。audio asset は owned RenderSnapshot の Project.assets からだけ引く。
 
 RenderSnapshot の既存 hash は映像文書・素材 lock を識別する。export snapshot hash はさらに audio placement / stream / source_in / Gain と envelope schema を含む。clip gain だけ変えると export hash は変わり、RenderSnapshot の hash は変わらない。MOV の `kronello_render_snapshot_hash` / `kronello_export_snapshot_hash` と report の両 hash でこの境界を明示する。export request の range / fps / region / background / clipping policy は report に別途保存する。
 
 最終映像は explicit background を使う SDR linear Rec.709 → BT.709 encoded RGB → RGBA8 → ProRes。音声は stereo f32 → 明示 clipping policy → PCM24。stage の audio / video の sample 数・duration を要求と照合し、mux 後も codec / start PTS / duration / metadata を確認する。最終ファイルは既存成果物を上書きせず同じ volume の stage から確定する。
 
 保守的な memory budget と対応 codec / layout / timing の範囲は ADR-0049 に記載する。大型 export の streaming、hardware / GPU 常駐転送、cancel / resume、実時間 playback は別の契約で昇格する。検証は [AUDIO-000](../testing/audio-000.md) を参照。
+
+## AUDIO-003: 文書音声と音量
+
+契約は [ADR-0063](../adr/0063-document-audio-and-clip-volume.md)、結果は
+[AUDIO-003](../testing/audio-003.md)。`DocumentAudioPlan::compile` は owned RenderSnapshot の Project から
+Sequence audio tracks と Composition Media / nested instances を確定配置へ変換する。
+Video CompositionClip も同じ音声を一度継承し、Audio track の Composition も対応する。
+Media は明示 Asset / stream と node-owned `kronello.audio.volume` Property を参照する。
+Audio Media は描画内容を持たず、Video / Image Media の描画は COMP-002 まで型付き未対応。
+
+`JobOutput::ProResMov` の省略値は `profile_version: 1, audio: explicit`。version 2 の document は
+文書音声、explicit は clips（空なら無音）、silence は意図的な無音。document / silence と
+非空 clips は拒否する。同期 `render.export` と job は同じ envelope / mixer / exporter を使う。
+report の `audio_source` / `audio_profile_version` にも選択を記録する。
+
+Clip の optional volume Property（省略は unity）は source-local time、Media の volume Property は
+Composition-local time で定数 / Curve を sample ごとに純粋評価する。負・非有限・f32 範囲外の Gain を拒否する。
+文書音声は合成済み rational offset の逆写像を一度 floor する affine sample mapping と祖先 active 区間の交差を使い、
+fractional trim でも phase を保持する。明示 clips の既存二境界 floor は変更しない。
+1024 placements / 64 nested scopes を上限とし、使用 Property / Curve は compiled plan が所有する。
+retimed audio / 音声経路 effects / Generator は AUDIO-004 の `UNSUPPORTED_FEATURE`。

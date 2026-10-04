@@ -65,6 +65,11 @@ pub enum TimelineCommand {
         properties: Vec<Property>,
         effects: Vec<Effect>,
     },
+    ClipSetVolume {
+        sequence: SequenceId,
+        clip: ClipId,
+        volume: Option<Property>,
+    },
     InstanceRetime {
         composition: CompositionId,
         node: NodeId,
@@ -551,6 +556,26 @@ pub(crate) fn mutate(
             keys.insert(changed(sequence.as_uuid(), sequence.as_uuid()));
             keys.insert(changed(clip.as_uuid(), sequence.as_uuid()));
         }
+        TimelineCommand::ClipSetVolume {
+            sequence,
+            clip,
+            volume,
+        } => {
+            if let Some(volume) = volume {
+                validate_volume(volume)
+                    .map_err(|e| ServiceError::new("INVALID_AUDIO_INPUT", e.to_string()))?;
+            }
+            let s = sequence_mut(project, *sequence)?;
+            let c = s
+                .tracks
+                .iter_mut()
+                .flat_map(|t| &mut t.clips)
+                .find(|c| c.id == *clip)
+                .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "clip missing"))?;
+            c.volume = volume.clone().map(Box::new);
+            keys.insert(changed(sequence.as_uuid(), project.id));
+            keys.insert(changed(clip.as_uuid(), sequence.as_uuid()));
+        }
         TimelineCommand::InstanceRetime {
             composition,
             node,
@@ -846,74 +871,39 @@ pub(crate) fn template_instance_retime(
     })
 }
 
-/// Offline 48 kHz bus from an immutable project value. Image rendering does not
-/// mux audio. Movie jobs accept explicit audio clips; sequence-track mux is
-/// outside the INTEGRATION-001 image-sequence demo.
+/// Offline document audio uses the same pure plan as synchronous/job MOV export.
 pub fn mix_sequence_audio(
     project: &Project,
     sequence: SequenceId,
     project_path: &std::path::Path,
     range: TimeRange,
 ) -> Result<kronello_audio::Bus, ServiceError> {
-    let sequence = project
-        .sequences
-        .iter()
-        .find_map(|s| match s {
-            DocumentObject::Known(s) if s.id == sequence => Some(s),
-            _ => None,
-        })
-        .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "sequence missing"))?;
-    sequence.validate(project)?;
+    let plan = kronello_audio::DocumentAudioPlan::compile(
+        project,
+        kronello_audio::AudioTarget::Sequence(sequence),
+    )
+    .map_err(|e| ServiceError::new(e.code(), e.to_string()))?;
     let runtime = kronello_media::MediaRuntime::load()?;
-    let mut clips = vec![];
     let mut sources = kronello_audio::AudioSources::new();
-    for track in &sequence.tracks {
-        if track.kind != TrackKind::Audio {
-            continue;
-        }
-        for clip in &track.clips {
-            if !clip.effects.is_empty() {
-                return Err(ServiceError::new(
-                    "UNSUPPORTED_FEATURE",
-                    "audio clip effects",
-                ));
-            }
-            let SourceRef::Asset {
-                asset,
-                stream_index,
-            } = clip.source_ref
-            else {
-                return Err(ServiceError::new(
-                    "UNSUPPORTED_FEATURE",
-                    "audio source must be an asset",
-                ));
-            };
-            let source = project
+    for clip in plan.clips() {
+        if let std::collections::btree_map::Entry::Vacant(entry) =
+            sources.entry((clip.asset, clip.stream_index))
+        {
+            let asset = project
                 .assets
                 .iter()
                 .find_map(|a| match a {
-                    DocumentObject::Known(a) if a.id == asset => Some(a),
+                    DocumentObject::Known(a) if a.id == clip.asset => Some(a),
                     _ => None,
                 })
-                .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "audio asset missing"))?;
-            if let std::collections::btree_map::Entry::Vacant(entry) =
-                sources.entry((asset, stream_index))
-            {
-                entry.insert(
-                    runtime
-                        .decode_asset_audio(source, project_path, stream_index)?
-                        .buffer,
-                );
-            }
-            clips.push(kronello_audio::AudioClip {
-                asset,
-                stream_index,
-                placement: clip.timeline_range,
-                source_in: clip.local_time(clip.timeline_range.start())?,
-                gain: kronello_audio::Gain::UNITY,
-            });
+                .ok_or_else(|| ServiceError::new("ASSET_MISSING", "audio asset missing"))?;
+            entry.insert(
+                runtime
+                    .decode_asset_audio(asset, project_path, clip.stream_index)?
+                    .buffer,
+            );
         }
     }
-    kronello_audio::mix(&clips, &sources, range)
+    plan.mix(&sources, range)
         .map_err(|e| ServiceError::new(e.code(), e.to_string()))
 }

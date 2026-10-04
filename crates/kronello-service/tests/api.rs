@@ -204,7 +204,7 @@ fn capabilities_registry_media_extension_without_device_initialization() {
     ) else {
         panic!()
     };
-    assert_eq!(c.commands.len(), 35);
+    assert_eq!(c.commands.len(), 36);
     assert_eq!(c.api_schema_version, 1);
     assert_eq!(c.semantic_versions.document, PROJECT_SEMANTIC_VERSION);
     let media = c.media.unwrap();
@@ -553,6 +553,7 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
         json!({"operation":"clip.stretch", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"stretch","sequence":uuid,"clip":uuid,"range":clip["timeline_range"]}),
         json!({"operation":"instance.retime", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"retime","composition":composition,"node":uuid,"time_map":clip["time_map"]}),
         json!({"operation":"template_instance.retime", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"retime-template","instance":uuid,"duration":time}),
+        json!({"operation":"render.export", "render":{"input":input,"range":{"start":{"num":"0","den":"1"},"end":time},"frame_rate":{"num":"24","den":"1"},"output_directory":"movie.mov"},"output":{"format":"pro_res_mov","clips":[],"background":[0,0,0]}}),
         json!({"operation":"render.submit","render":{"input":input,"range":{"start":{"num":"0","den":"1"},"end":time},
             "frame_rate":{"num":"24","den":"1"},"output_directory":"frames"}}),
         json!({"operation":"job.get","job":uuid.to_string()}),
@@ -897,6 +898,10 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
     execute(json!({"operation":"render.sequence", "input":input,
         "range":{"start":{"num":"0","den":"1"}, "end":{"num":"1","den":"1"}},
         "frame_rate":{"num":"1","den":"1"}, "output_directory":dir.path().join("frames")}));
+    execute(json!({"operation":"render.export", "render":{"input":input,
+        "range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"24"}},
+        "frame_rate":{"num":"24","den":"1"},"output_directory":dir.path().join("sync.mov")},
+        "output":{"format":"pro_res_mov","clips":[],"background":[0,0,0]}}));
     let job = execute(json!({"operation":"render.submit", "render":{"input":input,
         "range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"1"}},
         "frame_rate":{"num":"1","den":"1"},"output_directory":dir.path().join("job-frames")}}));
