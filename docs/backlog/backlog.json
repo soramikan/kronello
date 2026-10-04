@@ -649,7 +649,7 @@
       "priority": "P1",
       "area": "inspection",
       "title": "非表示原因・依存・レンダー経路のexplain",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "API-001",
         "LAYOUT-001",
@@ -788,7 +788,7 @@
       "priority": "P1",
       "area": "timeline",
       "title": "動画Asset/Generator ClipとTimeline編集の拡張",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "NLE-001",
         "MEDIA-001",
