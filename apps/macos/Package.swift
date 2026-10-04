@@ -10,16 +10,23 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [
         .library(name: "KronelloCore", targets: ["KronelloCore"]),
+        .library(name: "KronelloDesign", targets: ["KronelloDesign"]),
         .executable(name: "KronelloPreviewHarness", targets: ["KronelloPreviewHarness"]),
         .executable(name: "KronelloJSONBenchmark", targets: ["KronelloJSONBenchmark"])
     ],
     targets: [
+        // Native FFI boundary (FFI-001).
         .target(name: "CKronelloFFI", publicHeadersPath: "include"),
         .target(name: "KronelloCore", dependencies: ["CKronelloFFI"],
                 linkerSettings: [.unsafeFlags(["-L", libraryPath, "-lkronello_ffi", "-Xlinker", "-rpath", "-Xlinker", libraryPath])]),
         .executableTarget(name: "KronelloPreviewHarness", dependencies: ["KronelloCore"]),
         .executableTarget(name: "KronelloJSONBenchmark", dependencies: ["KronelloCore"]),
-        .testTarget(name: "KronelloCoreTests", dependencies: ["KronelloCore", "CKronelloFFI"])
+        .testTarget(name: "KronelloCoreTests", dependencies: ["KronelloCore", "CKronelloFFI"]),
+        // Design system: generated tokens and icons, fonts, and SwiftUI components.
+        .target(name: "KronelloDesign", resources: [.copy("Resources/Fonts")]),
+        // Renders every component in both themes to PNG for design review:
+        // `swift run --package-path apps/macos KronelloDesignGallery <output-directory>`.
+        .executableTarget(name: "KronelloDesignGallery", dependencies: ["KronelloDesign"]),
+        .testTarget(name: "KronelloDesignTests", dependencies: ["KronelloDesign"])
     ]
 )
-
