@@ -623,6 +623,18 @@ pub fn build_scene_ir_with_cache(
                 crate::bounds::check_overflow(&n.key, &layout)?;
                 SceneContent::Text(layout)
             }
+            NodeKind::Media(media) => {
+                let asset = content(&snapshot.project.assets, media.asset.as_uuid(), |a| {
+                    a.id.as_uuid()
+                })?
+                .ok_or_else(|| RenderError::UnsupportedFeature("missing media asset".into()))?;
+                if asset.kind != kronello_model::AssetKind::Audio {
+                    return Err(RenderError::UnsupportedFeature(
+                        "Media video/image drawing requires COMP-002".into(),
+                    ));
+                }
+                SceneContent::Empty
+            }
             _ => SceneContent::Empty,
         };
         nodes.push(SceneNodeIr {

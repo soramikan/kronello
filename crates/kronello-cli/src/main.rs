@@ -3,7 +3,7 @@ use std::io::{Read, Write};
 
 use kronello_service::{BackendSelection, Request, Response, Service, ServiceError};
 
-const USAGE: &str = "kronello [--backend gpu|cpu-reference] [--request-json JSON] [project create|import|export|info|collect | asset relink | render frame|sequence|submit | job get|list|cancel|prune | edit plan|apply|undo | history list | scene query | property sample | capabilities get | sequence create | clip place|trim|stretch | instance retime | template_instance retime | template define|instantiate|set_input|set_duration|preview|migration_plan] | worker --job <id>; otherwise read a tagged service Request from stdin";
+const USAGE: &str = "kronello [--backend gpu|cpu-reference] [--request-json JSON] [project create|import|export|info|collect | asset relink | render frame|sequence|export|submit | job get|list|cancel|prune | edit plan|apply|undo | history list | scene query | property sample | capabilities get | sequence create | clip place|trim|stretch | instance retime | template_instance retime | template define|instantiate|set_input|set_duration|preview|migration_plan] | worker --job <id>; otherwise read a tagged service Request from stdin";
 fn run() -> Result<Response, ServiceError> {
     let mut selection = BackendSelection::Gpu;
     let mut literal = None;
@@ -48,7 +48,10 @@ fn run() -> Result<Response, ServiceError> {
         ["sequence", "create"] => Some("sequence.create".into()),
         ["clip", verb @ ("place" | "trim" | "stretch")] => Some(format!("clip.{verb}")),
         [kind @ ("instance" | "template_instance"), "retime"] => Some(format!("{kind}.retime")),
-        ["render", verb @ ("frame" | "sequence" | "submit")] => Some(format!("render.{verb}")),
+        [
+            "render",
+            verb @ ("frame" | "sequence" | "export" | "submit"),
+        ] => Some(format!("render.{verb}")),
         ["edit", verb @ ("plan" | "apply" | "undo")] => Some(format!("edit.{verb}")),
         [
             "template",

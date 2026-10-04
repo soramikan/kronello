@@ -231,6 +231,17 @@
         },
         "timeline_range": {
           "$ref": "#/$defs/TimeRange"
+        },
+        "volume": {
+          "description": "Absent in M2 documents means unity. Evaluated in source-local time.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Property"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -1404,6 +1415,39 @@
         "interpolation"
       ]
     },
+    "MediaNode": {
+      "description": "Explicit media stream; AUDIO-003 executes audio only.",
+      "type": "object",
+      "properties": {
+        "asset": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "source_in": {
+          "$ref": "#/$defs/Rational"
+        },
+        "stream_index": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "time_map": {
+          "description": "Maps time relative to the owning node's active_range.start.",
+          "$ref": "#/$defs/TimeMap"
+        },
+        "volume": {
+          "description": "A kronello.audio.volume Property owned by the same SceneNode.",
+          "$ref": "#/$defs/PropertyId"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "asset",
+        "stream_index",
+        "source_in",
+        "time_map",
+        "volume"
+      ]
+    },
     "Modifier": {
       "description": "Ordered modifier frame only, with semantic parameters and a stable identity.\nNo modifier algorithm or execution capability is implemented here. The\nanimation compiler must resolve kind/version and reject unsupported kinds.",
       "type": "object",
@@ -1538,6 +1582,23 @@
             },
             "value": {
               "$ref": "#/$defs/CompositionInstance"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "media"
+            },
+            "value": {
+              "$ref": "#/$defs/MediaNode"
             }
           },
           "additionalProperties": false,

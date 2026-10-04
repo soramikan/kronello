@@ -25,11 +25,17 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                 #[derive(Deserialize)]
                 #[serde(deny_unknown_fields)]
                 struct Mov {
+                    #[serde(default)]
+                    audio: kronello_audio::AudioSourceMode,
+                    #[serde(default = "crate::jobs::movie_profile_v1")]
+                    profile_version: u32,
                     clips: Vec<crate::JobAudioClip>,
                     background: [f32; 3],
                 }
                 let mov: Mov = payload(&fields)?;
                 Ok(Self::ProResMov {
+                    audio: mov.audio,
+                    profile_version: mov.profile_version,
                     clips: mov.clips,
                     background: mov.background,
                 })
@@ -86,6 +92,7 @@ impl<'de> Deserialize<'de> for Request {
             "instance.retime" => payload(&fields).map(Self::InstanceRetime),
             "template_instance.retime" => payload(&fields).map(Self::TemplateInstanceRetime),
 
+            "render.export" => payload(&fields).map(Self::RenderExport),
             "render.submit" => payload(&fields).map(Self::RenderSubmit),
             "job.get" => payload(&fields).map(Self::JobGet),
             "job.list" => payload(&fields).map(Self::JobList),
@@ -121,6 +128,7 @@ impl<'de> Deserialize<'de> for ResultData {
         let mut fields = fields(d)?;
         let tag: String = take(&mut fields, "kind")?;
         let result = match tag.as_str() {
+            "movie" => Self::Movie(take(&mut fields, "value")?),
             "job" => Self::Job(take(&mut fields, "value")?),
             "jobs" => Self::Jobs(take(&mut fields, "value")?),
             "pruned" => Self::Pruned(take(&mut fields, "value")?),

@@ -56,6 +56,8 @@ pub enum Request {
     #[serde(rename = "template_instance.retime")]
     TemplateInstanceRetime(TemplateInstanceRetimeRequest),
 
+    #[serde(rename = "render.export")]
+    RenderExport(RenderSubmitRequest),
     #[serde(rename = "render.submit")]
     RenderSubmit(RenderSubmitRequest),
     #[serde(rename = "job.get")]
@@ -201,6 +203,7 @@ pub struct FrameResult {
     deny_unknown_fields
 )]
 pub enum ResultData {
+    Movie(Box<kronello_media::AvExportReport>),
     Job(Box<kronello_jobs::JobRecord>),
     Jobs(JobListResult),
     Pruned(kronello_jobs::PruneResult),
@@ -493,6 +496,32 @@ impl<'a> Service<'a> {
                     display: frame.pixels.display,
                 })))
             }),
+            Request::RenderExport(r) => {
+                jobs::features(&r.required_features)?;
+                self.render(&r.render.input, |snapshot, fonts, backend| {
+                    jobs::validate_movie_destination(&r.render.output_directory)?;
+                    let av = jobs::movie_snapshot(snapshot, &r.output)?;
+                    let JobOutput::ProResMov { background, .. } = r.output else {
+                        unreachable!()
+                    };
+                    let runtime = kronello_media::MediaRuntime::load()?;
+                    let report = runtime.export_av(
+                        &av,
+                        &r.render.input.project,
+                        fonts,
+                        backend,
+                        &kronello_media::AvExportRequest {
+                            output: r.render.output_directory.clone(),
+                            range: r.render.range,
+                            frame_rate: r.render.frame_rate,
+                            region: r.render.input.region,
+                            background,
+                            clipping: kronello_audio::ClippingPolicy::Reject,
+                        },
+                    )?;
+                    Ok(ResultData::Movie(Box::new(report)))
+                })
+            }
             Request::RenderSequence(r) => self.render(&r.input, |snapshot, fonts, backend| {
                 Ok(ResultData::Sequence(render_sequence(
                     snapshot,
@@ -803,7 +832,7 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
         Request::InstanceRetime(r) => local_locator(&r.project),
         Request::TemplateInstanceRetime(r) => local_locator(&r.project),
 
-        Request::RenderSubmit(r) => {
+        Request::RenderSubmit(r) | Request::RenderExport(r) => {
             local_locator(&r.render.output_directory)?;
             render_locators(&r.render.input)
         }

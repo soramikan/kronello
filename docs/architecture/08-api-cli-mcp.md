@@ -1,6 +1,6 @@
 # 08 API・CLI・MCP・エージェント
 
-GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001-shared-command-query-api.md)）。M1 CLI-001 と M2 SERVICE-001 / API-001 / TEMPLATE-001 / MEDIA-001 / MCP-001 / NLE-001 / JOB-001 と M3 EXPR-001 の実装範囲を次節に示す。それ以外の後続 API・CLI は提案であり、実装済みではない。
+GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001-shared-command-query-api.md)）。M1 CLI-001 と M2 SERVICE-001 / API-001 / TEMPLATE-001 / MEDIA-001 / MCP-001 / NLE-001 / JOB-001 と M3 EXPR-001 / AUDIO-003 の実装範囲を次節に示す。それ以外の後続 API・CLI は提案であり、実装済みではない。
 
 ## M1 CLI-001 の実装範囲
 
@@ -61,7 +61,7 @@ printf '%s\n' '{"operation":"project.export","project":"/private/tmp/kronello-m1
 
 受け入れテストは `crates/kronello-cli/tests/machine.rs`。built binary を起動し、stdout 全体の JSON parse、非 0 exit と stderr 診断、create / import / export / info、revision conflict / lock、font 欠落 / hash、未対応機能、CPU 連番を検証する。GPU を必要とするテストは `gpu_headless_default_backend_animated_shape_japanese_text_sequence`。service は `Service::with_backend(&dyn RenderBackend)` で backend を注入でき、CLI 固有の作品状態は持たない。 CPU と Apple M1 / Metal の実行結果は [CLI-001 の検証](../testing/cli-001.md) に記録する。
 
-## M3 EXPR-001 の実装範囲
+## M3 EXPR-001 / AUDIO-003 の実装範囲
 
 `edit.plan/apply` の `commands` に `{"expression_set":{"expression":Expression}}` を追加した。同じ batch 内で既存の `{"property_source_set":{"object":"UUID","property":"UUID","source":{"kind":"expression","value":"Expression UUID"}}}` を使う。capabilities の features に `expression` を追加した。操作 registry の追加はなく、CLI の `edit plan/apply`、MCP の同名 tool が同じ型付き command を解釈する。
 
@@ -164,9 +164,9 @@ capabilities はコンパイル済み対応範囲を示し、GPU adapter の稼�
 
 ### 公開 schema と registry
 
-[schemas/api-v1.schema.json](../../schemas/api-v1.schema.json) は Draft 2020-12。Request / Response envelope、全30操作の payload / successful result、型付き EditCommand を共有 Rust 型から生成する。`api_json_schema()` と committed schema の一致を通常テストで確認する。再生成は `cargo run -p kronello-service --example api_schema --locked > schemas/api-v1.schema.json`。版はファイル名・`$id`・`x-api-schema-version` で固定し、既存 Request に必須 version field を追加しない。Project document は従来の公開型 / schema を共有する。
+[schemas/api-v1.schema.json](../../schemas/api-v1.schema.json) は Draft 2020-12。Request / Response envelope、全33操作の payload / successful result、型付き EditCommand を共有 Rust 型から生成する。`api_json_schema()` と committed schema の一致を通常テストで確認する。再生成は `cargo run -p kronello-service --example api_schema --locked > schemas/api-v1.schema.json`。版はファイル名・`$id`・`x-api-schema-version` で固定し、既存 Request に必須 version field を追加しない。Project document は従来の公開型 / schema を共有する。
 
-`command_registry()` の CommandDescriptor は name / read_only / request_schema / response_schema を持つ。schema refs は同ファイルの `$defs` を指す。request_schema は operation tag を除いた payload、response_schema は status / kind を除いた successful value。MCP-001 / FFI-001 は同じ registry と execute / execute_json を使用できる。registry の30操作は project.create / import / export / info / collect、asset.relink、render.frame / sequence / submit、job.get / list / cancel / prune、edit.plan / apply / undo、history.list、scene.query、property.sample、capabilities.get、template.define / instantiate / set_input / set_duration と後述の NLE-001 の6操作。project.create / import / asset.relink / edit.apply / undo、template の4操作、NLE-001 の6操作が mutating。他は project に対し read-only（render.sequence と project.collect は output directory に成果物を作る）。project.collect の read_only は元プロジェクトを変更しないことを表し、複製と hash 検証済み素材を新しいフォルダに保存する。
+`command_registry()` の CommandDescriptor は name / read_only / request_schema / response_schema を持つ。schema refs は同ファイルの `$defs` を指す。request_schema は operation tag を除いた payload、response_schema は status / kind を除いた successful value。MCP-001 / FFI-001 は同じ registry と execute / execute_json を使用できる。registry の33操作は project.create / import / export / info / collect、asset.relink、render.frame / sequence / export / submit、job.get / list / cancel / prune、edit.plan / apply / undo、history.list、scene.query、property.sample、capabilities.get、template.define / instantiate / set_input / set_duration / preview / migration_plan と後述の NLE-001 の6操作。project.create / import / asset.relink / edit.apply / undo、template の4操作、NLE-001 の6操作が mutating。他は project に対し read-only（render.sequence と project.collect は output directory に成果物を作る）。project.collect の read_only は元プロジェクトを変更しないことを表し、複製と hash 検証済み素材を新しいフォルダに保存する。
 
 request envelope・既知 payload は未知 field と重複 field を拒否する。schema に任意 shell、外部 URL fetch、raw FFmpeg args の実行 field は設けない。project / font / output path と assets 内の locator の URI scheme は filesystem access の前に `INVALID_REQUEST` とする。Windows drive path は local path として許す。素材の name / text や未知 Project 内容は不活性なデータであり、命令として実行しない。Project の未知 field 保持と、API envelope の厳格な decode は別の契約である。
 
@@ -239,7 +239,7 @@ JOB-001 で `render.submit` / `job.get` / `job.list` / `job.cancel` / `job.prune
 
 output の既定は `{format:"image_sequence"}`。MOV は `{format:"pro_res_mov",background:[r,g,b],clips:[{asset,stream_index,placement,source_in,gain}]}`。clips の gain は非負の線形振幅倍率、clipping は Reject。`render.output_directory` は画像連番では新規 directory、MOV では新規 .mov file の path とする。MOV は同梱 LGPL runtime の ProRes + PCM24 のみで、暗黙の codec / CPU fallback はない。
 
-`render.submit.render.input` は同期 `render.sequence.input` と同じ `RenderTarget`（Composition / Sequence）と legacy `composition` を受け取り、どちらか一つだけを指定する。同じ `freeze_render_input` が Sequence、配置、資産、意味版、revision を owned snapshot に固定する。worker は固定入力から描画し、元の `.kronello` を開かない。Sequence target の MOV もこの映像を使うが、音声は `output.clips` の明示配置だけを使い、空なら silence とする。Sequence の audio track を自動で mux する処理は ADR-0051 の範囲外である。
+`render.submit.render.input` は同期 `render.sequence.input` と同じ `RenderTarget`（Composition / Sequence）と legacy `composition` を受け取り、どちらか一つだけを指定する。同じ `freeze_render_input` が Sequence、配置、資産、意味版、revision を owned snapshot に固定する。worker は固定入力から描画し、元の `.kronello` を開かない。Sequence target の MOV もこの映像を使う。AUDIO-003 の version 2 / document mode は同じ固定 snapshot から audio tracks と再帰 Composition 音声を mux する。省略時の version 1 / explicit は従来どおり `output.clips` のみ（空なら silence）。
 
 CLI は tagged stdin または `kronello render submit` / `kronello job get|list|cancel|prune` を使う。worker の入口は `kronello worker --job <id>` / `kronello-mcp worker --job <id>` で、同じ service の `worker_entry` を呼ぶ。MCP tools は同名で自動公開し、MCP が EOF で終了しても独立した同じ binary の worker が継続する。job.cancel は永続要求を frame 境界で確認する操作で、JSON-RPC notifications/cancelled の transport キャンセルとは別である。
 
@@ -387,3 +387,30 @@ MediaSlot の final compiler は既存 UNSUPPORTED_FEATURE、欠落は ASSET_MIS
 具体的な保存型・制約と MediaSlot の後続境界は
 [07 テンプレート](07-templates.md)、[ADR-0059](../adr/0059-template-duration-variants-and-migration.md)、
 [検証記録](../testing/template-002.md) を参照。
+
+## AUDIO-003 の共有 API
+
+[ADR-0063](../adr/0063-document-audio-and-clip-volume.md) と
+[AUDIO-003 の検証](../testing/audio-003.md) に従う。
+
+- `render.export`（CLI `render export`、MCP 同名 tool）は `RenderSubmitRequest` を共有し、同期の
+  ProRes / PCM24 MOV と `ResultData::Movie(AvExportReport)` を返す。image_sequence は
+  `render.sequence` を使う。project は読み取り、MOV を no-clobber で作る。
+- `output: {format: pro_res_mov, profile_version: 2, audio: document, clips: [], background: [0,0,0]}`
+  は Sequence / Composition 文書音声。audio は document / explicit / silence。省略は
+  version 1 / explicit、空の explicit clips は従来どおり無音。document / silence と非空 clips は拒否する。
+- `Clip.volume` は optional `kronello.audio.volume` Property。共有 edit command は
+  `{"timeline":{"clip_set_volume":{"sequence":"UUID","clip":"UUID","volume":Property}}}`。
+  null で unity に戻す。PropertySource は Scalar Constant / Curve、非負有限 Gain。
+  edit.plan / apply / undo の revision / idempotency / conflict 規則は維持する。
+- SceneNode の `kind: {kind: media, value: {asset, stream_index, source_in, time_map, volume}}` を追加した。
+  volume は同じ node の properties にある volume PropertyId。Media 音声だけに対応し、映像描画は
+  COMP-002 まで `UNSUPPORTED_FEATURE`。既存 scene.query / property.sample にも同じ Property を公開する。
+- capabilities.features に document_audio / clip_volume / media_audio を追加した。
+  registry は33操作。API / Project schema と GeneratedAPI.swift を共有 generator から再生成する。
+  `AvExportReport` に audio_source / audio_profile_version を追加し、省略した旧 report は explicit / 1。
+
+型付き失敗は `UNSUPPORTED_FEATURE`（profile / retime / effects / Generator / Media video）、
+`INVALID_AUDIO_INPUT`（Gain / Curve / audio compiler）、`INVALID_MEDIA_INPUT`（mode と clips の併用）、
+既存 `SOURCE_MISSING` / `ASSET_MISSING` / `ASSET_HASH_MISMATCH` / `AUDIO_SOURCE_TOO_SHORT` /
+`AUDIO_CLIPPING` / `AUDIO_OVERFLOW` / `TIME_ERROR`。検証の成功を GPU / hardware 稼働保証へ拡張しない。

@@ -38,6 +38,9 @@ pub struct Clip {
     pub time_map: TimeMap,
     #[serde(default)]
     pub audio_retime: AudioRetimePolicy,
+    /// Absent in M2 documents means unity. Evaluated in source-local time.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub volume: Option<Box<Property>>,
     #[serde(default)]
     pub links: Vec<ClipId>,
     #[serde(default)]
@@ -179,6 +182,9 @@ impl Sequence {
             .collect();
         for track in &self.tracks {
             for (index, clip) in track.clips.iter().enumerate() {
+                if let Some(volume) = &clip.volume {
+                    validate_volume(volume).map_err(|e| SequenceError::Invalid(e.to_string()))?;
+                }
                 if clip.timeline_range.is_empty()
                     || clip.source_in < Time::ZERO
                     || clip
@@ -203,11 +209,6 @@ impl Sequence {
                 }
                 match &clip.source_ref {
                     SourceRef::Composition { composition } => {
-                        if track.kind != TrackKind::Video {
-                            return Err(SequenceError::Invalid(
-                                "composition requires video track".into(),
-                            ));
-                        }
                         if project.compositions.iter().any(|c| matches!(c, DocumentObject::Opaque(c) if c.id == composition.as_uuid())) { continue; }
                         let source = project
                             .compositions
@@ -271,4 +272,13 @@ impl Sequence {
         }
         Ok(())
     }
+}
+
+/// Shared clip/media gain Property contract. Curves are resolved at execution.
+pub fn validate_volume(property: &Property) -> Result<(), ModelError> {
+    property.validate(&SchemaRegistry::with_builtin())?;
+    if property.descriptor().key.as_str() != "kronello.audio.volume" {
+        return Err(ModelError::SourceNotAllowed);
+    }
+    Ok(())
 }

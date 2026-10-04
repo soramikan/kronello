@@ -284,6 +284,17 @@ pub(crate) fn validate(project: &Project) -> Result<(), ServiceError> {
             }
         }
     }
+    for sequence in &project.sequences {
+        if let DocumentObject::Known(sequence) = sequence {
+            for clip in sequence.tracks.iter().flat_map(|t| &t.clips) {
+                if let Some(volume) = &clip.volume {
+                    volume
+                        .validate_sources(&r, &Catalog(project))
+                        .map_err(invalid)?;
+                }
+            }
+        }
+    }
     let expressions: Vec<_> = project
         .expressions
         .iter()
