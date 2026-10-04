@@ -27,7 +27,7 @@ class IntegrationM2(unittest.TestCase):
             self.assertEqual(completed.returncode, 0, completed.stderr + json.dumps(report))
             self.assertEqual(report["status"], "verified")
             self.assertEqual(report["backend"], "cpu-reference")
-            self.assertEqual(report["state_root"], str(state))
+            self.assertEqual(report["state_root"], str(state.resolve()))
             checks = {check["name"]: check["passed"] for check in report["checks"]}
             for name in ("independence.evaluated_values", "independence.pixels",
                          "protected_intervals.before", "protected_intervals.after",

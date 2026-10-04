@@ -1,6 +1,6 @@
 # INTEGRATION-001 の検証
 
-対象: `.worktrees/integration001` / `m2-integration-001`、基点 `66f1fb4497f2e6dcc512cf2727625ec491342377`。2026-10-04、Darwin arm64 / Rust 1.95.0、worker sandbox の明示 CPU reference。GPU は未実行。INTEGRATION-001 は host の 4K GPU 確認まで `in_progress` に維持する。
+対象: `.worktrees/integration001` / `m2-integration-001`、基点 `66f1fb4497f2e6dcc512cf2727625ec491342377`。2026-10-04、Darwin arm64 / Rust 1.95.0、worker sandbox の明示 CPU reference。GPU は未実行。INTEGRATION-001 は host の 4K GPU 確認（下記）で `done` とした。
 
 ## 再現 driver と入力
 
@@ -108,6 +108,25 @@ WGPU_BACKEND=metal python3 scripts/demo_integration_m2.py \
 
 | revision / platform | command | exit | frame / check数 | 結果 |
 |---|---|---|---|---|
-| | 上記4K GPU driver | | | |
+| `31ea36f`（clean commit）/ Apple M1・macOS・Metal（`WGPU_BACKEND=metal`）、release build、2026-10-04 | 上記4K GPU driver | 0 | 3840×2160 PNG / RGBA16F 2 frames（0秒・8秒）、55 checks、130 request summaries | `status=verified`、全 check 合格。job `f684fcbd-184e-4e77-8b0e-8b38cf1dc821` は `succeeded`（投入から完了まで 48.1 秒、driver 全体 56.7 秒）。frame metadata の backend は `wgpu_rgba16f`。`sips` で両 PNG が 3840×2160 であることを確認。同梱 LGPL ffprobe は PNG の寸法を 0×0 と報告するため寸法の根拠にしない（codec=png は一致） |
 
 host成功後にsupervisorがこの行を記入し、backlogをdoneへ更新する。CPU結果、GPU故障注入テスト、completed worker turnを4K GPUの受け入れ合格に数えない。固定GPU golden baselineは変更していない。
+
+## macOS の一時 directory パス比較修正
+
+2026-10-04、基点 `31ea36fa3c3165eb7e3ceeb244f44b02e5309fb5`。`scripts/tests/test_integration_m2.py` の `state_root` 期待値を `str(state.resolve())` に変更し、macOS の `/var` と `/private/var` の symlink 表記差を正規化して比較する。driver は既に状態パスを `resolve()` して使用・記録しており、`scripts/demo_integration_m2.py` は変更不要で未変更。
+
+worker sandbox で、上記の shared Cargo cache / target と FFmpeg の3環境変数を使用し、今回の `TMPDIR` は `/Users/sora/.local/share/codex-bridge/scratch/worker_cd81b8c5127b4262afc81b98b87ffe64` に設定した。4K / GPU は今回未実行で、supervisor の host 検証に委ねる。
+
+| command | exit | 結果 |
+|---|---:|---|
+| `cargo build -p kronello-cli -p kronello-mcp --locked` | 0 | debug binaries |
+| `python3 -m unittest scripts.tests.test_integration_m2.IntegrationM2.test_small_cpu_reference` | 0 | 1 passed、145.762秒、45種類のcheck、2 frames。job 31.504秒 |
+| `git diff --check` | 0 | whitespace errorなし |
+
+## Supervisor の host 検証（2026-10-04）
+
+- 4K GPU driver: 上表のとおり exit 0、55 checks。
+- `cargo fmt --all --check` / `cargo clippy --workspace --all-targets --locked -- -D warnings` / `cargo test --workspace --locked --no-fail-fast`: すべて exit 0、471 passed（一時 `KRONELLO_STATE_ROOT`）。
+- GPU golden（`KRONELLO_GOLDEN=1`、Metal）: 24 scenes すべて pass、mismatch 0。tile 実行の追加後も baseline は不変。
+- `python3 -m unittest discover -s scripts/tests`: 20 tests OK（4K / small の CPU reference driver を含む。state_root 比較の修正後）。
