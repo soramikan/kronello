@@ -1,6 +1,6 @@
 # ADR-0051: Sequence の配置・合成順序と三つの時間編集を固定する
 
-- 状態: 採用
+- 状態: 部分置換（[ADR-0062](0062-video-generator-and-timeline-edits.md): transition による明示 overlap と動画・Generator / clip effects / move・ripple・link の追加。その他の規約は維持）
 - 日付: 2026-10-04
 - 対象: NLE-001
 

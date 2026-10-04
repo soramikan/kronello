@@ -108,6 +108,9 @@ pub fn explain_render_path(
         raster_cache_observed: false,
     };
     let mut readback_bytes = 0;
+    // CPU-decoded video frames and CPU-prepared rasters are uploaded explicitly on GPU (ADR-0008).
+    let mut image_upload_bytes: u64 = 0;
+    let mut image_uploads: u64 = 0;
     for (tile_id, (_, tile)) in crate::frame_tiles(region).into_iter().enumerate() {
         let dag = crate::build_render_dag_with_cache(scene, profile, tile, cache)?;
         let mut stages = Vec::new();
@@ -127,6 +130,19 @@ pub fn explain_render_path(
                 }
                 DagNode::Mask { .. } => ("MASK", None, true),
                 DagNode::OutputTransform { .. } => ("OUTPUT_TRANSFORM", None, false),
+                DagNode::VideoDraw { bounds, .. } => {
+                    // Estimate: one RGBA f32 upload of the drawn pixel bounds per frame.
+                    let w = (bounds.max[0] - bounds.min[0]).max(0.0).ceil() as u64;
+                    let h = (bounds.max[1] - bounds.min[1]).max(0.0).ceil() as u64;
+                    image_upload_bytes += w * h * 16;
+                    image_uploads += 1;
+                    ("VIDEO_DRAW", None, true)
+                }
+                DagNode::RasterInput { pixels } => {
+                    image_upload_bytes += pixels.len() as u64 * 16;
+                    image_uploads += 1;
+                    ("RASTER_INPUT", None, true)
+                }
             };
             if image {
                 surfaces += 1;
@@ -230,8 +246,8 @@ pub fn explain_render_path(
     transfer(
         "IMAGE_UPLOAD",
         "cpu_to_gpu",
-        known.then_some(0),
-        known.then_some(0),
+        if gpu { Some(image_upload_bytes) } else { known.then_some(0) },
+        if gpu { Some(image_uploads) } else { known.then_some(0) },
     );
     transfer(
         "GPU_IMAGE_COPY",

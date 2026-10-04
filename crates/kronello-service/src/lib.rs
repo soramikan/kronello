@@ -45,6 +45,8 @@ use sha2::{Digest, Sha256};
 #[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
 #[serde(tag = "operation", deny_unknown_fields)]
 pub enum Request {
+    #[serde(rename = "sequence.query")]
+    SequenceQuery(SequenceQueryRequest),
     #[serde(rename = "sequence.create")]
     SequenceCreate(SequenceCreateRequest),
     #[serde(rename = "clip.place")]
@@ -207,6 +209,7 @@ pub struct FrameResult {
     deny_unknown_fields
 )]
 pub enum ResultData {
+    Timeline(SequenceQueryResult),
     Job(Box<kronello_jobs::JobRecord>),
     Jobs(JobListResult),
     Pruned(kronello_jobs::PruneResult),
@@ -412,6 +415,7 @@ impl<'a> Service<'a> {
     pub fn dispatch(&self, request: Request) -> Result<ResultData, ServiceError> {
         validate_request_locators(&request)?;
         match request {
+            Request::SequenceQuery(r) => nle::sequence_query(r).map(ResultData::Timeline),
             Request::SequenceCreate(r) => nle::sequence_create(r).map(ResultData::Edit),
             Request::ClipPlace(r) => nle::clip_place(r).map(ResultData::Edit),
             Request::ClipTrim(r) => nle::clip_trim(r).map(ResultData::Edit),
@@ -541,7 +545,16 @@ impl<'a> Service<'a> {
         ) -> Result<T, ServiceError>,
     ) -> Result<T, ServiceError> {
         self.with_render_input(input, |snapshot, fonts| {
-            self.with_selected_backend(|backend| run(snapshot, fonts, backend))
+            self.with_selected_backend(|backend| {
+                run(
+                    snapshot,
+                    fonts,
+                    &kronello_media::VideoRenderBackend {
+                        backend,
+                        project_path: &input.project,
+                    },
+                )
+            })
         })
     }
     fn with_render_input<T>(
@@ -820,6 +833,7 @@ fn document_asset_locators(document: &Project) -> Result<(), ServiceError> {
 fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
     match request {
         Request::SequenceCreate(r) => local_locator(&r.project),
+        Request::SequenceQuery(r) => local_locator(&r.project),
         Request::ClipPlace(r) => local_locator(&r.project),
         Request::ClipTrim(r) => local_locator(&r.project),
         Request::ClipStretch(r) => local_locator(&r.project),

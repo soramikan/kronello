@@ -220,6 +220,13 @@
             "$ref": "#/$defs/ClipId"
           }
         },
+        "properties": {
+          "description": "Placement transform and effect parameters, evaluated in sequence time.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Property"
+          }
+        },
         "source_in": {
           "$ref": "#/$defs/Rational"
         },
@@ -1951,6 +1958,12 @@
             "$ref": "#/$defs/Track"
           }
         },
+        "transitions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Transition"
+          }
+        },
         "working_space": {
           "$ref": "#/$defs/ColorSpace"
         }
@@ -2138,12 +2151,30 @@
         {
           "type": "object",
           "properties": {
+            "color": {
+              "$ref": "#/$defs/Color",
+              "default": {
+                "components": {
+                  "alpha": 1.0,
+                  "b": 0.0,
+                  "g": 0.0,
+                  "r": 0.0
+                },
+                "space": "srgb"
+              }
+            },
             "generator": {
               "type": "string"
             },
             "kind": {
               "type": "string",
               "const": "generator"
+            },
+            "version": {
+              "type": "integer",
+              "format": "uint32",
+              "default": 1,
+              "minimum": 0
             }
           },
           "additionalProperties": false,
@@ -2211,6 +2242,17 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "start_time": {
+          "description": "Absolute PTS origin. Missing legacy metadata means zero, never latest.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rational"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "time_base": {
@@ -2977,6 +3019,42 @@
       "enum": [
         "video",
         "audio"
+      ]
+    },
+    "Transition": {
+      "type": "object",
+      "properties": {
+        "incoming": {
+          "$ref": "#/$defs/ClipId"
+        },
+        "kind": {
+          "$ref": "#/$defs/TransitionKind"
+        },
+        "outgoing": {
+          "$ref": "#/$defs/ClipId"
+        },
+        "range": {
+          "$ref": "#/$defs/TimeRange"
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "outgoing",
+        "incoming",
+        "range",
+        "kind",
+        "version"
+      ]
+    },
+    "TransitionKind": {
+      "type": "string",
+      "enum": [
+        "crossfade"
       ]
     },
     "Value": {

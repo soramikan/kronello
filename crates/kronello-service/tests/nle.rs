@@ -44,11 +44,13 @@ fn clip(composition: CompositionId, start: Time, end: Time, speed: Rational) -> 
         audio_retime: AudioRetimePolicy::Reject,
         links: vec![],
         effects: vec![],
+        properties: vec![],
     }
 }
 fn sequence(p: &Project) -> Sequence {
     Sequence {
         id: SequenceId::new(),
+        transitions: vec![],
         extent: composition(p).design_extent,
         frame_rate: FrameRate::new(24, 1).unwrap(),
         audio_rate: SampleRate::HZ_48000,
@@ -785,6 +787,8 @@ fn asset_audio_tracks_mix_on_absolute_grid_and_reject_retime() {
             absolute: Some(fixture.to_string_lossy().into()),
         },
         streams: vec![StreamMetadata {
+            // Audio source_in must ignore the native presentation origin.
+            start_time: Some(t(5, 1)),
             index: 0,
             codec: "pcm_s16le".into(),
             time_base: t(1, 48000),
@@ -812,6 +816,7 @@ fn asset_audio_tracks_mix_on_absolute_grid_and_reject_retime() {
         audio_retime: AudioRetimePolicy::Reject,
         links: vec![],
         effects: vec![],
+        properties: vec![],
     };
     s.tracks.push(Track {
         id: TrackId::new(),
@@ -896,6 +901,8 @@ fn render_target_wire_is_exclusive_strict_and_unsupported_video_has_typed_errors
     let mut s = sequence(&p);
     s.tracks.truncate(1);
     s.tracks[0].clips[0].source_ref = SourceRef::Generator {
+        version: 1,
+        color: Color::from_srgb8([0; 3], None),
         generator: "future".into(),
     };
     let id = s.id;

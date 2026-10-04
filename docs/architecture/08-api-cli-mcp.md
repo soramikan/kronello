@@ -1,6 +1,6 @@
 # 08 API・CLI・MCP・エージェント
 
-GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001-shared-command-query-api.md)）。M1 CLI-001 と M2 SERVICE-001 / API-001 / TEMPLATE-001 / MEDIA-001 / MCP-001 / NLE-001 / JOB-001 と M3 EXPR-001 / INSPECT-001 の実装範囲を次節に示す。それ以外の後続 API・CLI は提案であり、実装済みではない。
+GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001-shared-command-query-api.md)）。M1 CLI-001 と M2 SERVICE-001 / API-001 / TEMPLATE-001 / MEDIA-001 / MCP-001 / NLE-001 / JOB-001 と M3 EXPR-001 / INSPECT-001 / TEMPLATE-002 / NLE-002 の実装範囲を次節に示す。それ以外の後続 API・CLI は提案であり、実装済みではない。
 
 ## M1 CLI-001 の実装範囲
 
@@ -166,7 +166,7 @@ capabilities はコンパイル済み対応範囲を示し、GPU adapter の稼�
 
 [schemas/api-v1.schema.json](../../schemas/api-v1.schema.json) は Draft 2020-12。Request / Response envelope、全32操作の payload / successful result、型付き EditCommand を共有 Rust 型から生成する。`api_json_schema()` と committed schema の一致を通常テストで確認する。再生成は `cargo run -p kronello-service --example api_schema --locked > schemas/api-v1.schema.json`。版はファイル名・`$id`・`x-api-schema-version` で固定し、既存 Request に必須 version field を追加しない。Project document は従来の公開型 / schema を共有する。
 
-`command_registry()` の CommandDescriptor は name / read_only / request_schema / response_schema を持つ。schema refs は同ファイルの `$defs` を指す。request_schema は operation tag を除いた payload、response_schema は status / kind を除いた successful value。MCP-001 / FFI-001 は同じ registry と execute / execute_json を使用できる。registry の32操作は project.create / import / export / info / collect、asset.relink、render.frame / sequence / submit、job.get / list / cancel / prune、edit.plan / apply / undo、history.list、scene.query、property.sample、capabilities.get、template.define / instantiate / set_input / set_duration と後述の NLE-001 の6操作、INSPECT-001 の2操作。project.create / import / asset.relink / edit.apply / undo、template の4操作、NLE-001 の6操作が mutating。他は project に対し read-only（render.sequence と project.collect は output directory に成果物を作る）。project.collect の read_only は元プロジェクトを変更しないことを表し、複製と hash 検証済み素材を新しいフォルダに保存する。
+`command_registry()` の CommandDescriptor は name / read_only / request_schema / response_schema を持つ。schema refs は同ファイルの `$defs` を指す。request_schema は operation tag を除いた payload、response_schema は status / kind を除いた successful value。MCP-001 / FFI-001 は同じ registry と execute / execute_json を使用できる。registry の35操作は project.create / import / export / info / collect、asset.relink、render.frame / sequence / submit、job.get / list / cancel / prune、edit.plan / apply / undo、history.list、scene.query、property.sample、capabilities.get、template.define / instantiate / set_input / set_duration / preview / migration_plan と後述の NLE-001 の6操作、NLE-002 の sequence.query、INSPECT-001 の2操作。project.create / import / asset.relink / edit.apply / undo、template の4操作、NLE-001 の6操作が mutating。他は project に対し read-only（render.sequence と project.collect は output directory に成果物を作る）。project.collect の read_only は元プロジェクトを変更しないことを表し、複製と hash 検証済み素材を新しいフォルダに保存する。
 
 request envelope・既知 payload は未知 field と重複 field を拒否する。schema に任意 shell、外部 URL fetch、raw FFmpeg args の実行 field は設けない。project / font / output path と assets 内の locator の URI scheme は filesystem access の前に `INVALID_REQUEST` とする。Windows drive path は local path として許す。素材の name / text や未知 Project 内容は不活性なデータであり、命令として実行しない。Project の未知 field 保持と、API envelope の厳格な decode は別の契約である。
 
@@ -331,7 +331,19 @@ cargo run -p kronello-mcp --locked -- --backend cpu-reference
 
 `template.define` / `template.instantiate` / `template.set_input` / `template.set_duration` は同名の二語 CLI subcommand で呼ぶ。すべて `project`、`base_revision`、`session_id`、`idempotency_key` を持ち、成功時は `kind: edit` の Event を返す。定義・配置・入力・尺の payload と制約は [07 テンプレート](07-templates.md) を参照。これらも registry と公開 schema、revision・idempotency・Undo の共通経路を使う。
 
-## NLE-001 の Command と RenderTarget
+## Timeline の Command と RenderTarget
+
+### NLE-002 の追加 API
+
+`sequence.query`（CLI `sequence query`、MCP の同名 tool）は project / sequence を受け取り、revision、Sequence、各配置の track / `ClipKind`（video / image / audio / composition / generator）、clip 本体、effective video color tags / assumptions、unsupported_reason を返す。GUI は表示名から kind を推測しない。image の描画、subtitle / adjustment は本タスクの範囲外。query は GPU や decoder を初期化せず、一つの保存 revision を読む。
+
+既存 edit.plan / edit.apply の TimelineCommand に `clip_move {sequence, clip, delta, linked}`、`clip_link {sequence, clips}`、`ripple {sequence, tracks, pivot, delta, linked}`、`transition_set {sequence, transition}`、`transition_remove {sequence, outgoing, incoming}`、`clip_set_effects {sequence, clip, properties, effects}` を追加した。clip Property は既存 property_source_set の対象にもなる。新しい入口専用の編集状態はない。
+
+同じ Sequence の構造編集は `Structure(sequence_id, sequence_id)`、影響した全配置は `Structure(clip_id, track_id)` を記録する。別 Sequence / 無関係 Property の selective Undo を保持し、active inverse の競合規則も変えない。全 command 後の候補を検証するため、配置＋transition と transition 除去＋move は一つの plan にできる。linked=false の部分移動は LINKED_EDIT_REQUIRED、一端だけの transition 移動は TRANSITION_EDIT_CONFLICT。source / overlap / map / unknown execution の既存 typed errors を保持する。
+
+公開 project / API schema 1 に Clip.properties、Sequence.transitions、Generator version / Color、StreamMetadata.start_time、SemanticVersions.generators / video_input、FrameMetadata.input_path、SequenceQuery の transport 型を追加した。Rust generator と generated Swift が正本に同期する。契約は [ADR-0062](../adr/0062-video-generator-and-timeline-edits.md)、検証と host の残件は [NLE-002](../testing/nle-002.md)。
+
+### NLE-001 の既存 API
 
 六つの操作を service registry、CLI の二語 subcommand、MCP stdio に共通登録した。すべて `project`、`base_revision`、`session_id`、`idempotency_key` を持ち、成功時は `kind: edit` の Event を返す。`EditCommand::Timeline` でも同じ plan / apply を呼べる。
 

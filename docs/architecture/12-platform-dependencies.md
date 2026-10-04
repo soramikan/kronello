@@ -91,7 +91,7 @@ macOS target の `kronello-framebridge` に CVPixelBuffer import と H.264 decod
 
 `capabilities.get` は schema_version=1 の media capabilities（FFmpeg version、canonical library directory、substituted、各 library の version / license / configuration、distribution_eligible / development_only、検出 codec と compiled hwaccel type）を返す。compiled hardware type の存在は physical device の利用成功を意味しない。GPL / nonfree は development_only とし、`verify_distribution` は LGPL と FFmpeg 9 と必須 AV1 / ProRes を要求する。Ubuntu の distribution FFmpeg / libav*-dev は開発・CI 専用として扱う。
 
-CFR / VFR / B-frame は stream start へ seek・flush して前から decode し、次 PTS を presentation interval の上端とする。平均 fps や decode 順の DTS で frame を選ばない。source planes と color tags を返すため PQ / HLG の bit depth は保持する。hardware decode / GPU resident media integration と、source color の working-space 変換は後続の契約。
+CFR / VFR / B-frame は stream start へ seek・flush して前から decode し、次 PTS を presentation interval の上端とする。平均 fps や decode 順の DTS で frame を選ばない。source planes と color tags を返すため PQ / HLG の bit depth は保持する。NLE-002 は明示 stream と SDR RGBA8 の color / linearization / premultiply、CPU sample から選択 GPU への明示 upload を追加した（[ADR-0062](../adr/0062-video-generator-and-timeline-edits.md)）。hardware decode / GPU resident media integration と HDR の working-space 変換は後続の契約。
 
 AV1 / ProRes の software encode と VideoToolbox H.264 / HEVC encode は公開 enum から選ぶ。入力は opaque BT.709 RGBA8。BT.709 matrix を明示して native YUV に変換し、MOV / MP4 の track timescale によって rational PTS を保持する。path report の CPU copy / conversion / upload counters は logical payload bytes であり、driver の内部転送・待機の実測と区別する。
 

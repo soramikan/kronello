@@ -26,6 +26,9 @@ pub struct StreamMetadata {
     pub codec: String,
     pub time_base: Rational,
     pub duration: Option<Rational>,
+    /// Absolute PTS origin. Missing legacy metadata means zero, never latest.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_time: Option<Rational>,
     pub width: Option<u32>,
     pub height: Option<u32>,
     pub pixel_format: Option<String>,

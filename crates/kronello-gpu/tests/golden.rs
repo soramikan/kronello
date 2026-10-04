@@ -181,6 +181,7 @@ fn gradient_manifest(g: &GradientPaint) -> Value {
 }
 fn draw_manifest(scene: &DrawScene) -> Value {
     json!({"roots":scene.roots,"nodes":scene.nodes.iter().map(|node| match node {
+        DrawNode::Raster(pixels)=>json!({"kind":"raster","pixels":pixels}),
         DrawNode::Path(p)=>json!({"kind":"path","fill_gradient":p.fill_gradient.as_ref().map(gradient_manifest),"stroke_gradient":p.stroke_gradient.as_ref().map(gradient_manifest),"paint_transform":p.paint_transform,"contours":p.contours.iter().map(|c| json!({"points":c.points,"closed":c.closed})).collect::<Vec<_>>(),"fill":p.fill.map(|f| json!({"rgba":f.paint.rgba,"space":format!("{:?}",f.paint.space),"rule":format!("{:?}",f.rule)})),"stroke":p.stroke.map(|s| json!({"rgba":s.paint.rgba,"space":format!("{:?}",s.paint.space),"width":s.width,"cap":format!("{:?}",s.cap),"join":format!("{:?}",s.join),"miter_limit":s.miter_limit}))}),
         DrawNode::Group {children,opacity}=>json!({"kind":"isolated-group","children":children,"opacity":opacity}),
         DrawNode::Effect {source,effect}=>json!({"kind":"effect","source":source,"effect":effect,"kernel_version":EFFECT_KERNEL_VERSION,"semantic_version":kronello_model::EFFECT_VERSION}),

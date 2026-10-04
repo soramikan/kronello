@@ -34,6 +34,8 @@ typedef struct Km {
     __typeof__(&av_image_get_buffer_size) av_image_get_buffer_size;
     __typeof__(&av_image_copy_to_buffer) av_image_copy_to_buffer;
     __typeof__(&av_get_pix_fmt_name) av_get_pix_fmt_name;
+    __typeof__(&av_get_pix_fmt) av_get_pix_fmt;
+    __typeof__(&av_image_fill_arrays) av_image_fill_arrays;
     __typeof__(&av_color_primaries_name) av_color_primaries_name;
     __typeof__(&av_color_transfer_name) av_color_transfer_name;
     __typeof__(&av_color_space_name) av_color_space_name;
@@ -156,6 +158,8 @@ Km *km_open(const char *directory, char *error, size_t capacity) {
     LOAD(0, av_image_get_buffer_size);
     LOAD(0, av_image_copy_to_buffer);
     LOAD(0, av_get_pix_fmt_name);
+    LOAD(0, av_get_pix_fmt);
+    LOAD(0, av_image_fill_arrays);
     LOAD(0, av_color_primaries_name);
     LOAD(0, av_color_transfer_name);
     LOAD(0, av_color_space_name);
@@ -322,6 +326,7 @@ alloc_failed:fail(k,AVERROR(ENOMEM),"decoder allocation");
 failed:km_decoder_close(d);return NULL;
 }
 Decoder *km_decoder_open(Km *k, const char *path) { return decoder_open(k,path,AVMEDIA_TYPE_VIDEO,-1); }
+Decoder *km_decoder_open_stream(Km *k, const char *path, int stream) { return decoder_open(k,path,AVMEDIA_TYPE_VIDEO,stream); }
 const char *km_decoder_name(Decoder *d) { return d->codec->codec->name; }
 void km_decoder_time_base(Decoder *d, int *num, int *den) { AVRational t=d->format->streams[d->stream]->time_base; *num=t.num; *den=t.den; }
 int64_t km_decoder_origin(Decoder *d) { int64_t start=d->format->streams[d->stream]->start_time; return start==AV_NOPTS_VALUE ? 0 : start; }
@@ -361,6 +366,24 @@ int km_frame_copy(Decoder *d, uint8_t *buffer, int size) {
     AVFrame *f=d->frame;
     if(!buffer)return d->k->av_image_get_buffer_size(f->format,f->width,f->height,1);
     return d->k->av_image_copy_to_buffer(buffer,size,(const uint8_t *const *)f->data,f->linesize,f->format,f->width,f->height,1);
+}
+/* Explicit SDR BT.709 matrix/range conversion. Rust validates source tags and
+ * inverse-transfers RGB; this shim does not tone-map or guess color semantics. */
+int km_video_rgba(Km *k, const uint8_t *input, int input_size, const char *format,
+                  int width, int height, int full_range, uint8_t *output) {
+    enum AVPixelFormat fmt=k->av_get_pix_fmt(format);
+    int size=k->av_image_get_buffer_size(fmt,width,height,1);
+    if(size<0 || size!=input_size)return fail(k,AVERROR(EINVAL),"video pixel layout");
+    uint8_t *planes[4]={0}; int strides[4]={0};
+    int ret=k->av_image_fill_arrays(planes,strides,input,fmt,width,height,1);
+    if(ret<0)return fail(k,ret,"video planes");
+    struct SwsContext *sws=k->sws_getContext(width,height,fmt,width,height,AV_PIX_FMT_RGBA,SWS_BILINEAR,NULL,NULL,NULL);
+    if(!sws)return fail(k,AVERROR(EINVAL),"video RGBA converter");
+    const int *coeff=k->sws_getCoefficients(SWS_CS_ITU709);
+    ret=k->sws_setColorspaceDetails(sws,coeff,full_range,coeff,1,0,1<<16,1<<16);
+    if(ret>=0) { uint8_t *dst[4]={output,NULL,NULL,NULL};int dst_stride[4]={width*4,0,0,0};ret=k->sws_scale(sws,(const uint8_t *const *)planes,strides,0,height,dst,dst_stride); }
+    k->sws_freeContext(sws);
+    return ret==height ? 0 : fail(k,ret<0?ret:AVERROR(EINVAL),"video RGBA conversion");
 }
 
 typedef struct Encoder {

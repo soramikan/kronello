@@ -309,6 +309,20 @@ impl RasterCacheKey {
         let mut keys: Vec<Option<Self>> = vec![];
         for node in dag.nodes() {
             let value = match node {
+                crate::DagNode::VideoDraw { .. } => {
+                    return Err(RenderError::UnsupportedFeature(
+                        "unresolved video input".into(),
+                    ));
+                }
+                crate::DagNode::RasterInput { pixels } => Some(Self(key(
+                    "video-raster",
+                    (
+                        pixels,
+                        dag.execution_region(),
+                        dag.working_space(),
+                        backend_namespace,
+                    ),
+                )?)),
                 crate::DagNode::Geometry { .. } | crate::DagNode::TextLayout { .. } => None,
                 crate::DagNode::CoverageDraw { path, .. } => Some(Self::new(
                     path,
