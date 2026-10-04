@@ -183,8 +183,51 @@ pub fn fill_rules(rule: FillRule) -> DrawScene {
         roots: vec![0],
     }
 }
+pub fn effect_scene(shadow: bool, working: WorkingSpace) -> DrawScene {
+    let color = model::Color::new(model::ColorSpace::Srgb, [0.2, 0.5, 0.9], 0.7).unwrap();
+    let effect = if shadow {
+        PixelEffect::DropShadow {
+            sigma: [1.2, 0.7],
+            offset: [2.25, -1.5],
+            color,
+            opacity: 0.6,
+        }
+    } else {
+        PixelEffect::GaussianBlur { sigma: [1.2, 0.7] }
+    };
+    let _ = working;
+    DrawScene {
+        nodes: vec![
+            rectangle(
+                [5.25, 5.5],
+                [10.25, 11.5],
+                paint([0.8, 0.2, 0.1, 0.65], InputSpace::Srgb),
+            ),
+            DrawNode::Effect { source: 0, effect },
+        ],
+        roots: vec![1],
+    }
+}
 pub fn scenes() -> Vec<(&'static str, u32, WorkingSpace, DrawScene)> {
     let mut scenes = vec![
+        (
+            "fx-gaussian-alpha",
+            16,
+            WorkingSpace::LinearRec709,
+            effect_scene(false, WorkingSpace::LinearRec709),
+        ),
+        (
+            "fx-shadow-srgb",
+            16,
+            WorkingSpace::LinearRec709,
+            effect_scene(true, WorkingSpace::LinearRec709),
+        ),
+        (
+            "fx-shadow-rec2020",
+            16,
+            WorkingSpace::LinearRec2020,
+            effect_scene(true, WorkingSpace::LinearRec2020),
+        ),
         (
             "isolated-nested-overlap",
             8,

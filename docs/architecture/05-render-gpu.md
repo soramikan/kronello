@@ -19,6 +19,8 @@ RenderRequest:
 ノードは要求に応じて必要な入力時刻・領域を返す。出力ポートは Color / Mask を初期実装し、Depth / MotionVector / Normal は将来の型として境界を確保する。
 値の評価と GPU コマンド発行を分離する。純粋モデル層は `wgpu::Texture` や `AVFrame` を保持しない。
 
+NLE-001 の `RenderTarget::Composition / Sequence` は `render.frame` / `render.sequence` の両方で使う。Sequence を ClipId による独立 instance と active_range を持つ実行用 Composition に lower し、既存 Scene IR / DAG で track の下→上に合成する。空白区間は透明。保存文書の Composition を追加・変更せず、snapshot の owned Project に元の Sequence と全配置を固定する。Sequence の working_space が profile の正本で、復元 snapshot の不一致は拒否する。CPU-reference は明示指定し、GPU の暗黙 fallback はない。画像連番には音声を含めず、音声 Bus は service の `mix_sequence_audio` へ明示入力する。Asset / Generator 動画 Clip、clip effects、Sequence A/V mux は後続範囲。[ADR-0051](../adr/0051-nle-placement-and-retime.md)、[検証記録](../testing/nle-001.md) を参照。
+
 render は Scene IR と評価値を受け取り、具象 backend の実装を上位から渡された契約越しに呼ぶ。コード依存の向きは [ADR-0043](../adr/0043-semantic-dependencies-and-units.md) に従う。出力領域は左上原点の画素単位で、画素 `(i, j)` の中心は `(i+0.5, j+0.5)`。設計単位 `design_px` と区別する。
 
 必要機能は要求と依存グラフから導出し、`required_features` と合わせて固定 snapshot の構造・意味の版を検証する。必要な未知機能・意味の版があれば最終レンダーを `UNSUPPORTED_FEATURE` で拒否する。プレビューの警告付き代替結果は最終結果・キャッシュと区別する（[ADR-0045](../adr/0045-snapshot-compatibility-boundaries.md)）。
@@ -73,7 +75,9 @@ OpenFX の入力領域 / 必要フレームの問い合わせに似た契約を�
 
 ## 基本エフェクト
 
-M2 で drop shadow と gaussian blur を実装する（FX-001）。エフェクトは必要な入力領域（ROI の halo）を宣言し、結果は visual_bounds に反映する。エフェクトのパラメーターは Property 基盤に乗せる。
+FX-001 は `SceneNode.effects` の順序付き stack と `DagNode::Effect` を実装する。sigma / offset / color / opacity はノード所有 Property で、評価済み `ResolvedEffect` を Scene IR に保持する。blur はローカル `design_px` の sigma を変換・出力倍率で画素へ写し、`radius = ceil(3σ)` の正規化 Gaussian を水平・垂直に畳み込む。透明 edge mode、内部線形 premultiplied RGBA16F と明示した binary16 RNE 面境界（CPU oracle も同じ丸め）を使い、shadow は blurred source alpha にタグ付き straight 色・opacity を掛けて source の下へ合成する。等方変換に対応し、正の sigma に対する非一様変換は型付き未対応。
+
+`PixelEffect::required_input` が output → input ROI を宣言し、DAG の逆順で Group / mask / 共有入力へ union を伝播する。初期 executor は必要領域の union を元の画素格子で描画し、要求画素へ crop する。`RenderDag::bounds()` の ink / visual は変換と離散 halo を含む output pixel bounds。effect params・意味版・upstream identities・ROI・色・backend namespace を cache key に含める。metadata は effect id ごとの意味版を固定する。GPU / golden の採用検証は [FX-001 の検証記録](../testing/fx-001.md) に分けて記録する。
 
 ## 高解像度
 
@@ -140,7 +144,7 @@ M1 / Metal の追加実測では、wgpu 30.0.1 の同一 MTLDevice による IOS
 - fill は Nonzero / Evenodd。開いた contour も fill では暗黙に閉じる。水平辺は winding に寄与せず、Y crossing は半開区間、cross product の符号は厳密な正負で判定する。点が辺上にある場合も同じ判定規約を使う。
 - stroke は miter / bevel / round、butt / square / round に対応する。共通の CPU 展開で中央線の矩形・接合三角形・円を生成し、GPU へ同じ領域を渡す。miter limit（既定 4）を越えた接合は bevel。閉じる辺は `Contour.closed` のときだけ stroke に含める。幅 0 は無被覆。幾何定義・退化処理は [04 章の VEC-003 規約](04-vector-text-layout.md#vec-003-の実装規約) を参照。dash・stroke alignment は未対応。
 - fill と stroke は別々に coverage を resolve し、stroke を fill の上に source-over する。単色または線形 / 放射 gradient の各 stop は sRGB decode → Rec.709 / Rec.2020 原色変換 → premultiply の順で処理する。各サンプル位置の線形 premultiplied paint を被覆に応じて蓄積・平均する。coverage に伝達関数を適用しない。RGBA8 の色付き raster を経由しない。
-- `render_scene_reference` は同じサンプル配置・辺判定・stroke・描画順の CPU 参照。CPU は binary16 丸めを行わない。AA は画素面積の厳密積分ではなく、この版付きサンプリング契約。辺を比較から除外しない。GPU の各中間面は RGBA16F。
+- `render_scene_reference` は同じサンプル配置・辺判定・stroke・描画順の CPU 参照。coverage の CPU は binary16 丸めを行わない（FX-001 の effect 面境界は別に明示した RNE を行う）。AA は画素面積の厳密積分ではなく、この版付きサンプリング契約。辺を比較から除外しない。GPU の各中間面は RGBA16F。
 
 ### Group、mask、外部出力
 
@@ -188,7 +192,7 @@ Shape の単色 / 線形・放射 gradient fill / stroke と miter / bevel / rou
 
 現行文書型には matte 欄がないため `MatteBinding` を snapshot の明示レンダー入力とする。source / matte とも stable SceneKey。matte は表示 root / children から除外し、`visible = true` の場合だけ表示する。source ごとの binding は一つ、共有 matte の DAG は再利用する。欠落・非アクティブ参照・containment / matte を合わせた循環は失敗する。
 
-scene 1,024 node、DAG 4,096 node、containment / matte recursion 24、出力 16,777,216 pixel の保守的上限を設ける。backend は GPU-002 の 1,024 draw node・32 depth・65,536 edge・512 MiB 面予算をさらに適用し、限界を超えた要求はエラーにする。全画面合成であり、ROI tiling・GPU texture cache・資源 pool・性能保証は未実装。CACHE-001 のインメモリ cache は下記の範囲で実装した。
+scene 1,024 node、DAG 4,096 node、containment / matte recursion 24、出力 16,777,216 pixel の保守的上限を設ける。backend は GPU-002 の 1,024 draw node・32 depth・65,536 edge・512 MiB 面予算をさらに適用し、限界を超えた要求はエラーにする。INTEGRATION-001 / [ADR-0053](../adr/0053-integration-evaluated-queries-and-render-tiles.md) で幅または高さが512 pixelsを超える出力を最大512×512のtileへ分け、元画素格子と既存effect ROI haloを保って同じbackendで実行する。metadataは元のregion、最終linear / display面は全画面のまま。tile / haloの予算は維持し、巨大halo・streaming export・GPU texture cache・資源pool・性能保証は未実装。CACHE-001 のインメモリ cache は下記の範囲で実装した。
 
 GPU adapter は同じ lowering 済み DrawScene について `render_scene` と `render_scene_output` を各一回呼ぶ。両経路とも合成・mask・色変換を GPU 上で行い、それぞれ image と validation status を readback する。CPU へ持ち帰った線形画素を出力変換する GPU 名義の経路ではない。二回の描画を統合する最適化と renderer API での転送統計の集約は後続課題。
 
@@ -207,7 +211,7 @@ RGBA16F の各 component は有限、alpha は `[0,1]`、RGB の絶対値は 65,
 
 `FrameMetadata` の必須項目は次のとおり。
 
-- `schema_version` / `snapshot_schema_version` / `project_schema_version`、`snapshot_content_hash`、元の `revision`（10進文字列）、選択 `composition`。
+- `schema_version` / `snapshot_schema_version` / `project_schema_version`、`snapshot_content_hash`、元の `revision`（10進文字列）、選択 `target`。互換フィールド `composition` は Sequence の場合、lower した実行用 root の ID。
 - `semantic_versions`（document / interpolation / time_map / layout / vector / color / coverage / stroke_geometry / gradient_interpolation）、`font_locks`（family / PostScript 名 / hash / face index）。
 - 正規化有理数 `time`（num / den は10進文字列）、連番時の `frame_index`（10進文字列）と `sequence_number`。任意時刻の still では後二項目は null。
 - `design_extent`、`region`（origin / extent / pixels）、2×3 の `design_to_pixel`、`working_space`、`flatten_tolerance_px`。

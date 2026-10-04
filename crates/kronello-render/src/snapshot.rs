@@ -1,8 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use kronello_eval::{
-    DependencyDeclarations, DependencyGraph, EvaluationSnapshot, ReferenceBindings,
-};
+use kronello_eval::{DependencyGraph, EvaluationSnapshot, ReferenceBindings};
 use kronello_model::*;
 use kronello_text::{FontData, LayoutResult};
 use kronello_time::Time;
@@ -18,7 +16,7 @@ pub const COVERAGE_VERSION: &str = "vec003-grid4-v2";
 pub const STROKE_GEOMETRY_VERSION: &str = "vec003-centered-stroke-v1";
 pub const GRADIENT_INTERPOLATION_VERSION: &str = "vec003-linear-premultiplied-pad-v1";
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SemanticVersions {
     pub document: u32,
@@ -30,6 +28,7 @@ pub struct SemanticVersions {
     pub coverage: String,
     pub stroke_geometry: String,
     pub gradient_interpolation: String,
+    pub effects: BTreeMap<String, u32>,
 }
 impl SemanticVersions {
     /// Pins explicitly at snapshot creation, never at execution or resume.
@@ -44,11 +43,15 @@ impl SemanticVersions {
             coverage: COVERAGE_VERSION.into(),
             stroke_geometry: STROKE_GEOMETRY_VERSION.into(),
             gradient_interpolation: GRADIENT_INTERPOLATION_VERSION.into(),
+            effects: BTreeMap::from([
+                (GAUSSIAN_BLUR_ID.into(), EFFECT_VERSION),
+                (DROP_SHADOW_ID.into(), EFFECT_VERSION),
+            ]),
         }
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RenderProfile {
     pub working_space: ColorSpace,
@@ -72,6 +75,8 @@ pub struct RenderSnapshot {
     schema_version: u32,
     project: Project,
     composition: CompositionId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    sequence: Option<SequenceId>,
     revision: u64,
     semantic_versions: SemanticVersions,
     profile: RenderProfile,
@@ -128,6 +133,62 @@ impl RenderSnapshot {
             vec![],
         )
     }
+    pub fn for_target(
+        project: &Project,
+        target: crate::RenderTarget,
+        revision: u64,
+        mut profile: RenderProfile,
+    ) -> Result<Self, RenderError> {
+        match target {
+            crate::RenderTarget::Composition { composition } => {
+                Self::new(project, composition, revision, profile)
+            }
+            crate::RenderTarget::Sequence { sequence } => {
+                let root = crate::sequence::lower_sequence(project, sequence)?;
+                let source = project
+                    .sequences
+                    .iter()
+                    .find_map(|s| match s {
+                        DocumentObject::Known(s) if s.id == sequence => Some(s),
+                        _ => None,
+                    })
+                    .unwrap();
+                profile.working_space = source.working_space;
+                let mut value = Self {
+                    schema_version: SNAPSHOT_SCHEMA_VERSION,
+                    project: project.clone(),
+                    composition: root.id,
+                    sequence: Some(sequence),
+                    revision,
+                    semantic_versions: SemanticVersions::current(project.semantic_version),
+                    profile,
+                    mattes: vec![],
+                    font_locks: vec![],
+                };
+                value.validate()?;
+                let definitions = value.definitions()?;
+                let mut locks = BTreeSet::new();
+                for c in definitions {
+                    for n in c.nodes {
+                        if let NodeKind::Text { content_ref } = n.kind {
+                            let text =
+                                content(&project.texts, content_ref.as_uuid(), |t| t.id.as_uuid())?
+                                    .ok_or(TextError::MissingContent { id: content_ref })?;
+                            locks.extend(text.styles.iter().map(|s| s.font.clone()));
+                        }
+                    }
+                }
+                value.font_locks = locks.into_iter().collect();
+                Ok(value)
+            }
+        }
+    }
+    pub fn target(&self) -> crate::RenderTarget {
+        match self.sequence {
+            Some(sequence) => crate::RenderTarget::Sequence { sequence },
+            None => self.composition.into(),
+        }
+    }
     pub fn with_contract(
         project: &Project,
         composition: CompositionId,
@@ -140,6 +201,7 @@ impl RenderSnapshot {
             schema_version: SNAPSHOT_SCHEMA_VERSION,
             project: project.clone(),
             composition,
+            sequence: None,
             revision,
             semantic_versions,
             profile,
@@ -229,6 +291,33 @@ impl RenderSnapshot {
                 "working space must be linear and flatten tolerance positive".into(),
             ));
         }
+        if let Some(id) = self.sequence {
+            if self.composition.as_uuid() != id.as_uuid() {
+                return Err(RenderError::InvalidInput("sequence target mismatch".into()));
+            }
+            let root = crate::sequence::lower_sequence(&self.project, id)?;
+            let sequence = self
+                .project
+                .sequences
+                .iter()
+                .find_map(|s| match s {
+                    DocumentObject::Known(s) if s.id == id => Some(s),
+                    _ => None,
+                })
+                .expect("lowering validated the sequence target");
+            if self.profile.working_space != sequence.working_space {
+                return Err(RenderError::InvalidInput(
+                    "sequence working space mismatch".into(),
+                ));
+            }
+            for node in root.nodes {
+                if let NodeKind::CompositionInstance(i) = node.kind {
+                    kronello_template::validate_reachable(&self.project, i.definition_ref)?;
+                }
+            }
+        } else {
+            kronello_template::validate_reachable(&self.project, self.composition)?;
+        }
         self.definitions()?;
         Ok(())
     }
@@ -245,8 +334,14 @@ impl RenderSnapshot {
                     "composition budget exceeded".into(),
                 ));
             }
-            let c = content(&self.project.compositions, id.as_uuid(), |c| c.id.as_uuid())?
-                .ok_or(kronello_eval::EvaluationError::CompositionNotFound(id))?;
+            let lowered;
+            let c = if let Some(sequence) = self.sequence.filter(|_| id == self.composition) {
+                lowered = crate::sequence::lower_sequence(&self.project, sequence)?;
+                &lowered
+            } else {
+                content(&self.project.compositions, id.as_uuid(), |c| c.id.as_uuid())?
+                    .ok_or(kronello_eval::EvaluationError::CompositionNotFound(id))?
+            };
             for node in &c.nodes {
                 if let NodeKind::CompositionInstance(i) = &node.kind {
                     pending.push(i.definition_ref);
@@ -293,6 +388,10 @@ pub struct SceneNodeIr {
     pub parent: Option<SceneKey>,
     pub world_transform: kronello_eval::Affine2,
     pub opacity: f64,
+    pub effects: Vec<ResolvedEffect>,
+    /// Final node values, including template and layout inputs.
+    pub properties: BTreeMap<PropertyId, Value>,
+    pub text: Option<String>,
     pub content: SceneContent,
     pub layout_content_hash: Option<String>,
 }
@@ -363,7 +462,12 @@ pub fn build_scene_ir_with_cache(
         curves.push(curve.clone());
     }
     let refs = ReferenceBindings::new();
-    let deps = DependencyDeclarations::new();
+    let mut templates = crate::template::TemplateRuntime::compile(
+        &snapshot.project,
+        &definitions,
+        snapshot.composition,
+    )?;
+    let deps = templates.dependencies.clone();
     let graph = DependencyGraph::compile(
         EvaluationSnapshot {
             compositions: &definitions,
@@ -375,11 +479,16 @@ pub fn build_scene_ir_with_cache(
         },
         snapshot.composition,
     )?;
+    templates.layout_inputs(&snapshot.project, &definitions, &graph, time, fonts, cache)?;
     let identity = snapshot.evaluation_content_hash()?;
     let evaluated = graph.evaluate_scene_with_properties(time, &mut |keys, time| {
-        keys.iter()
-            .map(|key| Ok((key.clone(), cache.evaluate(&graph, &identity, key, time)?)))
-            .collect()
+        if snapshot.project.template_instances.is_empty() {
+            keys.iter()
+                .map(|key| Ok((key.clone(), cache.evaluate(&graph, &identity, key, time)?)))
+                .collect()
+        } else {
+            graph.evaluate_properties_with_inputs(keys, time, &templates.inputs)
+        }
     })?;
     if evaluated.nodes.len() > 1024 {
         return Err(RenderError::UnsupportedFeature(
@@ -410,7 +519,21 @@ pub fn build_scene_ir_with_cache(
             .iter()
             .find(|v| v.id == n.key.node)
             .expect("evaluated node");
+        if authored.effects.len() > 16 {
+            return Err(EffectError::StackBudget.into());
+        }
+        let effects = authored
+            .effects
+            .iter()
+            .map(|e| {
+                let d = e.definition()?;
+                d.validate(&authored.properties, &registry)?;
+                Ok(d.resolve(&values)?)
+            })
+            .collect::<Result<Vec<_>, RenderError>>()?;
         let mut layout_content_hash = None;
+        let properties = values.clone();
+        let mut evaluated_text = None;
         let content = match n.kind {
             NodeKind::Shape { content_ref } => {
                 let shape = content(&snapshot.project.shapes, content_ref.as_uuid(), |s| {
@@ -430,10 +553,13 @@ pub fn build_scene_ir_with_cache(
                 })?
                 .ok_or(TextError::MissingContent { id: content_ref })?;
                 text.validate(&authored.properties, &registry)?;
-                let resolved = text.resolve(&values)?;
+                let mut resolved = text.resolve(&values)?;
+                templates.text_override(&n.key, &mut resolved)?;
+                evaluated_text = Some(resolved.text.clone());
                 layout_content_hash = Some(crate::layout_content_hash(&resolved)?);
                 used_fonts.extend(resolved.styles.iter().map(|s| s.font.clone()));
-                SceneContent::Text(cache.layout(&resolved, fonts)?)
+                let layout = cache.layout(&resolved, fonts)?;
+                SceneContent::Text(layout)
             }
             _ => SceneContent::Empty,
         };
@@ -442,6 +568,9 @@ pub fn build_scene_ir_with_cache(
             parent: n.containment_parent.as_ref().map(Into::into),
             world_transform: n.world_transform,
             opacity: n.transform.opacity,
+            effects,
+            properties,
+            text: evaluated_text,
             content,
             layout_content_hash,
         });
@@ -463,7 +592,11 @@ pub fn build_scene_ir_with_cache(
 
 pub fn render_registry() -> SchemaRegistry {
     let mut registry = SchemaRegistry::with_builtin();
-    for descriptor in shape_descriptors().into_iter().chain(text_descriptors()) {
+    for descriptor in shape_descriptors()
+        .into_iter()
+        .chain(text_descriptors())
+        .chain(effect_descriptors())
+    {
         registry
             .register(descriptor)
             .expect("distinct built-in render descriptors");

@@ -61,8 +61,13 @@
 | [0044](0044-color-and-alpha-contracts.md) | 作業用線形色と alpha の入出力契約を固定する | 採用 | 2026-10-03 |
 | [0045](0045-snapshot-compatibility-boundaries.md) | 保存・意味・実行能力の互換性を分けて判定する | 採用 | 2026-10-03 |
 | [0046](0046-store-format-and-location-policy.md) | 保存の外枠・安全モード判定・履歴警告を固定する | 採用 | 2026-10-03 |
-
 | [0047](0047-apple-silicon-metal-golden.md) | GPU golden は Apple Silicon + Metal の共通基準で比較する | 採用 | 2026-10-03 |
+| [0048](0048-media-native-build-and-asset-verification.md) | FFmpeg ABI 境界・同梱ビルド・素材検証を固定する | 採用 | 2026-10-03 |
+| [0049](0049-audio-bus-timing-and-codec.md) | 音声 Bus・サンプル格子・PCM24 の書き出しを固定する | 採用 | 2026-10-04 |
+| [0050](0050-fixed-job-execution-and-publication.md) | 固定ジョブ入力・実行 lease・成果物確定を共有 service で扱う | 採用 | 2026-10-04 |
+| [0051](0051-nle-placement-and-retime.md) | Sequence の配置・合成順序と三つの時間編集を固定する | 採用 | 2026-10-04 |
+| [0052](0052-snapshot-policy-evaluation.md) | サイズ閾値による追加 snapshot の既定採用を見送る | 採用 | 2026-10-04 |
+| [0053](0053-integration-evaluated-queries-and-render-tiles.md) | 縦断デモの評価 query と大解像度の tile 実行 | 採用 | 2026-10-04 |
 
 ## 追加と変更の規則
 

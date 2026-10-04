@@ -21,6 +21,13 @@ use thiserror::Error;
 /// exact (InstancePath, NodeId, PropertyId) key without synthesizing identities.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum RuntimePropertyKey {
+    /// Upper compiler supplies a bounds-derived Vec2 for this consumer.
+    /// The graph declares text inputs -> layout value -> consumer property.
+    LayoutValue {
+        instance_path: InstancePath,
+        text: kronello_model::NodeId,
+        consumer: PropertyId,
+    },
     Node(PropertyKey),
     Composition {
         instance_path: InstancePath,
@@ -32,6 +39,7 @@ impl RuntimePropertyKey {
     pub fn instance_path(&self) -> &InstancePath {
         match self {
             Self::Node(key) => &key.instance_path,
+            Self::LayoutValue { instance_path, .. } => instance_path,
             Self::Composition { instance_path, .. } => instance_path,
         }
     }
@@ -50,6 +58,8 @@ pub enum EvaluationError {
     CompositionNotFound(CompositionId),
     #[error("duplicate curve ID: {0}")]
     DuplicateCurveId(kronello_model::CurveId),
+    #[error("declared layout dependency input is missing: {0:?}")]
+    MissingLayoutInput(RuntimePropertyKey),
     #[error("property not found: {0:?}")]
     PropertyNotFound(RuntimePropertyKey),
     /// A closed path: the final key repeats the first. Each consecutive pair
@@ -96,3 +106,6 @@ impl EvaluationError {
         }
     }
 }
+
+mod sequence;
+pub use sequence::{EvaluatedClip, SequenceEvaluationError, evaluate_sequence};

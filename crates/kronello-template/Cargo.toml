@@ -1,0 +1,19 @@
+[package]
+name = "kronello-template"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+[lints]
+workspace = true
+[dependencies]
+kronello-model = { path = "../kronello-model" }
+kronello-time = { path = "../kronello-time" }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+sha2 = "0.10"
+thiserror = "2"
+uuid = "1"
+[dev-dependencies]
+kronello-animation = { path = "../kronello-animation" }

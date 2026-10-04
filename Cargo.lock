@@ -808,16 +808,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "kronello-audio"
+version = "0.0.0"
+dependencies = [
+ "kronello-model",
+ "kronello-time",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
 name = "kronello-cli"
 version = "0.0.0"
 dependencies = [
  "jsonschema",
+ "kronello-jobs",
  "kronello-model",
  "kronello-render",
  "kronello-service",
  "kronello-store",
  "kronello-testkit",
+ "nix",
  "png",
+ "rusqlite",
  "serde_json",
  "sha2",
  "tempfile",
@@ -830,6 +843,7 @@ dependencies = [
  "kronello-animation",
  "kronello-model",
  "kronello-time",
+ "serde_json",
  "thiserror",
 ]
 
@@ -868,6 +882,56 @@ dependencies = [
 ]
 
 [[package]]
+name = "kronello-jobs"
+version = "0.0.0"
+dependencies = [
+ "directories",
+ "nix",
+ "rusqlite",
+ "rustix",
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror",
+ "uuid",
+]
+
+[[package]]
+name = "kronello-mcp"
+version = "0.0.0"
+dependencies = [
+ "jsonschema",
+ "kronello-jobs",
+ "kronello-service",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "kronello-media"
+version = "0.0.0"
+dependencies = [
+ "cc",
+ "kronello-audio",
+ "kronello-gpu",
+ "kronello-model",
+ "kronello-render",
+ "kronello-text",
+ "kronello-time",
+ "pkg-config",
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror",
+ "uuid",
+]
+
+[[package]]
 name = "kronello-model"
 version = "0.0.0"
 dependencies = [
@@ -888,11 +952,13 @@ dependencies = [
  "kronello-eval",
  "kronello-gpu",
  "kronello-model",
+ "kronello-template",
  "kronello-testkit",
  "kronello-text",
  "kronello-time",
  "kronello-vector",
  "png",
+ "schemars",
  "serde",
  "serde_json",
  "sha2",
@@ -905,12 +971,19 @@ dependencies = [
 name = "kronello-service"
 version = "0.0.0"
 dependencies = [
+ "jsonschema",
+ "kronello-audio",
+ "kronello-eval",
  "kronello-gpu",
+ "kronello-jobs",
+ "kronello-media",
  "kronello-model",
  "kronello-render",
  "kronello-store",
+ "kronello-template",
  "kronello-text",
  "kronello-time",
+ "schemars",
  "serde",
  "serde_json",
  "sha2",
@@ -928,10 +1001,24 @@ dependencies = [
  "kronello-time",
  "nix",
  "rusqlite",
+ "schemars",
  "serde",
  "serde_json",
  "sha2",
  "tempfile",
+ "thiserror",
+ "uuid",
+]
+
+[[package]]
+name = "kronello-template"
+version = "0.0.0"
+dependencies = [
+ "kronello-animation",
+ "kronello-model",
+ "kronello-time",
+ "serde_json",
+ "sha2",
  "thiserror",
  "uuid",
 ]

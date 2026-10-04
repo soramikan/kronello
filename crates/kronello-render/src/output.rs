@@ -18,7 +18,7 @@ pub struct FrameRequest {
     pub region: OutputRegion,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ImageFormat {
     pub color_space: ColorSpace,
@@ -31,7 +31,7 @@ pub struct ImageFormat {
     pub byte_order: String,
     pub clipping: String,
 }
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FrameMetadata {
     pub schema_version: u32,
@@ -40,6 +40,7 @@ pub struct FrameMetadata {
     pub snapshot_content_hash: String,
     pub revision: String,
     pub composition: CompositionId,
+    pub target: crate::RenderTarget,
     pub semantic_versions: SemanticVersions,
     pub font_locks: Vec<FontRef>,
     pub time: Time,
@@ -85,9 +86,7 @@ pub fn render_frame_with_cache(
 ) -> Result<RenderedFrame, RenderError> {
     request.region.validate()?;
     let scene = crate::build_scene_ir_with_cache(snapshot, request.time, fonts, cache)?;
-    let dag =
-        crate::build_render_dag_with_cache(&scene, snapshot.profile(), request.region, cache)?;
-    let pixels = backend.execute_with_cache(&dag, cache)?;
+    let pixels = execute_tiles(&scene, snapshot.profile(), request.region, backend, cache)?;
     let count = u64::from(request.region.pixels[0]) * u64::from(request.region.pixels[1]);
     if pixels.linear.len() as u64 != count || pixels.display.len() as u64 != count {
         return Err(RenderError::InvalidInput(
@@ -104,6 +103,7 @@ pub fn render_frame_with_cache(
         snapshot_content_hash: snapshot.content_hash()?,
         revision: snapshot.revision().to_string(),
         composition: snapshot.composition(),
+        target: snapshot.target(),
         semantic_versions: snapshot.semantic_versions().clone(),
         font_locks: snapshot.font_locks().to_vec(),
         time: request.time,
@@ -139,6 +139,66 @@ pub fn render_frame_with_cache(
         backend: backend.name().into(),
     };
     Ok(RenderedFrame { pixels, metadata })
+}
+
+/// Bound intermediate surfaces while retaining the output's absolute sample
+/// lattice. Each tile uses the existing backwards ROI/halo compiler and the
+/// same selected backend; failures never retry on another execution path.
+fn execute_tiles(
+    scene: &crate::SceneIr,
+    profile: crate::RenderProfile,
+    region: OutputRegion,
+    backend: &dyn RenderBackend,
+    cache: &mut crate::RenderCache,
+) -> Result<BackendFrame, RenderError> {
+    const EDGE: u32 = 512;
+    if region.pixels.iter().all(|v| *v <= EDGE) {
+        let dag = crate::build_render_dag_with_cache(scene, profile, region, cache)?;
+        return backend.execute_with_cache(&dag, cache);
+    }
+    let count = region.pixels[0] as usize * region.pixels[1] as usize;
+    let mut frame = BackendFrame {
+        linear: vec![[0.0; 4]; count],
+        display: vec![[0.0; 4]; count],
+    };
+    let units = [0, 1].map(|axis| region.extent[axis] / f64::from(region.pixels[axis]));
+    for y in (0..region.pixels[1]).step_by(EDGE as usize) {
+        for x in (0..region.pixels[0]).step_by(EDGE as usize) {
+            let pixels = [
+                EDGE.min(region.pixels[0] - x),
+                EDGE.min(region.pixels[1] - y),
+            ];
+            let tile = OutputRegion {
+                origin: [
+                    region.origin[0] + f64::from(x) * units[0],
+                    region.origin[1] + f64::from(y) * units[1],
+                ],
+                extent: [
+                    f64::from(pixels[0]) * units[0],
+                    f64::from(pixels[1]) * units[1],
+                ],
+                pixels,
+            };
+            let dag = crate::build_render_dag_with_cache(scene, profile, tile, cache)?;
+            let output = backend.execute_with_cache(&dag, cache)?;
+            let tile_count = pixels[0] as usize * pixels[1] as usize;
+            if output.linear.len() != tile_count || output.display.len() != tile_count {
+                return Err(RenderError::InvalidInput(
+                    "backend returned wrong tile pixel count".into(),
+                ));
+            }
+            for row in 0..pixels[1] as usize {
+                let start = (y as usize + row) * region.pixels[0] as usize + x as usize;
+                let source = row * pixels[0] as usize;
+                let width = pixels[0] as usize;
+                frame.linear[start..start + width]
+                    .copy_from_slice(&output.linear[source..source + width]);
+                frame.display[start..start + width]
+                    .copy_from_slice(&output.display[source..source + width]);
+            }
+        }
+    }
+    Ok(frame)
 }
 
 fn validate_pixels(pixels: &[[f32; 4]], internal: bool) -> Result<(), RenderError> {
@@ -196,14 +256,14 @@ pub struct SequenceRequest {
     pub frame_rate: FrameRate,
     pub region: OutputRegion,
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct OutputFile {
     pub name: String,
     pub bytes: u64,
     pub sha256: String,
 }
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SequenceFrame {
     pub metadata: FrameMetadata,
@@ -211,7 +271,7 @@ pub struct SequenceFrame {
     pub display: OutputFile,
     pub metadata_file: String,
 }
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SequenceMetadata {
     pub schema_version: u32,
@@ -270,7 +330,7 @@ fn write_artifact(directory: &Path, name: String, bytes: &[u8]) -> Result<Output
 /// Creates an exclusively new output directory. Existing outputs are refused.
 /// All files are rendered into staging; the sequence manifest is published last.
 /// An error rolls back this invocation's new directory, never existing output.
-/// This is synchronous offline export; job cancellation/resume is a later task.
+/// Synchronous offline export; checkpoint callers can cancel between frames.
 pub fn render_sequence(
     snapshot: &RenderSnapshot,
     fonts: &[FontData<'_>],
@@ -296,10 +356,53 @@ pub fn render_sequence_with_cache(
     directory: impl AsRef<Path>,
     cache: &mut crate::RenderCache,
 ) -> Result<SequenceMetadata, RenderError> {
+    render_sequence_controlled(
+        snapshot,
+        fonts,
+        backend,
+        request,
+        directory.as_ref(),
+        (cache, &mut |_| Ok(())),
+    )
+}
+
+/// Checkpoints before every frame and before publishing the sequence manifest.
+pub fn render_sequence_with_checkpoint(
+    snapshot: &RenderSnapshot,
+    fonts: &[FontData<'_>],
+    backend: &dyn RenderBackend,
+    request: SequenceRequest,
+    directory: impl AsRef<Path>,
+    checkpoint: &mut dyn FnMut(u64) -> Result<(), RenderError>,
+) -> Result<SequenceMetadata, RenderError> {
+    render_sequence_controlled(
+        snapshot,
+        fonts,
+        backend,
+        request,
+        directory.as_ref(),
+        (
+            &mut crate::RenderCache::new(crate::CacheConfig::disabled()),
+            checkpoint,
+        ),
+    )
+}
+
+fn render_sequence_controlled(
+    snapshot: &RenderSnapshot,
+    fonts: &[FontData<'_>],
+    backend: &dyn RenderBackend,
+    request: SequenceRequest,
+    directory: &Path,
+    control: (
+        &mut crate::RenderCache,
+        &mut dyn FnMut(u64) -> Result<(), RenderError>,
+    ),
+) -> Result<SequenceMetadata, RenderError> {
+    let (cache, checkpoint) = control;
     snapshot.validate()?;
     request.region.validate()?;
     let samples = frame_samples(request.range, request.frame_rate)?;
-    let directory = directory.as_ref();
     fs::create_dir(directory)?;
     let mut guard = OutputGuard {
         path: directory,
@@ -310,6 +413,7 @@ pub fn render_sequence_with_cache(
         .tempdir_in(directory)?;
     let mut frames = Vec::with_capacity(samples.len());
     for (ordinal, (index, time)) in samples.into_iter().enumerate() {
+        checkpoint(ordinal as u64)?;
         let mut frame = render_frame_with_cache(
             snapshot,
             fonts,
@@ -345,6 +449,7 @@ pub fn render_sequence_with_cache(
             metadata_file,
         });
     }
+    checkpoint(frames.len() as u64)?;
     let metadata = SequenceMetadata {
         schema_version: 1,
         range: request.range,

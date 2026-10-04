@@ -16,13 +16,14 @@ QA-001 の実装: fixture の生成・取得・台帳検証、`kronello-testkit`
 | 線形 HDR RGBA16F | linear Rec.2020、premultiplied、little-endian binary16、4x1 | 負 RGB、1 超、alpha=0、微小 alpha の解析値。tone mapping を行わない |
 | 48 kHz stereo WAV | PCM16、0.1 秒、固定整数表の 1 kHz sine、右 channel 切替 | 固定 byte hash、再生成一致、代表 sample 値 |
 | CFR/VFR NUT | 16x16、rawvideo、6 frames | ffprobe の整数 PTS × 有理数 time_base、frame 数、rate、format、全 frame decode |
+| B-frame NUT | LGPL native MPEG-4、16x16、6 frames、24 fps、2 B-frames | 整数 PTS は 1/24〜6/24、B picture と DTS reorder、全 frame decode |
 | PQ/HLG Matroska | 16x16、FFV1、10bit limited-range ramp、2 frames | BT.2020 / transfer / matrix / range と全 frame decode |
 
 PQ/HLG ramp は符号値と metadata の入力 fixture であり、203 cd/m² の輝度校正、HDR 表示器、tone mapping の検証ではない。線形 HDR データの 1 は [ADR-0044](../adr/0044-color-and-alpha-contracts.md) の作業値を表す。
 
 ## 再現手順
 
-Python 3.10 以上と FFmpeg / ffprobe が必要。使うのは rawvideo、FFV1、PCM と標準 filter だけで、GPL codec を必要としない。開発環境でインストールされた FFmpeg の本体・ライブラリは fixture に含めず、配布 FFmpeg の LGPL build 検証（MEDIA-001）とは分ける。
+Python 3.10 以上と FFmpeg / ffprobe が必要。使うのは rawvideo、FFV1、native MPEG-4、PCM と標準 filter だけで、GPL codec を必要としない。開発環境でインストールされた FFmpeg の本体・ライブラリは fixture に含めず、配布 FFmpeg の LGPL build 検証（MEDIA-001）とは分ける。
 
 ```sh
 python3 scripts/fetch_fixtures.py

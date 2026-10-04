@@ -16,6 +16,9 @@
     "rec2020-conversion",
     "hdr-no-clamp",
     "alpha-boundary",
+    "fx-gaussian-alpha",
+    "fx-shadow-srgb",
+    "fx-shadow-rec2020",
     "isolated-nested-overlap",
     "alpha-matte-reference",
     "luma-matte-rec709",
@@ -33,5 +36,10 @@
     "srgb-output-roundtrip"
   ],
   "stroke_geometry_version": "vec003-centered-stroke-v1",
-  "gradient_interpolation_version": "vec003-linear-premultiplied-pad-v1"
+  "gradient_interpolation_version": "vec003-linear-premultiplied-pad-v1",
+  "effect_kernel_version": "fx001-separable-gaussian-transparent-rne16-v1",
+  "effect_semantic_versions": {
+    "kronello.gaussian_blur": 1,
+    "kronello.drop_shadow": 1
+  }
 }

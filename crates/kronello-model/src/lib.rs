@@ -27,8 +27,8 @@ pub use curve::{
 };
 pub use error::{JsonError, ModelError, from_json};
 pub use id::{
-    AssetId, CompositionId, CompositionInstanceId, ContentId, CurveId, DescriptorId, ExpressionId,
-    ModifierId, NodeId, PropertyId, SchemaKey,
+    AssetId, ClipId, CompositionId, CompositionInstanceId, ContentId, CurveId, DescriptorId,
+    ExpressionId, ModifierId, NodeId, PropertyId, SchemaKey, SequenceId, TrackId,
 };
 pub use property::{DescriptorRef, Modifier, Property, PropertySource, SourceResolver};
 pub use schema::{
@@ -59,3 +59,13 @@ pub use text::{
     TextDirection, TextDocument, TextError, TextRange, TextStyleSpan, text_descriptors,
     validate_text_contents,
 };
+
+mod effect;
+mod template;
+pub use effect::*;
+pub use template::*;
+mod asset;
+pub use asset::{Asset, AssetKind, AssetLocator, StreamMetadata};
+
+mod sequence;
+pub use sequence::*;

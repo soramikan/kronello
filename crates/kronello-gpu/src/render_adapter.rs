@@ -95,6 +95,10 @@ fn lower(dag: &RenderDag) -> Result<(RenderSize, DrawScene, WorkingSpace), Rende
                     .collect::<Result<_, _>>()?,
                 opacity: *opacity as f32,
             },
+            DagNode::Effect { source, effect } => DrawNode::Effect {
+                source: image(&ids, *source)?,
+                effect: effect.clone(),
+            },
             DagNode::Mask {
                 source,
                 matte,
@@ -116,7 +120,7 @@ fn lower(dag: &RenderDag) -> Result<(RenderSize, DrawScene, WorkingSpace), Rende
         scene.nodes.push(draw);
     }
     scene.validate().map_err(error)?;
-    let pixels = dag.region().pixels;
+    let pixels = dag.execution_region().pixels;
     let size = RenderSize {
         design_extent: pixels.map(|v| v as f32),
         output_resolution: pixels,
@@ -142,7 +146,7 @@ impl RenderBackend for CpuReferenceBackend {
             .iter()
             .map(|p| convert_output_reference(*p, working, DISPLAY).map_err(error))
             .collect::<Result<_, _>>()?;
-        Ok(BackendFrame { linear, display })
+        Ok(crop(dag, BackendFrame { linear, display }))
     }
     fn execute_with_cache(
         &self,
@@ -151,33 +155,41 @@ impl RenderBackend for CpuReferenceBackend {
     ) -> Result<BackendFrame, RenderError> {
         let (size, scene, working) = lower(dag)?;
         // Keep the exact lowering order; DAG indices are never cache identities.
+        let keys = kronello_render::RasterCacheKey::for_dag(dag, "cpu-reference-f32-v1")?;
         let keys: Vec<_> = dag
             .nodes()
             .iter()
-            .filter_map(|node| match node {
+            .zip(keys)
+            .filter_map(|(node, key)| match node {
                 DagNode::Geometry { .. }
                 | DagNode::TextLayout { .. }
                 | DagNode::OutputTransform { .. } => None,
-                DagNode::CoverageDraw { path, .. } => Some(
-                    kronello_render::RasterCacheKey::new(
-                        path,
-                        dag.region(),
-                        dag.working_space(),
-                        "cpu-reference-f32-v1",
-                    )
-                    .map(Some),
-                ),
-                _ => Some(Ok(None)),
+                _ => Some(key),
             })
-            .collect::<Result<_, RenderError>>()?;
-        let linear = crate::scene::render_scene_reference_with_raster(
+            .collect();
+        let cache = std::cell::RefCell::new(cache);
+        let linear = crate::scene::render_scene_reference_with_resolvers(
             size,
             &scene,
             working,
             &mut |id, path| {
-                cache.rasterize(keys[id].expect("lowered path key"), || {
-                    crate::scene::raster_path_reference(size, path, working)
-                })
+                cache
+                    .borrow_mut()
+                    .rasterize(keys[id].expect("path key"), || {
+                        crate::scene::raster_path_reference(size, path, working)
+                    })
+            },
+            &mut |id, source, effect| {
+                cache
+                    .borrow_mut()
+                    .rasterize(keys[id].expect("effect key"), || {
+                        crate::effect::apply_reference(
+                            source,
+                            size.output_resolution,
+                            effect,
+                            working,
+                        )
+                    })
             },
         )
         .map_err(error)?;
@@ -185,7 +197,7 @@ impl RenderBackend for CpuReferenceBackend {
             .iter()
             .map(|p| convert_output_reference(*p, working, DISPLAY).map_err(error))
             .collect::<Result<_, _>>()?;
-        Ok(BackendFrame { linear, display })
+        Ok(crop(dag, BackendFrame { linear, display }))
     }
 }
 impl RenderBackend for GpuContext {
@@ -204,7 +216,7 @@ impl RenderBackend for GpuContext {
             .render_scene_output(size, &scene, working, DISPLAY)
             .map_err(error)?
             .pixels;
-        Ok(BackendFrame { linear, display })
+        Ok(crop(dag, BackendFrame { linear, display }))
     }
 }
 
@@ -232,5 +244,24 @@ fn gradient(g: &kronello_model::ResolvedGradient) -> crate::GradientPaint {
                 paint: paint(s.color),
             })
             .collect(),
+    }
+}
+
+fn crop(dag: &RenderDag, frame: BackendFrame) -> BackendFrame {
+    let [x, y] = dag.crop_origin();
+    let [w, h] = dag.region().pixels;
+    let stride = dag.execution_region().pixels[0] as usize;
+    let extract = |pixels: Vec<[f32; 4]>| {
+        (0..h as usize)
+            .flat_map(|row| {
+                pixels[(row + y) * stride + x..(row + y) * stride + x + w as usize]
+                    .iter()
+                    .copied()
+            })
+            .collect()
+    };
+    BackendFrame {
+        linear: extract(frame.linear),
+        display: extract(frame.display),
     }
 }

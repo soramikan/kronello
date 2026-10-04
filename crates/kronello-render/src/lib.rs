@@ -2,8 +2,11 @@
 //! is injected through RenderBackend; this crate imports no GPU or store API.
 mod cache;
 mod dag;
+mod effect;
 mod output;
 mod snapshot;
+mod template;
+pub use effect::*;
 
 pub use cache::*;
 pub use dag::*;
@@ -17,6 +20,10 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum RenderError {
+    #[error(transparent)]
+    Sequence(#[from] kronello_model::SequenceError),
+    #[error(transparent)]
+    Template(#[from] kronello_template::TemplateError),
     #[error("UNSUPPORTED_FEATURE: {0}")]
     UnsupportedFeature(String),
     #[error("unsupported snapshot structure: {0}")]
@@ -25,6 +32,8 @@ pub enum RenderError {
     InvalidInput(String),
     #[error(transparent)]
     Evaluation(#[from] EvaluationError),
+    #[error(transparent)]
+    Effect(#[from] kronello_model::EffectError),
     #[error(transparent)]
     Shape(#[from] ShapeError),
     #[error(transparent)]
@@ -47,7 +56,10 @@ pub enum RenderError {
 impl RenderError {
     pub fn code(&self) -> &'static str {
         match self {
-            Self::UnsupportedFeature(_) => "UNSUPPORTED_FEATURE",
+            Self::Sequence(e) => e.code(),
+            Self::Template(e) => e.code(),
+            Self::Effect(kronello_model::EffectError::UnsupportedFeature)
+            | Self::UnsupportedFeature(_) => "UNSUPPORTED_FEATURE",
             Self::UnsupportedSchema(_) => "UNSUPPORTED_SCHEMA",
             Self::Evaluation(e) => e.code(),
             Self::Layout(LayoutError::MissingFont { .. }) => "ASSET_MISSING",
@@ -91,3 +103,9 @@ pub trait RenderBackend {
         self.execute(dag)
     }
 }
+
+mod media;
+pub use media::{DecodedVideoFrame, VideoDecodeBackend};
+
+mod sequence;
+pub use sequence::RenderTarget;

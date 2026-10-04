@@ -187,6 +187,16 @@
       "license": "OFL-1.1",
       "license_fixture": "noto-license",
       "purpose": "日本語組版の固定フォント。emoji/IVS 全 coverage の保証はしない。"
+    },
+    {
+      "id": "bframes",
+      "storage": "generated",
+      "path": "media/bframes.nut",
+      "recipe": "bframes",
+      "rate": "24/1",
+      "source": "scripts/fixtures.py media_command; FFmpeg testsrc2; native LGPL MPEG-4 encoder (-bf 2); NUT",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "B-frame 並べ替え、decoder drain、seek 後の presentation interval を整数 PTS で確認する。"
     }
   ]
 }

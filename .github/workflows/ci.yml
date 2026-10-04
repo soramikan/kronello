@@ -16,6 +16,19 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  windows-store:
+    name: Windows (storage processes)
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup show
+      - name: Test storage and operational example
+        run: cargo test -p kronello-store --all-targets --locked
+
   macos:
     name: macOS (Apple Silicon)
     runs-on: macos-latest
@@ -39,12 +52,12 @@ jobs:
             ~/.cargo/git/db
             target
           key: cargo-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', '**/Cargo.toml', 'Cargo.lock') }}
+      - name: Install FFmpeg development dependencies
+        run: brew list ffmpeg >/dev/null 2>&1 || brew install ffmpeg
       - name: Check formatting
         run: cargo fmt --all --check
       - name: Lint with warnings denied
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - name: Install fixture generation tools
-        run: brew list ffmpeg >/dev/null 2>&1 || brew install ffmpeg
       - name: Fetch hash-pinned test fixtures
         run: python3 scripts/fetch_fixtures.py
       - name: Generate and validate fixtures
@@ -54,6 +67,12 @@ jobs:
           python3 -m unittest discover -s scripts/tests -v
       - name: Run workspace tests
         run: cargo test --workspace --locked
+      - name: Run small CPU integration test
+        env:
+          KRONELLO_INTEGRATION_TESTS: "1"
+        run: |
+          cargo build -p kronello-cli -p kronello-mcp --locked
+          python3 -m unittest scripts.tests.test_integration_m2.IntegrationM2.test_small_cpu_reference -v
       - name: Validate backlog
         run: python3 scripts/backlog.py check
 
@@ -95,14 +114,14 @@ jobs:
             ~/.cargo/git/db
             target
           key: cargo-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', '**/Cargo.toml', 'Cargo.lock') }}
+      - name: Install FFmpeg development dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes pkg-config libavcodec-dev libavformat-dev libavutil-dev libswscale-dev ffmpeg
       - name: Check formatting
         run: cargo fmt --all --check
       - name: Lint with warnings denied
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - name: Install fixture generation tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes ffmpeg
       - name: Fetch hash-pinned test fixtures
         run: python3 scripts/fetch_fixtures.py
       - name: Generate and validate fixtures
@@ -112,5 +131,11 @@ jobs:
           python3 -m unittest discover -s scripts/tests -v
       - name: Run workspace tests
         run: cargo test --workspace --locked
+      - name: Run small CPU integration test
+        env:
+          KRONELLO_INTEGRATION_TESTS: "1"
+        run: |
+          cargo build -p kronello-cli -p kronello-mcp --locked
+          python3 -m unittest scripts.tests.test_integration_m2.IntegrationM2.test_small_cpu_reference -v
       - name: Validate backlog
         run: python3 scripts/backlog.py check

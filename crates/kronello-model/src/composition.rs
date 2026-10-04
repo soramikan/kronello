@@ -71,6 +71,8 @@ pub struct Composition {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SceneNode {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub effects: Vec<crate::Effect>,
     pub id: NodeId,
     pub kind: NodeKind,
     pub containment_parent: Option<NodeId>,

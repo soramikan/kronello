@@ -36,6 +36,7 @@ fn constant(key: &str, value: Value) -> Property {
 }
 fn node(properties: Vec<Property>) -> SceneNode {
     SceneNode {
+        effects: vec![],
         id: NodeId::new(),
         kind: NodeKind::Null,
         containment_parent: None,
@@ -822,4 +823,85 @@ fn reference_overrides_require_existing_binding_parent_scope_and_matching_units(
         graph(&defs, &[], &refs, &deps, &registry),
         Err(EvaluationError::InvalidReferenceBinding(_))
     ));
+}
+
+#[test]
+fn declared_layout_values_schedule_consumers_and_reject_reverse_wrap_cycle() {
+    let mut registry = SchemaRegistry::with_builtin();
+    for descriptor in shape_descriptors().into_iter().chain(text_descriptors()) {
+        registry.register(descriptor).unwrap();
+    }
+    let p: Project =
+        serde_json::from_str(include_str!("../../../examples/template-001.project.json")).unwrap();
+    let definitions: Vec<_> = p
+        .compositions
+        .iter()
+        .filter_map(|c| match c {
+            DocumentObject::Known(c) => Some(c.clone()),
+            _ => None,
+        })
+        .collect();
+    let curves: Vec<_> = p
+        .curves
+        .iter()
+        .filter_map(|c| match c {
+            DocumentObject::Known(c) => Some(c.clone()),
+            _ => None,
+        })
+        .collect();
+    let c = &definitions[1];
+    let text = &c.nodes[1];
+    let band = &c.nodes[0];
+    let size = node_key(InstancePath::root(), band, 0);
+    let wrap = node_key(InstancePath::root(), text, 2);
+    let layout = RuntimePropertyKey::LayoutValue {
+        instance_path: InstancePath::root(),
+        text: text.id,
+        consumer: band.properties[0].id(),
+    };
+    let deps = DependencyDeclarations::from([
+        (layout.clone(), vec![wrap.clone()]),
+        (size.clone(), vec![layout.clone()]),
+    ]);
+    let refs = ReferenceBindings::new();
+    let compile = |deps| {
+        DependencyGraph::compile(
+            EvaluationSnapshot {
+                compositions: &definitions,
+                curves: &curves,
+                registry: &registry,
+                reference_bindings: &refs,
+                dependencies: deps,
+                working_space: ColorSpace::LinearRec709,
+            },
+            c.id,
+        )
+    };
+    let graph = compile(&deps).unwrap();
+    assert_eq!(
+        graph.dependencies(&size).unwrap(),
+        &std::collections::BTreeSet::from([layout.clone()])
+    );
+    let value = vec2(44.0, 20.0);
+    let inputs = BTreeMap::from([(layout.clone(), value.clone())]);
+    assert_eq!(
+        graph
+            .evaluate_properties_with_inputs(std::slice::from_ref(&size), Time::ZERO, &inputs)
+            .unwrap()[&size],
+        value
+    );
+    assert!(matches!(
+        graph.evaluate_property(&size, Time::ZERO),
+        Err(EvaluationError::MissingLayoutInput(_))
+    ));
+    let mut reverse_deps = deps.clone();
+    reverse_deps.insert(wrap.clone(), vec![size.clone()]);
+    let error = compile(&reverse_deps).err().unwrap();
+    let EvaluationError::DependencyCycle { path } = error else {
+        panic!()
+    };
+    assert!(path.contains(&size));
+    assert!(path.contains(&wrap));
+    assert!(path.contains(&layout));
+    assert_eq!(path.first(), path.last());
 }

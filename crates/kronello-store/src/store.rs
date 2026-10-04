@@ -35,6 +35,8 @@ pub enum StoreError {
     HistoryReplayFailed { revision: Revision, reason: String },
     #[error("idempotency key already recorded")]
     IdempotencyKeyExists,
+    #[error("idempotency key reused with a different payload")]
+    IdempotencyKeyReused,
     #[error("invalid location: {0}")]
     InvalidLocation(String),
     #[error(transparent)]
@@ -56,6 +58,7 @@ impl StoreError {
             Self::SnapshotNotFound(_) => "SNAPSHOT_NOT_FOUND",
             Self::HistoryReplayFailed { .. } => "HISTORY_REPLAY_FAILED",
             Self::IdempotencyKeyExists => "IDEMPOTENCY_KEY_EXISTS",
+            Self::IdempotencyKeyReused => "IDEMPOTENCY_KEY_REUSED",
             Self::InvalidLocation(_) => "INVALID_LOCATION",
             Self::Io(_) => "IO_ERROR",
             Self::Sqlite(_) => "STORAGE_ERROR",
@@ -76,16 +79,17 @@ impl From<ProjectError> for StoreError {
 }
 
 /// Paths use object-member segments, avoiding ambiguous JSON pointer escaping.
-/// Arrays are replaced as a unit. A service can use stable IDs before preparing
-/// these storage patches; array positions are never object identities.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// An array segment selects an object by its UUID `id`, never by position.
+/// The service replaces ordered arrays (including modifiers and draw order)
+/// as a unit; only unordered model collections use member paths.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "operation", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Mutation {
     Set { path: Vec<String>, value: Value },
     Remove { path: Vec<String> },
 }
 impl Mutation {
-    fn apply(&self, document: &mut Value) -> Result<Self, StoreError> {
+    pub fn apply(&self, document: &mut Value) -> Result<Self, StoreError> {
         let path = match self {
             Self::Set { path, .. } | Self::Remove { path } => path,
         };
@@ -101,11 +105,62 @@ impl Mutation {
             ));
         }
         let mut parent = document;
-        for part in &path[..path.len() - 1] {
-            parent = parent
-                .as_object_mut()
-                .and_then(|object| object.get_mut(part))
-                .ok_or_else(|| StoreError::InvalidMutation("missing object parent".into()))?;
+        for (depth, part) in path[..path.len() - 1].iter().enumerate() {
+            parent = match parent {
+                Value::Object(object) => {
+                    // Empty optional document collections are omitted by the
+                    // public serializer. Stable member patches materialize the
+                    // collection without a whole-array inverse that could erase
+                    // a later, independent content insertion.
+                    if depth == 0
+                        && matches!(
+                            part.as_str(),
+                            "shapes" | "texts" | "templates" | "template_instances" | "sequences"
+                        )
+                        && !object.contains_key(part)
+                    {
+                        object.insert(part.clone(), Value::Array(Vec::new()));
+                    }
+                    object.get_mut(part)
+                }
+                Value::Array(array) => array
+                    .iter_mut()
+                    .find(|v| v.get("id").and_then(Value::as_str) == Some(part)),
+                _ => None,
+            }
+            .ok_or_else(|| StoreError::InvalidMutation("missing object parent".into()))?;
+        }
+        if let Value::Array(array) = parent {
+            let key = path.last().unwrap();
+            let index = array
+                .iter()
+                .position(|v| v.get("id").and_then(Value::as_str) == Some(key));
+            let previous = match self {
+                Self::Set { value, .. } => {
+                    if value.get("id").and_then(Value::as_str) != Some(key) {
+                        return Err(StoreError::InvalidMutation(
+                            "array value must match stable id".into(),
+                        ));
+                    }
+                    match index {
+                        Some(i) => Some(std::mem::replace(&mut array[i], value.clone())),
+                        None => {
+                            array.push(value.clone());
+                            None
+                        }
+                    }
+                }
+                Self::Remove { .. } => Some(array.remove(index.ok_or_else(|| {
+                    StoreError::InvalidMutation("missing removal target".into())
+                })?)),
+            };
+            return Ok(match previous {
+                Some(value) => Self::Set {
+                    path: path.clone(),
+                    value,
+                },
+                None => Self::Remove { path: path.clone() },
+            });
         }
         let object = parent
             .as_object_mut()
@@ -129,7 +184,9 @@ impl Mutation {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, schemars::JsonSchema,
+)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ChangedKey {
     Value {
@@ -157,7 +214,7 @@ pub struct Snapshot {
     pub revision: Revision,
     pub document: Project,
 }
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct Event {
     pub id: Uuid,
     pub revision: Revision,
@@ -179,6 +236,8 @@ pub struct IdempotencyRecord {
     pub key: String,
     pub payload: ApplyRequest,
     pub result: Event,
+    /// Canonical service command envelope, absent for legacy storage callers.
+    pub service_payload: Option<Value>,
 }
 
 pub struct ProjectStore {
@@ -208,6 +267,21 @@ CREATE TABLE idempotency (key TEXT PRIMARY KEY, payload TEXT NOT NULL, event_id 
 ";
 
 impl ProjectStore {
+    /// Capture the current revision without journal reconfiguration, checkpoint,
+    /// migration, or writes to the project file. SQLite supplies a consistent read.
+    pub fn read_snapshot(path: impl AsRef<Path>) -> Result<Snapshot, StoreError> {
+        let connection =
+            Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        connection.busy_timeout(Duration::from_secs(5))?;
+        connection.execute_batch("PRAGMA query_only=ON;")?;
+        let version: u32 = connection.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+        if version != INTERNAL_SCHEMA_VERSION {
+            return Err(StoreError::UnsupportedSchemaVersion(version));
+        }
+        let snapshot = read_snapshot(&connection)?;
+        snapshot.document.validate_storage()?;
+        Ok(snapshot)
+    }
     pub fn open(path: impl AsRef<Path>, options: OpenOptions) -> Result<Self, StoreError> {
         Self::open_with_detector(path, options, &SystemLocationDetector)
     }
@@ -407,7 +481,7 @@ impl ProjectStore {
             idempotency_key: None,
             undo_of: None,
         };
-        self.apply_inner(request, true)
+        self.apply_inner(request, true, None)
     }
     pub fn restore_snapshot(
         &mut self,
@@ -423,93 +497,164 @@ impl ProjectStore {
         )
     }
     pub fn apply(&mut self, request: ApplyRequest) -> Result<Event, StoreError> {
-        self.apply_inner(request, false)
+        self.apply_inner(request, false, None)
     }
-    fn apply_inner(&mut self, request: ApplyRequest, import: bool) -> Result<Event, StoreError> {
+    /// Atomically checks the service receipt before revision validation. Exact
+    /// retries return the original Event even after subsequent edits/compaction.
+    pub fn apply_with_payload(
+        &mut self,
+        request: ApplyRequest,
+        payload: Value,
+    ) -> Result<Event, StoreError> {
+        self.apply_inner(request, false, Some(payload))
+    }
+    /// Runs service validation under the same writer lock as the commit, after
+    /// receipt and revision checks. The callback receives immutable state whose
+    /// snapshot/history cannot race with apply or compact.
+    pub fn apply_with_payload_checked<E: From<StoreError>>(
+        &mut self,
+        request: ApplyRequest,
+        payload: Value,
+        check: impl FnOnce(&Snapshot, &[Event]) -> Result<(), E>,
+    ) -> Result<Event, E> {
+        self.apply_inner_checked(request, false, Some(payload), |connection, snapshot| {
+            let events = read_events_since(connection, 0)?;
+            check(snapshot, &events)
+        })
+    }
+    fn apply_inner(
+        &mut self,
+        request: ApplyRequest,
+        import: bool,
+        service_payload: Option<Value>,
+    ) -> Result<Event, StoreError> {
+        self.apply_inner_checked(request, import, service_payload, |_, _| Ok(()))
+    }
+    fn apply_inner_checked<E: From<StoreError>>(
+        &mut self,
+        request: ApplyRequest,
+        import: bool,
+        service_payload: Option<Value>,
+        check: impl FnOnce(&Connection, &Snapshot) -> Result<(), E>,
+    ) -> Result<Event, E> {
         let tx = self
             .connection
-            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(StoreError::from)?;
         let snapshot = read_snapshot(&tx)?;
-        if request.base_revision != snapshot.revision {
-            return Err(StoreError::RevisionConflict {
-                base: request.base_revision,
-                current: snapshot.revision,
-            });
+        let receipt = (|| -> Result<Option<Event>, StoreError> {
+            if let (Some(key), Some(payload)) = (&request.idempotency_key, &service_payload) {
+                let receipt: Option<(String, String)> = tx
+                    .query_row(
+                        "SELECT payload,result FROM idempotency WHERE key=?1",
+                        [key],
+                        |r| Ok((r.get(0)?, r.get(1)?)),
+                    )
+                    .optional()?;
+                if let Some((stored, result)) = receipt {
+                    let stored: Value = serde_json::from_str(&stored)?;
+                    if stored.get("service_payload") != Some(payload) {
+                        return Err(StoreError::IdempotencyKeyReused);
+                    }
+                    return Ok(Some(serde_json::from_str(&result)?));
+                }
+            }
+            if request.base_revision != snapshot.revision {
+                return Err(StoreError::RevisionConflict {
+                    base: request.base_revision,
+                    current: snapshot.revision,
+                });
+            }
+            if !import {
+                snapshot.document.ensure_editable()?;
+            }
+            if let Some(key) = &request.idempotency_key
+                && tx
+                    .query_row("SELECT 1 FROM idempotency WHERE key=?1", [key], |_| Ok(()))
+                    .optional()?
+                    .is_some()
+            {
+                return Err(StoreError::IdempotencyKeyExists);
+            }
+            Ok(None)
+        })()?;
+        if let Some(event) = receipt {
+            return Ok(event);
         }
-        if !import {
-            snapshot.document.ensure_editable()?;
-        }
-        if let Some(key) = &request.idempotency_key
-            && tx
-                .query_row("SELECT 1 FROM idempotency WHERE key=?1", [key], |_| Ok(()))
-                .optional()?
-                .is_some()
-        {
-            return Err(StoreError::IdempotencyKeyExists);
-        }
-        let mut value = serde_json::to_value(&snapshot.document)?;
-        let mut inverse = Vec::new();
-        for mutation in &request.mutations {
-            inverse.push(mutation.apply(&mut value)?);
-        }
-        inverse.reverse();
-        let document: Project = serde_json::from_str(&value.to_string())?;
-        document.validate_storage()?;
-        if !import {
-            document.ensure_editable()?;
-        }
-        let revision = snapshot
-            .revision
-            .checked_add(1)
-            .ok_or_else(|| StoreError::InvalidMutation("revision overflow".into()))?;
-        let event = Event {
-            id: Uuid::new_v4(),
-            revision,
-            session_id: request.session_id,
-            mutations: request.mutations.clone(),
-            inverse,
-            changed_keys: request.changed_keys.clone(),
-            idempotency_key: request.idempotency_key.clone(),
-            undo_of: request.undo_of,
-        };
-        let document = serde_json::to_string(&document)?;
-        tx.execute(
-            "UPDATE project SET revision=?1, document=?2 WHERE singleton=1",
-            params![sql_revision(revision)?, document],
-        )?;
-        tx.execute(
-            "INSERT INTO events VALUES(?1,?2,?3,?4,?5,?6,?7,?8)",
-            params![
-                sql_revision(revision)?,
-                event.id.to_string(),
-                event.session_id.to_string(),
-                serde_json::to_string(&event.mutations)?,
-                serde_json::to_string(&event.inverse)?,
-                serde_json::to_string(&event.changed_keys)?,
-                event.idempotency_key,
-                event.undo_of.map(|id| id.to_string())
-            ],
-        )?;
-        if revision.is_multiple_of(SNAPSHOT_INTERVAL) {
+        check(&tx, &snapshot)?;
+        (|| -> Result<Event, StoreError> {
+            let mut value = serde_json::to_value(&snapshot.document)?;
+            let mut inverse = Vec::new();
+            for mutation in &request.mutations {
+                inverse.push(mutation.apply(&mut value)?);
+            }
+            inverse.reverse();
+            let document: Project = serde_json::from_str(&value.to_string())?;
+            document.validate_storage()?;
+            if !import {
+                document.ensure_editable()?;
+            }
+            let revision = snapshot
+                .revision
+                .checked_add(1)
+                .ok_or_else(|| StoreError::InvalidMutation("revision overflow".into()))?;
+            let event = Event {
+                id: Uuid::new_v4(),
+                revision,
+                session_id: request.session_id,
+                mutations: request.mutations.clone(),
+                inverse,
+                changed_keys: request.changed_keys.clone(),
+                idempotency_key: request.idempotency_key.clone(),
+                undo_of: request.undo_of,
+            };
+            let document = serde_json::to_string(&document)?;
             tx.execute(
-                "INSERT INTO snapshots VALUES(?1,?2)",
+                "UPDATE project SET revision=?1, document=?2 WHERE singleton=1",
                 params![sql_revision(revision)?, document],
             )?;
-        }
-        if let Some(key) = &request.idempotency_key {
             tx.execute(
-                "INSERT INTO idempotency VALUES(?1,?2,?3,?4,?5)",
+                "INSERT INTO events VALUES(?1,?2,?3,?4,?5,?6,?7,?8)",
                 params![
-                    key,
-                    serde_json::to_string(&request)?,
-                    event.id.to_string(),
                     sql_revision(revision)?,
-                    serde_json::to_string(&event)?
+                    event.id.to_string(),
+                    event.session_id.to_string(),
+                    serde_json::to_string(&event.mutations)?,
+                    serde_json::to_string(&event.inverse)?,
+                    serde_json::to_string(&event.changed_keys)?,
+                    event.idempotency_key,
+                    event.undo_of.map(|id| id.to_string())
                 ],
             )?;
-        }
-        tx.commit()?;
-        Ok(event)
+            if revision.is_multiple_of(SNAPSHOT_INTERVAL) {
+                tx.execute(
+                    "INSERT INTO snapshots VALUES(?1,?2)",
+                    params![sql_revision(revision)?, document],
+                )?;
+            }
+            if let Some(key) = &request.idempotency_key {
+                let mut payload = serde_json::to_value(&request)?;
+                if let Some(service_payload) = service_payload {
+                    payload
+                        .as_object_mut()
+                        .unwrap()
+                        .insert("service_payload".into(), service_payload);
+                }
+                tx.execute(
+                    "INSERT INTO idempotency VALUES(?1,?2,?3,?4,?5)",
+                    params![
+                        key,
+                        serde_json::to_string(&payload)?,
+                        event.id.to_string(),
+                        sql_revision(revision)?,
+                        serde_json::to_string(&event)?
+                    ],
+                )?;
+            }
+            tx.commit()?;
+            Ok(event)
+        })()
+        .map_err(E::from)
     }
     /// Receipt lookup supplies material for SERVICE-001 payload/result policy.
     pub fn idempotency_record(&self, key: &str) -> Result<Option<IdempotencyRecord>, StoreError> {
@@ -527,33 +672,23 @@ impl ProjectStore {
                     key: key.to_owned(),
                     payload: serde_json::from_str(&payload)?,
                     result: serde_json::from_str(&result)?,
+                    service_payload: serde_json::from_str::<Value>(&payload)?
+                        .get("service_payload")
+                        .cloned(),
                 })
             })
             .transpose()
     }
     pub fn events_since(&self, revision: Revision) -> Result<Vec<Event>, StoreError> {
-        let mut statement = self.connection.prepare("SELECT revision,event_id,session_id,mutations,inverse,changed_keys,idempotency_key,undo_of FROM events WHERE revision>?1 ORDER BY revision")?;
-        let mut rows = statement.query([sql_revision(revision)?])?;
-        let mut result = Vec::new();
-        while let Some(row) = rows.next()? {
-            let id: String = row.get(1)?;
-            let session: String = row.get(2)?;
-            let undo: Option<String> = row.get(7)?;
-            let parse_id = |value: &str| {
-                Uuid::parse_str(value).map_err(|e| StoreError::InvalidMutation(e.to_string()))
-            };
-            result.push(Event {
-                revision: read_u64(row, 0)?,
-                id: parse_id(&id)?,
-                session_id: parse_id(&session)?,
-                mutations: serde_json::from_str(&row.get::<_, String>(3)?)?,
-                inverse: serde_json::from_str(&row.get::<_, String>(4)?)?,
-                changed_keys: serde_json::from_str(&row.get::<_, String>(5)?)?,
-                idempotency_key: row.get(6)?,
-                undo_of: undo.as_deref().map(parse_id).transpose()?,
-            });
-        }
-        Ok(result)
+        read_events_since(&self.connection, revision)
+    }
+    /// Current document and history from one read view for service undo/query.
+    pub fn snapshot_and_events(&self) -> Result<(Snapshot, Vec<Event>), StoreError> {
+        let tx = self.connection.unchecked_transaction()?;
+        let snapshot = read_snapshot(&tx)?;
+        let events = self.events_since(0)?;
+        tx.commit()?;
+        Ok((snapshot, events))
     }
     /// Prunes strictly before the supplied revision; its full snapshot and event
     /// are retained. Replay storage patches to materialize the boundary first.
@@ -784,6 +919,34 @@ impl HistorySize {
             warning: bytes >= HISTORY_WARNING_BYTES,
         }
     }
+}
+
+fn read_events_since(
+    connection: &Connection,
+    revision: Revision,
+) -> Result<Vec<Event>, StoreError> {
+    let mut statement = connection.prepare("SELECT revision,event_id,session_id,mutations,inverse,changed_keys,idempotency_key,undo_of FROM events WHERE revision>?1 ORDER BY revision")?;
+    let mut rows = statement.query([sql_revision(revision)?])?;
+    let mut result = Vec::new();
+    while let Some(row) = rows.next()? {
+        let id: String = row.get(1)?;
+        let session: String = row.get(2)?;
+        let undo: Option<String> = row.get(7)?;
+        let parse_id = |value: &str| {
+            Uuid::parse_str(value).map_err(|e| StoreError::InvalidMutation(e.to_string()))
+        };
+        result.push(Event {
+            revision: read_u64(row, 0)?,
+            id: parse_id(&id)?,
+            session_id: parse_id(&session)?,
+            mutations: serde_json::from_str(&row.get::<_, String>(3)?)?,
+            inverse: serde_json::from_str(&row.get::<_, String>(4)?)?,
+            changed_keys: serde_json::from_str(&row.get::<_, String>(5)?)?,
+            idempotency_key: row.get(6)?,
+            undo_of: undo.as_deref().map(parse_id).transpose()?,
+        });
+    }
+    Ok(result)
 }
 
 #[cfg(test)]

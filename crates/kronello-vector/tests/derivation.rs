@@ -41,6 +41,7 @@ fn fixture() -> (Project, BTreeMap<PropertyId, Value>, SchemaRegistry) {
         })
         .collect();
     let node = SceneNode {
+        effects: vec![],
         id: NodeId::new(),
         kind: NodeKind::Shape {
             content_ref: shape.id,

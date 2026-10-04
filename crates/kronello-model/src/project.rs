@@ -7,7 +7,10 @@ use serde_json::Value;
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::{AnimationCurve, Composition, Shape, TextDocument};
+use crate::{
+    AnimationCurve, Asset, Composition, Sequence, Shape, TemplateDefinition, TemplateInstance,
+    TextDocument,
+};
 
 pub const PROJECT_SCHEMA_VERSION: u32 = 1;
 pub const PROJECT_SEMANTIC_VERSION: u32 = 1;
@@ -41,6 +44,14 @@ pub struct Project {
     pub shapes: Vec<DocumentObject<Shape>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub texts: Vec<DocumentObject<TextDocument>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub templates: Vec<DocumentObject<TemplateDefinition>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub template_instances: Vec<DocumentObject<TemplateInstance>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub assets: Vec<DocumentObject<Asset>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sequences: Vec<DocumentObject<Sequence>>,
     #[serde(flatten)]
     pub unknown_fields: BTreeMap<String, Value>,
 }
@@ -66,6 +77,10 @@ impl Default for Project {
             curves: Vec::new(),
             shapes: Vec::new(),
             texts: Vec::new(),
+            templates: Vec::new(),
+            template_instances: Vec::new(),
+            assets: Vec::new(),
+            sequences: Vec::new(),
             unknown_fields: BTreeMap::new(),
         }
     }
@@ -87,6 +102,10 @@ impl Project {
                     | "curves"
                     | "shapes"
                     | "texts"
+                    | "templates"
+                    | "template_instances"
+                    | "assets"
+                    | "sequences"
             )
         }) {
             return Err(ProjectError::InvalidDocument(
@@ -155,6 +174,110 @@ impl Project {
                 return Err(ProjectError::InvalidDocument("duplicate object id".into()));
             }
         }
+        for object in &self.templates {
+            let (id, fields) = match object {
+                DocumentObject::Known(value) => (value.id, None),
+                DocumentObject::Opaque(value) => (value.id, Some(&value.fields)),
+            };
+            if !ids.insert(id) || fields.is_some_and(|f| f.contains_key("id")) {
+                return Err(ProjectError::InvalidDocument(
+                    "duplicate or shadowed template id".into(),
+                ));
+            }
+        }
+        for object in &self.template_instances {
+            let (id, fields) = match object {
+                DocumentObject::Known(value) => (value.id.as_uuid(), None),
+                DocumentObject::Opaque(value) => (value.id, Some(&value.fields)),
+            };
+            if !ids.insert(id) || fields.is_some_and(|f| f.contains_key("id")) {
+                return Err(ProjectError::InvalidDocument(
+                    "duplicate or shadowed template instance id".into(),
+                ));
+            }
+        }
+        for object in &self.assets {
+            let id = match object {
+                DocumentObject::Known(asset) => {
+                    asset.validate()?;
+                    asset.id.as_uuid()
+                }
+                DocumentObject::Opaque(value) => {
+                    if value.fields.contains_key("id") {
+                        return Err(ProjectError::InvalidDocument(
+                            "opaque extension shadows id".into(),
+                        ));
+                    }
+                    value.id
+                }
+            };
+            if !ids.insert(id) {
+                return Err(ProjectError::InvalidDocument("duplicate object id".into()));
+            }
+        }
+        for object in &self.sequences {
+            let id = match object {
+                DocumentObject::Known(sequence) => {
+                    sequence
+                        .validate(self)
+                        .map_err(|e| ProjectError::InvalidDocument(e.to_string()))?;
+                    for track in &sequence.tracks {
+                        if !ids.insert(track.id.as_uuid()) {
+                            return Err(ProjectError::InvalidDocument("duplicate track id".into()));
+                        }
+                        for clip in &track.clips {
+                            if !ids.insert(clip.id.as_uuid()) {
+                                return Err(ProjectError::InvalidDocument(
+                                    "duplicate clip id".into(),
+                                ));
+                            }
+                        }
+                    }
+                    sequence.id.as_uuid()
+                }
+                DocumentObject::Opaque(value) => {
+                    if value.fields.contains_key("id") {
+                        return Err(ProjectError::InvalidDocument(
+                            "opaque extension shadows id".into(),
+                        ));
+                    }
+                    value.id
+                }
+            };
+            if !ids.insert(id) {
+                return Err(ProjectError::InvalidDocument("duplicate object id".into()));
+            }
+        }
+        // Preserve existing scene validation policy while preventing timeline
+        // IDs from aliasing a scene placement or node.
+        let mut timeline_ids = std::collections::BTreeSet::new();
+        for object in &self.sequences {
+            match object {
+                DocumentObject::Known(sequence) => {
+                    timeline_ids.insert(sequence.id.as_uuid());
+                    for track in &sequence.tracks {
+                        timeline_ids.insert(track.id.as_uuid());
+                        timeline_ids.extend(track.clips.iter().map(|clip| clip.id.as_uuid()));
+                    }
+                }
+                DocumentObject::Opaque(value) => {
+                    timeline_ids.insert(value.id);
+                }
+            }
+        }
+        for object in &self.compositions {
+            if let DocumentObject::Known(c) = object {
+                for node in &c.nodes {
+                    if timeline_ids.contains(&node.id.as_uuid())
+                        || matches!(&node.kind, crate::NodeKind::CompositionInstance(i) if timeline_ids.contains(&i.id.as_uuid()))
+                    {
+                        return Err(ProjectError::InvalidDocument(
+                            "timeline id aliases scene identity".into(),
+                        ));
+                    }
+                }
+            }
+        }
         Ok(())
     }
 
@@ -167,6 +290,7 @@ impl Project {
                 .compositions
                 .iter()
                 .any(|v| matches!(v, DocumentObject::Opaque(_)))
+            || self.compositions.iter().any(|v| matches!(v, DocumentObject::Known(c) if c.nodes.iter().flat_map(|n| &n.effects).any(|e| e.definition().is_err())))
             || self
                 .curves
                 .iter()
@@ -175,6 +299,10 @@ impl Project {
                 .shapes
                 .iter()
                 .any(|v| matches!(v, DocumentObject::Opaque(_)))
+            || self.sequences.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
+            || self.assets.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
+            || self.templates.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
+            || self.template_instances.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
             || self.texts.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
             || self.texts.iter().any(|v| matches!(v, DocumentObject::Known(t) if t.layout_version != crate::TEXT_LAYOUT_VERSION))
             || self.curves.iter().any(
@@ -233,6 +361,26 @@ impl<'de> Deserialize<'de> for Project {
             },
             texts: if fields.contains_key("texts") {
                 take_field::<_, D::Error>(&mut fields, "texts")?
+            } else {
+                Vec::new()
+            },
+            templates: if fields.contains_key("templates") {
+                take_field::<_, D::Error>(&mut fields, "templates")?
+            } else {
+                Vec::new()
+            },
+            template_instances: if fields.contains_key("template_instances") {
+                take_field::<_, D::Error>(&mut fields, "template_instances")?
+            } else {
+                Vec::new()
+            },
+            assets: if fields.contains_key("assets") {
+                take_field::<_, D::Error>(&mut fields, "assets")?
+            } else {
+                Vec::new()
+            },
+            sequences: if fields.contains_key("sequences") {
+                take_field::<_, D::Error>(&mut fields, "sequences")?
             } else {
                 Vec::new()
             },

@@ -113,6 +113,27 @@ type PropertyResolver<'a> = dyn FnMut(
     + 'a;
 
 impl DependencyGraph<'_> {
+    pub fn node_transform_with_inputs(
+        &self,
+        key: &NodeKey,
+        time: Time,
+        inputs: &BTreeMap<RuntimePropertyKey, Value>,
+    ) -> Result<TransformValues, EvaluationError> {
+        if !self
+            .scopes
+            .get(&key.instance_path)
+            .is_some_and(|s| s.composition.nodes.iter().any(|n| n.id == key.node))
+        {
+            return Err(EvaluationError::InstancePathNotFound(
+                key.instance_path.clone(),
+            ));
+        }
+        self.transform_values(key, time, true, &mut |keys, time| {
+            self.evaluate_properties_with_inputs(keys, time, inputs)
+        })
+        .map(|(values, _)| values)
+    }
+
     fn transform_values(
         &self,
         key: &NodeKey,

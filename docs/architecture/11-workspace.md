@@ -1,6 +1,6 @@
 # 11 ワークスペースと実装責務
 
-状態: Cargo workspace を整備済み。GPU-001 の `kronello-gpu` / `kronello-framebridge` スパイクと、M1 の store / animation / eval / vector / text / render / service / cli の各 crate を実装した（実装範囲・実測は下記と各タスクの検証記録）。`kronello-service` は CLI-001 に必要な操作だけを持つ最小版で、Command / Query API の全体は SERVICE-001 以降。以下の全体構成は引き続き構成案であり、全 crate の機能実装や `apps/` の作成を完了したものではない。
+状態: Cargo workspace を整備済み。M0 の GPU / FrameBridge スパイク、M1 の store / animation / eval / vector / text / render / service / cli と、M2 の media / audio / template / mcp / jobs の各 crate を実装した。M2 の P0 全 10 タスクは完了し、共有編集・検査 API、CompositionClip のマルチトラック配置、公開入力・保護時間区間付き日本語テンプレート、基本音声と ProRes / PCM24 書き出し、blur / shadow、MCP stdio、固定 snapshot の独立 worker、4K 縦断デモを接続した（実装範囲と検証は下記・各タスクの記録）。延期範囲は[後続タスク](../roadmap/milestones.md#m2-の延期範囲と後続タスク)に記録し、STORE-003 は実環境検証の残件により `in_progress`。M3 以降と `apps/` は未着手。以下の全体構成は引き続き構成案であり、記録した範囲外の API・crate の機能を実装済みとは扱わない。
 
 初期は以下を論理モジュールとして開始し、ビルド依存やテスト境界に応じて crate 分割する。過度な micro-crate 化はしない。
 
@@ -24,6 +24,7 @@ crates/
   kronello-service/        # commands, queries, policies, job orchestration
   kronello-cli/            # machine-oriented CLI adapter (binary: kronello)
   kronello-mcp/            # MCP adapter
+  kronello-jobs/           # detached workers, execution state, leases, publication
   kronello-ffi/            # FFI boundary for native GUI apps
 apps/
   macos/                     # Swift (SwiftUI / AppKit) desktop app

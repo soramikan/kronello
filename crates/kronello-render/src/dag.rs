@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{MatteKind, RenderError, RenderProfile, SceneContent, SceneIr, SceneKey};
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct OutputRegion {
     pub origin: [f64; 2],
@@ -84,6 +84,10 @@ pub enum DagNode {
         children: Vec<usize>,
         opacity: f64,
     },
+    Effect {
+        source: usize,
+        effect: crate::PixelEffect,
+    },
     Mask {
         source: usize,
         matte: usize,
@@ -102,7 +106,7 @@ impl DagNode {
             Self::CoverageDraw { geometry, .. } => vec![*geometry],
             Self::IsolatedComposite { children, .. } => children.clone(),
             Self::Mask { source, matte, .. } => vec![*source, *matte],
-            Self::OutputTransform { source, .. } => vec![*source],
+            Self::Effect { source, .. } | Self::OutputTransform { source, .. } => vec![*source],
         }
     }
 }
@@ -113,6 +117,9 @@ pub struct RenderDag {
     nodes: Vec<DagNode>,
     region: OutputRegion,
     working_space: ColorSpace,
+    execution_region: OutputRegion,
+    requests: Vec<Option<crate::PixelBounds>>,
+    bounds: Vec<crate::NodeBounds>,
 }
 impl RenderDag {
     pub fn nodes(&self) -> &[DagNode] {
@@ -123,6 +130,23 @@ impl RenderDag {
     }
     pub fn working_space(&self) -> ColorSpace {
         self.working_space
+    }
+    pub fn execution_region(&self) -> OutputRegion {
+        self.execution_region
+    }
+    pub fn input_requests(&self) -> &[Option<crate::PixelBounds>] {
+        &self.requests
+    }
+    pub fn bounds(&self) -> &[crate::NodeBounds] {
+        &self.bounds
+    }
+    pub fn crop_origin(&self) -> [usize; 2] {
+        std::array::from_fn(|i| {
+            ((self.region.origin[i] - self.execution_region.origin[i])
+                * f64::from(self.region.pixels[i])
+                / self.region.extent[i])
+                .round() as usize
+        })
     }
     pub fn output(&self) -> usize {
         self.nodes.len() - 1
@@ -297,6 +321,17 @@ impl Builder<'_> {
             children,
             opacity: n.opacity,
         })?;
+        let scale =
+            std::array::from_fn(|i| f64::from(self.region.pixels[i]) / self.region.extent[i]);
+        for effect in &n.effects {
+            id = self.push(DagNode::Effect {
+                source: id,
+                effect: crate::PixelEffect::from_design(
+                    &map_effect(effect, n.world_transform)?,
+                    scale,
+                )?,
+            })?;
+        }
         if let Some(binding) = self.scene.mattes.iter().find(|m| m.source == n.key) {
             let matte = *self.indices.get(&binding.matte).ok_or_else(|| {
                 RenderError::InvalidInput(format!("missing active matte {:?}", binding.matte))
@@ -365,7 +400,7 @@ pub fn build_render_dag(
     )
 }
 
-pub fn build_render_dag_with_cache(
+fn build_unpadded_dag(
     scene: &SceneIr,
     profile: RenderProfile,
     region: OutputRegion,
@@ -447,6 +482,9 @@ pub fn build_render_dag_with_cache(
         nodes: b.nodes,
         region,
         working_space: profile.working_space,
+        execution_region: region,
+        requests: vec![],
+        bounds: vec![],
     })
 }
 
@@ -468,4 +506,170 @@ fn inverse(transform: Affine2) -> Result<[[f64; 3]; 2], RenderError> {
         ));
     }
     Ok(result)
+}
+
+/// Backward ROI propagation preserves the requested pixel lattice. The initial
+/// executor uses one conservative union surface; per-node tiling is future work.
+pub fn build_render_dag_with_cache(
+    scene: &SceneIr,
+    profile: RenderProfile,
+    region: OutputRegion,
+    cache: &mut crate::RenderCache,
+) -> Result<RenderDag, RenderError> {
+    use crate::PixelBounds;
+    let mut dag = build_unpadded_dag(scene, profile, region, cache)?;
+    let bounds = derive_bounds(&dag.nodes);
+    let requested = PixelBounds {
+        min: [0.0; 2],
+        max: region.pixels.map(f64::from),
+    };
+    let mut requests = vec![None; dag.nodes.len()];
+    requests[dag.output()] = Some(requested);
+    let mut union = requested;
+    for i in (0..dag.nodes.len()).rev() {
+        let Some(output) = requests[i] else { continue };
+        let input = match &dag.nodes[i] {
+            DagNode::Effect { effect, .. } => effect.required_input(output),
+            _ => output,
+        };
+        if input
+            .min
+            .iter()
+            .chain(&input.max)
+            .any(|v| !v.is_finite() || v.abs() > 16_777_216.0)
+        {
+            return Err(RenderError::InvalidInput(
+                "effect ROI budget exceeded".into(),
+            ));
+        }
+        for id in dag.nodes[i].inputs() {
+            requests[id] = Some(requests[id].map_or(input, |old: PixelBounds| old.union(input)));
+        }
+        union = union.union(input);
+    }
+    let min = union.min.map(f64::floor);
+    let max = union.max.map(f64::ceil);
+    if min != requested.min || max != requested.max {
+        let scale: [f64; 2] =
+            std::array::from_fn(|i| f64::from(region.pixels[i]) / region.extent[i]);
+        let execution = OutputRegion {
+            origin: std::array::from_fn(|i| region.origin[i] + min[i] / scale[i]),
+            extent: std::array::from_fn(|i| (max[i] - min[i]) / scale[i]),
+            pixels: std::array::from_fn(|i| (max[i] - min[i]) as u32),
+        };
+        execution.validate()?;
+        dag = build_unpadded_dag(scene, profile, execution, cache)?;
+        dag.region = region;
+        dag.execution_region = execution;
+    }
+    dag.requests = requests;
+    dag.bounds = bounds;
+    Ok(dag)
+}
+fn derive_bounds(nodes: &[DagNode]) -> Vec<crate::NodeBounds> {
+    use crate::{NodeBounds, PixelBounds};
+    let mut bounds: Vec<NodeBounds> = vec![];
+    let union = |a: Option<PixelBounds>, b: Option<PixelBounds>| match (a, b) {
+        (Some(a), Some(b)) => Some(a.union(b)),
+        (a, b) => a.or(b),
+    };
+    for node in nodes {
+        let value = match node {
+            DagNode::CoverageDraw { path, .. } => {
+                let points: Vec<_> = path
+                    .contours
+                    .subpaths
+                    .iter()
+                    .flat_map(|s| s.points.iter())
+                    .collect();
+                let ink = if points.is_empty() || (path.fill.is_none() && path.stroke.is_none()) {
+                    None
+                } else {
+                    let b = PixelBounds {
+                        min: std::array::from_fn(|i| {
+                            points.iter().map(|p| p[i]).fold(f64::INFINITY, f64::min)
+                        }),
+                        max: std::array::from_fn(|i| {
+                            points
+                                .iter()
+                                .map(|p| p[i])
+                                .fold(f64::NEG_INFINITY, f64::max)
+                        }),
+                    };
+                    Some(b.expand(
+                        [path.stroke.map_or(0.0, |(_, w, join, _, m)| {
+                            w * 0.5
+                                * if join == kronello_model::StrokeJoin::Miter {
+                                    m
+                                } else {
+                                    1.0
+                                }
+                        }); 2],
+                    ))
+                };
+                NodeBounds {
+                    ink_bounds: ink,
+                    visual_bounds: ink,
+                }
+            }
+            DagNode::IsolatedComposite { children, .. } => {
+                children
+                    .iter()
+                    .fold(NodeBounds::default(), |a, id| NodeBounds {
+                        ink_bounds: union(a.ink_bounds, bounds[*id].ink_bounds),
+                        visual_bounds: union(a.visual_bounds, bounds[*id].visual_bounds),
+                    })
+            }
+            DagNode::Effect { source, effect } => NodeBounds {
+                ink_bounds: bounds[*source].ink_bounds,
+                visual_bounds: bounds[*source]
+                    .visual_bounds
+                    .map(|b| effect.output_bounds(b)),
+            },
+            DagNode::Mask { source, .. } | DagNode::OutputTransform { source, .. } => {
+                bounds[*source]
+            }
+            _ => NodeBounds::default(),
+        };
+        bounds.push(value);
+    }
+    bounds
+}
+
+fn map_effect(
+    effect: &kronello_model::ResolvedEffect,
+    transform: Affine2,
+) -> Result<kronello_model::ResolvedEffect, RenderError> {
+    use kronello_model::ResolvedEffect;
+    let [a, b] = transform.0;
+    let x = a[0].hypot(b[0]);
+    let y = a[1].hypot(b[1]);
+    let dot = a[0] * a[1] + b[0] * b[1];
+    let sigma = match effect {
+        ResolvedEffect::GaussianBlur { sigma } | ResolvedEffect::DropShadow { sigma, .. } => *sigma,
+    };
+    if sigma > 0.0
+        && ((x - y).abs() > 1e-10 * x.max(y).max(1.0) || dot.abs() > 1e-10 * (x * y).max(1.0))
+    {
+        return Err(RenderError::UnsupportedFeature(
+            "nonuniform transformed Gaussian effect".into(),
+        ));
+    }
+    Ok(match effect {
+        ResolvedEffect::GaussianBlur { .. } => ResolvedEffect::GaussianBlur { sigma: sigma * x },
+        ResolvedEffect::DropShadow {
+            offset,
+            color,
+            opacity,
+            ..
+        } => ResolvedEffect::DropShadow {
+            sigma: sigma * x,
+            offset: [
+                a[0] * offset[0] + a[1] * offset[1],
+                b[0] * offset[0] + b[1] * offset[1],
+            ],
+            color: *color,
+            opacity: *opacity,
+        },
+    })
 }

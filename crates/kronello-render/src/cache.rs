@@ -179,6 +179,11 @@ impl RenderCache {
     ) -> Result<Value, EvaluationError> {
         // Serialize the complete typed runtime identity without relying on Debug.
         let runtime_json = match runtime {
+            RuntimePropertyKey::LayoutValue {
+                instance_path,
+                text,
+                consumer,
+            } => json!(["layout", instance_path, text, consumer]),
             RuntimePropertyKey::Node(k) => json!(["node", k.instance_path, k.node, k.property]),
             RuntimePropertyKey::Composition {
                 instance_path,
@@ -289,6 +294,62 @@ impl RenderCache {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RasterCacheKey(Key);
 impl RasterCacheKey {
+    /// Effect identities include the ordered dependency image identity, exact
+    /// evaluated parameters, semantic versions, ROI, color and backend namespace.
+    pub fn for_dag(
+        dag: &crate::RenderDag,
+        backend_namespace: &str,
+    ) -> Result<Vec<Option<Self>>, RenderError> {
+        let mut keys: Vec<Option<Self>> = vec![];
+        for node in dag.nodes() {
+            let value = match node {
+                crate::DagNode::Geometry { .. } | crate::DagNode::TextLayout { .. } => None,
+                crate::DagNode::CoverageDraw { path, .. } => Some(Self::new(
+                    path,
+                    dag.execution_region(),
+                    dag.working_space(),
+                    backend_namespace,
+                )?),
+                crate::DagNode::IsolatedComposite { children, opacity } => Some(Self(key(
+                    "isolated-composite",
+                    (
+                        children
+                            .iter()
+                            .map(|id| keys[*id].map(|k| hex(k.0)))
+                            .collect::<Vec<_>>(),
+                        opacity,
+                    ),
+                )?)),
+                crate::DagNode::Mask {
+                    source,
+                    matte,
+                    kind,
+                } => Some(Self(key(
+                    "mask",
+                    (
+                        keys[*source].map(|k| hex(k.0)),
+                        keys[*matte].map(|k| hex(k.0)),
+                        kind,
+                    ),
+                )?)),
+                crate::DagNode::Effect { source, effect } => Some(Self(key(
+                    "effect",
+                    (
+                        crate::EFFECT_KERNEL_VERSION,
+                        kronello_model::EFFECT_VERSION,
+                        keys[*source].map(|k| hex(k.0)),
+                        effect,
+                        dag.execution_region(),
+                        dag.working_space(),
+                        backend_namespace,
+                    ),
+                )?)),
+                crate::DagNode::OutputTransform { source, .. } => keys[*source],
+            };
+            keys.push(value);
+        }
+        Ok(keys)
+    }
     pub fn new(
         path: &CoveragePath,
         region: OutputRegion,

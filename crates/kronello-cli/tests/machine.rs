@@ -459,3 +459,388 @@ fn locked_project_and_invalid_create_leave_existing_state_intact() {
     assert!(!missing.exists());
     assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
 }
+
+fn edit_commands(value: f64) -> Value {
+    let d = document();
+    json!([{"property_source_set": {
+        "object":d["compositions"][0]["nodes"][0]["id"],
+        "property":d["compositions"][0]["nodes"][0]["properties"][1]["id"],
+        "source":{"kind":"constant","value":{"kind":"scalar","value":value}}
+    }}])
+}
+fn edit_payload(path: &Path, base: &str, key: &str, commands: Value) -> Value {
+    let planned = call(
+        &["edit", "plan"],
+        json!({"project":path,"base_revision":base,"commands":commands}),
+        true,
+    );
+    json!({"project":path,"base_revision":base,"plan_hash":planned["result"]["value"]["plan_hash"],
+        "idempotency_key":key,"session_id":"1b549e15-9862-4168-a638-0cd2f2b0e6b1","commands":commands})
+}
+
+#[test]
+fn persisted_edit_receipts_replay_from_real_cli_processes_after_edits_and_compact() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("receipts.kronello");
+    create(&path);
+    let payload = edit_payload(&path, "1", "first", edit_commands(2.0));
+    let first = call(&["edit", "apply"], payload.clone(), true);
+    // Every call starts a fresh CLI process; no process memory can hold receipts.
+    assert_eq!(call(&["edit", "apply"], payload.clone(), true), first);
+    let second_payload = edit_payload(&path, "2", "second", edit_commands(3.0));
+    let second = call(&["edit", "apply"], second_payload, true);
+    let undo = json!({"project":path,"base_revision":"3","event_id":second["result"]["value"]["id"],"idempotency_key":"undo","session_id":"1b549e15-9862-4168-a638-0cd2f2b0e6b1"});
+    let undone = call(&["edit", "undo"], undo.clone(), true);
+    assert_eq!(call(&["edit", "undo"], undo, true), undone);
+    assert_eq!(call(&["edit", "apply"], payload.clone(), true), first);
+    let mut changed = payload.clone();
+    changed["commands"] = edit_commands(3.0);
+    assert_eq!(
+        error_code(&call(&["edit", "apply"], changed, false)),
+        "IDEMPOTENCY_KEY_REUSED"
+    );
+    let mut stale = payload.clone();
+    stale["idempotency_key"] = json!("stale");
+    assert_eq!(
+        error_code(&call(&["edit", "apply"], stale, false)),
+        "REVISION_CONFLICT"
+    );
+    let h = call(
+        &["history", "list"],
+        json!({"project":path,"since_revision":"1"}),
+        true,
+    );
+    assert_eq!(h["result"]["value"]["revision"], "4");
+    assert_eq!(h["result"]["value"]["events"].as_array().unwrap().len(), 3);
+    let mut store =
+        kronello_store::ProjectStore::open(&path, kronello_store::OpenOptions::default()).unwrap();
+    store.compact(3).unwrap();
+    store.close().unwrap();
+    // The complete receipt remains even when the original event is compacted.
+    assert_eq!(call(&["edit", "apply"], payload, true), first);
+    let h = call(&["history", "list"], json!({"project":path}), true);
+    assert_eq!(h["result"]["value"]["revision"], "4");
+    assert_eq!(
+        call(&["project", "info"], json!({"project":path}), true)["result"]["value"]["revision"],
+        "4"
+    );
+}
+
+#[test]
+fn concurrent_cli_same_key_returns_one_event_and_different_keys_conflict() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("concurrent.kronello");
+    create(&path);
+    let payload = edit_payload(&path, "1", "same", edit_commands(2.0));
+    let spawn = |payload: &Value| {
+        let mut child = Command::new(env!("CARGO_BIN_EXE_kronello"))
+            .args(["edit", "apply"])
+            .env_remove("KRONELLO_TEST_ADAPTER_UNAVAILABLE")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(payload.to_string().as_bytes())
+            .unwrap();
+        child
+    };
+    let a = spawn(&payload);
+    let b = spawn(&payload);
+    let a = a.wait_with_output().unwrap();
+    let b = b.wait_with_output().unwrap();
+    assert!(a.status.success(), "{}", String::from_utf8_lossy(&a.stderr));
+    assert!(b.status.success(), "{}", String::from_utf8_lossy(&b.stderr));
+    let a: Value = serde_json::from_slice(&a.stdout).unwrap();
+    let b: Value = serde_json::from_slice(&b.stdout).unwrap();
+    assert_eq!(a, b);
+    assert_eq!(a["result"]["value"]["revision"], 2);
+    let first = edit_payload(&path, "2", "left", edit_commands(2.25));
+    let mut second = first.clone();
+    second["idempotency_key"] = json!("right");
+    let a = spawn(&first);
+    let b = spawn(&second);
+    let a = a.wait_with_output().unwrap();
+    let b = b.wait_with_output().unwrap();
+    assert_ne!(a.status.success(), b.status.success());
+    let error = if a.status.success() { b } else { a };
+    let error: Value = serde_json::from_slice(&error.stdout).unwrap();
+    assert_eq!(error_code(&error), "REVISION_CONFLICT");
+    assert_eq!(
+        call(&["project", "info"], json!({"project":path}), true)["result"]["value"]["revision"],
+        "3"
+    );
+}
+
+#[test]
+fn structured_api_queries_and_empty_capabilities_payload_from_real_cli() {
+    let capabilities = call(&["capabilities", "get"], json!({}), true);
+    assert_eq!(capabilities["result"]["kind"], "capabilities");
+    assert_eq!(
+        capabilities["result"]["value"]["commands"]
+            .as_array()
+            .unwrap()
+            .len(),
+        30
+    );
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("query.kronello");
+    create(&path);
+    let doc = document();
+    let composition = &doc["compositions"][0]["id"];
+    let scene = call(
+        &["scene", "query"],
+        json!({"project":path, "composition":composition}),
+        true,
+    );
+    assert_eq!(scene["result"]["kind"], "scene");
+    assert_eq!(
+        scene["result"]["value"]["nodes"].as_array().unwrap().len(),
+        2
+    );
+    let sample = call(
+        &["property", "sample"],
+        json!({"project":path, "composition":composition,
+        "keys":[{"kind":"node", "instance_path":[], "node":doc["compositions"][0]["nodes"][0]["id"],
+            "property":doc["compositions"][0]["nodes"][0]["properties"][0]["id"]}],
+        "times":[{"num":"1","den":"2"}]}),
+        true,
+    );
+    assert_eq!(sample["result"]["kind"], "samples");
+    assert_eq!(sample["result"]["value"]["samples"][0]["unit"], "design_px");
+    let error = call(
+        &["capabilities", "get"],
+        json!({"shell":"touch /tmp/never"}),
+        false,
+    );
+    assert_eq!(error_code(&error), "INVALID_REQUEST");
+}
+
+#[test]
+fn history_pagination_and_execution_input_rejection_from_real_cli() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("history.kronello");
+    create(&path);
+    let payload = edit_payload(&path, "1", "change", edit_commands(2.0));
+    let session = payload["session_id"].clone();
+    let event = call(&["edit", "apply"], payload, true);
+    let event_id = &event["result"]["value"]["id"];
+    call(
+        &["edit", "undo"],
+        json!({"project":path,"base_revision":"2","session_id":session,
+            "event_id":event_id,"idempotency_key":"undo"}),
+        true,
+    );
+    let first = call(
+        &["history", "list"],
+        json!({"project":path,"since_revision":"1","limit":1,"session_id":session}),
+        true,
+    );
+    let history = &first["result"]["value"];
+    assert_eq!(history["revision"], "3");
+    assert_eq!(history["events"][0]["event"]["id"], *event_id);
+    assert_eq!(history["events"][0]["event"]["session_id"], session);
+    assert!(
+        !history["events"][0]["event"]["changed_keys"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(history["events"][0]["undone"], true);
+    let last = call(
+        &[],
+        json!({"operation":"history.list","project":path,"limit":1,"session_id":session,
+            "since_revision":history["next_since_revision"]}),
+        true,
+    );
+    assert_eq!(
+        last["result"]["value"]["events"][0]["event"]["undo_of"],
+        *event_id
+    );
+    assert!(last["result"]["value"]["next_since_revision"].is_null());
+    let before = call(&["project", "export"], json!({"project":path}), true);
+    for field in ["shell", "url", "ffmpeg_args"] {
+        let mut request = json!({"project":path});
+        request[field] = json!("untrusted");
+        assert_eq!(
+            error_code(&call(&["project", "info"], request, false)),
+            "INVALID_REQUEST"
+        );
+    }
+    assert_eq!(
+        error_code(&call(
+            &["project", "info"],
+            json!({"project":"https://example.invalid/movie.kronello"}),
+            false
+        )),
+        "INVALID_REQUEST"
+    );
+    let duplicate = invoke(
+        &["capabilities", "get"],
+        r#"{"operation":"capabilities.get"}"#,
+        false,
+    )
+    .0;
+    assert_eq!(error_code(&duplicate), "INVALID_REQUEST");
+    assert_eq!(
+        call(&["project", "export"], json!({"project":path}), true),
+        before
+    );
+}
+
+#[test]
+fn template_commands_share_schema_service_and_report_final_overflow() {
+    let dir = tempfile::tempdir().unwrap();
+    let project = dir.path().join("template.kronello");
+    let document: Value =
+        serde_json::from_str(include_str!("../../../examples/template-001.project.json")).unwrap();
+    let definition: Value = serde_json::from_str(include_str!(
+        "../../../examples/template-001.definition.json"
+    ))
+    .unwrap();
+    call(
+        &["project", "create"],
+        json!({"project":project,"document":document}),
+        true,
+    );
+    let session = "d42e2df2-f299-4e2d-811d-52dab580a772";
+    let instance = "9e2d1247-479c-47db-ad74-c89b362e00aa";
+    call(
+        &["template", "define"],
+        json!({"project":project,"base_revision":"1","session_id":session,"idempotency_key":"define","definition":definition}),
+        true,
+    );
+    call(
+        &["template", "instantiate"],
+        json!({"project":project,"base_revision":"2","session_id":session,"idempotency_key":"place","composition":document["compositions"][0]["id"],"node":"7706a562-00d9-4a1b-9467-2cd97c57d3d4","index":0,"instance":{"id":instance,"definition_ref":definition["id"],"version":"1.0.0","duration":{"num":"5","den":"1"},"inputs":{}}}),
+        true,
+    );
+    call(
+        &["template", "set_duration"],
+        json!({"project":project,"base_revision":"3","session_id":session,"idempotency_key":"duration","instance":instance,"duration":{"num":"8","den":"1"}}),
+        true,
+    );
+    let exported = call(&["project", "export"], json!({"project":project}), true);
+    let saved = &exported["result"]["value"]["document"];
+    let schema: Value =
+        serde_json::from_str(include_str!("../../../schemas/project-v1.schema.json")).unwrap();
+    jsonschema::validator_for(&schema)
+        .unwrap()
+        .validate(saved)
+        .unwrap();
+    assert_eq!(
+        saved["template_instances"][0]["duration"],
+        json!({"num":"8","den":"1"})
+    );
+    assert_eq!(saved["template_instances"][0]["version"], "1.0.0");
+    assert_eq!(
+        saved["templates"][0]["content_hash"]
+            .as_str()
+            .unwrap()
+            .len(),
+        64
+    );
+    call(
+        &["template", "set_input"],
+        json!({"project":project,"base_revision":"4","session_id":session,"idempotency_key":"headline","instance":instance,"name":"headline","value":{"kind":"string","value":"一\n二\n三"}}),
+        true,
+    );
+    let output = dir.path().join("frames");
+    let input = json!({"project":project,"composition":document["compositions"][0]["id"],"region":{"origin":[0,0],"extent":[64,32],"pixels":[64,32]},"fonts":[{"identity":document["texts"][0]["styles"][0]["font"],"path":kronello_testkit::resolve_fixture("noto-sans-cjk-jp").unwrap()}]});
+    let result = call(
+        &["--backend", "cpu-reference", "render", "sequence"],
+        json!({"input":input,"range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"1"}},"frame_rate":{"num":"1","den":"1"},"output_directory":output}),
+        false,
+    );
+    assert_eq!(result["error"]["code"], "TEMPLATE_OVERFLOW");
+    assert_eq!(result["error"]["details"]["actual_lines"], 3);
+    assert!(!output.exists());
+}
+
+#[test]
+fn unavailable_ffmpeg_returns_typed_error_without_default_library_fallback() {
+    let dir = tempfile::tempdir().unwrap();
+    let missing = dir.path().join("missing-ffmpeg");
+    let (result, _) = invoke_with_env(
+        &["capabilities", "get"],
+        "{}",
+        false,
+        Some(("KRONELLO_FFMPEG_LIB_DIR", missing.to_str().unwrap())),
+    );
+    assert_eq!(error_code(&result), "FFMPEG_UNAVAILABLE");
+}
+
+#[test]
+fn media_commands_use_shared_service_and_preserve_source_revision_on_collect() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("media.kronello");
+    let source = dir.path().join("asset.bin");
+    std::fs::write(&source, b"media cli").unwrap();
+    let asset = kronello_model::AssetId::new();
+    let mut doc = document();
+    doc["assets"] = json!([{
+        "id":asset, "content_hash":format!("{:x}", Sha256::digest(b"media cli")),
+        "kind":"video", "streams":[], "locator":{"relative":"asset.bin", "absolute":null}
+    }]);
+    call(
+        &["project", "create"],
+        json!({"project":path, "document":doc}),
+        true,
+    );
+    let search = dir.path().join("search");
+    std::fs::create_dir(&search).unwrap();
+    std::fs::rename(source, search.join("renamed.bin")).unwrap();
+    let updated = call(
+        &["asset", "relink"],
+        json!({"project":path, "base_revision":"1", "asset":asset, "search_directory":search}),
+        true,
+    );
+    let collected = call(
+        &["project", "collect"],
+        json!({"project":path, "output_directory":dir.path().join("collected")}),
+        true,
+    );
+    assert_eq!(collected["result"]["kind"], "collected");
+    assert_eq!(collected["result"]["value"]["asset_count"], 1);
+    let info = call(&["project", "info"], json!({"project":path}), true);
+    assert_eq!(
+        info["result"]["value"]["revision"],
+        updated["result"]["value"]["revision"]
+    );
+}
+
+#[test]
+fn nle_sequence_target_and_clip_trim_use_shared_machine_commands() {
+    let p: Value =
+        serde_json::from_str(include_str!("../../../examples/nle-001.project.json")).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("nle-cli.kronello");
+    invoke(
+        &["project", "create"],
+        &json!({"project":path,"document":p}).to_string(),
+        true,
+    );
+    let seq = &p["sequences"][0];
+    let clip = &seq["tracks"][0]["clips"][0];
+    let (event,_)=invoke(&["clip","trim"],&json!({"project":path,"base_revision":"1","session_id":"e20090e7-c3de-44e7-bb91-fd15b94bcde4","idempotency_key":"trim","sequence":seq["id"],"clip":clip["id"],"range":{"start":{"num":"9","den":"4"},"end":{"num":"11","den":"4"}}}).to_string(),true);
+    let (pixels,_)=invoke(&["--backend","cpu-reference","render","frame"],&json!({"input":{"project":path,"target":{"kind":"sequence","sequence":seq["id"]},"region":{"origin":[0.0,0.0],"extent":[64.0,32.0],"pixels":[64,32]}},"time":{"num":"5","den":"2"}}).to_string(),true);
+    assert_eq!(
+        pixels["result"]["value"]["metadata"]["target"]["kind"],
+        "sequence"
+    );
+    assert_eq!(
+        pixels["result"]["value"]["metadata"]["backend"],
+        "cpu_reference_float32"
+    );
+    invoke(&["edit","undo"],&json!({"project":path,"base_revision":"2","session_id":"e20090e7-c3de-44e7-bb91-fd15b94bcde4","idempotency_key":"undo-trim","event_id":event["result"]["value"]["id"]}).to_string(),true);
+    let (exported, _) = invoke(
+        &["project", "export"],
+        &json!({"project":path}).to_string(),
+        true,
+    );
+    assert_eq!(exported["result"]["value"]["document"], p);
+}

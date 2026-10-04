@@ -281,3 +281,7 @@ pub fn render_reference(
     }
     Ok(pixels)
 }
+
+mod effect;
+pub use effect::{EFFECT_KERNEL_VERSION, PixelEffect};
+pub const EFFECT_SHADER: &str = include_str!("effect.wgsl");

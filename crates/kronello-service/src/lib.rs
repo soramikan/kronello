@@ -1,6 +1,28 @@
-//! Shared synchronous Command/Query boundary for the M1 headless workflow.
+//! Shared synchronous Command/Query boundary for headless rendering and edits.
 //! Entry points own transport only; storage, fonts and rendering compose here.
+mod nle;
+pub use kronello_render::RenderTarget;
+pub use nle::*;
+mod jobs;
+pub use jobs::*;
+mod api;
+mod edit;
+mod query;
+pub use api::*;
+pub use query::*;
 mod wire;
+pub use edit::{
+    EditApplyRequest, EditCommand, EditPlan, HistoryEntry, HistoryRequest, HistoryResult,
+    PlanRequest, UndoConflict, UndoRequest,
+};
+
+mod template;
+pub use template::{
+    TemplateCommand, TemplateDefineRequest, TemplateInstantiateRequest, TemplateSetDurationRequest,
+    TemplateSetInputRequest,
+};
+mod media;
+pub use media::{CollectRequest, RelinkRequest};
 
 use std::path::{Path, PathBuf};
 
@@ -16,9 +38,44 @@ use kronello_time::{FrameRate, Time, TimeRange};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
 #[serde(tag = "operation", deny_unknown_fields)]
 pub enum Request {
+    #[serde(rename = "sequence.create")]
+    SequenceCreate(SequenceCreateRequest),
+    #[serde(rename = "clip.place")]
+    ClipPlace(ClipPlaceRequest),
+    #[serde(rename = "clip.trim")]
+    ClipTrim(ClipTrimRequest),
+    #[serde(rename = "clip.stretch")]
+    ClipStretch(ClipStretchRequest),
+    #[serde(rename = "instance.retime")]
+    InstanceRetime(InstanceRetimeRequest),
+    #[serde(rename = "template_instance.retime")]
+    TemplateInstanceRetime(TemplateInstanceRetimeRequest),
+
+    #[serde(rename = "render.submit")]
+    RenderSubmit(RenderSubmitRequest),
+    #[serde(rename = "job.get")]
+    JobGet(JobRequest),
+    #[serde(rename = "job.list")]
+    JobList(JobListRequest),
+    #[serde(rename = "job.cancel")]
+    JobCancel(JobRequest),
+    #[serde(rename = "job.prune")]
+    JobPrune(JobPruneRequest),
+    #[serde(rename = "template.set_duration")]
+    TemplateSetDuration(TemplateSetDurationRequest),
+    #[serde(rename = "template.define")]
+    TemplateDefine(TemplateDefineRequest),
+    #[serde(rename = "template.instantiate")]
+    TemplateInstantiate(TemplateInstantiateRequest),
+    #[serde(rename = "template.set_input")]
+    TemplateSetInput(TemplateSetInputRequest),
+    #[serde(rename = "asset.relink")]
+    AssetRelink(RelinkRequest),
+    #[serde(rename = "project.collect")]
+    ProjectCollect(CollectRequest),
     #[serde(rename = "project.create")]
     ProjectCreate(CreateRequest),
     #[serde(rename = "project.import")]
@@ -31,14 +88,28 @@ pub enum Request {
     RenderFrame(FrameRenderRequest),
     #[serde(rename = "render.sequence")]
     RenderSequence(SequenceRenderRequest),
+    #[serde(rename = "edit.plan")]
+    EditPlan(PlanRequest),
+    #[serde(rename = "edit.apply")]
+    EditApply(EditApplyRequest),
+    #[serde(rename = "edit.undo")]
+    EditUndo(UndoRequest),
+    #[serde(rename = "history.list")]
+    HistoryList(HistoryRequest),
+    #[serde(rename = "scene.query")]
+    SceneQuery(SceneQueryRequest),
+    #[serde(rename = "property.sample")]
+    PropertySample(PropertySampleRequest),
+    #[serde(rename = "capabilities.get")]
+    CapabilitiesGet(CapabilitiesRequest),
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateRequest {
     pub project: PathBuf,
     pub document: Project,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ImportRequest {
     pub project: PathBuf,
@@ -46,35 +117,45 @@ pub struct ImportRequest {
     pub base_revision: String,
     pub document: Project,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectRequest {
     pub project: PathBuf,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FontInput {
     pub identity: FontRef,
     pub path: PathBuf,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(transform = render_input_schema)]
 pub struct RenderInput {
     pub project: PathBuf,
-    pub composition: CompositionId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub composition: Option<CompositionId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target: Option<RenderTarget>,
     pub region: OutputRegion,
     #[serde(default)]
     pub profile: RenderProfile,
     #[serde(default)]
     pub fonts: Vec<FontInput>,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+fn render_input_schema(schema: &mut schemars::Schema) {
+    schema.insert("oneOf".into(), serde_json::json!([
+        {"required":["composition"], "properties":{"composition":{"type":"string"}}, "not":{"required":["target"]}},
+        {"required":["target"], "properties":{"target":{"type":"object"}}, "not":{"required":["composition"]}}
+    ]));
+}
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FrameRenderRequest {
     pub input: RenderInput,
     pub time: Time,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SequenceRenderRequest {
     pub input: RenderInput,
@@ -82,7 +163,7 @@ pub struct SequenceRenderRequest {
     pub frame_rate: FrameRate,
     pub output_directory: PathBuf,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectInfo {
     pub project_id: String,
@@ -93,44 +174,62 @@ pub struct ProjectInfo {
     pub content_hash: String,
     pub compositions: Vec<CompositionId>,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ExportResult {
     pub revision: String,
     pub document: Project,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FrameResult {
     pub metadata: FrameMetadata,
     pub linear: Vec<[f32; 4]>,
     pub display: Vec<[f32; 4]>,
 }
-#[derive(Debug, Clone, Serialize)]
-#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
+#[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
+#[serde(
+    tag = "kind",
+    content = "value",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
 pub enum ResultData {
+    Job(Box<kronello_jobs::JobRecord>),
+    Jobs(JobListResult),
+    Pruned(kronello_jobs::PruneResult),
+    Collected(kronello_media::CollectedProject),
     Project(ProjectInfo),
-    Export(ExportResult),
+    Export(Box<ExportResult>),
     Frame(Box<FrameResult>),
     Sequence(SequenceMetadata),
+    Plan(Box<EditPlan>),
+    Edit(kronello_store::Event),
+    History(HistoryResult),
+    Scene(SceneQueryResult),
+    Samples(PropertySampleResult),
+    Capabilities(Box<CapabilitiesResult>),
 }
-#[derive(Debug, Clone, Serialize)]
-#[serde(tag = "status", rename_all = "snake_case")]
+#[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
+#[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Response {
     Success { result: ResultData },
     Error { error: ServiceError },
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ServiceError {
     pub code: String,
     pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub details: Option<serde_json::Value>,
 }
 impl ServiceError {
     pub fn new(code: &str, message: impl Into<String>) -> Self {
         Self {
             code: code.into(),
             message: message.into(),
+            details: None,
         }
     }
     pub fn invalid(message: impl Into<String>) -> Self {
@@ -158,7 +257,17 @@ impl From<RenderError> for ServiceError {
         } else {
             e.code()
         };
-        Self::new(code, e.to_string())
+        let mut error = Self::new(code, e.to_string());
+        if let RenderError::Template(kronello_template::TemplateError::Overflow {
+            node,
+            actual,
+            maximum,
+        }) = e
+        {
+            error.details =
+                Some(serde_json::json!({"node":node,"actual_lines":actual,"max_lines":maximum}));
+        }
+        error
     }
 }
 impl From<serde_json::Error> for ServiceError {
@@ -173,7 +282,8 @@ impl From<std::io::Error> for ServiceError {
 }
 
 /// Explicit execution choice. GPU initialization is lazy and never falls back.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum BackendSelection {
     #[default]
     Gpu,
@@ -186,12 +296,18 @@ enum Backend<'a> {
 pub struct Service<'a> {
     backend: Backend<'a>,
     gpu_factory: fn() -> Result<GpuContext, GpuError>,
+    media_capabilities: Option<MediaCapabilities>,
+    job_config: Option<kronello_jobs::JobConfig>,
+    worker_executable: Option<PathBuf>,
 }
 impl Service<'_> {
     pub fn new(selection: BackendSelection) -> Self {
         Self {
             backend: Backend::Selected(selection),
             gpu_factory: create_gpu_context,
+            media_capabilities: None,
+            job_config: None,
+            worker_executable: None,
         }
     }
 }
@@ -200,6 +316,21 @@ impl<'a> Service<'a> {
         Self {
             backend: Backend::Injected(backend),
             gpu_factory: create_gpu_context,
+            media_capabilities: None,
+            job_config: None,
+            worker_executable: None,
+        }
+    }
+    pub fn with_media_capabilities(mut self, capabilities: MediaCapabilities) -> Self {
+        self.media_capabilities = Some(capabilities);
+        self
+    }
+    pub fn execute_json(&self, json: &str) -> Response {
+        match serde_json::from_str(json) {
+            Ok(request) => self.execute(request),
+            Err(error) => Response::Error {
+                error: error.into(),
+            },
         }
     }
     pub fn execute(&self, request: Request) -> Response {
@@ -209,12 +340,56 @@ impl<'a> Service<'a> {
         }
     }
     pub fn dispatch(&self, request: Request) -> Result<ResultData, ServiceError> {
+        validate_request_locators(&request)?;
         match request {
+            Request::SequenceCreate(r) => nle::sequence_create(r).map(ResultData::Edit),
+            Request::ClipPlace(r) => nle::clip_place(r).map(ResultData::Edit),
+            Request::ClipTrim(r) => nle::clip_trim(r).map(ResultData::Edit),
+            Request::ClipStretch(r) => nle::clip_stretch(r).map(ResultData::Edit),
+            Request::InstanceRetime(r) => nle::instance_retime(r).map(ResultData::Edit),
+            Request::TemplateInstanceRetime(r) => {
+                nle::template_instance_retime(r).map(ResultData::Edit)
+            }
+            Request::RenderSubmit(r) => self.submit_job(r).map(|r| ResultData::Job(Box::new(r))),
+            Request::JobGet(r) => self
+                .jobs()?
+                .get(&r.job)
+                .map(|r| ResultData::Job(Box::new(r)))
+                .map_err(Into::into),
+            Request::JobCancel(r) => self
+                .jobs()?
+                .cancel(&r.job)
+                .map(|r| ResultData::Job(Box::new(r)))
+                .map_err(Into::into),
+            Request::JobList(_) => Ok(ResultData::Jobs(JobListResult {
+                jobs: self.jobs()?.list()?,
+            })),
+            Request::JobPrune(_) => Ok(ResultData::Pruned(self.jobs()?.prune()?)),
+            Request::SceneQuery(r) => query::scene(r).map(ResultData::Scene),
+            Request::PropertySample(r) => query::sample(r).map(ResultData::Samples),
+            Request::CapabilitiesGet(_) => Ok(ResultData::Capabilities(Box::new(
+                CapabilitiesResult::current(Some(match &self.media_capabilities {
+                    Some(capabilities) => capabilities.clone(),
+                    None => media::capabilities()?,
+                })),
+            ))),
+            Request::TemplateSetDuration(r) => template::set_duration(r).map(ResultData::Edit),
+            Request::TemplateDefine(r) => template::define(r).map(ResultData::Edit),
+            Request::TemplateInstantiate(r) => template::instantiate(r).map(ResultData::Edit),
+            Request::TemplateSetInput(r) => template::set_input(r).map(ResultData::Edit),
+            Request::EditPlan(r) => edit::plan(r).map(|p| ResultData::Plan(Box::new(p))),
+            Request::EditApply(r) => edit::apply(r).map(ResultData::Edit),
+            Request::EditUndo(r) => edit::undo(r).map(ResultData::Edit),
+            Request::HistoryList(r) => edit::history(r).map(ResultData::History),
+            Request::AssetRelink(r) => media::relink(r).map(ResultData::Project),
+            Request::ProjectCollect(r) => media::collect(r).map(ResultData::Collected),
             Request::ProjectCreate(r) => create(r).map(ResultData::Project),
             Request::ProjectImport(r) => {
                 let revision = parse_revision(&r.base_revision)?;
                 let json = serde_json::to_string(&r.document)?;
                 let mut store = open_existing(&r.project)?;
+                let previous = store.snapshot()?;
+                kronello_template::validate_stored_transition(&previous.document, &r.document)?;
                 store.import_json(revision, uuid::Uuid::new_v4(), &json)?;
                 let info = info(&store)?;
                 store.close()?;
@@ -230,10 +405,10 @@ impl<'a> Service<'a> {
                 let store = open_existing(&r.project)?;
                 let snapshot = store.snapshot()?;
                 store.close()?;
-                Ok(ResultData::Export(ExportResult {
+                Ok(ResultData::Export(Box::new(ExportResult {
                     revision: snapshot.revision.to_string(),
                     document: snapshot.document,
-                }))
+                })))
             }
             Request::RenderFrame(r) => self.render(&r.input, |snapshot, fonts, backend| {
                 let frame = render_frame(
@@ -279,70 +454,23 @@ impl<'a> Service<'a> {
         let store = open_existing(&input.project)?;
         let stored = store.snapshot()?;
         store.close()?;
-        let snapshot = RenderSnapshot::new(
-            &stored.document,
-            input.composition,
-            stored.revision,
-            input.profile,
-        )?;
-        // File locators are explicit request inputs. Locked identity comes from
-        // the snapshot; never discover system fonts or silently re-pin bytes.
-        for font in &input.fonts {
-            if !snapshot.font_locks().contains(&font.identity) {
-                return Err(ServiceError::invalid("font input is not a snapshot lock"));
-            }
-        }
-        let mut bytes = Vec::new();
-        for identity in snapshot.font_locks() {
-            let matches: Vec<_> = input
-                .fonts
-                .iter()
-                .filter(|font| &font.identity == identity)
-                .collect();
-            if matches.len() > 1 {
-                return Err(ServiceError::invalid("duplicate font input"));
-            }
-            let font = matches
-                .first()
-                .ok_or_else(|| ServiceError::new("FONT_MISSING", "missing locked font locator"))?;
-            bytes.push(std::fs::read(&font.path).map_err(|e| {
-                ServiceError::new(
-                    if e.kind() == std::io::ErrorKind::NotFound {
-                        "FONT_MISSING"
-                    } else {
-                        "IO_ERROR"
-                    },
-                    e.to_string(),
-                )
-            })?);
-        }
-        for (identity, bytes) in snapshot.font_locks().iter().zip(&bytes) {
-            if format!("{:x}", Sha256::digest(bytes)) != identity.sha256 {
-                return Err(ServiceError::new(
-                    "ASSET_HASH_MISMATCH",
-                    "locked font hash differs",
-                ));
-            }
-            let actual =
-                kronello_text::pin_font(bytes, identity.face_index).map_err(RenderError::from)?;
-            if &actual != identity {
-                return Err(ServiceError::new(
-                    "ASSET_HASH_MISMATCH",
-                    "locked font identity differs",
-                ));
-            }
-        }
+        let snapshot = freeze_render_input(&stored, input)?;
+        let bytes = load_locked_fonts(&snapshot, input)?;
         let fonts: Vec<_> = snapshot
             .font_locks()
             .iter()
             .zip(&bytes)
             .map(|(identity, bytes)| FontData { identity, bytes })
             .collect();
+        self.with_selected_backend(|backend| run(&snapshot, &fonts, backend))
+    }
+    fn with_selected_backend<T>(
+        &self,
+        run: impl FnOnce(&dyn RenderBackend) -> Result<T, ServiceError>,
+    ) -> Result<T, ServiceError> {
         match self.backend {
-            Backend::Injected(backend) => run(&snapshot, &fonts, backend),
-            Backend::Selected(BackendSelection::CpuReference) => {
-                run(&snapshot, &fonts, &CpuReferenceBackend)
-            }
+            Backend::Injected(backend) => run(backend),
+            Backend::Selected(BackendSelection::CpuReference) => run(&CpuReferenceBackend),
             Backend::Selected(BackendSelection::Gpu) => {
                 let gpu = (self.gpu_factory)().map_err(|e| {
                     let code = match e {
@@ -352,10 +480,85 @@ impl<'a> Service<'a> {
                     };
                     ServiceError::new(code, e.to_string())
                 })?;
-                run(&snapshot, &fonts, &gpu)
+                run(&gpu)
             }
         }
     }
+}
+/// One target compiler for synchronous rendering and fixed asynchronous input.
+/// New render target variants belong here, never in a separate job target model.
+fn freeze_render_input(
+    stored: &kronello_store::Snapshot,
+    input: &RenderInput,
+) -> Result<RenderSnapshot, ServiceError> {
+    let target = match (input.composition, input.target) {
+        (Some(composition), None) => composition.into(),
+        (None, Some(target)) => target,
+        _ => {
+            return Err(ServiceError::invalid(
+                "specify exactly one of composition or target",
+            ));
+        }
+    };
+    Ok(RenderSnapshot::for_target(
+        &stored.document,
+        target,
+        stored.revision,
+        input.profile,
+    )?)
+}
+fn load_locked_fonts(
+    snapshot: &RenderSnapshot,
+    input: &RenderInput,
+) -> Result<Vec<Vec<u8>>, ServiceError> {
+    // File locators are explicit request inputs. Locked identity comes from
+    // the snapshot; never discover system fonts or silently re-pin bytes.
+    for font in &input.fonts {
+        if !snapshot.font_locks().contains(&font.identity) {
+            return Err(ServiceError::invalid("font input is not a snapshot lock"));
+        }
+    }
+    let mut bytes = Vec::new();
+    for identity in snapshot.font_locks() {
+        let matches: Vec<_> = input
+            .fonts
+            .iter()
+            .filter(|font| &font.identity == identity)
+            .collect();
+        if matches.len() > 1 {
+            return Err(ServiceError::invalid("duplicate font input"));
+        }
+        let font = matches
+            .first()
+            .ok_or_else(|| ServiceError::new("FONT_MISSING", "missing locked font locator"))?;
+        bytes.push(std::fs::read(&font.path).map_err(|e| {
+            ServiceError::new(
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    "FONT_MISSING"
+                } else {
+                    "IO_ERROR"
+                },
+                e.to_string(),
+            )
+        })?);
+    }
+    for (identity, bytes) in snapshot.font_locks().iter().zip(&bytes) {
+        if format!("{:x}", Sha256::digest(bytes)) != identity.sha256 {
+            return Err(ServiceError::new(
+                "ASSET_HASH_MISMATCH",
+                "locked font hash differs",
+            ));
+        }
+        let actual =
+            kronello_text::pin_font(bytes, identity.face_index).map_err(RenderError::from)?;
+        if &actual != identity {
+            return Err(ServiceError::new(
+                "ASSET_HASH_MISMATCH",
+                "locked font identity differs",
+            ));
+        }
+    }
+    Ok(bytes)
 }
 fn create_gpu_context() -> Result<GpuContext, GpuError> {
     // Never honor fault injection in a release-profile build, even if a
@@ -431,6 +634,7 @@ fn create(request: CreateRequest) -> Result<ProjectInfo, ServiceError> {
             "project must use .kronello extension",
         ));
     }
+    kronello_template::validate_stored_project(&request.document)?;
     let json = serde_json::to_string(&request.document)?;
     let parent = request
         .project
@@ -458,6 +662,135 @@ fn create(request: CreateRequest) -> Result<ProjectInfo, ServiceError> {
         )
     })?;
     Ok(info)
+}
+
+/// Reject URI schemes at local-file boundaries, before any storage/font/output
+/// access. Material text and other opaque document strings remain inert data.
+fn local_locator(path: &Path) -> Result<(), ServiceError> {
+    local_locator_text(&path.to_string_lossy())
+}
+fn local_locator_text(value: &str) -> Result<(), ServiceError> {
+    if let Some((scheme, tail)) = value.split_once(':') {
+        let windows_drive = scheme.len() == 1
+            && scheme.as_bytes()[0].is_ascii_alphabetic()
+            && (tail.starts_with('/') || tail.starts_with('\\'));
+        if !windows_drive
+            && !scheme.is_empty()
+            && scheme
+                .bytes()
+                .all(|c| c.is_ascii_alphanumeric() || b"+-.".contains(&c))
+        {
+            return Err(ServiceError::invalid(
+                "locators must be local filesystem paths, not URIs",
+            ));
+        }
+    }
+    Ok(())
+}
+fn document_asset_locators(document: &Project) -> Result<(), ServiceError> {
+    // Asset objects are an additive document extension owned by MEDIA-001.
+    // Only locator slots are interpreted here; captions/names are never code.
+    fn visit(value: &serde_json::Value) -> Result<(), ServiceError> {
+        match value {
+            serde_json::Value::Object(object) => {
+                for (name, value) in object {
+                    if matches!(
+                        name.as_str(),
+                        "relative" | "absolute" | "relative_path" | "absolute_path" | "locator"
+                    ) && let Some(text) = value.as_str()
+                    {
+                        local_locator_text(text)?;
+                    }
+                    visit(value)?;
+                }
+            }
+            serde_json::Value::Array(values) => {
+                for value in values {
+                    visit(value)?;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+    if let Some(assets) = serde_json::to_value(document)?.get("assets") {
+        visit(assets)?;
+    }
+    Ok(())
+}
+fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
+    match request {
+        Request::SequenceCreate(r) => local_locator(&r.project),
+        Request::ClipPlace(r) => local_locator(&r.project),
+        Request::ClipTrim(r) => local_locator(&r.project),
+        Request::ClipStretch(r) => local_locator(&r.project),
+        Request::InstanceRetime(r) => local_locator(&r.project),
+        Request::TemplateInstanceRetime(r) => local_locator(&r.project),
+
+        Request::RenderSubmit(r) => {
+            local_locator(&r.render.output_directory)?;
+            render_locators(&r.render.input)
+        }
+        Request::JobGet(_) | Request::JobCancel(_) | Request::JobList(_) | Request::JobPrune(_) => {
+            Ok(())
+        }
+        Request::ProjectCreate(r) => {
+            local_locator(&r.project)?;
+            document_asset_locators(&r.document)
+        }
+        Request::ProjectImport(r) => {
+            local_locator(&r.project)?;
+            document_asset_locators(&r.document)
+        }
+        Request::ProjectExport(r) | Request::ProjectInfo(r) => local_locator(&r.project),
+        Request::TemplateDefine(r) => local_locator(&r.project),
+        Request::TemplateInstantiate(r) => local_locator(&r.project),
+        Request::TemplateSetInput(r) => local_locator(&r.project),
+        Request::TemplateSetDuration(r) => local_locator(&r.project),
+        Request::EditPlan(r) => local_locator(&r.project),
+        Request::EditApply(r) => local_locator(&r.project),
+        Request::EditUndo(r) => local_locator(&r.project),
+        Request::HistoryList(r) => local_locator(&r.project),
+        Request::SceneQuery(r) => {
+            local_locator(&r.project)?;
+            if let Some(evaluation) = &r.evaluation {
+                for font in &evaluation.fonts {
+                    local_locator(&font.path)?;
+                }
+            }
+            Ok(())
+        }
+        Request::PropertySample(r) => {
+            local_locator(&r.project)?;
+            if let Some(fonts) = &r.fonts {
+                for font in fonts {
+                    local_locator(&font.path)?;
+                }
+            }
+            Ok(())
+        }
+        Request::RenderFrame(r) => render_locators(&r.input),
+        Request::RenderSequence(r) => {
+            local_locator(&r.output_directory)?;
+            render_locators(&r.input)
+        }
+        Request::AssetRelink(r) => {
+            local_locator(&r.project)?;
+            local_locator(&r.search_directory)
+        }
+        Request::ProjectCollect(r) => {
+            local_locator(&r.project)?;
+            local_locator(&r.output_directory)
+        }
+        Request::CapabilitiesGet(_) => Ok(()),
+    }
+}
+fn render_locators(input: &RenderInput) -> Result<(), ServiceError> {
+    local_locator(&input.project)?;
+    for font in &input.fonts {
+        local_locator(&font.path)?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -493,7 +826,8 @@ mod tests {
         let request = Request::RenderSequence(SequenceRenderRequest {
             input: RenderInput {
                 project,
-                composition,
+                composition: Some(composition),
+                target: None,
                 region: OutputRegion {
                     origin: [0.0, 0.0],
                     extent: [64.0, 32.0],

@@ -20,6 +20,7 @@ struct ScenePass<'a> {
     size: RenderSize,
     working: WorkingSpace,
     pipeline: wgpu::ComputePipeline,
+    effect_pipeline: wgpu::ComputePipeline,
     blank: wgpu::Texture,
     stats: TransferStats,
     validation: wgpu::Buffer,
@@ -264,6 +265,124 @@ impl ScenePass<'_> {
         self.gpu.queue.submit([encoder.finish()]);
         Ok(output)
     }
+    fn effect_pass(
+        &mut self,
+        source: &wgpu::Texture,
+        original: &wgpu::Texture,
+        weights: &[f32],
+        axis: u32,
+        shadow: Option<([f32; 2], [f32; 4])>,
+    ) -> Result<wgpu::Texture, GpuError> {
+        let output = self.texture()?;
+        let mut params = Vec::new();
+        params.extend(
+            [
+                u32::from(shadow.is_some()),
+                (weights.len() / 2) as u32,
+                axis,
+                0,
+            ]
+            .into_iter()
+            .flat_map(u32::to_le_bytes),
+        );
+        let (offset, color) = shadow.unwrap_or(([0.0; 2], [0.0; 4]));
+        params.extend(
+            [offset[0], offset[1], 0.0, 0.0]
+                .into_iter()
+                .chain(color)
+                .flat_map(f32::to_le_bytes),
+        );
+        let weights: Vec<u8> = weights.iter().flat_map(|w| w.to_le_bytes()).collect();
+        let uniform = self
+            .gpu
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("FX-001 parameters"),
+                contents: &params,
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
+        let weights_buffer =
+            self.gpu
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("FX-001 Gaussian kernel"),
+                    contents: &weights,
+                    usage: wgpu::BufferUsages::STORAGE,
+                });
+        self.stats.cpu_upload_control_bytes += (params.len() + weights.len()) as u64;
+        self.stats.cpu_upload_control_operations += 2;
+        let views = [
+            source.create_view(&Default::default()),
+            original.create_view(&Default::default()),
+            output.create_view(&Default::default()),
+        ];
+        let bind = self
+            .gpu
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("FX-001 effect"),
+                layout: &self.effect_pipeline.get_bind_group_layout(0),
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&views[0]),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(&views[1]),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::TextureView(&views[2]),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: uniform.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 4,
+                        resource: weights_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 5,
+                        resource: self.validation.as_entire_binding(),
+                    },
+                ],
+            });
+        let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
+        {
+            let mut pass = encoder.begin_compute_pass(&Default::default());
+            pass.set_pipeline(&self.effect_pipeline);
+            pass.set_bind_group(0, &bind, &[]);
+            pass.dispatch_workgroups(
+                self.size.output_resolution[0].div_ceil(8),
+                self.size.output_resolution[1].div_ceil(8),
+                1,
+            );
+        }
+        self.gpu.queue.submit([encoder.finish()]);
+        Ok(output)
+    }
+    fn effect(
+        &mut self,
+        source: &wgpu::Texture,
+        effect: &PixelEffect,
+    ) -> Result<wgpu::Texture, GpuError> {
+        let [sx, sy] = effect.sigma();
+        let horizontal = self.effect_pass(source, source, &crate::effect::kernel(sx)?, 0, None)?;
+        let blurred =
+            self.effect_pass(&horizontal, source, &crate::effect::kernel(sy)?, 1, None)?;
+        match effect {
+            PixelEffect::GaussianBlur { .. } => Ok(blurred),
+            PixelEffect::DropShadow { offset, .. } => self.effect_pass(
+                &blurred,
+                source,
+                &[1.0],
+                0,
+                Some((*offset, crate::effect::shadow_color(effect, self.working))),
+            ),
+        }
+    }
     fn validate(&mut self) -> Result<(), GpuError> {
         let readback = self.gpu.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("GPU-002 validation status"),
@@ -318,6 +437,10 @@ impl ScenePass<'_> {
             DrawNode::Group { children, opacity } => {
                 let texture = self.composite(scene, children, cache)?;
                 self.pass(2, (&texture, &blank), None, *opacity, MaskKind::Alpha, None)?
+            }
+            DrawNode::Effect { source, effect } => {
+                let source = self.node(scene, *source, cache)?;
+                self.effect(&source, effect)?
             }
             DrawNode::Masked {
                 source,
@@ -380,11 +503,28 @@ impl GpuContext {
                 compilation_options: Default::default(),
                 cache: None,
             });
+        let effect_shader = self
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("FX-001"),
+                source: wgpu::ShaderSource::Wgsl(EFFECT_SHADER.into()),
+            });
+        let effect_pipeline =
+            self.device
+                .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                    label: Some("FX-001"),
+                    layout: None,
+                    module: &effect_shader,
+                    entry_point: Some("main"),
+                    compilation_options: Default::default(),
+                    cache: None,
+                });
         Ok(ScenePass {
             gpu: self,
             size,
             working,
             pipeline,
+            effect_pipeline,
             blank,
             stats: TransferStats {
                 cpu_upload_control_bytes: 4,

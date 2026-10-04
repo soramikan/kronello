@@ -1,0 +1,22 @@
+[package]
+name = "kronello-mcp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+kronello-service = { path = "../kronello-service" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip", "raw_value"] }
+
+[dev-dependencies]
+kronello-service = { path = "../kronello-service", features = ["test-adapter-unavailable", "test-job-control"] }
+kronello-jobs = { path = "../kronello-jobs" }
+jsonschema = { version = "0.46", default-features = false }
+tempfile = "3"

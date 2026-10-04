@@ -1,0 +1,6812 @@
+{
+  "$defs": {
+    "AnimationCurve": {
+      "additionalProperties": false,
+      "description": "Validated, strictly time-ordered document data; evaluation lives in\nkronello-animation. Unknown meaning versions can be retained and serialized,\nbut cannot be edited or evaluated as version 1. Empty curves are editable;\nevaluating one is an explicit error, never an implicit default value.",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/CurveId"
+        },
+        "interpolation_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "keys": {
+          "items": {
+            "$ref": "#/$defs/Keyframe"
+          },
+          "type": "array"
+        },
+        "value_type": {
+          "$ref": "#/$defs/ValueType"
+        }
+      },
+      "required": [
+        "id",
+        "value_type",
+        "keys",
+        "interpolation_version"
+      ],
+      "type": "object"
+    },
+    "Asset": {
+      "additionalProperties": false,
+      "properties": {
+        "content_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "id": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "kind": {
+          "$ref": "#/$defs/AssetKind"
+        },
+        "locator": {
+          "$ref": "#/$defs/AssetLocator"
+        },
+        "streams": {
+          "items": {
+            "$ref": "#/$defs/StreamMetadata"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "content_hash",
+        "kind",
+        "streams",
+        "locator"
+      ],
+      "type": "object"
+    },
+    "AssetId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "format": "uuid",
+      "type": "string"
+    },
+    "AssetKind": {
+      "enum": [
+        "video",
+        "audio",
+        "image",
+        "data"
+      ],
+      "type": "string"
+    },
+    "AssetLocator": {
+      "additionalProperties": false,
+      "properties": {
+        "absolute": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "relative": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "AudioRetimePolicy": {
+      "description": "NLE-001 never performs implicit pitch/speed conversion.",
+      "enum": [
+        "reject"
+      ],
+      "type": "string"
+    },
+    "CapabilitiesRequest": {
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CapabilitiesResult": {
+      "additionalProperties": false,
+      "properties": {
+        "api_schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "backends": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "commands": {
+          "items": {
+            "$ref": "#/$defs/CommandDescriptor"
+          },
+          "type": "array"
+        },
+        "effects": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "engine_version": {
+          "type": "string"
+        },
+        "features": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "media": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MediaCapabilities"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Loaded FFmpeg capabilities; discovery failures return a typed error.\nAn explicitly supplied report avoids runtime initialization."
+        },
+        "semantic_versions": {
+          "$ref": "#/$defs/SemanticVersions"
+        }
+      },
+      "required": [
+        "api_schema_version",
+        "engine_version",
+        "semantic_versions",
+        "commands",
+        "features",
+        "effects",
+        "backends"
+      ],
+      "type": "object"
+    },
+    "ChangedKey": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "value",
+              "type": "string"
+            },
+            "object_id": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "property_id": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "required": [
+            "kind",
+            "object_id",
+            "property_id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "structure",
+              "type": "string"
+            },
+            "object_id": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "parent_container_id": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "object_id",
+            "parent_container_id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Clip": {
+      "additionalProperties": false,
+      "properties": {
+        "audio_retime": {
+          "$ref": "#/$defs/AudioRetimePolicy",
+          "default": "reject"
+        },
+        "effects": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Effect"
+          },
+          "type": "array"
+        },
+        "id": {
+          "$ref": "#/$defs/ClipId"
+        },
+        "links": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ClipId"
+          },
+          "type": "array"
+        },
+        "source_in": {
+          "$ref": "#/$defs/Rational"
+        },
+        "source_ref": {
+          "$ref": "#/$defs/SourceRef"
+        },
+        "time_map": {
+          "$ref": "#/$defs/TimeMap"
+        },
+        "timeline_range": {
+          "$ref": "#/$defs/TimeRange"
+        }
+      },
+      "required": [
+        "id",
+        "source_ref",
+        "timeline_range",
+        "source_in",
+        "time_map"
+      ],
+      "type": "object"
+    },
+    "ClipId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "format": "uuid",
+      "type": "string"
+    },
+    "ClipPlaceRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision": {
+          "type": "string"
+        },
+        "clip": {
+          "$ref": "#/$defs/Clip"
+        },
+        "idempotency_key": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "sequence": {
+          "$ref": "#/$defs/SequenceId"
+        },
+        "session_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "track": {
+          "$ref": "#/$defs/TrackId"
+        }
+      },
+      "required": [
+        "project",
+        "base_revision",
+        "session_id",
+        "idempotency_key",
+        "sequence",
+        "track",
+        "clip"
+      ],
+      "type": "object"
+    },
+    "ClipStretchRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision": {
+          "type": "string"
+        },
+        "clip": {
+          "$ref": "#/$defs/ClipId"
+        },
+        "idempotency_key": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "range": {
+          "$ref": "#/$defs/TimeRange"
+        },
+        "sequence": {
+          "$ref": "#/$defs/SequenceId"
+        },
+        "session_id": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "base_revision",
+        "session_id",
+        "idempotency_key",
+        "sequence",
+        "clip",
+        "range"
+      ],
+      "type": "object"
+    },
+    "ClipTrimRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision": {
+          "type": "string"
+        },
+        "clip": {
+          "$ref": "#/$defs/ClipId"
+        },
+        "idempotency_key": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "range": {
+          "$ref": "#/$defs/TimeRange"
+        },
+        "sequence": {
+          "$ref": "#/$defs/SequenceId"
+        },
+        "session_id": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "base_revision",
+        "session_id",
+        "idempotency_key",
+        "sequence",
+        "clip",
+        "range"
+      ],
+      "type": "object"
+    },
+    "CodecCapability": {
+      "properties": {
+        "decoder": {
+          "type": "boolean"
+        },
+        "encoder": {
+          "type": "boolean"
+        },
+        "hardware": {
+          "description": "FFmpeg HARDWARE or HYBRID registration; device success is checked on open.",
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "encoder",
+        "decoder",
+        "hardware"
+      ],
+      "type": "object"
+    },
+    "CollectRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "output_directory": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "output_directory"
+      ],
+      "type": "object"
+    },
+    "CollectedProject": {
+      "properties": {
+        "asset_count": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "directory": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "directory",
+        "project",
+        "asset_count"
+      ],
+      "type": "object"
+    },
+    "Color": {
+      "additionalProperties": false,
+      "properties": {
+        "components": {
+          "$ref": "#/$defs/ColorComponents"
+        },
+        "space": {
+          "$ref": "#/$defs/ColorSpace"
+        }
+      },
+      "required": [
+        "space",
+        "components"
+      ],
+      "type": "object"
+    },
+    "ColorComponents": {
+      "additionalProperties": false,
+      "description": "Straight RGB with independent alpha. Alpha defaults only at input; saved\ncolors always emit all four components and an explicit color space.",
+      "properties": {
+        "alpha": {
+          "$ref": "#/$defs/FiniteF64",
+          "default": 1.0
+        },
+        "b": {
+          "$ref": "#/$defs/FiniteF64"
+        },
+        "g": {
+          "$ref": "#/$defs/FiniteF64"
+        },
+        "r": {
+          "$ref": "#/$defs/FiniteF64"
+        }
+      },
+      "required": [
+        "r",
+        "g",
+        "b"
+      ],
+      "type": "object"
+    },
+    "ColorSpace": {
+      "enum": [
+        "srgb",
+        "linear_rec709",
+        "linear_rec2020"
+      ],
+      "type": "string"
+    },
+    "CommandDescriptor": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "read_only": {
+          "description": "Read-only refers to the source project: render.sequence and\nproject.collect write output files without changing that project.",
+          "type": "boolean"
+        },
+        "request_schema": {
+          "description": "Payload schema (without transport operation tag).",
+          "type": "string"
+        },
+        "response_schema": {
+          "description": "Successful result value schema (without status/kind envelope).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "read_only",
+        "request_schema",
+        "response_schema"
+      ],
+      "type": "object"
+    },
+    "Composition": {
+      "additionalProperties": false,
+      "description": "Editable document frame. After editing or decoding, validate the complete\ndefinition set with validate_compositions before accepting it. Node storage\norder has no semantic meaning; root_nodes and child_order carry draw order.",
+      "properties": {
+        "design_extent": {
+          "$ref": "#/$defs/DesignExtent"
+        },
+        "duration": {
+          "$ref": "#/$defs/Duration"
+        },
+        "edit_rate": {
+          "$ref": "#/$defs/FrameRate"
+        },
+        "id": {
+          "$ref": "#/$defs/CompositionId"
+        },
+        "nodes": {
+          "items": {
+            "$ref": "#/$defs/SceneNode"
+          },
+          "type": "array"
+        },
+        "properties": {
+          "items": {
+            "$ref": "#/$defs/Property"
+          },
+          "type": "array"
+        },
+        "root_nodes": {
+          "items": {
+            "$ref": "#/$defs/NodeId"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "duration",
+        "design_extent",
+        "edit_rate",
+        "root_nodes",
+        "nodes",
+        "properties"
+      ],
+      "type": "object"
+    },
+    "CompositionId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "format": "uuid",
+      "type": "string"
+    },
+    "CompositionInstance": {
+      "additionalProperties": false,
+      "properties": {
+        "definition_ref": {
+          "$ref": "#/$defs/CompositionId"
+        },
+        "id": {
+          "$ref": "#/$defs/CompositionInstanceId"
+        },
+        "input_bindings": {
+          "additionalProperties": {
+            "$ref": "#/$defs/PropertySource"
+          },
+          "description": "Targets are properties on the referenced Composition. Curve/expression\nmetadata resolution and public template input policy are later layers.",
+          "type": "object"
+        },
+        "local_time_map": {
+          "$ref": "#/$defs/TimeMap"
+        },
+        "seed": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "definition_ref",
+        "input_bindings",
+        "local_time_map",
+        "seed"
+      ],
+      "type": "object"
+    },
+    "CompositionInstanceId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "format": "uuid",
+      "type": "string"
+    },
+    "ContentId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "format": "uuid",
+      "type": "string"
+    },
+    "CreateRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/Project"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "document"
+      ],
+      "type": "object"
+    },
+    "CurveId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "format": "uuid",
+      "type": "string"
+    },
+    "CurveInterpolation": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "hold",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "linear",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "cubic",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/TimeBezier"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "DescriptorRef": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/SchemaKey"
+        },
+        "version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "key",
+        "version"
+      ],
+      "type": "object"
+    },
+    "DesignExtent": {
+      "additionalProperties": false,
+      "description": "Design units, independent of output pixels or display DPI.",
+      "properties": {
+        "height": {
+          "$ref": "#/$defs/FiniteF64"
+        },
+        "width": {
+          "$ref": "#/$defs/FiniteF64"
+        }
+      },
+      "required": [
+        "width",
+        "height"
+      ],
+      "type": "object"
+    },
+    "DocumentObject": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Composition"
+        },
+        {
+          "$ref": "#/$defs/OpaqueObject"
+        }
+      ],
+      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
+    },
+    "DocumentObject2": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AnimationCurve"
+        },
+        {
+          "$ref": "#/$defs/OpaqueObject"
+        }
+      ],
+      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
+    },
+    "DocumentObject3": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Shape"
+        },
+        {
+          "$ref": "#/$defs/OpaqueObject"
+        }
+      ],
+      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
+    },
+    "DocumentObject4": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TextDocument"
+        },
+        {
+          "$ref": "#/$defs/OpaqueObject"
+        }
+      ],
+      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
+    },
+    "DocumentObject5": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TemplateDefinition"
+        },
+        {
+          "$ref": "#/$defs/OpaqueObject"
+        }
+      ],
+      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
+    },
+    "DocumentObject6": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TemplateInstance"
+        },
+        {
+          "$ref": "#/$defs/OpaqueObject"
+        }
+      ],
+      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
+    },
+    "DocumentObject7": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Asset"
+        },
+        {
+          "$ref": "#/$defs/OpaqueObject"
+        }
+      ],
+      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
+    },
+    "DocumentObject8": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sequence"
+        },
+        {
+          "$ref": "#/$defs/OpaqueObject"
+        }
+      ],
+      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
+    },
+    "Duration": {
+      "additionalProperties": false,
+      "description": "A nonnegative length in seconds. Zero is permitted.",
+      "properties": {
+        "den": {
+          "pattern": "^-?[0-9]+$",
+          "type": "string"
+        },
+        "num": {
+          "pattern": "^-?[0-9]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "num",
+        "den"
+      ],
+      "type": "object"
+    },
+    "EditApplyRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision": {
+          "type": "string"
+        },
+        "commands": {
+          "items": {
+            "$ref": "#/$defs/EditCommand"
+          },
+          "type": "array"
+        },
+        "idempotency_key": {
+          "type": "string"
+        },
+        "plan_hash": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "session_id": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "base_revision",
+        "plan_hash",
+        "idempotency_key",
+        "session_id",
+        "commands"
+      ],
+      "type": "object"
+    },
+    "EditCommand": {
+      "description": "Externally tagged commands decode directly, retaining strict fields and\nconcrete model number decoding instead of serde's tagged Content buffer.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "timeline": {
+              "$ref": "#/$defs/TimelineCommand"
+            }
+          },
+          "required": [
+            "timeline"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "template": {
+              "$ref": "#/$defs/TemplateCommand"
+            }
+          },
+          "required": [
+            "template"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "property_source_set": {
+              "additionalProperties": false,
+              "properties": {
+                "curve": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/AnimationCurve"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "object": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "property": {
+                  "$ref": "#/$defs/PropertyId"
+                },
+                "source": {
+                  "$ref": "#/$defs/PropertySource"
+                }
+              },
+              "required": [
+                "object",
+                "property",
+                "source"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "property_source_set"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "keyframe_insert": {
+              "additionalProperties": false,
+              "properties": {
+                "curve": {
+                  "$ref": "#/$defs/CurveId"
+                },
+                "key": {
+                  "$ref": "#/$defs/Keyframe"
+                }
+              },
+              "required": [
+                "curve",
+                "key"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "keyframe_insert"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "keyframe_upsert": {
+              "additionalProperties": false,
+              "properties": {
+                "curve": {
+                  "$ref": "#/$defs/CurveId"
+                },
+                "key": {
+                  "$ref": "#/$defs/Keyframe"
+                }
+              },
+              "required": [
+                "curve",
+                "key"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "keyframe_upsert"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "keyframe_replace": {
+              "additionalProperties": false,
+              "properties": {
+                "curve": {
+                  "$ref": "#/$defs/CurveId"
+                },
+                "key": {
+                  "$ref": "#/$defs/Keyframe"
+                }
+              },
+              "required": [
+                "curve",
+                "key"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "keyframe_replace"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "keyframe_remove": {
+              "additionalProperties": false,
+              "properties": {
+                "curve": {
+                  "$ref": "#/$defs/CurveId"
+                },
+                "time": {
+                  "$ref": "#/$defs/Rational"
+                }
+              },
+              "required": [
+                "curve",
+                "time"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "keyframe_remove"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "node_add": {
+              "additionalProperties": false,
+              "properties": {
+                "composition": {
+                  "$ref": "#/$defs/CompositionId"
+                },
+                "index": {
+                  "format": "uint",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "node": {
+                  "$ref": "#/$defs/SceneNode"
+                }
+              },
+              "required": [
+                "composition",
+                "node",
+                "index"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "node_add"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "node_remove": {
+              "additionalProperties": false,
+              "properties": {
+                "composition": {
+                  "$ref": "#/$defs/CompositionId"
+                },
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                }
+              },
+              "required": [
+                "composition",
+                "node"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "node_remove"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "node_reparent": {
+              "additionalProperties": false,
+              "properties": {
+                "composition": {
+                  "$ref": "#/$defs/CompositionId"
+                },
+                "index": {
+                  "format": "uint",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                },
+                "parent": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/NodeId"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "composition",
+                "node",
+                "index"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "node_reparent"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "transform_parent_set": {
+              "additionalProperties": false,
+              "properties": {
+                "composition": {
+                  "$ref": "#/$defs/CompositionId"
+                },
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                },
+                "parent": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/NodeId"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "composition",
+                "node"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "transform_parent_set"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "node_reorder": {
+              "additionalProperties": false,
+              "properties": {
+                "composition": {
+                  "$ref": "#/$defs/CompositionId"
+                },
+                "order": {
+                  "items": {
+                    "$ref": "#/$defs/NodeId"
+                  },
+                  "type": "array"
+                },
+                "parent": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/NodeId"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "composition",
+                "order"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "node_reorder"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "shape_set": {
+              "additionalProperties": false,
+              "properties": {
+                "shape": {
+                  "$ref": "#/$defs/Shape"
+                }
+              },
+              "required": [
+                "shape"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "shape_set"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "text_set": {
+              "additionalProperties": false,
+              "properties": {
+                "text": {
+                  "$ref": "#/$defs/TextDocument"
+                }
+              },
+              "required": [
+                "text"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "text_set"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "composition_create": {
+              "additionalProperties": false,
+              "properties": {
+                "composition": {
+                  "$ref": "#/$defs/Composition"
+                }
+              },
+              "required": [
+                "composition"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "composition_create"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "instance_place": {
+              "additionalProperties": false,
+              "properties": {
+                "composition": {
+                  "$ref": "#/$defs/CompositionId"
+                },
+                "index": {
+                  "format": "uint",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "node": {
+                  "$ref": "#/$defs/SceneNode"
+                }
+              },
+              "required": [
+                "composition",
+                "node",
+                "index"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "instance_place"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "EditPlan": {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision": {
+          "type": "string"
+        },
+        "candidate": {
+          "$ref": "#/$defs/Project"
+        },
+        "changed_keys": {
+          "items": {
+            "$ref": "#/$defs/ChangedKey"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "commands": {
+          "items": {
+            "$ref": "#/$defs/EditCommand"
+          },
+          "type": "array"
+        },
+        "inverse": {
+          "items": {
+            "$ref": "#/$defs/Mutation"
+          },
+          "type": "array"
+        },
+        "mutations": {
+          "items": {
+            "$ref": "#/$defs/Mutation"
+          },
+          "type": "array"
+        },
+        "plan_hash": {
+          "type": "string"
+        },
+        "project_id": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "base_revision",
+        "commands",
+        "mutations",
+        "inverse",
+        "changed_keys",
+        "candidate",
+        "plan_hash"
+      ],
+      "type": "object"
+    },
+    "Effect": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EffectDefinition"
+        },
+        true
+      ],
+      "description": "Unknown ids, parameters, fields and variants are retained verbatim."
+    },
+    "EffectDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "effect_id": {
+          "type": "string"
+        },
+        "parameters": {
+          "$ref": "#/$defs/EffectParameters"
+        },
+        "version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "effect_id",
+        "version",
+        "parameters"
+      ],
+      "type": "object"
+    },
+    "EffectParameters": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "gaussian_blur",
+              "type": "string"
+            },
+            "sigma": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "required": [
+            "kind",
+            "sigma"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "color": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "const": "drop_shadow",
+              "type": "string"
+            },
+            "offset": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "opacity": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "sigma": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "required": [
+            "kind",
+            "sigma",
+            "offset",
+            "color",
+            "opacity"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Event": {
+      "properties": {
+        "changed_keys": {
+          "items": {
+            "$ref": "#/$defs/ChangedKey"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "idempotency_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "inverse": {
+          "items": {
+            "$ref": "#/$defs/Mutation"
+          },
+          "type": "array"
+        },
+        "mutations": {
+          "items": {
+            "$ref": "#/$defs/Mutation"
+          },
+          "type": "array"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "session_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "undo_of": {
+          "format": "uuid",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "revision",
+        "session_id",
+        "mutations",
+        "inverse",
+        "changed_keys"
+      ],
+      "type": "object"
+    },
+    "ExportResult": {
+      "additionalProperties": false,
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/Project"
+        },
+        "revision": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "revision",
+        "document"
+      ],
+      "type": "object"
+    },
+    "ExpressionId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "format": "uuid",
+      "type": "string"
+    },
+    "Fill": {
+      "additionalProperties": false,
+      "properties": {
+        "color": {
+          "$ref": "#/$defs/PropertyId",
+          "description": "Color Property: explicitly tagged straight RGB and independent alpha."
+        },
+        "gradient": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Gradient"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rule": {
+          "$ref": "#/$defs/FillRule"
+        }
+      },
+      "required": [
+        "color",
+        "rule"
+      ],
+      "type": "object"
+    },
+    "FillRule": {
+      "enum": [
+        "nonzero",
+        "evenodd"
+      ],
+      "type": "string"
+    },
+    "FiniteF64": {
+      "description": "No non-finite value can be constructed or deserialized through the public API.",
+      "format": "double",
+      "type": "number"
+    },
+    "FontInput": {
+      "additionalProperties": false,
+      "properties": {
+        "identity": {
+          "$ref": "#/$defs/FontRef"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "identity",
+        "path"
+      ],
+      "type": "object"
+    },
+    "FontRef": {
+      "additionalProperties": false,
+      "description": "File hash plus face index fixes the actual bytes; names are verified too.\nNo family lookup or implicit system-font fallback is permitted.",
+      "properties": {
+        "face_index": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "family": {
+          "type": "string"
+        },
+        "postscript_name": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "family",
+        "postscript_name",
+        "sha256",
+        "face_index"
+      ],
+      "type": "object"
+    },
+    "FrameMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "backend": {
+          "type": "string"
+        },
+        "composition": {
+          "$ref": "#/$defs/CompositionId"
+        },
+        "design_extent": {
+          "items": {
+            "format": "double",
+            "type": "number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "design_to_pixel": {
+          "items": {
+            "items": {
+              "format": "double",
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "display": {
+          "$ref": "#/$defs/ImageFormat"
+        },
+        "flatten_tolerance_px": {
+          "format": "double",
+          "type": "number"
+        },
+        "font_locks": {
+          "items": {
+            "$ref": "#/$defs/FontRef"
+          },
+          "type": "array"
+        },
+        "frame_index": {
+          "description": "Decimal absolute time-zero frame index; absent for arbitrary still time.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "numeric": {
+          "$ref": "#/$defs/ImageFormat"
+        },
+        "project_schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "region": {
+          "$ref": "#/$defs/OutputRegion"
+        },
+        "revision": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "semantic_versions": {
+          "$ref": "#/$defs/SemanticVersions"
+        },
+        "sequence_number": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "snapshot_content_hash": {
+          "type": "string"
+        },
+        "snapshot_schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "target": {
+          "$ref": "#/$defs/RenderTarget"
+        },
+        "time": {
+          "$ref": "#/$defs/Rational"
+        },
+        "working_space": {
+          "$ref": "#/$defs/ColorSpace"
+        }
+      },
+      "required": [
+        "schema_version",
+        "snapshot_schema_version",
+        "project_schema_version",
+        "snapshot_content_hash",
+        "revision",
+        "composition",
+        "target",
+        "semantic_versions",
+        "font_locks",
+        "time",
+        "design_extent",
+        "region",
+        "design_to_pixel",
+        "working_space",
+        "flatten_tolerance_px",
+        "numeric",
+        "display",
+        "backend"
+      ],
+      "type": "object"
+    },
+    "FrameRate": {
+      "additionalProperties": false,
+      "description": "A positive exact number of frames per second.",
+      "properties": {
+        "den": {
+          "pattern": "^-?[0-9]+$",
+          "type": "string"
+        },
+        "num": {
+          "pattern": "^-?[0-9]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "num",
+        "den"
+      ],
+      "type": "object"
+    },
+    "FrameRenderRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "input": {
+          "$ref": "#/$defs/RenderInput"
+        },
+        "time": {
+          "$ref": "#/$defs/Rational"
+        }
+      },
+      "required": [
+        "input",
+        "time"
+      ],
+      "type": "object"
+    },
+    "FrameResult": {
+      "additionalProperties": false,
+      "properties": {
+        "display": {
+          "items": {
+            "items": {
+              "format": "float",
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "linear": {
+          "items": {
+            "items": {
+              "format": "float",
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "metadata": {
+          "$ref": "#/$defs/FrameMetadata"
+        }
+      },
+      "required": [
+        "metadata",
+        "linear",
+        "display"
+      ],
+      "type": "object"
+    },
+    "Gradient": {
+      "description": "Local design-space, pad-only paint. Unknown fields/variants are retained by\nthe owning DocumentObject as opaque content and cannot execute.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "end": {
+              "items": {
+                "$ref": "#/$defs/FiniteF64"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            },
+            "kind": {
+              "const": "linear",
+              "type": "string"
+            },
+            "start": {
+              "items": {
+                "$ref": "#/$defs/FiniteF64"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            },
+            "stops": {
+              "items": {
+                "$ref": "#/$defs/GradientStop"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "start",
+            "end",
+            "stops"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "center": {
+              "items": {
+                "$ref": "#/$defs/FiniteF64"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            },
+            "kind": {
+              "const": "radial",
+              "type": "string"
+            },
+            "radius": {
+              "$ref": "#/$defs/FiniteF64"
+            },
+            "stops": {
+              "items": {
+                "$ref": "#/$defs/GradientStop"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "center",
+            "radius",
+            "stops"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "GradientStop": {
+      "additionalProperties": false,
+      "properties": {
+        "color": {
+          "$ref": "#/$defs/PropertyId"
+        },
+        "offset": {
+          "$ref": "#/$defs/PropertyId"
+        }
+      },
+      "required": [
+        "color",
+        "offset"
+      ],
+      "type": "object"
+    },
+    "HistoryEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "event": {
+          "$ref": "#/$defs/Event"
+        },
+        "undone": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "event",
+        "undone"
+      ],
+      "type": "object"
+    },
+    "HistoryRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "limit": {
+          "default": 100,
+          "format": "uint",
+          "maximum": 1000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "project": {
+          "type": "string"
+        },
+        "session_id": {
+          "default": null,
+          "format": "uuid",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "since_revision": {
+          "default": "0",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "type": "object"
+    },
+    "HistoryResult": {
+      "additionalProperties": false,
+      "properties": {
+        "events": {
+          "items": {
+            "$ref": "#/$defs/HistoryEntry"
+          },
+          "type": "array"
+        },
+        "next_since_revision": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "revision": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "revision",
+        "events"
+      ],
+      "type": "object"
+    },
+    "ImageFormat": {
+      "additionalProperties": false,
+      "properties": {
+        "alpha": {
+          "type": "string"
+        },
+        "association_space": {
+          "$ref": "#/$defs/ColorSpace"
+        },
+        "byte_order": {
+          "type": "string"
+        },
+        "channel_order": {
+          "type": "string"
+        },
+        "clipping": {
+          "type": "string"
+        },
+        "color_space": {
+          "$ref": "#/$defs/ColorSpace"
+        },
+        "pixel_format": {
+          "type": "string"
+        },
+        "row_order": {
+          "type": "string"
+        },
+        "transfer_function": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "color_space",
+        "transfer_function",
+        "alpha",
+        "association_space",
+        "pixel_format",
+        "channel_order",
+        "row_order",
+        "byte_order",
+        "clipping"
+      ],
+      "type": "object"
+    },
+    "ImportRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision": {
+          "description": "Decimal revision, independent of JSON number precision.",
+          "type": "string"
+        },
+        "document": {
+          "$ref": "#/$defs/Project"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "base_revision",
+        "document"
+      ],
+      "type": "object"
+    },
+    "InstancePath": {
+      "description": "Root-to-leaf stable placement identities. Empty denotes the root definition.\nA path is contextual: resolve it from a root Composition to validate it.",
+      "items": {
+        "$ref": "#/$defs/CompositionInstanceId"
+      },
+      "type": "array"
+    },
+    "InstanceRetimeRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision": {
+          "type": "string"
+        },
+        "composition": {
+          "$ref": "#/$defs/CompositionId"
+        },
+        "idempotency_key": {
+          "type": "string"
+        },
+        "node": {
+          "$ref": "#/$defs/NodeId"
+        },
+        "project": {
+          "type": "string"
+        },
+        "session_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "time_map": {
+          "$ref": "#/$defs/TimeMap"
+        }
+      },
+      "required": [
+        "project",
+        "base_revision",
+        "session_id",
+        "idempotency_key",
+        "composition",
+        "node",
+        "time_map"
+      ],
+      "type": "object"
+    },
+    "JobAudioClip": {
+      "additionalProperties": false,
+      "properties": {
+        "asset": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "gain": {
+          "format": "float",
+          "type": "number"
+        },
+        "placement": {
+          "$ref": "#/$defs/TimeRange"
+        },
+        "source_in": {
+          "$ref": "#/$defs/Rational"
+        },
+        "stream_index": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "asset",
+        "stream_index",
+        "placement",
+        "source_in",
+        "gain"
+      ],
+      "type": "object"
+    },
+    "JobFailure": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "type": "object"
+    },
+    "JobListRequest": {
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "JobListResult": {
+      "additionalProperties": false,
+      "properties": {
+        "jobs": {
+          "items": {
+            "$ref": "#/$defs/JobRecord"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "jobs"
+      ],
+      "type": "object"
+    },
+    "JobOutput": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "format": {
+              "const": "image_sequence",
+              "type": "string"
+            }
+          },
+          "required": [
+            "format"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "background": {
+              "items": {
+                "format": "float",
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/JobAudioClip"
+              },
+              "type": "array"
+            },
+            "format": {
+              "const": "pro_res_mov",
+              "type": "string"
+            }
+          },
+          "required": [
+            "format",
+            "clips",
+            "background"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "JobPruneRequest": {
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "JobRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "cancel_requested": {
+          "type": "boolean"
+        },
+        "completed_frames": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "destination": {
+          "type": "string"
+        },
+        "directory_pruned": {
+          "type": "boolean"
+        },
+        "engine_version": {
+          "type": "string"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JobFailure"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "finished_at_ms": {
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "heartbeat_at_ms": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "id": {
+          "type": "string"
+        },
+        "input_hash": {
+          "type": "string"
+        },
+        "output_profile": true,
+        "project_id": {
+          "type": "string"
+        },
+        "result": true,
+        "revision": {
+          "type": "string"
+        },
+        "snapshot_hash": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/JobStatus"
+        },
+        "submitted_at_ms": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "total_frames": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "worker_pid": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "submitted_at_ms",
+        "engine_version",
+        "project_id",
+        "revision",
+        "snapshot_hash",
+        "input_hash",
+        "output_profile",
+        "destination",
+        "status",
+        "completed_frames",
+        "total_frames",
+        "heartbeat_at_ms",
+        "cancel_requested",
+        "directory_pruned"
+      ],
+      "type": "object"
+    },
+    "JobRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "job": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "job"
+      ],
+      "type": "object"
+    },
+    "JobStatus": {
+      "enum": [
+        "queued",
+        "running",
+        "succeeded",
+        "failed",
+        "canceled",
+        "interrupted"
+      ],
+      "type": "string"
+    },
+    "Keyframe": {
+      "additionalProperties": false,
+      "properties": {
+        "interpolation": {
+          "$ref": "#/$defs/CurveInterpolation",
+          "description": "Applies to [this key, next key). Validated even on the last key."
+        },
+        "time": {
+          "$ref": "#/$defs/Rational"
+        },
+        "value": {
+          "$ref": "#/$defs/Value"
+        }
+      },
+      "required": [
+        "time",
+        "value",
+        "interpolation"
+      ],
+      "type": "object"
+    },
+    "LibraryCapability": {
+      "properties": {
+        "configuration": {
+          "type": "string"
+        },
+        "license": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "license",
+        "configuration"
+      ],
+      "type": "object"
+    },
+    "MediaCapabilities": {
+      "additionalProperties": false,
+      "properties": {
+        "codecs": {
+          "items": {
+            "$ref": "#/$defs/CodecCapability"
+          },
+          "type": "array"
+        },
+        "decoders": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "development_only": {
+          "type": "boolean"
+        },
+        "distribution_eligible": {
+          "type": "boolean"
+        },
+        "encoders": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "ffmpeg_version": {
+          "type": "string"
+        },
+        "hwaccels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "libraries": {
+          "items": {
+            "$ref": "#/$defs/LibraryCapability"
+          },
+          "type": "array"
+        },
+        "library_directory": {
+          "type": "string"
+        },
+        "runtime_version": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "substituted": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "runtime_version",
+        "decoders",
+        "encoders",
+        "hwaccels",
+        "schema_version",
+        "ffmpeg_version",
+        "library_directory",
+        "substituted",
+        "libraries",
+        "distribution_eligible",
+        "development_only",
+        "codecs"
+      ],
+      "type": "object"
+    },
+    "Modifier": {
+      "additionalProperties": false,
+      "description": "Ordered modifier frame only, with semantic parameters and a stable identity.\nNo modifier algorithm or execution capability is implemented here. The\nanimation compiler must resolve kind/version and reject unsupported kinds.",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "id": {
+          "$ref": "#/$defs/ModifierId"
+        },
+        "key": {
+          "$ref": "#/$defs/SchemaKey"
+        },
+        "parameters": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Value"
+          },
+          "type": "object"
+        },
+        "version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "key",
+        "version",
+        "enabled",
+        "parameters"
+      ],
+      "type": "object"
+    },
+    "ModifierId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "format": "uuid",
+      "type": "string"
+    },
+    "Mutation": {
+      "description": "Paths use object-member segments, avoiding ambiguous JSON pointer escaping.\nAn array segment selects an object by its UUID `id`, never by position.\nThe service replaces ordered arrays (including modifiers and draw order)\nas a unit; only unordered model collections use member paths.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "operation": {
+              "const": "set",
+              "type": "string"
+            },
+            "path": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "value": true
+          },
+          "required": [
+            "operation",
+            "path",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "operation": {
+              "const": "remove",
+              "type": "string"
+            },
+            "path": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "operation",
+            "path"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "NodeId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "format": "uuid",
+      "type": "string"
+    },
+    "NodeKind": {
+      "description": "Content hooks only; geometry, text layout, and rendering are later layers.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "group",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "null",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "shape",
+              "type": "string"
+            },
+            "value": {
+              "additionalProperties": false,
+              "properties": {
+                "content_ref": {
+                  "$ref": "#/$defs/ContentId"
+                }
+              },
+              "required": [
+                "content_ref"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "text",
+              "type": "string"
+            },
+            "value": {
+              "additionalProperties": false,
+              "properties": {
+                "content_ref": {
+                  "$ref": "#/$defs/ContentId"
+                }
+              },
+              "required": [
+                "content_ref"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "composition_instance",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/CompositionInstance"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "OpaqueObject": {
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "OutputFile": {
+      "additionalProperties": false,
+      "properties": {
+        "bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "bytes",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "OutputRegion": {
+      "additionalProperties": false,
+      "properties": {
+        "extent": {
+          "items": {
+            "format": "double",
+            "type": "number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "origin": {
+          "items": {
+            "format": "double",
+            "type": "number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "pixels": {
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "origin",
+        "extent",
+        "pixels"
+      ],
+      "type": "object"
+    },
+    "Path": {
+      "additionalProperties": false,
+      "description": "A document geometry container only. Topology checking/morph evaluation is\ndeferred to the vector/animation layer; Path currently supports Hold only.",
+      "properties": {
+        "segments": {
+          "items": {
+            "$ref": "#/$defs/PathSegment"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "segments"
+      ],
+      "type": "object"
+    },
+    "PathSegment": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "move_to",
+              "type": "string"
+            },
+            "value": {
+              "items": {
+                "$ref": "#/$defs/FiniteF64"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "line_to",
+              "type": "string"
+            },
+            "value": {
+              "items": {
+                "$ref": "#/$defs/FiniteF64"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "quad_to",
+              "type": "string"
+            },
+            "value": {
+              "additionalProperties": false,
+              "properties": {
+                "control": {
+                  "items": {
+                    "$ref": "#/$defs/FiniteF64"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                },
+                "end": {
+                  "items": {
+                    "$ref": "#/$defs/FiniteF64"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "control",
+                "end"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "cubic_to",
+              "type": "string"
+            },
+            "value": {
+              "additionalProperties": false,
+              "properties": {
+                "control1": {
+                  "items": {
+                    "$ref": "#/$defs/FiniteF64"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                },
+                "control2": {
+                  "items": {
+                    "$ref": "#/$defs/FiniteF64"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                },
+                "end": {
+                  "items": {
+                    "$ref": "#/$defs/FiniteF64"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "control1",
+                "control2",
+                "end"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "close",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "PlanRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision": {
+          "type": "string"
+        },
+        "commands": {
+          "items": {
+            "$ref": "#/$defs/EditCommand"
+          },
+          "type": "array"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "base_revision",
+        "commands"
+      ],
+      "type": "object"
+    },
+    "Project": {
+      "additionalProperties": true,
+      "properties": {
+        "assets": {
+          "items": {
+            "$ref": "#/$defs/DocumentObject7"
+          },
+          "type": "array"
+        },
+        "compositions": {
+          "items": {
+            "$ref": "#/$defs/DocumentObject"
+          },
+          "type": "array"
+        },
+        "curves": {
+          "items": {
+            "$ref": "#/$defs/DocumentObject2"
+          },
+          "type": "array"
+        },
+        "id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "maximum": 1,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "semantic_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sequences": {
+          "items": {
+            "$ref": "#/$defs/DocumentObject8"
+          },
+          "type": "array"
+        },
+        "shapes": {
+          "items": {
+            "$ref": "#/$defs/DocumentObject3"
+          },
+          "type": "array"
+        },
+        "template_instances": {
+          "items": {
+            "$ref": "#/$defs/DocumentObject6"
+          },
+          "type": "array"
+        },
+        "templates": {
+          "items": {
+            "$ref": "#/$defs/DocumentObject5"
+          },
+          "type": "array"
+        },
+        "texts": {
+          "items": {
+            "$ref": "#/$defs/DocumentObject4"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "schema_version",
+        "semantic_version",
+        "name",
+        "compositions",
+        "curves"
+      ],
+      "type": "object"
+    },
+    "ProjectInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "compositions": {
+          "items": {
+            "$ref": "#/$defs/CompositionId"
+          },
+          "type": "array"
+        },
+        "content_hash": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "project_id": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "semantic_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "project_id",
+        "name",
+        "revision",
+        "schema_version",
+        "semantic_version",
+        "content_hash",
+        "compositions"
+      ],
+      "type": "object"
+    },
+    "ProjectRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "type": "object"
+    },
+    "Property": {
+      "additionalProperties": false,
+      "description": "Deserialization checks intrinsic invariants only; use from_json(input,\nregistry) or validate(registry) to resolve the descriptor before accepting\nan imported property. Source catalogs are checked by validate_sources.",
+      "properties": {
+        "descriptor": {
+          "$ref": "#/$defs/DescriptorRef"
+        },
+        "id": {
+          "$ref": "#/$defs/PropertyId"
+        },
+        "modifiers": {
+          "items": {
+            "$ref": "#/$defs/Modifier"
+          },
+          "type": "array"
+        },
+        "source": {
+          "$ref": "#/$defs/PropertySource"
+        }
+      },
+      "required": [
+        "id",
+        "descriptor",
+        "source",
+        "modifiers"
+      ],
+      "type": "object"
+    },
+    "PropertyId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "format": "uuid",
+      "type": "string"
+    },
+    "PropertySample": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/SampleKey"
+        },
+        "unit": {
+          "$ref": "#/$defs/Unit"
+        },
+        "value_type": {
+          "$ref": "#/$defs/ValueType"
+        },
+        "values": {
+          "items": {
+            "$ref": "#/$defs/Value"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "key",
+        "value_type",
+        "unit",
+        "values"
+      ],
+      "type": "object"
+    },
+    "PropertySampleRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "composition": {
+          "$ref": "#/$defs/CompositionId"
+        },
+        "fonts": {
+          "description": "Explicitly selects render-consistent active node values with font locks.",
+          "items": {
+            "$ref": "#/$defs/FontInput"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "keys": {
+          "items": {
+            "$ref": "#/$defs/SampleKey"
+          },
+          "maxItems": 100000,
+          "minItems": 1,
+          "type": "array"
+        },
+        "project": {
+          "type": "string"
+        },
+        "times": {
+          "items": {
+            "$ref": "#/$defs/Rational"
+          },
+          "maxItems": 100000,
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "project",
+        "composition",
+        "keys",
+        "times"
+      ],
+      "type": "object"
+    },
+    "PropertySampleResult": {
+      "additionalProperties": false,
+      "properties": {
+        "composition": {
+          "$ref": "#/$defs/CompositionId"
+        },
+        "revision": {
+          "type": "string"
+        },
+        "samples": {
+          "description": "Request key order; each values array follows request time order.",
+          "items": {
+            "$ref": "#/$defs/PropertySample"
+          },
+          "type": "array"
+        },
+        "times": {
+          "items": {
+            "$ref": "#/$defs/Rational"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "revision",
+        "composition",
+        "times",
+        "samples"
+      ],
+      "type": "object"
+    },
+    "PropertySource": {
+      "description": "One source at a time, in memory and JSON. Adjacent tagging represents scalar\nconstants and UUID references uniformly, while deny_unknown_fields rejects\ncompeting payloads rather than applying an implicit priority.\n\n```compile_fail\nuse kronello_model::PropertySource;\nlet source: PropertySource<bool> = PropertySource::Constant(\"wrong type\");\n```\n\n```compile_fail\nuse kronello_model::{CurveId, PropertySource};\nlet source = PropertySource::<bool> {\n    constant: true,\n    curve: CurveId::new(),\n};\n```",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "constant",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/Value"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "curve",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/CurveId"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "expression",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/ExpressionId"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "PruneResult": {
+      "additionalProperties": false,
+      "properties": {
+        "pruned": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "pruned"
+      ],
+      "type": "object"
+    },
+    "QueryBounds": {
+      "additionalProperties": false,
+      "properties": {
+        "max": {
+          "items": {
+            "format": "double",
+            "type": "number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "min": {
+          "items": {
+            "format": "double",
+            "type": "number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "min",
+        "max"
+      ],
+      "type": "object"
+    },
+    "Rational": {
+      "additionalProperties": false,
+      "properties": {
+        "den": {
+          "pattern": "^-?[0-9]+$",
+          "type": "string"
+        },
+        "num": {
+          "pattern": "^-?[0-9]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "num",
+        "den"
+      ],
+      "type": "object"
+    },
+    "RelinkRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "asset": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "base_revision": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "search_directory": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "base_revision",
+        "asset",
+        "search_directory"
+      ],
+      "type": "object"
+    },
+    "RenderInput": {
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "not": {
+            "required": [
+              "target"
+            ]
+          },
+          "properties": {
+            "composition": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "composition"
+          ]
+        },
+        {
+          "not": {
+            "required": [
+              "composition"
+            ]
+          },
+          "properties": {
+            "target": {
+              "type": "object"
+            }
+          },
+          "required": [
+            "target"
+          ]
+        }
+      ],
+      "properties": {
+        "composition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CompositionId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fonts": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/FontInput"
+          },
+          "type": "array"
+        },
+        "profile": {
+          "$ref": "#/$defs/RenderProfile",
+          "default": {
+            "flatten_tolerance_px": 0.02,
+            "working_space": "linear_rec709"
+          }
+        },
+        "project": {
+          "type": "string"
+        },
+        "region": {
+          "$ref": "#/$defs/OutputRegion"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RenderTarget"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "project",
+        "region"
+      ],
+      "type": "object"
+    },
+    "RenderProfile": {
+      "additionalProperties": false,
+      "properties": {
+        "flatten_tolerance_px": {
+          "format": "double",
+          "type": "number"
+        },
+        "working_space": {
+          "$ref": "#/$defs/ColorSpace"
+        }
+      },
+      "required": [
+        "working_space",
+        "flatten_tolerance_px"
+      ],
+      "type": "object"
+    },
+    "RenderSubmitRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "output": {
+          "$ref": "#/$defs/JobOutput",
+          "default": {
+            "format": "image_sequence"
+          }
+        },
+        "render": {
+          "$ref": "#/$defs/SequenceRenderRequest",
+          "description": "Reuses the synchronous target and time/region request without a job-only\ntarget model. output_directory is the MOV filename for ProResMov."
+        },
+        "required_features": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "render"
+      ],
+      "type": "object"
+    },
+    "RenderTarget": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "composition": {
+              "$ref": "#/$defs/CompositionId"
+            },
+            "kind": {
+              "const": "composition",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "composition"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "sequence",
+              "type": "string"
+            },
+            "sequence": {
+              "$ref": "#/$defs/SequenceId"
+            }
+          },
+          "required": [
+            "kind",
+            "sequence"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Request": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "base_revision": {
+              "type": "string"
+            },
+            "idempotency_key": {
+              "type": "string"
+            },
+            "operation": {
+              "const": "sequence.create",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "sequence": {
+              "$ref": "#/$defs/Sequence"
+            },
+            "session_id": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "base_revision",
+            "session_id",
+            "idempotency_key",
+            "sequence"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "base_revision": {
+              "type": "string"
+            },
+            "clip": {
+              "$ref": "#/$defs/Clip"
+            },
+            "idempotency_key": {
+              "type": "string"
+            },
+            "operation": {
+              "const": "clip.place",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "sequence": {
+              "$ref": "#/$defs/SequenceId"
+            },
+            "session_id": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "track": {
+              "$ref": "#/$defs/TrackId"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "base_revision",
+            "session_id",
+            "idempotency_key",
+            "sequence",
+            "track",
+            "clip"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "base_revision": {
+              "type": "string"
+            },
+            "clip": {
+              "$ref": "#/$defs/ClipId"
+            },
+            "idempotency_key": {
+              "type": "string"
+            },
+            "operation": {
+              "const": "clip.trim",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "range": {
+              "$ref": "#/$defs/TimeRange"
+            },
+            "sequence": {
+              "$ref": "#/$defs/SequenceId"
+            },
+            "session_id": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "base_revision",
+            "session_id",
+            "idempotency_key",
+            "sequence",
+            "clip",
+            "range"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "base_revision": {
+              "type": "string"
+            },
+            "clip": {
+              "$ref": "#/$defs/ClipId"
+            },
+            "idempotency_key": {
+              "type": "string"
+            },
+            "operation": {
+              "const": "clip.stretch",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "range": {
+              "$ref": "#/$defs/TimeRange"
+            },
+            "sequence": {
+              "$ref": "#/$defs/SequenceId"
+            },
+            "session_id": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "base_revision",
+            "session_id",
+            "idempotency_key",
+            "sequence",
+            "clip",
+            "range"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "base_revision": {
+              "type": "string"
+            },
+            "composition": {
+              "$ref": "#/$defs/CompositionId"
+            },
+            "idempotency_key": {
+              "type": "string"
+            },
+            "node": {
+              "$ref": "#/$defs/NodeId"
+            },
+            "operation": {
+              "const": "instance.retime",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "session_id": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "time_map": {
+              "$ref": "#/$defs/TimeMap"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "base_revision",
+            "session_id",
+            "idempotency_key",
+            "composition",
+            "node",
+            "time_map"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "base_revision": {
+              "type": "string"
+            },
+            "duration": {
+              "$ref": "#/$defs/Duration"
+            },
+            "idempotency_key": {
+              "type": "string"
+            },
+            "instance": {
+              "$ref": "#/$defs/CompositionInstanceId"
+            },
+            "operation": {
+              "const": "template_instance.retime",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "session_id": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "base_revision",
+            "session_id",
+            "idempotency_key",
+            "instance",
+            "duration"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "operation": {
+              "const": "render.submit",
+              "type": "string"
+            },
+            "output": {
+              "$ref": "#/$defs/JobOutput",
+              "default": {
+                "format": "image_sequence"
+              }
+            },
+            "render": {
+              "$ref": "#/$defs/SequenceRenderRequest",
+              "description": "Reuses the synchronous target and time/region request without a job-only\ntarget model. output_directory is the MOV filename for ProResMov."
+            },
+            "required_features": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "operation",
+            "render"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "job": {
+              "type": "string"
+            },
+            "operation": {
+              "const": "job.get",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "job"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "operation": {
+              "const": "job.list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "job": {
+              "type": "string"
+            },
+            "operation": {
+              "const": "job.cancel",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "job"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "operation": {
+              "const": "job.prune",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "base_revision": {
+              "type": "string"
+            },
+            "duration": {
+              "$ref": "#/$defs/Duration"
+            },
+            "idempotency_key": {
+              "type": "string"
+            },
+            "instance": {
+              "$ref": "#/$defs/CompositionInstanceId"
+            },
+            "operation": {
+              "const": "template.set_duration",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "session_id": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "base_revision",
+            "session_id",
+            "idempotency_key",
+            "instance",
+            "duration"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "base_revision": {
+              "type": "string"
+            },
+            "definition": {
+              "$ref": "#/$defs/TemplateDefinition"
+            },
+            "idempotency_key": {
+              "type": "string"
+            },
+            "operation": {
+              "const": "template.define",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "session_id": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "base_revision",
+            "session_id",
+            "idempotency_key",
+            "definition"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "base_revision": {
+              "type": "string"
+            },
+            "composition": {
+              "$ref": "#/$defs/CompositionId"
+            },
+            "idempotency_key": {
+              "type": "string"
+            },
+            "index": {
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "instance": {
+              "$ref": "#/$defs/TemplateInstance"
+            },
+            "node": {
+              "$ref": "#/$defs/NodeId"
+            },
+            "operation": {
+              "const": "template.instantiate",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "session_id": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "base_revision",
+            "session_id",
+            "idempotency_key",
+            "composition",
+            "node",
+            "index",
+            "instance"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "base_revision": {
+              "type": "string"
+            },
+            "idempotency_key": {
+              "type": "string"
+            },
+            "instance": {
+              "$ref": "#/$defs/CompositionInstanceId"
+            },
+            "name": {
+              "type": "string"
+            },
+            "operation": {
+              "const": "template.set_input",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "session_id": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/Value"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "base_revision",
+            "session_id",
+            "idempotency_key",
+            "instance",
+            "name",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "asset": {
+              "$ref": "#/$defs/AssetId"
+            },
+            "base_revision": {
+              "type": "string"
+            },
+            "operation": {
+              "const": "asset.relink",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "search_directory": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "base_revision",
+            "asset",
+            "search_directory"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "operation": {
+              "const": "project.collect",
+              "type": "string"
+            },
+            "output_directory": {
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "output_directory"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "document": {
+              "$ref": "#/$defs/Project"
+            },
+            "operation": {
+              "const": "project.create",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "document"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "base_revision": {
+              "description": "Decimal revision, independent of JSON number precision.",
+              "type": "string"
+            },
+            "document": {
+              "$ref": "#/$defs/Project"
+            },
+            "operation": {
+              "const": "project.import",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "base_revision",
+            "document"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "operation": {
+              "const": "project.export",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "operation": {
+              "const": "project.info",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "input": {
+              "$ref": "#/$defs/RenderInput"
+            },
+            "operation": {
+              "const": "render.frame",
+              "type": "string"
+            },
+            "time": {
+              "$ref": "#/$defs/Rational"
+            }
+          },
+          "required": [
+            "operation",
+            "input",
+            "time"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "frame_rate": {
+              "$ref": "#/$defs/FrameRate"
+            },
+            "input": {
+              "$ref": "#/$defs/RenderInput"
+            },
+            "operation": {
+              "const": "render.sequence",
+              "type": "string"
+            },
+            "output_directory": {
+              "type": "string"
+            },
+            "range": {
+              "$ref": "#/$defs/TimeRange"
+            }
+          },
+          "required": [
+            "operation",
+            "input",
+            "range",
+            "frame_rate",
+            "output_directory"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "base_revision": {
+              "type": "string"
+            },
+            "commands": {
+              "items": {
+                "$ref": "#/$defs/EditCommand"
+              },
+              "type": "array"
+            },
+            "operation": {
+              "const": "edit.plan",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "base_revision",
+            "commands"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "base_revision": {
+              "type": "string"
+            },
+            "commands": {
+              "items": {
+                "$ref": "#/$defs/EditCommand"
+              },
+              "type": "array"
+            },
+            "idempotency_key": {
+              "type": "string"
+            },
+            "operation": {
+              "const": "edit.apply",
+              "type": "string"
+            },
+            "plan_hash": {
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "session_id": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "base_revision",
+            "plan_hash",
+            "idempotency_key",
+            "session_id",
+            "commands"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "base_revision": {
+              "type": "string"
+            },
+            "event_id": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "idempotency_key": {
+              "type": "string"
+            },
+            "operation": {
+              "const": "edit.undo",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "session_id": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "base_revision",
+            "session_id",
+            "idempotency_key",
+            "event_id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "limit": {
+              "default": 100,
+              "format": "uint",
+              "maximum": 1000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "operation": {
+              "const": "history.list",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "session_id": {
+              "default": null,
+              "format": "uuid",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "since_revision": {
+              "default": "0",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "composition": {
+              "$ref": "#/$defs/CompositionId"
+            },
+            "evaluation": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/SceneEvaluationRequest"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "expand_instances": {
+              "default": false,
+              "type": "boolean"
+            },
+            "operation": {
+              "const": "scene.query",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "composition"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "composition": {
+              "$ref": "#/$defs/CompositionId"
+            },
+            "fonts": {
+              "description": "Explicitly selects render-consistent active node values with font locks.",
+              "items": {
+                "$ref": "#/$defs/FontInput"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "keys": {
+              "items": {
+                "$ref": "#/$defs/SampleKey"
+              },
+              "maxItems": 100000,
+              "minItems": 1,
+              "type": "array"
+            },
+            "operation": {
+              "const": "property.sample",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "times": {
+              "items": {
+                "$ref": "#/$defs/Rational"
+              },
+              "maxItems": 100000,
+              "minItems": 1,
+              "type": "array"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "composition",
+            "keys",
+            "times"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "operation": {
+              "const": "capabilities.get",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ResolvedEffect": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "GaussianBlur": {
+              "properties": {
+                "sigma": {
+                  "format": "double",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "sigma"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "GaussianBlur"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "DropShadow": {
+              "properties": {
+                "color": {
+                  "$ref": "#/$defs/Color"
+                },
+                "offset": {
+                  "items": {
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                },
+                "opacity": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "sigma": {
+                  "format": "double",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "sigma",
+                "offset",
+                "color",
+                "opacity"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "DropShadow"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Response": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "result": {
+              "$ref": "#/$defs/ResultData"
+            },
+            "status": {
+              "const": "success",
+              "type": "string"
+            }
+          },
+          "required": [
+            "status",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "error": {
+              "$ref": "#/$defs/ServiceError"
+            },
+            "status": {
+              "const": "error",
+              "type": "string"
+            }
+          },
+          "required": [
+            "status",
+            "error"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ResultData": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "job",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/JobRecord"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "jobs",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/JobListResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "pruned",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/PruneResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "collected",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/CollectedProject"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "project",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/ProjectInfo"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "export",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/ExportResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "frame",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/FrameResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "sequence",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/SequenceMetadata"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "plan",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/EditPlan"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "edit",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/Event"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "history",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/HistoryResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "scene",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/SceneQueryResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "samples",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/PropertySampleResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "capabilities",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/CapabilitiesResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "RubyAssociation": {
+      "additionalProperties": false,
+      "properties": {
+        "base": {
+          "$ref": "#/$defs/TextRange"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "base",
+        "text"
+      ],
+      "type": "object"
+    },
+    "SampleKey": {
+      "description": "A wire key for either a node property or a composition input. IDs and paths\nare the evaluator's runtime identities, never display names or indices.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "instance_path": {
+              "$ref": "#/$defs/InstancePath"
+            },
+            "kind": {
+              "const": "node",
+              "type": "string"
+            },
+            "node": {
+              "$ref": "#/$defs/NodeId"
+            },
+            "property": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "required": [
+            "kind",
+            "instance_path",
+            "node",
+            "property"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "composition": {
+              "$ref": "#/$defs/CompositionId"
+            },
+            "instance_path": {
+              "$ref": "#/$defs/InstancePath"
+            },
+            "kind": {
+              "const": "composition",
+              "type": "string"
+            },
+            "property": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "required": [
+            "kind",
+            "instance_path",
+            "composition",
+            "property"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "SampleRate": {
+      "description": "Positive integer samples per second. Indices share the time-zero origin.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "SceneEvaluationRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "fonts": {
+          "items": {
+            "$ref": "#/$defs/FontInput"
+          },
+          "type": "array"
+        },
+        "time": {
+          "$ref": "#/$defs/Rational"
+        }
+      },
+      "required": [
+        "time",
+        "fonts"
+      ],
+      "type": "object"
+    },
+    "SceneNode": {
+      "additionalProperties": false,
+      "properties": {
+        "active_range": {
+          "$ref": "#/$defs/TimeRange"
+        },
+        "child_order": {
+          "description": "Ordered owned children, independent of transform parenting.",
+          "items": {
+            "$ref": "#/$defs/NodeId"
+          },
+          "type": "array"
+        },
+        "containment_parent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NodeId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "effects": {
+          "items": {
+            "$ref": "#/$defs/Effect"
+          },
+          "type": "array"
+        },
+        "id": {
+          "$ref": "#/$defs/NodeId"
+        },
+        "kind": {
+          "$ref": "#/$defs/NodeKind"
+        },
+        "properties": {
+          "items": {
+            "$ref": "#/$defs/Property"
+          },
+          "type": "array"
+        },
+        "transform_parent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NodeId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "child_order",
+        "active_range",
+        "properties"
+      ],
+      "type": "object"
+    },
+    "SceneNodeEvaluation": {
+      "additionalProperties": false,
+      "properties": {
+        "effects": {
+          "items": {
+            "$ref": "#/$defs/ResolvedEffect"
+          },
+          "type": "array"
+        },
+        "layout_bounds": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/QueryBounds"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "properties": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Value"
+          },
+          "type": "object"
+        },
+        "text": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "world_transform": {
+          "items": {
+            "items": {
+              "format": "double",
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "properties",
+        "world_transform",
+        "effects"
+      ],
+      "type": "object"
+    },
+    "SceneNodeKey": {
+      "additionalProperties": false,
+      "properties": {
+        "instance_path": {
+          "$ref": "#/$defs/InstancePath"
+        },
+        "node": {
+          "$ref": "#/$defs/NodeId"
+        }
+      },
+      "required": [
+        "instance_path",
+        "node"
+      ],
+      "type": "object"
+    },
+    "SceneQueryNode": {
+      "additionalProperties": false,
+      "properties": {
+        "active_range": {
+          "$ref": "#/$defs/TimeRange",
+          "description": "Authored half-open range in this instance's local composition time."
+        },
+        "children": {
+          "description": "Ordered children, with expanded definition roots before authored children.",
+          "items": {
+            "$ref": "#/$defs/SceneNodeKey"
+          },
+          "type": "array"
+        },
+        "composition": {
+          "$ref": "#/$defs/CompositionId"
+        },
+        "containment_parent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SceneNodeKey"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evaluated": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SceneNodeEvaluation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Present only for active nodes when evaluation was requested."
+        },
+        "key": {
+          "$ref": "#/$defs/SceneNodeKey"
+        },
+        "kind": {
+          "$ref": "#/$defs/NodeKind"
+        },
+        "transform_parent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SceneNodeKey"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "key",
+        "composition",
+        "kind",
+        "children",
+        "active_range"
+      ],
+      "type": "object"
+    },
+    "SceneQueryRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "composition": {
+          "$ref": "#/$defs/CompositionId"
+        },
+        "evaluation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SceneEvaluationRequest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expand_instances": {
+          "default": false,
+          "type": "boolean"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "composition"
+      ],
+      "type": "object"
+    },
+    "SceneQueryResult": {
+      "additionalProperties": false,
+      "properties": {
+        "composition": {
+          "$ref": "#/$defs/CompositionId"
+        },
+        "design_extent": {
+          "$ref": "#/$defs/DesignExtent"
+        },
+        "duration": {
+          "$ref": "#/$defs/Duration"
+        },
+        "nodes": {
+          "description": "Containment pre-order; includes inactive nodes without evaluating values.",
+          "items": {
+            "$ref": "#/$defs/SceneQueryNode"
+          },
+          "type": "array"
+        },
+        "revision": {
+          "type": "string"
+        },
+        "roots": {
+          "items": {
+            "$ref": "#/$defs/SceneNodeKey"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "revision",
+        "composition",
+        "duration",
+        "design_extent",
+        "roots",
+        "nodes"
+      ],
+      "type": "object"
+    },
+    "SchemaKey": {
+      "description": "Immutable namespaced schema identity, such as `kronello.transform.opacity`.\nIt is supplied by the schema author, independently of a localized label.",
+      "type": "string"
+    },
+    "SemanticVersions": {
+      "additionalProperties": false,
+      "properties": {
+        "color": {
+          "type": "string"
+        },
+        "coverage": {
+          "type": "string"
+        },
+        "document": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "effects": {
+          "additionalProperties": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "object"
+        },
+        "gradient_interpolation": {
+          "type": "string"
+        },
+        "interpolation": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "layout": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stroke_geometry": {
+          "type": "string"
+        },
+        "time_map": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "vector": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "document",
+        "interpolation",
+        "time_map",
+        "layout",
+        "vector",
+        "color",
+        "coverage",
+        "stroke_geometry",
+        "gradient_interpolation",
+        "effects"
+      ],
+      "type": "object"
+    },
+    "Sequence": {
+      "additionalProperties": false,
+      "properties": {
+        "audio_rate": {
+          "$ref": "#/$defs/SampleRate"
+        },
+        "extent": {
+          "$ref": "#/$defs/DesignExtent"
+        },
+        "frame_rate": {
+          "$ref": "#/$defs/FrameRate"
+        },
+        "id": {
+          "$ref": "#/$defs/SequenceId"
+        },
+        "tracks": {
+          "description": "Authored bottom-to-top compositing order.",
+          "items": {
+            "$ref": "#/$defs/Track"
+          },
+          "type": "array"
+        },
+        "working_space": {
+          "$ref": "#/$defs/ColorSpace"
+        }
+      },
+      "required": [
+        "id",
+        "extent",
+        "frame_rate",
+        "audio_rate",
+        "working_space",
+        "tracks"
+      ],
+      "type": "object"
+    },
+    "SequenceCreateRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision": {
+          "type": "string"
+        },
+        "idempotency_key": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "sequence": {
+          "$ref": "#/$defs/Sequence"
+        },
+        "session_id": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "base_revision",
+        "session_id",
+        "idempotency_key",
+        "sequence"
+      ],
+      "type": "object"
+    },
+    "SequenceFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "display": {
+          "$ref": "#/$defs/OutputFile"
+        },
+        "metadata": {
+          "$ref": "#/$defs/FrameMetadata"
+        },
+        "metadata_file": {
+          "type": "string"
+        },
+        "numeric": {
+          "$ref": "#/$defs/OutputFile"
+        }
+      },
+      "required": [
+        "metadata",
+        "numeric",
+        "display",
+        "metadata_file"
+      ],
+      "type": "object"
+    },
+    "SequenceId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "format": "uuid",
+      "type": "string"
+    },
+    "SequenceMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "frame_grid": {
+          "type": "string"
+        },
+        "frame_rate": {
+          "$ref": "#/$defs/FrameRate"
+        },
+        "frames": {
+          "items": {
+            "$ref": "#/$defs/SequenceFrame"
+          },
+          "type": "array"
+        },
+        "range": {
+          "$ref": "#/$defs/TimeRange"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_version",
+        "range",
+        "frame_rate",
+        "frame_grid",
+        "frames"
+      ],
+      "type": "object"
+    },
+    "SequenceRenderRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "frame_rate": {
+          "$ref": "#/$defs/FrameRate"
+        },
+        "input": {
+          "$ref": "#/$defs/RenderInput"
+        },
+        "output_directory": {
+          "type": "string"
+        },
+        "range": {
+          "$ref": "#/$defs/TimeRange"
+        }
+      },
+      "required": [
+        "input",
+        "range",
+        "frame_rate",
+        "output_directory"
+      ],
+      "type": "object"
+    },
+    "ServiceError": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "details": true,
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "type": "object"
+    },
+    "Shape": {
+      "additionalProperties": false,
+      "properties": {
+        "fill": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Fill"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "geometry": {
+          "$ref": "#/$defs/ShapeGeometry"
+        },
+        "id": {
+          "$ref": "#/$defs/ContentId"
+        },
+        "stroke": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Stroke"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "geometry"
+      ],
+      "type": "object"
+    },
+    "ShapeGeometry": {
+      "description": "Size is [width, height] in local design_px, with top-left at [0, 0].\nEllipses fit that rectangle. Radius is a uniform circular corner radius;\nderivation caps it to half the smaller dimension without changing the IR.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "rectangle",
+              "type": "string"
+            },
+            "value": {
+              "additionalProperties": false,
+              "properties": {
+                "corner_radius": {
+                  "$ref": "#/$defs/PropertyId"
+                },
+                "size": {
+                  "$ref": "#/$defs/PropertyId"
+                }
+              },
+              "required": [
+                "size",
+                "corner_radius"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "ellipse",
+              "type": "string"
+            },
+            "value": {
+              "additionalProperties": false,
+              "properties": {
+                "size": {
+                  "$ref": "#/$defs/PropertyId"
+                }
+              },
+              "required": [
+                "size"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "bezier_path",
+              "type": "string"
+            },
+            "value": {
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "$ref": "#/$defs/PropertyId"
+                }
+              },
+              "required": [
+                "path"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "SourceRef": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "composition": {
+              "$ref": "#/$defs/CompositionId"
+            },
+            "kind": {
+              "const": "composition",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "composition"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "asset": {
+              "$ref": "#/$defs/AssetId"
+            },
+            "kind": {
+              "const": "asset",
+              "type": "string"
+            },
+            "stream_index": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "asset",
+            "stream_index"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "generator": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "generator",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "generator"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "StreamMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "codec": {
+          "type": "string"
+        },
+        "color_matrix": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "color_primaries": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "color_range": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "color_transfer": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "duration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rational"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "height": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "index": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pixel_format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "time_base": {
+          "$ref": "#/$defs/Rational"
+        },
+        "width": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "index",
+        "codec",
+        "time_base"
+      ],
+      "type": "object"
+    },
+    "Stroke": {
+      "additionalProperties": false,
+      "properties": {
+        "cap": {
+          "$ref": "#/$defs/PropertyId",
+          "description": "Enum Property: \"butt\", \"round\", or \"square\" (Hold interpolation)."
+        },
+        "color": {
+          "$ref": "#/$defs/PropertyId"
+        },
+        "gradient": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Gradient"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "join": {
+          "$ref": "#/$defs/PropertyId",
+          "description": "Enum Property: \"miter\", \"round\", or \"bevel\" (Hold interpolation)."
+        },
+        "miter_limit": {
+          "$ref": "#/$defs/PropertyId",
+          "description": "Dimensionless Scalar Property, at least 1."
+        },
+        "width": {
+          "$ref": "#/$defs/PropertyId"
+        }
+      },
+      "required": [
+        "color",
+        "width",
+        "join",
+        "cap",
+        "miter_limit"
+      ],
+      "type": "object"
+    },
+    "TemplateBandBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "band_node": {
+          "$ref": "#/$defs/NodeId"
+        },
+        "padding": {
+          "items": {
+            "$ref": "#/$defs/FiniteF64"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "position_property": {
+          "$ref": "#/$defs/PropertyId"
+        },
+        "size_property": {
+          "$ref": "#/$defs/PropertyId"
+        },
+        "text_node": {
+          "$ref": "#/$defs/NodeId"
+        }
+      },
+      "required": [
+        "text_node",
+        "band_node",
+        "size_property",
+        "position_property",
+        "padding"
+      ],
+      "type": "object"
+    },
+    "TemplateCommand": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "define": {
+              "additionalProperties": false,
+              "properties": {
+                "definition": {
+                  "$ref": "#/$defs/TemplateDefinition"
+                }
+              },
+              "required": [
+                "definition"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "define"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "instantiate": {
+              "additionalProperties": false,
+              "properties": {
+                "composition": {
+                  "$ref": "#/$defs/CompositionId"
+                },
+                "index": {
+                  "format": "uint",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "instance": {
+                  "$ref": "#/$defs/TemplateInstance"
+                },
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                }
+              },
+              "required": [
+                "composition",
+                "node",
+                "index",
+                "instance"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "instantiate"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "set_input": {
+              "additionalProperties": false,
+              "properties": {
+                "instance": {
+                  "$ref": "#/$defs/CompositionInstanceId"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "value": {
+                  "$ref": "#/$defs/Value"
+                }
+              },
+              "required": [
+                "instance",
+                "name",
+                "value"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "set_input"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "set_duration": {
+              "additionalProperties": false,
+              "properties": {
+                "duration": {
+                  "$ref": "#/$defs/Duration"
+                },
+                "instance": {
+                  "$ref": "#/$defs/CompositionInstanceId"
+                }
+              },
+              "required": [
+                "instance",
+                "duration"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "set_duration"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "TemplateConstraints": {
+      "additionalProperties": false,
+      "properties": {
+        "bands": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/TemplateBandBinding"
+          },
+          "type": "array"
+        },
+        "max_lines": {
+          "additionalProperties": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "default": {},
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "TemplateDefineRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision": {
+          "type": "string"
+        },
+        "definition": {
+          "$ref": "#/$defs/TemplateDefinition"
+        },
+        "idempotency_key": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "session_id": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "base_revision",
+        "session_id",
+        "idempotency_key",
+        "definition"
+      ],
+      "type": "object"
+    },
+    "TemplateDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "composition_ref": {
+          "$ref": "#/$defs/CompositionId"
+        },
+        "constraints": {
+          "$ref": "#/$defs/TemplateConstraints"
+        },
+        "content_hash": {
+          "description": "Hash of the complete reachable authoring content, fixed by define.",
+          "type": "string"
+        },
+        "duration_policy": {
+          "$ref": "#/$defs/TemplateDurationPolicy"
+        },
+        "id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "public_inputs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/TemplateInput"
+          },
+          "type": "object"
+        },
+        "template_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "template_id",
+        "version",
+        "composition_ref",
+        "public_inputs",
+        "duration_policy",
+        "constraints",
+        "content_hash"
+      ],
+      "type": "object"
+    },
+    "TemplateDurationPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "intro": {
+          "$ref": "#/$defs/Duration"
+        },
+        "middle_mode": {
+          "$ref": "#/$defs/TemplateMiddleMode"
+        },
+        "minimum_middle": {
+          "$ref": "#/$defs/Duration"
+        },
+        "outro": {
+          "$ref": "#/$defs/Duration"
+        }
+      },
+      "required": [
+        "intro",
+        "outro",
+        "minimum_middle",
+        "middle_mode"
+      ],
+      "type": "object"
+    },
+    "TemplateInput": {
+      "additionalProperties": false,
+      "properties": {
+        "choices": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "default": {
+          "$ref": "#/$defs/Value"
+        },
+        "maximum": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FiniteF64"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "minimum": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FiniteF64"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target": {
+          "$ref": "#/$defs/TemplateInputTarget"
+        },
+        "value_type": {
+          "$ref": "#/$defs/ValueType"
+        }
+      },
+      "required": [
+        "value_type",
+        "default",
+        "target"
+      ],
+      "type": "object"
+    },
+    "TemplateInputTarget": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "property": {
+              "additionalProperties": false,
+              "properties": {
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                },
+                "property": {
+                  "$ref": "#/$defs/PropertyId"
+                }
+              },
+              "required": [
+                "node",
+                "property"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "property"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "text": {
+              "additionalProperties": false,
+              "properties": {
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                }
+              },
+              "required": [
+                "node"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "TemplateInstance": {
+      "additionalProperties": false,
+      "properties": {
+        "definition_ref": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "duration": {
+          "$ref": "#/$defs/Duration"
+        },
+        "id": {
+          "$ref": "#/$defs/CompositionInstanceId"
+        },
+        "inputs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Value"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "definition_ref",
+        "version",
+        "duration"
+      ],
+      "type": "object"
+    },
+    "TemplateInstanceRetimeRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision": {
+          "type": "string"
+        },
+        "duration": {
+          "$ref": "#/$defs/Duration"
+        },
+        "idempotency_key": {
+          "type": "string"
+        },
+        "instance": {
+          "$ref": "#/$defs/CompositionInstanceId"
+        },
+        "project": {
+          "type": "string"
+        },
+        "session_id": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "base_revision",
+        "session_id",
+        "idempotency_key",
+        "instance",
+        "duration"
+      ],
+      "type": "object"
+    },
+    "TemplateInstantiateRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision": {
+          "type": "string"
+        },
+        "composition": {
+          "$ref": "#/$defs/CompositionId"
+        },
+        "idempotency_key": {
+          "type": "string"
+        },
+        "index": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "instance": {
+          "$ref": "#/$defs/TemplateInstance"
+        },
+        "node": {
+          "$ref": "#/$defs/NodeId"
+        },
+        "project": {
+          "type": "string"
+        },
+        "session_id": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "base_revision",
+        "session_id",
+        "idempotency_key",
+        "composition",
+        "node",
+        "index",
+        "instance"
+      ],
+      "type": "object"
+    },
+    "TemplateMiddleMode": {
+      "enum": [
+        "stretch"
+      ],
+      "type": "string"
+    },
+    "TemplateSetDurationRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision": {
+          "type": "string"
+        },
+        "duration": {
+          "$ref": "#/$defs/Duration"
+        },
+        "idempotency_key": {
+          "type": "string"
+        },
+        "instance": {
+          "$ref": "#/$defs/CompositionInstanceId"
+        },
+        "project": {
+          "type": "string"
+        },
+        "session_id": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "base_revision",
+        "session_id",
+        "idempotency_key",
+        "instance",
+        "duration"
+      ],
+      "type": "object"
+    },
+    "TemplateSetInputRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision": {
+          "type": "string"
+        },
+        "idempotency_key": {
+          "type": "string"
+        },
+        "instance": {
+          "$ref": "#/$defs/CompositionInstanceId"
+        },
+        "name": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "session_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/Value"
+        }
+      },
+      "required": [
+        "project",
+        "base_revision",
+        "session_id",
+        "idempotency_key",
+        "instance",
+        "name",
+        "value"
+      ],
+      "type": "object"
+    },
+    "TextDirection": {
+      "enum": [
+        "horizontal",
+        "vertical_rl"
+      ],
+      "type": "string"
+    },
+    "TextDocument": {
+      "additionalProperties": false,
+      "properties": {
+        "alignment": {
+          "$ref": "#/$defs/PropertyId",
+          "description": "Enum Property: \"start\", \"center\", or \"end\"."
+        },
+        "direction": {
+          "$ref": "#/$defs/TextDirection"
+        },
+        "id": {
+          "$ref": "#/$defs/ContentId"
+        },
+        "layout_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "line_height": {
+          "$ref": "#/$defs/PropertyId",
+          "description": "Absolute baseline spacing in design_px, not a font-size multiplier."
+        },
+        "ruby": {
+          "items": {
+            "$ref": "#/$defs/RubyAssociation"
+          },
+          "type": "array"
+        },
+        "styles": {
+          "description": "Ordered, nonoverlapping, complete coverage at grapheme boundaries.",
+          "items": {
+            "$ref": "#/$defs/TextStyleSpan"
+          },
+          "type": "array"
+        },
+        "text": {
+          "type": "string"
+        },
+        "wrap_width": {
+          "$ref": "#/$defs/PropertyId"
+        }
+      },
+      "required": [
+        "id",
+        "layout_version",
+        "text",
+        "styles",
+        "direction",
+        "wrap_width",
+        "line_height",
+        "alignment"
+      ],
+      "type": "object"
+    },
+    "TextRange": {
+      "additionalProperties": false,
+      "description": "Half-open UTF-8 byte range in the original, unnormalized text.",
+      "properties": {
+        "end": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "start": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "type": "object"
+    },
+    "TextStyleSpan": {
+      "additionalProperties": false,
+      "properties": {
+        "fill": {
+          "$ref": "#/$defs/PropertyId",
+          "description": "Tagged straight Color Property."
+        },
+        "font": {
+          "$ref": "#/$defs/FontRef"
+        },
+        "range": {
+          "$ref": "#/$defs/TextRange"
+        },
+        "size": {
+          "$ref": "#/$defs/PropertyId",
+          "description": "Positive Scalar Property in design_px."
+        }
+      },
+      "required": [
+        "range",
+        "font",
+        "size",
+        "fill"
+      ],
+      "type": "object"
+    },
+    "TimeBezier": {
+      "additionalProperties": false,
+      "description": "Normalized time/value-progress handles between (0, 0) and (1, 1).\nOrdered x handles guarantee monotonic time. Finite y handles may overshoot.\nThese are dimensionless progress values, never stored timestamps.",
+      "properties": {
+        "control1": {
+          "items": {
+            "$ref": "#/$defs/FiniteF64"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "control2": {
+          "items": {
+            "$ref": "#/$defs/FiniteF64"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "control1",
+        "control2"
+      ],
+      "type": "object"
+    },
+    "TimeMap": {
+      "description": "Exact, stateless mappings. Reverse playback, looping, stopping and nonlinear\nmapping are unsupported. Future nonlinear variants require a versioned\nquantization, rounding and evaluation contract; no floating time is stored.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "linear",
+              "type": "string"
+            },
+            "offset": {
+              "$ref": "#/$defs/Rational"
+            },
+            "speed": {
+              "$ref": "#/$defs/Rational"
+            }
+          },
+          "required": [
+            "kind",
+            "offset",
+            "speed"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "piecewise_linear",
+              "type": "string"
+            },
+            "points": {
+              "items": {
+                "$ref": "#/$defs/TimeMapPoint"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "points"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "TimeMapPoint": {
+      "additionalProperties": false,
+      "description": "An exact parent/local control point.",
+      "properties": {
+        "local": {
+          "$ref": "#/$defs/Rational"
+        },
+        "parent": {
+          "$ref": "#/$defs/Rational"
+        }
+      },
+      "required": [
+        "parent",
+        "local"
+      ],
+      "type": "object"
+    },
+    "TimeRange": {
+      "additionalProperties": false,
+      "description": "A half-open interval [start, end). Equal endpoints describe an empty range.",
+      "properties": {
+        "end": {
+          "$ref": "#/$defs/Rational"
+        },
+        "start": {
+          "$ref": "#/$defs/Rational"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "type": "object"
+    },
+    "TimelineCommand": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "sequence_create": {
+              "additionalProperties": false,
+              "properties": {
+                "sequence": {
+                  "$ref": "#/$defs/Sequence"
+                }
+              },
+              "required": [
+                "sequence"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "sequence_create"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "clip_place": {
+              "additionalProperties": false,
+              "properties": {
+                "clip": {
+                  "$ref": "#/$defs/Clip"
+                },
+                "sequence": {
+                  "$ref": "#/$defs/SequenceId"
+                },
+                "track": {
+                  "$ref": "#/$defs/TrackId"
+                }
+              },
+              "required": [
+                "sequence",
+                "track",
+                "clip"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "clip_place"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "clip_trim": {
+              "additionalProperties": false,
+              "properties": {
+                "clip": {
+                  "$ref": "#/$defs/ClipId"
+                },
+                "range": {
+                  "$ref": "#/$defs/TimeRange"
+                },
+                "sequence": {
+                  "$ref": "#/$defs/SequenceId"
+                }
+              },
+              "required": [
+                "sequence",
+                "clip",
+                "range"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "clip_trim"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "clip_stretch": {
+              "additionalProperties": false,
+              "properties": {
+                "clip": {
+                  "$ref": "#/$defs/ClipId"
+                },
+                "range": {
+                  "$ref": "#/$defs/TimeRange"
+                },
+                "sequence": {
+                  "$ref": "#/$defs/SequenceId"
+                }
+              },
+              "required": [
+                "sequence",
+                "clip",
+                "range"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "clip_stretch"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "instance_retime": {
+              "additionalProperties": false,
+              "properties": {
+                "composition": {
+                  "$ref": "#/$defs/CompositionId"
+                },
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                },
+                "time_map": {
+                  "$ref": "#/$defs/TimeMap"
+                }
+              },
+              "required": [
+                "composition",
+                "node",
+                "time_map"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "instance_retime"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "template_instance_retime": {
+              "additionalProperties": false,
+              "properties": {
+                "duration": {
+                  "$ref": "#/$defs/Duration"
+                },
+                "instance": {
+                  "$ref": "#/$defs/CompositionInstanceId"
+                }
+              },
+              "required": [
+                "instance",
+                "duration"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "template_instance_retime"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Track": {
+      "additionalProperties": false,
+      "properties": {
+        "clips": {
+          "items": {
+            "$ref": "#/$defs/Clip"
+          },
+          "type": "array"
+        },
+        "id": {
+          "$ref": "#/$defs/TrackId"
+        },
+        "kind": {
+          "$ref": "#/$defs/TrackKind"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "clips"
+      ],
+      "type": "object"
+    },
+    "TrackId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "format": "uuid",
+      "type": "string"
+    },
+    "TrackKind": {
+      "enum": [
+        "video",
+        "audio"
+      ],
+      "type": "string"
+    },
+    "UndoRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision": {
+          "type": "string"
+        },
+        "event_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "idempotency_key": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "session_id": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "base_revision",
+        "session_id",
+        "idempotency_key",
+        "event_id"
+      ],
+      "type": "object"
+    },
+    "Unit": {
+      "enum": [
+        "dimensionless",
+        "design_px",
+        "degrees"
+      ],
+      "type": "string"
+    },
+    "Value": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "scalar",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/FiniteF64"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "vec2",
+              "type": "string"
+            },
+            "value": {
+              "items": {
+                "$ref": "#/$defs/FiniteF64"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "vec3",
+              "type": "string"
+            },
+            "value": {
+              "items": {
+                "$ref": "#/$defs/FiniteF64"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Continuous degrees: never reduced modulo 360.",
+          "properties": {
+            "kind": {
+              "const": "angle",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/FiniteF64"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "color",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/Color"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "bool",
+              "type": "string"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "enum",
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "string",
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "asset_ref",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/AssetId"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "path",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/Path"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ValueType": {
+      "enum": [
+        "scalar",
+        "vec2",
+        "vec3",
+        "angle",
+        "color",
+        "bool",
+        "enum",
+        "string",
+        "asset_ref",
+        "path"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "https://kronello.dev/schemas/api-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "anyOf": [
+    {
+      "$ref": "#/$defs/Request"
+    },
+    {
+      "$ref": "#/$defs/Response"
+    }
+  ],
+  "title": "ApiEnvelope",
+  "x-api-schema-version": 1
+}
