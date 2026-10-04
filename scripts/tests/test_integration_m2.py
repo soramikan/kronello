@@ -1,4 +1,4 @@
-"""Binary-only CPU acceptance for the INTEGRATION-001 driver."""
+"""Opt-in binary-only CPU acceptance for the INTEGRATION-001 driver."""
 import json
 import os
 from pathlib import Path
@@ -9,6 +9,10 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 
 
+@unittest.skipUnless(
+    os.environ.get("KRONELLO_INTEGRATION_TESTS") == "1",
+    "set KRONELLO_INTEGRATION_TESTS=1 to run binary integration tests after building CLI/MCP",
+)
 class IntegrationM2(unittest.TestCase):
     def run_demo(self, resolution):
         target = Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target"))
@@ -43,6 +47,10 @@ class IntegrationM2(unittest.TestCase):
     def test_small_cpu_reference(self):
         self.run_demo("small")
 
+    @unittest.skipUnless(
+        os.environ.get("KRONELLO_INTEGRATION_4K") == "1",
+        "set KRONELLO_INTEGRATION_4K=1 to run the host-only 4K CPU integration test",
+    )
     def test_4k_cpu_reference(self):
         self.run_demo("4k")
 

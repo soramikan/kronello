@@ -14,6 +14,29 @@ MCP は stdio の initialize / initialized / tools/list を交換し、各 query
 
 `--output-directory` は新規 directory を要求する。`--binary-dir` は既定 `${CARGO_TARGET_DIR:-target}/debug`。`--state-root` は指定した新規 directory、省略時は output 内の新規 `state`。driver / 自動テストは実ユーザー状態領域を開かない。全 request と response summary、CLI exit / stderr / elapsed、check の結果は `report.json`、MCP の診断は `mcp.stderr.log`。失敗時も report を残し、非0終了する。大きい画素配列は count / SHA-256 summary とし、確定 numeric / PNG artifact は保存する。
 
+## 自動テストの opt-in と CI
+
+`scripts/tests/test_integration_m2.py` の実 binary テストは `KRONELLO_INTEGRATION_TESTS=1` を明示した場合だけ実行する。通常の `python3 -m unittest discover -s scripts/tests -v` では small / 4K の2件を理由付き `skipped` として報告する。4K は追加で `KRONELLO_INTEGRATION_4K=1` が必要。opt-in 後の binary / font 欠落や driver の失敗はテスト失敗とし、自動 skip しない。
+
+macOS / Linux の CI は既存の FFmpeg と固定フォントの準備を使い、`Run workspace tests` の後に CLI / MCP の debug binary を build して small の1件だけを実行する。このテストは driver に `--backend cpu-reference --resolution small` を明示する。4K CPU / GPU は CI の対象外で、host で明示実行する。
+
+```sh
+python3 scripts/fetch_fixtures.py
+cargo build -p kronello-cli -p kronello-mcp --locked
+KRONELLO_INTEGRATION_TESTS=1 \
+  python3 -m unittest scripts.tests.test_integration_m2.IntegrationM2.test_small_cpu_reference -v
+```
+
+4K CPU の host 専用コマンド（release binary と FFmpeg / 固定フォントを準備する）:
+
+```sh
+cargo build -p kronello-cli -p kronello-mcp --release --locked
+KRONELLO_INTEGRATION_TESTS=1 KRONELLO_INTEGRATION_4K=1 \
+  python3 -m unittest scripts.tests.test_integration_m2.IntegrationM2.test_4k_cpu_reference -v
+```
+
+`.gitattributes` は全 text を checkout 時も LF に固定する。これにより storage の `committed_schema_matches_rust_types`、service の `public_schemas_match_rust_generators`（両公開 schema）、`scripts/fixtures.py` の固定 JSON fixture の hash / canonical bytes 比較を Windows の CRLF 変換から保護する。PNG / RGBA16F / PAM / WAV などは binary とし、バイトを変換しない。
+
 ## 受け入れ条件との対応
 
 | 条件 | driver の check / 回帰 | 根拠 |
@@ -84,7 +107,8 @@ export PATH=/Users/sora/Repositories/soramikan/kronello/target/native/ffmpeg-lgp
 
 ```sh
 cargo build -p kronello-cli -p kronello-mcp --release --locked
-KRONELLO_INTEGRATION_BINARY_DIR="${CARGO_TARGET_DIR:-target}/release" \
+KRONELLO_INTEGRATION_TESTS=1 KRONELLO_INTEGRATION_4K=1 \
+  KRONELLO_INTEGRATION_BINARY_DIR="${CARGO_TARGET_DIR:-target}/release" \
   python3 -m unittest discover -s scripts/tests -p test_integration_m2.py -v
 ```
 

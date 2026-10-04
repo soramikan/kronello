@@ -1,0 +1,14 @@
+# Preserve byte-exact schemas and fixtures on every platform.
+* text=auto eol=lf
+
+# Binary fixtures, fonts, media, and project files must not be normalized.
+*.png binary
+*.rgba16f binary
+*.pam binary
+*.wav binary
+*.nut binary
+*.mkv binary
+*.mov binary
+*.ttf binary
+*.otf binary
+*.kronello binary

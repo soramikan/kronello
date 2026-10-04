@@ -67,6 +67,12 @@ jobs:
           python3 -m unittest discover -s scripts/tests -v
       - name: Run workspace tests
         run: cargo test --workspace --locked
+      - name: Run small CPU integration test
+        env:
+          KRONELLO_INTEGRATION_TESTS: "1"
+        run: |
+          cargo build -p kronello-cli -p kronello-mcp --locked
+          python3 -m unittest scripts.tests.test_integration_m2.IntegrationM2.test_small_cpu_reference -v
       - name: Validate backlog
         run: python3 scripts/backlog.py check
 
@@ -125,5 +131,11 @@ jobs:
           python3 -m unittest discover -s scripts/tests -v
       - name: Run workspace tests
         run: cargo test --workspace --locked
+      - name: Run small CPU integration test
+        env:
+          KRONELLO_INTEGRATION_TESTS: "1"
+        run: |
+          cargo build -p kronello-cli -p kronello-mcp --locked
+          python3 -m unittest scripts.tests.test_integration_m2.IntegrationM2.test_small_cpu_reference -v
       - name: Validate backlog
         run: python3 scripts/backlog.py check
