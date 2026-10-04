@@ -109,6 +109,8 @@ macro_rules! commands {
             ("edit.undo", false, UndoRequest, kronello_store::Event),
             ("history.list", true, HistoryRequest, HistoryResult),
             ("scene.query", true, SceneQueryRequest, SceneQueryResult),
+            ("node.explain", true, NodeExplainRequest, NodeExplainResult),
+            ("render.explain", true, RenderExplainRequest, RenderExplainResult),
             ("property.sample", true, PropertySampleRequest, PropertySampleResult),
             ("capabilities.get", true, CapabilitiesRequest, CapabilitiesResult),
             ("template.define", false, TemplateDefineRequest, kronello_store::Event),

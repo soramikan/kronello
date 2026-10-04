@@ -98,7 +98,7 @@ pub struct RenderSnapshot {
     font_locks: Vec<FontRef>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum MatteKind {
     Alpha,
@@ -108,7 +108,7 @@ pub enum MatteKind {
 /// Explicit render inputs until a document-level matte model is implemented.
 /// A consumed matte is removed from display roots/children, unless visible is
 /// true. Keys use stable instance paths, never document-array positions.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct MatteBinding {
     pub source: SceneKey,
@@ -116,7 +116,9 @@ pub struct MatteBinding {
     pub kind: MatteKind,
     pub visible: bool,
 }
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, schemars::JsonSchema,
+)]
 #[serde(deny_unknown_fields)]
 pub struct SceneKey {
     pub instance_path: InstancePath,
@@ -243,6 +245,11 @@ impl RenderSnapshot {
     }
     pub fn profile(&self) -> RenderProfile {
         self.profile
+    }
+    /// Explicit transient matte inputs; does not alter the saved Project.
+    pub fn with_mattes(mut self, mattes: Vec<MatteBinding>) -> Self {
+        self.mattes = mattes;
+        self
     }
     pub fn composition(&self) -> CompositionId {
         self.composition

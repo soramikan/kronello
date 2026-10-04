@@ -513,6 +513,7 @@ mod tests {
                 .collect();
             let error = DependencyGraph::compile(
                 EvaluationSnapshot {
+                    expressions: &[],
                     compositions: &definitions,
                     curves: &curves,
                     registry: &registry,

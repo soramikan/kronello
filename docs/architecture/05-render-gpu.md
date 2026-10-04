@@ -106,6 +106,16 @@ M1 / M2 は互換経路でも実装を進め、転送コストを明示する。
 
 ## キャッシュ
 
+### INSPECT-001 の実行前説明
+
+共通 Query `render.explain` は Composition / Sequence の snapshot、Scene IR、tile ごとの Render DAG を組立て、stage code / inputs / SceneKey、要求・halo 実行領域、面数・メモリ・転送の推定を返す。frame executor と同じ `frame_tiles` を使う。`executed:false` であり、GPU の可用性や転送時間の実測ではない。失敗時は `plan:null` と型付き diagnostics を返し、代替 backend を選ばない。
+
+control upload / image upload / GPU image copy / image・status readback を分ける。組込 GPU の frame export は tile ごとに linear / display の二回描画を行い、二つの RGBA16F image（256-byte row padding）と二つの4-byte statusを readback する。control upload の bytes / operations は未推定の null。CPU の GPU 転送は0。注入 backend の未知使用量も null とする。
+
+RGBA16F 面は8 bytes/pixel、CPU 参照面は16 bytes/pixel、最終 host の linear / display は合計32 bytes/pixel。中間面は既存 backend の保守的な安全予算式による `_estimate` で、allocator / driver / geometry / font / RSS / 実測 peak を含まない。`DUPLICATE_LINEAR_DISPLAY_RENDER`、`ZERO_OPACITY_STILL_PROCESSED`、`EFFECT_HALO_EXPANSION`、`SURFACE_BUDGET_EXCEEDED` は処理・安全予算上の notice。OQ-14 の性能合否を決めない。
+
+Query ごとの隔離 `RenderCache` の実 compilation counters を `compilation_cache` に載せ、renderer の cache / LRU / counters を変更しない。scope は `isolated_query_compilation`、raster 未実行を `raster_cache_observed:false` で明示する。runtime の warm hit/miss と混同しない。非表示原因は `node.explain` が containment・transform parent・opacity・active range・transient matte・content / font / unsupported の別に返す。画素の occlusion・coverage は測定しない。詳細は [ADR-0060](../adr/0060-structured-read-only-inspection.md)、[INSPECT-001 検証](../testing/inspect-001.md)。
+
 ```text
 cache_key = hash(
   node semantic version,
