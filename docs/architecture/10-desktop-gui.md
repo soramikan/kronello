@@ -27,6 +27,15 @@ kronello-ffi  --->  kronello-service (Command / Query API)
 | Windows | WinUI 3 | macOS 版の後（[ADR-0032](../adr/0032-windows-winui-linux-gtk.md)） |
 | Linux | GTK4 | macOS 版の後（[ADR-0032](../adr/0032-windows-winui-linux-gtk.md)） |
 
+## 見た目
+
+見た目は OS ごとに変えず、[デザインシステム](../design-system/README.md) で全 OS 共通に定める（[ADR-0054](../adr/0054-gui-design-system.md)）。
+
+- 各フレームワークの標準コントロールを、デザインシステムのトークン（色・寸法・書体）でスタイルして使う。IME・アクセシビリティ・キーボード操作は各フレームワークの仕組みを使う。
+- メニューバー、ファイルダイアログ、ウインドウの枠など OS が描くものは OS のものを使う。
+- テーマは Dark（既定）と Light。書体は Noto Sans JP / Noto Sans Mono を同梱し、アイコンは Lucide を使う。
+- 値の正本は [tokens.json](../design-system/tokens.json)。各実装はトークン名を定数名として写し、値を直接書かない。
+
 ## FFI 境界の規約
 
 [ADR-0031](../adr/0031-ffi-c-abi-json.md) による。
