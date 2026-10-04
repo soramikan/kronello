@@ -73,11 +73,11 @@ Kronello の UI は素材が主役の作業場として組む。見た目は mac
 
 | トークン | Dark | Light | 用途 |
 |---|---|---|---|
-| `surface-0` | `#0e0f11` | `#dedfe2` | ビューアの周囲とキャンバスの背後。両テーマで最も奥の地で、素材を中立の沈んだ地の上で判断できるようにする。 |
-| `surface-100` | `#16171a` | `#ececee` | パネルの地: Project、Inspector、Timeline、Dope sheet。キーフレームのレーンも。 |
+| `surface-0` | `#0e0f11` | `#f3f4f7` | ビューアの周囲とキャンバスの背後。両テーマで最も奥の地で、素材を中立の沈んだ地の上で判断できるようにする。 |
+| `surface-100` | `#16171a` | `#fafbfc` | パネルの地: Project、Inspector、Timeline、Dope sheet。キーフレームのレーンも。 |
 | `surface-200` | `#202125` | `#ffffff` | surface-100 の上に一段上がる行とコントロール: トラックのレーン、数値フィールド、secondary ボタン、ポップオーバー。 |
-| `control-hover` | `#2a2c31` | `#f4f4f6` | secondary / plain ボタンと行の hover の塗り。 |
-| `line` | `#3a3c42` | `#d6d7db` | パネル・トラック・行の間の 1px の区切り。装飾用（3:1 未満）で、操作できる部品の唯一の境界にはしない。 |
+| `control-hover` | `#2a2c31` | `#eff1f4` | secondary / plain ボタンと行の hover の塗り。 |
+| `line` | `#3a3c42` | `#e3e5ea` | パネル・トラック・行の間の 1px の区切り。装飾用（3:1 未満）で、操作できる部品の唯一の境界にはしない。 |
 | `line-strong` | `#74777f` | `#7c7e85` | コントロールの 1px の枠（数値フィールド、secondary ボタン）と中空のキーフレーム。両テーマで surface-0/100/200 と control-hover に対し 3:1 以上。 |
 | `ink` | `#e9e7e4` | `#1d1d1f` | 主な文字とアイコン。すべての地、clip、selection-bg の上で 9:1 以上。 |
 | `ink-muted` | `#9b9ea6` | `#5f6168` | 補助の文字と未選択のキーフレーム: 単位、非アクティブのタブ、ルーラーの目盛り、プレースホルダ。両テーマで surface-0/100/200 と selection-bg に対し 4.6:1 以上。 |
@@ -85,9 +85,9 @@ Kronello の UI は素材が主役の作業場として組む。見た目は mac
 | `accent-ink` | `#f0a33a` | `#8a4f00` | 文字・細線としての琥珀: 再生ヘッドの線、現在時刻のタイムコード。両テーマで surface-0/100/200 に対し 4.9:1 以上。生の琥珀は明るい地で 1.8:1 しかないため、Light では濃くする。 |
 | `on-accent` | `#1b1206` | `#1b1206` | accent の塗りの上の文字とアイコン（8.8:1）。 |
 | `selection` | `#4c9bff` | `#0a5bc0` | 選択されているもの: 選択中のクリップ・レイヤーの 2px の枠、選択中のキーフレームの塗り、フォーカスリング、メニューの現在項目、チェックのオン。両テーマで clip とすべての地に対し 3.8:1 以上。 |
-| `selection-bg` | `#1c3557` | `#d2e3fb` | 選択中の行とクリップの塗り。ink（10:1）と ink-muted（4.6:1）が読める。 |
+| `selection-bg` | `#1c3557` | `#dce8fb` | 選択中の行とクリップの塗り。ink（10:1）と ink-muted（4.6:1）が読める。 |
 | `on-selection` | `#06121f` | `#ffffff` | selection の塗りの上の文字とアイコン（5.6:1 以上）。 |
-| `clip` | `#383b42` | `#c5c8cf` | トラック上のクリップの通常の塗り。上の ink の名前は 9:1 以上。 |
+| `clip` | `#383b42` | `#e4e6eb` | トラック上のクリップの通常の塗り。上の ink の名前は 9:1 以上。 |
 | `kind-video` | `#4fbfae` | `#1f7a6d` | 映像の素材とクリップ（静止画も同じ）: 種類のアイコンとクリップの 2px の下線。青緑。 線とアイコン専用で文字には使わない。両テーマで clip、selection-bg、すべての地に対し 3:1 以上。 |
 | `kind-audio` | `#92c75e` | `#4c7a1c` | 音声の素材とクリップ: 種類のアイコンとクリップの下線。緑。kind-video とは色相とアイコンの両方で区別する。 線とアイコン専用で文字には使わない。両テーマで clip、selection-bg、すべての地に対し 3:1 以上。 |
 | `kind-composition` | `#b596f2` | `#7048c8` | Composition の素材、Composition を参照するクリップ、CompositionInstance のレイヤー。紫。 線とアイコン専用で文字には使わない。両テーマで clip、selection-bg、すべての地に対し 3:1 以上。 |
@@ -143,7 +143,7 @@ Kronello の UI は素材が主役の作業場として組む。見た目は mac
 
 | トークン | 値 | 用途 |
 |---|---|---|
-| `shadow-popover` | dark: `0 8px 24px #00000080, 0 0 0 1px #3a3c42`<br>light: `0 8px 24px #0000002e, 0 0 0 1px #d6d7db` | ポップオーバー、メニュー、ダイアログ、HUD の唯一の影。パネルは影を落とさない。 |
+| `shadow-popover` | dark: `0 8px 24px #00000080, 0 0 0 1px #3a3c42`<br>light: `0 8px 24px #0000001f, 0 0 0 1px #e3e5ea` | ポップオーバー、メニュー、ダイアログ、HUD の唯一の影。パネルは影を落とさない。 |
 
 ## コンポーネント
 
@@ -162,6 +162,7 @@ Kronello の UI は素材が主役の作業場として組む。見た目は mac
 | Timeline | [CurveEditor](components/CurveEditor.md) | Property の AnimationCurve を時間軸のグラフとして表示・編集するエディタで、値グラフと速度グラフを切り替えられる。 |
 | Project と Viewer | [AssetRow](components/AssetRow.md) | Project パネルの素材一覧の 1 行で、素材の種類をアイコンとその色（`kind-*`）で示し、映像と音声を一目で見分けられるようにする。 |
 | Project と Viewer | [Viewer](components/Viewer.md) | Sequence / Composition の現在時刻の画を表示し、再生操作とタイムコードでの移動を受け持つプレビュー領域。 |
+| Project と Viewer | [ToolStrip](components/ToolStrip.md) | Viewer で使う道具（選択・手のひら・ズーム・図形・ペン・テキスト、編集ページではブレード）を切り替える縦の列で、既定では Viewer の左端に付き、折りたたみと取り外し（移動）ができる。 |
 | オーバーレイ | [Menu](components/Menu.md) | 右クリックやメニューバー、PopupButton から開くコマンドの一覧で、項目ごとにアイコン・ショートカット・チェック・サブメニューを持てる。 |
 | オーバーレイ | [Popover](components/Popover.md) | 対象（キーフレーム、クリップ、ボタン）に矢印で結び付けて開く小さな編集面で、その場で数項目を調整する。 |
 | オーバーレイ | [Dialog](components/Dialog.md) | 作業を止めて判断を求めるシートで、型付きエラー（`ASSET_MISSING`、`UNSUPPORTED_FEATURE`、`UNDO_CONFLICT` など）の説明と次の操作を示すのに使う。 |
@@ -171,8 +172,12 @@ Kronello の UI は素材が主役の作業場として組む。見た目は mac
 | レイアウトと状態 | [EmptyState](components/EmptyState.md) | 中身のないパネルに置く案内で、何がないかと次にできることを示し、ファイルのドロップ先も兼ねる。 |
 | レイアウトと状態 | [Welcome](components/Welcome.md) | 起動時やプロジェクトを閉じたときに出す最初のウインドウで、新規作成・開く・最近のプロジェクトの再開を受け持つ。 |
 
+## 画面
+
+メインウインドウの画面仕様（配置・寸法・状態の扱い）は [screens/](screens/README.md) にある: [ウインドウの骨格](screens/window.md)、[モーション](screens/motion.md)、[編集](screens/edit.md)、[テンプレート](screens/template.md)、[書き出し](screens/export.md)、[エラーと競合の状態](screens/states.md)。構成の決定は [ADR-0055](../adr/0055-main-window-pages-and-workspaces.md)。
+
 ## 変更の手順
 
 - 値を変えるときは tokens.json と、この文書のトークン表を同じ変更で更新する。コントラストの記述（「4.5:1 以上」など）は両テーマで計算し直す。
-- 色の役割（琥珀・青・赤・種類の色の意味）、テーマの既定、書体、アイコンセットを変える場合は ADR を追加する。
+- 色の役割（琥珀・青・赤・種類の色の意味）、テーマの既定、書体、アイコンセットを変える場合は ADR を追加する。値の調整（Light の地の明るさなど）は ADR を要しない。
 - コンポーネントを追加するときは components/ に仕様を 1 ファイル置き、上の表に加える。仕様には「利用側が渡すもの」「見た目」「使い分け」を書き、値はトークン名で参照する。
