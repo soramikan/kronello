@@ -5,7 +5,7 @@ Kronello は Rust / FFmpeg / wgpu を基盤とする動画編集・モーショ�
 
 ## 現在の状態
 
-- M0・M1 を実装済み（M0: `kronello-time` / `kronello-model` / `kronello-testkit` / `kronello-gpu` / `kronello-framebridge`、CI。M1: `kronello-store` / `kronello-animation` / `kronello-eval` / `kronello-vector` / `kronello-text` / `kronello-render` / `kronello-service` / `kronello-cli`）。M1 で見送った範囲は後続タスク（VEC-004 / VEC-005 / STORE-003 / QA-004 / CACHE-003）に記録済み。M2 以降の機能と `apps/` は未着手。
+- M0・M1 と M2 の P0 全 10 タスクを実装済み（M0: `kronello-time` / `kronello-model` / `kronello-testkit` / `kronello-gpu` / `kronello-framebridge`、CI。M1: `kronello-store` / `kronello-animation` / `kronello-eval` / `kronello-vector` / `kronello-text` / `kronello-render` / `kronello-service` / `kronello-cli`。M2 の追加 crate: `kronello-media` / `kronello-audio` / `kronello-template` / `kronello-mcp` / `kronello-jobs`）。M2 は共有編集・検査 API、CompositionClip のマルチトラック配置、日本語テンプレート、基本音声と ProRes / PCM24 書き出し、blur / shadow、MCP stdio、固定 snapshot の独立 worker と 4K 縦断デモを実装した。M1・M2 で見送った範囲は[後続タスク](docs/roadmap/milestones.md#m2-の延期範囲と後続タスク)に記録済み。M2 の STORE-003（P2）は実環境検証の残件により `in_progress`。M3 以降の機能と `apps/` は未着手。
 - 文書中の API・CLI・スキーマは提案であり、実装済みと書かない・扱わない。
 
 ## 最初に読むもの

@@ -1,11 +1,11 @@
 {
   "schema_version": "0.5",
   "created": "2026-10-01",
-  "updated": "2026-10-03",
+  "updated": "2026-10-04",
   "status": "implementation_started",
   "description": "設計と実装の計画・進捗。このファイルがバックログの正本であり、GitHub等へ登録したIssueではない。",
   "specification": "docs/architecture/",
-  "task_count": 60,
+  "task_count": 71,
   "items": [
     {
       "id": "ARC-001",
@@ -533,7 +533,8 @@
       "acceptance_criteria": [
         "patchの累計が文書サイズを超えたときにも完全snapshotを取る方式を評価し、採否を記録する",
         "iCloud Drive・Dropbox等の実際の同期フォルダとネットワークファイルシステムで、安全モードとPROJECT_LOCKEDを手順で確認して記録する",
-        "Linux/Windowsで複数プロセスの競合と強制終了後の回復を確認する"
+        "Linux/Windowsで複数プロセスの競合と強制終了後の回復を確認する",
+        "2026-10-04時点の完了範囲（適応的snapshotの既定不採用: ADR-0052、host iCloud Drive検証）と未確認範囲（Dropbox・ネットワークFS・Linux・Windows）をdocs/testing/store-003.mdに分けて記録し、残る実環境検証が完了するまでin_progressを維持する"
       ]
     },
     {
@@ -550,7 +551,8 @@
       "acceptance_criteria": [
         "静的依存列挙と命令/メモリ/サンプル予算を実装する",
         "固定seedのnoiseと禁止機能の拒否をテストする",
-        "ASTを式の正本とし、将来の式言語と一対一に往復できる構造にする"
+        "ASTを式の正本とし、将来の式言語と一対一に往復できる構造にする",
+        "Expressionの設定を共有edit.plan/applyと公開schemaへ接続し、property.sampleと最終レンダーで同じ有界評価・依存診断を使う。revision/idempotency/Undoと固定snapshotを検証する"
       ]
     },
     {
@@ -567,7 +569,8 @@
       ],
       "acceptance_criteria": [
         "layout/ink/visual boundsを区別する",
-        "文字幅と背景幅の循環およびoverflowを診断する"
+        "文字幅と背景幅の循環およびoverflowを診断する",
+        "ink_boundsを背景帯追従へ供給する純粋なLayoutValueと依存宣言を定義し、layout/ink/visualの選択が組版と描画結果で一致することを検証する"
       ]
     },
     {
@@ -583,7 +586,9 @@
       ],
       "acceptance_criteria": [
         "短尺拒否/hold/loop/stretchを明示する",
-        "版更新の差分計画とプレビューを生成し勝手に既存作品を更新しない"
+        "版更新の差分計画とプレビューを生成し勝手に既存作品を更新しない",
+        "MediaSlot/DataTable入力と縦横比variantを共有schema・公開入力policyに接続し、別instanceの入力・尺・版が干渉しないことを検証する",
+        "tight-ink背景帯追従をlayout_bounds追従と区別した明示policyとして設計し、短文/空白/複数行/変換後のink_boundsとpaddingを検証する。既存templateのwrap_width基準を暗黙に変更せず、循環/overflowを型付き診断する"
       ]
     },
     {
@@ -634,7 +639,8 @@
       ],
       "acceptance_criteria": [
         "音声コールバックをプロジェクト更新・ディスク読み出し・式評価と別の実行系にする",
-        "プレビュー再生で音声クロックを基準に映像フレームを提示する"
+        "プレビュー再生で音声クロックを基準に映像フレームを提示する",
+        "seek・再生停止/再開・非整数fpsで音声sample格子と映像提示の同期を検証し、offline exportやCPU参照だけを実時間再生の受け入れ証拠にしない"
       ]
     },
     {
@@ -743,6 +749,205 @@
       ]
     },
     {
+      "id": "NLE-002",
+      "milestone": "M3",
+      "priority": "P1",
+      "area": "timeline",
+      "title": "動画Asset/Generator ClipとTimeline編集の拡張",
+      "status": "planned",
+      "dependencies": [
+        "NLE-001",
+        "MEDIA-001",
+        "FX-001"
+      ],
+      "acceptance_criteria": [
+        "動画Asset Clipを明示stream・source_in・TimeMapで描画し、CFR/VFR/B-frameの正確なseekと配置境界、異なる配置の独立性を検証する",
+        "Generator Clipの実行契約と意味版を定義し、固定snapshotから決定的に描画する。未知Generatorを代替画像で継続しない",
+        "clip effectsを既存Render DAGへ接続し、配置・変換・ROI haloと合成順をCPU参照および明示GPU実行で検証する",
+        "transition・ripple・リンク連動編集の範囲と競合キーを定義し、共通plan/apply・idempotency・selective Undoと保存再読込で検証する"
+      ]
+    },
+    {
+      "id": "AUDIO-003",
+      "milestone": "M3",
+      "priority": "P1",
+      "area": "audio",
+      "title": "Sequence音声trackのA/V muxとclip音量",
+      "status": "planned",
+      "dependencies": [
+        "NLE-001",
+        "AUDIO-000",
+        "JOB-001"
+      ],
+      "acceptance_criteria": [
+        "Sequenceのaudio trackを同じ固定RenderSnapshotから音声配置へcompileし、映像と音声を同期exportおよびrender.submitのProRes/PCM24 MOVへmuxする",
+        "Sequence音声とoutput.clipsの明示配置の選択・併用規約を定義し、音声の二重加算や暗黙silenceへの置換を防ぐ",
+        "clip volumeを非負の線形Gainとして共有編集APIに公開し、定数・Curve/Propertyによる音量アニメーションを純粋評価する。revision・idempotency・Undo・固定入力hashを検証する",
+        "Compositionと入れ子instanceの再帰音声の時間写像・ミックス順を定義し、別配置の独立性、trim、負時刻、NTSC格子でのsample数とA/V duration差1/48000秒未満を検証する",
+        "投入後の作品編集・削除が映像と音声を変えず、素材不足・hash不一致・clippingの型付き失敗で成果物を公開しない"
+      ]
+    },
+    {
+      "id": "AUDIO-004",
+      "milestone": "M3",
+      "priority": "P1",
+      "area": "audio",
+      "title": "リタイム音声・audio effects・Generator音声",
+      "status": "planned",
+      "dependencies": [
+        "AUDIO-003",
+        "ANIM-001"
+      ],
+      "acceptance_criteria": [
+        "retimed audioのTimeMap・補間・pitchの扱いを設計して意味版を固定し、線形/区分線形map、trim/stretch、非整数sample境界で同期とsource範囲を検証する",
+        "audio effectsとGenerator音声の純粋評価・資源予算・固定入力の契約を定義し、同じsnapshotを任意順のbatchで評価して一致することを検証する",
+        "未対応map・effect・Generator、予算超過や非有限値を型付きエラーにし、暗黙の速度1・無音・clampで続行しない"
+      ]
+    },
+    {
+      "id": "MEDIA-002",
+      "milestone": "M3",
+      "priority": "P1",
+      "area": "media",
+      "title": "追加movie job profileと圧縮音声",
+      "status": "planned",
+      "dependencies": [
+        "MEDIA-001",
+        "AUDIO-000",
+        "JOB-001"
+      ],
+      "acceptance_criteria": [
+        "AV1・H.264・HEVCを同期exportとrender.submitの版付き出力profileとして公開し、固定snapshot・PTS/duration・probe・no-clobber publicationを検証する",
+        "H.264/HEVCはVideoToolboxのallow_sw=0を維持し、非対応hostではENCODER_UNAVAILABLEを返す。software成功をhardware検証に数えず、codec/転送経路を記録する",
+        "AAC・ALACとAV1配信用音声のcodec/container契約、priming・padding・終端sampleの扱い、配布・特許方針を採用前に文書化し、採用profileのA/V同期とroundtripを検証する",
+        "LGPL同梱runtimeと開発用system FFmpegを区別し、任意codec名・FFmpeg引数・暗黙codec fallbackを公開APIに追加しない。HDR profileはCOLOR-001で扱う"
+      ]
+    },
+    {
+      "id": "RENDER-003",
+      "milestone": "M3",
+      "priority": "P1",
+      "area": "render",
+      "title": "長尺・大解像度exportのstreaming",
+      "status": "planned",
+      "dependencies": [
+        "JOB-001",
+        "AUDIO-000",
+        "FX-001"
+      ],
+      "acceptance_criteria": [
+        "音声source/Busと映像payloadを有界batchでdecode・render・encode/muxし、10分/全source 28800000 stereo frames・映像256 MiBの現行上限を超える長尺exportを再現可能な手順で検証する",
+        "tileから最終成果物へのstreamingにより最終linear/display面の全画面保持を減らし、node別tile allocationとROI/haloの処理予算を定義する。巨大haloは予算超過として診断する",
+        "従来の全体exportと画素・音声samples・rational PTS/durationを比較し、負/非ゼロ開始・NTSC・tile境界に欠落や重複を作らない",
+        "長尺/4Kのpeak memory・I/Oを実測し、cancel・容量不足・encode失敗でも既存成果物を壊さず一時出力を処理する。強制終了後の回収とresumeはRECOVERY-001で扱う"
+      ]
+    },
+    {
+      "id": "MCP-002",
+      "milestone": "M3",
+      "priority": "P1",
+      "area": "mcp",
+      "title": "MCP HTTP・resources/prompts・進捗とキャンセル",
+      "status": "planned",
+      "dependencies": [
+        "MCP-001",
+        "JOB-001"
+      ],
+      "acceptance_criteria": [
+        "HTTP transportの接続・認証・版交渉・終了の契約を定義し、stdioと同じCommand/Query registry・schema・型付き結果へ到達することを実クライアントで検証する",
+        "resources・promptsの公開範囲とschemaを定義し、毎回明示したProjectだけを読み、素材文字列を命令として実行しない",
+        "実行中要求のキャンセルとprogress通知を追加し、request IDとの対応・競合・接続終了を検証する。永続job.cancelと要求キャンセルの意味を区別し、接続終了だけでdetached jobを停止しない",
+        "sampling・MCP taskの対応範囲と能力交渉を定義し、採用機能を共有serviceへ接続する。未対応機能を対応済みとして広告しない",
+        "入力上限・未知/重複field拒否・stdout protocol分離を維持し、外部MCP client SDKで成功/失敗/通知を検証する"
+      ]
+    },
+    {
+      "id": "JOB-002",
+      "milestone": "M3",
+      "priority": "P1",
+      "area": "jobs",
+      "title": "Windows workerのdetachと各OSの実プロセス検証",
+      "status": "planned",
+      "dependencies": [
+        "JOB-001",
+        "MCP-001"
+      ],
+      "acceptance_criteria": [
+        "WindowsでCLI/MCPの終了から独立するworker起動・stdio/log・回収の契約を実装し、親終了後も固定入力のジョブが継続することを実機またはCIで検証する",
+        "Windowsの上書き禁止publicationを設計し、同一volume・既存file/空directoryの拒否・cancel/lease競合を実プロセスで検証する",
+        "Linux/WindowsでFIFO slot・queued/running heartbeat・強制終了後のinterrupted・pruneを検証し、OS/版/コマンド/exitを記録する。未検証OSを保証経路に昇格しない"
+      ]
+    },
+    {
+      "id": "FX-002",
+      "milestone": "M3",
+      "priority": "P2",
+      "area": "effects",
+      "title": "非一様affine下のblur/shadow",
+      "status": "planned",
+      "dependencies": [
+        "FX-001"
+      ],
+      "acceptance_criteria": [
+        "非一様scale/shear下の正sigmaのGaussian blur/drop shadowの意味を定義して版を管理し、現行のUNSUPPORTED_FEATUREを対応範囲内で解消する",
+        "変換後のkernel・offset・解析boundsとROI haloをCPU参照/GPUで比較し、回転・非一様scale・shear・tile境界のcrop一致と有限予算を検証する"
+      ]
+    },
+    {
+      "id": "API-002",
+      "milestone": "M3",
+      "priority": "P2",
+      "area": "api",
+      "title": "scene検索・paging・固定履歴cursorとevent stream",
+      "status": "planned",
+      "dependencies": [
+        "API-001",
+        "INTEGRATION-001"
+      ],
+      "acceptance_criteria": [
+        "scene.queryに範囲・タグ・種類による検索とpagingを追加し、InstancePath/NodeId・所有順・revisionを保ち、既存の明示evaluation modeとの整合性を検証する",
+        "history.listの複数ページを固定snapshot cursorで取得し、並行編集/Undo/compactで欠落・重複・取り消し状態の混在を起こさない。失効cursorは型付きエラーにする",
+        "CLIのNDJSON event streamの版・framing・終了/取消契約を定義し、既存の一要求一stdout JSON modeを維持する。診断はstderrへ出す",
+        "全拡張を共有registry/公開schema/CLI/MCP経由で検証し、暗黙のcurrent Projectや入口専用状態を作らない"
+      ]
+    },
+    {
+      "id": "SERVICE-002",
+      "milestone": "M3",
+      "priority": "P2",
+      "area": "service",
+      "title": "project作成/importの計画・冪等性とModifier編集",
+      "status": "planned",
+      "dependencies": [
+        "SERVICE-001",
+        "API-001"
+      ],
+      "acceptance_criteria": [
+        "project.create/importの変更計画・再送の冪等性を共通APIで設計し、createの出力予約とimportのrevision照合、同一キー異payloadの拒否、保存後再送を実プロセスで検証する",
+        "Modifier編集を型付きCommandとして公開し、順序付き配列の変更・競合キー・inverse・selective Undoを検証する。Expression設定/評価はEXPR-001へ接続する",
+        "未対応Modifierの保存・編集・評価の境界を文書化し、未対応の最終レンダーを代替値で続行しない。生patch/inverse/changed_keysを入口から受け取らない"
+      ]
+    },
+    {
+      "id": "RELEASE-001",
+      "milestone": "M3",
+      "priority": "P1",
+      "area": "release",
+      "title": "同梱FFmpegを含む配布packageの再配置・署名検証",
+      "status": "planned",
+      "dependencies": [
+        "MEDIA-001",
+        "AUDIO-000",
+        "CLI-001",
+        "MCP-001"
+      ],
+      "acceptance_criteria": [
+        "macOSの配布packageに同梱するFFmpeg共有library・SVT-AV1・dav1d・license原文・PATENTS・source manifestを固定し、GPL/nonfree・開発用system libraryを含めないことを検証する",
+        "元のbuild prefixから独立した場所へpackageを再配置し、全5 FFmpeg libraryの動的リンク・ABI・差し替えとcapabilities、ProRes/PCM24・AV1 roundtripを検証する。単一libavcodecのotool結果でpackage全体を合格にしない",
+        "macOSの署名・配布検証の手順を固定して再配置後の実binary起動を確認し、platform/revision/package hash/コマンド/exitを記録する。Windows/Linux packageは各platformで別途検証してから保証する"
+      ]
+    },
+    {
       "id": "RENDER-002",
       "milestone": "M4",
       "priority": "P1",
@@ -769,12 +974,14 @@
       "dependencies": [
         "GPU-001",
         "GPU-002",
-        "MEDIA-001"
+        "MEDIA-001",
+        "NLE-002"
       ],
       "acceptance_criteria": [
         "macOS (Metal / VideoToolbox) を最初の保証経路とし、Windows/Linuxは順次昇格する",
         "対応形式ごとにデバイス/所有権/同期/寿命を検証する",
-        "非対応経路は明示fallbackまたはrequire_gpu_residentエラー"
+        "非対応経路は明示fallbackまたはrequire_gpu_residentエラー",
+        "hardware decodeとGPU resident media/renderの接続を形式別に検証し、MEDIA-001のsoftware decodeやhardware encode成功をGPU常駐保証の代替にしない。CPU往復・copy・readbackを明示する"
       ]
     },
     {
@@ -787,12 +994,16 @@
       "dependencies": [
         "GPU-002",
         "RENDER-002",
-        "QA-001"
+        "QA-001",
+        "JOB-001",
+        "MEDIA-002"
       ],
       "acceptance_criteria": [
         "HDRの表示変換を最終出力へ勝手に焼き込まない",
         "文字・mask・glowを含む8K offline出力を検証する",
-        "基準白203cd/m2(BT.2408)とRec.2100 PQ/HLG出力を検証し、トーンマップは表示と明示的なSDR変換出力に限る"
+        "基準白203cd/m2(BT.2408)とRec.2100 PQ/HLG出力を検証し、トーンマップは表示と明示的なSDR変換出力に限る",
+        "native source planeのPQ/HLG・10-bit色tagsを保持してworking-spaceへ変換し、SDR/HDRをタグの付替えや暗黙8-bit化で混同しない",
+        "HDRの同期export/render.submit profileを固定入力・codec/bit depth・色metadata・probeへ接続し、PQ/HLGのroundtripを実機で検証する。未対応encoder/profileでSDRや別codecへ黙ってfallbackしない"
       ]
     },
     {
@@ -821,11 +1032,15 @@
       "dependencies": [
         "GPU-003",
         "COLOR-001",
-        "CACHE-002"
+        "CACHE-002",
+        "RENDER-003"
       ],
       "acceptance_criteria": [
         "warm/cold・proxy/full・preview/finalを分けてp50/p95を出す",
-        "decode面/atlas/accumulation/encoderを含めたpeak memoryを記録する"
+        "decode面/atlas/accumulation/encoderを含めたpeak memoryを記録する",
+        "GPUのlinear/display二重描画の統合とrenderer APIの転送統計集約を評価し、最適化前後の画素一致・実転送/待機・node別tile allocationのpeak memoryを測定する",
+        "MEDIA-001のstream startからのdecode forwardを正確なseekテストを維持して効率化し、CFR/VFR/B-frameのforward/backward/repeated要求で性能を比較する",
+        "ADR-0052の合成debug測定と区別して実作品/release buildの履歴復元頻度・遅延・SQLite/WAL物理I/Oを測り、opt-in snapshot・数/容量予算・root patch重複削減の再検討要否を記録する。採用変更が必要なら新ADRで決める"
       ]
     },
     {
@@ -843,7 +1058,10 @@
       "acceptance_criteria": [
         "失敗でProjectや確定済み成果物が壊れない",
         "出力fileへの無条件appendを再開方法に使わない",
-        "interruptedのジョブをjob.resumeで再開でき、完了済み区間の扱いを検証する"
+        "interruptedのジョブをjob.resumeで再開でき、完了済み区間の扱いを検証する",
+        "SIGKILLが残したdestination側temporary outputを所有jobと固定入力hashで照合して安全に回収し、確定済み成果物や他jobの出力を削除しない",
+        "atomic NOREPLACE rename後・状態DB commit前の停止を故障注入し、成果物のhash/metadata・snapshot identityとinterrupted記録を照合する。無検証でsucceededへ補正しない",
+        "再開時に固定入力の構造/意味版・必要機能・素材/font lockを再検証し、最新Projectへ置換しない。取消・lease失効・容量不足と再開の競合を検証する"
       ]
     },
     {
@@ -875,7 +1093,9 @@
       ],
       "acceptance_criteria": [
         "GPU textureのcacheを容量予算つきで持ち、意味的keyをCPU側のcacheと共有する",
-        "プロジェクト外のcache領域へraster結果を永続化し、削除しても描画結果が変わらない"
+        "プロジェクト外のcache領域へraster結果を永続化し、削除しても描画結果が変わらない",
+        "GPU texture/surface poolの所有権・寿命・予算とtile/halo再利用を検証し、非対応資源をCPU cacheへ黙って置換しない",
+        "厳密raster cacheのbackend/GPU/driver fingerprintと意味版をkeyへ固定し、異なる実行環境の結果を誤再利用しない"
       ]
     },
     {
