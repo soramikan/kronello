@@ -86,33 +86,16 @@ git diff --check
 - 既存の anisotropy test は、型付き拒否が DAG から bounds を導出する Scene IR compile へ早まったことに合わせて更新し、uniform scale / rotation の semantic と pixel bounds の丸め差も確認した。
 - `git diff --check`: 終了コード 0。
 
-## Pending host run
+## host での実行（supervisor）
 
-2026-10-04 の supervisor 指示に従い、GPU がない sandbox で full workspace test を実行したとは扱わない。
-次の command は **未実行・pending host run**。期待結果は全 test 成功（exit 0）であり、測定済み結果ではない。
-
-```sh
-CARGO_BUILD_JOBS=3 cargo test --workspace --locked
-```
-
-GPU / FrameBridge / VideoToolbox の実機・固定 GPU 画素・他 OS はこの worker では未検証。
-今回の CPU 画素 test は GPU の代替受け入れではない。
-
-Git metadata は sandbox で read-only のため、新しい commit はなし。supervisor がレビュー後に staging / commit する。
-期待結果は一つの English imperative commit と clean working tree（supervisor の管理ファイルは含めない）。
+2026-10-04、Apple Silicon（Metal）の host で supervisor が実行した。
 
 ```sh
-git add -- crates/kronello-eval/src/graph.rs crates/kronello-eval/src/scene.rs crates/kronello-model/src/template.rs crates/kronello-model/tests/template.rs \
-  crates/kronello-vector/src/lib.rs crates/kronello-vector/tests/derivation.rs crates/kronello-template/src/lib.rs \
-  crates/kronello-render/src/bounds.rs crates/kronello-render/src/dag.rs crates/kronello-render/src/lib.rs \
-  crates/kronello-render/src/snapshot.rs crates/kronello-render/src/template.rs \
-  crates/kronello-render/tests/render.rs crates/kronello-render/tests/template.rs \
-  crates/kronello-service/src/lib.rs crates/kronello-service/src/query.rs crates/kronello-service/tests/integration_query.rs \
-  schemas/project-v1.schema.json schemas/api-v1.schema.json docs/adr/0057-layout-bounds-stages.md \
-  docs/architecture/04-vector-text-layout.md docs/architecture/07-templates.md docs/architecture/08-api-cli-mcp.md \
-  docs/testing/layout-001.md
-git commit -m "Add explicit layout bounds stages and background followers"
+CARGO_BUILD_JOBS=4 cargo test --workspace --locked
 ```
+
+終了コード 0。78 の test binary で 490 passed / 0 failed / 4 ignored（GPU / FrameBridge の test を含む）。
+他 OS と固定 GPU 画素の新規 golden はこのタスクの範囲外。
 
 ## Supervisor 管理ファイルへの依頼
 
