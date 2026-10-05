@@ -13,7 +13,7 @@
 | M0 | 0 | 0 | 6 | 0 | 6 |
 | M1 | 0 | 0 | 14 | 0 | 14 |
 | M2 | 0 | 1 | 10 | 0 | 11 |
-| M3 | 2 | 7 | 16 | 0 | 25 |
+| M3 | 2 | 6 | 17 | 0 | 25 |
 | M4 | 12 | 0 | 0 | 0 | 12 |
 | M5 | 5 | 0 | 0 | 0 | 5 |
 | M6 | 4 | 0 | 0 | 0 | 4 |
@@ -479,7 +479,7 @@
 
 ### MEDIA-002 追加movie job profileと圧縮音声
 
-- 優先度: P1 / 領域: media / 状態: in_progress
+- 優先度: P1 / 領域: media / 状態: done
 - 依存: MEDIA-001, AUDIO-000, JOB-001
 - 受け入れ条件:
   - AV1・H.264・HEVCを同期exportとrender.submitの版付き出力profileとして公開し、固定snapshot・PTS/duration・probe・no-clobber publicationを検証する

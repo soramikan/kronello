@@ -845,7 +845,7 @@
       "priority": "P1",
       "area": "media",
       "title": "追加movie job profileと圧縮音声",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "MEDIA-001",
         "AUDIO-000",
