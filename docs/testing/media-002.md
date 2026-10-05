@@ -342,3 +342,8 @@ docs/adr/0068-versioned-delivery-movie-profiles.md、docs/architecture/12-platfo
 docs/testing/media-002.md（7 files）。既存commitの20 filesを今回の新規実装とは数えない。
 FFmpeg flags / manifest、backlog、Cargo.lock、API / Project schema、generated Swiftは変更なし。
 今回もworkerはcommit / push / mergeや他worktreeへの書込みを実行していない。
+
+## supervisor による hvc1 修正後の再確認（2026-10-05、Apple M1）
+
+`hvc1` 修正のコミット後に次を実行した。`host_hevc_alac_movie_roundtrip_pts_duration_and_publication` 1 passed、`host_hevc_delivery_sync_fixed_job_and_alac_match_quantized_evaluator` 1 passed、`movie_profiles … hevc` exit 0。ffprobe は video `hevc` / tag `hvc1`、audio `alac`。AVFoundation は `isPlayable=true`、duration 4805/48000、FourCC `hvc1` / `alac`。
+
