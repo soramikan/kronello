@@ -10,7 +10,7 @@
       "pattern": "4x4 regular grid, offsets ((sx+0.5)/4,(sy+0.5)/4), top-left origin",
       "resolve": "per-sample working-linear premultiplied solid/gradient paint accumulation, then stroke over fill",
       "samples_per_pixel": 16,
-      "stroke": "centered union of segment rectangles, outer join triangles (miter-limit fallback to bevel), and exact round join/cap disks; inclusive boundaries",
+      "stroke": "legacy output-space centered primitives or explicit vec005 local primitives, dashes, inverse affine, and fill-rule alignment clip",
       "version": "vec003-grid4-v2"
     },
     "effect_kernel_version": "fx001-separable-gaussian-transparent-rne16-v1",
@@ -19,6 +19,7 @@
       "kronello.gaussian_blur": 1
     },
     "gradient_interpolation_version": "vec004-explicit-interpolation-v1",
+    "legacy_stroke_geometry_version": "vec003-centered-stroke-v1",
     "scene_ids": [
       "source-over",
       "srgb-pam",
@@ -55,11 +56,15 @@
       "fx002-nonuniform-rotation",
       "fx002-shear-shadow",
       "fx002-reflected-shear-shadow-rec2020",
+      "stroke-dashes",
+      "stroke-inside-evenodd",
+      "stroke-outside-nonzero",
+      "stroke-affine-reflected",
       "srgb-output-roundtrip"
     ],
     "schema_version": 1,
     "status": "scene catalog for shared Apple Silicon + Metal baselines",
-    "stroke_geometry_version": "vec003-centered-stroke-v1"
+    "stroke_geometry_version": "vec005-local-stroke-v2"
   },
   "comparison_version": 1,
   "effect_kernel_version": "fx001-separable-gaussian-transparent-rne16-v1",
@@ -493,6 +498,7 @@
             },
             "fill_gradient": null,
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -506,6 +512,7 @@
               ]
             ],
             "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           },
           {
@@ -594,6 +601,7 @@
             },
             "fill_gradient": null,
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -607,6 +615,7 @@
               ]
             ],
             "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           },
           {
@@ -709,6 +718,7 @@
             },
             "fill_gradient": null,
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -722,6 +732,7 @@
               ]
             ],
             "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           },
           {
@@ -824,6 +835,7 @@
             },
             "fill_gradient": null,
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -837,6 +849,7 @@
               ]
             ],
             "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           },
           {
@@ -875,6 +888,7 @@
             },
             "fill_gradient": null,
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -888,6 +902,7 @@
               ]
             ],
             "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           },
           {
@@ -977,6 +992,7 @@
             },
             "fill_gradient": null,
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -990,6 +1006,7 @@
               ]
             ],
             "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           },
           {
@@ -1028,6 +1045,7 @@
             },
             "fill_gradient": null,
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -1041,6 +1059,7 @@
               ]
             ],
             "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           },
           {
@@ -1121,6 +1140,7 @@
             },
             "fill_gradient": null,
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -1134,6 +1154,7 @@
               ]
             ],
             "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           },
           {
@@ -1172,6 +1193,7 @@
             },
             "fill_gradient": null,
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -1185,6 +1207,7 @@
               ]
             ],
             "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           },
           {
@@ -1265,6 +1288,7 @@
             },
             "fill_gradient": null,
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -1278,6 +1302,7 @@
               ]
             ],
             "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           },
           {
@@ -1316,6 +1341,7 @@
             },
             "fill_gradient": null,
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -1329,6 +1355,7 @@
               ]
             ],
             "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           },
           {
@@ -1405,6 +1432,7 @@
             },
             "fill_gradient": null,
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -1430,6 +1458,7 @@
               "space": "Srgb",
               "width": 0.7
             },
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           }
         ],
@@ -1500,6 +1529,7 @@
             },
             "fill_gradient": null,
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -1525,6 +1555,7 @@
               "space": "Srgb",
               "width": 0.7
             },
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           }
         ],
@@ -1620,6 +1651,7 @@
             },
             "fill_gradient": null,
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -1633,6 +1665,7 @@
               ]
             ],
             "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           }
         ],
@@ -1728,6 +1761,7 @@
             },
             "fill_gradient": null,
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -1741,6 +1775,7 @@
               ]
             ],
             "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           }
         ],
@@ -2401,6 +2436,7 @@
             },
             "fill_gradient": null,
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -2414,6 +2450,7 @@
               ]
             ],
             "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           }
         ],
@@ -2475,6 +2512,7 @@
             "fill": null,
             "fill_gradient": null,
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -2500,6 +2538,7 @@
               "space": "Srgb",
               "width": 4.0
             },
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           },
           {
@@ -2525,6 +2564,7 @@
             "fill": null,
             "fill_gradient": null,
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -2550,6 +2590,7 @@
               "space": "Srgb",
               "width": 4.0
             },
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           },
           {
@@ -2575,6 +2616,7 @@
             "fill": null,
             "fill_gradient": null,
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -2600,6 +2642,7 @@
               "space": "Srgb",
               "width": 4.0
             },
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           }
         ],
@@ -2659,6 +2702,7 @@
             "fill": null,
             "fill_gradient": null,
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -2684,6 +2728,7 @@
               "space": "Srgb",
               "width": 4.0
             },
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           },
           {
@@ -2705,6 +2750,7 @@
             "fill": null,
             "fill_gradient": null,
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -2730,6 +2776,7 @@
               "space": "Srgb",
               "width": 4.0
             },
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           },
           {
@@ -2751,6 +2798,7 @@
             "fill": null,
             "fill_gradient": null,
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -2776,6 +2824,7 @@
               "space": "Srgb",
               "width": 4.0
             },
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           }
         ],
@@ -2839,6 +2888,7 @@
             "fill": null,
             "fill_gradient": null,
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -2864,6 +2914,7 @@
               "space": "Srgb",
               "width": 4.0
             },
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           },
           {
@@ -2889,6 +2940,7 @@
             "fill": null,
             "fill_gradient": null,
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -2914,6 +2966,7 @@
               "space": "Srgb",
               "width": 4.0
             },
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           },
           {
@@ -2939,6 +2992,7 @@
             "fill": null,
             "fill_gradient": null,
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -2964,6 +3018,7 @@
               "space": "Srgb",
               "width": 4.0
             },
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           }
         ],
@@ -3110,6 +3165,7 @@
               ]
             },
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 0.9,
@@ -3135,6 +3191,7 @@
               "space": "Srgb",
               "width": 2.4
             },
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": {
               "equal_offsets": "last wins at offset",
               "geometry": {
@@ -3346,6 +3403,7 @@
               ]
             },
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 0.9,
@@ -3371,6 +3429,7 @@
               "space": "Srgb",
               "width": 2.4
             },
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": {
               "equal_offsets": "last wins at offset",
               "geometry": {
@@ -3582,6 +3641,7 @@
               ]
             },
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 0.9,
@@ -3607,6 +3667,7 @@
               "space": "Srgb",
               "width": 2.4
             },
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": {
               "equal_offsets": "last wins at offset",
               "geometry": {
@@ -3821,6 +3882,7 @@
               ]
             },
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 0.9,
@@ -3846,6 +3908,7 @@
               "space": "Srgb",
               "width": 2.4
             },
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": {
               "equal_offsets": "last wins at offset",
               "geometry": {
@@ -4062,6 +4125,7 @@
               ]
             },
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 0.9,
@@ -4087,6 +4151,7 @@
               "space": "Srgb",
               "width": 2.4
             },
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": {
               "equal_offsets": "last wins at offset",
               "geometry": {
@@ -4301,6 +4366,7 @@
               ]
             },
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 0.9,
@@ -4326,6 +4392,7 @@
               "space": "Srgb",
               "width": 2.4
             },
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": {
               "equal_offsets": "last wins at offset",
               "geometry": {
@@ -4538,6 +4605,7 @@
               ]
             },
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 0.9,
@@ -4563,6 +4631,7 @@
               "space": "Srgb",
               "width": 2.4
             },
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": {
               "equal_offsets": "last wins at offset",
               "geometry": {
@@ -4777,6 +4846,7 @@
               ]
             },
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 0.9,
@@ -4802,6 +4872,7 @@
               "space": "Srgb",
               "width": 2.4
             },
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": {
               "equal_offsets": "last wins at offset",
               "geometry": {
@@ -5016,6 +5087,7 @@
               ]
             },
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 0.9,
@@ -5041,6 +5113,7 @@
               "space": "Srgb",
               "width": 2.4
             },
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": {
               "equal_offsets": "last wins at offset",
               "geometry": {
@@ -5841,6 +5914,7 @@
               ]
             },
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -5854,6 +5928,7 @@
               ]
             ],
             "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           }
         ],
@@ -5928,6 +6003,7 @@
             },
             "fill_gradient": null,
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -5941,6 +6017,7 @@
               ]
             ],
             "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           },
           {
@@ -6030,6 +6107,7 @@
             },
             "fill_gradient": null,
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -6043,6 +6121,7 @@
               ]
             ],
             "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           },
           {
@@ -6132,6 +6211,7 @@
             },
             "fill_gradient": null,
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -6145,6 +6225,7 @@
               ]
             ],
             "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           },
           {
@@ -6248,6 +6329,7 @@
             },
             "fill_gradient": null,
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -6261,6 +6343,7 @@
               ]
             ],
             "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           },
           {
@@ -6322,6 +6405,821 @@
       "color_pipeline_id": "vec003-grid4-v2",
       "comparison_space": "linear working-space premultiplied; external output decoded back before comparison",
       "design_extent": [
+        32,
+        32
+      ],
+      "display_transform": "external-unpremultiply-then-srgb-clamp; visualization only",
+      "draw": {
+        "nodes": [
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    7.07764,
+                    5.0673604
+                  ],
+                  [
+                    21.46864,
+                    6.66636
+                  ],
+                  [
+                    23.69964,
+                    17.04536
+                  ],
+                  [
+                    9.30864,
+                    15.446361
+                  ]
+                ]
+              }
+            ],
+            "fill": null,
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": {
+              "alignment": "center",
+              "contours": [
+                {
+                  "closed": false,
+                  "points": [
+                    [
+                      1.833,
+                      0.019
+                    ],
+                    [
+                      5.15,
+                      0.019
+                    ],
+                    [
+                      7.323,
+                      0.019
+                    ]
+                  ]
+                },
+                {
+                  "closed": false,
+                  "points": [
+                    [
+                      10.64,
+                      0.019
+                    ]
+                  ]
+                },
+                {
+                  "closed": false,
+                  "points": [
+                    [
+                      12.331,
+                      0.5009997
+                    ],
+                    [
+                      12.331,
+                      3.8179996
+                    ],
+                    [
+                      12.331,
+                      5.9909997
+                    ]
+                  ]
+                },
+                {
+                  "closed": false,
+                  "points": [
+                    [
+                      12.331,
+                      9.308
+                    ]
+                  ]
+                },
+                {
+                  "closed": false,
+                  "points": [
+                    [
+                      10.569,
+                      9.719
+                    ],
+                    [
+                      7.2520003,
+                      9.719
+                    ],
+                    [
+                      5.0790005,
+                      9.719
+                    ]
+                  ]
+                },
+                {
+                  "closed": false,
+                  "points": [
+                    [
+                      1.7620006,
+                      9.719
+                    ]
+                  ]
+                },
+                {
+                  "closed": false,
+                  "points": [
+                    [
+                      0.031,
+                      9.277
+                    ],
+                    [
+                      0.031,
+                      5.9600005
+                    ],
+                    [
+                      0.031,
+                      3.7870004
+                    ]
+                  ]
+                },
+                {
+                  "closed": false,
+                  "points": [
+                    [
+                      0.031,
+                      0.4700004
+                    ]
+                  ]
+                }
+              ],
+              "dash_array": [
+                0.0,
+                2.173,
+                3.317
+              ],
+              "dash_offset": 0.371,
+              "fill_rule": "Nonzero",
+              "inverse": [
+                [
+                  0.8756138,
+                  -0.18821605,
+                  -5.2125206
+                ],
+                [
+                  -0.10638297,
+                  0.95744675,
+                  -4.0797873
+                ]
+              ],
+              "version": "vec005-local-stroke-v2"
+            },
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": {
+              "cap": "Round",
+              "join": "Round",
+              "miter_limit": 4.0,
+              "rgba": [
+                0.17,
+                0.63,
+                1.3,
+                0.83
+              ],
+              "space": "LinearRec709",
+              "width": 1.713
+            },
+            "stroke_geometry_version": "vec005-local-stroke-v2",
+            "stroke_gradient": null
+          }
+        ],
+        "roots": [
+          0
+        ]
+      },
+      "id": "stroke-dashes",
+      "layers": [],
+      "origin": [
+        0,
+        0
+      ],
+      "output_transform": null,
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "seed": 0,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "color_pipeline_id": "vec003-grid4-v2",
+      "comparison_space": "linear working-space premultiplied; external output decoded back before comparison",
+      "design_extent": [
+        32,
+        32
+      ],
+      "display_transform": "external-unpremultiply-then-srgb-clamp; visualization only",
+      "draw": {
+        "nodes": [
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    7.07764,
+                    5.0673604
+                  ],
+                  [
+                    21.46864,
+                    6.66636
+                  ],
+                  [
+                    23.69964,
+                    17.04536
+                  ],
+                  [
+                    9.30864,
+                    15.446361
+                  ]
+                ]
+              },
+              {
+                "closed": true,
+                "points": [
+                  [
+                    11.4596195,
+                    8.95078
+                  ],
+                  [
+                    18.45154,
+                    9.72766
+                  ],
+                  [
+                    19.15212,
+                    12.98688
+                  ],
+                  [
+                    12.1602,
+                    12.210001
+                  ]
+                ]
+              }
+            ],
+            "fill": null,
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": {
+              "alignment": "inside",
+              "contours": [
+                {
+                  "closed": true,
+                  "points": [
+                    [
+                      0.031,
+                      0.019
+                    ],
+                    [
+                      12.331,
+                      0.019
+                    ],
+                    [
+                      12.331,
+                      9.719
+                    ],
+                    [
+                      0.031,
+                      9.719
+                    ]
+                  ]
+                },
+                {
+                  "closed": true,
+                  "points": [
+                    [
+                      3.137,
+                      3.271
+                    ],
+                    [
+                      9.113,
+                      3.271
+                    ],
+                    [
+                      9.113,
+                      6.317
+                    ],
+                    [
+                      3.137,
+                      6.317
+                    ]
+                  ]
+                }
+              ],
+              "dash_array": [],
+              "dash_offset": 0.371,
+              "fill_rule": "Evenodd",
+              "inverse": [
+                [
+                  0.8756138,
+                  -0.18821605,
+                  -5.2125206
+                ],
+                [
+                  -0.10638297,
+                  0.95744675,
+                  -4.0797873
+                ]
+              ],
+              "version": "vec005-local-stroke-v2"
+            },
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": {
+              "cap": "Round",
+              "join": "Round",
+              "miter_limit": 4.0,
+              "rgba": [
+                0.17,
+                0.63,
+                1.3,
+                0.83
+              ],
+              "space": "LinearRec709",
+              "width": 1.713
+            },
+            "stroke_geometry_version": "vec005-local-stroke-v2",
+            "stroke_gradient": null
+          }
+        ],
+        "roots": [
+          0
+        ]
+      },
+      "id": "stroke-inside-evenodd",
+      "layers": [],
+      "origin": [
+        0,
+        0
+      ],
+      "output_transform": null,
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "seed": 0,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "color_pipeline_id": "vec003-grid4-v2",
+      "comparison_space": "linear working-space premultiplied; external output decoded back before comparison",
+      "design_extent": [
+        32,
+        32
+      ],
+      "display_transform": "external-unpremultiply-then-srgb-clamp; visualization only",
+      "draw": {
+        "nodes": [
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    7.07764,
+                    5.0673604
+                  ],
+                  [
+                    21.46864,
+                    6.66636
+                  ],
+                  [
+                    23.69964,
+                    17.04536
+                  ],
+                  [
+                    9.30864,
+                    15.446361
+                  ]
+                ]
+              },
+              {
+                "closed": true,
+                "points": [
+                  [
+                    12.1602,
+                    12.210001
+                  ],
+                  [
+                    19.15212,
+                    12.98688
+                  ],
+                  [
+                    18.45154,
+                    9.72766
+                  ],
+                  [
+                    11.4596195,
+                    8.95078
+                  ]
+                ]
+              }
+            ],
+            "fill": null,
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": {
+              "alignment": "outside",
+              "contours": [
+                {
+                  "closed": true,
+                  "points": [
+                    [
+                      0.031,
+                      0.019
+                    ],
+                    [
+                      12.331,
+                      0.019
+                    ],
+                    [
+                      12.331,
+                      9.719
+                    ],
+                    [
+                      0.031,
+                      9.719
+                    ]
+                  ]
+                },
+                {
+                  "closed": true,
+                  "points": [
+                    [
+                      3.137,
+                      6.317
+                    ],
+                    [
+                      9.113,
+                      6.317
+                    ],
+                    [
+                      9.113,
+                      3.271
+                    ],
+                    [
+                      3.137,
+                      3.271
+                    ]
+                  ]
+                }
+              ],
+              "dash_array": [],
+              "dash_offset": 0.371,
+              "fill_rule": "Nonzero",
+              "inverse": [
+                [
+                  0.8756138,
+                  -0.18821605,
+                  -5.2125206
+                ],
+                [
+                  -0.10638297,
+                  0.95744675,
+                  -4.0797873
+                ]
+              ],
+              "version": "vec005-local-stroke-v2"
+            },
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": {
+              "cap": "Round",
+              "join": "Round",
+              "miter_limit": 4.0,
+              "rgba": [
+                0.17,
+                0.63,
+                1.3,
+                0.83
+              ],
+              "space": "LinearRec709",
+              "width": 1.713
+            },
+            "stroke_geometry_version": "vec005-local-stroke-v2",
+            "stroke_gradient": null
+          }
+        ],
+        "roots": [
+          0
+        ]
+      },
+      "id": "stroke-outside-nonzero",
+      "layers": [],
+      "origin": [
+        0,
+        0
+      ],
+      "output_transform": null,
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "seed": 0,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "color_pipeline_id": "vec003-grid4-v2",
+      "comparison_space": "linear working-space premultiplied; external output decoded back before comparison",
+      "design_extent": [
+        32,
+        32
+      ],
+      "display_transform": "external-unpremultiply-then-srgb-clamp; visualization only",
+      "draw": {
+        "nodes": [
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    24.00221,
+                    7.06404
+                  ],
+                  [
+                    8.012211,
+                    9.155041
+                  ],
+                  [
+                    10.825211,
+                    17.20604
+                  ],
+                  [
+                    26.81521,
+                    15.11504
+                  ]
+                ]
+              }
+            ],
+            "fill": null,
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": {
+              "alignment": "center",
+              "contours": [
+                {
+                  "closed": false,
+                  "points": [
+                    [
+                      0.031,
+                      0.019
+                    ],
+                    [
+                      2.833,
+                      0.019
+                    ]
+                  ]
+                },
+                {
+                  "closed": false,
+                  "points": [
+                    [
+                      4.15,
+                      0.019
+                    ],
+                    [
+                      7.323,
+                      0.019
+                    ]
+                  ]
+                },
+                {
+                  "closed": false,
+                  "points": [
+                    [
+                      8.64,
+                      0.019
+                    ],
+                    [
+                      11.813,
+                      0.019
+                    ]
+                  ]
+                },
+                {
+                  "closed": false,
+                  "points": [
+                    [
+                      12.331,
+                      0.81799966
+                    ],
+                    [
+                      12.331,
+                      3.9909997
+                    ]
+                  ]
+                },
+                {
+                  "closed": false,
+                  "points": [
+                    [
+                      12.331,
+                      5.3079996
+                    ],
+                    [
+                      12.331,
+                      8.481
+                    ]
+                  ]
+                },
+                {
+                  "closed": false,
+                  "points": [
+                    [
+                      12.252001,
+                      9.719
+                    ],
+                    [
+                      9.079,
+                      9.719
+                    ]
+                  ]
+                },
+                {
+                  "closed": false,
+                  "points": [
+                    [
+                      7.7620006,
+                      9.719
+                    ],
+                    [
+                      4.5890007,
+                      9.719
+                    ]
+                  ]
+                },
+                {
+                  "closed": false,
+                  "points": [
+                    [
+                      3.2720006,
+                      9.719
+                    ],
+                    [
+                      0.09900052,
+                      9.719
+                    ]
+                  ]
+                },
+                {
+                  "closed": false,
+                  "points": [
+                    [
+                      0.031,
+                      8.47
+                    ],
+                    [
+                      0.031,
+                      5.2970004
+                    ]
+                  ]
+                },
+                {
+                  "closed": false,
+                  "points": [
+                    [
+                      0.031,
+                      3.9800005
+                    ],
+                    [
+                      0.031,
+                      0.8070004
+                    ]
+                  ]
+                }
+              ],
+              "dash_array": [
+                3.173,
+                1.317
+              ],
+              "dash_offset": 0.371,
+              "fill_rule": "Nonzero",
+              "inverse": [
+                [
+                  -0.73561996,
+                  0.25702384,
+                  15.87188
+                ],
+                [
+                  0.15066916,
+                  1.1521759,
+                  -11.736409
+                ]
+              ],
+              "version": "vec005-local-stroke-v2"
+            },
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": {
+              "cap": "Round",
+              "join": "Round",
+              "miter_limit": 4.0,
+              "rgba": [
+                0.17,
+                0.63,
+                1.3,
+                0.83
+              ],
+              "space": "LinearRec709",
+              "width": 1.713
+            },
+            "stroke_geometry_version": "vec005-local-stroke-v2",
+            "stroke_gradient": null
+          }
+        ],
+        "roots": [
+          0
+        ]
+      },
+      "id": "stroke-affine-reflected",
+      "layers": [],
+      "origin": [
+        0,
+        0
+      ],
+      "output_transform": null,
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "seed": 0,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "color_pipeline_id": "vec003-grid4-v2",
+      "comparison_space": "linear working-space premultiplied; external output decoded back before comparison",
+      "design_extent": [
         8,
         8
       ],
@@ -6360,6 +7258,7 @@
             },
             "fill_gradient": null,
             "kind": "path",
+            "local_stroke": null,
             "paint_transform": [
               [
                 1.0,
@@ -6385,6 +7284,7 @@
               "space": "Srgb",
               "width": 0.7
             },
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
             "stroke_gradient": null
           }
         ],
@@ -6414,5 +7314,5 @@
     }
   ],
   "schema_version": 3,
-  "stroke_geometry_version": "vec003-centered-stroke-v1"
+  "stroke_geometry_version": "vec005-local-stroke-v2"
 }
