@@ -685,7 +685,7 @@
       "priority": "P1",
       "area": "test",
       "title": "GUI/CLI/MCP同等性と日本語IME",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "GUI-002",
         "MCP-001",
