@@ -299,10 +299,17 @@ impl Process {
         // SAFETY: handle has PROCESS_TERMINATE; no pointer arguments.
         if unsafe { TerminateProcess(self.handle(), 1) } == 0 {
             let error = io::Error::last_os_error();
-            // SAFETY: owned handle remains valid even when process has exited.
-            if unsafe { WaitForSingleObject(self.handle(), 0) } != WAIT_OBJECT_0 {
+            // A naturally exiting process can reject termination before its
+            // handle becomes signaled (pending I/O still needs to drain).
+            // ACCESS_DENIED is only accepted after the owned handle confirms
+            // exit; an actually inaccessible live process remains an error.
+            if error.raw_os_error() != Some(ERROR_ACCESS_DENIED as i32) {
                 return Err(error);
             }
+            if self.wait(std::time::Duration::from_secs(10)).is_err() {
+                return Err(error);
+            }
+            return Ok(());
         }
         // SAFETY: owned handle has SYNCHRONIZE and remains live for the wait.
         match unsafe { WaitForSingleObject(self.handle(), 10000) } {
@@ -312,6 +319,7 @@ impl Process {
         }
     }
 }
+
 impl Drop for Process {
     fn drop(&mut self) {
         // SAFETY: the handle was opened successfully and is closed exactly once.
@@ -333,4 +341,23 @@ pub fn is_alive(pid: u32) -> bool {
         status
     };
     status == WAIT_TIMEOUT
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn termination_observes_exit_during_natural_shutdown() {
+        for _ in 0..64 {
+            let mut command = Command::new(std::env::var_os("COMSPEC").unwrap());
+            command.args(["/C", "exit", "0"]);
+            let child = spawn(&command).unwrap();
+            std::thread::yield_now();
+            child.process.terminate_and_wait().unwrap();
+            child.process.wait(std::time::Duration::ZERO).unwrap();
+            // Repeated cleanup must remain valid with the same owned handle.
+            child.process.terminate_and_wait().unwrap();
+        }
+    }
 }

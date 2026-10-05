@@ -120,7 +120,7 @@ fn connection_stress(raw: bool) -> Result<(), JobError> {
     );
     let peer = std::thread::spawn(move || -> Result<(), JobError> {
         peer_barrier.wait();
-        for _ in 0..1000 {
+        for completed in 1..=1000 {
             if raw {
                 raw_connection_cycle(&peer_path)?;
             } else {
@@ -132,6 +132,9 @@ fn connection_stress(raw: bool) -> Result<(), JobError> {
                     }
                 }
             }
+            if completed % 50 == 0 {
+                eprintln!("connection stress progress thread=heartbeat writes={completed}");
+            }
         }
         Ok(())
     });
@@ -141,6 +144,12 @@ fn connection_stress(raw: bool) -> Result<(), JobError> {
             raw_connection_cycle(&raw_path)?;
         } else {
             store.checkpoint(&r.id, completed)?;
+        }
+        if (completed + 1) % 50 == 0 {
+            eprintln!(
+                "connection stress progress thread=checkpoint writes={}",
+                completed + 1
+            );
         }
     }
     peer.join().expect("connection stress thread")?;

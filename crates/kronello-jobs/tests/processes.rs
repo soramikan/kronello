@@ -15,12 +15,17 @@ impl Fixture {
         Self::with_slots(1)
     }
     fn with_slots(slots: usize) -> Self {
+        Self::with_limits(slots, Duration::from_secs(10))
+    }
+    fn with_limits(slots: usize, heartbeat_timeout: Duration) -> Self {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path().join("state");
         let cleanup = WorkerCleanup::new(&root).unwrap();
         let mut config = JobConfig::at(root);
         config.heartbeat_interval = Duration::from_millis(50);
-        config.heartbeat_timeout = Duration::from_secs(1);
+        // Keep routine process tests independent of subsecond disk/scheduler
+        // latency. The watchdog test below explicitly supplies a short limit.
+        config.heartbeat_timeout = heartbeat_timeout;
         config.retention = Duration::ZERO;
         config.slots = slots;
         let store = JobStore::open(config).unwrap();
@@ -66,7 +71,14 @@ impl Fixture {
             .arg(destination)
             .env("KRONELLO_STATE_ROOT", &self.store.config().state_root)
             .env("KRONELLO_JOB_HEARTBEAT_MS", "50")
-            .env("KRONELLO_JOB_TIMEOUT_MS", "1000")
+            .env(
+                "KRONELLO_JOB_TIMEOUT_MS",
+                self.store
+                    .config()
+                    .heartbeat_timeout
+                    .as_millis()
+                    .to_string(),
+            )
             .env("KRONELLO_JOB_SLOTS", self.store.config().slots.to_string())
             .env("KRONELLO_JOB_RETENTION_SECONDS", "0")
             .stdin(Stdio::null())
@@ -331,15 +343,35 @@ fn concurrent_connection_lifecycle_and_worker_writes_make_progress() {
         .unwrap();
     let mut child = ChildCleanup(child);
     let start = Instant::now();
+    let mut last_progress = [Instant::now(); 2];
+    let mut progress = [String::new(), String::new()];
     let status = loop {
         if let Some(status) = child.0.try_wait().unwrap() {
             break status;
         }
+        let text = std::fs::read_to_string(&log).unwrap();
+        // FULL synchronous WAL open/close costs vary across CI filesystems.
+        // Bound a stall separately from total work, retaining all 2000 writes.
+        for (index, thread) in ["heartbeat", "checkpoint"].into_iter().enumerate() {
+            let prefix = format!("connection stress progress thread={thread} ");
+            let latest = text.lines().rev().find(|line| line.starts_with(&prefix));
+            if let Some(latest) = latest
+                && latest != progress[index]
+            {
+                progress[index] = latest.to_owned();
+                last_progress[index] = Instant::now();
+            }
+            assert!(
+                progress[index].ends_with("writes=1000")
+                    || last_progress[index].elapsed() < Duration::from_secs(30),
+                "connection stress thread={thread} made no progress for 30s: {text}"
+            );
+        }
         assert!(
-            start.elapsed() < Duration::from_secs(60),
-            "connection stress deadlocked"
+            start.elapsed() < Duration::from_secs(300),
+            "connection stress exceeded total deadline: {text}"
         );
-        std::thread::sleep(Duration::from_millis(10));
+        std::thread::sleep(Duration::from_millis(50));
     };
     let text = std::fs::read_to_string(log).unwrap();
     assert!(status.success(), "{text}");
@@ -348,7 +380,7 @@ fn concurrent_connection_lifecycle_and_worker_writes_make_progress() {
 
 #[test]
 fn heartbeat_deadline_exits_worker_and_recovers_interrupted() {
-    let f = Fixture::new();
+    let f = Fixture::with_limits(1, Duration::from_secs(1));
     let r = f.submit("stalled", false);
     let active = f.wait(&r.id, JobStatus::Running);
     let guard = kronello_platform::ProcessGuard::capture(active.worker_pid.unwrap()).unwrap();
