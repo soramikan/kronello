@@ -162,6 +162,12 @@ public struct EditCandidate {
         guard n > 0, d > 0, !top.overflow, !bottom.overflow, bottom.partialValue > 0 else { return 0 }
         return top.partialValue / bottom.partialValue + (top.partialValue % bottom.partialValue == 0 ? 0 : 1)
     }
+    /// Authoring geometry remains tied to its Composition while page/playback
+    /// routing changes and the next page's query is still loading.
+    public var compositionExtent: CGSize {
+        let dimensions = current.object("design_extent")
+        return CGSize(width: dimensions.number("width"), height: dimensions.number("height"))
+    }
     public var extent: CGSize {
         let dimensions: [String: Any]
         if case .sequence(let id) = playbackTarget { dimensions = document.objects("sequences").first { $0.string("id") == id }?.object("extent") ?? [:] }

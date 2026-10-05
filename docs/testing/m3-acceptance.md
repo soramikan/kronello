@@ -33,6 +33,7 @@ CommandLineTools の SwiftPM は `SwiftUIMacros` が欠落し、初回 build は
 | SwiftPM build | 成功 | 統合4ページ / audio harness / design gallery をビルド |
 | SwiftPM XCTest | 68 passed、0 failures、0 skips | Design19 / Core4 / AppModel45。AppModel は Edit11 / Editor7 / Integration2 / Motion15 / Playback3 / QA2 / Workflow5 |
 | 最終 SwiftPM / 三入口、`8b94950`のcode | 68 passed、0 failures、0 skips、23操作のsnapshot一致 | `target/m3-acceptance/final-qa/report.json` / `gui.json` / `ime.json` / `cli-mcp.json`。最適化FFI、実Integration evidenceを再取得 |
+| Motion→Edit transition修正後のSwiftPM | 69 passed、0 failures、0 skips | `target/m3-acceptance/gui-transition-swift.log`。未取得Sequence geometry / 旧playback targetの回帰1件を追加、Rust core変更なし |
 | 三入口等価性 | 23操作すべて同じ canonical snapshot | `target/m3-acceptance/qa/report.json`、`gui_compared:true`、実 FFI / CLI / MCP の独立 project |
 | 第2段階 FFI 値表示 | 成功 | SwiftPM IntegrationTests が `target/m3-acceptance/integration-metal/gui-evidence.json` を明示取得して全値・boundsを照合 |
 | native IME 境界 | 成功 | QA の `ime.json`。未確定 / 取消の commit0、確定の単一 Event、UTF-8 の結合濁点差分 |
