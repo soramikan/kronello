@@ -1,6 +1,6 @@
 # 14 ジョブ
 
-長時間の処理（最終レンダー、書き出し）を、投入したプロセスや接続の寿命から独立して実行する仕組み。[ADR-0025](../adr/0025-detached-render-workers.md) による。JOB-001（M2）で macOS の CLI / MCP と明示 CPU reference の実プロセスを検証した。実装判断は [ADR-0050](../adr/0050-fixed-job-execution-and-publication.md) と [ADR-0074](../adr/0074-windows-job-workers-and-process-evidence.md)、条件ごとの結果は [JOB-001](../testing/job-001.md) / [JOB-002](../testing/job-002.md)。Windows jobs/platform と Linux の CI 実行結果は確認待ち。Windows full CLI/MCP、再開・GPU 実機経路は未検証。
+長時間の処理（最終レンダー、書き出し）を、投入したプロセスや接続の寿命から独立して実行する仕組み。[ADR-0025](../adr/0025-detached-render-workers.md) による。JOB-001（M2）で macOS の CLI / MCP と明示 CPU reference の実プロセスを検証した。実装判断は [ADR-0050](../adr/0050-fixed-job-execution-and-publication.md) と [ADR-0074](../adr/0074-windows-job-workers-and-process-evidence.md)、条件ごとの結果は [JOB-001](../testing/job-001.md) / [JOB-002](../testing/job-002.md)。初回Linux JOB-002 CI evidenceは成功、Windows jobs/platform の修正版はCI再実行待ち。Windows full CLI/MCP、再開・GPU 実機経路は未検証。
 
 ## 構成
 
@@ -23,7 +23,7 @@ GUI / CLI / MCP
 - GUI から投入したジョブも同じ仕組みで動く。GUI を閉じても書き出しは続く。
 - worker は投入したプロセスと同じ版の実行ファイルから起動する。ジョブにはエンジンの版を記録する。
 - CLI は `kronello worker --job <id>`、MCP は同じ実装の `kronello-mcp worker --job <id>` を起動する。Unix worker 開始時に `setsid`、stdin は null、stdout/stderr は worker.log とし、MCP pipe を継承しない。埋込み service は worker executable を注入できる。
-- Windows は `kronello-platform` の `CreateProcessW` に NEW_PROCESS_GROUP / DETACHED_PROCESS / BREAKAWAY_FROM_JOB、handle inheritance FALSE を指定する。worker 自身が NUL / worker.log を開き、console / 親 Job Object からの独立を確認する。breakaway 不可は `WORKER_DETACH_ERROR`、attached fallback はない。親生存中は reaper thread、親終了後は OS 回収。Windows の full CLI/MCP build は media loader 移植待ちで、CI は同じ jobs/platform API を使う test-only worker で検証する。
+- Windows は `kronello-platform` の `CreateProcessW` に NEW_PROCESS_GROUP / DETACHED_PROCESS / BREAKAWAY_FROM_JOB、handle inheritance FALSE を指定する。ERROR_ACCESS_DENIEDかつ親がJob Object内の場合だけbreakaway flagを外して1回再試行する。他のerror・2回目の失敗は `WORKER_DETACH_ERROR`。worker 自身が NUL / worker.log を開き、consoleがないことを確認する。実所属を `detach_mode: "breakaway"` / `"in_parent_job"` としてlog / evidenceへ記録する。後者も親CLI/MCP process終了後は続行するが、外側Job Objectの終了は越えられない。親生存中は reaper thread、親終了後は OS 回収。Windows の full CLI/MCP build は media loader 移植待ちで、CI は同じ jobs/platform API を使う test-only worker で検証する。
 
 ## 置き場所
 

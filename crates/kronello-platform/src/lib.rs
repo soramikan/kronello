@@ -6,6 +6,8 @@ use std::time::Duration;
 #[cfg(unix)]
 use std::time::Instant;
 
+#[cfg(any(windows, test))]
+mod detach_policy;
 #[cfg(windows)]
 #[allow(unsafe_code)]
 mod windows;
@@ -29,6 +31,9 @@ impl DetachedChild {
     pub fn id(&self) -> u32 {
         self.child.pid
     }
+    pub fn detach_mode(&self) -> &'static str {
+        self.child.detach_mode
+    }
     pub fn kill(&mut self) -> io::Result<()> {
         self.child.process.terminate_and_wait()
     }
@@ -42,15 +47,23 @@ pub fn detach_worker() -> io::Result<()> {
     #[cfg(unix)]
     {
         nix::unistd::setsid().map_err(io::Error::from)?;
+        log_detach_mode("setsid")?;
         Ok(())
     }
     #[cfg(windows)]
     {
-        windows::verify_detached()?;
-        windows::initialize_stdio()
+        windows::initialize_stdio()?;
+        let mode = windows::verify_detached()?;
+        log_detach_mode(mode)?;
+        Ok(())
     }
     #[cfg(not(any(unix, windows)))]
     Err(io::Error::new(io::ErrorKind::Unsupported, "worker detach"))
+}
+
+fn log_detach_mode(mode: &str) -> io::Result<()> {
+    use std::io::Write;
+    std::io::stderr().write_all(format!("worker detach_mode: \"{mode}\"\n").as_bytes())
 }
 
 pub fn process_is_alive(pid: u32) -> bool {

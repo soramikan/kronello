@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import sqlite3
 import subprocess
 import tempfile
 import time
@@ -19,14 +20,58 @@ class JobEvidenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             registry = root / "workers.jsonl"
-            registry.write_text("broken JSON\n[]\n" + json.dumps({"pid": 123, "job": "known-job"}) + "\n")
+            registry.write_text("broken JSON\n[]\n" + json.dumps({"pid": 123, "job": "known-job", "detach_mode": "in_parent_job"}) + "\n")
             (root / "jobs.sqlite3").write_bytes(b"broken database")
+            opened = []
+            connect = sqlite3.connect
+            def tracked_connect(*args, **kwargs):
+                db = connect(*args, **kwargs)
+                opened.append(db)
+                return db
             with patch.object(job_evidence, "probe_pid", return_value=False) as probe:
                 with patch.object(job_evidence, "reap_adopted_pid"):
-                    result = job_evidence.cleanup_workers(registry, root)
+                    with patch.object(job_evidence.sqlite3, "connect", side_effect=tracked_connect):
+                        result = job_evidence.cleanup_workers(registry, root)
             probe.assert_called_once_with(123)
             self.assertFalse(result["no_orphans"])
             self.assertEqual(len(result["cleanup_errors"]), 3)
+            self.assertEqual(result["detach_modes"][0]["detach_mode"], "in_parent_job")
+            self.assertEqual(len(opened), 1)
+            with self.assertRaises(sqlite3.ProgrammingError):
+                opened[0].execute("SELECT 1")
+
+    def test_database_handles_close_on_success_and_bad_record(self):
+        for valid in [False, True]:
+            with self.subTest(valid=valid), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                path = root / "jobs.sqlite3"
+                with contextlib.closing(sqlite3.connect(path)) as db:
+                    db.execute("CREATE TABLE jobs(record TEXT)")
+                    record = json.dumps({"id": "known-job", "worker_pid": 123}) if valid else "bad JSON"
+                    db.execute("INSERT INTO jobs VALUES (?)", [record])
+                    db.commit()
+                log = root / "jobs" / "known-job" / "worker.log"
+                log.parent.mkdir(parents=True)
+                log.write_text('worker launch detach_mode: "in_parent_job"\n')
+                opened = []
+                connect = sqlite3.connect
+                def tracked_connect(*args, **kwargs):
+                    db = connect(*args, **kwargs)
+                    opened.append(db)
+                    return db
+                with patch.object(job_evidence, "probe_pid", return_value=False):
+                    with patch.object(job_evidence, "reap_adopted_pid"):
+                        with patch.object(job_evidence.sqlite3, "connect", side_effect=tracked_connect):
+                            result = job_evidence.cleanup_workers(root / "missing-registry", root)
+                self.assertEqual(result["no_orphans"], valid)
+                if valid:
+                    self.assertEqual(result["detach_modes"][0]["detach_mode"], "in_parent_job")
+                self.assertEqual(len(opened), 1)
+                with self.assertRaises(sqlite3.ProgrammingError):
+                    opened[0].execute("SELECT 1")
+                # Exercise deletion before GC, with the closed connection
+                # retained in opened; Windows rejects this if a handle leaked.
+                path.unlink()
 
     def test_command_timeout_kills_and_waits_for_child(self):
         with tempfile.TemporaryDirectory() as directory:

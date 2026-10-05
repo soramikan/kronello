@@ -679,9 +679,26 @@ impl JobStore {
                     format!("independent spawn failed: {e}"),
                 )
             })?;
+            #[cfg(windows)]
+            let mode = spawned.detach_mode();
+            #[cfg(not(windows))]
+            let mode = "setsid";
             r.worker_pid = Some(spawned.id());
             r.heartbeat_at_ms = now_ms();
             child = Some(spawned);
+            // Keep the child owned before fallible logging: an I/O failure must
+            // reach the rollback/kill/wait path, never leak an unregistered PID.
+            use std::io::Write;
+            let mut log = std::fs::OpenOptions::new()
+                .append(true)
+                .open(directory.join("worker.log"))?;
+            log.write_all(
+                format!(
+                    "worker launch job={id} pid={} detach_mode: \"{mode}\"\n",
+                    r.worker_pid.unwrap()
+                )
+                .as_bytes(),
+            )?;
             Ok(())
         }) {
             if let Some(mut child) = child {

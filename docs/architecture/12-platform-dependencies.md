@@ -25,8 +25,10 @@ jobs / service の unsafe forbid と純粋層の依存境界は維持する
 Windows full CLI/MCP は media C loader の dlfcn.h / Unix loading と pkg-config headers の移植待ち。
 JOB-002 CI は deterministic test payload で jobs/platform の本番 launch / state / publication を確認し、
 Windows の CLI/MCP render を保証した結果として扱わない。
-Linux は CLI/MCP 実プロセスを追加実行する。両 OS の結果は branch push 後の CI 確認待ちであり、
-この実装だけで保証経路へ昇格させない。OS 別の証跡は [JOB-002](../testing/job-002.md) に記録する。
+Linux は CLI/MCP 実プロセスを追加実行し、初回CIのJOB-002 evidenceは成功した。
+Windowsの修正版は再実行待ち。breakaway拒否環境では `in_parent_job` として親process終了後は続行できるが、
+外側Job Object（CI step / service manager等）の終了で停止する制限を持つ。
+未検証経路を保証へ昇格させない。OS 別revision / command / exitの証跡は [JOB-002](../testing/job-002.md) に記録する。
 
 ## FFmpeg
 

@@ -51,8 +51,25 @@ impl WorkerCleanup {
                             .create(true)
                             .append(true)
                             .open(registry)?;
+                        let detach_mode = std::fs::read_to_string(
+                            self.root.join("jobs").join(&r.id).join("worker.log"),
+                        )
+                        .ok()
+                        .and_then(|log| {
+                            log.lines().find_map(|line| {
+                                if !line.starts_with("worker launch job=")
+                                    && !line.starts_with("worker detach_mode: ")
+                                {
+                                    return None;
+                                }
+                                let (_, value) = line.split_once("detach_mode: \"")?;
+                                let (mode, _) = value.split_once('"')?;
+                                matches!(mode, "breakaway" | "in_parent_job" | "setsid")
+                                    .then(|| mode.to_owned())
+                            })
+                        });
                         let mut line = serde_json::to_vec(
-                            &serde_json::json!({"pid":pid,"job":r.id,"root":self.root}),
+                            &serde_json::json!({"pid":pid,"job":r.id,"root":self.root,"detach_mode":detach_mode}),
                         )?;
                         line.push(b'\n');
                         file.write_all(&line)?;

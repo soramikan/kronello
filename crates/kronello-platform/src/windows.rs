@@ -73,6 +73,7 @@ fn quote(value: &std::ffi::OsStr) -> Vec<u16> {
 pub struct Child {
     pub pid: u32,
     pub process: Process,
+    pub detach_mode: &'static str,
 }
 impl Child {
     pub fn wait(&self) -> io::Result<()> {
@@ -118,57 +119,94 @@ pub fn spawn(command: &Command) -> io::Result<Child> {
     }
     environment.push(0);
     let cwd = command.get_current_dir().map(wide).transpose()?;
-    // SAFETY: these Win32 POD structs permit zero initialization; cb is set.
-    let (mut startup, mut info): (STARTUPINFOW, PROCESS_INFORMATION) =
-        unsafe { (std::mem::zeroed(), std::mem::zeroed()) };
-    startup.cb = std::mem::size_of::<STARTUPINFOW>() as u32;
-    // SAFETY: all UTF-16 buffers are terminated and remain live, argv is mutable,
-    // outputs point to initialized structs, no security attributes/handles are
-    // inherited. Fixed creation flags forbid attachment fallback.
-    if unsafe {
-        CreateProcessW(
-            program.as_ptr(),
-            argv.as_mut_ptr(),
-            std::ptr::null(),
-            std::ptr::null(),
-            0,
-            CREATE_BREAKAWAY_FROM_JOB
-                | CREATE_NEW_PROCESS_GROUP
+    let info = crate::detach_policy::spawn_with_job_policy(
+        |breakaway| {
+            // CreateProcessW may modify argv even on failure. Every attempt
+            // starts with identical arguments and fresh output structures.
+            let mut argv = argv.clone();
+            // SAFETY: Win32 POD structs permit zero initialization; cb is set.
+            let (mut startup, mut info): (STARTUPINFOW, PROCESS_INFORMATION) =
+                unsafe { (std::mem::zeroed(), std::mem::zeroed()) };
+            startup.cb = std::mem::size_of::<STARTUPINFOW>() as u32;
+            let flags = CREATE_NEW_PROCESS_GROUP
                 | DETACHED_PROCESS
-                | CREATE_UNICODE_ENVIRONMENT,
-            environment.as_ptr().cast(),
-            cwd.as_ref().map_or(std::ptr::null(), |v| v.as_ptr()),
-            &startup,
-            &mut info,
+                | CREATE_UNICODE_ENVIRONMENT
+                | if breakaway {
+                    CREATE_BREAKAWAY_FROM_JOB
+                } else {
+                    0
+                };
+            // SAFETY: terminated UTF-16 buffers remain live, argv is mutable,
+            // output structures are initialized. No handles are inherited;
+            // both attempts retain detached console/process-group behavior.
+            if unsafe {
+                CreateProcessW(
+                    program.as_ptr(),
+                    argv.as_mut_ptr(),
+                    std::ptr::null(),
+                    std::ptr::null(),
+                    0,
+                    flags,
+                    environment.as_ptr().cast(),
+                    cwd.as_ref().map_or(std::ptr::null(), |v| v.as_ptr()),
+                    &startup,
+                    &mut info,
+                )
+            } == 0
+            {
+                Err(io::Error::last_os_error())
+            } else {
+                Ok(info)
+            }
+        },
+        || in_job(None),
+    )?;
+    // SAFETY: CreateProcessW succeeded and transferred a thread handle to us.
+    unsafe {
+        CloseHandle(info.hThread);
+    }
+    let process = Process(info.hProcess as usize);
+    let in_job = match in_job(Some(process.handle())) {
+        Ok(in_job) => in_job,
+        Err(error) => {
+            // Do not leave an unregistered child on a failed membership query.
+            let _ = process.terminate_and_wait();
+            return Err(error);
+        }
+    };
+    Ok(Child {
+        pid: info.dwProcessId,
+        process,
+        detach_mode: if in_job { "in_parent_job" } else { "breakaway" },
+    })
+}
+
+fn in_job(process: Option<HANDLE>) -> io::Result<bool> {
+    let mut in_job = 0;
+    // SAFETY: caller retains any supplied handle; current-process pseudo handle
+    // is valid. Output points to live BOOL; null job means any job membership.
+    if unsafe {
+        IsProcessInJob(
+            process.unwrap_or_else(|| GetCurrentProcess()),
+            std::ptr::null_mut(),
+            &mut in_job,
         )
     } == 0
     {
         return Err(io::Error::last_os_error());
     }
-    // SAFETY: CreateProcessW succeeded and transferred a thread handle to us.
-    unsafe {
-        CloseHandle(info.hThread);
-    }
-    Ok(Child {
-        pid: info.dwProcessId,
-        process: Process(info.hProcess as usize),
-    })
+    Ok(in_job != 0)
 }
-
-pub fn verify_detached() -> io::Result<()> {
-    let mut in_job = 0;
-    // SAFETY: current-process pseudo handle is valid; output points to live BOOL.
-    if unsafe { IsProcessInJob(GetCurrentProcess(), std::ptr::null_mut(), &mut in_job) } == 0 {
-        return Err(io::Error::last_os_error());
-    }
+pub fn verify_detached() -> io::Result<&'static str> {
+    let in_job = in_job(None)?;
     // SAFETY: GetConsoleWindow has no pointer arguments or ownership transfer.
-    if in_job != 0 || !unsafe { GetConsoleWindow() }.is_null() {
+    if !unsafe { GetConsoleWindow() }.is_null() {
         return Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
-            "worker retained a parent job object or console",
+            "worker retained a parent console",
         ));
     }
-    Ok(())
+    Ok(if in_job { "in_parent_job" } else { "breakaway" })
 }
 
 #[cfg(feature = "test-support")]

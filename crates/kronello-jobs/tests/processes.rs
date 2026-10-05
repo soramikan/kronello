@@ -43,6 +43,16 @@ impl Fixture {
         fenced: bool,
         destination: &Path,
     ) -> JobRecord {
+        self.submit_using_parent(name, directory, fenced, destination, "parent")
+    }
+    fn submit_using_parent(
+        &self,
+        name: &str,
+        directory: bool,
+        fenced: bool,
+        destination: &Path,
+        parent_mode: &str,
+    ) -> JobRecord {
         let input = self.temp.path().join(format!("{name}.json"));
         let publication_gate = fenced.then(|| self.temp.path().join(format!("{name}.publish")));
         std::fs::write(
@@ -51,7 +61,7 @@ impl Fixture {
         )
         .unwrap();
         let output = Command::new(env!("CARGO_BIN_EXE_kronello-job-test-worker"))
-            .args(["parent"])
+            .arg(parent_mode)
             .arg(input)
             .arg(destination)
             .env("KRONELLO_STATE_ROOT", &self.store.config().state_root)
@@ -409,26 +419,59 @@ fn cross_volume_is_typed_when_a_second_volume_is_supplied() {
 
 #[test]
 #[cfg(windows)]
-fn breakaway_denied_is_typed_and_never_runs_attached() {
+fn breakaway_denied_worker_survives_parent_exit_in_parent_job() {
     let f = Fixture::new();
-    let input = f.temp.path().join("fixed.json");
-    std::fs::write(&input, b"{}").unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_kronello-job-test-worker"))
-        .arg("restricted-parent")
-        .arg(input)
-        .arg(f.temp.path().join("never"))
-        .env("KRONELLO_STATE_ROOT", &f.store.config().state_root)
-        .stdin(Stdio::null())
-        .output()
-        .unwrap();
-    assert!(!output.status.success());
-    assert!(
-        String::from_utf8_lossy(&output.stderr).contains("WORKER_DETACH_ERROR"),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
+    let record = f.submit_using_parent(
+        "limited",
+        false,
+        false,
+        &f.temp.path().join("limited"),
+        "restricted-parent",
     );
-    let records = f.store.list().unwrap();
-    assert_eq!(records.len(), 1);
-    assert!(records[0].worker_pid.is_none());
-    assert!(!records[0].destination.exists());
+    // submit_using_parent has already waited for the restricted parent to exit.
+    f.wait(&record.id, JobStatus::Running);
+    f.release("limited");
+    f.wait(&record.id, JobStatus::Succeeded);
+    f.cleanup.reap().unwrap();
+    let log =
+        std::fs::read_to_string(f.store.directory(&record.id).unwrap().join("worker.log")).unwrap();
+    assert!(
+        log.contains("worker launch") && log.contains("detach_mode: \"in_parent_job\""),
+        "{log}"
+    );
+    assert!(
+        log.contains("worker detach_mode: \"in_parent_job\""),
+        "{log}"
+    );
+    assert_eq!(
+        std::fs::read(record.destination).unwrap(),
+        b"fixed job payload"
+    );
+}
+
+#[test]
+fn unrelated_spawn_error_remains_typed_and_has_no_worker() {
+    let f = Fixture::new();
+    let record = f
+        .store
+        .submit(
+            b"fixed",
+            kronello_jobs::Submission {
+                engine_version: "test".into(),
+                project_id: "fixed".into(),
+                revision: "1".into(),
+                snapshot_hash: "fixed".into(),
+                output_profile: json!({}),
+                destination: f.temp.path().join("never"),
+                total_frames: 1,
+            },
+        )
+        .unwrap();
+    let error = f
+        .store
+        .spawn(&record.id, &f.temp.path().join("missing-worker.exe"))
+        .unwrap_err();
+    assert_eq!(error.code(), "WORKER_DETACH_ERROR");
+    assert!(f.store.get(&record.id).unwrap().worker_pid.is_none());
+    assert!(!record.destination.exists());
 }

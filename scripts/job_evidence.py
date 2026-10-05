@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import closing
 import json
 import os
 from pathlib import Path
 import platform
+import re
 import signal
 import sqlite3
 import subprocess
@@ -101,12 +103,27 @@ def cleanup_workers(registry: Path, scratch: Path) -> dict:
     # A killed test harness may not have captured its last submit response.
     for db_path in scratch.rglob("jobs.sqlite3"):
         try:
-            with sqlite3.connect(f"{db_path.as_uri()}?mode=ro", uri=True) as db:
-                for (text,) in db.execute("SELECT record FROM jobs"):
+            # Connection.__exit__ commits/rolls back; it does NOT close the
+            # handle. Close both resources even on a corrupt-db/JSON error.
+            with closing(sqlite3.connect(f"{db_path.as_uri()}?mode=ro", uri=True)) as db:
+                with closing(db.execute("SELECT record FROM jobs")) as cursor:
+                    records = cursor.fetchall()
+                for (text,) in records:
                     row = json.loads(text)
                     if row["worker_pid"]:
                         pid = row["worker_pid"]
-                        workers[(pid, row["id"])] = {"pid": pid, "job": row["id"]}
+                        key = (pid, row["id"])
+                        if key not in workers:
+                            log = db_path.parent / "jobs" / row["id"] / "worker.log"
+                            mode = None
+                            if log.exists():
+                                try:
+                                    match = re.search(r'^(?:worker launch [^\n]*|worker )detach_mode: "(breakaway|in_parent_job|setsid)"',
+                                                      log.read_text(errors="replace"), re.MULTILINE)
+                                    mode = match.group(1) if match else None
+                                except OSError as error:
+                                    errors.append(f"cannot read worker detach mode {log}: {error}")
+                            workers[key] = {"pid": pid, "job": row["id"], "detach_mode": mode}
         except (sqlite3.Error, ValueError, KeyError, TypeError) as error:
             errors.append(f"cannot discover workers in {db_path}: {error}")
     orphans = []
@@ -136,6 +153,8 @@ def cleanup_workers(registry: Path, scratch: Path) -> dict:
         except Exception as error:
             errors.append(f"pid={pid}: {error}")
     return {"registered_workers": len(workers), "orphans_before_cleanup": orphans,
+            "detach_modes": [{"pid": row["pid"], "job": row["job"],
+                              "detach_mode": row.get("detach_mode")} for row in workers.values()],
             "cleanup_errors": errors, "no_orphans": not orphans and not errors}
 
 
@@ -202,6 +221,7 @@ def main() -> int:
                "KRONELLO_TEST_WORKER_REGISTRY": str(registry), "CARGO_BUILD_JOBS": "3"}
         commands = [
             [sys.executable, "-m", "unittest", "scripts.tests.test_job_evidence", "-v"],
+            ["cargo", "test", "-p", "kronello-platform", "--locked"],
             ["cargo", "test", "-p", "kronello-jobs", "--features", "test-worker", "--locked",
              "--test", "state", "--test", "processes", "--", "--nocapture"],
             ["cargo", "clippy", "-p", "kronello-platform", "-p", "kronello-jobs", "--all-targets",
