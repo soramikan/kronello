@@ -298,9 +298,13 @@ class Demo:
                    len(probe["packets"]) == 1 and int(probe["packets"][0]["size"]) == first.stat().st_size,
                    codec=stream["codec_name"], reported_dimensions=[stream["width"], stream["height"]])
 
-    def run(self):
+    def load_inputs(self):
         document = json.loads((ROOT / "examples/integration-001.project.json").read_text())
         definition = json.loads((ROOT / "examples/integration-001.definition.json").read_text())
+        return document, definition
+
+    def run(self):
+        document, definition = self.load_inputs()
         self.compositions = document["compositions"][:2]
         self.band, self.label = document["compositions"][2]["nodes"]
         binding = definition["constraints"]["bands"][0]

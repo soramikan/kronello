@@ -26,7 +26,7 @@ do {
         print("Gallery output: \(directory.path)")
         print("Bundled fonts: \(fonts.map(\.lastPathComponent).joined(separator: ", "))")
         for theme in KRTheme.allCases {
-            for (name, content) in ComponentSheets.all {
+            for (name, content) in ComponentSheets.all + TemplateInspectionSheets.all {
                 try save(AnyView(GallerySheet(name, theme: theme, content: content).krTheme(theme)), name: "\(name)-\(theme.rawValue)", directory: directory)
             }
             try save(AnyView(MotionScreen().krTheme(theme)), name: "Screen-motion-\(theme.rawValue)", directory: directory)

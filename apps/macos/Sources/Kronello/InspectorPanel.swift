@@ -64,6 +64,9 @@ struct InspectorPanel: View {
                                 KRSegmentedControl([.init("layout", "layout"), .init("ink", "ink"), .init("visual", "visual")], selection: $model.ui.bounds).fixedSize()
                             }
                         }
+                        if TemplateInstanceInspection.instance(layer, document: model.document) != nil {
+                            TemplateInstanceInspectionPanel(model: model)
+                        }
                     } else {
                         KREmptyState(icon: .mousePointer2, title: "レイヤーを選択", message: "Layers または Viewer でレイヤーを選択してください。")
                     }
