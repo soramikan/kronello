@@ -211,7 +211,15 @@ impl MediaRuntime {
         match std::env::var_os("KRONELLO_FFMPEG_LIB_DIR") {
             Some(path) => Self::load_directory(PathBuf::from(path), true),
             None => {
-                Self::load_directory(PathBuf::from(env!("KRONELLO_FFMPEG_BUILD_LIB_DIR")), false)
+                let executable = std::env::current_exe()?;
+                let root = executable.parent().and_then(std::path::Path::parent);
+                let directory = root
+                    .filter(|root| root.join("package-manifest.json").is_file())
+                    .map(|root| root.join("lib"))
+                    .unwrap_or_else(|| PathBuf::from(env!("KRONELLO_FFMPEG_BUILD_LIB_DIR")));
+                // A declared package must fail if its runtime is broken. Never
+                // fall back to the development prefix or system libraries.
+                Self::load_directory(directory, false)
             }
         }
     }

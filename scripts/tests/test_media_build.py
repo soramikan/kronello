@@ -86,6 +86,19 @@ class NativeBuildTests(unittest.TestCase):
                         build.verify(prefix, {})
                 self.assertFalse((prefix / "build-receipt.json").exists())
 
+    def test_different_ffmpeg_release_with_same_abi_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            prefix = Path(temporary)
+            library = Mock()
+            library.avutil_license.return_value = b"LGPL version 2.1 or later"
+            library.avutil_configuration.return_value = b"--disable-gpl --disable-nonfree --enable-shared"
+            library.avutil_version.return_value = 61 << 16
+            library.av_version_info.return_value = b"9.1.0"
+            with patch.object(ctypes, "CDLL", return_value=library):
+                with self.assertRaisesRegex(ValueError, "pinned FFmpeg version mismatch"):
+                    build.verify(prefix, json.loads(build.MANIFEST.read_text()))
+            self.assertFalse((prefix / "build-receipt.json").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

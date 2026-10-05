@@ -134,7 +134,7 @@ impl NumericRange {
 }
 
 /// Vector bounds are declared per component, without scalar broadcasting.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, schemars::JsonSchema)]
 #[serde(
     tag = "kind",
     content = "value",
@@ -146,6 +146,19 @@ pub enum ValueRange {
     Vec2([NumericRange; 2]),
     Vec3([NumericRange; 3]),
     Angle(NumericRange),
+}
+
+impl<'de> Deserialize<'de> for ValueRange {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let wire = crate::wire::Adjacent::deserialize(d)?;
+        match wire.kind.as_str() {
+            "scalar" => wire.value().map(Self::Scalar),
+            "vec2" => wire.value().map(Self::Vec2),
+            "vec3" => wire.value().map(Self::Vec3),
+            "angle" => wire.value().map(Self::Angle),
+            _ => Err(wire.unknown(&["scalar", "vec2", "vec3", "angle"])),
+        }
+    }
 }
 impl ValueRange {
     pub fn validate_type(&self, value_type: ValueType) -> Result<(), ModelError> {
