@@ -2,7 +2,7 @@
 
 検証日: 2026-10-06。基点 `c3173f3` と本変更を専用 worktree で検証した。
 4つの受け入れ条件は下表のテスト / 実測で確認した。
-backlog は統合側の必須 workspace gate 合格待ちのため `in_progress` とする。
+最終統合後の必須 workspace gate も成功し、backlog は `done` とした（末尾の統合検証記録）。
 設計は [ADR-0079](../adr/0079-bounded-streaming-movie-export.md)。
 
 ## 受け入れ条件との対応
@@ -75,7 +75,7 @@ python3 scripts/measure_export_streaming.py --binary target/debug/deps/streaming
 python3 scripts/measure_export_streaming.py --binary target/debug/deps/streaming-e38184c2c5c97269 --test source_spool_capacity_failure_removes_temporary_outputs --file-limit-bytes 16384 --output target/render3-spool-capacity-measured.json
 ```
 
-## 必須検証と統合待ち
+## 専用 worktree の必須検証と統合前の状態
 
 - `cargo fmt --all --check`、`cargo clippy --workspace --all-targets --locked -- -D warnings`、`git diff --check`: exit0。
 - `python3 scripts/backlog.py render` / `check`: exit0、77 tasks。
