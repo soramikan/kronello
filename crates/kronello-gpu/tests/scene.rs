@@ -654,6 +654,10 @@ fn gpu_surface_overflow_status_is_sticky_and_output_association_is_checked() {
 #[test]
 fn cpu_gradient_pad_premultiplied_equal_offsets_and_working_conversion() {
     let mut g = GradientPaint {
+        spread: Default::default(),
+        interpolation: Default::default(),
+        interpolation_version: 1,
+        transform: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
         geometry: GradientGeometry::Linear {
             start: [0.0, 0.0],
             end: [2.0, 0.0],
@@ -777,6 +781,21 @@ fn gpu_stroke_styles_and_gradients_match_cpu_in_both_working_spaces() {
     for (id, n, _, scene) in vec003_scenes() {
         for working in [WorkingSpace::LinearRec709, WorkingSpace::LinearRec2020] {
             eprintln!("VEC-003 {id}: {working:?}");
+            let expected =
+                render_scene_reference(RenderSize::pixels(n, n), &scene, working).unwrap();
+            let actual = gpu()
+                .render_scene(RenderSize::pixels(n, n), &scene, working)
+                .unwrap();
+            compare(n, working, &expected, &actual.pixels);
+        }
+    }
+}
+
+#[test]
+fn gpu_vec004_gradients_match_cpu_in_both_working_spaces() {
+    for (id, n, _, scene) in vec004_scenes() {
+        for working in [WorkingSpace::LinearRec709, WorkingSpace::LinearRec2020] {
+            eprintln!("VEC-004 {id}: {working:?}");
             let expected =
                 render_scene_reference(RenderSize::pixels(n, n), &scene, working).unwrap();
             let actual = gpu()

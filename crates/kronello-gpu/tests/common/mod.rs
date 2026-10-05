@@ -102,6 +102,7 @@ pub fn glyph() -> DrawScene {
         layout_version: kronello_text::LAYOUT_VERSION,
         text: "あ".into(),
         styles: vec![model::ResolvedTextStyle {
+            gradient: None,
             range: model::TextRange { start: 0, end: 3 },
             font: font.clone(),
             size: f(25.0),
@@ -284,6 +285,7 @@ pub fn scenes() -> Vec<(&'static str, u32, WorkingSpace, DrawScene)> {
         ),
     ];
     scenes.extend(vec003_scenes());
+    scenes.extend(vec004_scenes());
     scenes
 }
 
@@ -339,6 +341,10 @@ pub fn gradient_scene(radial: bool) -> DrawScene {
         }
     };
     let gradient = GradientPaint {
+        spread: Default::default(),
+        interpolation: Default::default(),
+        interpolation_version: 1,
+        transform: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
         geometry,
         stops: vec![
             GradientStop {
@@ -359,8 +365,8 @@ pub fn gradient_scene(radial: bool) -> DrawScene {
             },
         ],
     };
-    path.fill_gradient = Some(gradient.clone());
-    path.stroke_gradient = Some(gradient);
+    path.fill_gradient = Some(Box::new(gradient.clone()));
+    path.stroke_gradient = Some(Box::new(gradient));
     path.stroke = Some(RoundStroke {
         paint: paint([1.0; 4], InputSpace::Srgb),
         width: 2.4,
@@ -407,4 +413,110 @@ pub fn vec003_scenes() -> Vec<(&'static str, u32, WorkingSpace, DrawScene)> {
             gradient_scene(true),
         ),
     ]
+}
+
+/// Extended paints exercise independent fill/stroke mappings and both spaces.
+pub fn vec004_scenes() -> Vec<(&'static str, u32, WorkingSpace, DrawScene)> {
+    let settings = [
+        (
+            "gradient-repeat",
+            GradientSpread::Repeat,
+            GradientInterpolation::WorkingLinearPremultiplied,
+        ),
+        (
+            "gradient-reflect",
+            GradientSpread::Reflect,
+            GradientInterpolation::WorkingLinearPremultiplied,
+        ),
+        (
+            "gradient-focal-radial",
+            GradientSpread::Repeat,
+            GradientInterpolation::WorkingLinearPremultiplied,
+        ),
+        (
+            "gradient-conic",
+            GradientSpread::Reflect,
+            GradientInterpolation::WorkingLinearPremultiplied,
+        ),
+        (
+            "gradient-linear-straight",
+            GradientSpread::Pad,
+            GradientInterpolation::WorkingLinearStraight,
+        ),
+        (
+            "gradient-srgb-straight",
+            GradientSpread::Pad,
+            GradientInterpolation::SrgbStraight,
+        ),
+        (
+            "gradient-srgb-premultiplied",
+            GradientSpread::Pad,
+            GradientInterpolation::SrgbPremultiplied,
+        ),
+        (
+            "gradient-text-fill",
+            GradientSpread::Reflect,
+            GradientInterpolation::SrgbStraight,
+        ),
+    ];
+    settings
+        .into_iter()
+        .enumerate()
+        .map(|(i, (id, spread, interpolation))| {
+            let mut scene = if i == 7 {
+                glyph()
+            } else {
+                gradient_scene(false)
+            };
+            let DrawNode::Path(path) = &mut scene.nodes[0] else {
+                panic!("path fixture");
+            };
+            let mut gradient = if let Some(g) = &path.fill_gradient {
+                g.as_ref().clone()
+            } else {
+                let source = gradient_scene(false);
+                let DrawNode::Path(p) = &source.nodes[0] else {
+                    unreachable!()
+                };
+                *p.fill_gradient.clone().unwrap()
+            };
+            gradient.spread = spread;
+            gradient.interpolation = interpolation;
+            gradient.transform = [[0.8, 0.15, -2.0], [-0.1, 0.9, 1.0]];
+            if i == 2 {
+                gradient.geometry = GradientGeometry::FocalRadial {
+                    center: [16.0; 2],
+                    radius: 12.0,
+                    focal: [12.0, 15.0],
+                    focal_radius: 2.0,
+                };
+            } else if i == 3 {
+                gradient.geometry = GradientGeometry::Conic {
+                    center: [16.0; 2],
+                    start_angle: 25.0,
+                    sweep_angle: 240.0,
+                };
+            } else {
+                gradient.geometry = GradientGeometry::Linear {
+                    start: [0.0; 2],
+                    end: [if i == 7 { 8.0 } else { 12.0 }, 0.0],
+                };
+            }
+            path.fill_gradient = Some(Box::new(gradient.clone()));
+            if i != 7 {
+                gradient.transform = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
+                path.stroke_gradient = Some(Box::new(gradient));
+            }
+            (
+                id,
+                32,
+                if i % 2 == 0 {
+                    WorkingSpace::LinearRec709
+                } else {
+                    WorkingSpace::LinearRec2020
+                },
+                scene,
+            )
+        })
+        .collect()
 }

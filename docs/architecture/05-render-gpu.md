@@ -45,6 +45,25 @@ OpenFX の入力領域 / 必要フレームの問い合わせに似た契約を�
 - 外部アダプターは `straight / premultiplied / opaque` と関連付け空間を明示する。非線形色変換は straight RGB に行い、外部入出力の unpremultiply 時は `a > 2^-16` で除算、それ以下は RGB をゼロとし alpha は保持する。内部 effect の unpremultiply はゼロだけを特別扱いし、内部画像に閾値を適用しない。
 - alpha を持たない出力は明示した背景へ合成する。外部 alpha 変換、閾値の境界、マット境界を検証する。詳細と新規に固定した契約は [ADR-0044](../adr/0044-color-and-alpha-contracts.md) を参照。
 
+### VEC-004 の gradient paint
+
+[ADR-0066](../adr/0066-explicit-gradient-semantics.md) の版 1 options を各 gradient に保持する。
+coverage サンプルの座標を node / ROI の逆写像、各 gradient の bbox / affine 逆写像で gradient 空間へ移す。
+parameter → pad / repeat / reflect → stop の補間 → 作業用線形 premultiplied paint の順。
+補間空間と alpha association は独立の意味で、sRGB straight / premultiplied 補間も合成前に decode する。
+text も同じ shader / CPU reference の paint 経路を使い、shaping cluster を作り直さない。
+sampling の座標・焦点円の判別式・NaN parameter・周期 spread の無限 parameter は、
+CPU の面検証と GPU の sticky validation flag で型付きエラーにし、stop 色へ置換しない。
+旧 pad の無限 parameter は VEC-003 と同じ端点色を維持する。
+
+`SemanticVersions.gradient_interpolation` は `vec004-explicit-interpolation-v1`。
+個々の `interpolation_version` と全 options / stop / transform を raster identity に含める。
+旧固定 snapshot は意味版の不一致を拒否し、旧 Project の省略 options は従来値へ正規化する。
+16bit PNG / RGBA16F は従来の出力規約を維持し、VEC-004 では dither を追加しない。
+native preview の Bgra8Unorm は banding の可能性を残す。8bit 出力 / preview の対策は将来の量子化境界で検討する。
+Metal 実機の一致・32 シーンの新 golden 候補生成 / 明示採用 / 比較は host run 待ち。
+[検証記録](../testing/vec-004.md) の残件を完了するまで GPU の受け入れ成功と扱わない。
+
 ## 色
 
 [ADR-0024](../adr/0024-working-color-space.md) の決定を維持し、値の表現・alpha・変換境界を [ADR-0044](../adr/0044-color-and-alpha-contracts.md) で固定する。
@@ -206,7 +225,7 @@ DAG は topological なノード列と明示 input index を持つ。index は�
 
 `OutputRegion { origin, extent, pixels }` は設計座標の矩形を出力画素へ写す。`p = diag(pixels / extent) × (design_position - origin)`、左上原点・+Y 下向き。ROI / 解像度を変えても文書・組版は変えない。異なるアスペクト比を要求したときは、この明示写像で伸縮し、responsive variant の再組版を暗黙に行わない。flatten の最大拡大率は node world transform と ROI 写像を合成した行列の Frobenius norm で保守的に求める。
 
-Shape の単色 / 線形・放射 gradient fill / stroke と miter / bevel / round join、butt / square / round cap を接続する。stroke の非一様 scale / shear は `UNSUPPORTED_FEATURE`。fill / text の非一様変換は対応する。後続 paint / stroke 機能は opaque で保持し、必要な最終出力は拒否する。glyph ごとに coverage を作り、text の opacity は glyph 全体の合成に一度掛ける。Group / Null / 配置の containment 枠も局所 opacity と順序を保持する。
+Shape の単色 / linear・radial・focal_radial・conic gradient fill / stroke と miter / bevel / round join、butt / square / round cap を接続する。stroke の非一様 scale / shear は `UNSUPPORTED_FEATURE`。fill / text の非一様変換は対応する。未知 paint / 後続 stroke 機能は opaque で保持し、必要な最終出力は拒否する。glyph ごとに coverage を作り、text の opacity は glyph 全体の合成に一度掛ける。Group / Null / 配置の containment 枠も局所 opacity と順序を保持する。
 
 現行文書型には matte 欄がないため `MatteBinding` を snapshot の明示レンダー入力とする。source / matte とも stable SceneKey。matte は表示 root / children から除外し、`visible = true` の場合だけ表示する。source ごとの binding は一つ、共有 matte の DAG は再利用する。欠落・非アクティブ参照・containment / matte を合わせた循環は失敗する。
 

@@ -91,6 +91,7 @@ pub struct AnimationUnit {
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct PositionedGlyph {
+    pub gradient: Option<Box<kronello_model::ResolvedGradient>>,
     pub glyph_id: u16,
     /// Identifies the font and fill in the evaluated input's styles.
     pub style_index: usize,
@@ -558,6 +559,7 @@ pub fn layout(text: &ResolvedText, fonts: &[FontData<'_>]) -> Result<LayoutResul
                     position,
                     advance: glyph.advance,
                     fill: text.styles[c.style].fill,
+                    gradient: text.styles[c.style].gradient.clone(),
                     outline,
                 });
                 x += glyph.advance;

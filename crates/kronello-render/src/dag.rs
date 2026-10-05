@@ -62,8 +62,8 @@ pub struct CoveragePath {
         kronello_model::StrokeCap,
         f64,
     )>,
-    pub fill_gradient: Option<ResolvedGradient>,
-    pub stroke_gradient: Option<ResolvedGradient>,
+    pub fill_gradient: Option<Box<ResolvedGradient>>,
+    pub stroke_gradient: Option<Box<ResolvedGradient>>,
     pub paint_transform: [[f64; 3]; 2],
 }
 #[derive(Debug, Clone, PartialEq)]
@@ -312,6 +312,15 @@ impl Builder<'_> {
                         .geometry(&resolved.geometry, None, flatten, || {
                             Ok(kronello_vector::flatten(definition, values, flatten)?)
                         })?;
+                let bounds = kronello_vector::geometry_bounds(&resolved.geometry)?;
+                let fill_gradient = prepare_gradient(
+                    resolved.fill.as_ref().and_then(|f| f.gradient.as_deref()),
+                    bounds,
+                )?;
+                let stroke_gradient = prepare_gradient(
+                    resolved.stroke.as_ref().and_then(|f| f.gradient.as_deref()),
+                    bounds,
+                )?;
                 let contours = map_contours(contours, transform)?;
                 let stroke = if let Some(stroke) = &resolved.stroke {
                     let x = a[0].hypot(b[0]);
@@ -342,14 +351,8 @@ impl Builder<'_> {
                             geometry_content_hash,
                             contours,
                             fill: resolved.fill.as_ref().map(|f| (f.color, f.rule)),
-                            fill_gradient: resolved
-                                .fill
-                                .as_ref()
-                                .and_then(|f| f.gradient.as_deref().cloned()),
-                            stroke_gradient: resolved
-                                .stroke
-                                .as_ref()
-                                .and_then(|s| s.gradient.as_deref().cloned()),
+                            fill_gradient,
+                            stroke_gradient,
                             paint_transform: if resolved
                                 .fill
                                 .as_ref()
@@ -374,6 +377,10 @@ impl Builder<'_> {
                     layout: layout.clone(),
                 })?;
                 for glyph in &layout.glyphs {
+                    let gradient = prepare_gradient(
+                        glyph.gradient.as_deref(),
+                        layout.ink_bounds.map(|b| (b.min, b.max)),
+                    )?;
                     let (geometry_content_hash, contours) = self.semantic_cache.geometry(
                         &kronello_model::ResolvedGeometry::BezierPath(glyph.outline.clone()),
                         n.layout_content_hash.as_deref(),
@@ -387,9 +394,13 @@ impl Builder<'_> {
                             geometry_content_hash,
                             contours,
                             fill: Some((glyph.fill, FillRule::Nonzero)),
-                            fill_gradient: None,
+                            paint_transform: if gradient.is_some() {
+                                inverse(transform)?
+                            } else {
+                                Affine2::IDENTITY.0
+                            },
+                            fill_gradient: gradient,
                             stroke_gradient: None,
-                            paint_transform: Affine2::IDENTITY.0,
                             stroke: None,
                         },
                     })?);
@@ -768,4 +779,47 @@ pub(crate) fn map_effect(
             opacity: *opacity,
         },
     })
+}
+
+// The object box is unstroked local geometry (text: complete positioned ink).
+// Normalize the unit mapping before lowering; each fill/stroke keeps its own map.
+fn prepare_gradient(
+    g: Option<&ResolvedGradient>,
+    bounds: Option<([f64; 2], [f64; 2])>,
+) -> Result<Option<Box<ResolvedGradient>>, RenderError> {
+    let Some(g) = g else {
+        return Ok(None);
+    };
+    if g.options.interpolation_version != 1 {
+        return Err(RenderError::UnsupportedFeature(
+            "gradient interpolation version".into(),
+        ));
+    }
+    let mut g = g.clone();
+    let mut transform = Affine2(
+        g.options
+            .transform
+            .map(|r| r.map(kronello_model::FiniteF64::get)),
+    );
+    if g.options.units == kronello_model::GradientUnits::ObjectBoundingBox {
+        let (min, max) = bounds.ok_or_else(|| {
+            RenderError::InvalidInput("empty gradient object bounding box".into())
+        })?;
+        if max[0] <= min[0] || max[1] <= min[1] {
+            return Err(RenderError::InvalidInput(
+                "degenerate gradient object bounding box".into(),
+            ));
+        }
+        transform = Affine2([
+            [max[0] - min[0], 0.0, min[0]],
+            [0.0, max[1] - min[1], min[1]],
+        ])
+        .compose(transform);
+    }
+    inverse(transform)?;
+    g.options.transform = transform
+        .0
+        .map(|r| r.map(|v| kronello_model::FiniteF64::new(v).expect("validated finite transform")));
+    g.options.units = kronello_model::GradientUnits::LocalDesign;
+    Ok(Some(Box::new(g)))
 }

@@ -143,6 +143,7 @@ fn project() -> (Project, CompositionId) {
         layout_version: TEXT_LAYOUT_VERSION,
         text: "日本語".into(),
         styles: vec![TextStyleSpan {
+            gradient: None,
             range: TextRange {
                 start: 0,
                 end: "日本語".len(),
@@ -1659,6 +1660,7 @@ fn gradient_project(animated: bool) -> (Project, CompositionId) {
     };
     let fill = shape.fill.as_mut().unwrap();
     fill.gradient = Some(Box::new(Gradient::Linear {
+        options: Default::default(),
         start: [f(0.0); 2],
         end: [f(16.0), f(0.0)],
         stops: vec![
@@ -1728,6 +1730,430 @@ fn gradient_stop_color_and_offset_animate_through_scene_evaluator() {
         GRADIENT_INTERPOLATION_VERSION
     );
     assert_eq!(versions.coverage, COVERAGE_VERSION);
+}
+
+#[test]
+fn vec004_legacy_project_without_options_keeps_identical_pixels() {
+    for radial in [false, true] {
+        let (mut p, id) = gradient_project(true);
+        if radial {
+            let DocumentObject::Known(shape) = &mut p.shapes[0] else {
+                panic!()
+            };
+            let gradient = shape.fill.as_mut().unwrap().gradient.as_mut().unwrap();
+            **gradient = Gradient::Radial {
+                center: [f(8.0); 2],
+                radius: f(8.0),
+                stops: gradient.stops().to_vec(),
+                options: Default::default(),
+            };
+        }
+        let mut json = serde_json::to_value(&p).unwrap();
+        let shape = &mut json["shapes"][0];
+        for paint in ["fill", "stroke"] {
+            if let Some(gradient) = shape
+                .get_mut(paint)
+                .and_then(|paint| paint.get_mut("gradient"))
+                .and_then(serde_json::Value::as_object_mut)
+            {
+                assert!(gradient.remove("options").is_some());
+            }
+        }
+        serde_json::from_str::<Shape>(&serde_json::to_string(shape).unwrap())
+            .expect("legacy shape must remain supported");
+        let old: Project = serde_json::from_value(json).unwrap();
+        for working_space in [ColorSpace::LinearRec709, ColorSpace::LinearRec2020] {
+            let profile = RenderProfile {
+                working_space,
+                ..Default::default()
+            };
+            let current = RenderSnapshot::new(&p, id, 1, profile).unwrap();
+            let legacy = RenderSnapshot::new(&old, id, 1, profile).unwrap();
+            for time in [t(0, 1), t(1, 2), t(1, 1)] {
+                let request = FrameRequest {
+                    time,
+                    region: region(),
+                };
+                assert_eq!(
+                    render_frame(&current, &[], &CpuReferenceBackend, request)
+                        .unwrap()
+                        .pixels,
+                    render_frame(&legacy, &[], &CpuReferenceBackend, request)
+                        .unwrap()
+                        .pixels
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn vec004_unknown_interpolation_version_has_shared_unsupported_code() {
+    let (mut p, id) = gradient_project(false);
+    let DocumentObject::Known(shape) = &mut p.shapes[0] else {
+        panic!()
+    };
+    let Gradient::Linear { options, .. } = shape
+        .fill
+        .as_mut()
+        .unwrap()
+        .gradient
+        .as_deref_mut()
+        .unwrap()
+    else {
+        panic!()
+    };
+    options.interpolation_version = 2;
+    let gradient = shape.fill.as_ref().unwrap().gradient.clone().unwrap();
+    let error = render_frame(
+        &snapshot(&p, id),
+        &[],
+        &CpuReferenceBackend,
+        FrameRequest {
+            time: t(0, 1),
+            region: region(),
+        },
+    )
+    .unwrap_err();
+    assert_eq!(error.code(), "UNSUPPORTED_FEATURE");
+    assert!(matches!(
+        error,
+        RenderError::Shape(ShapeError::UnsupportedGradientVersion)
+    ));
+
+    let stop_ids: Vec<_> = gradient
+        .stops()
+        .iter()
+        .flat_map(|s| [s.color, s.offset])
+        .collect();
+    let properties: Vec<_> = comp_mut(&mut p).nodes[0]
+        .properties
+        .iter()
+        .filter(|property| stop_ids.contains(&property.id()))
+        .cloned()
+        .collect();
+    let (mut text_project, text_id) = project();
+    let DocumentObject::Known(text) = &mut text_project.texts[0] else {
+        panic!()
+    };
+    text.styles[0].gradient = Some(gradient);
+    comp_mut(&mut text_project).nodes[1]
+        .properties
+        .extend(properties);
+    let error = render_frame(
+        &snapshot(&text_project, text_id),
+        &fonts(),
+        &CpuReferenceBackend,
+        FrameRequest {
+            time: t(0, 1),
+            region: region(),
+        },
+    )
+    .unwrap_err();
+    assert_eq!(error.code(), "UNSUPPORTED_FEATURE");
+    assert!(matches!(
+        error,
+        RenderError::Text(TextError::Gradient(ShapeError::UnsupportedGradientVersion))
+    ));
+}
+
+#[test]
+fn vec004_bbox_and_gradient_transform_match_local_mapping_and_reject_degeneracy() {
+    let (mut p, id) = gradient_project(false);
+    let local = cached_frame(
+        &snapshot(&p, id),
+        t(0, 1),
+        region(),
+        &mut RenderCache::default(),
+    );
+    let DocumentObject::Known(shape) = &mut p.shapes[0] else {
+        panic!()
+    };
+    let Gradient::Linear { end, options, .. } = shape
+        .fill
+        .as_mut()
+        .unwrap()
+        .gradient
+        .as_deref_mut()
+        .unwrap()
+    else {
+        panic!()
+    };
+    *end = [f(0.5), f(0.0)];
+    options.units = GradientUnits::ObjectBoundingBox;
+    options.transform = [[f(2.0), f(0.0), f(0.0)], [f(0.0), f(1.0), f(0.0)]];
+    let bbox = cached_frame(
+        &snapshot(&p, id),
+        t(0, 1),
+        region(),
+        &mut RenderCache::default(),
+    );
+    assert_eq!(bbox.pixels.linear, local.pixels.linear);
+    let ir = build_scene_ir(&snapshot(&p, id), t(0, 1), &[]).unwrap();
+    let dag = build_render_dag(&ir, RenderProfile::default(), region()).unwrap();
+    let lowered = dag
+        .nodes()
+        .iter()
+        .find_map(|n| match n {
+            DagNode::CoverageDraw { path, .. } => path.fill_gradient.as_ref(),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(lowered.options.units, GradientUnits::LocalDesign);
+    assert_eq!(lowered.options.transform[0][0], f(32.0));
+    // Geometry cache is independent of units, spread, and interpolation paint.
+    let mut cache = RenderCache::default();
+    cached_frame(&snapshot(&p, id), t(0, 1), region(), &mut cache);
+    cache.reset_stats();
+    let DocumentObject::Known(shape) = &mut p.shapes[0] else {
+        panic!()
+    };
+    let Gradient::Linear { options, .. } = shape
+        .fill
+        .as_mut()
+        .unwrap()
+        .gradient
+        .as_deref_mut()
+        .unwrap()
+    else {
+        panic!()
+    };
+    options.interpolation = GradientInterpolation::SrgbStraight;
+    cached_frame(&snapshot(&p, id), t(0, 1), region(), &mut cache);
+    assert!(cache.stats().geometry.hits > 0);
+    assert!(cache.stats().raster.misses > 0);
+    comp_mut(&mut p).nodes[0].properties[0]
+        .set_source(PropertySource::Constant(v2(0.0, 16.0)), &render_registry())
+        .unwrap();
+    assert!(
+        render_frame(
+            &snapshot(&p, id),
+            &[],
+            &CpuReferenceBackend,
+            FrameRequest {
+                time: t(0, 1),
+                region: region()
+            }
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn vec004_text_gradient_reuses_layout_and_keeps_one_object_coordinate_system() {
+    let (mut p, id) = project();
+    let plain = build_scene_ir(&snapshot(&p, id), t(0, 1), &fonts()).unwrap();
+    let red = constant(
+        "kronello.shape.gradient_color",
+        Value::Color(Color::from_srgb8([255, 0, 0], None)),
+    );
+    let blue = constant(
+        "kronello.shape.gradient_color",
+        Value::Color(Color::from_srgb8([0, 0, 255], None)),
+    );
+    let start = constant("kronello.shape.gradient_offset", scalar(0.0));
+    let end = constant("kronello.shape.gradient_offset", scalar(1.0));
+    let gradient = Gradient::Linear {
+        start: [f(0.0); 2],
+        end: [f(1.0), f(0.0)],
+        options: GradientOptions {
+            units: GradientUnits::ObjectBoundingBox,
+            interpolation: GradientInterpolation::SrgbStraight,
+            ..Default::default()
+        },
+        stops: vec![
+            GradientStop {
+                color: red.id(),
+                offset: start.id(),
+            },
+            GradientStop {
+                color: blue.id(),
+                offset: end.id(),
+            },
+        ],
+    };
+    let mut cache = RenderCache::default();
+    let before = cached_frame(&snapshot(&p, id), t(0, 1), region(), &mut cache);
+    let DocumentObject::Known(text) = &mut p.texts[0] else {
+        panic!()
+    };
+    text.styles[0].gradient = Some(Box::new(gradient));
+    comp_mut(&mut p).nodes[1]
+        .properties
+        .extend([red, blue, start, end]);
+    let imported: Project = serde_json::from_str(&serde_json::to_string(&p).unwrap()).unwrap();
+    assert_eq!(imported, p);
+    p = imported;
+    cache.reset_stats();
+    let after = cached_frame(&snapshot(&p, id), t(0, 1), region(), &mut cache);
+    assert_ne!(before.pixels.linear, after.pixels.linear);
+    assert!(cache.stats().layout.hits > 0);
+    assert_eq!(cache.stats().layout.misses, 0);
+    let painted = build_scene_ir(&snapshot(&p, id), t(0, 1), &fonts()).unwrap();
+    let extract = |ir: &SceneIr| {
+        ir.nodes
+            .iter()
+            .find_map(|n| match &n.content {
+                SceneContent::Text(l) => Some(l.clone()),
+                _ => None,
+            })
+            .unwrap()
+    };
+    let mut layout = extract(&painted);
+    assert!(layout.glyphs.iter().all(|g| g.gradient.is_some()));
+    for g in &mut layout.glyphs {
+        g.gradient = None;
+    }
+    assert_eq!(layout, extract(&plain));
+    let dag = build_render_dag(&painted, RenderProfile::default(), region()).unwrap();
+    let gradients: Vec<_> = dag
+        .nodes()
+        .iter()
+        .filter_map(|n| match n {
+            DagNode::CoverageDraw { path, .. } => path.fill_gradient.as_ref(),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(gradients.len(), layout.glyphs.len());
+    assert!(
+        gradients
+            .windows(2)
+            .all(|pair| pair[0].options.transform == pair[1].options.transform)
+    );
+}
+
+fn vec004_projects() -> Vec<(Project, CompositionId)> {
+    (0..4)
+        .map(|kind| {
+            let (mut p, id) = gradient_project(true);
+            let DocumentObject::Known(shape) = &mut p.shapes[0] else {
+                panic!()
+            };
+            let stops = shape
+                .fill
+                .as_ref()
+                .unwrap()
+                .gradient
+                .as_ref()
+                .unwrap()
+                .stops()
+                .to_vec();
+            let options = GradientOptions {
+                units: GradientUnits::ObjectBoundingBox,
+                spread: if kind % 2 == 0 {
+                    GradientSpread::Repeat
+                } else {
+                    GradientSpread::Reflect
+                },
+                interpolation: [
+                    GradientInterpolation::WorkingLinearPremultiplied,
+                    GradientInterpolation::WorkingLinearStraight,
+                    GradientInterpolation::SrgbStraight,
+                    GradientInterpolation::SrgbPremultiplied,
+                ][kind],
+                transform: [[f(0.8), f(0.15), f(0.05)], [f(-0.1), f(0.9), f(0.05)]],
+                ..Default::default()
+            };
+            shape.fill.as_mut().unwrap().gradient = Some(Box::new(match kind {
+                0 => Gradient::Linear {
+                    start: [f(0.0); 2],
+                    end: [f(0.5), f(0.0)],
+                    stops,
+                    options,
+                },
+                1 => Gradient::Radial {
+                    center: [f(0.5); 2],
+                    radius: f(0.4),
+                    stops,
+                    options,
+                },
+                2 => Gradient::FocalRadial {
+                    center: [f(0.5); 2],
+                    radius: f(0.4),
+                    focal: [f(0.4), f(0.5)],
+                    focal_radius: f(0.05),
+                    stops,
+                    options,
+                },
+                _ => Gradient::Conic {
+                    center: [f(0.5); 2],
+                    start_angle: f(20.0),
+                    sweep_angle: f(240.0),
+                    stops,
+                    options,
+                },
+            }));
+            comp_mut(&mut p).nodes[0].properties.extend([
+                constant("kronello.transform.position", v2(4.0, 3.0)),
+                constant("kronello.transform.rotation", Value::Angle(f(15.0))),
+            ]);
+            (p, id)
+        })
+        .collect()
+}
+
+#[test]
+fn vec004_all_geometries_lower_through_bbox_animation_and_cache() {
+    for (p, id) in vec004_projects() {
+        let imported: Project = serde_json::from_str(&serde_json::to_string(&p).unwrap()).unwrap();
+        assert_eq!(imported, p);
+        let p = imported;
+        for working_space in [ColorSpace::LinearRec709, ColorSpace::LinearRec2020] {
+            let s = RenderSnapshot::new(
+                &p,
+                id,
+                1,
+                RenderProfile {
+                    working_space,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            let mut cache = RenderCache::default();
+            for time in [t(1, 1), t(0, 1), t(1, 2), t(1, 1)] {
+                let request = FrameRequest {
+                    time,
+                    region: region(),
+                };
+                let direct = render_frame(&s, &[], &CpuReferenceBackend, request).unwrap();
+                let cached =
+                    render_frame_with_cache(&s, &[], &CpuReferenceBackend, request, &mut cache)
+                        .unwrap();
+                assert_eq!(direct.pixels, cached.pixels);
+                assert!(direct.pixels.linear.iter().flatten().all(|v| v.is_finite()));
+            }
+            assert!(cache.stats().geometry.hits > 0);
+            assert!(cache.stats().raster.hits > 0);
+        }
+    }
+}
+
+#[test]
+fn gpu_vec004_bbox_transform_animation_match_cpu_reference() {
+    let gpu = kronello_gpu::GpuContext::new().expect("GPU required; no fallback");
+    for (p, id) in vec004_projects() {
+        for working_space in [ColorSpace::LinearRec709, ColorSpace::LinearRec2020] {
+            let s = RenderSnapshot::new(
+                &p,
+                id,
+                1,
+                RenderProfile {
+                    working_space,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            for time in [t(0, 1), t(1, 2), t(1, 1)] {
+                let request = FrameRequest {
+                    time,
+                    region: region(),
+                };
+                let cpu = render_frame(&s, &[], &CpuReferenceBackend, request).unwrap();
+                let actual = render_frame(&s, &[], &gpu, request).unwrap();
+                compare(&cpu.pixels.linear, &actual.pixels.linear, 2.0_f32.powi(-10));
+            }
+        }
+    }
 }
 #[test]
 fn gradient_color_changes_invalidate_raster_and_geometry_changes_invalidate_both() {
@@ -1802,11 +2228,13 @@ fn invalid_gradient_stops_and_geometry_fail_with_typed_shape_errors() {
     ));
     for geometry in [
         Gradient::Linear {
+            options: Default::default(),
             start: [f(0.0); 2],
             end: [f(0.0); 2],
             stops: vec![],
         },
         Gradient::Radial {
+            options: Default::default(),
             center: [f(0.0); 2],
             radius: f(0.0),
             stops: vec![],
@@ -1824,7 +2252,7 @@ fn invalid_gradient_stops_and_geometry_fail_with_typed_shape_errors() {
     }
 }
 #[test]
-fn vec004_vec005_payloads_roundtrip_but_fail_final_render() {
+fn malformed_gradient_and_vec005_payloads_roundtrip_but_fail_final_render() {
     let (mut p, id) = gradient_project(false);
     let width = constant("kronello.stroke_width", scalar(2.0));
     let join = constant("kronello.shape.stroke_join", Value::Enum("miter".into()));
@@ -1916,7 +2344,7 @@ fn gpu_gradient_dag_transform_and_animation_match_cpu_reference() {
 }
 
 #[test]
-fn text_gradient_is_preserved_as_opaque_and_snapshot_refuses_it() {
+fn malformed_text_gradient_is_preserved_as_opaque_and_snapshot_refuses_it() {
     let (p, id) = cache_project();
     let mut value = serde_json::to_value(&p).unwrap();
     value["texts"][0]["styles"][0]["gradient"] = serde_json::json!({"kind":"linear","stops":[{"offset":0,"color":"red"},{"offset":1,"color":"blue"}]});
