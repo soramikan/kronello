@@ -88,3 +88,14 @@ KRONELLO_STATE_ROOT="$PWD/target/m3-acceptance/job-state" \
 OS pointerによる素材dropはproviderからdestinationへ未到達で、原因は未確定。
 成功やCUA固有の制約とは断定せず、正式条件の本番receiver / shared API検査と区別する。
 開発用の最終bundleは `target/macos/Kronello.app`。各fix番号付きbundleは比較実験の記録である。
+
+
+## canonical開発appの最終起動（2026-10-06）
+
+主エージェントが最終 `target/macos/Kronello.app` を直接起動して確認した。
+GUI-003のrevision10からclip本体を100 raw pixels移動するとrevision11 / 開始19/24秒となり、
+Undo一回でrevision12 / 開始1秒へ戻った。明示CPU参照の映像プレビューは正常、
+「モーションで開く」でShapeと日本語のMetal表示へ移り、Cmd+1でEditへ戻ってrevision12を保持した。
+証拠は `target/m3-acceptance/final-release-move.json` / `final-release-motion-light.png` / `gui-final-release.log`。
+最終bundleでもOS素材dropは元SwiftUI providerまでのtraceで、receiverには未到達。
+この観測は上の保証範囲を変更しない。
