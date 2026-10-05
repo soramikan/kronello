@@ -89,8 +89,9 @@ struct InspectorPanel: View {
         if let property = model.transformProperty(layer, key: key) {
             let source = KRPropertySource(property)
             KRInspectorRow(label, source: source,
-                onKeyframe: model.onKeyframe(property), error: model.propertyError(layer, property), keyframeEditingEnabled: false,
+                onKeyframe: model.onKeyframe(property), error: model.propertyError(layer, property), keyframeEditingEnabled: !model.ui.locked.contains(layer.id) && !model.busy,
                 previous: source == .curve ? { model.seekAdjacent(property, forward: false) } : nil,
+                toggleKeyframe: { model.toggleKeyframe(layer, property: property) },
                 next: source == .curve ? { model.seekAdjacent(property, forward: true) } : nil) {
                 PropertyValue(model: model, layer: layer, property: property)
             }

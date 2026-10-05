@@ -35,7 +35,7 @@ public struct ServiceFailure: Error, Identifiable {
         }
     }
     public static func request(_ object: [String: Any]) throws -> API.Request {
-        try JSONDecoder().decode(API.Request.self, from: JSONSerialization.data(withJSONObject: object))
+        try JSONDecoder().decode(API.Request.self, from: JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]))
     }
     public static func result(_ object: [String: Any]) throws -> [String: Any] {
         if object["status"] as? String == "error", let error = object["error"] as? [String: Any] {
@@ -51,9 +51,10 @@ public struct ServiceFailure: Error, Identifiable {
         _ = try Self.result(JSONSerialization.jsonObject(with: JSONEncoder().encode(response)) as! [String: Any])
     }
     public func call(_ request: [String: Any]) async throws -> [String: Any] {
-        // Validate the same generated envelope. Raw response avoids re-encoding opaque document numbers.
+        // Validate the same generated envelope. Sorted fields keep adjacent enum tags ahead of
+        // floating payloads in the current Rust decoder. Raw responses preserve opaque numbers.
         _ = try Self.request(request)
-        let response = try await session.rawCall(JSONSerialization.data(withJSONObject: request))
+        let response = try await session.rawCall(JSONSerialization.data(withJSONObject: request, options: [.sortedKeys]))
         return try Self.result(JSONSerialization.jsonObject(with: response) as! [String: Any])
     }
     public func subscribe() async throws { try await session.subscribe() }

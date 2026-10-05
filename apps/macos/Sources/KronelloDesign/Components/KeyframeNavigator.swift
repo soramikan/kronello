@@ -30,7 +30,7 @@ public struct KRKeyframeNavigator: View {
                     KRKeyframeGlyph(.linear, hollow: source == .constant || !onKeyframe, on: source == .curve && onKeyframe,
                                     accessibilityLabel: onKeyframe ? "キーフレームを削除" : "キーフレームを追加", action: toggle)
                         .padding(.horizontal, -KRSpace.space1)
-                        .disabled(!editingEnabled).help(editingEnabled ? "" : "キーフレーム編集は GUI-002 で追加します")
+                        .disabled(!editingEnabled).help(editingEnabled ? "" : "この Property のキーは現在編集できません")
                     arrow(right: true, action: next).opacity(source == .curve ? 1 : 0)
                 }
             }

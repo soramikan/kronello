@@ -49,9 +49,18 @@ def main():
                    + [str(p) for p in sorted((PACKAGE / "Tests/KronelloAppModelTests").glob("*.swift"))], check=True)
     if args.run_checks:
         runner = output / "GUIRunner.swift"
-        runner.write_text("import Foundation\n@main struct Runner { @MainActor static func main() async throws { try await GUIChecks().runAll() } }\n")
+        runner.write_text(r'''import Foundation
+import Darwin
+@main struct Runner {
+    @MainActor static func main() async {
+        setbuf(stdout, nil)
+        do { try await GUIChecks().runAll(); try await MotionChecks().runAll() }
+        catch { fputs("GUI checks failed: \(error)\n", stderr); exit(1) }
+    }
+}
+''')
         subprocess.run(common + ["-parse-as-library", "-lKronelloAppModel", "-lKronelloCore", "-lKronelloDesign", "-o", str(output / "GUIRunner"),
-                                str(PACKAGE / "Tests/KronelloAppModelTests/GUIChecks.swift"), str(runner)], check=True)
+                                str(PACKAGE / "Tests/KronelloAppModelTests/GUIChecks.swift"), str(PACKAGE / "Tests/KronelloAppModelTests/MotionChecks.swift"), str(runner)], check=True)
         subprocess.run([str(output / "GUIRunner")], cwd=ROOT, check=True)
 
 
