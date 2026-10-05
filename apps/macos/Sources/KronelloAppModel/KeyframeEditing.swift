@@ -20,11 +20,21 @@ public struct KeyGesture {
 }
 
 public enum CurveDisplay {
-    /// Read-only display derivative in units per second, before presentation scale.
+    /// Read-only derivative of the segment containing frame under [start, end).
+    /// At a key use its outgoing segment; outside the segments the value holds.
     public static func velocity(_ keys: [[String: Any]], frame: Double, positions: [Double], framesPerSecond: Double) -> [Double] {
-        let a = sample(keys, frame: frame - 0.01, positions: positions)
-        let b = sample(keys, frame: frame + 0.01, positions: positions)
-        return zip(a, b).map { ($1 - $0) / 0.02 * framesPerSecond }
+        guard let first = keys.first, keys.count == positions.count else { return [] }
+        let zero = numbers(first).map { _ in 0.0 }
+        guard let i = positions.lastIndex(where: { $0 <= frame }), i + 1 < keys.count,
+              positions[i + 1] > positions[i], keys[i].object("interpolation").string("kind") != "hold" else { return zero }
+        // Keep the finite-difference window inside this segment. In particular,
+        // do not average an outgoing derivative with the pre-key constant region.
+        let step = min(0.01, (positions[i + 1] - positions[i]) / 2)
+        let lo = max(positions[i], frame - step), hi = min(positions[i + 1], frame + step)
+        guard hi > lo else { return zero }
+        let a = sample(keys, frame: lo, positions: positions)
+        let b = sample(keys, frame: hi, positions: positions)
+        return zip(a, b).map { ($1 - $0) / (hi - lo) * framesPerSecond }
     }
     public static func numbers(_ key: [String: Any]) -> [Double] {
         let v = key.object("value")["value"]
