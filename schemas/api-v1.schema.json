@@ -132,7 +132,8 @@
     "AudioRetimePolicy": {
       "description": "NLE-001 never performs implicit pitch/speed conversion.",
       "enum": [
-        "reject"
+        "reject",
+        "resample_v1"
       ],
       "type": "string"
     },
@@ -411,6 +412,101 @@
           "type": "object"
         }
       ]
+    },
+    "CliEvent": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "record": {
+              "const": "header",
+              "type": "string"
+            },
+            "sequence": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "record",
+            "version",
+            "sequence"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "completed": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "record": {
+              "const": "progress",
+              "type": "string"
+            },
+            "sequence": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "total": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "record",
+            "sequence",
+            "completed",
+            "total"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "outcome": {
+              "$ref": "#/$defs/CliEventOutcome"
+            },
+            "record": {
+              "const": "terminal",
+              "type": "string"
+            },
+            "response": {
+              "$ref": "#/$defs/Response"
+            },
+            "sequence": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "record",
+            "sequence",
+            "outcome",
+            "response"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "CliEventOutcome": {
+      "enum": [
+        "end",
+        "cancelled",
+        "error"
+      ],
+      "type": "string"
     },
     "Clip": {
       "additionalProperties": false,
@@ -877,11 +973,39 @@
       "format": "uuid",
       "type": "string"
     },
+    "CreatePlanRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/Project"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "document"
+      ],
+      "type": "object"
+    },
     "CreateRequest": {
       "additionalProperties": false,
       "properties": {
         "document": {
           "$ref": "#/$defs/Project"
+        },
+        "idempotency_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "plan_hash": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "project": {
           "type": "string"
@@ -1411,6 +1535,39 @@
         {
           "additionalProperties": false,
           "properties": {
+            "node_tags_set": {
+              "additionalProperties": false,
+              "properties": {
+                "composition": {
+                  "$ref": "#/$defs/CompositionId"
+                },
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                },
+                "tags": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array",
+                  "uniqueItems": true
+                }
+              },
+              "required": [
+                "composition",
+                "node",
+                "tags"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "node_tags_set"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
             "node_rename": {
               "additionalProperties": false,
               "properties": {
@@ -1729,6 +1886,135 @@
             "instance_place"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "modifier_insert": {
+              "additionalProperties": false,
+              "properties": {
+                "index": {
+                  "format": "uint",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "modifier": {
+                  "$ref": "#/$defs/Modifier"
+                },
+                "object": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "property": {
+                  "$ref": "#/$defs/PropertyId"
+                }
+              },
+              "required": [
+                "object",
+                "property",
+                "modifier",
+                "index"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "modifier_insert"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "modifier_replace": {
+              "additionalProperties": false,
+              "properties": {
+                "modifier": {
+                  "$ref": "#/$defs/Modifier"
+                },
+                "object": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "property": {
+                  "$ref": "#/$defs/PropertyId"
+                }
+              },
+              "required": [
+                "object",
+                "property",
+                "modifier"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "modifier_replace"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "modifier_remove": {
+              "additionalProperties": false,
+              "properties": {
+                "modifier": {
+                  "$ref": "#/$defs/ModifierId"
+                },
+                "object": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "property": {
+                  "$ref": "#/$defs/PropertyId"
+                }
+              },
+              "required": [
+                "object",
+                "property",
+                "modifier"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "modifier_remove"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "modifier_reorder": {
+              "additionalProperties": false,
+              "properties": {
+                "object": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "order": {
+                  "items": {
+                    "$ref": "#/$defs/ModifierId"
+                  },
+                  "type": "array"
+                },
+                "property": {
+                  "$ref": "#/$defs/PropertyId"
+                }
+              },
+              "required": [
+                "object",
+                "property",
+                "order"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "modifier_reorder"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -1862,6 +2148,23 @@
             "offset",
             "color",
             "opacity"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "gain": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "const": "audio_gain",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "gain"
           ],
           "type": "object"
         }
@@ -3122,6 +3425,12 @@
     "HistoryRequest": {
       "additionalProperties": false,
       "properties": {
+        "cursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "limit": {
           "default": 100,
           "format": "uint",
@@ -3158,6 +3467,12 @@
             "$ref": "#/$defs/HistoryEntry"
           },
           "type": "array"
+        },
+        "next_cursor": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "next_since_revision": {
           "type": [
@@ -3219,6 +3534,26 @@
       ],
       "type": "object"
     },
+    "ImportPlanRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision": {
+          "type": "string"
+        },
+        "document": {
+          "$ref": "#/$defs/Project"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "base_revision",
+        "document"
+      ],
+      "type": "object"
+    },
     "ImportRequest": {
       "additionalProperties": false,
       "properties": {
@@ -3228,6 +3563,18 @@
         },
         "document": {
           "$ref": "#/$defs/Project"
+        },
+        "idempotency_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "plan_hash": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "project": {
           "type": "string"
@@ -4765,6 +5112,53 @@
       ],
       "type": "object"
     },
+    "ProjectChangeKind": {
+      "enum": [
+        "create",
+        "import"
+      ],
+      "type": "string"
+    },
+    "ProjectChangePlan": {
+      "additionalProperties": false,
+      "properties": {
+        "base_content_hash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "base_revision": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "candidate": {
+          "$ref": "#/$defs/Project"
+        },
+        "expected_absent": {
+          "type": "boolean"
+        },
+        "operation": {
+          "$ref": "#/$defs/ProjectChangeKind"
+        },
+        "plan_hash": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation",
+        "project",
+        "expected_absent",
+        "candidate",
+        "plan_hash"
+      ],
+      "type": "object"
+    },
     "ProjectInfo": {
       "additionalProperties": false,
       "properties": {
@@ -6267,9 +6661,21 @@
             "document": {
               "$ref": "#/$defs/Project"
             },
+            "idempotency_key": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "operation": {
               "const": "project.create",
               "type": "string"
+            },
+            "plan_hash": {
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "project": {
               "type": "string"
@@ -6292,9 +6698,21 @@
             "document": {
               "$ref": "#/$defs/Project"
             },
+            "idempotency_key": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "operation": {
               "const": "project.import",
               "type": "string"
+            },
+            "plan_hash": {
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "project": {
               "type": "string"
@@ -6499,6 +6917,12 @@
         {
           "additionalProperties": false,
           "properties": {
+            "cursor": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "limit": {
               "default": 100,
               "format": "uint",
@@ -6538,6 +6962,12 @@
             "composition": {
               "$ref": "#/$defs/CompositionId"
             },
+            "cursor": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "evaluation": {
               "anyOf": [
                 {
@@ -6552,12 +6982,28 @@
               "default": false,
               "type": "boolean"
             },
+            "limit": {
+              "format": "uint",
+              "maximum": 1000,
+              "minimum": 1,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
             "operation": {
               "const": "scene.query",
               "type": "string"
             },
             "project": {
               "type": "string"
+            },
+            "search": {
+              "$ref": "#/$defs/SceneSearch",
+              "default": {
+                "kinds": [],
+                "tags": []
+              }
             }
           },
           "required": [
@@ -6698,6 +7144,52 @@
           },
           "required": [
             "operation"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "base_revision": {
+              "type": "string"
+            },
+            "document": {
+              "$ref": "#/$defs/Project"
+            },
+            "operation": {
+              "const": "project.import_plan",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "base_revision",
+            "document"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "document": {
+              "$ref": "#/$defs/Project"
+            },
+            "operation": {
+              "const": "project.create_plan",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "document"
           ],
           "type": "object"
         }
@@ -7238,6 +7730,23 @@
             "value"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "project_plan",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/ProjectChangePlan"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -7353,6 +7862,17 @@
       ],
       "type": "object"
     },
+    "SceneKind": {
+      "enum": [
+        "group",
+        "null",
+        "shape",
+        "text",
+        "composition_instance",
+        "media"
+      ],
+      "type": "string"
+    },
     "SceneNode": {
       "additionalProperties": false,
       "properties": {
@@ -7404,6 +7924,15 @@
             "$ref": "#/$defs/Property"
           },
           "type": "array"
+        },
+        "tags": {
+          "description": "Search metadata only; never runtime identity.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "type": "array",
+          "uniqueItems": true
         },
         "transform_parent": {
           "anyOf": [
@@ -7543,6 +8072,13 @@
         "kind": {
           "$ref": "#/$defs/NodeKind"
         },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
         "transform_parent": {
           "anyOf": [
             {
@@ -7569,6 +8105,12 @@
         "composition": {
           "$ref": "#/$defs/CompositionId"
         },
+        "cursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "evaluation": {
           "anyOf": [
             {
@@ -7583,8 +8125,24 @@
           "default": false,
           "type": "boolean"
         },
+        "limit": {
+          "format": "uint",
+          "maximum": 1000,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "project": {
           "type": "string"
+        },
+        "search": {
+          "$ref": "#/$defs/SceneSearch",
+          "default": {
+            "kinds": [],
+            "tags": []
+          }
         }
       },
       "required": [
@@ -7604,6 +8162,12 @@
         },
         "duration": {
           "$ref": "#/$defs/Duration"
+        },
+        "next_cursor": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "nodes": {
           "description": "Containment pre-order; includes inactive nodes without evaluating values.",
@@ -7630,6 +8194,39 @@
         "roots",
         "nodes"
       ],
+      "type": "object"
+    },
+    "SceneSearch": {
+      "additionalProperties": false,
+      "properties": {
+        "kinds": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SceneKind"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "range": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimeRange"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Overlap in each node's authored local composition time, not visibility."
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
       "type": "object"
     },
     "SchemaKey": {

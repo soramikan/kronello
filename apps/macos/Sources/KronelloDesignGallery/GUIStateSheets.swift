@@ -13,7 +13,7 @@ import KronelloDesign
             ("ViewerError", AnyView(KRViewerError(.init("ADAPTER_UNAVAILABLE", "GPU を利用できません。"), copy: {}, retry: {}).frame(height: 240))),
             ("ManipulationOverlay", AnyView(KRManipulationOverlay(.init(CGRect(x: 0.2, y: 0.2, width: 0.5, height: 0.5), label: "layout 960 × 540"), onPreview: { _, _, _ in }, onCommit: { _, _, _ in }).frame(height: 280))),
             ("UnavailableControls", AnyView(VStack(alignment: .leading, spacing: KRSpace.space4) {
-                KRSegmentedControl([.init("dope", "Dope sheet"), .init("curve", "Curve editor", unavailableReason: "GUI-002")], selection: .constant("dope"))
+                KRSegmentedControl([.init("dope", "Dope sheet"), .init("curve", "Curve editor")], selection: .constant("dope"))
                 KRToolStrip([.init("text", icon: .type, name: "テキスト", shortcut: "T", unavailableReason: "FONT_MISSING")], selection: .constant("select"), placement: .constant(.init())).frame(height: 120)
                 KRInspectorRow("Position", keyframeEditingEnabled: false) { Text("960").krText(KRType.timecode) }
                 KRLayerRow("Title", kind: .text, diagnostic: .init("FONT_MISSING", "指定された font lock を解決できません"))

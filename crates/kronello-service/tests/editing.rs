@@ -18,6 +18,8 @@ fn setup() -> (tempfile::TempDir, PathBuf, Project) {
     let p = fixture();
     service()
         .dispatch(Request::ProjectCreate(CreateRequest {
+            plan_hash: None,
+            idempotency_key: None,
             project: path.clone(),
             document: p.clone(),
         }))
@@ -211,6 +213,7 @@ fn undo(path: &Path, event: &Event, key: &str) -> Event {
 fn history(path: &Path, since: &str) -> HistoryResult {
     let ResultData::History(h) = service()
         .dispatch(Request::HistoryList(HistoryRequest {
+            cursor: None,
             project: path.into(),
             since_revision: since.into(),
             limit: 100,
@@ -224,6 +227,7 @@ fn history(path: &Path, since: &str) -> HistoryResult {
 }
 fn node(kind: NodeKind, p: &Project, parent: Option<NodeId>) -> SceneNode {
     SceneNode {
+        tags: Default::default(),
         name: None,
         enabled: true,
         id: NodeId::new(),
@@ -745,6 +749,8 @@ fn optional_content_collection_inverse_preserves_independent_insertions() {
     p.texts.clear();
     service()
         .dispatch(Request::ProjectCreate(CreateRequest {
+            plan_hash: None,
+            idempotency_key: None,
             project: path.clone(),
             document: p.clone(),
         }))

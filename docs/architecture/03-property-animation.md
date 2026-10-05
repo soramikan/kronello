@@ -58,6 +58,18 @@ T(position) * R(rotation) * K(skew) * S(scale) * T(-anchor)
 - Color は sRGB の伝達関数を復号し、必要なら既存 GPU 参照と同じ D65 原色変換係数を f64 で適用する。`sample` は単体要求の線形 Rec.709、`sample_in_space` は明示した線形 Rec.709 / Rec.2020 を使い、straight RGB と alpha を独立に補間する。Sequence の作業空間や descriptor の明示空間は呼び出し側から渡す。負値・1 超の線形 RGB は保持し、alpha の `[0, 1]` 違反は clamp せずエラーとする。Rec.2020 の値変換は HDR 出力対応の宣言ではない。
 - descriptor の範囲は Modifier 列の適用後に既存の `validate_final_value` で検証する。曲線評価は範囲 clamp や暗黙の代替値を行わない。数値 golden、境界、編集の原子性、および 128 個の生成曲線の順方向・逆順・固定 seed の順序変更と JSON 往復を通常テストで確認する。
 
+### GUI-002 の authoring
+
+GUI の時間接線は `TimeBezier` の既存データを `keyframe_replace` で変更する。
+Vec2 の成分別接線データを追加せず、X / Y は同じ時間イージングを共有する。
+揃える / 分けるは操作中チャンネルの隣接区間の傾きから導出する UI 補助で、永続化しない。
+揃えるでは左右の区間を一つの transaction、分けるでは片側だけを変更する。
+最後のキーの削除は、編集した Property だけをその時刻の共有評価値への Constant Source に戻す。
+他の Property / Expression CurveSample の消費者がいれば Curve とキーを保持し、他の Source は変えない。
+単独消費者の場合だけキーを remove する。同じ transaction / 一回の Undo とする。
+空間パスは Viewer の読取り専用表示、Curve editor は時間イージング、速度は表示のみ。
+詳細は [ADR-0070](../adr/0070-motion-keyframe-authoring.md)。
+
 ### EVAL-001 の実装規約
 
 純粋 crate `kronello-eval` の `EvaluationSnapshot` は Composition / Curve / Expression / descriptor と評価側の依存宣言を借用する。`DependencyGraph::compile` は配置ごとにグラフを構築し、`evaluate_property` / `evaluate_properties` / `evaluate_scene` は呼び出し内だけのメモ化で任意の有理数時刻を評価する。保存・版・資産 lock の互換性検証は、この型付き入力を生成する呼び出し側の責務であり、保存層への依存や最新 Project の暗黙参照は持たない。
@@ -105,3 +117,21 @@ DataAsset 参照、動的な過去 Property sample、連続補間 noise は未�
 
 通常式からの再帰的な自己参照は禁止する。以前の値を積み上げる表現は Simulation へ移す。
 失敗時に最終出力で勝手に基底値へ置換しない。プレビューの代替表示は警告付きにし、最終出力はエラーにする。
+
+
+## SERVICE-002 の Modifier authoring
+
+[ADR-0071](../adr/0071-project-change-plans-and-modifier-edits.md) の typed EditCommand
+modifier_insert / replace / remove / reorder は Node / Composition / Clip の既存 Property を編集する。
+replace は同じ ModifierId の enabled / key / version / parameters を完全に置換し、
+reorder は全 ID の permutation。modifiers の配列順を保持した patch / inverse を生成する。
+主値源と Modifier は同じ Value(object_id,property_id) の Undo 競合キーを持ち、
+Expression の直接消費 Property の更新もこのキーを使う。別 Property の selective Undo は保持する。
+
+保存/import は既存の保存検証を行い、実行可能性の検証とは区別する。
+型付き編集では構造、descriptor の modifiers capability、source 型と候補 DAG を検証する。
+未実装 Modifier の構造を保った型付き編集は許すが、algorithm を新しく提供しない。
+必要な enabled Modifier の評価は UNSUPPORTED_FEATURE。最終 render に定数・curve・式の
+代替値を渡さない。disabled は明示的に実行対象外とし、source と最終値の検証は続ける。
+式の設定は既存 EXPR-001 の AST / expression_set / property_source_set を使い、同じ batch で
+Modifier を編集できる。[検証記録](../testing/service-002.md) に両者の保存・Undo・評価失敗を記録する。

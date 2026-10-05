@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 pub const GAUSSIAN_BLUR_ID: &str = "kronello.gaussian_blur";
 pub const DROP_SHADOW_ID: &str = "kronello.drop_shadow";
 pub const EFFECT_VERSION: u32 = 1;
+pub const AUDIO_GAIN_ID: &str = "kronello.audio.gain";
 pub const AFFINE_EFFECT_VERSION: u32 = 2;
 
 /// Unknown ids, parameters, fields and variants are retained verbatim.
@@ -36,6 +37,9 @@ pub enum EffectParameters {
         offset: PropertyId,
         color: PropertyId,
         opacity: PropertyId,
+    },
+    AudioGain {
+        gain: PropertyId,
     },
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
@@ -72,17 +76,21 @@ pub enum EffectError {
 }
 impl EffectDefinition {
     pub fn ensure_supported(&self) -> Result<(), EffectError> {
-        let id = match self.parameters {
-            EffectParameters::GaussianBlur { .. } => GAUSSIAN_BLUR_ID,
-            EffectParameters::DropShadow { .. } => DROP_SHADOW_ID,
+        let (id, latest) = match self.parameters {
+            EffectParameters::AudioGain { .. } => (AUDIO_GAIN_ID, EFFECT_VERSION),
+            EffectParameters::GaussianBlur { .. } => (GAUSSIAN_BLUR_ID, AFFINE_EFFECT_VERSION),
+            EffectParameters::DropShadow { .. } => (DROP_SHADOW_ID, AFFINE_EFFECT_VERSION),
         };
-        if self.effect_id != id || !matches!(self.version, EFFECT_VERSION | AFFINE_EFFECT_VERSION) {
+        if self.effect_id != id || !(EFFECT_VERSION..=latest).contains(&self.version) {
             return Err(EffectError::UnsupportedFeature);
         }
         Ok(())
     }
     fn references(&self) -> Vec<(PropertyId, ValueType, Unit)> {
         match self.parameters {
+            EffectParameters::AudioGain { gain } => {
+                vec![(gain, ValueType::Scalar, Unit::Dimensionless)]
+            }
             EffectParameters::GaussianBlur { sigma } => {
                 vec![(sigma, ValueType::Scalar, Unit::DesignPx)]
             }
@@ -129,6 +137,8 @@ impl EffectDefinition {
             _ => Err(EffectError::InvalidParameter(id)),
         };
         let sigma_id = match self.parameters {
+            // Audio effects are executed only by the audio evaluator.
+            EffectParameters::AudioGain { .. } => return Err(EffectError::UnsupportedFeature),
             EffectParameters::GaussianBlur { sigma }
             | EffectParameters::DropShadow { sigma, .. } => sigma,
         };
@@ -137,6 +147,7 @@ impl EffectDefinition {
             return Err(EffectError::InvalidParameter(sigma_id));
         }
         Ok(match self.parameters {
+            EffectParameters::AudioGain { .. } => return Err(EffectError::UnsupportedFeature),
             EffectParameters::GaussianBlur { .. } => {
                 if self.version == AFFINE_EFFECT_VERSION {
                     ResolvedEffect::AffineGaussianBlur {

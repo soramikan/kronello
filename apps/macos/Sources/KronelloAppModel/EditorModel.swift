@@ -74,6 +74,7 @@ public struct EditCandidate {
     @Published public var previewFailure: ServiceFailure?
     @Published public private(set) var pendingCandidate: EditCandidate?
     @Published public var candidateBounds: CGRect?
+    @Published public var keySelection: Set<KeyReference> = []
     @Published public var playing = false
     @Published public private(set) var busy = false
     @Published public private(set) var refreshToken = 0
@@ -202,6 +203,12 @@ public struct EditCandidate {
         }
         for id in current["root_nodes"] as? [String] ?? [] { visit(id, 0) }
         layers = result
+        keySelection = keySelection.filter { ref in
+            guard curveKeys(ref.curve).contains(where: { keyTime($0) == ref.time }) else { return false }
+            guard let property = ref.property else { return true }
+            let properties = compositions.flatMap { $0.objects("properties") + $0.objects("nodes").flatMap { $0.objects("properties") } }
+            return properties.contains { $0.string("id") == property && curveID($0) == ref.curve }
+        }
         if let selection = ui.selection, !layers.contains(where: { $0.id == selection }) {
             ui.selection = nil
             deletedSelection = "選択していたレイヤーは削除されました。\(actor) · rev \(revision)"

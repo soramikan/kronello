@@ -78,3 +78,31 @@ Video / Image Media の描画は COMP-002 まで型付き未対応。
 Audio track も Composition source を持てる。Video CompositionClip は参照先の音声を一度継承する。
 出力 mode、時間写像、trim の sample phase と編集規則は
 [ADR-0063](../adr/0063-document-audio-and-clip-volume.md) と [基本音声](audio-000.md) を参照。
+
+### AUDIO-004 の共有モデル拡張
+
+[ADR-0069](../adr/0069-versioned-stateless-audio.md) により `AudioRetimePolicy` へ
+`resample_v1` を追加する。省略 / `reject` は旧意味のまま。SourceRef の構造は変えず、
+audio track に Generator を保存できる。未知 Generator は保存時に代替せず、選択した音声の
+最終実行で `UNSUPPORTED_FEATURE`。audio track に Clip.properties / effects と明示 crossfade を
+許し、既存の二 clip・完全 intersection・第三 clip 不在という overlap 条件を維持する。
+`EffectParameters::AudioGain {gain}` は clip-owned volume descriptor Property を参照し、
+既知 effect id は `kronello.audio.gain` version 1。映像 effect evaluator は音声 effect を拒否する。
+公開 project / API schema の番号1は維持し、Rust generator と Swift transport を再生成する。
+旧文書・profile 1/2 の実行意味を変更せず、movie profile 3 が新音声 contract を固定する。
+
+SERVICE-002 の Modifier 編集は既存 Modifier の id / key / version / enabled / parameters と
+Property.modifiers の順序付き配列を使い、Project schema を変更しない。
+insert / replace / remove / reorder は共有 EditCommand とし、保存可能性と評価可能性を区別する。
+[ADR-0071](../adr/0071-project-change-plans-and-modifier-edits.md)、
+[03 プロパティとアニメーション](03-property-animation.md#service-002-の-modifier-authoring) を参照。
+
+## API-002 の検索 metadata
+
+SceneNode.tags は任意の sorted string set（既定空、空は保存省略）。NFC 正規形、非空、
+制御文字なし、先頭末尾の空白なし、UTF-8 64 bytes 以下、node 当たり32個以下。
+タグは runtime identity ではなく、共有 node_tags_set command と scene.query search だけが扱う metadata。
+Project schema version 1 と既存必須 active_range を維持する。
+range 検索は各 node の authored local Composition time の半開区間 overlap であり、
+評価時刻の可視性や親の retime を投影した時間とは区別する。
+[ADR-0072](../adr/0072-scene-search-fixed-cursors-and-cli-events.md) を参照。

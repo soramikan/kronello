@@ -4,6 +4,8 @@ VEC-005 は `stroke-dashes` / `stroke-inside-evenodd` / `stroke-outside-nonzero`
 
 VEC-004 は gradient の 8 シーン、FX-002 は version 2 の `fx002-rotation` / `fx002-nonuniform-rotation` / `fx002-shear-shadow` / `fx002-reflected-shear-shadow-rec2020` の 4 シーンを追加し、VEC-005 追加前のカタログは **36 シーン・36 comparison frames**。新規 12 シーンの候補生成・採用・比較は統合ブランチで一度だけ行う（[VEC-004](vec-004.md)、[FX-002](fx-002.md)）。
 
+2026-10-05 に統合ブランチ（revision `2baa1ad`）で 36 シーンの候補を生成し、CPU oracle 一致・画像レビューの後に明示採用した。通常比較は `status=pass`。採用で既存シーン `gradient-linear-fill-stroke` の RGBA16F が 5 チャンネルだけ変わった（最大差 3.05e-5、binary16 の 1 ulp）。VEC-004 で WGSL の gradient sampling を組み替えたことによる丸めの差で、旧 baseline との差も許容誤差 `2^-10` の範囲内。意味の変更ではないため再採用した。
+
 FX-001 は blur / shadow の 3 シーンを追加し、FX-001 時点のカタログは **24 シーン・24 comparison frames**。24 シーンの採用・比較証拠は [FX-001](fx-001.md) に記録する。以下の QA-003 の 21 シーンは初回登録時点の履歴である。
 
 QA-003 は [ADR-0047](../adr/0047-apple-silicon-metal-golden.md) に従い、GPU-001 / GPU-002 / VEC-003 の **21 シーン・21 comparison frames** を共通の基準へ比較する。初回の M1 基準登録・全シーン比較は成功した（[QA-003 の検証記録](qa-003.md)）。許容誤差は QA-001 の `compare_pixels` 既定値 `2^-10` を維持する。

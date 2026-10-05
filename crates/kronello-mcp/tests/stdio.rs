@@ -8,6 +8,73 @@ use kronello_mcp::SUPPORTED_PROTOCOL_VERSIONS;
 use serde_json::{Value, json};
 
 #[test]
+fn search_paging_and_tag_commands_are_discovered_and_schema_validated() {
+    let mut client = Client::spawn(&[], false);
+    client.ready(SUPPORTED_PROTOCOL_VERSIONS[0]);
+    let tools = client.schemas();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("api2.kronello");
+    let mut doc: Value =
+        serde_json::from_str(include_str!("../../../examples/m1-demo.project.json")).unwrap();
+    for n in doc["compositions"][0]["nodes"].as_array_mut().unwrap() {
+        n["tags"] = json!(["search"]);
+    }
+    client.call("project.create", json!({"project":path,"document":doc}));
+    let query = json!({"project":path,"composition":doc["compositions"][0]["id"],"limit":1,"search":{"tags":["search"],"kinds":["shape","text"],"range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"1"}}}});
+    jsonschema::validator_for(&tools["scene.query"]["inputSchema"])
+        .unwrap()
+        .validate(&query)
+        .unwrap();
+    let first = client.call("scene.query", query.clone());
+    validate(&tools["scene.query"], &first);
+    let mut query = query;
+    query["cursor"] = first["structuredContent"]["next_cursor"].clone();
+    let second = client.call("scene.query", query.clone());
+    validate(&tools["scene.query"], &second);
+    assert_ne!(
+        first["structuredContent"]["nodes"][0]["key"],
+        second["structuredContent"]["nodes"][0]["key"]
+    );
+    query["limit"] = json!(2);
+    let mismatch = client.call("scene.query", query);
+    validate(&tools["scene.query"], &mismatch);
+    assert_eq!(
+        mismatch["structuredContent"]["error"]["code"],
+        "CURSOR_MISMATCH"
+    );
+    let commands = json!([{"node_tags_set":{"composition":doc["compositions"][0]["id"],"node":doc["compositions"][0]["nodes"][0]["id"],"tags":["authored"]}}]);
+    let plan = client.call(
+        "edit.plan",
+        json!({"project":path,"base_revision":"1","commands":commands}),
+    );
+    validate(&tools["edit.plan"], &plan);
+    let event=client.call("edit.apply",json!({"project":path,"base_revision":"1","commands":commands,"plan_hash":plan["structuredContent"]["plan_hash"],"session_id":"96607679-eefd-407a-a3a8-59943f2bd82f","idempotency_key":"tags"}));
+    validate(&tools["edit.apply"], &event);
+    let first = client.call("history.list", json!({"project":path,"limit":1}));
+    validate(&tools["history.list"], &first);
+    let second = client.call(
+        "history.list",
+        json!({"project":path,"limit":1,"cursor":first["structuredContent"]["next_cursor"]}),
+    );
+    validate(&tools["history.list"], &second);
+    assert_eq!(
+        second["structuredContent"]["events"][0]["event"]["id"],
+        event["structuredContent"]["id"]
+    );
+    let undo=client.call("edit.undo",json!({"project":path,"base_revision":"2","session_id":"96607679-eefd-407a-a3a8-59943f2bd82f","idempotency_key":"undo","event_id":event["structuredContent"]["id"]}));
+    validate(&tools["edit.undo"], &undo);
+    assert_eq!(undo["isError"], false);
+    let absent = client.call(
+        "scene.query",
+        json!({"composition":doc["compositions"][0]["id"]}),
+    );
+    assert_eq!(
+        absent["structuredContent"]["error"]["code"],
+        "INVALID_REQUEST"
+    );
+}
+
+#[test]
 fn explain_tools_are_discovered_and_return_shared_results_without_a_device() {
     let mut client = Client::spawn(&[], true);
     client.ready(SUPPORTED_PROTOCOL_VERSIONS[0]);
@@ -886,4 +953,62 @@ fn nle2_generator_query_and_move_share_mcp_registry_and_transactions() {
         restored["structuredContent"]["sequence"],
         doc["sequences"][0]
     );
+}
+
+#[test]
+fn project_plans_receipts_and_modifiers_use_registry_tools() {
+    let mut client = Client::spawn(&[], false);
+    client.ready(SUPPORTED_PROTOCOL_VERSIONS[0]);
+    let tools = client.schemas();
+    for name in ["project.create_plan", "project.import_plan"] {
+        assert_eq!(tools[name]["_meta"]["kronello"]["readOnlyProject"], true);
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("planned.kronello");
+    let doc: Value =
+        serde_json::from_str(include_str!("../../../examples/m1-demo.project.json")).unwrap();
+    let planned = client.call(
+        "project.create_plan",
+        json!({"project":path,"document":doc}),
+    );
+    validate(&tools["project.create_plan"], &planned);
+    assert!(!path.exists());
+    let create = json!({"project":path,"document":doc,"plan_hash":planned["structuredContent"]["plan_hash"],"idempotency_key":"mcp-create"});
+    let original = client.call("project.create", create.clone());
+    assert_eq!(original["isError"], false);
+    let planned = client.call(
+        "project.import_plan",
+        json!({"project":path,"base_revision":"1","document":doc}),
+    );
+    validate(&tools["project.import_plan"], &planned);
+    let import = json!({"project":path,"base_revision":"1","document":doc,"plan_hash":planned["structuredContent"]["plan_hash"],"idempotency_key":"mcp-import"});
+    let imported = client.call("project.import", import.clone());
+    assert_eq!(imported["isError"], false);
+    let c = &doc["compositions"][0];
+    let node = &c["nodes"][0];
+    let prop = node["properties"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["descriptor"]["key"] == "kronello.opacity")
+        .unwrap();
+    let commands = json!([{ "modifier_insert":{"object":node["id"],"property":prop["id"],"index":0,"modifier":{"id":"173087e0-c21b-43de-9371-8e1da051095a","key":"example.unsupported","version":1,"enabled":true,"parameters":{}}} }]);
+    let plan = client.call(
+        "edit.plan",
+        json!({"project":path,"base_revision":"2","commands":commands}),
+    );
+    assert_eq!(plan["isError"], false, "{plan}");
+    let applied = client.call("edit.apply",json!({"project":path,"base_revision":"2","commands":commands,"plan_hash":plan["structuredContent"]["plan_hash"],"session_id":"96607679-eefd-407a-a3a8-59943f2bd82f","idempotency_key":"mcp-modifier"}));
+    assert_eq!(applied["isError"], false, "{applied}");
+    let sample = client.call("property.sample",json!({"project":path,"composition":c["id"],"keys":[{"kind":"node","instance_path":[],"node":node["id"],"property":prop["id"]}],"times":[{"num":"0","den":"1"}]}));
+    assert_error(&sample, "UNSUPPORTED_FEATURE");
+    assert_eq!(
+        client.call("project.create", create)["structuredContent"],
+        original["structuredContent"]
+    );
+    assert_eq!(
+        client.call("project.import", import)["structuredContent"],
+        imported["structuredContent"]
+    );
+    assert!(client.finish().contains("UNSUPPORTED_FEATURE"));
 }

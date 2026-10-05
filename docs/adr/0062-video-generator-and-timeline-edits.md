@@ -1,6 +1,7 @@
 # ADR-0062: 動画・Generator Clip と明示した Timeline 編集範囲
 
-- 状態: 採用（GPU の受け入れは host run 待ち）
+- 状態: 部分置換（ADR-0069、下記の追加範囲のみ）（GPU の受け入れは host run 待ち）
+- AUDIO-004 の追加・部分置換: [ADR-0069](0069-versioned-stateless-audio.md)。audio track の Generator / effect Property / crossfade と明示 resample_v1 を追加し、movie profile 1/2 の実行意味は維持する。
 - 日付: 2026-10-04
 - 対象: NLE-002
 

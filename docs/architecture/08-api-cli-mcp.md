@@ -22,7 +22,7 @@ GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001
 ### 機械向け I/O
 
 - subcommand を指定した場合は、その payload の JSON object を stdin に渡す（`operation` を含めない）。subcommand なしの場合は `operation` を含む完全な service Request を渡す。
-- `--request-json 'JSON'` は stdin の代わりに一つの要求を渡す。入力上限は UTF-8 16 MiB。一回の起動につき一つの要求、一つの結果 JSON document と改行を stdout に出力する。NDJSON event stream は未実装。
+- `--request-json 'JSON'` は stdin の代わりに一つの要求を渡す。入力上限は UTF-8 16 MiB。一回の起動につき一つの要求、一つの結果 JSON document と改行を stdout に出力する。明示 --events ndjson は後述の API-002 framing を使う。
 - 成功は `{ "status": "success", "result": { "kind": "project|export|frame|sequence|plan|edit|history|scene|node_explanation|render_explanation|samples|capabilities|collected|job|jobs|pruned", "value": ... } }`、失敗は `{ "status": "error", "error": { "code": "INVALID_REQUEST", "message": "..." } }`。成功の exit code は 0、失敗は非 0。診断は stderr にだけ出力する。`--help` も `USAGE` JSON error と stderr の使用法（非 0）を返す。
 - backend の既定は GPU。`--backend gpu` も指定可。adapter / device を作れなければ型付きエラーを返す。GPU 不在時の暗黙の CPU fallback はない。GPU は render 操作でのみ初期化する。
 - `--backend cpu-reference` は検証用の float32 参照 backend の明示選択。metadata に `cpu_reference_float32` と記録する。通常の GPU は `wgpu_rgba16f`。両者のビット一致や性能保証は提供しない。
@@ -82,7 +82,7 @@ AST node は externally tagged の一要素 object。`"time"` は unit variant�
 | `edit.plan` | `edit plan` | `project`、`base_revision`、`commands` → `kind: plan` の EditPlan |
 | `edit.apply` | `edit apply` | 上記に `plan_hash`、`session_id`、`idempotency_key` を追加 → `kind: edit` の保存済み Event |
 | `edit.undo` | `edit undo` | `project`、`base_revision`、`session_id`、`idempotency_key`、`event_id` → 新しい Event |
-| `history.list` | `history list` | `project`、任意の `since_revision`（既定 `"0"`）/ `limit` / `session_id` → 現在 revision、Event / `undone`、次ページ cursor（API-001） |
+| `history.list` | `history list` | `project`、任意の `since_revision`（既定 `"0"`）/ `limit` / `session_id` → 現在 revision、Event / `undone`、next_since_revision（互換）/ next_cursor（API-002） |
 
 `base_revision` / `since_revision` は10進文字列、ID は UUID。Plan / HistoryResult の revision も10進文字列だが、既存 store の Event は JSON 整数の revision を返す。`idempotency_key` は空でない UTF-8 文字列（256 bytes 以下）を明示する。session は呼び出し元が決める。history は一つの SQLite 読み取り transaction で現在文書とイベントを取得し、revision 順に session・変更キー・undo_of・取り消し状態を返す。revision が進む前の receipt 再送でも元の Event 全体を返し、現在文書をその時点へ戻さない。
 
@@ -164,15 +164,15 @@ capabilities はコンパイル済み対応範囲を示し、GPU adapter の稼�
 
 ### 公開 schema と registry
 
-[schemas/api-v1.schema.json](../../schemas/api-v1.schema.json) は Draft 2020-12。Request / Response envelope、全36操作の payload / successful result、型付き EditCommand を共有 Rust 型から生成する。`api_json_schema()` と committed schema の一致を通常テストで確認する。再生成は `cargo run -p kronello-service --example api_schema --locked > schemas/api-v1.schema.json`。版はファイル名・`$id`・`x-api-schema-version` で固定し、既存 Request に必須 version field を追加しない。Project document は従来の公開型 / schema を共有する。
+[schemas/api-v1.schema.json](../../schemas/api-v1.schema.json) は Draft 2020-12。Request / Response envelope、全38操作の payload / successful result、型付き EditCommand を共有 Rust 型から生成する。`api_json_schema()` と committed schema の一致を通常テストで確認する。再生成は `cargo run -p kronello-service --example api_schema --locked > schemas/api-v1.schema.json`。版はファイル名・`$id`・`x-api-schema-version` で固定し、既存 Request に必須 version field を追加しない。Project document は従来の公開型 / schema を共有する。
 
-`command_registry()` の CommandDescriptor は name / read_only / request_schema / response_schema を持つ。schema refs は同ファイルの `$defs` を指す。request_schema は operation tag を除いた payload、response_schema は status / kind を除いた successful value。MCP-001 / FFI-001 は同じ registry と execute / execute_json を使用できる。registry の36操作は project.create / import / export / info / collect、asset.relink、render.frame / sequence / export / submit、job.get / list / cancel / prune、edit.plan / apply / undo、history.list、scene.query、property.sample、capabilities.get、template.define / instantiate / set_input / set_duration / preview / migration_plan と後述の NLE-001 の6操作、NLE-002 の sequence.query、INSPECT-001 の2操作。project.create / import / asset.relink / edit.apply / undo、template の4操作、NLE-001 の6操作が mutating。他は project に対し read-only（render.sequence と project.collect は output directory に成果物を作る）。project.collect の read_only は元プロジェクトを変更しないことを表し、複製と hash 検証済み素材を新しいフォルダに保存する。
+`command_registry()` の CommandDescriptor は name / read_only / request_schema / response_schema を持つ。schema refs は同ファイルの `$defs` を指す。request_schema は operation tag を除いた payload、response_schema は status / kind を除いた successful value。MCP-001 / FFI-001 は同じ registry と execute / execute_json を使用できる。registry の38操作は project.create / create_plan / import / import_plan / export / info / collect、asset.relink、render.frame / sequence / export / submit、job.get / list / cancel / prune、edit.plan / apply / undo、history.list、scene.query、property.sample、capabilities.get、template.define / instantiate / set_input / set_duration / preview / migration_plan と後述の NLE-001 の6操作、NLE-002 の sequence.query、INSPECT-001 の2操作。project.create / import / asset.relink / edit.apply / undo、template の4操作、NLE-001 の6操作が mutating。他は project に対し read-only（render.sequence と project.collect は output directory に成果物を作る）。project.collect の read_only は元プロジェクトを変更しないことを表し、複製と hash 検証済み素材を新しいフォルダに保存する。
 
 request envelope・既知 payload は未知 field と重複 field を拒否する。schema に任意 shell、外部 URL fetch、raw FFmpeg args の実行 field は設けない。project / font / output path と assets 内の locator の URI scheme は filesystem access の前に `INVALID_REQUEST` とする。Windows drive path は local path として許す。素材の name / text や未知 Project 内容は不活性なデータであり、命令として実行しない。Project の未知 field 保持と、API envelope の厳格な decode は別の契約である。
 
 ### history.list のページング
 
-`since_revision` は exclusive cursor（既定 `"0"`）、limit は既定100、範囲1..=1000。任意の session_id で filter した Event を revision 昇順で返す。続きがあれば `next_since_revision` は最後に返した Event の10進 revision、なければ null。同じ filter で次の要求に cursor を渡す。結果は Event 全体（id / session_id / changed_keys / undo_of 等）、undone、現在 revision を含む。undone はページング・session filter の前に全保持履歴の Undo chain から計算するため、別 session や後続ページの Undo も反映する。各ページは一つの read transaction で整合するが、複数ページ全体を固定する snapshot cursor は提供しない。compact された Event は返さない。
+`since_revision` は exclusive cursor（既定 `"0"`）、limit は既定100、範囲1..=1000。任意の session_id で filter した Event を revision 昇順で返す。続きがあれば `next_since_revision` は最後に返した Event の10進 revision、なければ null。同じ filter で次の要求に cursor を渡す。結果は Event 全体（id / session_id / changed_keys / undo_of 等）、undone、現在 revision を含む。undone はページング・session filter の前に全保持履歴の Undo chain から計算するため、別 session や後続ページの Undo も反映する。next_since_revision のみの従来取得は各ページの read transaction 内で整合するが、ページ間は最新 revision に更新される。API-002 の next_cursor / cursor は初回 revision と undone を固定し、必要な履歴の compact は CURSOR_EXPIRED で拒否する（後述）。
 
 受け入れ条件、CPU 検証と未確認範囲は [API-001 の検証](../testing/api-001.md) を参照する。
 
@@ -490,10 +490,91 @@ MediaSlot の final compiler は既存 UNSUPPORTED_FEATURE、欠落は ASSET_MIS
   volume は同じ node の properties にある volume PropertyId。Media 音声だけに対応し、映像描画は
   COMP-002 まで `UNSUPPORTED_FEATURE`。既存 scene.query / property.sample にも同じ Property を公開する。
 - capabilities.features に document_audio / clip_volume / media_audio を追加した。
-  registry は33操作。API / Project schema と GeneratedAPI.swift を共有 generator から再生成する。
+  registry は38操作（SERVICE-002 の2 Query を含む。API-002 は既存 query / EditCommand の拡張で追加操作なし）。API / Project schema と GeneratedAPI.swift を共有 generator から再生成する。
   `AvExportReport` に audio_source / audio_profile_version を追加し、省略した旧 report は explicit / 1。
 
 型付き失敗は `UNSUPPORTED_FEATURE`（profile / retime / effects / Generator / Media video）、
 `INVALID_AUDIO_INPUT`（Gain / Curve / audio compiler）、`INVALID_MEDIA_INPUT`（mode と clips の併用）、
 既存 `SOURCE_MISSING` / `ASSET_MISSING` / `ASSET_HASH_MISMATCH` / `AUDIO_SOURCE_TOO_SHORT` /
 `AUDIO_CLIPPING` / `AUDIO_OVERFLOW` / `TIME_ERROR`。検証の成功を GPU / hardware 稼働保証へ拡張しない。
+
+### AUDIO-004 の movie profile 3
+
+共有 `render.export` / `render.submit` の `output.profile_version: 3, audio: document` は
+[ADR-0069](../adr/0069-versioned-stateless-audio.md) の evaluator 2 を固定する。
+省略1と指定2は旧契約を維持し、profile 3 の explicit / silence も従来の明示音声規則を使う。
+新しい入口・任意 shell / FFmpeg parameters は追加しない。`timeline.clip_place` の Clip が
+`audio_retime: resample_v1` を保持し、既存 `clip_set_effects` が AudioGain / volume Property を受け取る。
+capabilities.features は audio_resample_v1 / audio_gain_v1 / audio_generator_v1 /
+audio_crossfade_v1、effects に kronello.audio.gain を追加する。これらは movie profile 3 の
+対応範囲であり、映像 effect / nested retime / pitch-preserving stretch の対応を示さない。
+詳細な error / sample boundaries / budget と実行証拠は [AUDIO-004](../testing/audio-004.md)。
+
+## SERVICE-002 の Project 計画・再送と Modifier 編集
+
+[ADR-0071](../adr/0071-project-change-plans-and-modifier-edits.md)、
+[検証記録](../testing/service-002.md) を参照する。
+共有 registry は38操作。新規 Query は `project.create_plan` / `project.import_plan`、
+CLI は `project create_plan` / `project import_plan`、MCP は同名 tool。
+create_plan は `{project,document}`、import_plan は `{project,base_revision,document}` を受け、
+`kind: project_plan` の `ProjectChangePlan` を返す。plan は target を作らない。
+
+結果は `{operation,project,expected_absent,base_revision,base_content_hash,candidate,plan_hash}`。
+project は親を canonicalize した target、create は expected_absent=true / base_* は null。
+import は一つの read-only snapshot の revision / document hash を固定する。
+plan_hash は自身を空文字にした計画の canonical JSON SHA-256。
+既存 `project.create` / `project.import` は optional plan_hash / idempotency_key を受け、
+ProjectInfo を返す。指定 hash の不一致は PLAN_HASH_MISMATCH、古い revision は
+REVISION_CONFLICT。同 key の異なる canonical payload は IDEMPOTENCY_KEY_REUSED。
+省略した従来の direct Command も利用できる。
+
+create の出力予約は apply 時の初期化済み staging file の no-clobber publication。
+receipt も公開前に保存し、既存 target の matching receipt を再送に使う。
+一致しない既存 target は PROJECT_EXISTS。import は既存の writer transaction と receipt を使う。
+後続編集・compact 後の再送も元の ProjectInfo を返し、最新の revision を返さない。
+read-only な receipt replay / import plan でも SQLite WAL / SHM sidecar は作られうる。
+
+edit.plan / edit.apply の typed EditCommand に次を追加した。
+
+| command | payload |
+|---|---|
+| modifier_insert | object, property, modifier（完全な Modifier）, index |
+| modifier_replace | object, property, modifier（既存 ID の完全な置換） |
+| modifier_remove | object, property, modifier（ModifierId） |
+| modifier_reorder | object, property, order（全 ModifierId の permutation） |
+
+replace で enabled / parameters / key / version を編集する。source と同じ
+Value(object_id,property_id) が競合キーで、順序付き配列全体の inverse を記録する。
+別 Property の selective Undo、Undo event の競合、Redo は既存契約を使う。
+EXPR-001 の expression_set / property_source_set と同じ batch を作れる。
+未実装 Modifier の保存・型付き編集は可能だが、enabled な必要 Property の sample / final render は
+UNSUPPORTED_FEATURE。disabled の場合だけ実行対象外となり、最終値検証は続く。
+Modifier algorithm の対応追加を意味しない。raw patch / mutations / inverse / changed_keys は
+create / import / plan / edit の入口から受け取らない。
+
+## API-002 の検索・固定ページ・CLI stream
+
+[ADR-0072](../adr/0072-scene-search-fixed-cursors-and-cli-events.md)、
+[検証](../testing/api-002.md) を契約とする。共有 registry の操作数は変えない（SERVICE-002 を含め38操作）。
+
+- scene.query に search {tags,kinds,range?}、limit?（1..=1000）、cursor? を追加した。
+  tags は NFC 正規化後の case-sensitive all-of、kinds は閉じた enum の any-of。
+  range は mandatory active_range との authored local Composition time の半開区間 overlap。
+  evaluation time の可視性とは独立。所有 pre-order、InstancePath / NodeId、関係 key と revision を保持する。
+  roots / parents / children は検索や page の外の key を参照しうる。next_cursor で同じ snapshot を継続する。
+- history.list の cursor? / next_cursor は初回 revision の履歴と undone を固定する。
+  since_revision / limit / session_id は初回と同じ値を再送する。next_since_revision は互換用で、
+  それだけを使った次回要求は最新 snapshot を開始する。
+- cursor は Project UUID / operation / revision / 正規化 query parameters / 最後の stable key に束縛する。
+  INVALID_CURSOR / CURSOR_MISMATCH / CURSOR_EXPIRED は typed error。
+  compact で必要な snapshot / history prefix が消えたら初回から取得し直す。
+- SceneNode.tags は sorted set、既定空・保存省略。非空 NFC、制御文字なし、端の空白なし、
+  UTF-8 64 bytes 以下、32個以下。EditCommand.node_tags_set {composition,node,tags} が集合全体を
+  Undo 可能に置換する。Project schema version 1、旧ファイルの省略、UUID identity を維持する。
+- CLI --events ndjson は UTF-8 / LF / 各 record flush。header {record,version:1,sequence:0}、
+  0個以上の progress {record,sequence,completed,total}、一つの terminal
+  {record,sequence,outcome:end|cancelled|error,response:Response} の順。sequence は1ずつ増える。
+  end は exit 0、cancelled / error は非0。diagnostic は stderr、通常モードは一要求一 JSON と LF。
+  SIGINT は stdin 待ち・dispatch 前・frame 境界・manifest 公開前で協調取消し、書込済み状態は rollback しない。
+  stdout failure は stderr の OUTPUT_IO_ERROR、非0終了、取消 flag。閉じた pipe への terminal は保証できず、
+  terminal のない EOF は不完全。SIGTERM / SIGKILL、watch / replay / stream resume は保証しない。

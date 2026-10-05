@@ -7,8 +7,8 @@ use std::{
 use crate::{ServiceError, open_existing, parse_revision};
 use kronello_model::{
     AnimationCurve, Composition, CompositionId, CurveId, DocumentObject, ExpressionId, Keyframe,
-    NodeId, NodeKind, Project, Property, PropertyId, PropertySource, SceneNode, SchemaRegistry,
-    Shape, SourceResolver, TextDocument, Value, ValueType,
+    Modifier, ModifierId, NodeId, NodeKind, Project, Property, PropertyId, PropertySource,
+    SceneNode, SchemaRegistry, Shape, SourceResolver, TextDocument, Value, ValueType,
 };
 use kronello_store::{ApplyRequest, ChangedKey, Event, Mutation, ProjectStore, StoreError};
 use kronello_time::Time;
@@ -54,6 +54,11 @@ pub enum EditCommand {
         composition: CompositionId,
         node: SceneNode,
         index: usize,
+    },
+    NodeTagsSet {
+        composition: CompositionId,
+        node: NodeId,
+        tags: BTreeSet<String>,
     },
     NodeRename {
         composition: CompositionId,
@@ -104,6 +109,27 @@ pub enum EditCommand {
         node: SceneNode,
         index: usize,
     },
+    ModifierInsert {
+        object: Uuid,
+        property: PropertyId,
+        modifier: Modifier,
+        index: usize,
+    },
+    ModifierReplace {
+        object: Uuid,
+        property: PropertyId,
+        modifier: Modifier,
+    },
+    ModifierRemove {
+        object: Uuid,
+        property: PropertyId,
+        modifier: ModifierId,
+    },
+    ModifierReorder {
+        object: Uuid,
+        property: PropertyId,
+        order: Vec<ModifierId>,
+    },
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -134,6 +160,8 @@ pub struct UndoRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct HistoryRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
     pub project: PathBuf,
     #[serde(default = "zero")]
     pub since_revision: String,
@@ -173,6 +201,8 @@ pub struct HistoryResult {
     pub revision: String,
     pub events: Vec<HistoryEntry>,
     pub next_since_revision: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -509,6 +539,80 @@ fn apply_command(
     keys: &mut BTreeSet<ChangedKey>,
 ) -> Result<(), ServiceError> {
     match command {
+        EditCommand::ModifierInsert {
+            object,
+            property,
+            modifier,
+            index,
+        } => {
+            let p = property_mut(project, *object, *property)?;
+            let mut modifiers = p.modifiers().to_vec();
+            if *index > modifiers.len() {
+                return Err(invalid("modifier index out of bounds"));
+            }
+            modifiers.insert(*index, modifier.clone());
+            p.set_modifiers(modifiers, &registry()).map_err(invalid)?;
+            keys.insert(ChangedKey::Value {
+                object_id: *object,
+                property_id: *property,
+            });
+        }
+        EditCommand::ModifierReplace {
+            object,
+            property,
+            modifier,
+        } => {
+            let p = property_mut(project, *object, *property)?;
+            let mut modifiers = p.modifiers().to_vec();
+            let current = modifiers
+                .iter_mut()
+                .find(|m| m.id == modifier.id)
+                .ok_or_else(|| invalid("modifier not found"))?;
+            *current = modifier.clone();
+            p.set_modifiers(modifiers, &registry()).map_err(invalid)?;
+            keys.insert(ChangedKey::Value {
+                object_id: *object,
+                property_id: *property,
+            });
+        }
+        EditCommand::ModifierRemove {
+            object,
+            property,
+            modifier,
+        } => {
+            let p = property_mut(project, *object, *property)?;
+            let mut modifiers = p.modifiers().to_vec();
+            let index = modifiers
+                .iter()
+                .position(|m| m.id == *modifier)
+                .ok_or_else(|| invalid("modifier not found"))?;
+            modifiers.remove(index);
+            p.set_modifiers(modifiers, &registry()).map_err(invalid)?;
+            keys.insert(ChangedKey::Value {
+                object_id: *object,
+                property_id: *property,
+            });
+        }
+        EditCommand::ModifierReorder {
+            object,
+            property,
+            order,
+        } => {
+            let p = property_mut(project, *object, *property)?;
+            let ids: BTreeSet<_> = p.modifiers().iter().map(|m| m.id).collect();
+            if order.len() != ids.len() || order.iter().copied().collect::<BTreeSet<_>>() != ids {
+                return Err(invalid("modifier order must be an exact permutation"));
+            }
+            let modifiers = order
+                .iter()
+                .map(|id| p.modifiers().iter().find(|m| m.id == *id).unwrap().clone())
+                .collect();
+            p.set_modifiers(modifiers, &registry()).map_err(invalid)?;
+            keys.insert(ChangedKey::Value {
+                object_id: *object,
+                property_id: *property,
+            });
+        }
         EditCommand::ExpressionSet { expression } => {
             expression
                 .validate()
@@ -678,6 +782,18 @@ fn apply_command(
                 property_id: property.id(),
             });
             n.properties.push(property.clone());
+        }
+        EditCommand::NodeTagsSet {
+            composition,
+            node,
+            tags,
+        } => {
+            if !kronello_model::valid_node_tags(tags) {
+                return Err(ServiceError::invalid("invalid node tags"));
+            }
+            let n = node_mut(composition_mut(project, *composition)?, *node)?;
+            structure(keys, n.id.as_uuid(), n.id.as_uuid());
+            n.tags = tags.clone();
         }
         EditCommand::NodeRename {
             composition,
@@ -1247,9 +1363,39 @@ pub(crate) fn history(r: HistoryRequest) -> Result<HistoryResult, ServiceError> 
     let store = open_existing(&r.project)?;
     let (s, events) = store.snapshot_and_events()?;
     store.close()?;
+    let binding =
+        serde_json::json!({"since_revision":since,"limit":r.limit,"session_id":r.session_id});
+    let cursor = r
+        .cursor
+        .as_deref()
+        .map(crate::paging::Cursor::decode)
+        .transpose()?;
+    let floor = events.first().map(|e| e.id.to_string());
+    let revision = if let Some(c) = &cursor {
+        c.validate("history.list", s.document.id, &binding)?;
+        if c.floor != floor || c.revision > s.revision {
+            return Err(crate::paging::expired());
+        }
+        c.revision
+    } else {
+        s.revision
+    };
+    let events: Vec<_> = events
+        .into_iter()
+        .filter(|e| e.revision <= revision)
+        .collect();
     let active = active(&events);
+    let after = if let Some(c) = &cursor {
+        events
+            .iter()
+            .find(|e| serde_json::json!(e.id) == c.after)
+            .ok_or_else(crate::paging::expired)?
+            .revision
+    } else {
+        since
+    };
     let mut selected = events.into_iter().filter(|e| {
-        e.revision > since && r.session_id.is_none_or(|session| e.session_id == session)
+        e.revision > after && r.session_id.is_none_or(|session| e.session_id == session)
     });
     let entries: Vec<_> = selected
         .by_ref()
@@ -1259,13 +1405,26 @@ pub(crate) fn history(r: HistoryRequest) -> Result<HistoryResult, ServiceError> 
             event,
         })
         .collect();
-    let next_since_revision = selected
-        .next()
-        .and_then(|_| entries.last().map(|e| e.event.revision.to_string()));
+    let more = selected.next().is_some();
+    let last = entries.last().filter(|_| more);
+    let next_cursor = last
+        .map(|entry| {
+            crate::paging::Cursor::new(
+                "history.list",
+                s.document.id,
+                revision,
+                binding,
+                serde_json::json!(entry.event.id),
+                floor,
+            )
+            .encode()
+        })
+        .transpose()?;
     Ok(HistoryResult {
-        revision: s.revision.to_string(),
+        revision: revision.to_string(),
+        next_since_revision: last.map(|e| e.event.revision.to_string()),
+        next_cursor,
         events: entries,
-        next_since_revision,
     })
 }
 

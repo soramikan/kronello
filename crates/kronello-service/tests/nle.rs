@@ -78,6 +78,8 @@ fn setup(p: Project) -> (tempfile::TempDir, PathBuf) {
     let path = dir.path().join("nle.kronello");
     engine()
         .dispatch(Request::ProjectCreate(CreateRequest {
+            plan_hash: None,
+            idempotency_key: None,
             project: path.clone(),
             document: p,
         }))
@@ -399,6 +401,7 @@ fn instance_retime_changes_only_internal_map_with_undo_and_domain_rejections() {
         root_nodes: vec![node],
         properties: vec![],
         nodes: vec![SceneNode {
+            tags: Default::default(),
             name: None,
             enabled: true,
             id: node,

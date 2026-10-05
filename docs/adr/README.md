@@ -71,7 +71,7 @@
 | [0054](0054-gui-design-system.md) | GUI の見た目を全 OS 共通のデザインシステムで定める | 採用 | 2026-10-04 |
 | [0055](0055-main-window-pages-and-workspaces.md) | メインウインドウをページとワークスペースで構成する | 採用 | 2026-10-04 |
 | [0056](0056-native-ffi-worker-and-swiftpm.md) | native FFI の非同期 worker と SwiftPM 境界 | 採用 | 2026-10-04 |
-| [0057](0057-layout-bounds-stages.md) | bounds の三段階を純粋値と明示した帯追従 policy で共有する | 採用 | 2026-10-04 |
+| [0057](0057-layout-bounds-stages.md) | bounds の三段階を純粋値と明示した帯追従 policy で共有する | 部分置換（[0067](0067-affine-gaussian-effects.md)） | 2026-10-04 |
 | [0058](0058-bounded-canonical-expression-ast.md) | 正規 postorder AST と有界 Expression 評価 | 採用 | 2026-10-04 |
 | [0059](0059-template-duration-variants-and-migration.md) | テンプレートの保護尺・variant・data と明示した版移行を共有する | 採用 | 2026-10-05 |
 | [0060](0060-structured-read-only-inspection.md) | 非表示原因と実行前レンダー計画を読み取り Query で共有する | 採用 | 2026-10-05 |
@@ -79,6 +79,11 @@
 | [0062](0062-video-generator-and-timeline-edits.md) | 動画・Generator Clip と明示した Timeline 編集範囲 | 採用 | 2026-10-05 |
 | [0063](0063-document-audio-and-clip-volume.md) | 文書音声の配置・音量 Property と明示的な出力選択 | 採用 | 2026-10-05 |
 | [0064](0064-mcp-http-resources-and-request-control.md) | MCP HTTP・明示 resource・request 制御 | 採用 | 2026-10-05 |
+| [0066](0066-explicit-gradient-semantics.md) | グラデーションの座標・spread・補間空間を明示する | 採用 | 2026-10-05 |
+| [0067](0067-affine-gaussian-effects.md) | 非一様 affine の Gaussian / shadow を明示した意味版 2 で扱う | 採用 | 2026-10-05 |
+| [0069](0069-versioned-stateless-audio.md) | リタイム・effect・Generator・crossfade 音声を明示 profile に固定する | 採用 | 2026-10-05 |
+| [0071](0071-project-change-plans-and-modifier-edits.md) | Project 作成・import の計画と再送、Modifier の型付き編集 | 採用 | 2026-10-05 |
+| [0072](0072-scene-search-fixed-cursors-and-cli-events.md) | Scene 検索・固定 revision cursor・CLI event framing | 採用 | 2026-10-05 |
 
 ## 追加と変更の規則
 
