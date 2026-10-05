@@ -9,5 +9,5 @@ pub use location::{
 };
 pub use store::{
     ApplyRequest, ChangedKey, Event, HISTORY_WARNING_BYTES, HistorySize, IdempotencyRecord,
-    Mutation, ProjectStore, Revision, Snapshot, StoreError,
+    Mutation, ProjectStore, Revision, ServiceReceipt, Snapshot, StoreError,
 };

@@ -954,7 +954,7 @@
       "priority": "P2",
       "area": "service",
       "title": "project作成/importの計画・冪等性とModifier編集",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "SERVICE-001",
         "API-001"

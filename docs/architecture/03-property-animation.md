@@ -117,3 +117,21 @@ DataAsset 参照、動的な過去 Property sample、連続補間 noise は未�
 
 通常式からの再帰的な自己参照は禁止する。以前の値を積み上げる表現は Simulation へ移す。
 失敗時に最終出力で勝手に基底値へ置換しない。プレビューの代替表示は警告付きにし、最終出力はエラーにする。
+
+
+## SERVICE-002 の Modifier authoring
+
+[ADR-0071](../adr/0071-project-change-plans-and-modifier-edits.md) の typed EditCommand
+modifier_insert / replace / remove / reorder は Node / Composition / Clip の既存 Property を編集する。
+replace は同じ ModifierId の enabled / key / version / parameters を完全に置換し、
+reorder は全 ID の permutation。modifiers の配列順を保持した patch / inverse を生成する。
+主値源と Modifier は同じ Value(object_id,property_id) の Undo 競合キーを持ち、
+Expression の直接消費 Property の更新もこのキーを使う。別 Property の selective Undo は保持する。
+
+保存/import は既存の保存検証を行い、実行可能性の検証とは区別する。
+型付き編集では構造、descriptor の modifiers capability、source 型と候補 DAG を検証する。
+未実装 Modifier の構造を保った型付き編集は許すが、algorithm を新しく提供しない。
+必要な enabled Modifier の評価は UNSUPPORTED_FEATURE。最終 render に定数・curve・式の
+代替値を渡さない。disabled は明示的に実行対象外とし、source と最終値の検証は続ける。
+式の設定は既存 EXPR-001 の AST / expression_set / property_source_set を使い、同じ batch で
+Modifier を編集できる。[検証記録](../testing/service-002.md) に両者の保存・Undo・評価失敗を記録する。

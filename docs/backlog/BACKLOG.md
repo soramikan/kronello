@@ -13,7 +13,7 @@
 | M0 | 0 | 0 | 6 | 0 | 6 |
 | M1 | 0 | 0 | 14 | 0 | 14 |
 | M2 | 0 | 1 | 10 | 0 | 11 |
-| M3 | 7 | 8 | 10 | 0 | 25 |
+| M3 | 7 | 7 | 11 | 0 | 25 |
 | M4 | 11 | 0 | 0 | 0 | 11 |
 | M5 | 5 | 0 | 0 | 0 | 5 |
 | M6 | 4 | 0 | 0 | 0 | 4 |
@@ -539,7 +539,7 @@
 
 ### SERVICE-002 project作成/importの計画・冪等性とModifier編集
 
-- 優先度: P2 / 領域: service / 状態: in_progress
+- 優先度: P2 / 領域: service / 状態: done
 - 依存: SERVICE-001, API-001
 - 受け入れ条件:
   - project.create/importの変更計画・再送の冪等性を共通APIで設計し、createの出力予約とimportのrevision照合、同一キー異payloadの拒否、保存後再送を実プロセスで検証する

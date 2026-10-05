@@ -164,9 +164,9 @@ capabilities はコンパイル済み対応範囲を示し、GPU adapter の稼�
 
 ### 公開 schema と registry
 
-[schemas/api-v1.schema.json](../../schemas/api-v1.schema.json) は Draft 2020-12。Request / Response envelope、全36操作の payload / successful result、型付き EditCommand を共有 Rust 型から生成する。`api_json_schema()` と committed schema の一致を通常テストで確認する。再生成は `cargo run -p kronello-service --example api_schema --locked > schemas/api-v1.schema.json`。版はファイル名・`$id`・`x-api-schema-version` で固定し、既存 Request に必須 version field を追加しない。Project document は従来の公開型 / schema を共有する。
+[schemas/api-v1.schema.json](../../schemas/api-v1.schema.json) は Draft 2020-12。Request / Response envelope、全38操作の payload / successful result、型付き EditCommand を共有 Rust 型から生成する。`api_json_schema()` と committed schema の一致を通常テストで確認する。再生成は `cargo run -p kronello-service --example api_schema --locked > schemas/api-v1.schema.json`。版はファイル名・`$id`・`x-api-schema-version` で固定し、既存 Request に必須 version field を追加しない。Project document は従来の公開型 / schema を共有する。
 
-`command_registry()` の CommandDescriptor は name / read_only / request_schema / response_schema を持つ。schema refs は同ファイルの `$defs` を指す。request_schema は operation tag を除いた payload、response_schema は status / kind を除いた successful value。MCP-001 / FFI-001 は同じ registry と execute / execute_json を使用できる。registry の36操作は project.create / import / export / info / collect、asset.relink、render.frame / sequence / export / submit、job.get / list / cancel / prune、edit.plan / apply / undo、history.list、scene.query、property.sample、capabilities.get、template.define / instantiate / set_input / set_duration / preview / migration_plan と後述の NLE-001 の6操作、NLE-002 の sequence.query、INSPECT-001 の2操作。project.create / import / asset.relink / edit.apply / undo、template の4操作、NLE-001 の6操作が mutating。他は project に対し read-only（render.sequence と project.collect は output directory に成果物を作る）。project.collect の read_only は元プロジェクトを変更しないことを表し、複製と hash 検証済み素材を新しいフォルダに保存する。
+`command_registry()` の CommandDescriptor は name / read_only / request_schema / response_schema を持つ。schema refs は同ファイルの `$defs` を指す。request_schema は operation tag を除いた payload、response_schema は status / kind を除いた successful value。MCP-001 / FFI-001 は同じ registry と execute / execute_json を使用できる。registry の38操作は project.create / create_plan / import / import_plan / export / info / collect、asset.relink、render.frame / sequence / export / submit、job.get / list / cancel / prune、edit.plan / apply / undo、history.list、scene.query、property.sample、capabilities.get、template.define / instantiate / set_input / set_duration / preview / migration_plan と後述の NLE-001 の6操作、NLE-002 の sequence.query、INSPECT-001 の2操作。project.create / import / asset.relink / edit.apply / undo、template の4操作、NLE-001 の6操作が mutating。他は project に対し read-only（render.sequence と project.collect は output directory に成果物を作る）。project.collect の read_only は元プロジェクトを変更しないことを表し、複製と hash 検証済み素材を新しいフォルダに保存する。
 
 request envelope・既知 payload は未知 field と重複 field を拒否する。schema に任意 shell、外部 URL fetch、raw FFmpeg args の実行 field は設けない。project / font / output path と assets 内の locator の URI scheme は filesystem access の前に `INVALID_REQUEST` とする。Windows drive path は local path として許す。素材の name / text や未知 Project 内容は不活性なデータであり、命令として実行しない。Project の未知 field 保持と、API envelope の厳格な decode は別の契約である。
 
@@ -490,7 +490,7 @@ MediaSlot の final compiler は既存 UNSUPPORTED_FEATURE、欠落は ASSET_MIS
   volume は同じ node の properties にある volume PropertyId。Media 音声だけに対応し、映像描画は
   COMP-002 まで `UNSUPPORTED_FEATURE`。既存 scene.query / property.sample にも同じ Property を公開する。
 - capabilities.features に document_audio / clip_volume / media_audio を追加した。
-  registry は33操作。API / Project schema と GeneratedAPI.swift を共有 generator から再生成する。
+  registry は38操作（SERVICE-002 の2 Query を含む）。API / Project schema と GeneratedAPI.swift を共有 generator から再生成する。
   `AvExportReport` に audio_source / audio_profile_version を追加し、省略した旧 report は explicit / 1。
 
 型付き失敗は `UNSUPPORTED_FEATURE`（profile / retime / effects / Generator / Media video）、
@@ -509,3 +509,45 @@ capabilities.features は audio_resample_v1 / audio_gain_v1 / audio_generator_v1
 audio_crossfade_v1、effects に kronello.audio.gain を追加する。これらは movie profile 3 の
 対応範囲であり、映像 effect / nested retime / pitch-preserving stretch の対応を示さない。
 詳細な error / sample boundaries / budget と実行証拠は [AUDIO-004](../testing/audio-004.md)。
+
+## SERVICE-002 の Project 計画・再送と Modifier 編集
+
+[ADR-0071](../adr/0071-project-change-plans-and-modifier-edits.md)、
+[検証記録](../testing/service-002.md) を参照する。
+共有 registry は38操作。新規 Query は `project.create_plan` / `project.import_plan`、
+CLI は `project create_plan` / `project import_plan`、MCP は同名 tool。
+create_plan は `{project,document}`、import_plan は `{project,base_revision,document}` を受け、
+`kind: project_plan` の `ProjectChangePlan` を返す。plan は target を作らない。
+
+結果は `{operation,project,expected_absent,base_revision,base_content_hash,candidate,plan_hash}`。
+project は親を canonicalize した target、create は expected_absent=true / base_* は null。
+import は一つの read-only snapshot の revision / document hash を固定する。
+plan_hash は自身を空文字にした計画の canonical JSON SHA-256。
+既存 `project.create` / `project.import` は optional plan_hash / idempotency_key を受け、
+ProjectInfo を返す。指定 hash の不一致は PLAN_HASH_MISMATCH、古い revision は
+REVISION_CONFLICT。同 key の異なる canonical payload は IDEMPOTENCY_KEY_REUSED。
+省略した従来の direct Command も利用できる。
+
+create の出力予約は apply 時の初期化済み staging file の no-clobber publication。
+receipt も公開前に保存し、既存 target の matching receipt を再送に使う。
+一致しない既存 target は PROJECT_EXISTS。import は既存の writer transaction と receipt を使う。
+後続編集・compact 後の再送も元の ProjectInfo を返し、最新の revision を返さない。
+read-only な receipt replay / import plan でも SQLite WAL / SHM sidecar は作られうる。
+
+edit.plan / edit.apply の typed EditCommand に次を追加した。
+
+| command | payload |
+|---|---|
+| modifier_insert | object, property, modifier（完全な Modifier）, index |
+| modifier_replace | object, property, modifier（既存 ID の完全な置換） |
+| modifier_remove | object, property, modifier（ModifierId） |
+| modifier_reorder | object, property, order（全 ModifierId の permutation） |
+
+replace で enabled / parameters / key / version を編集する。source と同じ
+Value(object_id,property_id) が競合キーで、順序付き配列全体の inverse を記録する。
+別 Property の selective Undo、Undo event の競合、Redo は既存契約を使う。
+EXPR-001 の expression_set / property_source_set と同じ batch を作れる。
+未実装 Modifier の保存・型付き編集は可能だが、enabled な必要 Property の sample / final render は
+UNSUPPORTED_FEATURE。disabled の場合だけ実行対象外となり、最終値検証は続く。
+Modifier algorithm の対応追加を意味しない。raw patch / mutations / inverse / changed_keys は
+create / import / plan / edit の入口から受け取らない。
