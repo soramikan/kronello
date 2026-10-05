@@ -21,7 +21,7 @@ use std::collections::{BTreeMap, BTreeSet};
 ///     curve: CurveId::new(),
 /// };
 /// ```
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, schemars::JsonSchema)]
 #[serde(
     tag = "kind",
     content = "value",
@@ -32,6 +32,18 @@ pub enum PropertySource<T> {
     Constant(T),
     Curve(CurveId),
     Expression(ExpressionId),
+}
+
+impl<'de, T: serde::de::DeserializeOwned> Deserialize<'de> for PropertySource<T> {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let wire = crate::wire::Adjacent::deserialize(d)?;
+        match wire.kind.as_str() {
+            "constant" => wire.value().map(Self::Constant),
+            "curve" => wire.value().map(Self::Curve),
+            "expression" => wire.value().map(Self::Expression),
+            _ => Err(wire.unknown(&["constant", "curve", "expression"])),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]

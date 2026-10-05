@@ -1446,3 +1446,62 @@ fn randomized_edit_histories_match_an_every_revision_reference() {
         );
     }
 }
+
+#[test]
+fn json_order_unknown_number_spelling_and_hash_survive_reopen_and_replay() {
+    let (_directory, path, mut store) = fixture();
+    let mut input = serde_json::to_value(Project::default()).unwrap();
+    let precise = "123456789012345678901234567890.12345678901234567890";
+    let decimal = "1.2300";
+    input["future"] = serde_json::from_str(&format!(
+        r#"{{"large":18446744073709551616001,"precise":{precise},"decimal":{decimal}}}"#
+    ))
+    .unwrap();
+    let encoded = input.to_string();
+    store.import_json(0, Uuid::new_v4(), &encoded).unwrap();
+    let original_hash = store.content_hash().unwrap();
+    assert_eq!(
+        serde_json::from_str::<Value>(&store.export_json().unwrap()).unwrap(),
+        input
+    );
+    let check = |value: &Value| {
+        assert_eq!(
+            value["future"]["large"].to_string(),
+            "18446744073709551616001"
+        );
+        assert_eq!(value["future"]["precise"].to_string(), precise);
+        assert_eq!(value["future"]["decimal"].to_string(), decimal);
+    };
+    check(&serde_json::to_value(store.snapshot_at(1).unwrap().document).unwrap());
+    let event = store.events_since(0).unwrap().remove(0);
+    let Mutation::Set { value, .. } = &event.mutations[0] else {
+        panic!()
+    };
+    check(value);
+    store.close().unwrap();
+    let mut store = open(&path);
+    assert_eq!(store.content_hash().unwrap(), original_hash);
+    check(&serde_json::from_str(&store.export_json().unwrap()).unwrap());
+    // Reorder the input's top-level keys without changing the numbers.
+    let reordered = format!(
+        "{{{}}}",
+        input
+            .as_object()
+            .unwrap()
+            .iter()
+            .rev()
+            .map(|(k, v)| format!("{}:{}", serde_json::to_string(k).unwrap(), v))
+            .collect::<Vec<_>>()
+            .join(",")
+    );
+    store.import_json(1, Uuid::new_v4(), &reordered).unwrap();
+    assert_eq!(store.content_hash().unwrap(), original_hash);
+    let different_spelling = encoded.replace("1.2300", "1.23");
+    assert_ne!(different_spelling, encoded);
+    store
+        .import_json(2, Uuid::new_v4(), &different_spelling)
+        .unwrap();
+    assert_ne!(store.content_hash().unwrap(), original_hash);
+    check(&serde_json::to_value(store.snapshot_at(1).unwrap().document).unwrap());
+    store.close().unwrap();
+}

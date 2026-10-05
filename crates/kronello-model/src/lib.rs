@@ -13,6 +13,7 @@ mod id;
 mod property;
 mod schema;
 mod value;
+mod wire;
 
 pub use builtin::{
     AUDIO_VOLUME_ID, FILL_COLOR_ID, OPACITY_ID, STROKE_WIDTH_ID, TRANSFORM_ANCHOR_ID,
