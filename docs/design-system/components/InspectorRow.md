@@ -2,6 +2,10 @@
 
 1 つの Property を 1 行で表し、主値源（`PropertySource` の `Constant` / `Curve` / `Expression`）をキーフレームナビゲータの形で示す Inspector の行。
 
+![InspectorRow の見本（Dark）](../preview/images/components/InspectorRow-dark.png)
+
+見本: [Light の画像](../preview/images/components/InspectorRow-light.png) · [HTML](../preview/components.html#InspectorRow)
+
 ## 利用側が渡すもの
 
 - `label`（Property 名。英語の型名のまま: `Position`、`Opacity`）。

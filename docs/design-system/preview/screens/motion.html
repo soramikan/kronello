@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="ja" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>モーション — Kronello</title>
+<!--
+  Screen: docs/design-system/screens/motion.md (1440×900).
+  States (?state=): curve, undo-conflict, revision-conflict, adapter-unavailable,
+  evaluation-error, safe-mode, selection-deleted. See screens/states.md.
+-->
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/kit.css">
+<link rel="stylesheet" href="../assets/screens.css">
+<script src="../assets/icons.js"></script>
+<script src="../assets/preview.js"></script>
+</head>
+<body>
+<div class="window">
+  <header class="toolbar">
+    <div class="toolbar-left">
+      <span class="traffic" aria-label="OS のウインドウボタン"><span></span><span></span><span></span></span>
+      <div class="project-name"><span class="heading">朝の港 PV</span><span class="caption muted">~/Movies/朝の港</span></div>
+    </div>
+    <div class="seg"><button>編集</button><button class="is-selected">モーション</button><button>テンプレート</button><button>書き出し</button></div>
+    <div class="toolbar-right">
+      <button class="btn btn-plain btn-icon" aria-label="取り消す"><i data-icon="undo-2"></i></button>
+      <button class="btn btn-plain btn-icon" aria-label="やり直す"><i data-icon="redo-2"></i></button>
+      <span class="vsep"></span>
+      <span class="popup" style="min-width: 120px;"><span class="row gap-1"><i data-icon="layout-panel-left" class="muted"></i>標準</span><i data-icon="chevrons-up-down"></i></span>
+    </div>
+  </header>
+
+  <div>
+    <div class="band" data-when="safe-mode">
+      <i data-icon="info"></i>
+      <span><span class="ink">安全モードで開いています。</span>クラウド同期フォルダにあるため、開いている間は CLI / MCP から開けません（<span class="mono">PROJECT_LOCKED</span>）。</span>
+      <button class="btn btn-plain" style="margin-left: auto;">詳細…</button>
+    </div>
+  </div>
+
+  <div class="page-body motion-body">
+    <!-- Left: Layers / Project -->
+    <section class="panel" style="grid-area: left;">
+      <div class="panel-header">
+        <div class="tabs"><span class="tab is-selected">Layers</span><span class="tab">Project</span></div>
+        <div class="panel-actions"><button class="btn btn-plain btn-icon" aria-label="追加"><i data-icon="plus"></i></button><button class="btn btn-plain btn-icon" aria-label="パネルメニュー"><i data-icon="ellipsis"></i></button></div>
+      </div>
+      <div class="panel-body">
+        <div class="section-pad" style="padding-bottom: 8px;"><span class="tf-input"><i data-icon="search"></i><span class="tf-placeholder">レイヤーを検索</span></span></div>
+        <div class="list-row lrow" style="--depth:0"><i data-icon="chevron-down" class="lrow-disc"></i><i data-icon="folder"></i><span class="lrow-name">Title group</span><span class="lrow-toggles"><button class="btn btn-plain btn-icon is-default"><i data-icon="eye"></i></button><button class="btn btn-plain btn-icon is-default"><i data-icon="lock-open"></i></button></span></div>
+        <div class="list-row lrow" style="--depth:1" data-unless="selection-deleted"><i data-icon="chevron-right" class="lrow-disc is-empty"></i><i data-icon="type"></i><span class="lrow-name">見出し</span><i data-icon="triangle-alert" class="lrow-alert" data-when="evaluation-error" title="FONT_MISSING"></i><span class="lrow-toggles"><button class="btn btn-plain btn-icon is-default"><i data-icon="eye"></i></button><button class="btn btn-plain btn-icon is-default"><i data-icon="lock-open"></i></button></span></div>
+        <div class="list-row lrow is-selected" style="--depth:1" data-unless="selection-deleted"><i data-icon="chevron-right" class="lrow-disc is-empty"></i><i data-icon="type"></i><span class="lrow-name">サブタイトル</span><span class="lrow-toggles"><button class="btn btn-plain btn-icon is-default"><i data-icon="eye"></i></button><button class="btn btn-plain btn-icon is-default"><i data-icon="lock-open"></i></button></span></div>
+        <div class="list-row lrow" style="--depth:1"><i data-icon="chevron-right" class="lrow-disc is-empty"></i><i data-icon="shapes"></i><span class="lrow-name">帯</span><span class="lrow-parent"><i data-icon="link"></i>Anchor</span><span class="lrow-toggles"><button class="btn btn-plain btn-icon is-default"><i data-icon="eye"></i></button><button class="btn btn-plain btn-icon is-default"><i data-icon="lock-open"></i></button></span></div>
+        <div class="list-row lrow" style="--depth:0"><i data-icon="chevron-right" class="lrow-disc is-empty"></i><i data-icon="crosshair"></i><span class="lrow-name">Anchor</span><span class="lrow-toggles"><button class="btn btn-plain btn-icon is-default"><i data-icon="eye"></i></button><button class="btn btn-plain btn-icon is-default"><i data-icon="lock-open"></i></button></span></div>
+        <div class="list-row lrow is-locked" style="--depth:0"><i data-icon="chevron-right" class="lrow-disc"></i><i data-icon="layers" class="kind-composition"></i><span class="lrow-name">Logo loop</span><span class="lrow-toggles"><button class="btn btn-plain btn-icon is-default"><i data-icon="eye"></i></button><button class="btn btn-plain btn-icon"><i data-icon="lock"></i></button></span></div>
+        <div class="list-row lrow is-hidden" style="--depth:0"><i data-icon="chevron-right" class="lrow-disc is-empty"></i><i data-icon="sparkles" class="kind-generator"></i><span class="lrow-name">Grain</span><span class="lrow-toggles"><button class="btn btn-plain btn-icon"><i data-icon="eye-off"></i></button><button class="btn btn-plain btn-icon is-default"><i data-icon="lock-open"></i></button></span></div>
+        <div class="list-row lrow" style="--depth:0"><i data-icon="chevron-right" class="lrow-disc is-empty"></i><i data-icon="film" class="kind-video"></i><span class="lrow-name">harbor_dawn.mov</span><span class="lrow-toggles"><button class="btn btn-plain btn-icon is-default"><i data-icon="eye"></i></button><button class="btn btn-plain btn-icon is-default"><i data-icon="lock-open"></i></button></span></div>
+      </div>
+    </section>
+
+    <!-- Center: Composition tabs + Viewer -->
+    <section class="panel" style="grid-area: center;">
+      <div class="panel-header">
+        <div class="tabs"><span class="tab is-selected"><i data-icon="layers" class="kind-composition"></i>Lower third<i data-icon="x" class="tab-close"></i></span><span class="tab">Logo loop</span></div>
+        <div class="panel-actions">
+          <span class="caption muted" style="margin-right: 4px;">1920×1080 · 24 fps</span>
+          <button class="btn btn-plain btn-icon is-pressed" aria-label="スナップ"><i data-icon="magnet"></i></button>
+          <button class="btn btn-plain btn-icon" aria-label="ガイド"><i data-icon="grid-3x3"></i></button>
+          <button class="btn btn-plain btn-icon" aria-label="パネルメニュー"><i data-icon="ellipsis"></i></button>
+        </div>
+      </div>
+      <div class="viewer" style="flex: 1 1 auto;">
+        <div class="viewer-main">
+          <div class="toolstrip">
+            <span class="tool-grip"><i data-icon="grip-horizontal"></i></span><span class="tool-fold"><i data-icon="chevrons-left"></i></span>
+            <span class="tool is-current" title="選択 (V)"><i data-icon="mouse-pointer-2"></i></span><span class="tool" title="手のひら (H)"><i data-icon="hand"></i></span><span class="tool" title="ズーム (Z)"><i data-icon="zoom-in"></i></span>
+            <span class="tool-sep"></span>
+            <span class="tool" title="長方形 (M)"><i data-icon="square"></i></span><span class="tool" title="楕円 (E)"><i data-icon="circle"></i></span><span class="tool" title="ペン (P)"><i data-icon="pen-tool"></i></span><span class="tool" title="テキスト (T)"><i data-icon="type"></i></span>
+          </div>
+          <div class="viewer-stage">
+            <div class="banner viewer-banner" data-when="revision-conflict">
+              <i data-icon="triangle-alert"></i>
+              <div class="col" style="min-width: 0;">
+                <span><span class="ink" style="font-weight: 500;">移動を適用できませんでした</span> <span class="code danger">REVISION_CONFLICT</span></span>
+                <span class="caption muted">ドラッグ中に MCP が「サブタイトル」の Position を変更しました（rev 131）。最新の状態を表示しています。</span>
+              </div>
+              <div class="row" style="margin-left: auto;"><button class="btn btn-secondary">破棄</button><button class="btn btn-secondary">もう一度適用</button></div>
+            </div>
+
+            <div class="frame footage-harbor motion-frame" data-unless="adapter-unavailable">
+              <div class="footage-bar" style="left: 52px; top: 255px; width: 5px; height: 52px;" data-unless="selection-deleted"></div>
+              <div class="footage-title" style="left: 68px; top: 252px;" data-unless="selection-deleted"><span class="t1" style="font-size: 30px; line-height: 34px;">朝の港</span><span class="t2" style="font-size: 13px;">漁船が戻る午前 5 時</span></div>
+              <div class="bounds" style="left: 66px; top: 287px; width: 400px; height: 20px;" data-unless="selection-deleted">
+                <span class="bounds-handle" style="left: 0; top: 0;"></span><span class="bounds-handle" style="left: 50%; top: 0;"></span><span class="bounds-handle" style="left: 100%; top: 0;"></span>
+                <span class="bounds-handle" style="left: 0; top: 50%;"></span><span class="bounds-handle" style="left: 100%; top: 50%;"></span>
+                <span class="bounds-handle" style="left: 0; top: 100%;"></span><span class="bounds-handle" style="left: 50%; top: 100%;"></span><span class="bounds-handle" style="left: 100%; top: 100%;"></span>
+                <span class="bounds-label">layout 1200 × 60</span>
+              </div>
+            </div>
+
+            <div class="viewer-error" data-when="adapter-unavailable">
+              <i data-icon="triangle-alert" class="ic-24 danger"></i>
+              <span class="heading">プレビューを描画できません</span>
+              <p class="empty-body"><span class="code danger">ADAPTER_UNAVAILABLE</span> GPU のアダプターを取得できませんでした。CPU の描画には自動で切り替えません。</p>
+              <div class="row"><button class="btn btn-plain">詳細をコピー</button><button class="btn btn-secondary">CPU で描画（低速）</button><button class="btn btn-secondary"><i data-icon="refresh-cw"></i>再試行</button></div>
+            </div>
+          </div>
+        </div>
+        <div class="transport">
+          <div class="transport-left"><span class="tc-input time-now">00:00:01:12</span></div>
+          <div class="transport-center">
+            <button class="btn btn-plain btn-icon" aria-label="先頭へ"><i data-icon="skip-back"></i></button><button class="btn btn-plain btn-icon" aria-label="前のフレーム"><i data-icon="step-back"></i></button><button class="btn btn-plain btn-icon" aria-label="再生"><i data-icon="play"></i></button><button class="btn btn-plain btn-icon" aria-label="次のフレーム"><i data-icon="step-forward"></i></button><button class="btn btn-plain btn-icon" aria-label="末尾へ"><i data-icon="skip-forward"></i></button><button class="btn btn-plain btn-icon is-pressed" aria-label="ループ"><i data-icon="repeat"></i></button>
+          </div>
+          <div class="transport-right"><span class="popup">Fit<i data-icon="chevrons-up-down"></i></span><span class="popup">Full<i data-icon="chevrons-up-down"></i></span><span class="timecode muted">00:00:06:00</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right: Inspector -->
+    <section class="panel" style="grid-area: right;">
+      <div class="panel-header"><span class="heading">Inspector</span><div class="panel-actions"><button class="btn btn-plain btn-icon" aria-label="パネルメニュー"><i data-icon="ellipsis"></i></button></div></div>
+      <div class="panel-body" data-unless="selection-deleted">
+        <div class="inspector-subject"><i data-icon="type"></i><div class="col"><span style="font-weight: 500;">サブタイトル</span><span class="caption muted">Text · Title group</span></div></div>
+        <div class="isection"><i data-icon="chevron-down"></i><span class="heading">Transform</span></div>
+        <div class="isection-body">
+          <div class="irow"><div class="kfnav"><span class="kfnav-arrow prev"></span><span class="kfnav-key is-on"></span><span class="kfnav-arrow next"></span></div><span class="irow-label">Position</span><div class="irow-values"><span class="nf"><span class="nf-prefix">X</span><span class="nf-value">1720.0</span></span><span class="nf"><span class="nf-prefix">Y</span><span class="nf-value">470.0</span></span></div></div>
+          <div class="irow"><div class="kfnav"><span class="kfnav-arrow prev"></span><span class="kfnav-key"></span><span class="kfnav-arrow next"></span></div><span class="irow-label">Scale</span><div class="irow-values"><span class="nf"><span class="nf-value">104.2</span><span class="nf-unit">%</span></span></div></div>
+          <div class="irow"><div class="kfnav"><span class="kfnav-arrow prev is-off"></span><span class="kfnav-key"></span><span class="kfnav-arrow next is-off"></span></div><span class="irow-label">Rotation</span><div class="irow-values"><span class="nf"><span class="nf-value">0.0</span><span class="nf-unit">°</span></span></div></div>
+          <div class="irow" data-unless="evaluation-error"><div class="kfnav"><span class="fx-badge">fx</span></div><span class="irow-label">Opacity</span><div class="irow-values"><span class="nf is-readonly"><span class="nf-value">72.0</span><span class="nf-unit">%</span></span></div></div>
+          <div class="irow" data-when="evaluation-error"><div class="kfnav"><span class="fx-badge">fx</span></div><span class="irow-label">Opacity</span><div class="irow-values"><span class="nf is-error"><span class="nf-value">—</span><span class="nf-unit">%</span></span></div>
+            <div class="irow-error"><i data-icon="triangle-alert"></i><span><span class="code">EVALUATION_ERROR</span> 式を評価できませんでした。0 による除算です。</span></div>
+          </div>
+        </div>
+        <div class="isection"><i data-icon="chevron-down"></i><span class="heading">Text</span></div>
+        <div class="isection-body">
+          <div class="irow"><span></span><span class="irow-label">書体</span><div class="irow-values"><span class="popup" style="min-width: 160px;">Noto Sans JP<i data-icon="chevrons-up-down"></i></span></div></div>
+          <div class="irow"><span></span><span class="irow-label">太さ</span><div class="irow-values"><span class="popup" style="min-width: 160px;">Medium · 500<i data-icon="chevrons-up-down"></i></span></div></div>
+          <div class="irow"><div class="kfnav"><span class="kfnav-arrow prev is-off"></span><span class="kfnav-key"></span><span class="kfnav-arrow next is-off"></span></div><span class="irow-label">サイズ</span><div class="irow-values"><span class="nf"><span class="nf-value">40.0</span><span class="nf-unit">px</span></span></div></div>
+          <div class="irow"><span></span><span class="irow-label">文字揃え</span><div class="irow-values"><div class="seg seg-sm"><button class="is-selected" aria-label="左揃え"><i data-icon="align-left"></i></button><button aria-label="中央揃え"><i data-icon="align-center"></i></button></div></div></div>
+        </div>
+        <div class="isection"><i data-icon="chevron-down"></i><span class="heading">Layout</span></div>
+        <div class="isection-body" style="border-bottom: 0;">
+          <div class="irow"><div class="kfnav"><span class="kfnav-arrow prev is-off"></span><span class="kfnav-key"></span><span class="kfnav-arrow next is-off"></span></div><span class="irow-label">Wrap width</span><div class="irow-values"><span class="nf"><span class="nf-value">1200.0</span><span class="nf-unit">px</span></span></div></div>
+          <div class="irow"><span></span><span class="irow-label">表示する bounds</span><div class="irow-values"><div class="seg seg-sm"><button class="is-selected">layout</button><button>ink</button><button>visual</button></div></div></div>
+        </div>
+      </div>
+      <div class="panel-body" data-when="selection-deleted">
+        <div class="empty" style="height: 100%;">
+          <i data-icon="info"></i>
+          <span class="heading">選択していたレイヤーは削除されました</span>
+          <p class="empty-body">MCP が rev 132 で「見出し」と「サブタイトル」を削除しました。別のレイヤーは自動で選びません。</p>
+          <button class="btn btn-secondary"><i data-icon="history"></i>履歴で確認…</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Bottom: Dope sheet / Curve editor -->
+    <section class="panel" style="grid-area: bottom;">
+      <div class="panel-header">
+        <div class="seg seg-sm"><button class="is-selected" data-unless="curve">Dope sheet</button><button data-when="curve">Dope sheet</button><button data-unless="curve">Curve editor</button><button class="is-selected" data-when="curve">Curve editor</button></div>
+        <div class="seg seg-sm" data-when="curve"><button class="is-selected">値</button><button>速度</button></div>
+        <span class="time-now">00:00:01:12</span>
+        <span class="vsep" data-when="curve"></span>
+        <div class="seg seg-sm" data-when="curve"><button>Linear</button><button class="is-selected">Cubic</button><button>Hold</button></div>
+        <div class="seg seg-sm" data-when="curve"><button class="is-selected">揃える</button><button>分ける</button></div>
+        <div class="panel-actions">
+          <button class="btn btn-plain btn-icon" aria-label="全体を表示" data-when="curve"><i data-icon="scan"></i></button>
+          <button class="btn btn-plain btn-icon is-pressed" aria-label="キーフレームへのスナップ"><i data-icon="magnet"></i></button>
+          <span class="row gap-1" style="margin: 0 6px;" data-unless="curve"><i data-icon="zoom-in" class="ic-12 muted"></i><span class="slider" style="width: 80px;"><span class="slider-track"><span class="slider-fill" style="width: 40%"></span></span><span class="slider-thumb" style="left: 40%"></span></span></span>
+          <button class="btn btn-plain btn-icon" aria-label="パネルメニュー"><i data-icon="ellipsis"></i></button>
+        </div>
+      </div>
+
+      <div class="dope" data-unless="curve">
+        <div class="dope-left">
+          <div class="dope-search"><span class="tf-input grow"><i data-icon="search"></i><span class="tf-placeholder">Property を検索</span></span><button class="btn btn-plain btn-icon" aria-label="値の列を畳む"><i data-icon="chevrons-left"></i></button></div>
+          <div class="dope-name is-layer"><i data-icon="chevron-down" class="lrow-disc"></i><i data-icon="folder" class="muted"></i><span>Title group</span></div>
+          <div class="dope-name is-layer" style="--depth:1" data-unless="selection-deleted"><i data-icon="chevron-right" class="lrow-disc"></i><i data-icon="type" class="muted"></i><span>見出し</span></div>
+          <div class="dope-name is-layer is-selected" style="--depth:1" data-unless="selection-deleted"><i data-icon="chevron-down" class="lrow-disc"></i><i data-icon="type" class="muted"></i><span>サブタイトル</span></div>
+          <div class="dope-prop" data-unless="selection-deleted"><div class="kfnav"><span class="kfnav-arrow prev"></span><span class="kfnav-key is-on"></span><span class="kfnav-arrow next"></span></div><span class="irow-label">Position</span><span class="irow-values"><span class="nf"><span class="nf-prefix">X</span><span class="nf-value">1720.0</span></span><span class="nf"><span class="nf-prefix">Y</span><span class="nf-value">470.0</span></span></span></div>
+          <div class="dope-prop" data-unless="selection-deleted"><div class="kfnav"><span class="kfnav-arrow prev"></span><span class="kfnav-key"></span><span class="kfnav-arrow next"></span></div><span class="irow-label">Scale</span><span class="irow-values"><span class="nf"><span class="nf-value">104.2</span><span class="nf-unit">%</span></span></span></div>
+          <div class="dope-prop" data-unless="selection-deleted evaluation-error"><div class="kfnav"><span class="fx-badge">fx</span></div><span class="irow-label">Opacity</span><span class="irow-values"><span class="nf is-readonly"><span class="nf-value">72.0</span><span class="nf-unit">%</span></span></span></div>
+          <div class="dope-prop" data-when="evaluation-error"><div class="kfnav"><span class="fx-badge">fx</span></div><span class="irow-label">Opacity</span><span class="irow-values"><span class="nf is-error"><span class="nf-value">—</span><span class="nf-unit">%</span></span></span></div>
+          <div class="dope-name is-layer" style="--depth:1"><i data-icon="chevron-down" class="lrow-disc"></i><i data-icon="shapes" class="muted"></i><span>帯</span></div>
+          <div class="dope-prop"><div class="kfnav"><span class="kfnav-arrow prev"></span><span class="kfnav-key"></span><span class="kfnav-arrow next"></span></div><span class="irow-label">Scale</span><span class="irow-values"><span class="nf"><span class="nf-prefix">X</span><span class="nf-value">0.0</span></span><span class="nf"><span class="nf-prefix">Y</span><span class="nf-value">100.0</span></span></span></div>
+          <div class="dope-name is-layer"><i data-icon="chevron-right" class="lrow-disc is-empty"></i><i data-icon="crosshair" class="muted"></i><span>Anchor</span></div>
+          <div class="dope-name is-layer"><i data-icon="chevron-right" class="lrow-disc"></i><i data-icon="layers" class="kind-composition"></i><span>Logo loop</span></div>
+          <div class="dope-name is-layer"><i data-icon="chevron-right" class="lrow-disc is-empty"></i><i data-icon="film" class="kind-video"></i><span>harbor_dawn.mov</span></div>
+        </div>
+        <div class="dope-right">
+          <div class="ruler" style="height: 24px;" data-inset="12" data-frames="144" data-rate="24" data-minor="3" data-major="12"></div>
+          <div class="dope-row is-layer"><span class="kf kf-sm kf-linear" style="--p: 0"></span><span class="kf kf-sm kf-cubic" style="--p: 8.33"></span><span class="kf kf-sm kf-cubic" style="--p: 25"></span><span class="kf kf-sm kf-linear" style="--p: 33.33"></span><span class="kf kf-sm kf-hold" style="--p: 66.67"></span></div>
+          <div class="dope-row is-layer" data-unless="selection-deleted"><span class="kf kf-sm kf-linear" style="--p: 0"></span><span class="kf kf-sm kf-cubic" style="--p: 16.67"></span></div>
+          <div class="dope-row is-layer is-selected" data-unless="selection-deleted"><span class="kf kf-sm kf-cubic" style="--p: 8.33"></span><span class="kf kf-sm kf-cubic" style="--p: 25"></span><span class="kf kf-sm kf-linear" style="--p: 33.33"></span></div>
+          <div class="dope-row" data-unless="selection-deleted"><span class="kf kf-cubic" style="--p: 8.33"></span><span class="kf kf-cubic is-selected" style="--p: 25"></span><span class="kf kf-linear" style="--p: 58.33"></span></div>
+          <div class="dope-row" data-unless="selection-deleted"><span class="kf kf-cubic" style="--p: 8.33"></span><span class="kf kf-linear" style="--p: 33.33"></span></div>
+          <div class="dope-row" data-unless="selection-deleted"></div>
+          <div class="dope-row is-layer"><span class="kf kf-sm kf-linear" style="--p: 0"></span><span class="kf kf-sm kf-hold" style="--p: 66.67"></span></div>
+          <div class="dope-row"><span class="kf kf-linear" style="--p: 0"></span><span class="kf kf-cubic" style="--p: 12.5"></span><span class="kf kf-hold" style="--p: 66.67"></span></div>
+          <div class="dope-row is-layer"></div>
+          <div class="dope-row is-layer"></div>
+          <div class="dope-row is-layer"></div>
+          <div class="playhead" style="--p: 25"><span class="playhead-knob"></span></div>
+        </div>
+      </div>
+
+      <div class="curve" data-when="curve">
+        <div class="curve-channels">
+          <div class="overline" style="padding: 8px 12px 4px;">チャンネル</div>
+          <div class="ch-row"><i data-icon="chevron-down" class="lrow-disc"></i><i data-icon="type" class="muted"></i><span>サブタイトル</span></div>
+          <div class="ch-row" style="--depth:1"><i data-icon="chevron-down" class="lrow-disc"></i><span class="irow-label">Position</span></div>
+          <div class="ch-row is-active" style="--depth:2"><span class="ch-swatch"></span><span class="label">X</span><span class="mono muted ch-value">1720.0</span><button class="btn btn-plain btn-icon"><i data-icon="eye"></i></button></div>
+          <div class="ch-row" style="--depth:2"><span class="ch-swatch is-dashed"></span><span class="label">Y</span><span class="mono muted ch-value">470.0</span><button class="btn btn-plain btn-icon"><i data-icon="eye"></i></button></div>
+          <div class="ch-row" style="--depth:1"><i data-icon="chevron-right" class="lrow-disc"></i><span class="irow-label">Scale</span></div>
+          <div class="ch-row" style="--depth:1"><i data-icon="chevron-right" class="lrow-disc is-empty"></i><span class="irow-label">Opacity</span><span class="caption muted ch-value">式のため編集不可</span></div>
+        </div>
+        <div class="curve-graph">
+          <div class="ruler" style="height: 24px;" data-frames="144" data-rate="24" data-minor="3" data-major="12"></div>
+          <svg class="curve-svg" width="1224" height="292" viewBox="0 0 1224 292" aria-label="Curve editor">
+            <line class="cv-grid" x1="0" y1="40" x2="1224" y2="40"/><line class="cv-grid" x1="0" y1="110" x2="1224" y2="110"/><line class="cv-grid" x1="0" y1="180" x2="1224" y2="180"/><line class="cv-zero" x1="0" y1="250" x2="1224" y2="250"/>
+            <line class="cv-grid" x1="204" y1="0" x2="204" y2="292"/><line class="cv-grid" x1="408" y1="0" x2="408" y2="292"/><line class="cv-grid" x1="612" y1="0" x2="612" y2="292"/><line class="cv-grid" x1="816" y1="0" x2="816" y2="292"/><line class="cv-grid" x1="1020" y1="0" x2="1020" y2="292"/>
+            <text class="cv-axis" x="6" y="36">1800</text><text class="cv-axis" x="6" y="106">1200</text><text class="cv-axis" x="6" y="176">600</text><text class="cv-axis" x="6" y="246">0</text>
+            <path class="cv-inactive" d="M102 195 C 180 195, 260 206, 340 206 S 600 195, 714 195"/>
+            <text class="cv-name muted" x="724" y="199">Y</text>
+            <path class="cv-active" d="M102 250 C 170 250, 230 52, 306 49 S 560 45, 714 45"/>
+            <text class="cv-name" x="724" y="49">X</text>
+            <line class="cv-handle" x1="246" y1="52" x2="366" y2="47"/>
+            <circle class="cv-handle-end" cx="246" cy="52" r="3"/><circle class="cv-handle-end" cx="366" cy="47" r="3"/>
+            <circle class="cv-key" cx="102" cy="250" r="4.5"/><circle class="cv-key is-selected" cx="306" cy="49" r="4.5"/><rect class="cv-key" x="709.5" y="40.5" width="9" height="9" transform="rotate(45 714 45)"/>
+            <circle class="cv-key" cx="102" cy="195" r="4.5"/><circle class="cv-key" cx="340" cy="206" r="4.5"/><rect class="cv-key" x="709.5" y="190.5" width="9" height="9" transform="rotate(45 714 195)"/>
+            <text class="cv-sel" x="314" y="72">1s12f · 1720 px</text>
+            <line class="cv-playhead" x1="306" y1="0" x2="306" y2="292"/>
+            <text class="cv-now" x="314" y="150">X 1720.0</text><text class="cv-now" x="314" y="164">Y 470.0</text>
+          </svg>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer class="statusbar">
+    <span class="sb-item"><i data-icon="history"></i>保存済み · rev <span data-unless="selection-deleted">131</span><span data-when="selection-deleted">132</span><span data-when="safe-mode"> · 安全モード</span></span>
+    <span class="sb-item" data-unless="selection-deleted"><i data-icon="refresh-cw"></i>MCP の変更を読み込みました（rev 130 → 131）</span>
+    <span class="sb-item" data-when="selection-deleted"><i data-icon="refresh-cw"></i>MCP の変更を読み込みました（rev 131 → 132）</span>
+    <span class="sb-item is-error" data-when="evaluation-error"><i data-icon="triangle-alert"></i><span class="code">EVALUATION_ERROR</span> 1 · <span class="code">FONT_MISSING</span> 1</span>
+    <span class="sb-item is-error" data-when="adapter-unavailable"><i data-icon="triangle-alert"></i><span class="code">ADAPTER_UNAVAILABLE</span> 1</span>
+    <span class="sb-item sb-right"><i data-icon="circle-check"></i>ジョブなし</span>
+  </footer>
+
+  <div data-when="undo-conflict">
+    <div class="scrim" style="top: 44px;"></div>
+    <div class="sheet-host" style="top: 44px;">
+      <div class="dialog is-danger" style="width: 480px;">
+        <div class="dialog-main">
+          <i data-icon="triangle-alert"></i>
+          <div>
+            <div class="dialog-title">「Position の変更」を取り消せません</div>
+            <p class="dialog-body"><span class="code">UNDO_CONFLICT</span> 取り消そうとした操作のあとで、別の操作が同じキーを変更しました。部分的には取り消しません。履歴で競合を確認できます。</p>
+            <div class="dialog-details">競合した操作   rev 131 · MCP · サブタイトル › Position · 10:42:18
+取り消す操作   rev 129 · GUI · サブタイトル › Position · 10:41:55</div>
+          </div>
+        </div>
+        <div class="dialog-actions"><button class="btn btn-secondary"><i data-icon="history"></i>履歴を開く…</button><button class="btn btn-primary">OK</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

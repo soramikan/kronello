@@ -2,6 +2,10 @@
 
 Property の AnimationCurve を時間軸のグラフとして表示・編集するエディタで、値グラフと速度グラフを切り替えられる。空間パス（Position の軌跡）は Canvas 側で表示し、ここでは時間イージングだけを扱う。
 
+![CurveEditor の見本（Dark）](../preview/images/components/CurveEditor-dark.png)
+
+見本: [Light の画像](../preview/images/components/CurveEditor-light.png) · [HTML](../preview/components.html#CurveEditor)
+
 ## 利用側が渡すもの
 
 - 対象の Property とそのチャンネル（`X` / `Y` など）、アクティブなチャンネル。

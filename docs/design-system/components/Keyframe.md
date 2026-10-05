@@ -2,6 +2,10 @@
 
 AnimationCurve 上の 1 キーフレームを表すグリフで、形が補間（`InterpolationMode`）を、塗りの色が選択状態を表す。
 
+![Keyframe の見本（Dark）](../preview/images/components/Keyframe-dark.png)
+
+見本: [Light の画像](../preview/images/components/Keyframe-light.png) · [HTML](../preview/components.html#Keyframe)
+
 ## 利用側が渡すもの
 
 - `interpolation`: `Linear` | `Cubic` | `Hold`（`kronello-model` の `InterpolationMode` と一対一）。

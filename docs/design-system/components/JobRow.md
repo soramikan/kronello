@@ -2,6 +2,10 @@
 
 書き出し・解析などのジョブ 1 件を表す行で、StatusBar から開く一覧に並べ、状態ごとに次の操作を示す。
 
+![JobRow の見本（Dark）](../preview/images/components/JobRow-dark.png)
+
+見本: [Light の画像](../preview/images/components/JobRow-light.png) · [HTML](../preview/components.html#JobRow)
+
 ## 利用側が渡すもの
 
 - 種類と対象（「書き出し: Teaser_v3.mp4」「解析: Interview_A.mov」）。

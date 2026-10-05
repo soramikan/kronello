@@ -2,6 +2,10 @@
 
 書き出し設定・書き出し前の確認・ジョブを扱うページ。形式とジョブの規則は [ADR-0035](../../adr/0035-software-encoders.md)、[ADR-0050](../../adr/0050-fixed-job-execution-and-publication.md)、[14 ジョブ](../../architecture/14-jobs.md) に従う。
 
+![書き出しページの見本（Dark）。書き出し前の確認にエラーが 1 件ある状態](../preview/images/screens/export-dark.png)
+
+見本: [Light の画像](../preview/images/screens/export-light.png) · [HTML](../preview/screens/export.html)
+
 ## 配置
 
 ```text

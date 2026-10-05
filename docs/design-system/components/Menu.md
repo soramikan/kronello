@@ -2,6 +2,10 @@
 
 右クリックやメニューバー、PopupButton から開くコマンドの一覧で、項目ごとにアイコン・ショートカット・チェック・サブメニューを持てる。
 
+![Menu の見本（Dark）](../preview/images/components/Menu-dark.png)
+
+見本: [Light の画像](../preview/images/components/Menu-light.png) · [HTML](../preview/components.html#Menu)
+
 ## 利用側が渡すもの
 
 - 項目: ラベル（動詞句）、任意のアイコン（Lucide）、ショートカット、種類（通常 / チェック / ラジオ / サブメニュー / 区切り / 見出し）、無効、破壊的操作か。

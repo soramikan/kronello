@@ -2,6 +2,10 @@
 
 Viewer で使う道具（選択・手のひら・ズーム・図形・ペン・テキスト、編集ページではブレード）を切り替える縦の列で、既定では Viewer の左端に付き、折りたたみと取り外し（移動）ができる。
 
+![ToolStrip の見本（Dark）](../preview/images/components/ToolStrip-dark.png)
+
+見本: [Light の画像](../preview/images/components/ToolStrip-light.png) · [HTML](../preview/components.html#ToolStrip)
+
 ## 利用側が渡すもの
 
 - ページごとの道具の一覧（Lucide のアイコン、名前、ショートカット）と区切りの位置。

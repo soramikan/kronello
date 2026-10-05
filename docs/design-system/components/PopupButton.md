@@ -2,6 +2,10 @@
 
 決まった選択肢から 1 つを選ぶボタンで、押すと Menu が開き、現在の値をボタン上に表示する。
 
+![PopupButton の見本（Dark）](../preview/images/components/PopupButton-dark.png)
+
+見本: [Light の画像](../preview/images/components/PopupButton-light.png) · [HTML](../preview/components.html#PopupButton)
+
 ## 利用側が渡すもの
 
 - 選択肢と現在の値、任意のラベル（上に置く）。「カスタム…」のように別の入力へ進む選択肢は区切りの下に置く。

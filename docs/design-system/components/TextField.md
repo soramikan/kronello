@@ -2,6 +2,10 @@
 
 名前・パス・検索語など文字列を入力する 1 行の欄で、ラベル・補足・エラーを上下に添えられる。数値は NumberField を使う。
 
+![TextField の見本（Dark）](../preview/images/components/TextField-dark.png)
+
+見本: [Light の画像](../preview/images/components/TextField-light.png) · [HTML](../preview/components.html#TextField)
+
 ## 利用側が渡すもの
 
 - ラベル（上に置く）、値、任意でプレースホルダ・補足・検索用のアイコン。

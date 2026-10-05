@@ -2,6 +2,10 @@
 
 コマンドを 1 回発行する押しボタンで、primary・secondary・plain・destructive の 4 種と、アイコンだけの icon 形を持つ。
 
+![Button の見本（Dark）](../preview/images/components/Button-dark.png)
+
+見本: [Light の画像](../preview/images/components/Button-light.png) · [HTML](../preview/components.html#Button)
+
 ## 利用側が渡すもの
 
 - `label`（日本語の動詞句。「書き出す」「再リンク」）またはアイコン。アイコンだけの場合は `accessibilityLabel` を必ず渡す。

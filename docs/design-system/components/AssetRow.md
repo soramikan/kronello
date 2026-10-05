@@ -2,6 +2,10 @@
 
 Project パネルの素材一覧の 1 行で、素材の種類をアイコンとその色（`kind-*`）で示し、映像と音声を一目で見分けられるようにする。
 
+![AssetRow の見本（Dark）](../preview/images/components/AssetRow-dark.png)
+
+見本: [Light の画像](../preview/images/components/AssetRow-light.png) · [HTML](../preview/components.html#AssetRow)
+
 ## 利用側が渡すもの
 
 - `kind`: `video` | `image` | `audio` | `composition` | `subtitle`（タイムラインの Clip と同じ区分）。

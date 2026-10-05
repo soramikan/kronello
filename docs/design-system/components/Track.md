@@ -2,6 +2,10 @@
 
 Timeline の 1 トラック（ヘッダ + レーン）と、その上に置く Clip・時間ルーラー・再生ヘッドをまとめたタイムラインの基本部品。
 
+![Track の見本（Dark）](../preview/images/components/Track-dark.png)
+
+見本: [Light の画像](../preview/images/components/Track-light.png) · [HTML](../preview/components.html#Track)
+
 ## 利用側が渡すもの
 
 - トラック: 種別と番号（`V1`、`A1`）、名前、表示 / ロックのトグル状態、選択状態。

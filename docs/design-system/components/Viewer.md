@@ -2,6 +2,10 @@
 
 Sequence / Composition の現在時刻の画を表示し、再生操作とタイムコードでの移動を受け持つプレビュー領域。
 
+![Viewer の見本（Dark）](../preview/images/components/Viewer-dark.png)
+
+見本: [Light の画像](../preview/images/components/Viewer-light.png) · [HTML](../preview/components.html#Viewer)
+
 ## 利用側が渡すもの
 
 - 描画面（ネイティブ側が用意した CAMetalLayer などを wgpu の surface として渡す。画素は CPU を経由しない）。

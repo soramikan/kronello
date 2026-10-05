@@ -2,6 +2,10 @@
 
 Composition のアニメーションを作るページ（GUI-001 / GUI-002）。
 
+![モーションページの見本（Dark）](../preview/images/screens/motion-dark.png)
+
+見本: [Light の画像](../preview/images/screens/motion-light.png) · [HTML](../preview/screens/motion.html)
+
 ## 配置
 
 ```text
@@ -45,6 +49,10 @@ TS = ToolStrip（Viewer の左端、40px）
 ## Curve editor
 
 [CurveEditor](../components/CurveEditor.md) に従う。ページ上での配置は次のとおり。
+
+![Curve editor の見本（Dark）](../preview/images/screens/motion-curve-editor-dark.png)
+
+見本: [Light の画像](../preview/images/screens/motion-curve-editor-light.png) · [HTML](../preview/screens/motion.html?state=curve)
 
 - 見出し: Dope sheet / Curve editor、値 / 速度、現在時刻、区切り、選択中のキーの補間（Linear / Cubic / Hold）と接線（揃える / 分ける）、全体を表示（`scan`）・スナップ・パネルメニュー。
 - 左列「チャンネル」（216px）: レイヤー › Property › チャンネル（X / Y）の木。チャンネルの行には線種の見本（実線 = 操作中、破線 = それ以外）、現在の値、グラフへの表示切り替え（`eye` / `eye-off`）を置く。操作中のチャンネルの行は `selection-bg`。式で値が決まる Property は「式のため編集不可」と表示し、曲線を出さない。

@@ -2,6 +2,10 @@
 
 中身のないパネルに置く案内で、何がないかと次にできることを示し、ファイルのドロップ先も兼ねる。
 
+![EmptyState の見本（Dark）](../preview/images/components/EmptyState-dark.png)
+
+見本: [Light の画像](../preview/images/components/EmptyState-light.png) · [HTML](../preview/components.html#EmptyState)
+
 ## 利用側が渡すもの
 
 - アイコン（Lucide、24px）、見出し（「素材がありません」）、本文（次にできること 1 文）。

@@ -2,6 +2,10 @@
 
 起動時やプロジェクトを閉じたときに出す最初のウインドウで、新規作成・開く・最近のプロジェクトの再開を受け持つ。
 
+![Welcome の見本（Dark）](../preview/images/components/Welcome-dark.png)
+
+見本: [Light の画像](../preview/images/components/Welcome-light.png) · [HTML](../preview/components.html#Welcome)
+
 ## 利用側が渡すもの
 
 - 最近のプロジェクト（`.kronello` のファイル名、場所、最終更新、存在するか）。一覧は UI 状態としてユーザーごとの状態領域に置く。

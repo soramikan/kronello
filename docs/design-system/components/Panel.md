@@ -2,6 +2,10 @@
 
 ワークスペースを分割する入れ物で、見出しの付いた単独パネルと、開いている Sequence / Composition を切り替えるタブ付きパネルの 2 形を持つ。
 
+![Panel の見本（Dark）](../preview/images/components/Panel-dark.png)
+
+見本: [Light の画像](../preview/images/components/Panel-light.png) · [HTML](../preview/components.html#Panel)
+
 ## 利用側が渡すもの
 
 - 単独: 見出し（`Project`、`Inspector`、`Layers` など英語のパネル名）。

@@ -75,6 +75,8 @@ jobs:
           python3 -m unittest scripts.tests.test_integration_m2.IntegrationM2.test_small_cpu_reference -v
       - name: Validate backlog
         run: python3 scripts/backlog.py check
+      - name: Validate design system preview
+        run: python3 scripts/design_preview.py check
 
   linux-software-vulkan:
     name: Linux (Mesa lavapipe)
