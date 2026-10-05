@@ -33,6 +33,8 @@ fn edition_pin_input_commands_revision_idempotency_and_undo() {
     };
     service
         .dispatch(Request::ProjectCreate(CreateRequest {
+            plan_hash: None,
+            idempotency_key: None,
             project: path.clone(),
             document,
         }))
@@ -190,6 +192,8 @@ fn authoring_edit_cannot_change_a_published_edition() {
     };
     service
         .dispatch(Request::ProjectCreate(CreateRequest {
+            plan_hash: None,
+            idempotency_key: None,
             project: path.clone(),
             document,
         }))
@@ -233,6 +237,8 @@ fn instance_duration_edit_rebuilds_map_and_import_cannot_republish_definition() 
     };
     service
         .dispatch(Request::ProjectCreate(CreateRequest {
+            plan_hash: None,
+            idempotency_key: None,
             project: path.clone(),
             document,
         }))
@@ -302,6 +308,8 @@ fn instance_duration_edit_rebuilds_map_and_import_cannot_republish_definition() 
         .default = Value::String("再公開".into());
     error(
         service.dispatch(Request::ProjectImport(ImportRequest {
+            plan_hash: None,
+            idempotency_key: None,
             project: path.clone(),
             base_revision: "4".into(),
             document: saved.document,
@@ -340,6 +348,8 @@ fn future_template_contracts_round_trip_through_create_import_export() {
     }]);
     service
         .dispatch(Request::ProjectCreate(CreateRequest {
+            plan_hash: None,
+            idempotency_key: None,
             project: path.clone(),
             document: serde_json::from_value(document.clone()).unwrap(),
         }))
@@ -351,6 +361,8 @@ fn future_template_contracts_round_trip_through_create_import_export() {
     document["name"] = serde_json::json!("preserved future templates");
     service
         .dispatch(Request::ProjectImport(ImportRequest {
+            plan_hash: None,
+            idempotency_key: None,
             project: path.clone(),
             base_revision: "1".into(),
             document: serde_json::from_value(document.clone()).unwrap(),
@@ -379,6 +391,8 @@ fn import_cannot_obscure_published_content_or_definition_with_opaque_fields() {
         serde_json::from_str(include_str!("../../../examples/template-001.project.json")).unwrap();
     service
         .dispatch(Request::ProjectCreate(CreateRequest {
+            plan_hash: None,
+            idempotency_key: None,
             project: path.clone(),
             document,
         }))
@@ -401,6 +415,8 @@ fn import_cannot_obscure_published_content_or_definition_with_opaque_fields() {
         altered[collection][0]["future_field"] = serde_json::json!(true);
         error(
             service.dispatch(Request::ProjectImport(ImportRequest {
+                plan_hash: None,
+                idempotency_key: None,
                 project: path.clone(),
                 base_revision: "2".into(),
                 document: serde_json::from_value(altered).unwrap(),
@@ -503,6 +519,8 @@ fn migration_diff_previews_are_read_only_deterministic_and_explicit_apply_is_und
     let fonts = fonts(&p);
     service
         .dispatch(Request::ProjectCreate(CreateRequest {
+            plan_hash: None,
+            idempotency_key: None,
             project: path.clone(),
             document: p,
         }))
@@ -619,6 +637,8 @@ fn migration_diff_previews_are_read_only_deterministic_and_explicit_apply_is_und
     // Import remains unable to change a pin, even when the candidate is valid.
     error(
         service.dispatch(Request::ProjectImport(ImportRequest {
+            plan_hash: None,
+            idempotency_key: None,
             project: path.clone(),
             base_revision: "5".into(),
             document: result.plan.candidate.clone(),
@@ -681,6 +701,8 @@ fn data_projection_variant_inputs_durations_versions_and_preview_failures_are_is
     let fonts = fonts(&p);
     service
         .dispatch(Request::ProjectCreate(CreateRequest {
+            plan_hash: None,
+            idempotency_key: None,
             project: path.clone(),
             document: p,
         }))
@@ -828,6 +850,9 @@ fn media_slots_validate_refs_expose_bindings_and_reject_final_execution() {
     };
     c.root_nodes.push(slot);
     c.nodes.push(SceneNode {
+        tags: Default::default(),
+        name: None,
+        enabled: true,
         id: slot,
         kind: NodeKind::Null,
         containment_parent: None,
@@ -851,6 +876,8 @@ fn media_slots_validate_refs_expose_bindings_and_reject_final_execution() {
     );
     service
         .dispatch(Request::ProjectCreate(CreateRequest {
+            plan_hash: None,
+            idempotency_key: None,
             project: path.clone(),
             document: p,
         }))
@@ -939,6 +966,8 @@ fn migration_requires_explicit_resolution_and_variant_content_cannot_be_obscured
     let fonts = fonts(&p);
     service
         .dispatch(Request::ProjectCreate(CreateRequest {
+            plan_hash: None,
+            idempotency_key: None,
             project: path.clone(),
             document: p,
         }))
@@ -963,6 +992,8 @@ fn migration_requires_explicit_resolution_and_variant_content_cannot_be_obscured
     c["future_layout"] = serde_json::json!(true);
     error(
         service.dispatch(Request::ProjectImport(ImportRequest {
+            plan_hash: None,
+            idempotency_key: None,
             project: path.clone(),
             base_revision: "3".into(),
             document: serde_json::from_value(opaque).unwrap(),

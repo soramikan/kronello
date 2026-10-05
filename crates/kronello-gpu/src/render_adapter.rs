@@ -65,8 +65,8 @@ fn lower(dag: &RenderDag) -> Result<(RenderSize, DrawScene, WorkingSpace), Rende
             DagNode::RasterInput { pixels } => DrawNode::Raster(pixels.clone()),
             DagNode::Geometry { .. } | DagNode::TextLayout { .. } => continue,
             DagNode::CoverageDraw { path, .. } => DrawNode::Path(PathDraw {
-                fill_gradient: path.fill_gradient.as_ref().map(gradient),
-                stroke_gradient: path.stroke_gradient.as_ref().map(gradient),
+                fill_gradient: path.fill_gradient.as_deref().map(gradient).map(Box::new),
+                stroke_gradient: path.stroke_gradient.as_deref().map(gradient).map(Box::new),
                 paint_transform: path.paint_transform.map(|r| r.map(|v| v as f32)),
                 contours: path
                     .contours
@@ -244,7 +244,25 @@ impl RenderBackend for GpuContext {
 }
 
 fn gradient(g: &kronello_model::ResolvedGradient) -> crate::GradientPaint {
+    let m = g.options.transform.map(|r| r.map(|v| v.get() as f32));
+    let determinant = m[0][0] * m[1][1] - m[0][1] * m[1][0];
+    let transform = [
+        [
+            m[1][1] / determinant,
+            -m[0][1] / determinant,
+            (m[0][1] * m[1][2] - m[1][1] * m[0][2]) / determinant,
+        ],
+        [
+            -m[1][0] / determinant,
+            m[0][0] / determinant,
+            (m[1][0] * m[0][2] - m[0][0] * m[1][2]) / determinant,
+        ],
+    ];
     crate::GradientPaint {
+        spread: g.options.spread,
+        interpolation: g.options.interpolation,
+        interpolation_version: g.options.interpolation_version,
+        transform,
         geometry: match g.geometry {
             kronello_model::GradientGeometry::Linear { start, end } => {
                 crate::GradientGeometry::Linear {
@@ -258,6 +276,26 @@ fn gradient(g: &kronello_model::ResolvedGradient) -> crate::GradientPaint {
                     radius: radius as f32,
                 }
             }
+            kronello_model::GradientGeometry::FocalRadial {
+                center,
+                radius,
+                focal,
+                focal_radius,
+            } => crate::GradientGeometry::FocalRadial {
+                center: center.map(|v| v as f32),
+                radius: radius as f32,
+                focal: focal.map(|v| v as f32),
+                focal_radius: focal_radius as f32,
+            },
+            kronello_model::GradientGeometry::Conic {
+                center,
+                start_angle,
+                sweep_angle,
+            } => crate::GradientGeometry::Conic {
+                center: center.map(|v| v as f32),
+                start_angle: start_angle as f32,
+                sweep_angle: sweep_angle as f32,
+            },
         },
         stops: g
             .stops

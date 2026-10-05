@@ -9,7 +9,7 @@
 | DataAsset | id, schema, content_hash, values, time_mapping, analyzer_version |
 | Sequence | id, extent, frame_rate, audio_rate, working_space, tracks, transitions |
 | Track | id, kind（video / audio）, clips |
-| Clip | id, source_ref, timeline_range, source_in, time_map, links, properties, effects |
+| Clip | id, source_ref, timeline_range, source_in, time_map, volume, links, properties, effects |
 | Composition | id, duration, design_extent, edit_rate, root_nodes, properties, inputs, markers, output_ports |
 | SceneNode | id, kind, containment_parent, transform_parent, child_order, active_range, transform_ref, content_ref |
 | CompositionInstance | id, definition_ref, input_bindings, local_time_map, seed |
@@ -66,3 +66,43 @@ RenderSnapshot は公開 `schema_version` を持ち、`semantic_versions` に文
 文書モデルと RenderSnapshot は意味的な値だけを持つ。`wgpu::Texture` や `AVFrame` など、バックエンド・GUI・GPU 資源の寿命に依存する型を保持しない（[ADR-0005](../adr/0005-semantic-snapshot-vs-gpu-resources.md)）。
 
 Property の単位・座標系・範囲は ADR-0043 に従う。保存 Color は色空間タグ付きの straight RGB と独立 alpha とし、内部画像の premultiplied 表現とは区別する（[ADR-0044](../adr/0044-color-and-alpha-contracts.md)）。
+
+## AUDIO-003 の Media と volume
+
+`Clip.volume` は optional `kronello.audio.volume` Property（省略 / null は unity）。
+非負有限の dimensionless Scalar Gain を Constant / Curve から純粋評価する。
+`NodeKind::Media` は `MediaNode { asset, stream_index, source_in, time_map, volume }` を保存し、
+volume は同じ SceneNode の properties にある volume PropertyId。
+Media の音声と CompositionInstance の再帰音声を文書音声としてコンパイルする。
+Video / Image Media の描画は COMP-002 まで型付き未対応。
+Audio track も Composition source を持てる。Video CompositionClip は参照先の音声を一度継承する。
+出力 mode、時間写像、trim の sample phase と編集規則は
+[ADR-0063](../adr/0063-document-audio-and-clip-volume.md) と [基本音声](audio-000.md) を参照。
+
+### AUDIO-004 の共有モデル拡張
+
+[ADR-0069](../adr/0069-versioned-stateless-audio.md) により `AudioRetimePolicy` へ
+`resample_v1` を追加する。省略 / `reject` は旧意味のまま。SourceRef の構造は変えず、
+audio track に Generator を保存できる。未知 Generator は保存時に代替せず、選択した音声の
+最終実行で `UNSUPPORTED_FEATURE`。audio track に Clip.properties / effects と明示 crossfade を
+許し、既存の二 clip・完全 intersection・第三 clip 不在という overlap 条件を維持する。
+`EffectParameters::AudioGain {gain}` は clip-owned volume descriptor Property を参照し、
+既知 effect id は `kronello.audio.gain` version 1。映像 effect evaluator は音声 effect を拒否する。
+公開 project / API schema の番号1は維持し、Rust generator と Swift transport を再生成する。
+旧文書・profile 1/2 の実行意味を変更せず、movie profile 3 が新音声 contract を固定する。
+
+SERVICE-002 の Modifier 編集は既存 Modifier の id / key / version / enabled / parameters と
+Property.modifiers の順序付き配列を使い、Project schema を変更しない。
+insert / replace / remove / reorder は共有 EditCommand とし、保存可能性と評価可能性を区別する。
+[ADR-0071](../adr/0071-project-change-plans-and-modifier-edits.md)、
+[03 プロパティとアニメーション](03-property-animation.md#service-002-の-modifier-authoring) を参照。
+
+## API-002 の検索 metadata
+
+SceneNode.tags は任意の sorted string set（既定空、空は保存省略）。NFC 正規形、非空、
+制御文字なし、先頭末尾の空白なし、UTF-8 64 bytes 以下、node 当たり32個以下。
+タグは runtime identity ではなく、共有 node_tags_set command と scene.query search だけが扱う metadata。
+Project schema version 1 と既存必須 active_range を維持する。
+range 検索は各 node の authored local Composition time の半開区間 overlap であり、
+評価時刻の可視性や親の retime を投影した時間とは区別する。
+[ADR-0072](../adr/0072-scene-search-fixed-cursors-and-cli-events.md) を参照。

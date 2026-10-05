@@ -49,6 +49,7 @@ pub enum VisibilityAssessment {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExplanationCategory {
+    Enabled,
     Opacity,
     ActiveRange,
     Parent,
@@ -66,11 +67,12 @@ pub enum ExplanationImpact {
     Information,
 }
 /// Stable semantic causes, extensible without adding state to the inspector.
-/// GUI's enabled/disabled document contract is integrated by its owning branch.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum VisibilityCode {
+    Disabled,
+    AncestorDisabled,
     OpacityZero,
     OutsideActiveRange,
     AncestorOpacityZero,
@@ -97,6 +99,8 @@ pub enum VisibilityCode {
 impl VisibilityCode {
     fn from_code(code: &str) -> Self {
         match code {
+            "DISABLED" => Self::Disabled,
+            "ANCESTOR_DISABLED" => Self::AncestorDisabled,
             "OPACITY_ZERO" => Self::OpacityZero,
             "OUTSIDE_ACTIVE_RANGE" => Self::OutsideActiveRange,
             "ANCESTOR_OPACITY_ZERO" => Self::AncestorOpacityZero,
@@ -443,14 +447,18 @@ fn paints_match(
             });
             fill && stroke
         }
-        kronello_render::SceneContent::Text(layout) => {
-            layout.glyphs.iter().all(|g| predicate(g.fill))
-        }
+        kronello_render::SceneContent::Text(layout) => layout.glyphs.iter().all(|g| {
+            g.gradient.as_ref().map_or_else(
+                || predicate(g.fill),
+                |gradient| gradient.stops.iter().all(|s| predicate(s.color)),
+            )
+        }),
         kronello_render::SceneContent::Empty => true,
         // Decoded video pixels are not known here, so a video paint is never proven to match.
         kronello_render::SceneContent::Video { .. } => false,
     }
 }
+
 fn leaf(scene: &SceneIr, node: &kronello_render::SceneNodeIr) -> bool {
     !scene
         .nodes
@@ -622,6 +630,21 @@ pub(crate) fn node(r: NodeExplainRequest) -> Result<NodeExplainResult, ServiceEr
         };
         if own {
             result.local_time = local;
+        }
+        // Disabled containment subtrees never enter the evaluated scene (ADR-0061).
+        if !node_definition.enabled {
+            reason(
+                &mut result,
+                key,
+                if own { "DISABLED" } else { "ANCESTOR_DISABLED" },
+                if own {
+                    ExplanationCategory::Enabled
+                } else {
+                    ExplanationCategory::Parent
+                },
+                ExplanationImpact::Hides,
+                json!({"enabled":false}),
+            );
         }
         if let Some(time) = local {
             if !node_definition.active_range.contains(time) {
@@ -1118,4 +1141,76 @@ fn inspect_content(
         _ => (),
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod gradient_tests {
+    use super::paints_match;
+    use kronello_model::*;
+    use kronello_render::*;
+    use kronello_text::*;
+
+    #[test]
+    fn vec004_visible_text_gradient_is_not_hidden_by_transparent_fallback_color() {
+        let transparent = Color::from_srgb8([0; 3], Some(0));
+        let red = Color::from_srgb8([255, 0, 0], None);
+        let glyph = PositionedGlyph {
+            gradient: Some(Box::new(ResolvedGradient {
+                options: Default::default(),
+                geometry: GradientGeometry::Linear {
+                    start: [0.0; 2],
+                    end: [1.0, 0.0],
+                },
+                stops: vec![
+                    ResolvedGradientStop {
+                        color: red,
+                        offset: 0.0,
+                    },
+                    ResolvedGradientStop {
+                        color: transparent,
+                        offset: 1.0,
+                    },
+                ],
+            })),
+            glyph_id: 1,
+            style_index: 0,
+            source: TextRange { start: 0, end: 1 },
+            graphemes: 0..1,
+            shaping_cluster: 0,
+            position: [0.0; 2],
+            advance: 1.0,
+            fill: transparent,
+            outline: Path { segments: vec![] },
+        };
+        let node = SceneNodeIr {
+            key: SceneKey {
+                instance_path: Default::default(),
+                node: NodeId::new(),
+            },
+            parent: None,
+            world_transform: kronello_eval::Affine2::IDENTITY,
+            opacity: 1.0,
+            post_effect_opacity: 1.0,
+            effects: vec![],
+            properties: Default::default(),
+            text: Some("a".into()),
+            bounds: Default::default(),
+            layout_content_hash: None,
+            content: SceneContent::Text(LayoutResult {
+                layout_version: 1,
+                lines: vec![],
+                glyphs: vec![glyph],
+                graphemes: vec![],
+                shaping_clusters: vec![],
+                animation_units: vec![],
+                layout_bounds: Bounds {
+                    min: [0.0; 2],
+                    max: [1.0; 2],
+                },
+                ink_bounds: None,
+            }),
+        };
+        assert!(!paints_match(&node, |c| c.components().alpha.get() == 0.0));
+        assert!(!paints_match(&node, |c| c.components().r.get() == 0.0));
+    }
 }

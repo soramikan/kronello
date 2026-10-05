@@ -253,6 +253,9 @@ pub(crate) fn mutate(
             }
             c.root_nodes.insert(*index, *node);
             c.nodes.push(SceneNode {
+                tags: Default::default(),
+                name: None,
+                enabled: true,
                 id: *node,
                 kind: NodeKind::CompositionInstance(placement),
                 containment_parent: None,
@@ -535,6 +538,9 @@ fn preview_candidate(
     bytes.copy_from_slice(&hash[16..]);
     let node_id = NodeId::from_uuid(Uuid::from_bytes(bytes));
     let placement = SceneNode {
+        tags: Default::default(),
+        name: None,
+        enabled: true,
         id: node_id,
         kind: NodeKind::CompositionInstance(CompositionInstance {
             id: instance.id,

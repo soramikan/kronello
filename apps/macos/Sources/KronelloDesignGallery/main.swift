@@ -30,6 +30,7 @@ do {
                 try save(AnyView(GallerySheet(name, theme: theme, content: content).krTheme(theme)), name: "\(name)-\(theme.rawValue)", directory: directory)
             }
             try save(AnyView(MotionScreen().krTheme(theme)), name: "Screen-motion-\(theme.rawValue)", directory: directory)
+            try save(AnyView(MotionScreen(curveEditor: true).krTheme(theme)), name: "Screen-motion-curve-\(theme.rawValue)", directory: directory)
         }
     }
 } catch {

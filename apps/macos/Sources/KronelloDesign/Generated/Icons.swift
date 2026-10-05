@@ -51,6 +51,7 @@ public enum KRIcon: String, CaseIterable, Sendable {
     case redo2 = "redo-2"
     case refreshCw = "refresh-cw"
     case `repeat` = "repeat"
+    case scan = "scan"
     case scissors = "scissors"
     case search = "search"
     case shapes = "shapes"
@@ -561,6 +562,23 @@ extension KRIcon {
             p.addLine(to: CGPoint(x: 21, y: 14))
             p.addCurve(to: CGPoint(x: 17, y: 18), control1: CGPoint(x: 21, y: 16.2091), control2: CGPoint(x: 19.2091, y: 18))
             p.addLine(to: CGPoint(x: 3, y: 18))
+        case .scan:
+            p.move(to: CGPoint(x: 3, y: 7))
+            p.addLine(to: CGPoint(x: 3, y: 5))
+            p.addCurve(to: CGPoint(x: 5, y: 3), control1: CGPoint(x: 3, y: 3.8954), control2: CGPoint(x: 3.8954, y: 3))
+            p.addLine(to: CGPoint(x: 7, y: 3))
+            p.move(to: CGPoint(x: 17, y: 3))
+            p.addLine(to: CGPoint(x: 19, y: 3))
+            p.addCurve(to: CGPoint(x: 21, y: 5), control1: CGPoint(x: 20.1046, y: 3), control2: CGPoint(x: 21, y: 3.8954))
+            p.addLine(to: CGPoint(x: 21, y: 7))
+            p.move(to: CGPoint(x: 21, y: 17))
+            p.addLine(to: CGPoint(x: 21, y: 19))
+            p.addCurve(to: CGPoint(x: 19, y: 21), control1: CGPoint(x: 21, y: 20.1046), control2: CGPoint(x: 20.1046, y: 21))
+            p.addLine(to: CGPoint(x: 17, y: 21))
+            p.move(to: CGPoint(x: 7, y: 21))
+            p.addLine(to: CGPoint(x: 5, y: 21))
+            p.addCurve(to: CGPoint(x: 3, y: 19), control1: CGPoint(x: 3.8954, y: 21), control2: CGPoint(x: 3, y: 20.1046))
+            p.addLine(to: CGPoint(x: 3, y: 17))
         case .scissors:
             p.addEllipse(in: CGRect(x: 3, y: 3, width: 6, height: 6))
             p.move(to: CGPoint(x: 8.12, y: 8.12))

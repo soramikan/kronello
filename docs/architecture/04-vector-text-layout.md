@@ -28,21 +28,21 @@ Trim path、線端・破線のアニメーション、Path boolean、morph は�
 
 ### 線とグラデーションの実装範囲
 
-M1 で実装する範囲（VEC-003）と後続タスクの境界を固定する。後続の機能を含む文書は保存時に失わないが、最終レンダーは `UNSUPPORTED_FEATURE` で拒否する（[ADR-0010](../adr/0010-unsupported-features-fail-final-render.md)）。
+M1 の VEC-003 と M3 の VEC-004 の範囲、後続タスクの境界を固定する。未対応の機能を含む文書は保存時に失わないが、最終レンダーは `UNSUPPORTED_FEATURE` で拒否する（[ADR-0010](../adr/0010-unsupported-features-fail-final-render.md)）。
 
-| 項目 | M1（VEC-003） | 後続 |
+| 項目 | M1（VEC-003） | M3（VEC-004）/ 後続 |
 |---|---|---|
 | 線の join / cap | miter（miter limit 既定 4）/ bevel / round、butt / square / round | — |
 | 破線 | なし | dash 配列・offset とそのアニメーション（VEC-005） |
 | 線の位置 | 中央のみ | 内側・外側（VEC-005） |
 | 非一様 scale / skew 下の線幅 | `UNSUPPORTED_FEATURE` | 意味を定義して解消（VEC-005） |
-| グラデーションの種類 | 線形、放射（中心と半径） | 焦点付き放射（焦点位置・焦点半径）、円錐 / sweep（VEC-004） |
+| グラデーションの種類 | 線形、放射（中心と半径） | 焦点付き放射（焦点位置・焦点半径）、円錐 / sweep（VEC-004、Metal 検証待ち） |
 | 範囲外の扱い（spread） | pad のみ | repeat / reflect（VEC-004） |
 | 色の補間空間 | 作業用線形空間の premultiplied に固定 | グラデーションごとの明示指定（sRGB・straight 等）と補間空間の意味の版（VEC-004） |
 | 座標系 | 図形のローカル `design_px` | bounding box 基準の座標、gradient transform（VEC-004） |
 | 適用先 | Shape の fill / stroke | Text の fill（組版クラスタを壊さない、VEC-004） |
 | stop のアニメーション | 色と位置 | — |
-| SDR 8bit 出力の banding | 対策なし | dither の要否判断。採用時は固定 seed で決定的にする（VEC-004） |
+| SDR 8bit 出力の banding | 対策なし | VEC-004 では dither を採用しない。8bit exporter の量子化境界で再検討（ADR-0066） |
 | Trim path、morph、SVG 対応表 | なし | VEC-002（M5） |
 
 ### VEC-003 の実装規約
@@ -52,9 +52,28 @@ M1 で実装する範囲（VEC-003）と後続タスクの境界を固定する�
 - `GradientStop` の color / offset はノード所有の `PropertyId`。再利用可能な `kronello.shape.gradient_color` / `kronello.shape.gradient_offset` descriptor を登録する。stop descriptor は一つのノードに複数配置でき、評価は PropertyId ごとに行う。transform / opacity 等の singleton descriptor 重複は引き続き拒否する。offset は有限の `[0,1]`、stop 数は 2〜256、保存順は offset の非減少順。評価後にも検証し、アニメーションで順序が逆転したら `ShapeError::InvalidGradient` とする。並べ替え・clamp で修正しない。同位置ではその位置の最後の stop が勝つ右連続の段差とし、直前の区間は最初の同位置 stop に向かう。
 - stop の色を個別に sRGB decode / 原色変換 → 作業用線形空間 → premultiply し、その値を補間する。各 4×4 AA サンプルで paint を評価・被覆に応じて蓄積し、fill / stroke を別々に平均して stroke を fill へ source-over する。内部補間を unpremultiply しない。透明 stop の RGB を持ち込まず、HDR の負値・1 超も clamp しない。
 - CPU / GPU は同じ float32 の展開済み三角形・円を使う。curve の flatten は既存の画素 tolerance（既定 0.02 px）。snapshot の coverage は `vec003-grid4-v2`、stroke geometry は `vec003-centered-stroke-v1`、gradient interpolation は `vec003-linear-premultiplied-pad-v1`。vector flatten / color の既存意味版は変更しない。raster key は stop 値・gradient geometry・逆写像・線幅 / join / cap / limit・追加意味版を含む。paint 変更ではローカル輪郭の geometry cache を再利用する。
-- 表の VEC-004 / VEC-005 のフィールド・variant は strict な既知 Shape / Text として解釈せず、`DocumentObject::Opaque` で値と所属を保持する。選択出力が必要とする opaque content は最終レンダーで `UNSUPPORTED_FEATURE`。非一様変換の線も同じエラー。機能を既定値へ置換しない。
+- VEC-005 と未知の gradient フィールド・variant は strict な既知 Shape / Text として解釈せず、`DocumentObject::Opaque` で値と所属を保持する。選択出力が必要とする opaque content は最終レンダーで `UNSUPPORTED_FEATURE`。非一様変換の線も同じエラー。機能を既定値へ置換しない。
 
 受け入れ条件のテスト対応と検証範囲は [VEC-003 の検証](../testing/vec-003.md) を参照。
+
+### VEC-004 の実装規約
+
+[ADR-0066](../adr/0066-explicit-gradient-semantics.md) で gradient ごとの `GradientOptions`
+（spread / interpolation / interpolation_version / units / transform）を固定する。
+省略値は VEC-003 の pad / working_linear_premultiplied / version 1 / local_design / 単位行列。
+repeat / reflect は負 parameter にも floor の周期規約を適用する。
+焦点円を外円の内部に厳密に含む `focal_radial`、時計回りの `conic`（正の sweep、360 度以下）を追加する。
+補間は working_linear_premultiplied / working_linear_straight / srgb_straight / srgb_premultiplied。
+透明 stop の RGB は straight モードでは保存・補間し、画像 paint への変換時に premultiply する。
+
+bbox は Shape の unstroked 解析的 geometry bounds、Text 全体の positioned ink_bounds。
+`node * bbox * gradient_transform` の順に写し、fill / stroke は独立した transform を持つ。
+空 / 退化 bbox、特異行列、不正な円・sweep・stop は型付きエラー。
+`TextStyleSpan.gradient` の stop も node の Property を評価し、shaping 後に style_index で glyph に付ける。
+paint の変更で cluster / AnimationUnit / outline / layout key を変えず、raster key だけへ全 paint 入力を含める。
+意味版は `vec004-explicit-interpolation-v1`、未知の補間版は最終レンダーで `UNSUPPORTED_FEATURE`。
+SDR dither は採用せず、現行の RGBA16F / 16bit PNG にノイズを追加しない。
+CPU / 静的検証と Metal / golden の残件は [VEC-004 の検証](../testing/vec-004.md) を参照。
 
 ### 設計寸法と出力解像度
 

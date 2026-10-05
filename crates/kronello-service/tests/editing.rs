@@ -18,11 +18,115 @@ fn setup() -> (tempfile::TempDir, PathBuf, Project) {
     let p = fixture();
     service()
         .dispatch(Request::ProjectCreate(CreateRequest {
+            plan_hash: None,
+            idempotency_key: None,
             project: path.clone(),
             document: p.clone(),
         }))
         .unwrap();
     (dir, path, p)
+}
+
+#[test]
+fn node_name_visibility_share_idempotency_and_selective_undo() {
+    let (_dir, path, project) = setup();
+    let c = comp(&project);
+    let id = c.nodes[0].id;
+    let commands = vec![
+        EditCommand::NodeRename {
+            composition: c.id,
+            node: id,
+            name: Some("Renamed".into()),
+        },
+        EditCommand::NodeEnabledSet {
+            composition: c.id,
+            node: id,
+            enabled: false,
+        },
+    ];
+    let p = plan(&path, "1", commands);
+    let r = request(&path, &p, "node-name-visibility");
+    let event = apply_request(r.clone()).unwrap();
+    assert_eq!(apply_request(r).unwrap(), event);
+    let saved = export(&path);
+    assert_eq!(saved.revision, "2");
+    assert_eq!(comp(&saved.document).nodes[0].id, id);
+    assert_eq!(
+        comp(&saved.document).nodes[0].name.as_deref(),
+        Some("Renamed")
+    );
+    assert!(!comp(&saved.document).nodes[0].enabled);
+    undo(&path, &event, "undo-node-name-visibility");
+    let restored = export(&path);
+    assert_eq!(restored.revision, "3");
+    assert_eq!(comp(&restored.document).nodes[0].name, None);
+    assert!(comp(&restored.document).nodes[0].enabled);
+}
+#[test]
+fn node_property_insert_validates_identity_key_and_supports_receipt_undo() {
+    let (_dir, path, project) = setup();
+    let c = comp(&project);
+    let node = c.nodes[0].id;
+    let property: Property = serde_json::from_value(json!({
+        "id": PropertyId::new(), "descriptor": {"key": "kronello.transform.rotation", "version": 1},
+        "source": {"kind": "constant", "value": {"kind": "angle", "value": 15.0}}, "modifiers": []
+    }))
+    .unwrap();
+    let command = EditCommand::NodePropertyInsert {
+        composition: c.id,
+        node,
+        property: property.clone(),
+    };
+    let p = plan(&path, "1", vec![command.clone()]);
+    let r = request(&path, &p, "insert-default-transform");
+    // Exercise the same JSON decoder used by CLI, MCP, and FFI.
+    let decoded: Request =
+        serde_json::from_value(serde_json::to_value(Request::EditApply(r.clone())).unwrap())
+            .unwrap();
+    let ResultData::Edit(event) = service().dispatch(decoded).unwrap() else {
+        panic!()
+    };
+    assert_eq!(apply_request(r).unwrap(), event);
+    assert_eq!(
+        comp(&export(&path).document).nodes[0].properties.last(),
+        Some(&property)
+    );
+    let invalid_plan = |command| {
+        service()
+            .dispatch(Request::EditPlan(PlanRequest {
+                project: path.clone(),
+                base_revision: "2".into(),
+                commands: vec![command],
+            }))
+            .unwrap_err()
+            .code
+    };
+    assert_eq!(invalid_plan(command), "INVALID_EDIT");
+    let mut new_id = serde_json::to_value(&property).unwrap();
+    new_id["id"] = json!(PropertyId::new());
+    assert_eq!(
+        invalid_plan(EditCommand::NodePropertyInsert {
+            composition: c.id,
+            node,
+            property: serde_json::from_value(new_id).unwrap()
+        }),
+        "INVALID_EDIT"
+    );
+    assert_eq!(
+        invalid_plan(EditCommand::NodePropertyInsert {
+            composition: c.id,
+            node: c.nodes[1].id,
+            property: property.clone()
+        }),
+        "INVALID_EDIT"
+    );
+    let undone = undo(&path, &event, "undo-default-transform");
+    assert_eq!(export(&path).document, project);
+    undo(&path, &undone, "redo-default-transform");
+    assert_eq!(
+        comp(&export(&path).document).nodes[0].properties.last(),
+        Some(&property)
+    );
 }
 fn export(path: &Path) -> ExportResult {
     let ResultData::Export(r) = service()
@@ -109,6 +213,7 @@ fn undo(path: &Path, event: &Event, key: &str) -> Event {
 fn history(path: &Path, since: &str) -> HistoryResult {
     let ResultData::History(h) = service()
         .dispatch(Request::HistoryList(HistoryRequest {
+            cursor: None,
             project: path.into(),
             since_revision: since.into(),
             limit: 100,
@@ -122,6 +227,9 @@ fn history(path: &Path, since: &str) -> HistoryResult {
 }
 fn node(kind: NodeKind, p: &Project, parent: Option<NodeId>) -> SceneNode {
     SceneNode {
+        tags: Default::default(),
+        name: None,
+        enabled: true,
         id: NodeId::new(),
         kind,
         containment_parent: parent,
@@ -641,6 +749,8 @@ fn optional_content_collection_inverse_preserves_independent_insertions() {
     p.texts.clear();
     service()
         .dispatch(Request::ProjectCreate(CreateRequest {
+            plan_hash: None,
+            idempotency_key: None,
             project: path.clone(),
             document: p.clone(),
         }))

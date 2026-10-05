@@ -31,6 +31,7 @@ fn clip(color: [u8; 3], a: i64, b: i64) -> Clip {
         source_in: Time::ZERO,
         time_map: TimeMap::linear(Time::ZERO, Rational::ONE).unwrap(),
         audio_retime: AudioRetimePolicy::Reject,
+        volume: None,
         links: vec![],
         properties: vec![],
         effects: vec![],
@@ -95,6 +96,8 @@ fn setup(p: Project) -> (tempfile::TempDir, PathBuf) {
     let path = dir.path().join("nle2.kronello");
     service()
         .dispatch(Request::ProjectCreate(CreateRequest {
+            plan_hash: None,
+            idempotency_key: None,
             project: path.clone(),
             document: p,
         }))

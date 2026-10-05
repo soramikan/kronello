@@ -1,6 +1,7 @@
 # ADR-0051: Sequence の配置・合成順序と三つの時間編集を固定する
 
 - 状態: 部分置換（[ADR-0062](0062-video-generator-and-timeline-edits.md): transition による明示 overlap と動画・Generator / clip effects / move・ripple・link の追加。その他の規約は維持）
+- AUDIO-004 の追加・部分置換: [ADR-0069](0069-versioned-stateless-audio.md)。audio track の Generator / effect Property / crossfade と明示 resample_v1 を追加し、movie profile 1/2 の実行意味は維持する。
 - 日付: 2026-10-04
 - 対象: NLE-001
 

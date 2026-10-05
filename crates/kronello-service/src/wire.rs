@@ -25,11 +25,17 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                 #[derive(Deserialize)]
                 #[serde(deny_unknown_fields)]
                 struct Mov {
+                    #[serde(default)]
+                    audio: kronello_audio::AudioSourceMode,
+                    #[serde(default = "crate::jobs::movie_profile_v1")]
+                    profile_version: u32,
                     clips: Vec<crate::JobAudioClip>,
                     background: [f32; 3],
                 }
                 let mov: Mov = payload(&fields)?;
                 Ok(Self::ProResMov {
+                    audio: mov.audio,
+                    profile_version: mov.profile_version,
                     clips: mov.clips,
                     background: mov.background,
                 })
@@ -87,6 +93,7 @@ impl<'de> Deserialize<'de> for Request {
             "instance.retime" => payload(&fields).map(Self::InstanceRetime),
             "template_instance.retime" => payload(&fields).map(Self::TemplateInstanceRetime),
 
+            "render.export" => payload(&fields).map(Self::RenderExport),
             "render.submit" => payload(&fields).map(Self::RenderSubmit),
             "job.get" => payload(&fields).map(Self::JobGet),
             "job.list" => payload(&fields).map(Self::JobList),
@@ -100,6 +107,8 @@ impl<'de> Deserialize<'de> for Request {
             "template.set_input" => payload(&fields).map(Self::TemplateSetInput),
             "asset.relink" => payload(&fields).map(Self::AssetRelink),
             "project.collect" => payload(&fields).map(Self::ProjectCollect),
+            "project.create_plan" => payload(&fields).map(Self::ProjectCreatePlan),
+            "project.import_plan" => payload(&fields).map(Self::ProjectImportPlan),
             "project.create" => payload(&fields).map(Self::ProjectCreate),
             "project.import" => payload(&fields).map(Self::ProjectImport),
             "project.export" => payload(&fields).map(Self::ProjectExport),
@@ -125,11 +134,13 @@ impl<'de> Deserialize<'de> for ResultData {
         let tag: String = take(&mut fields, "kind")?;
         let result = match tag.as_str() {
             "timeline" => Self::Timeline(take(&mut fields, "value")?),
+            "movie" => Self::Movie(take(&mut fields, "value")?),
             "job" => Self::Job(take(&mut fields, "value")?),
             "jobs" => Self::Jobs(take(&mut fields, "value")?),
             "pruned" => Self::Pruned(take(&mut fields, "value")?),
             "collected" => Self::Collected(take(&mut fields, "value")?),
             "project" => Self::Project(take(&mut fields, "value")?),
+            "project_plan" => Self::ProjectPlan(take(&mut fields, "value")?),
             "export" => Self::Export(take(&mut fields, "value")?),
             "frame" => Self::Frame(take(&mut fields, "value")?),
             "sequence" => Self::Sequence(take(&mut fields, "value")?),

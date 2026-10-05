@@ -23,6 +23,7 @@ fn input(text: &str, width: f64) -> ResolvedText {
             vec![]
         } else {
             vec![ResolvedTextStyle {
+                gradient: None,
                 range: TextRange {
                     start: 0,
                     end: text.len(),
@@ -124,6 +125,45 @@ fn fixed_font_identity_matches_manifest_and_font_names() {
         .find(|e| e["id"] == "noto-sans-cjk-jp")
         .unwrap();
     assert_eq!(font().1.sha256, entry["sha256"]);
+}
+
+#[test]
+fn vec004_gradient_paint_preserves_combining_ivs_and_shaping_clusters() {
+    let mut text = input("か\u{3099}葛\u{e0100}office", 640.0);
+    let plain = run(&text).unwrap();
+    text.styles[0].gradient = Some(Box::new(ResolvedGradient {
+        options: GradientOptions {
+            interpolation: GradientInterpolation::SrgbStraight,
+            ..Default::default()
+        },
+        geometry: GradientGeometry::Conic {
+            center: [20.0; 2],
+            start_angle: 0.0,
+            sweep_angle: 360.0,
+        },
+        stops: vec![
+            ResolvedGradientStop {
+                color: Color::from_srgb8([255, 0, 0], None),
+                offset: 0.0,
+            },
+            ResolvedGradientStop {
+                color: Color::from_srgb8([0, 0, 255], None),
+                offset: 1.0,
+            },
+        ],
+    }));
+    let mut painted = run(&text).unwrap();
+    assert_mapping(&text.text, &painted);
+    assert!(
+        painted
+            .glyphs
+            .iter()
+            .all(|g| g.gradient == text.styles[0].gradient)
+    );
+    for g in &mut painted.glyphs {
+        g.gradient = None;
+    }
+    assert_eq!(painted, plain);
 }
 #[test]
 fn combining_dakuten_and_ivs_preserve_original_source_and_glyph_selection() {

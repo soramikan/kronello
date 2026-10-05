@@ -4,7 +4,8 @@ import SwiftUI
 public struct KRSegment: Identifiable, Sendable {
     public var id: String
     public var label: String
-    public init(_ id: String, _ label: String) { self.id = id; self.label = label }
+    public var unavailableReason: String?
+    public init(_ id: String, _ label: String, unavailableReason: String? = nil) { self.id = id; self.label = label; self.unavailableReason = unavailableReason }
 }
 
 /// An always-visible group of mutually exclusive choices.
@@ -23,6 +24,7 @@ public struct KRSegmentedControl: View {
                 Button { selection = segment.id; onSelect(segment.id) } label: {
                     Text(segment.label).krText(KRType.label).padding(.horizontal, KRSpace.space2).frame(height: 18)
                 }.buttonStyle(KRSegmentStyle(selected: selection == segment.id, appearance: appearance))
+                    .disabled(segment.unavailableReason != nil).help(segment.unavailableReason ?? segment.label)
                     .accessibilityAddTraits(selection == segment.id ? .isSelected : [])
             }
         }.padding(2).background(p.surface200, in: RoundedRectangle(cornerRadius: KRRadius.radiusMd))

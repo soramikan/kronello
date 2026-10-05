@@ -1,16 +1,22 @@
 //! Machine transport adapter. All document and execution policy lives in service.
 use std::io::{Read, Write};
+mod events;
 
 use kronello_service::{BackendSelection, Request, Response, Service, ServiceError};
 
-const USAGE: &str = "kronello [--backend gpu|cpu-reference] [--request-json JSON] [project create|import|export|info|collect | asset relink | render frame|sequence|submit|explain | node explain | job get|list|cancel|prune | edit plan|apply|undo | history list | scene query | property sample | capabilities get | sequence create|query | clip place|trim|stretch | instance retime | template_instance retime | template define|instantiate|set_input|set_duration|preview|migration_plan] | worker --job <id>; otherwise read a tagged service Request from stdin";
-fn run() -> Result<Response, ServiceError> {
+const USAGE: &str = "kronello [--events ndjson] [--backend gpu|cpu-reference] [--request-json JSON] [project create|create_plan|import|import_plan|export|info|collect | asset relink | render frame|sequence|export|submit|explain | node explain | job get|list|cancel|prune | edit plan|apply|undo | history list | scene query | property sample | capabilities get | sequence create|query | clip place|trim|stretch | instance retime | template_instance retime | template define|instantiate|set_input|set_duration|preview|migration_plan] | worker --job <id>; otherwise read a tagged service Request from stdin";
+fn run(stream: Option<&events::Stream>) -> Result<Response, ServiceError> {
     let mut selection = BackendSelection::Gpu;
     let mut literal = None;
     let mut command = Vec::new();
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
+            "--events" => {
+                if args.next().as_deref() != Some("ndjson") {
+                    return Err(ServiceError::invalid("--events requires ndjson"));
+                }
+            }
             "--backend" => {
                 selection = match args.next().as_deref() {
                     Some("gpu") => BackendSelection::Gpu,
@@ -42,13 +48,17 @@ fn run() -> Result<Response, ServiceError> {
         .as_slice()
     {
         [] => None,
-        ["project", verb @ ("create" | "import" | "export" | "info")] => {
-            Some(format!("project.{verb}"))
-        }
+        [
+            "project",
+            verb @ ("create" | "create_plan" | "import" | "import_plan" | "export" | "info"),
+        ] => Some(format!("project.{verb}")),
         ["sequence", verb @ ("create" | "query")] => Some(format!("sequence.{verb}")),
         ["clip", verb @ ("place" | "trim" | "stretch")] => Some(format!("clip.{verb}")),
         [kind @ ("instance" | "template_instance"), "retime"] => Some(format!("{kind}.retime")),
-        ["render", verb @ ("frame" | "sequence" | "submit")] => Some(format!("render.{verb}")),
+        [
+            "render",
+            verb @ ("frame" | "sequence" | "export" | "submit"),
+        ] => Some(format!("render.{verb}")),
         ["edit", verb @ ("plan" | "apply" | "undo")] => Some(format!("edit.{verb}")),
         [
             "template",
@@ -68,6 +78,8 @@ fn run() -> Result<Response, ServiceError> {
     };
     let json = if let Some(json) = literal {
         json
+    } else if let Some(stream) = stream {
+        stream.read_request()?
     } else {
         let mut json = String::new();
         std::io::stdin()
@@ -94,16 +106,53 @@ fn run() -> Result<Response, ServiceError> {
     } else {
         serde_json::from_str(&json)?
     };
-    Ok(Service::new(selection).execute(request))
+    Ok(if let Some(stream) = stream {
+        Service::new(selection).execute_json_with_control(&serde_json::to_string(&request)?, stream)
+    } else {
+        Service::new(selection).execute(request)
+    })
 }
 fn main() -> std::process::ExitCode {
     if let Some(exit) = kronello_service::worker_entry() {
         return exit;
     }
-    let response = run().unwrap_or_else(|error| Response::Error { error });
+    // Option values are data, including malformed JSON equal to a flag name.
+    let mut args = std::env::args().skip(1);
+    let mut wants_events = false;
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--backend" | "--request-json" => {
+                args.next();
+            }
+            "--events" => {
+                wants_events = true;
+                break;
+            }
+            _ => {}
+        }
+    }
+    let stream = if wants_events {
+        match events::Stream::start() {
+            Ok(stream) => Some(stream),
+            Err(error) => {
+                eprintln!("{error}");
+                return std::process::ExitCode::FAILURE;
+            }
+        }
+    } else {
+        None
+    };
+    let response = run(stream.as_ref()).unwrap_or_else(|error| Response::Error { error });
     let failed = matches!(&response, Response::Error { .. });
     if let Response::Error { error } = &response {
         eprintln!("{error}");
+    }
+    if let Some(stream) = stream {
+        return if stream.finish(response) {
+            std::process::ExitCode::FAILURE
+        } else {
+            std::process::ExitCode::SUCCESS
+        };
     }
     let mut stdout = std::io::stdout().lock();
     if let Err(error) = serde_json::to_writer(&mut stdout, &response)

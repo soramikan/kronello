@@ -122,6 +122,9 @@ pub fn lower_sequence(project: &Project, id: SequenceId) -> Result<Composition, 
             };
             end = end.max(clip.timeline_range.end());
             nodes.push(SceneNode {
+                tags: Default::default(),
+                name: None,
+                enabled: true,
                 id: NodeId::from_uuid(clip.id.as_uuid()),
                 kind: if let SourceRef::Composition { composition } = clip.source_ref {
                     NodeKind::CompositionInstance(CompositionInstance {

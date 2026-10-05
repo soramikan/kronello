@@ -7,11 +7,16 @@ mod jobs;
 pub use jobs::*;
 mod api;
 mod edit;
+mod events;
 mod inspect;
+mod paging;
 mod query;
 pub use api::*;
+pub use events::*;
 pub use inspect::*;
 pub use query::*;
+mod project;
+pub use project::{CreatePlanRequest, ImportPlanRequest, ProjectChangeKind, ProjectChangePlan};
 mod wire;
 pub use edit::{
     EditApplyRequest, EditCommand, EditPlan, HistoryEntry, HistoryRequest, HistoryResult,
@@ -27,6 +32,8 @@ pub use template::{
 };
 mod media;
 pub use media::{CollectRequest, RelinkRequest};
+mod control;
+pub use control::ExecutionControl;
 
 use std::path::{Path, PathBuf};
 
@@ -34,7 +41,8 @@ use kronello_gpu::{GpuContext, GpuError, render_adapter::CpuReferenceBackend};
 use kronello_model::{CompositionId, FontRef, Project};
 use kronello_render::{
     FrameMetadata, FrameRequest, OutputRegion, RenderBackend, RenderError, RenderProfile,
-    RenderSnapshot, SequenceMetadata, SequenceRequest, render_frame, render_sequence,
+    RenderSnapshot, SequenceMetadata, SequenceRequest, render_frame,
+    render_sequence_with_checkpoint,
 };
 use kronello_store::{OpenOptions, ProjectStore, StoreError};
 use kronello_text::FontData;
@@ -60,6 +68,8 @@ pub enum Request {
     #[serde(rename = "template_instance.retime")]
     TemplateInstanceRetime(TemplateInstanceRetimeRequest),
 
+    #[serde(rename = "render.export")]
+    RenderExport(RenderSubmitRequest),
     #[serde(rename = "render.submit")]
     RenderSubmit(RenderSubmitRequest),
     #[serde(rename = "job.get")]
@@ -116,16 +126,28 @@ pub enum Request {
     PropertySample(PropertySampleRequest),
     #[serde(rename = "capabilities.get")]
     CapabilitiesGet(CapabilitiesRequest),
+    #[serde(rename = "project.import_plan")]
+    ProjectImportPlan(ImportPlanRequest),
+    #[serde(rename = "project.create_plan")]
+    ProjectCreatePlan(CreatePlanRequest),
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateRequest {
     pub project: PathBuf,
     pub document: Project,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plan_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub idempotency_key: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ImportRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plan_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub idempotency_key: Option<String>,
     pub project: PathBuf,
     /// Decimal revision, independent of JSON number precision.
     pub base_revision: String,
@@ -180,6 +202,7 @@ pub struct SequenceRenderRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectInfo {
+    pub open_mode: ProjectOpenMode,
     pub project_id: String,
     pub name: String,
     pub revision: String,
@@ -210,6 +233,7 @@ pub struct FrameResult {
 )]
 pub enum ResultData {
     Timeline(SequenceQueryResult),
+    Movie(Box<kronello_media::AvExportReport>),
     Job(Box<kronello_jobs::JobRecord>),
     Jobs(JobListResult),
     Pruned(kronello_jobs::PruneResult),
@@ -228,6 +252,7 @@ pub enum ResultData {
     RenderExplanation(Box<RenderExplainResult>),
     Samples(PropertySampleResult),
     Capabilities(Box<CapabilitiesResult>),
+    ProjectPlan(Box<ProjectChangePlan>),
 }
 #[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
 #[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
@@ -356,6 +381,7 @@ pub struct Service<'a> {
     media_capabilities: Option<MediaCapabilities>,
     job_config: Option<kronello_jobs::JobConfig>,
     worker_executable: Option<PathBuf>,
+    read_only_inspection: bool,
 }
 impl Service<'_> {
     pub fn new(selection: BackendSelection) -> Self {
@@ -365,6 +391,7 @@ impl Service<'_> {
             media_capabilities: None,
             job_config: None,
             worker_executable: None,
+            read_only_inspection: false,
         }
     }
 }
@@ -392,15 +419,35 @@ impl<'a> Service<'a> {
             media_capabilities: None,
             job_config: None,
             worker_executable: None,
+            read_only_inspection: false,
         }
     }
     pub fn with_media_capabilities(mut self, capabilities: MediaCapabilities) -> Self {
         self.media_capabilities = Some(capabilities);
         self
     }
+    /// Snapshot-only inspection for resources/prompts. Existing command tools
+    /// retain their normal open/close, exclusive-lock and migration policy.
+    /// This policy changes only project.info and project.export, not edits.
+    pub fn with_read_only_inspection(mut self) -> Self {
+        self.read_only_inspection = true;
+        self
+    }
     pub fn execute_json(&self, json: &str) -> Response {
+        self.execute_json_with_control(json, &())
+    }
+    /// The same decoder/dispatcher with optional cooperative request control.
+    /// Cancellation never implies job.cancel or rollback of committed edits.
+    pub fn execute_json_with_control(
+        &self,
+        json: &str,
+        control: &dyn ExecutionControl,
+    ) -> Response {
         match serde_json::from_str(json) {
-            Ok(request) => self.execute(request),
+            Ok(request) => match self.dispatch_controlled(request, control) {
+                Ok(result) => Response::Success { result },
+                Err(error) => Response::Error { error },
+            },
             Err(error) => Response::Error {
                 error: error.into(),
             },
@@ -413,6 +460,19 @@ impl<'a> Service<'a> {
         }
     }
     pub fn dispatch(&self, request: Request) -> Result<ResultData, ServiceError> {
+        self.dispatch_controlled(request, &())
+    }
+    fn dispatch_controlled(
+        &self,
+        request: Request,
+        control: &dyn ExecutionControl,
+    ) -> Result<ResultData, ServiceError> {
+        if control.is_cancelled() {
+            return Err(ServiceError::new(
+                "REQUEST_CANCELLED",
+                "Request cancelled before dispatch",
+            ));
+        }
         validate_request_locators(&request)?;
         match request {
             Request::SequenceQuery(r) => nle::sequence_query(r).map(ResultData::Timeline),
@@ -477,28 +537,36 @@ impl<'a> Service<'a> {
             Request::HistoryList(r) => edit::history(r).map(ResultData::History),
             Request::AssetRelink(r) => media::relink(r).map(ResultData::Project),
             Request::ProjectCollect(r) => media::collect(r).map(ResultData::Collected),
-            Request::ProjectCreate(r) => create(r).map(ResultData::Project),
-            Request::ProjectImport(r) => {
-                let revision = parse_revision(&r.base_revision)?;
-                let json = serde_json::to_string(&r.document)?;
-                let mut store = open_existing(&r.project)?;
-                let previous = store.snapshot()?;
-                kronello_template::validate_stored_transition(&previous.document, &r.document)?;
-                store.import_json(revision, uuid::Uuid::new_v4(), &json)?;
-                let info = info(&store)?;
-                store.close()?;
-                Ok(ResultData::Project(info))
+            Request::ProjectCreatePlan(r) => {
+                project::create_plan(r).map(|p| ResultData::ProjectPlan(Box::new(p)))
             }
+            Request::ProjectImportPlan(r) => {
+                project::import_plan(r).map(|p| ResultData::ProjectPlan(Box::new(p)))
+            }
+            Request::ProjectCreate(r) => project::create(r).map(ResultData::Project),
+            Request::ProjectImport(r) => project::import(r).map(ResultData::Project),
             Request::ProjectInfo(r) => {
-                let store = open_existing(&r.project)?;
-                let info = info(&store)?;
-                store.close()?;
-                Ok(ResultData::Project(info))
+                if self.read_only_inspection {
+                    Ok(ResultData::Project(snapshot_info(
+                        read_project_snapshot(&r.project)?,
+                        ProjectOpenMode::ReadOnlySnapshot,
+                    )?))
+                } else {
+                    let store = open_existing(&r.project)?;
+                    let info = info(&store)?;
+                    store.close()?;
+                    Ok(ResultData::Project(info))
+                }
             }
             Request::ProjectExport(r) => {
-                let store = open_existing(&r.project)?;
-                let snapshot = store.snapshot()?;
-                store.close()?;
+                let snapshot = if self.read_only_inspection {
+                    read_project_snapshot(&r.project)?
+                } else {
+                    let store = open_existing(&r.project)?;
+                    let snapshot = store.snapshot()?;
+                    store.close()?;
+                    snapshot
+                };
                 Ok(ResultData::Export(Box::new(ExportResult {
                     revision: snapshot.revision.to_string(),
                     document: snapshot.document,
@@ -520,8 +588,35 @@ impl<'a> Service<'a> {
                     display: frame.pixels.display,
                 })))
             }),
+            Request::RenderExport(r) => {
+                jobs::features(&r.required_features)?;
+                self.render(&r.render.input, |snapshot, fonts, backend| {
+                    jobs::validate_movie_destination(&r.render.output_directory)?;
+                    let av = jobs::movie_snapshot(snapshot, &r.output)?;
+                    let JobOutput::ProResMov { background, .. } = r.output else {
+                        unreachable!()
+                    };
+                    let runtime = kronello_media::MediaRuntime::load()?;
+                    let report = runtime.export_av(
+                        &av,
+                        &r.render.input.project,
+                        fonts,
+                        backend,
+                        &kronello_media::AvExportRequest {
+                            output: r.render.output_directory.clone(),
+                            range: r.render.range,
+                            frame_rate: r.render.frame_rate,
+                            region: r.render.input.region,
+                            background,
+                            clipping: kronello_audio::ClippingPolicy::Reject,
+                        },
+                    )?;
+                    Ok(ResultData::Movie(Box::new(report)))
+                })
+            }
             Request::RenderSequence(r) => self.render(&r.input, |snapshot, fonts, backend| {
-                Ok(ResultData::Sequence(render_sequence(
+                let total = kronello_render::frame_samples(r.range, r.frame_rate)?.len() as u64;
+                Ok(ResultData::Sequence(render_sequence_with_checkpoint(
                     snapshot,
                     fonts,
                     backend,
@@ -531,6 +626,16 @@ impl<'a> Service<'a> {
                         region: r.input.region,
                     },
                     &r.output_directory,
+                    &mut |completed| {
+                        if control.is_cancelled() {
+                            return Err(RenderError::Backend {
+                                code: "REQUEST_CANCELLED",
+                                message: "Request cancelled at frame boundary".into(),
+                            });
+                        }
+                        control.progress(completed, total);
+                        Ok(())
+                    },
                 )?))
             }),
         }
@@ -705,8 +810,36 @@ fn open_existing(path: &Path) -> Result<ProjectStore, ServiceError> {
     }
     Ok(ProjectStore::open(path, OpenOptions::default())?)
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ProjectOpenMode {
+    Normal,
+    Safe,
+    /// Read-only inspection (ADR-0064) read a snapshot without opening a store.
+    ReadOnlySnapshot,
+}
+
 fn info(store: &ProjectStore) -> Result<ProjectInfo, ServiceError> {
-    let snapshot = store.snapshot()?;
+    let mode = if store.safe_mode() {
+        ProjectOpenMode::Safe
+    } else {
+        ProjectOpenMode::Normal
+    };
+    snapshot_info(store.snapshot()?, mode)
+}
+fn read_project_snapshot(path: &Path) -> Result<kronello_store::Snapshot, ServiceError> {
+    if !path.is_file() {
+        return Err(ServiceError::new(
+            "PROJECT_NOT_FOUND",
+            "project file does not exist",
+        ));
+    }
+    Ok(ProjectStore::read_snapshot(path)?)
+}
+fn snapshot_info(
+    snapshot: kronello_store::Snapshot,
+    open_mode: ProjectOpenMode,
+) -> Result<ProjectInfo, ServiceError> {
     let content_hash = format!(
         "{:x}",
         Sha256::digest(serde_json::to_vec(&serde_json::to_value(
@@ -714,6 +847,7 @@ fn info(store: &ProjectStore) -> Result<ProjectInfo, ServiceError> {
         )?)?)
     );
     Ok(ProjectInfo {
+        open_mode,
         project_id: snapshot.document.id.to_string(),
         name: snapshot.document.name,
         revision: snapshot.revision.to_string(),
@@ -731,51 +865,6 @@ fn info(store: &ProjectStore) -> Result<ProjectInfo, ServiceError> {
             .collect(),
     })
 }
-fn create(request: CreateRequest) -> Result<ProjectInfo, ServiceError> {
-    // Validate before creating anything. Exclusive publication prevents overwrite.
-    request
-        .document
-        .validate_storage()
-        .map_err(StoreError::from)?;
-    if request
-        .project
-        .extension()
-        .is_none_or(|ext| ext != "kronello")
-    {
-        return Err(ServiceError::invalid(
-            "project must use .kronello extension",
-        ));
-    }
-    kronello_template::validate_stored_project(&request.document)?;
-    let json = serde_json::to_string(&request.document)?;
-    let parent = request
-        .project
-        .parent()
-        .filter(|p| !p.as_os_str().is_empty())
-        .unwrap_or(Path::new("."));
-    // Publish a fully initialized, closed SQLite file. A failed import leaves
-    // no partially initialized target for another process to adopt.
-    let staging = tempfile::Builder::new()
-        .prefix(".kronello-create-")
-        .suffix(".kronello")
-        .tempfile_in(parent)?;
-    let mut store = ProjectStore::open(staging.path(), OpenOptions::default())?;
-    store.import_json(0, uuid::Uuid::new_v4(), &json)?;
-    let info = info(&store)?;
-    store.close()?;
-    staging.persist_noclobber(&request.project).map_err(|e| {
-        ServiceError::new(
-            if e.error.kind() == std::io::ErrorKind::AlreadyExists {
-                "PROJECT_EXISTS"
-            } else {
-                "IO_ERROR"
-            },
-            e.error.to_string(),
-        )
-    })?;
-    Ok(info)
-}
-
 /// Reject URI schemes at local-file boundaries, before any storage/font/output
 /// access. Material text and other opaque document strings remain inert data.
 fn local_locator(path: &Path) -> Result<(), ServiceError> {
@@ -840,12 +929,20 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
         Request::InstanceRetime(r) => local_locator(&r.project),
         Request::TemplateInstanceRetime(r) => local_locator(&r.project),
 
-        Request::RenderSubmit(r) => {
+        Request::RenderSubmit(r) | Request::RenderExport(r) => {
             local_locator(&r.render.output_directory)?;
             render_locators(&r.render.input)
         }
         Request::JobGet(_) | Request::JobCancel(_) | Request::JobList(_) | Request::JobPrune(_) => {
             Ok(())
+        }
+        Request::ProjectCreatePlan(r) => {
+            local_locator(&r.project)?;
+            document_asset_locators(&r.document)
+        }
+        Request::ProjectImportPlan(r) => {
+            local_locator(&r.project)?;
+            document_asset_locators(&r.document)
         }
         Request::ProjectCreate(r) => {
             local_locator(&r.project)?;
@@ -930,6 +1027,27 @@ fn render_locators(input: &RenderInput) -> Result<(), ServiceError> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn project_info_reports_actual_normal_and_safe_open_mode() {
+        let folder = tempfile::tempdir().unwrap();
+        for (mode, expected) in [
+            (
+                kronello_store::OpenMode::ForceNormal,
+                super::ProjectOpenMode::Normal,
+            ),
+            (
+                kronello_store::OpenMode::ForceSafe,
+                super::ProjectOpenMode::Safe,
+            ),
+        ] {
+            let path = folder.path().join(format!("{expected:?}.kronello"));
+            let store =
+                kronello_store::ProjectStore::open(&path, kronello_store::OpenOptions { mode })
+                    .unwrap();
+            assert_eq!(super::info(&store).unwrap().open_mode, expected);
+            store.close().unwrap();
+        }
+    }
     use super::*;
 
     #[test]
@@ -951,6 +1069,8 @@ mod tests {
         let mut service = Service::new(BackendSelection::default());
         service
             .dispatch(Request::ProjectCreate(CreateRequest {
+                plan_hash: None,
+                idempotency_key: None,
                 project: project.clone(),
                 document,
             }))

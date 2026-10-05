@@ -29,7 +29,7 @@ enum ComponentSheets {
          .init("separator", kind: .separator), .init("delete", "削除", icon: .trash2, shortcut: "⌫", destructive: true)]
     }
     static var all: [(String, AnyView)] {
-        controls + hierarchy + timeline + viewer + feedback + overlays + [
+        controls + hierarchy + timeline + viewer + feedback + overlays + GUIStateSheets.all + CurveEditorSheets.all + [
             ("Icons", AnyView(IconSheet())), ("Typography", AnyView(TypeSheet())), ("Palette", AnyView(PaletteSheet()))
         ]
     }
@@ -116,6 +116,8 @@ enum ComponentSheets {
                     }
                 }
                 inspector("Position", source: .expression, error: diagnostic)
+                KRInspectorSettingRow("Font") { KRPopupButton("書体", options: [.init("noto", "Noto Sans JP")], selection: .constant("noto")).frame(width: 144) }
+                KRInspectorSettingRow("Bounds") { KRSegmentedControl([.init("layout", "layout"), .init("ink", "ink"), .init("visual", "visual")], selection: .constant("layout")).fixedSize() }
             }.frame(width: 480))),
             ("Panel", AnyView(HStack(spacing: KRSpace.space4) {
                 KRPanel("Project", actions: { KRButton(icon: .plus, accessibilityLabel: "素材を追加") {} }) {

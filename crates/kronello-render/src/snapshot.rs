@@ -14,8 +14,12 @@ pub const COLOR_VERSION: &str = "gpu002-color-v1";
 pub const VECTOR_VERSION: &str = "render001-kurbo-flatten-v1";
 pub const COVERAGE_VERSION: &str = "vec003-grid4-v2";
 pub const STROKE_GEOMETRY_VERSION: &str = "vec003-centered-stroke-v1";
-pub const GRADIENT_INTERPOLATION_VERSION: &str = "vec003-linear-premultiplied-pad-v1";
+pub const GRADIENT_INTERPOLATION_VERSION: &str = "vec004-explicit-interpolation-v1";
 pub const LAYOUT_BOUNDS_VERSION: u32 = 1;
+pub const NODE_VISIBILITY_VERSION: u32 = 2;
+fn legacy_visibility_version() -> u32 {
+    1
+}
 pub const VIDEO_INPUT_VERSION: &str = "nle002-sdr-rgba8-nearest-v1";
 fn initial_video_version() -> String {
     VIDEO_INPUT_VERSION.into()
@@ -28,6 +32,8 @@ fn initial_bounds_version() -> u32 {
 #[serde(deny_unknown_fields)]
 pub struct SemanticVersions {
     pub document: u32,
+    #[serde(default = "legacy_visibility_version")]
+    pub visibility: u32,
     #[serde(default = "expression_version")]
     pub expression: u32,
     pub interpolation: u32,
@@ -58,6 +64,7 @@ impl SemanticVersions {
     pub fn current(document: u32) -> Self {
         Self {
             document,
+            visibility: NODE_VISIBILITY_VERSION,
             expression: EXPRESSION_VERSION,
             interpolation: INTERPOLATION_VERSION,
             time_map: 1,
@@ -69,8 +76,8 @@ impl SemanticVersions {
             stroke_geometry: STROKE_GEOMETRY_VERSION.into(),
             gradient_interpolation: GRADIENT_INTERPOLATION_VERSION.into(),
             effects: BTreeMap::from([
-                (GAUSSIAN_BLUR_ID.into(), EFFECT_VERSION),
-                (DROP_SHADOW_ID.into(), EFFECT_VERSION),
+                (GAUSSIAN_BLUR_ID.into(), AFFINE_EFFECT_VERSION),
+                (DROP_SHADOW_ID.into(), AFFINE_EFFECT_VERSION),
             ]),
             generators: generator_versions(),
             video_input: initial_video_version(),
@@ -305,8 +312,24 @@ impl RenderSnapshot {
         self.project
             .validate_storage()
             .map_err(|e| RenderError::InvalidInput(e.to_string()))?;
+        // Legacy visibility v1 is equivalent only when every authored node is enabled.
+        let mut supported_versions = SemanticVersions::current(self.project.semantic_version);
+        if self.semantic_versions.visibility == 1
+            && self
+                .project
+                .compositions
+                .iter()
+                .all(|c| matches!(c, DocumentObject::Known(c) if c.nodes.iter().all(|n| n.enabled)))
+        {
+            supported_versions.visibility = 1;
+        }
+        for (id, version) in &mut supported_versions.effects {
+            if self.semantic_versions.effects.get(id) == Some(&EFFECT_VERSION) {
+                *version = EFFECT_VERSION;
+            }
+        }
         if self.project.semantic_version != PROJECT_SEMANTIC_VERSION
-            || self.semantic_versions != SemanticVersions::current(self.project.semantic_version)
+            || self.semantic_versions != supported_versions
         {
             return Err(RenderError::UnsupportedFeature(
                 "snapshot semantic versions".into(),
@@ -623,6 +646,16 @@ pub fn build_scene_ir_with_cache(
             .iter()
             .map(|e| {
                 let d = e.definition()?;
+                if snapshot
+                    .semantic_versions
+                    .effects
+                    .get(&d.effect_id)
+                    .is_none_or(|v| d.version > *v)
+                {
+                    return Err(RenderError::UnsupportedFeature(
+                        "effect exceeds pinned snapshot version".into(),
+                    ));
+                }
                 d.validate(&authored.properties, &registry)?;
                 Ok(d.resolve(&values)?)
             })
@@ -657,6 +690,18 @@ pub fn build_scene_ir_with_cache(
                 let layout = cache.layout(&resolved, fonts)?;
                 crate::bounds::check_overflow(&n.key, &layout)?;
                 SceneContent::Text(layout)
+            }
+            NodeKind::Media(media) => {
+                let asset = content(&snapshot.project.assets, media.asset.as_uuid(), |a| {
+                    a.id.as_uuid()
+                })?
+                .ok_or_else(|| RenderError::UnsupportedFeature("missing media asset".into()))?;
+                if asset.kind != kronello_model::AssetKind::Audio {
+                    return Err(RenderError::UnsupportedFeature(
+                        "Media video/image drawing requires COMP-002".into(),
+                    ));
+                }
+                SceneContent::Empty
             }
             _ => SceneContent::Empty,
         };

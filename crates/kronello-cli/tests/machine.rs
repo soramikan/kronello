@@ -51,6 +51,80 @@ fn explain_subcommands_and_tagged_requests_share_read_only_diagnostics() {
 }
 
 #[test]
+fn scene_search_history_cursors_and_tags_use_shared_cli_payloads() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("api2.kronello");
+    let mut doc = document();
+    for n in doc["compositions"][0]["nodes"].as_array_mut().unwrap() {
+        n["tags"] = json!(["search"]);
+    }
+    call(
+        &["project", "create"],
+        json!({"project":path,"document":doc}),
+        true,
+    );
+    let payload = json!({"project":path,"composition":doc["compositions"][0]["id"],"search":{"tags":["search"],"kinds":["shape","text"],"range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"1"}}},"limit":1});
+    let first = call(&["scene", "query"], payload.clone(), true);
+    let mut tagged = payload.clone();
+    tagged["operation"] = json!("scene.query");
+    jsonschema::validator_for(&kronello_service::api_json_schema())
+        .unwrap()
+        .validate(&tagged)
+        .unwrap();
+    assert_eq!(call(&[], tagged, true), first);
+    let mut second = payload.clone();
+    second["cursor"] = first["result"]["value"]["next_cursor"].clone();
+    let last = call(&["scene", "query"], second.clone(), true);
+    assert_ne!(
+        first["result"]["value"]["nodes"][0]["key"],
+        last["result"]["value"]["nodes"][0]["key"]
+    );
+    second["limit"] = json!(2);
+    assert_eq!(
+        call(&["scene", "query"], second, false)["error"]["code"],
+        "CURSOR_MISMATCH"
+    );
+    let commands = json!([{"node_tags_set":{"composition":doc["compositions"][0]["id"],"node":doc["compositions"][0]["nodes"][0]["id"],"tags":["new"]}}]);
+    let plan = call(
+        &["edit", "plan"],
+        json!({"project":path,"base_revision":"1","commands":commands}),
+        true,
+    );
+    let applied = call(
+        &["edit", "apply"],
+        json!({"project":path,"base_revision":"1","commands":commands,"plan_hash":plan["result"]["value"]["plan_hash"],"session_id":"96607679-eefd-407a-a3a8-59943f2bd82f","idempotency_key":"tags"}),
+        true,
+    );
+    let history = call(
+        &["history", "list"],
+        json!({"project":path,"limit":1}),
+        true,
+    );
+    let next = call(
+        &["history", "list"],
+        json!({"project":path,"limit":1,"cursor":history["result"]["value"]["next_cursor"]}),
+        true,
+    );
+    assert_eq!(
+        next["result"]["value"]["events"][0]["event"]["id"],
+        applied["result"]["value"]["id"]
+    );
+    assert_eq!(
+        next["result"]["value"]["revision"],
+        history["result"]["value"]["revision"]
+    );
+    call(
+        &["edit", "undo"],
+        json!({"project":path,"base_revision":"2","session_id":"96607679-eefd-407a-a3a8-59943f2bd82f","idempotency_key":"undo-tags","event_id":applied["result"]["value"]["id"]}),
+        true,
+    );
+    assert_eq!(
+        call(&["scene", "query"], payload, true)["result"]["value"]["nodes"][0]["tags"],
+        json!(["search"])
+    );
+}
+
+#[test]
 fn expression_commands_and_samples_use_the_shared_cli_api() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("expression.kronello");
@@ -663,12 +737,13 @@ fn concurrent_cli_same_key_returns_one_event_and_different_keys_conflict() {
 fn structured_api_queries_and_empty_capabilities_payload_from_real_cli() {
     let capabilities = call(&["capabilities", "get"], json!({}), true);
     assert_eq!(capabilities["result"]["kind"], "capabilities");
+    // API-002 adds parameters and an EditCommand, adding no operation.
     assert_eq!(
         capabilities["result"]["value"]["commands"]
             .as_array()
             .unwrap()
             .len(),
-        35
+        38
     );
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("query.kronello");
@@ -1080,4 +1155,204 @@ fn nle2_generator_query_and_move_use_shared_cli_plan_apply() {
         true,
     );
     assert_eq!(restored["result"]["value"]["sequence"], doc["sequences"][0]);
+}
+
+#[test]
+fn project_plans_and_durable_retries_from_real_cli() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("planned.kronello");
+    let alias = dir.path().join(".").join("planned.kronello");
+    let doc = document();
+    let plan = call(
+        &["project", "create_plan"],
+        json!({"project":alias,"document":doc}),
+        true,
+    );
+    assert!(!path.exists());
+    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+    assert_eq!(plan["result"]["kind"], "project_plan");
+    assert_eq!(plan["result"]["value"]["expected_absent"], true);
+    assert_eq!(
+        plan,
+        call(
+            &[],
+            json!({"operation":"project.create_plan","project":path,"document":doc}),
+            true
+        )
+    );
+    let mut create = json!({"project":path,"document":doc,"idempotency_key":"create","plan_hash":plan["result"]["value"]["plan_hash"]});
+    let mut wrong = create.clone();
+    wrong["plan_hash"] = json!("wrong");
+    assert_eq!(
+        call(&["project", "create"], wrong, false)["error"]["code"],
+        "PLAN_HASH_MISMATCH"
+    );
+    assert!(!path.exists());
+    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+    let original = call(&["project", "create"], create.clone(), true);
+    assert_eq!(original["result"]["value"]["revision"], "1");
+    create["project"] = json!(alias);
+    assert_eq!(call(&["project", "create"], create.clone(), true), original);
+    assert_eq!(
+        call(
+            &["project", "create"],
+            json!({"project":path,"document":doc,"idempotency_key":"unrelated"}),
+            false
+        )["error"]["code"],
+        "PROJECT_EXISTS"
+    );
+    let mut changed = doc.clone();
+    changed["name"] = json!("Imported");
+    let planned_import = call(
+        &["project", "import_plan"],
+        json!({"project":path,"base_revision":"1","document":changed}),
+        true,
+    );
+    assert_eq!(planned_import["result"]["value"]["expected_absent"], false);
+    let import = json!({"project":path,"base_revision":"01","document":changed,"idempotency_key":"import","plan_hash":planned_import["result"]["value"]["plan_hash"]});
+    let mut wrong = import.clone();
+    wrong["document"]["name"] = json!("Unplanned");
+    assert_eq!(
+        call(&["project", "import"], wrong, false)["error"]["code"],
+        "PLAN_HASH_MISMATCH"
+    );
+    let imported = call(&["project", "import"], import.clone(), true);
+    assert_eq!(imported["result"]["value"]["revision"], "2");
+    call(
+        &["project", "import"],
+        json!({"project":path,"base_revision":"2","document":doc}),
+        true,
+    );
+    let bytes = std::fs::read(&path).unwrap();
+    assert_eq!(call(&["project", "create"], create.clone(), true), original);
+    assert_eq!(call(&["project", "import"], import.clone(), true), imported);
+    assert_eq!(std::fs::read(&path).unwrap(), bytes);
+    assert_eq!(
+        call(&["project", "info"], json!({"project":path}), true)["result"]["value"]["revision"],
+        "3"
+    );
+    for (command, mut request) in [("create", create), ("import", import.clone())] {
+        request["document"]["name"] = json!("Changed payload");
+        assert_eq!(
+            call(&["project", command], request, false)["error"]["code"],
+            "IDEMPOTENCY_KEY_REUSED"
+        );
+    }
+    let mut stale = import;
+    stale["idempotency_key"] = json!("fresh-key");
+    assert_eq!(
+        call(&["project", "import"], stale, false)["error"]["code"],
+        "REVISION_CONFLICT"
+    );
+    assert_eq!(
+        call(
+            &["project", "import_plan"],
+            json!({"project":path,"base_revision":"1","document":doc}),
+            false
+        )["error"]["code"],
+        "REVISION_CONFLICT"
+    );
+    assert!(std::fs::read_dir(dir.path()).unwrap().all(|e| {
+        !e.unwrap()
+            .file_name()
+            .to_string_lossy()
+            .starts_with(".kronello-create-")
+    }));
+}
+
+#[test]
+fn concurrent_create_publication_and_import_receipts_from_real_cli() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("race.kronello");
+    let doc = document();
+    let planned = call(
+        &["project", "create_plan"],
+        json!({"project":path,"document":doc}),
+        true,
+    );
+    let race = |operation: &str, requests: Vec<Value>| {
+        // Both processes are running and blocked on stdin before either receives
+        // EOF. This exercises publication / SQLite locks across real processes.
+        let mut children: Vec<_> = requests
+            .iter()
+            .map(|_| {
+                Command::new(env!("CARGO_BIN_EXE_kronello"))
+                    .args(["project", operation])
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .spawn()
+                    .unwrap()
+            })
+            .collect();
+        let mut inputs: Vec<_> = children
+            .iter_mut()
+            .map(|c| c.stdin.take().unwrap())
+            .collect();
+        for (input, request) in inputs.iter_mut().zip(&requests) {
+            input.write_all(request.to_string().as_bytes()).unwrap();
+        }
+        drop(inputs);
+        children
+            .into_iter()
+            .map(|c| {
+                let output = c.wait_with_output().unwrap();
+                let response: Value = serde_json::from_slice(&output.stdout).unwrap();
+                let _: Response = serde_json::from_slice(&output.stdout).unwrap();
+                assert_eq!(
+                    output.status.success(),
+                    response["status"] == "success",
+                    "{response}"
+                );
+                response
+            })
+            .collect::<Vec<_>>()
+    };
+    let results = race("create", (0..2).map(|i| json!({"project":path,"document":doc,"idempotency_key":format!("create-{i}"),"plan_hash":planned["result"]["value"]["plan_hash"]})).collect());
+    assert_eq!(
+        results.iter().filter(|r| r["status"] == "success").count(),
+        1,
+        "{results:?}"
+    );
+    assert_eq!(
+        results.iter().find(|r| r["status"] == "error").unwrap()["error"]["code"],
+        "PROJECT_EXISTS"
+    );
+    assert!(std::fs::read_dir(dir.path()).unwrap().all(|e| {
+        !e.unwrap()
+            .file_name()
+            .to_string_lossy()
+            .starts_with(".kronello-create-")
+    }));
+    let mut updated = doc.clone();
+    updated["name"] = json!("Concurrent import");
+    let plan = call(
+        &["project", "import_plan"],
+        json!({"project":path,"base_revision":"1","document":updated}),
+        true,
+    );
+    let request = json!({"project":path,"base_revision":"1","document":updated,"idempotency_key":"same-import","plan_hash":plan["result"]["value"]["plan_hash"]});
+    let results = race("import", vec![request.clone(), request]);
+    assert_eq!(results[0]["status"], "success", "{results:?}");
+    assert_eq!(results[0], results[1]);
+    let history = call(&["history", "list"], json!({"project":path}), true);
+    assert_eq!(history["result"]["value"]["revision"], "2");
+    assert_eq!(
+        history["result"]["value"]["events"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    let arbitrary = dir.path().join("arbitrary.kronello");
+    std::fs::write(&arbitrary, b"not SQLite").unwrap();
+    assert_eq!(
+        call(
+            &["project", "create"],
+            json!({"project":arbitrary,"document":doc,"idempotency_key":"key"}),
+            false
+        )["error"]["code"],
+        "PROJECT_EXISTS"
+    );
+    assert_eq!(std::fs::read(arbitrary).unwrap(), b"not SQLite");
 }

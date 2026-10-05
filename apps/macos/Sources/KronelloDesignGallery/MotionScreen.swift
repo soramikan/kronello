@@ -3,6 +3,7 @@ import SwiftUI
 
 /// Static, explicitly illustrative data assembled with the public component library.
 struct MotionScreen: View {
+    var curveEditor = false
     @Environment(\.krPalette) var p
     var body: some View {
         VStack(spacing: 0) {
@@ -12,7 +13,7 @@ struct MotionScreen: View {
                 viewer
                 inspector.frame(width: 304)
             }.frame(height: 488)
-            dopeSheet.frame(height: 344)
+            Group { if curveEditor { curveSheet } else { dopeSheet } }.frame(height: 344)
             KRStatusBar(revision: "rev 131", externalChange: "MCP の変更を読み込みました（rev 130 → 131）", job: .init("書き出し 42%", progress: 0.42))
         }.frame(width: 1440, height: 900).background(p.surface100).foregroundStyle(p.ink)
     }
@@ -88,12 +89,12 @@ struct MotionScreen: View {
                 KRInspectorRow("Rotation", source: .constant) { field(0, unit: "°") }
                 KRInspectorRow("Opacity", source: .curve, previous: {}, next: {}) { field(100, unit: "%") }
                 heading("Text")
-                KRPopoverRow("書体") { KRPopupButton("書体", options: [.init("noto", "Noto Sans JP")], selection: .constant("noto")).frame(width: 144) }.padding(.horizontal, KRSpace.space3)
-                KRPopoverRow("太さ") { KRPopupButton("太さ", options: [.init("600", "Semibold")], selection: .constant("600")).frame(width: 144) }.padding(.horizontal, KRSpace.space3)
+                KRInspectorSettingRow("Font") { KRPopupButton("書体", options: [.init("noto", "Noto Sans JP")], selection: .constant("noto")).frame(width: 144) }
+                KRInspectorSettingRow("Weight") { KRPopupButton("太さ", options: [.init("600", "Semibold")], selection: .constant("600")).frame(width: 144) }
                 KRInspectorRow("Size") { field(64, unit: "px") }
                 heading("Layout")
                 KRInspectorRow("Wrap width") { field(1200, unit: "px") }
-                KRPopoverRow("Bounds") { KRSegmentedControl([.init("layout", "layout"), .init("ink", "ink"), .init("visual", "visual")], selection: .constant("layout")) }.padding(.horizontal, KRSpace.space3)
+                KRInspectorSettingRow("Bounds") { KRSegmentedControl([.init("layout", "layout"), .init("ink", "ink"), .init("visual", "visual")], selection: .constant("layout")).fixedSize() }
                 Spacer(minLength: 0)
             }
         }
@@ -104,16 +105,42 @@ struct MotionScreen: View {
     func field(_ value: Double, unit: String, width: CGFloat = 88) -> some View {
         KRNumberField(value: .constant(value), unit: unit, accessibilityLabel: "値", onCommit: { _, _ in }).frame(width: width)
     }
+    var curveSheet: some View {
+        KRPanel(header: {
+            HStack(spacing: KRSpace.space3) {
+                KRSegmentedControl([.init("dope", "Dope sheet"), .init("curve", "Curve editor")], selection: .constant("curve"))
+                Text("00:00:02:12").krText(KRType.timecode).foregroundStyle(p.accentInk)
+                KRPopupButton("補間", options: [.init("cubic", "Cubic")], selection: .constant("cubic")).frame(width: 96)
+            }.padding(.leading, KRSpace.space3)
+        }, actions: {
+            KRPopupButton("時間軸の拡大", options: [.init("1", "100%")], selection: .constant("1")).frame(width: 96)
+            KRButton(icon: .magnet, accessibilityLabel: "キーフレームにスナップ", pressed: true) {}
+        }) {
+            HStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("チャンネル").krText(KRType.heading).padding(KRSpace.space3)
+                    Text("見出し").krText(KRType.label).padding(.leading, KRSpace.space2).frame(height: KRSize.rowHeight)
+                    KRButton("Position", icon: .chevronDown, variant: .plain) {}.padding(.leading, KRSpace.space3)
+                    ForEach(["X", "Y"], id: \.self) { channel in
+                        HStack { Text(channel).krText(KRType.label); Text(channel == "X" ? "100.0 px" : "90.0 px").krText(KRType.ruler); Spacer(); KRButton(icon: .eye, accessibilityLabel: channel + " の表示") {} }
+                            .padding(.horizontal, KRSpace.space4).frame(height: KRSize.rowHeight).background(channel == "X" ? p.selectionBg : .clear)
+                    }
+                    Spacer()
+                }.frame(width: 216).overlay(alignment: .trailing) { p.line.frame(width: 1) }
+                CurveEditorSheets.demo
+            }
+        }
+    }
     var dopeSheet: some View {
         KRPanel(header: {
             HStack(spacing: KRSpace.space3) {
                 KRSegmentedControl([.init("dope", "Dope sheet"), .init("curve", "Curve editor")], selection: .constant("dope"))
                 Text("00:00:01:21").krText(KRType.timecode).foregroundStyle(p.accentInk)
+                KRPopupButton("補間", options: [.init("cubic", "Cubic")], selection: .constant("cubic")).frame(width: 96)
             }.padding(.leading, KRSpace.space3)
         }, actions: {
             KRButton(icon: .magnet, accessibilityLabel: "キーフレームにスナップ", pressed: true) {}
-            KRButton(icon: .zoomIn, accessibilityLabel: "時間軸を拡大") {}
-            KRButton(icon: .ellipsis, accessibilityLabel: "Dope sheet メニュー") {}
+            KRPopupButton("時間軸の拡大", options: [.init("1", "100%")], selection: .constant("1")).frame(width: 96)
         }) {
             HStack(alignment: .top, spacing: 0) {
                 VStack(spacing: 0) {
@@ -136,7 +163,7 @@ struct MotionScreen: View {
                     Spacer(minLength: 0)
                 }.frame(width: 376).overlay(alignment: .trailing) { p.line.frame(width: 1) }
                 VStack(spacing: 0) {
-                    KRRuler((0..<41).map { .init("t\($0)", x: CGFloat($0) * 24, label: $0 % 4 == 0 ? "\($0 / 4)s" : nil) }).padding(.vertical, 2)
+                    GeometryReader { proxy in KRRuler((0...10).map { .init("t\($0)", x: KRSpace.space2 + Double($0) / 10 * max(1, proxy.size.width - KRSpace.space2 * 2), label: $0 == 10 ? nil : "\($0)s") }) }.frame(height: KRSize.rowHeight)
                     ForEach(0..<7) { row in
                         GeometryReader { geometry in
                             HStack(spacing: 0) {

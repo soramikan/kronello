@@ -143,6 +143,11 @@ impl Project {
         }
         let mut ids = std::collections::BTreeSet::from([self.id]);
         for object in &self.compositions {
+            if let DocumentObject::Known(c) = object
+                && c.nodes.iter().any(|n| !crate::valid_node_tags(&n.tags))
+            {
+                return Err(ProjectError::InvalidDocument("invalid node tags".into()));
+            }
             let id = match object {
                 DocumentObject::Known(value) => value.id.as_uuid(),
                 DocumentObject::Opaque(value) => value.id,
@@ -410,7 +415,7 @@ impl<'de> Deserialize<'de> for Project {
         })
     }
 }
-fn take_field<T: DeserializeOwned, E: serde::de::Error>(
+pub(crate) fn take_field<T: DeserializeOwned, E: serde::de::Error>(
     fields: &mut BTreeMap<String, Value>,
     name: &'static str,
 ) -> Result<T, E> {
@@ -420,7 +425,7 @@ fn take_field<T: DeserializeOwned, E: serde::de::Error>(
     serde_json::from_str(&value.to_string()).map_err(E::custom)
 }
 
-fn unique_fields<'de, D: Deserializer<'de>>(
+pub(crate) fn unique_fields<'de, D: Deserializer<'de>>(
     deserializer: D,
 ) -> Result<BTreeMap<String, Value>, D::Error> {
     struct FieldsVisitor;

@@ -29,6 +29,10 @@ pub const FILL_COLOR_ID: DescriptorId =
 pub const STROKE_WIDTH_ID: DescriptorId =
     DescriptorId::from_uuid(Uuid::from_u128(0x98c01340_51f5_4b72_a039_722ba5b3a3b0));
 
+/// Fixed identity for nonnegative linear audio volume.
+pub const AUDIO_VOLUME_ID: DescriptorId =
+    DescriptorId::from_uuid(Uuid::from_u128(0xe9cf4a80_2b64_4b8e_9e29_dfe6bc119a63));
+
 pub(crate) fn registry() -> SchemaRegistry {
     let zero = FiniteF64::new(0.0).expect("finite built-in zero");
     let one = FiniteF64::new(1.0).expect("finite built-in one");
@@ -110,8 +114,28 @@ pub(crate) fn registry() -> SchemaRegistry {
         max: None,
     }));
 
+    let mut volume = definition(
+        AUDIO_VOLUME_ID,
+        "kronello.audio.volume",
+        "Volume",
+        Unit::Dimensionless,
+        Value::Scalar(one),
+    );
+    volume.range = Some(ValueRange::Scalar(NumericRange {
+        min: Some(NumericBound {
+            value: zero,
+            inclusive: true,
+        }),
+        max: Some(NumericBound {
+            value: FiniteF64::new(f64::from(f32::MAX)).expect("finite gain limit"),
+            inclusive: true,
+        }),
+    }));
+    volume.capabilities.expressions = false;
+    volume.capabilities.modifiers = false;
     let mut registry = SchemaRegistry::new();
     for definition in [
+        volume,
         position,
         anchor,
         scale,

@@ -25,6 +25,8 @@ fn setup(document: Project) -> (tempfile::TempDir, PathBuf) {
     let project = dir.path().join("api.kronello");
     service()
         .dispatch(Request::ProjectCreate(CreateRequest {
+            plan_hash: None,
+            idempotency_key: None,
             project: project.clone(),
             document,
         }))
@@ -46,6 +48,9 @@ fn invalid(json: Json) {
 fn scene(path: &Path, composition: CompositionId, expand_instances: bool) -> SceneQueryResult {
     let ResultData::Scene(r) = service()
         .dispatch(Request::SceneQuery(SceneQueryRequest {
+            search: Default::default(),
+            limit: None,
+            cursor: None,
             evaluation: None,
             project: path.into(),
             composition,
@@ -80,6 +85,9 @@ fn scene_tree_preserves_order_parents_ranges_and_instance_identity() {
         let id = NodeId::new();
         root.root_nodes.push(id);
         root.nodes.push(SceneNode {
+            tags: Default::default(),
+            name: None,
+            enabled: true,
             id,
             kind: NodeKind::CompositionInstance(CompositionInstance {
                 id: CompositionInstanceId::new(),
@@ -116,6 +124,20 @@ fn scene_tree_preserves_order_parents_ranges_and_instance_identity() {
     assert_eq!(a.children, vec![text.key.clone()]);
     assert!(matches!(a.kind, NodeKind::Shape { .. }));
     assert_eq!(expanded.revision, "1");
+    // API-002 pages keep repeated definitions distinct by complete runtime key.
+    let mut request = json!({"operation":"scene.query","project":path,"composition":root_id,
+        "expand_instances":true,"limit":1,"search":{"kinds":["shape"]}});
+    let first = serde_json::to_value(service().execute_json(&request.to_string())).unwrap();
+    request["cursor"] = first["result"]["value"]["next_cursor"].clone();
+    let second = serde_json::to_value(service().execute_json(&request.to_string())).unwrap();
+    assert_eq!(
+        first["result"]["value"]["nodes"][0]["key"]["node"],
+        second["result"]["value"]["nodes"][0]["key"]["node"]
+    );
+    assert_ne!(
+        first["result"]["value"]["nodes"][0]["key"]["instance_path"],
+        second["result"]["value"]["nodes"][0]["key"]["instance_path"]
+    );
     assert!(dir.path().is_dir());
 }
 
@@ -204,7 +226,8 @@ fn capabilities_registry_media_extension_without_device_initialization() {
     ) else {
         panic!()
     };
-    assert_eq!(c.commands.len(), 35);
+    // API-002 extends existing payloads and EditCommand; no new operation.
+    assert_eq!(c.commands.len(), 38);
     assert_eq!(c.api_schema_version, 1);
     assert_eq!(c.semantic_versions.document, PROJECT_SEMANTIC_VERSION);
     let media = c.media.unwrap();
@@ -217,7 +240,11 @@ fn capabilities_registry_media_extension_without_device_initialization() {
     assert!(media.substituted && media.distribution_eligible && !media.development_only);
     assert_eq!(
         c.effects,
-        ["kronello.gaussian_blur", "kronello.drop_shadow"]
+        [
+            "kronello.gaussian_blur",
+            "kronello.drop_shadow",
+            "kronello.audio.gain"
+        ]
     );
     assert!(c.backends.contains(&"cpu_reference_float32".into()));
     let mutating: Vec<_> = c
@@ -482,6 +509,7 @@ fn history_pages_sessions_changed_keys_and_undo_outside_page() {
     let get = |since: &str, limit, filter| {
         let ResultData::History(h) = service()
             .dispatch(Request::HistoryList(HistoryRequest {
+                cursor: None,
                 project: path.clone(),
                 since_revision: since.into(),
                 limit,
@@ -546,6 +574,8 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
     let sequence = json!({"id":Uuid::new_v4(), "extent":{"width":64.0,"height":32.0}, "frame_rate":{"num":"24","den":"1"}, "audio_rate":48000, "working_space":"linear_rec709", "tracks":[]});
     let clip = json!({"id":Uuid::new_v4(), "source_ref":{"kind":"composition","composition":composition}, "timeline_range":{"start":{"num":"0","den":"1"},"end":time}, "source_in":{"num":"0","den":"1"}, "time_map":{"kind":"linear","offset":{"num":"0","den":"1"},"speed":{"num":"1","den":"1"}}, "links":[],"effects":[]});
     let requests = vec![
+        json!({"operation":"project.create_plan", "project":path, "document":p}),
+        json!({"operation":"project.import_plan", "project":path, "base_revision":"1", "document":p}),
         json!({"operation":"sequence.query", "project":path,"sequence":uuid}),
         json!({"operation":"sequence.create", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"seq","sequence":sequence}),
         json!({"operation":"clip.place", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"clip","sequence":uuid,"track":uuid,"clip":clip}),
@@ -553,6 +583,7 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
         json!({"operation":"clip.stretch", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"stretch","sequence":uuid,"clip":uuid,"range":clip["timeline_range"]}),
         json!({"operation":"instance.retime", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"retime","composition":composition,"node":uuid,"time_map":clip["time_map"]}),
         json!({"operation":"template_instance.retime", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"retime-template","instance":uuid,"duration":time}),
+        json!({"operation":"render.export", "render":{"input":input,"range":{"start":{"num":"0","den":"1"},"end":time},"frame_rate":{"num":"24","den":"1"},"output_directory":"movie.mov"},"output":{"format":"pro_res_mov","clips":[],"background":[0,0,0]}}),
         json!({"operation":"render.submit","render":{"input":input,"range":{"start":{"num":"0","den":"1"},"end":time},
             "frame_rate":{"num":"24","den":"1"},"output_directory":"frames"}}),
         json!({"operation":"job.get","job":uuid.to_string()}),
@@ -672,6 +703,9 @@ fn sampling_resolves_composition_inputs_placement_bindings_and_local_time() {
     let node = NodeId::new();
     root.root_nodes.push(node);
     root.nodes.push(SceneNode {
+        tags: Default::default(),
+        name: None,
+        enabled: true,
         id: node,
         kind: NodeKind::CompositionInstance(CompositionInstance {
             id: placement,
@@ -858,7 +892,11 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
     })).unwrap()));
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("contracts.kronello");
+    execute(json!({"operation":"project.create_plan", "project":path, "document":document}));
     execute(json!({"operation":"project.create", "project":path, "document":document}));
+    execute(
+        json!({"operation":"project.import_plan", "project":path, "base_revision":"1", "document":document}),
+    );
     execute(
         json!({"operation":"project.import", "project":path, "base_revision":"1", "document":document}),
     );
@@ -897,6 +935,10 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
     execute(json!({"operation":"render.sequence", "input":input,
         "range":{"start":{"num":"0","den":"1"}, "end":{"num":"1","den":"1"}},
         "frame_rate":{"num":"1","den":"1"}, "output_directory":dir.path().join("frames")}));
+    execute(json!({"operation":"render.export", "render":{"input":input,
+        "range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"24"}},
+        "frame_rate":{"num":"24","den":"1"},"output_directory":dir.path().join("sync.mov")},
+        "output":{"format":"pro_res_mov","clips":[],"background":[0,0,0]}}));
     let job = execute(json!({"operation":"render.submit", "render":{"input":input,
         "range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"1"}},
         "frame_rate":{"num":"1","den":"1"},"output_directory":dir.path().join("job-frames")}}));
@@ -1074,10 +1116,15 @@ fn all_filesystem_boundaries_reject_uris_before_access() {
         let mut document = document.clone();
         document["assets"] =
             json!([{"id":Uuid::new_v4(), "locator":{slot:"https://example.invalid/movie.mp4"}}]);
-        for operation in ["project.create", "project.import"] {
+        for operation in [
+            "project.create",
+            "project.import",
+            "project.create_plan",
+            "project.import_plan",
+        ] {
             let mut request =
                 json!({"operation":operation, "project":"missing.kronello", "document":document});
-            if operation == "project.import" {
+            if operation == "project.import" || operation == "project.import_plan" {
                 request["base_revision"] = json!("0");
             }
             invalid_locator(request);
