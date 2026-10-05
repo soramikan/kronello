@@ -33,13 +33,27 @@
     "stroke-miter-limit",
     "gradient-linear-fill-stroke",
     "gradient-radial-fill-stroke",
+    "gradient-repeat",
+    "gradient-reflect",
+    "gradient-focal-radial",
+    "gradient-conic",
+    "gradient-linear-straight",
+    "gradient-srgb-straight",
+    "gradient-srgb-premultiplied",
+    "gradient-text-fill",
+    "fx002-rotation",
+    "fx002-nonuniform-rotation",
+    "fx002-shear-shadow",
+    "fx002-reflected-shear-shadow-rec2020",
     "srgb-output-roundtrip"
   ],
   "stroke_geometry_version": "vec003-centered-stroke-v1",
-  "gradient_interpolation_version": "vec003-linear-premultiplied-pad-v1",
+  "gradient_interpolation_version": "vec004-explicit-interpolation-v1",
   "effect_kernel_version": "fx001-separable-gaussian-transparent-rne16-v1",
   "effect_semantic_versions": {
     "kronello.gaussian_blur": 1,
     "kronello.drop_shadow": 1
-  }
+  },
+  "affine_effect_kernel_version": "fx002-affine-ellipse-lattice-rne16-v2",
+  "affine_effect_semantic_version": 2
 }

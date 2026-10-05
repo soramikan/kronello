@@ -132,7 +132,8 @@
     "AudioRetimePolicy": {
       "description": "NLE-001 never performs implicit pitch/speed conversion.",
       "enum": [
-        "reject"
+        "reject",
+        "resample_v1"
       ],
       "type": "string"
     },
@@ -2021,6 +2022,23 @@
             "opacity"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "gain": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "const": "audio_gain",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "gain"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -2928,7 +2946,6 @@
       "type": "object"
     },
     "Gradient": {
-      "description": "Local design-space, pad-only paint. Unknown fields/variants are retained by\nthe owning DocumentObject as opaque content and cannot execute.",
       "oneOf": [
         {
           "additionalProperties": false,
@@ -2944,6 +2961,27 @@
             "kind": {
               "const": "linear",
               "type": "string"
+            },
+            "options": {
+              "$ref": "#/$defs/GradientOptions",
+              "default": {
+                "interpolation": "working_linear_premultiplied",
+                "interpolation_version": 1,
+                "spread": "pad",
+                "transform": [
+                  [
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0
+                  ]
+                ],
+                "units": "local_design"
+              }
             },
             "start": {
               "items": {
@@ -2983,6 +3021,27 @@
               "const": "radial",
               "type": "string"
             },
+            "options": {
+              "$ref": "#/$defs/GradientOptions",
+              "default": {
+                "interpolation": "working_linear_premultiplied",
+                "interpolation_version": 1,
+                "spread": "pad",
+                "transform": [
+                  [
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0
+                  ]
+                ],
+                "units": "local_design"
+              }
+            },
             "radius": {
               "$ref": "#/$defs/FiniteF64"
             },
@@ -3000,8 +3059,201 @@
             "stops"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "center": {
+              "items": {
+                "$ref": "#/$defs/FiniteF64"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            },
+            "focal": {
+              "items": {
+                "$ref": "#/$defs/FiniteF64"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            },
+            "focal_radius": {
+              "$ref": "#/$defs/FiniteF64"
+            },
+            "kind": {
+              "const": "focal_radial",
+              "type": "string"
+            },
+            "options": {
+              "$ref": "#/$defs/GradientOptions",
+              "default": {
+                "interpolation": "working_linear_premultiplied",
+                "interpolation_version": 1,
+                "spread": "pad",
+                "transform": [
+                  [
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0
+                  ]
+                ],
+                "units": "local_design"
+              }
+            },
+            "radius": {
+              "$ref": "#/$defs/FiniteF64"
+            },
+            "stops": {
+              "items": {
+                "$ref": "#/$defs/GradientStop"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "center",
+            "radius",
+            "focal",
+            "focal_radius",
+            "stops"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "center": {
+              "items": {
+                "$ref": "#/$defs/FiniteF64"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            },
+            "kind": {
+              "const": "conic",
+              "type": "string"
+            },
+            "options": {
+              "$ref": "#/$defs/GradientOptions",
+              "default": {
+                "interpolation": "working_linear_premultiplied",
+                "interpolation_version": 1,
+                "spread": "pad",
+                "transform": [
+                  [
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0
+                  ]
+                ],
+                "units": "local_design"
+              }
+            },
+            "start_angle": {
+              "$ref": "#/$defs/FiniteF64"
+            },
+            "stops": {
+              "items": {
+                "$ref": "#/$defs/GradientStop"
+              },
+              "type": "array"
+            },
+            "sweep_angle": {
+              "$ref": "#/$defs/FiniteF64"
+            }
+          },
+          "required": [
+            "kind",
+            "center",
+            "start_angle",
+            "sweep_angle",
+            "stops"
+          ],
+          "type": "object"
         }
       ]
+    },
+    "GradientInterpolation": {
+      "enum": [
+        "working_linear_premultiplied",
+        "working_linear_straight",
+        "srgb_straight",
+        "srgb_premultiplied"
+      ],
+      "type": "string"
+    },
+    "GradientOptions": {
+      "additionalProperties": false,
+      "properties": {
+        "interpolation": {
+          "$ref": "#/$defs/GradientInterpolation",
+          "default": "working_linear_premultiplied"
+        },
+        "interpolation_version": {
+          "default": 1,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "spread": {
+          "$ref": "#/$defs/GradientSpread",
+          "default": "pad"
+        },
+        "transform": {
+          "default": [
+            [
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0
+            ]
+          ],
+          "description": "Gradient coordinates to unit coordinates; bbox mapping is applied next.",
+          "items": {
+            "items": {
+              "$ref": "#/$defs/FiniteF64"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "units": {
+          "$ref": "#/$defs/GradientUnits",
+          "default": "local_design"
+        }
+      },
+      "type": "object"
+    },
+    "GradientSpread": {
+      "description": "Versioned paint settings. Missing settings preserve VEC-003 semantics.",
+      "enum": [
+        "pad",
+        "repeat",
+        "reflect"
+      ],
+      "type": "string"
     },
     "GradientStop": {
       "additionalProperties": false,
@@ -3018,6 +3270,13 @@
         "offset"
       ],
       "type": "object"
+    },
+    "GradientUnits": {
+      "enum": [
+        "local_design",
+        "object_bounding_box"
+      ],
+      "type": "string"
     },
     "HistoryEntry": {
       "additionalProperties": false,
@@ -6773,6 +7032,97 @@
         {
           "additionalProperties": false,
           "properties": {
+            "AffineGaussianBlur": {
+              "properties": {
+                "linear": {
+                  "items": {
+                    "items": {
+                      "format": "double",
+                      "type": "number"
+                    },
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "type": "array"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                },
+                "sigma": {
+                  "format": "double",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "sigma",
+                "linear"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "AffineGaussianBlur"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "AffineDropShadow": {
+              "properties": {
+                "color": {
+                  "$ref": "#/$defs/Color"
+                },
+                "linear": {
+                  "items": {
+                    "items": {
+                      "format": "double",
+                      "type": "number"
+                    },
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "type": "array"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                },
+                "offset": {
+                  "items": {
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                },
+                "opacity": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "sigma": {
+                  "format": "double",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "sigma",
+                "linear",
+                "offset",
+                "color",
+                "opacity"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "AffineDropShadow"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
             "GaussianBlur": {
               "properties": {
                 "sigma": {
@@ -9352,6 +9702,16 @@
         },
         "font": {
           "$ref": "#/$defs/FontRef"
+        },
+        "gradient": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Gradient"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "range": {
           "$ref": "#/$defs/TextRange"

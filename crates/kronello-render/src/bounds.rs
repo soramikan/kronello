@@ -87,6 +87,23 @@ pub(crate) fn apply_effects(
         let Some(input) = bounds else { break };
         // Raster execution rounds this support outwards to its output lattice.
         bounds = Some(match effect {
+            ResolvedEffect::AffineGaussianBlur { sigma, linear }
+            | ResolvedEffect::AffineDropShadow { sigma, linear, .. } => {
+                crate::validate_affine_linear(*linear)?;
+                let halo = linear.map(|r| 3.0 * sigma * r[0].hypot(r[1]));
+                let expanded = DesignBounds::checked(
+                    [0, 1].map(|i| input.min[i] - halo[i]),
+                    [0, 1].map(|i| input.max[i] + halo[i]),
+                )?;
+                if let ResolvedEffect::AffineDropShadow { offset, .. } = effect {
+                    input.union(DesignBounds::checked(
+                        [0, 1].map(|i| expanded.min[i] + offset[i]),
+                        [0, 1].map(|i| expanded.max[i] + offset[i]),
+                    )?)
+                } else {
+                    expanded
+                }
+            }
             ResolvedEffect::GaussianBlur { sigma } => input.expand(3.0 * sigma)?,
             ResolvedEffect::DropShadow { sigma, offset, .. } => {
                 let shadow = input.expand(3.0 * sigma)?;
@@ -218,4 +235,33 @@ pub(crate) fn derive_scene_bounds(nodes: &mut [SceneNodeIr]) -> Result<(), Rende
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod affine_tests {
+    use super::*;
+    #[test]
+    fn fx002_analytic_support_and_offset_follow_shear() {
+        let effect = ResolvedEffect::AffineDropShadow {
+            sigma: 2.0,
+            linear: [[1.0, 0.0], [0.0, 1.0]],
+            offset: [2.0, -1.0],
+            color: kronello_model::Color::from_srgb8([0; 3], None),
+            opacity: 0.5,
+        };
+        let mapped =
+            crate::dag::map_effect(&effect, Affine2([[2.0, 1.0, 50.0], [0.0, 1.0, 99.0]])).unwrap();
+        let ResolvedEffect::AffineDropShadow { offset, linear, .. } = mapped else {
+            panic!()
+        };
+        assert_eq!(offset, [3.0, -1.0]);
+        assert_eq!(linear, [[2.0, 1.0], [0.0, 1.0]]);
+        let input = DesignBounds {
+            min: [0.0; 2],
+            max: [10.0; 2],
+        };
+        let b = apply_effects(Some(input), &[mapped]).unwrap().unwrap();
+        assert_eq!(b.min, [3.0 - 6.0 * 5.0_f64.sqrt(), -7.0]);
+        assert_eq!(b.max, [13.0 + 6.0 * 5.0_f64.sqrt(), 15.0]);
+    }
 }

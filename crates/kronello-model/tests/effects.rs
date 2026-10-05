@@ -77,3 +77,31 @@ fn effect_schema_describes_known_parameters_and_opaque_preservation() {
     assert!(schema["$defs"]["EffectDefinition"]["properties"]["effect_id"].is_object());
     assert!(schema["$defs"]["EffectParameters"]["oneOf"].is_array());
 }
+
+#[test]
+fn fx002_versions_are_explicit_and_legacy_resolution_is_unchanged() {
+    let sigma = PropertyId::new();
+    let mut definition = EffectDefinition {
+        effect_id: GAUSSIAN_BLUR_ID.into(),
+        version: 1,
+        parameters: EffectParameters::GaussianBlur { sigma },
+    };
+    let values = BTreeMap::from([(sigma, Value::Scalar(FiniteF64::new(1.0).unwrap()))]);
+    assert_eq!(
+        definition.resolve(&values).unwrap(),
+        ResolvedEffect::GaussianBlur { sigma: 1.0 }
+    );
+    definition.version = 2;
+    assert_eq!(
+        definition.resolve(&values).unwrap(),
+        ResolvedEffect::AffineGaussianBlur {
+            sigma: 1.0,
+            linear: [[1.0, 0.0], [0.0, 1.0]]
+        }
+    );
+    definition.version = 3;
+    assert!(matches!(
+        definition.resolve(&values),
+        Err(EffectError::UnsupportedFeature)
+    ));
+}

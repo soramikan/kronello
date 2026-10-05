@@ -52,10 +52,10 @@ pub use project::{
 
 mod shape;
 pub use shape::{
-    Fill, FillRule, Gradient, GradientGeometry, GradientStop, ResolvedFill, ResolvedGeometry,
-    ResolvedGradient, ResolvedGradientStop, ResolvedShape, ResolvedStroke, Shape, ShapeError,
-    ShapeGeometry, Stroke, StrokeCap, StrokeJoin, shape_descriptors, validate_path,
-    validate_shape_contents,
+    Fill, FillRule, Gradient, GradientGeometry, GradientInterpolation, GradientOptions,
+    GradientSpread, GradientStop, GradientUnits, ResolvedFill, ResolvedGeometry, ResolvedGradient,
+    ResolvedGradientStop, ResolvedShape, ResolvedStroke, Shape, ShapeError, ShapeGeometry, Stroke,
+    StrokeCap, StrokeJoin, shape_descriptors, validate_path, validate_shape_contents,
 };
 
 mod text;

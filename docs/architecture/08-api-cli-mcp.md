@@ -498,6 +498,17 @@ MediaSlot の final compiler は既存 UNSUPPORTED_FEATURE、欠落は ASSET_MIS
 既存 `SOURCE_MISSING` / `ASSET_MISSING` / `ASSET_HASH_MISMATCH` / `AUDIO_SOURCE_TOO_SHORT` /
 `AUDIO_CLIPPING` / `AUDIO_OVERFLOW` / `TIME_ERROR`。検証の成功を GPU / hardware 稼働保証へ拡張しない。
 
+### AUDIO-004 の movie profile 3
+
+共有 `render.export` / `render.submit` の `output.profile_version: 3, audio: document` は
+[ADR-0069](../adr/0069-versioned-stateless-audio.md) の evaluator 2 を固定する。
+省略1と指定2は旧契約を維持し、profile 3 の explicit / silence も従来の明示音声規則を使う。
+新しい入口・任意 shell / FFmpeg parameters は追加しない。`timeline.clip_place` の Clip が
+`audio_retime: resample_v1` を保持し、既存 `clip_set_effects` が AudioGain / volume Property を受け取る。
+capabilities.features は audio_resample_v1 / audio_gain_v1 / audio_generator_v1 /
+audio_crossfade_v1、effects に kronello.audio.gain を追加する。これらは movie profile 3 の
+対応範囲であり、映像 effect / nested retime / pitch-preserving stretch の対応を示さない。
+詳細な error / sample boundaries / budget と実行証拠は [AUDIO-004](../testing/audio-004.md)。
 
 ## SERVICE-002 の Project 計画・再送と Modifier 編集
 

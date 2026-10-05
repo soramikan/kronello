@@ -1,6 +1,7 @@
 # ADR-0063: 文書音声の配置・音量 Property と明示的な出力選択
 
-- 状態: 採用
+- 状態: 部分置換（ADR-0069、下記の追加範囲のみ）
+- AUDIO-004 の追加・部分置換: [ADR-0069](0069-versioned-stateless-audio.md)。audio track の Generator / effect Property / crossfade と明示 resample_v1 を追加し、movie profile 1/2 の実行意味は維持する。
 - 日付: 2026-10-05
 - 対象: AUDIO-003
 

@@ -225,6 +225,7 @@ impl RenderCache {
             let mut canonical = text.clone();
             for style in &mut canonical.styles {
                 style.fill = Color::from_srgb8([0, 0, 0], None);
+                style.gradient = None;
             }
             let result = kronello_text::layout(&canonical, fonts)?;
             // Accounts for outlines and all source/cluster/line metadata.
@@ -244,6 +245,7 @@ impl RenderCache {
         };
         for glyph in &mut layout.glyphs {
             glyph.fill = text.styles[glyph.style_index].fill;
+            glyph.gradient = text.styles[glyph.style_index].gradient.clone();
         }
         Ok(layout)
     }
@@ -355,8 +357,8 @@ impl RasterCacheKey {
                 crate::DagNode::Effect { source, effect } => Some(Self(key(
                     "effect",
                     (
-                        crate::EFFECT_KERNEL_VERSION,
-                        kronello_model::EFFECT_VERSION,
+                        effect.kernel_version(),
+                        effect.semantic_version(),
                         keys[*source].map(|k| hex(k.0)),
                         effect,
                         dag.execution_region(),

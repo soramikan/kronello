@@ -102,6 +102,7 @@ pub fn glyph() -> DrawScene {
         layout_version: kronello_text::LAYOUT_VERSION,
         text: "あ".into(),
         styles: vec![model::ResolvedTextStyle {
+            gradient: None,
             range: model::TextRange { start: 0, end: 3 },
             font: font.clone(),
             size: f(25.0),
@@ -208,6 +209,54 @@ pub fn effect_scene(shadow: bool, working: WorkingSpace) -> DrawScene {
         roots: vec![1],
     }
 }
+pub fn affine_effect_scene(linear: [[f64; 2]; 2], shadow: bool) -> DrawScene {
+    let resolved = if shadow {
+        model::ResolvedEffect::AffineDropShadow {
+            sigma: 1.1,
+            linear,
+            offset: [
+                linear[0][0] * 2.25 - linear[0][1] * 1.5,
+                linear[1][0] * 2.25 - linear[1][1] * 1.5,
+            ],
+            color: model::Color::new(model::ColorSpace::Srgb, [0.2, 0.5, 0.9], 0.7).unwrap(),
+            opacity: 0.6,
+        }
+    } else {
+        model::ResolvedEffect::AffineGaussianBlur { sigma: 1.1, linear }
+    };
+    let effect = PixelEffect::from_design(&resolved, [1.0; 2]).unwrap();
+    let mut scene = effect_scene(shadow, WorkingSpace::LinearRec709);
+    scene.nodes[1] = DrawNode::Effect { source: 0, effect };
+    scene
+}
+pub fn fx002_scenes() -> Vec<(&'static str, u32, WorkingSpace, DrawScene)> {
+    vec![
+        (
+            "fx002-rotation",
+            16,
+            WorkingSpace::LinearRec709,
+            affine_effect_scene([[0.8, -0.6], [0.6, 0.8]], false),
+        ),
+        (
+            "fx002-nonuniform-rotation",
+            16,
+            WorkingSpace::LinearRec709,
+            affine_effect_scene([[1.6, -0.6], [1.2, 0.8]], false),
+        ),
+        (
+            "fx002-shear-shadow",
+            16,
+            WorkingSpace::LinearRec709,
+            affine_effect_scene([[1.5, 0.7], [0.0, 0.8]], true),
+        ),
+        (
+            "fx002-reflected-shear-shadow-rec2020",
+            16,
+            WorkingSpace::LinearRec2020,
+            affine_effect_scene([[-1.2, 0.5], [0.2, 0.8]], true),
+        ),
+    ]
+}
 pub fn scenes() -> Vec<(&'static str, u32, WorkingSpace, DrawScene)> {
     let mut scenes = vec![
         (
@@ -284,6 +333,8 @@ pub fn scenes() -> Vec<(&'static str, u32, WorkingSpace, DrawScene)> {
         ),
     ];
     scenes.extend(vec003_scenes());
+    scenes.extend(vec004_scenes());
+    scenes.extend(fx002_scenes());
     scenes
 }
 
@@ -339,6 +390,10 @@ pub fn gradient_scene(radial: bool) -> DrawScene {
         }
     };
     let gradient = GradientPaint {
+        spread: Default::default(),
+        interpolation: Default::default(),
+        interpolation_version: 1,
+        transform: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
         geometry,
         stops: vec![
             GradientStop {
@@ -359,8 +414,8 @@ pub fn gradient_scene(radial: bool) -> DrawScene {
             },
         ],
     };
-    path.fill_gradient = Some(gradient.clone());
-    path.stroke_gradient = Some(gradient);
+    path.fill_gradient = Some(Box::new(gradient.clone()));
+    path.stroke_gradient = Some(Box::new(gradient));
     path.stroke = Some(RoundStroke {
         paint: paint([1.0; 4], InputSpace::Srgb),
         width: 2.4,
@@ -407,4 +462,118 @@ pub fn vec003_scenes() -> Vec<(&'static str, u32, WorkingSpace, DrawScene)> {
             gradient_scene(true),
         ),
     ]
+}
+
+/// Extended paints exercise independent fill/stroke mappings and both spaces.
+pub fn vec004_scenes() -> Vec<(&'static str, u32, WorkingSpace, DrawScene)> {
+    let settings = [
+        (
+            "gradient-repeat",
+            GradientSpread::Repeat,
+            GradientInterpolation::WorkingLinearPremultiplied,
+        ),
+        (
+            "gradient-reflect",
+            GradientSpread::Reflect,
+            GradientInterpolation::WorkingLinearPremultiplied,
+        ),
+        (
+            "gradient-focal-radial",
+            GradientSpread::Repeat,
+            GradientInterpolation::WorkingLinearPremultiplied,
+        ),
+        (
+            "gradient-conic",
+            GradientSpread::Reflect,
+            GradientInterpolation::WorkingLinearPremultiplied,
+        ),
+        (
+            "gradient-linear-straight",
+            GradientSpread::Pad,
+            GradientInterpolation::WorkingLinearStraight,
+        ),
+        (
+            "gradient-srgb-straight",
+            GradientSpread::Pad,
+            GradientInterpolation::SrgbStraight,
+        ),
+        (
+            "gradient-srgb-premultiplied",
+            GradientSpread::Pad,
+            GradientInterpolation::SrgbPremultiplied,
+        ),
+        (
+            "gradient-text-fill",
+            GradientSpread::Reflect,
+            GradientInterpolation::SrgbStraight,
+        ),
+    ];
+    settings
+        .into_iter()
+        .enumerate()
+        .map(|(i, (id, spread, interpolation))| {
+            let mut scene = if i == 7 {
+                glyph()
+            } else {
+                gradient_scene(false)
+            };
+            let DrawNode::Path(path) = &mut scene.nodes[0] else {
+                panic!("path fixture");
+            };
+            let mut gradient = if let Some(g) = &path.fill_gradient {
+                g.as_ref().clone()
+            } else {
+                let source = gradient_scene(false);
+                let DrawNode::Path(p) = &source.nodes[0] else {
+                    unreachable!()
+                };
+                *p.fill_gradient.clone().unwrap()
+            };
+            gradient.spread = spread;
+            gradient.interpolation = interpolation;
+            gradient.transform = [[0.8, 0.15, -2.0], [-0.1, 0.9, 1.0]];
+            if i == 2 {
+                gradient.geometry = GradientGeometry::FocalRadial {
+                    center: [16.0; 2],
+                    radius: 12.0,
+                    focal: [12.0, 15.0],
+                    focal_radius: 2.0,
+                };
+            } else if i == 3 {
+                gradient.geometry = GradientGeometry::Conic {
+                    center: [16.0; 2],
+                    start_angle: 25.0,
+                    sweep_angle: 240.0,
+                };
+            } else if i == 7 {
+                gradient.geometry = GradientGeometry::Linear {
+                    start: [0.0; 2],
+                    end: [8.0, 0.0],
+                };
+            } else {
+                // The sample grid and paint transform put mapped samples on a
+                // 1/1600 px lattice; a 0.0003 px phase keeps hard stops and
+                // repeat seams off exact ties, whose side depends on FMA.
+                gradient.geometry = GradientGeometry::Linear {
+                    start: [0.0003, 0.0],
+                    end: [12.0003, 0.0],
+                };
+            }
+            path.fill_gradient = Some(Box::new(gradient.clone()));
+            if i != 7 {
+                gradient.transform = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
+                path.stroke_gradient = Some(Box::new(gradient));
+            }
+            (
+                id,
+                32,
+                if i % 2 == 0 {
+                    WorkingSpace::LinearRec709
+                } else {
+                    WorkingSpace::LinearRec2020
+                },
+                scene,
+            )
+        })
+        .collect()
 }
