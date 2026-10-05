@@ -438,6 +438,7 @@ fn cpu_all_catalog_scenes_are_finite_with_zero_transparent_rgb() {
 fn gpu_round_stroke_open_contour_and_design_scale_match_analytic_values() {
     let scene = DrawScene {
         nodes: vec![DrawNode::Path(PathDraw {
+            stroke_geometry: None,
             fill_gradient: None,
             stroke_gradient: None,
             paint_transform: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
@@ -988,4 +989,66 @@ fn cpu_fx002_affine_impulse_matches_independent_elliptical_gaussian() {
         ),
         Err(GpuError::UnsupportedFeature(_))
     ));
+}
+
+#[test]
+fn cpu_vec005_catalog_rasterizes_local_affine_and_alignment() {
+    for (_, n, _, scene) in vec005_scenes() {
+        scene.validate().unwrap();
+        for working in [WorkingSpace::LinearRec709, WorkingSpace::LinearRec2020] {
+            let pixels = render_scene_reference(RenderSize::pixels(n, n), &scene, working).unwrap();
+            assert!(pixels.iter().any(|p| p[3] > 0.0));
+            assert!(pixels.iter().any(|p| p[3] == 0.0));
+        }
+    }
+}
+#[test]
+fn gpu_vec005_strokes_match_cpu_in_both_working_spaces() {
+    for (id, n, _, scene) in vec005_scenes() {
+        for working in [WorkingSpace::LinearRec709, WorkingSpace::LinearRec2020] {
+            eprintln!("VEC-005 {id}: {working:?}");
+            let expected =
+                render_scene_reference(RenderSize::pixels(n, n), &scene, working).unwrap();
+            let actual = gpu()
+                .render_scene(RenderSize::pixels(n, n), &scene, working)
+                .unwrap();
+            compare(n, working, &expected, &actual.pixels);
+        }
+    }
+}
+
+#[test]
+fn cpu_vec005_golden_samples_avoid_discontinuity_ties() {
+    for (id, n, _, scene) in vec005_scenes() {
+        let baseline =
+            render_scene_reference(RenderSize::pixels(n, n), &scene, WorkingSpace::LinearRec709)
+                .unwrap();
+        for dx in [-0.00001, 0.00001] {
+            for dy in [-0.00001, 0.00001] {
+                let mut perturbed = scene.clone();
+                let DrawNode::Path(path) = &mut perturbed.nodes[0] else {
+                    panic!()
+                };
+                let g = path.stroke_geometry.as_mut().unwrap();
+                g.output_to_local[0][2] += dx;
+                g.output_to_local[1][2] += dy;
+                for c in &mut path.contours {
+                    for p in &mut c.points {
+                        p[0] += dx;
+                        p[1] += dy;
+                    }
+                }
+                let pixels = render_scene_reference(
+                    RenderSize::pixels(n, n),
+                    &perturbed,
+                    WorkingSpace::LinearRec709,
+                )
+                .unwrap();
+                assert_eq!(
+                    pixels, baseline,
+                    "{id}: sample too close to stroke/fill discontinuity at perturbation {dx}/{dy}"
+                );
+            }
+        }
+    }
 }

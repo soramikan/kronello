@@ -118,6 +118,23 @@ Composition target の profile 3 は既存の recursive unity audio を使う。
 `UNSUPPORTED_FEATURE`、`AUDIO_BUDGET_EXCEEDED`、`INVALID_AUDIO_INPUT`、
 `AUDIO_SOURCE_TOO_SHORT`、`AUDIO_OVERFLOW` と既存 asset / time / clipping codes。
 
+## MEDIA-002: ALAC 圧縮音声
+
+`av1_mp4` / `h264_mov` / `hevc_mov` version 1 は evaluator 2 を固定し、既存 Bus と
+PCM24 quantizer の出力を native ALAC へ lossless encode する。48 kHz stereo S32P / 24 bit、
+zero initial_padding、4096 sample coding frame と正確な部分最終 frame、drain 後の全 packet。
+音声 stage は明示 MP4、最終は選択した MP4 / MOV へ packet copy。旧 PCM24 stage はMOV。
+追加 `AvExportSnapshot::with_movie_profile` は MovieProfile を envelope hashへ含める。
+`MediaRuntime::encode_alac` / `mux_movie` / `MediaProbe::verify_movie` は閉 profile の契約を使う。
+`AvExportReport.movie_profile` は追加形式だけに出現し、audio_profile_version は3。
+既存 constructors / report はこの optional field を省略し、旧 hash / sample bits を維持する。
+
+N decoded samples の start は0、last PTS は(N-1)/48000、exclusive endはN/48000。
+映像の先頭・最後と duration 差1 sample未満を検証し、ALAC roundtrip は量子化後の全 channel sample
+を bit比較する。AAC-LC の priming / padding / edit list / iTunSMPB と配布・特許・品質レビュー、
+AV1 + Opus の Web 配信は未採用。詳細は [ADR-0068](../adr/0068-versioned-delivery-movie-profiles.md)、
+CPU / host の証拠を分けた [MEDIA-002](../testing/media-002.md)。
+
 ## AUDIO-002: buffered realtime playback
 
 [ADR-0076](../adr/0076-buffered-device-clock-playback.md)、[検証](../testing/audio-002.md)。

@@ -616,7 +616,7 @@
       "priority": "P1",
       "area": "gui",
       "title": "Dope sheetとCurve editor",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "GUI-001",
         "ANIM-001"
@@ -632,7 +632,7 @@
       "priority": "P1",
       "area": "audio",
       "title": "リアルタイム音声再生とA/V同期",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "AUDIO-000",
         "GUI-001"
@@ -702,7 +702,7 @@
       "priority": "P1",
       "area": "integration",
       "title": "縦断デモ第2段階: GUI閲覧と縦型variant",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "INTEGRATION-001",
         "TEMPLATE-002",
@@ -719,7 +719,7 @@
       "priority": "P2",
       "area": "gui",
       "title": "macOS GUI: 編集ページ（Sequence のトラック・素材一覧・クリップの Inspector）",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "GUI-001",
         "NLE-002"
@@ -736,7 +736,7 @@
       "priority": "P2",
       "area": "gui",
       "title": "macOS GUI: テンプレートページと書き出しページ",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "GUI-001",
         "TEMPLATE-002",
@@ -772,7 +772,7 @@
       "priority": "P2",
       "area": "vector",
       "title": "線の拡張: 破線・線の位置・非一様変換",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "VEC-003"
       ],
@@ -845,7 +845,7 @@
       "priority": "P1",
       "area": "media",
       "title": "追加movie job profileと圧縮音声",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "MEDIA-001",
         "AUDIO-000",
@@ -902,7 +902,7 @@
       "priority": "P1",
       "area": "jobs",
       "title": "Windows workerのdetachと各OSの実プロセス検証",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "JOB-001",
         "MCP-001"

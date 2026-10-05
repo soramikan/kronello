@@ -13,7 +13,7 @@ pub const SNAPSHOT_SCHEMA_VERSION: u32 = 1;
 pub const COLOR_VERSION: &str = "gpu002-color-v1";
 pub const VECTOR_VERSION: &str = "render001-kurbo-flatten-v1";
 pub const COVERAGE_VERSION: &str = "vec003-grid4-v2";
-pub const STROKE_GEOMETRY_VERSION: &str = "vec003-centered-stroke-v1";
+pub const STROKE_GEOMETRY_VERSION: &str = EXTENDED_STROKE_VERSION;
 pub const GRADIENT_INTERPOLATION_VERSION: &str = "vec004-explicit-interpolation-v1";
 pub const LAYOUT_BOUNDS_VERSION: u32 = 1;
 pub const NODE_VISIBILITY_VERSION: u32 = 2;
@@ -314,6 +314,9 @@ impl RenderSnapshot {
             .map_err(|e| RenderError::InvalidInput(e.to_string()))?;
         // Legacy visibility v1 is equivalent only when every authored node is enabled.
         let mut supported_versions = SemanticVersions::current(self.project.semantic_version);
+        if self.semantic_versions.stroke_geometry == LEGACY_STROKE_VERSION {
+            supported_versions.stroke_geometry = LEGACY_STROKE_VERSION.into();
+        }
         if self.semantic_versions.visibility == 1
             && self
                 .project
@@ -670,6 +673,13 @@ pub fn build_scene_ir_with_cache(
                 })?
                 .ok_or(ShapeError::MissingContent { id: content_ref })?;
                 shape.validate(&authored.properties, &registry)?;
+                if shape.stroke.as_ref().is_some_and(|s| s.options.is_some())
+                    && snapshot.semantic_versions.stroke_geometry == LEGACY_STROKE_VERSION
+                {
+                    return Err(RenderError::UnsupportedFeature(
+                        "stroke exceeds pinned snapshot version".into(),
+                    ));
+                }
                 SceneContent::Shape {
                     definition: shape.clone(),
                     resolved: shape.resolve(&values)?,

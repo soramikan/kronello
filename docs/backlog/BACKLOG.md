@@ -13,7 +13,7 @@
 | M0 | 0 | 0 | 6 | 0 | 6 |
 | M1 | 0 | 0 | 14 | 0 | 14 |
 | M2 | 0 | 1 | 10 | 0 | 11 |
-| M3 | 7 | 3 | 15 | 0 | 25 |
+| M3 | 2 | 5 | 18 | 0 | 25 |
 | M4 | 12 | 0 | 0 | 0 | 12 |
 | M5 | 5 | 0 | 0 | 0 | 5 |
 | M6 | 4 | 0 | 0 | 0 | 4 |
@@ -357,7 +357,7 @@
 
 ### GUI-002 Dope sheetとCurve editor
 
-- 優先度: P1 / 領域: gui / 状態: in_progress
+- 優先度: P1 / 領域: gui / 状態: done
 - 依存: GUI-001, ANIM-001
 - 受け入れ条件:
   - キー移動/接線編集/UndoがCLIで読める同じモデルを変更する
@@ -365,7 +365,7 @@
 
 ### AUDIO-002 リアルタイム音声再生とA/V同期
 
-- 優先度: P1 / 領域: audio / 状態: planned
+- 優先度: P1 / 領域: audio / 状態: in_progress
 - 依存: AUDIO-000, GUI-001
 - 受け入れ条件:
   - 音声コールバックをプロジェクト更新・ディスク読み出し・式評価と別の実行系にする
@@ -402,7 +402,7 @@
 
 ### INTEGRATION-002 縦断デモ第2段階: GUI閲覧と縦型variant
 
-- 優先度: P1 / 領域: integration / 状態: planned
+- 優先度: P1 / 領域: integration / 状態: in_progress
 - 依存: INTEGRATION-001, TEMPLATE-002, GUI-001
 - 受け入れ条件:
   - 第1段階と同じプロジェクトをmacOS GUIで開き、CLI/MCPと同じ値・layout boundsを表示する
@@ -410,7 +410,7 @@
 
 ### GUI-003 macOS GUI: 編集ページ（Sequence のトラック・素材一覧・クリップの Inspector）
 
-- 優先度: P2 / 領域: gui / 状態: planned
+- 優先度: P2 / 領域: gui / 状態: in_progress
 - 依存: GUI-001, NLE-002
 - 受け入れ条件:
   - docs/design-system/screens/edit.md の配置で Project の素材一覧・Sequence の Viewer・クリップの Inspector・トラックを表示し、種類の色・選択・ASSET_MISSING を仕様どおりに示す
@@ -419,7 +419,7 @@
 
 ### GUI-004 macOS GUI: テンプレートページと書き出しページ
 
-- 優先度: P2 / 領域: gui / 状態: planned
+- 優先度: P2 / 領域: gui / 状態: in_progress
 - 依存: GUI-001, TEMPLATE-002, INSPECT-001
 - 受け入れ条件:
   - docs/design-system/screens/template.md の配置で variant を並べて layout/ink/visual bounds と TEMPLATE_OVERFLOW 等の診断を表示し、公開入力・版の差分計画・尺のポリシーを共通 API で扱う。既存配置を暗黙に更新しない
@@ -439,7 +439,7 @@
 
 ### VEC-005 線の拡張: 破線・線の位置・非一様変換
 
-- 優先度: P2 / 領域: vector / 状態: in_progress
+- 優先度: P2 / 領域: vector / 状態: done
 - 依存: VEC-003
 - 受け入れ条件:
   - 破線(dash配列・offset)とoffsetのアニメーションを実装する
@@ -479,7 +479,7 @@
 
 ### MEDIA-002 追加movie job profileと圧縮音声
 
-- 優先度: P1 / 領域: media / 状態: in_progress
+- 優先度: P1 / 領域: media / 状態: done
 - 依存: MEDIA-001, AUDIO-000, JOB-001
 - 受け入れ条件:
   - AV1・H.264・HEVCを同期exportとrender.submitの版付き出力profileとして公開し、固定snapshot・PTS/duration・probe・no-clobber publicationを検証する
@@ -510,7 +510,7 @@
 
 ### JOB-002 Windows workerのdetachと各OSの実プロセス検証
 
-- 優先度: P1 / 領域: jobs / 状態: planned
+- 優先度: P1 / 領域: jobs / 状態: in_progress
 - 依存: JOB-001, MCP-001
 - 受け入れ条件:
   - WindowsでCLI/MCPの終了から独立するworker起動・stdio/log・回収の契約を実装し、親終了後も固定入力のジョブが継続することを実機またはCIで検証する

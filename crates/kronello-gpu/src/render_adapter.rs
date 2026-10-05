@@ -65,6 +65,28 @@ fn lower(dag: &RenderDag) -> Result<(RenderSize, DrawScene, WorkingSpace), Rende
             DagNode::RasterInput { pixels } => DrawNode::Raster(pixels.clone()),
             DagNode::Geometry { .. } | DagNode::TextLayout { .. } => continue,
             DagNode::CoverageDraw { path, .. } => DrawNode::Path(PathDraw {
+                stroke_geometry: path.stroke_geometry.as_ref().map(|g| {
+                    crate::LocalStrokeGeometry {
+                        version: g.version.clone(),
+                        contours: g
+                            .contours
+                            .subpaths
+                            .iter()
+                            .map(|c| Contour {
+                                points: c.points.iter().map(|p| p.map(|x| x as f32)).collect(),
+                                closed: c.closed,
+                            })
+                            .collect(),
+                        output_to_local: g.output_to_local.map(|r| r.map(|x| x as f32)),
+                        alignment: g.alignment,
+                        fill_rule: match g.fill_rule {
+                            kronello_model::FillRule::Nonzero => FillRule::Nonzero,
+                            kronello_model::FillRule::Evenodd => FillRule::Evenodd,
+                        },
+                        dash_array: g.dash_array.clone(),
+                        dash_offset: g.dash_offset,
+                    }
+                }),
                 fill_gradient: path.fill_gradient.as_deref().map(gradient).map(Box::new),
                 stroke_gradient: path.stroke_gradient.as_deref().map(gradient).map(Box::new),
                 paint_transform: path.paint_transform.map(|r| r.map(|v| v as f32)),

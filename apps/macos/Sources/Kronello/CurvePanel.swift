@@ -123,8 +123,14 @@ struct CurvePanel: View {
     }
     func points(_ axis: Int) -> [CGPoint] {
         let positions = keys.map(model.keyFramePosition)
-        return (0...400).compactMap { i in
-            let frame = frames.lowerBound + Double(i) / 400 * (frames.upperBound - frames.lowerBound)
+        var sampleFrames = (0...400).map { frames.lowerBound + Double($0) / 400 * (frames.upperBound - frames.lowerBound) }
+        if graphMode == "velocity" {
+            // Include exact discontinuities and the readout time, so the plotted
+            // point at the playhead uses the same outgoing segment as the readout.
+            sampleFrames += (positions + [model.currentFramePosition]).filter { frames.contains($0) }
+            sampleFrames = Array(Set(sampleFrames)).sorted()
+        }
+        return sampleFrames.compactMap { frame in
             var values = CurveDisplay.sample(keys, frame: frame, positions: positions)
             if graphMode == "velocity" {
                 values = CurveDisplay.velocity(keys, frame: frame, positions: positions, framesPerSecond: Double(model.rateNum) / Double(model.rateDen))

@@ -172,6 +172,16 @@
           },
           "type": "array"
         },
+        "movie_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MovieProfile"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "probe": {
           "$ref": "#/$defs/MediaProbe"
         },
@@ -1094,6 +1104,13 @@
         "rows"
       ],
       "type": "object"
+    },
+    "DeliveryAudioCodec": {
+      "enum": [
+        "alac",
+        "aac"
+      ],
+      "type": "string"
     },
     "DescriptorRef": {
       "additionalProperties": false,
@@ -3879,6 +3896,138 @@
             "background"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/AudioSourceMode",
+              "default": "explicit"
+            },
+            "audio_codec": {
+              "$ref": "#/$defs/DeliveryAudioCodec",
+              "default": "alac"
+            },
+            "background": {
+              "items": {
+                "format": "float",
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/JobAudioClip"
+              },
+              "type": "array"
+            },
+            "format": {
+              "const": "av1_mp4",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "clips",
+            "background"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/AudioSourceMode",
+              "default": "explicit"
+            },
+            "audio_codec": {
+              "$ref": "#/$defs/DeliveryAudioCodec",
+              "default": "alac"
+            },
+            "background": {
+              "items": {
+                "format": "float",
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/JobAudioClip"
+              },
+              "type": "array"
+            },
+            "format": {
+              "const": "h264_mov",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "clips",
+            "background"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/AudioSourceMode",
+              "default": "explicit"
+            },
+            "audio_codec": {
+              "$ref": "#/$defs/DeliveryAudioCodec",
+              "default": "alac"
+            },
+            "background": {
+              "items": {
+                "format": "float",
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/JobAudioClip"
+              },
+              "type": "array"
+            },
+            "format": {
+              "const": "hevc_mov",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "clips",
+            "background"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -4446,6 +4595,15 @@
     "ModifierId": {
       "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
       "format": "uuid",
+      "type": "string"
+    },
+    "MovieProfile": {
+      "enum": [
+        "pro_res_pcm24",
+        "av1_mp4_alac_v1",
+        "h264_alac_v1",
+        "hevc_alac_v1"
+      ],
       "type": "string"
     },
     "Mutation": {
@@ -8868,6 +9026,17 @@
           "$ref": "#/$defs/PropertyId",
           "description": "Dimensionless Scalar Property, at least 1."
         },
+        "options": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StrokeOptions"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Absent options retain the exact VEC-003 execution path."
+        },
         "width": {
           "$ref": "#/$defs/PropertyId"
         }
@@ -8878,6 +9047,47 @@
         "join",
         "cap",
         "miter_limit"
+      ],
+      "type": "object"
+    },
+    "StrokeAlignment": {
+      "enum": [
+        "center",
+        "inside",
+        "outside"
+      ],
+      "type": "string"
+    },
+    "StrokeOptions": {
+      "additionalProperties": false,
+      "description": "Explicit opt-in; lengths are local design_px, offset is an evaluated Property.",
+      "properties": {
+        "alignment": {
+          "$ref": "#/$defs/StrokeAlignment"
+        },
+        "dash_array": {
+          "items": {
+            "$ref": "#/$defs/FiniteF64"
+          },
+          "type": "array"
+        },
+        "dash_offset": {
+          "$ref": "#/$defs/PropertyId"
+        },
+        "fill_rule": {
+          "$ref": "#/$defs/FillRule",
+          "description": "Defines the interior independently of whether the shape has fill paint."
+        },
+        "geometry_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "geometry_version",
+        "alignment",
+        "fill_rule",
+        "dash_array",
+        "dash_offset"
       ],
       "type": "object"
     },

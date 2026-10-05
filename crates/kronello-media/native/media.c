@@ -559,31 +559,44 @@ int km_audio_next(AudioDecoder *a) {
 }
 
 /* Native PCM24 encoder uses packed S32 with its low eight bits zero. */
-int km_audio_encode(Km *k,const char *path,const int32_t *samples,int64_t count) {
+int km_audio_encode(Km *k,const char *path,const int32_t *samples,int64_t count,int alac) {
     AVFormatContext *format=NULL;AVCodecContext *codec=NULL;AVFrame *frame=NULL;AVPacket *packet=NULL;
-    const AVCodec *encoder=k->avcodec_find_encoder_by_name("pcm_s24le");
+    const AVCodec *encoder=k->avcodec_find_encoder_by_name(alac?"alac":"pcm_s24le");
     int ret=AVERROR_ENCODER_NOT_FOUND;
     if(!encoder){fail(k,ret,"PCM24 encoder unavailable");goto done;}
-    ret=k->avformat_alloc_output_context2(&format,NULL,"mov",path);
+    ret=k->avformat_alloc_output_context2(&format,NULL,alac?"mp4":"mov",path);
     if(ret<0 || !format){ret=fail(k,ret<0?ret:AVERROR(ENOMEM),"audio output context");goto done;}
     codec=k->avcodec_alloc_context3(encoder);frame=k->av_frame_alloc();packet=k->av_packet_alloc();
     AVStream *stream=k->avformat_new_stream(format,NULL);
     if(!codec || !frame || !packet || !stream){ret=fail(k,AVERROR(ENOMEM),"PCM allocation");goto done;}
-    codec->sample_rate=48000;codec->sample_fmt=AV_SAMPLE_FMT_S32;codec->time_base=(AVRational){1,48000};
+    codec->sample_rate=48000;codec->sample_fmt=alac?AV_SAMPLE_FMT_S32P:AV_SAMPLE_FMT_S32;codec->time_base=(AVRational){1,48000};
+    if(alac)codec->bits_per_raw_sample=24;
     k->av_channel_layout_default(&codec->ch_layout,2);
     if(format->oformat->flags & AVFMT_GLOBALHEADER)codec->flags|=AV_CODEC_FLAG_GLOBAL_HEADER;
     ret=k->avcodec_open2(codec,encoder,NULL);if(ret<0){fail(k,ret,"open PCM encoder");goto done;}
+    if(alac && (codec->initial_padding!=0 || codec->frame_size<=0 ||
+        !(encoder->capabilities & AV_CODEC_CAP_SMALL_LAST_FRAME))) {
+        ret=fail(k,AVERROR_INVALIDDATA,"ALAC requires zero priming and exact partial final frame");goto done;
+    }
+    int block=alac?codec->frame_size:1024;
     stream->time_base=codec->time_base;
     ret=k->avcodec_parameters_from_context(stream->codecpar,codec);if(ret<0){fail(k,ret,"PCM parameters");goto done;}
     ret=k->avio_open(&format->pb,path,AVIO_FLAG_WRITE);if(ret<0){fail(k,ret,"open PCM output");goto done;}
-    ret=k->avformat_write_header(format,NULL);if(ret<0){fail(k,ret,"PCM header");goto done;}
-    frame->format=codec->sample_fmt;frame->sample_rate=48000;frame->nb_samples=1024;
+    AVDictionary *audio_options=NULL;
+    if(alac)k->av_dict_set(&audio_options,"movie_timescale","48000",0);
+    ret=k->avformat_write_header(format,&audio_options);k->av_dict_free(&audio_options);if(ret<0){fail(k,ret,"PCM header");goto done;}
+    frame->format=codec->sample_fmt;frame->sample_rate=48000;frame->nb_samples=block;
     ret=k->av_channel_layout_copy(&frame->ch_layout,&codec->ch_layout);if(ret<0){fail(k,ret,"PCM channel layout");goto done;}
     ret=k->av_frame_get_buffer(frame,0);if(ret<0){fail(k,ret,"PCM frame buffer");goto done;}
-    for(int64_t i=0;i<count;i+=1024) {
+    for(int64_t i=0;i<count;i+=block) {
         ret=k->av_frame_make_writable(frame);if(ret<0){fail(k,ret,"PCM writable buffer");goto done;}
-        frame->nb_samples=(int)((count-i)<1024?(count-i):1024);frame->pts=i;
-        memcpy(frame->data[0],samples+i*2,(size_t)frame->nb_samples*2*sizeof(int32_t));
+        frame->nb_samples=(int)((count-i)<block?(count-i):block);frame->pts=i;
+        if(alac) {
+            for(int ch=0;ch<2;++ch) {
+                int32_t *plane=(int32_t *)frame->data[ch];
+                for(int j=0;j<frame->nb_samples;++j)plane[j]=samples[(i+j)*2+ch];
+            }
+        } else memcpy(frame->data[0],samples+i*2,(size_t)frame->nb_samples*2*sizeof(int32_t));
         ret=k->avcodec_send_frame(codec,frame);if(ret<0){fail(k,ret,"send PCM frame");goto done;}
         for(;;) {
             ret=k->avcodec_receive_packet(codec,packet);
@@ -633,6 +646,7 @@ void km_probe_stream(AVFormatContext *format,int i,StreamInfo *out) {
         p->sample_rate,p->ch_layout.nb_channels,p->width,p->height};
 }
 const char *km_probe_codec(Km *k,AVFormatContext *format,int i) { return k->avcodec_get_name(format->streams[i]->codecpar->codec_id); }
+uint32_t km_probe_codec_tag(AVFormatContext *format,int i) { return format->streams[i]->codecpar->codec_tag; }
 const char *km_probe_tag(Km *k,AVFormatContext *format,const char *key) {
     const AVDictionaryEntry *entry=k->av_dict_get(format->metadata,key,NULL,0);
     return entry?entry->value:"";
@@ -650,32 +664,39 @@ static int read_mux_packet(Km *k,AVFormatContext *f,AVPacket *p,int stream) {
         k->av_packet_unref(p);
     }
 }
+/* HEVC delivery stores parameter sets in hvcC, with a fixed hvc1 sample entry. */
+uint32_t km_mux_video_tag(int profile) { return profile==3?MKTAG('h','v','c','1'):0; }
 int km_mux_av(Km *k,const char *video,const char *audio,const char *path,
-    const char *render_hash,const char *export_hash) {
+    const char *render_hash,const char *export_hash,int profile) {
     AVFormatContext *input[2]={NULL,NULL},*out=NULL;AVPacket *packets[2]={NULL,NULL};
     AVStream *streams[2]={NULL,NULL};int index[2]={-1,-1},ready[2]={0,0};
     int ret=0;
+    const enum AVCodecID videos[4]={AV_CODEC_ID_PRORES,AV_CODEC_ID_AV1,AV_CODEC_ID_H264,AV_CODEC_ID_HEVC};
+    if(profile<0 || profile>3)return fail(k,AVERROR(EINVAL),"unknown movie profile");
     const char *paths[2]={video,audio};
     for(int i=0;i<2;++i) {
         input[i]=km_probe_open(k,paths[i]);if(!input[i]){ret=-1;goto done;}
         index[i]=k->av_find_best_stream(input[i],i?AVMEDIA_TYPE_AUDIO:AVMEDIA_TYPE_VIDEO,-1,-1,NULL,0);
         if(index[i]<0){ret=fail(k,index[i],"mux stream missing");goto done;}
         AVStream *s=input[i]->streams[index[i]];
-        if(s->start_time!=0 || s->duration<=0 || s->codecpar->codec_id!=(i?AV_CODEC_ID_PCM_S24LE:AV_CODEC_ID_PRORES)) {
-            ret=fail(k,AVERROR_INVALIDDATA,"mux requires zero-origin ProRes and PCM24");goto done;
+        if(s->start_time!=0 || s->duration<=0 || s->codecpar->codec_id!=(i?(profile?AV_CODEC_ID_ALAC:AV_CODEC_ID_PCM_S24LE):videos[profile])) {
+            ret=fail(k,AVERROR_INVALIDDATA,"mux requires zero-origin streams matching the closed movie profile");goto done;
         }
         if(i && (s->codecpar->sample_rate!=48000 || s->codecpar->ch_layout.nb_channels!=2)) {
             ret=fail(k,AVERROR_INVALIDDATA,"mux requires stereo 48 kHz PCM");goto done;
         }
         packets[i]=k->av_packet_alloc();if(!packets[i]){ret=fail(k,AVERROR(ENOMEM),"mux packet allocation");goto done;}
     }
-    ret=k->avformat_alloc_output_context2(&out,NULL,"mov",path);
+    ret=k->avformat_alloc_output_context2(&out,NULL,profile==1?"mp4":"mov",path);
     if(ret<0 || !out){ret=fail(k,ret<0?ret:AVERROR(ENOMEM),"mux output context");goto done;}
     for(int i=0;i<2;++i) {
         streams[i]=k->avformat_new_stream(out,NULL);if(!streams[i]){ret=fail(k,AVERROR(ENOMEM),"mux stream allocation");goto done;}
         AVStream *s=input[i]->streams[index[i]];
         ret=k->avcodec_parameters_copy(streams[i]->codecpar,s->codecpar);if(ret<0){fail(k,ret,"mux codec parameters");goto done;}
-        streams[i]->codecpar->codec_tag=0;streams[i]->time_base=s->time_base;
+        streams[i]->codecpar->codec_tag=i?0:km_mux_video_tag(profile);streams[i]->time_base=s->time_base;
+        if(!i && profile==3 && (!streams[i]->codecpar->extradata || streams[i]->codecpar->extradata_size<=0)) {
+            ret=fail(k,AVERROR_INVALIDDATA,"hvc1 requires HEVC global-header parameter sets");goto done;
+        }
     }
     k->av_dict_set(&out->metadata,"kronello_render_snapshot_hash",render_hash,0);
     k->av_dict_set(&out->metadata,"kronello_export_snapshot_hash",export_hash,0);
@@ -684,6 +705,7 @@ int km_mux_av(Km *k,const char *video,const char *audio,const char *path,
     snprintf(timescale,sizeof(timescale),"%d",streams[0]->time_base.den);
     k->av_dict_set(&options,"video_track_timescale",timescale,0);
     k->av_dict_set(&options,"movflags","use_metadata_tags",0);
+    if(profile)k->av_dict_set(&options,"movie_timescale","48000",0);
     ret=k->avformat_write_header(out,&options);k->av_dict_free(&options);if(ret<0){fail(k,ret,"mux header");goto done;}
     for(int i=0;i<2;++i){ready[i]=read_mux_packet(k,input[i],packets[i],index[i]);if(ready[i]<0){ret=ready[i];goto done;}}
     while(ready[0] || ready[1]) {
