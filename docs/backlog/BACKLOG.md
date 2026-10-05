@@ -13,7 +13,7 @@
 | M0 | 0 | 0 | 6 | 0 | 6 |
 | M1 | 0 | 0 | 14 | 0 | 14 |
 | M2 | 0 | 1 | 10 | 0 | 11 |
-| M3 | 0 | 5 | 20 | 0 | 25 |
+| M3 | 0 | 4 | 21 | 0 | 25 |
 | M4 | 12 | 0 | 0 | 0 | 12 |
 | M5 | 5 | 0 | 0 | 0 | 5 |
 | M6 | 4 | 0 | 0 | 0 | 4 |
@@ -402,7 +402,7 @@
 
 ### INTEGRATION-002 縦断デモ第2段階: GUI閲覧と縦型variant
 
-- 優先度: P1 / 領域: integration / 状態: in_progress
+- 優先度: P1 / 領域: integration / 状態: done
 - 依存: INTEGRATION-001, TEMPLATE-002, GUI-001
 - 受け入れ条件:
   - 第1段階と同じプロジェクトをmacOS GUIで開き、CLI/MCPと同じ値・layout boundsを表示する

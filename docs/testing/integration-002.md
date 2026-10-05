@@ -1,5 +1,9 @@
 # INTEGRATION-002 の検証
 
+完了状態: 2026-10-06、Metal第2段階147 checks、実Swift FFIの全内部値 / bounds比較、
+同じprojectの横型 / 縦型の主エージェント直接GUI確認を合わせて受け入れ2条件を満たし `done`。
+以下は初回workerの記録、末尾に統合後の実環境証拠を記載する。
+
 対象: `.worktrees/m3-integ2` / `m3-integ2`、基点 `e02292ae68040edfd3ad3d66f41f95a61f3726cc`。
 2026-10-05、Darwin arm64 / Rust 1.95.0。GPU・SwiftPM・アプリの画面操作は worker sandbox では未実行。
 実装完了と受け入れ合格を区別し、host の証拠を最後に追記する。
@@ -258,3 +262,15 @@ Metal 4K出力、font manifest、固定 snapshot、CLI / MCP の canonical pair�
 
 証拠: `target/m3-acceptance/integration-metal/report.json` / `gui-evidence.json` / `portrait-wrapping.json`、
 `target/m3-acceptance/integration-metal.log`。実画面の内部レイヤー・boundsの主エージェント確認は追記する。
+
+### 主エージェントの横型 / 縦型GUI確認（2026-10-06）
+
+同じ `integration-metal/lower-third.kronello` のrevision14を実アプリで開き、
+landscape（第1Composition tab）/ portrait（第5tab）のCompositionInstanceから内部Shapeを検査した。
+landscapeはMin28,118 / Max286,154 / Size258×36、portraitはMin28,218 / Max84,286 / Size56×68。
+両方のPosition、色`#E6800D`、shadow offset6,6 / opacity0.6もCLI / MCPの値と一致した。
+実Metal表示で日本語の2行 → 4行への再レイアウトを目視した。
+CLI / MCPのscene JSONの厳密一致、SwiftPMの全内部値 / layout・ink・visual bounds比較、
+driver147 checksと合わせて両条件を確認した。
+証拠は `target/m3-acceptance/integration-{landscape,portrait}-shape.png` と既存driver / FFI evidence。
+内部レイヤーpopupの別NSPanelのCUA取得は別に調査しており、確認前にpopup操作成功とは記録しない。

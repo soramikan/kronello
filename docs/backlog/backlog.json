@@ -702,7 +702,7 @@
       "priority": "P1",
       "area": "integration",
       "title": "縦断デモ第2段階: GUI閲覧と縦型variant",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "INTEGRATION-001",
         "TEMPLATE-002",
