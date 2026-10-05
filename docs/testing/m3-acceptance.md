@@ -50,6 +50,7 @@ CommandLineTools の SwiftPM は `SwiftUIMacros` が欠落し、初回 build は
 | GUI-003正式受け入れ | 成功、done。直接両テーマのmove / 両端trim / blade / Undo / Motion、配置は本番receiver test | `target/m3-acceptance/edit-*`、[GUI-003](gui-003.md)末尾 |
 | GUI-004 正式受け入れ | 成功、done。両テーマ / AX直接数値入力 / 型付き短尺拒否 / 明示保存Undoも確認 | `target/m3-acceptance/template-*`、[GUI-004](gui-004.md)末尾 |
 | GUI-004 Export実操作（Dark / Light） | preflight disabled→ready、固定独立worker成功、OUTPUT_EXISTS / FONT_MISSING抑止 | `target/m3-acceptance/gui-export-jobs.json` / `gui-export-final.mov` / `export-*png`。Metal3frames、PCM24 6000samples |
+| 最終canonical開発app | `--release` build / deep strict codesign / asset UTI宣言が成功 | `target/macos/Kronello.app`、`target/m3-acceptance/final-app-build.log`。最適化Rust coreと開発Swift UI、runtime FFmpegは別ディレクトリ |
 | 元 GUI 作業ツリーの保全 | 成功 | `.worktrees/m3-{gui3,gui4,integ2,qa2}` の tracked patch / 未追跡 source の bytes 一致 |
 
 SwiftPM 初回の debug FFI run は中断時点で未完了だった。sample 採取では音声やUIの停止ではなく、
@@ -57,8 +58,10 @@ space-path全時刻のscene評価が大きい日本語フォントの SHA を繰
 最適化 FFI の再実行で Motion15件は3.17秒、AppModel45件は25.34秒で成功した。
 初回の未完了 run を成功件数に含めない。
 
-先行 macOS CI の Swift build では duration label の複数文字列 `+` 連結が型検査の時間制限に達した。
-同じ表示の string interpolation へ変更し、実 Xcode SwiftPM build は成功した。次の CI で hosted toolchain も検証する。
+先行macOS CIのSwift buildではduration labelの複数文字列 `+` 連結が型検査の時間制限に達した。
+同じ表示のstring interpolationへ変更し、実Xcode SwiftPM buildと後続hosted CIが成功した。
+run37382296012のhosted Swiftは69 tests / skipped1 / failures0。Integration evidence未指定のskipを、
+ローカル最終71 tests / skipped0の明示evidence付きrunと区別する。
 
 再現コマンド:
 
