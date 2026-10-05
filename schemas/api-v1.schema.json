@@ -132,7 +132,8 @@
     "AudioRetimePolicy": {
       "description": "NLE-001 never performs implicit pitch/speed conversion.",
       "enum": [
-        "reject"
+        "reject",
+        "resample_v1"
       ],
       "type": "string"
     },
@@ -1862,6 +1863,23 @@
             "offset",
             "color",
             "opacity"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "gain": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "const": "audio_gain",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "gain"
           ],
           "type": "object"
         }

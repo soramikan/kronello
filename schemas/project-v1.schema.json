@@ -184,7 +184,8 @@
       "description": "NLE-001 never performs implicit pitch/speed conversion.",
       "type": "string",
       "enum": [
-        "reject"
+        "reject",
+        "resample_v1"
       ]
     },
     "BoundsStage": {
@@ -717,6 +718,23 @@
             "offset",
             "color",
             "opacity"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "gain": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "audio_gain"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "gain"
           ]
         }
       ]

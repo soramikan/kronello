@@ -523,12 +523,12 @@ pub(crate) fn movie_snapshot(
     else {
         return Err(ServiceError::invalid("render.export requires pro_res_mov"));
     };
-    if !matches!(profile_version, 1 | 2)
+    if !matches!(profile_version, 1..=3)
         || (*profile_version == 1 && *audio != kronello_audio::AudioSourceMode::Explicit)
     {
         return Err(ServiceError::new(
             "UNSUPPORTED_FEATURE",
-            "document/silence audio requires movie profile_version 2",
+            "unsupported movie profile or audio mode (document/silence requires profile 2/3)",
         ));
     }
     let clips = clips
@@ -538,7 +538,7 @@ pub(crate) fn movie_snapshot(
     Ok(if *profile_version == 1 {
         AvExportSnapshot::new(snapshot, clips)?
     } else {
-        AvExportSnapshot::with_audio(snapshot, *audio, clips)?
+        AvExportSnapshot::with_audio_profile(snapshot, *audio, clips, *profile_version)?
     })
 }
 
