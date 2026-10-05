@@ -62,6 +62,7 @@ public struct EditCandidate {
     @Published public private(set) var compositions: [[String: Any]] = []
     @Published public private(set) var layers: [Layer] = []
     @Published public private(set) var document: [String: Any] = [:]
+    @Published public private(set) var scene: [String: Any] = [:]
     @Published public private(set) var history: [[String: Any]] = []
     @Published public private(set) var undoState = SessionUndo()
     @Published public private(set) var undoConflictLabel = "操作の変更"
@@ -191,13 +192,13 @@ public struct EditCandidate {
     /// Shared immutable query results are presentation data, never a second editable document.
     public func adopt(document: [String: Any], scene: [String: Any], revision: String, actor: String, external: Bool) {
         let previous = self.revision
-        self.document = document; compositions = document.objects("compositions"); self.revision = revision
+        self.document = document; self.scene = scene; compositions = document.objects("compositions"); self.revision = revision
         let nodes = current.objects("nodes"), evaluated = scene.objects("nodes")
         let byID = Dictionary(uniqueKeysWithValues: nodes.map { ($0.string("id"), $0) })
         var result: [Layer] = []
         func visit(_ id: String, _ level: Int) {
             guard let authored = byID[id] else { return }
-            let evaluation = evaluated.first { $0.object("key").string("node") == id }?.object("evaluated") ?? [:]
+            let evaluation = evaluated.first { $0.object("key").string("node") == id && $0.object("key")["instance_path"] as? [String] == [] }?.object("evaluated") ?? [:]
             result.append(Layer(id: id, authored: authored, evaluated: evaluation, level: level))
             for child in authored["child_order"] as? [String] ?? [] { visit(child, level + 1) }
         }

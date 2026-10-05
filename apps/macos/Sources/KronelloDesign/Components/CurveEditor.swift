@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 public struct KRCurveChannel: Identifiable {
@@ -50,6 +51,12 @@ public struct KRCurveEditor: View {
     public var body: some View {
         GeometryReader { proxy in
             let graph = CGSize(width: proxy.size.width, height: max(1, proxy.size.height - KRSize.rowHeight))
+            let axisLabels = (0...4).map { String(format: "%.1f", values.lowerBound + Double($0) / 4 * (values.upperBound - values.lowerBound)) }
+            let readouts = channels.map { $0.id + " " + $0.current }
+            let axisWidth = KRSpace.space2 + textWidth(axisLabels)
+            let lineHeight = max(KRType.ruler.lineHeight, ceil(("X" as NSString).size(withAttributes: [.font: KRType.ruler.nsFont()]).height))
+            let readoutSize = CGSize(width: textWidth(readouts), height: CGFloat(channels.count) * lineHeight + CGFloat(max(0, channels.count - 1)) * KRSpace.space1)
+            let readoutFrame = KRCurveReadoutLayout.frame(graph: graph, playheadX: screen(CGPoint(x: playhead, y: 0), graph).x, axisWidth: axisWidth, readout: readoutSize)
             VStack(spacing: 0) {
                 KRRuler(ticks).frame(height: KRSize.rowHeight)
                 ZStack(alignment: .topLeading) {
@@ -112,12 +119,16 @@ public struct KRCurveEditor: View {
                     }
                     VStack(alignment: .leading, spacing: KRSpace.space1) {
                         ForEach(channels) { channel in Text(channel.id + " " + channel.current).krText(KRType.ruler).foregroundStyle(p.accentInk) }
-                    }.offset(x: min(max(0, screen(CGPoint(x: playhead, y: 0), graph).x + KRSpace.space2), max(0, graph.width - 100)), y: KRSpace.space2).allowsHitTesting(false)
+                    }.fixedSize().frame(width: readoutFrame.width, height: readoutFrame.height, alignment: .topLeading).clipped()
+                        .offset(x: readoutFrame.minX, y: readoutFrame.minY).allowsHitTesting(false)
                 }.coordinateSpace(name: "curve-graph").frame(height: graph.height)
             }.overlay(alignment: .topLeading) {
                 KRPlayhead().frame(height: proxy.size.height).offset(x: screen(CGPoint(x: playhead, y: 0), graph).x - 6).allowsHitTesting(false)
             }.clipped()
         }.focusable().focused($focused).focusEffectDisabled().krFocusRing(focused, inset: true)
+    }
+    func textWidth(_ labels: [String]) -> CGFloat {
+        ceil(labels.map { ($0 as NSString).size(withAttributes: [.font: KRType.ruler.nsFont()]).width }.max() ?? 0)
     }
     func screen(_ point: CGPoint, _ size: CGSize) -> CGPoint {
         CGPoint(x: KRSpace.space2 + (point.x - frames.lowerBound) / max(1, frames.upperBound - frames.lowerBound) * max(1, size.width - KRSpace.space2 * 2),

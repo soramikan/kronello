@@ -73,9 +73,12 @@ struct CurvePanel: View {
                 }
             }
             HStack(spacing: KRSpace.space2) {
-                Text("X / Y は同じ時間イージングを共有します。どちらの接線編集も両方に反映されます。").krText(KRType.caption).foregroundStyle(p.inkMuted)
+                VStack(alignment: .leading, spacing: KRSpace.space1) {
+                    Text("X / Y は同じ時間イージングを共有します。どちらの接線編集も両方に反映されます。")
+                    if graphMode == "velocity" { Text("速度は表示のみです。キーと接線は値グラフで編集します。") }
+                }.krText(KRType.caption).foregroundStyle(p.inkMuted)
                 Spacer()
-            }.padding(.horizontal, KRSpace.space3).frame(height: KRSize.rowHeight).background(p.surface100)
+            }.padding(.horizontal, KRSpace.space3).frame(height: graphMode == "velocity" ? KRSize.rowHeight * 2 : KRSize.rowHeight).background(p.surface100)
         }.onChange(of: propertyID) { _, _ in axis = 0; alignment = nil; hidden = [] }
             .onChange(of: model.keySelection) { _, _ in alignment = nil }
             .onKeyPress(.escape) { keyGesture = nil; keyDelta = 0; tangentOrigin = nil; tangentPreview = nil; finishGesture(); return .handled }
@@ -112,14 +115,11 @@ struct CurvePanel: View {
     func channelName(_ i: Int) -> String { count == 1 ? presentation.label : ["X", "Y", "Z", "W"][min(i, 3)] }
     func currentValue(_ i: Int) -> String {
         let values = target.map { model.propertyNumbers($0.0, $0.1) } ?? []
-        return values.indices.contains(i) ? String(format: "%.1f %@", values[i] * presentation.multiplier, presentation.unit) : "—"
+        return values.indices.contains(i) ? presentation.curveReadout(values[i]) : "—"
     }
     func velocityValue(_ i: Int) -> String {
-        let positions = keys.map(model.keyFramePosition), f = model.currentFramePosition
-        let a = CurveDisplay.sample(keys, frame: f - 0.01, positions: positions), b = CurveDisplay.sample(keys, frame: f + 0.01, positions: positions)
-        guard a.indices.contains(i), b.indices.contains(i) else { return "—" }
-        let value = (b[i] - a[i]) / 0.02 * Double(model.rateNum) / Double(model.rateDen) * presentation.multiplier
-        return String(format: "%.1f %@/s", value, presentation.unit)
+        let values = CurveDisplay.velocity(keys, frame: model.currentFramePosition, positions: keys.map(model.keyFramePosition), framesPerSecond: Double(model.rateNum) / Double(model.rateDen))
+        return values.indices.contains(i) ? presentation.curveReadout(values[i], velocity: true) : "—"
     }
     func points(_ axis: Int) -> [CGPoint] {
         let positions = keys.map(model.keyFramePosition)
@@ -127,8 +127,7 @@ struct CurvePanel: View {
             let frame = frames.lowerBound + Double(i) / 400 * (frames.upperBound - frames.lowerBound)
             var values = CurveDisplay.sample(keys, frame: frame, positions: positions)
             if graphMode == "velocity" {
-                let a = CurveDisplay.sample(keys, frame: frame - 0.01, positions: positions), b = CurveDisplay.sample(keys, frame: frame + 0.01, positions: positions)
-                values = zip(a, b).map { ($1 - $0) / 0.02 * Double(model.rateNum) / Double(model.rateDen) }
+                values = CurveDisplay.velocity(keys, frame: frame, positions: positions, framesPerSecond: Double(model.rateNum) / Double(model.rateDen))
             }
             return values.indices.contains(axis) ? CGPoint(x: frame, y: values[axis] * presentation.multiplier) : nil
         }

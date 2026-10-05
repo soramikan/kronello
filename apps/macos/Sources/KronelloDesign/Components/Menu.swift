@@ -104,7 +104,7 @@ private struct KRMenuEntry: View {
             }.padding(.horizontal, KRSpace.space2).frame(height: KRSize.controlHeight)
                 .background(active ? p.selection : .clear, in: RoundedRectangle(cornerRadius: 4))
         }.buttonStyle(.plain).disabled(item.disabled).opacity(item.disabled ? 0.45 : 1)
-            .krFocusRing(cornerRadius: 4).background {
+            .krControlFocusRing(cornerRadius: 4).background {
                 GeometryReader { geometry in
                     Color.clear.preference(key: KRMenuAnchorKey.self, value: geometry.frame(in: .global))
                 }
