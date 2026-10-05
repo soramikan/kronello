@@ -112,6 +112,10 @@ jobs:
     timeout-minutes: 30
     env:
       WGPU_BACKEND: vulkan
+      # Keep duplicate dev/test/feature artifacts below the hosted disk budget.
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_INCREMENTAL: "0"
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -143,7 +147,9 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             target
-          key: cargo-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', '**/Cargo.toml', 'Cargo.lock') }}
+          key: cargo-${{ runner.os }}-${{ runner.arch }}-lean-v1-${{ hashFiles('rust-toolchain.toml', '**/Cargo.toml', 'Cargo.lock') }}
+      - name: Report disk available for workspace tests
+        run: df -h "$GITHUB_WORKSPACE" "$RUNNER_TEMP"
       - name: Install FFmpeg development dependencies
         run: |
           sudo apt-get update
