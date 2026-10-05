@@ -149,6 +149,51 @@ fn transactional_slots_obey_fifo_and_configured_parallelism() {
         .unwrap();
     assert!(claim_retrying_contention(&store, &c.id).unwrap());
 }
+
+#[test]
+fn owned_queued_polling_does_not_write_but_heartbeat_and_promotion_do() {
+    let temp = tempfile::tempdir().unwrap();
+    let store = JobStore::open(JobConfig::at(temp.path())).unwrap();
+    let running = submit(&store);
+    assert!(claim_retrying_contention(&store, &running.id).unwrap());
+    let queued = submit(&store);
+    assert!(!claim_retrying_contention(&store, &queued.id).unwrap());
+    let db = rusqlite::Connection::open(temp.path().join("jobs.sqlite3")).unwrap();
+    db.execute_batch(
+        "CREATE TABLE observed_updates(id TEXT);
+        CREATE TRIGGER count_job_updates AFTER UPDATE ON jobs
+        BEGIN INSERT INTO observed_updates VALUES(NEW.id); END;",
+    )
+    .unwrap();
+    let writes = || -> i64 {
+        db.query_row(
+            "SELECT count(*) FROM observed_updates WHERE id=?1",
+            [&queued.id],
+            |row| row.get(0),
+        )
+        .unwrap()
+    };
+    for _ in 0..20 {
+        assert!(!claim_retrying_contention(&store, &queued.id).unwrap());
+    }
+    assert_eq!(
+        writes(),
+        0,
+        "occupied-slot polls must not flush redundant updates"
+    );
+    assert_eq!(
+        store.get(&queued.id).unwrap().worker_pid,
+        Some(std::process::id())
+    );
+    store.heartbeat(&queued.id).unwrap();
+    assert_eq!(writes(), 1, "queued liveness still has an explicit writer");
+    store
+        .finish_error(&running.id, &JobError::new("TEST_FAILURE", "done"))
+        .unwrap();
+    assert!(claim_retrying_contention(&store, &queued.id).unwrap());
+    assert_eq!(writes(), 2);
+    assert_eq!(store.get(&queued.id).unwrap().status, JobStatus::Running);
+}
 #[test]
 fn stale_lease_cannot_publish_or_become_successful_again() {
     let temp = tempfile::tempdir().unwrap();

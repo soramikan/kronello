@@ -77,6 +77,7 @@ GUI / CLI / MCP
 - heartbeat 専用 connection の SQLite busy 待機は `min(100 ms, heartbeat_interval, heartbeat_timeout / 4)` とする。通常の状態操作の5秒待機を使わない。`SQLITE_BUSY` / `SQLITE_LOCKED` は worker.log に記録し、次の間隔で再試行する。所有喪失など他のエラーは記録して heartbeat thread を終了する。worker 起動・heartbeat 開始・書込み失敗・復帰・thread panic も stderr（切り離した worker では worker.log）へ記録する。
 - プレビュー（`preview.render`）はジョブではなく、呼び出したプロセス内で即時に実行する。スロットを消費しない。
 - slot claim / frame checkpoint も heartbeat と同じ短い busy 待機と競合のみの再試行を使う。slot 待機時間と contention、checkpoint contention を記録する。get/list は通常 WAL read、期限切れかつ死亡した active record のある場合のみ writer を取得して最新状態を再確認する。lock が解放されなければ完了時刻は保証しない。
+- slot claim は初回の owner 登録と Running への遷移時に record を保存する。同じ owner の queued poll は冗長な FULL 同期更新を避け、queued heartbeat は専用 pulse thread が維持する。
 
 ## 中断と取り消し
 
