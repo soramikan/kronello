@@ -4,6 +4,8 @@ import UniformTypeIdentifiers
 import KronelloAppModel
 import KronelloDesign
 
+private let projectAssetType = UTType(exportedAs: "com.kronello.project-asset", conformingTo: .data)
+
 struct EditPage: View {
     @ObservedObject var model: EditorModel
     var body: some View {
@@ -34,9 +36,10 @@ struct EditProjectPanel: View {
                                             if let composition = asset.source["composition"] as? String { model.ui.page = "motion"; model.setComposition(composition) }
                                         })
                                         .onDrag {
+                                            if ProcessInfo.processInfo.environment["KRONELLO_TRACE_ASSET_DRAG"] == "1" { NSLog("asset drag SwiftUI provider") }
                                             model.assetSelection = asset.id; model.cancelClipGesture()
                                             let provider = NSItemProvider()
-                                            provider.registerDataRepresentation(forTypeIdentifier: "com.kronello.project-asset", visibility: .ownProcess) { completion in
+                                            provider.registerDataRepresentation(forTypeIdentifier: projectAssetType.identifier, visibility: .ownProcess) { completion in
                                                 completion(Data(asset.id.utf8), nil); return nil
                                             }
                                             return provider
@@ -232,7 +235,7 @@ struct SequenceTracks: View {
                         .frame(width: max(1, Double(candidate.end - candidate.start) * frameWidth)).offset(x: KRSpace.space2 + Double(candidate.start) * frameWidth).allowsHitTesting(false)
                 }
             }.frame(width: width, height: KRSize.trackHeight)
-                .onDrop(of: ["com.kronello.project-asset"], delegate: AssetPlacementDrop(model: model, track: id, frameWidth: frameWidth))
+                .onDrop(of: [projectAssetType], delegate: AssetPlacementDrop(model: model, track: id, frameWidth: frameWidth))
         }
     }
     func clipView(_ clip: EditClip, frameWidth: Double, locked: Bool) -> some View {
@@ -267,17 +270,27 @@ struct AssetPlacementDrop: DropDelegate {
     let model: EditorModel
     let track: String
     let frameWidth: Double
-    func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: ["com.kronello.project-asset"]) && model.assetSelection != nil && !model.busy && model.pendingCandidate == nil }
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        let frame = Int64(max(0, (info.location.x - KRSpace.space2) / frameWidth).rounded())
-        if model.timelineCandidate == nil, let asset = model.editAssets.first(where: { $0.id == model.assetSelection }) { model.beginAssetGesture(asset, track: track, at: frame) }
-        model.updateClipGesture(at: frame)
-        return DropProposal(operation: model.timelineCandidate == nil ? .forbidden : .copy)
+    var receiver: AssetPlacementReceiver { .init(model: model, track: track) }
+    func trace(_ event: String) {
+        if ProcessInfo.processInfo.environment["KRONELLO_TRACE_ASSET_DRAG"] == "1" { NSLog("asset drag destination: %@", event) }
     }
-    func dropExited(info: DropInfo) { model.cancelClipGesture() }
+    func validateDrop(info: DropInfo) -> Bool {
+        let accepted = info.hasItemsConforming(to: [projectAssetType]) && receiver.canAccept
+        trace("validate \(accepted)"); return accepted
+    }
+    func dropEntered(info: DropInfo) { trace("entered"); _ = updateCandidate(info: info) }
+    @discardableResult func updateCandidate(info: DropInfo) -> Bool {
+        let frame = Int64(max(0, (info.location.x - KRSpace.space2) / frameWidth).rounded())
+        return receiver.update(at: frame)
+    }
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        trace("updated"); return DropProposal(operation: updateCandidate(info: info) ? .copy : .forbidden)
+    }
+    func dropExited(info: DropInfo) { trace("exited"); receiver.exit() }
     func performDrop(info: DropInfo) -> Bool {
-        guard model.timelineCandidate != nil else { return false }
-        Task { await model.commitClipGesture() }; return true
+        trace("perform"); guard validateDrop(info: info) else { return false }
+        guard updateCandidate(info: info) else { return false }
+        Task { await receiver.commit() }; return true
     }
 }
 

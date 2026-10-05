@@ -13,11 +13,16 @@ import KronelloDesign
         let track: String
         let clip: String
     }
-    func fixture() async throws -> Fixture {
+    func fixture(includeAudio: Bool = false) async throws -> Fixture {
         let checks = GUIChecks(), folder = try checks.temporary(), path = folder.appendingPathComponent("edit.kronello").path
         let transport = try RecordingTransport(path: path, worker: checks.root.appendingPathComponent("apps/macos/Libraries/kronello").path)
         let editor = EditorModel(path: path, transport: transport, stateStore: .init(root: folder.appendingPathComponent("state")))
         var document = EditorModel.newDocument(name: "GUI-003 checks")
+        if includeAudio {
+            document["assets"] = [["id": UUID().uuidString.lowercased(), "content_hash": String(repeating: "0", count: 64),
+                "kind": "audio", "locator": ["relative": "audio.wav", "absolute": folder.appendingPathComponent("audio.wav").path],
+                "streams": [["index": 0, "codec": "pcm_s16le", "time_base": ["num": "1", "den": "48000"], "duration": ["num": "2", "den": "1"]]]]]
+        }
         let sequence = UUID().uuidString.lowercased(), track = UUID().uuidString.lowercased(), clip = UUID().uuidString.lowercased()
         let composition = document.objects("compositions")[0].string("id")
         document["sequences"] = [["id": sequence, "extent": ["width": 320, "height": 180], "frame_rate": ["num": "24", "den": "1"],
@@ -281,6 +286,49 @@ import KronelloDesign
         try require(!view.accessibilityPerformPress(), "Disabled native hit receiver rejects accessibility selection")
         await finish(f)
     }
+    func verifyAssetPlacementReceiver() async throws {
+        let f = try await fixture(includeAudio: true), e = f.editor
+        let receiver = AssetPlacementReceiver(model: e, track: f.track)
+        try require(!receiver.canAccept, "No asset selection is not a drop destination")
+        let asset = e.editAssets.first { $0.kind == .composition }!
+        e.assetSelection = asset.id
+        let plans = f.transport.planCount, applies = f.transport.applyCount
+        // Enter and release can occur without an intermediate dropUpdated callback.
+        try require(receiver.update(at: 72) && receiver.update(at: 80), "Entered and final release positions both reach the production receiver")
+        try require(e.timelineCandidate?.start == 80 && f.transport.planCount == plans && f.transport.applyCount == applies,
+                    "Receiver movement only changes the candidate")
+        let committed = await receiver.commit()
+        try require(committed, "Receiver release commits through the shared service")
+        try require(f.transport.planCount == plans + 1 && f.transport.applyCount == applies + 1 && f.transport.lastApply.objects("commands").count == 1,
+                    "Receiver release emits exactly one command and Event")
+        let repeated = await receiver.commit()
+        try require(!repeated, "Repeated release does not duplicate the Event")
+        try parity(f); await e.undo()
+        try require(e.editClips.count == 1, "One Undo removes the placement")
+        let afterUndo = f.transport.applyCount
+        // A drop with no entered/updated callbacks still prepares at its final point.
+        try require(receiver.update(at: 120) && e.timelineCandidate?.start == 120, "Final-position fallback creates a candidate")
+        receiver.exit()
+        try require(e.timelineCandidate == nil && f.transport.applyCount == afterUndo, "Exiting cancels only the local placement")
+        e.ui.locked.insert(f.track)
+        try require(!receiver.canAccept && !receiver.update(at: 140), "Locked tracks reject placement before service mutation")
+        e.ui.locked.remove(f.track)
+        e.beginClipGesture(e.editClips[0], mode: .move)
+        try require(!receiver.update(at: 140) && e.timelineCandidate?.mode == .move, "A foreign edit candidate is neither accepted nor overwritten")
+        receiver.exit()
+        try require(e.timelineCandidate?.mode == .move, "Drop exit does not cancel a different edit")
+        e.cancelClipGesture()
+        try require(receiver.update(at: 140), "Valid placement can start after a different edit is canceled")
+        let otherTrack = AssetPlacementReceiver(model: e, track: UUID().uuidString.lowercased())
+        try require(!otherTrack.update(at: 160) && e.timelineCandidate?.track == f.track, "Another destination cannot consume the current track's candidate")
+        otherTrack.exit()
+        try require(e.timelineCandidate != nil, "Exit from another destination preserves the candidate")
+        receiver.exit()
+        e.assetSelection = e.editAssets.first { $0.kind == .audio }!.id
+        try require(!receiver.update(at: 140) && e.timelineCandidate == nil && f.transport.applyCount == afterUndo,
+                    "Audio asset to video track is forbidden without a candidate or service edit")
+        await finish(f)
+    }
     func runAll() async throws {
         try await verifyPlaceReleaseOnce(); print("PASS edit place release + Undo + CLI parity")
         try await verifyTrimReleaseOnce(); print("PASS edit trim release + Undo + CLI parity")
@@ -294,5 +342,6 @@ import KronelloDesign
         try await verifyReviewPresentation(); print("PASS edit rational presentation, keyed preview errors and explicit CPU session choice")
         try await verifyBladeMouseHitPath(); print("PASS edit real NSEvent hit path and accessibility blade press = one command")
         try await verifyClipDragMouseHitPath(); print("PASS clip move/trim native NSEvent hit path, stable origin, click and release-once")
+        try await verifyAssetPlacementReceiver(); print("PASS drop receiver final-position candidate, release-once, Undo and CLI parity")
     }
 }

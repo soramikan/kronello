@@ -41,12 +41,14 @@ CommandLineTools の SwiftPM は `SwiftUIMacros` が欠落し、初回 build は
 | native IME 境界 / QA-002正式受け入れ | 成功、done | QA の `ime.json`。未確定 / 取消の commit0、確定の単一 Event、UTF-8 の結合濁点差分 |
 | macOS JOB 実プロセス | 8 passed、0 failures、1 ignored | `--features test-worker --test processes`。ignored は load50 の明示 stress |
 | macOS JOB 高負荷、FIFO修正後 | CLI24/24を2回成功、146 workers / orphan0 | `c860d07` clean HEAD、64 burners、最後40 sampleのload79.06–99.68。[JOB-002](job-002.md)末尾 |
-| Linux / macOS JOB最終production CI | 全workspace / clippy / 実process証拠が成功 | run37381037423、各62 workers / orphan0 / errors0。Windows processes成功、stateの並列retry testだけ次CI待ち |
+| Linux / macOS JOB最終production CI | 全workspace / clippy / 実process証拠が成功 | run37381037423、各62 workers / orphan0 / errors0。Windowsは次の同一revision runでstateを含め成功 |
+| JOB最終同一revisionの3OS CI | Linux / macOS / Windowsすべて成功、JOB-002 done | run37382296012、[JOB-002](job-002.md)末尾。production / focused / full gatesを区別 |
+| 最終GUI / 本番配置receiverのSwiftPM | 71 passed、0 failures、0 skips | `target/m3-acceptance/final-gui-swift.log`。Design19 / Core4 / AppModel48。native clipとtransition、receiverを追加 |
 | 第2段階 Metal 4K driver | 147 checksすべて成功 | `target/m3-acceptance/integration-metal/report.json`、横型 / 縦型 / 固定 snapshot / typed overflow |
 | AUDIO-002 実engine / Metal | 3fps、underrun0、seek / stop-resume一致 | `target/m3-acceptance/audio-report.json`。負荷並行条件、physical scanoutは未測定 |
 | AUDIO-002 最終quiet実測 | 全3率exit0、underrun / missing0、seek2 / resume一致 | `target/m3-acceptance/audio-quiet/report.json`。38.539–38.603秒、929 / 929 / 1160提示、最大frame格子差0 / 0 / 1frames |
-| GUI-003 実操作（Dark） | trim / Undo / blade各単一Event、Motion遷移でrevision不変 | `target/m3-acceptance/edit-*`、[GUI-003](gui-003.md)末尾 |
-| GUI-004 実操作（Dark） | 入力 / Undo、版移行Cancel不変 / Apply単一Event | `target/m3-acceptance/template-*`、[GUI-004](gui-004.md)末尾 |
+| GUI-003正式受け入れ | 成功、done。直接両テーマのmove / 両端trim / blade / Undo / Motion、配置は本番receiver test | `target/m3-acceptance/edit-*`、[GUI-003](gui-003.md)末尾 |
+| GUI-004 正式受け入れ | 成功、done。両テーマ / AX直接数値入力 / 型付き短尺拒否 / 明示保存Undoも確認 | `target/m3-acceptance/template-*`、[GUI-004](gui-004.md)末尾 |
 | GUI-004 Export実操作（Dark / Light） | preflight disabled→ready、固定独立worker成功、OUTPUT_EXISTS / FONT_MISSING抑止 | `target/m3-acceptance/gui-export-jobs.json` / `gui-export-final.mov` / `export-*png`。Metal3frames、PCM24 6000samples |
 | 元 GUI 作業ツリーの保全 | 成功 | `.worktrees/m3-{gui3,gui4,integ2,qa2}` の tracked patch / 未追跡 source の bytes 一致 |
 
@@ -69,16 +71,17 @@ KRONELLO_STATE_ROOT="$PWD/target/m3-acceptance/job-state" \
   cargo test -p kronello-jobs --features test-worker --test processes --locked -- --nocapture
 ```
 
-## 受け入れ確認を続ける範囲
+## 最終判定と保証範囲
 
-- 主エージェントが実アプリを直接操作して Dark / Light、クリップ操作、テンプレート・書き出し、
-  尺入力等の残件を確認する。QA-002の正式2条件は本番native input境界と三入口比較で成功した。
+- M3の25タスクは正式受け入れを確認しすべて `done`。GUI-003 / GUI-004は直接Dark / Light、clip操作、
+  Template / Export / AX尺入力と本番receiverの検査で確認した。QA-002の正式2条件は本番native input境界と三入口比較で成功した。
   OSの実候補ウインドウ / Kotoeri / VoiceOverは未検証として保証範囲から分ける。
 - AUDIO-002 は負荷並行 / 最終quietの実デバイス / Metal測定とnative callback分離のreviewが成功し `done`。
   物理scanout / loopback / 主観的listeningの保証は含めない。
 - RENDER-003 の長尺 / 4K / memory / 障害の実測と最終統合の必須 Rust gate / GPU goldenは成功。
   [RENDER-003](render-003.md)に元実測と統合結果を分けて記録する。
-- JOB-002 の Windows / Linux の最終実プロセス CI を確認する。
-  macOSの修正後load50超のstressとworker回収は成功済み。
+- JOB-002 は最終3OS実プロセスCIとmacOSの修正後load50超stress / worker回収で成功し `done`。
 
-その後の結果は本書と各タスクの検証文書へ追記する。
+OS pointerによる素材dropはproviderからdestinationへ未到達で、原因は未確定。
+成功やCUA固有の制約とは断定せず、正式条件の本番receiver / shared API検査と区別する。
+開発用の最終bundleは `target/macos/Kronello.app`。各fix番号付きbundleは比較実験の記録である。

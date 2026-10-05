@@ -53,7 +53,8 @@ def assemble(bin_path, output):
         "LSMinimumSystemVersion": "14.0", "NSHighResolutionCapable": True, "NSPrincipalClass": "NSApplication",
         "CFBundleDocumentTypes": [{"CFBundleTypeName": "Kronello Project", "CFBundleTypeRole": "Editor", "LSItemContentTypes": ["dev.kronello.project"]}],
         "UTExportedTypeDeclarations": [{"UTTypeIdentifier": "dev.kronello.project", "UTTypeDescription": "Kronello Project",
-            "UTTypeConformsTo": ["public.data"], "UTTypeTagSpecification": {"public.filename-extension": ["kronello"]}}],
+            "UTTypeConformsTo": ["public.data"], "UTTypeTagSpecification": {"public.filename-extension": ["kronello"]}},
+            {"UTTypeIdentifier": "com.kronello.project-asset", "UTTypeDescription": "Kronello Project Asset Transfer", "UTTypeConformsTo": ["public.data"]}],
     }
     with (contents / "Info.plist").open("wb") as file:
         plistlib.dump(info, file)

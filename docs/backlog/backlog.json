@@ -719,7 +719,7 @@
       "priority": "P2",
       "area": "gui",
       "title": "macOS GUI: 編集ページ（Sequence のトラック・素材一覧・クリップの Inspector）",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "GUI-001",
         "NLE-002"

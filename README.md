@@ -3,8 +3,8 @@
 カット編集（NLE）とモーショングラフィックスを、同じ時間・プロパティ・組版・合成・レンダー基盤の上で扱う動画編集ソフトウェア。
 人間が使う GUI と、スクリプトや AI エージェントが使う CLI / MCP を同格の入口とし、どこから操作しても同じ Command / Query API・同じ revision・同じレンダー結果に到達することを設計の中心に置く。
 
-> **状態: M0（基盤契約・テスト素材・CI・技術スパイク）を実装済み。** 有理数時刻（`kronello-time`）、型付き Property（`kronello-model`）、テスト素材と比較（`kronello-testkit`）、GPU 描画と FrameBridge のスパイク（`kronello-gpu` / `kronello-framebridge`）がある。動画編集機能（M1 以降）と参照機での性能検証は未着手。
-> 文書中の API・CLI・スキーマはすべて提案であり、稼働中の製品の仕様ではない。
+> **状態: M0・M1・M2のP0とM3の正式受け入れを完了。** Rustコア、共有CLI / MCP、macOSのEdit / Motion / Template / Exportページ、実時間音声とstreaming書き出しを実装した。M2のSTORE-003の実環境残件とM4以降は別範囲。
+> 実装と保証範囲の正本は [backlog](docs/backlog/BACKLOG.md) と [M3の検証記録](docs/testing/m3-acceptance.md)。設計文書中の提案APIを、そのまま実装済み仕様と扱わない。
 
 ## 何を作るか
 
@@ -52,7 +52,9 @@ cargo test --workspace --locked
 python3 scripts/backlog.py check
 ```
 
-CI は macOS (Apple Silicon) と Linux (Mesa lavapipe) で同じ検証を行う。GPU 画素の比較は [固定環境の golden 比較手順](docs/testing/golden-comparison.md) を参照（harness は実装済み、参照機の基準画像は未作成）。
+CI は macOS (Apple Silicon) と Linux (Mesa lavapipe) でworkspaceを検証し、Windowsではworkerの実プロセス検査を行う。GPU画素は [固定環境のgolden比較手順](docs/testing/golden-comparison.md) と [最終Metal 40 scene比較の記録](docs/testing/m3-acceptance.md) を参照。
+
+macOSの開発アプリは [apps/macos/README.md](apps/macos/README.md) の手順で `python3 scripts/build_macos_app.py --release` を実行すると、`target/macos/Kronello.app` に組み立てる。配布用signing / notarization済みの製品ではない。
 
 ## ライセンス
 

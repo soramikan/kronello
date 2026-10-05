@@ -5,7 +5,7 @@ package 名は `Kronello`、Swift tools 5.10、macOS 14 以上。
 
 | target | 内容 |
 |---|---|
-| Kronello | Welcome / main window、Motion authoring、明示 Dark / Light theme |
+| Kronello | Welcome / main window、Edit / Motion / Template / Export、明示 Dark / Light theme |
 | KronelloAppModel | 共有 Command / Query の view model、session Undo、ユーザー UI state actor |
 | KronelloAppModelTests | selection / conflict / Undo / state 分離 / commit-once / GUI-CLI 同等性 |
 | CKronelloFFI | C header / module map。Rust の9関数だけを公開 |
@@ -38,14 +38,17 @@ SwiftPM が絶対パスのローカル `Libraries` を link / rpath に加える
 開発 app bundle と ad-hoc signing は下記スクリプトで行う。配布 signing / notarization と LGPL FFmpeg runtime の組み立ては後続範囲。
 FFI build は FFmpeg executable や GPL binary を同梱しない。
 
-## GUI-001 開発アプリ
+## M3開発アプリ
 
 ```sh
-python3 scripts/build_macos_app.py
+python3 scripts/build_macos_app.py --release
 target/macos/Kronello.app/Contents/MacOS/Kronello
 ```
 
-スクリプトは FFI / CLI、UI fonts、`swift build -j 3` を実行する。既存 build のみ使う場合は `--skip-build`。
+スクリプトは FFI / CLI、UI fonts、`swift build -j 3` を実行する。`--release`はRust FFI / CLIを最適化し、Swiftは開発buildを使う。既存buildのみ使う場合は `--skip-build`。
+M3の最終受け入れ・実機証拠と保証範囲は [統合検証記録](../../docs/testing/m3-acceptance.md)。
+Xcodeのtoolchainを使用する環境では `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` を設定する。
+LGPL FFmpegを別途用意し、必要に応じて `PKG_CONFIG_PATH` と `KRONELLO_FFMPEG_LIB_DIR` をその開発 / runtimeディレクトリに設定する。
 `target/macos/Kronello.app`（bundle ID `dev.kronello.Kronello`）の MacOS executable、Frameworks の FFI dylib、
 Helpers の `kronello` worker、Resources の `Kronello_KronelloDesign.bundle` と font licenses を配置する。
 executable の rpath は `@executable_path/../Frameworks`。library / helper / app を ad-hoc sign し verify する。

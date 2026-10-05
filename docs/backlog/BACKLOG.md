@@ -13,7 +13,7 @@
 | M0 | 0 | 0 | 6 | 0 | 6 |
 | M1 | 0 | 0 | 14 | 0 | 14 |
 | M2 | 0 | 1 | 10 | 0 | 11 |
-| M3 | 0 | 1 | 24 | 0 | 25 |
+| M3 | 0 | 0 | 25 | 0 | 25 |
 | M4 | 12 | 0 | 0 | 0 | 12 |
 | M5 | 5 | 0 | 0 | 0 | 5 |
 | M6 | 4 | 0 | 0 | 0 | 4 |
@@ -410,7 +410,7 @@
 
 ### GUI-003 macOS GUI: 編集ページ（Sequence のトラック・素材一覧・クリップの Inspector）
 
-- 優先度: P2 / 領域: gui / 状態: in_progress
+- 優先度: P2 / 領域: gui / 状態: done
 - 依存: GUI-001, NLE-002
 - 受け入れ条件:
   - docs/design-system/screens/edit.md の配置で Project の素材一覧・Sequence の Viewer・クリップの Inspector・トラックを表示し、種類の色・選択・ASSET_MISSING を仕様どおりに示す
