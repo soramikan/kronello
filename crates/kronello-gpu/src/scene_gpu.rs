@@ -277,8 +277,18 @@ impl ScenePass<'_> {
         let mut params = Vec::new();
         params.extend(
             [
-                u32::from(shadow.is_some()),
-                (weights.len() / 2) as u32,
+                if shadow.is_some() {
+                    if axis == 3 { 3 } else { 1 }
+                } else if axis == 2 {
+                    2
+                } else {
+                    0
+                },
+                if axis == 2 {
+                    (weights.len() / 3) as u32
+                } else {
+                    (weights.len() / 2) as u32
+                },
                 axis,
                 0,
             ]
@@ -368,19 +378,31 @@ impl ScenePass<'_> {
         source: &wgpu::Texture,
         effect: &PixelEffect,
     ) -> Result<wgpu::Texture, GpuError> {
-        let [sx, sy] = effect.sigma();
-        let horizontal = self.effect_pass(source, source, &crate::effect::kernel(sx)?, 0, None)?;
-        let blurred =
-            self.effect_pass(&horizontal, source, &crate::effect::kernel(sy)?, 1, None)?;
-        match effect {
-            PixelEffect::GaussianBlur { .. } => Ok(blurred),
-            PixelEffect::DropShadow { offset, .. } => self.effect_pass(
+        let blurred = if let Some(covariance) = effect.covariance() {
+            let taps = kronello_render::affine_gaussian_kernel(covariance).map_err(|_| {
+                GpuError::UnsupportedFeature("affine Gaussian covariance or kernel budget")
+            })?;
+            let weights: Vec<f32> = taps
+                .iter()
+                .flat_map(|t| [t.offset[0] as f32, t.offset[1] as f32, t.weight])
+                .collect();
+            self.effect_pass(source, source, &weights, 2, None)?
+        } else {
+            let [sx, sy] = effect.sigma();
+            let horizontal =
+                self.effect_pass(source, source, &crate::effect::kernel(sx)?, 0, None)?;
+            self.effect_pass(&horizontal, source, &crate::effect::kernel(sy)?, 1, None)?
+        };
+        if let Some((offset, _, _)) = effect.shadow() {
+            self.effect_pass(
                 &blurred,
                 source,
                 &[1.0],
-                0,
-                Some((*offset, crate::effect::shadow_color(effect, self.working))),
-            ),
+                if effect.covariance().is_some() { 3 } else { 0 },
+                Some((offset, crate::effect::shadow_color(effect, self.working))),
+            )
+        } else {
+            Ok(blurred)
         }
     }
     fn validate(&mut self) -> Result<(), GpuError> {

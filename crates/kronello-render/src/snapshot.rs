@@ -76,8 +76,8 @@ impl SemanticVersions {
             stroke_geometry: STROKE_GEOMETRY_VERSION.into(),
             gradient_interpolation: GRADIENT_INTERPOLATION_VERSION.into(),
             effects: BTreeMap::from([
-                (GAUSSIAN_BLUR_ID.into(), EFFECT_VERSION),
-                (DROP_SHADOW_ID.into(), EFFECT_VERSION),
+                (GAUSSIAN_BLUR_ID.into(), AFFINE_EFFECT_VERSION),
+                (DROP_SHADOW_ID.into(), AFFINE_EFFECT_VERSION),
             ]),
             generators: generator_versions(),
             video_input: initial_video_version(),
@@ -322,6 +322,11 @@ impl RenderSnapshot {
                 .all(|c| matches!(c, DocumentObject::Known(c) if c.nodes.iter().all(|n| n.enabled)))
         {
             supported_versions.visibility = 1;
+        }
+        for (id, version) in &mut supported_versions.effects {
+            if self.semantic_versions.effects.get(id) == Some(&EFFECT_VERSION) {
+                *version = EFFECT_VERSION;
+            }
         }
         if self.project.semantic_version != PROJECT_SEMANTIC_VERSION
             || self.semantic_versions != supported_versions
@@ -641,6 +646,16 @@ pub fn build_scene_ir_with_cache(
             .iter()
             .map(|e| {
                 let d = e.definition()?;
+                if snapshot
+                    .semantic_versions
+                    .effects
+                    .get(&d.effect_id)
+                    .is_none_or(|v| d.version > *v)
+                {
+                    return Err(RenderError::UnsupportedFeature(
+                        "effect exceeds pinned snapshot version".into(),
+                    ));
+                }
                 d.validate(&authored.properties, &registry)?;
                 Ok(d.resolve(&values)?)
             })

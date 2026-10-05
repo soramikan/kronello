@@ -33,6 +33,10 @@
     "stroke-miter-limit",
     "gradient-linear-fill-stroke",
     "gradient-radial-fill-stroke",
+    "fx002-rotation",
+    "fx002-nonuniform-rotation",
+    "fx002-shear-shadow",
+    "fx002-reflected-shear-shadow-rec2020",
     "srgb-output-roundtrip"
   ],
   "stroke_geometry_version": "vec003-centered-stroke-v1",
@@ -41,5 +45,7 @@
   "effect_semantic_versions": {
     "kronello.gaussian_blur": 1,
     "kronello.drop_shadow": 1
-  }
+  },
+  "affine_effect_kernel_version": "fx002-affine-ellipse-lattice-rne16-v2",
+  "affine_effect_semantic_version": 2
 }

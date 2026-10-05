@@ -738,11 +738,41 @@ pub(crate) fn map_effect(
 ) -> Result<kronello_model::ResolvedEffect, RenderError> {
     use kronello_model::ResolvedEffect;
     let [a, b] = transform.0;
+    if let ResolvedEffect::AffineGaussianBlur { sigma, linear }
+    | ResolvedEffect::AffineDropShadow { sigma, linear, .. } = effect
+    {
+        let mapped =
+            [a, b].map(|row| [0, 1].map(|j| row[0] * linear[0][j] + row[1] * linear[1][j]));
+        crate::validate_affine_linear(mapped)?;
+        return Ok(match effect {
+            ResolvedEffect::AffineGaussianBlur { .. } => ResolvedEffect::AffineGaussianBlur {
+                sigma: *sigma,
+                linear: mapped,
+            },
+            ResolvedEffect::AffineDropShadow {
+                offset,
+                color,
+                opacity,
+                ..
+            } => ResolvedEffect::AffineDropShadow {
+                sigma: *sigma,
+                linear: mapped,
+                offset: [
+                    a[0] * offset[0] + a[1] * offset[1],
+                    b[0] * offset[0] + b[1] * offset[1],
+                ],
+                color: *color,
+                opacity: *opacity,
+            },
+            _ => unreachable!(),
+        });
+    }
     let x = a[0].hypot(b[0]);
     let y = a[1].hypot(b[1]);
     let dot = a[0] * a[1] + b[0] * b[1];
     let sigma = match effect {
         ResolvedEffect::GaussianBlur { sigma } | ResolvedEffect::DropShadow { sigma, .. } => *sigma,
+        _ => unreachable!(),
     };
     if sigma > 0.0
         && ((x - y).abs() > 1e-10 * x.max(y).max(1.0) || dot.abs() > 1e-10 * (x * y).max(1.0))
@@ -767,5 +797,6 @@ pub(crate) fn map_effect(
             color: *color,
             opacity: *opacity,
         },
+        _ => unreachable!(),
     })
 }
