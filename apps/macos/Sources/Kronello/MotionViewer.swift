@@ -94,7 +94,9 @@ struct MotionViewer: View {
         }
     }
     @ViewBuilder var stage: some View {
-        if let error = model.previewFailure {
+        if model.ui.page != "motion" {
+            EmptyView()
+        } else if let error = model.previewFailure {
             KRViewerError(.init(error.code, error.message), copy: {
                 NSPasteboard.general.clearContents(); NSPasteboard.general.setString(error.code + "\n" + error.message, forType: .string)
             }, retry: { model.previewFailure = nil; Task { do { try await model.reload() } catch { model.mapFailure(error) } } }).padding(KRSpace.space4)
@@ -102,10 +104,10 @@ struct MotionViewer: View {
             KREmptyState(icon: .layers, title: "Composition がありません", message: "Composition を含むプロジェクトを開いてください。")
         } else {
             GeometryReader { proxy in
-                let extent = model.extent
+                let extent = model.compositionExtent
                 let aspect = extent.width / max(1, extent.height)
                 let size = KRViewerFrame<EmptyView>.fittingSize(container: proxy.size, aspectRatio: aspect)
-                let zoom = model.ui.zoom == "fit" ? 1 : (Double(model.ui.zoom) ?? 100) / 100 * model.extent.width / max(1, size.width)
+                let zoom = model.ui.zoom == "fit" ? 1 : (Double(model.ui.zoom) ?? 100) / 100 * extent.width / max(1, size.width)
                 ZStack {
                     KRViewerFrame(aspectRatio: aspect) { MetalPreview(model: model) }
                     TemplateInstanceInspectionOverlay(model: model)
@@ -119,8 +121,8 @@ struct MotionViewer: View {
                     if let pathFailure { VStack { KRErrorLine(.init(pathFailure.code, pathFailure.message)); Spacer() }.allowsHitTesting(false) }
                     if model.ui.tool == "select", let selected = model.selected, !model.ui.locked.contains(selected.id), TemplateInstanceInspection.instance(selected, document: model.document) == nil,
                        let bounds = model.candidateBounds ?? selected.bounds(model.ui.bounds) {
-                        let selection = KRViewerSelection(CGRect(x: bounds.minX / model.extent.width, y: bounds.minY / model.extent.height,
-                            width: bounds.width / model.extent.width, height: bounds.height / model.extent.height), label: "\(model.ui.bounds) \(Int(bounds.width.rounded())) × \(Int(bounds.height.rounded()))")
+                        let selection = KRViewerSelection(CGRect(x: bounds.minX / extent.width, y: bounds.minY / extent.height,
+                            width: bounds.width / extent.width, height: bounds.height / extent.height), label: "\(model.ui.bounds) \(Int(bounds.width.rounded())) × \(Int(bounds.height.rounded()))")
                         KRManipulationOverlay(selection, onPreview: { translation, handle, rotate in
                             if canvasEdit == nil { canvasEdit = model.beginCanvasEdit() }
                             if let edit = canvasEdit { model.previewCanvas(edit, translation: translation, handle: handle, rotate: rotate) }
@@ -167,6 +169,6 @@ struct MotionViewer: View {
         }
     }
     func designPoint(_ point: CGPoint, size: CGSize) -> CGPoint {
-        CGPoint(x: point.x / max(1, size.width) * model.extent.width, y: point.y / max(1, size.height) * model.extent.height)
+        CGPoint(x: point.x / max(1, size.width) * model.compositionExtent.width, y: point.y / max(1, size.height) * model.compositionExtent.height)
     }
 }

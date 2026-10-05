@@ -67,6 +67,7 @@ import KronelloCore
         try await verifyBinaryProducerAndHostFallback(); print("PASS binary producer bounds, revision pinning and explicit host/mute clock (no device acceptance)")
         try await verifyPresentationTickDoesNotQueryService(); print("PASS clock-driven EditorModel presentation without per-frame queries")
         try verifySequenceConfiguration(); print("PASS typed Sequence target, NTSC rate, extent and duration integration")
+        try verifyCompositionGeometrySurvivesPageTransitions(); print("PASS Composition viewer geometry survives page and playback target transitions")
     }
     func verifySequenceConfiguration() throws {
         let fake = FakeTransport(), model = EditorModel(path: "unused", transport: FakeTransport())
@@ -80,5 +81,28 @@ import KronelloCore
         try require(model.durationFrames == 4316 && model.extent.width == 64 && model.nominalFPS == 24, "Sequence playback must use its own duration, extent and NTSC rate")
         model.ui.time = RationalTime(num: 137 * 1001, den: 24000)
         try require(model.frame == 137, "Sequence frame grid uses configured rate")
+    }
+    func verifyCompositionGeometrySurvivesPageTransitions() throws {
+        let fake = FakeTransport(), model = EditorModel(path: "unused", transport: FakeTransport())
+        var document = fake.document
+        let id = UUID().uuidString
+        document["sequences"] = [["id": id, "extent": ["width": 64, "height": 32]]]
+        let composition = document.objects("compositions")[0]
+        model.ui.composition = composition.string("id")
+        model.ui.page = "motion"
+        model.adopt(document: document, scene: [:], revision: "1", actor: "test", external: false)
+        let expected = model.compositionExtent
+        try require(expected.width > 0 && expected.height > 0, "Composition fixture geometry is valid")
+        // SwiftUI can reevaluate the departing Motion view before Edit loads its
+        // Sequence query. Playback geometry is temporarily absent in that gap.
+        model.ui.page = "edit"
+        try require(model.extent == .zero, "reproduce the unloaded Sequence transition")
+        try require(model.compositionExtent == expected, "departing Motion viewer retains Composition geometry")
+        model.configurePlayback(target: .sequence(id), rateNum: 24, rateDen: 1)
+        model.ui.page = "motion"
+        try require(model.extent.width == 64 && model.compositionExtent == expected,
+                    "entering Motion must not borrow the previous Sequence playback extent")
+        model.configurePlayback(target: nil, rateNum: 24, rateDen: 1)
+        try require(model.compositionExtent == expected, "Composition geometry is stable after route reset")
     }
 }

@@ -33,6 +33,7 @@ CommandLineTools の SwiftPM は `SwiftUIMacros` が欠落し、初回 build は
 | SwiftPM build | 成功 | 統合4ページ / audio harness / design gallery をビルド |
 | SwiftPM XCTest | 68 passed、0 failures、0 skips | Design19 / Core4 / AppModel45。AppModel は Edit11 / Editor7 / Integration2 / Motion15 / Playback3 / QA2 / Workflow5 |
 | 最終 SwiftPM / 三入口、`8b94950`のcode | 68 passed、0 failures、0 skips、23操作のsnapshot一致 | `target/m3-acceptance/final-qa/report.json` / `gui.json` / `ime.json` / `cli-mcp.json`。最適化FFI、実Integration evidenceを再取得 |
+| Motion→Edit transition修正後のSwiftPM | 69 passed、0 failures、0 skips | `target/m3-acceptance/gui-transition-swift.log`。未取得Sequence geometry / 旧playback targetの回帰1件を追加、Rust core変更なし |
 | 三入口等価性 | 23操作すべて同じ canonical snapshot | `target/m3-acceptance/qa/report.json`、`gui_compared:true`、実 FFI / CLI / MCP の独立 project |
 | 第2段階 FFI 値表示 | 成功 | SwiftPM IntegrationTests が `target/m3-acceptance/integration-metal/gui-evidence.json` を明示取得して全値・boundsを照合 |
 | native IME 境界 | 成功 | QA の `ime.json`。未確定 / 取消の commit0、確定の単一 Event、UTF-8 の結合濁点差分 |
@@ -40,8 +41,10 @@ CommandLineTools の SwiftPM は `SwiftUIMacros` が欠落し、初回 build は
 | macOS JOB 高負荷、FIFO修正後 | CLI24/24を2回成功、146 workers / orphan0 | `c860d07` clean HEAD、64 burners、最後40 sampleのload79.06–99.68。[JOB-002](job-002.md)末尾 |
 | 第2段階 Metal 4K driver | 147 checksすべて成功 | `target/m3-acceptance/integration-metal/report.json`、横型 / 縦型 / 固定 snapshot / typed overflow |
 | AUDIO-002 実engine / Metal | 3fps、underrun0、seek / stop-resume一致 | `target/m3-acceptance/audio-report.json`。負荷並行条件、physical scanoutは未測定 |
+| AUDIO-002 最終quiet実測 | 全3率exit0、underrun / missing0、seek2 / resume一致 | `target/m3-acceptance/audio-quiet/report.json`。38.539–38.603秒、929 / 929 / 1160提示、最大frame格子差0 / 0 / 1frames |
 | GUI-003 実操作（Dark） | trim / Undo / blade各単一Event、Motion遷移でrevision不変 | `target/m3-acceptance/edit-*`、[GUI-003](gui-003.md)末尾 |
 | GUI-004 実操作（Dark） | 入力 / Undo、版移行Cancel不変 / Apply単一Event | `target/m3-acceptance/template-*`、[GUI-004](gui-004.md)末尾 |
+| GUI-004 Export実操作（Dark / Light） | preflight disabled→ready、固定独立worker成功、OUTPUT_EXISTS / FONT_MISSING抑止 | `target/m3-acceptance/gui-export-jobs.json` / `gui-export-final.mov` / `export-*png`。Metal3frames、PCM24 6000samples |
 | 元 GUI 作業ツリーの保全 | 成功 | `.worktrees/m3-{gui3,gui4,integ2,qa2}` の tracked patch / 未追跡 source の bytes 一致 |
 
 SwiftPM 初回の debug FFI run は中断時点で未完了だった。sample 採取では音声やUIの停止ではなく、
@@ -67,9 +70,11 @@ KRONELLO_STATE_ROOT="$PWD/target/m3-acceptance/job-state" \
 
 - 主エージェントが実アプリを直接操作して Dark / Light、クリップ操作、テンプレート・書き出し、
   macOS 日本語入力ソースの候補ウインドウ / 確定 / 取消を確認する。
-- AUDIO-002 の3種類のfpsで実デバイス / Metal / seek / 停止再開を測定する。SwiftPMのhost fallbackだけで完了と扱わない。
+- AUDIO-002 は負荷並行 / 最終quietの実デバイス / Metal測定とnative callback分離のreviewが成功し `done`。
+  物理scanout / loopback / 主観的listeningの保証は含めない。
 - RENDER-003 の長尺 / 4K / memory / 障害の実測と最終統合の必須 Rust gate / GPU goldenは成功。
   [RENDER-003](render-003.md)に元実測と統合結果を分けて記録する。
-- JOB-002 の Windows / Linux の実プロセス CI と load50 stress の受け入れを確認する。
+- JOB-002 の Windows / Linux の最終実プロセス CI を確認する。
+  macOSの修正後load50超のstressとworker回収は成功済み。
 
 その後の結果は本書と各タスクの検証文書へ追記する。

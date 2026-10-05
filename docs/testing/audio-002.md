@@ -1,5 +1,9 @@
 # AUDIO-002: 実時間音声再生と A/V 同期
 
+完了状態: 2026-10-06、最終統合の native callback / source review と実 AVAudioEngine / Metal の3率測定で
+受け入れ3条件を確認し `done`。quiet測定の結果と保証範囲は末尾に記録する。
+以下の初回worker記録にある `pending host run` は当時の状態であり、後続の実測で更新した。
+
 設計: [ADR-0076](../adr/0076-buffered-device-clock-playback.md)。2026-10-05、branch `m3-audio2`、
 base HEAD `376daa4c97a42a43827e60f47744efe57d3a40c2` の clean worktree からの未 commit 変更。
 worker は共有 Cargo cache / target、managed TMPDIR、CARGO_BUILD_JOBS=3を使用する。
@@ -186,3 +190,20 @@ request時刻との差そのものの最大値は73.71 / 68.40 / 69.74msであ�
 `target/m3-completion-audio/audio-{24-1,24000-1001,30000-1001}.jsonl`。
 CPU / GPUテストsuiteと並行した負荷条件の実測である。quiet条件での再測定を別記録とする。
 physical scanout / loopback / 主観的listeningは今回の測定に含めず、機器の出力遅延全体の保証とは扱わない。
+
+### 最終release FFIのquiet実測（2026-10-06）
+
+主エージェントが最終統合release FFIで、重いbuild / testと並行しない条件で再測定し、全run exit0を確認した。
+
+| fps | device clock進行 | 映像提示 | 最大frame格子差 | 最大request時刻差 |
+|---|---:|---:|---:|---:|
+| 24/1 | 38.581秒 | 929 | 0 frames / 0ms | 26.3125ms |
+| 24000/1001 | 38.603秒 | 929 | 0 frames / 0ms | 28.0417ms |
+| 30000/1001 | 38.539秒 | 1,160 | 1 frame / 33.3667ms | 39.0708ms |
+
+全runでunderrun0 / missing sample0、seek2回、stop / resumeの整数sample厳密一致。
+証拠は `target/m3-acceptance/audio-quiet/report.json`、各 `audio-*.jsonl`、`audio-quiet-host.log`。
+native callbackのcopy / silenceだけの契約、別prepare / producer系のsource reviewと合わせ、
+callback分離・audio clockによる提示・seek / 停止再開 / 非整数fpsの同期の3条件を満たした。
+最大request時刻差は量子化後のframe格子差と区別する。physical scanout / loopback / 主観的listeningは未測定で、
+この結果を物理出力遅延の保証とは扱わない。追加のInstruments計測も今回の受け入れ証拠に含めない。

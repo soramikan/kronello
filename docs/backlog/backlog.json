@@ -632,7 +632,7 @@
       "priority": "P1",
       "area": "audio",
       "title": "リアルタイム音声再生とA/V同期",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "AUDIO-000",
         "GUI-001"
