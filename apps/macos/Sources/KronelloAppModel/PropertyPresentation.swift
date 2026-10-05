@@ -7,6 +7,12 @@ public struct PropertyPresentation: Sendable {
     public let unit: String
     public let multiplier: Double
 
+    /// Curve readouts use the same precision and display scale in both modes.
+    public func curveReadout(_ value: Double, velocity: Bool = false) -> String {
+        let suffix = velocity ? unit + "/s" : unit
+        return String(format: "%.1f %@", value * multiplier, suffix)
+    }
+
     public static func of(_ key: String) -> PropertyPresentation {
         switch key {
         case "kronello.transform.position": return .init(label: "Position", unit: "px", multiplier: 1)

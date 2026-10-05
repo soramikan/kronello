@@ -12,4 +12,7 @@ import XCTest
     func testMoveUndoCLIParity() async throws { try await MotionChecks().verifyMoveUndoCLIParity() }
     func testSelectionSnapAndConflict() async throws { try await MotionChecks().verifySelectionSnapAndConflict() }
     func testSpatialTemporalSeparation() async throws { try await MotionChecks().verifySpatialTemporalSeparation() }
+    func testCurvePlayheadReadouts() throws { try MotionChecks().verifyCurvePlayheadReadouts() }
+    func testSpatialPathParentSpaceAndFailures() async throws { try await MotionChecks().verifySpatialPathParentSpaceAndFailures() }
+    func testCurveReadoutPlacement() throws { try MotionChecks().verifyCurveReadoutPlacement() }
 }

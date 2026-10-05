@@ -12,6 +12,8 @@ struct MotionViewer: View {
     @State private var playingTask: Task<Void, Never>?
     @State private var floatingPreview = CGSize.zero
     @State private var spatialPath = SpatialPath()
+    @State private var parentPath = SpatialPath()
+    @State private var pathParent: CGAffineTransform?
     @State private var pathFailure: ServiceFailure?
     @State private var viewerSize = CGSize.zero
     @FocusState private var viewerFocused: Bool
@@ -44,10 +46,11 @@ struct MotionViewer: View {
                     onSeek: model.seek, onStep: { model.seek(model.frame + Int64($0)) }, onBoundary: { model.seek($0 ? model.durationFrames - 1 : 0) })
             }
         }.task(id: model.revision + "/" + (model.ui.selection ?? "") + "/" + (model.ui.composition ?? "")) {
-            spatialPath = .init(); pathFailure = nil
-            do { spatialPath = try await model.spatialPath() }
+            spatialPath = .init(); parentPath = .init(); pathParent = nil; pathFailure = nil
+            do { parentPath = try await model.spatialPath(); remapPath() }
             catch is CancellationError {} catch { if !Task.isCancelled { pathFailure = model.serviceFailure(error) } }
-        }.onChange(of: model.playing) { _, value in
+        }.onChange(of: model.refreshToken) { _, _ in remapPath() }
+            .onChange(of: model.playing) { _, value in
             playingTask?.cancel()
             if value {
                 playingTask = Task { @MainActor in
@@ -58,6 +61,17 @@ struct MotionViewer: View {
                 }
             }
         }.onDisappear { playingTask?.cancel(); model.playing = false }
+    }
+    func remapPath() {
+        guard !parentPath.points.isEmpty || !parentPath.keys.isEmpty else { return }
+        do {
+            let parent = try model.spatialPathParentTransform()
+            if parent != pathParent {
+                spatialPath = parent.map { parentPath.mapped(by: $0) } ?? .init()
+                pathParent = parent
+            }
+            pathFailure = nil
+        } catch { spatialPath = .init(); pathParent = nil; pathFailure = model.serviceFailure(error) }
     }
     var toolstrip: some View {
         KRToolStrip(tools, selection: $model.ui.tool, placement: Binding(get: { model.ui.layout.tools }, set: { model.ui.layout.tools = $0 }),

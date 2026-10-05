@@ -8917,6 +8917,17 @@
           "$ref": "#/$defs/PropertyId",
           "description": "Dimensionless Scalar Property, at least 1."
         },
+        "options": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StrokeOptions"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Absent options retain the exact VEC-003 execution path."
+        },
         "width": {
           "$ref": "#/$defs/PropertyId"
         }
@@ -8927,6 +8938,47 @@
         "join",
         "cap",
         "miter_limit"
+      ],
+      "type": "object"
+    },
+    "StrokeAlignment": {
+      "enum": [
+        "center",
+        "inside",
+        "outside"
+      ],
+      "type": "string"
+    },
+    "StrokeOptions": {
+      "additionalProperties": false,
+      "description": "Explicit opt-in; lengths are local design_px, offset is an evaluated Property.",
+      "properties": {
+        "alignment": {
+          "$ref": "#/$defs/StrokeAlignment"
+        },
+        "dash_array": {
+          "items": {
+            "$ref": "#/$defs/FiniteF64"
+          },
+          "type": "array"
+        },
+        "dash_offset": {
+          "$ref": "#/$defs/PropertyId"
+        },
+        "fill_rule": {
+          "$ref": "#/$defs/FillRule",
+          "description": "Defines the interior independently of whether the shape has fill paint."
+        },
+        "geometry_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "geometry_version",
+        "alignment",
+        "fill_rule",
+        "dash_array",
+        "dash_offset"
       ],
       "type": "object"
     },

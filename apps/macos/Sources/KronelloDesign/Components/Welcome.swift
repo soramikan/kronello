@@ -90,6 +90,6 @@ private struct KRRecentRow: View {
                 }.frame(maxWidth: .infinity, alignment: .leading)
                 Text(project.date).krText(KRType.caption).foregroundStyle(p.inkMuted)
             }.padding(KRSpace.space3).background(hover ? p.controlHover : p.surface100)
-        }.buttonStyle(.plain).krFocusRing().onHover { hover = $0 }.accessibilityLabel(project.name)
+        }.buttonStyle(.plain).krControlFocusRing().onHover { hover = $0 }.accessibilityLabel(project.name)
     }
 }

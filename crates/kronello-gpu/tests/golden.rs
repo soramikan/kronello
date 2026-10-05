@@ -197,7 +197,7 @@ fn gradient_manifest(g: &GradientPaint) -> Value {
 fn draw_manifest(scene: &DrawScene) -> Value {
     json!({"roots":scene.roots,"nodes":scene.nodes.iter().map(|node| match node {
         DrawNode::Raster(pixels)=>json!({"kind":"raster","pixels":pixels}),
-        DrawNode::Path(p)=>json!({"kind":"path","fill_gradient":p.fill_gradient.as_deref().map(gradient_manifest),"stroke_gradient":p.stroke_gradient.as_deref().map(gradient_manifest),"paint_transform":p.paint_transform,"contours":p.contours.iter().map(|c| json!({"points":c.points,"closed":c.closed})).collect::<Vec<_>>(),"fill":p.fill.map(|f| json!({"rgba":f.paint.rgba,"space":format!("{:?}",f.paint.space),"rule":format!("{:?}",f.rule)})),"stroke":p.stroke.map(|s| json!({"rgba":s.paint.rgba,"space":format!("{:?}",s.paint.space),"width":s.width,"cap":format!("{:?}",s.cap),"join":format!("{:?}",s.join),"miter_limit":s.miter_limit}))}),
+        DrawNode::Path(p)=>json!({"kind":"path","stroke_geometry_version":p.stroke_geometry.as_ref().map_or(kronello_model::LEGACY_STROKE_VERSION,|g|g.version.as_str()),"local_stroke":p.stroke_geometry.as_ref().map(|g|json!({"version":g.version,"alignment":g.alignment,"fill_rule":format!("{:?}",g.fill_rule),"inverse":g.output_to_local,"dash_array":g.dash_array,"dash_offset":g.dash_offset,"contours":g.contours.iter().map(|c|json!({"points":c.points,"closed":c.closed})).collect::<Vec<_>>()})),"fill_gradient":p.fill_gradient.as_deref().map(gradient_manifest),"stroke_gradient":p.stroke_gradient.as_deref().map(gradient_manifest),"paint_transform":p.paint_transform,"contours":p.contours.iter().map(|c| json!({"points":c.points,"closed":c.closed})).collect::<Vec<_>>(),"fill":p.fill.map(|f| json!({"rgba":f.paint.rgba,"space":format!("{:?}",f.paint.space),"rule":format!("{:?}",f.rule)})),"stroke":p.stroke.map(|s| json!({"rgba":s.paint.rgba,"space":format!("{:?}",s.paint.space),"width":s.width,"cap":format!("{:?}",s.cap),"join":format!("{:?}",s.join),"miter_limit":s.miter_limit}))}),
         DrawNode::Group {children,opacity}=>json!({"kind":"isolated-group","children":children,"opacity":opacity}),
         DrawNode::Effect {source,effect}=>json!({"kind":"effect","source":source,"effect":effect,"kernel_version":effect.kernel_version(),"semantic_version":effect.semantic_version()}),
         DrawNode::Masked {source,matte,kind}=>json!({"kind":"masked","source":source,"matte":matte,"mode":format!("{:?}",kind)})
@@ -589,7 +589,7 @@ fn cpu_catalog_and_vec003_manifest_match_harness() {
         catalog["scene_ids"],
         json!(scenes.iter().map(|s| s.id).collect::<Vec<_>>())
     );
-    assert_eq!(scenes.len(), 36);
+    assert_eq!(scenes.len(), 40);
     let m = manifest(&scenes, "fixture-test", "font-test");
     assert_eq!(
         m["stroke_geometry_version"],
@@ -613,7 +613,38 @@ fn cpu_catalog_and_vec003_manifest_match_harness() {
             4
         );
         assert_eq!(path["stroke"]["miter_limit"], 4.0);
+        assert_eq!(
+            path["stroke_geometry_version"],
+            kronello_model::LEGACY_STROKE_VERSION
+        );
         assert!(path["paint_transform"].is_array());
+    }
+    for (id, alignment) in [
+        ("stroke-dashes", "center"),
+        ("stroke-inside-evenodd", "inside"),
+        ("stroke-outside-nonzero", "outside"),
+        ("stroke-affine-reflected", "center"),
+    ] {
+        let scene = m["scenes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["id"] == id)
+            .unwrap();
+        let path = &scene["draw"]["nodes"][0];
+        assert_eq!(
+            path["stroke_geometry_version"],
+            kronello_model::EXTENDED_STROKE_VERSION
+        );
+        assert_eq!(
+            path["local_stroke"]["version"],
+            kronello_model::EXTENDED_STROKE_VERSION
+        );
+        assert_eq!(path["local_stroke"]["alignment"], alignment);
+        assert!(path["local_stroke"]["inverse"].is_array());
+        assert!(path["local_stroke"]["contours"].is_array());
+        assert_eq!(path["local_stroke"]["dash_offset"], 0.371);
+        assert!(path["local_stroke"]["dash_array"].is_array());
     }
 }
 

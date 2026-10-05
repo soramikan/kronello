@@ -128,8 +128,14 @@ impl ScenePass<'_> {
         params.extend(
             [
                 u32::from(output_transform.is_some_and(|t| t.alpha == OutputAlpha::Premultiplied)),
-                0,
-                0,
+                path.and_then(|p| p.stroke_geometry.as_ref())
+                    .map_or(0, |g| match g.alignment {
+                        kronello_model::StrokeAlignment::Center => 0,
+                        kronello_model::StrokeAlignment::Inside => 1,
+                        kronello_model::StrokeAlignment::Outside => 2,
+                    }),
+                path.and_then(|p| p.stroke_geometry.as_ref())
+                    .map_or(0, |g| u32::from(g.fill_rule == FillRule::Evenodd)),
                 0,
             ]
             .into_iter()
@@ -227,6 +233,12 @@ impl ScenePass<'_> {
         }
         if stop_bytes.is_empty() {
             stop_bytes.resize(48, 0);
+        }
+        let mapping = path
+            .and_then(|p| p.stroke_geometry.as_ref())
+            .map_or([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], |g| g.output_to_local);
+        for row in mapping {
+            params.extend(row.into_iter().chain([0.0]).flat_map(f32::to_le_bytes));
         }
         let stop_buffer = self
             .gpu

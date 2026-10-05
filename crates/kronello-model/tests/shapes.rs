@@ -76,6 +76,7 @@ fn fixture() -> (Project, SchemaRegistry) {
             rule: FillRule::Evenodd,
         }),
         stroke: Some(Stroke {
+            options: None,
             gradient: None,
             color: ids[7],
             width: ids[3],

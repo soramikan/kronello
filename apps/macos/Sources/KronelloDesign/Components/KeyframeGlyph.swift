@@ -32,7 +32,7 @@ public struct KRKeyframeGlyph: View {
     public var body: some View {
         Group {
             if let action {
-                Button(action: action) { glyph }.buttonStyle(.plain).krFocusRing(appearance == .focused)
+                Button(action: action) { glyph }.buttonStyle(.plain).krControlFocusRing(appearance == .focused)
                     .accessibilityLabel(label).accessibilityAddTraits(selected ? .isSelected : [])
             } else { glyph.accessibilityLabel(label).accessibilityAddTraits(selected ? .isSelected : []) }
         }.onHover { hover = $0 }

@@ -23,6 +23,7 @@ public struct KRLayerRow: View {
     @Environment(\.krPalette) private var p
     @State private var hover = false
     @FocusState private var focusedToggle: String?
+    @FocusState private var focusedRow: Bool
     public let name: String
     public let kind: KRLayerKind
     public let level: Int
@@ -50,7 +51,7 @@ public struct KRLayerRow: View {
     public var body: some View {
         HStack(spacing: KRSpace.space1) {
             Button(action: onDisclosure) { KRIconView(expanded ? .chevronDown : .chevronRight, size: 12).frame(height: 16) }
-                .buttonStyle(.plain).foregroundStyle(p.inkMuted).krFocusRing(cornerRadius: 2)
+                .buttonStyle(.plain).foregroundStyle(p.inkMuted).krControlFocusRing(cornerRadius: 2)
                 .opacity(hasChildren ? 1 : 0).disabled(!hasChildren).accessibilityLabel(expanded ? "\(name) を畳む" : "\(name) を開く")
             Button(action: onSelect) {
                 HStack(spacing: KRSpace.space1) {
@@ -63,7 +64,7 @@ public struct KRLayerRow: View {
                         }
                     }.frame(maxWidth: .infinity, alignment: .leading)
                 }
-            }.buttonStyle(.plain).krFocusRing().accessibilityLabel(name).accessibilityAddTraits(selected ? .isSelected : [])
+            }.buttonStyle(.plain).focused($focusedRow).focusEffectDisabled().accessibilityLabel(name).accessibilityAddTraits(selected ? .isSelected : [])
             HStack(spacing: 2) {
                 KRButton(icon: hidden ? .eyeOff : .eye, accessibilityLabel: hidden ? "表示する" : "非表示にする", pressed: hidden,
                          size: 20, iconSize: 13, action: onVisibility).focused($focusedToggle, equals: "visibility")
@@ -74,7 +75,7 @@ public struct KRLayerRow: View {
             }
         }.padding(.leading, KRSpace.space2 + CGFloat(level) * KRSpace.space3).padding(.trailing, KRSpace.space1)
             .frame(height: KRSize.rowHeight).background(selected ? p.selectionBg : hover || appearance == .hover ? p.controlHover : .clear)
-            .krFocusRing(appearance == .focused)
+            .krFocusRing(focusedRow || appearance == .focused)
             .onHover { hover = $0 }
     }
 }

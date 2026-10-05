@@ -1,6 +1,7 @@
 import Foundation
 import KronelloAppModel
 import KronelloCore
+import KronelloDesign
 
 func requireResult(_ value: Bool, _ message: String) throws { try require(value, message) }
 
@@ -202,15 +203,113 @@ func requireResult(_ value: Bool, _ message: String) throws { try require(value,
         await finish(f)
     }
     func verifySpatialTemporalSeparation() async throws {
-        let f = try await fixture(); let editor = f.editor, base = editor.revision
+        let f = try await fixture(count: 5); let editor = f.editor, base = editor.revision
+        let requests = (f.transport.sampleCount, f.transport.sceneCount)
         let path = try await editor.spatialPath()
-        try require(path.points.count == 72 && path.keys.count == 3, "Every composition frame and exact keys are service evaluated")
-        try require(path.points[24] == .init(x: 100, y: 200) && editor.revision == base, "Spatial path uses composition coordinates and never edits")
+        try require(path.points.count == 72 && path.keys.count == 5, "Every composition frame and exact keys, including inactive/out-of-duration keys, are service evaluated")
+        try require(f.transport.sampleCount == requests.0 + 1 && f.transport.sceneCount == requests.1, "Spatial path uses exactly one property.sample and no scene.query")
+        try require(path.keys.last == .init(x: 400, y: 800), "A key outside the active range does not fail the whole path")
+        try requireResult(path.mapped(by: try editor.spatialPathParentTransform()!).points == path.points, "An unparented layer maps through the scene's identity parent without more queries")
+        try require(path.points[24] == .init(x: 100, y: 200) && editor.revision == base, "Spatial path uses parent-space Position and never edits")
         let long = EditorModel.pathFrames(1200)
         try require(long.count == 600 && long.first == 0 && long.last == 1199, "Long paths bounded to 600, including first and last frame")
-        let display = CurveDisplay.sample(editor.curveKeys(f.curve), frame: 36, positions: [0, 24, 48])
+        let display = CurveDisplay.sample(editor.curveKeys(f.curve), frame: 36, positions: [0, 24, 48, 72, 96])
         try require(display == [150, 300], "Temporal graph displays shared normalized time progress per channel")
         await finish(f)
+    }
+    func verifySpatialPathParentSpaceAndFailures() async throws {
+        let folder = try GUIChecks().temporary(); defer { try? FileManager.default.removeItem(at: folder) }
+        let fake = FakeTransport(), editor = GUIChecks().model(fake, folder: folder)
+        let node = UUID().uuidString, parent = UUID().uuidString, property = UUID().uuidString, curve = UUID().uuidString
+        var composition = fake.document.objects("compositions")[0]
+        composition["duration"] = RationalTime(num: 50, den: 1).wire
+        composition["root_nodes"] = [parent]
+        composition["nodes"] = [
+            ["id": parent, "kind": ["kind": "null"], "child_order": [node], "properties": []],
+            ["id": node, "kind": ["kind": "shape"], "transform_parent": parent, "child_order": [], "properties": [
+                ["id": property, "descriptor": ["key": "kronello.transform.position"], "source": ["kind": "curve", "value": curve]]
+            ]]
+        ]
+        fake.document["compositions"] = [composition]
+        fake.document["curves"] = [["id": curve, "keys": [["time": RationalTime(num: 0, den: 1).wire], ["time": RationalTime(num: 60, den: 1).wire]]]]
+        editor.ui.composition = composition.string("id"); editor.ui.selection = node
+        let key: [String: Any] = ["node": node, "instance_path": [String]()]
+        let parentKey: [String: Any] = ["node": parent, "instance_path": [String]()]
+        var scene: [String: Any] = ["nodes": [
+            ["key": ["node": node, "instance_path": ["other-instance"]], "transform_parent": NSNull()],
+            ["key": key, "transform_parent": parentKey, "evaluated": ["world_transform": [[99, 0, 900], [0, 99, 800]]]],
+            ["key": parentKey, "transform_parent": NSNull(), "evaluated": ["world_transform": [[0, -2, 100], [3, 0, 200]]]]
+        ]]
+        // Exercise the actual JSONSerialization integer/NSNumber representation.
+        scene = try JSONSerialization.jsonObject(with: JSONSerialization.data(withJSONObject: scene)) as! [String: Any]
+        editor.adopt(document: fake.document, scene: scene, revision: "1", actor: "", external: false)
+        fake.latency = .milliseconds(30)
+        fake.sampleResponse = { request in
+            let values = request.objects("times").indices.map { ["kind": "vec2", "value": [$0, $0 * 2]] as [String: Any] }
+            let response: [String: Any] = ["revision": "1", "composition": composition.string("id"), "times": request.objects("times"), "samples": [["key": request.objects("keys")[0], "value_type": "vec2", "values": values]]]
+            return try JSONSerialization.jsonObject(with: JSONSerialization.data(withJSONObject: response)) as! [String: Any]
+        }
+        let start = ContinuousClock.now
+        let path = try await editor.spatialPath()
+        let elapsed = start.duration(to: .now)
+        try require(fake.requests.count == 1 && fake.requests[0].string("operation") == "property.sample" && fake.requests[0].objects("keys").count == 1, "One batched Position evaluation, no Anchor or per-frame scene requests")
+        try require(fake.requests[0]["fonts"] == nil && path.points.count == 600 && path.keys.count == 2, "Read-only property evaluation keeps the 600-point cap and exact out-of-duration keys")
+        try require(elapsed < .seconds(1), "A 600-point path is ready after one delayed request, not 600 sequential waits")
+        try require(path.points[1] == .init(x: 1, y: 2), "Integer JSON Position points stay in parent space")
+        let matrix = try editor.spatialPathParentTransform()!
+        let mapped = path.mapped(by: matrix)
+        try require(mapped.points[0] == .init(x: 100, y: 200) && mapped.points[1] == .init(x: 96, y: 203), "Apply the shared parent's non-identity 2x3 matrix once, not the child's own transform")
+        var parentNode = scene.objects("nodes")[2]
+        parentNode["evaluated"] = ["world_transform": [[0, -2, 300], [3, 0, 400]]]
+        scene["nodes"] = [scene.objects("nodes")[1], parentNode]
+        editor.ui.time = RationalTime(num: 1, den: 1)
+        editor.adopt(document: fake.document, scene: scene, revision: "1", actor: "", external: false)
+        try requireResult(path.mapped(by: try editor.spatialPathParentTransform()!).points[0] == .init(x: 300, y: 400), "An animated parent remaps cached trajectory at the new playhead")
+        try require(fake.requests.count == 1, "Playhead remapping never resamples")
+        for nodes in [[], [scene.objects("nodes")[0]], [scene.objects("nodes")[0], ["key": parentKey, "transform_parent": NSNull()] ]] as [[[String: Any]]] {
+            editor.adopt(document: fake.document, scene: ["nodes": nodes], revision: "1", actor: "", external: false)
+            do { _ = try editor.spatialPathParentTransform(); throw GUICheckError(message: "Missing selected/parent node or inactive parent must explain why it cannot draw") }
+            catch let error as ServiceFailure { try require(error.code == "EVALUATION_ERROR", "Missing/inactive scene nodes surface a typed error for KRErrorLine") }
+        }
+        fake.sampleResponse = { request in ["revision": "1", "composition": composition.string("id"), "times": request.objects("times"), "samples": []] }
+        do { _ = try await editor.spatialPath(); throw GUICheckError(message: "Missing Position sample must not silently return an empty path") }
+        catch let error as ServiceFailure { try require(error.code == "EVALUATION_ERROR", "Missing sample surfaces a typed error") }
+        await editor.close()
+    }
+    func verifyCurveReadoutPlacement() throws {
+        let graph = CGSize(width: 800, height: 240), readout = CGSize(width: 140, height: 28), axisWidth: CGFloat = 54
+        let first = KRCurveReadoutLayout.frame(graph: graph, playheadX: 8, axisWidth: axisWidth, readout: readout)
+        let middle = KRCurveReadoutLayout.frame(graph: graph, playheadX: 400, axisWidth: axisWidth, readout: readout)
+        let last = KRCurveReadoutLayout.frame(graph: graph, playheadX: 792, axisWidth: axisWidth, readout: readout)
+        for frame in [first, middle, last] {
+            try require(frame.minX >= axisWidth + KRSpace.space2 && frame.minY >= KRSpace.space2 && frame.maxX <= graph.width - KRSpace.space2 && frame.maxY <= graph.height, "Readout avoids measured axis gutter, ruler, and graph edges")
+        }
+        try require(middle.minX > 400 && last.maxX <= 792 - KRSpace.space2, "Readout sits right of the playhead, flipping left near the right edge")
+        let narrow = KRCurveReadoutLayout.frame(graph: .init(width: 160, height: 60), playheadX: 8, axisWidth: axisWidth, readout: readout)
+        try require(narrow.minX >= axisWidth + KRSpace.space2 && narrow.maxX <= 160 - KRSpace.space2, "Narrow readouts clip within their reserved area rather than overlapping the axis")
+    }
+    func verifyCurvePlayheadReadouts() throws {
+        let keys: [[String: Any]] = [
+            ["value": ["value": [0.0, 20.0]], "interpolation": ["kind": "cubic", "value": ["control1": [1.0 / 3, 0.0], "control2": [2.0 / 3, 1.0]]]],
+            ["value": ["value": [200.0, 160.0]]]
+        ]
+        let position = PropertyPresentation.of("kronello.transform.position")
+        let values = CurveDisplay.sample(keys, frame: 60, positions: [0, 120])
+        let speed = CurveDisplay.velocity(keys, frame: 60, positions: [0, 120], framesPerSecond: 24)
+        try require(values.map { position.curveReadout($0) } == ["100.0 px", "90.0 px"], "Value-mode playhead precision and units remain unchanged")
+        try require(speed.map { position.curveReadout($0, velocity: true) } == ["60.0 px/s", "42.0 px/s"], "Velocity playhead shows each channel's actual derivative; constant Y offset contributes no speed")
+        let earlier = CurveDisplay.velocity(keys, frame: 30, positions: [0, 120], framesPerSecond: 24)
+        try require(earlier.map { position.curveReadout($0, velocity: true) } == ["45.0 px/s", "31.5 px/s"], "Velocity readout follows the playhead time")
+        let fractional = CurveDisplay.velocity(keys, frame: 60, positions: [0, 120], framesPerSecond: 24000.0 / 1001)
+        try require(position.curveReadout(fractional[0], velocity: true) == "59.9 px/s", "Velocity uses the actual frame rate in seconds")
+        try require(PropertyPresentation.of("kronello.transform.rotation").curveReadout(48.24, velocity: true) == "48.2 °/s", "Rotation speed has degrees per second and value precision")
+        for key in ["kronello.transform.scale", "kronello.opacity"] {
+            let presentation = PropertyPresentation.of(key)
+            try require(presentation.curveReadout(0.4824, velocity: true) == "48.2 %/s", "Percentage velocity uses the Property display multiplier exactly once")
+            try require(presentation.curveReadout(0.4824) == "48.2 %", "Percentage value-mode readout remains unchanged")
+        }
+        try require(position.curveReadout(-48.24, velocity: true) == "-48.2 px/s", "Velocity preserves direction")
+        try require(CurveDisplay.velocity([], frame: 60, positions: [], framesPerSecond: 24).isEmpty, "Absent curves do not invent a speed")
     }
     func runAll() async throws {
         try await verifyNavigatorAddRemove(); print("PASS navigator Constant/Curve add/remove at current frame")
@@ -224,5 +323,8 @@ func requireResult(_ value: Bool, _ message: String) throws { try require(value,
         try await verifyMoveUndoCLIParity(); print("PASS multi-key session Undo/Redo and CLI parity")
         try await verifySelectionSnapAndConflict(); print("PASS Shift selection, snapping, retained revision conflict")
         try await verifySpatialTemporalSeparation(); print("PASS service evaluated spatial path and temporal graph separation")
+        try verifyCurvePlayheadReadouts(); print("PASS value/velocity playhead readouts, channel derivatives, per-second units and precision")
+        try await verifySpatialPathParentSpaceAndFailures(); print("PASS one-request spatial path latency, integer JSON, parent-space mapping and typed failures")
+        try verifyCurveReadoutPlacement(); print("PASS curve readout avoids axes/ruler and flips at graph edges")
     }
 }

@@ -20,6 +20,12 @@ public struct KeyGesture {
 }
 
 public enum CurveDisplay {
+    /// Read-only display derivative in units per second, before presentation scale.
+    public static func velocity(_ keys: [[String: Any]], frame: Double, positions: [Double], framesPerSecond: Double) -> [Double] {
+        let a = sample(keys, frame: frame - 0.01, positions: positions)
+        let b = sample(keys, frame: frame + 0.01, positions: positions)
+        return zip(a, b).map { ($1 - $0) / 0.02 * framesPerSecond }
+    }
     public static func numbers(_ key: [String: Any]) -> [Double] {
         let v = key.object("value")["value"]
         if let a = v as? [Double] { return a }

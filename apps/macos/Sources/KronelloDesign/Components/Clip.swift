@@ -7,7 +7,6 @@ public enum KRClipState: Equatable, Sendable { case resting, selected, missing(S
 public struct KRClip: View {
     @Environment(\.krPalette) private var p
     @State private var hover = false
-    @FocusState private var focused: Bool
     public let name: String
     public let kind: KRMediaKind
     public let state: KRClipState
@@ -39,8 +38,8 @@ public struct KRClip: View {
                 }
                 .overlay { RoundedRectangle(cornerRadius: KRRadius.radiusSm).strokeBorder(missing != nil ? p.danger : selected ? p.selection : hover || appearance == .hover ? p.lineStrong : .clear,
                                 style: StrokeStyle(lineWidth: selected && missing == nil ? 2 : 1, dash: missing == nil ? [] : [4, 3])) }
-        }.buttonStyle(.plain).focused($focused).disabled(state == .disabled).opacity(state == .disabled ? 0.45 : 1)
-            .krFocusRing(focused || appearance == .focused).onHover { hover = $0 }.accessibilityLabel(missing.map { "\(name) \($0)" } ?? name)
+        }.buttonStyle(.plain).disabled(state == .disabled).opacity(state == .disabled ? 0.45 : 1)
+            .krControlFocusRing(appearance == .focused).onHover { hover = $0 }.accessibilityLabel(missing.map { "\(name) \($0)" } ?? name)
             .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }

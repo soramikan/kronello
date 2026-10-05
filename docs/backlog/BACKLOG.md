@@ -13,7 +13,7 @@
 | M0 | 0 | 0 | 6 | 0 | 6 |
 | M1 | 0 | 0 | 14 | 0 | 14 |
 | M2 | 0 | 1 | 10 | 0 | 11 |
-| M3 | 7 | 4 | 14 | 0 | 25 |
+| M3 | 4 | 5 | 16 | 0 | 25 |
 | M4 | 12 | 0 | 0 | 0 | 12 |
 | M5 | 5 | 0 | 0 | 0 | 5 |
 | M6 | 4 | 0 | 0 | 0 | 4 |
@@ -365,7 +365,7 @@
 
 ### AUDIO-002 リアルタイム音声再生とA/V同期
 
-- 優先度: P1 / 領域: audio / 状態: planned
+- 優先度: P1 / 領域: audio / 状態: in_progress
 - 依存: AUDIO-000, GUI-001
 - 受け入れ条件:
   - 音声コールバックをプロジェクト更新・ディスク読み出し・式評価と別の実行系にする
@@ -410,7 +410,7 @@
 
 ### GUI-003 macOS GUI: 編集ページ（Sequence のトラック・素材一覧・クリップの Inspector）
 
-- 優先度: P2 / 領域: gui / 状態: planned
+- 優先度: P2 / 領域: gui / 状態: in_progress
 - 依存: GUI-001, NLE-002
 - 受け入れ条件:
   - docs/design-system/screens/edit.md の配置で Project の素材一覧・Sequence の Viewer・クリップの Inspector・トラックを表示し、種類の色・選択・ASSET_MISSING を仕様どおりに示す
@@ -439,7 +439,7 @@
 
 ### VEC-005 線の拡張: 破線・線の位置・非一様変換
 
-- 優先度: P2 / 領域: vector / 状態: in_progress
+- 優先度: P2 / 領域: vector / 状態: done
 - 依存: VEC-003
 - 受け入れ条件:
   - 破線(dash配列・offset)とoffsetのアニメーションを実装する
@@ -510,7 +510,7 @@
 
 ### JOB-002 Windows workerのdetachと各OSの実プロセス検証
 
-- 優先度: P1 / 領域: jobs / 状態: planned
+- 優先度: P1 / 領域: jobs / 状態: in_progress
 - 依存: JOB-001, MCP-001
 - 受け入れ条件:
   - WindowsでCLI/MCPの終了から独立するworker起動・stdio/log・回収の契約を実装し、親終了後も固定入力のジョブが継続することを実機またはCIで検証する
@@ -548,7 +548,7 @@
 
 ### RELEASE-001 同梱FFmpegを含む配布packageの再配置・署名検証
 
-- 優先度: P1 / 領域: release / 状態: in_progress
+- 優先度: P1 / 領域: release / 状態: done
 - 依存: MEDIA-001, AUDIO-000, CLI-001, MCP-001
 - 受け入れ条件:
   - macOSの配布packageに同梱するFFmpeg共有library・SVT-AV1・dav1d・license原文・PATENTS・source manifestを固定し、GPL/nonfree・開発用system libraryを含めないことを検証する

@@ -4,6 +4,8 @@ use kronello_model::{PathSegment, PropertyId, ResolvedGeometry, Shape, ShapeErro
 use kurbo::{BezPath, Ellipse, PathEl, Point, RoundedRect, Shape as KurboShape};
 use std::collections::BTreeMap;
 use thiserror::Error;
+mod dash;
+pub use dash::{MAX_DASH_SEGMENTS, dash_path};
 
 /// Uniform magnification (including the node scale) and error in output pixels.
 /// For nonuniform/affine transforms pass a conservative maximum magnification.
