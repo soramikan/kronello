@@ -445,6 +445,7 @@ impl JobStore {
                 "another worker owns job",
             ));
         }
+        let ownership_changed = r.worker_pid.is_none();
         r.worker_pid = Some(std::process::id());
         if r.cancel_requested {
             save(&tx, &r)?;
@@ -466,8 +467,13 @@ impl JobStore {
         if acquired {
             r.status = JobStatus::Running;
         }
-        r.heartbeat_at_ms = now_ms();
-        save(&tx, &r)?;
+        // A queued worker already has a dedicated heartbeat pulse. Polling
+        // the occupied slots must not add a FULL synchronous write every
+        // 50 ms, starving submit/cancel writers on slower filesystems.
+        if acquired || ownership_changed {
+            r.heartbeat_at_ms = now_ms();
+            save(&tx, &r)?;
+        }
         tx.commit()?;
         Ok(acquired)
     }
