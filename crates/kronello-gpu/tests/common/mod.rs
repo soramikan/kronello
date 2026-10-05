@@ -545,10 +545,18 @@ pub fn vec004_scenes() -> Vec<(&'static str, u32, WorkingSpace, DrawScene)> {
                     start_angle: 25.0,
                     sweep_angle: 240.0,
                 };
-            } else {
+            } else if i == 7 {
                 gradient.geometry = GradientGeometry::Linear {
                     start: [0.0; 2],
-                    end: [if i == 7 { 8.0 } else { 12.0 }, 0.0],
+                    end: [8.0, 0.0],
+                };
+            } else {
+                // The sample grid and paint transform put mapped samples on a
+                // 1/1600 px lattice; a 0.0003 px phase keeps hard stops and
+                // repeat seams off exact ties, whose side depends on FMA.
+                gradient.geometry = GradientGeometry::Linear {
+                    start: [0.0003, 0.0],
+                    end: [12.0003, 0.0],
                 };
             }
             path.fill_gradient = Some(Box::new(gradient.clone()));

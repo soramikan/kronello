@@ -98,3 +98,7 @@ coverage、線形合成、中間面へノイズを入れると、16bit 出力や
 CPU reference と WGSL は同じ float32 規約と 4×4 coverage を使う。
 Metal pixel / golden は host run 待ち。比較誤差は ADR-0047 / QA-001 の既存規約を維持する。
 既存 baseline を編集・暗黙更新せず、clean commit の新候補をレビューして明示採用する。
+hard stop（同一 offset の stop）と repeat の周期境界は不連続点である。sample の parameter が f32 の丸め誤差の範囲で不連続点に一致すると、
+WGSL が規定しない FMA 融合の有無によって CPU と GPU で境界のどちら側になるかが変わる。この差は画素比較の許容誤差で吸収しない。
+CPU / GPU 比較・golden の fixture は、写像後の sample が不連続点から f32 の誤差より十分離れるように geometry を選ぶ（[VEC-004 の検証](../testing/vec-004.md)）。
+実際の作品で不連続点上の sample が CPU と GPU で 1 sample 分異なり得ることは保証の対象外とする。
