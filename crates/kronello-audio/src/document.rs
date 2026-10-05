@@ -287,6 +287,11 @@ impl DocumentAudioPlan {
                 .iter()
                 .find(|n| n.id == id)
                 .ok_or_else(|| invalid("audio node missing"))?;
+            // Disabled containment subtrees leave the evaluated scene (ADR-0061),
+            // including their Media audio.
+            if !node.enabled {
+                continue;
+            }
             let node_range = shifted(node.active_range, offset)?;
             let Some(active) = parent_active.intersection(node_range) else {
                 continue;

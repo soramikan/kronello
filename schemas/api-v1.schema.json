@@ -1411,6 +1411,95 @@
         {
           "additionalProperties": false,
           "properties": {
+            "node_rename": {
+              "additionalProperties": false,
+              "properties": {
+                "composition": {
+                  "$ref": "#/$defs/CompositionId"
+                },
+                "name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                }
+              },
+              "required": [
+                "composition",
+                "node"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "node_rename"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "node_property_insert": {
+              "additionalProperties": false,
+              "properties": {
+                "composition": {
+                  "$ref": "#/$defs/CompositionId"
+                },
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                },
+                "property": {
+                  "$ref": "#/$defs/Property"
+                }
+              },
+              "required": [
+                "composition",
+                "node",
+                "property"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "node_property_insert"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "node_enabled_set": {
+              "additionalProperties": false,
+              "properties": {
+                "composition": {
+                  "$ref": "#/$defs/CompositionId"
+                },
+                "enabled": {
+                  "type": "boolean"
+                },
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                }
+              },
+              "required": [
+                "composition",
+                "node",
+                "enabled"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "node_enabled_set"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
             "node_remove": {
               "additionalProperties": false,
               "properties": {
@@ -1861,6 +1950,7 @@
     },
     "ExplanationCategory": {
       "enum": [
+        "enabled",
         "opacity",
         "active_range",
         "parent",
@@ -4449,6 +4539,9 @@
         "name": {
           "type": "string"
         },
+        "open_mode": {
+          "$ref": "#/$defs/ProjectOpenMode"
+        },
         "project_id": {
           "type": "string"
         },
@@ -4467,6 +4560,7 @@
         }
       },
       "required": [
+        "open_mode",
         "project_id",
         "name",
         "revision",
@@ -4476,6 +4570,22 @@
         "compositions"
       ],
       "type": "object"
+    },
+    "ProjectOpenMode": {
+      "oneOf": [
+        {
+          "enum": [
+            "normal",
+            "safe"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "read_only_snapshot",
+          "description": "Read-only inspection (ADR-0064) read a snapshot without opening a store.",
+          "type": "string"
+        }
+      ]
     },
     "ProjectRequest": {
       "additionalProperties": false,
@@ -6940,11 +7050,22 @@
           },
           "type": "array"
         },
+        "enabled": {
+          "description": "Disabled containment subtrees do not enter the evaluated scene.",
+          "type": "boolean"
+        },
         "id": {
           "$ref": "#/$defs/NodeId"
         },
         "kind": {
           "$ref": "#/$defs/NodeKind"
+        },
+        "name": {
+          "description": "Display only; never used as identity.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "properties": {
           "items": {
@@ -7256,6 +7377,12 @@
         "video_input": {
           "default": "nle002-sdr-rgba8-nearest-v1",
           "type": "string"
+        },
+        "visibility": {
+          "default": 1,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
@@ -9867,8 +9994,10 @@
       ]
     },
     "VisibilityCode": {
-      "description": "Stable semantic causes, extensible without adding state to the inspector.\nGUI's enabled/disabled document contract is integrated by its owning branch.",
+      "description": "Stable semantic causes, extensible without adding state to the inspector.",
       "enum": [
+        "DISABLED",
+        "ANCESTOR_DISABLED",
         "OPACITY_ZERO",
         "OUTSIDE_ACTIVE_RANGE",
         "ANCESTOR_OPACITY_ZERO",

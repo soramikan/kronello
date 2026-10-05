@@ -33,17 +33,19 @@ public struct KRLayerRow: View {
     public let locked: Bool
     public let selected: Bool
     public let appearance: KRControlAppearance
+    public let diagnostic: KRDiagnostic?
     private let onSelect: () -> Void
     private let onDisclosure: () -> Void
     private let onVisibility: () -> Void
     private let onLock: () -> Void
     public init(_ name: String, kind: KRLayerKind, level: Int = 0, hasChildren: Bool = false, expanded: Bool = false,
-                transformParent: String? = nil, hidden: Bool = false, locked: Bool = false, selected: Bool = false, appearance: KRControlAppearance = .resting,
+                transformParent: String? = nil, hidden: Bool = false, locked: Bool = false, selected: Bool = false, appearance: KRControlAppearance = .resting, diagnostic: KRDiagnostic? = nil,
                 onSelect: @escaping () -> Void = {}, onDisclosure: @escaping () -> Void = {},
                 onVisibility: @escaping () -> Void = {}, onLock: @escaping () -> Void = {}) {
         self.name = name; self.kind = kind; self.level = max(0, level); self.hasChildren = hasChildren
         self.expanded = expanded; parent = transformParent; self.hidden = hidden; self.locked = locked; self.selected = selected; self.appearance = appearance
         self.onSelect = onSelect; self.onDisclosure = onDisclosure; self.onVisibility = onVisibility; self.onLock = onLock
+        self.diagnostic = diagnostic
     }
     public var body: some View {
         HStack(spacing: KRSpace.space1) {
@@ -55,6 +57,7 @@ public struct KRLayerRow: View {
                     KRIconView(kind.icon).foregroundStyle(hidden ? p.inkMuted : kind.color(in: p))
                     HStack(alignment: .firstTextBaseline, spacing: KRSpace.space2) {
                         Text(name).italicIf(locked).krText(KRType.body).lineLimit(1).foregroundStyle(hidden ? p.inkMuted : p.ink)
+                        if let diagnostic { KRIconView(.triangleAlert, size: 12).foregroundStyle(p.danger).help(diagnostic.code + " · " + diagnostic.message) }
                         if let parent {
                             HStack(spacing: 2) { KRIconView(.link, size: 10); Text(parent).krText(KRType.caption).lineLimit(1) }.foregroundStyle(p.inkMuted)
                         }

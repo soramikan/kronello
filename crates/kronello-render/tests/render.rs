@@ -52,6 +52,8 @@ fn constant(key: &str, value: Value) -> Property {
 }
 fn node(kind: NodeKind, properties: Vec<Property>) -> SceneNode {
     SceneNode {
+        name: None,
+        enabled: true,
         effects: vec![],
         id: NodeId::new(),
         kind,
@@ -210,6 +212,60 @@ fn comp_mut(p: &mut Project) -> &mut Composition {
         DocumentObject::Known(c) => c,
         _ => panic!(),
     }
+}
+
+#[test]
+fn cpu_visibility_snapshot_versions_preserve_legacy_and_hide_disabled_subtrees() {
+    let (mut child, shape) = rectangle([16.0, 12.0], Color::from_srgb8([200, 40, 10], None));
+    let mut parent = node(NodeKind::Group, vec![]);
+    parent.child_order.push(child.id);
+    child.containment_parent = Some(parent.id);
+    let composition = composition(vec![parent, child]);
+    let id = composition.id;
+    let mut project = Project {
+        name: "Visibility".into(),
+        ..Project::default()
+    };
+    project
+        .compositions
+        .push(DocumentObject::Known(composition));
+    project.shapes.push(DocumentObject::Known(shape));
+    let visible = snapshot(&project, id);
+    assert_eq!(visible.semantic_versions().visibility, 2);
+    let render = |snapshot: &RenderSnapshot| {
+        render_frame(
+            snapshot,
+            &[],
+            &CpuReferenceBackend,
+            FrameRequest {
+                time: Time::ZERO,
+                region: region(),
+            },
+        )
+        .unwrap()
+    };
+    let visible_frame = render(&visible);
+    let mut legacy = serde_json::to_value(&visible).unwrap();
+    legacy["semantic_versions"]
+        .as_object_mut()
+        .unwrap()
+        .remove("visibility");
+    let legacy: RenderSnapshot = serde_json::from_value(legacy).unwrap();
+    assert_eq!(legacy.semantic_versions().visibility, 1);
+    assert_eq!(render(&legacy).pixels, visible_frame.pixels);
+    comp_mut(&mut project).nodes[0].enabled = false;
+    let disabled = snapshot(&project, id);
+    let hidden = render(&disabled);
+    assert_ne!(visible_frame.pixels, hidden.pixels);
+    assert!(hidden.pixels.linear.iter().all(|pixel| *pixel == [0.0; 4]));
+    let mut legacy_contract = disabled.semantic_versions().clone();
+    legacy_contract.visibility = 1;
+    assert_eq!(
+        RenderSnapshot::with_contract(&project, id, 7, disabled.profile(), legacy_contract, vec![])
+            .unwrap_err()
+            .code(),
+        "UNSUPPORTED_FEATURE"
+    );
 }
 
 #[test]

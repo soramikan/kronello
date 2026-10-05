@@ -20,8 +20,10 @@ public struct KRTool: Identifiable, Sendable {
     public var name: String
     public var shortcut: String
     public var separatorBefore: Bool
-    public init(_ id: String, icon: KRIcon, name: String, shortcut: String, separatorBefore: Bool = false) {
+    public var unavailableReason: String?
+    public init(_ id: String, icon: KRIcon, name: String, shortcut: String, separatorBefore: Bool = false, unavailableReason: String? = nil) {
         self.id = id; self.icon = icon; self.name = name; self.shortcut = shortcut; self.separatorBefore = separatorBefore
+        self.unavailableReason = unavailableReason
     }
     /// The motion page's default tool set.
     public static let motion: [KRTool] = [
@@ -64,7 +66,8 @@ public struct KRToolStrip: View {
                     if tool.separatorBefore { p.line.frame(width: 20, height: 1).padding(.vertical, KRSpace.space1) }
                     Toggle(isOn: Binding(get: { selection == tool.id }, set: { if $0 { selection = tool.id; onSelect(tool.id) } })) {
                         KRIconView(tool.icon, size: 16)
-                    }.toggleStyle(KRToolRadioStyle(label: tool.name)).help("\(tool.name) (\(tool.shortcut))").accessibilityLabel(tool.name)
+                    }.toggleStyle(KRToolRadioStyle(label: tool.name)).disabled(tool.unavailableReason != nil)
+                        .help(tool.unavailableReason ?? "\(tool.name) (\(tool.shortcut))").accessibilityLabel(tool.name)
                 }
             }
             if !placement.isFloating { Spacer(minLength: 0) }

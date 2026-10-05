@@ -80,6 +80,8 @@ fn scene_tree_preserves_order_parents_ranges_and_instance_identity() {
         let id = NodeId::new();
         root.root_nodes.push(id);
         root.nodes.push(SceneNode {
+            name: None,
+            enabled: true,
             id,
             kind: NodeKind::CompositionInstance(CompositionInstance {
                 id: CompositionInstanceId::new(),
@@ -673,6 +675,8 @@ fn sampling_resolves_composition_inputs_placement_bindings_and_local_time() {
     let node = NodeId::new();
     root.root_nodes.push(node);
     root.nodes.push(SceneNode {
+        name: None,
+        enabled: true,
         id: node,
         kind: NodeKind::CompositionInstance(CompositionInstance {
             id: placement,

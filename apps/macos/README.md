@@ -1,11 +1,13 @@
 # macOS package
 
-macOS アプリの SwiftPM package。FFI-001 の native 境界（`CKronelloFFI` / `KronelloCore`、検証用 harness）と、デザインシステムの SwiftUI 部品（`KronelloDesign`、後半の節）を含む。
+macOS アプリの SwiftPM package。GUI-001 の実アプリ、FFI-001 の native 境界（`CKronelloFFI` / `KronelloCore`、検証用 harness）、デザインシステムの SwiftUI 部品（`KronelloDesign`、後半の節）を含む。
 package 名は `Kronello`、Swift tools 5.10、macOS 14 以上。
-後続の `KronelloDesign` / `Kronello` targets はこの変更では作成しない。
 
 | target | 内容 |
 |---|---|
+| Kronello | Welcome / main window、Motion authoring、明示 Dark / Light theme |
+| KronelloAppModel | 共有 Command / Query の view model、session Undo、ユーザー UI state actor |
+| KronelloAppModelTests | selection / conflict / Undo / state 分離 / commit-once / GUI-CLI 同等性 |
 | CKronelloFFI | C header / module map。Rust の9関数だけを公開 |
 | KronelloCore | MainActor の async wrapper と公開 schema 由来の Codable 型 |
 | KronelloPreviewHarness | 一つの AppKit window と CAMetalLayer。編集・プレビューの検証専用 |
@@ -33,8 +35,36 @@ Swift ファイルを更新する場合は `python3 scripts/generate_swift_api.p
 
 Rust library の install name は `@rpath/libkronello_ffi.dylib`。
 SwiftPM が絶対パスのローカル `Libraries` を link / rpath に加える。
-配布用 app bundle、code signing、notarization、同梱 LGPL FFmpeg runtime の組み立ては後続範囲。
+開発 app bundle と ad-hoc signing は下記スクリプトで行う。配布 signing / notarization と LGPL FFmpeg runtime の組み立ては後続範囲。
 FFI build は FFmpeg executable や GPL binary を同梱しない。
+
+## GUI-001 開発アプリ
+
+```sh
+python3 scripts/build_macos_app.py
+target/macos/Kronello.app/Contents/MacOS/Kronello
+```
+
+スクリプトは FFI / CLI、UI fonts、`swift build -j 3` を実行する。既存 build のみ使う場合は `--skip-build`。
+`target/macos/Kronello.app`（bundle ID `dev.kronello.Kronello`）の MacOS executable、Frameworks の FFI dylib、
+Helpers の `kronello` worker、Resources の `Kronello_KronelloDesign.bundle` と font licenses を配置する。
+executable の rpath は `@executable_path/../Frameworks`。library / helper / app を ad-hoc sign し verify する。
+FFmpeg executable / runtime、GPL binary はコピーしない。開発 bundle の組立・起動は host run を要する。
+
+起動時に `KRFonts.registerBundled()` を呼び、theme は Dark 既定。表示メニュー / Settings の明示設定だけで
+Light へ切り替える。`NSApp.appearance` と各 window root の `krTheme` を一致させる。
+新規 `.kronello` は共有 `project.create`、open は NSOpenPanel、recent はユーザー状態領域へ保存する。
+Motion の操作と既知の制限、host screenshot procedure は [GUI-001 の検証](../../docs/testing/gui-001.md)。
+
+UI state は `KRONELLO_STATE_ROOT` または `~/Library/Application Support/Kronello/` の
+`ui-state/<project-id>.json`、theme / recent は `preferences.json`。`.kronello` に UI state を追加しない。
+Text render / creation 用の font は UI font と別契約。`KRONELLO_FONT_INPUTS` に JSON manifest の絶対 path を
+指定する（配列要素は共有 API の `{identity, path}`）。既存 document font lock と一致しない限り Text tool は無効。
+未指定・欠落時は型付き `FONT_MISSING`。暗黙の代替フォントを使わない。
+
+共有契約の追加は `SceneNode.name` / `enabled`、`node_rename` / `node_enabled_set` /
+`node_property_insert`、`project.info.open_mode`。lock は GUI 個人の UI state。
+safe-mode store は現行 FFI で要求ごとに開閉され、ウインドウ全体の排他は保証しない（[ADR-0061](../../docs/adr/0061-macos-editor-session-and-ui-state.md)）。
 
 ## API / ownership
 
@@ -127,6 +157,12 @@ gallery と ImageRenderer smoke は `.environment(\.krStaticRendering, true)` �
 | 状態 | `KRStatusBar` + `KRJobSummary`、`KRProgressBar`、`KRActivityIndicator`、`KRJobRow` + `KRJobState`。状態と文字列、error / job を開く callback、行の actions |
 | 判断・編集面 | `KRDialog` + `KRDialogAction`（最大 3 ボタン、primary は最大 1 個・右端）、`KRPopover` / `KRPopoverRow`、`KREmptyState`。シート・popover の presentation と外側クリック / Esc の dismissal、drop の受け付けは利用側が行う |
 | 共通 | `KRFocusRing` / `.krFocusRing()`、`KRDiagnostic` / `KRErrorLine`。フォーカスは selection の 2px 実線。タブだけは仕様に従い内側に置く |
+| GUI 状態面 | `KRWelcome` / `KRRecentProject`、32px `KRStateBand`、`KRConflictBanner`、`KRViewerError`、7px handle の `KRManipulationOverlay`。`KRWindowMetrics` は画面仕様寸法 |
+
+`KRSegment.unavailableReason` / `KRTool.unavailableReason` は選択肢を個別無効化し tooltip を出す。
+`KRInspectorRow.keyframeEditingEnabled` は glyph の編集だけを無効化し、Curve の前後 navigation を残す。
+`KRLayerRow.diagnostic` は名前の後ろに danger icon と code / message tooltip を出す。
+この追加は gallery の `UnavailableControls` と GUI 状態面の5 sheets で両 theme をレビューする。
 
 `KRControlAppearance` と `KRNumberFieldState` は静止画でも hover / focus / scrubbing などを表示するための指定。実際の hover / focus はコントロール自身も扱う。`EnvironmentValues.krFreezeActivity` は gallery / snapshot の回転停止用で、実アプリでは既定の false を使う。OS の reduced-motion は常に尊重する。
 
@@ -141,12 +177,12 @@ python3 scripts/fetch_ui_fonts.py
 `apps/macos` で実行する。
 
 ```sh
-swift build
-swift test
-swift run KronelloDesignGallery /tmp/kronello-gallery
+swift build -j 3
+swift test -j 3
+swift run -j 3 KronelloDesignGallery /tmp/kronello-gallery
 ```
 
-gallery は 2x の PNG とその絶対パスを出力し、描画や保存に失敗したら終了コード 1 で止まる。PNG をコミットしない。出力は以下の各名前に `-dark.png` / `-light.png` を付けたもの（35 部品・基礎シート + 1 画面、合計 72 ファイル）。
+gallery は 2x の PNG とその絶対パスを出力し、描画や保存に失敗したら終了コード 1 で止まる。PNG をコミットしない。出力は以下の各名前に `-dark.png` / `-light.png` を付けたもの（35 部品・基礎シート + 1 画面 + GUI 状態6 sheets、合計 84 ファイルを予定。追加 sheets の host 描画は未検証）。
 
 ```text
 Button SegmentedControl PopupButton Menu NumberField TextField SearchField
@@ -154,6 +190,7 @@ Checkbox Radio Slider FocusRing KeyframeNavigator InspectorRow Panel TabBar
 LayerRow AssetRow KeyframeGlyph Track Clip Ruler Playhead ToolStrip TransportBar
 TimecodeField ViewerFrame StatusBar ProgressBar JobRow Dialog Popover EmptyState
 Icons Typography Palette Screen-motion
+Welcome StateBand ConflictBanner ViewerError ManipulationOverlay UnavailableControls
 ```
 
 テストは NumberField の閾値・倍率・clamp・確定一回・キャンセル、timecode の省略・範囲・overflow・往復、placement の Codable 往復、Viewer の両方向 fit、32 部品の両テーマ ImageRenderer smoke を含む。smoke は画像生成と寸法の検査で、画素の CSS 一致や実操作・VoiceOver・日本語 IME の受け入れを保証するものではない。

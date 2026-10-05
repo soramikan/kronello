@@ -65,6 +65,8 @@ fn fixture() -> (Project, CompositionId, AssetId) {
     let (id, aid) = (c.id, asset.id);
     let v = volume(PropertySource::Constant(scalar(0.5)));
     let node = SceneNode {
+        name: None,
+        enabled: true,
         id: NodeId::new(),
         kind: NodeKind::Media(MediaNode {
             asset: aid,
@@ -135,6 +137,8 @@ fn nested_placements_trim_negative_grid_and_request_order_are_independent() {
     // Same definition at two distinct placements; source and gain contexts stay separate.
     for offset in [t(0, 1), t(-1, 20)] {
         let n = SceneNode {
+            name: None,
+            enabled: true,
             id: NodeId::new(),
             kind: NodeKind::CompositionInstance(CompositionInstance {
                 id: CompositionInstanceId::new(),
@@ -286,6 +290,8 @@ fn retime_effect_generator_missing_assets_and_recursive_audio_fail_typed() {
         panic!()
     };
     let recursive = SceneNode {
+        name: None,
+        enabled: true,
         id: NodeId::new(),
         kind: NodeKind::CompositionInstance(CompositionInstance {
             id: CompositionInstanceId::new(),
@@ -393,4 +399,17 @@ fn crossfade_between_audible_composition_clips_fails_typed() {
     let error = DocumentAudioPlan::compile(&p, AudioTarget::Sequence(seq)).unwrap_err();
     assert_eq!(error.code(), "UNSUPPORTED_FEATURE");
     assert!(error.to_string().contains("crossfade"), "{error}");
+}
+#[test]
+fn disabled_media_node_is_silent() {
+    let (mut p, root, _) = fixture();
+    let seq = sequence(&mut p, root, Time::ZERO, t(1, 10));
+    let enabled = DocumentAudioPlan::compile(&p, AudioTarget::Sequence(seq)).unwrap();
+    assert_eq!(enabled.clips().len(), 1);
+    let DocumentObject::Known(c) = &mut p.compositions[0] else {
+        panic!()
+    };
+    c.nodes[0].enabled = false;
+    let disabled = DocumentAudioPlan::compile(&p, AudioTarget::Sequence(seq)).unwrap();
+    assert!(disabled.clips().is_empty());
 }

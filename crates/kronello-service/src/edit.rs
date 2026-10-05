@@ -55,6 +55,21 @@ pub enum EditCommand {
         node: SceneNode,
         index: usize,
     },
+    NodeRename {
+        composition: CompositionId,
+        node: NodeId,
+        name: Option<String>,
+    },
+    NodePropertyInsert {
+        composition: CompositionId,
+        node: NodeId,
+        property: Property,
+    },
+    NodeEnabledSet {
+        composition: CompositionId,
+        node: NodeId,
+        enabled: bool,
+    },
     NodeRemove {
         composition: CompositionId,
         node: NodeId,
@@ -629,6 +644,52 @@ fn apply_command(
             }
             order.insert(*index, node.id);
             c.nodes.push(node.clone());
+        }
+        EditCommand::NodePropertyInsert {
+            composition,
+            node,
+            property,
+        } => {
+            if properties(project)
+                .iter()
+                .any(|(_, p)| p.id() == property.id())
+            {
+                return Err(invalid("property ID already exists"));
+            }
+            let n = node_mut(composition_mut(project, *composition)?, *node)?;
+            if n.properties
+                .iter()
+                .any(|p| p.descriptor().key == property.descriptor().key)
+            {
+                return Err(invalid("property key already exists on node"));
+            }
+            property.validate(&registry()).map_err(invalid)?;
+            structure(keys, n.id.as_uuid(), n.id.as_uuid());
+            keys.insert(ChangedKey::Value {
+                object_id: n.id.as_uuid(),
+                property_id: property.id(),
+            });
+            n.properties.push(property.clone());
+        }
+        EditCommand::NodeRename {
+            composition,
+            node,
+            name,
+        } => {
+            let c = composition_mut(project, *composition)?;
+            let n = node_mut(c, *node)?;
+            structure(keys, n.id.as_uuid(), n.id.as_uuid());
+            n.name = name.clone();
+        }
+        EditCommand::NodeEnabledSet {
+            composition,
+            node,
+            enabled,
+        } => {
+            let c = composition_mut(project, *composition)?;
+            let n = node_mut(c, *node)?;
+            structure(keys, n.id.as_uuid(), n.id.as_uuid());
+            n.enabled = *enabled;
         }
         EditCommand::NodeRemove { composition, node } => {
             let c = composition_mut(project, *composition)?;
