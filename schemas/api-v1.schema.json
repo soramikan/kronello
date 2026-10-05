@@ -241,6 +241,16 @@
           "minimum": 0,
           "type": "integer"
         },
+        "streaming": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StreamingExportReport"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "video": {
           "$ref": "#/$defs/MediaPathReport"
         }
@@ -9184,6 +9194,46 @@
         "index",
         "codec",
         "time_base"
+      ],
+      "type": "object"
+    },
+    "StreamingExportReport": {
+      "description": "Logical I/O observed after successful operations. Stage byte lengths come\nfrom file metadata; they are not physical device I/O or process RSS estimates.",
+      "properties": {
+        "audio_spool_write_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "audio_stage_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "audio_window_read_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "published_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "video_stage_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "audio_spool_write_bytes",
+        "audio_window_read_bytes",
+        "audio_stage_bytes",
+        "video_stage_bytes"
       ],
       "type": "object"
     },

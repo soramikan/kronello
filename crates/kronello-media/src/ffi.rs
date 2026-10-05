@@ -530,6 +530,11 @@ unsafe extern "C" {
     fn km_audio_count(a: *mut c_void) -> c_int;
     fn km_audio_copy(a: *mut c_void, out: *mut f32, capacity: c_int) -> c_int;
     fn km_audio_next(a: *mut c_void) -> c_int;
+    fn km_audio_encoder_open(k: *mut c_void, path: *const c_char, alac: c_int) -> *mut c_void;
+    fn km_audio_encoder_close(e: *mut c_void);
+    fn km_audio_encoder_block(e: *mut c_void) -> c_int;
+    fn km_audio_encoder_frame(e: *mut c_void, samples: *const i32, count: c_int) -> c_int;
+    fn km_audio_encoder_finish(e: *mut c_void) -> c_int;
     fn km_audio_encode(
         k: *mut c_void,
         path: *const c_char,
@@ -651,6 +656,65 @@ impl Drop for NativeAudioDecoder<'_> {
         unsafe { km_audio_close(self.ptr.as_ptr()) }
     }
 }
+pub(crate) struct NativeAudioEncoder<'a> {
+    ptr: NonNull<c_void>,
+    runtime: &'a NativeRuntime,
+    pub block: usize,
+}
+impl<'a> NativeAudioEncoder<'a> {
+    pub(crate) fn open(
+        runtime: &'a NativeRuntime,
+        path: &Path,
+        alac: bool,
+    ) -> Result<Self, MediaError> {
+        let path = path_string(path)?;
+        // SAFETY: the runtime and path remain live; returned context is owned.
+        let ptr = NonNull::new(unsafe {
+            km_audio_encoder_open(runtime.0.as_ptr(), path.as_ptr(), i32::from(alac))
+        })
+        .ok_or_else(|| MediaError::Encode(runtime.error()))?;
+        let block = unsafe { km_audio_encoder_block(ptr.as_ptr()) } as usize;
+        Ok(Self {
+            ptr,
+            runtime,
+            block,
+        })
+    }
+    pub(crate) fn frame(&mut self, samples: &[i32]) -> Result<(), MediaError> {
+        if samples.is_empty() || !samples.len().is_multiple_of(2) || samples.len() / 2 > self.block
+        {
+            return Err(MediaError::InvalidInput(
+                "audio encoder block length".into(),
+            ));
+        }
+        // SAFETY: exactly two samples per frame, bounded by the owned codec block.
+        if unsafe {
+            km_audio_encoder_frame(
+                self.ptr.as_ptr(),
+                samples.as_ptr(),
+                (samples.len() / 2) as c_int,
+            )
+        } < 0
+        {
+            return Err(MediaError::Encode(self.runtime.error()));
+        }
+        Ok(())
+    }
+    pub(crate) fn finish(&mut self) -> Result<(), MediaError> {
+        // SAFETY: the unique live encoder has accepted all its input.
+        if unsafe { km_audio_encoder_finish(self.ptr.as_ptr()) } < 0 {
+            return Err(MediaError::Encode(self.runtime.error()));
+        }
+        Ok(())
+    }
+}
+impl Drop for NativeAudioEncoder<'_> {
+    fn drop(&mut self) {
+        // SAFETY: uniquely owned handle, destroyed before its borrowed runtime.
+        unsafe { km_audio_encoder_close(self.ptr.as_ptr()) }
+    }
+}
+
 struct NativeProbe<'a> {
     ptr: NonNull<c_void>,
     runtime: &'a NativeRuntime,

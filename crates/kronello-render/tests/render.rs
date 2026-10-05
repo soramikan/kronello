@@ -2720,6 +2720,28 @@ fn tiled_frame_matches_full_frame_across_shadow_halo_and_partial_tiles() {
         )
         .unwrap();
         assert_eq!(actual.pixels, expected, "scale {scale}");
+        let mut streamed = vec![[0.0; 4]; 529 * 35];
+        render_frame_tiles(
+            &snapshot,
+            &[],
+            &CpuReferenceBackend,
+            FrameRequest {
+                time: t(0, 1),
+                region,
+            },
+            &mut |[x, y], tile, output| {
+                for row in 0..tile.pixels[1] as usize {
+                    let dest = (y as usize + row) * 529 + x as usize;
+                    let source = row * tile.pixels[0] as usize;
+                    let width = tile.pixels[0] as usize;
+                    streamed[dest..dest + width]
+                        .copy_from_slice(&output.linear[source..source + width]);
+                }
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(streamed, expected.linear, "streamed halo scale {scale}");
         assert_eq!(actual.metadata.region, region);
         assert_eq!(actual.metadata.revision, "7");
         assert_eq!(actual.metadata.design_to_pixel, region.design_to_pixel().0);
@@ -3379,4 +3401,56 @@ fn vec005_restore(wire: &serde_json::Value) -> Result<RenderSnapshot, RenderErro
     let snapshot: RenderSnapshot = serde_json::from_value(wire.clone()).unwrap();
     snapshot.validate()?;
     Ok(snapshot)
+}
+
+#[test]
+fn streaming_rejects_cumulative_halo_before_backend_allocation() {
+    let (mut project, id) = fx_project();
+    let c = comp_mut(&mut project);
+    let sigma = c.nodes[0]
+        .properties
+        .iter()
+        .find(|p| p.descriptor().key.as_str() == "kronello.effect.sigma")
+        .unwrap()
+        .id();
+    c.nodes[0]
+        .properties
+        .iter_mut()
+        .find(|p| p.id() == sigma)
+        .unwrap()
+        .set_source(PropertySource::Constant(scalar(20.0)), &render_registry())
+        .unwrap();
+    c.nodes[0].effects = (0..16)
+        .map(|_| {
+            Effect::Known(EffectDefinition {
+                effect_id: GAUSSIAN_BLUR_ID.into(),
+                version: 1,
+                parameters: EffectParameters::GaussianBlur { sigma },
+            })
+        })
+        .collect();
+    let snap = RenderSnapshot::new(&project, id, 0, RenderProfile::default()).unwrap();
+    let mut tiles = 0;
+    let region = OutputRegion {
+        origin: [0.0; 2],
+        extent: [512.0; 2],
+        pixels: [512; 2],
+    };
+    let error = render_frame_tiles(
+        &snap,
+        &[],
+        &CpuReferenceBackend,
+        FrameRequest {
+            time: t(0, 1),
+            region,
+        },
+        &mut |_, _, _| {
+            tiles += 1;
+            Ok(())
+        },
+    )
+    .unwrap_err();
+    assert_eq!(error.code(), "UNSUPPORTED_FEATURE", "{error:?}");
+    assert!(error.to_string().contains("streaming tile surface budget"));
+    assert_eq!(tiles, 0);
 }

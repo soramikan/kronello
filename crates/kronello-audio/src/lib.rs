@@ -25,6 +25,8 @@ pub enum AudioError {
     BudgetExceeded(String),
     #[error("ASSET_MISSING: audio {0}")]
     AssetMissing(AssetId),
+    #[error("AUDIO_SOURCE_READ: {0}")]
+    SourceRead(String),
     #[error("AUDIO_SOURCE_TOO_SHORT: {0}")]
     SourceTooShort(AssetId),
     #[error(transparent)]
@@ -44,6 +46,7 @@ impl AudioError {
             Self::InvalidInput(_) => "INVALID_AUDIO_INPUT",
             Self::BudgetExceeded(_) => "AUDIO_BUDGET_EXCEEDED",
             Self::AssetMissing(_) => "ASSET_MISSING",
+            Self::SourceRead(_) => "AUDIO_SOURCE_READ",
             Self::SourceTooShort(_) => "AUDIO_SOURCE_TOO_SHORT",
             Self::Sequence(e) => e.code(),
             Self::Unsupported(_) => "UNSUPPORTED_FEATURE",
@@ -206,6 +209,30 @@ pub struct QuantizedAudio {
 /// Each source key selects the exact authored stream of a verified asset.
 pub type AudioSources = BTreeMap<(AssetId, u32), AudioBuffer>;
 
+/// Read-only indexed source contract. Implementations may page samples without
+/// exposing files or codecs to this pure evaluator. Missing samples are errors.
+pub trait AudioSourceReader {
+    fn frame_count(&self, asset: AssetId, stream: u32) -> Result<usize, AudioError>;
+    fn frame(&self, asset: AssetId, stream: u32, index: usize) -> Result<[f32; 2], AudioError>;
+}
+impl AudioSourceReader for AudioSources {
+    fn frame_count(&self, asset: AssetId, stream: u32) -> Result<usize, AudioError> {
+        Ok(self
+            .get(&(asset, stream))
+            .ok_or(AudioError::AssetMissing(asset))?
+            .frames
+            .len())
+    }
+    fn frame(&self, asset: AssetId, stream: u32, index: usize) -> Result<[f32; 2], AudioError> {
+        self.get(&(asset, stream))
+            .ok_or(AudioError::AssetMissing(asset))?
+            .frames
+            .get(index)
+            .copied()
+            .ok_or(AudioError::SourceTooShort(asset))
+    }
+}
+
 /// Calculate every boundary from absolute rational time. Adjacent requests use
 /// identical floor boundaries; rounded frame lengths are never accumulated.
 pub fn mix(
@@ -213,13 +240,31 @@ pub fn mix(
     sources: &AudioSources,
     range: TimeRange,
 ) -> Result<Bus, AudioError> {
-    mix_with_gain(clips, sources, range, &mut |_, _| Ok(Gain::UNITY))
+    mix_reader(clips, sources, range)
+}
+
+/// Mix a bounded Bus from indexed immutable sources.
+pub fn mix_reader(
+    clips: &[AudioClip],
+    sources: &dyn AudioSourceReader,
+    range: TimeRange,
+) -> Result<Bus, AudioError> {
+    mix_with_gain_reader(clips, sources, range, &mut |_, _| Ok(Gain::UNITY))
 }
 
 /// Stateless per-sample gain hook. Sample indices are absolute, never accumulated.
 pub fn mix_with_gain(
     clips: &[AudioClip],
     sources: &AudioSources,
+    range: TimeRange,
+    gain: &mut dyn FnMut(usize, i64) -> Result<Gain, AudioError>,
+) -> Result<Bus, AudioError> {
+    mix_with_gain_reader(clips, sources, range, gain)
+}
+
+pub(crate) fn mix_with_gain_reader(
+    clips: &[AudioClip],
+    sources: &dyn AudioSourceReader,
     range: TimeRange,
     gain: &mut dyn FnMut(usize, i64) -> Result<Gain, AudioError>,
 ) -> Result<Bus, AudioError> {
@@ -235,9 +280,7 @@ pub fn mix_with_gain(
         clip.validate()?;
         let placement = sample_range(clip.placement)?;
         let source_in = sample_index(clip.source_in)?;
-        let source = sources
-            .get(&(clip.asset, clip.stream_index))
-            .ok_or(AudioError::AssetMissing(clip.asset))?;
+        let source_length = sources.frame_count(clip.asset, clip.stream_index)?;
         let source_end = source_in
             .checked_add(
                 placement
@@ -248,7 +291,7 @@ pub fn mix_with_gain(
             .ok_or(AudioError::Overflow)?;
         if usize::try_from(source_end)
             .ok()
-            .is_none_or(|end| end > source.frames.len())
+            .is_none_or(|end| end > source_length)
         {
             return Err(AudioError::SourceTooShort(clip.asset));
         }
@@ -262,11 +305,8 @@ pub fn mix_with_gain(
         let src = usize::try_from(source_in + (start - placement.start))
             .map_err(|_| AudioError::Overflow)?;
         let len = usize::try_from(end - start).map_err(|_| AudioError::Overflow)?;
-        for (offset, (out, input)) in frames[dst..dst + len]
-            .iter_mut()
-            .zip(&source.frames[src..src + len])
-            .enumerate()
-        {
+        for (offset, out) in frames[dst..dst + len].iter_mut().enumerate() {
+            let input = sources.frame(clip.asset, clip.stream_index, src + offset)?;
             let linear = gain(clip_index, start + offset as i64)?.linear() * clip.gain.0;
             for channel in 0..2 {
                 out[channel] += input[channel] * linear;

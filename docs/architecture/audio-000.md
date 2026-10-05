@@ -1,6 +1,6 @@
 # AUDIO-000 基本音声と A/V 書き出し
 
-設計契約: [ADR-0049](../adr/0049-audio-bus-timing-and-codec.md)。基本音声の library API を実装する。AUDIO-000 の範囲は定数音量の明示配置。AUDIO-003 で文書由来の再帰配置・音量 Property / Curve と共有 `render.export` / `render.submit` を追加した。AUDIO-004 は明示 resample・audio clip Gain effect・Generator・crossfade を movie profile 3 へ追加した。AUDIO-002 は buffered realtime playback を追加した（実デバイスの受け入れは pending host run）。pitch-preserving stretch、長尺 streaming は後続。
+設計契約: [ADR-0049](../adr/0049-audio-bus-timing-and-codec.md)。基本音声の library API を実装する。AUDIO-000 の範囲は定数音量の明示配置。AUDIO-003 で文書由来の再帰配置・音量 Property / Curve と共有 `render.export` / `render.submit` を追加した。AUDIO-004 は明示 resample・audio clip Gain effect・Generator・crossfade を movie profile 3 へ追加した。AUDIO-002 は buffered realtime playback を追加した（実デバイスの受け入れは検証文書に記録）。pitch-preserving stretch は後続。RENDER-003 で movie export の長尺 streaming を追加した（ADR-0079）。
 
 ## 依存境界
 
@@ -49,7 +49,7 @@ RenderSnapshot の既存 hash は映像文書・素材 lock を識別する。ex
 
 最終映像は explicit background を使う SDR linear Rec.709 → BT.709 encoded RGB → RGBA8 → ProRes。音声は stereo f32 → 明示 clipping policy → PCM24。stage の audio / video の sample 数・duration を要求と照合し、mux 後も codec / start PTS / duration / metadata を確認する。最終ファイルは既存成果物を上書きせず同じ volume の stage から確定する。
 
-保守的な memory budget と対応 codec / layout / timing の範囲は ADR-0049 に記載する。大型 export の streaming、hardware / GPU 常駐転送、cancel / resume は後続。実時間 playback は下記 AUDIO-002 の別契約で扱う。検証は [AUDIO-000](../testing/audio-000.md) を参照。
+保守的な memory budget と対応 codec / layout / timing の範囲は ADR-0049 に記載する。movie export の有界 source / Bus と協調 cancel は ADR-0079 を使う。hardware / GPU 常駐転送、resume は後続。実時間 playback は下記 AUDIO-002 の別契約で扱う。検証は [AUDIO-000](../testing/audio-000.md) を参照。
 
 ## AUDIO-003: 文書音声と音量
 
@@ -155,3 +155,15 @@ underrun は silence / count、遅着 sample は破棄し device clock を継続
 producer / timestamp / device change の typed failures を表示する。音声なし / mute / デバイスなしは
 理由付き host clock。実 engine + Metal の40秒×3-rate harness と解析手順は検証文書を参照し、
 CPU / export / synthetic callback checks を実時間同期の受け入れに読み替えない。
+
+## RENDER-003 の有界 movie 音声
+
+`decode_audio_stream` は finite / PTS continuity を検査して native chunk を順に渡す。
+movie export は hash lock を decode 前後で確認し、destination volume の f32 stereo spoolを
+`AudioSourceReader` から4,096 framesの窓で読む。純粋 mixer に file / codec を渡さず、
+全 source を同時に `AudioBuffer` に展開しない。source / aggregate / movie全Busの10分上限を外し、
+既存の `AudioBuffer` / 単体 decode 上限と batchあたりsample operations予算は維持する。
+Bus は codec block（PCM24:4,096、ALAC: native block）ごとに絶対sample格子から生成する。
+最後の partial blockだけを許し、sample count とzero-origin PTSを従来と一致させる。
+`AudioSources` を使う既存 `mix` / `DocumentAudioPlan::mix` は同じ reader経路の互換wrapper。
+[ADR-0079](../adr/0079-bounded-streaming-movie-export.md)、[検証](../testing/render-003.md)。

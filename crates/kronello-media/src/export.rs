@@ -1,14 +1,13 @@
-use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use kronello_audio::{
-    AudioClip, AudioSourceMode, AudioSources, AudioTarget, ClippingPolicy, DocumentAudioPlan,
-    SAMPLE_RATE, mix, sample_range,
+    AudioClip, AudioSourceMode, AudioTarget, ClippingPolicy, DocumentAudioPlan, SAMPLE_RATE,
+    mix_reader, sample_range,
 };
 use kronello_model::{ColorSpace, DocumentObject};
 use kronello_render::{
     FrameMetadata, FrameRequest, OutputRegion, RenderBackend, RenderSnapshot, frame_samples,
-    render_frame,
+    render_frame_tiles,
 };
 use kronello_text::FontData;
 use kronello_time::{FrameRate, Rational, TimeRange};
@@ -17,8 +16,7 @@ use sha2::{Digest, Sha256};
 
 use crate::audio::{publish_file, stage_file};
 use crate::{
-    AudioEncodeReport, EncodeCodec, EncodeFrame, EncodeRequest, MediaError, MediaPathReport,
-    MediaRuntime,
+    AudioEncodeReport, EncodeCodec, EncodeRequest, MediaError, MediaPathReport, MediaRuntime,
 };
 
 #[derive(
@@ -310,6 +308,17 @@ pub struct AvExportRequest {
     pub background: [f32; 3],
     pub clipping: ClippingPolicy,
 }
+/// Logical I/O observed after successful operations. Stage byte lengths come
+/// from file metadata; they are not physical device I/O or process RSS estimates.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct StreamingExportReport {
+    pub audio_spool_write_bytes: u64,
+    pub audio_window_read_bytes: u64,
+    pub audio_stage_bytes: u64,
+    pub video_stage_bytes: u64,
+    pub published_bytes: Option<u64>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct AvExportReport {
     pub schema_version: u32,
@@ -328,6 +337,8 @@ pub struct AvExportReport {
     pub video: MediaPathReport,
     pub audio: AudioEncodeReport,
     pub probe: MediaProbe,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub streaming: Option<StreamingExportReport>,
 }
 impl MediaRuntime {
     /// Read the stream's container codec tag (little-endian FourCC when textual).
@@ -502,27 +513,26 @@ impl MediaRuntime {
             }
         }
         let times = frame_samples(request.range, request.frame_rate)?;
-        let size = u64::from(request.region.pixels[0]) * u64::from(request.region.pixels[1]) * 4;
-        if times.is_empty()
-            || size
-                .checked_mul(times.len() as u64)
-                .is_none_or(|v| v > 256 * 1024 * 1024)
-        {
-            return Err(MediaError::InvalidInput(
-                "empty export or video payload budget exceeded".into(),
-            ));
+        if times.is_empty() {
+            return Err(MediaError::InvalidInput("empty export".into()));
         }
         if request.output.exists() {
             return Err(MediaError::OutputExists(request.output.clone()));
         }
         let render_hash = snapshot.render.content_hash()?;
         let export_hash = snapshot.content_hash()?;
-        let mut sources: AudioSources = BTreeMap::new();
-        let mut source_frames = 0_usize;
+        let parent = request
+            .output
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or(Path::new("."));
+        // Every intermediate is on the destination volume and owned by RAII.
+        let stage = tempfile::tempdir_in(parent)?;
+        let video_file = stage.path().join("video.mov");
+        let audio_file = stage.path().join("audio.mov");
+        let mut sources = crate::streaming::SpoolSources::new();
         for clip in &snapshot.clips {
-            if let std::collections::btree_map::Entry::Vacant(entry) =
-                sources.entry((clip.asset, clip.stream_index))
-            {
+            if !sources.contains(&(clip.asset, clip.stream_index)) {
                 let asset = snapshot
                     .render
                     .project()
@@ -533,32 +543,89 @@ impl MediaRuntime {
                         _ => None,
                     })
                     .ok_or_else(|| MediaError::AssetMissing(clip.asset.to_string()))?;
-                let decoded = self
-                    .decode_asset_audio(asset, project_path, clip.stream_index)?
-                    .buffer;
-                source_frames = source_frames
-                    .checked_add(decoded.frames().len())
-                    .filter(|v| *v <= kronello_audio::MAX_AUDIO_FRAMES)
-                    .ok_or_else(|| {
-                        MediaError::InvalidInput("aggregate audio source budget exceeded".into())
-                    })?;
-                entry.insert(decoded);
+                sources.decode(
+                    self,
+                    asset,
+                    project_path,
+                    clip.stream_index,
+                    stage.path(),
+                    checkpoint,
+                )?;
             }
         }
-        let bus = if snapshot.audio == AudioSourceMode::Document {
-            document_plan(&snapshot.render, snapshot.schema_version)?
-                .mix(&sources, request.range)?
+        let plan = if snapshot.audio == AudioSourceMode::Document {
+            Some(document_plan(&snapshot.render, snapshot.schema_version)?)
         } else {
-            mix(&snapshot.clips, &sources, request.range)?
+            None
         };
-        // Reject clipping before expensive frame rendering; explicit Saturate
-        // still records every changed channel sample in the encode report.
-        bus.quantize_pcm24(request.clipping)?;
-        let mut frames = Vec::new();
+        let samples = sample_range(request.range)?;
+        if samples.is_empty() {
+            return Err(MediaError::InvalidInput("empty audio output".into()));
+        }
+        let mut audio_encoder = crate::ffi::NativeAudioEncoder::open(
+            &self.native,
+            &audio_file,
+            profile != MovieProfile::ProResPcm24,
+        )?;
+        let mut clipped_samples = 0_usize;
+        let mut start = samples.start;
+        while start < samples.end {
+            checkpoint(0)?;
+            let end = samples.end.min(
+                start
+                    .checked_add(audio_encoder.block as i64)
+                    .ok_or_else(|| MediaError::InvalidInput("audio batch overflow".into()))?,
+            );
+            let range = TimeRange::new(
+                SAMPLE_RATE.sample_to_time(start)?,
+                SAMPLE_RATE.sample_to_time(end)?,
+            )?;
+            let bus = match &plan {
+                Some(plan) => plan.mix_reader(&sources, range)?,
+                None => mix_reader(&snapshot.clips, &sources, range)?,
+            };
+            let quantized = bus.quantize_pcm24(request.clipping)?;
+            clipped_samples = clipped_samples
+                .checked_add(quantized.clipped_samples)
+                .ok_or_else(|| MediaError::InvalidInput("clipping count overflow".into()))?;
+            audio_encoder.frame(&quantized.samples)?;
+            start = end;
+        }
+        audio_encoder.finish()?;
+        drop(audio_encoder);
+        let audio_spool_write_bytes = sources.decoded_bytes;
+        let audio_window_read_bytes = sources.read_bytes();
+        drop(sources);
+        let audio = AudioEncodeReport {
+            codec: if profile == MovieProfile::ProResPcm24 {
+                "pcm_s24le"
+            } else {
+                "alac"
+            }
+            .into(),
+            sample_rate: 48_000,
+            channels: 2,
+            frames: usize::try_from(samples.end - samples.start)
+                .map_err(|_| MediaError::InvalidInput("audio count overflow".into()))?,
+            clipped_samples,
+        };
+        let encode_request = EncodeRequest {
+            output: video_file.clone(),
+            codec: profile.video_codec(),
+            width: request.region.pixels[0],
+            height: request.region.pixels[1],
+            time_base: request.frame_rate.frame_to_time(1)?,
+        };
         let mut metadata = Vec::new();
-        for (index, time) in times {
-            checkpoint(frames.len() as u64)?;
-            let mut rendered = render_frame(
+        let video = self.encode_video_stream(&encode_request, times.len(), &mut |number| {
+            checkpoint(number as u64)?;
+            let (index, time) = times[number];
+            let mut rgba =
+                vec![
+                    0_u8;
+                    request.region.pixels[0] as usize * request.region.pixels[1] as usize * 4
+                ];
+            let mut frame_metadata = render_frame_tiles(
                 &snapshot.render,
                 fonts,
                 backend,
@@ -566,45 +633,39 @@ impl MediaRuntime {
                     time,
                     region: request.region,
                 },
+                &mut |[x, y], tile, output| {
+                    // The sole full-frame buffer is RGBA8. No full-frame linear
+                    // or display surface is allocated by this movie path.
+                    let bytes = bt709_rgba(&output.linear, request.background).map_err(|e| {
+                        kronello_render::RenderError::UnsupportedFeature(e.to_string())
+                    })?;
+                    for row in 0..tile.pixels[1] as usize {
+                        let destination = ((y as usize + row) * request.region.pixels[0] as usize
+                            + x as usize)
+                            * 4;
+                        let source = row * tile.pixels[0] as usize * 4;
+                        let width = tile.pixels[0] as usize * 4;
+                        rgba[destination..destination + width]
+                            .copy_from_slice(&bytes[source..source + width]);
+                    }
+                    Ok(())
+                },
             )?;
-            if rendered.metadata.snapshot_content_hash != render_hash {
+            if frame_metadata.snapshot_content_hash != render_hash {
                 return Err(MediaError::Encode(
                     "video snapshot identity mismatch".into(),
                 ));
             }
-            let rgba = bt709_rgba(&rendered.pixels.linear, request.background)?;
-            rendered.metadata.frame_index = Some(index.to_string());
-            rendered.metadata.sequence_number = Some(frames.len() as u64);
-            metadata.push(rendered.metadata);
-            frames.push(EncodeFrame {
+            frame_metadata.frame_index = Some(index.to_string());
+            frame_metadata.sequence_number = Some(number as u64);
+            metadata.push(frame_metadata);
+            Ok(crate::EncodeFrame {
                 pts: time.checked_sub(request.range.start())?,
                 rgba,
-            });
-        }
-        checkpoint(frames.len() as u64)?;
-        let parent = request
-            .output
-            .parent()
-            .filter(|p| !p.as_os_str().is_empty())
-            .unwrap_or(Path::new("."));
-        let stage = tempfile::tempdir_in(parent)?;
-        let video_file = stage.path().join("video.mov");
-        let audio_file = stage.path().join("audio.mov");
-        let video = self.encode_video(
-            &EncodeRequest {
-                output: video_file.clone(),
-                codec: profile.video_codec(),
-                width: request.region.pixels[0],
-                height: request.region.pixels[1],
-                time_base: request.frame_rate.frame_to_time(1)?,
-            },
-            &frames,
-        )?;
-        let audio = if profile == MovieProfile::ProResPcm24 {
-            self.encode_audio(&bus, request.clipping, &audio_file)?
-        } else {
-            self.encode_alac(&bus, request.clipping, &audio_file)?
-        };
+            })
+        })?;
+        let audio_stage_bytes = std::fs::metadata(&audio_file)?.len();
+        let video_stage_bytes = std::fs::metadata(&video_file)?.len();
         let video_probe = self.probe(&video_file)?;
         let audio_probe = self.probe(&audio_file)?;
         let expected_video = request.range.end().checked_sub(request.range.start())?;
@@ -623,7 +684,7 @@ impl MediaRuntime {
                 video_probe.streams, audio_probe.streams
             )));
         }
-        checkpoint(frames.len() as u64)?;
+        checkpoint(metadata.len() as u64)?;
         let probe = self.mux_movie(
             &video_file,
             &audio_file,
@@ -646,6 +707,13 @@ impl MediaRuntime {
             video,
             audio,
             probe,
+            streaming: Some(StreamingExportReport {
+                audio_spool_write_bytes,
+                audio_window_read_bytes,
+                audio_stage_bytes,
+                video_stage_bytes,
+                published_bytes: std::fs::metadata(&request.output).ok().map(|m| m.len()),
+            }),
         })
     }
 }

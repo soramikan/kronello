@@ -6,8 +6,8 @@ use kronello_model::*;
 use kronello_time::{Time, TimeMap, TimeRange};
 
 use crate::{
-    AudioBuffer, AudioClip, AudioError, AudioSources, AudioTarget, Bus, DocumentAudioPlan, Gain,
-    MAX_AUDIO_FRAMES, sample_range,
+    AudioBuffer, AudioClip, AudioError, AudioSourceReader, AudioTarget, Bus, DocumentAudioPlan,
+    Gain, MAX_AUDIO_FRAMES, sample_range,
 };
 
 /// Selected by movie profile 3; legacy movie profiles retain evaluator 1.
@@ -325,7 +325,11 @@ impl AdvancedAudioPlan {
             })
             .collect()
     }
-    pub(crate) fn mix(&self, sources: &AudioSources, range: TimeRange) -> Result<Bus, AudioError> {
+    pub(crate) fn mix(
+        &self,
+        sources: &dyn AudioSourceReader,
+        range: TimeRange,
+    ) -> Result<Bus, AudioError> {
         let output = sample_range(range)?;
         let length = output
             .end
@@ -387,9 +391,7 @@ impl AdvancedAudioPlan {
                 else {
                     unreachable!()
                 };
-                if !sources.contains_key(&(asset, stream_index)) {
-                    return Err(AudioError::AssetMissing(asset));
-                }
+                sources.frame_count(asset, stream_index)?;
                 let placement = sample_range(entry.clip.timeline_range)?;
                 if !placement.is_empty() {
                     resample(&entry.clip, sources, placement.start)?;
@@ -400,7 +402,7 @@ impl AdvancedAudioPlan {
         let mut frames = vec![[0.0; 2]; length];
         for entry in &self.entries {
             let legacy = match &entry.source {
-                Source::Legacy(p) => Some(p.mix(sources, range)?),
+                Source::Legacy(p) => Some(p.mix_reader(sources, range)?),
                 _ => None,
             };
             let placement = sample_range(entry.clip.timeline_range)?;
@@ -467,7 +469,11 @@ impl AdvancedAudioPlan {
         })
     }
 }
-fn resample(clip: &Clip, sources: &AudioSources, sample: i64) -> Result<[f32; 2], AudioError> {
+fn resample(
+    clip: &Clip,
+    sources: &dyn AudioSourceReader,
+    sample: i64,
+) -> Result<[f32; 2], AudioError> {
     let SourceRef::Asset {
         asset,
         stream_index,
@@ -475,24 +481,19 @@ fn resample(clip: &Clip, sources: &AudioSources, sample: i64) -> Result<[f32; 2]
     else {
         unreachable!()
     };
-    let source = sources
-        .get(&(asset, stream_index))
-        .ok_or(AudioError::AssetMissing(asset))?;
     let position = local_time(clip, sample)?.checked_mul(Time::from_integer(48_000))?;
     let floor = position.floor();
     let index = usize::try_from(floor).map_err(|_| AudioError::SourceTooShort(asset))?;
-    let a = *source
-        .frames()
-        .get(index)
-        .ok_or(AudioError::SourceTooShort(asset))?;
+    let a = sources.frame(asset, stream_index, index)?;
     let fraction = position.checked_sub(Time::from_integer(floor))?;
     if fraction == Time::ZERO {
         return Ok(a);
     }
-    let b = *source
-        .frames()
-        .get(index.checked_add(1).ok_or(AudioError::Overflow)?)
-        .ok_or(AudioError::SourceTooShort(asset))?;
+    let b = sources.frame(
+        asset,
+        stream_index,
+        index.checked_add(1).ok_or(AudioError::Overflow)?,
+    )?;
     let fraction = number(fraction);
     let result = std::array::from_fn(|channel| {
         (f64::from(a[channel]) * (1.0 - fraction) + f64::from(b[channel]) * fraction) as f32

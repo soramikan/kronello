@@ -246,7 +246,7 @@ Shape の単色 / linear・radial・focal_radial・conic gradient fill / stroke 
 
 現行文書型には matte 欄がないため `MatteBinding` を snapshot の明示レンダー入力とする。source / matte とも stable SceneKey。matte は表示 root / children から除外し、`visible = true` の場合だけ表示する。source ごとの binding は一つ、共有 matte の DAG は再利用する。欠落・非アクティブ参照・containment / matte を合わせた循環は失敗する。
 
-scene 1,024 node、DAG 4,096 node、containment / matte recursion 24、出力 16,777,216 pixel の保守的上限を設ける。backend は GPU-002 の 1,024 draw node・32 depth・65,536 edge・512 MiB 面予算をさらに適用し、限界を超えた要求はエラーにする。INTEGRATION-001 / [ADR-0053](../adr/0053-integration-evaluated-queries-and-render-tiles.md) で幅または高さが512 pixelsを超える出力を最大512×512のtileへ分け、元画素格子と既存effect ROI haloを保って同じbackendで実行する。metadataは元のregion、最終linear / display面は全画面のまま。tile / haloの予算は維持し、巨大halo・streaming export・GPU texture cache・資源pool・性能保証は未実装。CACHE-001 のインメモリ cache は下記の範囲で実装した。
+scene 1,024 node、DAG 4,096 node、containment / matte recursion 24、出力 16,777,216 pixel の保守的上限を設ける。backend は GPU-002 の 1,024 draw node・32 depth・65,536 edge・512 MiB 面予算をさらに適用し、限界を超えた要求はエラーにする。INTEGRATION-001 / [ADR-0053](../adr/0053-integration-evaluated-queries-and-render-tiles.md) で幅または高さが512 pixelsを超える出力を最大512×512のtileへ分け、元画素格子と既存effect ROI haloを保って同じbackendで実行する。metadataは元のregion、最終linear / display面は全画面のまま。movie export は RENDER-003 の tile sink から1枚の RGBA8 buffer に組み立てて即 encode し、全画面 linear / display と全 frames payload を保持しない。巨大 cumulative halo は node 別の保守的 allocation 総額512 MiBで backend allocation 前に拒否する。GPU texture cache・資源pool・性能保証は未実装。CACHE-001 のインメモリ cache は下記の範囲で実装した。
 
 GPU adapter は同じ lowering 済み DrawScene について `render_scene` と `render_scene_output` を各一回呼ぶ。両経路とも合成・mask・色変換を GPU 上で行い、それぞれ image と validation status を readback する。CPU へ持ち帰った線形画素を出力変換する GPU 名義の経路ではない。二回の描画を統合する最適化と renderer API での転送統計の集約は後続課題。
 
@@ -307,3 +307,16 @@ layout の取得後に、その時刻の各 style の fill を `style_index` で
 - `kronello-eval::DependencyGraph::evaluate_scene_with_properties` は値の取得を純粋な callback として受け、render cache へ逆依存しない。`kronello-text::validate_fonts` は導出 layout 再利用時の明示 byte 照合を提供する。
 
 受け入れ条件の per-level counter、CPU の cached / disabled / direct 実行、cold / warm / 逆順 / eviction / clear、連番ファイル一致の検証は [CACHE-001 の検証](../testing/cache-001.md) を参照。GPU 実機での画素 cache、ディスク永続化、性能目標の実測は今回の保証範囲に含めない。
+
+## RENDER-003 の movie export
+
+[ADR-0079](../adr/0079-bounded-streaming-movie-export.md) の `render_frame_tiles` は
+512×512 tile を同期 sink に渡し、sink の処理完了まで次の tile を作らない。
+ROI / halo は従来の backwards compiler と絶対画素格子を共有する。
+`RenderDag::tile_surface_bytes(16)` は全 image stage の output、Group の children / accumulator、
+effect の3 temporaryと root reserveを execution ROI union で数える。
+512 MiB超過は `UNSUPPORTED_FEATURE`。backend 固有の安全予算も適用する。
+一般 frame / image sequence の最終2面と render.explain の host 面推定は従来のまま。
+movie は RGBA8 1面だけを全画面保持し、1 frame ごとに native encoderへ渡す。
+音声の spool / bounded Bus、I/O report、実測 RSS と検証範囲は
+[RENDER-003](../testing/render-003.md) を参照する。

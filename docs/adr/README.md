@@ -63,11 +63,11 @@
 | [0046](0046-store-format-and-location-policy.md) | 保存の外枠・安全モード判定・履歴警告を固定する | 採用 | 2026-10-03 |
 | [0047](0047-apple-silicon-metal-golden.md) | GPU golden は Apple Silicon + Metal の共通基準で比較する | 採用 | 2026-10-03 |
 | [0048](0048-media-native-build-and-asset-verification.md) | FFmpeg ABI 境界・同梱ビルド・素材検証を固定する | 採用 | 2026-10-03 |
-| [0049](0049-audio-bus-timing-and-codec.md) | 音声 Bus・サンプル格子・PCM24 の書き出しを固定する | 採用 | 2026-10-04 |
-| [0050](0050-fixed-job-execution-and-publication.md) | 固定ジョブ入力・実行 lease・成果物確定を共有 service で扱う | 採用 | 2026-10-04 |
+| [0049](0049-audio-bus-timing-and-codec.md) | 音声 Bus・サンプル格子・PCM24 の書き出しを固定する | 部分置換（0079） | 2026-10-04 |
+| [0050](0050-fixed-job-execution-and-publication.md) | 固定ジョブ入力・実行 lease・成果物確定を共有 service で扱う | 部分置換（0074 / 0079） | 2026-10-04 |
 | [0051](0051-nle-placement-and-retime.md) | Sequence の配置・合成順序と三つの時間編集を固定する | 採用 | 2026-10-04 |
 | [0052](0052-snapshot-policy-evaluation.md) | サイズ閾値による追加 snapshot の既定採用を見送る | 採用 | 2026-10-04 |
-| [0053](0053-integration-evaluated-queries-and-render-tiles.md) | 縦断デモの評価 query と大解像度の tile 実行 | 採用 | 2026-10-04 |
+| [0053](0053-integration-evaluated-queries-and-render-tiles.md) | 縦断デモの評価 query と大解像度の tile 実行 | 部分置換（0079） | 2026-10-04 |
 | [0054](0054-gui-design-system.md) | GUI の見た目を全 OS 共通のデザインシステムで定める | 採用 | 2026-10-04 |
 | [0055](0055-main-window-pages-and-workspaces.md) | メインウインドウをページとワークスペースで構成する | 採用 | 2026-10-04 |
 | [0056](0056-native-ffi-worker-and-swiftpm.md) | native FFI の非同期 worker と SwiftPM 境界 | 採用 | 2026-10-04 |
@@ -94,6 +94,7 @@
 | [0076](0076-buffered-device-clock-playback.md) | lock-free buffer と音声デバイス時計による再生 | 採用 | 2026-10-05 |
 | [0077](0077-template-instance-read-only-inspection.md) | テンプレート内部の評価値を停止時の読み取り検査として表示する | 採用 | 2026-10-05 |
 | [0078](0078-template-export-pages-and-inspected-snapshot.md) | テンプレート比較と検査した revision の書き出し | 採用 | 2026-10-05 |
+| [0079](0079-bounded-streaming-movie-export.md) | movie export の payload を有界 streaming で処理する | 採用 | 2026-10-06 |
 
 ## 追加と変更の規則
 

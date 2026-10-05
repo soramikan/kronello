@@ -145,3 +145,13 @@ probe は選択 profile の codec / start / duration / metadata を検証し、�
 fence と no-clobber publication を使う。AAC / 未知 version は UNSUPPORTED_FEATURE。
 既存 ProRes profile 1/2/3 と explicit / document / silence の意味は維持する。
 [ADR-0068](../adr/0068-versioned-delivery-movie-profiles.md)、[MEDIA-002 の検証](../testing/media-002.md)。
+
+## RENDER-003 の有界 movie worker
+
+固定 movie worker も共有 `export_av_with_checkpoint` の source spool / audio block / tile sink /
+1-frame encodeを使う。input schema / snapshot hash / MovieProfileと publication fenceは維持する。
+source chunk、audio block、video frameと最終mux前にcancelを確認する。
+通常エラーで destination volume の一時 directoryを回収し、既存成果物を上書きしない。
+強制終了後の回収とresumeはRECOVERY-001。
+`AvExportReport.streaming` の byte counters とホスト検証範囲は
+[ADR-0079](../adr/0079-bounded-streaming-movie-export.md)、[RENDER-003](../testing/render-003.md) を参照する。
