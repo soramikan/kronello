@@ -58,6 +58,7 @@ fn heartbeat_lock_wait_is_bounded_and_can_be_retried() {
     let store = JobStore::open(config).unwrap();
     let record = submit(&store);
     assert!(claim_retrying_contention(&store, &record.id).unwrap());
+    let original_heartbeat = store.get(&record.id).unwrap().heartbeat_at_ms;
     let db = rusqlite::Connection::open(temp.path().join("jobs.sqlite3")).unwrap();
     db.execute_batch("BEGIN IMMEDIATE").unwrap();
     let pulse_store = store.clone();
@@ -75,8 +76,26 @@ fn heartbeat_lock_wait_is_bounded_and_can_be_retried() {
     // reaches the held SQLite writer lock. Both waits must stay bounded and
     // return retryable contention, with no assumption about which wins first.
     assert!(error.is_retryable_heartbeat(), "{error}");
-    store.heartbeat(&record.id).unwrap();
-    assert_eq!(store.get(&record.id).unwrap().status, JobStatus::Running);
+    // Releasing this database's writer does not release other tests' gate
+    // leases. Exercise the same bounded retry as the heartbeat worker.
+    let retry_started = std::time::Instant::now();
+    loop {
+        match store.heartbeat(&record.id) {
+            Err(error)
+                if error.is_retryable_heartbeat()
+                    && retry_started.elapsed() < Duration::from_secs(5) =>
+            {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            result => {
+                result.unwrap();
+                break;
+            }
+        }
+    }
+    let observed = store.get(&record.id).unwrap();
+    assert_eq!(observed.status, JobStatus::Running);
+    assert!(observed.heartbeat_at_ms > original_heartbeat);
 }
 
 #[test]
