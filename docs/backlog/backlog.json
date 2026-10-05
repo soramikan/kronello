@@ -772,7 +772,7 @@
       "priority": "P2",
       "area": "vector",
       "title": "線の拡張: 破線・線の位置・非一様変換",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "VEC-003"
       ],

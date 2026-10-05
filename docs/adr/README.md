@@ -85,6 +85,7 @@
 | [0069](0069-versioned-stateless-audio.md) | リタイム・effect・Generator・crossfade 音声を明示 profile に固定する | 採用 | 2026-10-05 |
 | [0071](0071-project-change-plans-and-modifier-edits.md) | Project 作成・import の計画と再送、Modifier の型付き編集 | 採用 | 2026-10-05 |
 | [0072](0072-scene-search-fixed-cursors-and-cli-events.md) | Scene 検索・固定 revision cursor・CLI event framing | 採用 | 2026-10-05 |
+| [0073](0073-local-stroke-extensions.md) | 破線・線位置・affine 線幅を明示したローカル幾何版で扱う | 採用 | 2026-10-05 |
 
 ## 追加と変更の規則
 
