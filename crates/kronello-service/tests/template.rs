@@ -850,6 +850,7 @@ fn media_slots_validate_refs_expose_bindings_and_reject_final_execution() {
     };
     c.root_nodes.push(slot);
     c.nodes.push(SceneNode {
+        tags: Default::default(),
         name: None,
         enabled: true,
         id: slot,

@@ -207,3 +207,15 @@ receipt payload に optional service_result を追加し、既存 Event の resu
 compact は receipt を削除しないため、保存後・後続編集後・古い event の削除後も元の結果を再生できる。
 再送は read-only 接続で本体の bytes / revision を更新しない。WAL / SHM sidecar は作られうる。
 検証は [SERVICE-002](../testing/service-002.md)。電源断・強制 kill・実 network FS は未検証。
+
+## API-002 の固定 history cursor
+
+history.list は初回 read transaction の Project UUID / revision / 最古 Event UUID を cursor に固定する。
+再送時も同じ since_revision / limit / session_id と project を明示し、
+固定 revision 以下の全イベントから undone を計算してから session filter と page を適用する。
+後続 edit / Undo / Redo は混ぜない。compact による history prefix の削除は CURSOR_EXPIRED。
+scene.query は同じ stable runtime key の owner order と snapshot_at を使い、削除済み snapshot を同じ error にする。
+DB table、compact の保持規則、選択 Undo の意味は変更しない。
+next_since_revision のみの従来取得は最新 snapshot を開始するため、固定取得には next_cursor を使う。
+[ADR-0072](../adr/0072-scene-search-fixed-cursors-and-cli-events.md) と
+[検証](../testing/api-002.md) を参照。

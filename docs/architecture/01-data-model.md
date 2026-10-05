@@ -96,3 +96,13 @@ Property.modifiers の順序付き配列を使い、Project schema を変更し�
 insert / replace / remove / reorder は共有 EditCommand とし、保存可能性と評価可能性を区別する。
 [ADR-0071](../adr/0071-project-change-plans-and-modifier-edits.md)、
 [03 プロパティとアニメーション](03-property-animation.md#service-002-の-modifier-authoring) を参照。
+
+## API-002 の検索 metadata
+
+SceneNode.tags は任意の sorted string set（既定空、空は保存省略）。NFC 正規形、非空、
+制御文字なし、先頭末尾の空白なし、UTF-8 64 bytes 以下、node 当たり32個以下。
+タグは runtime identity ではなく、共有 node_tags_set command と scene.query search だけが扱う metadata。
+Project schema version 1 と既存必須 active_range を維持する。
+range 検索は各 node の authored local Composition time の半開区間 overlap であり、
+評価時刻の可視性や親の retime を投影した時間とは区別する。
+[ADR-0072](../adr/0072-scene-search-fixed-cursors-and-cli-events.md) を参照。

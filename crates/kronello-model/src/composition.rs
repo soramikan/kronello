@@ -71,6 +71,10 @@ pub struct Composition {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SceneNode {
+    /// Search metadata only; never runtime identity.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    #[schemars(length(max = 32))]
+    pub tags: BTreeSet<String>,
     /// Display only; never used as identity.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
@@ -332,6 +336,8 @@ pub enum CompositionError {
         instance: CompositionInstanceId,
         depth: usize,
     },
+    #[error("invalid tags on node {node}")]
+    InvalidTags { node: NodeId },
     #[error(transparent)]
     Value(#[from] ModelError),
 }
@@ -368,6 +374,9 @@ pub fn validate_compositions(
         for node in &composition.nodes {
             if !node_ids.insert(node.id) {
                 errors.push(CompositionError::DuplicateNodeId { id: node.id });
+            }
+            if !valid_node_tags(&node.tags) {
+                errors.push(CompositionError::InvalidTags { node: node.id });
             }
             nodes.insert(node.id, node);
             validate_properties(
@@ -605,4 +614,21 @@ fn node_enabled() -> bool {
 }
 fn is_enabled(enabled: &bool) -> bool {
     *enabled
+}
+
+/// Authored tags must already be NFC; search normalizes its input separately.
+pub fn valid_node_tags(tags: &BTreeSet<String>) -> bool {
+    use unicode_normalization::UnicodeNormalization;
+    tags.len() <= 32
+        && tags.iter().all(|tag| {
+            !tag.is_empty()
+                && tag.len() <= 64
+                && tag.trim() == tag
+                && !tag.chars().any(char::is_control)
+                && tag.nfc().eq(tag.chars())
+        })
+}
+pub fn normalize_search_tags(tags: &BTreeSet<String>) -> BTreeSet<String> {
+    use unicode_normalization::UnicodeNormalization;
+    tags.iter().map(|tag| tag.nfc().collect()).collect()
 }

@@ -4,7 +4,7 @@
 
 - schema_version: 0.5
 - 更新日: 2026-10-04
-- タスク数: 76
+- タスク数: 77
 
 ## 集計
 
@@ -13,8 +13,8 @@
 | M0 | 0 | 0 | 6 | 0 | 6 |
 | M1 | 0 | 0 | 14 | 0 | 14 |
 | M2 | 0 | 1 | 10 | 0 | 11 |
-| M3 | 7 | 7 | 11 | 0 | 25 |
-| M4 | 11 | 0 | 0 | 0 | 11 |
+| M3 | 7 | 4 | 14 | 0 | 25 |
+| M4 | 12 | 0 | 0 | 0 | 12 |
 | M5 | 5 | 0 | 0 | 0 | 5 |
 | M6 | 4 | 0 | 0 | 0 | 4 |
 
@@ -427,7 +427,7 @@
 
 ### VEC-004 グラデーションの拡張
 
-- 優先度: P2 / 領域: vector / 状態: in_progress
+- 優先度: P2 / 領域: vector / 状態: done
 - 依存: VEC-003
 - 受け入れ条件:
   - repeat/reflectのspreadを実装する
@@ -521,7 +521,7 @@
 
 ### FX-002 非一様affine下のblur/shadow
 
-- 優先度: P2 / 領域: effects / 状態: in_progress
+- 優先度: P2 / 領域: effects / 状態: done
 - 依存: FX-001
 - 受け入れ条件:
   - 非一様scale/shear下の正sigmaのGaussian blur/drop shadowの意味を定義して版を管理し、現行のUNSUPPORTED_FEATUREを対応範囲内で解消する
@@ -529,7 +529,7 @@
 
 ### API-002 scene検索・paging・固定履歴cursorとevent stream
 
-- 優先度: P2 / 領域: api / 状態: in_progress
+- 優先度: P2 / 領域: api / 状態: done
 - 依存: API-001, INTEGRATION-001
 - 受け入れ条件:
   - scene.queryに範囲・タグ・種類による検索とpagingを追加し、InstancePath/NodeId・所有順・revisionを保ち、既存の明示evaluation modeとの整合性を検証する
@@ -659,6 +659,15 @@
 - 受け入れ条件:
   - 安全モードで開いたプロジェクトについて、GUI を開いている間は他プロセス（CLI / MCP）が PROJECT_LOCKED になるよう、FFI / service の store の寿命を GUI セッションに合わせる
   - GUI を閉じたとき・異常終了したときに lock が解放され、再 open できることを実プロセスで検証する
+
+### MEDIA-003 Windows の FFmpeg 実行時読み込みと CLI/MCP の Windows ビルド
+
+- 優先度: P1 / 領域: media / 状態: planned
+- 依存: MEDIA-001, JOB-002, RELEASE-001
+- 受け入れ条件:
+  - kronello-media の native 読み込み（dlfcn / pkg-config 前提）を Windows の LGPL FFmpeg 共有 library に対応させ、CLI / MCP を Windows でビルドする
+  - Windows で ProRes / PCM24 と AV1 の書き出し・roundtrip、capabilities を実行し、OS / 版 / コマンド / exit を記録する
+  - JOB-002 で jobs / platform 層だけを検証した Windows の detached worker を、実際の `kronello worker --job` で親終了後も継続することを CI で検証する
 
 
 ## M5

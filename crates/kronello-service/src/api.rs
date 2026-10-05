@@ -210,6 +210,7 @@ pub fn api_json_schema() -> serde_json::Value {
         };
     }
     commands!(schemas);
+    let _ = generator.subschema_for::<CliEvent>();
     let _ = generator.subschema_for::<Request>();
     let _ = generator.subschema_for::<Response>();
     let schema = generator.into_root_schema_for::<ApiEnvelope>();

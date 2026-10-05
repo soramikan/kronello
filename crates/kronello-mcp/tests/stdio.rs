@@ -8,6 +8,73 @@ use kronello_mcp::SUPPORTED_PROTOCOL_VERSIONS;
 use serde_json::{Value, json};
 
 #[test]
+fn search_paging_and_tag_commands_are_discovered_and_schema_validated() {
+    let mut client = Client::spawn(&[], false);
+    client.ready(SUPPORTED_PROTOCOL_VERSIONS[0]);
+    let tools = client.schemas();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("api2.kronello");
+    let mut doc: Value =
+        serde_json::from_str(include_str!("../../../examples/m1-demo.project.json")).unwrap();
+    for n in doc["compositions"][0]["nodes"].as_array_mut().unwrap() {
+        n["tags"] = json!(["search"]);
+    }
+    client.call("project.create", json!({"project":path,"document":doc}));
+    let query = json!({"project":path,"composition":doc["compositions"][0]["id"],"limit":1,"search":{"tags":["search"],"kinds":["shape","text"],"range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"1"}}}});
+    jsonschema::validator_for(&tools["scene.query"]["inputSchema"])
+        .unwrap()
+        .validate(&query)
+        .unwrap();
+    let first = client.call("scene.query", query.clone());
+    validate(&tools["scene.query"], &first);
+    let mut query = query;
+    query["cursor"] = first["structuredContent"]["next_cursor"].clone();
+    let second = client.call("scene.query", query.clone());
+    validate(&tools["scene.query"], &second);
+    assert_ne!(
+        first["structuredContent"]["nodes"][0]["key"],
+        second["structuredContent"]["nodes"][0]["key"]
+    );
+    query["limit"] = json!(2);
+    let mismatch = client.call("scene.query", query);
+    validate(&tools["scene.query"], &mismatch);
+    assert_eq!(
+        mismatch["structuredContent"]["error"]["code"],
+        "CURSOR_MISMATCH"
+    );
+    let commands = json!([{"node_tags_set":{"composition":doc["compositions"][0]["id"],"node":doc["compositions"][0]["nodes"][0]["id"],"tags":["authored"]}}]);
+    let plan = client.call(
+        "edit.plan",
+        json!({"project":path,"base_revision":"1","commands":commands}),
+    );
+    validate(&tools["edit.plan"], &plan);
+    let event=client.call("edit.apply",json!({"project":path,"base_revision":"1","commands":commands,"plan_hash":plan["structuredContent"]["plan_hash"],"session_id":"96607679-eefd-407a-a3a8-59943f2bd82f","idempotency_key":"tags"}));
+    validate(&tools["edit.apply"], &event);
+    let first = client.call("history.list", json!({"project":path,"limit":1}));
+    validate(&tools["history.list"], &first);
+    let second = client.call(
+        "history.list",
+        json!({"project":path,"limit":1,"cursor":first["structuredContent"]["next_cursor"]}),
+    );
+    validate(&tools["history.list"], &second);
+    assert_eq!(
+        second["structuredContent"]["events"][0]["event"]["id"],
+        event["structuredContent"]["id"]
+    );
+    let undo=client.call("edit.undo",json!({"project":path,"base_revision":"2","session_id":"96607679-eefd-407a-a3a8-59943f2bd82f","idempotency_key":"undo","event_id":event["structuredContent"]["id"]}));
+    validate(&tools["edit.undo"], &undo);
+    assert_eq!(undo["isError"], false);
+    let absent = client.call(
+        "scene.query",
+        json!({"composition":doc["compositions"][0]["id"]}),
+    );
+    assert_eq!(
+        absent["structuredContent"]["error"]["code"],
+        "INVALID_REQUEST"
+    );
+}
+
+#[test]
 fn explain_tools_are_discovered_and_return_shared_results_without_a_device() {
     let mut client = Client::spawn(&[], true);
     client.ready(SUPPORTED_PROTOCOL_VERSIONS[0]);
