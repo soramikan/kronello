@@ -79,6 +79,7 @@
 | [0062](0062-video-generator-and-timeline-edits.md) | 動画・Generator Clip と明示した Timeline 編集範囲 | 採用 | 2026-10-05 |
 | [0063](0063-document-audio-and-clip-volume.md) | 文書音声の配置・音量 Property と明示的な出力選択 | 採用 | 2026-10-05 |
 | [0064](0064-mcp-http-resources-and-request-control.md) | MCP HTTP・明示 resource・request 制御 | 採用 | 2026-10-05 |
+| [0065](0065-relocatable-macos-distribution.md) | macOS 配布 runtime を再配置・署名後に全体検証する | 採用 | 2026-10-05 |
 | [0066](0066-explicit-gradient-semantics.md) | グラデーションの座標・spread・補間空間を明示する | 採用 | 2026-10-05 |
 | [0067](0067-affine-gaussian-effects.md) | 非一様 affine の Gaussian / shadow を明示した意味版 2 で扱う | 採用 | 2026-10-05 |
 | [0069](0069-versioned-stateless-audio.md) | リタイム・effect・Generator・crossfade 音声を明示 profile に固定する | 採用 | 2026-10-05 |
