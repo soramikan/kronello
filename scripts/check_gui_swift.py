@@ -1,12 +1,24 @@
 #!/usr/bin/env python3
 """Direct compiler GUI checks, independent of SwiftPM and native window execution."""
 import argparse
+import re
 import shutil
 import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "apps/macos"
+
+
+def check_focus_ownership():
+    components = PACKAGE / "Sources/KronelloDesign/Components"
+    source = (components / "FocusRing.swift").read_text()
+    if re.search(r"@Environment\s*\(\s*\\\.isFocused\s*\)", source):
+        raise AssertionError("Focus rings must use the control's own focus, never inherited ancestor isFocused")
+    for path in components.glob("*.swift"):
+        if re.search(r"\.krFocusRing\(\s*\)", path.read_text()):
+            raise AssertionError(f"{path.name}: a control must explicitly supply focus or own it via krControlFocusRing")
+    print("PASS focus-ring source regression: no inherited ancestor focus; controls own focus explicitly", flush=True)
 
 
 def main():
@@ -17,6 +29,7 @@ def main():
     parser.add_argument("--skip-modules", action="store_true", help="Reuse modules from a preceding direct check")
     parser.add_argument("--disable-plugin-sandbox", action="store_true", help="Avoid a nested compiler subprocess sandbox; the caller sandbox still applies")
     args = parser.parse_args()
+    check_focus_ownership()
     sdk = args.sdk or subprocess.check_output(["xcrun", "--show-sdk-path"], text=True).strip()
     output = PACKAGE / ".build/gui-direct"
     output.mkdir(parents=True, exist_ok=True)
@@ -49,9 +62,18 @@ def main():
                    + [str(p) for p in sorted((PACKAGE / "Tests/KronelloAppModelTests").glob("*.swift"))], check=True)
     if args.run_checks:
         runner = output / "GUIRunner.swift"
-        runner.write_text("import Foundation\n@main struct Runner { @MainActor static func main() async throws { try await GUIChecks().runAll() } }\n")
+        runner.write_text(r'''import Foundation
+import Darwin
+@main struct Runner {
+    @MainActor static func main() async {
+        setbuf(stdout, nil)
+        do { try await GUIChecks().runAll(); try await MotionChecks().runAll() }
+        catch { fputs("GUI checks failed: \(error)\n", stderr); exit(1) }
+    }
+}
+''')
         subprocess.run(common + ["-parse-as-library", "-lKronelloAppModel", "-lKronelloCore", "-lKronelloDesign", "-o", str(output / "GUIRunner"),
-                                str(PACKAGE / "Tests/KronelloAppModelTests/GUIChecks.swift"), str(runner)], check=True)
+                                str(PACKAGE / "Tests/KronelloAppModelTests/GUIChecks.swift"), str(PACKAGE / "Tests/KronelloAppModelTests/MotionChecks.swift"), str(runner)], check=True)
         subprocess.run([str(output / "GUIRunner")], cwd=ROOT, check=True)
 
 

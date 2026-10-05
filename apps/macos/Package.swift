@@ -31,7 +31,7 @@ let package = Package(
         .target(name: "KronelloDesign", resources: [.copy("Resources/Fonts")]),
         // Renders every component in both themes to PNG for design review:
         // `swift run --package-path apps/macos KronelloDesignGallery <output-directory>`.
-        .executableTarget(name: "KronelloDesignGallery", dependencies: ["KronelloDesign"]),
+        .executableTarget(name: "KronelloDesignGallery", dependencies: ["KronelloDesign", "KronelloAppModel"]),
         .testTarget(name: "KronelloDesignTests", dependencies: ["KronelloDesign"])
     ]
 )

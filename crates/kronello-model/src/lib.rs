@@ -13,6 +13,7 @@ mod id;
 mod property;
 mod schema;
 mod value;
+mod wire;
 
 pub use builtin::{
     AUDIO_VOLUME_ID, FILL_COLOR_ID, OPACITY_ID, STROKE_WIDTH_ID, TRANSFORM_ANCHOR_ID,
@@ -20,7 +21,8 @@ pub use builtin::{
 };
 pub use composition::{
     Composition, CompositionError, CompositionInstance, CompositionReference, DesignExtent,
-    InstancePath, MediaNode, NodeKind, ParentGraph, PropertyKey, SceneNode, validate_compositions,
+    InstancePath, MediaNode, NodeKind, ParentGraph, PropertyKey, SceneNode, normalize_search_tags,
+    valid_node_tags, validate_compositions,
 };
 pub use curve::{
     AnimationCurve, CurveDefinition, CurveError, CurveInterpolation, INTERPOLATION_VERSION,
@@ -52,10 +54,12 @@ pub use project::{
 
 mod shape;
 pub use shape::{
-    Fill, FillRule, Gradient, GradientGeometry, GradientInterpolation, GradientOptions,
-    GradientSpread, GradientStop, GradientUnits, ResolvedFill, ResolvedGeometry, ResolvedGradient,
-    ResolvedGradientStop, ResolvedShape, ResolvedStroke, Shape, ShapeError, ShapeGeometry, Stroke,
-    StrokeCap, StrokeJoin, shape_descriptors, validate_path, validate_shape_contents,
+    EXTENDED_STROKE_VERSION, Fill, FillRule, Gradient, GradientGeometry, GradientInterpolation,
+    GradientOptions, GradientSpread, GradientStop, GradientUnits, LEGACY_STROKE_VERSION,
+    ResolvedFill, ResolvedGeometry, ResolvedGradient, ResolvedGradientStop, ResolvedShape,
+    ResolvedStroke, ResolvedStrokeOptions, Shape, ShapeError, ShapeGeometry, Stroke,
+    StrokeAlignment, StrokeCap, StrokeJoin, StrokeOptions, shape_descriptors, validate_dash_array,
+    validate_path, validate_shape_contents,
 };
 
 mod text;

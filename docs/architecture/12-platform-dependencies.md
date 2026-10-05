@@ -34,6 +34,17 @@
 - 対応する FFmpeg は単一のメジャー版に固定する。
 - 利用者は環境変数で別の FFmpeg に差し替えられる。
 
+### macOS 配布パッケージの検証
+
+[ADR-0065](../adr/0065-relocatable-macos-distribution.md) の実装は `scripts/package_macos.py` / `scripts/verify_package.py`。
+CLI / MCP と `libavutil.61` / `libavcodec.63` / `libavformat.63` / `libswscale.10` / `libswresample.7`、SVT-AV1 4.2.0 / dav1d 1.5.4 を、固定 native receipt と hash に基づいて同梱する。license / PATENTS は pinned source archive の原文と照合する。FFmpeg executable、headers、static archive、pkg-config や development library は含めない。
+
+package manifest のある CLI / MCP executable は package root の `lib/` を既定ロード先にし、明示 override を優先する。宣言済み package の runtime が壊れている場合は開発 prefix へ戻らない。library は `@loader_path`、executable は `@executable_path/../lib` の依存・rpath とし、全 Mach-O を走査して外部 build prefix / Homebrew 依存を拒否する。
+
+install name の変更後に内側から署名し、元 prefix 外へ copy した package で全署名、CLI / MCP の起動と capabilities、5 本の ABI / LGPL 構成、AV1 と ProRes/PCM24 往復、同一 ABI runtime の差し替えを検証する。ad-hoc の検証と Developer ID / notarization / Gatekeeper の受け入れは区別する。Developer ID 署名では Hardened Runtime と差し替え用 Library Validation exception を executable に付け、notarization は host credential を用いた手動工程とする。実施記録と残件は [RELEASE-001](../testing/release-001.md)。Windows / Linux package は個別の実機検証が完了するまで保証しない。
+
+`bin/` / `lib/` / `tools/` / `licenses/` と manifests の配置を GUI app が後で directory ごと内包できるようにする。GUI app bundle の作成・署名は別タスクであり、本 package の結果を app bundle の保証としない。
+
 ### エンコーダー
 
 [ADR-0035](../adr/0035-software-encoders.md) による。
@@ -85,7 +96,7 @@ macOS target の `kronello-framebridge` に CVPixelBuffer import と H.264 decod
 
 ## MEDIA-001 の実装境界
 
-`kronello-media` は render の `VideoDecodeBackend` / `DecodedVideoFrame` 契約を使う backend。純粋層に AVFrame を公開しない。FFmpeg の構造体アクセスを C shim、Rust の unsafe を `ffi.rs` に隔離し、libavutil / libavcodec / libavformat / libswscale の共有ライブラリを runtime に動的ロードする。system headers で build した開発用 binary と、配布用 LGPL build の検証を分ける。
+`kronello-media` は render の `VideoDecodeBackend` / `DecodedVideoFrame` 契約を使う backend。純粋層に AVFrame を公開しない。FFmpeg の構造体アクセスを C shim、Rust の unsafe を `ffi.rs` に隔離し、libavutil / libavcodec / libavformat / libswscale / libswresample の共有ライブラリを runtime に動的ロードする。system headers で build した開発用 binary と、配布用 LGPL build の検証を分ける。
 
 [ADR-0048](../adr/0048-media-native-build-and-asset-verification.md) で FFmpeg 9.0.2 / SVT-AV1 4.2.0 / dav1d 1.5.4、configure と source SHA-256、毎回全 hash を確認する素材解決を固定した。`scripts/build_ffmpeg_lgpl.py` と `scripts/native-dependencies.json` が正本。`KRONELLO_FFMPEG_LIB_DIR` は実行時の共有ライブラリ directory、`PKG_CONFIG_PATH` は build 時の headers / ABI の選択。runtime override を指定して失敗した場合に system へ戻らない。
 
@@ -103,7 +114,7 @@ Project の `assets` は stable AssetId、SHA-256 content_hash、kind、rational
 
 ## AUDIO-000 の音声境界
 
-`kronello-audio` の純粋な 48 kHz stereo f32 Bus と、media の native decode / libswresample / PCM24 encode / MOV mux を実装する。libswresample は他の 4 library と同じ directory / ABI policy で動的ロードし、capabilities は全 5 library の license / configuration と PCM24 codec を検証する。mono は等倍複製、stereo は保持、多チャンネルの暗黙 downmix は拒否する。同梱 build の configure は swresample と native PCM を無効化しておらず、追加の外部 codec 依存はない。ビルドスクリプトの既存 verify-only は 4 library を調べるため、音声を含む配布の検証では新しい media capabilities の verify_distribution と audio tests も実行する。
+`kronello-audio` の純粋な 48 kHz stereo f32 Bus と、media の native decode / libswresample / PCM24 encode / MOV mux を実装する。libswresample は他の 4 library と同じ directory / ABI policy で動的ロードし、capabilities は全 5 library の license / configuration と PCM24 codec を検証する。mono は等倍複製、stereo は保持、多チャンネルの暗黙 downmix は拒否する。同梱 build の configure は swresample と native PCM を無効化しておらず、追加の外部 codec 依存はない。ビルドスクリプトの verify-only も全 5 library と PCM24 を調べる。配布物の受け入れでは、再配置後の media capabilities の verify_distribution と codec roundtrip も実行する。
 
 音量・量子化・snapshot / 時間の詳細は [基本音声](audio-000.md)、crate 単位の検証と host の残り範囲は [AUDIO-000 の検証](../testing/audio-000.md) を参照。
 

@@ -11,6 +11,10 @@ struct MotionViewer: View {
     @State private var penPoints: [CGPoint] = []
     @State private var playingTask: Task<Void, Never>?
     @State private var floatingPreview = CGSize.zero
+    @State private var spatialPath = SpatialPath()
+    @State private var parentPath = SpatialPath()
+    @State private var pathParent: CGAffineTransform?
+    @State private var pathFailure: ServiceFailure?
     @State private var viewerSize = CGSize.zero
     @FocusState private var viewerFocused: Bool
     var body: some View {
@@ -41,7 +45,12 @@ struct MotionViewer: View {
                     playing: $model.playing, looping: $model.ui.looping, zoom: $model.ui.zoom, resolution: $model.ui.resolution,
                     onSeek: model.seek, onStep: { model.seek(model.frame + Int64($0)) }, onBoundary: { model.seek($0 ? model.durationFrames - 1 : 0) })
             }
-        }.onChange(of: model.playing) { _, value in
+        }.task(id: model.revision + "/" + (model.ui.selection ?? "") + "/" + (model.ui.composition ?? "")) {
+            spatialPath = .init(); parentPath = .init(); pathParent = nil; pathFailure = nil
+            do { parentPath = try await model.spatialPath(); remapPath() }
+            catch is CancellationError {} catch { if !Task.isCancelled { pathFailure = model.serviceFailure(error) } }
+        }.onChange(of: model.refreshToken) { _, _ in remapPath() }
+            .onChange(of: model.playing) { _, value in
             playingTask?.cancel()
             if value {
                 playingTask = Task { @MainActor in
@@ -52,6 +61,17 @@ struct MotionViewer: View {
                 }
             }
         }.onDisappear { playingTask?.cancel(); model.playing = false }
+    }
+    func remapPath() {
+        guard !parentPath.points.isEmpty || !parentPath.keys.isEmpty else { return }
+        do {
+            let parent = try model.spatialPathParentTransform()
+            if parent != pathParent {
+                spatialPath = parent.map { parentPath.mapped(by: $0) } ?? .init()
+                pathParent = parent
+            }
+            pathFailure = nil
+        } catch { spatialPath = .init(); pathParent = nil; pathFailure = model.serviceFailure(error) }
     }
     var toolstrip: some View {
         KRToolStrip(tools, selection: $model.ui.tool, placement: Binding(get: { model.ui.layout.tools }, set: { model.ui.layout.tools = $0 }),
@@ -87,11 +107,20 @@ struct MotionViewer: View {
             KREmptyState(icon: .layers, title: "Composition がありません", message: "Composition を含むプロジェクトを開いてください。")
         } else {
             GeometryReader { proxy in
-                let aspect = model.extent.width / max(1, model.extent.height)
+                let extent = model.extent
+                let aspect = extent.width / max(1, extent.height)
                 let size = KRViewerFrame<EmptyView>.fittingSize(container: proxy.size, aspectRatio: aspect)
                 let zoom = model.ui.zoom == "fit" ? 1 : (Double(model.ui.zoom) ?? 100) / 100 * model.extent.width / max(1, size.width)
                 ZStack {
                     KRViewerFrame(aspectRatio: aspect) { MetalPreview(model: model) }
+                    Canvas { context, canvas in
+                        func screen(_ point: CGPoint) -> CGPoint { .init(x: point.x / extent.width * canvas.width, y: point.y / extent.height * canvas.height) }
+                        var path = Path()
+                        for (i, point) in spatialPath.points.enumerated() { if i == 0 { path.move(to: screen(point)) } else { path.addLine(to: screen(point)) } }
+                        context.stroke(path, with: .color(p.selection), lineWidth: 1 / max(0.01, zoom))
+                        for point in spatialPath.keys { let point = screen(point), side = 5 / max(0.01, zoom); context.fill(Path(CGRect(x: point.x - side / 2, y: point.y - side / 2, width: side, height: side)), with: .color(p.selection)) }
+                    }.allowsHitTesting(false)
+                    if let pathFailure { VStack { KRErrorLine(.init(pathFailure.code, pathFailure.message)); Spacer() }.allowsHitTesting(false) }
                     if model.ui.tool == "select", let selected = model.selected, !model.ui.locked.contains(selected.id),
                        let bounds = model.candidateBounds ?? selected.bounds(model.ui.bounds) {
                         let selection = KRViewerSelection(CGRect(x: bounds.minX / model.extent.width, y: bounds.minY / model.extent.height,

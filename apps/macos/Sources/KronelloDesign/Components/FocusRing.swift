@@ -3,7 +3,6 @@ import SwiftUI
 /// The shared 2px selection ring, separated from the control by 1px.
 public struct KRFocusRing: ViewModifier {
     @Environment(\.krPalette) private var p
-    @Environment(\.isFocused) private var focused
     public var active: Bool
     public var cornerRadius: CGFloat
     public var inset: Bool
@@ -16,7 +15,7 @@ public struct KRFocusRing: ViewModifier {
 
     public func body(content: Content) -> some View {
         content.overlay {
-            if active || focused {
+            if active {
                 RoundedRectangle(cornerRadius: cornerRadius + (inset ? 0 : 3))
                     .strokeBorder(p.selection, lineWidth: 2)
                     .padding(inset ? 0 : -3)
@@ -27,9 +26,26 @@ public struct KRFocusRing: ViewModifier {
 }
 
 extension View {
-    /// Adds the common focus ring; `active` also supports deterministic previews.
+    /// Adds a ring for this view's own FocusState or deterministic preview state.
+    /// Ancestor focus is deliberately not inherited.
     public func krFocusRing(_ active: Bool = false, cornerRadius: CGFloat = KRRadius.radiusSm, inset: Bool = false) -> some View {
         modifier(KRFocusRing(active: active, cornerRadius: cornerRadius, inset: inset))
+    }
+
+    /// Attach only to a focus-owning control (Button, TextField), never its label.
+    func krControlFocusRing(_ active: Bool = false, cornerRadius: CGFloat = KRRadius.radiusSm, inset: Bool = false) -> some View {
+        modifier(KRControlFocusRing(active: active, cornerRadius: cornerRadius, inset: inset))
+    }
+}
+
+private struct KRControlFocusRing: ViewModifier {
+    @FocusState private var focused: Bool
+    let active: Bool
+    let cornerRadius: CGFloat
+    let inset: Bool
+    func body(content: Content) -> some View {
+        content.focused($focused).focusEffectDisabled()
+            .krFocusRing(focused || active, cornerRadius: cornerRadius, inset: inset)
     }
 }
 

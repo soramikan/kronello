@@ -45,6 +45,19 @@ OpenFX の入力領域 / 必要フレームの問い合わせに似た契約を�
 - 外部アダプターは `straight / premultiplied / opaque` と関連付け空間を明示する。非線形色変換は straight RGB に行い、外部入出力の unpremultiply 時は `a > 2^-16` で除算、それ以下は RGB をゼロとし alpha は保持する。内部 effect の unpremultiply はゼロだけを特別扱いし、内部画像に閾値を適用しない。
 - alpha を持たない出力は明示した背景へ合成する。外部 alpha 変換、閾値の境界、マット境界を検証する。詳細と新規に固定した契約は [ADR-0044](../adr/0044-color-and-alpha-contracts.md) を参照。
 
+### VEC-005 の版付き stroke coverage
+
+`vec003-centered-stroke-v1` は従来の output-space 展開を維持する。
+明示 `Stroke.options` の `vec005-local-stroke-v2` は bounded dash subdivision 後、
+局所矩形・三角形・円を CPU / WGSL で共有し、AA sample の逆 affine で被覆を判定する。
+inside / outside の fill-rule clip は paint の有無に依存しない。
+非一様 scale / skew / reflection の線幅は局所線に変換を適用した幅になる。
+semantic bounds は局所 support を変換し、pixel bounds / backward ROI は row の絶対値和で halo を包含する。
+snapshot は旧 stroke 版も認識するが、旧版に固定した snapshot で新 options を実行しない。
+cache / golden draw manifest は実際の版と dash / phase / alignment / local primitive 入力を固定する。
+[ADR-0073](../adr/0073-local-stroke-extensions.md)、[VEC-005 検証](../testing/vec-005.md) を参照。
+Metal parity / baseline 採用は host run 待ちであり、CPU・Naga 合格とは区別する。
+
 ### VEC-004 の gradient paint
 
 [ADR-0066](../adr/0066-explicit-gradient-semantics.md) の版 1 options を各 gradient に保持する。
@@ -204,7 +217,7 @@ scene は参照欠落・循環・不正 opacity / 色 / 幾何を型付きエラ
 ### 固定 snapshot と公開 API
 
 - `RenderSnapshot::new(&Project, CompositionId, revision, RenderProfile)` は文書を複製し、選択した Composition、revision、profile、必要な `FontRef` と意味の版を固定する。`RenderProfile` は作業用線形 Rec.709 / Rec.2020 と flatten tolerance（既定 0.02 output px）。元の Project を編集しても snapshot は変わらない。
-- `RenderSnapshot::with_contract` は `SemanticVersions` と `MatteBinding` も明示入力する。公開 snapshot schema は **1**。Serde の strict な envelope を使い、復元時に欠けた版・lock を最新値で補わない。文書意味版・補間版・TimeMap 版・組版版は **1**、vector は `render001-kurbo-flatten-v1`、色は `gpu002-color-v1`、coverage は `vec003-grid4-v2`、stroke geometry は `vec003-centered-stroke-v1`、gradient interpolation は `vec003-linear-premultiplied-pad-v1`。実行時は対応する版と文書の意味版との一致を検証する。
+- `RenderSnapshot::with_contract` は `SemanticVersions` と `MatteBinding` も明示入力する。公開 snapshot schema は **1**。Serde の strict な envelope を使い、復元時に欠けた版・lock を最新値で補わない。文書意味版・補間版・TimeMap 版・組版版は **1**、vector は `render001-kurbo-flatten-v1`、色は `gpu002-color-v1`、coverage は `vec003-grid4-v2`。現在の stroke 対応上限は `vec005-local-stroke-v2`、旧 `vec003-centered-stroke-v1` の pin も旧 stroke に限り認識する。gradient interpolation は `vec004-explicit-interpolation-v1`。実行時は対応する版と文書の意味版との一致を検証する。
 - `content_hash()` は snapshot 全体を `serde_json::Value` の sorted object keys → compact UTF-8 → SHA-256 にする。STORE-001 の正規化規約を再利用し、独立した opaque 内容も hash に含める。schema、文書、revision、lock、profile、matte、意味の版を除外しない。time / region は個別の要求と metadata に保持する。CACHE-001 の values key は下記の rendering content identity と Time を使い、layout / geometry / raster はそれぞれ必要な内容だけで区別する。
 - `build_scene_ir(&snapshot, Time, &[FontData])` と `build_render_dag(&SceneIr, RenderProfile, OutputRegion)` は GPU・ファイル I/O を使わない。
 - `render_frame(&snapshot, &[FontData], &dyn RenderBackend, FrameRequest)` は `RenderedFrame`（作業用線形 premultiplied と外部 straight sRGB の画素、`FrameMetadata`）を返す。

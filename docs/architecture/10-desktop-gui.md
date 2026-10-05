@@ -92,10 +92,34 @@ session 長の `PROJECT_LOCKED` 保証は後続課題とし、本実装で store
 ## GUI-001 の実装範囲
 
 `apps/macos` の `Kronello` executable は Welcome、新規作成 / open / recent、4-page toolbar と status、
-Motion の Layers / Project、native Viewer、Transform / Text / Layout Inspector、読取り専用 Dope sheet を持つ。
+Motion の Layers / Project、native Viewer、Transform / Text / Layout Inspector を持つ。Dope sheet のキー編集と Curve editor は GUI-002 で追加した。
 残り3ページは後続タスクを説明する shell。Dark は既定で、OS theme へ自動追従しない。
 `scripts/build_macos_app.py` は開発 bundle を組み立て、CLI worker と resource fonts を配置して ad-hoc sign する。
 SwiftPM / bundle / Metal と visual fidelity は [GUI-001 の検証](../testing/gui-001.md) の host procedure で確認する。
+
+## GUI-002 の実装範囲
+
+Dope sheet はクリック / Shift / Command / 矩形選択、フレーム移動と playhead / 他キーへのスナップ、
+Navigator diamond の追加 / 削除、Linear / Cubic / Hold の変更を共有 edit batch に渡す。
+選択は CurveId + 有理数時刻、ドラッグ開始の revision / keys を捕捉し、候補表示中に作品を書かない。
+複数キーの release は一つの plan / apply、一つの Event / Undo。重複時刻は transaction 全体の型付き拒否。
+最後のキーの削除は編集した Property だけを共有評価値への Constant Source に変える。
+別の Property / Expression CurveSample が参照している場合は Curve とキーを保持し、単独消費者の場合だけキーを remove する。
+Source 変更と（単独消費者の場合の）remove は同じ batch / 一回の Undo。
+
+下段の Curve editor は216pxのチャンネル列と値 / 速度グラフ、選択キーと Cubic の接線を持つ。
+X / Y は区間の TimeBezier を共有する。揃える / 分けるは導出する UI 補助であり、
+揃えるは二つの隣接区間を一つの batch で `keyframe_replace`、分けるは片側だけ。
+Expression に編集用の Curve は出さない。速度は表示のみ。Viewer の空間パスは別表示の読取り専用で、
+Composition のフレーム（最大600点）と正確なキー時刻を一回の共有 `property.sample` で評価し、
+親空間の Position 軌跡を cached presentation として保持する。現在の共有 scene の親 `world_transform`
+だけを適用して1px線と5pxキー位置を表示する。祖先が動く場合も playhead の親空間に対する局所軌跡であり、
+playhead の移動は親 matrix が変わったときだけ再配置し、再サンプルしない。revision / 選択 / Composition の変更で再評価する。
+欠落した scene ノード / 親 matrix / sample は `KRErrorLine` に示す。
+Curve editor の速度 readout は Property 単位/秒、表示のみの説明は `ink-muted` の footer に常設する。
+readout は軸ラベルの余白を避け、右端で左側へ反転する。focus ring は各 control の所有する `FocusState` を使い、祖先の focus を継承しない。
+名前・値表示は `PropertyPresentation`、琥珀 / 青 / 赤の役割と単一 playhead は GUI-001 review を継承する。
+詳細は [ADR-0070](../adr/0070-motion-keyframe-authoring.md)、検査とホスト手順は [GUI-002 の検証](../testing/gui-002.md)。
 
 ## 画面の範囲
 

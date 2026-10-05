@@ -63,6 +63,7 @@ fn fixture() -> (Project, BTreeMap<PropertyId, Value>, SchemaRegistry) {
         })
         .collect();
     let node = SceneNode {
+        tags: Default::default(),
         name: None,
         enabled: true,
         effects: vec![],

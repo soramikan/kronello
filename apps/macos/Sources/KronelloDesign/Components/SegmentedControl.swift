@@ -15,6 +15,7 @@ public struct KRSegmentedControl: View {
     @Binding private var selection: String
     private let onSelect: (String) -> Void
     private let appearance: KRControlAppearance
+    @FocusState private var focused: String?
     public init(_ segments: [KRSegment], selection: Binding<String>, appearance: KRControlAppearance = .resting, onSelect: @escaping (String) -> Void = { _ in }) {
         self.segments = segments; _selection = selection; self.appearance = appearance; self.onSelect = onSelect
     }
@@ -23,7 +24,8 @@ public struct KRSegmentedControl: View {
             ForEach(segments) { segment in
                 Button { selection = segment.id; onSelect(segment.id) } label: {
                     Text(segment.label).krText(KRType.label).padding(.horizontal, KRSpace.space2).frame(height: 18)
-                }.buttonStyle(KRSegmentStyle(selected: selection == segment.id, appearance: appearance))
+                }.buttonStyle(KRSegmentStyle(selected: selection == segment.id, appearance: focused == segment.id ? .focused : appearance))
+                    .focused($focused, equals: segment.id).focusEffectDisabled()
                     .disabled(segment.unavailableReason != nil).help(segment.unavailableReason ?? segment.label)
                     .accessibilityAddTraits(selection == segment.id ? .isSelected : [])
             }

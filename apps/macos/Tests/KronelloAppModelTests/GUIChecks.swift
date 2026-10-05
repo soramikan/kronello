@@ -16,16 +16,20 @@ func require(_ value: @autoclosure () -> Bool, _ message: String) throws {
     var nextError: ServiceFailure?
     var eventID = UUID().uuidString
     var history: [[String: Any]] = []
+    var latency: Duration = .zero
+    var sampleResponse: (([String: Any]) throws -> [String: Any])?
     func ready() async throws {}
     func subscribe() async throws {}
     func poll() throws {}
     func close() {}
     func call(_ request: [String: Any]) async throws -> [String: Any] {
         requests.append(request)
+        if latency > .zero { try await Task.sleep(for: latency) }
         switch request.string("operation") {
         case "project.info": return ["project_id": document.string("id"), "name": "Tests", "revision": revision, "open_mode": "normal"]
         case "project.export": return ["revision": revision, "document": document]
         case "scene.query": return ["revision": revision, "nodes": []]
+        case "property.sample": return try sampleResponse?(request) ?? [:]
         case "history.list": return ["revision": revision, "events": history]
         case "edit.plan":
             if let error = nextError { throw error }; return ["plan_hash": "test-plan"]
@@ -40,6 +44,11 @@ func require(_ value: @autoclosure () -> Bool, _ message: String) throws {
 @MainActor final class RecordingTransport: ProjectTransport {
     let native: NativeProjectTransport
     var lastApply: [String: Any] = [:]
+    var lastEvent: [String: Any] = [:]
+    var planCount = 0
+    var applyCount = 0
+    var sampleCount = 0
+    var sceneCount = 0
     var notificationHandler: ((String, [String: Any]) -> Void)? {
         get { native.notificationHandler }
         set { native.notificationHandler = newValue }
@@ -50,8 +59,22 @@ func require(_ value: @autoclosure () -> Bool, _ message: String) throws {
     func poll() throws { try native.poll() }
     func close() { native.close() }
     func call(_ request: [String: Any]) async throws -> [String: Any] {
-        if request.string("operation") == "edit.apply" { lastApply = request }
-        return try await native.call(request)
+        if request.string("operation") == "edit.plan" { planCount += 1 }
+        if request.string("operation") == "edit.apply" { lastApply = request; applyCount += 1 }
+        if request.string("operation") == "property.sample" { sampleCount += 1 }
+        if request.string("operation") == "scene.query" { sceneCount += 1 }
+        do {
+            let result = try await native.call(request)
+            if request.string("operation") == "edit.apply" { lastEvent = result }
+            return result
+        }
+        catch {
+            if let failure = error as? ServiceFailure, failure.code == "INVALID_REQUEST" {
+                let data = try JSONSerialization.data(withJSONObject: request, options: [.sortedKeys])
+                fputs("Rejected shared request: " + String(data: data, encoding: .utf8)! + "\n", stderr)
+            }
+            throw error
+        }
     }
 }
 
@@ -180,7 +203,7 @@ func require(_ value: @autoclosure () -> Bool, _ message: String) throws {
         let process = Process(), input = Pipe(), output = Pipe(), errors = Pipe()
         process.executableURL = root.appendingPathComponent("apps/macos/Libraries/kronello")
         process.standardInput = input; process.standardOutput = output; process.standardError = errors
-        try process.run(); try input.fileHandleForWriting.write(contentsOf: JSONSerialization.data(withJSONObject: request)); try input.fileHandleForWriting.close()
+        try process.run(); try input.fileHandleForWriting.write(contentsOf: JSONSerialization.data(withJSONObject: request, options: [.sortedKeys])); try input.fileHandleForWriting.close()
         let response = output.fileHandleForReading.readDataToEndOfFile(); process.waitUntilExit()
         try require(process.terminationStatus == 0, "CLI failed: " + String(data: errors.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)!)
         return try NativeProjectTransport.result(JSONSerialization.jsonObject(with: response) as! [String: Any])
@@ -238,7 +261,7 @@ func require(_ value: @autoclosure () -> Bool, _ message: String) throws {
         let id = UUID().uuidString
         composition["nodes"] = [["id": id, "kind": ["kind": "shape"], "properties": [], "child_order": []]]
         composition["root_nodes"] = [id]; document["compositions"] = [composition]
-        editor.adopt(document: document, scene: ["nodes": [["key": ["node": id], "evaluated": ["bounds": ["layout_bounds": ["min": [0.0, 0.0], "max": [120.0, 60.0]]], "world_transform": [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]]]]], revision: "1", actor: "", external: false)
+        editor.adopt(document: document, scene: ["nodes": [["key": ["node": id, "instance_path": [String]()], "evaluated": ["bounds": ["layout_bounds": ["min": [0.0, 0.0], "max": [120.0, 60.0]]], "world_transform": [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]]]]], revision: "1", actor: "", external: false)
         editor.toggleLock(id); editor.select(id, canvas: true)
         try require(editor.selected == nil, "Locked nodes cannot be selected on canvas")
         editor.select(id)
