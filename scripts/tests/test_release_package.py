@@ -167,7 +167,7 @@ class ReleasePackageTests(unittest.TestCase):
             common.write_json(package / "build-provenance.json", {"native_prefix": str(root / "prefix"), "original_native_prefix": str(root / "prefix")})
             manifest = {"revision": "test", "package_sha256": "test", "signed": False}
             args = type("Args", (), {"package": package, "relocated": root / "relocated", "report": root / "report.json", "static_only": False})()
-            with patch.object(verify, "verify_inventory", return_value=(manifest, {})), patch.object(verify, "check_linkage", return_value={}):
+            with patch.object(verify.sys, "platform", "darwin"), patch.object(verify, "verify_inventory", return_value=(manifest, {})), patch.object(verify, "check_linkage", return_value={}):
                 with self.assertRaisesRegex(ValueError, "unsigned"):
                     verify.verify(args, FakeOtool(), {})
                 args.relocated = root / "static-relocated"
