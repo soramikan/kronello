@@ -1,7 +1,7 @@
 {
   "schema_version": "0.5",
   "created": "2026-10-01",
-  "updated": "2026-10-04",
+  "updated": "2026-10-06",
   "status": "implementation_started",
   "description": "設計と実装の計画・進捗。このファイルがバックログの正本であり、GitHub等へ登録したIssueではない。",
   "specification": "docs/architecture/",
@@ -864,7 +864,7 @@
       "priority": "P1",
       "area": "render",
       "title": "長尺・大解像度exportのstreaming",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "JOB-001",
         "AUDIO-000",
