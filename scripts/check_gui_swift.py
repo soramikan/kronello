@@ -28,6 +28,7 @@ def main():
     parser.add_argument("--clang", default=None)
     parser.add_argument("--run-checks", action="store_true")
     parser.add_argument("--integration-only", action="store_true", help="Run only stage-2 checks after compiling/typechecking all GUI modules")
+    parser.add_argument("--qa-only", action="store_true", help="Run QA-002 checks only (modules and XCTest still typecheck)")
     parser.add_argument("--skip-modules", action="store_true", help="Reuse modules from a preceding direct check")
     parser.add_argument("--disable-plugin-sandbox", action="store_true", help="Avoid a nested compiler subprocess sandbox; the caller sandbox still applies")
     args = parser.parse_args()
@@ -79,7 +80,7 @@ def main():
                    + [str(p) for p in sorted((PACKAGE / "Tests/KronelloAppModelTests").glob("*.swift"))], check=True)
     if args.run_checks:
         runner = output / "GUIRunner.swift"
-        runner.write_text(r'''import Foundation
+        runner_source = r'''import Foundation
 import Darwin
 @main struct Runner {
     @MainActor static func main() async {
@@ -88,11 +89,12 @@ import Darwin
         catch { fputs("GUI checks failed: \(error)\n", stderr); exit(1) }
     }
 }
-'''.replace("__CHECKS__", "try await IntegrationChecks().runAll()" if args.integration_only else
-            "try await GUIChecks().runAll(); try await MotionChecks().runAll(); try await PlaybackChecks().runAll(); try await EditChecks().runAll(); try await WorkflowChecks().runAll(); try await IntegrationChecks().runAll()"))
+'''.replace("__CHECKS__", "try await IntegrationChecks().runAll()" if args.integration_only else "try await QAChecks().runAll()" if args.qa_only else
+            "try await GUIChecks().runAll(); try await MotionChecks().runAll(); try await PlaybackChecks().runAll(); try await EditChecks().runAll(); try await WorkflowChecks().runAll(); try await IntegrationChecks().runAll(); try await QAChecks().runAll()")
+        runner.write_text(runner_source)
         subprocess.run(common + ["-parse-as-library", "-lKronelloAppModel", "-lKronelloCore", "-lKronelloDesign", "-o", str(output / "GUIRunner"),
                                 str(PACKAGE / "Tests/KronelloAppModelTests/GUIChecks.swift"), str(PACKAGE / "Tests/KronelloAppModelTests/MotionChecks.swift"),
-                                str(PACKAGE / "Tests/KronelloAppModelTests/PlaybackChecks.swift"), str(PACKAGE / "Tests/KronelloAppModelTests/EditChecks.swift"), str(PACKAGE / "Tests/KronelloAppModelTests/WorkflowChecks.swift"), str(PACKAGE / "Tests/KronelloAppModelTests/IntegrationChecks.swift"), str(runner)], check=True)
+                                str(PACKAGE / "Tests/KronelloAppModelTests/PlaybackChecks.swift"), str(PACKAGE / "Tests/KronelloAppModelTests/EditChecks.swift"), str(PACKAGE / "Tests/KronelloAppModelTests/WorkflowChecks.swift"), str(PACKAGE / "Tests/KronelloAppModelTests/IntegrationChecks.swift"), str(PACKAGE / "Tests/KronelloAppModelTests/QAChecks.swift"), str(runner)], check=True)
         subprocess.run([str(output / "GUIRunner")], cwd=ROOT, check=True)
 
 

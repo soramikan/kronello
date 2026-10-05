@@ -90,10 +90,10 @@ public struct KRNumberField: View {
     public var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 2) {
             if editing && !staticRendering {
-                TextField("", text: $text).textFieldStyle(.plain).focused($focused)
-                    .multilineTextAlignment(.trailing).onSubmit { commitText() }
-                    .onKeyPress(.escape) { cancel(); return .handled }
-                    .accessibilityLabel(label)
+                KRCommittedTextInput(value: text, label: label, placeholder: "", muted: NSColor(p.inkMuted), ink: NSColor(p.ink), selection: NSColor(p.selection), enabled: enabled,
+                    onCommit: { text = $0; commitText() }, onFocus: { focused = $0; if !$0 && editing && !invalid { cancel() } },
+                    font: KRType.timecode.nsFont(), alignment: .right, focusOnCreate: true, onCancel: cancel)
+                    .frame(height: KRSize.controlHeight - 8)
             } else {
                 Text(failed ? "—" : editing ? text : format(transaction?.candidate ?? value))
                     .frame(maxWidth: .infinity, alignment: .trailing)
@@ -137,7 +137,6 @@ public struct KRNumberField: View {
                 dragCancelled = transaction?.phase == .armed || transaction?.phase == .scrubbing
                 cancel(); return .handled
             }
-            .onChange(of: focused) { _, new in if !new && editing { commitText() } }
             .onHover { inside in hover = inside; updateCursor() }
             .onChange(of: editing) { _, _ in updateCursor() }
             .onChange(of: enabled) { _, _ in updateCursor() }
