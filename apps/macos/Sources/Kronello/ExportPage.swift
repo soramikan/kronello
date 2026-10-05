@@ -34,8 +34,8 @@ struct ExportPage: View {
                         KRPopupButton("対象", options: model.targets.map { .init($0.string("id"), $0.string("kind") + " · " + ($0.object("value").string("name").isEmpty ? String($0.object("value").string("id").prefix(8)) : $0.object("value").string("name"))) }, selection: $model.target)
                         KRInspectorSettingRow("範囲") { KRPopupButton("範囲", options: [.init("all", "全体"), .init("inout", "イン〜アウト")], selection: $model.rangeMode).frame(width: 144) }
                         if model.rangeMode == "inout" {
-                            KRInspectorSettingRow("In") { WorkflowFrameField(Double(model.startFrame), step: 1, range: 0...Double(max(0,model.totalFrames-1)), unit: "f", width: 120, onCommit: { _, v in model.startFrame = Int64(v) }) }
-                            KRInspectorSettingRow("Out (exclusive)") { WorkflowFrameField(Double(model.endFrame), step: 1, range: 1...Double(max(1,model.totalFrames)), unit: "f", width: 120, onCommit: { _, v in model.endFrame = Int64(v) }) }
+                            KRInspectorSettingRow("In") { WorkflowFrameField(Double(model.startFrame), step: 1, range: 0...Double(max(0,model.totalFrames-1)), unit: "f", width: 120, accessibilityLabel: "書き出し開始フレーム", onCommit: { _, v in model.startFrame = Int64(v) }) }
+                            KRInspectorSettingRow("Out (exclusive)") { WorkflowFrameField(Double(model.endFrame), step: 1, range: 1...Double(max(1,model.totalFrames)), unit: "f", width: 120, accessibilityLabel: "書き出し終了フレーム（排他的）", onCommit: { _, v in model.endFrame = Int64(v) }) }
                         }
                         KRPopupButton("プリセット", options: model.profiles.map { .init($0.string("format"), profileLabel($0), disabled: $0.string("device_availability") == "unavailable") }, selection: $model.format, onSelect: { _ in model.selectProfile() })
                         ForEach(model.profiles.filter { $0.string("device_availability") == "unavailable" }, id: \.formatID) { profile in

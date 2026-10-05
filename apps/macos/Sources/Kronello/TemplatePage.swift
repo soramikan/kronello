@@ -51,7 +51,7 @@ struct TemplatePage: View {
                 if let conflict = editor.revisionConflict { KRConflictBanner(.init(conflict.code,conflict.message), discard: { model.discardCandidate(); Task { await model.refresh() } }, reapply: { Task { await model.retryCandidate() } }) }
                 if model.loading { HStack { KRActivityIndicator(); Text("比較を読み込み中").krText(KRType.caption) }.padding(KRSpace.space2) }
                 if let failure = model.failure { KRErrorLine(.init(failure.code, failure.message)).padding(KRSpace.space2) }
-                HStack { Text("比較時刻").krText(KRType.label); WorkflowFrameField(Double(model.compareFrame), step: 1, range: 0...Double(max(0, model.durationFrames-1)), unit: "f", width: 96, onCommit: { _, value in model.compareFrame = Int64(value); Task { await model.refresh() } }) }.padding(.horizontal, KRSpace.space3)
+                HStack { Text("比較時刻").krText(KRType.label); WorkflowFrameField(Double(model.compareFrame), step: 1, range: 0...Double(max(0, model.durationFrames-1)), unit: "f", width: 96, accessibilityLabel: "比較時刻", onCommit: { _, value in model.compareFrame = Int64(value); Task { await model.refresh() } }) }.padding(.horizontal, KRSpace.space3)
                 ScrollView(.horizontal) {
                     HStack(alignment: .top, spacing: KRSpace.space3) {
                         ForEach(model.previews) { preview in
@@ -93,12 +93,12 @@ struct TemplatePage: View {
     var policy: some View {
         KRPanel(header: { KRPanelTitle("尺のポリシー（新版の下書き）") }, actions: {
             KRPopupButton("中間区間", options: ["hold","loop","stretch"].map { .init($0, $0) }, selection: $model.middleMode).frame(width: 110)
-            WorkflowFrameField(Double(model.minimumFrames), step: 1, range: 0...100000, unit: "f", width: 96, onCommit: { _, v in model.minimumFrames = Int64(v) })
+            WorkflowFrameField(Double(model.minimumFrames), step: 1, range: 0...100000, unit: "f", width: 96, accessibilityLabel: "最小中間尺", onCommit: { _, v in model.minimumFrames = Int64(v) })
         }) {
             VStack(alignment: .leading, spacing: KRSpace.space2) {
                 HStack {
                     Text("プレビューの尺").krText(KRType.label)
-                    WorkflowFrameField(Double(model.durationFrames), step: 1, range: 1...100000, unit: "f", width: 100, onCommit: { _, v in model.durationFrames = Int64(v); Task { await model.refresh() } })
+                    WorkflowFrameField(Double(model.durationFrames), step: 1, range: 1...100000, unit: "f", width: 100, accessibilityLabel: "プレビューの尺", onCommit: { _, v in model.durationFrames = Int64(v); Task { await model.refresh() } })
                     Text(KRTimecode.format(frames: model.durationFrames, fps: model.nominalFPS)).krText(KRType.ruler)
                     KRButton("配置の尺へ適用", variant: .secondary) { Task { await model.setPlacementDuration() } }.disabled(model.placement.isEmpty || editor.busy)
                 }.padding(.horizontal, KRSpace.space3)
