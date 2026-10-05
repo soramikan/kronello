@@ -206,7 +206,7 @@ fn capabilities_registry_media_extension_without_device_initialization() {
     ) else {
         panic!()
     };
-    assert_eq!(c.commands.len(), 30);
+    assert_eq!(c.commands.len(), 36);
     assert_eq!(c.api_schema_version, 1);
     assert_eq!(c.semantic_versions.document, PROJECT_SEMANTIC_VERSION);
     let media = c.media.unwrap();
@@ -548,12 +548,14 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
     let sequence = json!({"id":Uuid::new_v4(), "extent":{"width":64.0,"height":32.0}, "frame_rate":{"num":"24","den":"1"}, "audio_rate":48000, "working_space":"linear_rec709", "tracks":[]});
     let clip = json!({"id":Uuid::new_v4(), "source_ref":{"kind":"composition","composition":composition}, "timeline_range":{"start":{"num":"0","den":"1"},"end":time}, "source_in":{"num":"0","den":"1"}, "time_map":{"kind":"linear","offset":{"num":"0","den":"1"},"speed":{"num":"1","den":"1"}}, "links":[],"effects":[]});
     let requests = vec![
+        json!({"operation":"sequence.query", "project":path,"sequence":uuid}),
         json!({"operation":"sequence.create", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"seq","sequence":sequence}),
         json!({"operation":"clip.place", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"clip","sequence":uuid,"track":uuid,"clip":clip}),
         json!({"operation":"clip.trim", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"trim","sequence":uuid,"clip":uuid,"range":clip["timeline_range"]}),
         json!({"operation":"clip.stretch", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"stretch","sequence":uuid,"clip":uuid,"range":clip["timeline_range"]}),
         json!({"operation":"instance.retime", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"retime","composition":composition,"node":uuid,"time_map":clip["time_map"]}),
         json!({"operation":"template_instance.retime", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"retime-template","instance":uuid,"duration":time}),
+        json!({"operation":"render.export", "render":{"input":input,"range":{"start":{"num":"0","den":"1"},"end":time},"frame_rate":{"num":"24","den":"1"},"output_directory":"movie.mov"},"output":{"format":"pro_res_mov","clips":[],"background":[0,0,0]}}),
         json!({"operation":"render.submit","render":{"input":input,"range":{"start":{"num":"0","den":"1"},"end":time},
             "frame_rate":{"num":"24","den":"1"},"output_directory":"frames"}}),
         json!({"operation":"job.get","job":uuid.to_string()}),
@@ -573,6 +575,8 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
         json!({"operation":"edit.undo", "project":path, "base_revision":"1", "session_id":uuid, "idempotency_key":"key", "event_id":uuid}),
         json!({"operation":"history.list", "project":path}),
         json!({"operation":"scene.query", "project":path, "composition":composition}),
+        json!({"operation":"node.explain", "project":path, "composition":composition,"key":{"instance_path":[],"node":uuid},"time":time}),
+        json!({"operation":"render.explain", "input":input, "time":time}),
         json!({"operation":"property.sample", "project":path, "composition":composition, "keys":[
             {"kind":"node", "instance_path":[], "node":comp(&p).nodes[0].id,"property":comp(&p).nodes[0].properties[0].id()}], "times":[time]}),
         json!({"operation":"capabilities.get"}),
@@ -582,6 +586,8 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
         json!({"operation":"template.instantiate", "project":path, "base_revision":"1", "session_id":uuid, "idempotency_key":"place", "composition":composition, "node":uuid, "index":0, "instance":instance}),
         json!({"operation":"template.set_input", "project":path, "base_revision":"1", "session_id":uuid, "idempotency_key":"input", "instance":uuid, "name":"headline", "value":{"kind":"string", "value":"text"}}),
         json!({"operation":"template.set_duration", "project":path, "base_revision":"1", "session_id":uuid, "idempotency_key":"duration", "instance":uuid, "duration":time}),
+        json!({"operation":"template.preview","project":path,"instance":instance,"time":time,"fonts":[]}),
+        json!({"operation":"template.migration_plan","project":path,"base_revision":"1","instance":uuid,"definition":definition["id"],"time":time,"fonts":[]}),
     ];
     assert_eq!(requests.len(), command_registry().len());
     for request in requests {
@@ -888,9 +894,18 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
     let input = json!({"project":path, "composition":composition,
         "region":{"origin":[0.0,0.0], "extent":[64.0,32.0], "pixels":[8,4]}});
     execute(json!({"operation":"render.frame", "input":input, "time":{"num":"0", "den":"1"}}));
+    execute(json!({"operation":"render.explain", "input":input, "time":{"num":"0", "den":"1"}}));
+    execute(
+        json!({"operation":"node.explain", "project":path, "composition":composition,
+        "key":{"instance_path":[],"node":node}, "time":{"num":"0", "den":"1"}}),
+    );
     execute(json!({"operation":"render.sequence", "input":input,
         "range":{"start":{"num":"0","den":"1"}, "end":{"num":"1","den":"1"}},
         "frame_rate":{"num":"1","den":"1"}, "output_directory":dir.path().join("frames")}));
+    execute(json!({"operation":"render.export", "render":{"input":input,
+        "range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"24"}},
+        "frame_rate":{"num":"24","den":"1"},"output_directory":dir.path().join("sync.mov")},
+        "output":{"format":"pro_res_mov","clips":[],"background":[0,0,0]}}));
     let job = execute(json!({"operation":"render.submit", "render":{"input":input,
         "range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"1"}},
         "frame_rate":{"num":"1","den":"1"},"output_directory":dir.path().join("job-frames")}}));
@@ -924,6 +939,17 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
     execute(
         json!({"operation":"template_instance.retime","project":template_path,"base_revision":"5","session_id":session,"idempotency_key":"retime-template","instance":instance,"duration":{"num":"6","den":"1"}}),
     );
+    let template_fonts = json!([{"identity":template_document["texts"][0]["styles"][0]["font"],
+        "path":std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/fixtures/external/NotoSansCJKjp-Regular.otf")}]);
+    execute(
+        json!({"operation":"template.preview","project":template_path,
+        "instance":{"id":instance,"definition_ref":definition["id"],"version":"1.0.0","duration":{"num":"6","den":"1"},"inputs":{}},
+        "time":{"num":"1","den":"1"},"fonts":template_fonts}),
+    );
+    execute(
+        json!({"operation":"template.migration_plan","project":template_path,"base_revision":"6",
+        "instance":instance,"definition":definition["id"],"time":{"num":"1","den":"1"},"fonts":template_fonts}),
+    );
     let sequence_id = Uuid::new_v4();
     let track_id = Uuid::new_v4();
     let clip_id = Uuid::new_v4();
@@ -933,6 +959,7 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
     execute(
         json!({"operation":"clip.place","project":path,"base_revision":"5","session_id":session,"idempotency_key":"place-clip","sequence":sequence_id,"track":track_id,"clip":{"id":clip_id,"source_ref":{"kind":"composition","composition":composition},"timeline_range":{"start":{"num":"0","den":"1"},"end":{"num":"2","den":"1"}},"source_in":{"num":"0","den":"1"},"time_map":{"kind":"linear","offset":{"num":"0","den":"1"},"speed":{"num":"1","den":"1"}},"links":[],"effects":[]}}),
     );
+    execute(json!({"operation":"sequence.query","project":path,"sequence":sequence_id}));
     execute(
         json!({"operation":"clip.trim","project":path,"base_revision":"6","session_id":session,"idempotency_key":"trim-clip","sequence":sequence_id,"clip":clip_id,"range":{"start":{"num":"1","den":"4"},"end":{"num":"7","den":"4"}}}),
     );
@@ -1004,6 +1031,8 @@ fn all_filesystem_boundaries_reject_uris_before_access() {
         json!({"operation":"template.instantiate", "project":project, "base_revision":"1", "session_id":uuid, "idempotency_key":"place", "composition":composition, "node":uuid, "index":0, "instance":{"id":uuid,"definition_ref":definition["id"],"version":"1.0.0","duration":{"num":"5","den":"1"},"inputs":{}}}),
         json!({"operation":"template.set_input", "project":project, "base_revision":"1", "session_id":uuid, "idempotency_key":"input", "instance":uuid, "name":"headline", "value":{"kind":"string", "value":"text"}}),
         json!({"operation":"template.set_duration", "project":project, "base_revision":"1", "session_id":uuid, "idempotency_key":"duration", "instance":uuid, "duration":{"num":"5","den":"1"}}),
+        json!({"operation":"template.preview","project":project,"instance":{"id":uuid,"definition_ref":definition["id"],"version":"1.0.0","duration":{"num":"5","den":"1"},"inputs":{}},"time":time,"fonts":[]}),
+        json!({"operation":"template.migration_plan","project":project,"base_revision":"1","instance":uuid,"definition":definition["id"],"time":time,"fonts":[]}),
     ] {
         invalid_locator(request);
     }
@@ -1025,6 +1054,15 @@ fn all_filesystem_boundaries_reject_uris_before_access() {
             json!({"operation":"project.collect", "project":"missing.kronello", "output_directory":uri}),
         );
     }
+    let unsafe_fonts = json!([{"identity":document["texts"][0]["styles"][0]["font"],"path":"https://example.invalid/font.otf"}]);
+    invalid_locator(
+        json!({"operation":"template.preview","project":"missing.kronello",
+        "instance":{"id":uuid,"definition_ref":definition["id"],"version":"1.0.0","duration":{"num":"5","den":"1"},"inputs":{}},"time":time,"fonts":unsafe_fonts}),
+    );
+    invalid_locator(
+        json!({"operation":"template.migration_plan","project":"missing.kronello","base_revision":"1",
+        "instance":uuid,"definition":definition["id"],"time":time,"fonts":unsafe_fonts}),
+    );
     let mut font_input = input.clone();
     font_input["fonts"] = json!([{"identity":document["texts"][0]["styles"][0]["font"], "path":"https://example.invalid/font.otf"}]);
     invalid_locator(json!({"operation":"render.frame", "input":font_input, "time":time}));

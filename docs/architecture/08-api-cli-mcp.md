@@ -1,6 +1,6 @@
 # 08 API・CLI・MCP・エージェント
 
-GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001-shared-command-query-api.md)）。M1 CLI-001 と M2 SERVICE-001 / API-001 / TEMPLATE-001 / MEDIA-001 / MCP-001 / NLE-001 / JOB-001 と M3 EXPR-001 の実装範囲を次節に示す。それ以外の後続 API・CLI は提案であり、実装済みではない。
+GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001-shared-command-query-api.md)）。M1 CLI-001 と M2 SERVICE-001 / API-001 / TEMPLATE-001 / MEDIA-001 / MCP-001 / NLE-001 / JOB-001 と M3 EXPR-001 / INSPECT-001 / TEMPLATE-002 / NLE-002 / AUDIO-003 / MCP-002 の実装範囲を次節に示す。それ以外の後続 API・CLI は提案であり、実装済みではない。
 
 ## M1 CLI-001 の実装範囲
 
@@ -23,7 +23,7 @@ GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001
 
 - subcommand を指定した場合は、その payload の JSON object を stdin に渡す（`operation` を含めない）。subcommand なしの場合は `operation` を含む完全な service Request を渡す。
 - `--request-json 'JSON'` は stdin の代わりに一つの要求を渡す。入力上限は UTF-8 16 MiB。一回の起動につき一つの要求、一つの結果 JSON document と改行を stdout に出力する。NDJSON event stream は未実装。
-- 成功は `{ "status": "success", "result": { "kind": "project|export|frame|sequence|plan|edit|history|scene|samples|capabilities|collected|job|jobs|pruned", "value": ... } }`、失敗は `{ "status": "error", "error": { "code": "INVALID_REQUEST", "message": "..." } }`。成功の exit code は 0、失敗は非 0。診断は stderr にだけ出力する。`--help` も `USAGE` JSON error と stderr の使用法（非 0）を返す。
+- 成功は `{ "status": "success", "result": { "kind": "project|export|frame|sequence|plan|edit|history|scene|node_explanation|render_explanation|samples|capabilities|collected|job|jobs|pruned", "value": ... } }`、失敗は `{ "status": "error", "error": { "code": "INVALID_REQUEST", "message": "..." } }`。成功の exit code は 0、失敗は非 0。診断は stderr にだけ出力する。`--help` も `USAGE` JSON error と stderr の使用法（非 0）を返す。
 - backend の既定は GPU。`--backend gpu` も指定可。adapter / device を作れなければ型付きエラーを返す。GPU 不在時の暗黙の CPU fallback はない。GPU は render 操作でのみ初期化する。
 - `--backend cpu-reference` は検証用の float32 参照 backend の明示選択。metadata に `cpu_reference_float32` と記録する。通常の GPU は `wgpu_rgba16f`。両者のビット一致や性能保証は提供しない。
 - `render.frame` は有理数の任意時刻を評価して画素を JSON 応答する。画像ファイルが必要な場合は `render.sequence` を使う。連番は新しい directory にだけ出力し、既存成果物を上書きしない。PNG / RGBA16F / metadata の契約は [05 レンダー](05-render-gpu.md) を参照。
@@ -61,7 +61,7 @@ printf '%s\n' '{"operation":"project.export","project":"/private/tmp/kronello-m1
 
 受け入れテストは `crates/kronello-cli/tests/machine.rs`。built binary を起動し、stdout 全体の JSON parse、非 0 exit と stderr 診断、create / import / export / info、revision conflict / lock、font 欠落 / hash、未対応機能、CPU 連番を検証する。GPU を必要とするテストは `gpu_headless_default_backend_animated_shape_japanese_text_sequence`。service は `Service::with_backend(&dyn RenderBackend)` で backend を注入でき、CLI 固有の作品状態は持たない。 CPU と Apple M1 / Metal の実行結果は [CLI-001 の検証](../testing/cli-001.md) に記録する。
 
-## M3 EXPR-001 の実装範囲
+## M3 EXPR-001 / AUDIO-003 の実装範囲
 
 `edit.plan/apply` の `commands` に `{"expression_set":{"expression":Expression}}` を追加した。同じ batch 内で既存の `{"property_source_set":{"object":"UUID","property":"UUID","source":{"kind":"expression","value":"Expression UUID"}}}` を使う。capabilities の features に `expression` を追加した。操作 registry の追加はなく、CLI の `edit plan/apply`、MCP の同名 tool が同じ型付き command を解釈する。
 
@@ -164,9 +164,9 @@ capabilities はコンパイル済み対応範囲を示し、GPU adapter の稼�
 
 ### 公開 schema と registry
 
-[schemas/api-v1.schema.json](../../schemas/api-v1.schema.json) は Draft 2020-12。Request / Response envelope、全30操作の payload / successful result、型付き EditCommand を共有 Rust 型から生成する。`api_json_schema()` と committed schema の一致を通常テストで確認する。再生成は `cargo run -p kronello-service --example api_schema --locked > schemas/api-v1.schema.json`。版はファイル名・`$id`・`x-api-schema-version` で固定し、既存 Request に必須 version field を追加しない。Project document は従来の公開型 / schema を共有する。
+[schemas/api-v1.schema.json](../../schemas/api-v1.schema.json) は Draft 2020-12。Request / Response envelope、全36操作の payload / successful result、型付き EditCommand を共有 Rust 型から生成する。`api_json_schema()` と committed schema の一致を通常テストで確認する。再生成は `cargo run -p kronello-service --example api_schema --locked > schemas/api-v1.schema.json`。版はファイル名・`$id`・`x-api-schema-version` で固定し、既存 Request に必須 version field を追加しない。Project document は従来の公開型 / schema を共有する。
 
-`command_registry()` の CommandDescriptor は name / read_only / request_schema / response_schema を持つ。schema refs は同ファイルの `$defs` を指す。request_schema は operation tag を除いた payload、response_schema は status / kind を除いた successful value。MCP-001 / FFI-001 は同じ registry と execute / execute_json を使用できる。registry の30操作は project.create / import / export / info / collect、asset.relink、render.frame / sequence / submit、job.get / list / cancel / prune、edit.plan / apply / undo、history.list、scene.query、property.sample、capabilities.get、template.define / instantiate / set_input / set_duration と後述の NLE-001 の6操作。project.create / import / asset.relink / edit.apply / undo、template の4操作、NLE-001 の6操作が mutating。他は project に対し read-only（render.sequence と project.collect は output directory に成果物を作る）。project.collect の read_only は元プロジェクトを変更しないことを表し、複製と hash 検証済み素材を新しいフォルダに保存する。
+`command_registry()` の CommandDescriptor は name / read_only / request_schema / response_schema を持つ。schema refs は同ファイルの `$defs` を指す。request_schema は operation tag を除いた payload、response_schema は status / kind を除いた successful value。MCP-001 / FFI-001 は同じ registry と execute / execute_json を使用できる。registry の36操作は project.create / import / export / info / collect、asset.relink、render.frame / sequence / export / submit、job.get / list / cancel / prune、edit.plan / apply / undo、history.list、scene.query、property.sample、capabilities.get、template.define / instantiate / set_input / set_duration / preview / migration_plan と後述の NLE-001 の6操作、NLE-002 の sequence.query、INSPECT-001 の2操作。project.create / import / asset.relink / edit.apply / undo、template の4操作、NLE-001 の6操作が mutating。他は project に対し read-only（render.sequence と project.collect は output directory に成果物を作る）。project.collect の read_only は元プロジェクトを変更しないことを表し、複製と hash 検証済み素材を新しいフォルダに保存する。
 
 request envelope・既知 payload は未知 field と重複 field を拒否する。schema に任意 shell、外部 URL fetch、raw FFmpeg args の実行 field は設けない。project / font / output path と assets 内の locator の URI scheme は filesystem access の前に `INVALID_REQUEST` とする。Windows drive path は local path として許す。素材の name / text や未知 Project 内容は不活性なデータであり、命令として実行しない。Project の未知 field 保持と、API envelope の厳格な decode は別の契約である。
 
@@ -176,6 +176,25 @@ request envelope・既知 payload は未知 field と重複 field を拒否す�
 
 受け入れ条件、CPU 検証と未確認範囲は [API-001 の検証](../testing/api-001.md) を参照する。
 
+## M3 INSPECT-001 の共有 Query
+
+| operation / result kind | CLI / MCP | request / response |
+|---|---|---|
+| `node.explain` / `node_explanation` | `node explain` / `node.explain` | project、root composition、key `{instance_path,node}`、time、任意 fonts / mattes → revision、local_time / opacity、assessment、reasons、dependencies、render_diagnostics |
+| `render.explain` / `render_explanation` | `render explain` / `render.explain` | 既存 RenderInput、time、任意 mattes → revision、target、time、plan または null、diagnostics |
+
+両操作を read_only registry に追加した。FFI の `kronello_call` も同じ Request を専用 worker で実行する。CLI の `--backend gpu|cpu-reference` と MCP の backend 選択は render plan の予定経路を指定し、GPU を生成しない。注入 backend は `unknown`。Query 成功は実行成功を表さない。Project / fonts の locator、未知・重複 field は既存 policy で検証する。
+
+reasons の code は拡張可能な `VisibilityCode` enum。category は `opacity / active_range / parent / mask / asset / font / unsupported / evaluation`、impact は `hides / blocks / information`。subject は責任を持つ `{instance_path,node}`。details は原因の数値・range・resource 参照、error は必要時だけ元の型付き ServiceError。message を分岐に使わない。assessment は `hidden / blocked / potentially_visible / indeterminate`、`pixel_visibility_observed:false`。potentially_visible は画素が見えるという保証ではない。
+
+code は `DISABLED`（node の `enabled:false`）、`ANCESTOR_DISABLED`（無効な containment 祖先・CompositionInstance）、`OPACITY_ZERO`、`PAINT_ALPHA_ZERO`、`OUTSIDE_ACTIVE_RANGE`、`ANCESTOR_OPACITY_ZERO`、`ANCESTOR_OUTSIDE_ACTIVE_RANGE`、`TRANSFORM_COLLAPSED`、`MATTE_ONLY`、`MASK_ZERO_OPACITY`、`MASK_ZERO_COVERAGE`、`MASK_ZERO_LUMINANCE`、`MASK_INACTIVE`、`MASK_COVERAGE_UNRESOLVED`、`NO_DRAWABLE_CONTENT`、`ASSET_MISSING`、`FONT_MISSING`、`ASSET_HASH_MISMATCH`、`UNSUPPORTED_FEATURE`、`UNSUPPORTED_SCHEMA`、`GLYPH_MISSING`、`INVALID_REQUEST`、`ASSET_IO_ERROR`、`EVALUATION_FAILED`。最後の code は error 内の `EVALUATION_ERROR / EXPRESSION_BUDGET_EXCEEDED / PROPERTY_DEPENDENCY_CYCLE` 等を保持する。
+
+containment の opacity / active_range は祖先の原因として追跡し、transform parent の opacity / active_range は継承しない。inactive ancestor の下の別 instance scope は TimeMap を実行せず local_time を null とする。dependencies は containment / transform / matte の node 参照、content / font / curve / expression の resource 参照、Property / layout の静的 closure 辺。Property key は kind `node / composition / layout` で、layout は instance_path / text / consumer を持つ。Composition 全体の失敗は render_diagnostics に分け、別 node の欠落を対象 node の原因へ読み替えない。
+
+mattes は既存 `MatteBinding {source:SceneKey,matte:SceneKey,kind:"alpha"|"luminance",visible:bool}` の transient 入力。文書には保存しない。未測定の matte coverage は `MASK_COVERAGE_UNRESOLVED`。通常の render.frame に Query の matte 入力を暗黙に適用しない。
+
+plan は profile、backend、`executed:false`、tile ごとの requested / execution、stages（code / inputs / node / execution / image）、面数・メモリの `_estimate`、方向別 transfers（bytes_estimate / operations_estimate）、processing notices、実 compilation_cache counters を持つ。null の推定値は未推定であり0ではない。cache_scope は `isolated_query_compilation`、`raster_cache_observed:false`。renderer の cache / LRU / counters、作品の revision を変更しない。timing / runtime warm cache / GPU 可用性は測定しない。詳細は [ADR-0060](../adr/0060-structured-read-only-inspection.md)、[INSPECT-001 検証](../testing/inspect-001.md)。
+
 ## 読み取り API（実装済み範囲は上記参照）
 
 | API | 内容 |
@@ -184,14 +203,15 @@ request envelope・既知 payload は未知 field と重複 field を拒否す�
 | `scene.query` | API-001: Composition tree と任意の InstancePath 展開。範囲・タグ検索とページングは提案 |
 | `property.schema` | 型、単位、アニメーション可否、参照可能段階 |
 | `property.sample` | API-001: runtime key と有理数時刻列を指定し、評価済みの型付き値・単位を返す。source / modifier 中間結果の説明は提案 |
-| `scene.explain` | 親変換、マスク、opacity、時刻範囲、欠落資産などを診断 |
-| `render.explain` | 使用経路、CPU / GPU 転送、中間メモリ、キャッシュ再利用を報告 |
+| `node.explain` | INSPECT-001: instance / time の非表示原因、親・Property / layout / resource の依存を構造化診断 |
+| `render.explain` | INSPECT-001: Composition / Sequence の実行前経路、転送・中間メモリの推定、隔離 compile cache counters |
 | `preview.render` | フレーム・短区間・コンタクトシートの成果物を生成 |
 | `project.validate` | 構造・文字・資産・機能・性能予算の診断を返す |
 | `history.list` | イベント（適用されたコマンド）を revision 順に返す。session、変更したキー、取り消し状態を含む |
 | `job.get` / `job.list` | JOB-001: 状態・進捗・成果物・型付きエラー。作品 target は不要 |
 
 ## 変更 API
+
 
 以下の直接操作名は提案。SERVICE-001 の実装は `edit.plan` / `edit.apply` 内の型付き `EditCommand` を使う。TEMPLATE-001 の実装済みの4操作は後述の「TEMPLATE-001 の Command」を参照し、`EditCommand::Template` としても利用できる。
 
@@ -239,7 +259,7 @@ JOB-001 で `render.submit` / `job.get` / `job.list` / `job.cancel` / `job.prune
 
 output の既定は `{format:"image_sequence"}`。MOV は `{format:"pro_res_mov",background:[r,g,b],clips:[{asset,stream_index,placement,source_in,gain}]}`。clips の gain は非負の線形振幅倍率、clipping は Reject。`render.output_directory` は画像連番では新規 directory、MOV では新規 .mov file の path とする。MOV は同梱 LGPL runtime の ProRes + PCM24 のみで、暗黙の codec / CPU fallback はない。
 
-`render.submit.render.input` は同期 `render.sequence.input` と同じ `RenderTarget`（Composition / Sequence）と legacy `composition` を受け取り、どちらか一つだけを指定する。同じ `freeze_render_input` が Sequence、配置、資産、意味版、revision を owned snapshot に固定する。worker は固定入力から描画し、元の `.kronello` を開かない。Sequence target の MOV もこの映像を使うが、音声は `output.clips` の明示配置だけを使い、空なら silence とする。Sequence の audio track を自動で mux する処理は ADR-0051 の範囲外である。
+`render.submit.render.input` は同期 `render.sequence.input` と同じ `RenderTarget`（Composition / Sequence）と legacy `composition` を受け取り、どちらか一つだけを指定する。同じ `freeze_render_input` が Sequence、配置、資産、意味版、revision を owned snapshot に固定する。worker は固定入力から描画し、元の `.kronello` を開かない。Sequence target の MOV もこの映像を使う。AUDIO-003 の version 2 / document mode は同じ固定 snapshot から audio tracks と再帰 Composition 音声を mux する。省略時の version 1 / explicit は従来どおり `output.clips` のみ（空なら silence）。
 
 CLI は tagged stdin または `kronello render submit` / `kronello job get|list|cancel|prune` を使う。worker の入口は `kronello worker --job <id>` / `kronello-mcp worker --job <id>` で、同じ service の `worker_entry` を呼ぶ。MCP tools は同名で自動公開し、MCP が EOF で終了しても独立した同じ binary の worker が継続する。job.cancel は永続要求を frame 境界で確認する操作で、JSON-RPC notifications/cancelled の transport キャンセルとは別である。
 
@@ -272,15 +292,15 @@ kronello render --project demo.kronello --profile hevc-4k \
 
 ## M2 MCP-001 の実装範囲
 
-`kronello-mcp` crate の同名 binary は、同期 stdio の薄い JSON-RPC 2.0 adapter。UTF-8 の一行一メッセージで要求・応答を交換し、stdout は protocol のみ、診断・使用法は stderr に出す。各入力の上限は改行を除き16 MiB。stdin の EOF で終了する。HTTP transport、resources、prompts、sampling、MCP task、進捗通知、実行中要求のキャンセルは未実装。`notifications/cancelled` 等の通知は応答も操作実行もしない。
+`kronello-mcp` crate の同名 binary は、同期 stdio の薄い JSON-RPC 2.0 adapter。UTF-8 の一行一メッセージで要求・応答を交換し、stdout は protocol のみ、診断・使用法は stderr に出す。各入力の上限は改行を除き16 MiB。stdin の EOF で終了する。HTTP transport、resources、prompts、進捗と request cancellation は後述の M3 MCP-002 で追加した。sampling / MCP tasks は未対応。MCP-001 時点の同期 stdio は同じ共有 registry を使う非同期 request dispatcher に拡張した。
 
-対応版は `2025-06-18` と `2025-11-25`。[MCP lifecycle](https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle) に沿って initialize → notifications/initialized → tools/list または tools/call の順に使う。[MCP の版交渉規定](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle#version-negotiation) に従い、対応版の initialize は要求と同じ `protocolVersion` を返し、対応外の文字列なら最新対応版 `2025-11-25` を返して初期化を継続する。クライアントが応答版に対応していなければ接続を切断する判断を行う。いずれも tools capability（listChanged: false）を返す。初期化前および完了通知前の tool 要求は `-32002`。ping は初期化前後とも可能。同一接続の再 initialize は拒否する。
+対応版は `2025-06-18` と `2025-11-25`。[MCP lifecycle](https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle) に沿って initialize → notifications/initialized → tools/list または tools/call の順に使う。[MCP の版交渉規定](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle#version-negotiation) に従い、対応版の initialize は要求と同じ `protocolVersion` を返し、対応外の文字列なら最新対応版 `2025-11-25` を返して初期化を継続する。クライアントが応答版に対応していなければ接続を切断する判断を行う。いずれも tools capability（listChanged: false）を返す。MCP-002 は resources / prompts の capability も広告する（後述）。初期化前および完了通知前の tool 要求は `-32002`。ping は初期化前後とも可能。同一接続の再 initialize は拒否する。
 
 `tools/list` は `kronello-service::command_registry()` の全操作を同名で公開する。固定の MCP 操作一覧は持たず、MEDIA-001 等で registry と service Request を拡張すれば同じ経路で公開される。request_schema / response_schema が指す公開 API 型から `api_json_schema()` を生成し、各 schema に必要な `$defs` の参照閉包を同梱する。外部 schema fetch は不要。inputSchema は operation を除いた service payload と同一。outputSchema は成功値の schema と公開 Response の error branch の union で、エラー結果も schema に適合する。`_meta.kronello` に元の schema refs と readOnlyProject を返す。read_only は作品に対する性質であり、render.sequence の成果物書き出しも含むため MCP の readOnlyHint に置き換えない。
 
 `tools/call` の name を operation tag に変換し、arguments の生 JSON を `Service::execute_json` に渡す。重複 field・未知 field の拒否、revision、idempotency、Undo、local path policy 等は service と共有する。成功の structuredContent は service result.value、失敗は `{ "status":"error", "error": ServiceError }` と isError: true。[対応2版の tools 契約](https://modelcontextprotocol.io/specification/2025-11-25/server/tools) に従い、両方で同じ structuredContent を serialize した TextContent も必ず返す。成功値への部分結果や代替値は加えない。未知 method / tool や不正な JSON-RPC envelope は protocol error、既知 tool の入力不正・実行失敗は tool error とする。
 
-作品を対象とする全操作は毎回 `project` を明示する（同期 render は `input.project`、render.submit は `render.input.project`）。省略は INVALID_REQUEST。接続は初期化状態だけを持ち、暗黙の current project / session、project.open tool、接続に跨る ProjectStore を持たない。`capabilities.get` は共有 API の空 payload `{}` のまま、対象作品を持たないグローバル discovery とする。編集 session_id は service payload に毎回明示する。
+作品を対象とする全操作は毎回 `project` を明示する（同期 render は `input.project`、render.submit は `render.input.project`）。省略は INVALID_REQUEST。接続は protocol の初期化状態・交渉版・active request control だけを持ち、暗黙の current project / session、project.open tool、接続に跨る ProjectStore を持たない。`capabilities.get` は共有 API の空 payload `{}` のまま、対象作品を持たないグローバル discovery とする。編集 session_id は service payload に毎回明示する。
 
 backend は CLI と同じ GPU 既定、`--backend gpu|cpu-reference` で明示選択する。GPU 不在時の暗黙 CPU fallback はない。同期 render.frame / render.sequence は既存 service 操作を公開する。JOB-001 が render.submit と job.*、接続寿命から独立した同じ binary の worker を追加した（[14 ジョブ](14-jobs.md)、[JOB-001 の検証](../testing/job-001.md)）。検証方法と境界は [MCP-001 の検証](../testing/mcp-001.md)。
 
@@ -299,6 +319,57 @@ cargo run -p kronello-mcp --locked -- --backend cpu-reference
 {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"project.info","arguments":{"project":"/private/tmp/demo.kronello"}}}
 ```
 
+## M3 MCP-002 の実装範囲
+
+詳細は [ADR-0064](../adr/0064-mcp-http-resources-and-request-control.md)、再現手順と実行記録は [MCP-002 の検証](../testing/mcp-002.md)。protocol 基準は固定した `2025-11-25`。`2025-06-18` と合わせて既存 initialize lifecycle を保持する。最新 `2026-07-28` は未対応で、その版の initialize は最新対応版 `2025-11-25` を返す。`server/discover` は `-32601` / `UNSUPPORTED_PROTOCOL_VERSION` と対応版一覧、対応外 HTTP version header は400を返す。
+
+### HTTP 接続と認証
+
+`kronello-mcp --http` は既定で `http://127.0.0.1:8765/mcp` を開く。`--bind IP:port` と `--auth-token-env NAME` は HTTP を選択し、非 loopback bind は明示 token がないと socket を開く前に失敗する。token は32 byte以上の可視 ASCII、全 method の `Authorization: Bearer ...` で照合する。loopback token は任意。資格情報を URL / CLI 引数 / protocol stdout に出さない。
+
+POST は `application/json` の単一 JSON-RPC message、Accept は `application/json,text/event-stream` の両方を必須とする。即時応答は JSON、service work の progress / response は POST SSE。notification は空 body の202。GET は405（独立 SSE stream なし）、DELETE は204で protocol session を閉じる。SSE replay、旧 HTTP+SSE、batch は未対応。
+
+initialize に `MCP-Session-Id` を返し、後続要求に必須とする。session 欠落400、未知 / 失効404。`MCP-Protocol-Version` は交渉版と一致させ、省略なら保存された交渉版を用いる。最大64 session、最終 HTTP request から30分の idle expiry。Ctrl-C は listener と request work を協調停止する。bind address と診断は stderr、HTTP stdout は空。
+
+Origin があれば全接続を403とし、browser allowlist / CORS は提供しない。loopback の Host は bind authority または同 port の localhost に制限する。非 loopback 運用の TLS terminator / network 制限は運用側が明示構成する。組込み TLS / OAuth / multi-user ACL はない。credential の保持者は共有 API を通して OS ユーザー権限の Project / asset / output を扱える。local token なしの endpoint は同じ host の信頼された client に限って使う。
+
+```sh
+cargo run -p kronello-mcp --locked -- --http --backend cpu-reference
+# 認証が必要な場合、外部で設定した KRONELLO_MCP_TOKEN を指定する
+cargo run -p kronello-mcp --locked -- --http --auth-token-env KRONELLO_MCP_TOKEN
+```
+
+### resource / prompt の schema と明示 Project
+
+| method / 対象 | 入力・結果 | 作品への作用 |
+|---|---|---|
+| `resources/list` | 空 params、global `kronello://schema/api-v1` 一つ | 作品探索なし |
+| `resources/read` schema | `{uri:"kronello://schema/api-v1"}` → `api_json_schema()` の JSON text / `application/schema+json` | Project 不要の global schema |
+| `resources/templates/list` | `/info` と `/snapshot` の二 template | Project 一覧や暗黙 target なし |
+| `resources/read` Project | `{uri:"kronello://project/{project}/info"}` または `/snapshot` → `ProjectInfo` / `ExportResult` の JSON text / `application/json` | project segment に UTF-8 local locator を一度だけ canonical percent encode。毎要求で明示 |
+| `prompts/list` | `inspect-project` 一つ、required argument `project:string` | 固定の template 一覧 |
+| `prompts/get` | `{name:"inspect-project",arguments:{project:"local.kronello"}}` → 固定 TextContent と別の EmbeddedResource | 指定 snapshot の読取りだけ。編集 / sampling を実行しない |
+
+list は非ページング、cursor は拒否する。typed params / prompt arguments の未知 field と全 JSON object の重複 member は拒否する。resource URI は既知 scheme / kind と canonical encoding を検査し、空 Project / 外部 URL / 任意 file fetch は拒否する。例えば `/absolute/demo.kronello` は `kronello://project/%2Fabsolute%2Fdemo.kronello/snapshot`。省略した Project を直前の要求から補わない。
+
+resource / prompt は共有 service の `with_read_only_inspection` を選択し、既存 `project.info` / `project.export` の同じ Request / Result 型で `ProjectStore::read_snapshot` を利用する。READ_ONLY / query_only、snapshot schema 検査、migration / checkpoint なし、作品内容・revision の書込みと writer / exclusive lock なし。SQLite reader lock と WAL / SHM sidecar 利用・作成はありうる。通常 CLI / tool の writable open/close、ForceSafe lock、sidecar cleanup 契約は維持する。
+
+素材・作品名・text / 字幕は instruction text に補間せず、別の resource の untrusted JSON data として返す。server は素材文字列を shell / FFmpeg / URL / model instruction として実行しない。返した data を model がどう解釈するかは client の責任で、prompt text に data 境界を明示する。
+
+### 要求の進捗と取り消し
+
+両 transport は同じ `Connection` dispatcher と共有 service registry / schema / typed results を利用する。最大3 service work を同時実行し、各 connection の outstanding work は最大32。active ID と active progress token の重複は `-32602`。integer / string ID は区別する。
+
+`_meta.progressToken` は string / integer。指定時だけ `notifications/progress` に同じ token を返し、受付0 / 処理完了1を通知する。`render.sequence` は共有 `ExecutionControl` と既存 renderer checkpoint で完了 frame 数 / total を通知する。中間通知は100 ms以上の間隔で間引き、通知値は厳密増加、最終値は保持する。完了・取消後の新しい通知はない。
+
+`notifications/cancelled.params.requestId` はその接続の in-flight 要求を照合する。未知 / 完了済み / initialize の取消は無応答。queued work は待機を解除して実行せず、service は dispatch 前、sequence は frame 境界と manifest 公開前に取り消しを確認し、部分出力を既存 OutputGuard で除去する。単一 frame / codec / transaction は途中で強制停止しない。取消後の response は抑制するが、先に送った response、commit 済み編集、最後の checkpoint 後の成果物、投入済み job は rollback しない。
+
+stdio EOF、HTTP DELETE / expiry、server shutdown は request work を協調停止する。HTTP POST stream の切断は cancellation とみなさない。どの接続終了・要求取消も `job.cancel` に変換しない。detached job は共有 ID で新接続から query / cancel する。
+
+### 採用しない capability
+
+tools (`listChanged:false`)、resources (`subscribe:false,listChanged:false`)、prompts (`listChanged:false`) のみを広告する。sampling、MCP tasks、elicitation、completion、resource subscription、list change notification は未対応で、client capability から有効化しない。該当 method は `-32601`、task を付けた tool call は `-32602`。共有 `render.submit` / `job.*` を MCP tasks と表示しない。将来採用する際も共有 service の権限・job 契約へ接続する。
+
 ## 安全性
 
 - 素材の文字列や字幕は命令ではなくデータ。
@@ -311,7 +382,19 @@ cargo run -p kronello-mcp --locked -- --backend cpu-reference
 
 `template.define` / `template.instantiate` / `template.set_input` / `template.set_duration` は同名の二語 CLI subcommand で呼ぶ。すべて `project`、`base_revision`、`session_id`、`idempotency_key` を持ち、成功時は `kind: edit` の Event を返す。定義・配置・入力・尺の payload と制約は [07 テンプレート](07-templates.md) を参照。これらも registry と公開 schema、revision・idempotency・Undo の共通経路を使う。
 
-## NLE-001 の Command と RenderTarget
+## Timeline の Command と RenderTarget
+
+### NLE-002 の追加 API
+
+`sequence.query`（CLI `sequence query`、MCP の同名 tool）は project / sequence を受け取り、revision、Sequence、各配置の track / `ClipKind`（video / image / audio / composition / generator）、clip 本体、effective video color tags / assumptions、unsupported_reason を返す。GUI は表示名から kind を推測しない。image の描画、subtitle / adjustment は本タスクの範囲外。query は GPU や decoder を初期化せず、一つの保存 revision を読む。
+
+既存 edit.plan / edit.apply の TimelineCommand に `clip_move {sequence, clip, delta, linked}`、`clip_link {sequence, clips}`、`ripple {sequence, tracks, pivot, delta, linked}`、`transition_set {sequence, transition}`、`transition_remove {sequence, outgoing, incoming}`、`clip_set_effects {sequence, clip, properties, effects}` を追加した。clip Property は既存 property_source_set の対象にもなる。新しい入口専用の編集状態はない。
+
+同じ Sequence の構造編集は `Structure(sequence_id, sequence_id)`、影響した全配置は `Structure(clip_id, track_id)` を記録する。別 Sequence / 無関係 Property の selective Undo を保持し、active inverse の競合規則も変えない。全 command 後の候補を検証するため、配置＋transition と transition 除去＋move は一つの plan にできる。linked=false の部分移動は LINKED_EDIT_REQUIRED、一端だけの transition 移動は TRANSITION_EDIT_CONFLICT。source / overlap / map / unknown execution の既存 typed errors を保持する。
+
+公開 project / API schema 1 に Clip.properties、Sequence.transitions、Generator version / Color、StreamMetadata.start_time、SemanticVersions.generators / video_input、FrameMetadata.input_path、SequenceQuery の transport 型を追加した。Rust generator と generated Swift が正本に同期する。契約は [ADR-0062](../adr/0062-video-generator-and-timeline-edits.md)、検証と host の残件は [NLE-002](../testing/nle-002.md)。
+
+### NLE-001 の既存 API
 
 六つの操作を service registry、CLI の二語 subcommand、MCP stdio に共通登録した。すべて `project`、`base_revision`、`session_id`、`idempotency_key` を持ち、成功時は `kind: edit` の Event を返す。`EditCommand::Timeline` でも同じ plan / apply を呼べる。
 
@@ -348,3 +431,69 @@ GPU 初期化や作品 revision の更新を行わず、renderer と同じ固定
 任意の依存宣言・式を受け付ける公開 command は今回追加しない。
 max_lines の `TEMPLATE_OVERFLOW` と未対応エフェクトの型付き失敗は維持する。
 [ADR-0057](../adr/0057-layout-bounds-stages.md)、[LAYOUT-001 検証](../testing/layout-001.md) を参照。
+
+
+### TEMPLATE-002 の比較・移行 Query
+
+共有 registry / wire / Rust 生成 schema に次の read_only query を追加した。
+CLI は template preview / template migration_plan、MCP は同名 tool を registry から公開する。
+
+| operation | payload | result |
+|---|---|---|
+| template.preview | {project,instance,time,fonts,region?} | TemplatePreviewResult |
+| template.migration_plan | {project,base_revision,instance,definition,variant?,inputs?,time,fonts,region?} | TemplateMigrationPlan |
+
+preview の instance は版固定した完全な TemplateInstance。time は [0,duration)。
+result は revision、instance、選択 variant の definition（入力 schema / bindings / duration_policy / constraints）、
+design_extent、local_time、resolved_inputs、media_slots、nodes、frame、diagnostic。
+nodes は {key,evaluated}、evaluated は scene.query と同じ Property / text / effects / world_transform /
+layout_bounds / bounds。bounds の全段階は選択 variant の root Composition の design_px。
+region 省略は backend を初期化しない意味的 query、指定時は選択 backend の既存 FrameResult を返す。
+CLI の CPU は --backend cpu-reference で明示する。暗黙 fallback はない。
+overflow / font / media / backend の失敗は diagnostic として返し、frame は null。
+成功 envelope に diagnostic があることを成功した描画と表示しない。
+
+migration_plan の instance は既存 ID、definition は次の immutable edition ID。
+variant 省略 / null は base、inputs 省略は既存上書きを完全保持。
+result は {plan,changes,before,after}、changes は {field,before,after} の JSON pointer による差分。
+plan は既存 EditPlan。before / after は一つの基準 revision と同じ font locator で比較した preview。
+新版の公開・query・計画は既存 instance を更新しない。
+
+適用は edit.apply へ plan.commands / plan.plan_hash、base_revision、session_id、
+idempotency_key を渡す。EditCommand の template branch に
+migrate: {instance,definition,variant,inputs} を追加した。
+これが指定した instance だけを変更し、既存の hash 照合・revision・receipt・Undo を使う。
+import は pin を変更できない。
+新しい error は INVALID_DATA_TABLE、TEMPLATE_VARIANT_NOT_FOUND、TEMPLATE_MIGRATION_INCOMPATIBLE。
+MediaSlot の final compiler は既存 UNSUPPORTED_FEATURE、欠落は ASSET_MISSING。
+すべての新 font path と project path に既存 local locator policy を適用する。
+具体的な保存型・制約と MediaSlot の後続境界は
+[07 テンプレート](07-templates.md)、[ADR-0059](../adr/0059-template-duration-variants-and-migration.md)、
+[検証記録](../testing/template-002.md) を参照。
+
+## AUDIO-003 の共有 API
+
+[ADR-0063](../adr/0063-document-audio-and-clip-volume.md) と
+[AUDIO-003 の検証](../testing/audio-003.md) に従う。
+
+- `render.export`（CLI `render export`、MCP 同名 tool）は `RenderSubmitRequest` を共有し、同期の
+  ProRes / PCM24 MOV と `ResultData::Movie(AvExportReport)` を返す。image_sequence は
+  `render.sequence` を使う。project は読み取り、MOV を no-clobber で作る。
+- `output: {format: pro_res_mov, profile_version: 2, audio: document, clips: [], background: [0,0,0]}`
+  は Sequence / Composition 文書音声。audio は document / explicit / silence。省略は
+  version 1 / explicit、空の explicit clips は従来どおり無音。document / silence と非空 clips は拒否する。
+- `Clip.volume` は optional `kronello.audio.volume` Property。共有 edit command は
+  `{"timeline":{"clip_set_volume":{"sequence":"UUID","clip":"UUID","volume":Property}}}`。
+  null で unity に戻す。PropertySource は Scalar Constant / Curve、非負有限 Gain。
+  edit.plan / apply / undo の revision / idempotency / conflict 規則は維持する。
+- SceneNode の `kind: {kind: media, value: {asset, stream_index, source_in, time_map, volume}}` を追加した。
+  volume は同じ node の properties にある volume PropertyId。Media 音声だけに対応し、映像描画は
+  COMP-002 まで `UNSUPPORTED_FEATURE`。既存 scene.query / property.sample にも同じ Property を公開する。
+- capabilities.features に document_audio / clip_volume / media_audio を追加した。
+  registry は33操作。API / Project schema と GeneratedAPI.swift を共有 generator から再生成する。
+  `AvExportReport` に audio_source / audio_profile_version を追加し、省略した旧 report は explicit / 1。
+
+型付き失敗は `UNSUPPORTED_FEATURE`（profile / retime / effects / Generator / Media video）、
+`INVALID_AUDIO_INPUT`（Gain / Curve / audio compiler）、`INVALID_MEDIA_INPUT`（mode と clips の併用）、
+既存 `SOURCE_MISSING` / `ASSET_MISSING` / `ASSET_HASH_MISMATCH` / `AUDIO_SOURCE_TOO_SHORT` /
+`AUDIO_CLIPPING` / `AUDIO_OVERFLOW` / `TIME_ERROR`。検証の成功を GPU / hardware 稼働保証へ拡張しない。

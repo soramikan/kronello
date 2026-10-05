@@ -5,7 +5,7 @@
   "status": "implementation_started",
   "description": "設計と実装の計画・進捗。このファイルがバックログの正本であり、GitHub等へ登録したIssueではない。",
   "specification": "docs/architecture/",
-  "task_count": 74,
+  "task_count": 76,
   "items": [
     {
       "id": "ARC-001",
@@ -579,7 +579,7 @@
       "priority": "P1",
       "area": "template",
       "title": "長さ・縦横比variant・data入力・版移行",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "TEMPLATE-001",
         "LAYOUT-001"
@@ -649,7 +649,7 @@
       "priority": "P1",
       "area": "inspection",
       "title": "非表示原因・依存・レンダー経路のexplain",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "API-001",
         "LAYOUT-001",
@@ -753,7 +753,7 @@
       "priority": "P2",
       "area": "vector",
       "title": "グラデーションの拡張",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "VEC-003"
       ],
@@ -788,7 +788,7 @@
       "priority": "P1",
       "area": "timeline",
       "title": "動画Asset/Generator ClipとTimeline編集の拡張",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "NLE-001",
         "MEDIA-001",
@@ -807,7 +807,7 @@
       "priority": "P1",
       "area": "audio",
       "title": "Sequence音声trackのA/V muxとclip音量",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "NLE-001",
         "AUDIO-000",
@@ -882,7 +882,7 @@
       "priority": "P1",
       "area": "mcp",
       "title": "MCP HTTP・resources/prompts・進捗とキャンセル",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "MCP-001",
         "JOB-001"
@@ -919,7 +919,7 @@
       "priority": "P2",
       "area": "effects",
       "title": "非一様affine下のblur/shadow",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "FX-001"
       ],
@@ -969,7 +969,7 @@
       "priority": "P1",
       "area": "release",
       "title": "同梱FFmpegを含む配布packageの再配置・署名検証",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "MEDIA-001",
         "AUDIO-000",
@@ -1301,6 +1301,36 @@
       "acceptance_criteria": [
         "Composition の Media ノードを素材参照・source time・色契約つきで描画し、CPU 参照と明示 GPU 実行で検証する",
         "TEMPLATE-002 の MediaSlot 入力を最終レンダーへ接続し、素材不足・hash 不一致は型付き失敗にする"
+      ]
+    },
+    {
+      "id": "MCP-003",
+      "milestone": "M4",
+      "priority": "P2",
+      "area": "api",
+      "title": "MCP 2026-07-28 版（server/discover・要求ごとの版指定）への対応",
+      "status": "planned",
+      "dependencies": [
+        "MCP-002"
+      ],
+      "acceptance_criteria": [
+        "2026-07-28 版の server/discover と要求ごとの版指定を、2025-11-25 版の initialize と併存させて実装し、同じ Command/Query registry・schema・型付き結果へ到達することを外部 client SDK で検証する",
+        "未対応の版や機能を対応済みとして広告しない"
+      ]
+    },
+    {
+      "id": "FFI-002",
+      "milestone": "M4",
+      "priority": "P2",
+      "area": "gui",
+      "title": "GUI セッション中の安全モード排他の保持",
+      "status": "planned",
+      "dependencies": [
+        "GUI-001"
+      ],
+      "acceptance_criteria": [
+        "安全モードで開いたプロジェクトについて、GUI を開いている間は他プロセス（CLI / MCP）が PROJECT_LOCKED になるよう、FFI / service の store の寿命を GUI セッションに合わせる",
+        "GUI を閉じたとき・異常終了したときに lock が解放され、再 open できることを実プロセスで検証する"
       ]
     }
   ]

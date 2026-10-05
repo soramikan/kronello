@@ -84,6 +84,7 @@ pub struct CapabilitiesResult {
 macro_rules! commands {
     ($emit:ident) => {
         $emit! {
+            ("sequence.query", true, SequenceQueryRequest, SequenceQueryResult),
             ("sequence.create", false, SequenceCreateRequest, kronello_store::Event),
             ("clip.place", false, ClipPlaceRequest, kronello_store::Event),
             ("clip.trim", false, ClipTrimRequest, kronello_store::Event),
@@ -91,6 +92,7 @@ macro_rules! commands {
             ("instance.retime", false, InstanceRetimeRequest, kronello_store::Event),
             ("template_instance.retime", false, TemplateInstanceRetimeRequest, kronello_store::Event),
 
+            ("render.export", true, RenderSubmitRequest, kronello_media::AvExportReport),
             ("render.submit", true, RenderSubmitRequest, kronello_jobs::JobRecord),
             ("job.get", true, JobRequest, kronello_jobs::JobRecord),
             ("job.list", true, JobListRequest, JobListResult),
@@ -109,8 +111,12 @@ macro_rules! commands {
             ("edit.undo", false, UndoRequest, kronello_store::Event),
             ("history.list", true, HistoryRequest, HistoryResult),
             ("scene.query", true, SceneQueryRequest, SceneQueryResult),
+            ("node.explain", true, NodeExplainRequest, NodeExplainResult),
+            ("render.explain", true, RenderExplainRequest, RenderExplainResult),
             ("property.sample", true, PropertySampleRequest, PropertySampleResult),
             ("capabilities.get", true, CapabilitiesRequest, CapabilitiesResult),
+            ("template.preview", true, TemplatePreviewRequest, TemplatePreviewResult),
+            ("template.migration_plan", true, TemplateMigrationPlanRequest, TemplateMigrationPlan),
             ("template.define", false, TemplateDefineRequest, kronello_store::Event),
             ("template.instantiate", false, TemplateInstantiateRequest, kronello_store::Event),
             ("template.set_input", false, TemplateSetInputRequest, kronello_store::Event),
@@ -142,6 +148,15 @@ impl CapabilitiesResult {
             features: [
                 "sequence",
                 "composition_clip",
+                "video_clip",
+                "generator_clip",
+                "clip_effects",
+                "crossfade",
+                "ripple",
+                "linked_move",
+                "document_audio",
+                "clip_volume",
+                "media_audio",
                 "composition",
                 "shape",
                 "text",
@@ -171,7 +186,7 @@ impl CapabilitiesResult {
 #[schemars(untagged)]
 #[allow(dead_code)]
 enum ApiEnvelope {
-    Request(Request),
+    Request(Box<Request>),
     Response(Response),
 }
 

@@ -4,7 +4,7 @@
 
 - schema_version: 0.5
 - 更新日: 2026-10-04
-- タスク数: 74
+- タスク数: 76
 
 ## 集計
 
@@ -13,8 +13,8 @@
 | M0 | 0 | 0 | 6 | 0 | 6 |
 | M1 | 0 | 0 | 14 | 0 | 14 |
 | M2 | 0 | 1 | 10 | 0 | 11 |
-| M3 | 19 | 3 | 3 | 0 | 25 |
-| M4 | 9 | 0 | 0 | 0 | 9 |
+| M3 | 13 | 6 | 6 | 0 | 25 |
+| M4 | 11 | 0 | 0 | 0 | 11 |
 | M5 | 5 | 0 | 0 | 0 | 5 |
 | M6 | 4 | 0 | 0 | 0 | 4 |
 
@@ -336,7 +336,7 @@
 
 ### TEMPLATE-002 長さ・縦横比variant・data入力・版移行
 
-- 優先度: P1 / 領域: template / 状態: in_progress
+- 優先度: P1 / 領域: template / 状態: done
 - 依存: TEMPLATE-001, LAYOUT-001
 - 受け入れ条件:
   - 短尺拒否/hold/loop/stretchを明示する
@@ -374,7 +374,7 @@
 
 ### INSPECT-001 非表示原因・依存・レンダー経路のexplain
 
-- 優先度: P1 / 領域: inspection / 状態: in_progress
+- 優先度: P1 / 領域: inspection / 状態: done
 - 依存: API-001, LAYOUT-001, CACHE-001
 - 受け入れ条件:
   - opacity/active range/parent/mask/asset不足を要因別に返す
@@ -427,7 +427,7 @@
 
 ### VEC-004 グラデーションの拡張
 
-- 優先度: P2 / 領域: vector / 状態: planned
+- 優先度: P2 / 領域: vector / 状態: in_progress
 - 依存: VEC-003
 - 受け入れ条件:
   - repeat/reflectのspreadを実装する
@@ -448,7 +448,7 @@
 
 ### NLE-002 動画Asset/Generator ClipとTimeline編集の拡張
 
-- 優先度: P1 / 領域: timeline / 状態: planned
+- 優先度: P1 / 領域: timeline / 状態: done
 - 依存: NLE-001, MEDIA-001, FX-001
 - 受け入れ条件:
   - 動画Asset Clipを明示stream・source_in・TimeMapで描画し、CFR/VFR/B-frameの正確なseekと配置境界、異なる配置の独立性を検証する
@@ -458,7 +458,7 @@
 
 ### AUDIO-003 Sequence音声trackのA/V muxとclip音量
 
-- 優先度: P1 / 領域: audio / 状態: planned
+- 優先度: P1 / 領域: audio / 状態: in_progress
 - 依存: NLE-001, AUDIO-000, JOB-001
 - 受け入れ条件:
   - Sequenceのaudio trackを同じ固定RenderSnapshotから音声配置へcompileし、映像と音声を同期exportおよびrender.submitのProRes/PCM24 MOVへmuxする
@@ -498,7 +498,7 @@
 
 ### MCP-002 MCP HTTP・resources/prompts・進捗とキャンセル
 
-- 優先度: P1 / 領域: mcp / 状態: planned
+- 優先度: P1 / 領域: mcp / 状態: in_progress
 - 依存: MCP-001, JOB-001
 - 受け入れ条件:
   - HTTP transportの接続・認証・版交渉・終了の契約を定義し、stdioと同じCommand/Query registry・schema・型付き結果へ到達することを実クライアントで検証する
@@ -519,7 +519,7 @@
 
 ### FX-002 非一様affine下のblur/shadow
 
-- 優先度: P2 / 領域: effects / 状態: planned
+- 優先度: P2 / 領域: effects / 状態: in_progress
 - 依存: FX-001
 - 受け入れ条件:
   - 非一様scale/shear下の正sigmaのGaussian blur/drop shadowの意味を定義して版を管理し、現行のUNSUPPORTED_FEATUREを対応範囲内で解消する
@@ -546,7 +546,7 @@
 
 ### RELEASE-001 同梱FFmpegを含む配布packageの再配置・署名検証
 
-- 優先度: P1 / 領域: release / 状態: planned
+- 優先度: P1 / 領域: release / 状態: in_progress
 - 依存: MEDIA-001, AUDIO-000, CLI-001, MCP-001
 - 受け入れ条件:
   - macOSの配布packageに同梱するFFmpeg共有library・SVT-AV1・dav1d・license原文・PATENTS・source manifestを固定し、GPL/nonfree・開発用system libraryを含めないことを検証する
@@ -641,6 +641,22 @@
 - 受け入れ条件:
   - Composition の Media ノードを素材参照・source time・色契約つきで描画し、CPU 参照と明示 GPU 実行で検証する
   - TEMPLATE-002 の MediaSlot 入力を最終レンダーへ接続し、素材不足・hash 不一致は型付き失敗にする
+
+### MCP-003 MCP 2026-07-28 版（server/discover・要求ごとの版指定）への対応
+
+- 優先度: P2 / 領域: api / 状態: planned
+- 依存: MCP-002
+- 受け入れ条件:
+  - 2026-07-28 版の server/discover と要求ごとの版指定を、2025-11-25 版の initialize と併存させて実装し、同じ Command/Query registry・schema・型付き結果へ到達することを外部 client SDK で検証する
+  - 未対応の版や機能を対応済みとして広告しない
+
+### FFI-002 GUI セッション中の安全モード排他の保持
+
+- 優先度: P2 / 領域: gui / 状態: planned
+- 依存: GUI-001
+- 受け入れ条件:
+  - 安全モードで開いたプロジェクトについて、GUI を開いている間は他プロセス（CLI / MCP）が PROJECT_LOCKED になるよう、FFI / service の store の寿命を GUI セッションに合わせる
+  - GUI を閉じたとき・異常終了したときに lock が解放され、再 open できることを実プロセスで検証する
 
 
 ## M5

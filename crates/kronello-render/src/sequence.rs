@@ -15,10 +15,43 @@ impl From<CompositionId> for RenderTarget {
         Self::Composition { composition }
     }
 }
-pub(crate) fn lower_sequence(
-    project: &Project,
-    id: SequenceId,
-) -> Result<Composition, RenderError> {
+pub(crate) fn solid_content(
+    color: Color,
+    extent: DesignExtent,
+) -> Result<crate::SceneContent, RenderError> {
+    use std::collections::BTreeMap;
+    let ids = [1, 2, 3].map(|id| PropertyId::from_uuid(uuid::Uuid::from_u128(id)));
+    let definition = Shape {
+        id: ContentId::from_uuid(uuid::Uuid::nil()),
+        geometry: ShapeGeometry::Rectangle {
+            size: ids[0],
+            corner_radius: ids[1],
+        },
+        fill: Some(Fill {
+            color: ids[2],
+            rule: FillRule::Nonzero,
+            gradient: None,
+        }),
+        stroke: None,
+    };
+    let values = BTreeMap::from([
+        (
+            ids[0],
+            Value::Vec2([
+                FiniteF64::new(extent.width()).expect("extent"),
+                FiniteF64::new(extent.height()).expect("extent"),
+            ]),
+        ),
+        (ids[1], Value::Scalar(FiniteF64::new(0.0).expect("zero"))),
+        (ids[2], Value::Color(color)),
+    ]);
+    Ok(crate::SceneContent::Shape {
+        resolved: definition.resolve(&values)?,
+        definition,
+        values,
+    })
+}
+pub fn lower_sequence(project: &Project, id: SequenceId) -> Result<Composition, RenderError> {
     if project
         .sequences
         .iter()
@@ -35,20 +68,37 @@ pub(crate) fn lower_sequence(
         })
         .ok_or_else(|| RenderError::Sequence(SequenceError::MissingSource(id.to_string())))?;
     sequence.validate(project)?;
+    if sequence.transitions.iter().any(|t| t.version != 1) {
+        return Err(RenderError::UnsupportedFeature("transition version".into()));
+    }
     let mut nodes = vec![];
     let mut end = Time::ZERO;
     for track in &sequence.tracks {
         if track.kind == TrackKind::Audio {
             continue;
         }
-        for clip in &track.clips {
-            let SourceRef::Composition { composition } = clip.source_ref else {
+        let mut clips: Vec<_> = track.clips.iter().collect();
+        clips.sort_by_key(|c| c.timeline_range.start());
+        for clip in clips {
+            if let SourceRef::Asset { asset, .. } = clip.source_ref
+                && let Some(DocumentObject::Known(a)) = project
+                    .assets
+                    .iter()
+                    .find(|a| matches!(a, DocumentObject::Known(a) if a.id == asset))
+                && a.kind != AssetKind::Video
+            {
                 return Err(RenderError::UnsupportedFeature(
-                    "asset/generator sequence video: INTEGRATION-001".into(),
+                    "sequence image source rendering".into(),
                 ));
-            };
-            if !clip.effects.is_empty() {
-                return Err(RenderError::UnsupportedFeature("clip effects".into()));
+            }
+            if let SourceRef::Generator {
+                generator, version, ..
+            } = &clip.source_ref
+                && (generator != SOLID_GENERATOR_ID || *version != GENERATOR_VERSION)
+            {
+                return Err(RenderError::UnsupportedFeature(
+                    "generator id/version".into(),
+                ));
             }
             let local_time_map = match &clip.time_map {
                 TimeMap::Linear(m) => TimeMap::linear(
@@ -75,19 +125,23 @@ pub(crate) fn lower_sequence(
                 name: None,
                 enabled: true,
                 id: NodeId::from_uuid(clip.id.as_uuid()),
-                kind: NodeKind::CompositionInstance(CompositionInstance {
-                    id: CompositionInstanceId::from_uuid(clip.id.as_uuid()),
-                    definition_ref: composition,
-                    input_bindings: Default::default(),
-                    local_time_map,
-                    seed: 0,
-                }),
+                kind: if let SourceRef::Composition { composition } = clip.source_ref {
+                    NodeKind::CompositionInstance(CompositionInstance {
+                        id: CompositionInstanceId::from_uuid(clip.id.as_uuid()),
+                        definition_ref: composition,
+                        input_bindings: Default::default(),
+                        local_time_map,
+                        seed: 0,
+                    })
+                } else {
+                    NodeKind::Null
+                },
                 containment_parent: None,
                 transform_parent: None,
                 child_order: vec![],
                 active_range: clip.timeline_range,
-                properties: vec![],
-                effects: vec![],
+                properties: clip.properties.clone(),
+                effects: clip.effects.clone(),
             });
         }
     }

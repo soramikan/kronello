@@ -6,7 +6,7 @@ use kronello_model::{Color, ColorSpace, ResolvedGeometry, ResolvedText, Value};
 use kronello_text::{FontData, LayoutResult};
 use kronello_time::Time;
 use kronello_vector::{FlattenRequest, FlattenedPath};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
@@ -50,7 +50,10 @@ impl CacheConfig {
         }
     }
 }
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(deny_unknown_fields)]
 pub struct CacheStats {
     pub hits: u64,
     pub misses: u64,
@@ -60,7 +63,10 @@ pub struct CacheStats {
     /// Retained payload weight, excluding allocator overhead. Values use JSON byte size.
     pub bytes: usize,
 }
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(deny_unknown_fields)]
 pub struct RenderCacheStats {
     pub values: CacheStats,
     pub layout: CacheStats,
@@ -303,6 +309,20 @@ impl RasterCacheKey {
         let mut keys: Vec<Option<Self>> = vec![];
         for node in dag.nodes() {
             let value = match node {
+                crate::DagNode::VideoDraw { .. } => {
+                    return Err(RenderError::UnsupportedFeature(
+                        "unresolved video input".into(),
+                    ));
+                }
+                crate::DagNode::RasterInput { pixels } => Some(Self(key(
+                    "video-raster",
+                    (
+                        pixels,
+                        dag.execution_region(),
+                        dag.working_space(),
+                        backend_namespace,
+                    ),
+                )?)),
                 crate::DagNode::Geometry { .. } | crate::DagNode::TextLayout { .. } => None,
                 crate::DagNode::CoverageDraw { path, .. } => Some(Self::new(
                     path,

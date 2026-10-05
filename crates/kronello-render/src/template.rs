@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 pub(crate) struct TemplateRuntime {
     pub inputs: BTreeMap<RuntimePropertyKey, Value>,
     pub texts: BTreeMap<NodeKey, String>,
+    pub media_slots: BTreeMap<NodeKey, AssetId>,
     pub dependencies: DependencyDeclarations,
     pub layouts: BTreeMap<NodeKey, LayoutResult>,
     bands: Vec<(InstancePath, TemplateBandBinding)>,
@@ -84,11 +85,13 @@ impl TemplateRuntime {
                     }) else {
                         continue;
                     };
-                    let d = kronello_template::definition(project, i.definition_ref)?;
-                    let values = kronello_template::resolved_inputs(d, i)?;
-                    for (name, input) in &d.public_inputs {
-                        let value = values[name].clone();
-                        match input.target {
+                    let edition = kronello_template::definition(project, i.definition_ref)?;
+                    let selected =
+                        kronello_template::selected_definition(edition, i.variant.as_deref())?;
+                    let d = &selected;
+                    let values = kronello_template::resolved_inputs(edition, i)?;
+                    for (target, value) in kronello_template::input_bindings(d, &values)? {
+                        match target {
                             TemplateInputTarget::Property { node, property } => {
                                 runtime.inputs.insert(key(&child, node, property), value);
                             }
@@ -103,6 +106,22 @@ impl TemplateRuntime {
                                     },
                                     value,
                                 );
+                            }
+                            TemplateInputTarget::MediaSlot { node } => {
+                                kronello_template::validate_asset(project, &value)?;
+                                let Value::AssetRef(asset) = value else {
+                                    unreachable!("validated type")
+                                };
+                                runtime.media_slots.insert(
+                                    NodeKey {
+                                        instance_path: child.clone(),
+                                        node,
+                                    },
+                                    asset,
+                                );
+                            }
+                            TemplateInputTarget::DataTable { .. } => {
+                                unreachable!("projected bindings")
                             }
                         }
                     }
@@ -463,6 +482,7 @@ mod tests {
                     definition_ref: d.id,
                     version: d.version,
                     duration,
+                    variant: None,
                     inputs: BTreeMap::new(),
                 }));
             let definitions: Vec<_> = project

@@ -32,6 +32,24 @@ public struct KRInspectorRow<Fields: View>: View {
     }
 }
 
+/// A setting that is not animatable (font face, alignment, bounds kind). Keeps the
+/// navigator column empty so its label lines up with KRInspectorRow labels.
+public struct KRInspectorSettingRow<Control: View>: View {
+    @Environment(\.krPalette) private var p
+    private let label: String
+    private let control: Control
+    public init(_ label: String, @ViewBuilder control: () -> Control) { self.label = label; self.control = control() }
+    public var body: some View {
+        HStack(spacing: KRSpace.space2) {
+            Color.clear.frame(width: 48, height: 1)
+            Text(label).krText(KRType.label).foregroundStyle(p.ink).lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            control
+        }.frame(minHeight: KRSize.rowHeight - 2)
+            .padding(.leading, KRSpace.space2).padding(.trailing, KRSpace.space3).padding(.vertical, 1)
+    }
+}
+
 /// A muted axis caption preceding a consumer-supplied component field, such as X or Y.
 public struct KRInspectorAxis<Field: View>: View {
     @Environment(\.krPalette) private var p

@@ -33,6 +33,7 @@ fn place(
         definition_ref: d.id,
         version: d.version.clone(),
         duration,
+        variant: None,
         inputs: BTreeMap::from([
             ("headline".into(), Value::String(text.into())),
             (
@@ -816,5 +817,180 @@ fn visual_band_dependencies_are_scheduled_independently_of_constraint_order() {
         refresh(&mut p, &mut d);
         let ordered = snapshot(&p, root);
         assert_eq!(build_scene_ir(&ordered, Time::ONE, fonts).unwrap(), actual);
+    });
+}
+
+#[test]
+fn template2_variants_tables_versions_and_ink_padding_share_pure_renderer() {
+    let mut p: Project =
+        serde_json::from_str(include_str!("../../../examples/template-002.project.json")).unwrap();
+    let mut d: TemplateDefinition = serde_json::from_str(include_str!(
+        "../../../examples/template-002.definition.json"
+    ))
+    .unwrap();
+    let DocumentObject::Known(root) = &mut p.compositions[0] else {
+        panic!()
+    };
+    root.duration = Duration::new(Time::from_integer(12)).unwrap();
+    let root_id = root.id;
+    for object in &mut p.compositions[1..] {
+        let DocumentObject::Known(c) = object else {
+            panic!()
+        };
+        let text = c
+            .nodes
+            .iter_mut()
+            .find(|n| matches!(n.kind, NodeKind::Text { .. }))
+            .unwrap();
+        text.properties.push(constant(
+            "kronello.transform.rotation",
+            Value::Angle(number(35.0)),
+        ));
+        text.properties.push(constant(
+            "kronello.transform.scale",
+            Value::Vec2([number(-1.2), number(1.2)]),
+        ));
+    }
+    d.content_hash = authoring_hash(&p, d.composition_ref).unwrap();
+    for v in d.variants.values_mut() {
+        v.content_hash = authoring_hash(&p, v.composition_ref).unwrap();
+    }
+    let mut v2 = d.clone();
+    v2.id = uuid::Uuid::new_v4();
+    v2.version = "2.0.0".into();
+    v2.duration_policy.middle_mode = TemplateMiddleMode::Hold;
+    p.templates.extend([
+        DocumentObject::Known(d.clone()),
+        DocumentObject::Known(v2.clone()),
+    ]);
+    let mut ids = vec![];
+    for (edition, variant, duration, value) in [
+        (&d, None, 5, "日"),
+        (&d, Some("portrait"), 10, "一\n二"),
+        (&v2, None, 8, "   "),
+        (&v2, Some("portrait"), 8, ""),
+    ] {
+        let selected = kronello_template::selected_definition(edition, variant).unwrap();
+        let id = CompositionInstanceId::new();
+        ids.push(id);
+        let duration = Duration::new(Time::from_integer(duration)).unwrap();
+        let Value::DataTable(mut table) = edition.public_inputs["data"].default.clone() else {
+            panic!()
+        };
+        table.rows[0].insert("headline".into(), Value::String(value.into()));
+        let instance = TemplateInstance {
+            id,
+            definition_ref: edition.id,
+            version: edition.version.clone(),
+            duration,
+            variant: variant.map(str::to_owned),
+            inputs: BTreeMap::from([("data".into(), Value::DataTable(table))]),
+        };
+        let n = SceneNode {
+            name: None,
+            enabled: true,
+            id: NodeId::new(),
+            kind: NodeKind::CompositionInstance(CompositionInstance {
+                id,
+                definition_ref: selected.composition_ref,
+                input_bindings: BTreeMap::new(),
+                seed: 0,
+                local_time_map: duration_map(
+                    kronello_template::composition(&p, selected.composition_ref)
+                        .unwrap()
+                        .duration,
+                    duration,
+                    &edition.duration_policy,
+                )
+                .unwrap(),
+            }),
+            containment_parent: None,
+            transform_parent: None,
+            child_order: vec![],
+            active_range: TimeRange::from_start_duration(Time::ZERO, duration).unwrap(),
+            properties: vec![],
+            effects: vec![],
+        };
+        let DocumentObject::Known(root) = &mut p.compositions[0] else {
+            panic!()
+        };
+        root.root_nodes.push(n.id);
+        root.nodes.push(n);
+        p.template_instances.push(DocumentObject::Known(instance));
+    }
+    let frozen = snapshot(&p, root_id);
+    with_fonts(|fonts| {
+        let scene = build_scene_ir(&frozen, Time::ONE, fonts).unwrap();
+        for id in &ids {
+            let i = p
+                .template_instances
+                .iter()
+                .find_map(|o| match o {
+                    DocumentObject::Known(i) if i.id == *id => Some(i),
+                    _ => None,
+                })
+                .unwrap();
+            let edition = kronello_template::definition(&p, i.definition_ref).unwrap();
+            let selected =
+                kronello_template::selected_definition(edition, i.variant.as_deref()).unwrap();
+            let binding = &selected.constraints.bands[0];
+            let path = InstancePath::root().child(*id);
+            let text = scene
+                .nodes
+                .iter()
+                .find(|n| n.key.instance_path == path && n.key.node == binding.text_node)
+                .unwrap();
+            let band = scene
+                .nodes
+                .iter()
+                .find(|n| n.key.instance_path == path && n.key.node == binding.band_node)
+                .unwrap();
+            let ink = text.bounds.ink_bounds.unwrap_or_else(|| {
+                let origin = text.world_transform.transform_point([0.0; 2]);
+                DesignBounds {
+                    min: origin,
+                    max: origin,
+                }
+            });
+            let Value::Vec2(size) = band.properties[&binding.size_property] else {
+                panic!()
+            };
+            let Value::Vec2(position) = band.properties[&binding.position_property] else {
+                panic!()
+            };
+            for (axis, dimension) in size.iter().enumerate() {
+                assert!(
+                    (dimension.get()
+                        - (ink.max[axis] - ink.min[axis] + 2.0 * binding.padding[axis].get()))
+                    .abs()
+                        < 1e-9
+                );
+                assert!(
+                    (position[axis].get() - (ink.min[axis] - binding.padding[axis].get())).abs()
+                        < 1e-9
+                );
+            }
+        }
+        let mut cache = RenderCache::new(CacheConfig::default());
+        for time in [
+            Time::from_integer(9),
+            Time::new(47, 10).unwrap(),
+            Time::ONE,
+            Time::new(2, 5).unwrap(),
+            Time::ONE,
+        ] {
+            assert_eq!(
+                build_scene_ir_with_cache(&frozen, time, fonts, &mut cache).unwrap(),
+                build_scene_ir(&frozen, time, fonts).unwrap()
+            );
+        }
+        let late = build_scene_ir(&frozen, Time::from_integer(9), fonts).unwrap();
+        assert!(
+            late.nodes
+                .iter()
+                .filter(|n| !n.key.instance_path.ids().is_empty())
+                .all(|n| n.key.instance_path.ids()[0] == ids[1])
+        );
+        assert_eq!(build_scene_ir(&frozen, Time::ONE, fonts).unwrap(), scene);
     });
 }

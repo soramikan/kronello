@@ -9,6 +9,20 @@ import KronelloAppModel
     var changed: (() -> Void)?
     override init(frame: NSRect) { super.init(frame: frame); wantsLayer = true; layer = metal; metal.isOpaque = true }
     required init?(coder: NSCoder) { fatalError("Use init(frame:)") }
+    // Occluded frames are skipped by the FFI (not failures); redraw once visible again.
+    private var occlusion: NSObjectProtocol?
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if let occlusion { NotificationCenter.default.removeObserver(occlusion) }
+        occlusion = nil
+        guard let window else { return }
+        occlusion = NotificationCenter.default.addObserver(forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.window?.occlusionState.contains(.visible) == true else { return }
+                self.changed?()
+            }
+        }
+    }
     override func layout() {
         super.layout()
         let scale = window?.backingScaleFactor ?? 1

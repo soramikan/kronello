@@ -54,7 +54,7 @@ FFI-001 の実装は [ADR-0056](../adr/0056-native-ffi-worker-and-swiftpm.md) �
 `kronello-ffi` は9関数の C ABI、FIFO worker、非 blocking poll、revision / job snapshot 通知、
 CAMetalLayer の attach / resize / redraw を持つ。Command / Query は共有 Request decoder / Service に渡し、
 作品 path は各要求に明示する。native preview は共有 snapshot / font policy / DAG と GPU lowering を使い、
-画素を readback せず SDR surface に描く。SwiftPM の `CKronelloFFI` / `KronelloCore` は実装済みで、
+画素を readback せず SDR surface に描く。窓が隠れている（`Occluded`）・取得が時間切れの frame は失敗にせず、redraw は `presented:false` と `skipped` を返して描画を省く。表示側は可視になったときに再描画する。`Outdated` は surface を再設定して1回だけ再取得し、それ以外の取得失敗は `SURFACE_ACQUIRE_FAILED`。SwiftPM の `CKronelloFFI` / `KronelloCore` は実装済みで、
 公開 schema 由来の Codable 型と検証専用 `KronelloPreviewHarness` を持つ。
 GUI-001 は以下のアプリと UI state 保存、候補 overlay を追加した。
 FFI 単体と実アプリの証拠は分け、FFI の確認と境界は [FFI-001 の検証](../testing/ffi-001.md)、
@@ -85,7 +85,7 @@ GUI の Undo は、その GUI セッションが発行した操作だけを新�
 
 CLI / MCP（エージェント）が同じプロジェクトを編集している場合、GUI は revision 通知を購読し再読込する（[09 保存と同時編集](09-storage-concurrency.md)）。stable ID が残れば selection を保持する。選択中の node が外部削除された場合は selection を解除し、Inspector に削除通知、session ID / revision と履歴への導線を出す。別の node は自動選択しない。
 
-`project.info.open_mode` で actual store mode を表示する。現行 FFI/service の safe-mode 排他は要求ごとであり、
+`project.info.open_mode` で actual store mode を表示する（store を開かない read-only inspection では `read_only_snapshot`）。現行 FFI/service の safe-mode 排他は要求ごとであり、
 GUI window の寿命全体を排他にするものではない。32px の band にその制約を表示する。
 session 長の `PROJECT_LOCKED` 保証は後続課題とし、本実装で store lifetime を変更しない。
 

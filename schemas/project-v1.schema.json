@@ -220,6 +220,13 @@
             "$ref": "#/$defs/ClipId"
           }
         },
+        "properties": {
+          "description": "Placement transform and effect parameters, evaluated in sequence time.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Property"
+          }
+        },
         "source_in": {
           "$ref": "#/$defs/Rational"
         },
@@ -231,6 +238,17 @@
         },
         "timeline_range": {
           "$ref": "#/$defs/TimeRange"
+        },
+        "volume": {
+          "description": "Absent in M2 documents means unity. Evaluated in source-local time.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Property"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -441,6 +459,32 @@
             "value"
           ]
         }
+      ]
+    },
+    "DataTable": {
+      "description": "Inline material data; columns are explicit and every row has the same shape.",
+      "type": "object",
+      "properties": {
+        "columns": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ValueType"
+          }
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/$defs/Value"
+            }
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "columns",
+        "rows"
       ]
     },
     "DescriptorRef": {
@@ -1378,6 +1422,39 @@
         "interpolation"
       ]
     },
+    "MediaNode": {
+      "description": "Explicit media stream; AUDIO-003 executes audio only.",
+      "type": "object",
+      "properties": {
+        "asset": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "source_in": {
+          "$ref": "#/$defs/Rational"
+        },
+        "stream_index": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "time_map": {
+          "description": "Maps time relative to the owning node's active_range.start.",
+          "$ref": "#/$defs/TimeMap"
+        },
+        "volume": {
+          "description": "A kronello.audio.volume Property owned by the same SceneNode.",
+          "$ref": "#/$defs/PropertyId"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "asset",
+        "stream_index",
+        "source_in",
+        "time_map",
+        "volume"
+      ]
+    },
     "Modifier": {
       "description": "Ordered modifier frame only, with semantic parameters and a stable identity.\nNo modifier algorithm or execution capability is implemented here. The\nanimation compiler must resolve kind/version and reject unsupported kinds.",
       "type": "object",
@@ -1512,6 +1589,23 @@
             },
             "value": {
               "$ref": "#/$defs/CompositionInstance"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "media"
+            },
+            "value": {
+              "$ref": "#/$defs/MediaNode"
             }
           },
           "additionalProperties": false,
@@ -1790,6 +1884,14 @@
         }
       ]
     },
+    "ProtectedMiddleMode": {
+      "description": "Only the middle is retimed; intro/outro retain unit speed.",
+      "type": "string",
+      "enum": [
+        "hold",
+        "loop"
+      ]
+    },
     "Rational": {
       "type": "object",
       "properties": {
@@ -1926,6 +2028,12 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/Track"
+          }
+        },
+        "transitions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Transition"
           }
         },
         "working_space": {
@@ -2115,12 +2223,30 @@
         {
           "type": "object",
           "properties": {
+            "color": {
+              "$ref": "#/$defs/Color",
+              "default": {
+                "components": {
+                  "alpha": 1.0,
+                  "b": 0.0,
+                  "g": 0.0,
+                  "r": 0.0
+                },
+                "space": "srgb"
+              }
+            },
             "generator": {
               "type": "string"
             },
             "kind": {
               "type": "string",
               "const": "generator"
+            },
+            "version": {
+              "type": "integer",
+              "format": "uint32",
+              "default": 1,
+              "minimum": 0
             }
           },
           "additionalProperties": false,
@@ -2188,6 +2314,17 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "start_time": {
+          "description": "Absolute PTS origin. Missing legacy metadata means zero, never latest.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rational"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "time_base": {
@@ -2287,6 +2424,56 @@
         "padding"
       ]
     },
+    "TemplateCellTarget": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "property": {
+              "type": "object",
+              "properties": {
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                },
+                "property": {
+                  "$ref": "#/$defs/PropertyId"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "node",
+                "property"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "property"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "object",
+              "properties": {
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "node"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "text"
+          ]
+        }
+      ]
+    },
     "TemplateConstraints": {
       "type": "object",
       "properties": {
@@ -2308,6 +2495,28 @@
         }
       },
       "additionalProperties": false
+    },
+    "TemplateDataBinding": {
+      "type": "object",
+      "properties": {
+        "column": {
+          "type": "string"
+        },
+        "row": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "target": {
+          "$ref": "#/$defs/TemplateCellTarget"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "row",
+        "column",
+        "target"
+      ]
     },
     "TemplateDefinition": {
       "type": "object",
@@ -2338,6 +2547,12 @@
         "template_id": {
           "type": "string",
           "format": "uuid"
+        },
+        "variants": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/TemplateVariant"
+          }
         },
         "version": {
           "type": "string"
@@ -2473,6 +2688,51 @@
           "required": [
             "text"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "media_slot": {
+              "type": "object",
+              "properties": {
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "node"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "media_slot"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "data_table": {
+              "type": "object",
+              "properties": {
+                "bindings": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/TemplateDataBinding"
+                  }
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "bindings"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "data_table"
+          ]
         }
       ]
     },
@@ -2496,6 +2756,12 @@
           },
           "default": {}
         },
+        "variant": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "version": {
           "type": "string"
         }
@@ -2511,7 +2777,37 @@
     "TemplateMiddleMode": {
       "type": "string",
       "enum": [
+        "hold",
+        "loop",
         "stretch"
+      ]
+    },
+    "TemplateVariant": {
+      "description": "Each aspect variant freezes a separate authored Composition and bindings.",
+      "type": "object",
+      "properties": {
+        "composition_ref": {
+          "$ref": "#/$defs/CompositionId"
+        },
+        "constraints": {
+          "$ref": "#/$defs/TemplateConstraints"
+        },
+        "content_hash": {
+          "type": "string"
+        },
+        "targets": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/TemplateInputTarget"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "composition_ref",
+        "targets",
+        "constraints",
+        "content_hash"
       ]
     },
     "TextDirection": {
@@ -2650,7 +2946,7 @@
       ]
     },
     "TimeMap": {
-      "description": "Exact, stateless mappings. Reverse playback, looping, stopping and nonlinear\nmapping are unsupported. Future nonlinear variants require a versioned\nquantization, rounding and evaluation contract; no floating time is stored.",
+      "description": "Exact, stateless mappings. Protected middle segments support hold and loop.\nReverse and general nonlinear playback remain unsupported.",
       "oneOf": [
         {
           "type": "object",
@@ -2691,6 +2987,39 @@
           "required": [
             "kind",
             "points"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "authoring": {
+              "$ref": "#/$defs/Duration"
+            },
+            "intro": {
+              "$ref": "#/$defs/Duration"
+            },
+            "kind": {
+              "type": "string",
+              "const": "protected"
+            },
+            "mode": {
+              "$ref": "#/$defs/ProtectedMiddleMode"
+            },
+            "outro": {
+              "$ref": "#/$defs/Duration"
+            },
+            "requested": {
+              "$ref": "#/$defs/Duration"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "authoring",
+            "requested",
+            "intro",
+            "outro",
+            "mode"
           ]
         }
       ]
@@ -2762,6 +3091,42 @@
       "enum": [
         "video",
         "audio"
+      ]
+    },
+    "Transition": {
+      "type": "object",
+      "properties": {
+        "incoming": {
+          "$ref": "#/$defs/ClipId"
+        },
+        "kind": {
+          "$ref": "#/$defs/TransitionKind"
+        },
+        "outgoing": {
+          "$ref": "#/$defs/ClipId"
+        },
+        "range": {
+          "$ref": "#/$defs/TimeRange"
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "outgoing",
+        "incoming",
+        "range",
+        "kind",
+        "version"
+      ]
+    },
+    "TransitionKind": {
+      "type": "string",
+      "enum": [
+        "crossfade"
       ]
     },
     "Value": {
@@ -2935,6 +3300,23 @@
           "properties": {
             "kind": {
               "type": "string",
+              "const": "data_table"
+            },
+            "value": {
+              "$ref": "#/$defs/DataTable"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
               "const": "path"
             },
             "value": {
@@ -2961,6 +3343,7 @@
         "enum",
         "string",
         "asset_ref",
+        "data_table",
         "path"
       ]
     }

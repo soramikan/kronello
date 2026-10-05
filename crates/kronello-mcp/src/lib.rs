@@ -1,13 +1,17 @@
-//! Synchronous MCP transport. Project state and execution policy live in service.
+//! MCP adapters share one strict protocol dispatcher and the service registry.
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::{BufRead, Write};
 
-use kronello_service::{BackendSelection, Response, Service, ServiceError};
+use kronello_service::Response;
 use serde::Deserialize;
 use serde_json::{Value, json, value::RawValue};
 
 pub const SUPPORTED_PROTOCOL_VERSIONS: [&str; 2] = ["2025-06-18", "2025-11-25"];
 pub const MAX_MESSAGE_BYTES: usize = 16 * 1024 * 1024;
+mod connection;
+pub mod http;
+mod resources;
+mod strict;
+pub use connection::{Connection, Reply, serve_stdio};
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -21,15 +25,27 @@ struct RpcRequest {
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 struct Initialize {
     protocol_version: String,
     capabilities: BTreeMap<String, Value>,
     client_info: ClientInfo,
+    #[serde(default, rename = "_meta")]
+    _meta: Option<BTreeMap<String, Value>>,
 }
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ClientInfo {
     name: String,
     version: String,
+    #[serde(default)]
+    title: Option<String>,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    icons: Option<Vec<Value>>,
+    #[serde(default, rename = "websiteUrl")]
+    website_url: Option<String>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -162,204 +178,4 @@ fn tools() -> Value {
         })
         .collect();
     json!({"tools":tools})
-}
-
-#[derive(Default)]
-enum Lifecycle {
-    #[default]
-    New,
-    AwaitingInitialized,
-    Ready,
-}
-/// Connection state contains only protocol readiness, never a project or session.
-pub struct Server {
-    lifecycle: Lifecycle,
-    service: Service<'static>,
-}
-impl Server {
-    pub fn new(backend: BackendSelection) -> Self {
-        Self {
-            lifecycle: Lifecycle::New,
-            service: Service::new(backend),
-        }
-    }
-    pub fn handle(&mut self, message: &str) -> Option<Value> {
-        let raw: Value = match serde_json::from_str(message) {
-            Ok(raw) => raw,
-            Err(error) => {
-                return Some(rpc_error(
-                    Value::Null,
-                    -32700,
-                    error.to_string(),
-                    Value::Null,
-                ));
-            }
-        };
-        let id = raw
-            .get("id")
-            .filter(|id| id.is_string() || id.as_i64().is_some() || id.as_u64().is_some())
-            .cloned();
-        let request: RpcRequest = match serde_json::from_str(message) {
-            Ok(request) => request,
-            Err(error) => {
-                return Some(rpc_error(
-                    id.unwrap_or(Value::Null),
-                    -32600,
-                    error.to_string(),
-                    Value::Null,
-                ));
-            }
-        };
-        if request.jsonrpc != "2.0"
-            || ((request.id.is_some() || raw.get("id").is_some()) && id.is_none())
-        {
-            return Some(rpc_error(
-                Value::Null,
-                -32600,
-                "Invalid JSON-RPC envelope",
-                Value::Null,
-            ));
-        }
-        // Requests without IDs are notifications: they must never execute tools.
-        let Some(id) = id else {
-            if request.method == "notifications/initialized"
-                && matches!(self.lifecycle, Lifecycle::AwaitingInitialized)
-            {
-                self.lifecycle = Lifecycle::Ready;
-            }
-            return None;
-        };
-        let params = request.params.get();
-        if request.method == "ping" {
-            return Some(result(id, json!({})));
-        }
-        if request.method == "initialize" {
-            if !matches!(self.lifecycle, Lifecycle::New) {
-                return Some(invalid_params(id, "Already initialized"));
-            }
-            let initialize: Initialize = match serde_json::from_str(params) {
-                Ok(initialize) => initialize,
-                Err(error) => return Some(invalid_params(id, error)),
-            };
-            let protocol_version =
-                if SUPPORTED_PROTOCOL_VERSIONS.contains(&initialize.protocol_version.as_str()) {
-                    initialize.protocol_version.as_str()
-                } else {
-                    SUPPORTED_PROTOCOL_VERSIONS
-                        .into_iter()
-                        .max()
-                        .expect("supported protocol versions")
-                };
-            let _ = (
-                initialize.capabilities,
-                initialize.client_info.name,
-                initialize.client_info.version,
-            );
-            self.lifecycle = Lifecycle::AwaitingInitialized;
-            return Some(result(
-                id,
-                json!({"protocolVersion":protocol_version,
-                "capabilities":{"tools":{"listChanged":false}},
-                "serverInfo":{"name":"kronello-mcp","version":env!("CARGO_PKG_VERSION")}}),
-            ));
-        }
-        if !matches!(self.lifecycle, Lifecycle::Ready) {
-            return Some(rpc_error(id, -32002, "Server not initialized", Value::Null));
-        }
-        Some(match request.method.as_str() {
-            "tools/list" => match serde_json::from_str::<ToolList>(params) {
-                Ok(list) if list.cursor.is_none() => result(id, tools()),
-                Ok(_) => invalid_params(id, "This unpaginated tool list has no cursors"),
-                Err(error) => invalid_params(id, error),
-            },
-            "tools/call" => match serde_json::from_str::<ToolCall>(params) {
-                Ok(call) => self.call(id, call),
-                Err(error) => invalid_params(id, error),
-            },
-            _ => rpc_error(id, -32601, "Method not found", Value::Null),
-        })
-    }
-    fn call(&self, id: Value, call: ToolCall) -> Value {
-        if !kronello_service::command_registry()
-            .iter()
-            .any(|command| command.name == call.name)
-        {
-            return invalid_params(id, format!("Unknown tool: {}", call.name));
-        }
-        let arguments = call.arguments.get();
-        let Some(tail) = arguments.trim_start().strip_prefix('{') else {
-            return result(
-                id,
-                tool_result(Response::Error {
-                    error: ServiceError::invalid("Tool arguments must be an object"),
-                }),
-            );
-        };
-        let separator = if tail.trim_start().starts_with('}') {
-            ""
-        } else {
-            ","
-        };
-        // Raw JSON reaches the strict service decoder, preserving duplicate keys
-        // and float precision. The caller cannot override the operation tag.
-        let tagged = format!(
-            "{{\"operation\":{}{separator}{tail}",
-            serde_json::to_string(&call.name).expect("tool name serialization")
-        );
-        result(id, tool_result(self.service.execute_json(&tagged)))
-    }
-}
-
-/// Newline-delimited UTF-8 JSON-RPC; stdout contains protocol messages only.
-pub fn serve(
-    mut input: impl BufRead,
-    mut output: impl Write,
-    backend: BackendSelection,
-) -> std::io::Result<()> {
-    let mut server = Server::new(backend);
-    loop {
-        let mut line = Vec::new();
-        let size = std::io::Read::take(&mut input, (MAX_MESSAGE_BYTES + 2) as u64)
-            .read_until(b'\n', &mut line)?;
-        if size == 0 {
-            return Ok(());
-        }
-        if size > MAX_MESSAGE_BYTES + 1 || (size > MAX_MESSAGE_BYTES && line.last() != Some(&b'\n'))
-        {
-            // Bound allocation and discard the remainder before reading another message.
-            if line.last() != Some(&b'\n') {
-                loop {
-                    let buffer = input.fill_buf()?;
-                    if buffer.is_empty() {
-                        break;
-                    }
-                    let newline = buffer.iter().position(|byte| *byte == b'\n');
-                    let consumed = newline.map_or(buffer.len(), |position| position + 1);
-                    input.consume(consumed);
-                    if newline.is_some() {
-                        break;
-                    }
-                }
-            }
-            let error = rpc_error(Value::Null, -32600, "Message exceeds 16 MiB", Value::Null);
-            serde_json::to_writer(&mut output, &error)?;
-            output.write_all(b"\n")?;
-            output.flush()?;
-            continue;
-        }
-        let response = match std::str::from_utf8(&line) {
-            Ok(message) => server.handle(message),
-            Err(error) => Some(rpc_error(
-                Value::Null,
-                -32700,
-                error.to_string(),
-                Value::Null,
-            )),
-        };
-        if let Some(response) = response {
-            serde_json::to_writer(&mut output, &response)?;
-            output.write_all(b"\n")?;
-            output.flush()?;
-        }
-    }
 }

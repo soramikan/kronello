@@ -15,6 +15,8 @@ pub struct TemplateDefinition {
     pub version: String,
     pub composition_ref: CompositionId,
     pub public_inputs: BTreeMap<String, TemplateInput>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub variants: BTreeMap<String, TemplateVariant>,
     pub duration_policy: TemplateDurationPolicy,
     pub constraints: TemplateConstraints,
     /// Hash of the complete reachable authoring content, fixed by define.
@@ -36,6 +38,8 @@ pub struct TemplateInput {
 pub enum TemplateInputTarget {
     Property { node: NodeId, property: PropertyId },
     Text { node: NodeId },
+    MediaSlot { node: NodeId },
+    DataTable { bindings: Vec<TemplateDataBinding> },
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -48,6 +52,8 @@ pub struct TemplateDurationPolicy {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum TemplateMiddleMode {
+    Hold,
+    Loop,
     Stretch,
 }
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
@@ -77,8 +83,33 @@ pub struct TemplateInstance {
     pub definition_ref: Uuid,
     pub version: String,
     pub duration: Duration,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub variant: Option<String>,
     #[serde(default)]
     pub inputs: BTreeMap<String, Value>,
+}
+
+/// Each aspect variant freezes a separate authored Composition and bindings.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TemplateVariant {
+    pub composition_ref: CompositionId,
+    pub targets: BTreeMap<String, TemplateInputTarget>,
+    pub constraints: TemplateConstraints,
+    pub content_hash: String,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TemplateDataBinding {
+    pub row: usize,
+    pub column: String,
+    pub target: TemplateCellTarget,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub enum TemplateCellTarget {
+    Property { node: NodeId, property: PropertyId },
+    Text { node: NodeId },
 }
 
 /// Resolution-independent bounds stage selected by a layout consumer.

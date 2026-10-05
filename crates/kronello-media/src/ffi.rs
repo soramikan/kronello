@@ -39,6 +39,17 @@ unsafe extern "C" {
     ) -> *const c_char;
     fn km_hw(k: *mut c_void, kind: *mut c_int) -> *const c_char;
     fn km_decoder_open(k: *mut c_void, path: *const c_char) -> *mut c_void;
+    fn km_decoder_open_stream(k: *mut c_void, path: *const c_char, stream: c_int) -> *mut c_void;
+    fn km_video_rgba(
+        k: *mut c_void,
+        input: *const u8,
+        input_size: c_int,
+        format: *const c_char,
+        width: c_int,
+        height: c_int,
+        full_range: c_int,
+        output: *mut u8,
+    ) -> c_int;
     fn km_decoder_close(d: *mut c_void);
     fn km_decoder_name(d: *mut c_void) -> *const c_char;
     fn km_decoder_time_base(d: *mut c_void, num: *mut c_int, den: *mut c_int);
@@ -192,9 +203,23 @@ pub(crate) struct NativeDecoder<'a> {
 }
 impl<'a> NativeDecoder<'a> {
     pub(crate) fn open(runtime: &'a NativeRuntime, path: &Path) -> Result<Self, MediaError> {
+        Self::open_stream(runtime, path, None)
+    }
+    pub(crate) fn open_stream(
+        runtime: &'a NativeRuntime,
+        path: &Path,
+        stream: Option<u32>,
+    ) -> Result<Self, MediaError> {
         let path = path_string(path)?;
-        let ptr = NonNull::new(unsafe { km_decoder_open(runtime.0.as_ptr(), path.as_ptr()) })
-            .ok_or_else(|| MediaError::Decode(runtime.error()))?;
+        let ptr = NonNull::new(match stream {
+            Some(stream) => {
+                let stream = c_int::try_from(stream)
+                    .map_err(|_| MediaError::InvalidInput("stream index overflow".into()))?;
+                unsafe { km_decoder_open_stream(runtime.0.as_ptr(), path.as_ptr(), stream) }
+            }
+            None => unsafe { km_decoder_open(runtime.0.as_ptr(), path.as_ptr()) },
+        })
+        .ok_or_else(|| MediaError::Decode(runtime.error()))?;
         let (mut num, mut den) = (0, 0);
         unsafe { km_decoder_time_base(ptr.as_ptr(), &mut num, &mut den) };
         let time_base = match Rational::new(i64::from(num), i64::from(den)) {
@@ -249,9 +274,19 @@ impl<'a> NativeDecoder<'a> {
                 "missing PTS or invalid frame metadata".into(),
             ));
         }
+        if i64::from(info.width) * i64::from(info.height) > 16_777_216 {
+            return Err(MediaError::UnsupportedFeature(
+                "decoded video pixel budget".into(),
+            ));
+        }
         let size = unsafe { km_frame_copy(self.ptr.as_ptr(), std::ptr::null_mut(), 0) };
         if size < 0 {
             return Err(MediaError::Decode("unsupported native pixel layout".into()));
+        }
+        if size > 134_217_728 {
+            return Err(MediaError::UnsupportedFeature(
+                "decoded video byte budget".into(),
+            ));
         }
         let mut pixels = vec![0; size as usize];
         // SAFETY: buffer has exactly the size queried for the unchanged native frame.
@@ -269,6 +304,43 @@ impl<'a> NativeDecoder<'a> {
             pixels,
         }))
     }
+}
+pub(crate) fn video_rgba(
+    runtime: &NativeRuntime,
+    frame: &kronello_render::DecodedVideoFrame,
+    full_range: bool,
+) -> Result<Vec<u8>, MediaError> {
+    if frame.width == 0
+        || frame.height == 0
+        || u64::from(frame.width) * u64::from(frame.height) > 16_777_216
+    {
+        return Err(MediaError::InvalidInput(
+            "video frame dimensions/budget".into(),
+        ));
+    }
+    let format = CString::new(frame.pixel_format.as_str())
+        .map_err(|_| MediaError::InvalidInput("video pixel format".into()))?;
+    let size = c_int::try_from(frame.pixels.len())
+        .map_err(|_| MediaError::InvalidInput("video pixel budget".into()))?;
+    let mut output = vec![0; frame.width as usize * frame.height as usize * 4];
+    // SAFETY: dimensions and exact packed input size are verified by the shim;
+    // the RGBA output allocation covers width*height*4 and lives through the call.
+    if unsafe {
+        km_video_rgba(
+            runtime.0.as_ptr(),
+            frame.pixels.as_ptr(),
+            size,
+            format.as_ptr(),
+            frame.width as c_int,
+            frame.height as c_int,
+            c_int::from(full_range),
+            output.as_mut_ptr(),
+        )
+    } < 0
+    {
+        return Err(MediaError::Decode(runtime.error()));
+    }
+    Ok(output)
 }
 impl Drop for NativeDecoder<'_> {
     fn drop(&mut self) {

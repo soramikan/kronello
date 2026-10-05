@@ -32,29 +32,37 @@ struct InspectorPanel: View {
                         if layer.kind == "text" {
                             section("Text") {
                                 if let text = model.textDocument(layer) {
-                                    KRTextField("Text", value: .constant(text.string("text")), onCommit: { model.setText(layer, to: $0) })
-                                        .padding(.horizontal, KRSpace.space3).disabled(model.ui.locked.contains(layer.id) || model.busy)
-                                    KRPopoverRow("Font") { Text(text.objects("styles").first?.object("font").string("family") ?? "Font").krText(KRType.label).foregroundStyle(p.inkMuted) }
-                                        .padding(.horizontal, KRSpace.space3)
-                                    KRPopoverRow("Weight") { Text(text.objects("styles").first?.object("font").string("postscript_name") ?? "Font lock").krText(KRType.caption).foregroundStyle(p.inkMuted).lineLimit(1) }
-                                        .padding(.horizontal, KRSpace.space3).help("固定 font face。weight の変更は後続タスクです")
+                                    let font = text.objects("styles").first?.object("font") ?? [:]
+                                    KRInspectorSettingRow("Text") {
+                                        KRTextField("", value: .constant(text.string("text")), onCommit: { model.setText(layer, to: $0) })
+                                            .frame(width: KRWindowMetrics.settingWidth)
+                                    }.disabled(model.ui.locked.contains(layer.id) || model.busy)
+                                    KRInspectorSettingRow("Font") {
+                                        KRPopupButton("書体", options: [.init("current", font.string("family"))], selection: .constant("current"))
+                                            .frame(width: KRWindowMetrics.settingWidth).disabled(true)
+                                    }.help("固定した font lock の書体です。書体の変更は後続タスクです")
+                                    KRInspectorSettingRow("Weight") {
+                                        KRPopupButton("太さ", options: [.init("current", Self.styleName(font.string("postscript_name")))], selection: .constant("current"))
+                                            .frame(width: KRWindowMetrics.settingWidth).disabled(true)
+                                    }.help(font.string("postscript_name") + "。太さの変更は後続タスクです")
                                 }
                                 property(layer, key: "kronello.text.font_size", label: "Size", unit: "px")
                                 property(layer, key: "kronello.text.line_height", label: "Line height", unit: "px")
                                 if let alignment = layer.property("kronello.text.alignment") {
-                                    KRPopoverRow("Alignment") {
+                                    KRInspectorSettingRow("Alignment") {
                                         KRPopupButton("文字揃え", options: [.init("start", "Start"), .init("center", "Center"), .init("end", "End")],
                                             selection: Binding(get: { layer.value(alignment).string("value") }, set: { model.setEnum(layer, property: alignment, to: $0) }))
+                                            .frame(width: KRWindowMetrics.settingWidth)
                                             .disabled(model.ui.locked.contains(layer.id) || alignment.object("source").string("kind") != "constant" || model.busy)
-                                    }.padding(.horizontal, KRSpace.space3)
+                                    }
                                 }
                             }
                         }
                         section("Layout") {
                             if layer.kind == "text" { property(layer, key: "kronello.text.wrap_width", label: "Wrap width", unit: "px") }
-                            KRPopoverRow("Bounds") {
-                                KRSegmentedControl([.init("layout", "layout"), .init("ink", "ink"), .init("visual", "visual")], selection: $model.ui.bounds)
-                            }.padding(.horizontal, KRSpace.space3)
+                            KRInspectorSettingRow("Bounds") {
+                                KRSegmentedControl([.init("layout", "layout"), .init("ink", "ink"), .init("visual", "visual")], selection: $model.ui.bounds).fixedSize()
+                            }
                         }
                     } else {
                         KREmptyState(icon: .mousePointer2, title: "レイヤーを選択", message: "Layers または Viewer でレイヤーを選択してください。")
@@ -62,6 +70,12 @@ struct InspectorPanel: View {
                 }
             }
         }
+    }
+    /// Style suffix of a PostScript name ("NotoSansCJKjp-Bold" -> "Bold"); "Regular" when absent.
+    static func styleName(_ postscript: String) -> String {
+        guard let dash = postscript.lastIndex(of: "-") else { return "Regular" }
+        let style = postscript[postscript.index(after: dash)...]
+        return style.isEmpty ? "Regular" : String(style)
     }
     func section<Content: View>(_ name: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -71,33 +85,18 @@ struct InspectorPanel: View {
             if !collapsed.contains(name) { content() }
         }
     }
-    @ViewBuilder func property(_ layer: Layer, key: String, label: String, unit: String, multiplier: Double = 1) -> some View {
+    @ViewBuilder func property(_ layer: Layer, key: String, label: String, unit: String = "", multiplier: Double = 1) -> some View {
         if let property = model.transformProperty(layer, key: key) {
-            let source = property.object("source").string("kind")
-            let numbers = model.propertyNumbers(layer, property)
-            KRInspectorRow(label, source: source == "curve" ? .curve : source == "expression" ? .expression : .constant,
+            let source = KRPropertySource(property)
+            KRInspectorRow(label, source: source,
                 onKeyframe: model.onKeyframe(property), error: model.propertyError(layer, property), keyframeEditingEnabled: false,
-                previous: source == "curve" ? { model.seekAdjacent(property, forward: false) } : nil,
-                next: source == "curve" ? { model.seekAdjacent(property, forward: true) } : nil) {
-                HStack(spacing: KRSpace.space1) {
-                    if numbers.isEmpty { Text("—").krText(KRType.timecode).foregroundStyle(p.inkMuted) }
-                    ForEach(Array(numbers.enumerated()), id: \.offset) { axis, number in
-                        if numbers.count > 1 {
-                            KRInspectorAxis(axis == 0 ? "X" : "Y") { field(layer, property: property, axis: axis, number: number, unit: unit, multiplier: multiplier) }
-                        } else { field(layer, property: property, axis: axis, number: number, unit: unit, multiplier: multiplier) }
-                    }
-                }.disabled(model.ui.locked.contains(layer.id) || model.busy || model.pendingCandidate != nil)
+                previous: source == .curve ? { model.seekAdjacent(property, forward: false) } : nil,
+                next: source == .curve ? { model.seekAdjacent(property, forward: true) } : nil) {
+                PropertyValue(model: model, layer: layer, property: property)
             }
         } else {
             KRInspectorRow(label, keyframeEditingEnabled: false) { Text("—").krText(KRType.timecode).foregroundStyle(p.inkMuted) }
                 .help("このレイヤーに編集可能な Property がありません")
         }
-    }
-    func field(_ layer: Layer, property: [String: Any], axis: Int, number: Double, unit: String, multiplier: Double) -> some View {
-        KRNumberField(value: .constant(number * multiplier), unit: unit, step: multiplier == 100 ? 1 : 1,
-            error: model.propertyError(layer, property) != nil, accessibilityLabel: property.object("descriptor").string("key") + " \(axis)",
-            onPreview: { model.previewNumber(layer: layer, property: property, axis: axis, to: $0 / multiplier) },
-            onCommit: { model.commitNumber(layer: layer, property: property, axis: axis, from: $0 / multiplier, to: $1 / multiplier) })
-            .frame(width: KRWindowMetrics.numberWidth)
     }
 }

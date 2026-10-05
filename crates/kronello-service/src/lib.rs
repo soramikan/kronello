@@ -7,8 +7,10 @@ mod jobs;
 pub use jobs::*;
 mod api;
 mod edit;
+mod inspect;
 mod query;
 pub use api::*;
+pub use inspect::*;
 pub use query::*;
 mod wire;
 pub use edit::{
@@ -18,11 +20,15 @@ pub use edit::{
 
 mod template;
 pub use template::{
-    TemplateCommand, TemplateDefineRequest, TemplateInstantiateRequest, TemplateSetDurationRequest,
+    TemplateChange, TemplateCommand, TemplateDefineRequest, TemplateInstantiateRequest,
+    TemplateMigrationPlan, TemplateMigrationPlanRequest, TemplatePreviewNode,
+    TemplatePreviewRequest, TemplatePreviewResult, TemplateSetDurationRequest,
     TemplateSetInputRequest,
 };
 mod media;
 pub use media::{CollectRequest, RelinkRequest};
+mod control;
+pub use control::ExecutionControl;
 
 use std::path::{Path, PathBuf};
 
@@ -30,7 +36,8 @@ use kronello_gpu::{GpuContext, GpuError, render_adapter::CpuReferenceBackend};
 use kronello_model::{CompositionId, FontRef, Project};
 use kronello_render::{
     FrameMetadata, FrameRequest, OutputRegion, RenderBackend, RenderError, RenderProfile,
-    RenderSnapshot, SequenceMetadata, SequenceRequest, render_frame, render_sequence,
+    RenderSnapshot, SequenceMetadata, SequenceRequest, render_frame,
+    render_sequence_with_checkpoint,
 };
 use kronello_store::{OpenOptions, ProjectStore, StoreError};
 use kronello_text::FontData;
@@ -41,6 +48,8 @@ use sha2::{Digest, Sha256};
 #[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
 #[serde(tag = "operation", deny_unknown_fields)]
 pub enum Request {
+    #[serde(rename = "sequence.query")]
+    SequenceQuery(SequenceQueryRequest),
     #[serde(rename = "sequence.create")]
     SequenceCreate(SequenceCreateRequest),
     #[serde(rename = "clip.place")]
@@ -54,6 +63,8 @@ pub enum Request {
     #[serde(rename = "template_instance.retime")]
     TemplateInstanceRetime(TemplateInstanceRetimeRequest),
 
+    #[serde(rename = "render.export")]
+    RenderExport(RenderSubmitRequest),
     #[serde(rename = "render.submit")]
     RenderSubmit(RenderSubmitRequest),
     #[serde(rename = "job.get")]
@@ -64,6 +75,10 @@ pub enum Request {
     JobCancel(JobRequest),
     #[serde(rename = "job.prune")]
     JobPrune(JobPruneRequest),
+    #[serde(rename = "template.preview")]
+    TemplatePreview(TemplatePreviewRequest),
+    #[serde(rename = "template.migration_plan")]
+    TemplateMigrationPlan(TemplateMigrationPlanRequest),
     #[serde(rename = "template.set_duration")]
     TemplateSetDuration(TemplateSetDurationRequest),
     #[serde(rename = "template.define")]
@@ -98,6 +113,10 @@ pub enum Request {
     HistoryList(HistoryRequest),
     #[serde(rename = "scene.query")]
     SceneQuery(SceneQueryRequest),
+    #[serde(rename = "node.explain")]
+    NodeExplain(NodeExplainRequest),
+    #[serde(rename = "render.explain")]
+    RenderExplain(RenderExplainRequest),
     #[serde(rename = "property.sample")]
     PropertySample(PropertySampleRequest),
     #[serde(rename = "capabilities.get")]
@@ -196,6 +215,8 @@ pub struct FrameResult {
     deny_unknown_fields
 )]
 pub enum ResultData {
+    Timeline(SequenceQueryResult),
+    Movie(Box<kronello_media::AvExportReport>),
     Job(Box<kronello_jobs::JobRecord>),
     Jobs(JobListResult),
     Pruned(kronello_jobs::PruneResult),
@@ -205,9 +226,13 @@ pub enum ResultData {
     Frame(Box<FrameResult>),
     Sequence(SequenceMetadata),
     Plan(Box<EditPlan>),
+    TemplatePreview(Box<TemplatePreviewResult>),
+    TemplateMigrationPlan(Box<TemplateMigrationPlan>),
     Edit(kronello_store::Event),
     History(HistoryResult),
     Scene(SceneQueryResult),
+    NodeExplanation(Box<NodeExplainResult>),
+    RenderExplanation(Box<RenderExplainResult>),
     Samples(PropertySampleResult),
     Capabilities(Box<CapabilitiesResult>),
 }
@@ -338,6 +363,7 @@ pub struct Service<'a> {
     media_capabilities: Option<MediaCapabilities>,
     job_config: Option<kronello_jobs::JobConfig>,
     worker_executable: Option<PathBuf>,
+    read_only_inspection: bool,
 }
 impl Service<'_> {
     pub fn new(selection: BackendSelection) -> Self {
@@ -347,6 +373,7 @@ impl Service<'_> {
             media_capabilities: None,
             job_config: None,
             worker_executable: None,
+            read_only_inspection: false,
         }
     }
 }
@@ -374,15 +401,35 @@ impl<'a> Service<'a> {
             media_capabilities: None,
             job_config: None,
             worker_executable: None,
+            read_only_inspection: false,
         }
     }
     pub fn with_media_capabilities(mut self, capabilities: MediaCapabilities) -> Self {
         self.media_capabilities = Some(capabilities);
         self
     }
+    /// Snapshot-only inspection for resources/prompts. Existing command tools
+    /// retain their normal open/close, exclusive-lock and migration policy.
+    /// This policy changes only project.info and project.export, not edits.
+    pub fn with_read_only_inspection(mut self) -> Self {
+        self.read_only_inspection = true;
+        self
+    }
     pub fn execute_json(&self, json: &str) -> Response {
+        self.execute_json_with_control(json, &())
+    }
+    /// The same decoder/dispatcher with optional cooperative request control.
+    /// Cancellation never implies job.cancel or rollback of committed edits.
+    pub fn execute_json_with_control(
+        &self,
+        json: &str,
+        control: &dyn ExecutionControl,
+    ) -> Response {
         match serde_json::from_str(json) {
-            Ok(request) => self.execute(request),
+            Ok(request) => match self.dispatch_controlled(request, control) {
+                Ok(result) => Response::Success { result },
+                Err(error) => Response::Error { error },
+            },
             Err(error) => Response::Error {
                 error: error.into(),
             },
@@ -395,8 +442,22 @@ impl<'a> Service<'a> {
         }
     }
     pub fn dispatch(&self, request: Request) -> Result<ResultData, ServiceError> {
+        self.dispatch_controlled(request, &())
+    }
+    fn dispatch_controlled(
+        &self,
+        request: Request,
+        control: &dyn ExecutionControl,
+    ) -> Result<ResultData, ServiceError> {
+        if control.is_cancelled() {
+            return Err(ServiceError::new(
+                "REQUEST_CANCELLED",
+                "Request cancelled before dispatch",
+            ));
+        }
         validate_request_locators(&request)?;
         match request {
+            Request::SequenceQuery(r) => nle::sequence_query(r).map(ResultData::Timeline),
             Request::SequenceCreate(r) => nle::sequence_create(r).map(ResultData::Edit),
             Request::ClipPlace(r) => nle::clip_place(r).map(ResultData::Edit),
             Request::ClipTrim(r) => nle::clip_trim(r).map(ResultData::Edit),
@@ -421,6 +482,21 @@ impl<'a> Service<'a> {
             })),
             Request::JobPrune(_) => Ok(ResultData::Pruned(self.jobs()?.prune()?)),
             Request::SceneQuery(r) => query::scene(r).map(ResultData::Scene),
+            Request::NodeExplain(r) => {
+                inspect::node(r).map(|r| ResultData::NodeExplanation(Box::new(r)))
+            }
+            Request::RenderExplain(r) => {
+                let backend = match self.backend {
+                    Backend::Selected(BackendSelection::Gpu) => {
+                        kronello_render::ExplainBackend::Gpu
+                    }
+                    Backend::Selected(BackendSelection::CpuReference) => {
+                        kronello_render::ExplainBackend::CpuReference
+                    }
+                    Backend::Injected(_) => kronello_render::ExplainBackend::Unknown,
+                };
+                inspect::render(r, backend).map(|r| ResultData::RenderExplanation(Box::new(r)))
+            }
             Request::PropertySample(r) => query::sample(r).map(ResultData::Samples),
             Request::CapabilitiesGet(_) => Ok(ResultData::Capabilities(Box::new(
                 CapabilitiesResult::current(Some(match &self.media_capabilities {
@@ -428,6 +504,11 @@ impl<'a> Service<'a> {
                     None => media::capabilities()?,
                 })),
             ))),
+            Request::TemplatePreview(r) => {
+                template::preview(r, self).map(|r| ResultData::TemplatePreview(Box::new(r)))
+            }
+            Request::TemplateMigrationPlan(r) => template::migration_plan(r, self)
+                .map(|r| ResultData::TemplateMigrationPlan(Box::new(r))),
             Request::TemplateSetDuration(r) => template::set_duration(r).map(ResultData::Edit),
             Request::TemplateDefine(r) => template::define(r).map(ResultData::Edit),
             Request::TemplateInstantiate(r) => template::instantiate(r).map(ResultData::Edit),
@@ -451,15 +532,27 @@ impl<'a> Service<'a> {
                 Ok(ResultData::Project(info))
             }
             Request::ProjectInfo(r) => {
-                let store = open_existing(&r.project)?;
-                let info = info(&store)?;
-                store.close()?;
-                Ok(ResultData::Project(info))
+                if self.read_only_inspection {
+                    Ok(ResultData::Project(snapshot_info(
+                        read_project_snapshot(&r.project)?,
+                        ProjectOpenMode::ReadOnlySnapshot,
+                    )?))
+                } else {
+                    let store = open_existing(&r.project)?;
+                    let info = info(&store)?;
+                    store.close()?;
+                    Ok(ResultData::Project(info))
+                }
             }
             Request::ProjectExport(r) => {
-                let store = open_existing(&r.project)?;
-                let snapshot = store.snapshot()?;
-                store.close()?;
+                let snapshot = if self.read_only_inspection {
+                    read_project_snapshot(&r.project)?
+                } else {
+                    let store = open_existing(&r.project)?;
+                    let snapshot = store.snapshot()?;
+                    store.close()?;
+                    snapshot
+                };
                 Ok(ResultData::Export(Box::new(ExportResult {
                     revision: snapshot.revision.to_string(),
                     document: snapshot.document,
@@ -481,8 +574,35 @@ impl<'a> Service<'a> {
                     display: frame.pixels.display,
                 })))
             }),
+            Request::RenderExport(r) => {
+                jobs::features(&r.required_features)?;
+                self.render(&r.render.input, |snapshot, fonts, backend| {
+                    jobs::validate_movie_destination(&r.render.output_directory)?;
+                    let av = jobs::movie_snapshot(snapshot, &r.output)?;
+                    let JobOutput::ProResMov { background, .. } = r.output else {
+                        unreachable!()
+                    };
+                    let runtime = kronello_media::MediaRuntime::load()?;
+                    let report = runtime.export_av(
+                        &av,
+                        &r.render.input.project,
+                        fonts,
+                        backend,
+                        &kronello_media::AvExportRequest {
+                            output: r.render.output_directory.clone(),
+                            range: r.render.range,
+                            frame_rate: r.render.frame_rate,
+                            region: r.render.input.region,
+                            background,
+                            clipping: kronello_audio::ClippingPolicy::Reject,
+                        },
+                    )?;
+                    Ok(ResultData::Movie(Box::new(report)))
+                })
+            }
             Request::RenderSequence(r) => self.render(&r.input, |snapshot, fonts, backend| {
-                Ok(ResultData::Sequence(render_sequence(
+                let total = kronello_render::frame_samples(r.range, r.frame_rate)?.len() as u64;
+                Ok(ResultData::Sequence(render_sequence_with_checkpoint(
                     snapshot,
                     fonts,
                     backend,
@@ -492,6 +612,16 @@ impl<'a> Service<'a> {
                         region: r.input.region,
                     },
                     &r.output_directory,
+                    &mut |completed| {
+                        if control.is_cancelled() {
+                            return Err(RenderError::Backend {
+                                code: "REQUEST_CANCELLED",
+                                message: "Request cancelled at frame boundary".into(),
+                            });
+                        }
+                        control.progress(completed, total);
+                        Ok(())
+                    },
                 )?))
             }),
         }
@@ -506,7 +636,16 @@ impl<'a> Service<'a> {
         ) -> Result<T, ServiceError>,
     ) -> Result<T, ServiceError> {
         self.with_render_input(input, |snapshot, fonts| {
-            self.with_selected_backend(|backend| run(snapshot, fonts, backend))
+            self.with_selected_backend(|backend| {
+                run(
+                    snapshot,
+                    fonts,
+                    &kronello_media::VideoRenderBackend {
+                        backend,
+                        project_path: &input.project,
+                    },
+                )
+            })
         })
     }
     fn with_render_input<T>(
@@ -662,10 +801,31 @@ fn open_existing(path: &Path) -> Result<ProjectStore, ServiceError> {
 pub enum ProjectOpenMode {
     Normal,
     Safe,
+    /// Read-only inspection (ADR-0064) read a snapshot without opening a store.
+    ReadOnlySnapshot,
 }
 
 fn info(store: &ProjectStore) -> Result<ProjectInfo, ServiceError> {
-    let snapshot = store.snapshot()?;
+    let mode = if store.safe_mode() {
+        ProjectOpenMode::Safe
+    } else {
+        ProjectOpenMode::Normal
+    };
+    snapshot_info(store.snapshot()?, mode)
+}
+fn read_project_snapshot(path: &Path) -> Result<kronello_store::Snapshot, ServiceError> {
+    if !path.is_file() {
+        return Err(ServiceError::new(
+            "PROJECT_NOT_FOUND",
+            "project file does not exist",
+        ));
+    }
+    Ok(ProjectStore::read_snapshot(path)?)
+}
+fn snapshot_info(
+    snapshot: kronello_store::Snapshot,
+    open_mode: ProjectOpenMode,
+) -> Result<ProjectInfo, ServiceError> {
     let content_hash = format!(
         "{:x}",
         Sha256::digest(serde_json::to_vec(&serde_json::to_value(
@@ -673,11 +833,7 @@ fn info(store: &ProjectStore) -> Result<ProjectInfo, ServiceError> {
         )?)?)
     );
     Ok(ProjectInfo {
-        open_mode: if store.safe_mode() {
-            ProjectOpenMode::Safe
-        } else {
-            ProjectOpenMode::Normal
-        },
+        open_mode,
         project_id: snapshot.document.id.to_string(),
         name: snapshot.document.name,
         revision: snapshot.revision.to_string(),
@@ -797,13 +953,14 @@ fn document_asset_locators(document: &Project) -> Result<(), ServiceError> {
 fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
     match request {
         Request::SequenceCreate(r) => local_locator(&r.project),
+        Request::SequenceQuery(r) => local_locator(&r.project),
         Request::ClipPlace(r) => local_locator(&r.project),
         Request::ClipTrim(r) => local_locator(&r.project),
         Request::ClipStretch(r) => local_locator(&r.project),
         Request::InstanceRetime(r) => local_locator(&r.project),
         Request::TemplateInstanceRetime(r) => local_locator(&r.project),
 
-        Request::RenderSubmit(r) => {
+        Request::RenderSubmit(r) | Request::RenderExport(r) => {
             local_locator(&r.render.output_directory)?;
             render_locators(&r.render.input)
         }
@@ -819,6 +976,20 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
             document_asset_locators(&r.document)
         }
         Request::ProjectExport(r) | Request::ProjectInfo(r) => local_locator(&r.project),
+        Request::TemplatePreview(r) => {
+            local_locator(&r.project)?;
+            for font in &r.fonts {
+                local_locator(&font.path)?;
+            }
+            Ok(())
+        }
+        Request::TemplateMigrationPlan(r) => {
+            local_locator(&r.project)?;
+            for font in &r.fonts {
+                local_locator(&font.path)?;
+            }
+            Ok(())
+        }
         Request::TemplateDefine(r) => local_locator(&r.project),
         Request::TemplateInstantiate(r) => local_locator(&r.project),
         Request::TemplateSetInput(r) => local_locator(&r.project),
@@ -836,6 +1007,14 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
             }
             Ok(())
         }
+        Request::NodeExplain(r) => {
+            local_locator(&r.project)?;
+            for font in &r.fonts {
+                local_locator(&font.path)?;
+            }
+            Ok(())
+        }
+        Request::RenderExplain(r) => render_locators(&r.input),
         Request::PropertySample(r) => {
             local_locator(&r.project)?;
             if let Some(fonts) = &r.fonts {

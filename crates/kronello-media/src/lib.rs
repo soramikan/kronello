@@ -1,5 +1,7 @@
 //! Local-file media backend. Native resources are confined to the audited FFI.
 #![deny(unsafe_code)]
+mod render;
+pub use render::*;
 mod assets;
 mod audio;
 mod export;
@@ -173,13 +175,13 @@ pub enum EncodeCodec {
     H264,
     Hevc,
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecutionKind {
     Software,
     Hardware,
 }
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct MediaTransferStats {
     pub cpu_copy_bytes: u64,
     pub cpu_conversion_input_bytes: u64,
@@ -188,7 +190,7 @@ pub struct MediaTransferStats {
     pub cpu_readback_bytes: u64,
     pub gpu_copy_bytes: u64,
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct MediaPathReport {
     pub decoder: Option<String>,
     pub encoder: Option<String>,

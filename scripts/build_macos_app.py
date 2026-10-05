@@ -43,7 +43,11 @@ def assemble(bin_path, output):
             destination = license_dir / path.relative_to(ROOT / "third_party/fonts")
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(path, destination)
+    # The UI is Japanese; declare it so AppKit localizes the standard menus.
+    (contents / "Resources/ja.lproj").mkdir()
+    (contents / "Resources/ja.lproj/InfoPlist.strings").write_text("", encoding="utf-8")
     info = {
+        "CFBundleDevelopmentRegion": "ja", "CFBundleLocalizations": ["ja"],
         "CFBundleIdentifier": "dev.kronello.Kronello", "CFBundleName": "Kronello", "CFBundleDisplayName": "Kronello",
         "CFBundleExecutable": "Kronello", "CFBundlePackageType": "APPL", "CFBundleVersion": "1", "CFBundleShortVersionString": "0.0.0",
         "LSMinimumSystemVersion": "14.0", "NSHighResolutionCapable": True, "NSPrincipalClass": "NSApplication",
@@ -73,10 +77,11 @@ def assemble(bin_path, output):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--skip-build", action="store_true", help="Use previously built debug artifacts")
+    parser.add_argument("--skip-build", action="store_true", help="Use previously built FFI and Swift artifacts")
+    parser.add_argument("--release", action="store_true", help="Build the FFI and helper CLI optimized (use for review and timing)")
     args = parser.parse_args()
     if not args.skip_build:
-        run("python3", "scripts/build_ffi.py")
+        run("python3", "scripts/build_ffi.py", *(["--release"] if args.release else []))
         run("python3", "scripts/fetch_ui_fonts.py")
         run("swift", "build", "--package-path", PACKAGE, "-j", "3")
     bin_path = Path(run("swift", "build", "--package-path", PACKAGE, "--show-bin-path").strip())

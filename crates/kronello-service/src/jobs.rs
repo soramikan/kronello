@@ -39,6 +39,10 @@ pub enum JobOutput {
     #[default]
     ImageSequence,
     ProResMov {
+        #[serde(default)]
+        audio: kronello_audio::AudioSourceMode,
+        #[serde(default = "movie_profile_v1")]
+        profile_version: u32,
         clips: Vec<JobAudioClip>,
         background: [f32; 3],
     },
@@ -94,7 +98,7 @@ fn absolute(path: &Path) -> Result<PathBuf, ServiceError> {
         std::env::current_dir()?.join(path)
     })
 }
-fn features(required: &[String]) -> Result<(), ServiceError> {
+pub(crate) fn features(required: &[String]) -> Result<(), ServiceError> {
     let supported = crate::CapabilitiesResult::current(None).features;
     if let Some(missing) = required.iter().find(|f| !supported.contains(f)) {
         return Err(ServiceError::new(
@@ -167,22 +171,9 @@ impl Service<'_> {
                 "job range must contain at least one frame",
             ));
         }
-        if let JobOutput::ProResMov { clips, .. } = &request.output {
-            if request
-                .render
-                .output_directory
-                .extension()
-                .is_none_or(|e| e != "mov")
-            {
-                return Err(ServiceError::invalid("ProResMov requires .mov destination"));
-            }
-            AvExportSnapshot::new(
-                &snapshot,
-                clips
-                    .iter()
-                    .map(JobAudioClip::compile)
-                    .collect::<Result<_, _>>()?,
-            )?;
+        if let JobOutput::ProResMov { .. } = &request.output {
+            validate_movie_destination(&request.render.output_directory)?;
+            movie_snapshot(&snapshot, &request.output)?;
         }
         let store = self.jobs()?;
         let submission = Submission {
@@ -288,6 +279,11 @@ impl Service<'_> {
             })
         };
         let rendered = self.with_selected_backend(|backend| {
+            let video_backend = kronello_media::VideoRenderBackend {
+                backend,
+                project_path: &fixed.request.render.input.project,
+            };
+            let backend = &video_backend;
             let request = &fixed.request.render;
             let result = match &fixed.request.output {
                 JobOutput::ImageSequence => {
@@ -320,15 +316,9 @@ impl Service<'_> {
                     )?;
                     serde_json::to_value(metadata)?
                 }
-                JobOutput::ProResMov { clips, background } => {
+                JobOutput::ProResMov { background, .. } => {
                     let runtime = MediaRuntime::load()?;
-                    let av = AvExportSnapshot::new(
-                        &fixed.snapshot,
-                        clips
-                            .iter()
-                            .map(JobAudioClip::compile)
-                            .collect::<Result<_, _>>()?,
-                    )?;
+                    let av = movie_snapshot(&fixed.snapshot, &fixed.request.output)?;
                     let report = runtime.export_av_with_checkpoint(
                         &av,
                         &request.input.project,
@@ -515,4 +505,46 @@ pub fn worker_entry() -> Option<std::process::ExitCode> {
             std::process::ExitCode::FAILURE
         }
     })
+}
+
+pub(crate) fn movie_profile_v1() -> u32 {
+    1
+}
+pub(crate) fn movie_snapshot(
+    snapshot: &RenderSnapshot,
+    output: &JobOutput,
+) -> Result<AvExportSnapshot, ServiceError> {
+    let JobOutput::ProResMov {
+        audio,
+        profile_version,
+        clips,
+        ..
+    } = output
+    else {
+        return Err(ServiceError::invalid("render.export requires pro_res_mov"));
+    };
+    if !matches!(profile_version, 1 | 2)
+        || (*profile_version == 1 && *audio != kronello_audio::AudioSourceMode::Explicit)
+    {
+        return Err(ServiceError::new(
+            "UNSUPPORTED_FEATURE",
+            "document/silence audio requires movie profile_version 2",
+        ));
+    }
+    let clips = clips
+        .iter()
+        .map(JobAudioClip::compile)
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(if *profile_version == 1 {
+        AvExportSnapshot::new(snapshot, clips)?
+    } else {
+        AvExportSnapshot::with_audio(snapshot, *audio, clips)?
+    })
+}
+
+pub(crate) fn validate_movie_destination(path: &Path) -> Result<(), ServiceError> {
+    if path.extension().is_none_or(|e| e != "mov") {
+        return Err(ServiceError::invalid("ProResMov requires .mov destination"));
+    }
+    Ok(())
 }

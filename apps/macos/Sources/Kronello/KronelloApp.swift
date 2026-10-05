@@ -14,10 +14,10 @@ import KronelloAppModel
             .defaultSize(width: KRWindowMetrics.welcomeWidth, height: KRWindowMetrics.welcomeHeight)
             .commands { KronelloCommands(controller: controller) }
         Settings {
-            KRPanel("Settings") { VStack(alignment: .leading, spacing: KRSpace.space4) {
+            KRPanel("設定") { VStack(alignment: .leading, spacing: KRSpace.space4) {
                 KRCheckbox("Light テーマ", isOn: $controller.preferences.light)
                 KRCheckbox("起動時に Welcome を表示", isOn: $controller.preferences.showWelcome)
-            }.padding(KRSpace.space4) }.krTheme(controller.theme)
+            }.padding(KRSpace.space4).frame(width: 360, alignment: .leading) }.fixedSize().krTheme(controller.theme)
                 .onChange(of: controller.preferences.light) { _, _ in controller.savePreferences() }
                 .onChange(of: controller.preferences.showWelcome) { _, _ in controller.savePreferences() }
         }
@@ -37,14 +37,16 @@ struct KronelloCommands: Commands {
                     Button("取り消す") { Task { await controller.editor?.undo() } }.keyboardShortcut("z").disabled(controller.editor?.canUndo != true)
                     Button("やり直す") { Task { await controller.editor?.undo(redo: true) } }.keyboardShortcut("z", modifiers: [.command, .shift]).disabled(controller.editor?.canRedo != true)
                 }
-                CommandMenu("表示") {
+                // Extend the system View menu instead of adding a second one.
+                CommandGroup(before: .toolbar) {
                     ForEach(Array(["編集", "モーション", "テンプレート", "書き出し"].enumerated()), id: \.offset) { index, label in
                         Button(label) { controller.editor?.ui.page = ["edit", "motion", "template", "export"][index] }
                             .keyboardShortcut(KeyEquivalent(Character(String(index + 1))))
                             .disabled(controller.editor == nil)
                     }
                     Divider()
-                    Toggle("Light", isOn: $controller.preferences.light).onChange(of: controller.preferences.light) { _, _ in controller.savePreferences() }
+                    Toggle("Light テーマ", isOn: $controller.preferences.light).onChange(of: controller.preferences.light) { _, _ in controller.savePreferences() }
+                    Divider()
                 }
     }
 }

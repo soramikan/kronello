@@ -16,7 +16,7 @@ pub enum TimelineCommand {
     ClipPlace {
         sequence: SequenceId,
         track: TrackId,
-        clip: Clip,
+        clip: Box<Clip>,
     },
     ClipTrim {
         sequence: SequenceId,
@@ -28,6 +28,48 @@ pub enum TimelineCommand {
         clip: ClipId,
         range: TimeRange,
     },
+    /// Move one placement or its transitive reciprocal link component.
+    ClipMove {
+        sequence: SequenceId,
+        clip: ClipId,
+        delta: kronello_time::Time,
+        linked: bool,
+    },
+    /// Replace the selected clips' links with one reciprocal group. Old edges
+    /// incident to the group are removed at both endpoints.
+    ClipLink {
+        sequence: SequenceId,
+        clips: Vec<ClipId>,
+    },
+    /// Shift placements starting at/after pivot on explicit tracks. Reject a
+    /// clip straddling pivot. linked=true includes complete link components.
+    Ripple {
+        sequence: SequenceId,
+        tracks: Vec<TrackId>,
+        pivot: kronello_time::Time,
+        delta: kronello_time::Time,
+        linked: bool,
+    },
+    TransitionSet {
+        sequence: SequenceId,
+        transition: Transition,
+    },
+    TransitionRemove {
+        sequence: SequenceId,
+        outgoing: ClipId,
+        incoming: ClipId,
+    },
+    ClipSetEffects {
+        sequence: SequenceId,
+        clip: ClipId,
+        properties: Vec<Property>,
+        effects: Vec<Effect>,
+    },
+    ClipSetVolume {
+        sequence: SequenceId,
+        clip: ClipId,
+        volume: Option<Property>,
+    },
     InstanceRetime {
         composition: CompositionId,
         node: NodeId,
@@ -38,12 +80,132 @@ pub enum TimelineCommand {
         duration: kronello_time::Duration,
     },
 }
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SequenceQueryRequest {
+    pub project: PathBuf,
+    pub sequence: SequenceId,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ClipKind {
+    Video,
+    Image,
+    Audio,
+    Composition,
+    Generator,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ClipQuery {
+    pub track: TrackId,
+    pub kind: ClipKind,
+    pub clip: Clip,
+    pub video_color: Option<kronello_media::VideoColorPolicy>,
+    pub unsupported_reason: Option<String>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SequenceQueryResult {
+    pub revision: String,
+    pub sequence: Sequence,
+    pub clips: Vec<ClipQuery>,
+}
+pub(crate) fn sequence_query(
+    request: SequenceQueryRequest,
+) -> Result<SequenceQueryResult, ServiceError> {
+    let store = open_existing(&request.project)?;
+    let snapshot = store.snapshot()?;
+    store.close()?;
+    let mut project = snapshot.document;
+    let sequence = sequence_mut(&mut project, request.sequence)?.clone();
+    let mut clips = vec![];
+    for track in &sequence.tracks {
+        for clip in &track.clips {
+            let mut video_color = None;
+            let mut unsupported_reason = None;
+            let kind = match &clip.source_ref {
+                SourceRef::Composition { .. } => ClipKind::Composition,
+                SourceRef::Generator {
+                    generator, version, ..
+                } => {
+                    if generator != SOLID_GENERATOR_ID || *version != GENERATOR_VERSION {
+                        unsupported_reason =
+                            Some("UNSUPPORTED_FEATURE: generator id/version".into());
+                    }
+                    ClipKind::Generator
+                }
+                SourceRef::Asset {
+                    asset,
+                    stream_index,
+                } => {
+                    let asset = project
+                        .assets
+                        .iter()
+                        .find_map(|a| match a {
+                            DocumentObject::Known(a) if a.id == *asset => Some(a),
+                            _ => None,
+                        })
+                        .ok_or_else(|| {
+                            ServiceError::new("ASSET_MISSING", "asset metadata missing")
+                        })?;
+                    let kind = if track.kind == TrackKind::Audio {
+                        ClipKind::Audio
+                    } else if asset.kind == AssetKind::Image {
+                        ClipKind::Image
+                    } else {
+                        ClipKind::Video
+                    };
+                    if kind != ClipKind::Audio {
+                        let stream = asset
+                            .streams
+                            .iter()
+                            .find(|s| s.index == *stream_index)
+                            .ok_or_else(|| {
+                                ServiceError::new("SOURCE_MISSING", "asset stream missing")
+                            })?;
+                        match kronello_media::video_color_policy(stream) {
+                            Ok(policy) => video_color = Some(policy),
+                            Err(error) => {
+                                unsupported_reason = Some(format!("{}: {error}", error.code()))
+                            }
+                        }
+                    }
+                    if kind == ClipKind::Image {
+                        unsupported_reason =
+                            Some("UNSUPPORTED_FEATURE: sequence image source rendering".into());
+                    }
+                    kind
+                }
+            };
+            clips.push(ClipQuery {
+                track: track.id,
+                kind,
+                clip: clip.clone(),
+                video_color,
+                unsupported_reason,
+            });
+        }
+    }
+    Ok(SequenceQueryResult {
+        revision: snapshot.revision.to_string(),
+        sequence,
+        clips,
+    })
+}
 impl From<SequenceError> for ServiceError {
     fn from(error: SequenceError) -> Self {
         Self::new(error.code(), error.to_string())
     }
 }
 fn sequence_mut(project: &mut Project, id: SequenceId) -> Result<&mut Sequence, ServiceError> {
+    if project
+        .sequences
+        .iter()
+        .any(|s| matches!(s, DocumentObject::Opaque(s) if s.id == id.as_uuid()))
+    {
+        return Err(ServiceError::new("UNSUPPORTED_FEATURE", "opaque sequence"));
+    }
     project
         .sequences
         .iter_mut()
@@ -52,6 +214,107 @@ fn sequence_mut(project: &mut Project, id: SequenceId) -> Result<&mut Sequence, 
             _ => None,
         })
         .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "sequence missing"))
+}
+fn expand_links(
+    sequence: &Sequence,
+    selected: &mut BTreeSet<ClipId>,
+    linked: bool,
+) -> Result<(), ServiceError> {
+    loop {
+        let before = selected.len();
+        for c in sequence.tracks.iter().flat_map(|t| &t.clips) {
+            if selected.contains(&c.id) {
+                if !linked && c.links.iter().any(|id| !selected.contains(id)) {
+                    return Err(ServiceError::new(
+                        "LINKED_EDIT_REQUIRED",
+                        "edit would separate linked placements",
+                    ));
+                }
+                if linked {
+                    selected.extend(&c.links);
+                }
+            }
+        }
+        if before == selected.len() {
+            break;
+        }
+    }
+    Ok(())
+}
+fn shift(
+    sequence: &mut Sequence,
+    selected: &BTreeSet<ClipId>,
+    delta: kronello_time::Time,
+) -> Result<(), ServiceError> {
+    for transition in &mut sequence.transitions {
+        match (
+            selected.contains(&transition.outgoing),
+            selected.contains(&transition.incoming),
+        ) {
+            (true, true) => {
+                transition.range = TimeRange::new(
+                    transition
+                        .range
+                        .start()
+                        .checked_add(delta)
+                        .map_err(SequenceError::from)?,
+                    transition
+                        .range
+                        .end()
+                        .checked_add(delta)
+                        .map_err(SequenceError::from)?,
+                )
+                .map_err(SequenceError::from)?
+            }
+            (false, false) => (),
+            _ => {
+                return Err(ServiceError::new(
+                    "TRANSITION_EDIT_CONFLICT",
+                    "move both transition endpoints or remove transition in the same plan",
+                ));
+            }
+        }
+    }
+    for c in sequence
+        .tracks
+        .iter_mut()
+        .flat_map(|t| &mut t.clips)
+        .filter(|c| selected.contains(&c.id))
+    {
+        c.timeline_range = TimeRange::new(
+            c.timeline_range
+                .start()
+                .checked_add(delta)
+                .map_err(SequenceError::from)?,
+            c.timeline_range
+                .end()
+                .checked_add(delta)
+                .map_err(SequenceError::from)?,
+        )
+        .map_err(SequenceError::from)?;
+    }
+    Ok(())
+}
+fn timeline_keys(
+    sequence: &Sequence,
+    _project: Uuid,
+    clips: &BTreeSet<ClipId>,
+    keys: &mut BTreeSet<ChangedKey>,
+) {
+    keys.insert(ChangedKey::Structure {
+        object_id: sequence.id.as_uuid(),
+        parent_container_id: sequence.id.as_uuid(),
+    });
+    for track in &sequence.tracks {
+        for c in &track.clips {
+            if clips.contains(&c.id) {
+                keys.insert(ChangedKey::Structure {
+                    object_id: c.id.as_uuid(),
+                    parent_container_id: track.id.as_uuid(),
+                });
+            }
+        }
+    }
 }
 fn protected_content(project: &Project, root: CompositionId) -> bool {
     let mut pending = vec![root];
@@ -63,7 +326,7 @@ fn protected_content(project: &Project, root: CompositionId) -> bool {
         if project
             .templates
             .iter()
-            .any(|d| matches!(d, DocumentObject::Known(d) if d.composition_ref == id))
+            .any(|d| matches!(d, DocumentObject::Known(d) if d.composition_ref == id || d.variants.values().any(|v| v.composition_ref == id)))
         {
             return true;
         }
@@ -89,6 +352,144 @@ pub(crate) fn mutate(
         parent_container_id: parent,
     };
     match command {
+        TimelineCommand::ClipMove {
+            sequence,
+            clip,
+            delta,
+            linked,
+        } => {
+            let project_id = project.id;
+            let s = sequence_mut(project, *sequence)?;
+            let mut selected = BTreeSet::from([*clip]);
+            if !s
+                .tracks
+                .iter()
+                .flat_map(|t| &t.clips)
+                .any(|c| c.id == *clip)
+            {
+                return Err(ServiceError::new("SOURCE_MISSING", "clip missing"));
+            }
+            expand_links(s, &mut selected, *linked)?;
+            shift(s, &selected, *delta)?;
+            timeline_keys(s, project_id, &selected, keys);
+        }
+        TimelineCommand::Ripple {
+            sequence,
+            tracks,
+            pivot,
+            delta,
+            linked,
+        } => {
+            let project_id = project.id;
+            let s = sequence_mut(project, *sequence)?;
+            let tracks: BTreeSet<_> = tracks.iter().copied().collect();
+            if tracks.is_empty()
+                || tracks
+                    .iter()
+                    .any(|id| !s.tracks.iter().any(|t| t.id == *id))
+            {
+                return Err(ServiceError::new(
+                    "INVALID_CLIP",
+                    "explicit ripple tracks required",
+                ));
+            }
+            let mut selected = BTreeSet::new();
+            for track in s.tracks.iter().filter(|t| tracks.contains(&t.id)) {
+                for clip in &track.clips {
+                    if clip.timeline_range.start() < *pivot && clip.timeline_range.end() > *pivot {
+                        return Err(ServiceError::new(
+                            "INVALID_CLIP",
+                            "ripple pivot straddles a clip",
+                        ));
+                    }
+                    if clip.timeline_range.start() >= *pivot {
+                        selected.insert(clip.id);
+                    }
+                }
+            }
+            if selected.is_empty() {
+                return Err(ServiceError::new("INVALID_CLIP", "ripple selects no clips"));
+            }
+            expand_links(s, &mut selected, *linked)?;
+            shift(s, &selected, *delta)?;
+            timeline_keys(s, project_id, &selected, keys);
+        }
+        TimelineCommand::ClipLink { sequence, clips } => {
+            let project_id = project.id;
+            let s = sequence_mut(project, *sequence)?;
+            let selected: BTreeSet<_> = clips.iter().copied().collect();
+            if selected.is_empty()
+                || selected.len() != clips.len()
+                || selected
+                    .iter()
+                    .any(|id| !s.tracks.iter().flat_map(|t| &t.clips).any(|c| c.id == *id))
+            {
+                return Err(ServiceError::new(
+                    "INVALID_CLIP",
+                    "link clips missing/duplicated",
+                ));
+            }
+            let mut affected = selected.clone();
+            for c in s.tracks.iter_mut().flat_map(|t| &mut t.clips) {
+                if selected.contains(&c.id) {
+                    affected.extend(&c.links);
+                    c.links = selected.iter().copied().filter(|id| *id != c.id).collect();
+                } else if c.links.iter().any(|id| selected.contains(id)) {
+                    affected.insert(c.id);
+                    c.links.retain(|id| !selected.contains(id));
+                }
+            }
+            timeline_keys(s, project_id, &affected, keys);
+        }
+        TimelineCommand::TransitionSet {
+            sequence,
+            transition,
+        } => {
+            let project_id = project.id;
+            let s = sequence_mut(project, *sequence)?;
+            s.transitions
+                .retain(|t| t.outgoing != transition.outgoing || t.incoming != transition.incoming);
+            s.transitions.push(transition.clone());
+            timeline_keys(
+                s,
+                project_id,
+                &BTreeSet::from([transition.outgoing, transition.incoming]),
+                keys,
+            );
+        }
+        TimelineCommand::TransitionRemove {
+            sequence,
+            outgoing,
+            incoming,
+        } => {
+            let project_id = project.id;
+            let s = sequence_mut(project, *sequence)?;
+            let count = s.transitions.len();
+            s.transitions
+                .retain(|t| t.outgoing != *outgoing || t.incoming != *incoming);
+            if count == s.transitions.len() {
+                return Err(ServiceError::new("SOURCE_MISSING", "transition missing"));
+            }
+            timeline_keys(s, project_id, &BTreeSet::from([*outgoing, *incoming]), keys);
+        }
+        TimelineCommand::ClipSetEffects {
+            sequence,
+            clip,
+            properties,
+            effects,
+        } => {
+            let project_id = project.id;
+            let s = sequence_mut(project, *sequence)?;
+            let c = s
+                .tracks
+                .iter_mut()
+                .flat_map(|t| &mut t.clips)
+                .find(|c| c.id == *clip)
+                .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "clip missing"))?;
+            c.properties = properties.clone();
+            c.effects = effects.clone();
+            timeline_keys(s, project_id, &BTreeSet::from([*clip]), keys);
+        }
         TimelineCommand::SequenceCreate { sequence } => {
             keys.insert(changed(sequence.id.as_uuid(), project.id));
             project
@@ -106,8 +507,8 @@ pub(crate) fn mutate(
                 .iter_mut()
                 .find(|t| t.id == *track)
                 .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "track missing"))?;
-            t.clips.push(clip.clone());
-            keys.insert(changed(sequence.as_uuid(), project.id));
+            t.clips.push((**clip).clone());
+            keys.insert(changed(sequence.as_uuid(), sequence.as_uuid()));
             keys.insert(changed(clip.id.as_uuid(), track.as_uuid()));
         }
         TimelineCommand::ClipTrim {
@@ -152,6 +553,26 @@ pub(crate) fn mutate(
                 c.stretched(*range)?
             };
             // Track membership/order is authored; edits on the same sequence conflict conservatively.
+            keys.insert(changed(sequence.as_uuid(), sequence.as_uuid()));
+            keys.insert(changed(clip.as_uuid(), sequence.as_uuid()));
+        }
+        TimelineCommand::ClipSetVolume {
+            sequence,
+            clip,
+            volume,
+        } => {
+            if let Some(volume) = volume {
+                validate_volume(volume)
+                    .map_err(|e| ServiceError::new("INVALID_AUDIO_INPUT", e.to_string()))?;
+            }
+            let s = sequence_mut(project, *sequence)?;
+            let c = s
+                .tracks
+                .iter_mut()
+                .flat_map(|t| &mut t.clips)
+                .find(|c| c.id == *clip)
+                .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "clip missing"))?;
+            c.volume = volume.clone().map(Box::new);
             keys.insert(changed(sequence.as_uuid(), project.id));
             keys.insert(changed(clip.as_uuid(), sequence.as_uuid()));
         }
@@ -245,11 +666,6 @@ pub(crate) fn mutate(
             keys,
         )?,
     }
-    for s in &project.sequences {
-        if let DocumentObject::Known(s) = s {
-            s.validate(project)?;
-        }
-    }
     Ok(())
 }
 
@@ -301,7 +717,7 @@ pub(crate) fn clip_place(r: ClipPlaceRequest) -> Result<kronello_store::Event, S
         TimelineCommand::ClipPlace {
             sequence: r.sequence,
             track: r.track,
-            clip: r.clip,
+            clip: Box::new(r.clip),
         },
     ))];
     let plan = crate::edit::plan(PlanRequest {
@@ -455,74 +871,39 @@ pub(crate) fn template_instance_retime(
     })
 }
 
-/// Offline 48 kHz bus from an immutable project value. Image rendering does not
-/// mux audio. Movie jobs accept explicit audio clips; sequence-track mux is
-/// outside the INTEGRATION-001 image-sequence demo.
+/// Offline document audio uses the same pure plan as synchronous/job MOV export.
 pub fn mix_sequence_audio(
     project: &Project,
     sequence: SequenceId,
     project_path: &std::path::Path,
     range: TimeRange,
 ) -> Result<kronello_audio::Bus, ServiceError> {
-    let sequence = project
-        .sequences
-        .iter()
-        .find_map(|s| match s {
-            DocumentObject::Known(s) if s.id == sequence => Some(s),
-            _ => None,
-        })
-        .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "sequence missing"))?;
-    sequence.validate(project)?;
+    let plan = kronello_audio::DocumentAudioPlan::compile(
+        project,
+        kronello_audio::AudioTarget::Sequence(sequence),
+    )
+    .map_err(|e| ServiceError::new(e.code(), e.to_string()))?;
     let runtime = kronello_media::MediaRuntime::load()?;
-    let mut clips = vec![];
     let mut sources = kronello_audio::AudioSources::new();
-    for track in &sequence.tracks {
-        if track.kind != TrackKind::Audio {
-            continue;
-        }
-        for clip in &track.clips {
-            if !clip.effects.is_empty() {
-                return Err(ServiceError::new(
-                    "UNSUPPORTED_FEATURE",
-                    "audio clip effects",
-                ));
-            }
-            let SourceRef::Asset {
-                asset,
-                stream_index,
-            } = clip.source_ref
-            else {
-                return Err(ServiceError::new(
-                    "UNSUPPORTED_FEATURE",
-                    "audio source must be an asset",
-                ));
-            };
-            let source = project
+    for clip in plan.clips() {
+        if let std::collections::btree_map::Entry::Vacant(entry) =
+            sources.entry((clip.asset, clip.stream_index))
+        {
+            let asset = project
                 .assets
                 .iter()
                 .find_map(|a| match a {
-                    DocumentObject::Known(a) if a.id == asset => Some(a),
+                    DocumentObject::Known(a) if a.id == clip.asset => Some(a),
                     _ => None,
                 })
-                .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "audio asset missing"))?;
-            if let std::collections::btree_map::Entry::Vacant(entry) =
-                sources.entry((asset, stream_index))
-            {
-                entry.insert(
-                    runtime
-                        .decode_asset_audio(source, project_path, stream_index)?
-                        .buffer,
-                );
-            }
-            clips.push(kronello_audio::AudioClip {
-                asset,
-                stream_index,
-                placement: clip.timeline_range,
-                source_in: clip.local_time(clip.timeline_range.start())?,
-                gain: kronello_audio::Gain::UNITY,
-            });
+                .ok_or_else(|| ServiceError::new("ASSET_MISSING", "audio asset missing"))?;
+            entry.insert(
+                runtime
+                    .decode_asset_audio(asset, project_path, clip.stream_index)?
+                    .buffer,
+            );
         }
     }
-    kronello_audio::mix(&clips, &sources, range)
+    plan.mix(&sources, range)
         .map_err(|e| ServiceError::new(e.code(), e.to_string()))
 }

@@ -186,6 +186,15 @@ pub(crate) fn derive_scene_bounds(nodes: &mut [SceneNodeIr]) -> Result<(), Rende
                     visual_bounds: ink.map(map).transpose()?,
                 }
             }
+            SceneContent::Video { extent, .. } => {
+                let bounds =
+                    Some(DesignBounds::checked([0.0; 2], *extent)?.transform(n.world_transform)?);
+                LayoutValue {
+                    layout_bounds: bounds,
+                    ink_bounds: bounds,
+                    visual_bounds: bounds,
+                }
+            }
             SceneContent::Empty => LayoutValue::default(),
         };
         for child in nodes

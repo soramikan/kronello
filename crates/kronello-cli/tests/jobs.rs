@@ -855,3 +855,206 @@ fn invalid_temporary_mov_is_rejected_before_final_filename_exists() {
             .starts_with(".kronello-job-")
     }));
 }
+#[test]
+fn nle2_video_generator_fixed_job_survives_clip_edit_and_project_removal() {
+    let f = Fixture::new();
+    let source = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/fixtures/generated/media/cfr-24-1.nut")
+        .canonicalize()
+        .unwrap();
+    let asset = "00620000-0000-4000-8000-000000000001";
+    let sequence = "00620000-0000-4000-8000-000000000002";
+    let clip = "00620000-0000-4000-8000-000000000004";
+    let mut doc = f.document.clone();
+    doc["assets"] = json!([{"id":asset,"kind":"video","content_hash":format!("{:x}",Sha256::digest(std::fs::read(&source).unwrap())),"locator":{"relative":null,"absolute":source},"streams":[{"index":0,"codec":"rawvideo","time_base":{"num":"1","den":"24"},"duration":null,"start_time":{"num":"0","den":"1"},"width":16,"height":16,"pixel_format":"yuv420p","color_primaries":null,"color_transfer":null,"color_matrix":null,"color_range":null}]}]);
+    doc["sequences"] = json!([{"id":sequence,"extent":{"width":16.0,"height":16.0},"frame_rate":{"num":"24","den":"1"},"audio_rate":48000,"working_space":"linear_rec709","tracks":[{"id":"00620000-0000-4000-8000-000000000003","kind":"video","clips":[{"id":clip,"source_ref":{"kind":"asset","asset":asset,"stream_index":0},"timeline_range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"8"}},"source_in":{"num":"0","den":"1"},"time_map":{"kind":"linear","offset":{"num":"0","den":"1"},"speed":{"num":"1","den":"1"}},"links":[],"effects":[],"audio_retime":"reject"}]},{"id":"00620000-0000-4000-8000-000000000005","kind":"video","clips":[{"id":"00620000-0000-4000-8000-000000000006","source_ref":{"kind":"generator","generator":"kronello.solid","version":1,"color":{"space":"srgb","components":{"r":1.0,"g":0.0,"b":0.0,"alpha":0.25}}},"timeline_range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"8"}},"source_in":{"num":"0","den":"1"},"time_map":{"kind":"linear","offset":{"num":"0","den":"1"},"speed":{"num":"1","den":"1"}},"links":[],"effects":[],"audio_retime":"reject"}]}]}]);
+    f.service(json!({"operation":"project.import","project":f.project,"base_revision":"1","document":doc}));
+    let reference = f.temp.path().join("video-reference");
+    let destination = f.temp.path().join("video-fixed");
+    let gate = f.temp.path().join("release-video");
+    let mut render = f.render(&reference);
+    render["input"]
+        .as_object_mut()
+        .unwrap()
+        .remove("composition");
+    render["input"]["target"] = json!({"kind":"sequence","sequence":sequence});
+    render["input"]["region"] = json!({"origin":[0,0],"extent":[16,16],"pixels":[16,16]});
+    let mut request = render.clone();
+    request["operation"] = json!("render.sequence");
+    f.cli(request, None, false);
+    render["output_directory"] = json!(destination);
+    let job = f.submit_request(
+        json!({"operation":"render.submit","render":render}),
+        Some(&gate),
+        false,
+    );
+    f.wait(&job.id, JobStatus::Running);
+    let commands = json!([{"timeline":{"clip_trim":{"sequence":sequence,"clip":clip,"range":{"start":{"num":"1","den":"24"},"end":{"num":"1","den":"8"}}}}}]);
+    let plan=f.service(json!({"operation":"edit.plan","project":f.project,"base_revision":"2","commands":commands}));
+    f.service(json!({"operation":"edit.apply","project":f.project,"base_revision":"2","commands":commands,"plan_hash":plan["plan_hash"],"session_id":"00620000-0000-4000-8000-000000000007","idempotency_key":"trim-video-after-submit"}));
+    std::fs::remove_file(&f.project).unwrap();
+    std::fs::write(&gate, b"release").unwrap();
+    f.wait(&job.id, JobStatus::Succeeded);
+    for entry in std::fs::read_dir(&reference).unwrap() {
+        let path = entry.unwrap().path();
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            std::fs::read(destination.join(path.file_name().unwrap())).unwrap(),
+            "{}",
+            path.display()
+        );
+    }
+}
+
+fn audio_sequence_fixture(f: &Fixture, gain: f64) -> (Value, Value) {
+    use sha2::Digest;
+    let source = f.temp.path().join("audio.wav");
+    let frames = 24000u32;
+    let bytes = frames * 4;
+    let mut wav = Vec::new();
+    wav.extend(b"RIFF");
+    wav.extend((36 + bytes).to_le_bytes());
+    wav.extend(b"WAVEfmt ");
+    wav.extend(16u32.to_le_bytes());
+    wav.extend(1u16.to_le_bytes());
+    wav.extend(2u16.to_le_bytes());
+    wav.extend(48000u32.to_le_bytes());
+    wav.extend(192000u32.to_le_bytes());
+    wav.extend(4u16.to_le_bytes());
+    wav.extend(16u16.to_le_bytes());
+    wav.extend(b"data");
+    wav.extend(bytes.to_le_bytes());
+    for _ in 0..frames {
+        wav.extend(4096i16.to_le_bytes());
+        wav.extend((-4096i16).to_le_bytes());
+    }
+    std::fs::write(&source, &wav).unwrap();
+    let asset = kronello_model::AssetId::new();
+    let sequence = kronello_model::SequenceId::new();
+    let volume = json!({"id":kronello_model::PropertyId::new(),"descriptor":{"key":"kronello.audio.volume","version":1},"source":{"kind":"constant","value":{"kind":"scalar","value":gain}},"modifiers":[]});
+    let placement = json!({"start":{"num":"0","den":"1"},"end":{"num":"1","den":"5"}});
+    let mut document = f.document.clone();
+    document["assets"] = json!([{"id":asset,"kind":"audio","content_hash":format!("{:x}",sha2::Sha256::digest(&wav)),
+        "locator":{"relative":null,"absolute":source},"streams":[{"index":0,"codec":"pcm_s16le","time_base":{"num":"1","den":"48000"},"duration":{"num":"1","den":"2"},
+            "width":null,"height":null,"pixel_format":null,"color_primaries":null,"color_transfer":null,"color_matrix":null,"color_range":null}]}]);
+    document["sequences"] = json!([{"id":sequence,"extent":{"width":64.0,"height":32.0},"frame_rate":{"num":"30000","den":"1001"},"audio_rate":48000,"working_space":"linear_rec709",
+        "tracks":[{"id":kronello_model::TrackId::new(),"kind":"video","clips":[{"id":kronello_model::ClipId::new(),"source_ref":{"kind":"composition","composition":document["compositions"][0]["id"]},"timeline_range":placement,"source_in":{"num":"0","den":"1"},"time_map":{"kind":"linear","offset":{"num":"0","den":"1"},"speed":{"num":"1","den":"1"}},"links":[],"effects":[]}]},
+            {"id":kronello_model::TrackId::new(),"kind":"audio","clips":[{"id":kronello_model::ClipId::new(),"source_ref":{"kind":"asset","asset":asset,"stream_index":0},"timeline_range":placement,"source_in":{"num":"0","den":"1"},"time_map":{"kind":"linear","offset":{"num":"0","den":"1"},"speed":{"num":"1","den":"1"}},"volume":volume,"links":[],"effects":[]}]}]}]);
+    let mut render = f.render(&f.temp.path().join("document.mov"));
+    render["input"]
+        .as_object_mut()
+        .unwrap()
+        .remove("composition");
+    render["input"]["target"] = json!({"kind":"sequence","sequence":sequence});
+    render["frame_rate"] = json!({"num":"30000","den":"1001"});
+    render["range"] = json!({"start":{"num":"0","den":"1"},"end":{"num":"1001","den":"10000"}});
+    (document, render)
+}
+#[test]
+fn document_audio_sync_and_fixed_job_survive_volume_edit_and_project_deletion_ntsc() {
+    let f = Fixture::new();
+    let (document, mut render) = audio_sequence_fixture(&f, 0.5);
+    f.service(json!({"operation":"project.import","project":f.project,"base_revision":"1","document":document}));
+    let profile = json!({"format":"pro_res_mov","profile_version":2,"audio":"document","clips":[],"background":[0,0,0]});
+    let baseline = f.cli(
+        json!({"operation":"render.export","render":render,"output":profile}),
+        None,
+        false,
+    );
+    let baseline_file = render["output_directory"].as_str().unwrap().to_owned();
+    let gate = f.temp.path().join("audio-release");
+    render["output_directory"] = json!(f.temp.path().join("job.mov"));
+    let job = f.submit_request(
+        json!({"operation":"render.submit","render":render,"output":profile}),
+        Some(&gate),
+        false,
+    );
+    f.wait(&job.id, JobStatus::Running);
+    let fixed: Value = serde_json::from_slice(
+        &std::fs::read(f.store().directory(&job.id).unwrap().join("input.json")).unwrap(),
+    )
+    .unwrap();
+    use sha2::Digest;
+    let bytes = std::fs::read(f.store().directory(&job.id).unwrap().join("input.json")).unwrap();
+    assert_eq!(
+        format!("{:x}", sha2::Sha256::digest(&bytes)),
+        job.input_hash
+    );
+    let mut other_mode = fixed.clone();
+    other_mode["request"]["output"]["audio"] = json!("silence");
+    assert_ne!(
+        sha2::Sha256::digest(serde_json::to_vec(&fixed).unwrap()),
+        sha2::Sha256::digest(serde_json::to_vec(&other_mode).unwrap())
+    );
+    assert_eq!(fixed["request"]["output"]["audio"], "document");
+    assert_eq!(fixed["request"]["output"]["profile_version"], 2);
+    let mut changed = document.clone();
+    changed["sequences"][0]["tracks"][1]["clips"][0]["volume"]["source"]["value"]["value"] =
+        json!(0.0);
+    changed["compositions"][0]["nodes"][0]["properties"][2]["source"]["value"]["value"]["components"]
+        ["r"] = json!(0.0);
+    f.service(json!({"operation":"project.import","project":f.project,"base_revision":"2","document":changed}));
+    std::fs::remove_file(&f.project).unwrap();
+    std::fs::write(gate, b"release").unwrap();
+    let done = f.wait(&job.id, JobStatus::Succeeded);
+    let report = &done.result.as_ref().unwrap()["report"];
+    assert_eq!(report["frames"], baseline["frames"]);
+    assert_eq!(
+        report["export_snapshot_hash"],
+        baseline["export_snapshot_hash"]
+    );
+    assert_eq!(report["sample_range"], json!({"start":0,"end":4804}));
+    assert_eq!(report["audio"]["frames"], 4804);
+    let runtime = kronello_media::MediaRuntime::load().unwrap();
+    runtime
+        .probe(&job.destination)
+        .unwrap()
+        .verify_av()
+        .unwrap();
+    let baseline_audio = runtime.decode_audio(Path::new(&baseline_file), 1).unwrap();
+    let job_audio = runtime.decode_audio(&job.destination, 1).unwrap();
+    assert_eq!(job_audio.buffer, baseline_audio.buffer);
+    assert_eq!(job_audio.buffer.frames()[0], [0.0625, -0.0625]);
+    let mut original_video = runtime.open_video(Path::new(&baseline_file)).unwrap();
+    let mut fixed_video = runtime.open_video(&job.destination).unwrap();
+    for frame in baseline["frames"].as_array().unwrap() {
+        let time = serde_json::from_value(frame["time"].clone()).unwrap();
+        assert_eq!(
+            original_video.decode_at(time).unwrap().pixels,
+            fixed_video.decode_at(time).unwrap().pixels
+        );
+    }
+}
+#[test]
+fn document_audio_worker_missing_hash_mismatch_and_clipping_never_publish() {
+    for failure in ["missing", "hash", "clipping"] {
+        let f = Fixture::new();
+        let (document, render) =
+            audio_sequence_fixture(&f, if failure == "clipping" { 16.0 } else { 0.5 });
+        f.service(json!({"operation":"project.import","project":f.project,"base_revision":"1","document":document}));
+        let gate = f.temp.path().join("failure-release");
+        let job=f.submit_request(json!({"operation":"render.submit","render":render,"output":{"format":"pro_res_mov","profile_version":2,"audio":"document","clips":[],"background":[0,0,0]}}),Some(&gate),false);
+        f.wait(&job.id, JobStatus::Running);
+        let asset = PathBuf::from(
+            document["assets"][0]["locator"]["absolute"]
+                .as_str()
+                .unwrap(),
+        );
+        match failure {
+            "missing" => std::fs::remove_file(asset).unwrap(),
+            "hash" => std::fs::write(asset, b"changed").unwrap(),
+            _ => (),
+        }
+        std::fs::write(gate, b"release").unwrap();
+        let done = f.wait(&job.id, JobStatus::Failed);
+        assert_eq!(
+            done.error.unwrap().code,
+            match failure {
+                "missing" => "ASSET_MISSING",
+                "hash" => "ASSET_HASH_MISMATCH",
+                _ => "AUDIO_CLIPPING",
+            }
+        );
+        assert!(!job.destination.exists());
+    }
+}

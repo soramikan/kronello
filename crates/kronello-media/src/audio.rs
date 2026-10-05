@@ -16,7 +16,7 @@ pub struct DecodedAudio {
     pub source_channels: u32,
     pub stream_index: u32,
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct AudioEncodeReport {
     pub codec: String,
     pub sample_rate: u32,

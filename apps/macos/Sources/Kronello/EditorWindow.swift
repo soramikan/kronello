@@ -17,7 +17,8 @@ struct EditorWindow: View {
             if model.ui.page == "motion" { MotionPage(model: model, historyOpen: $historyOpen) }
             else { KREmptyState(icon: model.ui.page == "export" ? .clapperboard : .layers,
                 title: model.ui.page == "edit" ? "編集ページ" : model.ui.page == "template" ? "テンプレートページ" : "書き出しページ",
-                message: model.ui.page == "edit" ? "Sequence の編集は GUI-003 で追加します。モーションページで Composition を開いてください。" : "このページは GUI-004 で追加します。モーションページで作業を続けられます。") }
+                message: model.ui.page == "edit" ? "Sequence の編集は GUI-003 で追加します。モーションページで Composition を開いてください。" : "このページは GUI-004 で追加します。モーションページで作業を続けられます。")
+                .frame(maxWidth: .infinity, maxHeight: .infinity) }
             KRStatusBar(saved: (model.busy ? "保存中" : "保存済み") + (model.safeMode ? " · 安全モード" : ""), revision: "rev " + model.revision,
                 externalChange: model.externalChange, error: diagnostic, job: jobSummary,
                 onError: { if model.undoConflict != nil {} else if model.revisionConflict == nil { model.failure = model.previewFailure } }, onJobs: { jobsOpen = true })
@@ -57,7 +58,7 @@ struct EditorWindow: View {
             KRButton(icon: .undo2, accessibilityLabel: "取り消す") { Task { await model.undo() } }.disabled(!model.canUndo)
             KRButton(icon: .redo2, accessibilityLabel: "やり直す") { Task { await model.undo(redo: true) } }.disabled(!model.canRedo)
             p.line.frame(width: 1, height: KRSize.controlHeight)
-            KRPopupButton("ワークスペース", options: [.init("standard", "標準", icon: .layoutPanelLeft)], selection: $model.ui.workspace)
+            KRPopupButton("ワークスペース", options: [.init("standard", "標準", icon: .layoutPanelLeft)], selection: $model.ui.workspace).fixedSize()
         }.padding(.horizontal, KRSpace.space3).frame(height: KRWindowMetrics.toolbar)
             .overlay { KRSegmentedControl([.init("edit", "編集"), .init("motion", "モーション"), .init("template", "テンプレート"), .init("export", "書き出し")], selection: $model.ui.page) }
             .overlay(alignment: .bottom) { p.line.frame(height: 1) }

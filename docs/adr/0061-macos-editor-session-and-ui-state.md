@@ -54,7 +54,8 @@ ADR-0026 の selective Undo、ADR-0033 のユーザー状態領域を実アプ�
   Redo は Undo Event を `edit.undo` する共有意味を使う。失敗時は stack を消費しない。
   `UNDO_CONFLICT` は理由・共有 details / history を sheet、`REVISION_CONFLICT` は候補を保持した Viewer banner。
   再適用はユーザーの明示操作による新しい plan と idempotency key。自動上書き・自動再試行はしない。
-- `project.info.open_mode` は実際の store open に由来する `normal` / `safe` を返す。
+- `project.info.open_mode` は実際の store open に由来する `normal` / `safe` を返す。ADR-0064 の read-only inspection（MCP resources / prompts）は store を開かず snapshot を読むため `read_only_snapshot` を返し、`normal` / `safe` を推測しない。
+- 無効な node と無効な containment 祖先は `node.explain` で `DISABLED` / `ANCESTOR_DISABLED`（impact `hides`）として説明する。無効な subtree の Media 音声も文書音声（ADR-0063）に入らない。
   **現行 FFI/service は要求ごとに ProjectStore を開閉する。safe mode の排他はその要求中だけであり、
   GUI window 全体の `PROJECT_LOCKED` を保証しない。** band copy にこの制約を明記する。
   session 長の lease / store lifetime は本タスクで変更せず、監督側が後続タスクを管理する。

@@ -57,6 +57,12 @@ fn lower(dag: &RenderDag) -> Result<(RenderSize, DrawScene, WorkingSpace), Rende
     };
     for (index, node) in dag.nodes().iter().enumerate() {
         let draw = match node {
+            DagNode::VideoDraw { .. } => {
+                return Err(RenderError::UnsupportedFeature(
+                    "video requires explicit media backend".into(),
+                ));
+            }
+            DagNode::RasterInput { pixels } => DrawNode::Raster(pixels.clone()),
             DagNode::Geometry { .. } | DagNode::TextLayout { .. } => continue,
             DagNode::CoverageDraw { path, .. } => DrawNode::Path(PathDraw {
                 fill_gradient: path.fill_gradient.as_ref().map(gradient),

@@ -207,7 +207,8 @@ public struct EditCandidate {
             deletedSelection = "選択していたレイヤーは削除されました。\(actor) · rev \(revision)"
         }
         if external && previous != revision {
-            externalChange = "\(actor) の変更を読み込みました（rev \(previous) → \(revision)）"
+            // Events carry a session, not a client kind; show a short session tag.
+            externalChange = "別のセッション（\(actor.prefix(8))）の変更を読み込みました（rev \(previous) → \(revision)）"
         }
         refreshToken += 1
     }
@@ -303,6 +304,7 @@ public struct EditCandidate {
         case "kronello.transform.position": kind = "vec2"; value = [0.0, 0.0]
         case "kronello.transform.scale": kind = "vec2"; value = [1.0, 1.0]
         case "kronello.transform.rotation": kind = "angle"; value = 0.0
+        case "kronello.opacity": kind = "scalar"; value = 1.0
         default: return nil
         }
         return ["descriptor": ["key": key, "version": 1], "source": ["kind": "constant", "value": ["kind": kind, "value": value]], "modifiers": []]
@@ -332,7 +334,7 @@ public struct EditCandidate {
         values[axis] = to
         do {
             let command = try numericCommand(layer: origin.layer, property: property, values: values, time: origin.time)
-            submit([command], label: property.object("descriptor").string("key") + " の変更", base: origin.base)
+            submit([command], label: PropertyPresentation.of(property).label + " の変更", base: origin.base)
         } catch { mapFailure(error) }
     }
     public func numericCommand(layer: Layer, property: [String: Any], values: [Double], time: RationalTime) throws -> [String: Any] {

@@ -1,6 +1,12 @@
 //! Plain decoded media contracts. Native decoder handles remain in backends.
 use kronello_time::Rational;
 use serde::{Deserialize, Serialize};
+#[derive(Debug, Clone, PartialEq)]
+pub struct VideoImage {
+    pub size: [u32; 2],
+    /// Linear working-space premultiplied RGBA, prepared by the explicit media path.
+    pub pixels: Vec<[f32; 4]>,
+}
 
 /// Native pixel values, packed with alignment 1, in FFmpeg's named plane order.
 /// This is source-encoded color; it must be color-converted before compositing.

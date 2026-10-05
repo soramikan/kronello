@@ -2039,6 +2039,76 @@ fn fx_dag(p: &Project, id: CompositionId, region: OutputRegion) -> RenderDag {
     let scene = build_scene_ir(&snapshot, t(0, 1), &[]).unwrap();
     build_render_dag(&scene, RenderProfile::default(), region).unwrap()
 }
+
+#[test]
+fn inspect_path_reports_halos_budgets_and_preserves_the_live_render_cache() {
+    let (p, id) = fx_project();
+    let snapshot = snapshot(&p, id);
+    let mut live = RenderCache::default();
+    let request = FrameRequest {
+        time: Time::ZERO,
+        region: fx_region(),
+    };
+    let expected =
+        render_frame_with_cache(&snapshot, &[], &CpuReferenceBackend, request, &mut live).unwrap();
+    let before = live.stats();
+    let mut isolated = RenderCache::default();
+    let scene = build_scene_ir_with_cache(&snapshot, Time::ZERO, &[], &mut isolated).unwrap();
+    let plan = explain_render_path(
+        &scene,
+        snapshot.profile(),
+        fx_region(),
+        ExplainBackend::Gpu,
+        &mut isolated,
+    )
+    .unwrap();
+    assert!(
+        plan.notices
+            .iter()
+            .any(|n| n.code == "EFFECT_HALO_EXPANSION")
+    );
+    assert!(plan.tiles[0].stages.iter().any(|s| s.code == "EFFECT"));
+    let dag = build_render_dag(&scene, snapshot.profile(), fx_region()).unwrap();
+    assert_eq!(plan.tiles[0].execution, dag.execution_region());
+    assert_eq!(plan.tiles[0].stages.len(), dag.nodes().len());
+    for (stage, node) in plan.tiles[0].stages.iter().zip(dag.nodes()) {
+        assert_eq!(stage.inputs, node.inputs());
+    }
+    assert_eq!(live.stats(), before);
+    assert_eq!(
+        render_frame_with_cache(&snapshot, &[], &CpuReferenceBackend, request, &mut live)
+            .unwrap()
+            .pixels,
+        expected.pixels
+    );
+    assert_eq!(live.stats().raster.misses, before.raster.misses);
+    let mut heavy = scene.clone();
+    for _ in 0..180 {
+        let mut n = heavy.nodes[0].clone();
+        n.key.node = NodeId::new();
+        heavy.nodes.push(n);
+    }
+    let large = OutputRegion {
+        origin: [0.0; 2],
+        extent: [512.0; 2],
+        pixels: [512; 2],
+    };
+    let plan = explain_render_path(
+        &heavy,
+        snapshot.profile(),
+        large,
+        ExplainBackend::Gpu,
+        &mut RenderCache::default(),
+    )
+    .unwrap();
+    assert!(
+        plan.notices
+            .iter()
+            .any(|n| n.code == "SURFACE_BUDGET_EXCEEDED"
+                && n.actual_estimate.unwrap() > n.limit.unwrap())
+    );
+    assert!(!plan.executed);
+}
 #[test]
 fn fx_halo_requests_and_transformed_visual_bounds_are_analytical() {
     let (p, id) = fx_project();

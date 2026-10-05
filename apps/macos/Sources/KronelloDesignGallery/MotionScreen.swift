@@ -88,12 +88,12 @@ struct MotionScreen: View {
                 KRInspectorRow("Rotation", source: .constant) { field(0, unit: "°") }
                 KRInspectorRow("Opacity", source: .curve, previous: {}, next: {}) { field(100, unit: "%") }
                 heading("Text")
-                KRPopoverRow("書体") { KRPopupButton("書体", options: [.init("noto", "Noto Sans JP")], selection: .constant("noto")).frame(width: 144) }.padding(.horizontal, KRSpace.space3)
-                KRPopoverRow("太さ") { KRPopupButton("太さ", options: [.init("600", "Semibold")], selection: .constant("600")).frame(width: 144) }.padding(.horizontal, KRSpace.space3)
+                KRInspectorSettingRow("Font") { KRPopupButton("書体", options: [.init("noto", "Noto Sans JP")], selection: .constant("noto")).frame(width: 144) }
+                KRInspectorSettingRow("Weight") { KRPopupButton("太さ", options: [.init("600", "Semibold")], selection: .constant("600")).frame(width: 144) }
                 KRInspectorRow("Size") { field(64, unit: "px") }
                 heading("Layout")
                 KRInspectorRow("Wrap width") { field(1200, unit: "px") }
-                KRPopoverRow("Bounds") { KRSegmentedControl([.init("layout", "layout"), .init("ink", "ink"), .init("visual", "visual")], selection: .constant("layout")) }.padding(.horizontal, KRSpace.space3)
+                KRInspectorSettingRow("Bounds") { KRSegmentedControl([.init("layout", "layout"), .init("ink", "ink"), .init("visual", "visual")], selection: .constant("layout")).fixedSize() }
                 Spacer(minLength: 0)
             }
         }

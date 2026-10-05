@@ -1,7 +1,10 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use kronello_audio::{AudioClip, AudioSources, ClippingPolicy, SAMPLE_RATE, mix, sample_range};
+use kronello_audio::{
+    AudioClip, AudioSourceMode, AudioSources, AudioTarget, ClippingPolicy, DocumentAudioPlan,
+    SAMPLE_RATE, mix, sample_range,
+};
 use kronello_model::{ColorSpace, DocumentObject};
 use kronello_render::{
     FrameMetadata, FrameRequest, OutputRegion, RenderBackend, RenderSnapshot, frame_samples,
@@ -18,8 +21,8 @@ use crate::{
     MediaRuntime,
 };
 
-/// AUDIO-000 export envelope. RenderSnapshot schema remains unchanged. Audio
-/// placements are explicit until the shared document gains its timeline model.
+/// Owned export envelope. Version 1 retains explicit M2 audio; version 2
+/// pins source selection and document-compiled placements.
 /// Both inputs are owned, immutable through this API, and hashed together.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -27,6 +30,8 @@ pub struct AvExportSnapshot {
     schema_version: u32,
     render: RenderSnapshot,
     clips: Vec<AudioClip>,
+    #[serde(default, skip_serializing_if = "is_explicit")]
+    audio: AudioSourceMode,
 }
 impl AvExportSnapshot {
     pub fn new(render: &RenderSnapshot, clips: Vec<AudioClip>) -> Result<Self, MediaError> {
@@ -34,9 +39,38 @@ impl AvExportSnapshot {
             schema_version: 1,
             render: render.clone(),
             clips,
+            audio: AudioSourceMode::Explicit,
         };
         snapshot.validate()?;
         Ok(snapshot)
+    }
+    /// Version 2 pins the explicit source selection and document-derived placements.
+    pub fn with_audio(
+        render: &RenderSnapshot,
+        audio: AudioSourceMode,
+        clips: Vec<AudioClip>,
+    ) -> Result<Self, MediaError> {
+        if audio != AudioSourceMode::Explicit && !clips.is_empty() {
+            return Err(MediaError::InvalidInput(
+                "document/silence audio cannot contain explicit clips".into(),
+            ));
+        }
+        let clips = if audio == AudioSourceMode::Document {
+            document_plan(render)?.clips()
+        } else {
+            clips
+        };
+        let snapshot = Self {
+            schema_version: 2,
+            render: render.clone(),
+            clips,
+            audio,
+        };
+        snapshot.validate()?;
+        Ok(snapshot)
+    }
+    pub fn audio(&self) -> AudioSourceMode {
+        self.audio
     }
     pub fn render(&self) -> &RenderSnapshot {
         &self.render
@@ -49,12 +83,26 @@ impl AvExportSnapshot {
         Ok(format!("{:x}", Sha256::digest(serde_json::to_vec(&value)?)))
     }
     pub fn validate(&self) -> Result<(), MediaError> {
-        if self.schema_version != 1 {
+        if !matches!(self.schema_version, 1 | 2)
+            || (self.schema_version == 1 && self.audio != AudioSourceMode::Explicit)
+        {
             return Err(MediaError::UnsupportedFeature(
                 "audio export snapshot schema".into(),
             ));
         }
         self.render.validate()?;
+        if self.audio == AudioSourceMode::Document
+            && document_plan(&self.render)?.clips() != self.clips
+        {
+            return Err(MediaError::InvalidInput(
+                "document audio placements differ from fixed snapshot".into(),
+            ));
+        }
+        if self.audio == AudioSourceMode::Silence && !self.clips.is_empty() {
+            return Err(MediaError::InvalidInput(
+                "silence audio contains clips".into(),
+            ));
+        }
         if self.clips.len() > 1024 {
             return Err(MediaError::InvalidInput(
                 "audio clip budget exceeded".into(),
@@ -88,14 +136,14 @@ impl AvExportSnapshot {
         Ok(())
     }
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum StreamKind {
     Video,
     Audio,
     Other,
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct MediaStream {
     pub index: u32,
     pub kind: StreamKind,
@@ -108,7 +156,7 @@ pub struct MediaStream {
     pub width: Option<u32>,
     pub height: Option<u32>,
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct MediaProbe {
     pub streams: Vec<MediaStream>,
     pub render_snapshot_hash: String,
@@ -164,7 +212,7 @@ impl MediaProbe {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct AvExportRequest {
     pub output: PathBuf,
     pub range: TimeRange,
@@ -174,12 +222,16 @@ pub struct AvExportRequest {
     pub background: [f32; 3],
     pub clipping: ClippingPolicy,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct AvExportReport {
     pub schema_version: u32,
     pub render_snapshot_hash: String,
     pub export_snapshot_hash: String,
     pub audio_render_snapshot_hash: String,
+    #[serde(default)]
+    pub audio_source: AudioSourceMode,
+    #[serde(default = "legacy_audio_profile")]
+    pub audio_profile_version: u32,
     pub request: AvExportRequest,
     pub sample_range: std::ops::Range<i64>,
     pub frames: Vec<FrameMetadata>,
@@ -351,7 +403,11 @@ impl MediaRuntime {
                 entry.insert(decoded);
             }
         }
-        let bus = mix(&snapshot.clips, &sources, request.range)?;
+        let bus = if snapshot.audio == AudioSourceMode::Document {
+            document_plan(&snapshot.render)?.mix(&sources, request.range)?
+        } else {
+            mix(&snapshot.clips, &sources, request.range)?
+        };
         // Reject clipping before expensive frame rendering; explicit Saturate
         // still records every changed channel sample in the encode report.
         bus.quantize_pcm24(request.clipping)?;
@@ -433,6 +489,8 @@ impl MediaRuntime {
             render_snapshot_hash: render_hash.clone(),
             export_snapshot_hash: export_hash,
             audio_render_snapshot_hash: render_hash,
+            audio_source: snapshot.audio,
+            audio_profile_version: snapshot.schema_version,
             request: request.clone(),
             sample_range: sample_range(request.range)?,
             frames: metadata,
@@ -462,4 +520,21 @@ fn bt709_rgba(pixels: &[[f32; 4]], background: [f32; 3]) -> Result<Vec<u8>, Medi
         rgba.push(255);
     }
     Ok(rgba)
+}
+
+fn is_explicit(mode: &AudioSourceMode) -> bool {
+    *mode == AudioSourceMode::Explicit
+}
+fn document_plan(render: &RenderSnapshot) -> Result<DocumentAudioPlan, MediaError> {
+    let target = match render.target() {
+        kronello_render::RenderTarget::Composition { composition } => {
+            AudioTarget::Composition(composition)
+        }
+        kronello_render::RenderTarget::Sequence { sequence } => AudioTarget::Sequence(sequence),
+    };
+    Ok(DocumentAudioPlan::compile(render.project(), target)?)
+}
+
+fn legacy_audio_profile() -> u32 {
+    1
 }

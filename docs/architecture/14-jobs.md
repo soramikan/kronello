@@ -61,7 +61,7 @@ GUI / CLI / MCP
 
 投入時に、その時点の revision の RenderSnapshot を直列化してジョブディレクトリへ保存する。投入後にプロジェクトが編集されても、ジョブは投入時点の内容で完了する。
 
-投入側は `ProjectStore::read_snapshot` の READ_ONLY / query_only を使い、journal 変更・migration・checkpoint をしない。envelope schema 1 は RenderSnapshot、`SequenceRenderRequest`、出力 profile、明示音声配置、required_features、backend を固定する。同期 render と同じ `freeze_render_input` と `RenderTarget`（Composition / Sequence）を使い、job 専用 target を作らない。Sequence、配置、資産、意味版、revision も固定入力に含める。Sequence target の MOV は明示音声 clips（空なら silence）を使い、Sequence の audio track を自動で mux しない。
+投入側は `ProjectStore::read_snapshot` の READ_ONLY / query_only を使い、journal 変更・migration・checkpoint をしない。envelope schema 1 は RenderSnapshot、`SequenceRenderRequest`、出力 profile、明示音声配置、required_features、backend を固定する。同期 render と同じ `freeze_render_input` と `RenderTarget`（Composition / Sequence）を使い、job 専用 target を作らない。Sequence、配置、資産、意味版、revision も固定入力に含める。AUDIO-003 の MOV は出力 profile に音声 mode を固定する。省略は既存の version 1 / explicit clips（空なら silence）。version 2 の document は同じ RenderSnapshot の Sequence / Composition 音声、silence は意図的な無音。document / silence と非空 clips の併用は拒否する。
 
 素材は外部参照のままであり、worker が content hash を照合する。一致しなければジョブは失敗する。フォントやデータの lock も同様に照合する。
 
@@ -87,7 +87,7 @@ GUI / CLI / MCP
 
 この生存確認はプロセスの進捗や起動 identity を証明しない。停止・hang・未回収 zombie、PID 再利用では slot 解放が遅れる場合がある。生存中のプロセスを期限だけで中断する方法へ戻さず、進捗監視・起動 identity の強化は後続で設計する。Unix 以外の生存確認は実装しておらず、Windows detached worker の `UNSUPPORTED_FEATURE` は維持する。
 
-画像連番は destination volume の temporary directory に全 artifact を出力し、manifest・metadata・byte 長・hash・snapshot identity を再読検証する。MOV は ProRes + stereo 48 kHz PCM24、明示 background と clips を同じ AvExportSnapshot から出力し、stream / PTS / duration / snapshot metadata を probe する。frame 境界と確定前に cancel を確認する。DB transaction 内で lease / cancel を再確認し、atomic NOREPLACE rename で全 directory または MOV file を一度に確定する。既存成果物は空 directory も上書きしない。
+画像連番は destination volume の temporary directory に全 artifact を出力し、manifest・metadata・byte 長・hash・snapshot identity を再読検証する。MOV は ProRes + stereo 48 kHz PCM24、明示 background と選択 mode の音声を同じ AvExportSnapshot から出力し、stream / PTS / duration / snapshot metadata を probe する。frame 境界と確定前に cancel を確認する。DB transaction 内で lease / cancel を再確認し、atomic NOREPLACE rename で全 directory または MOV file を一度に確定する。既存成果物は空 directory も上書きしない。
 
 MOV の現行上限・SDR 契約は AUDIO-000 のまま。AV1 / H.264 / HEVC の job profile は未提供。SIGKILL は destination の temporary directory を残す場合がある。また rename と DB commit の間の電源断では検証済み成果物と interrupted 記録が共存しうる。temporary output 回収・成果物照合・再開は RECOVERY-001 で設計し、自動で成功扱いにしない。
 
@@ -106,3 +106,17 @@ GUI の UI 状態も同じ状態領域に保存する（[10 デスクトップ G
 ## 未決事項
 
 - 再開時に完了済みの区間をどこまで再利用できるか（RECOVERY-001 で設計）。
+
+## AUDIO-003 の固定音声入力
+
+[ADR-0063](../adr/0063-document-audio-and-clip-volume.md) の `audio` / `profile_version` と
+Clip volume / Curve / Media source / nested maps は input.json に保存する。
+worker は最新 Project を読まず、owned RenderSnapshot から文書音声 plan を再コンパイルする。
+AvExportSnapshot schema 2 は mode と flatten 済み placement を hash に含め、元の固定文書と照合する。
+文書音声の音量編集は RenderSnapshot hash にも反映し、mode は job input_hash / export hash に反映する。
+report の audio_source / audio_profile_version と両 snapshot hash は同期 `render.export` と共有する。
+
+動画 / 音声を同じ revision に固定し、作品を編集・削除しても変えない。外部 asset 自体は引き続き
+hash lock で検証し、欠落 / hash 不一致 / clipping で失敗した worker は MOV を publish しない。
+NTSC sample count / decoded A/V の固定性と failure publication は
+[AUDIO-003 の検証](../testing/audio-003.md) を参照。host GPU / hardware 検証は別 gate。

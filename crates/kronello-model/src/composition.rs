@@ -103,6 +103,20 @@ pub enum NodeKind {
     Shape { content_ref: ContentId },
     Text { content_ref: ContentId },
     CompositionInstance(CompositionInstance),
+    Media(MediaNode),
+}
+
+/// Explicit media stream; AUDIO-003 executes audio only.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MediaNode {
+    pub asset: crate::AssetId,
+    pub stream_index: u32,
+    pub source_in: kronello_time::Time,
+    /// Maps time relative to the owning node's active_range.start.
+    pub time_map: TimeMap,
+    /// A kronello.audio.volume Property owned by the same SceneNode.
+    pub volume: PropertyId,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
@@ -244,6 +258,8 @@ pub struct CompositionReference {
 
 #[derive(Debug, Clone, PartialEq, Error)]
 pub enum CompositionError {
+    #[error("invalid Media node {node}: {message}")]
+    InvalidMedia { node: NodeId, message: String },
     #[error("design extent must have positive finite dimensions")]
     InvalidDesignExtent,
     #[error("duplicate Composition ID: {id}")]
@@ -362,6 +378,20 @@ pub fn validate_compositions(
                 &mut property_ids,
                 &mut errors,
             );
+            if let NodeKind::Media(media) = &node.kind {
+                let valid = media.source_in >= kronello_time::Time::ZERO
+                    && node
+                        .properties
+                        .iter()
+                        .find(|p| p.id() == media.volume)
+                        .is_some_and(|p| crate::validate_volume(p).is_ok());
+                if !valid {
+                    errors.push(CompositionError::InvalidMedia {
+                        node: node.id,
+                        message: "source_in or volume Property".into(),
+                    });
+                }
+            }
             if let NodeKind::CompositionInstance(instance) = &node.kind {
                 if !instance_ids.insert(instance.id) {
                     errors.push(CompositionError::DuplicateInstanceId { id: instance.id });

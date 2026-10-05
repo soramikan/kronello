@@ -68,6 +68,18 @@ pub struct CoveragePath {
 }
 #[derive(Debug, Clone, PartialEq)]
 pub enum DagNode {
+    VideoDraw {
+        asset: kronello_model::Asset,
+        stream_index: u32,
+        time: kronello_time::Time,
+        extent: [f64; 2],
+        output_to_local: [[f64; 3]; 2],
+        bounds: crate::PixelBounds,
+    },
+    /// Explicit CPU-prepared working-space premultiplied image input.
+    RasterInput {
+        pixels: Vec<[f32; 4]>,
+    },
     Geometry {
         key: SceneKey,
         resolved: ResolvedShape,
@@ -102,7 +114,10 @@ pub enum DagNode {
 impl DagNode {
     pub fn inputs(&self) -> Vec<usize> {
         match self {
-            Self::Geometry { .. } | Self::TextLayout { .. } => vec![],
+            Self::Geometry { .. }
+            | Self::TextLayout { .. }
+            | Self::VideoDraw { .. }
+            | Self::RasterInput { .. } => vec![],
             Self::CoverageDraw { geometry, .. } => vec![*geometry],
             Self::IsolatedComposite { children, .. } => children.clone(),
             Self::Mask { source, matte, .. } => vec![*source, *matte],
@@ -122,6 +137,58 @@ pub struct RenderDag {
     bounds: Vec<crate::NodeBounds>,
 }
 impl RenderDag {
+    /// Resolve external video only through a caller-selected media backend.
+    /// Sampling is nearest, at the output pixel center, without frame interpolation.
+    pub fn resolve_video(
+        &self,
+        mut decode: impl FnMut(
+            &kronello_model::Asset,
+            u32,
+            kronello_time::Time,
+            ColorSpace,
+        ) -> Result<crate::VideoImage, RenderError>,
+    ) -> Result<Self, RenderError> {
+        let mut dag = self.clone();
+        for node in &mut dag.nodes {
+            if let DagNode::VideoDraw {
+                asset,
+                stream_index,
+                time,
+                extent,
+                output_to_local,
+                ..
+            } = node
+            {
+                let image = decode(asset, *stream_index, *time, dag.working_space)?;
+                if image.size.contains(&0)
+                    || image.size[0] as usize * image.size[1] as usize != image.pixels.len()
+                {
+                    return Err(RenderError::InvalidInput("invalid video image size".into()));
+                }
+                let [w, h] = dag.execution_region.pixels;
+                let mapping = kronello_eval::Affine2(*output_to_local);
+                let mut pixels = Vec::with_capacity(w as usize * h as usize);
+                for y in 0..h {
+                    for x in 0..w {
+                        let p = mapping.transform_point([f64::from(x) + 0.5, f64::from(y) + 0.5]);
+                        pixels.push(
+                            if p[0] >= 0.0 && p[1] >= 0.0 && p[0] < extent[0] && p[1] < extent[1] {
+                                let sx =
+                                    (p[0] * f64::from(image.size[0]) / extent[0]).floor() as usize;
+                                let sy =
+                                    (p[1] * f64::from(image.size[1]) / extent[1]).floor() as usize;
+                                image.pixels[sy * image.size[0] as usize + sx]
+                            } else {
+                                [0.0; 4]
+                            },
+                        );
+                    }
+                }
+                *node = DagNode::RasterInput { pixels };
+            }
+        }
+        Ok(dag)
+    }
     pub fn nodes(&self) -> &[DagNode] {
         &self.nodes
     }
@@ -207,6 +274,25 @@ impl Builder<'_> {
         let mut children = vec![];
         match &n.content {
             SceneContent::Empty => (),
+            SceneContent::Video {
+                asset,
+                stream_index,
+                time,
+                extent,
+            } => {
+                let b = crate::DesignBounds::checked([0.0; 2], *extent)?.transform(transform)?;
+                children.push(self.push(DagNode::VideoDraw {
+                    asset: asset.clone(),
+                    stream_index: *stream_index,
+                    time: *time,
+                    extent: *extent,
+                    output_to_local: inverse(transform)?,
+                    bounds: crate::PixelBounds {
+                        min: b.min,
+                        max: b.max,
+                    },
+                })?);
+            }
             SceneContent::Shape {
                 definition,
                 values,
@@ -330,6 +416,17 @@ impl Builder<'_> {
                     &map_effect(effect, n.world_transform)?,
                     scale,
                 )?,
+            })?;
+        }
+        if !n.post_effect_opacity.is_finite() || !(0.0..=1.0).contains(&n.post_effect_opacity) {
+            return Err(RenderError::InvalidInput(
+                "invalid transition opacity".into(),
+            ));
+        }
+        if n.post_effect_opacity != 1.0 {
+            id = self.push(DagNode::IsolatedComposite {
+                children: vec![id],
+                opacity: n.post_effect_opacity,
             })?;
         }
         if let Some(binding) = self.scene.mattes.iter().find(|m| m.source == n.key) {
@@ -575,6 +672,10 @@ fn derive_bounds(nodes: &[DagNode]) -> Vec<crate::NodeBounds> {
     };
     for node in nodes {
         let value = match node {
+            DagNode::VideoDraw { bounds, .. } => NodeBounds {
+                ink_bounds: Some(*bounds),
+                visual_bounds: Some(*bounds),
+            },
             DagNode::CoverageDraw { path, .. } => {
                 let points: Vec<_> = path
                     .contours

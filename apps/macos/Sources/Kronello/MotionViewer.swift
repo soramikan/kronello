@@ -95,7 +95,7 @@ struct MotionViewer: View {
                     if model.ui.tool == "select", let selected = model.selected, !model.ui.locked.contains(selected.id),
                        let bounds = model.candidateBounds ?? selected.bounds(model.ui.bounds) {
                         let selection = KRViewerSelection(CGRect(x: bounds.minX / model.extent.width, y: bounds.minY / model.extent.height,
-                            width: bounds.width / model.extent.width, height: bounds.height / model.extent.height), label: "\(model.ui.bounds) \(Int(bounds.width)) × \(Int(bounds.height))")
+                            width: bounds.width / model.extent.width, height: bounds.height / model.extent.height), label: "\(model.ui.bounds) \(Int(bounds.width.rounded())) × \(Int(bounds.height.rounded()))")
                         KRManipulationOverlay(selection, onPreview: { translation, handle, rotate in
                             if canvasEdit == nil { canvasEdit = model.beginCanvasEdit() }
                             if let edit = canvasEdit { model.previewCanvas(edit, translation: translation, handle: handle, rotate: rotate) }
@@ -108,7 +108,7 @@ struct MotionViewer: View {
                     .contentShape(Rectangle()).gesture(backgroundGesture(size: size))
                     .scaleEffect(zoom).offset(x: model.ui.panX, y: model.ui.panY)
                     .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
-            }.padding(KRSpace.space4).clipped().focusable().focused($viewerFocused).focusEffectDisabled().krFocusRing(viewerFocused)
+            }.padding(KRSpace.space4).clipped().focusable().focused($viewerFocused).focusEffectDisabled().krFocusRing(viewerFocused, inset: true)
                 .onKeyPress(.space) { model.playing.toggle(); return .handled }
                 .onKeyPress(.leftArrow) { model.seek(model.frame - 1); return .handled }
                 .onKeyPress(.rightArrow) { model.seek(model.frame + 1); return .handled }

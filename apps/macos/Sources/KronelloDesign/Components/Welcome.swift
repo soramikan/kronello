@@ -16,7 +16,12 @@ public enum KRWindowMetrics {
     public static let welcomeWidth: CGFloat = 680
     public static let welcomeHeight: CGFloat = 420
     public static let handle: CGFloat = 7
+    /// Axis fields (X / Y) without unit.
     public static let numberWidth: CGFloat = 64
+    /// Single-value fields with their unit.
+    public static let scalarWidth: CGFloat = 88
+    /// Inspector setting controls (font, weight, alignment), as in the motion gallery.
+    public static let settingWidth: CGFloat = 144
 }
 
 public struct KRRecentProject: Identifiable {
