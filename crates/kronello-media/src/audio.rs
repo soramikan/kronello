@@ -7,6 +7,16 @@ use serde::{Deserialize, Serialize};
 
 use crate::{MediaError, MediaRuntime, content_hash, ffi, resolve_asset};
 
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum DeliveryAudioCodec {
+    #[default]
+    Alac,
+    Aac,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct DecodedAudio {
     pub buffer: AudioBuffer,
@@ -106,15 +116,35 @@ impl MediaRuntime {
         policy: ClippingPolicy,
         output: &Path,
     ) -> Result<AudioEncodeReport, MediaError> {
+        self.encode_audio_codec(bus, policy, output, false)
+    }
+    /// Lossless MP4 audio stage, using exactly the existing PCM24 quantizer.
+    /// Movie profiles remux these packets to their declared MOV/MP4 container.
+    pub fn encode_alac(
+        &self,
+        bus: &Bus,
+        policy: ClippingPolicy,
+        output: &Path,
+    ) -> Result<AudioEncodeReport, MediaError> {
+        self.encode_audio_codec(bus, policy, output, true)
+    }
+    fn encode_audio_codec(
+        &self,
+        bus: &Bus,
+        policy: ClippingPolicy,
+        output: &Path,
+        alac: bool,
+    ) -> Result<AudioEncodeReport, MediaError> {
+        let name = if alac { "alac" } else { "pcm_s24le" };
         if !self
             .capabilities
             .codecs
             .iter()
-            .any(|c| c.encoder && c.name == "pcm_s24le")
+            .any(|c| c.encoder && c.name == name)
         {
             return Err(MediaError::EncoderUnavailable {
-                encoder: "pcm_s24le".into(),
-                reason: "native PCM24 encoder is missing".into(),
+                encoder: name.into(),
+                reason: "native audio encoder is missing".into(),
                 ffmpeg: None,
             });
         }
@@ -123,11 +153,12 @@ impl MediaRuntime {
             return Err(MediaError::InvalidInput("empty audio output".into()));
         }
         let temp = stage_file(output)?;
-        self.native.encode_audio(temp.path(), &quantized.samples)?;
+        self.native
+            .encode_audio(temp.path(), &quantized.samples, alac)?;
         temp.as_file().sync_all()?;
         publish_file(temp, output)?;
         Ok(AudioEncodeReport {
-            codec: "pcm_s24le".into(),
+            codec: name.into(),
             sample_rate: 48_000,
             channels: 2,
             frames: bus.buffer().frames().len(),
