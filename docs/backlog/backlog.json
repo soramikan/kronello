@@ -753,7 +753,7 @@
       "priority": "P2",
       "area": "vector",
       "title": "グラデーションの拡張",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "VEC-003"
       ],
@@ -921,7 +921,7 @@
       "priority": "P2",
       "area": "effects",
       "title": "非一様affine下のblur/shadow",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "FX-001"
       ],
