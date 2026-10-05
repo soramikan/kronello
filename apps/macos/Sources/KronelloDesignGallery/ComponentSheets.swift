@@ -93,6 +93,21 @@ enum ComponentSheets {
                 KRButton("書き出す", variant: .primary, appearance: .focused) {}
                 number(.focused); KRCheckbox("表示する", isOn: .constant(true), appearance: .focused)
                 KRPopupButton("解像度", options: options, selection: .constant("full"), appearance: .focused).frame(width: 120)
+            })),
+            ("FocusRing-container", AnyView(VStack(alignment: .leading, spacing: KRSpace.space4) {
+                Text("コンテナのみフォーカス").krText(KRType.caption)
+                HStack(spacing: KRSpace.space3) {
+                    KRButton("操作") {}
+                    KRSearchField(text: .constant("")).frame(width: 160)
+                    KRKeyframeNavigator(source: .curve, onKeyframe: true, previous: {}, next: {})
+                    number()
+                }.padding(KRSpace.space3).krFocusRing(true, inset: true)
+                Text("子の control のみフォーカス").krText(KRType.caption)
+                HStack(spacing: KRSpace.space3) {
+                    KRButton("操作", appearance: .focused) {}
+                    KRSearchField(text: .constant("")).frame(width: 160)
+                    number()
+                }.padding(KRSpace.space3).krFocusRing(false, inset: true)
             }))
         ]
     }
