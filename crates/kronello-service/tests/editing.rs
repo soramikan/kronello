@@ -18,6 +18,8 @@ fn setup() -> (tempfile::TempDir, PathBuf, Project) {
     let p = fixture();
     service()
         .dispatch(Request::ProjectCreate(CreateRequest {
+            plan_hash: None,
+            idempotency_key: None,
             project: path.clone(),
             document: p.clone(),
         }))
@@ -745,6 +747,8 @@ fn optional_content_collection_inverse_preserves_independent_insertions() {
     p.texts.clear();
     service()
         .dispatch(Request::ProjectCreate(CreateRequest {
+            plan_hash: None,
+            idempotency_key: None,
             project: path.clone(),
             document: p.clone(),
         }))

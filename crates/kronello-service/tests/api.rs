@@ -25,6 +25,8 @@ fn setup(document: Project) -> (tempfile::TempDir, PathBuf) {
     let project = dir.path().join("api.kronello");
     service()
         .dispatch(Request::ProjectCreate(CreateRequest {
+            plan_hash: None,
+            idempotency_key: None,
             project: project.clone(),
             document,
         }))
@@ -206,7 +208,7 @@ fn capabilities_registry_media_extension_without_device_initialization() {
     ) else {
         panic!()
     };
-    assert_eq!(c.commands.len(), 36);
+    assert_eq!(c.commands.len(), 38);
     assert_eq!(c.api_schema_version, 1);
     assert_eq!(c.semantic_versions.document, PROJECT_SEMANTIC_VERSION);
     let media = c.media.unwrap();
@@ -548,6 +550,8 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
     let sequence = json!({"id":Uuid::new_v4(), "extent":{"width":64.0,"height":32.0}, "frame_rate":{"num":"24","den":"1"}, "audio_rate":48000, "working_space":"linear_rec709", "tracks":[]});
     let clip = json!({"id":Uuid::new_v4(), "source_ref":{"kind":"composition","composition":composition}, "timeline_range":{"start":{"num":"0","den":"1"},"end":time}, "source_in":{"num":"0","den":"1"}, "time_map":{"kind":"linear","offset":{"num":"0","den":"1"},"speed":{"num":"1","den":"1"}}, "links":[],"effects":[]});
     let requests = vec![
+        json!({"operation":"project.create_plan", "project":path, "document":p}),
+        json!({"operation":"project.import_plan", "project":path, "base_revision":"1", "document":p}),
         json!({"operation":"sequence.query", "project":path,"sequence":uuid}),
         json!({"operation":"sequence.create", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"seq","sequence":sequence}),
         json!({"operation":"clip.place", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"clip","sequence":uuid,"track":uuid,"clip":clip}),
@@ -863,7 +867,11 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
     })).unwrap()));
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("contracts.kronello");
+    execute(json!({"operation":"project.create_plan", "project":path, "document":document}));
     execute(json!({"operation":"project.create", "project":path, "document":document}));
+    execute(
+        json!({"operation":"project.import_plan", "project":path, "base_revision":"1", "document":document}),
+    );
     execute(
         json!({"operation":"project.import", "project":path, "base_revision":"1", "document":document}),
     );
@@ -1083,10 +1091,15 @@ fn all_filesystem_boundaries_reject_uris_before_access() {
         let mut document = document.clone();
         document["assets"] =
             json!([{"id":Uuid::new_v4(), "locator":{slot:"https://example.invalid/movie.mp4"}}]);
-        for operation in ["project.create", "project.import"] {
+        for operation in [
+            "project.create",
+            "project.import",
+            "project.create_plan",
+            "project.import_plan",
+        ] {
             let mut request =
                 json!({"operation":operation, "project":"missing.kronello", "document":document});
-            if operation == "project.import" {
+            if operation == "project.import" || operation == "project.import_plan" {
                 request["base_revision"] = json!("0");
             }
             invalid_locator(request);

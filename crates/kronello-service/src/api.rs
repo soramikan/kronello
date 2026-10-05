@@ -98,6 +98,8 @@ macro_rules! commands {
             ("job.list", true, JobListRequest, JobListResult),
             ("job.cancel", true, JobRequest, kronello_jobs::JobRecord),
             ("job.prune", true, JobPruneRequest, kronello_jobs::PruneResult),
+            ("project.create_plan", true, CreatePlanRequest, ProjectChangePlan),
+            ("project.import_plan", true, ImportPlanRequest, ProjectChangePlan),
             ("project.create", false, CreateRequest, ProjectInfo),
             ("project.import", false, ImportRequest, ProjectInfo),
             ("project.export", true, ProjectRequest, ExportResult),
@@ -167,6 +169,8 @@ impl CapabilitiesResult {
                 "curve",
                 "expression",
                 "selective_undo",
+                "project_change_plans",
+                "modifier_editing",
                 "template",
             ]
             .map(String::from)

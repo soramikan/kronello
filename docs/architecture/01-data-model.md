@@ -78,3 +78,10 @@ Video / Image Media の描画は COMP-002 まで型付き未対応。
 Audio track も Composition source を持てる。Video CompositionClip は参照先の音声を一度継承する。
 出力 mode、時間写像、trim の sample phase と編集規則は
 [ADR-0063](../adr/0063-document-audio-and-clip-volume.md) と [基本音声](audio-000.md) を参照。
+
+
+SERVICE-002 の Modifier 編集は既存 Modifier の id / key / version / enabled / parameters と
+Property.modifiers の順序付き配列を使い、Project schema を変更しない。
+insert / replace / remove / reorder は共有 EditCommand とし、保存可能性と評価可能性を区別する。
+[ADR-0071](../adr/0071-project-change-plans-and-modifier-edits.md)、
+[03 プロパティとアニメーション](03-property-animation.md#service-002-の-modifier-authoring) を参照。

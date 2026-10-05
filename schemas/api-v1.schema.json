@@ -877,11 +877,39 @@
       "format": "uuid",
       "type": "string"
     },
+    "CreatePlanRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/Project"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "document"
+      ],
+      "type": "object"
+    },
     "CreateRequest": {
       "additionalProperties": false,
       "properties": {
         "document": {
           "$ref": "#/$defs/Project"
+        },
+        "idempotency_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "plan_hash": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "project": {
           "type": "string"
@@ -1727,6 +1755,135 @@
           },
           "required": [
             "instance_place"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "modifier_insert": {
+              "additionalProperties": false,
+              "properties": {
+                "index": {
+                  "format": "uint",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "modifier": {
+                  "$ref": "#/$defs/Modifier"
+                },
+                "object": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "property": {
+                  "$ref": "#/$defs/PropertyId"
+                }
+              },
+              "required": [
+                "object",
+                "property",
+                "modifier",
+                "index"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "modifier_insert"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "modifier_replace": {
+              "additionalProperties": false,
+              "properties": {
+                "modifier": {
+                  "$ref": "#/$defs/Modifier"
+                },
+                "object": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "property": {
+                  "$ref": "#/$defs/PropertyId"
+                }
+              },
+              "required": [
+                "object",
+                "property",
+                "modifier"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "modifier_replace"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "modifier_remove": {
+              "additionalProperties": false,
+              "properties": {
+                "modifier": {
+                  "$ref": "#/$defs/ModifierId"
+                },
+                "object": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "property": {
+                  "$ref": "#/$defs/PropertyId"
+                }
+              },
+              "required": [
+                "object",
+                "property",
+                "modifier"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "modifier_remove"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "modifier_reorder": {
+              "additionalProperties": false,
+              "properties": {
+                "object": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "order": {
+                  "items": {
+                    "$ref": "#/$defs/ModifierId"
+                  },
+                  "type": "array"
+                },
+                "property": {
+                  "$ref": "#/$defs/PropertyId"
+                }
+              },
+              "required": [
+                "object",
+                "property",
+                "order"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "modifier_reorder"
           ],
           "type": "object"
         }
@@ -2978,6 +3135,26 @@
       ],
       "type": "object"
     },
+    "ImportPlanRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision": {
+          "type": "string"
+        },
+        "document": {
+          "$ref": "#/$defs/Project"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "base_revision",
+        "document"
+      ],
+      "type": "object"
+    },
     "ImportRequest": {
       "additionalProperties": false,
       "properties": {
@@ -2987,6 +3164,18 @@
         },
         "document": {
           "$ref": "#/$defs/Project"
+        },
+        "idempotency_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "plan_hash": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "project": {
           "type": "string"
@@ -4524,6 +4713,53 @@
       ],
       "type": "object"
     },
+    "ProjectChangeKind": {
+      "enum": [
+        "create",
+        "import"
+      ],
+      "type": "string"
+    },
+    "ProjectChangePlan": {
+      "additionalProperties": false,
+      "properties": {
+        "base_content_hash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "base_revision": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "candidate": {
+          "$ref": "#/$defs/Project"
+        },
+        "expected_absent": {
+          "type": "boolean"
+        },
+        "operation": {
+          "$ref": "#/$defs/ProjectChangeKind"
+        },
+        "plan_hash": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation",
+        "project",
+        "expected_absent",
+        "candidate",
+        "plan_hash"
+      ],
+      "type": "object"
+    },
     "ProjectInfo": {
       "additionalProperties": false,
       "properties": {
@@ -6026,9 +6262,21 @@
             "document": {
               "$ref": "#/$defs/Project"
             },
+            "idempotency_key": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "operation": {
               "const": "project.create",
               "type": "string"
+            },
+            "plan_hash": {
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "project": {
               "type": "string"
@@ -6051,9 +6299,21 @@
             "document": {
               "$ref": "#/$defs/Project"
             },
+            "idempotency_key": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "operation": {
               "const": "project.import",
               "type": "string"
+            },
+            "plan_hash": {
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "project": {
               "type": "string"
@@ -6457,6 +6717,52 @@
           },
           "required": [
             "operation"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "base_revision": {
+              "type": "string"
+            },
+            "document": {
+              "$ref": "#/$defs/Project"
+            },
+            "operation": {
+              "const": "project.import_plan",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "base_revision",
+            "document"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "document": {
+              "$ref": "#/$defs/Project"
+            },
+            "operation": {
+              "const": "project.create_plan",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "document"
           ],
           "type": "object"
         }
@@ -6899,6 +7205,23 @@
             },
             "value": {
               "$ref": "#/$defs/CapabilitiesResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "project_plan",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/ProjectChangePlan"
             }
           },
           "required": [
