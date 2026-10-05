@@ -34,10 +34,11 @@ CommandLineTools の SwiftPM は `SwiftUIMacros` が欠落し、初回 build は
 | SwiftPM XCTest | 68 passed、0 failures、0 skips | Design19 / Core4 / AppModel45。AppModel は Edit11 / Editor7 / Integration2 / Motion15 / Playback3 / QA2 / Workflow5 |
 | 最終 SwiftPM / 三入口、`8b94950`のcode | 68 passed、0 failures、0 skips、23操作のsnapshot一致 | `target/m3-acceptance/final-qa/report.json` / `gui.json` / `ime.json` / `cli-mcp.json`。最適化FFI、実Integration evidenceを再取得 |
 | Motion→Edit transition修正後のSwiftPM | 69 passed、0 failures、0 skips | `target/m3-acceptance/gui-transition-swift.log`。未取得Sequence geometry / 旧playback targetの回帰1件を追加、Rust core変更なし |
+| native clip / AX数値入力修正後のSwiftPM | 70 passed、0 failures、0 skips | `target/m3-acceptance/clip-hit-final-swift.log`。Design19 / Core4 / AppModel47、3個のxctest bundleの総数。AppModelのnative mouse境界を1件追加 |
 | 三入口等価性 | 23操作すべて同じ canonical snapshot | `target/m3-acceptance/qa/report.json`、`gui_compared:true`、実 FFI / CLI / MCP の独立 project |
 | 第2段階 FFI 値表示 | 成功 | SwiftPM IntegrationTests が `target/m3-acceptance/integration-metal/gui-evidence.json` を明示取得して全値・boundsを照合 |
 | 第2段階の直接GUI閲覧 | 横型 / 縦型の値・bounds・日本語2行→4行の再layout一致 | revision14、`target/m3-acceptance/integration-{landscape,portrait}-shape.png`。INTEGRATION-002の2条件を確認しdone |
-| native IME 境界 | 成功 | QA の `ime.json`。未確定 / 取消の commit0、確定の単一 Event、UTF-8 の結合濁点差分 |
+| native IME 境界 / QA-002正式受け入れ | 成功、done | QA の `ime.json`。未確定 / 取消の commit0、確定の単一 Event、UTF-8 の結合濁点差分 |
 | macOS JOB 実プロセス | 8 passed、0 failures、1 ignored | `--features test-worker --test processes`。ignored は load50 の明示 stress |
 | macOS JOB 高負荷、FIFO修正後 | CLI24/24を2回成功、146 workers / orphan0 | `c860d07` clean HEAD、64 burners、最後40 sampleのload79.06–99.68。[JOB-002](job-002.md)末尾 |
 | Linux / macOS JOB最終production CI | 全workspace / clippy / 実process証拠が成功 | run37381037423、各62 workers / orphan0 / errors0。Windows processes成功、stateの並列retry testだけ次CI待ち |
@@ -71,7 +72,8 @@ KRONELLO_STATE_ROOT="$PWD/target/m3-acceptance/job-state" \
 ## 受け入れ確認を続ける範囲
 
 - 主エージェントが実アプリを直接操作して Dark / Light、クリップ操作、テンプレート・書き出し、
-  macOS 日本語入力ソースの候補ウインドウ / 確定 / 取消を確認する。
+  尺入力等の残件を確認する。QA-002の正式2条件は本番native input境界と三入口比較で成功した。
+  OSの実候補ウインドウ / Kotoeri / VoiceOverは未検証として保証範囲から分ける。
 - AUDIO-002 は負荷並行 / 最終quietの実デバイス / Metal測定とnative callback分離のreviewが成功し `done`。
   物理scanout / loopback / 主観的listeningの保証は含めない。
 - RENDER-003 の長尺 / 4K / memory / 障害の実測と最終統合の必須 Rust gate / GPU goldenは成功。

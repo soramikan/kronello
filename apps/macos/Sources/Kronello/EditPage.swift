@@ -241,30 +241,25 @@ struct SequenceTracks: View {
         let end = c?.end ?? clip.end.frames(rateNum: model.rateNum, rateDen: model.rateDen)
         let missing = model.clipMissing(clip)
         return KRClip(model.clipName(clip), kind: clip.kind, state: missing.map { .missing($0) } ?? (model.ui.clipSelection == clip.id ? .selected : .resting), onSelect: { model.selectClip(clip.id) })
-            .allowsHitTesting(model.editTool != "blade")
-            .accessibilityHidden(model.editTool == "blade")
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
             .overlay { if model.editTool == "blade" {
                 KRBladeHitArea("\(model.clipName(clip)) を分割", begin: { fraction in
                     model.beginClipGesture(clip, mode: .blade); model.updateClipGesture(at: model.bladeFrame(clip, fraction: fraction))
                 }, update: { model.updateClipGesture(at: model.bladeFrame(clip, fraction: $0)) }, release: { Task { await model.commitClipGesture() } })
+            } else {
+                KRClipHitArea(missing.map { model.clipName(clip) + " " + $0 } ?? model.clipName(clip),
+                    select: { tracksFocused = true; model.selectClip(clip.id) },
+                    open: { if clip.composition != nil { model.openClipInMotion(clip) } },
+                    begin: { mode in
+                        model.beginClipGesture(clip, mode: mode == .move ? .move : mode == .trimStart ? .trimStart : .trimEnd)
+                    }, update: { model.updateClipGesture(delta: Int64(($0 / frameWidth).rounded())) },
+                    release: { Task { await model.commitClipGesture() } }, cancel: model.cancelClipGesture)
             } }
-            .overlay(alignment: .leading) { if model.editTool != "blade" { trimHandle(clip, mode: .trimStart, frameWidth: frameWidth).frame(width: 6) } }
-            .overlay(alignment: .trailing) { if model.editTool != "blade" { trimHandle(clip, mode: .trimEnd, frameWidth: frameWidth).frame(width: 6) } }
             .overlay { if let c, c.mode == .blade { p.selection.frame(width: 1).offset(x: Double(c.cut - start) * frameWidth - Double(end - start) * frameWidth / 2).allowsHitTesting(false) } }
             .frame(width: max(1, Double(end - start) * frameWidth))
             .offset(x: KRSpace.space2 + Double(start) * frameWidth)
-            .simultaneousGesture(TapGesture(count: 2).onEnded { if model.editTool != "blade", clip.composition != nil { model.openClipInMotion(clip) } })
-            .gesture(DragGesture(minimumDistance: 3, coordinateSpace: .named("sequenceTracks")).onChanged { value in
-                guard model.editTool != "blade" else { return }
-                model.beginClipGesture(clip, mode: .move)
-                model.updateClipGesture(delta: Int64((value.translation.width / frameWidth).rounded()))
-            }.onEnded { _ in if model.editTool != "blade" { Task { await model.commitClipGesture() } } }, including: model.editTool == "blade" ? .none : .all)
             .disabled(locked || model.busy || model.pendingCandidate != nil)
-    }
-    func trimHandle(_ clip: EditClip, mode: TimelineCandidate.Mode, frameWidth: Double) -> some View {
-        Rectangle().fill(Color.clear).contentShape(Rectangle()).highPriorityGesture(DragGesture(minimumDistance: 3, coordinateSpace: .named("sequenceTracks")).onChanged {
-            model.beginClipGesture(clip, mode: mode); model.updateClipGesture(delta: Int64(($0.translation.width / frameWidth).rounded()))
-        }.onEnded { _ in Task { await model.commitClipGesture() } }).help(mode == .trimStart ? "開始をトリム" : "末尾をトリム")
     }
 }
 

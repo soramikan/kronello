@@ -143,6 +143,10 @@ public struct KRNumberField: View {
             .onDisappear { if cursorPushed { NSCursor.pop(); cursorPushed = false } }
             .accessibilityElement(children: editing ? .contain : .ignore)
             .accessibilityLabel(label).accessibilityValue(failed ? "エラー" : "\(format(value)) \(unit)")
+            .accessibilityAction(.default) {
+                guard enabled && !failed && !editing else { return }
+                beginEditing()
+            }
             .accessibilityAdjustableAction { direction in
                 guard enabled && !failed else { return }
                 let next = KRNumberEdit(value: value, step: step, range: range).stepped(direction == .increment ? 1 : -1)

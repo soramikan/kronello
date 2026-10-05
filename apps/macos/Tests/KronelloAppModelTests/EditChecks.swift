@@ -232,6 +232,55 @@ import KronelloDesign
         view.enabled = false; try require(!view.accessibilityPerformPress(), "Disabled hit area rejects accessibility edits")
         await finish(f)
     }
+    func verifyClipDragMouseHitPath() async throws {
+        let f = try await fixture(), e = f.editor, clip = e.editClips[0]
+        e.editSnap = false
+        let view = KRClipHitView(frame: NSRect(x: 0, y: 0, width: 200, height: 36))
+        var releases = 0
+        view.select = { e.selectClip(clip.id) }
+        view.open = { e.openClipInMotion(clip) }
+        view.begin = { e.beginClipGesture(clip, mode: $0 == .move ? .move : $0 == .trimStart ? .trimStart : .trimEnd) }
+        view.update = { e.updateClipGesture(delta: Int64(($0 / 2).rounded())) }
+        view.release = { releases += 1; Task { await e.commitClipGesture() } }
+        view.cancel = e.cancelClipGesture
+        func event(_ kind: NSEvent.EventType, _ x: Double, clicks: Int = 1) -> NSEvent {
+            NSEvent.mouseEvent(with: kind, location: NSPoint(x: x, y: 18), modifierFlags: [], timestamp: 0,
+                windowNumber: 0, context: nil, eventNumber: 1, clickCount: clicks, pressure: kind == .leftMouseUp ? 0 : 1)!
+        }
+        try require(view.hitTest(NSPoint(x: 100, y: 18)) === view, "Clip body routes raw points to the native drag receiver")
+        let applies = f.transport.applyCount, base = e.revision
+        view.mouseDown(with: event(.leftMouseDown, 100))
+        view.mouseDragged(with: event(.leftMouseDragged, 102))
+        try require(e.timelineCandidate == nil && e.ui.clipSelection == clip.id, "Click/subthreshold motion only selects")
+        view.mouseDragged(with: event(.leftMouseDragged, 148))
+        try require(e.timelineCandidate?.start == 24 && f.transport.applyCount == applies, "Move candidate stays local")
+        view.setFrameOrigin(NSPoint(x: 48, y: 0))
+        view.mouseDragged(with: event(.leftMouseDragged, 160))
+        try require(e.timelineCandidate?.start == 30, "Moving the preview does not change the press coordinate origin")
+        view.mouseUp(with: event(.leftMouseUp, 160)); view.mouseUp(with: event(.leftMouseUp, 160))
+        try await MotionChecks().waitForEdit(e, after: base)
+        try require(releases == 1 && f.transport.applyCount == applies + 1 && e.editClips[0].start.frames(rateNum: 24, rateDen: 1) == 30,
+                    "Native drag release applies exactly one shared move command")
+        await e.undo()
+        let trimBase = e.revision, beforeTrim = f.transport.applyCount
+        view.setFrameOrigin(.zero)
+        view.mouseDown(with: event(.leftMouseDown, 1)); view.mouseDragged(with: event(.leftMouseDragged, 13))
+        try require(e.timelineCandidate?.mode == .trimStart && e.timelineCandidate?.start == 6, "Leading six points route to trim")
+        view.setFrameOrigin(NSPoint(x: 12, y: 0)); view.mouseUp(with: event(.leftMouseUp, 25))
+        try await MotionChecks().waitForEdit(e, after: trimBase)
+        try require(releases == 2 && f.transport.applyCount == beforeTrim + 1 && e.editClips[0].start.frames(rateNum: 24, rateDen: 1) == 12,
+                    "Trim release retains its original press origin and applies once")
+        await e.undo()
+        view.setFrameOrigin(.zero)
+        let beforeClick = f.transport.applyCount
+        view.mouseDown(with: event(.leftMouseDown, 100)); view.mouseUp(with: event(.leftMouseUp, 101))
+        try require(releases == 2 && f.transport.applyCount == beforeClick && e.timelineCandidate == nil, "Click never emits an edit")
+        view.mouseDown(with: event(.leftMouseDown, 100, clicks: 2)); view.mouseUp(with: event(.leftMouseUp, 100))
+        try require(e.ui.page == "motion" && releases == 2 && f.transport.applyCount == beforeClick, "Double click navigates without moving the clip")
+        view.enabled = false
+        try require(!view.accessibilityPerformPress(), "Disabled native hit receiver rejects accessibility selection")
+        await finish(f)
+    }
     func runAll() async throws {
         try await verifyPlaceReleaseOnce(); print("PASS edit place release + Undo + CLI parity")
         try await verifyTrimReleaseOnce(); print("PASS edit trim release + Undo + CLI parity")
@@ -244,5 +293,6 @@ import KronelloDesign
         try await verifyProjectInventoryAndMissing(); print("PASS edit Project inventory, shared kind and ASSET_MISSING")
         try await verifyReviewPresentation(); print("PASS edit rational presentation, keyed preview errors and explicit CPU session choice")
         try await verifyBladeMouseHitPath(); print("PASS edit real NSEvent hit path and accessibility blade press = one command")
+        try await verifyClipDragMouseHitPath(); print("PASS clip move/trim native NSEvent hit path, stable origin, click and release-once")
     }
 }
