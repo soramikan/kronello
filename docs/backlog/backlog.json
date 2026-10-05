@@ -736,7 +736,7 @@
       "priority": "P2",
       "area": "gui",
       "title": "macOS GUI: テンプレートページと書き出しページ",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "GUI-001",
         "TEMPLATE-002",

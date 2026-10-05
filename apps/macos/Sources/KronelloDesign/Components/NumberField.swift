@@ -72,6 +72,7 @@ public struct KRNumberField: View {
     @State private var hover = false
     @State private var cursorPushed = false
     @State private var editing = false
+    @State private var inputFocused = false
     @State private var invalid = false
     @State private var dragCancelled = false
     @FocusState private var focused: Bool
@@ -91,7 +92,7 @@ public struct KRNumberField: View {
         HStack(alignment: .firstTextBaseline, spacing: 2) {
             if editing && !staticRendering {
                 KRCommittedTextInput(value: text, label: label, placeholder: "", muted: NSColor(p.inkMuted), ink: NSColor(p.ink), selection: NSColor(p.selection), enabled: enabled,
-                    onCommit: { text = $0; commitText() }, onFocus: { focused = $0; if !$0 && editing && !invalid { cancel() } },
+                    onCommit: { text = $0; commitText() }, onFocus: { inputFocused = $0; if !$0 && editing && !invalid { cancel() } },
                     font: KRType.timecode.nsFont(), alignment: .right, focusOnCreate: true, onCancel: cancel)
                     .frame(height: KRSize.controlHeight - 8)
             } else {
@@ -106,7 +107,7 @@ public struct KRNumberField: View {
             .overlay { RoundedRectangle(cornerRadius: KRRadius.radiusSm)
                 .strokeBorder(failed ? p.danger : scrubbing ? p.selection : p.lineStrong, lineWidth: 1) }
             .focusable(!editing && enabled && !error).focused($focused)
-            .focusEffectDisabled().krFocusRing(focused || appearance == .editing || appearance == .focused)
+            .focusEffectDisabled().krFocusRing(focused || inputFocused || appearance == .editing || appearance == .focused)
             .opacity(enabled ? 1 : 0.45)
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 0).onChanged { drag in
@@ -155,7 +156,7 @@ public struct KRNumberField: View {
     }
     private func beginEditing() {
         transaction = KRNumberEdit(value: value, step: step, range: range); transaction?.beginEditing()
-        text = format(value); editing = true; focused = true
+        text = format(value); focused = false; editing = true
     }
     private func updateCursor() {
         let needsCursor = hover && enabled && !editing && !failed
@@ -172,7 +173,7 @@ public struct KRNumberField: View {
         transaction = nil
     }
     private func cancel() {
-        transaction?.cancel(); transaction = nil; editing = false; invalid = false; focused = false
+        transaction?.cancel(); transaction = nil; editing = false; invalid = false; focused = false; inputFocused = false
         onPreview(value)
     }
 }
