@@ -1,6 +1,8 @@
 import Foundation
+import AppKit
 import KronelloAppModel
 import KronelloCore
+import KronelloDesign
 
 @MainActor struct EditChecks {
     struct Fixture {
@@ -162,16 +164,73 @@ import KronelloCore
         let path = output.appendingPathComponent("edit.kronello").path
         let transport = try RecordingTransport(path: path, worker: checks.root.appendingPathComponent("apps/macos/Libraries/kronello").path)
         let e = EditorModel(path: path, transport: transport, stateStore: .init(root: output.appendingPathComponent("user-state")))
+        e.fonts = try JSONSerialization.jsonObject(with: Data(contentsOf: output.appendingPathComponent("fonts.json"))) as! [[String: Any]]
         try await e.start()
         try require(e.ui.page == "edit" && e.editClips.count == 4, "Demo opens the actual Edit page with four Sequence clips")
         try require(e.editClips.filter { $0.kind == .video }.count == 2 && e.editClips.filter { $0.kind == .audio }.count == 1 && e.editClips.filter { $0.kind == .composition }.count == 1, "Shared ClipKind distinguishes video, audio and Composition")
         try require(e.editAssets.count == 4 && e.editAssets.filter { $0.missing == "ASSET_MISSING" }.count == 1 && e.editClips.filter { e.clipMissing($0) == "ASSET_MISSING" }.count == 1, "Project rows and timeline clips share the missing-asset diagnostic")
         try require(e.sequenceResult.objects("asset_status").filter { $0.string("availability") == "present_unverified" }.count == 2, "Present files are explicitly hash-unverified")
         try require(e.selectedClip?.composition != nil, "Demo selects a Composition clip for the Inspector")
+        let input: [String: Any] = ["project": path, "target": ["kind": "sequence", "sequence": e.ui.sequence!],
+            "fonts": e.fonts, "region": ["origin": [0, 0], "extent": [320, 180], "pixels": [32, 18]]]
+        let request: [String: Any] = ["operation": "render.frame", "input": input, "time": ["num": "0", "den": "1"], "backend": "cpu_reference"]
+        let native = try await transport.call(request)
+        var cliRequest = request; cliRequest.removeValue(forKey: "backend")
+        let cli = try checks.cli(cliRequest, arguments: ["--backend", "cpu-reference"])
+        try require(native.object("metadata").string("backend") == "cpu_reference_float32" && native.object("metadata").string("input_path").contains("software_video_decode"), "Explicit CPU request uses the shared video decode path")
+        try require(NSDictionary(dictionary: native) == NSDictionary(dictionary: cli), "Native FFI and CLI render.frame CPU pixels and metadata match exactly")
         let before = transport.callCounts["sequence.query", default: 0]
         try await e.reload()
         try require(transport.callCounts["sequence.query", default: 0] == before + 1, "One batched query refreshes all inventory and clips")
         await e.close()
+    }
+    func verifyReviewPresentation() async throws {
+        let f = try await fixture(), e = f.editor
+        try require(e.editClips[0].speedLabel == "100.0%" && !e.editClips[0].reversed, "String rational 1x displays 100.0%")
+        var clip = e.editClips[0].authored
+        clip["time_map"] = ["kind": "linear", "offset": ["num": "0", "den": "1"], "speed": ["num": "-3", "den": "2"]]
+        let reverse = EditClip(query: ["clip": clip])
+        try require(reverse.speedLabel == "-150.0%" && reverse.reversed, "Reverse derives from exact signed rational rate")
+        try require(EditPresentation.rateLabel(num: 24, den: 1) == "24 fps" && EditPresentation.rateLabel(num: 24000, den: 1001) == "23.976 fps", "Integer and NTSC header format")
+        try require(EditPresentation.rulerLabel(frame: 12, fps: 24) == "0s12f" && EditPresentation.rulerLabel(frame: 24, fps: 24) == "1s0f", "Ruler keeps subsecond frame units")
+        let old = e.previewIdentity
+        e.reportPreviewFailure(.init(code: "UNSUPPORTED_FEATURE", message: "video requires explicit media backend"), for: old)
+        try require(e.offersCPUReference && !e.usesCPUReference, "Video unsupported offers explicit action without silent fallback")
+        e.chooseCPUReference()
+        try require(e.usesCPUReference && e.previewFailure == nil && e.revision == old.revision, "CPU preference is session UI state only")
+        e.playing = true; try require(e.previewStale, "CPU playback displays an explicit stale frame state")
+        e.openClipInMotion(e.editClips[0]); e.reportPreviewFailure(.init(code: "UNSUPPORTED_FEATURE", message: "late video failure"), for: old)
+        try require(e.previewFailure == nil && !e.usesCPUReference, "Target change clears and rejects late Sequence errors")
+        e.ui.page = "edit"; try require(e.usesCPUReference, "CPU choice persists only for the chosen Sequence tab in session")
+        let beforeSeek = e.previewIdentity
+        e.previewFailure = .init(code: "ASSET_MISSING", message: "test")
+        e.seek(1); try require(e.previewFailure == nil, "Errors are keyed to exact time")
+        e.reportPreviewFailure(.init(code: "ASSET_MISSING", message: "late"), for: beforeSeek)
+        try require(e.previewFailure == nil, "Superseded time error is discarded")
+        await finish(f)
+    }
+    func verifyBladeMouseHitPath() async throws {
+        let f = try await fixture(), e = f.editor, clip = e.editClips[0]
+        let view = KRBladeHitView(frame: NSRect(x: 0, y: 0, width: 200, height: 36))
+        var releases = 0
+        view.begin = { fraction in e.beginClipGesture(clip, mode: .blade); e.updateClipGesture(at: e.bladeFrame(clip, fraction: fraction)) }
+        view.update = { e.updateClipGesture(at: e.bladeFrame(clip, fraction: $0)) }
+        view.release = { releases += 1; Task { await e.commitClipGesture() } }
+        try require(view.hitTest(NSPoint(x: 100, y: 18)) === view, "Blade hit area receives the raw clip point")
+        let down = NSEvent.mouseEvent(with: .leftMouseDown, location: NSPoint(x: 100, y: 18), modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil, eventNumber: 1, clickCount: 1, pressure: 1)!
+        let up = NSEvent.mouseEvent(with: .leftMouseUp, location: NSPoint(x: 100, y: 18), modifierFlags: [], timestamp: 0.01, windowNumber: 0, context: nil, eventNumber: 2, clickCount: 1, pressure: 0)!
+        let base = e.revision, applies = f.transport.applyCount
+        view.mouseDown(with: down)
+        try require(e.timelineCandidate?.cut == 24 && f.transport.applyCount == applies, "Mouse down displays the candidate without applying")
+        view.mouseUp(with: up); view.mouseUp(with: up)
+        try await MotionChecks().waitForEdit(e, after: base)
+        try require(releases == 1 && f.transport.applyCount == applies + 1 && e.editClips.count == 2, "Zero-motion mouse click issues exactly one split; duplicate up is ignored")
+        await e.undo(); let axBase = e.revision
+        try require(view.accessibilityPerformPress(), "Blade accessibility press is handled by the same hit area")
+        try await MotionChecks().waitForEdit(e, after: axBase)
+        try require(releases == 2 && f.transport.applyCount == applies + 2 && e.editClips.count == 2, "Accessibility press issues exactly one split at the clip midpoint")
+        view.enabled = false; try require(!view.accessibilityPerformPress(), "Disabled hit area rejects accessibility edits")
+        await finish(f)
     }
     func runAll() async throws {
         try await verifyPlaceReleaseOnce(); print("PASS edit place release + Undo + CLI parity")
@@ -183,5 +242,7 @@ import KronelloCore
         try await verifyMotionNavigation(); print("PASS edit open in Motion navigation")
         try await verifyBatchedQueryAndSeek(); print("PASS edit batched query and query-free Sequence seek")
         try await verifyProjectInventoryAndMissing(); print("PASS edit Project inventory, shared kind and ASSET_MISSING")
+        try await verifyReviewPresentation(); print("PASS edit rational presentation, keyed preview errors and explicit CPU session choice")
+        try await verifyBladeMouseHitPath(); print("PASS edit real NSEvent hit path and accessibility blade press = one command")
     }
 }

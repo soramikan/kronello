@@ -1,6 +1,14 @@
 import Foundation
 import KronelloDesign
 
+public struct PreviewIdentity: Equatable {
+    public let target: String
+    public let revision: String
+    public let time: RationalTime
+    public init(target: String, revision: String, time: RationalTime) { self.target = target; self.revision = revision; self.time = time }
+}
+struct PreviewIssue { let identity: PreviewIdentity; let failure: ServiceFailure }
+
 public struct EditAsset: Identifiable {
     public let id: String
     public let name: String
@@ -14,6 +22,7 @@ public struct EditAsset: Identifiable {
 
 public struct EditClip: Identifiable {
     public let query: [String: Any]
+    public init(query: [String: Any]) { self.query = query }
     public var authored: [String: Any] { query.object("clip") }
     public var id: String { authored.string("id") }
     public var track: String { query.string("track") }
@@ -21,6 +30,23 @@ public struct EditClip: Identifiable {
     public var start: RationalTime { .wire(authored.object("timeline_range").object("start")) }
     public var end: RationalTime { .wire(authored.object("timeline_range").object("end")) }
     public var composition: String? { authored.object("source_ref")["composition"] as? String }
+    public var linearRate: RationalTime? {
+        let map = authored.object("time_map")
+        guard map.string("kind") == "linear" else { return nil }
+        return .wire(map.object("speed"))
+    }
+    public var speedLabel: String {
+        guard let rate = linearRate else { return "非線形" }
+        return String(format: "%.1f%%", Double(rate.num)! / Double(rate.den)! * 100)
+    }
+    public var reversed: Bool { linearRate.map { Int64($0.num)! < 0 } ?? false }
+}
+
+public enum EditPresentation {
+    public static func rateLabel(num: Int64, den: Int64) -> String {
+        num % den == 0 ? "\(num / den) fps" : String(format: "%.3f fps", Double(num) / Double(den))
+    }
+    public static func rulerLabel(frame: Int64, fps: Int) -> String { "\(frame / Int64(fps))s\(frame % Int64(fps))f" }
 }
 
 public struct TimelineCandidate {
@@ -145,6 +171,10 @@ extension EditorModel {
         timelineCandidate = c
     }
     public func cancelClipGesture() { timelineCandidate = nil }
+    public func bladeFrame(_ clip: EditClip, fraction: Double) -> Int64 {
+        let start = clip.start.frames(rateNum: rateNum, rateDen: rateDen), end = clip.end.frames(rateNum: rateNum, rateDen: rateDen)
+        return start + Int64((fraction * Double(end - start)).rounded())
+    }
     public func timelineCommand(_ name: String, _ fields: [String: Any]) -> [String: Any] { ["timeline": [name: fields]] }
     @discardableResult public func commitClipGesture() async -> [String: Any]? {
         guard let c = timelineCandidate else { return nil }

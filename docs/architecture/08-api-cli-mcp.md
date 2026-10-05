@@ -388,6 +388,12 @@ tools (`listChanged:false`)、resources (`subscribe:false,listChanged:false`)、
 
 ### NLE-002 の追加 API
 
+GUI-003 review により `render.frame` の `FrameRenderRequest.backend` に省略可能な
+`gpu` / `cpu_reference` を追加した。省略時は従来の Service / CLI backend 選択を維持する。
+明示 CPU は同じ shared renderer と `VideoRenderBackend` の media decode を使用する。
+CLI / MCP / FFI は同じ request/schema。native preview result は実際の backend を報告し、
+GUI は特定の video unsupported error からユーザーが選んだ場合だけ CPU 表示を行う。
+
 `sequence.query`（CLI `sequence query`、MCP の同名 tool）は project / sequence を受け取り、revision、Sequence、各配置の track / `ClipKind`（video / image / audio / composition / generator）、clip 本体、effective video color tags / assumptions、unsupported_reason を返す。GUI は表示名から kind を推測しない。image の描画、subtitle / adjustment は本タスクの範囲外。query は GPU や decoder を初期化せず、一つの保存 revision を読む。
 
 GUI-003 は `asset_status` を追加した。Project 全体の既知 Asset について `asset`、

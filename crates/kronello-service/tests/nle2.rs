@@ -1343,6 +1343,47 @@ fn video_effects_fixture(runtime: &MediaRuntime, path: &Path) -> Project {
     p.assets.push(DocumentObject::Known(a));
     p
 }
+#[test]
+fn explicit_frame_cpu_backend_matches_session_cpu_video_pixels_and_is_strict() {
+    let runtime = MediaRuntime::load().unwrap();
+    let p = video_effects_fixture(&runtime, &fixtures().join("cfr-24-1.nut"));
+    let DocumentObject::Known(s) = &p.sequences[0] else {
+        panic!()
+    };
+    let id = s.id;
+    let (_dir, path) = setup(p);
+    let request = FrameRenderRequest {
+        backend: Some(BackendSelection::CpuReference),
+        input: RenderInput {
+            project: path,
+            composition: None,
+            target: Some(RenderTarget::Sequence { sequence: id }),
+            region: crop_region(),
+            profile: Default::default(),
+            fonts: vec![],
+        },
+        time: t(2, 1),
+    };
+    let explicit = Service::new(BackendSelection::Gpu)
+        .render_requested_frame(&request)
+        .unwrap();
+    let mut omitted = request.clone();
+    omitted.backend = None;
+    let session = Service::new(BackendSelection::CpuReference)
+        .render_requested_frame(&omitted)
+        .unwrap();
+    assert_eq!(explicit, session);
+    assert_eq!(explicit.metadata.backend, "cpu_reference_float32");
+    assert!(
+        explicit
+            .metadata
+            .input_path
+            .contains("software_video_decode")
+    );
+    let mut value = serde_json::to_value(Request::RenderFrame(request)).unwrap();
+    value["backend"] = serde_json::json!("automatic");
+    assert!(serde_json::from_value::<Request>(value).is_err());
+}
 fn crop_region() -> OutputRegion {
     OutputRegion {
         origin: [5.0, 2.0],

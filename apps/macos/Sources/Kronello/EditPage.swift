@@ -66,7 +66,10 @@ struct SequenceViewer: View {
         KRPanel(header: {
             KRTabBar(model.document.objects("sequences").enumerated().map { .init($0.element.string("id"), "Sequence \($0.offset + 1)") },
                      selection: Binding(get: { model.ui.sequence ?? "" }, set: { model.setSequence($0) }))
-        }, actions: { KRButton(icon: .scan, accessibilityLabel: "セーフエリア", pressed: safeArea) { safeArea.toggle() } }) {
+        }, actions: { HStack {
+            if model.usesCPUReference { Text("CPU 参照").krText(KRType.caption).foregroundStyle(p.inkMuted) }
+            KRButton(icon: .scan, accessibilityLabel: "セーフエリア", pressed: safeArea) { safeArea.toggle() }
+        } }) {
             VStack(spacing: 0) {
                 if let conflict = model.revisionConflict { KRConflictBanner(.init(conflict.code, conflict.message), discard: model.discardCandidate, reapply: model.reapply) }
                 if let text = model.deletedSelection { KRStateBand(text) }
@@ -81,10 +84,16 @@ struct SequenceViewer: View {
                             }.padding(KRSpace.space3)
                         }
                         if let failure = model.sequenceFailure ?? model.previewFailure {
-                            KRViewerError(.init(failure.code, failure.message), copy: { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(failure.detailText, forType: .string) },
-                                          retry: { model.previewFailure = nil; Task { do { try await model.reload() } catch { model.mapFailure(error) } } })
+                            VStack(spacing: KRSpace.space3) {
+                                KRViewerError(.init(failure.code, failure.message), copy: { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(failure.detailText, forType: .string) },
+                                              retry: { model.previewFailure = nil; Task { do { try await model.reload() } catch { model.mapFailure(error) } } })
+                                if model.offersCPUReference { KRButton("CPU 参照で表示", variant: .secondary) { model.chooseCPUReference() } }
+                            }
                         }
-                        if model.sequenceLoading || model.busy { VStack { HStack { KRActivityIndicator(); Text("更新中 · 表示は前回の結果です").krText(KRType.caption); Spacer() }; Spacer() }.padding(KRSpace.space3) }
+                        if model.sequenceLoading || model.busy || model.previewRendering || model.previewStale { VStack { HStack {
+                            if model.sequenceLoading || model.busy || model.previewRendering { KRActivityIndicator() }
+                            Text(model.usesCPUReference && model.playing ? "CPU 参照 · 再生中は前回のフレームを表示" : "更新中 · 表示は前回の結果です").krText(KRType.caption).foregroundStyle(p.inkMuted); Spacer()
+                        }; Spacer() }.padding(KRSpace.space3).allowsHitTesting(false) }
                     }.background(p.surface0)
                 }
                 KRTransportBar(frames: Binding(get: { model.frame }, set: { model.seek($0) }), fps: model.nominalFPS, duration: model.durationCode,
@@ -117,8 +126,8 @@ struct ClipInspector: View {
                             timeRow("ソース開始", frames: RationalTime.wire(clip.authored.object("source_in")).frames(rateNum: model.rateNum, rateDen: model.rateDen), action: nil)
                         }
                         section("時間") {
-                            KRInspectorSettingRow("速度") { Text(speed(clip)).krText(KRType.timecode).foregroundStyle(p.inkMuted) }
-                            KRInspectorSettingRow("逆再生") { KRCheckbox("逆再生", isOn: .constant(clip.authored.object("time_map").object("speed").number("num") < 0)).disabled(true) }
+                            KRInspectorSettingRow("速度") { Text(clip.speedLabel).krText(KRType.timecode).foregroundStyle(p.inkMuted) }
+                            KRInspectorSettingRow("逆再生") { KRCheckbox("", isOn: .constant(clip.reversed)).accessibilityLabel("逆再生").disabled(true) }
                             Text("速度・ソース開始の変更は未対応です。").krText(KRType.caption).foregroundStyle(p.inkMuted).padding(.horizontal, KRSpace.space3)
                         }
                         section("合成") {
@@ -141,11 +150,6 @@ struct ClipInspector: View {
                 .disabled(action == nil || model.busy || model.pendingCandidate != nil)
         }
     }
-    func speed(_ clip: EditClip) -> String {
-        let map = clip.authored.object("time_map"), speed = map.object("speed")
-        guard map.string("kind") == "linear" else { return "非線形" }
-        return String(format: "%.1f%%", speed.number("num") / max(1, speed.number("den")) * 100)
-    }
     func opacity(_ clip: EditClip) -> String {
         guard let property = clip.authored.objects("properties").first(where: { $0.object("descriptor").string("key") == "kronello.opacity" }) else { return "100.0%" }
         let source = property.object("source")
@@ -161,7 +165,7 @@ struct SequenceTracks: View {
     var body: some View {
         KRPanel(header: { HStack(spacing: KRSpace.space2) {
             KRPanelTitle("Sequence")
-            Text("\(Int(model.extent.width))×\(Int(model.extent.height)) · \(model.rateNum)/\(model.rateDen) fps · \(Int(model.sequence.number("audio_rate")) / 1000) kHz").krText(KRType.caption).foregroundStyle(p.inkMuted)
+            Text("\(Int(model.extent.width))×\(Int(model.extent.height)) · \(EditPresentation.rateLabel(num: model.rateNum, den: model.rateDen)) · \(Int(model.sequence.number("audio_rate")) / 1000) kHz").krText(KRType.caption).foregroundStyle(p.inkMuted)
             Text(model.timecode).krText(KRType.timecode).foregroundStyle(p.accentInk)
         } }, actions: {
             KRButton(icon: .magnet, accessibilityLabel: "スナップ", pressed: model.editSnap) { model.editSnap.toggle() }
@@ -176,7 +180,7 @@ struct SequenceTracks: View {
                         VStack(spacing: 0) {
                             HStack(spacing: 0) {
                                 Color.clear.frame(width: 200, height: KRSize.rulerHeight)
-                                KRRuler((0...8).map { i in .init("\(i)", x: KRSpace.space2 + (laneWidth - KRSpace.space2 * 2) * Double(i) / 8, label: i == 8 ? nil : "\(Int64(Double(max(model.durationFrames, Int64(model.nominalFPS * 5))) * Double(i) / 8) / Int64(model.nominalFPS))s") })
+                                KRRuler(rulerTicks(width: laneWidth))
                                     .contentShape(Rectangle()).gesture(DragGesture(minimumDistance: 0).onChanged { model.seek(Int64(max(0, ($0.location.x - KRSpace.space2) / frameWidth).rounded())) })
                             }
                             ForEach(model.orderedTracks, id: \.selfID) { track in
@@ -205,6 +209,15 @@ struct SequenceTracks: View {
             return .handled
         }
     }
+    func rulerTicks(width: Double) -> [KRRulerTick] {
+        let total = Double(max(model.durationFrames, Int64(model.nominalFPS * 5)))
+        return (0...8).map { index in
+            let fraction = Double(index) / 8
+            let x = KRSpace.space2 + (width - KRSpace.space2 * 2) * fraction
+            let label = index == 8 ? nil : EditPresentation.rulerLabel(frame: Int64(total * fraction), fps: model.nominalFPS)
+            return KRRulerTick("\(index)", x: x, label: label)
+        }
+    }
     func lane(_ track: [String: Any], width: Double, frameWidth: Double) -> some View {
         let id = track.string("id"), locked = model.ui.locked.contains(id)
         return KRTrack(header: .init(model.trackNumber(id), track.string("kind") == "audio" ? "Audio" : "Video", kind: track.string("kind") == "audio" ? .audio : .video,
@@ -228,16 +241,24 @@ struct SequenceTracks: View {
         let end = c?.end ?? clip.end.frames(rateNum: model.rateNum, rateDen: model.rateDen)
         let missing = model.clipMissing(clip)
         return KRClip(model.clipName(clip), kind: clip.kind, state: missing.map { .missing($0) } ?? (model.ui.clipSelection == clip.id ? .selected : .resting), onSelect: { model.selectClip(clip.id) })
-            .overlay(alignment: .leading) { trimHandle(clip, mode: .trimStart, frameWidth: frameWidth).frame(width: 6) }
-            .overlay(alignment: .trailing) { trimHandle(clip, mode: .trimEnd, frameWidth: frameWidth).frame(width: 6) }
+            .allowsHitTesting(model.editTool != "blade")
+            .accessibilityHidden(model.editTool == "blade")
+            .overlay { if model.editTool == "blade" {
+                KRBladeHitArea("\(model.clipName(clip)) を分割", begin: { fraction in
+                    model.beginClipGesture(clip, mode: .blade); model.updateClipGesture(at: model.bladeFrame(clip, fraction: fraction))
+                }, update: { model.updateClipGesture(at: model.bladeFrame(clip, fraction: $0)) }, release: { Task { await model.commitClipGesture() } })
+            } }
+            .overlay(alignment: .leading) { if model.editTool != "blade" { trimHandle(clip, mode: .trimStart, frameWidth: frameWidth).frame(width: 6) } }
+            .overlay(alignment: .trailing) { if model.editTool != "blade" { trimHandle(clip, mode: .trimEnd, frameWidth: frameWidth).frame(width: 6) } }
             .overlay { if let c, c.mode == .blade { p.selection.frame(width: 1).offset(x: Double(c.cut - start) * frameWidth - Double(end - start) * frameWidth / 2).allowsHitTesting(false) } }
             .frame(width: max(1, Double(end - start) * frameWidth))
             .offset(x: KRSpace.space2 + Double(start) * frameWidth)
-            .simultaneousGesture(TapGesture(count: 2).onEnded { if clip.composition != nil { model.openClipInMotion(clip) } })
-            .gesture(DragGesture(minimumDistance: model.editTool == "blade" ? 0 : 3, coordinateSpace: .named("sequenceTracks")).onChanged { value in
-                model.beginClipGesture(clip, mode: model.editTool == "blade" ? .blade : .move)
-                model.updateClipGesture(delta: Int64((value.translation.width / frameWidth).rounded()), at: model.editTool == "blade" ? Int64(((value.location.x - 200 - KRSpace.space2) / frameWidth).rounded()) : nil)
-            }.onEnded { _ in Task { await model.commitClipGesture() } })
+            .simultaneousGesture(TapGesture(count: 2).onEnded { if model.editTool != "blade", clip.composition != nil { model.openClipInMotion(clip) } })
+            .gesture(DragGesture(minimumDistance: 3, coordinateSpace: .named("sequenceTracks")).onChanged { value in
+                guard model.editTool != "blade" else { return }
+                model.beginClipGesture(clip, mode: .move)
+                model.updateClipGesture(delta: Int64((value.translation.width / frameWidth).rounded()))
+            }.onEnded { _ in if model.editTool != "blade" { Task { await model.commitClipGesture() } } }, including: model.editTool == "blade" ? .none : .all)
             .disabled(locked || model.busy || model.pendingCandidate != nil)
     }
     func trimHandle(_ clip: EditClip, mode: TimelineCandidate.Mode, frameWidth: Double) -> some View {

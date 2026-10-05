@@ -130,6 +130,11 @@ FFI request は発行しない。`asset_status` は locate/stat だけの存在�
 asset の stream を明示して1倍速配置、同一 track 移動・subset trim・共有 ClipSplit を
 候補 geometry と release 時一つの Command / Event に接続する。Session Undo / conflicts は GUI-001 と共通。
 Composition clip の「モーションで開く」は参照先 Composition への UI navigation だけ。
+Viewer error は target / revision / rational time に結ぶ。video の GPU unsupported にだけ
+明示「CPU 参照で表示」を提示し、選択した Sequence tab の session 中だけ muted badge を表示する。
+CPU は共有 render.frame/backend と media decode を使い、native surface に current-frame pixels を upload する。
+一件ずつ最新要求へ集約し、古い completion を破棄する。再生中の CPU 要求は停止し、最後の frame と
+stale 注記を表示する。native redraw 自体の中断は未対応。blade の専用 hit area は Button の tap と競合しない。
 track mute/visibility は説明付き disabled、lock は UI state。reverse/composite/speed は表示のみと明示する。
 Sequence の seek は UI time / preview refresh だけで毎フレームの query を追加しない。
 AUDIO-002 が `activatePlayback(for:)` を `configurePlayback(target:.sequence(id),rateNum:,rateDen:)` に接続する。

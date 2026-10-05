@@ -54,7 +54,10 @@ public struct EditCandidate {
     public let sessionID = UUID().uuidString
     public let transport: any ProjectTransport
     public let stateStore: UIStateStore
-    @Published public var ui = ProjectUIState() { didSet { persistState() } }
+    @Published public var ui = ProjectUIState() { didSet {
+        if oldValue.page != ui.page || oldValue.sequence != ui.sequence || oldValue.composition != ui.composition { previewFailure = nil }
+        persistState()
+    } }
     @Published public private(set) var projectID = ""
     @Published public private(set) var name = "Kronello"
     @Published public private(set) var revision = "0"
@@ -80,7 +83,28 @@ public struct EditCandidate {
     @Published public var failure: ServiceFailure?
     @Published public var undoConflict: ServiceFailure?
     @Published public var revisionConflict: ServiceFailure?
-    @Published public var previewFailure: ServiceFailure?
+    @Published private var previewIssue: PreviewIssue?
+    @Published public var previewRendering = false
+    @Published public var previewPresented: PreviewIdentity?
+    @Published public private(set) var cpuReferenceSequences: Set<String> = []
+    public var previewIdentity: PreviewIdentity { .init(target: ui.page == "edit" ? "sequence:\(ui.sequence ?? "")" : "composition:\(ui.composition ?? "")", revision: revision, time: ui.time) }
+    public var previewFailure: ServiceFailure? {
+        get { previewIssue?.identity == previewIdentity ? previewIssue?.failure : nil }
+        set { previewIssue = newValue.map { .init(identity: previewIdentity, failure: $0) } }
+    }
+    public var usesCPUReference: Bool { ui.page == "edit" && cpuReferenceSequences.contains(ui.sequence ?? "") }
+    public var offersCPUReference: Bool {
+        ui.page == "edit" && !usesCPUReference && previewFailure?.code == "UNSUPPORTED_FEATURE" && previewFailure?.message.contains("video requires explicit media backend") == true
+    }
+    public var previewStale: Bool { usesCPUReference && (playing || previewPresented != previewIdentity) }
+    public func chooseCPUReference() {
+        guard offersCPUReference, let sequence = ui.sequence else { return }
+        cpuReferenceSequences.insert(sequence); previewFailure = nil; refreshToken += 1
+    }
+    public func reportPreviewFailure(_ failure: ServiceFailure?, for identity: PreviewIdentity) {
+        guard identity == previewIdentity else { return }
+        previewIssue = failure.map { .init(identity: identity, failure: $0) }
+    }
     @Published public private(set) var pendingCandidate: EditCandidate?
     @Published public var candidateBounds: CGRect?
     @Published public var keySelection: Set<KeyReference> = []
@@ -174,9 +198,11 @@ public struct EditCandidate {
             let comps = export.object("document").objects("compositions")
             if !comps.contains(where: { $0.string("id") == ui.composition }) { ui.composition = comps.first?.string("id") }
             var scene: [String: Any] = [:]
+            var sceneFailure: ServiceFailure?
+            let sceneIdentity = PreviewIdentity(target: "composition:\(ui.composition ?? "")", revision: export.string("revision"), time: ui.time)
             if ui.page != "edit", let composition = ui.composition {
                 do { scene = try await request("scene.query", ["composition": composition, "evaluation": ["time": ui.time.wire, "fonts": fonts]]) }
-                catch { previewFailure = serviceFailure(error); scene = try await request("scene.query", ["composition": composition]) }
+                catch { sceneFailure = serviceFailure(error); scene = try await request("scene.query", ["composition": composition]) }
             }
             var timeline: [String: Any] = [:]
             let sequences = export.object("document").objects("sequences")
@@ -213,6 +239,7 @@ public struct EditCandidate {
             }?.object("event")
             adopt(document: export.object("document"), scene: scene, revision: export.string("revision"), actor: actor,
                   external: external && history.contains { $0.object("event").string("session_id") != sessionID })
+            if let sceneFailure { reportPreviewFailure(sceneFailure, for: sceneIdentity) }
             if previousSelection != nil && ui.selection == nil {
                 if let deletion { deletedSelection = "選択していたレイヤーは削除されました。\(deletion.string("session_id")) · rev \(deletion.string("revision"))" }
                 else { deletedSelection = "選択していたレイヤーは削除されました。削除した操作者は履歴で確認してください · 読込 rev \(revision)" }

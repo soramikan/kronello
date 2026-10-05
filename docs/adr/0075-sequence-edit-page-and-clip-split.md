@@ -49,5 +49,26 @@ GUI-001 の `EditorModel.apply`、共有 `edit.plan` / `edit.apply`、通知と 
 
 ## 検証
 
+### supervisor review 後の追加決定（2026-10-05）
+
+監督は `FrameRenderRequest.backend` の省略可能な closed enum（`gpu` / `cpu_reference`）を承認した。
+省略時は従来の Service の選択を維持する。共有 current-frame renderer と `VideoRenderBackend` が
+CLI `--backend cpu-reference` と同じ decode・pixels を作る。native surface は明示 CPU の linear pixels を
+texture に upload し、preview result の `backend` に実際の `cpu_reference_float32` を返す。
+GPU が `UNSUPPORTED_FEATURE: video requires explicit media backend` を返した場合だけ、Viewer は
+「CPU 参照で表示」を提示する。ユーザーの選択後はその Sequence tab の session UI 状態とし、
+ink-muted の「CPU 参照」を継続表示する。project や永続 UI state に backend を保存しない。
+GPU の無言 fallback はない。その他の typed failure は元のまま表示する。
+
+native request は一度に一件、未処理の変更は最新 frame に集約し、superseded completion / error を捨てる。
+CPU 参照では再生中に新しい frame request を出さず、最後の frame と stale の注記を表示する。
+停止後に現在 frame 一件を要求する。native redraw 自体は中断できず、協調 cancellation は後続課題。
+Viewer error は target / revision / rational time に結び、target 変更時に消し、古い completion を採用しない。
+
+速度と逆再生は time map の string rational を読む。ruler は Motion と同じ seconds / frames、header は
+整数 fps または小数3桁。blade は clip Button より上の専用 AppKit hit area が mouse down/up を受け、
+release 一回で split する。accessibility press は位置情報がないため clip の中央を一度分割する。
+Inspector の checkbox は視覚 label を持たず、accessibility label だけを保持する。
+
 [GUI-003 の検証](../testing/gui-003.md) に acceptance と actual checks、ホスト手順を記録する。
 direct Swift の成功は SwiftPM runner・実画面・Metal・音声再生の受け入れを意味しない。

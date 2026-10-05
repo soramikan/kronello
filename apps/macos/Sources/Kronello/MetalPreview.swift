@@ -53,16 +53,22 @@ struct MetalPreview: NSViewRepresentable {
         init(_ model: EditorModel) { self.model = model }
         func schedule(force: Bool = false) {
             guard let surface = view else { return }
+            if model.usesCPUReference && model.playing { needsRender = false; scheduledKey = ""; return }
             let key = [model.ui.page, model.revision, "\(model.refreshToken)", model.ui.sequence ?? "", model.ui.composition ?? "", model.ui.time.num, model.ui.time.den,
-                       model.ui.resolution, model.ui.zoom, "\(surface.bounds.size)", "\(surface.window?.backingScaleFactor ?? 1)"].joined(separator: ":")
+                       model.ui.resolution, model.ui.zoom, model.usesCPUReference ? "cpu_reference" : "gpu", "\(surface.bounds.size)", "\(surface.window?.backingScaleFactor ?? 1)"].joined(separator: ":")
             guard force || key != scheduledKey else { return }
             scheduledKey = key
             needsRender = true
             guard task == nil else { return }
             task = Task {
-                defer { task = nil }
-                do {
-                    while needsRender && !Task.isCancelled {
+                defer { task = nil; model.previewRendering = false }
+                while needsRender && !Task.isCancelled {
+                    let identity = model.previewIdentity
+                    let cpuReference = model.usesCPUReference
+                    let requestedKey = scheduledKey
+                    let time = model.ui.time
+                    let extent = model.extent
+                    do {
                         needsRender = false
                         guard let view, let native = model.transport as? NativeProjectTransport else { return }
                         let target: [String: Any]
@@ -84,13 +90,26 @@ struct MetalPreview: NSViewRepresentable {
                             try await native.session.attach(metalLayer: Unmanaged.passUnretained(view.metal).toOpaque(), width: width, height: height)
                             attached = true
                         } else { try await native.session.resize(width: width, height: height) }
+                        model.previewRendering = true
                         var input: [String: Any] = ["project": model.path, "fonts": model.fonts,
-                            "region": ["origin": [0, 0], "extent": [model.extent.width, model.extent.height], "pixels": [width, height]]]
+                            "region": ["origin": [0, 0], "extent": [extent.width, extent.height], "pixels": [width, height]]]
                         input.merge(target) { _, value in value }
-                        _ = try await native.session.redraw(NativeProjectTransport.request(["operation": "render.frame", "input": input, "time": model.ui.time.wire]))
-                        model.previewFailure = nil
+                        var request: [String: Any] = ["operation": "render.frame", "input": input, "time": time.wire]
+                        if cpuReference { request["backend"] = "cpu_reference" }
+                        guard !Task.isCancelled, requestedKey == scheduledKey, identity == model.previewIdentity else { continue }
+                        let response = try await native.session.redraw(NativeProjectTransport.request(request))
+                        guard !Task.isCancelled, requestedKey == scheduledKey, identity == model.previewIdentity else { continue }
+                        if cpuReference, case .object(let object) = response, case .object(let preview) = object["preview"], preview["backend"] != .string("cpu_reference_float32") {
+                            throw ServiceFailure(code: "PREVIEW_BACKEND_MISMATCH", message: "CPU 参照の描画結果を確認できません")
+                        }
+                        if case .object(let object) = response, case .object(let preview) = object["preview"], preview["presented"] == .bool(true) {
+                            model.previewPresented = identity
+                        }
+                        model.reportPreviewFailure(nil, for: identity)
+                    } catch is CancellationError { return } catch {
+                        if requestedKey == scheduledKey { model.reportPreviewFailure(model.serviceFailure(error), for: identity) }
                     }
-                } catch is CancellationError {} catch { model.previewFailure = model.serviceFailure(error) }
+                }
             }
         }
     }

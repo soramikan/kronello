@@ -923,6 +923,7 @@ fn media_slots_validate_refs_expose_bindings_and_reject_final_execution() {
     assert_eq!(preview.diagnostic.unwrap().code, "UNSUPPORTED_FEATURE");
     error(
         service.dispatch(Request::RenderFrame(FrameRenderRequest {
+            backend: None,
             input: RenderInput {
                 project: path.clone(),
                 composition: Some(root),

@@ -201,9 +201,10 @@ func require(_ value: @autoclosure () -> Bool, _ message: String) throws {
         try require(fake.requests.filter { $0.string("operation") == "edit.plan" }.count == 1 && fake.requests.filter { $0.string("operation") == "edit.apply" }.count == 1, "Numeric gesture commits one plan/apply")
         await editor.close()
     }
-    func cli(_ request: [String: Any]) throws -> [String: Any] {
+    func cli(_ request: [String: Any], arguments: [String] = []) throws -> [String: Any] {
         let process = Process(), input = Pipe(), output = Pipe(), errors = Pipe()
         process.executableURL = root.appendingPathComponent("apps/macos/Libraries/kronello")
+        process.arguments = arguments
         process.standardInput = input; process.standardOutput = output; process.standardError = errors
         try process.run(); try input.fileHandleForWriting.write(contentsOf: JSONSerialization.data(withJSONObject: request, options: [.sortedKeys])); try input.fileHandleForWriting.close()
         let response = output.fileHandleForReading.readDataToEndOfFile(); process.waitUntilExit()

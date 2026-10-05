@@ -36,6 +36,7 @@ struct EditScreen: View {
     }
     var viewer: some View {
         KRPanel(header: { KRTabBar([.init("sequence", "Sequence 1")], selection: .constant("sequence")) }, actions: {
+            Text("CPU 参照").krText(KRType.caption).foregroundStyle(p.inkMuted)
             KRButton(icon: .scan, accessibilityLabel: "セーフエリア") {}
         }) {
             VStack(spacing: 0) {
@@ -61,7 +62,7 @@ struct EditScreen: View {
                 VStack(spacing: KRSpace.space1) {
                     heading("時間")
                     KRInspectorSettingRow("速度") { Text("100.0%").krText(KRType.timecode).foregroundStyle(p.inkMuted) }
-                    KRInspectorSettingRow("逆再生") { KRCheckbox("逆再生", isOn: .constant(false)).disabled(true) }
+                    KRInspectorSettingRow("逆再生") { KRCheckbox("", isOn: .constant(false)).accessibilityLabel("逆再生").disabled(true) }
                     Text("速度・ソース開始の変更は未対応です。").krText(KRType.caption).foregroundStyle(p.inkMuted)
                 }
                 VStack(spacing: KRSpace.space1) {
@@ -87,7 +88,7 @@ struct EditScreen: View {
         }) {
             ZStack(alignment: .topLeading) {
                 VStack(spacing: 0) {
-                    HStack(spacing: 0) { Color.clear.frame(width: 200, height: 20); KRRuler((0...5).map { .init("\($0)", x: 8 + Double($0) * 240, label: $0 == 5 ? nil : "\($0)s") }) }
+                    HStack(spacing: 0) { Color.clear.frame(width: 200, height: 20); KRRuler((0...5).map { .init("\($0)", x: 8 + Double($0) * 240, label: $0 == 5 ? nil : "\($0)s0f") }) }
                     KRTrack(header: .init("V2", "Video", kind: .video, selected: true, visibilityEnabled: false), headerWidth: 200) {
                         KRClip("Composition 1", kind: .composition, state: .selected).frame(width: 720).offset(x: 248)
                     }
@@ -110,6 +111,7 @@ struct EditScreen: View {
 
 enum EditSheets {
     static var all: [(String, AnyView)] { [
+        ("Blade-hit-and-CPU-preview", AnyView(EditReviewSheet())),
         ("Timecode-role", AnyView(VStack(alignment: .leading, spacing: KRSpace.space4) {
             SampleRow("current / amber") { KRTimecodeField(frames: .constant(24), fps: 24) }
             SampleRow("placement / neutral") { KRTimecodeField(frames: .constant(24), fps: 24, currentTime: false, label: "開始") }
@@ -127,4 +129,24 @@ enum EditSheets {
             KRTrack(header: .init("A1", "Audio", kind: .audio, locked: true, visibilityEnabled: false), headerWidth: 200, locked: true) { KRClip("Audio", kind: .audio).frame(width: 400) }
         }))
     ] }
+}
+
+private struct EditReviewSheet: View {
+    @Environment(\.krPalette) var p
+    var body: some View {
+        VStack(alignment: .leading, spacing: KRSpace.space4) {
+            Text("video requires explicit media backend").krText(KRType.label)
+            KRErrorLine(.init("UNSUPPORTED_FEATURE", "video requires explicit media backend"))
+            KRButton("CPU 参照で表示", variant: .secondary) {}
+            Text("CPU 参照").krText(KRType.caption).foregroundStyle(p.inkMuted)
+            Text("CPU 参照 · 再生中は前回のフレームを表示").krText(KRType.caption).foregroundStyle(p.inkMuted)
+            KRClip("Composition 1", kind: .composition, state: .selected)
+                .allowsHitTesting(false)
+                .overlay { KRBladeHitArea("Composition 1 を分割", begin: { _ in }, update: { _ in }, release: {}) }
+                .frame(width: 320)
+            KRInspectorSettingRow("逆再生") { KRCheckbox("", isOn: .constant(true)).accessibilityLabel("逆再生").disabled(true) }
+            Text("1920×1080 · 23.976 fps · 48 kHz").krText(KRType.caption).foregroundStyle(p.inkMuted)
+            KRRuler([.init("0", x: 8, label: "0s0f"), .init("12", x: 100, label: "0s12f"), .init("24", x: 200, label: "1s0f")]).frame(height: 20)
+        }
+    }
 }

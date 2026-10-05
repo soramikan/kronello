@@ -11,4 +11,6 @@ final class EditEditorTests: XCTestCase {
     @MainActor func testMotionNavigation() async throws { try await EditChecks().verifyMotionNavigation() }
     @MainActor func testBatchedQueryAndSeek() async throws { try await EditChecks().verifyBatchedQueryAndSeek() }
     @MainActor func testProjectInventoryAndMissing() async throws { try await EditChecks().verifyProjectInventoryAndMissing() }
+    @MainActor func testReviewPresentation() async throws { try await EditChecks().verifyReviewPresentation() }
+    @MainActor func testBladeMouseHitPath() async throws { try await EditChecks().verifyBladeMouseHitPath() }
 }

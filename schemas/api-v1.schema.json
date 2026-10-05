@@ -297,6 +297,14 @@
       ],
       "type": "object"
     },
+    "BackendSelection": {
+      "description": "Explicit execution choice. GPU initialization is lazy and never falls back.",
+      "enum": [
+        "gpu",
+        "cpu_reference"
+      ],
+      "type": "string"
+    },
     "BoundsStage": {
       "description": "Resolution-independent bounds stage selected by a layout consumer.",
       "enum": [
@@ -3081,6 +3089,16 @@
     "FrameRenderRequest": {
       "additionalProperties": false,
       "properties": {
+        "backend": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BackendSelection"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "input": {
           "$ref": "#/$defs/RenderInput"
         },
@@ -6963,6 +6981,16 @@
         {
           "additionalProperties": false,
           "properties": {
+            "backend": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BackendSelection"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "input": {
               "$ref": "#/$defs/RenderInput"
             },
