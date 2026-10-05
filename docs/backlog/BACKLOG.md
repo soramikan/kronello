@@ -13,7 +13,7 @@
 | M0 | 0 | 0 | 6 | 0 | 6 |
 | M1 | 0 | 0 | 14 | 0 | 14 |
 | M2 | 0 | 1 | 10 | 0 | 11 |
-| M3 | 11 | 6 | 8 | 0 | 25 |
+| M3 | 10 | 6 | 9 | 0 | 25 |
 | M4 | 11 | 0 | 0 | 0 | 11 |
 | M5 | 5 | 0 | 0 | 0 | 5 |
 | M6 | 4 | 0 | 0 | 0 | 4 |
@@ -346,7 +346,7 @@
 
 ### GUI-001 macOSネイティブGUI: Canvas・階層・変換操作
 
-- 優先度: P1 / 領域: gui / 状態: in_progress
+- 優先度: P1 / 領域: gui / 状態: done
 - 依存: FFI-001, RENDER-001
 - 受け入れ条件:
   - GUI操作が共通command/eventを使う
@@ -357,7 +357,7 @@
 
 ### GUI-002 Dope sheetとCurve editor
 
-- 優先度: P1 / 領域: gui / 状態: planned
+- 優先度: P1 / 領域: gui / 状態: in_progress
 - 依存: GUI-001, ANIM-001
 - 受け入れ条件:
   - キー移動/接線編集/UndoがCLIで読める同じモデルを変更する
@@ -517,6 +517,7 @@
   - Windowsの上書き禁止publicationを設計し、同一volume・既存file/空directoryの拒否・cancel/lease競合を実プロセスで検証する
   - Linux/WindowsでFIFO slot・queued/running heartbeat・強制終了後のinterrupted・pruneを検証し、OS/版/コマンド/exitを記録する。未検証OSを保証経路に昇格しない
   - 高負荷時（load average 50 前後）に CLI の job テスト（例: sequence_target_job_preserves_placements_after_trim_and_project_removal）が Queued のまま 60 秒で timeout する事象を再現・原因調査し、状態 DB の lock 競合下でも job が開始されることを検証する
+  - テストが失敗・時間切れになっても、起動した detached worker（`kronello worker --job`）を必ず回収し、テスト後に孤立 process を残さないことを検証する（2026-10-05 に最長14時間残った worker を6件確認）
 
 ### FX-002 非一様affine下のblur/shadow
 

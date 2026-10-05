@@ -393,3 +393,16 @@ fn crossfade_between_audible_composition_clips_fails_typed() {
     assert_eq!(error.code(), "UNSUPPORTED_FEATURE");
     assert!(error.to_string().contains("crossfade"), "{error}");
 }
+#[test]
+fn disabled_media_node_is_silent() {
+    let (mut p, root, _) = fixture();
+    let seq = sequence(&mut p, root, Time::ZERO, t(1, 10));
+    let enabled = DocumentAudioPlan::compile(&p, AudioTarget::Sequence(seq)).unwrap();
+    assert_eq!(enabled.clips().len(), 1);
+    let DocumentObject::Known(c) = &mut p.compositions[0] else {
+        panic!()
+    };
+    c.nodes[0].enabled = false;
+    let disabled = DocumentAudioPlan::compile(&p, AudioTarget::Sequence(seq)).unwrap();
+    assert!(disabled.clips().is_empty());
+}

@@ -38,6 +38,7 @@ fn fixture() -> (Project, SchemaRegistry) {
         layout_version: TEXT_LAYOUT_VERSION,
         text: "か\u{3099}日本語".into(),
         styles: vec![TextStyleSpan {
+            gradient: None,
             range: TextRange { start: 0, end: 15 },
             font: FontRef {
                 family: "Noto Sans CJK JP".into(),
@@ -55,6 +56,8 @@ fn fixture() -> (Project, SchemaRegistry) {
         alignment: properties[4].id(),
     };
     let node = SceneNode {
+        name: None,
+        enabled: true,
         effects: vec![],
         id: NodeId::new(),
         kind: NodeKind::Text {

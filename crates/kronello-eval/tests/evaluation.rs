@@ -51,6 +51,8 @@ fn unsupported_opacity() -> Property {
 }
 fn node(properties: Vec<Property>) -> SceneNode {
     SceneNode {
+        name: None,
+        enabled: true,
         effects: vec![],
         id: NodeId::new(),
         kind: NodeKind::Null,
@@ -60,6 +62,34 @@ fn node(properties: Vec<Property>) -> SceneNode {
         active_range: TimeRange::new(t(-100, 1), t(100, 1)).unwrap(),
         properties,
     }
+}
+
+#[test]
+fn disabled_containment_subtree_is_not_evaluated_but_transform_parenting_is_independent() {
+    let mut parent = node(vec![]);
+    parent.kind = NodeKind::Group;
+    parent.enabled = false;
+    let mut child = node(vec![]);
+    child.containment_parent = Some(parent.id);
+    parent.child_order.push(child.id);
+    let mut other = node(vec![]);
+    other.transform_parent = Some(parent.id);
+    let other_id = other.id;
+    let comps = [composition(vec![parent, child, other])];
+    let registry = SchemaRegistry::with_builtin();
+    let refs = ReferenceBindings::default();
+    let deps = DependencyDeclarations::default();
+    let graph = graph(&comps, &[], &refs, &deps, &registry).unwrap();
+    let scene = graph.evaluate_scene(Time::ZERO).unwrap();
+    assert_eq!(scene.nodes.len(), 1);
+    assert_eq!(scene.nodes[0].key.node, other_id);
+    // Absent fields in a legacy node retain old draw semantics and stable identity.
+    let value = serde_json::to_value(&comps[0].nodes[2]).unwrap();
+    assert!(value.get("enabled").is_none());
+    assert!(value.get("name").is_none());
+    let restored: SceneNode = serde_json::from_value(value).unwrap();
+    assert!(restored.enabled);
+    assert_eq!(restored.id, other_id);
 }
 fn composition(nodes: Vec<SceneNode>) -> Composition {
     Composition {

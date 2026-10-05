@@ -10,6 +10,7 @@ pub const GAUSSIAN_BLUR_ID: &str = "kronello.gaussian_blur";
 pub const DROP_SHADOW_ID: &str = "kronello.drop_shadow";
 pub const EFFECT_VERSION: u32 = 1;
 pub const AUDIO_GAIN_ID: &str = "kronello.audio.gain";
+pub const AFFINE_EFFECT_VERSION: u32 = 2;
 
 /// Unknown ids, parameters, fields and variants are retained verbatim.
 #[derive(Debug, Clone, PartialEq, Serialize, schemars::JsonSchema)]
@@ -43,6 +44,17 @@ pub enum EffectParameters {
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum ResolvedEffect {
+    AffineGaussianBlur {
+        sigma: f64,
+        linear: [[f64; 2]; 2],
+    },
+    AffineDropShadow {
+        sigma: f64,
+        linear: [[f64; 2]; 2],
+        offset: [f64; 2],
+        color: Color,
+        opacity: f64,
+    },
     GaussianBlur {
         sigma: f64,
     },
@@ -64,12 +76,12 @@ pub enum EffectError {
 }
 impl EffectDefinition {
     pub fn ensure_supported(&self) -> Result<(), EffectError> {
-        let id = match self.parameters {
-            EffectParameters::AudioGain { .. } => AUDIO_GAIN_ID,
-            EffectParameters::GaussianBlur { .. } => GAUSSIAN_BLUR_ID,
-            EffectParameters::DropShadow { .. } => DROP_SHADOW_ID,
+        let (id, latest) = match self.parameters {
+            EffectParameters::AudioGain { .. } => (AUDIO_GAIN_ID, EFFECT_VERSION),
+            EffectParameters::GaussianBlur { .. } => (GAUSSIAN_BLUR_ID, AFFINE_EFFECT_VERSION),
+            EffectParameters::DropShadow { .. } => (DROP_SHADOW_ID, AFFINE_EFFECT_VERSION),
         };
-        if self.effect_id != id || self.version != EFFECT_VERSION {
+        if self.effect_id != id || !(EFFECT_VERSION..=latest).contains(&self.version) {
             return Err(EffectError::UnsupportedFeature);
         }
         Ok(())
@@ -136,7 +148,16 @@ impl EffectDefinition {
         }
         Ok(match self.parameters {
             EffectParameters::AudioGain { .. } => return Err(EffectError::UnsupportedFeature),
-            EffectParameters::GaussianBlur { .. } => ResolvedEffect::GaussianBlur { sigma },
+            EffectParameters::GaussianBlur { .. } => {
+                if self.version == AFFINE_EFFECT_VERSION {
+                    ResolvedEffect::AffineGaussianBlur {
+                        sigma,
+                        linear: [[1.0, 0.0], [0.0, 1.0]],
+                    }
+                } else {
+                    ResolvedEffect::GaussianBlur { sigma }
+                }
+            }
             EffectParameters::DropShadow {
                 offset,
                 color,
@@ -158,11 +179,21 @@ impl EffectDefinition {
                 if !(0.0..=1.0).contains(&opacity_value) {
                     return Err(EffectError::InvalidParameter(opacity));
                 }
-                ResolvedEffect::DropShadow {
-                    sigma,
-                    offset: offset_value,
-                    color: color_value,
-                    opacity: opacity_value,
+                if self.version == AFFINE_EFFECT_VERSION {
+                    ResolvedEffect::AffineDropShadow {
+                        sigma,
+                        linear: [[1.0, 0.0], [0.0, 1.0]],
+                        offset: offset_value,
+                        color: color_value,
+                        opacity: opacity_value,
+                    }
+                } else {
+                    ResolvedEffect::DropShadow {
+                        sigma,
+                        offset: offset_value,
+                        color: color_value,
+                        opacity: opacity_value,
+                    }
                 }
             }
         })

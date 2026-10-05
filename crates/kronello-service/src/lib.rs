@@ -185,6 +185,7 @@ pub struct SequenceRenderRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectInfo {
+    pub open_mode: ProjectOpenMode,
     pub project_id: String,
     pub name: String,
     pub revision: String,
@@ -532,9 +533,10 @@ impl<'a> Service<'a> {
             }
             Request::ProjectInfo(r) => {
                 if self.read_only_inspection {
-                    Ok(ResultData::Project(snapshot_info(read_project_snapshot(
-                        &r.project,
-                    )?)?))
+                    Ok(ResultData::Project(snapshot_info(
+                        read_project_snapshot(&r.project)?,
+                        ProjectOpenMode::ReadOnlySnapshot,
+                    )?))
                 } else {
                     let store = open_existing(&r.project)?;
                     let info = info(&store)?;
@@ -794,8 +796,22 @@ fn open_existing(path: &Path) -> Result<ProjectStore, ServiceError> {
     }
     Ok(ProjectStore::open(path, OpenOptions::default())?)
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ProjectOpenMode {
+    Normal,
+    Safe,
+    /// Read-only inspection (ADR-0064) read a snapshot without opening a store.
+    ReadOnlySnapshot,
+}
+
 fn info(store: &ProjectStore) -> Result<ProjectInfo, ServiceError> {
-    snapshot_info(store.snapshot()?)
+    let mode = if store.safe_mode() {
+        ProjectOpenMode::Safe
+    } else {
+        ProjectOpenMode::Normal
+    };
+    snapshot_info(store.snapshot()?, mode)
 }
 fn read_project_snapshot(path: &Path) -> Result<kronello_store::Snapshot, ServiceError> {
     if !path.is_file() {
@@ -806,7 +822,10 @@ fn read_project_snapshot(path: &Path) -> Result<kronello_store::Snapshot, Servic
     }
     Ok(ProjectStore::read_snapshot(path)?)
 }
-fn snapshot_info(snapshot: kronello_store::Snapshot) -> Result<ProjectInfo, ServiceError> {
+fn snapshot_info(
+    snapshot: kronello_store::Snapshot,
+    open_mode: ProjectOpenMode,
+) -> Result<ProjectInfo, ServiceError> {
     let content_hash = format!(
         "{:x}",
         Sha256::digest(serde_json::to_vec(&serde_json::to_value(
@@ -814,6 +833,7 @@ fn snapshot_info(snapshot: kronello_store::Snapshot) -> Result<ProjectInfo, Serv
         )?)?)
     );
     Ok(ProjectInfo {
+        open_mode,
         project_id: snapshot.document.id.to_string(),
         name: snapshot.document.name,
         revision: snapshot.revision.to_string(),
@@ -1030,6 +1050,27 @@ fn render_locators(input: &RenderInput) -> Result<(), ServiceError> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn project_info_reports_actual_normal_and_safe_open_mode() {
+        let folder = tempfile::tempdir().unwrap();
+        for (mode, expected) in [
+            (
+                kronello_store::OpenMode::ForceNormal,
+                super::ProjectOpenMode::Normal,
+            ),
+            (
+                kronello_store::OpenMode::ForceSafe,
+                super::ProjectOpenMode::Safe,
+            ),
+        ] {
+            let path = folder.path().join(format!("{expected:?}.kronello"));
+            let store =
+                kronello_store::ProjectStore::open(&path, kronello_store::OpenOptions { mode })
+                    .unwrap();
+            assert_eq!(super::info(&store).unwrap().open_mode, expected);
+            store.close().unwrap();
+        }
+    }
     use super::*;
 
     #[test]

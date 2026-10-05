@@ -536,6 +536,8 @@ fn document_audio_source_modes_are_explicit_backward_compatible_and_hashed() {
     )
     .unwrap();
     let node = SceneNode {
+        name: None,
+        enabled: true,
         id: NodeId::new(),
         kind: NodeKind::Media(MediaNode {
             asset: aid,
