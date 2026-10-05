@@ -13,7 +13,7 @@
 | M0 | 0 | 0 | 6 | 0 | 6 |
 | M1 | 0 | 0 | 14 | 0 | 14 |
 | M2 | 0 | 1 | 10 | 0 | 11 |
-| M3 | 0 | 7 | 18 | 0 | 25 |
+| M3 | 0 | 6 | 19 | 0 | 25 |
 | M4 | 12 | 0 | 0 | 0 | 12 |
 | M5 | 5 | 0 | 0 | 0 | 5 |
 | M6 | 4 | 0 | 0 | 0 | 4 |
@@ -489,7 +489,7 @@
 
 ### RENDER-003 長尺・大解像度exportのstreaming
 
-- 優先度: P1 / 領域: render / 状態: in_progress
+- 優先度: P1 / 領域: render / 状態: done
 - 依存: JOB-001, AUDIO-000, FX-001
 - 受け入れ条件:
   - 音声source/Busと映像payloadを有界batchでdecode・render・encode/muxし、10分/全source 28800000 stereo frames・映像256 MiBの現行上限を超える長尺exportを再現可能な手順で検証する

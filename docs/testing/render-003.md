@@ -87,3 +87,17 @@ python3 scripts/measure_export_streaming.py --binary target/debug/deps/streaming
 Metal / hardware encoderの長尺性能、8K pixel上限解除、image sequenceの最終2面streaming、
 report metadataの外部manifest化、物理disk throughput / 空volume試験は今回保証しない。
 RENDERのsample・画素の意味は変えず、snapshot / request / codec意味版を変更しない。
+
+## M3 統合後の検証（2026-10-06）
+
+実装 `b6abe53` をGUI / 実時間音声 / JOBの共有APIへ統合した。
+streaming ADRは採番の重複を解消して ADR-0079 とした。
+既存の realtime source 合計予算を `decode_audio_stream` の bounded sinkでappend前に検査し、
+`AUDIO_BUDGET_EXCEEDED` を維持した。movieの有界 spool / batch経路とは別の契約である。
+最終統合コード `8b94950` はfmt / schema / backlog、all-targets clippy、
+完全workspace 104 suites / 711 passed / 0 failed / 12 ignored、すべてexit0。
+worker側のMCP timeoutは今回full suiteでは再発せず、fixture testも成功した。
+Metal goldenの通常比較は40 scenes / 40 frames / mismatch0。
+各ignored acceptanceの長尺 / 4K / 容量制限実測は上記記録を使い、通常workspaceの成功件数に混ぜない。
+証拠は `target/m3-acceptance/final-rust-result.json` / `final-workspace.log` / `final-clippy.log`、
+`target/golden/run.m3.final.compare.CKVIrc/report.json`。

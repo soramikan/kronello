@@ -26,8 +26,10 @@ CommandLineTools の SwiftPM は `SwiftUIMacros` が欠落し、初回 build は
 |---|---|---|
 | Rust fmt / 公開 Swift schema / backlog | 成功 | `cargo fmt --all --check`、`generate_swift_api.py --check`、`backlog.py check`（77 tasks） |
 | Rust workspace、JOB 統合後 | 704 passed、0 failed、8 ignored、exit0 | GPU / FrameBridge を含む103 suites。RENDER-003統合前のbaseline |
+| 最終 Rust workspace、`8b94950` | 711 passed、0 failed、12 ignored、exit0 | 104 suites。`target/m3-acceptance/final-rust-result.json` / `final-workspace.log`。RENDER・JOB最終fixを含む |
 | Rust clippy、JOB 統合後 | 成功 | `cargo clippy --workspace --all-targets --locked -- -D warnings` |
 | Metal GPU golden、`def961f` | 1 test / 40 scenes / 40 frames、全 mismatch 0 | `target/golden/run.m3.compare.Ux5o9b/report.json`。clean HEAD、既存 baseline と CPU oracle の通常比較 |
+| 最終 fmt / clippy / schema / backlog / Metal golden | 成功、golden全 mismatch 0 | `8b94950` clean HEAD、`final-clippy.log`、`target/golden/run.m3.final.compare.CKVIrc/report.json` |
 | SwiftPM build | 成功 | 統合4ページ / audio harness / design gallery をビルド |
 | SwiftPM XCTest | 68 passed、0 failures、0 skips | Design19 / Core4 / AppModel45。AppModel は Edit11 / Editor7 / Integration2 / Motion15 / Playback3 / QA2 / Workflow5 |
 | 三入口等価性 | 23操作すべて同じ canonical snapshot | `target/m3-acceptance/qa/report.json`、`gui_compared:true`、実 FFI / CLI / MCP の独立 project |
@@ -65,7 +67,8 @@ KRONELLO_STATE_ROOT="$PWD/target/m3-acceptance/job-state" \
 - 主エージェントが実アプリを直接操作して Dark / Light、クリップ操作、テンプレート・書き出し、
   macOS 日本語入力ソースの候補ウインドウ / 確定 / 取消を確認する。
 - AUDIO-002 の3種類のfpsで実デバイス / Metal / seek / 停止再開を測定する。SwiftPMのhost fallbackだけで完了と扱わない。
-- RENDER-003 の統合と長尺 / 4K / memory / 障害の実測後、最終コードの workspace tests と GPU golden を確認する。
+- RENDER-003 の長尺 / 4K / memory / 障害の実測と最終統合の必須 Rust gate / GPU goldenは成功。
+  [RENDER-003](render-003.md)に元実測と統合結果を分けて記録する。
 - JOB-002 の Windows / Linux の実プロセス CI と load50 stress の受け入れを確認する。
 
 その後の結果は本書と各タスクの検証文書へ追記する。
