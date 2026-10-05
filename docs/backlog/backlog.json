@@ -632,7 +632,7 @@
       "priority": "P1",
       "area": "audio",
       "title": "リアルタイム音声再生とA/V同期",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "AUDIO-000",
         "GUI-001"
@@ -719,7 +719,7 @@
       "priority": "P2",
       "area": "gui",
       "title": "macOS GUI: 編集ページ（Sequence のトラック・素材一覧・クリップの Inspector）",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "GUI-001",
         "NLE-002"
@@ -902,7 +902,7 @@
       "priority": "P1",
       "area": "jobs",
       "title": "Windows workerのdetachと各OSの実プロセス検証",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "JOB-001",
         "MCP-001"
