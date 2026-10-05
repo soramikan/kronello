@@ -772,7 +772,7 @@
       "priority": "P2",
       "area": "vector",
       "title": "線の拡張: 破線・線の位置・非一様変換",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "VEC-003"
       ],
@@ -827,7 +827,7 @@
       "priority": "P1",
       "area": "audio",
       "title": "リタイム音声・audio effects・Generator音声",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "AUDIO-003",
         "ANIM-001"
@@ -911,7 +911,8 @@
         "WindowsでCLI/MCPの終了から独立するworker起動・stdio/log・回収の契約を実装し、親終了後も固定入力のジョブが継続することを実機またはCIで検証する",
         "Windowsの上書き禁止publicationを設計し、同一volume・既存file/空directoryの拒否・cancel/lease競合を実プロセスで検証する",
         "Linux/WindowsでFIFO slot・queued/running heartbeat・強制終了後のinterrupted・pruneを検証し、OS/版/コマンド/exitを記録する。未検証OSを保証経路に昇格しない",
-        "高負荷時（load average 50 前後）に CLI の job テスト（例: sequence_target_job_preserves_placements_after_trim_and_project_removal）が Queued のまま 60 秒で timeout する事象を再現・原因調査し、状態 DB の lock 競合下でも job が開始されることを検証する"
+        "高負荷時（load average 50 前後）に CLI の job テスト（例: sequence_target_job_preserves_placements_after_trim_and_project_removal）が Queued のまま 60 秒で timeout する事象を再現・原因調査し、状態 DB の lock 競合下でも job が開始されることを検証する",
+        "テストが失敗・時間切れになっても、起動した detached worker（`kronello worker --job`）を必ず回収し、テスト後に孤立 process を残さないことを検証する（2026-10-05 に最長14時間残った worker を6件確認）"
       ]
     },
     {
@@ -935,7 +936,7 @@
       "priority": "P2",
       "area": "api",
       "title": "scene検索・paging・固定履歴cursorとevent stream",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "API-001",
         "INTEGRATION-001"
@@ -953,7 +954,7 @@
       "priority": "P2",
       "area": "service",
       "title": "project作成/importの計画・冪等性とModifier編集",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "SERVICE-001",
         "API-001"

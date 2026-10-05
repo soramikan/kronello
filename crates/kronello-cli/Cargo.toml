@@ -22,6 +22,7 @@ kronello-service = { path = "../kronello-service" }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 
 [dev-dependencies]
+kronello-audio = { path = "../kronello-audio" }
 kronello-media = { path = "../kronello-media" }
 kronello-service = { path = "../kronello-service", features = ["test-adapter-unavailable", "test-job-control"] }
 kronello-jobs = { path = "../kronello-jobs" }

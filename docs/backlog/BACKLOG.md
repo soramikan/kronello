@@ -13,7 +13,7 @@
 | M0 | 0 | 0 | 6 | 0 | 6 |
 | M1 | 0 | 0 | 14 | 0 | 14 |
 | M2 | 0 | 1 | 10 | 0 | 11 |
-| M3 | 10 | 6 | 9 | 0 | 25 |
+| M3 | 7 | 8 | 10 | 0 | 25 |
 | M4 | 11 | 0 | 0 | 0 | 11 |
 | M5 | 5 | 0 | 0 | 0 | 5 |
 | M6 | 4 | 0 | 0 | 0 | 4 |
@@ -439,7 +439,7 @@
 
 ### VEC-005 線の拡張: 破線・線の位置・非一様変換
 
-- 優先度: P2 / 領域: vector / 状態: planned
+- 優先度: P2 / 領域: vector / 状態: in_progress
 - 依存: VEC-003
 - 受け入れ条件:
   - 破線(dash配列・offset)とoffsetのアニメーションを実装する
@@ -469,7 +469,7 @@
 
 ### AUDIO-004 リタイム音声・audio effects・Generator音声
 
-- 優先度: P1 / 領域: audio / 状態: in_progress
+- 優先度: P1 / 領域: audio / 状態: done
 - 依存: AUDIO-003, ANIM-001
 - 受け入れ条件:
   - retimed audioのTimeMap・補間・pitchの扱いを設計して意味版を固定し、線形/区分線形map、trim/stretch、非整数sample境界で同期とsource範囲を検証する
@@ -517,6 +517,7 @@
   - Windowsの上書き禁止publicationを設計し、同一volume・既存file/空directoryの拒否・cancel/lease競合を実プロセスで検証する
   - Linux/WindowsでFIFO slot・queued/running heartbeat・強制終了後のinterrupted・pruneを検証し、OS/版/コマンド/exitを記録する。未検証OSを保証経路に昇格しない
   - 高負荷時（load average 50 前後）に CLI の job テスト（例: sequence_target_job_preserves_placements_after_trim_and_project_removal）が Queued のまま 60 秒で timeout する事象を再現・原因調査し、状態 DB の lock 競合下でも job が開始されることを検証する
+  - テストが失敗・時間切れになっても、起動した detached worker（`kronello worker --job`）を必ず回収し、テスト後に孤立 process を残さないことを検証する（2026-10-05 に最長14時間残った worker を6件確認）
 
 ### FX-002 非一様affine下のblur/shadow
 
@@ -528,7 +529,7 @@
 
 ### API-002 scene検索・paging・固定履歴cursorとevent stream
 
-- 優先度: P2 / 領域: api / 状態: planned
+- 優先度: P2 / 領域: api / 状態: in_progress
 - 依存: API-001, INTEGRATION-001
 - 受け入れ条件:
   - scene.queryに範囲・タグ・種類による検索とpagingを追加し、InstancePath/NodeId・所有順・revisionを保ち、既存の明示evaluation modeとの整合性を検証する
@@ -538,7 +539,7 @@
 
 ### SERVICE-002 project作成/importの計画・冪等性とModifier編集
 
-- 優先度: P2 / 領域: service / 状態: planned
+- 優先度: P2 / 領域: service / 状態: in_progress
 - 依存: SERVICE-001, API-001
 - 受け入れ条件:
   - project.create/importの変更計画・再送の冪等性を共通APIで設計し、createの出力予約とimportのrevision照合、同一キー異payloadの拒否、保存後再送を実プロセスで検証する

@@ -14,7 +14,7 @@ pub const COLOR_VERSION: &str = "gpu002-color-v1";
 pub const VECTOR_VERSION: &str = "render001-kurbo-flatten-v1";
 pub const COVERAGE_VERSION: &str = "vec003-grid4-v2";
 pub const STROKE_GEOMETRY_VERSION: &str = "vec003-centered-stroke-v1";
-pub const GRADIENT_INTERPOLATION_VERSION: &str = "vec003-linear-premultiplied-pad-v1";
+pub const GRADIENT_INTERPOLATION_VERSION: &str = "vec004-explicit-interpolation-v1";
 pub const LAYOUT_BOUNDS_VERSION: u32 = 1;
 pub const NODE_VISIBILITY_VERSION: u32 = 2;
 fn legacy_visibility_version() -> u32 {
@@ -76,8 +76,8 @@ impl SemanticVersions {
             stroke_geometry: STROKE_GEOMETRY_VERSION.into(),
             gradient_interpolation: GRADIENT_INTERPOLATION_VERSION.into(),
             effects: BTreeMap::from([
-                (GAUSSIAN_BLUR_ID.into(), EFFECT_VERSION),
-                (DROP_SHADOW_ID.into(), EFFECT_VERSION),
+                (GAUSSIAN_BLUR_ID.into(), AFFINE_EFFECT_VERSION),
+                (DROP_SHADOW_ID.into(), AFFINE_EFFECT_VERSION),
             ]),
             generators: generator_versions(),
             video_input: initial_video_version(),
@@ -322,6 +322,11 @@ impl RenderSnapshot {
                 .all(|c| matches!(c, DocumentObject::Known(c) if c.nodes.iter().all(|n| n.enabled)))
         {
             supported_versions.visibility = 1;
+        }
+        for (id, version) in &mut supported_versions.effects {
+            if self.semantic_versions.effects.get(id) == Some(&EFFECT_VERSION) {
+                *version = EFFECT_VERSION;
+            }
         }
         if self.project.semantic_version != PROJECT_SEMANTIC_VERSION
             || self.semantic_versions != supported_versions
@@ -641,6 +646,16 @@ pub fn build_scene_ir_with_cache(
             .iter()
             .map(|e| {
                 let d = e.definition()?;
+                if snapshot
+                    .semantic_versions
+                    .effects
+                    .get(&d.effect_id)
+                    .is_none_or(|v| d.version > *v)
+                {
+                    return Err(RenderError::UnsupportedFeature(
+                        "effect exceeds pinned snapshot version".into(),
+                    ));
+                }
                 d.validate(&authored.properties, &registry)?;
                 Ok(d.resolve(&values)?)
             })

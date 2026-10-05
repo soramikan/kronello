@@ -11,6 +11,9 @@ fn load(p:vec2<i32>)->vec4<f32> {
 }
 fn bilinear(p:vec2<f32>)->vec4<f32> {
     let base=vec2<i32>(floor(p)); let f=p-vec2<f32>(base);
+    return bilinear_parts(base,f);
+}
+fn bilinear_parts(base:vec2<i32>, f:vec2<f32>)->vec4<f32> {
     let a=load(base); let b=load(base+vec2<i32>(1,0));
     let c=load(base+vec2<i32>(0,1)); let d=load(base+vec2<i32>(1,1));
     let top=a+(b-a)*f.x; let bottom=c+(d-c)*f.x;
@@ -40,9 +43,21 @@ fn main(@builtin(global_invocation_id) id:vec3<u32>) {
             let w=weights[u32(i+radius)]; result+=load(p+delta)*w; norm+=w;
         }
         result/=norm;
+    } else if params.config.x==2u {
+        var norm=0.0;
+        for (var i=0u; i<params.config.y; i++) {
+            let delta=vec2<i32>(i32(weights[3u*i]),i32(weights[3u*i+1u]));
+            let w=weights[3u*i+2u]; result+=load(p+delta)*w; norm+=w;
+        }
+        result/=norm;
     } else {
         let s=textureLoad(original,p,0);
-        let shadow=params.color*bilinear(vec2<f32>(p)-params.offset.xy).a;
+        var alpha=0.0;
+        if params.config.x==3u {
+            let shift=floor(-params.offset.xy);
+            alpha=bilinear_parts(p+vec2<i32>(shift),-params.offset.xy-shift).a;
+        } else { alpha=bilinear(vec2<f32>(p)-params.offset.xy).a; }
+        let shadow=params.color*alpha;
         result=s+shadow*(1.0-s.a);
     }
     if any(abs(result.rgb)>vec3<f32>(65504.0)) || any(result!=result) || result.a<0.0 || result.a>1.0 {atomicStore(&validation,1u);}

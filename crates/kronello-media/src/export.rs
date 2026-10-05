@@ -50,18 +50,32 @@ impl AvExportSnapshot {
         audio: AudioSourceMode,
         clips: Vec<AudioClip>,
     ) -> Result<Self, MediaError> {
+        Self::with_audio_profile(render, audio, clips, 2)
+    }
+    /// Profile 3 pins AUDIO-004 evaluator 2; profiles 1/2 retain their meaning.
+    pub fn with_audio_profile(
+        render: &RenderSnapshot,
+        audio: AudioSourceMode,
+        clips: Vec<AudioClip>,
+        profile: u32,
+    ) -> Result<Self, MediaError> {
+        if !matches!(profile, 2 | 3) {
+            return Err(MediaError::UnsupportedFeature(
+                "audio profile version".into(),
+            ));
+        }
         if audio != AudioSourceMode::Explicit && !clips.is_empty() {
             return Err(MediaError::InvalidInput(
                 "document/silence audio cannot contain explicit clips".into(),
             ));
         }
         let clips = if audio == AudioSourceMode::Document {
-            document_plan(render)?.clips()
+            document_plan(render, profile)?.clips()
         } else {
             clips
         };
         let snapshot = Self {
-            schema_version: 2,
+            schema_version: profile,
             render: render.clone(),
             clips,
             audio,
@@ -83,7 +97,7 @@ impl AvExportSnapshot {
         Ok(format!("{:x}", Sha256::digest(serde_json::to_vec(&value)?)))
     }
     pub fn validate(&self) -> Result<(), MediaError> {
-        if !matches!(self.schema_version, 1 | 2)
+        if !matches!(self.schema_version, 1..=3)
             || (self.schema_version == 1 && self.audio != AudioSourceMode::Explicit)
         {
             return Err(MediaError::UnsupportedFeature(
@@ -92,7 +106,7 @@ impl AvExportSnapshot {
         }
         self.render.validate()?;
         if self.audio == AudioSourceMode::Document
-            && document_plan(&self.render)?.clips() != self.clips
+            && document_plan(&self.render, self.schema_version)?.clips() != self.clips
         {
             return Err(MediaError::InvalidInput(
                 "document audio placements differ from fixed snapshot".into(),
@@ -404,7 +418,8 @@ impl MediaRuntime {
             }
         }
         let bus = if snapshot.audio == AudioSourceMode::Document {
-            document_plan(&snapshot.render)?.mix(&sources, request.range)?
+            document_plan(&snapshot.render, snapshot.schema_version)?
+                .mix(&sources, request.range)?
         } else {
             mix(&snapshot.clips, &sources, request.range)?
         };
@@ -525,14 +540,18 @@ fn bt709_rgba(pixels: &[[f32; 4]], background: [f32; 3]) -> Result<Vec<u8>, Medi
 fn is_explicit(mode: &AudioSourceMode) -> bool {
     *mode == AudioSourceMode::Explicit
 }
-fn document_plan(render: &RenderSnapshot) -> Result<DocumentAudioPlan, MediaError> {
+fn document_plan(render: &RenderSnapshot, profile: u32) -> Result<DocumentAudioPlan, MediaError> {
     let target = match render.target() {
         kronello_render::RenderTarget::Composition { composition } => {
             AudioTarget::Composition(composition)
         }
         kronello_render::RenderTarget::Sequence { sequence } => AudioTarget::Sequence(sequence),
     };
-    Ok(DocumentAudioPlan::compile(render.project(), target)?)
+    Ok(DocumentAudioPlan::compile_version(
+        render.project(),
+        target,
+        if profile == 3 { 2 } else { 1 },
+    )?)
 }
 
 fn legacy_audio_profile() -> u32 {

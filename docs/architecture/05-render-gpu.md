@@ -6,7 +6,7 @@ Sequence compiler は Composition の独立 instance に加え、動画 Asset �
 
 `VideoRenderBackend` は固定 DAG に入った Asset hash / locator だけを解決する。元 Project を再読込しない。software seek / decode、明示 SDR RGBA8 color conversion / inverse transfer / premultiply、CPU nearest sampling、選択 GPU への明示 RGBA16F upload を通す。未知 format / HDR / 色 tag、asset 欠落 / hash mismatch は typed error。タグ欠落時の明示 default（YUV: BT.709 limited、RGB: sRGB full）は sequence.query に assumptions として見える。native plane decode API の HDR 保持をこの SDR renderer の対応と同一視しない。
 
-clip effects は FX-001 の ordered DAG、affine 制限、halo / backward ROI、raster identity を共有する。`FrameMetadata.input_path` は active video の CPU decode / color / sampling と selected backend の経路を表し、GPU の低層 TransferStats は upload bytes / operations を数える。GPU-resident decode、frame interpolation、tile 間の decode cache は追加していない。CPU / GPU 比較の実行範囲は [NLE-002 の検証](../testing/nle-002.md)、時間・色・Generator と transition の意味版は [ADR-0062](../adr/0062-video-generator-and-timeline-edits.md) を参照する。
+clip effects は FX-001 / FX-002 の版付き ordered DAG、affine 契約、halo / backward ROI、raster identity を共有する。`FrameMetadata.input_path` は active video の CPU decode / color / sampling と selected backend の経路を表し、GPU の低層 TransferStats は upload bytes / operations を数える。GPU-resident decode、frame interpolation、tile 間の decode cache は追加していない。CPU / GPU 比較の実行範囲は [NLE-002 の検証](../testing/nle-002.md)、時間・色・Generator と transition の意味版は [ADR-0062](../adr/0062-video-generator-and-timeline-edits.md) を参照する。
 
 ## レンダー要求
 
@@ -44,6 +44,25 @@ OpenFX の入力領域 / 必要フレームの問い合わせに似た契約を�
 - opacity / coverage は premultiplied RGB と alpha の両方に掛け、画像の補間・blur・蓄積も premultiplied 値で行う。alpha / coverage は有限の `[0, 1]`、alpha = 0 の内部 RGB はゼロとする。HDR RGB の負値・1 超を alpha の範囲に clamp しない。
 - 外部アダプターは `straight / premultiplied / opaque` と関連付け空間を明示する。非線形色変換は straight RGB に行い、外部入出力の unpremultiply 時は `a > 2^-16` で除算、それ以下は RGB をゼロとし alpha は保持する。内部 effect の unpremultiply はゼロだけを特別扱いし、内部画像に閾値を適用しない。
 - alpha を持たない出力は明示した背景へ合成する。外部 alpha 変換、閾値の境界、マット境界を検証する。詳細と新規に固定した契約は [ADR-0044](../adr/0044-color-and-alpha-contracts.md) を参照。
+
+### VEC-004 の gradient paint
+
+[ADR-0066](../adr/0066-explicit-gradient-semantics.md) の版 1 options を各 gradient に保持する。
+coverage サンプルの座標を node / ROI の逆写像、各 gradient の bbox / affine 逆写像で gradient 空間へ移す。
+parameter → pad / repeat / reflect → stop の補間 → 作業用線形 premultiplied paint の順。
+補間空間と alpha association は独立の意味で、sRGB straight / premultiplied 補間も合成前に decode する。
+text も同じ shader / CPU reference の paint 経路を使い、shaping cluster を作り直さない。
+sampling の座標・焦点円の判別式・NaN parameter・周期 spread の無限 parameter は、
+CPU の面検証と GPU の sticky validation flag で型付きエラーにし、stop 色へ置換しない。
+旧 pad の無限 parameter は VEC-003 と同じ端点色を維持する。
+
+`SemanticVersions.gradient_interpolation` は `vec004-explicit-interpolation-v1`。
+個々の `interpolation_version` と全 options / stop / transform を raster identity に含める。
+旧固定 snapshot は意味版の不一致を拒否し、旧 Project の省略 options は従来値へ正規化する。
+16bit PNG / RGBA16F は従来の出力規約を維持し、VEC-004 では dither を追加しない。
+native preview の Bgra8Unorm は banding の可能性を残す。8bit 出力 / preview の対策は将来の量子化境界で検討する。
+Metal 実機の一致・32 シーンの新 golden 候補生成 / 明示採用 / 比較は host run 待ち。
+[検証記録](../testing/vec-004.md) の残件を完了するまで GPU の受け入れ成功と扱わない。
 
 ## 色
 
@@ -83,9 +102,13 @@ OpenFX の入力領域 / 必要フレームの問い合わせに似た契約を�
 
 ## 基本エフェクト
 
-FX-001 は `SceneNode.effects` の順序付き stack と `DagNode::Effect` を実装する。sigma / offset / color / opacity はノード所有 Property で、評価済み `ResolvedEffect` を Scene IR に保持する。blur はローカル `design_px` の sigma を変換・出力倍率で画素へ写し、`radius = ceil(3σ)` の正規化 Gaussian を水平・垂直に畳み込む。透明 edge mode、内部線形 premultiplied RGBA16F と明示した binary16 RNE 面境界（CPU oracle も同じ丸め）を使い、shadow は blurred source alpha にタグ付き straight 色・opacity を掛けて source の下へ合成する。等方変換に対応し、正の sigma に対する非一様変換は型付き未対応。
+FX-001 は `SceneNode.effects` の順序付き stack と `DagNode::Effect` を実装する。sigma / offset / color / opacity はノード所有 Property で、評価済み `ResolvedEffect` を Scene IR に保持する。blur はローカル `design_px` の sigma を変換・出力倍率で画素へ写し、`radius = ceil(3σ)` の正規化 Gaussian を水平・垂直に畳み込む。透明 edge mode、内部線形 premultiplied RGBA16F と明示した binary16 RNE 面境界（CPU oracle も同じ丸め）を使い、shadow は blurred source alpha にタグ付き straight 色・opacity を掛けて source の下へ合成する。version 1 は等方変換に対応し、正の sigma に対する非一様変換は型付き未対応。この旧版の画素・制限は維持する。
 
-`PixelEffect::required_input` が output → input ROI を宣言し、DAG の逆順で Group / mask / 共有入力へ union を伝播する。初期 executor は必要領域の union を元の画素格子で描画し、要求画素へ crop する。`RenderDag::bounds()` の ink / visual は変換と離散 halo を含む output pixel bounds。effect params・意味版・upstream identities・ROI・色・backend namespace を cache key に含める。metadata は effect id ごとの意味版を固定する。GPU / golden の採用検証は [FX-001 の検証記録](../testing/fx-001.md) に分けて記録する。
+FX-002 は同じ effect id / parameters の明示した **version 2** を追加する（[ADR-0067](../adr/0067-affine-gaussian-effects.md)）。局所 Gaussian の covariance を `C = sigma² (S A)(S A)ᵀ` として出力格子へ写す。rotation / reflection / 非一様 scale / shear の cross term を保持する。整数 offset の `q = dᵀ C⁻¹ d <= 9` に `exp(-q/2)` の重みを与え、正規化した同じ f32 tap 列を CPU / GPU が一段で畳み込む。kernel 版は `fx002-affine-ellipse-lattice-rne16-v2`。sigma 0 は中心 tap、shadow offset は `S A offset`。shadow sampling は `floor(-offset)` の整数移動と offset だけから求めた fractional taps を分け、tile 原点で fraction が変わらない。面境界の binary16 RNE と transparent edge は共通。旧 version 1 から自動移行しない。
+
+semantic visual halo は軸別 `3 sigma hypot(A[i][0], A[i][1])`、pixel halo は `ceil(3 sqrt(Cii))`。shadow の bilinear floor / ceil と source union を含めて逆 ROI を要求する。有限非退化行列だけを扱い、normalized determinant `> 1e-6`、normalized covariance determinant `> 1e-12`、距離計算に使う直接 covariance determinant は正の normal f64、各 radius `<= 1024`、探索矩形 `<= 65,536 candidates` を要求する。超過・特異・近退化・covariance underflow は `UNSUPPORTED_FEATURE`。近似や clamp はしない。既存 surface memory 予算も適用する。CPU / GPU 比較と golden の実測状態は [FX-002](../testing/fx-002.md) に記録する。
+
+`PixelEffect::required_input` が output → input ROI を宣言し、DAG の逆順で Group / mask / 共有入力へ union を伝播する。初期 executor は必要領域の union を元の画素格子で描画し、要求画素へ crop する。`RenderDag::bounds()` の ink / visual は変換と離散 halo を含む output pixel bounds。effect params・意味版・upstream identities・ROI・色・backend namespace を cache key に含める。metadata は effect id ごとの対応版上限（新規 2 / 旧 1）を固定する。各 authored effect の版が algorithm を選び、上限 1 の snapshot に版 2 は入れない。GPU / golden の採用検証は [FX-001 の検証記録](../testing/fx-001.md) に分けて記録する。
 
 ## 高解像度
 
@@ -206,7 +229,7 @@ DAG は topological なノード列と明示 input index を持つ。index は�
 
 `OutputRegion { origin, extent, pixels }` は設計座標の矩形を出力画素へ写す。`p = diag(pixels / extent) × (design_position - origin)`、左上原点・+Y 下向き。ROI / 解像度を変えても文書・組版は変えない。異なるアスペクト比を要求したときは、この明示写像で伸縮し、responsive variant の再組版を暗黙に行わない。flatten の最大拡大率は node world transform と ROI 写像を合成した行列の Frobenius norm で保守的に求める。
 
-Shape の単色 / 線形・放射 gradient fill / stroke と miter / bevel / round join、butt / square / round cap を接続する。stroke の非一様 scale / shear は `UNSUPPORTED_FEATURE`。fill / text の非一様変換は対応する。後続 paint / stroke 機能は opaque で保持し、必要な最終出力は拒否する。glyph ごとに coverage を作り、text の opacity は glyph 全体の合成に一度掛ける。Group / Null / 配置の containment 枠も局所 opacity と順序を保持する。
+Shape の単色 / linear・radial・focal_radial・conic gradient fill / stroke と miter / bevel / round join、butt / square / round cap を接続する。stroke の非一様 scale / shear は `UNSUPPORTED_FEATURE`。fill / text の非一様変換は対応する。未知 paint / 後続 stroke 機能は opaque で保持し、必要な最終出力は拒否する。glyph ごとに coverage を作り、text の opacity は glyph 全体の合成に一度掛ける。Group / Null / 配置の containment 枠も局所 opacity と順序を保持する。
 
 現行文書型には matte 欄がないため `MatteBinding` を snapshot の明示レンダー入力とする。source / matte とも stable SceneKey。matte は表示 root / children から除外し、`visible = true` の場合だけ表示する。source ごとの binding は一つ、共有 matte の DAG は再利用する。欠落・非アクティブ参照・containment / matte を合わせた循環は失敗する。
 

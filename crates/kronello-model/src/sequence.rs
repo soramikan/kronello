@@ -59,6 +59,8 @@ pub struct Clip {
 pub enum AudioRetimePolicy {
     #[default]
     Reject,
+    // AUDIO-004 v1: linear sample interpolation, with pitch following speed.
+    ResampleV1,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, schemars::JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -311,8 +313,7 @@ impl Sequence {
                     SequenceError::Invalid("transition requires clips on one track".into())
                 })?;
             let (track, a, b) = pair;
-            if track.kind != TrackKind::Video
-                || a.timeline_range.start() >= b.timeline_range.start()
+            if a.timeline_range.start() >= b.timeline_range.start()
                 || a.timeline_range.end() >= b.timeline_range.end()
                 || a.timeline_range.intersection(b.timeline_range) != Some(transition.range)
                 || self.transitions[..index].iter().any(|old| {
@@ -367,13 +368,6 @@ impl Sequence {
                         return Err(SequenceError::Invalid("clip property identity".into()));
                     }
                 }
-                if track.kind == TrackKind::Audio
-                    && (!clip.effects.is_empty() || !clip.properties.is_empty())
-                {
-                    return Err(SequenceError::Unsupported(
-                        "audio clip properties/effects".into(),
-                    ));
-                }
                 if clip.effects.len() > 16 {
                     return Err(SequenceError::Invalid("clip effect budget".into()));
                 }
@@ -418,6 +412,7 @@ impl Sequence {
                         stream_index,
                     } => {
                         if track.kind == TrackKind::Audio
+                            && clip.audio_retime == AudioRetimePolicy::Reject
                             && !matches!(&clip.time_map, TimeMap::Linear(m) if m.speed() == kronello_time::Rational::ONE)
                         {
                             return Err(SequenceError::Unsupported(
@@ -467,13 +462,7 @@ impl Sequence {
                             ));
                         }
                     }
-                    SourceRef::Generator { .. } => {
-                        if track.kind != TrackKind::Video {
-                            return Err(SequenceError::Invalid(
-                                "generator requires video track".into(),
-                            ));
-                        }
-                    }
+                    SourceRef::Generator { .. } => (),
                 }
             }
         }

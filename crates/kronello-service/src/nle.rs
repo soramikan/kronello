@@ -127,9 +127,21 @@ pub(crate) fn sequence_query(
             let kind = match &clip.source_ref {
                 SourceRef::Composition { .. } => ClipKind::Composition,
                 SourceRef::Generator {
-                    generator, version, ..
+                    generator,
+                    version,
+                    color,
                 } => {
-                    if generator != SOLID_GENERATOR_ID || *version != GENERATOR_VERSION {
+                    let supported = if track.kind == TrackKind::Audio {
+                        matches!(
+                            generator.as_str(),
+                            kronello_audio::AUDIO_GENERATOR_SILENCE
+                                | kronello_audio::AUDIO_GENERATOR_TONE
+                        ) && *version == 1
+                            && *color == Color::from_srgb8([0; 3], None)
+                    } else {
+                        generator == SOLID_GENERATOR_ID && *version == GENERATOR_VERSION
+                    };
+                    if !supported {
                         unsupported_reason =
                             Some("UNSUPPORTED_FEATURE: generator id/version".into());
                     }

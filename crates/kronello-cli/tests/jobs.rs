@@ -1058,3 +1058,141 @@ fn document_audio_worker_missing_hash_mismatch_and_clipping_never_publish() {
         assert!(!job.destination.exists());
     }
 }
+
+#[test]
+fn audio4_retime_gain_generator_crossfade_fixed_job_matches_sync_ntsc() {
+    let f = Fixture::new();
+    let (mut document, mut render) = audio_sequence_fixture(&f, 0.5);
+    let gain = kronello_model::PropertyId::new();
+    let outgoing = &mut document["sequences"][0]["tracks"][1]["clips"][0];
+    outgoing["timeline_range"]["end"] = json!({"num":"1","den":"10"});
+    outgoing["time_map"]["speed"] = json!({"num":"2","den":"1"});
+    outgoing["audio_retime"] = json!("resample_v1");
+    outgoing["properties"] = json!([{"id":gain,"descriptor":{"key":"kronello.audio.volume","version":1},"source":{"kind":"constant","value":{"kind":"scalar","value":0.5}},"modifiers":[]}]);
+    outgoing["effects"] = json!([{"effect_id":"kronello.audio.gain","version":1,"parameters":{"kind":"audio_gain","gain":gain}}]);
+    let outgoing_id = outgoing["id"].clone();
+    let mut incoming = outgoing.clone();
+    incoming["id"] = json!(kronello_model::ClipId::new());
+    incoming["timeline_range"] =
+        json!({"start":{"num":"1","den":"20"},"end":{"num":"1","den":"5"}});
+    incoming["source_ref"] =
+        json!({"kind":"generator","generator":"kronello.audio.tone440","version":1});
+    incoming["time_map"]["speed"] = json!({"num":"1","den":"1"});
+    incoming["effects"] = json!([]);
+    incoming["properties"] = json!([]);
+    incoming["volume"] = Value::Null;
+    document["sequences"][0]["transitions"] = json!([{"outgoing":outgoing_id,"incoming":incoming["id"],"range":{"start":{"num":"1","den":"20"},"end":{"num":"1","den":"10"}},"kind":"crossfade","version":1}]);
+    document["sequences"][0]["tracks"][1]["clips"]
+        .as_array_mut()
+        .unwrap()
+        .push(incoming);
+    f.service(json!({"operation":"project.import","project":f.project,"base_revision":"1","document":document}));
+    let query = f.service(json!({"operation":"sequence.query","project":f.project,"sequence":document["sequences"][0]["id"]}));
+    let generator = query["clips"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["kind"] == "generator")
+        .unwrap();
+    assert!(generator["unsupported_reason"].is_null(), "{generator}");
+    let profile = json!({"format":"pro_res_mov","profile_version":3,"audio":"document","clips":[],"background":[0,0,0]});
+    let baseline = f.cli(
+        json!({"operation":"render.export","render":render,"output":profile}),
+        None,
+        false,
+    );
+    let baseline_file = render["output_directory"].as_str().unwrap().to_owned();
+    let gate = f.temp.path().join("audio-release");
+    render["output_directory"] = json!(f.temp.path().join("job.mov"));
+    let job = f.submit_request(
+        json!({"operation":"render.submit","render":render,"output":profile}),
+        Some(&gate),
+        false,
+    );
+    f.wait(&job.id, JobStatus::Running);
+    let fixed: Value = serde_json::from_slice(
+        &std::fs::read(f.store().directory(&job.id).unwrap().join("input.json")).unwrap(),
+    )
+    .unwrap();
+    use sha2::Digest;
+    let bytes = std::fs::read(f.store().directory(&job.id).unwrap().join("input.json")).unwrap();
+    assert_eq!(
+        format!("{:x}", sha2::Sha256::digest(&bytes)),
+        job.input_hash
+    );
+    let mut other_mode = fixed.clone();
+    other_mode["request"]["output"]["audio"] = json!("silence");
+    assert_ne!(
+        sha2::Sha256::digest(serde_json::to_vec(&fixed).unwrap()),
+        sha2::Sha256::digest(serde_json::to_vec(&other_mode).unwrap())
+    );
+    assert_eq!(fixed["request"]["output"]["audio"], "document");
+    assert_eq!(fixed["request"]["output"]["profile_version"], 3);
+    let mut changed = document.clone();
+    changed["sequences"][0]["tracks"][1]["clips"][0]["volume"]["source"]["value"]["value"] =
+        json!(0.0);
+    changed["compositions"][0]["nodes"][0]["properties"][2]["source"]["value"]["value"]["components"]
+        ["r"] = json!(0.0);
+    f.service(json!({"operation":"project.import","project":f.project,"base_revision":"2","document":changed}));
+    std::fs::remove_file(&f.project).unwrap();
+    std::fs::write(gate, b"release").unwrap();
+    let done = f.wait(&job.id, JobStatus::Succeeded);
+    let report = &done.result.as_ref().unwrap()["report"];
+    assert_eq!(report["frames"], baseline["frames"]);
+    assert_eq!(
+        report["export_snapshot_hash"],
+        baseline["export_snapshot_hash"]
+    );
+    assert_eq!(report["sample_range"], json!({"start":0,"end":4804}));
+    assert_eq!(report["audio"]["frames"], 4804);
+    let runtime = kronello_media::MediaRuntime::load().unwrap();
+    runtime
+        .probe(&job.destination)
+        .unwrap()
+        .verify_av()
+        .unwrap();
+    let baseline_audio = runtime.decode_audio(Path::new(&baseline_file), 1).unwrap();
+    let job_audio = runtime.decode_audio(&job.destination, 1).unwrap();
+    assert_eq!(job_audio.buffer, baseline_audio.buffer);
+    assert_eq!(report["audio_profile_version"], 3);
+    let typed: kronello_model::Project = serde_json::from_value(document.clone()).unwrap();
+    let sequence = serde_json::from_value(document["sequences"][0]["id"].clone()).unwrap();
+    let plan = kronello_audio::DocumentAudioPlan::compile_version(
+        &typed,
+        kronello_audio::AudioTarget::Sequence(sequence),
+        2,
+    )
+    .unwrap();
+    let audio_clip = &plan.clips()[0];
+    let audio_asset = typed
+        .assets
+        .iter()
+        .find_map(|a| match a {
+            kronello_model::DocumentObject::Known(a) if a.id == audio_clip.asset => Some(a),
+            _ => None,
+        })
+        .unwrap();
+    let source = runtime
+        .decode_asset_audio(audio_asset, &f.project, audio_clip.stream_index)
+        .unwrap()
+        .buffer;
+    let sources = [((audio_clip.asset, audio_clip.stream_index), source)].into();
+    let range = serde_json::from_value(render["range"].clone()).unwrap();
+    let bus = plan.mix(&sources, range).unwrap();
+    let pcm = bus
+        .quantize_pcm24(kronello_audio::ClippingPolicy::Reject)
+        .unwrap();
+    for (actual, expected) in job_audio.buffer.frames().iter().flatten().zip(pcm.samples) {
+        assert_eq!(*actual, (expected / 256) as f32 / 8388608.0);
+    }
+    assert_eq!(job_audio.buffer.frames()[0], [0.03125, -0.03125]);
+    let mut original_video = runtime.open_video(Path::new(&baseline_file)).unwrap();
+    let mut fixed_video = runtime.open_video(&job.destination).unwrap();
+    for frame in baseline["frames"].as_array().unwrap() {
+        let time = serde_json::from_value(frame["time"].clone()).unwrap();
+        assert_eq!(
+            original_video.decode_at(time).unwrap().pixels,
+            fixed_video.decode_at(time).unwrap().pixels
+        );
+    }
+}
