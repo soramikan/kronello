@@ -121,6 +121,18 @@ readout は軸ラベルの余白を避け、右端で左側へ反転する。foc
 名前・値表示は `PropertyPresentation`、琥珀 / 青 / 赤の役割と単一 playhead は GUI-001 review を継承する。
 詳細は [ADR-0070](../adr/0070-motion-keyframe-authoring.md)、検査とホスト手順は [GUI-002 の検証](../testing/gui-002.md)。
 
+## テンプレート内部の読み取り検査
+
+Motion のテンプレート配置を選ぶと、内部 node を `InstancePath + NodeId` で選び、
+評価された Property・text・layout / ink / visual bounds を Inspector に表示する。
+内部値は編集 field を持たず、Viewer の青い bounds 枠にも操作 handle を付けない。
+Inspector / Viewer は同じ表示 cache を使い、停止時の revision / Composition / 配置 / time
+変更を150ms debounceした一回の expanded `scene.query` で更新する。
+再生中は最後の値と「再生中は停止時に更新」を出し、inspection request は発行しない。
+古い task / revision は破棄し、失敗は `KRErrorLine` を表示する。
+[ADR-0077](../adr/0077-template-instance-read-only-inspection.md) と
+[INTEGRATION-002 の検証](../testing/integration-002.md) に範囲と証拠を記録する。
+
 ## 画面の範囲
 
 AUDIO-002 の playback は [ADR-0076](../adr/0076-buffered-device-clock-playback.md)、

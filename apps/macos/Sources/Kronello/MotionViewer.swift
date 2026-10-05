@@ -107,6 +107,7 @@ struct MotionViewer: View {
                 let zoom = model.ui.zoom == "fit" ? 1 : (Double(model.ui.zoom) ?? 100) / 100 * model.extent.width / max(1, size.width)
                 ZStack {
                     KRViewerFrame(aspectRatio: aspect) { MetalPreview(model: model) }
+                    TemplateInstanceInspectionOverlay(model: model)
                     Canvas { context, canvas in
                         func screen(_ point: CGPoint) -> CGPoint { .init(x: point.x / extent.width * canvas.width, y: point.y / extent.height * canvas.height) }
                         var path = Path()
@@ -115,7 +116,7 @@ struct MotionViewer: View {
                         for point in spatialPath.keys { let point = screen(point), side = 5 / max(0.01, zoom); context.fill(Path(CGRect(x: point.x - side / 2, y: point.y - side / 2, width: side, height: side)), with: .color(p.selection)) }
                     }.allowsHitTesting(false)
                     if let pathFailure { VStack { KRErrorLine(.init(pathFailure.code, pathFailure.message)); Spacer() }.allowsHitTesting(false) }
-                    if model.ui.tool == "select", let selected = model.selected, !model.ui.locked.contains(selected.id),
+                    if model.ui.tool == "select", let selected = model.selected, !model.ui.locked.contains(selected.id), TemplateInstanceInspection.instance(selected, document: model.document) == nil,
                        let bounds = model.candidateBounds ?? selected.bounds(model.ui.bounds) {
                         let selection = KRViewerSelection(CGRect(x: bounds.minX / model.extent.width, y: bounds.minY / model.extent.height,
                             width: bounds.width / model.extent.width, height: bounds.height / model.extent.height), label: "\(model.ui.bounds) \(Int(bounds.width.rounded())) × \(Int(bounds.height.rounded()))")
