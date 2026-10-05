@@ -415,7 +415,7 @@ impl<'de> Deserialize<'de> for Project {
         })
     }
 }
-fn take_field<T: DeserializeOwned, E: serde::de::Error>(
+pub(crate) fn take_field<T: DeserializeOwned, E: serde::de::Error>(
     fields: &mut BTreeMap<String, Value>,
     name: &'static str,
 ) -> Result<T, E> {
@@ -425,7 +425,7 @@ fn take_field<T: DeserializeOwned, E: serde::de::Error>(
     serde_json::from_str(&value.to_string()).map_err(E::custom)
 }
 
-fn unique_fields<'de, D: Deserializer<'de>>(
+pub(crate) fn unique_fields<'de, D: Deserializer<'de>>(
     deserializer: D,
 ) -> Result<BTreeMap<String, Value>, D::Error> {
     struct FieldsVisitor;

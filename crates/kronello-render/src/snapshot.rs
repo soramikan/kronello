@@ -14,7 +14,7 @@ pub const COLOR_VERSION: &str = "gpu002-color-v1";
 pub const VECTOR_VERSION: &str = "render001-kurbo-flatten-v1";
 pub const COVERAGE_VERSION: &str = "vec003-grid4-v2";
 pub const STROKE_GEOMETRY_VERSION: &str = "vec003-centered-stroke-v1";
-pub const GRADIENT_INTERPOLATION_VERSION: &str = "vec003-linear-premultiplied-pad-v1";
+pub const GRADIENT_INTERPOLATION_VERSION: &str = "vec004-explicit-interpolation-v1";
 pub const LAYOUT_BOUNDS_VERSION: u32 = 1;
 pub const NODE_VISIBILITY_VERSION: u32 = 2;
 fn legacy_visibility_version() -> u32 {

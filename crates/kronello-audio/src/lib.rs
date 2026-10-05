@@ -8,7 +8,9 @@ use kronello_time::{SampleRate, Time, TimeRange};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+mod advanced;
 mod document;
+pub use advanced::{AUDIO_EVALUATION_VERSION, AUDIO_GENERATOR_SILENCE, AUDIO_GENERATOR_TONE};
 pub use document::{AudioSourceMode, AudioTarget, DocumentAudioPlan};
 
 pub const SAMPLE_RATE: SampleRate = SampleRate::HZ_48000;
@@ -19,6 +21,8 @@ pub const MAX_AUDIO_FRAMES: usize = 48_000 * 600;
 pub enum AudioError {
     #[error("INVALID_AUDIO_INPUT: {0}")]
     InvalidInput(String),
+    #[error("AUDIO_BUDGET_EXCEEDED: {0}")]
+    BudgetExceeded(String),
     #[error("ASSET_MISSING: audio {0}")]
     AssetMissing(AssetId),
     #[error("AUDIO_SOURCE_TOO_SHORT: {0}")]
@@ -38,6 +42,7 @@ impl AudioError {
     pub fn code(&self) -> &'static str {
         match self {
             Self::InvalidInput(_) => "INVALID_AUDIO_INPUT",
+            Self::BudgetExceeded(_) => "AUDIO_BUDGET_EXCEEDED",
             Self::AssetMissing(_) => "ASSET_MISSING",
             Self::SourceTooShort(_) => "AUDIO_SOURCE_TOO_SHORT",
             Self::Sequence(e) => e.code(),

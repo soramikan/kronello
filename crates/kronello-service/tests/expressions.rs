@@ -121,6 +121,8 @@ fn shared_edit_schema_revision_idempotency_undo_and_fixed_render_snapshot() {
     let p = document();
     let e = expression(0.4);
     s.dispatch(Request::ProjectCreate(CreateRequest {
+        plan_hash: None,
+        idempotency_key: None,
         project: path.clone(),
         document: p.clone(),
     }))
@@ -286,6 +288,8 @@ fn sample_and_final_render_share_budget_arithmetic_and_cycle_diagnostics() {
             p.expressions.push(DocumentObject::Known(e));
         }
         s.dispatch(Request::ProjectCreate(CreateRequest {
+            plan_hash: None,
+            idempotency_key: None,
             project: path.clone(),
             document: p.clone(),
         }))
@@ -329,6 +333,8 @@ fn expression_edits_validate_dependencies_atomically_and_conflict_on_undo() {
     let p = document();
     let e = expression(0.4);
     s.dispatch(Request::ProjectCreate(CreateRequest {
+        plan_hash: None,
+        idempotency_key: None,
         project: path.clone(),
         document: p.clone(),
     }))

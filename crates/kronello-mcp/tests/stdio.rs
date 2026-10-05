@@ -954,3 +954,61 @@ fn nle2_generator_query_and_move_share_mcp_registry_and_transactions() {
         doc["sequences"][0]
     );
 }
+
+#[test]
+fn project_plans_receipts_and_modifiers_use_registry_tools() {
+    let mut client = Client::spawn(&[], false);
+    client.ready(SUPPORTED_PROTOCOL_VERSIONS[0]);
+    let tools = client.schemas();
+    for name in ["project.create_plan", "project.import_plan"] {
+        assert_eq!(tools[name]["_meta"]["kronello"]["readOnlyProject"], true);
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("planned.kronello");
+    let doc: Value =
+        serde_json::from_str(include_str!("../../../examples/m1-demo.project.json")).unwrap();
+    let planned = client.call(
+        "project.create_plan",
+        json!({"project":path,"document":doc}),
+    );
+    validate(&tools["project.create_plan"], &planned);
+    assert!(!path.exists());
+    let create = json!({"project":path,"document":doc,"plan_hash":planned["structuredContent"]["plan_hash"],"idempotency_key":"mcp-create"});
+    let original = client.call("project.create", create.clone());
+    assert_eq!(original["isError"], false);
+    let planned = client.call(
+        "project.import_plan",
+        json!({"project":path,"base_revision":"1","document":doc}),
+    );
+    validate(&tools["project.import_plan"], &planned);
+    let import = json!({"project":path,"base_revision":"1","document":doc,"plan_hash":planned["structuredContent"]["plan_hash"],"idempotency_key":"mcp-import"});
+    let imported = client.call("project.import", import.clone());
+    assert_eq!(imported["isError"], false);
+    let c = &doc["compositions"][0];
+    let node = &c["nodes"][0];
+    let prop = node["properties"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["descriptor"]["key"] == "kronello.opacity")
+        .unwrap();
+    let commands = json!([{ "modifier_insert":{"object":node["id"],"property":prop["id"],"index":0,"modifier":{"id":"173087e0-c21b-43de-9371-8e1da051095a","key":"example.unsupported","version":1,"enabled":true,"parameters":{}}} }]);
+    let plan = client.call(
+        "edit.plan",
+        json!({"project":path,"base_revision":"2","commands":commands}),
+    );
+    assert_eq!(plan["isError"], false, "{plan}");
+    let applied = client.call("edit.apply",json!({"project":path,"base_revision":"2","commands":commands,"plan_hash":plan["structuredContent"]["plan_hash"],"session_id":"96607679-eefd-407a-a3a8-59943f2bd82f","idempotency_key":"mcp-modifier"}));
+    assert_eq!(applied["isError"], false, "{applied}");
+    let sample = client.call("property.sample",json!({"project":path,"composition":c["id"],"keys":[{"kind":"node","instance_path":[],"node":node["id"],"property":prop["id"]}],"times":[{"num":"0","den":"1"}]}));
+    assert_error(&sample, "UNSUPPORTED_FEATURE");
+    assert_eq!(
+        client.call("project.create", create)["structuredContent"],
+        original["structuredContent"]
+    );
+    assert_eq!(
+        client.call("project.import", import)["structuredContent"],
+        imported["structuredContent"]
+    );
+    assert!(client.finish().contains("UNSUPPORTED_FEATURE"));
+}

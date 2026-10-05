@@ -32,16 +32,38 @@ pub struct RoundStroke {
     pub paint: Paint,
     pub width: f32,
 }
-pub use kronello_model::{StrokeCap, StrokeJoin};
+pub use kronello_model::{GradientInterpolation, GradientSpread, StrokeCap, StrokeJoin};
 #[derive(Debug, Clone)]
 pub struct GradientPaint {
+    pub spread: GradientSpread,
+    pub interpolation: GradientInterpolation,
+    pub interpolation_version: u32,
+    /// Local paint coordinates to gradient coordinates, already inverted.
+    pub transform: [[f32; 3]; 2],
     pub geometry: GradientGeometry,
     pub stops: Vec<GradientStop>,
 }
 #[derive(Debug, Clone, Copy)]
 pub enum GradientGeometry {
-    Linear { start: [f32; 2], end: [f32; 2] },
-    Radial { center: [f32; 2], radius: f32 },
+    Linear {
+        start: [f32; 2],
+        end: [f32; 2],
+    },
+    Radial {
+        center: [f32; 2],
+        radius: f32,
+    },
+    FocalRadial {
+        center: [f32; 2],
+        radius: f32,
+        focal: [f32; 2],
+        focal_radius: f32,
+    },
+    Conic {
+        center: [f32; 2],
+        start_angle: f32,
+        sweep_angle: f32,
+    },
 }
 #[derive(Debug, Clone, Copy)]
 pub struct GradientStop {
@@ -52,8 +74,8 @@ pub struct GradientStop {
 /// stroke closes only contours marked closed. Fill is drawn before stroke.
 #[derive(Debug, Clone)]
 pub struct PathDraw {
-    pub fill_gradient: Option<GradientPaint>,
-    pub stroke_gradient: Option<GradientPaint>,
+    pub fill_gradient: Option<Box<GradientPaint>>,
+    pub stroke_gradient: Option<Box<GradientPaint>>,
     /// Output design coordinates to local paint coordinates.
     pub paint_transform: [[f32; 3]; 2],
     pub contours: Vec<Contour>,
@@ -387,6 +409,22 @@ fn fill_hit(point: [f32; 2], edges: &[([f32; 2], [f32; 2], bool)], rule: FillRul
 }
 impl GradientPaint {
     pub fn validate(&self) -> Result<(), GpuError> {
+        if self.interpolation_version != 1 {
+            return Err(GpuError::UnsupportedFeature(
+                "gradient interpolation version",
+            ));
+        }
+        let m = self.transform;
+        let determinant = m[0][0] * m[1][1] - m[0][1] * m[1][0];
+        if m.iter()
+            .flatten()
+            .any(|v| !v.is_finite() || v.abs() > 1_000_000.0)
+            || !determinant.is_finite()
+            || determinant == 0.0
+        {
+            return Err(GpuError::InvalidInput("invalid gradient transform"));
+        }
+        let point_valid = |p: [f32; 2]| p.iter().all(|v| v.is_finite() && v.abs() <= 1_000_000.0);
         let valid = match self.geometry {
             GradientGeometry::Linear { start, end } => {
                 start != end
@@ -402,6 +440,33 @@ impl GradientPaint {
                     .all(|v| v.is_finite() && v.abs() <= 1_000_000.0)
                     && radius.is_finite()
                     && radius > 0.0
+            }
+            GradientGeometry::FocalRadial {
+                center,
+                radius,
+                focal,
+                focal_radius,
+            } => {
+                point_valid(center)
+                    && point_valid(focal)
+                    && radius.is_finite()
+                    && radius <= 1_000_000.0
+                    && focal_radius.is_finite()
+                    && focal_radius >= 0.0
+                    && dot(sub(center, focal), sub(center, focal)).sqrt() + focal_radius < radius
+                    && (radius - focal_radius) * (radius - focal_radius)
+                        > dot(sub(center, focal), sub(center, focal))
+            }
+            GradientGeometry::Conic {
+                center,
+                start_angle,
+                sweep_angle,
+            } => {
+                point_valid(center)
+                    && start_angle.is_finite()
+                    && sweep_angle.is_finite()
+                    && sweep_angle > 0.0
+                    && sweep_angle <= 360.0
             }
         };
         if !valid || !(2..=256).contains(&self.stops.len()) {
@@ -419,8 +484,14 @@ impl GradientPaint {
         }
         Ok(())
     }
-    /// Pad and right-continuous equal offsets: last stop at that offset wins.
+    /// Right-continuous equal offsets: last stop at that offset wins.
     pub fn sample(&self, p: [f32; 2], working: WorkingSpace) -> [f32; 4] {
+        let p = self.transform.map(|r| r[0] * p[0] + r[1] * p[1] + r[2]);
+        // Propagate arithmetic failure to the checked raster surface boundary.
+        // NaN parameters must never fall through stop comparisons to a color.
+        if p.iter().any(|v| !v.is_finite()) {
+            return [f32::NAN; 4];
+        }
         let t = match self.geometry {
             GradientGeometry::Linear { start, end } => {
                 let d = sub(end, start);
@@ -429,24 +500,137 @@ impl GradientPaint {
             GradientGeometry::Radial { center, radius } => {
                 dot(sub(p, center), sub(p, center)).sqrt() / radius
             }
+            GradientGeometry::FocalRadial {
+                center,
+                radius,
+                focal,
+                focal_radius,
+            } => {
+                let q = sub(p, focal);
+                let d = sub(center, focal);
+                let dr = radius - focal_radius;
+                let a = dr * dr - dot(d, d);
+                let b = dot(q, d) + focal_radius * dr;
+                let c = dot(q, q) - focal_radius * focal_radius;
+                if c <= 0.0 {
+                    0.0
+                } else {
+                    let root = (b * b + a * c).sqrt();
+                    if !root.is_finite() {
+                        return [f32::NAN; 4];
+                    }
+                    if b >= 0.0 {
+                        c / (root + b)
+                    } else {
+                        (root - b) / a
+                    }
+                }
+            }
+            GradientGeometry::Conic {
+                center,
+                start_angle,
+                sweep_angle,
+            } => {
+                let q = sub(p, center);
+                if q == [0.0; 2] {
+                    0.0
+                } else {
+                    let angle = q[1].atan2(q[0]) - start_angle.to_radians();
+                    (angle - std::f32::consts::TAU * (angle / std::f32::consts::TAU).floor())
+                        / sweep_angle.to_radians()
+                }
+            }
         };
-        let convert = |s: &GradientStop| color::to_working(s.paint.rgba, s.paint.space, working);
+        // Infinite pad parameters still identify the appropriate endpoint, as
+        // in VEC-003. Periodic spread cannot recover a phase from infinity.
+        if t.is_nan() || (!t.is_finite() && self.spread != GradientSpread::Pad) {
+            return [f32::NAN; 4];
+        }
+        let t = match self.spread {
+            GradientSpread::Pad => t,
+            GradientSpread::Repeat => t - t.floor(),
+            GradientSpread::Reflect => {
+                let u = t - 2.0 * (t / 2.0).floor();
+                if u > 1.0 { 2.0 - u } else { u }
+            }
+        };
         let mut previous = &self.stops[0];
         if t < previous.offset {
-            return convert(previous);
+            return self.finish(self.prepare(previous, working), working);
         }
         for stop in &self.stops[1..] {
             if t < stop.offset {
                 let f = (t - previous.offset) / (stop.offset - previous.offset);
-                let a = convert(previous);
-                let b = convert(stop);
-                return std::array::from_fn(|i| a[i] + (b[i] - a[i]) * f);
+                let a = self.prepare(previous, working);
+                let b = self.prepare(stop, working);
+                return self.finish(std::array::from_fn(|i| a[i] + (b[i] - a[i]) * f), working);
             }
             previous = stop;
         }
-        convert(previous)
+        self.finish(self.prepare(previous, working), working)
+    }
+    fn prepare(&self, stop: &GradientStop, working: WorkingSpace) -> [f32; 4] {
+        let srgb = matches!(
+            self.interpolation,
+            GradientInterpolation::SrgbStraight | GradientInterpolation::SrgbPremultiplied
+        );
+        let mut rgb = [stop.paint.rgba[0], stop.paint.rgba[1], stop.paint.rgba[2]];
+        if stop.paint.space == InputSpace::Srgb {
+            rgb = rgb.map(color::srgb_decode);
+        }
+        let from = if stop.paint.space == InputSpace::LinearRec2020 {
+            WorkingSpace::LinearRec2020
+        } else {
+            WorkingSpace::LinearRec709
+        };
+        rgb = color::convert_primaries(
+            rgb,
+            from,
+            if srgb {
+                WorkingSpace::LinearRec709
+            } else {
+                working
+            },
+        );
+        if srgb {
+            rgb = rgb.map(color::srgb_encode);
+        }
+        let p = [rgb[0], rgb[1], rgb[2], stop.paint.rgba[3]];
+        if matches!(
+            self.interpolation,
+            GradientInterpolation::WorkingLinearPremultiplied
+                | GradientInterpolation::SrgbPremultiplied
+        ) {
+            color::premultiply(p)
+        } else {
+            p
+        }
+    }
+    fn finish(&self, mut p: [f32; 4], working: WorkingSpace) -> [f32; 4] {
+        match self.interpolation {
+            GradientInterpolation::WorkingLinearPremultiplied => p,
+            GradientInterpolation::WorkingLinearStraight => color::premultiply(p),
+            GradientInterpolation::SrgbStraight | GradientInterpolation::SrgbPremultiplied => {
+                if self.interpolation == GradientInterpolation::SrgbPremultiplied {
+                    if p[3] == 0.0 {
+                        return [0.0; 4];
+                    }
+                    let alpha = p[3];
+                    for component in &mut p[..3] {
+                        *component /= alpha;
+                    }
+                }
+                let rgb = color::convert_primaries(
+                    [p[0], p[1], p[2]].map(color::srgb_decode),
+                    WorkingSpace::LinearRec709,
+                    working,
+                );
+                color::premultiply([rgb[0], rgb[1], rgb[2], p[3]])
+            }
+        }
     }
 }
+
 pub(crate) fn luma_weights(working: WorkingSpace) -> [f32; 3] {
     match working {
         WorkingSpace::LinearRec709 => [0.2126, 0.7152, 0.0722],
@@ -513,7 +697,7 @@ pub(crate) fn raster_path_reference(
         .stroke
         .map(|s| color::to_working(s.paint.rgba, s.paint.space, working))
         .unwrap_or([0.0; 4]);
-    let paint = |solid: [f32; 4], g: &Option<GradientPaint>, p: [f32; 2]| {
+    let paint = |solid: [f32; 4], g: &Option<Box<GradientPaint>>, p: [f32; 2]| {
         g.as_ref().map_or(solid, |g| {
             let local = path
                 .paint_transform

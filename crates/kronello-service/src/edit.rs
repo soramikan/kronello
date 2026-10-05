@@ -7,8 +7,8 @@ use std::{
 use crate::{ServiceError, open_existing, parse_revision};
 use kronello_model::{
     AnimationCurve, Composition, CompositionId, CurveId, DocumentObject, ExpressionId, Keyframe,
-    NodeId, NodeKind, Project, Property, PropertyId, PropertySource, SceneNode, SchemaRegistry,
-    Shape, SourceResolver, TextDocument, Value, ValueType,
+    Modifier, ModifierId, NodeId, NodeKind, Project, Property, PropertyId, PropertySource,
+    SceneNode, SchemaRegistry, Shape, SourceResolver, TextDocument, Value, ValueType,
 };
 use kronello_store::{ApplyRequest, ChangedKey, Event, Mutation, ProjectStore, StoreError};
 use kronello_time::Time;
@@ -108,6 +108,27 @@ pub enum EditCommand {
         composition: CompositionId,
         node: SceneNode,
         index: usize,
+    },
+    ModifierInsert {
+        object: Uuid,
+        property: PropertyId,
+        modifier: Modifier,
+        index: usize,
+    },
+    ModifierReplace {
+        object: Uuid,
+        property: PropertyId,
+        modifier: Modifier,
+    },
+    ModifierRemove {
+        object: Uuid,
+        property: PropertyId,
+        modifier: ModifierId,
+    },
+    ModifierReorder {
+        object: Uuid,
+        property: PropertyId,
+        order: Vec<ModifierId>,
     },
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
@@ -510,6 +531,80 @@ fn apply_command(
     keys: &mut BTreeSet<ChangedKey>,
 ) -> Result<(), ServiceError> {
     match command {
+        EditCommand::ModifierInsert {
+            object,
+            property,
+            modifier,
+            index,
+        } => {
+            let p = property_mut(project, *object, *property)?;
+            let mut modifiers = p.modifiers().to_vec();
+            if *index > modifiers.len() {
+                return Err(invalid("modifier index out of bounds"));
+            }
+            modifiers.insert(*index, modifier.clone());
+            p.set_modifiers(modifiers, &registry()).map_err(invalid)?;
+            keys.insert(ChangedKey::Value {
+                object_id: *object,
+                property_id: *property,
+            });
+        }
+        EditCommand::ModifierReplace {
+            object,
+            property,
+            modifier,
+        } => {
+            let p = property_mut(project, *object, *property)?;
+            let mut modifiers = p.modifiers().to_vec();
+            let current = modifiers
+                .iter_mut()
+                .find(|m| m.id == modifier.id)
+                .ok_or_else(|| invalid("modifier not found"))?;
+            *current = modifier.clone();
+            p.set_modifiers(modifiers, &registry()).map_err(invalid)?;
+            keys.insert(ChangedKey::Value {
+                object_id: *object,
+                property_id: *property,
+            });
+        }
+        EditCommand::ModifierRemove {
+            object,
+            property,
+            modifier,
+        } => {
+            let p = property_mut(project, *object, *property)?;
+            let mut modifiers = p.modifiers().to_vec();
+            let index = modifiers
+                .iter()
+                .position(|m| m.id == *modifier)
+                .ok_or_else(|| invalid("modifier not found"))?;
+            modifiers.remove(index);
+            p.set_modifiers(modifiers, &registry()).map_err(invalid)?;
+            keys.insert(ChangedKey::Value {
+                object_id: *object,
+                property_id: *property,
+            });
+        }
+        EditCommand::ModifierReorder {
+            object,
+            property,
+            order,
+        } => {
+            let p = property_mut(project, *object, *property)?;
+            let ids: BTreeSet<_> = p.modifiers().iter().map(|m| m.id).collect();
+            if order.len() != ids.len() || order.iter().copied().collect::<BTreeSet<_>>() != ids {
+                return Err(invalid("modifier order must be an exact permutation"));
+            }
+            let modifiers = order
+                .iter()
+                .map(|id| p.modifiers().iter().find(|m| m.id == *id).unwrap().clone())
+                .collect();
+            p.set_modifiers(modifiers, &registry()).map_err(invalid)?;
+            keys.insert(ChangedKey::Value {
+                object_id: *object,
+                property_id: *property,
+            });
+        }
         EditCommand::ExpressionSet { expression } => {
             expression
                 .validate()

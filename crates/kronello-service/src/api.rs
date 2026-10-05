@@ -98,6 +98,8 @@ macro_rules! commands {
             ("job.list", true, JobListRequest, JobListResult),
             ("job.cancel", true, JobRequest, kronello_jobs::JobRecord),
             ("job.prune", true, JobPruneRequest, kronello_jobs::PruneResult),
+            ("project.create_plan", true, CreatePlanRequest, ProjectChangePlan),
+            ("project.import_plan", true, ImportPlanRequest, ProjectChangePlan),
             ("project.create", false, CreateRequest, ProjectInfo),
             ("project.import", false, ImportRequest, ProjectInfo),
             ("project.export", true, ProjectRequest, ExportResult),
@@ -157,6 +159,10 @@ impl CapabilitiesResult {
                 "document_audio",
                 "clip_volume",
                 "media_audio",
+                "audio_resample_v1",
+                "audio_gain_v1",
+                "audio_generator_v1",
+                "audio_crossfade_v1",
                 "composition",
                 "shape",
                 "text",
@@ -167,6 +173,8 @@ impl CapabilitiesResult {
                 "curve",
                 "expression",
                 "selective_undo",
+                "project_change_plans",
+                "modifier_editing",
                 "template",
             ]
             .map(String::from)
@@ -174,6 +182,7 @@ impl CapabilitiesResult {
             effects: vec![
                 kronello_model::GAUSSIAN_BLUR_ID.into(),
                 kronello_model::DROP_SHADOW_ID.into(),
+                kronello_model::AUDIO_GAIN_ID.into(),
             ],
             backends: ["wgpu_rgba16f", "cpu_reference_float32"]
                 .map(String::from)

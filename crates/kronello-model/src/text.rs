@@ -66,6 +66,8 @@ pub enum TextAlignment {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct TextStyleSpan {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gradient: Option<Box<crate::Gradient>>,
     pub range: TextRange,
     pub font: FontRef,
     /// Positive Scalar Property in design_px.
@@ -99,6 +101,7 @@ pub struct TextDocument {
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResolvedTextStyle {
+    pub gradient: Option<Box<crate::ResolvedGradient>>,
     pub range: TextRange,
     pub font: FontRef,
     pub size: FiniteF64,
@@ -118,6 +121,8 @@ pub struct ResolvedText {
 
 #[derive(Debug, Clone, PartialEq, Error)]
 pub enum TextError {
+    #[error(transparent)]
+    Gradient(#[from] crate::ShapeError),
     #[error("invalid locked font reference")]
     InvalidFontRef,
     #[error("style spans must cover the text exactly at grapheme boundaries")]
@@ -212,6 +217,12 @@ impl TextDocument {
         self.parameters()
             .into_iter()
             .map(|(id, _, _)| id)
+            .chain(
+                self.styles
+                    .iter()
+                    .filter_map(|s| s.gradient.as_ref())
+                    .flat_map(|g| g.stops().iter().flat_map(|s| [s.color, s.offset])),
+            )
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect()
@@ -245,6 +256,9 @@ impl TextDocument {
                 validate_parameter(id, ty, value)?;
             }
         }
+        for gradient in self.styles.iter().filter_map(|s| s.gradient.as_ref()) {
+            gradient.validate_properties(properties, registry)?;
+        }
         Ok(())
     }
     pub fn resolve(&self, values: &BTreeMap<PropertyId, Value>) -> Result<ResolvedText, TextError> {
@@ -265,16 +279,23 @@ impl TextDocument {
             styles: self
                 .styles
                 .iter()
-                .map(|s| ResolvedTextStyle {
-                    range: s.range,
-                    font: s.font.clone(),
-                    size: scalar(s.size),
-                    fill: match values[&s.fill] {
-                        Value::Color(v) => v,
-                        _ => unreachable!(),
-                    },
+                .map(|s| {
+                    Ok(ResolvedTextStyle {
+                        gradient: s
+                            .gradient
+                            .as_ref()
+                            .map(|g| g.resolve(values).map(Box::new))
+                            .transpose()?,
+                        range: s.range,
+                        font: s.font.clone(),
+                        size: scalar(s.size),
+                        fill: match values[&s.fill] {
+                            Value::Color(v) => v,
+                            _ => unreachable!(),
+                        },
+                    })
                 })
-                .collect(),
+                .collect::<Result<Vec<_>, TextError>>()?,
             direction: self.direction,
             ruby: self.ruby.clone(),
             wrap_width: scalar(self.wrap_width),
