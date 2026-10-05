@@ -772,7 +772,7 @@
       "priority": "P2",
       "area": "vector",
       "title": "線の拡張: 破線・線の位置・非一様変換",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "VEC-003"
       ],
@@ -827,7 +827,7 @@
       "priority": "P1",
       "area": "audio",
       "title": "リタイム音声・audio effects・Generator音声",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "AUDIO-003",
         "ANIM-001"
@@ -936,7 +936,7 @@
       "priority": "P2",
       "area": "api",
       "title": "scene検索・paging・固定履歴cursorとevent stream",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "API-001",
         "INTEGRATION-001"
@@ -954,7 +954,7 @@
       "priority": "P2",
       "area": "service",
       "title": "project作成/importの計画・冪等性とModifier編集",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "SERVICE-001",
         "API-001"
