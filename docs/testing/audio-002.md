@@ -172,3 +172,17 @@ physical loopback / scanout、GUI-003統合後の確認はpending host / integra
 
 統合後の SwiftPM / FFI / 三入口比較の結果と未確認範囲は
 [M3 統合受け入れ](m3-acceptance.md) に記録した。過去の worker 検査と現在の実機検査を区別する。
+
+### 主エージェントの実デバイス / Metal 測定（2026-10-06）
+
+主エージェントが統合 release FFI の `KronelloAudioHarness` を使い、実 AVAudioEngine と Metal submission を測定した。
+24/1、24000/1001、30000/1001 fps の各runで38.58〜38.61秒のdevice clock進行、
+930 / 929 / 1161回の映像提示、2回のseekと停止 / 再開を確認した。
+stop / resume sample はすべて厳密一致、underrunとmissing sampleはすべて0。
+最大の frame grid offset は1 / 1 / 2 frames（41.67 / 41.71 / 66.73ms）。
+request時刻との差そのものの最大値は73.71 / 68.40 / 69.74msであり、frame格子へ量子化した値と区別する。
+
+証拠: `target/m3-acceptance/audio-report.json` / `audio-host.log` と
+`target/m3-completion-audio/audio-{24-1,24000-1001,30000-1001}.jsonl`。
+CPU / GPUテストsuiteと並行した負荷条件の実測である。quiet条件での再測定を別記録とする。
+physical scanout / loopback / 主観的listeningは今回の測定に含めず、機器の出力遅延全体の保証とは扱わない。

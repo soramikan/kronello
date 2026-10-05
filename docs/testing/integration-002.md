@@ -247,3 +247,14 @@ host証拠・統合後のGUI-003 / AUDIO-002との確認とbacklog更新はsuper
 
 統合後の SwiftPM / FFI / 三入口比較の結果と未確認範囲は
 [M3 統合受け入れ](m3-acceptance.md) に記録した。過去の worker 検査と現在の実機検査を区別する。
+
+### 統合 Metal 4K 出力と実 FFI 照合（2026-10-06）
+
+主エージェントの第2段階 driver は `target/m3-acceptance/integration-metal/` に横型 / 縦型の
+Metal 4K出力、font manifest、固定 snapshot、CLI / MCP の canonical pair、GUI検査用のevidenceを生成し、
+147 checksすべてに成功した。共有 template 定義の再利用と縦型の改行 / boundsを確認した。
+続けて統合 SwiftPM の `IntegrationTests.testStage2FFIPresentationParity` がその `gui-evidence.json` を読み、
+実 FFI sessionの評価値と layout / ink / visual boundsを照合して成功した。
+
+証拠: `target/m3-acceptance/integration-metal/report.json` / `gui-evidence.json` / `portrait-wrapping.json`、
+`target/m3-acceptance/integration-metal.log`。実画面の内部レイヤー・boundsの主エージェント確認は追記する。
