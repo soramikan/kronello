@@ -4,7 +4,7 @@
 
 - schema_version: 0.5
 - 更新日: 2026-10-04
-- タスク数: 76
+- タスク数: 77
 
 ## 集計
 
@@ -14,7 +14,7 @@
 | M1 | 0 | 0 | 14 | 0 | 14 |
 | M2 | 0 | 1 | 10 | 0 | 11 |
 | M3 | 7 | 4 | 14 | 0 | 25 |
-| M4 | 11 | 0 | 0 | 0 | 11 |
+| M4 | 12 | 0 | 0 | 0 | 12 |
 | M5 | 5 | 0 | 0 | 0 | 5 |
 | M6 | 4 | 0 | 0 | 0 | 4 |
 
@@ -659,6 +659,15 @@
 - 受け入れ条件:
   - 安全モードで開いたプロジェクトについて、GUI を開いている間は他プロセス（CLI / MCP）が PROJECT_LOCKED になるよう、FFI / service の store の寿命を GUI セッションに合わせる
   - GUI を閉じたとき・異常終了したときに lock が解放され、再 open できることを実プロセスで検証する
+
+### MEDIA-003 Windows の FFmpeg 実行時読み込みと CLI/MCP の Windows ビルド
+
+- 優先度: P1 / 領域: media / 状態: planned
+- 依存: MEDIA-001, JOB-002, RELEASE-001
+- 受け入れ条件:
+  - kronello-media の native 読み込み（dlfcn / pkg-config 前提）を Windows の LGPL FFmpeg 共有 library に対応させ、CLI / MCP を Windows でビルドする
+  - Windows で ProRes / PCM24 と AV1 の書き出し・roundtrip、capabilities を実行し、OS / 版 / コマンド / exit を記録する
+  - JOB-002 で jobs / platform 層だけを検証した Windows の detached worker を、実際の `kronello worker --job` で親終了後も継続することを CI で検証する
 
 
 ## M5

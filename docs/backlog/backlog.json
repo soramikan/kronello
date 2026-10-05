@@ -5,7 +5,7 @@
   "status": "implementation_started",
   "description": "設計と実装の計画・進捗。このファイルがバックログの正本であり、GitHub等へ登録したIssueではない。",
   "specification": "docs/architecture/",
-  "task_count": 76,
+  "task_count": 77,
   "items": [
     {
       "id": "ARC-001",
@@ -1333,6 +1333,24 @@
       "acceptance_criteria": [
         "安全モードで開いたプロジェクトについて、GUI を開いている間は他プロセス（CLI / MCP）が PROJECT_LOCKED になるよう、FFI / service の store の寿命を GUI セッションに合わせる",
         "GUI を閉じたとき・異常終了したときに lock が解放され、再 open できることを実プロセスで検証する"
+      ]
+    },
+    {
+      "id": "MEDIA-003",
+      "milestone": "M4",
+      "priority": "P1",
+      "area": "media",
+      "title": "Windows の FFmpeg 実行時読み込みと CLI/MCP の Windows ビルド",
+      "status": "planned",
+      "dependencies": [
+        "MEDIA-001",
+        "JOB-002",
+        "RELEASE-001"
+      ],
+      "acceptance_criteria": [
+        "kronello-media の native 読み込み（dlfcn / pkg-config 前提）を Windows の LGPL FFmpeg 共有 library に対応させ、CLI / MCP を Windows でビルドする",
+        "Windows で ProRes / PCM24 と AV1 の書き出し・roundtrip、capabilities を実行し、OS / 版 / コマンド / exit を記録する",
+        "JOB-002 で jobs / platform 層だけを検証した Windows の detached worker を、実際の `kronello worker --job` で親終了後も継続することを CI で検証する"
       ]
     }
   ]
