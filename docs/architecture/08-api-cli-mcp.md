@@ -605,3 +605,12 @@ audio_profile_version:3、両 snapshot hash、probe と encoder / execution / tr
 旧 pro_res_mov の省略 profile 1 / explicit と version 2/3、旧 report の省略 field は維持する。
 契約と未採用 AAC / Web audio は [ADR-0068](../adr/0068-versioned-delivery-movie-profiles.md)、
 実行結果は [MEDIA-002](../testing/media-002.md)。
+
+## RENDER-003 の export I/O 診断
+
+movie の `render.export` / 固定 worker report は任意の `streaming` を返す。
+`audio_spool_write_bytes` / `audio_window_read_bytes` は成功した論理読み書き量、
+`audio_stage_bytes` / `video_stage_bytes` は一時fileの実byte長、`published_bytes` は
+公開fileの実byte長（取得不可ならnull）。OSの物理I/OやRSSの推定値ではない。
+request / snapshot / codec / sampleの意味版を変更しない。
+[ADR-0074](../adr/0074-bounded-streaming-movie-export.md)、[検証](../testing/render-003.md)。

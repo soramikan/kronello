@@ -1,6 +1,6 @@
 # ADR-0053: 縦断デモの評価 query と大解像度の tile 実行
 
-- 状態: 採用
+- 状態: 部分置換（[ADR-0074](0074-bounded-streaming-movie-export.md)。movie export の最終 linear / display 面保持のみ）
 - 日付: 2026-10-04
 - 対象: INTEGRATION-001
 

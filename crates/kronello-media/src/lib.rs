@@ -293,3 +293,5 @@ mod tests {
         }
     }
 }
+
+mod streaming;

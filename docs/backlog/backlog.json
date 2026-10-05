@@ -864,7 +864,7 @@
       "priority": "P1",
       "area": "render",
       "title": "長尺・大解像度exportのstreaming",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "JOB-001",
         "AUDIO-000",

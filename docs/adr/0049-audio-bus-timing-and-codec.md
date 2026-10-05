@@ -1,6 +1,6 @@
 # ADR-0049: 音声 Bus・サンプル格子・PCM24 の書き出しを固定する
 
-- 状態: 採用
+- 状態: 部分置換（[ADR-0074](0074-bounded-streaming-movie-export.md)。movie export の全 source / Bus・映像 payload 上限のみ）
 - 日付: 2026-10-04
 - 対象: AUDIO-000
 

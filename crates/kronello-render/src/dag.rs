@@ -202,6 +202,28 @@ impl RenderDag {
         }
         Ok(dag)
     }
+    /// Conservative tile allocation including one surface per image stage,
+    /// Group child/accumulator surfaces, three effect temporaries and reserves.
+    /// Every stage currently uses the union execution ROI, including its halo.
+    pub fn tile_surface_bytes(&self, pixel_bytes: u64) -> Result<u64, RenderError> {
+        let mut surfaces = 4_u64;
+        for node in &self.nodes {
+            surfaces += match node {
+                DagNode::IsolatedComposite { children, .. } => children.len() as u64 + 2,
+                DagNode::Effect { .. } => 4,
+                DagNode::CoverageDraw { .. }
+                | DagNode::Mask { .. }
+                | DagNode::VideoDraw { .. }
+                | DagNode::RasterInput { .. } => 1,
+                _ => 0,
+            };
+        }
+        u64::from(self.execution_region.pixels[0])
+            .checked_mul(u64::from(self.execution_region.pixels[1]))
+            .and_then(|v| v.checked_mul(pixel_bytes))
+            .and_then(|v| v.checked_mul(surfaces))
+            .ok_or_else(|| RenderError::UnsupportedFeature("tile surface budget overflow".into()))
+    }
     pub fn nodes(&self) -> &[DagNode] {
         &self.nodes
     }

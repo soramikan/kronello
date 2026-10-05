@@ -96,6 +96,52 @@ pub fn render_frame_with_cache(
     }
     validate_pixels(&pixels.linear, true)?;
     validate_pixels(&pixels.display, false)?;
+    let metadata = frame_metadata(snapshot, &scene, backend, request)?;
+    Ok(RenderedFrame { pixels, metadata })
+}
+
+/// Deliver one validated tile at a time with synchronous backpressure. Only
+/// tile-sized linear/display surfaces are owned; sink errors stop execution.
+pub fn render_frame_tiles(
+    snapshot: &RenderSnapshot,
+    fonts: &[FontData<'_>],
+    backend: &dyn RenderBackend,
+    request: FrameRequest,
+    sink: &mut dyn FnMut([u32; 2], OutputRegion, BackendFrame) -> Result<(), RenderError>,
+) -> Result<FrameMetadata, RenderError> {
+    request.region.validate()?;
+    let mut cache = crate::RenderCache::new(crate::CacheConfig::disabled());
+    let scene = crate::build_scene_ir_with_cache(snapshot, request.time, fonts, &mut cache)?;
+    for (offset, tile) in frame_tiles(request.region) {
+        let dag = crate::build_render_dag_with_cache(&scene, snapshot.profile(), tile, &mut cache)?;
+        // Reserve the larger float32 CPU payload even for an injected backend.
+        // This rejects huge cumulative halos before backend allocation.
+        let bytes = dag.tile_surface_bytes(16)?;
+        if bytes > 512 * 1024 * 1024 {
+            return Err(RenderError::UnsupportedFeature(format!(
+                "streaming tile surface budget exceeded: {bytes} bytes > 536870912"
+            )));
+        }
+        let output = backend.execute_with_cache(&dag, &mut cache)?;
+        let count = tile.pixels[0] as usize * tile.pixels[1] as usize;
+        if output.linear.len() != count || output.display.len() != count {
+            return Err(RenderError::InvalidInput(
+                "backend returned wrong tile pixel count".into(),
+            ));
+        }
+        validate_pixels(&output.linear, true)?;
+        validate_pixels(&output.display, false)?;
+        sink(offset, tile, output)?;
+    }
+    frame_metadata(snapshot, &scene, backend, request)
+}
+
+fn frame_metadata(
+    snapshot: &RenderSnapshot,
+    scene: &crate::SceneIr,
+    backend: &dyn RenderBackend,
+    request: FrameRequest,
+) -> Result<FrameMetadata, RenderError> {
     let working = snapshot.profile().working_space;
     let metadata = FrameMetadata {
         schema_version: 1,
@@ -148,7 +194,7 @@ pub fn render_frame_with_cache(
             "semantic_scene".into()
         },
     };
-    Ok(RenderedFrame { pixels, metadata })
+    Ok(metadata)
 }
 
 /// Bound intermediate surfaces while retaining the output's absolute sample

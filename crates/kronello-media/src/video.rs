@@ -43,6 +43,30 @@ impl MediaRuntime {
         frames: &[EncodeFrame],
         capabilities: &MediaCapabilities,
     ) -> Result<MediaPathReport, MediaError> {
+        self.encode_video_stream_with_capabilities(
+            request,
+            frames.len(),
+            &mut |index| Ok(frames[index].clone()),
+            capabilities,
+        )
+    }
+    /// Synchronous producer backpressure: exactly one RGBA8 frame is retained.
+    /// The temporary file is removed if producing, encoding or finishing fails.
+    pub fn encode_video_stream(
+        &self,
+        request: &EncodeRequest,
+        count: usize,
+        frame: &mut dyn FnMut(usize) -> Result<EncodeFrame, MediaError>,
+    ) -> Result<MediaPathReport, MediaError> {
+        self.encode_video_stream_with_capabilities(request, count, frame, &self.capabilities)
+    }
+    fn encode_video_stream_with_capabilities(
+        &self,
+        request: &EncodeRequest,
+        count: usize,
+        produce: &mut dyn FnMut(usize) -> Result<EncodeFrame, MediaError>,
+        capabilities: &MediaCapabilities,
+    ) -> Result<MediaPathReport, MediaError> {
         let codec = capabilities.select_encoder(request.codec)?;
         let actual = self.capabilities.select_encoder(request.codec)?;
         if actual.name != codec.name {
@@ -62,7 +86,7 @@ impl MediaRuntime {
             || width % 2 != 0
             || height % 2 != 0
             || request.time_base <= Rational::ZERO
-            || frames.is_empty()
+            || count == 0
         {
             return Err(MediaError::InvalidInput(
                 "positive even dimensions, time base and frames required".into(),
@@ -72,24 +96,6 @@ impl MediaRuntime {
             .checked_mul(height as usize)
             .and_then(|s| s.checked_mul(4))
             .ok_or_else(|| MediaError::InvalidInput("frame size overflow".into()))?;
-        let mut previous = None;
-        let mut pts = Vec::new();
-        for frame in frames {
-            let tick = frame.pts.checked_div(request.time_base)?;
-            if frame.rgba.len() != size
-                || tick.denominator() != 1
-                || tick.numerator() < 0
-                || previous.is_some_and(|p| frame.pts <= p)
-                || frame.rgba.chunks_exact(4).any(|p| p[3] != 255)
-            {
-                return Err(MediaError::InvalidInput(
-                    "opaque RGBA length and strictly increasing integral nonnegative PTS required"
-                        .into(),
-                ));
-            }
-            previous = Some(frame.pts);
-            pts.push(tick.numerator());
-        }
         let parent = request
             .output
             .parent()
@@ -107,14 +113,29 @@ impl MediaRuntime {
             height,
             request.time_base,
         )?;
-        for (frame, pts) in frames.iter().zip(pts) {
-            encoder.frame(&frame.rgba, pts)?;
+        let mut previous = None;
+        for index in 0..count {
+            let frame = produce(index)?;
+            let tick = frame.pts.checked_div(request.time_base)?;
+            if frame.rgba.len() != size
+                || tick.denominator() != 1
+                || tick.numerator() < 0
+                || previous.is_some_and(|p| frame.pts <= p)
+                || frame.rgba.chunks_exact(4).any(|p| p[3] != 255)
+            {
+                return Err(MediaError::InvalidInput(
+                    "opaque RGBA length and strictly increasing integral nonnegative PTS required"
+                        .into(),
+                ));
+            }
+            previous = Some(frame.pts);
+            encoder.frame(&frame.rgba, tick.numerator())?;
         }
         encoder.finish()?;
         let pixel_format = encoder.pixel_format.clone();
         let converted_bytes = encoder
             .frame_size
-            .checked_mul(frames.len() as u64)
+            .checked_mul(count as u64)
             .ok_or_else(|| MediaError::InvalidInput("transfer counter overflow".into()))?;
         drop(encoder);
         temp.as_file().sync_all()?;
@@ -127,7 +148,7 @@ impl MediaRuntime {
         })?;
         let bytes = u64::try_from(size)
             .ok()
-            .and_then(|s| s.checked_mul(frames.len() as u64))
+            .and_then(|s| s.checked_mul(count as u64))
             .ok_or_else(|| MediaError::InvalidInput("transfer counter overflow".into()))?;
         Ok(MediaPathReport {
             decoder: None,

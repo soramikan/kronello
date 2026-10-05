@@ -6,7 +6,8 @@ use kronello_time::{Time, TimeMap, TimeRange};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AudioClip, AudioError, AudioSources, Bus, Gain, mix_with_gain, sample_index, sample_range,
+    AudioClip, AudioError, AudioSourceReader, AudioSources, Bus, Gain, mix_with_gain_reader,
+    sample_index, sample_range,
 };
 
 #[derive(
@@ -431,6 +432,14 @@ impl DocumentAudioPlan {
     /// Volume Properties and curves are immutable; every sample time is derived
     /// directly from its absolute index. Invocation order is irrelevant.
     pub fn mix(&self, sources: &AudioSources, range: TimeRange) -> Result<Bus, AudioError> {
+        self.mix_reader(sources, range)
+    }
+    /// Evaluate a bounded Bus without retaining complete source buffers.
+    pub fn mix_reader(
+        &self,
+        sources: &dyn AudioSourceReader,
+        range: TimeRange,
+    ) -> Result<Bus, AudioError> {
         if let Some(plan) = &self.advanced {
             return plan.mix(sources, range);
         }
@@ -439,7 +448,7 @@ impl DocumentAudioPlan {
             .iter()
             .map(|p| sample_range(p.active))
             .collect::<Result<Vec<_>, _>>()?;
-        mix_with_gain(&self.clips(), sources, range, &mut |index, sample| {
+        mix_with_gain_reader(&self.clips(), sources, range, &mut |index, sample| {
             if !active[index].contains(&sample) {
                 return Gain::new(0.0);
             }

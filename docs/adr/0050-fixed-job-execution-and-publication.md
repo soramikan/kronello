@@ -1,6 +1,6 @@
 # ADR-0050: 固定ジョブ入力・実行 lease・成果物確定を共有 service で扱う
 
-- 状態: 採用
+- 状態: 部分置換（[ADR-0074](0074-bounded-streaming-movie-export.md)。movie export の AUDIO-000 payload 上限の継承のみ）
 - 日付: 2026-10-04
 - 対象: JOB-001
 

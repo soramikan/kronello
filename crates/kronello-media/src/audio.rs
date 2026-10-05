@@ -26,6 +26,17 @@ pub struct DecodedAudio {
     pub source_channels: u32,
     pub stream_index: u32,
 }
+/// Metadata from a fully drained stream. Samples have been delivered in order
+/// to the synchronous sink and are never retained by the runtime.
+pub type AudioChunkSink<'a> = dyn FnMut(&[[f32; 2]]) -> Result<(), MediaError> + 'a;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AudioDecodeReport {
+    pub source_start: Time,
+    pub source_rate: u32,
+    pub source_channels: u32,
+    pub frames: usize,
+}
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct AudioEncodeReport {
     pub codec: String,
@@ -38,16 +49,48 @@ impl MediaRuntime {
     /// Decode a caller-selected local audio stream and drain swresample to 48 kHz.
     /// Public project exports use decode_asset_audio for hash verification.
     pub fn decode_audio(&self, path: &Path, stream_index: u32) -> Result<DecodedAudio, MediaError> {
+        let mut frames = Vec::new();
+        let report = self.decode_audio_stream(path, stream_index, &mut |chunk| {
+            if frames
+                .len()
+                .checked_add(chunk.len())
+                .is_none_or(|n| n > MAX_AUDIO_FRAMES)
+            {
+                return Err(MediaError::InvalidInput(
+                    "decoded audio sample budget exceeded".into(),
+                ));
+            }
+            frames.extend_from_slice(chunk);
+            Ok(())
+        })?;
+        Ok(DecodedAudio {
+            buffer: AudioBuffer::new(frames)?,
+            source_start: report.source_start,
+            source_rate: report.source_rate,
+            source_channels: report.source_channels,
+            stream_index,
+        })
+    }
+    /// Decode a local selected stream with bounded native chunks and synchronous
+    /// backpressure. Validate timestamp continuity and finite samples, drain the
+    /// resampler, and stop immediately on sink failure. Asset callers must verify
+    /// their hash before and after this operation.
+    pub fn decode_audio_stream(
+        &self,
+        path: &Path,
+        stream_index: u32,
+        sink: &mut AudioChunkSink<'_>,
+    ) -> Result<AudioDecodeReport, MediaError> {
         let path = path.canonicalize()?;
         if !path.is_file() {
             return Err(MediaError::InvalidInput("expected local audio file".into()));
         }
         let mut decoder = ffi::NativeAudioDecoder::open(&self.native, &path, stream_index)?;
-        let mut frames = Vec::new();
         let mut start = None;
         let mut input_count = 0_i64;
         let mut source_rate = 0;
         let mut source_channels = 0;
+        let mut frames = 0_usize;
         while let Some(chunk) = decoder.next()? {
             if chunk.input_samples != 0 {
                 let pts = chunk
@@ -57,8 +100,6 @@ impl MediaRuntime {
                 let expected =
                     origin.checked_add(Rational::new(input_count, i64::from(chunk.rate))?)?;
                 let delta = pts.checked_sub(expected)?;
-                // A demuxer's timestamp grid may be coarser than one sample.
-                // Tolerate only its rounding tick; gaps/discontinuities fail.
                 if delta >= decoder.time_base || delta <= decoder.time_base.checked_neg()? {
                     return Err(MediaError::UnsupportedFeature(
                         "discontinuous audio timestamps".into(),
@@ -70,27 +111,22 @@ impl MediaRuntime {
                     .checked_add(chunk.input_samples as i64)
                     .ok_or_else(|| MediaError::Decode("audio input sample overflow".into()))?;
             }
-            if frames
-                .len()
-                .checked_add(chunk.frames.len())
-                .is_none_or(|n| n > MAX_AUDIO_FRAMES)
-            {
-                return Err(MediaError::InvalidInput(
-                    "decoded audio sample budget exceeded".into(),
-                ));
+            if chunk.frames.iter().flatten().any(|v| !v.is_finite()) {
+                return Err(MediaError::Decode("non-finite audio sample".into()));
             }
-            frames.extend(chunk.frames);
+            frames = frames
+                .checked_add(chunk.frames.len())
+                .ok_or_else(|| MediaError::InvalidInput("decoded audio size overflow".into()))?;
+            sink(&chunk.frames)?;
         }
-        if frames.is_empty() {
+        if frames == 0 {
             return Err(MediaError::Decode("resampler produced no samples".into()));
         }
-        let source_start = start.ok_or_else(|| MediaError::Decode("empty audio stream".into()))?;
-        Ok(DecodedAudio {
-            buffer: AudioBuffer::new(frames)?,
-            source_start,
+        Ok(AudioDecodeReport {
+            source_start: start.ok_or_else(|| MediaError::Decode("empty audio stream".into()))?,
             source_rate,
             source_channels,
-            stream_index,
+            frames,
         })
     }
     /// Resolve and verify before decode and verify again before using its bytes.
