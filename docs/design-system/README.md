@@ -11,6 +11,7 @@ Kronello の UI は素材が主役の作業場として組む。見た目は mac
 - macOS（SwiftUI / AppKit）、Windows（WinUI 3）、Linux（GTK4）の各実装は、標準コントロールをこのシステムの見た目にスタイルして使う。IME・アクセシビリティ・キーボード操作は各フレームワークの仕組みをそのまま使う。
 - 例外として、OS が描くもの（macOS のメニューバー、ファイルの選択・保存ダイアログ、ウインドウの枠と信号機ボタン、システムの通知）は OS のものを使う。このシステムが対象にするのはウインドウの中身と、アプリ内で開くメニュー・ポップオーバー・シートである。
 - トークン名は英語の識別子で、各実装の色・寸法の定数名にそのまま対応させる。値を実装側で直接書き換えない。
+- 視覚的な見本（tokens.json から生成した CSS で描いた HTML と、そこから撮った画像）は [preview/](preview/README.md) にある。見本は仕様に従い、食い違うときは仕様を正とする。
 
 ## 原則
 
@@ -69,6 +70,10 @@ Kronello の UI は素材が主役の作業場として組む。見た目は mac
 
 値は [tokens.json](tokens.json) から転記したもの。食い違う場合は tokens.json を正とする。テーマは Dark（`dark`） / Light（`light`） で、最初の Dark が既定。
 
+![色のトークン（左が Dark、右が Light）](preview/images/foundations/color.png)
+
+![前景と地のコントラスト比](preview/images/foundations/contrast.png)
+
 ### 色
 
 | トークン | Dark | Light | 用途 |
@@ -98,6 +103,8 @@ Kronello の UI は素材が主役の作業場として組む。見た目は mac
 
 ### 文字
 
+![文字のスタイル](preview/images/foundations/type.png)
+
 書体: `sans` = "Noto Sans JP", "Noto Sans", sans-serif、`mono` = "Noto Sans Mono", "Noto Sans JP", monospace
 
 | スタイル | 書体 | サイズ / 行送り | 太さ | 用途 |
@@ -111,6 +118,8 @@ Kronello の UI は素材が主役の作業場として組む。見た目は mac
 | `ruler` | `mono` | 10px / 12px | 400 | 時間ルーラーの目盛りとカーブエディタの軸の値。 |
 
 ### 余白
+
+![余白・寸法・角丸・影](preview/images/foundations/measure.png)
 
 | トークン | 値 | 用途 |
 |---|---|---|
@@ -147,6 +156,8 @@ Kronello の UI は素材が主役の作業場として組む。見た目は mac
 
 ## コンポーネント
 
+各コンポーネントの文書の先頭に見本の画像がある。全部を並べた HTML は [preview/components.html](preview/components.html)。
+
 | 分類 | コンポーネント | 概要 |
 |---|---|---|
 | Controls | [Button](components/Button.md) | コマンドを 1 回発行する押しボタンで、primary・secondary・plain・destructive の 4 種と、アイコンだけの icon 形を持つ。 |
@@ -178,6 +189,7 @@ Kronello の UI は素材が主役の作業場として組む。見た目は mac
 
 ## 変更の手順
 
-- 値を変えるときは tokens.json と、この文書のトークン表を同じ変更で更新する。コントラストの記述（「4.5:1 以上」など）は両テーマで計算し直す。
+- 値を変えるときは tokens.json と、この文書のトークン表を同じ変更で更新する。コントラストの記述（「4.5:1 以上」など）は両テーマで計算し直す（[コントラストの表](preview/images/foundations/contrast.png)は tokens.json から計算している）。
+- 値・部品・画面を変えたら見本も同じ変更で直す: `python3 scripts/design_preview.py render` で生成物を作り直し、`check` を通し、`screenshots` で画像を撮り直す（手順は [preview/README.md](preview/README.md)）。
 - 色の役割（琥珀・青・赤・種類の色の意味）、テーマの既定、書体、アイコンセットを変える場合は ADR を追加する。値の調整（Light の地の明るさなど）は ADR を要しない。
 - コンポーネントを追加するときは components/ に仕様を 1 ファイル置き、上の表に加える。仕様には「利用側が渡すもの」「見た目」「使い分け」を書き、値はトークン名で参照する。

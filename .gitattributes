@@ -11,4 +11,5 @@
 *.mov binary
 *.ttf binary
 *.otf binary
+*.woff2 binary
 *.kronello binary

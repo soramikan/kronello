@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ja" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>編集 — Kronello</title>
+<!--
+  Screen: docs/design-system/screens/edit.md (1440×900).
+  States (?state=): asset-missing. See screens/states.md.
+-->
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/kit.css">
+<link rel="stylesheet" href="../assets/screens.css">
+<script src="../assets/icons.js"></script>
+<script src="../assets/preview.js"></script>
+</head>
+<body>
+<div class="window">
+  <header class="toolbar">
+    <div class="toolbar-left">
+      <span class="traffic" aria-label="OS のウインドウボタン"><span></span><span></span><span></span></span>
+      <div class="project-name"><span class="heading">朝の港 PV</span><span class="caption muted">~/Movies/朝の港</span></div>
+    </div>
+    <div class="seg"><button class="is-selected">編集</button><button>モーション</button><button>テンプレート</button><button>書き出し</button></div>
+    <div class="toolbar-right">
+      <button class="btn btn-plain btn-icon" aria-label="取り消す"><i data-icon="undo-2"></i></button>
+      <button class="btn btn-plain btn-icon" aria-label="やり直す"><i data-icon="redo-2"></i></button>
+      <span class="vsep"></span>
+      <span class="popup" style="min-width: 120px;"><span class="row gap-1"><i data-icon="layout-panel-left" class="muted"></i>標準</span><i data-icon="chevrons-up-down"></i></span>
+    </div>
+  </header>
+  <div></div>
+
+  <div class="page-body edit-body">
+    <!-- Left: Project / Effects -->
+    <section class="panel" style="grid-area: left;">
+      <div class="panel-header">
+        <div class="tabs"><span class="tab is-selected">Project</span><span class="tab">Effects</span></div>
+        <div class="panel-actions"><button class="btn btn-plain btn-icon" aria-label="読み込む"><i data-icon="plus"></i></button><button class="btn btn-plain btn-icon" aria-label="パネルメニュー"><i data-icon="ellipsis"></i></button></div>
+      </div>
+      <div class="panel-body">
+        <div class="section-pad" style="padding-bottom: 8px;"><span class="tf-input"><i data-icon="search"></i><span class="tf-placeholder">素材を検索</span></span></div>
+        <div class="list-row arow"><i data-icon="layers" class="kind-composition"></i><span class="arow-name">Lower third</span><span class="arow-spec">1920×1080</span><span class="arow-dur">00:00:06:00</span></div>
+        <div class="list-row arow"><i data-icon="layers" class="kind-composition"></i><span class="arow-name">Logo loop</span><span class="arow-spec">1080×1080</span><span class="arow-dur">00:00:04:00</span></div>
+        <div class="list-row arow is-selected"><i data-icon="film" class="kind-video"></i><span class="arow-name">harbor_dawn.mov</span><span class="arow-spec">3840×2160</span><span class="arow-dur">00:00:42:10</span></div>
+        <div class="list-row arow" data-unless="asset-missing"><i data-icon="film" class="kind-video"></i><span class="arow-name">drone_02.mov</span><span class="arow-spec">3840×2160</span><span class="arow-dur">00:00:18:04</span></div>
+        <div class="list-row arow is-missing" data-when="asset-missing"><i data-icon="triangle-alert"></i><span class="arow-name">drone_02.mov</span><span class="arow-spec">ASSET_MISSING</span><span class="arow-dur">—</span></div>
+        <div class="list-row arow" data-unless="asset-missing"><i data-icon="film" class="kind-video"></i><span class="arow-name">drone_03.mov</span><span class="arow-spec">3840×2160</span><span class="arow-dur">00:00:11:20</span></div>
+        <div class="list-row arow is-missing" data-when="asset-missing"><i data-icon="triangle-alert"></i><span class="arow-name">drone_03.mov</span><span class="arow-spec">ASSET_MISSING</span><span class="arow-dur">—</span></div>
+        <div class="list-row arow"><i data-icon="film" class="kind-video"></i><span class="arow-name">harbor_market.mov</span><span class="arow-spec">1920×1080</span><span class="arow-dur">00:00:27:02</span></div>
+        <div class="list-row arow"><i data-icon="image" class="kind-video"></i><span class="arow-name">logo.png</span><span class="arow-spec">2000×800</span><span class="arow-dur">—</span></div>
+        <div class="list-row arow"><i data-icon="audio-lines" class="kind-audio"></i><span class="arow-name">harbor_ambience.wav</span><span class="arow-spec">48 kHz</span><span class="arow-dur">00:01:30:00</span></div>
+        <div class="list-row arow"><i data-icon="audio-lines" class="kind-audio"></i><span class="arow-name">narration_take3.wav</span><span class="arow-spec">48 kHz</span><span class="arow-dur">00:00:21:16</span></div>
+        <div class="list-row arow"><i data-icon="captions" class="kind-subtitle"></i><span class="arow-name">字幕_ja.srt</span><span class="arow-spec">42 件</span><span class="arow-dur">00:00:28:12</span></div>
+        <div style="padding: 12px; margin-top: 4px; border-top: 1px solid var(--line);" class="caption muted">
+          選択中: <span class="ink">harbor_dawn.mov</span><br>3840×2160 · 23.976 fps · ProRes 422 HQ · 00:00:42:10
+        </div>
+      </div>
+    </section>
+
+    <!-- Center: Sequence tabs + Viewer -->
+    <section class="panel" style="grid-area: center;">
+      <div class="panel-header">
+        <div class="tabs"><span class="tab is-selected">本編 横型<i data-icon="x" class="tab-close"></i></span><span class="tab">本編 縦型</span></div>
+        <div class="panel-actions">
+          <span class="caption muted" style="margin-right: 4px;">1920×1080 · 24 fps</span>
+          <button class="btn btn-plain is-pressed" style="padding: 0 8px;">セーフエリア</button>
+          <button class="btn btn-plain btn-icon" aria-label="パネルメニュー"><i data-icon="ellipsis"></i></button>
+        </div>
+      </div>
+      <div class="viewer" style="flex: 1 1 auto;">
+        <div class="viewer-main">
+          <div class="toolstrip">
+            <span class="tool-grip"><i data-icon="grip-horizontal"></i></span><span class="tool-fold"><i data-icon="chevrons-left"></i></span>
+            <span class="tool is-current" title="選択 (V)"><i data-icon="mouse-pointer-2"></i></span><span class="tool" title="ブレード (B)"><i data-icon="scissors"></i></span><span class="tool" title="手のひら (H)"><i data-icon="hand"></i></span><span class="tool" title="ズーム (Z)"><i data-icon="zoom-in"></i></span>
+          </div>
+          <div class="viewer-stage">
+            <div class="frame footage-harbor edit-frame">
+              <div class="footage-bar" style="left: 50px; top: 246px; width: 5px; height: 48px;"></div>
+              <div class="footage-title" style="left: 64px; top: 243px;"><span class="t1" style="font-size: 28px; line-height: 32px;">朝の港</span><span class="t2" style="font-size: 12px;">漁船が戻る午前 5 時</span></div>
+              <div style="position: absolute; inset: 5% 5%; outline: 1px dashed rgba(255,255,255,0.35);"></div>
+              <div style="position: absolute; inset: 10% 10%; outline: 1px dashed rgba(255,255,255,0.22);"></div>
+              <div style="position: absolute; left: 0; right: 0; bottom: 20px; text-align: center; color: #fff; font-size: 13px; font-weight: 500; text-shadow: 0 1px 4px rgba(0,0,0,0.6);">夜明けとともに、港が目を覚ます。</div>
+            </div>
+          </div>
+        </div>
+        <div class="transport">
+          <div class="transport-left"><span class="tc-input time-now">00:00:04:00</span></div>
+          <div class="transport-center">
+            <button class="btn btn-plain btn-icon" aria-label="先頭へ"><i data-icon="skip-back"></i></button><button class="btn btn-plain btn-icon" aria-label="前のフレーム"><i data-icon="step-back"></i></button><button class="btn btn-plain btn-icon" aria-label="再生"><i data-icon="play"></i></button><button class="btn btn-plain btn-icon" aria-label="次のフレーム"><i data-icon="step-forward"></i></button><button class="btn btn-plain btn-icon" aria-label="末尾へ"><i data-icon="skip-forward"></i></button><button class="btn btn-plain btn-icon" aria-label="ループ"><i data-icon="repeat"></i></button>
+          </div>
+          <div class="transport-right"><span class="popup">Fit<i data-icon="chevrons-up-down"></i></span><span class="popup">Half<i data-icon="chevrons-up-down"></i></span><span class="timecode muted">00:00:30:00</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right: clip Inspector -->
+    <section class="panel" style="grid-area: right;">
+      <div class="panel-header"><span class="heading">Inspector</span><div class="panel-actions"><button class="btn btn-plain btn-icon" aria-label="パネルメニュー"><i data-icon="ellipsis"></i></button></div></div>
+      <div class="panel-body">
+        <div class="inspector-subject"><i data-icon="layers" class="kind-composition"></i><div class="col"><span style="font-weight: 500;">Lower third</span><span class="caption muted">Composition クリップ · V2</span></div></div>
+        <div class="isection"><i data-icon="chevron-down"></i><span class="heading">配置</span></div>
+        <div class="isection-body section-pad field-grid" style="padding-top: 4px;">
+          <span class="label">開始</span><span class="nf nf-time" style="justify-self: end;"><span class="nf-value">00:00:01:00</span></span>
+          <span class="label">尺</span><span class="nf nf-time" style="justify-self: end;"><span class="nf-value">00:00:06:00</span></span>
+          <span class="label">ソース開始</span><span class="nf nf-time" style="justify-self: end;"><span class="nf-value">00:00:00:00</span></span>
+        </div>
+        <div class="isection"><i data-icon="chevron-down"></i><span class="heading">時間</span></div>
+        <div class="isection-body section-pad field-grid" style="padding-top: 4px;">
+          <span class="label">速度</span><span class="nf" style="justify-self: end; min-width: 104px;"><span class="nf-value">100.0</span><span class="nf-unit">%</span></span>
+          <span class="label">逆再生</span><label class="cb" style="justify-self: end;"><span class="cb-box"></span></label>
+        </div>
+        <div class="isection"><i data-icon="chevron-down"></i><span class="heading">合成</span></div>
+        <div class="isection-body section-pad field-grid" style="padding-top: 4px;">
+          <span class="label">不透明度</span><span class="row" style="justify-content: flex-end;"><span class="slider" style="width: 84px;"><span class="slider-track"><span class="slider-fill" style="width: 100%"></span></span><span class="slider-thumb" style="left: 100%"></span></span><span class="nf" style="min-width: 64px;"><span class="nf-value">100</span><span class="nf-unit">%</span></span></span>
+          <span class="label">描画モード</span><span class="popup" style="justify-self: end; min-width: 156px;">通常<i data-icon="chevrons-up-down"></i></span>
+        </div>
+        <div class="section-pad"><button class="btn btn-secondary btn-full"><i data-icon="layers"></i>モーションで開く</button></div>
+      </div>
+    </section>
+
+    <!-- Bottom: Sequence tracks -->
+    <section class="panel" style="grid-area: bottom;">
+      <div class="panel-header">
+        <span class="heading">本編 横型</span>
+        <span class="caption muted">1920×1080 · 24 fps · 48 kHz</span>
+        <span class="time-now" style="margin-left: 8px;">00:00:04:00</span>
+        <div class="panel-actions">
+          <button class="btn btn-plain btn-icon is-pressed" aria-label="スナップ"><i data-icon="magnet"></i></button>
+          <span class="row gap-1" style="margin: 0 6px;"><i data-icon="zoom-in" class="ic-12 muted"></i><span class="slider" style="width: 80px;"><span class="slider-track"><span class="slider-fill" style="width: 25%"></span></span><span class="slider-thumb" style="left: 25%"></span></span></span>
+          <button class="btn btn-plain btn-icon" aria-label="パネルメニュー"><i data-icon="ellipsis"></i></button>
+        </div>
+      </div>
+      <div class="timeline" style="--head-w: 200px;">
+        <div class="tl-corner"></div>
+        <div class="ruler" data-frames="720" data-rate="24" data-minor="24" data-major="120"></div>
+        <div class="track-head"><span class="track-num">S1</span><span class="track-name">字幕</span><button class="btn btn-plain btn-icon"><i data-icon="eye"></i></button><button class="btn btn-plain btn-icon"><i data-icon="lock-open"></i></button></div>
+        <div class="lane">
+          <div class="clip" data-kind="subtitle" style="left: 6.67%; width: 13.33%;"><i data-icon="captions" class="kind-subtitle"></i><span class="clip-name">夜明けとともに、港が目を覚ます。</span></div>
+          <div class="clip" data-kind="subtitle" style="left: 26.67%; width: 16.67%;"><i data-icon="captions" class="kind-subtitle"></i><span class="clip-name">漁船が次々と戻ってくる。</span></div>
+          <div class="clip" data-kind="subtitle" style="left: 50%; width: 16.67%;"><i data-icon="captions" class="kind-subtitle"></i><span class="clip-name">市場の一日が始まる。</span></div>
+        </div>
+        <div class="track-head"><span class="track-num">V2</span><span class="track-name">タイトル・調整</span><button class="btn btn-plain btn-icon"><i data-icon="eye"></i></button><button class="btn btn-plain btn-icon"><i data-icon="lock-open"></i></button></div>
+        <div class="lane">
+          <div class="clip is-selected" data-kind="composition" style="left: 3.33%; width: 20%;"><i data-icon="layers" class="kind-composition"></i><span class="clip-name">Lower third</span></div>
+          <div class="clip" data-kind="adjustment" style="left: 33.33%; width: 46.67%;"><i data-icon="sliders-horizontal" class="kind-adjustment"></i><span class="clip-name">色調整 · 夕景</span></div>
+          <div class="clip" data-kind="composition" style="left: 86.67%; width: 13.33%;"><i data-icon="layers" class="kind-composition"></i><span class="clip-name">Logo loop</span></div>
+        </div>
+        <div class="track-head"><span class="track-num">V1</span><span class="track-name">映像</span><button class="btn btn-plain btn-icon"><i data-icon="eye"></i></button><button class="btn btn-plain btn-icon"><i data-icon="lock-open"></i></button></div>
+        <div class="lane">
+          <div class="clip" data-kind="video" style="left: 0%; width: 33.2%;"><i data-icon="film" class="kind-video"></i><span class="clip-name">harbor_dawn.mov</span></div>
+          <div class="clip" data-kind="video" style="left: 33.33%; width: 26.53%;" data-unless="asset-missing"><i data-icon="film" class="kind-video"></i><span class="clip-name">drone_02.mov</span></div>
+          <div class="clip is-missing" style="left: 33.33%; width: 26.53%;" data-when="asset-missing"><i data-icon="triangle-alert"></i><span class="clip-name">drone_02.mov</span><span class="code">ASSET_MISSING</span></div>
+          <div class="clip" data-kind="video" style="left: 60%; width: 40%;"><i data-icon="film" class="kind-video"></i><span class="clip-name">harbor_market.mov</span></div>
+        </div>
+        <div class="track-head"><span class="track-num">A1</span><span class="track-name">環境音</span><button class="btn btn-plain btn-icon"><i data-icon="volume-2"></i></button><button class="btn btn-plain btn-icon"><i data-icon="lock-open"></i></button></div>
+        <div class="lane"><div class="clip" data-kind="audio" style="left: 0%; width: 100%;"><i data-icon="audio-lines" class="kind-audio"></i><span class="clip-name">harbor_ambience.wav</span><span class="clip-wave"></span></div></div>
+        <div class="track-head"><span class="track-num">A2</span><span class="track-name">ナレーション</span><button class="btn btn-plain btn-icon"><i data-icon="volume-x"></i></button><button class="btn btn-plain btn-icon"><i data-icon="lock"></i></button></div>
+        <div class="lane is-locked"><div class="clip" data-kind="audio" style="left: 10%; width: 63.3%;"><i data-icon="audio-lines" class="kind-audio"></i><span class="clip-name">narration_take3.wav</span><span class="clip-wave"></span></div></div>
+        <div style="position: absolute; left: 200px; right: 0; top: 0; bottom: 0; pointer-events: none;"><div class="playhead" style="left: 13.33%;"><span class="playhead-knob"></span></div></div>
+      </div>
+    </section>
+  </div>
+
+  <footer class="statusbar">
+    <span class="sb-item"><i data-icon="history"></i>保存済み · rev 131</span>
+    <span class="sb-item"><i data-icon="refresh-cw"></i>CLI の変更を読み込みました（rev 129 → 130）</span>
+    <span class="sb-item is-error" data-when="asset-missing"><i data-icon="triangle-alert"></i><span class="code">ASSET_MISSING</span> 2</span>
+    <span class="sb-item sb-right"><i data-icon="loader-circle" class="spin"></i><span class="ink">書き出し 42%</span><span class="progress"><span style="width: 42%"></span></span>ほか 1 件</span>
+  </footer>
+
+  <div data-when="asset-missing">
+    <div class="scrim" style="top: 44px;"></div>
+    <div class="sheet-host" style="top: 44px;">
+      <div class="dialog is-danger">
+        <div class="dialog-main">
+          <i data-icon="triangle-alert"></i>
+          <div>
+            <div class="dialog-title">素材が 2 件見つかりません</div>
+            <p class="dialog-body"><span class="code">ASSET_MISSING</span> のため書き出しとプレビューを止めました。素材の場所を指定すると、hash が一致するファイルだけを再リンクします。</p>
+            <div class="dialog-details">~/Movies/朝の港/drone_02.mov
+~/Movies/朝の港/drone_03.mov</div>
+          </div>
+        </div>
+        <div class="dialog-actions"><button class="btn btn-plain">キャンセル</button><button class="btn btn-secondary">ファイルを選択…</button><button class="btn btn-primary">フォルダを検索…</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

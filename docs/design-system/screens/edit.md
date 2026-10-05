@@ -2,6 +2,10 @@
 
 Sequence のカット編集を行うページ（NLE-002 の GUI）。
 
+![編集ページの見本（Dark）](../preview/images/screens/edit-dark.png)
+
+見本: [Light の画像](../preview/images/screens/edit-light.png) · [HTML](../preview/screens/edit.html)
+
 ## 配置
 
 ```text

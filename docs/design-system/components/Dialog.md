@@ -2,6 +2,10 @@
 
 作業を止めて判断を求めるシートで、型付きエラー（`ASSET_MISSING`、`UNSUPPORTED_FEATURE`、`UNDO_CONFLICT` など）の説明と次の操作を示すのに使う。
 
+![Dialog の見本（Dark）](../preview/images/components/Dialog-dark.png)
+
+見本: [Light の画像](../preview/images/components/Dialog-light.png) · [HTML](../preview/components.html#Dialog)
+
 ## 利用側が渡すもの
 
 - 見出し（何が起きたかを 1 文、件数を含める）。

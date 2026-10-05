@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="ja" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kronello デザインシステム</title>
+<link rel="stylesheet" href="assets/tokens.css">
+<link rel="stylesheet" href="assets/kit.css">
+<link rel="stylesheet" href="assets/docs.css">
+<script src="assets/tokens.js"></script>
+<script src="assets/icons.js"></script>
+<script src="assets/preview.js"></script>
+</head>
+<body>
+<div class="doc">
+  <header class="doc-header">
+    <div class="doc-title">Kronello デザインシステム <span class="muted">見本</span></div>
+    <nav class="doc-nav">
+      <a href="index.html" aria-current="page" data-keep-theme>基礎</a>
+      <a href="components.html" data-keep-theme>コンポーネント</a>
+      <a href="#screens">画面</a>
+    </nav>
+    <button class="btn btn-secondary" data-theme-toggle>テーマ: <span data-theme-label>Dark</span></button>
+  </header>
+
+  <main class="doc-main">
+    <p class="doc-intro">
+      <a href="../README.md">デザインシステム</a>の値と規則を HTML で描いた見本。値はすべて <span class="mono">tokens.json</span> から生成した
+      <span class="mono">tokens.css</span> を参照する。仕様と食い違うときは仕様の文書を正とする。<kbd class="mono">t</kbd> でテーマを切り替える。
+    </p>
+
+    <section class="foundation" data-section id="color">
+      <h2 class="doc-h2">色</h2>
+      <p class="doc-lede">強い色は 3 つの意味だけに使う: 琥珀 = 「今」とブランド、青 = 選択、赤 = 型付きエラー。種類の色はアイコンと細い下線だけ。左が Dark（既定）、右が Light。</p>
+      <table class="tok-table" id="color-table">
+        <thead><tr><th>トークン</th><th>Dark</th><th>Light</th><th>用途</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="foundation" data-section id="contrast">
+      <h2 class="doc-h2">コントラスト</h2>
+      <p class="doc-lede">前景（行）と地（列）のコントラスト比を tokens.json の値から計算したもの。文字は 4.5:1、線と記号は 3:1 が基準（<span class="mono">AA</span> = 4.5 以上、<span class="mono">3:1</span> = 3 以上、<span class="mono">—</span> = 3 未満）。<span class="mono">line</span> は装飾用で 3:1 未満でよい。</p>
+      <div class="row gap-4" style="align-items:flex-start; flex-wrap: wrap;">
+        <div><h3 class="doc-h3">Dark</h3><table class="contrast" data-contrast="dark"></table></div>
+        <div><h3 class="doc-h3">Light</h3><table class="contrast" data-contrast="light"></table></div>
+      </div>
+    </section>
+
+    <section class="foundation" data-section id="type">
+      <h2 class="doc-h2">文字</h2>
+      <p class="doc-lede">UI は Noto Sans JP、数値とタイムコードは Noto Sans Mono（和文は Noto Sans JP にフォールバック）。時刻は浮動小数点で見せず、タイムコードか秒 + フレームで表す。</p>
+      <div class="board" id="type-list"></div>
+    </section>
+
+    <section class="foundation" data-section id="measure">
+      <h2 class="doc-h2">余白・寸法・角丸・影</h2>
+      <div class="row gap-4" style="align-items:flex-start; flex-wrap: wrap;">
+        <div style="flex: 1 1 520px;">
+          <h3 class="doc-h3">余白と寸法</h3>
+          <div class="board" id="measure-list"></div>
+        </div>
+        <div style="flex: 1 1 420px;">
+          <h3 class="doc-h3">角丸</h3>
+          <div class="board board-pad row gap-4" id="radius-list"></div>
+          <h3 class="doc-h3">影</h3>
+          <div class="board board-pad on-surface-0" style="padding: 24px;">
+            <div class="row gap-4">
+              <div class="popover" style="width: 200px; --arrow-x: 32px;">
+                <div class="heading">shadow-popover</div>
+                <p class="caption" style="margin-top: 4px;">ポップオーバー・メニュー・ダイアログ・HUD だけに使う。パネルは影を落とさない。</p>
+              </div>
+              <div class="panel" style="width: 180px; height: 92px; border: 1px solid var(--line);">
+                <div class="panel-header"><span class="heading">Panel</span></div>
+                <div class="panel-body section-pad caption muted">影なし・角丸なし。1px の line で接する。</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="foundation" data-section id="icons">
+      <h2 class="doc-h2">アイコン</h2>
+      <p class="doc-lede">Lucide 1.51.0 のうち <a class="doc-link" href="../icons.md">icons.md</a> に載せたものだけを使う。24px グリッド・stroke-width 2 のまま 12 / 14 / 16px に縮小し、色は親の文字色（<span class="mono">currentColor</span>）を継ぐ。</p>
+      <div class="icon-grid" id="icon-grid"></div>
+    </section>
+
+    <section id="screens">
+      <h2 class="doc-h2">画面</h2>
+      <p class="doc-lede">1440×900 のメインウインドウ。配置と寸法は <a class="doc-link" href="../screens/README.md">screens/</a> に従う。開くと実寸で表示する。</p>
+      <div class="shot-grid" id="shot-grid"></div>
+    </section>
+  </main>
+</div>
+
+<script>
+(function () {
+  var T = window.KRONELLO_TOKENS;
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+  // Colors
+  var tbody = document.querySelector("#color-table tbody");
+  tbody.innerHTML = T.color.tokens.map(function (t) {
+    function chip(theme) {
+      return '<div class="swatch"><span class="swatch-chip" style="background:' + t.value[theme] + '"></span><span class="swatch-hex">' + t.value[theme] + "</span></div>";
+    }
+    return "<tr><td class=\"tok-name\">" + esc(t.name) + "</td><td>" + chip("dark") + "</td><td>" + chip("light") + '</td><td class="usage">' + esc(t.usage) + "</td></tr>";
+  }).join("");
+
+  // Contrast (WCAG 2 relative luminance)
+  function lum(hex) {
+    var n = parseInt(hex.slice(1, 7), 16);
+    return [n >> 16, (n >> 8) & 255, n & 255].map(function (v) {
+      v /= 255;
+      return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    }).reduce(function (sum, v, i) { return sum + v * [0.2126, 0.7152, 0.0722][i]; }, 0);
+  }
+  function ratio(a, b) {
+    var x = lum(a), y = lum(b);
+    return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+  }
+  var byName = {};
+  T.color.tokens.forEach(function (t) { byName[t.name] = t.value; });
+  var fgs = ["ink", "ink-muted", "accent-ink", "selection", "danger", "line-strong", "line", "kind-video", "kind-audio", "kind-composition", "kind-subtitle", "kind-generator", "kind-adjustment"];
+  var bgs = ["surface-0", "surface-100", "surface-200", "control-hover", "clip", "selection-bg"];
+  document.querySelectorAll("[data-contrast]").forEach(function (table) {
+    var theme = table.getAttribute("data-contrast");
+    var head = "<tr><th></th>" + bgs.map(function (b) { return "<th>" + b + "</th>"; }).join("") + "</tr>";
+    var rows = fgs.map(function (f) {
+      return '<tr><th class="row-head">' + f + "</th>" + bgs.map(function (b) {
+        var r = ratio(byName[f][theme], byName[b][theme]);
+        var grade = r >= 4.5 ? "AA" : r >= 3 ? "3:1" : "—";
+        return '<td class="' + (r < 3 ? "is-low" : "") + '"><span class="cell" style="background:' + byName[b][theme] + ";color:" + byName[f][theme] + '">' + r.toFixed(1) + '</span> <span class="grade">' + grade + "</span></td>";
+      }).join("") + "</tr>";
+    }).join("");
+    table.innerHTML = "<thead>" + head + "</thead><tbody>" + rows + "</tbody>";
+  });
+
+  // Type
+  document.getElementById("type-list").innerHTML = T.type.groups.map(function (g) {
+    return g.styles.map(function (s) {
+      return '<div class="type-row"><div class="tok-name">' + s.name + '</div><div style="font:var(--font-' + s.name + ');letter-spacing:var(--tracking-' + s.name + ')">' + esc(s.sample) + '</div><div><div class="type-meta">' + g.family + " · " + s.fontSize + " / " + s.lineHeight + " · " + s.fontWeight + '</div><div class="caption muted" style="margin-top:2px">' + esc(s.usage) + "</div></div></div>";
+    }).join("");
+  }).join("");
+
+  // Spacing and sizes
+  var measures = T.spacing.tokens.concat(T.size.tokens);
+  document.getElementById("measure-list").innerHTML = measures.map(function (t) {
+    var px = parseInt(t.value, 10);
+    var vis = /^space-/.test(t.name)
+      ? '<span class="measure-bar" style="width:' + px + 'px"></span>'
+      : '<span class="measure-box" style="width:' + Math.max(px, 9) + "px;height:" + px + 'px"></span>';
+    return '<div class="measure-row" title="' + esc(t.usage) + '"><span class="tok-name">' + t.name + '</span><span class="type-meta">' + t.value + "</span><span class=\"row\">" + vis + '<span class="caption muted">' + esc(t.usage) + "</span></span></div>";
+  }).join("");
+
+  document.getElementById("radius-list").innerHTML = T.radius.tokens.map(function (t) {
+    return '<div class="demo-cell"><span class="measure-box" style="width:72px;height:44px;border-radius:' + t.value + '"></span><span class="tok-name">' + t.name + '</span><span class="type-meta">' + t.value + "</span></div>";
+  }).join("");
+
+  // Icons
+  var names = Object.keys(window.KRONELLO_ICONS).sort();
+  document.getElementById("icon-grid").innerHTML = names.map(function (n) {
+    return '<div class="icon-cell"><span class="sizes"><i data-icon="' + n + '" class="ic-12"></i><i data-icon="' + n + '"></i><i data-icon="' + n + '" class="ic-16"></i><i data-icon="' + n + '" class="ic-24"></i></span><span class="name">' + n + "</span></div>";
+  }).join("");
+
+  // Screens
+  var screens = [
+    ["screens/welcome.html", "", "ウェルカム", "Welcome"],
+    ["screens/edit.html", "", "編集", "Sequence のカット編集"],
+    ["screens/motion.html", "", "モーション", "Dope sheet"],
+    ["screens/motion.html", "state=curve", "モーション", "Curve editor"],
+    ["screens/template.html", "", "テンプレート", "variant・公開入力・尺"],
+    ["screens/export.html", "", "書き出し", "設定・確認・ジョブ"],
+    ["screens/motion.html", "state=undo-conflict", "状態", "UNDO_CONFLICT"],
+    ["screens/motion.html", "state=revision-conflict", "状態", "REVISION_CONFLICT"],
+    ["screens/motion.html", "state=adapter-unavailable", "状態", "ADAPTER_UNAVAILABLE"],
+    ["screens/motion.html", "state=evaluation-error", "状態", "EVALUATION_ERROR · FONT_MISSING"],
+    ["screens/motion.html", "state=safe-mode", "状態", "安全モード"],
+    ["screens/edit.html", "state=asset-missing", "状態", "ASSET_MISSING"]
+  ];
+  var grid = document.getElementById("shot-grid");
+  var theme = document.documentElement.dataset.theme;
+  grid.innerHTML = screens.map(function (s) {
+    var q = [s[1], "theme=" + theme].filter(Boolean).join("&");
+    return '<a class="shot" data-keep-theme href="' + s[0] + "?" + s[1] + '"><div class="shot-frame"><iframe loading="lazy" tabindex="-1" src="' + s[0] + "?" + q + '&capture"></iframe></div><div><div class="label">' + s[2] + '</div><div class="muted">' + esc(s[3]) + "</div></div></a>";
+  }).join("");
+  function fit() {
+    grid.querySelectorAll(".shot-frame").forEach(function (f) {
+      f.querySelector("iframe").style.transform = "scale(" + f.clientWidth / 1440 + ")";
+    });
+  }
+  window.addEventListener("resize", fit);
+  document.addEventListener("DOMContentLoaded", fit);
+  document.addEventListener("kronello-theme", function (event) {
+    grid.querySelectorAll("iframe").forEach(function (f) { f.src = f.src.replace(/theme=(dark|light)/, "theme=" + event.detail); });
+  });
+})();
+</script>
+</body>
+</html>

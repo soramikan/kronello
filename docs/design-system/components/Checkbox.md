@@ -2,6 +2,10 @@
 
 オン / オフ（とその混在）を切り替えるチェックボックスと、排他の選択肢から 1 つを選ぶラジオボタン。
 
+![Checkbox の見本（Dark）](../preview/images/components/Checkbox-dark.png)
+
+見本: [Light の画像](../preview/images/components/Checkbox-light.png) · [HTML](../preview/components.html#Checkbox)
+
 ## 利用側が渡すもの
 
 - ラベル（右に置く。名詞句か「〜する」）。

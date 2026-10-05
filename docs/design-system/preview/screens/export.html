@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="ja" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>書き出し — Kronello</title>
+<!-- Screen: docs/design-system/screens/export.md (1440×900). Shown with one preflight error, so 書き出す is disabled. -->
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/kit.css">
+<link rel="stylesheet" href="../assets/screens.css">
+<script src="../assets/icons.js"></script>
+<script src="../assets/preview.js"></script>
+</head>
+<body>
+<div class="window">
+  <header class="toolbar">
+    <div class="toolbar-left">
+      <span class="traffic" aria-label="OS のウインドウボタン"><span></span><span></span><span></span></span>
+      <div class="project-name"><span class="heading">朝の港 PV</span><span class="caption muted">~/Movies/朝の港</span></div>
+    </div>
+    <div class="seg"><button>編集</button><button>モーション</button><button>テンプレート</button><button class="is-selected">書き出し</button></div>
+    <div class="toolbar-right">
+      <button class="btn btn-plain btn-icon" aria-label="取り消す"><i data-icon="undo-2"></i></button>
+      <button class="btn btn-plain btn-icon" aria-label="やり直す"><i data-icon="redo-2"></i></button>
+      <span class="vsep"></span>
+      <span class="popup" style="min-width: 120px;"><span class="row gap-1"><i data-icon="layout-panel-left" class="muted"></i>標準</span><i data-icon="chevrons-up-down"></i></span>
+    </div>
+  </header>
+  <div></div>
+
+  <div class="page-body export-body">
+    <!-- Left: Export settings (runs to the bottom) -->
+    <section class="panel" style="grid-area: left;">
+      <div class="panel-header"><span class="heading">書き出し設定</span></div>
+      <div class="panel-body col">
+        <div class="section-pad field-grid">
+          <span class="label">対象</span><span class="popup">Sequence: 本編 横型<i data-icon="chevrons-up-down"></i></span>
+          <span class="label">範囲</span><div class="seg seg-sm" style="justify-self: start;"><button class="is-selected">全体</button><button>イン〜アウト</button></div>
+        </div>
+        <div class="section-pad" style="padding-top: 0;">
+          <div class="overline" style="margin-bottom: 4px;">プリセット</div>
+          <label class="preset rb is-on is-selected"><span class="cb-box"></span><span class="col"><span>ProRes 422 HQ</span><span class="caption">MOV · PCM 24-bit</span></span></label>
+          <label class="preset rb"><span class="cb-box"></span><span class="col"><span>画像連番</span><span class="caption">PNG 16-bit + JSON · 音声なし</span></span></label>
+          <label class="preset rb is-disabled"><span class="cb-box"></span><span class="col"><span class="cb-label">H.264</span><span class="caption">MP4 · VideoToolbox · OS のエンコーダーがあるときだけ選べます</span></span></label>
+          <label class="preset rb is-disabled"><span class="cb-box"></span><span class="col"><span class="cb-label">AV1</span><span class="caption">MP4 · MEDIA-002 で追加</span></span></label>
+        </div>
+        <div class="section-pad" style="padding-top: 0;">
+          <div class="overline" style="margin-bottom: 8px;">詳細</div>
+          <div class="field-grid">
+            <span class="label">解像度</span><span>1920×1080 <span class="caption muted">対象に従う</span></span>
+            <span class="label">フレームレート</span><span>24 fps <span class="caption muted">対象に従う</span></span>
+            <span class="label">色</span><span>SDR · Rec.709</span>
+            <span class="label">背景</span><span class="popup">不透明（黒）<i data-icon="chevrons-up-down"></i></span>
+            <span class="label">音声</span><span>PCM 24-bit · 48 kHz · stereo</span>
+          </div>
+        </div>
+        <div class="section-pad" style="padding-top: 0;">
+          <div class="tf"><span class="label">出力先</span><div class="row"><span class="tf-input grow"><span class="ellipsis">~/Movies/朝の港/書き出し/Teaser_v3.mov</span></span><button class="btn btn-secondary">選択…</button></div></div>
+        </div>
+        <div class="section-pad col gap-3" style="margin-top: auto; border-top: 1px solid var(--line);">
+          <button class="btn btn-primary btn-full is-disabled">書き出す</button>
+          <p class="caption muted" style="line-height: 16px;">rev 131 の内容を固定し、別プロセスで書き出します。アプリを閉じても続きます。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Center: Preview -->
+    <section class="panel" style="grid-area: center;">
+      <div class="panel-header"><span class="heading">本編 横型</span><span class="caption muted">1920×1080 · 24 fps · 00:00:30:00</span></div>
+      <div class="viewer" style="flex: 1 1 auto;">
+        <div class="viewer-main">
+          <div class="viewer-stage">
+            <div class="frame footage-harbor" style="width: 720px; height: 405px;">
+              <div class="footage-bar" style="left: 58px; top: 290px; width: 6px; height: 56px;"></div>
+              <div class="footage-title" style="left: 76px; top: 286px;"><span class="t1" style="font-size: 32px; line-height: 38px;">朝の港</span><span class="t2" style="font-size: 14px;">漁船が戻る午前 5 時</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="range-band">
+          <span class="rail"></span><span class="sel" style="left: 12px; right: 12px;"></span>
+          <span class="end" style="left: 12px;">00:00:00:00</span><span class="end" style="right: 12px;">00:00:30:00</span>
+        </div>
+        <div class="transport">
+          <div class="transport-left"><span class="tc-input time-now">00:00:04:00</span></div>
+          <div class="transport-center">
+            <button class="btn btn-plain btn-icon" aria-label="先頭へ"><i data-icon="skip-back"></i></button><button class="btn btn-plain btn-icon" aria-label="前のフレーム"><i data-icon="step-back"></i></button><button class="btn btn-plain btn-icon" aria-label="再生"><i data-icon="play"></i></button><button class="btn btn-plain btn-icon" aria-label="次のフレーム"><i data-icon="step-forward"></i></button><button class="btn btn-plain btn-icon" aria-label="末尾へ"><i data-icon="skip-forward"></i></button>
+          </div>
+          <div class="transport-right"><span class="popup">Fit<i data-icon="chevrons-up-down"></i></span><span class="popup">Full<i data-icon="chevrons-up-down"></i></span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right: Preflight -->
+    <section class="panel" style="grid-area: right;">
+      <div class="panel-header"><span class="heading">書き出し前の確認</span><div class="panel-actions"><button class="btn btn-plain"><i data-icon="refresh-cw"></i>もう一度確認</button></div></div>
+      <div class="panel-body">
+        <div class="row" style="align-items: flex-start; gap: 8px; margin: 12px; padding: 8px 10px; background: var(--surface-200); border-radius: var(--radius-md);">
+          <i data-icon="triangle-alert" class="danger" style="margin-top: 1px;"></i><span>エラーが 1 件あります。解消するまで書き出せません。</span>
+        </div>
+        <div style="padding: 0 12px;">
+          <div class="check-item is-error"><i data-icon="triangle-alert"></i><div class="col gap-1"><span><span class="code">ASSET_MISSING</span> <span class="caption muted">V1 · 00:00:10:00</span></span><span class="caption muted">drone_02.mov が見つかりません。</span><button class="btn btn-secondary" style="align-self: flex-start; margin-top: 2px;">再リンク…</button></div></div>
+          <div class="check-item"><i data-icon="circle-check"></i><div class="col"><span>未対応機能はありません</span><span class="caption muted"><span class="mono">UNSUPPORTED_FEATURE</span> 0 件</span></div></div>
+          <div class="check-item"><i data-icon="circle-check"></i><div class="col"><span>フォントの版を固定しました</span><span class="caption muted">Noto Sans JP · Noto Sans Mono（同梱した版）</span></div></div>
+          <div class="check-item"><i data-icon="info"></i><div class="col"><span>音声のクリッピングで止めます</span><span class="caption muted">ミックスが 0 dBFS を超えたら書き出しを止めます</span></div></div>
+        </div>
+        <div class="section-pad">
+          <div class="overline" style="margin-bottom: 6px;">見積もり</div>
+          <div class="estimate"><span class="label muted">尺</span><span class="mono">720 フレーム · 00:00:30:00</span><span class="label muted">サイズ</span><span class="mono">約 1.6 GB</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Bottom: Jobs -->
+    <section class="panel" style="grid-area: bottom;">
+      <div class="panel-header">
+        <span class="heading">ジョブ</span>
+        <div class="seg seg-sm" style="margin-left: 8px;"><button class="is-selected">すべて</button><button>実行中</button><button>完了</button><button>失敗</button></div>
+        <div class="panel-actions"><label class="cb" style="margin-right: 8px;"><span class="cb-box"></span><span class="cb-label label">完了した記録を隠す</span></label></div>
+      </div>
+      <div class="panel-body">
+        <div class="jobrow"><i data-icon="loader-circle" class="spin"></i><div class="col"><span class="job-name">書き出し: Teaser_v3.mov</span><span class="job-detail">ProRes 422 HQ · rev 131 を固定</span></div><div class="job-state"><span class="progress"><span style="width: 42%"></span></span><span class="mono">42%</span>残り 3 分</div><div class="job-actions"><button class="btn btn-secondary">中止</button></div></div>
+        <div class="jobrow"><i data-icon="clock"></i><div class="col"><span class="job-name">書き出し: Teaser_v3_portrait.mov</span><span class="job-detail">ProRes 422 HQ · rev 131 を固定</span></div><div class="job-state">待機中</div><div class="job-actions"><button class="btn btn-plain btn-icon" aria-label="取り消す"><i data-icon="x"></i></button></div></div>
+        <div class="jobrow is-failed"><i data-icon="triangle-alert"></i><div class="col"><span class="job-name">書き出し: Teaser_v3_h264.mp4</span><span class="job-detail"><span class="mono">ENCODER_UNAVAILABLE</span> この環境に H.264 のエンコーダーがありません</span></div><div class="job-state">失敗</div><div class="job-actions"><button class="btn btn-secondary">設定…</button></div></div>
+        <div class="jobrow"><i data-icon="circle-check"></i><div class="col"><span class="job-name">書き出し: Teaser_v2.mov</span><span class="job-detail">ProRes 422 HQ · rev 118</span></div><div class="job-state">完了 · 4 分 12 秒</div><div class="job-actions"><button class="btn btn-secondary"><i data-icon="folder-open"></i>フォルダを開く</button></div></div>
+      </div>
+    </section>
+  </div>
+
+  <footer class="statusbar">
+    <span class="sb-item"><i data-icon="history"></i>保存済み · rev 131</span>
+    <span class="sb-item is-error"><i data-icon="triangle-alert"></i><span class="code">ASSET_MISSING</span> 1</span>
+    <span class="sb-item sb-right"><i data-icon="loader-circle" class="spin"></i><span class="ink">書き出し 42%</span><span class="progress"><span style="width: 42%"></span></span>ほか 1 件</span>
+  </footer>
+</div>
+</body>
+</html>

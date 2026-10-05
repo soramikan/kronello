@@ -2,6 +2,10 @@
 
 ウインドウ下端の 1 行で、保存状態と revision、外部（CLI / MCP）からの変更、未解決の型付きエラー、実行中のジョブを常に見えるようにする。
 
+![StatusBar の見本（Dark）](../preview/images/components/StatusBar-dark.png)
+
+見本: [Light の画像](../preview/images/components/StatusBar-light.png) · [HTML](../preview/components.html#StatusBar)
+
 ## 利用側が渡すもの
 
 - 保存状態（保存済み / 未保存の変更あり）と現在の revision。

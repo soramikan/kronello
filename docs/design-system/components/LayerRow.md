@@ -2,6 +2,10 @@
 
 Composition の階層（SceneNode の木）の 1 行で、containment parent による字下げと、別に持つ transform parent を併記する。
 
+![LayerRow の見本（Dark）](../preview/images/components/LayerRow-dark.png)
+
+見本: [Light の画像](../preview/images/components/LayerRow-light.png) · [HTML](../preview/components.html#LayerRow)
+
 ## 利用側が渡すもの
 
 - 種類: `Group` | `Null` | `Shape` | `Text` | `Media` | `CompositionInstance`。

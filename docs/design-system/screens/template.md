@@ -2,6 +2,10 @@
 
 テンプレートの定義・variant・版・尺を扱うページ（TEMPLATE-002、INTEGRATION-002）。用語と規則は [07 テンプレート](../../architecture/07-templates.md) に従う。
 
+![テンプレートページの見本（Dark）](../preview/images/screens/template-dark.png)
+
+見本: [Light の画像](../preview/images/screens/template-light.png) · [HTML](../preview/screens/template.html)
+
 ## 配置
 
 ```text

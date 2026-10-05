@@ -2,6 +2,10 @@
 
 対象（キーフレーム、クリップ、ボタン）に矢印で結び付けて開く小さな編集面で、その場で数項目を調整する。
 
+![Popover の見本（Dark）](../preview/images/components/Popover-dark.png)
+
+見本: [Light の画像](../preview/images/components/Popover-light.png) · [HTML](../preview/components.html#Popover)
+
 ## 利用側が渡すもの
 
 - 見出し（対象の種類）と、行（ラベル + コントロール）の並び。コントロールは NumberField、segmented、PopupButton、Checkbox。

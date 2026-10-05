@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="ja" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kronello コンポーネント</title>
+<link rel="stylesheet" href="assets/tokens.css">
+<link rel="stylesheet" href="assets/kit.css">
+<link rel="stylesheet" href="assets/docs.css">
+<script src="assets/icons.js"></script>
+<script src="assets/preview.js"></script>
+</head>
+<body>
+<div class="doc">
+  <header class="doc-header">
+    <div class="doc-title">Kronello デザインシステム <span class="muted">見本</span></div>
+    <nav class="doc-nav">
+      <a href="index.html" data-keep-theme>基礎</a>
+      <a href="components.html" aria-current="page" data-keep-theme>コンポーネント</a>
+      <a href="index.html#screens" data-keep-theme>画面</a>
+    </nav>
+    <button class="btn btn-secondary" data-theme-toggle>テーマ: <span data-theme-label>Dark</span></button>
+  </header>
+
+  <main class="doc-main">
+    <p class="doc-intro">
+      <a href="../README.md#コンポーネント">コンポーネント</a>の仕様を状態ごとに描いた見本。hover・押下・フォーカスなどの状態はクラスで固定して並べている。仕様は各見出しの右のリンク先が正本。
+    </p>
+    <nav class="doc-toc">
+      <a href="#Button">Button</a><a href="#NumberField">NumberField</a><a href="#Checkbox">Checkbox</a><a href="#TextField">TextField</a><a href="#PopupButton">PopupButton</a><a href="#Slider">Slider</a>
+      <a href="#InspectorRow">InspectorRow</a><a href="#LayerRow">LayerRow</a><a href="#Track">Track</a><a href="#Keyframe">Keyframe</a><a href="#CurveEditor">CurveEditor</a>
+      <a href="#AssetRow">AssetRow</a><a href="#Viewer">Viewer</a><a href="#ToolStrip">ToolStrip</a><a href="#Menu">Menu</a><a href="#Popover">Popover</a><a href="#Dialog">Dialog</a>
+      <a href="#Panel">Panel</a><a href="#StatusBar">StatusBar</a><a href="#JobRow">JobRow</a><a href="#EmptyState">EmptyState</a><a href="#Welcome">Welcome</a>
+    </nav>
+
+    <!-- ================= Controls ================= -->
+
+    <section class="spec" data-section id="Button">
+      <div class="spec-head"><h2 class="doc-h2">Button</h2><span class="group">Controls</span><a href="../components/Button.md">components/Button.md</a></div>
+      <p class="spec-desc">コマンドを 1 回発行する押しボタン。primary は 1 画面に 1 つで最も右に置く。ツールバーは plain の icon 形で組む。</p>
+      <div class="board-grid" style="grid-template-columns: 140px repeat(5, 1fr);">
+        <div class="caption muted"></div>
+        <div class="caption muted">通常</div><div class="caption muted">hover</div><div class="caption muted">押下</div><div class="caption muted">フォーカス</div><div class="caption muted">無効</div>
+        <div class="label">primary</div>
+        <div><button class="btn btn-primary">書き出す</button></div>
+        <div><button class="btn btn-primary">書き出す</button></div>
+        <div><button class="btn btn-primary is-active">書き出す</button></div>
+        <div><button class="btn btn-primary focus-ring">書き出す</button></div>
+        <div><button class="btn btn-primary is-disabled">書き出す</button></div>
+        <div class="label">secondary</div>
+        <div><button class="btn btn-secondary">再リンク…</button></div>
+        <div><button class="btn btn-secondary is-hover">再リンク…</button></div>
+        <div><button class="btn btn-secondary is-hover is-active">再リンク…</button></div>
+        <div><button class="btn btn-secondary focus-ring">再リンク…</button></div>
+        <div><button class="btn btn-secondary is-disabled">再リンク…</button></div>
+        <div class="label">plain</div>
+        <div><button class="btn btn-plain">キャンセル</button></div>
+        <div><button class="btn btn-plain is-hover">キャンセル</button></div>
+        <div><button class="btn btn-plain is-hover is-active">キャンセル</button></div>
+        <div><button class="btn btn-plain focus-ring">キャンセル</button></div>
+        <div><button class="btn btn-plain is-disabled">キャンセル</button></div>
+        <div class="label">destructive</div>
+        <div><button class="btn btn-destructive"><i data-icon="trash-2"></i>削除</button></div>
+        <div><button class="btn btn-destructive is-hover"><i data-icon="trash-2"></i>削除</button></div>
+        <div><button class="btn btn-destructive is-hover is-active"><i data-icon="trash-2"></i>削除</button></div>
+        <div><button class="btn btn-destructive focus-ring"><i data-icon="trash-2"></i>削除</button></div>
+        <div><button class="btn btn-destructive is-disabled"><i data-icon="trash-2"></i>削除</button></div>
+        <div class="label">icon（トグル）</div>
+        <div><button class="btn btn-plain btn-icon" aria-label="ループ"><i data-icon="repeat"></i></button></div>
+        <div><button class="btn btn-plain btn-icon is-hover" aria-label="ループ"><i data-icon="repeat"></i></button></div>
+        <div class="row"><button class="btn btn-plain btn-icon is-pressed" aria-label="ループ"><i data-icon="repeat"></i></button><span class="caption muted">pressed</span></div>
+        <div><button class="btn btn-plain btn-icon focus-ring" aria-label="ループ"><i data-icon="repeat"></i></button></div>
+        <div><button class="btn btn-plain btn-icon is-disabled" aria-label="ループ"><i data-icon="repeat"></i></button></div>
+      </div>
+      <div class="board board-pad">
+        <div class="row" style="justify-content: space-between;">
+          <span class="caption muted">ダイアログ下端の並び（全 OS 共通）: 右から primary → secondary → plain</span>
+          <div class="row"><button class="btn btn-plain">キャンセル</button><button class="btn btn-secondary">ファイルを選択…</button><button class="btn btn-primary">フォルダを検索…</button></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="spec" data-section id="NumberField">
+      <div class="spec-head"><h2 class="doc-h2">NumberField</h2><span class="group">Controls</span><a href="../components/NumberField.md">components/NumberField.md</a></div>
+      <p class="spec-desc">横ドラッグでスクラブ、クリックで直接入力。値は mono で右寄せ、単位は caption。ドラッグ中は候補表示で、離した時点で Command を 1 回発行する。</p>
+      <div class="board-grid" style="grid-template-columns: repeat(5, 1fr);">
+        <div class="demo-cell"><span class="nf"><span class="nf-value">960.0</span><span class="nf-unit">px</span></span><span class="demo-label">通常</span></div>
+        <div class="demo-cell"><span class="nf is-scrubbing"><span class="nf-value">1042.5</span><span class="nf-unit">px</span></span><span class="demo-label">scrubbing（枠が selection）</span></div>
+        <div class="demo-cell"><span class="nf is-editing"><span class="nf-value">24<span class="caret"></span></span><span class="nf-unit">fps</span></span><span class="demo-label">editing（2px リング）</span></div>
+        <div class="demo-cell"><span class="nf is-error"><span class="nf-value">—</span><span class="nf-unit">%</span></span><span class="demo-label">error（値は「—」）</span></div>
+        <div class="demo-cell"><span class="nf is-disabled"><span class="nf-value">100</span><span class="nf-unit">%</span></span><span class="demo-label">無効</span></div>
+      </div>
+      <div class="board board-pad row gap-4">
+        <span class="nf"><span class="nf-prefix">X</span><span class="nf-value">960.0</span><span class="nf-unit">px</span></span>
+        <span class="nf"><span class="nf-prefix">Y</span><span class="nf-value">540.0</span><span class="nf-unit">px</span></span>
+        <span class="nf"><span class="nf-value">12.5</span><span class="nf-unit">°</span></span>
+        <span class="nf"><span class="nf-value">24.0</span><span class="nf-unit">fps</span></span>
+        <span class="caption muted">入力「24」→ 表示「24.0 fps」。⇧ で ×10、Option（Windows / Linux は Alt）で ×0.1。</span>
+      </div>
+    </section>
+
+    <section class="spec" data-section id="Checkbox">
+      <div class="spec-head"><h2 class="doc-h2">Checkbox</h2><span class="group">Controls</span><a href="../components/Checkbox.md">components/Checkbox.md</a></div>
+      <p class="spec-desc">オン / オフ / 混在のチェックボックスと、排他のラジオ。オンは「選ばれている」ものとして青。</p>
+      <div class="board-grid" style="grid-template-columns: repeat(2, 1fr);">
+        <div class="demo-stack">
+          <label class="cb"><span class="cb-box"></span><span class="cb-label">起動時に表示</span></label>
+          <label class="cb is-hover"><span class="cb-box"></span><span class="cb-label">hover</span></label>
+          <label class="cb is-on"><span class="cb-box"><i data-icon="check"></i></span><span class="cb-label">オン</span></label>
+          <label class="cb is-mixed"><span class="cb-box"></span><span class="cb-label">混在（複数選択の値が揃わない）</span></label>
+          <label class="cb is-on"><span class="cb-box focus-ring"><i data-icon="check"></i></span><span class="cb-label">フォーカス</span></label>
+          <label class="cb is-on is-disabled"><span class="cb-box"><i data-icon="check"></i></span><span class="cb-label">無効</span></label>
+        </div>
+        <div class="demo-stack">
+          <span class="label muted">中間区間の扱い</span>
+          <label class="cb rb is-on"><span class="cb-box"></span><span class="cb-label">hold</span></label>
+          <label class="cb rb"><span class="cb-box"></span><span class="cb-label">loop</span></label>
+          <label class="cb rb"><span class="cb-box"></span><span class="cb-label">stretch</span></label>
+          <label class="cb rb is-disabled"><span class="cb-box"></span><span class="cb-label">無効</span></label>
+        </div>
+      </div>
+    </section>
+
+    <section class="spec" data-section id="TextField">
+      <div class="spec-head"><h2 class="doc-h2">TextField</h2><span class="group">Controls</span><a href="../components/TextField.md">components/TextField.md</a></div>
+      <p class="spec-desc">文字列の 1 行入力。IME の変換中は検証しない。確定（Enter・フォーカス移動）で Command を 1 回。</p>
+      <div class="board-grid" style="grid-template-columns: repeat(3, 1fr);">
+        <div class="tf"><span class="label">名前</span><span class="tf-input">Title group</span><span class="caption muted">レイヤー一覧に表示する名前</span></div>
+        <div class="tf"><span class="label">検索</span><span class="tf-input"><i data-icon="search"></i><span class="tf-placeholder">素材を検索</span></span></div>
+        <div class="tf is-focus"><span class="label">見出し（IME 変換中）</span><span class="tf-input">朝の<span class="ime">みなと</span><span class="caret"></span></span><span class="caption muted">変換中は検証もエラー表示もしない</span></div>
+        <div class="tf is-error"><span class="label">出力先</span><span class="tf-input">/Volumes/Archive/out.mov</span><span class="tf-error"><i data-icon="triangle-alert"></i><span class="code">OUTPUT_NOT_WRITABLE</span> 書き込めない場所です。</span></div>
+        <div class="tf is-disabled"><span class="label">テンプレート ID</span><span class="tf-input">lower_third_ja</span></div>
+      </div>
+    </section>
+
+    <section class="spec" data-section id="PopupButton">
+      <div class="spec-head"><h2 class="doc-h2">PopupButton</h2><span class="group">Controls</span><a href="../components/PopupButton.md">components/PopupButton.md</a></div>
+      <p class="spec-desc">決まった選択肢から 1 つを選ぶ。押すと直下に Menu が開き、現在の値に check を付ける。</p>
+      <div class="board board-pad" style="height: 220px;">
+        <div class="row gap-4" style="align-items: flex-start;">
+          <div class="demo-cell"><span class="popup">Fit<i data-icon="chevrons-up-down"></i></span><span class="demo-label">通常</span></div>
+          <div class="demo-cell"><span class="popup is-disabled">Full<i data-icon="chevrons-up-down"></i></span><span class="demo-label">無効</span></div>
+          <div class="demo-cell" style="position: relative;">
+            <span class="popup is-open">Half<i data-icon="chevrons-up-down"></i></span>
+            <div class="menu" style="position: absolute; top: 26px; left: 0; min-width: 160px; z-index: 2;">
+              <div class="menu-item"><span></span><span>Full</span><span></span><span></span></div>
+              <div class="menu-item is-current"><i data-icon="check"></i><span>Half</span><span></span><span></span></div>
+              <div class="menu-item"><span></span><span>Quarter</span><span></span><span></span></div>
+              <div class="menu-sep"></div>
+              <div class="menu-item"><span></span><span>カスタム…</span><span></span><span></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="spec" data-section id="Slider">
+      <div class="spec-head"><h2 class="doc-h2">Slider</h2><span class="group">Controls</span><a href="../components/Slider.md">components/Slider.md</a></div>
+      <p class="spec-desc">範囲のある値を大まかに合わせる。必ず右に NumberField を添える。溝とつまみは中立色。</p>
+      <div class="board board-pad demo-stack" style="gap: 12px;">
+        <div class="row" style="gap: 12px;"><span class="label" style="width: 72px;">音量</span><span class="slider" style="width: 200px;"><span class="slider-track"><span class="slider-fill" style="width: 62%"></span></span><span class="slider-thumb" style="left: 62%"></span></span><span class="nf"><span class="nf-value">-6.0</span><span class="nf-unit">dB</span></span></div>
+        <div class="row" style="gap: 12px;"><span class="label" style="width: 72px;">不透明度</span><span class="slider is-focus" style="width: 200px;"><span class="slider-track"><span class="slider-fill" style="width: 85%"></span></span><span class="slider-thumb" style="left: 85%"></span></span><span class="nf"><span class="nf-value">85</span><span class="nf-unit">%</span></span><span class="caption muted">フォーカス</span></div>
+      </div>
+    </section>
+
+    <!-- ================= Inspector and hierarchy ================= -->
+
+    <section class="spec" data-section id="InspectorRow">
+      <div class="spec-head"><h2 class="doc-h2">InspectorRow</h2><span class="group">Inspector と階層</span><a href="../components/InspectorRow.md">components/InspectorRow.md</a></div>
+      <p class="spec-desc">1 Property = 1 行。左のナビゲータで主値源を示す: 中空のひし形のみ = Constant、◀ ◆ ▶ = Curve（塗り = 現在時刻にキー）、fx = Expression。</p>
+      <div class="row gap-4" style="align-items: flex-start;">
+        <div class="panel" style="width: 340px; border: 1px solid var(--line);">
+          <div class="panel-header"><span class="heading">Inspector</span></div>
+          <div class="isection"><i data-icon="chevron-down"></i><span class="heading">Transform</span></div>
+          <div class="isection-body">
+            <div class="irow"><div class="kfnav"><span class="kfnav-arrow prev"></span><span class="kfnav-key is-on"></span><span class="kfnav-arrow next"></span></div><span class="irow-label">Position</span><div class="irow-values"><span class="nf"><span class="nf-prefix">X</span><span class="nf-value">960.0</span></span><span class="nf"><span class="nf-prefix">Y</span><span class="nf-value">812.0</span></span></div></div>
+            <div class="irow is-selected"><div class="kfnav"><span class="kfnav-arrow prev"></span><span class="kfnav-key"></span><span class="kfnav-arrow next"></span></div><span class="irow-label">Scale</span><div class="irow-values"><span class="nf"><span class="nf-value">104.2</span><span class="nf-unit">%</span></span></div></div>
+            <div class="irow is-hover"><div class="kfnav"><span class="kfnav-arrow prev is-off"></span><span class="kfnav-key"></span><span class="kfnav-arrow next is-off"></span></div><span class="irow-label">Rotation</span><div class="irow-values"><span class="nf"><span class="nf-value">0.0</span><span class="nf-unit">°</span></span></div></div>
+            <div class="irow"><div class="kfnav"><span class="fx-badge">fx</span></div><span class="irow-label">Opacity</span><div class="irow-values"><span class="nf is-readonly"><span class="nf-value">72.0</span><span class="nf-unit">%</span></span></div></div>
+            <div class="irow"><div class="kfnav"><span class="fx-badge">fx</span></div><span class="irow-label">Anchor</span><div class="irow-values"><span class="nf is-error"><span class="nf-prefix">X</span><span class="nf-value">—</span></span><span class="nf is-error"><span class="nf-prefix">Y</span><span class="nf-value">—</span></span></div>
+              <div class="irow-error"><i data-icon="triangle-alert"></i><span><span class="code">EVALUATION_ERROR</span> 式を評価できませんでした。最終レンダーはこの状態では止まります。</span></div>
+            </div>
+          </div>
+        </div>
+        <table class="tok-table" style="width: auto; flex: 1;">
+          <thead><tr><th>行</th><th>source</th><th>意味</th></tr></thead>
+          <tbody>
+            <tr><td>Position</td><td class="tok-name">curve・キー上</td><td class="usage">現在時刻にキーフレームがある。押すと削除</td></tr>
+            <tr><td>Scale</td><td class="tok-name">curve・キー間</td><td class="usage">前後の矢印がアニメーション中の印。押すと追加（行は選択中）</td></tr>
+            <tr><td>Rotation</td><td class="tok-name">constant</td><td class="usage">押すと最初のキーを打ち curve になる（行は hover）</td></tr>
+            <tr><td>Opacity</td><td class="tok-name">expression</td><td class="usage">評価結果の表示のみでスクラブできない</td></tr>
+            <tr><td>Anchor</td><td class="tok-name">error</td><td class="usage">値を「—」と danger の枠にし、行の下にコードと説明</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="spec" data-section id="LayerRow">
+      <div class="spec-head"><h2 class="doc-h2">LayerRow</h2><span class="group">Inspector と階層</span><a href="../components/LayerRow.md">components/LayerRow.md</a></div>
+      <p class="spec-desc">字下げは containment parent だけで決め、transform parent は名前の後ろに link + 親の名前で併記する。トグルは既定の状態なら hover 時だけ出す。</p>
+      <div class="row gap-4" style="align-items: flex-start;">
+        <div class="panel" style="width: 320px; border: 1px solid var(--line);">
+          <div class="panel-header"><span class="heading">Layers</span><div class="panel-actions"><button class="btn btn-plain btn-icon"><i data-icon="plus"></i></button></div></div>
+          <div class="list-row lrow" style="--depth:0"><i data-icon="chevron-down" class="lrow-disc"></i><i data-icon="folder"></i><span class="lrow-name">Title group</span><span class="lrow-toggles"><button class="btn btn-plain btn-icon is-default"><i data-icon="eye"></i></button><button class="btn btn-plain btn-icon is-default"><i data-icon="lock-open"></i></button></span></div>
+          <div class="list-row lrow is-selected" style="--depth:1"><i data-icon="chevron-right" class="lrow-disc is-empty"></i><i data-icon="type"></i><span class="lrow-name">見出し</span><span class="lrow-toggles"><button class="btn btn-plain btn-icon is-default"><i data-icon="eye"></i></button><button class="btn btn-plain btn-icon is-default"><i data-icon="lock-open"></i></button></span></div>
+          <div class="list-row lrow is-hover" style="--depth:1"><i data-icon="chevron-right" class="lrow-disc is-empty"></i><i data-icon="shapes"></i><span class="lrow-name">帯</span><span class="lrow-parent"><i data-icon="link"></i>Anchor</span><span class="lrow-toggles"><button class="btn btn-plain btn-icon is-default"><i data-icon="eye"></i></button><button class="btn btn-plain btn-icon is-default"><i data-icon="lock-open"></i></button></span></div>
+          <div class="list-row lrow is-hidden" style="--depth:1"><i data-icon="chevron-right" class="lrow-disc is-empty"></i><i data-icon="type"></i><span class="lrow-name">サブタイトル</span><span class="lrow-toggles"><button class="btn btn-plain btn-icon"><i data-icon="eye-off"></i></button><button class="btn btn-plain btn-icon is-default"><i data-icon="lock-open"></i></button></span></div>
+          <div class="list-row lrow" style="--depth:0"><i data-icon="chevron-right" class="lrow-disc is-empty"></i><i data-icon="crosshair"></i><span class="lrow-name">Anchor</span><span class="lrow-toggles"><button class="btn btn-plain btn-icon is-default"><i data-icon="eye"></i></button><button class="btn btn-plain btn-icon is-default"><i data-icon="lock-open"></i></button></span></div>
+          <div class="list-row lrow is-locked" style="--depth:0"><i data-icon="chevron-right" class="lrow-disc"></i><i data-icon="layers" class="kind-composition"></i><span class="lrow-name">Logo loop</span><span class="lrow-toggles"><button class="btn btn-plain btn-icon is-default"><i data-icon="eye"></i></button><button class="btn btn-plain btn-icon"><i data-icon="lock"></i></button></span></div>
+          <div class="list-row lrow" style="--depth:0"><i data-icon="chevron-right" class="lrow-disc is-empty"></i><i data-icon="film" class="kind-video"></i><span class="lrow-name">harbor_dawn.mov</span><span class="lrow-toggles"><button class="btn btn-plain btn-icon is-default"><i data-icon="eye"></i></button><button class="btn btn-plain btn-icon is-default"><i data-icon="lock-open"></i></button></span></div>
+        </div>
+        <div class="demo-stack caption muted" style="max-width: 420px; line-height: 16px;">
+          <span>見出し: 選択（selection-bg）</span>
+          <span>帯: hover（トグルが出る）。transform parent は Anchor</span>
+          <span>サブタイトル: 非表示（名前とアイコンを ink-muted、eye-off は常に出す）</span>
+          <span>Logo loop: CompositionInstance（kind-composition）、ロック中（斜体、lock は常に出す）</span>
+          <span>harbor_dawn.mov: Media（素材の kind-video）</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= Timeline ================= -->
+
+    <section class="spec" data-section id="Track">
+      <div class="spec-head"><h2 class="doc-h2">Track</h2><span class="group">Timeline</span><a href="../components/Track.md">components/Track.md</a></div>
+      <p class="spec-desc">トラック（ヘッダ + レーン）とクリップ・ルーラー・再生ヘッド。種類の色はアイコンと下端 2px の下線だけ（調整は破線）。選択は selection、欠落は danger の破線 + アイコン + コード。琥珀は再生ヘッドと現在時刻だけ。</p>
+      <div class="board" style="overflow: hidden;">
+        <div class="timeline" style="--head-w: 168px;">
+          <div class="tl-corner"><span class="time-now">00:00:02:06</span></div>
+          <div class="ruler" data-frames="168" data-rate="24" data-minor="6" data-major="24"></div>
+          <div class="track-head"><span class="track-num">S1</span><span class="track-name">字幕</span><button class="btn btn-plain btn-icon"><i data-icon="eye"></i></button><button class="btn btn-plain btn-icon"><i data-icon="lock-open"></i></button></div>
+          <div class="lane"><div class="clip" data-kind="subtitle" style="left: 14%; width: 30%;"><i data-icon="captions" class="kind-subtitle"></i><span class="clip-name">字幕_ja.srt</span></div><div class="clip is-hover" data-kind="subtitle" style="left: 48%; width: 22%;"><i data-icon="captions" class="kind-subtitle"></i><span class="clip-name">hover</span></div></div>
+          <div class="track-head"><span class="track-num">V3</span><span class="track-name">調整・Generator</span><button class="btn btn-plain btn-icon"><i data-icon="eye"></i></button><button class="btn btn-plain btn-icon"><i data-icon="lock-open"></i></button></div>
+          <div class="lane"><div class="clip" data-kind="adjustment" style="left: 0%; width: 40%;"><i data-icon="sliders-horizontal" class="kind-adjustment"></i><span class="clip-name">色調整</span></div><div class="clip" data-kind="generator" style="left: 42%; width: 26%;"><i data-icon="sparkles" class="kind-generator"></i><span class="clip-name">グラデーション</span></div></div>
+          <div class="track-head is-selected"><span class="track-num">V2</span><span class="track-name">タイトル</span><button class="btn btn-plain btn-icon"><i data-icon="eye"></i></button><button class="btn btn-plain btn-icon"><i data-icon="lock-open"></i></button></div>
+          <div class="lane"><div class="clip is-selected" data-kind="composition" style="left: 8%; width: 36%;"><i data-icon="layers" class="kind-composition"></i><span class="clip-name">Lower third · 選択</span></div><div class="clip is-missing" style="left: 48%; width: 38%;"><i data-icon="triangle-alert"></i><span class="clip-name">drone_02.mov</span><span class="code">ASSET_MISSING</span></div></div>
+          <div class="track-head"><span class="track-num">V1</span><span class="track-name">映像</span><button class="btn btn-plain btn-icon"><i data-icon="eye"></i></button><button class="btn btn-plain btn-icon"><i data-icon="lock"></i></button></div>
+          <div class="lane is-locked"><div class="clip" data-kind="video" style="left: 0%; width: 55%;"><i data-icon="film" class="kind-video"></i><span class="clip-name">harbor_dawn.mov · ロック中</span></div><div class="clip" data-kind="image" style="left: 55.5%; width: 30%;"><i data-icon="image" class="kind-video"></i><span class="clip-name">logo.png</span></div></div>
+          <div class="track-head"><span class="track-num">A1</span><span class="track-name">音声</span><button class="btn btn-plain btn-icon"><i data-icon="volume-2"></i></button><button class="btn btn-plain btn-icon"><i data-icon="lock-open"></i></button></div>
+          <div class="lane"><div class="clip" data-kind="audio" style="left: 0%; width: 86%;"><i data-icon="audio-lines" class="kind-audio"></i><span class="clip-name">harbor_ambience.wav</span><span class="clip-wave"></span></div></div>
+          <div style="position: absolute; left: 168px; right: 0; top: 0; bottom: 0; pointer-events: none;"><div class="playhead" style="left: 31.5%;"><span class="playhead-knob"></span></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="spec" data-section id="Keyframe">
+      <div class="spec-head"><h2 class="doc-h2">Keyframe</h2><span class="group">Timeline</span><a href="../components/Keyframe.md">components/Keyframe.md</a></div>
+      <p class="spec-desc">形が補間、色が選択を表す。琥珀で塗らない。外接 9px、当たり判定は四方に 4px を足す。</p>
+      <div class="board-grid" style="grid-template-columns: 120px repeat(4, 1fr);">
+        <div></div><div class="caption muted">未選択</div><div class="caption muted">hover</div><div class="caption muted">選択</div><div class="caption muted">フォーカス</div>
+        <div class="label">Linear ◆</div><div><span class="kf kf-linear"></span></div><div><span class="kf kf-linear is-hover"></span></div><div><span class="kf kf-linear is-selected"></span></div><div><span class="kf kf-linear is-selected kf-focus"></span></div>
+        <div class="label">Cubic ●</div><div><span class="kf kf-cubic"></span></div><div><span class="kf kf-cubic is-hover"></span></div><div><span class="kf kf-cubic is-selected"></span></div><div><span class="kf kf-cubic is-selected kf-focus"></span></div>
+        <div class="label">Hold ■</div><div><span class="kf kf-hold"></span></div><div><span class="kf kf-hold is-hover"></span></div><div><span class="kf kf-hold is-selected"></span></div><div><span class="kf kf-hold is-selected kf-focus"></span></div>
+      </div>
+      <div class="board">
+        <div class="dope-row" style="height: 32px;">
+          <span class="dope-span" style="left: 10%; width: 50%;"></span>
+          <span class="kf kf-linear" style="left: 10%;"></span><span class="kf kf-cubic is-selected" style="left: 30%;"></span><span class="kf kf-cubic is-selected" style="left: 45%;"></span><span class="kf kf-hold" style="left: 60%;"></span>
+          <span class="caption muted" style="position: absolute; right: 12px; top: 9px;">Dope sheet の 1 行（2 つを選択）</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="spec" data-section id="CurveEditor">
+      <div class="spec-head"><h2 class="doc-h2">CurveEditor</h2><span class="group">Timeline</span><a href="../components/CurveEditor.md">components/CurveEditor.md</a></div>
+      <p class="spec-desc">値グラフ。アクティブなチャンネルは ink の実線、それ以外は ink-muted の破線で、色ではなく線種と名前で区別する。ハンドルは選択中のキーにだけ出す。</p>
+      <div class="panel" style="width: 1008px; height: 300px; border: 1px solid var(--line);">
+        <div class="panel-header">
+          <div class="seg seg-sm"><button class="is-selected">値</button><button>速度</button></div>
+          <span class="label">Position</span>
+          <span class="time-now">00:00:01:12</span>
+        </div>
+        <div class="panel-body">
+          <svg class="curve-svg" width="1006" height="270" viewBox="0 0 1006 270" aria-label="Curve editor">
+            <line class="cv-grid" x1="48" y1="30" x2="1006" y2="30"/><line class="cv-grid" x1="48" y1="90" x2="1006" y2="90"/><line class="cv-grid" x1="48" y1="150" x2="1006" y2="150"/><line class="cv-zero" x1="48" y1="210" x2="1006" y2="210"/>
+            <line class="cv-grid" x1="48" y1="0" x2="48" y2="246"/><line class="cv-grid" x1="276" y1="0" x2="276" y2="246"/><line class="cv-grid" x1="504" y1="0" x2="504" y2="246"/><line class="cv-grid" x1="732" y1="0" x2="732" y2="246"/><line class="cv-grid" x1="960" y1="0" x2="960" y2="246"/>
+            <text class="cv-axis" x="8" y="34">1800</text><text class="cv-axis" x="8" y="94">1200</text><text class="cv-axis" x="14" y="154">600</text><text class="cv-axis" x="32" y="214">0</text>
+            <text class="cv-axis" x="52" y="262">0f</text><text class="cv-axis" x="280" y="262">1s</text><text class="cv-axis" x="508" y="262">2s</text><text class="cv-axis" x="736" y="262">3s</text><text class="cv-axis" x="964" y="262">4s</text>
+            <path class="cv-inactive" d="M48 130 C 200 130, 300 120, 504 118 S 860 112, 960 112"/>
+            <text class="cv-name muted" x="970" y="116">Y</text>
+            <path class="cv-active" d="M48 200 C 160 200, 220 60, 390 48 S 730 40, 960 40"/>
+            <text class="cv-name" x="970" y="44">X</text>
+            <line class="cv-handle" x1="310" y1="54" x2="470" y2="42"/>
+            <circle class="cv-handle-end" cx="310" cy="54" r="3"/><circle class="cv-handle-end" cx="470" cy="42" r="3"/>
+            <circle class="cv-key" cx="48" cy="200" r="4.5"/><circle class="cv-key is-selected" cx="390" cy="48" r="4.5"/><rect class="cv-key" x="955.5" y="35.5" width="9" height="9" transform="rotate(45 960 40)"/>
+            <circle class="cv-key" cx="48" cy="130" r="4.5"/><circle class="cv-key" cx="504" cy="118" r="4.5"/><rect class="cv-key" x="955.5" y="107.5" width="9" height="9" transform="rotate(45 960 112)"/>
+            <text class="cv-sel" x="398" y="72">1s12f · 1720 px</text>
+            <line class="cv-playhead" x1="390" y1="0" x2="390" y2="246"/>
+            <text class="cv-now" x="396" y="100">X 1720</text><text class="cv-now" x="396" y="138">Y 470</text>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= Project and Viewer ================= -->
+
+    <section class="spec" data-section id="AssetRow">
+      <div class="spec-head"><h2 class="doc-h2">AssetRow</h2><span class="group">Project と Viewer</span><a href="../components/AssetRow.md">components/AssetRow.md</a></div>
+      <p class="spec-desc">種類はアイコンの形と色の両方で示す。種類の色で文字や行を塗らない。欠落は名前とアイコンを danger にしてエラーコードを出す。</p>
+      <div class="panel" style="width: 560px; border: 1px solid var(--line);">
+        <div class="panel-header"><span class="heading">Project</span><div class="panel-actions"><button class="btn btn-plain btn-icon"><i data-icon="search"></i></button><button class="btn btn-plain btn-icon"><i data-icon="plus"></i></button></div></div>
+        <div class="list-row arow"><i data-icon="film" class="kind-video"></i><span class="arow-name">harbor_dawn.mov</span><span class="arow-spec">3840×2160 · 23.976 fps</span><span class="arow-dur">00:00:42:10</span></div>
+        <div class="list-row arow is-selected"><i data-icon="audio-lines" class="kind-audio"></i><span class="arow-name">harbor_ambience.wav</span><span class="arow-spec">48 kHz · stereo</span><span class="arow-dur">00:01:30:00</span></div>
+        <div class="list-row arow is-hover"><i data-icon="image" class="kind-video"></i><span class="arow-name">logo.png</span><span class="arow-spec">2000×800</span><span class="arow-dur">—</span></div>
+        <div class="list-row arow"><i data-icon="layers" class="kind-composition"></i><span class="arow-name">Lower third</span><span class="arow-spec">1920×1080 · 24 fps</span><span class="arow-dur">00:00:06:00</span></div>
+        <div class="list-row arow"><i data-icon="captions" class="kind-subtitle"></i><span class="arow-name">字幕_ja.srt</span><span class="arow-spec">42 件</span><span class="arow-dur">00:01:28:12</span></div>
+        <div class="list-row arow is-missing"><i data-icon="triangle-alert"></i><span class="arow-name">drone_02.mov</span><span class="arow-spec">ASSET_MISSING</span><span class="arow-dur">00:00:18:04</span></div>
+      </div>
+    </section>
+
+    <section class="spec" data-section id="Viewer">
+      <div class="spec-head"><h2 class="doc-h2">Viewer</h2><span class="group">Project と Viewer</span><a href="../components/Viewer.md">components/Viewer.md</a></div>
+      <p class="spec-desc">地は surface-0。素材は UI より鮮やかでよい。選択中レイヤーの bounds は 1px selection と 7px のハンドル。再生ボタンは琥珀にせず、琥珀は現在時刻の文字だけ。</p>
+      <div class="viewer" style="height: 420px; border: 1px solid var(--line);">
+        <div class="viewer-main">
+          <div class="viewer-stage">
+            <div class="frame footage-harbor" style="width: 576px; height: 324px;">
+              <div class="footage-bar" style="left: 48px; top: 238px; width: 6px; height: 46px;"></div>
+              <div class="footage-title" style="left: 64px; top: 236px;"><span class="t1" style="font-size: 26px;">朝の港</span><span class="t2" style="font-size: 12px;">漁船が戻る午前 5 時</span></div>
+              <div class="bounds" style="left: 62px; top: 234px; width: 132px; height: 36px;">
+                <span class="bounds-handle" style="left: 0; top: 0;"></span><span class="bounds-handle" style="left: 50%; top: 0;"></span><span class="bounds-handle" style="left: 100%; top: 0;"></span>
+                <span class="bounds-handle" style="left: 0; top: 50%;"></span><span class="bounds-handle" style="left: 100%; top: 50%;"></span>
+                <span class="bounds-handle" style="left: 0; top: 100%;"></span><span class="bounds-handle" style="left: 50%; top: 100%;"></span><span class="bounds-handle" style="left: 100%; top: 100%;"></span>
+                <span class="bounds-label">layout 440 × 120</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="transport">
+          <div class="transport-left"><span class="tc-input time-now">00:00:01:12</span></div>
+          <div class="transport-center">
+            <button class="btn btn-plain btn-icon"><i data-icon="skip-back"></i></button><button class="btn btn-plain btn-icon"><i data-icon="step-back"></i></button><button class="btn btn-plain btn-icon"><i data-icon="play"></i></button><button class="btn btn-plain btn-icon"><i data-icon="step-forward"></i></button><button class="btn btn-plain btn-icon"><i data-icon="skip-forward"></i></button><button class="btn btn-plain btn-icon is-pressed"><i data-icon="repeat"></i></button>
+          </div>
+          <div class="transport-right"><span class="popup">Fit<i data-icon="chevrons-up-down"></i></span><span class="popup">Full<i data-icon="chevrons-up-down"></i></span><span class="timecode muted">00:00:06:00</span></div>
+        </div>
+      </div>
+      <div class="board board-pad row gap-4">
+        <div class="frame checker" style="width: 160px; height: 90px;"></div>
+        <span class="caption muted">透明部分は surface-200 / control-hover の 16px 市松</span>
+        <span class="tc-input is-invalid timecode" style="margin-left: auto;">00:00:99:99</span><span class="caption muted">不正なタイムコードは枠を danger にして移動しない</span>
+      </div>
+    </section>
+
+    <section class="spec" data-section id="ToolStrip">
+      <div class="spec-head"><h2 class="doc-h2">ToolStrip</h2><span class="group">Project と Viewer</span><a href="../components/ToolStrip.md">components/ToolStrip.md</a></div>
+      <p class="spec-desc">Viewer の左端に付く 40px の道具の列。現在の道具は selection-bg + selection のアイコン。取っ手で浮かせ、chevrons で 14px に畳む。</p>
+      <div class="board-grid" style="grid-template-columns: repeat(4, 1fr);">
+        <div class="demo-cell">
+          <div class="row" style="align-items: stretch; height: 330px; background: var(--surface-0); border: 1px solid var(--line);">
+            <div class="toolstrip">
+              <span class="tool-grip"><i data-icon="grip-horizontal"></i></span><span class="tool-fold"><i data-icon="chevrons-left"></i></span>
+              <span class="tool is-current"><i data-icon="mouse-pointer-2"></i></span><span class="tool is-hover"><i data-icon="hand"></i></span><span class="tool"><i data-icon="zoom-in"></i></span>
+              <span class="tool-sep"></span>
+              <span class="tool"><i data-icon="square"></i></span><span class="tool"><i data-icon="circle"></i></span><span class="tool"><i data-icon="pen-tool"></i></span><span class="tool"><i data-icon="type"></i></span>
+            </div>
+            <div style="width: 80px;"></div>
+          </div>
+          <span class="demo-label">モーション（付いた状態、選択中・手のひらを hover）</span>
+        </div>
+        <div class="demo-cell">
+          <div class="row" style="align-items: stretch; height: 330px; background: var(--surface-0); border: 1px solid var(--line);">
+            <div class="toolstrip">
+              <span class="tool-grip"><i data-icon="grip-horizontal"></i></span><span class="tool-fold"><i data-icon="chevrons-left"></i></span>
+              <span class="tool"><i data-icon="mouse-pointer-2"></i></span><span class="tool is-current"><i data-icon="scissors"></i></span><span class="tool"><i data-icon="hand"></i></span><span class="tool"><i data-icon="zoom-in"></i></span>
+            </div>
+            <div style="width: 80px;"></div>
+          </div>
+          <span class="demo-label">編集（ブレードを選択中）</span>
+        </div>
+        <div class="demo-cell">
+          <div class="row" style="align-items: stretch; height: 330px; background: var(--surface-0); border: 1px solid var(--line);">
+            <div class="toolstrip is-collapsed"><span class="tool-fold"><i data-icon="chevrons-right"></i></span></div>
+            <div style="width: 80px;"></div>
+          </div>
+          <span class="demo-label">畳んだ状態（14px）</span>
+        </div>
+        <div class="demo-cell">
+          <div style="position: relative; width: 100%; height: 330px; background: var(--surface-0); border: 1px solid var(--line);">
+            <div class="toolstrip is-floating" style="position: absolute; left: 40px; top: 40px;">
+              <span class="tool-grip"><i data-icon="grip-horizontal"></i></span><span class="tool-fold"><i data-icon="chevrons-left"></i></span>
+              <span class="tool is-current"><i data-icon="mouse-pointer-2"></i></span><span class="tool"><i data-icon="hand"></i></span><span class="tool"><i data-icon="zoom-in"></i></span>
+              <span class="tool-sep"></span>
+              <span class="tool"><i data-icon="square"></i></span><span class="tool"><i data-icon="circle"></i></span><span class="tool"><i data-icon="pen-tool"></i></span><span class="tool"><i data-icon="type"></i></span>
+            </div>
+          </div>
+          <span class="demo-label">浮いた状態</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= Overlays ================= -->
+
+    <section class="spec" data-section id="Menu">
+      <div class="spec-head"><h2 class="doc-h2">Menu</h2><span class="group">オーバーレイ</span><a href="../components/Menu.md">components/Menu.md</a></div>
+      <p class="spec-desc">コマンドの一覧。現在項目は selection の塗り + on-selection。破壊的操作は danger で最下段に区切る。続けてダイアログが開く項目は「…」で終える。</p>
+      <div class="board board-pad row gap-4" style="align-items: flex-start;">
+        <div class="menu" style="width: 260px;">
+          <div class="menu-heading">クリップ</div>
+          <div class="menu-item"><i data-icon="scissors"></i><span>カット</span><span class="menu-key">⌘X</span><span></span></div>
+          <div class="menu-item is-current"><i data-icon="copy"></i><span>コピー</span><span class="menu-key">⌘C</span><span></span></div>
+          <div class="menu-item is-disabled"><i data-icon="clipboard-paste"></i><span>ペースト</span><span class="menu-key">⌘V</span><span></span></div>
+          <div class="menu-sep"></div>
+          <div class="menu-item"><i data-icon="check"></i><span>スナップ</span><span class="menu-key">N</span><span></span></div>
+          <div class="menu-item"><span></span><span>補間</span><span></span><i data-icon="chevron-right"></i></div>
+          <div class="menu-item"><i data-icon="refresh-cw"></i><span>再リンク…</span><span></span><span></span></div>
+          <div class="menu-sep"></div>
+          <div class="menu-item is-destructive"><i data-icon="trash-2"></i><span>削除</span><span class="menu-key">Delete</span><span></span></div>
+        </div>
+        <div class="menu" style="width: 260px;">
+          <div class="menu-heading">Windows / Linux の表記</div>
+          <div class="menu-item"><i data-icon="scissors"></i><span>カット</span><span class="menu-key">Ctrl+X</span><span></span></div>
+          <div class="menu-item"><i data-icon="copy"></i><span>コピー</span><span class="menu-key">Ctrl+C</span><span></span></div>
+          <div class="menu-item"><i data-icon="undo-2"></i><span>取り消す</span><span class="menu-key">Ctrl+Z</span><span></span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="spec" data-section id="Popover">
+      <div class="spec-head"><h2 class="doc-h2">Popover</h2><span class="group">オーバーレイ</span><a href="../components/Popover.md">components/Popover.md</a></div>
+      <p class="spec-desc">対象に矢印で結んで開く小さな編集面。確定ボタンを置かず、各変更がそのまま 1 コマンドになる。</p>
+      <div class="board board-pad" style="padding: 24px;">
+        <div class="col" style="align-items: flex-start; gap: 10px;">
+          <span class="kf kf-cubic is-selected" style="margin-left: 44px;"></span>
+          <div class="popover" style="--arrow-x: 48px;">
+            <div class="heading">キーフレーム</div>
+            <div class="popover-row" style="margin-top: 6px;"><span class="label">補間</span><div class="seg seg-sm"><button>Linear</button><button class="is-selected">Cubic</button><button>Hold</button></div></div>
+            <div class="popover-row"><span class="label">時刻</span><span class="nf nf-time"><span class="nf-value">00:00:01:12</span></span></div>
+            <div class="popover-row"><span class="label">値</span><span class="nf"><span class="nf-value">1720.0</span><span class="nf-unit">px</span></span></div>
+            <p class="caption" style="margin-top: 4px;">外側クリックか Esc で閉じる。閉じても変更は取り消さない。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="spec" data-section id="Dialog">
+      <div class="spec-head"><h2 class="doc-h2">Dialog</h2><span class="group">オーバーレイ</span><a href="../components/Dialog.md">components/Dialog.md</a></div>
+      <p class="spec-desc">作業を止めて判断を求めるシート。本文はエラーコード + 理由 + 次にできること。素材のパスは本文に混ぜず詳細欄にデータとして出す。</p>
+      <div class="board board-pad row gap-4 on-surface-0" style="align-items: flex-start; padding: 24px;">
+        <div class="dialog is-danger">
+          <div class="dialog-main">
+            <i data-icon="triangle-alert"></i>
+            <div>
+              <div class="dialog-title">素材が 2 件見つかりません</div>
+              <p class="dialog-body"><span class="code">ASSET_MISSING</span> のため書き出しとプレビューを止めました。素材の場所を指定すると、hash が一致するファイルだけを再リンクします。</p>
+              <div class="dialog-details">~/Movies/朝の港/drone_02.mov
+~/Movies/朝の港/drone_03.mov</div>
+            </div>
+          </div>
+          <div class="dialog-actions"><button class="btn btn-plain">キャンセル</button><button class="btn btn-secondary">ファイルを選択…</button><button class="btn btn-primary">フォルダを検索…</button></div>
+        </div>
+        <div class="dialog">
+          <div class="dialog-main">
+            <i data-icon="info"></i>
+            <div>
+              <div class="dialog-title">プロジェクトを閉じますか？</div>
+              <p class="dialog-body">変更はすべて保存済みです（rev 131）。実行中のジョブ 1 件は別プロセスで続きます。</p>
+            </div>
+          </div>
+          <div class="dialog-actions"><button class="btn btn-plain">キャンセル</button><button class="btn btn-primary">閉じる</button></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= Layout and state ================= -->
+
+    <section class="spec" data-section id="Panel">
+      <div class="spec-head"><h2 class="doc-h2">Panel</h2><span class="group">レイアウトと状態</span><a href="../components/Panel.md">components/Panel.md</a></div>
+      <p class="spec-desc">見出し付きの単独形とタブ付き形。角丸・影・隙間を作らず、1px の line で接する。タブの下線は ink。</p>
+      <div class="board-grid" style="grid-template-columns: 1fr 1fr; padding: 0; gap: 1px;">
+        <div class="panel" style="padding: 0; height: 120px;">
+          <div class="panel-header"><span class="heading">Inspector</span><div class="panel-actions"><button class="btn btn-plain btn-icon"><i data-icon="ellipsis"></i></button></div></div>
+          <div class="panel-body section-pad caption muted">単独形: 見出しは heading、右端に plain の icon ボタン。</div>
+        </div>
+        <div class="panel" style="padding: 0; height: 120px;">
+          <div class="panel-header">
+            <div class="tabs"><span class="tab is-selected"><i data-icon="layers" class="kind-composition"></i>Lower third<i data-icon="x" class="tab-close"></i></span><span class="tab is-hover">Logo loop<i data-icon="x" class="tab-close"></i></span><span class="tab">Title card</span><span class="tab is-focus">フォーカス</span></div>
+            <div class="panel-actions"><button class="btn btn-plain btn-icon"><i data-icon="plus"></i></button><button class="btn btn-plain btn-icon"><i data-icon="ellipsis"></i></button></div>
+          </div>
+          <div class="panel-body section-pad caption muted">タブ付き形: 選択は ink + 下端 2px の ink、hover は control-hover。閉じるは hover と選択中だけ。</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="spec" data-section id="StatusBar">
+      <div class="spec-head"><h2 class="doc-h2">StatusBar</h2><span class="group">レイアウトと状態</span><a href="../components/StatusBar.md">components/StatusBar.md</a></div>
+      <p class="spec-desc">保存状態と revision、外部変更、未解決のエラー、ジョブを常に見せる 1 行。進捗バーは中立色。</p>
+      <div class="board" style="padding: 0;">
+        <div class="statusbar" style="border-top: 0;">
+          <span class="sb-item"><i data-icon="history"></i>保存済み · rev 131</span>
+          <span class="sb-item"><i data-icon="refresh-cw"></i>MCP の変更を読み込みました（rev 130 → 131）</span>
+          <span class="sb-item is-error"><i data-icon="triangle-alert"></i><span class="code">ASSET_MISSING</span> 2</span>
+          <span class="sb-item sb-right"><i data-icon="loader-circle" class="spin"></i><span class="ink">書き出し 42%</span><span class="progress"><span style="width: 42%"></span></span>ほか 1 件</span>
+        </div>
+        <div class="statusbar">
+          <span class="sb-item"><i data-icon="history"></i>未保存の変更あり · rev 131 · 安全モード</span>
+          <span class="sb-item sb-right"><i data-icon="circle-check"></i>ジョブなし</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="spec" data-section id="JobRow">
+      <div class="spec-head"><h2 class="doc-h2">JobRow</h2><span class="group">レイアウトと状態</span><a href="../components/JobRow.md">components/JobRow.md</a></div>
+      <p class="spec-desc">ジョブ 1 件の行。状態はアイコンの形と文言で区別し、失敗は理由のコードと次の操作を同じ行に出す。</p>
+      <div class="board" style="padding: 0;">
+        <div class="jobrow"><i data-icon="loader-circle" class="spin"></i><div class="col"><span class="job-name">書き出し: Teaser_v3.mov</span><span class="job-detail">ProRes 422 HQ · rev 131 を固定</span></div><div class="job-state"><span class="progress"><span style="width: 42%"></span></span><span class="mono">42%</span>残り 3 分</div><div class="job-actions"><button class="btn btn-secondary">中止</button></div></div>
+        <div class="jobrow"><i data-icon="clock"></i><div class="col"><span class="job-name">解析: Interview_A.mov</span><span class="job-detail">波形とサムネイル</span></div><div class="job-state">待機中</div><div class="job-actions"><button class="btn btn-plain btn-icon" aria-label="取り消す"><i data-icon="x"></i></button></div></div>
+        <div class="jobrow"><i data-icon="circle-check"></i><div class="col"><span class="job-name">書き出し: Teaser_v2.mov</span><span class="job-detail">ProRes 422 HQ · rev 118</span></div><div class="job-state">完了 · 4 分 12 秒</div><div class="job-actions"><button class="btn btn-secondary"><i data-icon="folder-open"></i>フォルダを開く</button></div></div>
+        <div class="jobrow is-failed"><i data-icon="triangle-alert"></i><div class="col"><span class="job-name">書き出し: Teaser_v3_h264.mp4</span><span class="job-detail"><span class="mono">ENCODER_UNAVAILABLE</span> この環境に H.264 のエンコーダーがありません</span></div><div class="job-state">失敗</div><div class="job-actions"><button class="btn btn-secondary">設定…</button></div></div>
+        <div class="jobrow"><i data-icon="circle-x"></i><div class="col"><span class="job-name">書き出し: Draft.mov</span><span class="job-detail">利用者が中止</span></div><div class="job-state">中止</div><div class="job-actions"><button class="btn btn-plain">再試行</button></div></div>
+      </div>
+    </section>
+
+    <section class="spec" data-section id="EmptyState">
+      <div class="spec-head"><h2 class="doc-h2">EmptyState</h2><span class="group">レイアウトと状態</span><a href="../components/EmptyState.md">components/EmptyState.md</a></div>
+      <p class="spec-desc">何がないかと次にできることを示し、ドロップ先を兼ねる。イラストや絵文字を置かない。</p>
+      <div class="board-grid" style="grid-template-columns: 1fr 1fr; padding: 0;">
+        <div class="empty" style="height: 220px;"><i data-icon="folder-open"></i><span class="heading">素材がありません</span><p class="empty-body">映像・音声・画像をここにドロップするか、読み込んでください。</p><button class="btn btn-secondary">素材を読み込む…</button></div>
+        <div class="empty is-dropping" style="height: 220px;"><i data-icon="plus"></i><span class="heading">3 件を読み込む</span><p class="empty-body">映像 2 件・音声 1 件</p></div>
+      </div>
+    </section>
+
+    <section class="spec" data-section id="Welcome">
+      <div class="spec-head"><h2 class="doc-h2">Welcome</h2><span class="group">レイアウトと状態</span><a href="../components/Welcome.md">components/Welcome.md</a></div>
+      <p class="spec-desc">起動時の最初のウインドウ。ロゴを作らず名前を文字で組む。見つからないプロジェクトは danger で場所を示す。</p>
+      <div class="board board-pad on-surface-0" style="padding: 32px; display: grid; place-items: center;">
+        <div class="welcome">
+          <div class="welcome-left">
+            <span class="welcome-name">Kronello</span>
+            <span class="welcome-tag">動画編集とモーショングラフィックス</span>
+            <button class="btn btn-primary"><i data-icon="file-plus"></i>新規プロジェクト…</button>
+            <button class="btn btn-secondary"><i data-icon="folder-open"></i>開く…</button>
+            <label class="cb is-on" style="margin-top: auto;"><span class="cb-box"><i data-icon="check"></i></span><span class="cb-label">起動時に表示</span></label>
+          </div>
+          <div class="welcome-sep"></div>
+          <div class="welcome-right">
+            <span class="overline" style="padding: 0 8px 8px;">最近のプロジェクト</span>
+            <div class="recent is-selected"><i data-icon="clapperboard"></i><div class="col"><span class="recent-name">朝の港 PV.kronello</span><span class="recent-where">~/Movies/朝の港</span></div><span class="recent-when">2 時間前</span></div>
+            <div class="recent"><i data-icon="clapperboard"></i><div class="col"><span class="recent-name">lower_third_ja.kronello</span><span class="recent-where">~/Projects/templates</span></div><span class="recent-when">昨日</span></div>
+            <div class="recent"><i data-icon="clapperboard"></i><div class="col"><span class="recent-name">Interview_cut.kronello</span><span class="recent-where">~/Movies/取材</span></div><span class="recent-when">3 日前</span></div>
+            <div class="recent is-missing"><i data-icon="triangle-alert"></i><div class="col"><span class="recent-name">Festival_2026.kronello</span><span class="recent-where">見つかりません · /Volumes/Archive/Festival</span></div><span class="recent-when">2026-09-12</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+</body>
+</html>

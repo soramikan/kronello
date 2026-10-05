@@ -1,5 +1,9 @@
 # ウインドウの骨格
 
+![メインウインドウの見本（モーションページ）](../preview/images/screens/motion-dark.png)
+
+見本: [HTML](../preview/screens/motion.html)
+
 ## 最小サイズ
 
 - 13 インチのノート（MacBook Air 13 インチ、1470×956 pt 前後）で全パネルが実用的に収まることを最低条件とし、設計の基準を 1440×900 とする。

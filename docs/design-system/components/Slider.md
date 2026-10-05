@@ -2,6 +2,10 @@
 
 範囲のある数値（音量、不透明度など）を大まかに合わせるスライダーで、正確な値の入力用に NumberField と組で置く。
 
+![Slider の見本（Dark）](../preview/images/components/Slider-dark.png)
+
+見本: [Light の画像](../preview/images/components/Slider-light.png) · [HTML](../preview/components.html#Slider)
+
 ## 利用側が渡すもの
 
 - 最小・最大・刻み・単位、現在の値。

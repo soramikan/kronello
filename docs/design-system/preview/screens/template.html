@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ja" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>テンプレート — Kronello</title>
+<!-- Screen: docs/design-system/screens/template.md (1440×900). -->
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/kit.css">
+<link rel="stylesheet" href="../assets/screens.css">
+<script src="../assets/icons.js"></script>
+<script src="../assets/preview.js"></script>
+</head>
+<body>
+<div class="window">
+  <header class="toolbar">
+    <div class="toolbar-left">
+      <span class="traffic" aria-label="OS のウインドウボタン"><span></span><span></span><span></span></span>
+      <div class="project-name"><span class="heading">朝の港 PV</span><span class="caption muted">~/Movies/朝の港</span></div>
+    </div>
+    <div class="seg"><button>編集</button><button>モーション</button><button class="is-selected">テンプレート</button><button>書き出し</button></div>
+    <div class="toolbar-right">
+      <button class="btn btn-plain btn-icon" aria-label="取り消す"><i data-icon="undo-2"></i></button>
+      <button class="btn btn-plain btn-icon" aria-label="やり直す"><i data-icon="redo-2"></i></button>
+      <span class="vsep"></span>
+      <span class="popup" style="min-width: 120px;"><span class="row gap-1"><i data-icon="layout-panel-left" class="muted"></i>標準</span><i data-icon="chevrons-up-down"></i></span>
+    </div>
+  </header>
+  <div></div>
+
+  <div class="page-body template-body">
+    <!-- Left: Templates -->
+    <section class="panel" style="grid-area: left;">
+      <div class="panel-header"><span class="heading">Templates</span><div class="panel-actions"><button class="btn btn-plain btn-icon" aria-label="追加"><i data-icon="plus"></i></button><button class="btn btn-plain btn-icon" aria-label="パネルメニュー"><i data-icon="ellipsis"></i></button></div></div>
+      <div class="panel-body" style="padding-top: 4px;">
+        <div class="tpl-row is-selected"><i data-icon="layout-template"></i><div class="col" style="min-width: 0;"><span class="mono ellipsis" style="font-size: 11px; font-weight: 500;">lower_third_ja</span><span class="caption muted ellipsis">Lower third · 入力 4 · 下書き</span></div><span class="badge">1.1.0</span></div>
+        <div class="tpl-row"><i data-icon="layout-template"></i><div class="col" style="min-width: 0;"><span class="mono ellipsis" style="font-size: 11px; font-weight: 500;">lower_third_ja</span><span class="caption muted ellipsis">Lower third · 入力 3 · 配置 3</span></div><span class="badge">1.0.0</span></div>
+        <div class="tpl-row"><i data-icon="layout-template"></i><div class="col" style="min-width: 0;"><span class="mono ellipsis" style="font-size: 11px; font-weight: 500;">title_card</span><span class="caption muted ellipsis">Title card · 入力 2 · 配置 1</span></div><span class="badge">2.1.0</span></div>
+        <div class="tpl-row"><i data-icon="layout-template"></i><div class="col" style="min-width: 0;"><span class="mono ellipsis" style="font-size: 11px; font-weight: 500;">end_roll</span><span class="caption muted ellipsis">End roll · 入力 6 · 配置 1</span></div><span class="badge">1.0.0</span></div>
+        <p class="caption muted section-pad" style="line-height: 16px;">公開済みの版は編集できません。編集は下書きの版で行います。</p>
+      </div>
+    </section>
+
+    <!-- Center: Variant comparison -->
+    <section class="panel" style="grid-area: center;">
+      <div class="panel-header">
+        <span class="heading">Variant の比較</span>
+        <div class="seg seg-sm" style="margin-left: 8px;"><button class="is-selected">layout</button><button>ink</button><button>visual</button></div>
+        <span class="time-now" style="margin-left: 4px;">00:00:02:00</span>
+        <div class="panel-actions"><button class="btn btn-plain"><i data-icon="plus"></i>variant を追加</button><button class="btn btn-plain btn-icon" aria-label="パネルメニュー"><i data-icon="ellipsis"></i></button></div>
+      </div>
+      <div class="panel-body" style="background: var(--surface-0);">
+        <div class="variants" style="padding-top: 28px;">
+          <div class="variant" style="width: 520px;">
+            <div class="variant-head"><i data-icon="rectangle-horizontal"></i><span style="font-weight: 500;">landscape</span><span class="caption muted">1920×1080</span><span class="row gap-1 caption muted" style="margin-left: auto;"><i data-icon="circle-check" class="ic-12"></i>収まっています</span></div>
+            <div class="frame footage-city" style="width: 520px; height: 292px;">
+              <div class="footage-bar" style="left: 36px; top: 196px; width: 4px; height: 52px; background: #3fa7d6;"></div>
+              <div class="footage-title" style="left: 48px; top: 192px; width: 330px;"><span class="t1" style="font-size: 19px; line-height: 24px;">港町の朝市が始まる、長い見出しの確認</span><span class="t2" style="font-size: 10px;">港町の朝市 · 2026年10月</span></div>
+              <div class="bounds" style="left: 46px; top: 190px; width: 332px; height: 52px;"><span class="bounds-label is-above">layout · 2 行 / 最大 2 行</span></div>
+            </div>
+          </div>
+          <div class="variant" style="width: 248px;">
+            <div class="variant-head"><i data-icon="rectangle-vertical"></i><span style="font-weight: 500;">portrait</span><span class="caption muted">1080×1920</span></div>
+            <div class="frame footage-city" style="width: 248px; height: 440px;">
+              <div class="footage-bar" style="left: 20px; top: 306px; width: 4px; height: 82px; background: #3fa7d6;"></div>
+              <div class="footage-title" style="left: 30px; top: 302px; width: 180px;"><span class="t1" style="font-size: 17px; line-height: 22px;">港町の朝市が始まる、長い見出しの確認</span><span class="t2" style="font-size: 9px;">港町の朝市 · 2026年10月</span></div>
+              <div class="bounds-over" style="left: 28px; top: 300px; width: 184px; height: 70px;"><span class="bounds-label">layout · 3 行 / 最大 2 行</span></div>
+            </div>
+            <div class="row gap-1 danger" style="align-items: flex-start;"><i data-icon="triangle-alert" class="ic-12" style="margin-top: 2px;"></i><span class="code">TEMPLATE_OVERFLOW</span></div>
+            <p class="variant-note">見出しが 3 行になり、最大の 2 行を超えます。見出しを短くするか、portrait の Wrap width を広げてください。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right: Public inputs / versions -->
+    <section class="panel" style="grid-area: right;">
+      <div class="panel-header">
+        <div class="tabs"><span class="tab is-selected">公開入力</span><span class="tab">版</span></div>
+        <div class="panel-actions"><span class="badge">1.1.0</span><span class="caption muted" style="margin: 0 6px 0 4px;">下書き</span></div>
+      </div>
+      <div class="panel-body col" style="height: 100%;">
+        <div class="input-card">
+          <div class="input-head"><i data-icon="type"></i><span class="mono" style="font-size: 11px; font-weight: 500;">heading</span><span class="caption muted">Text</span><span class="badge is-plain" style="margin-left: auto; font-family: var(--font-sans);">必須</span></div>
+          <span class="tf-input">港町の朝市が始まる、長い見出しの確認</span>
+          <span class="input-link"><i data-icon="link"></i>見出し › Text</span>
+        </div>
+        <div class="input-card">
+          <div class="input-head"><i data-icon="type"></i><span class="mono" style="font-size: 11px; font-weight: 500;">subheading</span><span class="caption muted">Text</span><span class="badge is-plain" style="margin-left: auto; font-family: var(--font-sans);">任意</span></div>
+          <span class="tf-input">港町の朝市 · 2026年10月</span>
+          <span class="input-link"><i data-icon="link"></i>サブタイトル › Text</span>
+        </div>
+        <div class="input-card">
+          <div class="input-head"><span class="swatch-sm" style="background: #3fa7d6;"></span><span class="mono" style="font-size: 11px; font-weight: 500;">accent_color</span><span class="caption muted">Color · sRGB</span><span class="badge is-plain" style="margin-left: auto; font-family: var(--font-sans);">任意</span></div>
+          <span class="tf-input"><span class="swatch-sm" style="background: #3fa7d6; width: 12px; height: 12px;"></span><span class="mono" style="font-size: 11px;">#3FA7D6</span></span>
+          <span class="input-link"><i data-icon="link"></i>帯 › Fill</span>
+        </div>
+        <div class="input-card">
+          <div class="input-head"><i data-icon="image"></i><span class="mono" style="font-size: 11px; font-weight: 500;">background</span><span class="caption muted">MediaSlot</span><span class="badge is-plain" style="margin-left: auto; font-family: var(--font-sans);">任意</span></div>
+          <span class="dropzone"><i data-icon="plus" class="ic-12"></i>映像か静止画をドロップ</span>
+          <span class="input-link"><i data-icon="link"></i>背景 › Source</span>
+        </div>
+        <div class="section-pad col gap-3" style="margin-top: auto; border-top: 1px solid var(--line);">
+          <p class="caption muted" style="line-height: 16px;"><span class="ink">1.0.0 との差分:</span> 公開入力を 1 件追加（<span class="mono">background</span>）、<span class="mono">heading</span> の最大行数を 2 に変更。<br>既存の配置 3 件は 1.0.0 に固定され、自動では更新しません。</p>
+          <div class="row" style="justify-content: flex-end;"><button class="btn btn-secondary">移行計画…</button><button class="btn btn-primary">1.1.0 として公開…</button></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Bottom: Duration policy -->
+    <section class="panel" style="grid-area: bottom;">
+      <div class="panel-header">
+        <span class="heading">尺のポリシー</span>
+        <span class="label muted" style="margin-left: 12px;">中間区間</span>
+        <div class="seg seg-sm"><button class="is-selected">hold</button><button>loop</button><button>stretch</button></div>
+        <span class="label muted" style="margin-left: 12px;">最低 hold</span>
+        <span class="nf" style="height: 20px;"><span class="nf-value">2s</span></span>
+        <span class="label muted" style="margin-left: 12px;">プレビューの尺</span>
+        <span class="nf nf-time" style="height: 20px;"><span class="nf-value">00:00:08:00</span></span>
+      </div>
+      <div class="dur">
+        <div class="dur-ruler">
+          <i style="left: 0%"></i><span style="left: 0%; transform: none;">0s</span><i style="left: 12.5%"></i><span style="left: 12.5%">1s</span><i style="left: 25%"></i><span style="left: 25%">2s</span><i style="left: 37.5%"></i><span style="left: 37.5%">3s</span><i style="left: 50%"></i><span style="left: 50%">4s</span><i style="left: 62.5%"></i><span style="left: 62.5%">5s</span><i style="left: 75%"></i><span style="left: 75%">6s</span><i style="left: 87.5%"></i><span style="left: 87.5%">7s</span><i style="left: 100%"></i><span style="left: 100%; transform: translateX(-100%);">8s</span>
+        </div>
+        <div class="dur-lane">
+          <span class="label muted">Authoring</span>
+          <div class="dur-bar">
+            <div class="dur-seg is-fixed" style="left: 0; width: calc(12.5% - 2px);"><i data-icon="lock"></i>intro<span class="mono">1s</span></div>
+            <div class="dur-seg is-flex" style="left: 12.5%; width: calc(37.5% - 2px);">中間<span class="mono">3s</span></div>
+            <div class="dur-seg is-fixed" style="left: 50%; width: calc(12.5% - 2px);"><i data-icon="lock"></i>outro<span class="mono">1s</span></div>
+          </div>
+        </div>
+        <div class="dur-lane">
+          <span class="label muted">配置</span>
+          <div class="dur-bar">
+            <div class="dur-seg is-fixed" style="left: 0; width: calc(12.5% - 2px);"><i data-icon="lock"></i>intro<span class="mono">1s</span></div>
+            <div class="dur-seg is-flex" style="left: 12.5%; width: calc(75% - 2px);">中間 · hold<span class="mono">6s</span></div>
+            <div class="dur-seg is-fixed" style="left: 87.5%; width: 12.5%;"><i data-icon="lock"></i>outro<span class="mono">1s</span></div>
+          </div>
+        </div>
+        <p class="caption muted" style="margin-left: 88px;">総尺が intro + outro + 最低 hold（4s）を下回ると <span class="mono danger">DURATION_TOO_SHORT</span> になります。intro と outro は長さを保ち、中間区間だけを伸縮します。</p>
+      </div>
+    </section>
+  </div>
+
+  <footer class="statusbar">
+    <span class="sb-item"><i data-icon="history"></i>未保存の変更あり · rev 131</span>
+    <span class="sb-item is-error"><i data-icon="triangle-alert"></i><span class="code">TEMPLATE_OVERFLOW</span> 1</span>
+    <span class="sb-item sb-right"><i data-icon="circle-check"></i>ジョブなし</span>
+  </footer>
+</div>
+</body>
+</html>

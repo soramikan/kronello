@@ -9,7 +9,12 @@ Kronello の UI は [Lucide](https://lucide.dev/) のアイコンだけを使う
 
 - 単色の線アイコン。インクは `currentColor` で、親要素の文字色を継がせて描く: 通常 `ink-muted`、hover / pressed で `ink`、エラーは `danger`、種類のアイコンは `kind-*`。
 - 24px グリッド・stroke-width 2 のまま、ツールバーは 14px、行内・クリップ内は 12px に縮小して使う（線は約 1〜1.2px になる）。stroke-width を上書きしない。
+
 ## 用途の対応
+
+![使用中のアイコン（12 / 14 / 16 / 24px）](preview/images/foundations/icons.png)
+
+見本の SVG は [preview/assets/icons/](preview/assets/icons/) に固定版から取得してある（`python3 scripts/design_preview.py vendor-icons`）。
 
 | 用途 | アイコン |
 |---|---|
@@ -39,6 +44,8 @@ Kronello の UI は [Lucide](https://lucide.dev/) のアイコンだけを使う
 | スナップ / ガイド | `magnet` / `grid-3x3` |
 | 取り消す / やり直す | `undo-2` / `redo-2` |
 | ワークスペース | `layout-panel-left` |
+| テンプレート / variant: 横型・縦型 | `layout-template` / `rectangle-horizontal` / `rectangle-vertical` |
+| 全体を表示（Curve editor） | `scan` |
 | 文字揃え | `align-left` / `align-center` |
 
 ここにないアイコンが必要になったら Lucide から選び、この表に追加する。他のアイコンセットや絵文字を混ぜない。

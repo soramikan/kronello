@@ -2,6 +2,10 @@
 
 横ドラッグで値をスクラブし、クリックで直接入力に切り替わる数値フィールドで、Inspector の値入力の基本部品。
 
+![NumberField の見本（Dark）](../preview/images/components/NumberField-dark.png)
+
+見本: [Light の画像](../preview/images/components/NumberField-light.png) · [HTML](../preview/components.html#NumberField)
+
 ## 利用側が渡すもの
 
 - `value` と `unit`（`px`、`%`、`°`、`fps` など。座標は `design_px` を `px` と表示する）。
