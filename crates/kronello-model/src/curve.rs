@@ -74,7 +74,7 @@ impl From<TimeBezier> for BezierWire {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, schemars::JsonSchema)]
 #[serde(
     tag = "kind",
     content = "value",
@@ -85,6 +85,18 @@ pub enum CurveInterpolation {
     Hold,
     Linear,
     Cubic(TimeBezier),
+}
+
+impl<'de> Deserialize<'de> for CurveInterpolation {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let wire = crate::wire::Adjacent::deserialize(d)?;
+        match wire.kind.as_str() {
+            "hold" => wire.unit(Self::Hold),
+            "linear" => wire.unit(Self::Linear),
+            "cubic" => wire.value().map(Self::Cubic),
+            _ => Err(wire.unknown(&["hold", "linear", "cubic"])),
+        }
+    }
 }
 impl CurveInterpolation {
     pub const fn mode(self) -> InterpolationMode {

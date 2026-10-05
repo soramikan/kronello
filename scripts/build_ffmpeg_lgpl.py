@@ -14,6 +14,8 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "scripts/native-dependencies.json"
+if not MANIFEST.is_file():
+    MANIFEST = ROOT / "native-dependencies.json"
 
 
 def sha256(path):
@@ -63,8 +65,9 @@ def run(command, cwd=None, env=None):
 
 
 def verify(prefix, manifest):
-    names = [("avutil", 61), ("avcodec", 63), ("avformat", 63), ("swscale", 10)]
+    names = [("avutil", 61), ("avcodec", 63), ("avformat", 63), ("swscale", 10), ("swresample", 7)]
     libraries = []
+    ffmpeg_version = None
     for name, major in names:
         filename = f"lib{name}.{major}.dylib" if sys.platform == "darwin" else f"lib{name}.so.{major}"
         path = prefix / "lib" / filename
@@ -79,21 +82,45 @@ def verify(prefix, manifest):
         version_fn.restype = ctypes.c_uint
         if not license_text.startswith("LGPL") or "--enable-gpl" in configuration or "--enable-nonfree" in configuration or version_fn() >> 16 != major:
             raise ValueError(f"distribution license/ABI rejected: {name}: {license_text}")
+        if name == "avutil":
+            info = lib.av_version_info
+            info.restype = ctypes.c_char_p
+            ffmpeg_version = info().decode()
+            expected = next(d["version"] for d in manifest["dependencies"] if d["name"] == "ffmpeg")
+            if ffmpeg_version != expected:
+                raise ValueError(f"pinned FFmpeg version mismatch: {ffmpeg_version}")
         libraries.append({"name": name, "version": version_fn(), "license": license_text, "configuration": configuration})
     probe = subprocess.check_output([str(prefix / "bin/ffmpeg"), "-hide_banner", "-encoders"], text=True, stderr=subprocess.STDOUT)
-    if "libsvtav1" not in probe or "prores_ks" not in probe:
-        raise ValueError("required AV1 and ProRes encoders missing")
+    if any(name not in probe for name in ["libsvtav1", "prores_ks", "pcm_s24le"]):
+        raise ValueError("required AV1, ProRes and PCM24 encoders missing")
     decoders = subprocess.check_output([str(prefix / "bin/ffmpeg"), "-hide_banner", "-decoders"], text=True, stderr=subprocess.STDOUT)
     if "libdav1d" not in decoders:
         raise ValueError("required AV1 software decoder missing")
+    external_versions = {}
+    for dependency, filename, symbol in [
+        ("svt-av1", "libSvtAv1Enc.4.dylib" if sys.platform == "darwin" else "libSvtAv1Enc.so.4", "svt_av1_get_version"),
+        ("dav1d", "libdav1d.7.dylib" if sys.platform == "darwin" else "libdav1d.so.7", "dav1d_version"),
+    ]:
+        library = ctypes.CDLL(str(prefix / "lib" / filename))
+        version = getattr(library, symbol)
+        version.restype = ctypes.c_char_p
+        actual = version().decode().removeprefix("v")
+        expected = next(d["version"] for d in manifest["dependencies"] if d["name"] == dependency)
+        if actual != expected:
+            raise ValueError(f"pinned dependency version mismatch: {dependency}: {actual}")
+        external_versions[dependency] = actual
     shared = sorted(p for p in (prefix / "lib").iterdir() if p.is_file() and not p.is_symlink() and (".so" in p.name or p.suffix == ".dylib"))
     if not shared or any(p.suffix == ".a" for p in (prefix / "lib").iterdir()):
         raise ValueError("shared libraries only required")
-    receipt = {"schema_version": 1, "manifest": manifest, "libraries": libraries,
+    license_files = [prefix / "licenses" / entry["name"] / name
+                     for entry in manifest["dependencies"] for name in entry["license_files"]]
+    receipt = {"schema_version": 1, "manifest": manifest, "libraries": libraries, "ffmpeg_version": ffmpeg_version,
+               "external_versions": external_versions,
+               "licenses": [{"file": str(p.relative_to(prefix)), "sha256": sha256(p)} for p in license_files],
                "shared_libraries": [{"file": p.name, "sha256": sha256(p)} for p in shared],
                "platform": sys.platform, "machine": os.uname().machine}
     (prefix / "build-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
-    print(f"verified LGPL shared libraries, AV1 and ProRes: {prefix}")
+    print(f"verified five LGPL shared libraries, AV1, ProRes and PCM24: {prefix}")
 
 
 def main():

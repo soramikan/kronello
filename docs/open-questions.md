@@ -28,7 +28,7 @@
 
 ### OQ-19 圧縮音声 AAC と配信向け音声の採用
 
-MEDIA-002 では AV1 / H.264 / HEVC の MOV profile の音声を ALAC に限り、AAC は `UNSUPPORTED_FEATURE` とした（[ADR-0068](adr/0068-movie-profiles-and-compressed-audio.md)）。残っているのは次の点。
+MEDIA-002 では AV1 / H.264 / HEVC の MOV profile の音声を ALAC に限り、AAC は `UNSUPPORTED_FEATURE` とした（[ADR-0068](adr/0068-versioned-delivery-movie-profiles.md)）。残っているのは次の点。
 
 - AAC-LC を採用するかどうか。配布と特許の確認、FFmpeg 内蔵 AAC encoder の品質評価、priming / padding と終端 sample の扱いの実測が済んでいない。
 - Web 配信向けの AV1 の音声（MP4 / WebM の Opus）。LGPL 構成の FFmpeg に libopus を追加する必要がある。

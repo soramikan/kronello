@@ -398,7 +398,13 @@ impl RasterCacheKey {
                 &path.fill_gradient,
                 &path.stroke_gradient,
                 path.paint_transform,
-                crate::STROKE_GEOMETRY_VERSION,
+                path.stroke_geometry.as_ref().map_or_else(
+                    || json!(kronello_model::LEGACY_STROKE_VERSION),
+                    |g| json!({"version":g.version,"alignment":g.alignment,"fill_rule":g.fill_rule,
+                        "inverse":g.output_to_local,"forward":g.local_to_output,
+                        "dash_array":g.dash_array,"dash_offset":g.dash_offset,
+                        "contours":g.contours.subpaths.iter().map(|p| (&p.points,p.closed)).collect::<Vec<_>>()}),
+                ),
                 crate::GRADIENT_INTERPOLATION_VERSION,
                 region,
                 working,
@@ -475,6 +481,7 @@ mod tests {
     #[test]
     fn failed_raster_computations_are_not_cached_and_namespaces_are_distinct() {
         let path = CoveragePath {
+            stroke_geometry: None,
             geometry_content_hash: "shape-v1".into(),
             fill_gradient: None,
             stroke_gradient: None,

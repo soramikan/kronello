@@ -75,10 +75,14 @@ impl RenderError {
             Self::Sequence(e) => e.code(),
             Self::Template(e) => e.code(),
             Self::Shape(ShapeError::UnsupportedGradientVersion)
+            | Self::Shape(ShapeError::UnsupportedStrokeVersion)
             | Self::Text(TextError::Gradient(ShapeError::UnsupportedGradientVersion))
             | Self::Effect(kronello_model::EffectError::UnsupportedFeature)
             | Self::UnsupportedFeature(_) => "UNSUPPORTED_FEATURE",
             Self::UnsupportedSchema(_) => "UNSUPPORTED_SCHEMA",
+            Self::Shape(ShapeError::InvalidDashArray) => "STROKE_INVALID_DASH",
+            Self::Shape(ShapeError::StrokeBudgetExceeded) => "STROKE_BUDGET_EXCEEDED",
+            Self::Shape(ShapeError::OpenStrokeAlignment) => "STROKE_OPEN_ALIGNMENT",
             Self::Evaluation(e) => e.code(),
             Self::Layout(LayoutError::MissingFont { .. }) => "ASSET_MISSING",
             Self::Layout(

@@ -42,6 +42,7 @@
             "_spdisplays_pixels": "3360 x 2100",
             "_spdisplays_resolution": "1680 x 1050 @ 60.00Hz",
             "spdisplays_ambient_brightness": "spdisplays_yes",
+            "spdisplays_asleep": "spdisplays_yes",
             "spdisplays_connection_type": "spdisplays_internal",
             "spdisplays_display_type": "spdisplays_built-in_retinaLCD",
             "spdisplays_main": "spdisplays_yes",

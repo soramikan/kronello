@@ -284,3 +284,47 @@ fn header_matches_every_exported_function_signature() {
         9
     );
 }
+
+#[test]
+fn json_order_ffi_worker_boundary() {
+    let handle = open("missing-json-order.kronello");
+    wait(handle, 0);
+    let response = wait(
+        handle,
+        call(
+            handle,
+            r#"{"commands":[{"property_source_set":{"source":{"value":{"value":1.5,"kind":"scalar"},"kind":"constant"},"property":"00000000-0000-0000-0000-000000000002","object":"00000000-0000-0000-0000-000000000001"}}],"base_revision":"0","project":"missing-json-order.kronello","operation":"edit.plan"}"#,
+        ),
+    );
+    kronello_close(handle);
+    assert_eq!(response["error"]["code"], "PROJECT_NOT_FOUND");
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("json-order.kronello");
+    let doc: Value =
+        serde_json::from_str(include_str!("../../../examples/m1-demo.project.json")).unwrap();
+    let node = &doc["compositions"][0]["nodes"][0];
+    let property = node["properties"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["descriptor"]["key"] == "kronello.opacity")
+        .unwrap();
+
+    assert_eq!(
+        service(json!({"operation":"project.create","project":path,"document":doc}))["status"],
+        "success"
+    );
+    let handle = open(path.to_str().unwrap());
+    wait(handle, 0);
+    let canonical = json!({"operation":"edit.plan","project":path,"base_revision":"1","commands":[{"property_source_set":{"object":node["id"],"property":property["id"],"source":{"kind":"constant","value":{"kind":"scalar","value":0.5}}}}]});
+    let raw = canonical.to_string().replace(
+        r#""kind":"scalar","value":0.5"#,
+        r#""value":0.5,"kind":"scalar""#,
+    );
+    assert_ne!(raw, canonical.to_string());
+    assert_eq!(wait(handle, call(handle, &raw)), service(canonical));
+    let invalid = raw.replace(r#""value":0.5"#, r#""value":"bad""#);
+    let response = wait(handle, call(handle, &invalid));
+    kronello_close(handle);
+    assert_eq!(response["error"]["code"], "INVALID_REQUEST");
+}
