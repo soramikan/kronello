@@ -616,7 +616,7 @@
       "priority": "P1",
       "area": "gui",
       "title": "Dope sheetとCurve editor",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "GUI-001",
         "ANIM-001"
