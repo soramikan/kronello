@@ -9,11 +9,13 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
 struct Fixture {
+    cleanup: kronello_jobs::test_support::WorkerCleanup,
     temp: tempfile::TempDir,
     project: PathBuf,
     state: PathBuf,
     document: Value,
     heartbeat_timeout: Duration,
+    wait_timeout: Duration,
 }
 impl Fixture {
     fn new() -> Self {
@@ -32,11 +34,13 @@ impl Fixture {
             .truncate(1);
         document.as_object_mut().unwrap().remove("texts");
         let fixture = Self {
+            cleanup: kronello_jobs::test_support::WorkerCleanup::new(&state).unwrap(),
             temp,
             project,
             state,
             document,
             heartbeat_timeout: Duration::from_secs(30),
+            wait_timeout: Duration::from_secs(60),
         };
         fixture.service(json!({"operation":"project.create","project":fixture.project,"document":fixture.document}));
         fixture
@@ -86,6 +90,7 @@ impl Fixture {
             .write_all(request.to_string().as_bytes())
             .unwrap();
         let output = child.wait_with_output().unwrap();
+        self.cleanup.capture_registered().unwrap();
         assert!(
             output.status.success(),
             "{}",
@@ -135,7 +140,7 @@ impl Fixture {
                     .unwrap_or_default()
             );
             assert!(
-                start.elapsed() < Duration::from_secs(60),
+                start.elapsed() < self.wait_timeout,
                 "timed out: {r:?}; log: {}",
                 std::fs::read_to_string(self.store().directory(id).unwrap().join("worker.log"))
                     .unwrap_or_default()
@@ -155,6 +160,7 @@ fn cli_exit_detaches_worker_and_preserves_project_bytes_and_mtime() {
     assert_eq!(submitted.status, JobStatus::Queued);
     let running = f.wait(&submitted.id, JobStatus::Running);
     let pid = running.worker_pid.unwrap() as i32;
+    #[cfg(unix)]
     assert_eq!(
         nix::unistd::getsid(Some(nix::unistd::Pid::from_raw(pid)))
             .unwrap()
@@ -419,11 +425,10 @@ fn sigkill_is_detected_by_heartbeat_and_releases_slot() {
     let first = f.submit("killed", Some(&f.temp.path().join("never")));
     let running = f.wait(&first.id, JobStatus::Running);
     let second = f.submit("next", None);
-    nix::sys::signal::kill(
-        nix::unistd::Pid::from_raw(running.worker_pid.unwrap() as i32),
-        nix::sys::signal::Signal::SIGKILL,
-    )
-    .unwrap();
+    kronello_platform::ProcessGuard::capture(running.worker_pid.unwrap())
+        .unwrap()
+        .terminate_and_wait()
+        .unwrap();
     let dead = f.wait(&first.id, JobStatus::Interrupted);
     assert_eq!(dead.error.unwrap().code, "JOB_INTERRUPTED");
     f.wait(&second.id, JobStatus::Succeeded);
@@ -485,6 +490,65 @@ fn worker_heartbeat_retries_writer_contention_and_logs_recovery() {
 }
 
 #[test]
+fn queued_worker_starts_after_writer_lock_exceeds_old_busy_timeout() {
+    let f = Fixture::new();
+    let gate = f.temp.path().join("release");
+    let first = f.submit("blocker", Some(&gate));
+    f.wait(&first.id, JobStatus::Running);
+    let second = f.submit("contended", None);
+    let db = rusqlite::Connection::open(f.state.join("jobs.sqlite3")).unwrap();
+    db.execute_batch("BEGIN IMMEDIATE").unwrap();
+    // Old claim() propagated SQLITE_BUSY after five seconds, killing the worker
+    // while its record could remain queued. This exceeds that fixed timeout.
+    std::thread::sleep(Duration::from_secs(6));
+    let observed = f.store().get(&second.id).unwrap();
+    assert_eq!(observed.status, JobStatus::Queued);
+    db.execute_batch("ROLLBACK").unwrap();
+    std::fs::write(gate, b"release").unwrap();
+    f.wait(&first.id, JobStatus::Succeeded);
+    let done = f.wait(&second.id, JobStatus::Succeeded);
+    let log =
+        std::fs::read_to_string(f.store().directory(&done.id).unwrap().join("worker.log")).unwrap();
+    assert!(log.contains("worker slot contention"), "{log}");
+    assert!(log.contains("worker slot acquired"), "{log}");
+}
+
+#[test]
+fn worker_checkpoint_and_heartbeat_share_serialized_connection_lifetimes() {
+    let f = Fixture::new();
+    let mut render = f.render(&f.temp.path().join("checkpoint-stress"));
+    render["range"]["end"] = json!({"num":"4","den":"1"});
+    let r = f.submit_request(
+        json!({"operation":"render.submit","render":render}),
+        None,
+        false,
+    );
+    let done = f.wait(&r.id, JobStatus::Succeeded);
+    assert_eq!(done.completed_frames, 96);
+}
+
+#[test]
+fn failed_test_reaps_detached_workers_before_fixture_removal() {
+    for timeout in [false, true] {
+        let mut f = Fixture::new();
+        let a = f.submit("never", Some(&f.temp.path().join("never")));
+        let pid = f.wait(&a.id, JobStatus::Running).worker_pid.unwrap();
+        f.wait_timeout = Duration::from_millis(100);
+        let failure = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let f = f;
+            if timeout {
+                f.wait(&a.id, JobStatus::Succeeded);
+            } else {
+                panic!("intentional test failure with live detached worker")
+            }
+        }));
+        assert!(failure.is_err());
+        assert!(!kronello_platform::process_is_alive(pid), "orphan {pid}");
+    }
+}
+
+#[test]
+#[cfg(unix)]
 fn suspended_live_worker_is_not_interrupted_by_an_expired_heartbeat() {
     struct ResumeWorker(nix::unistd::Pid);
     impl Drop for ResumeWorker {
@@ -518,13 +582,20 @@ fn duplicate_worker_cannot_fail_or_steal_an_active_job() {
     let gate = f.temp.path().join("release");
     let submitted = f.submit("output", Some(&gate));
     let original = f.wait(&submitted.id, JobStatus::Running);
-    let output = Command::new(env!("CARGO_BIN_EXE_kronello"))
+    let child = Command::new(env!("CARGO_BIN_EXE_kronello"))
         .args(["worker", "--job", &submitted.id])
         .env("KRONELLO_STATE_ROOT", &f.state)
         .env_remove("KRONELLO_TEST_JOB_GATE")
         .stdin(Stdio::null())
-        .output()
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
         .unwrap();
+    // This deliberate duplicate is never registered as the job owner, so it
+    // needs its own guard in addition to the fixture's registered-worker guard.
+    let duplicate = kronello_platform::ProcessGuard::capture(child.id()).unwrap();
+    let output = child.wait_with_output().unwrap();
+    duplicate.wait_for_exit(Duration::from_secs(5)).unwrap();
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("JOB_ALREADY_OWNED"));
     let current = f.store().get(&submitted.id).unwrap();

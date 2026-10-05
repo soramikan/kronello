@@ -14,6 +14,20 @@
 
 参照機の候補（性能計測用、[13 品質と性能](13-quality-performance.md)）: M4 Mac mini 32GB / macOS、RTX 4060 Ti 16GB / Windows、Linux / NVIDIA runner。
 
+## 独立 worker の native 境界
+
+JOB-002 の `kronello-platform` は Windows-only native module に `windows-sys 0.61.2`
+（MIT OR Apache-2.0）を使い、process 起動・生存確認・no-clobber rename を安全な API で提供する。
+workspace lints の mirror は unsafe_code=deny のみ例外で、private native module のみ局所許可する。
+jobs / service の unsafe forbid と純粋層の依存境界は維持する
+（[ADR-0074](../adr/0074-windows-job-workers-and-process-evidence.md)）。
+
+Windows full CLI/MCP は media C loader の dlfcn.h / Unix loading と pkg-config headers の移植待ち。
+JOB-002 CI は deterministic test payload で jobs/platform の本番 launch / state / publication を確認し、
+Windows の CLI/MCP render を保証した結果として扱わない。
+Linux は CLI/MCP 実プロセスを追加実行する。両 OS の結果は branch push 後の CI 確認待ちであり、
+この実装だけで保証経路へ昇格させない。OS 別の証跡は [JOB-002](../testing/job-002.md) に記録する。
+
 ## FFmpeg
 
 [ADR-0018](../adr/0018-ffmpeg-lgpl-dynamic-linking.md) による。

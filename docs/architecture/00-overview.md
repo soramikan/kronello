@@ -67,6 +67,12 @@ Preview / Still image / Image sequence / Encoder
 GUI・CLI・MCP はそれぞれ別プロセスになりうる。各プロセスが同じライブラリ（`kronello-service`）を内包し、同じ `.kronello` ファイルを開く。プロセスをまたぐ書き込みの直列化は SQLite のトランザクションと revision 照合で行う（[09 保存と同時編集](09-storage-concurrency.md)）。
 
 リアルタイム音声コールバックとプロジェクト更新、ディスク読み出し、重い式評価は別の実行系にする。
+独立 worker の状態・FIFO・lease は `kronello-jobs`、Windows の native 起動・生存確認・
+no-clobber publication は `kronello-platform` に置く。安全な API の外に OS handle を出さず、
+model / time / service / jobs の unsafe forbid を維持する。
+Windows の検証範囲は jobs/platform のみで、FFmpeg loader の移植前の full CLI/MCP は保証しない
+（[ADR-0074](../adr/0074-windows-job-workers-and-process-evidence.md)、[12](12-platform-dependencies.md)）。
+
 素材分析（ASR、音声特徴量、人物マスク等）は不変の DataAsset を生成する外部ジョブとして取り込む。
 
 ## 関係グラフを混同しない

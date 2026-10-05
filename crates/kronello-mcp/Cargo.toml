@@ -21,6 +21,6 @@ uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 kronello-service = { path = "../kronello-service", features = ["test-adapter-unavailable", "test-job-control"] }
-kronello-jobs = { path = "../kronello-jobs" }
+kronello-jobs = { path = "../kronello-jobs", features = ["test-support"] }
 jsonschema = { version = "0.46", default-features = false }
 tempfile = "3"

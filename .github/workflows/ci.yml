@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -14,10 +15,11 @@ defaults:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_BUILD_JOBS: "3"
 
 jobs:
   windows-store:
-    name: Windows (storage processes)
+    name: Windows (storage and job processes)
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
@@ -28,6 +30,16 @@ jobs:
         run: rustup show
       - name: Test storage and operational example
         run: cargo test -p kronello-store --all-targets --locked
+      - name: Verify jobs/platform real processes and record evidence
+        if: always()
+        run: python scripts/job_evidence.py
+      - name: Upload JOB-002 evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: job-002-${{ runner.os }}-${{ runner.arch }}
+          path: target/job-002-evidence
+          if-no-files-found: error
 
   macos:
     name: macOS (Apple Silicon)
@@ -67,6 +79,16 @@ jobs:
           python3 -m unittest discover -s scripts/tests -v
       - name: Run workspace tests
         run: cargo test --workspace --locked
+      - name: Verify job real processes and record evidence
+        if: always()
+        run: python3 scripts/job_evidence.py
+      - name: Upload JOB-002 evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: job-002-${{ runner.os }}-${{ runner.arch }}
+          path: target/job-002-evidence
+          if-no-files-found: error
       - name: Run small CPU integration test
         env:
           KRONELLO_INTEGRATION_TESTS: "1"
@@ -125,7 +147,7 @@ jobs:
       - name: Install FFmpeg development dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes pkg-config libavcodec-dev libavformat-dev libavutil-dev libswscale-dev ffmpeg
+          sudo apt-get install --yes pkg-config libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev ffmpeg
       - name: Check formatting
         run: cargo fmt --all --check
       - name: Lint with warnings denied
@@ -139,6 +161,16 @@ jobs:
           python3 -m unittest discover -s scripts/tests -v
       - name: Run workspace tests
         run: cargo test --workspace --locked
+      - name: Verify job real processes and record evidence
+        if: always()
+        run: python3 scripts/job_evidence.py
+      - name: Upload JOB-002 evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: job-002-${{ runner.os }}-${{ runner.arch }}
+          path: target/job-002-evidence
+          if-no-files-found: error
       - name: Run small CPU integration test
         env:
           KRONELLO_INTEGRATION_TESTS: "1"

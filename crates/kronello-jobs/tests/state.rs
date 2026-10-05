@@ -2,6 +2,9 @@ use kronello_jobs::*;
 use serde_json::json;
 use std::time::Duration;
 
+#[path = "../src/test_support.rs"]
+mod cleanup;
+
 #[test]
 #[cfg(unix)]
 fn spawn_registers_owner_before_worker_initialization() {
@@ -12,7 +15,9 @@ fn spawn_registers_owner_before_worker_initialization() {
     std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
     let store = JobStore::open(JobConfig::at(temp.path())).unwrap();
     let record = submit(&store);
+    let _cleanup = cleanup::WorkerCleanup::new(temp.path()).unwrap();
     store.spawn(&record.id, &executable).unwrap();
+    _cleanup.capture_registered().unwrap();
     let owner = store.get(&record.id).unwrap();
     let pid =
         nix::unistd::Pid::from_raw(owner.worker_pid.expect("spawn must register child PID") as i32);
@@ -60,7 +65,6 @@ fn heartbeat_lock_wait_is_bounded_and_can_be_retried() {
 }
 
 #[test]
-#[cfg(unix)]
 fn expired_heartbeat_of_live_owner_preserves_queued_and_running_leases() {
     let temp = tempfile::tempdir().unwrap();
     let store = JobStore::open(JobConfig::at(temp.path())).unwrap();
