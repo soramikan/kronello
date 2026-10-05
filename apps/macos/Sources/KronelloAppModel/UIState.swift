@@ -35,7 +35,7 @@ public struct ProjectUIState: Codable, Equatable, Sendable {
 }
 
 /// UI time is an integer fraction. Display geometry may use Double; persisted time never does.
-public struct RationalTime: Codable, Equatable, Sendable {
+public struct RationalTime: Codable, Equatable, Hashable, Sendable {
     public let num: String
     public let den: String
     public init(num: Int64, den: Int64) {
