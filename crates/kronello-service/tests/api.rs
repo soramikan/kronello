@@ -46,6 +46,9 @@ fn invalid(json: Json) {
 fn scene(path: &Path, composition: CompositionId, expand_instances: bool) -> SceneQueryResult {
     let ResultData::Scene(r) = service()
         .dispatch(Request::SceneQuery(SceneQueryRequest {
+            search: Default::default(),
+            limit: None,
+            cursor: None,
             evaluation: None,
             project: path.into(),
             composition,
@@ -80,6 +83,7 @@ fn scene_tree_preserves_order_parents_ranges_and_instance_identity() {
         let id = NodeId::new();
         root.root_nodes.push(id);
         root.nodes.push(SceneNode {
+            tags: Default::default(),
             name: None,
             enabled: true,
             id,
@@ -118,6 +122,20 @@ fn scene_tree_preserves_order_parents_ranges_and_instance_identity() {
     assert_eq!(a.children, vec![text.key.clone()]);
     assert!(matches!(a.kind, NodeKind::Shape { .. }));
     assert_eq!(expanded.revision, "1");
+    // API-002 pages keep repeated definitions distinct by complete runtime key.
+    let mut request = json!({"operation":"scene.query","project":path,"composition":root_id,
+        "expand_instances":true,"limit":1,"search":{"kinds":["shape"]}});
+    let first = serde_json::to_value(service().execute_json(&request.to_string())).unwrap();
+    request["cursor"] = first["result"]["value"]["next_cursor"].clone();
+    let second = serde_json::to_value(service().execute_json(&request.to_string())).unwrap();
+    assert_eq!(
+        first["result"]["value"]["nodes"][0]["key"]["node"],
+        second["result"]["value"]["nodes"][0]["key"]["node"]
+    );
+    assert_ne!(
+        first["result"]["value"]["nodes"][0]["key"]["instance_path"],
+        second["result"]["value"]["nodes"][0]["key"]["instance_path"]
+    );
     assert!(dir.path().is_dir());
 }
 
@@ -206,6 +224,7 @@ fn capabilities_registry_media_extension_without_device_initialization() {
     ) else {
         panic!()
     };
+    // API-002 extends existing payloads and EditCommand; no new operation.
     assert_eq!(c.commands.len(), 36);
     assert_eq!(c.api_schema_version, 1);
     assert_eq!(c.semantic_versions.document, PROJECT_SEMANTIC_VERSION);
@@ -484,6 +503,7 @@ fn history_pages_sessions_changed_keys_and_undo_outside_page() {
     let get = |since: &str, limit, filter| {
         let ResultData::History(h) = service()
             .dispatch(Request::HistoryList(HistoryRequest {
+                cursor: None,
                 project: path.clone(),
                 since_revision: since.into(),
                 limit,
@@ -675,6 +695,7 @@ fn sampling_resolves_composition_inputs_placement_bindings_and_local_time() {
     let node = NodeId::new();
     root.root_nodes.push(node);
     root.nodes.push(SceneNode {
+        tags: Default::default(),
         name: None,
         enabled: true,
         id: node,

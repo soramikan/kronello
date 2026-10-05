@@ -448,6 +448,7 @@ mod tests {
                 panic!()
             };
             let node = SceneNode {
+                tags: Default::default(),
                 name: None,
                 enabled: true,
                 id: NodeId::new(),

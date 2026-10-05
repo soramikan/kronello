@@ -187,3 +187,16 @@ SQLite は bundled の `rusqlite` を使用する。`rusqlite` / `libsqlite3-sys
 `ProjectStore::apply_with_payload` は service の canonical payload を receipt に保存する。`BEGIN IMMEDIATE` 内で receipt を先に照合し、一致すれば元の Event、異なれば `IDEMPOTENCY_KEY_REUSED`。新規要求だけ revision を照合して通常の atomic apply を行う。既存 `apply` の生 patch caller の契約は変えない。`snapshot_and_events` は文書と履歴を一つの読み取り transaction で取得する。Undo は `apply_with_payload_checked` に service の検証 callback を渡し、同じ `BEGIN IMMEDIATE` 内で receipt / revision 照合後に対象の存在・未取り消し状態・後続 active Event の競合・inverse 後候補を再検証してから保存する。revision を変更しない compact も同じ writer lock で直列化されるため、消えた対象の逆操作を commit しない。
 
 保存 `Set` / `Remove` の path は、object member のほか ID を持つ配列 member を UUID で選択できる。配列番号は使わない。追加・削除・逆操作が別 Property の後続変更を上書きしない。空の optional shapes / texts は公開 serializer が省略するため、member Set で collection を作り、inverse は member Remove とする。UUID member 指定は Project の compositions / curves / shapes / texts、Composition の nodes / properties、SceneNode の properties に限定する。Modifier を含むその他の配列は全体を置換し、service が親コンテナの競合を判定する。64 revision ごとの完全 snapshot、既存 patch の読み込み、compact の receipt 保持は従来どおり。詳細は [08 API](08-api-cli-mcp.md#m2-service-001-の実装範囲) と [検証](../testing/service-001.md) を参照する。
+
+
+## API-002 の固定 history cursor
+
+history.list は初回 read transaction の Project UUID / revision / 最古 Event UUID を cursor に固定する。
+再送時も同じ since_revision / limit / session_id と project を明示し、
+固定 revision 以下の全イベントから undone を計算してから session filter と page を適用する。
+後続 edit / Undo / Redo は混ぜない。compact による history prefix の削除は CURSOR_EXPIRED。
+scene.query は同じ stable runtime key の owner order と snapshot_at を使い、削除済み snapshot を同じ error にする。
+DB table、compact の保持規則、選択 Undo の意味は変更しない。
+next_since_revision のみの従来取得は最新 snapshot を開始するため、固定取得には next_cursor を使う。
+[ADR-0072](../adr/0072-scene-search-fixed-cursors-and-cli-events.md) と
+[検証](../testing/api-002.md) を参照。

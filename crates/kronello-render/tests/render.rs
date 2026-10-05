@@ -52,6 +52,7 @@ fn constant(key: &str, value: Value) -> Property {
 }
 fn node(kind: NodeKind, properties: Vec<Property>) -> SceneNode {
     SceneNode {
+        tags: Default::default(),
         name: None,
         enabled: true,
         effects: vec![],

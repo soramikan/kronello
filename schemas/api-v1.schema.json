@@ -412,6 +412,101 @@
         }
       ]
     },
+    "CliEvent": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "record": {
+              "const": "header",
+              "type": "string"
+            },
+            "sequence": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "record",
+            "version",
+            "sequence"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "completed": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "record": {
+              "const": "progress",
+              "type": "string"
+            },
+            "sequence": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "total": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "record",
+            "sequence",
+            "completed",
+            "total"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "outcome": {
+              "$ref": "#/$defs/CliEventOutcome"
+            },
+            "record": {
+              "const": "terminal",
+              "type": "string"
+            },
+            "response": {
+              "$ref": "#/$defs/Response"
+            },
+            "sequence": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "record",
+            "sequence",
+            "outcome",
+            "response"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "CliEventOutcome": {
+      "enum": [
+        "end",
+        "cancelled",
+        "error"
+      ],
+      "type": "string"
+    },
     "Clip": {
       "additionalProperties": false,
       "properties": {
@@ -1405,6 +1500,39 @@
           },
           "required": [
             "node_add"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "node_tags_set": {
+              "additionalProperties": false,
+              "properties": {
+                "composition": {
+                  "$ref": "#/$defs/CompositionId"
+                },
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                },
+                "tags": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array",
+                  "uniqueItems": true
+                }
+              },
+              "required": [
+                "composition",
+                "node",
+                "tags"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "node_tags_set"
           ],
           "type": "object"
         },
@@ -2881,6 +3009,12 @@
     "HistoryRequest": {
       "additionalProperties": false,
       "properties": {
+        "cursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "limit": {
           "default": 100,
           "format": "uint",
@@ -2917,6 +3051,12 @@
             "$ref": "#/$defs/HistoryEntry"
           },
           "type": "array"
+        },
+        "next_cursor": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "next_since_revision": {
           "type": [
@@ -6258,6 +6398,12 @@
         {
           "additionalProperties": false,
           "properties": {
+            "cursor": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "limit": {
               "default": 100,
               "format": "uint",
@@ -6297,6 +6443,12 @@
             "composition": {
               "$ref": "#/$defs/CompositionId"
             },
+            "cursor": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "evaluation": {
               "anyOf": [
                 {
@@ -6311,12 +6463,28 @@
               "default": false,
               "type": "boolean"
             },
+            "limit": {
+              "format": "uint",
+              "maximum": 1000,
+              "minimum": 1,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
             "operation": {
               "const": "scene.query",
               "type": "string"
             },
             "project": {
               "type": "string"
+            },
+            "search": {
+              "$ref": "#/$defs/SceneSearch",
+              "default": {
+                "kinds": [],
+                "tags": []
+              }
             }
           },
           "required": [
@@ -7112,6 +7280,17 @@
       ],
       "type": "object"
     },
+    "SceneKind": {
+      "enum": [
+        "group",
+        "null",
+        "shape",
+        "text",
+        "composition_instance",
+        "media"
+      ],
+      "type": "string"
+    },
     "SceneNode": {
       "additionalProperties": false,
       "properties": {
@@ -7163,6 +7342,15 @@
             "$ref": "#/$defs/Property"
           },
           "type": "array"
+        },
+        "tags": {
+          "description": "Search metadata only; never runtime identity.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "type": "array",
+          "uniqueItems": true
         },
         "transform_parent": {
           "anyOf": [
@@ -7302,6 +7490,13 @@
         "kind": {
           "$ref": "#/$defs/NodeKind"
         },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
         "transform_parent": {
           "anyOf": [
             {
@@ -7328,6 +7523,12 @@
         "composition": {
           "$ref": "#/$defs/CompositionId"
         },
+        "cursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "evaluation": {
           "anyOf": [
             {
@@ -7342,8 +7543,24 @@
           "default": false,
           "type": "boolean"
         },
+        "limit": {
+          "format": "uint",
+          "maximum": 1000,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "project": {
           "type": "string"
+        },
+        "search": {
+          "$ref": "#/$defs/SceneSearch",
+          "default": {
+            "kinds": [],
+            "tags": []
+          }
         }
       },
       "required": [
@@ -7363,6 +7580,12 @@
         },
         "duration": {
           "$ref": "#/$defs/Duration"
+        },
+        "next_cursor": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "nodes": {
           "description": "Containment pre-order; includes inactive nodes without evaluating values.",
@@ -7389,6 +7612,39 @@
         "roots",
         "nodes"
       ],
+      "type": "object"
+    },
+    "SceneSearch": {
+      "additionalProperties": false,
+      "properties": {
+        "kinds": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SceneKind"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "range": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimeRange"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Overlap in each node's authored local composition time, not visibility."
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
       "type": "object"
     },
     "SchemaKey": {

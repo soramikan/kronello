@@ -22,7 +22,7 @@ GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001
 ### 機械向け I/O
 
 - subcommand を指定した場合は、その payload の JSON object を stdin に渡す（`operation` を含めない）。subcommand なしの場合は `operation` を含む完全な service Request を渡す。
-- `--request-json 'JSON'` は stdin の代わりに一つの要求を渡す。入力上限は UTF-8 16 MiB。一回の起動につき一つの要求、一つの結果 JSON document と改行を stdout に出力する。NDJSON event stream は未実装。
+- `--request-json 'JSON'` は stdin の代わりに一つの要求を渡す。入力上限は UTF-8 16 MiB。一回の起動につき一つの要求、一つの結果 JSON document と改行を stdout に出力する。明示 --events ndjson は後述の API-002 framing を使う。
 - 成功は `{ "status": "success", "result": { "kind": "project|export|frame|sequence|plan|edit|history|scene|node_explanation|render_explanation|samples|capabilities|collected|job|jobs|pruned", "value": ... } }`、失敗は `{ "status": "error", "error": { "code": "INVALID_REQUEST", "message": "..." } }`。成功の exit code は 0、失敗は非 0。診断は stderr にだけ出力する。`--help` も `USAGE` JSON error と stderr の使用法（非 0）を返す。
 - backend の既定は GPU。`--backend gpu` も指定可。adapter / device を作れなければ型付きエラーを返す。GPU 不在時の暗黙の CPU fallback はない。GPU は render 操作でのみ初期化する。
 - `--backend cpu-reference` は検証用の float32 参照 backend の明示選択。metadata に `cpu_reference_float32` と記録する。通常の GPU は `wgpu_rgba16f`。両者のビット一致や性能保証は提供しない。
@@ -82,7 +82,7 @@ AST node は externally tagged の一要素 object。`"time"` は unit variant�
 | `edit.plan` | `edit plan` | `project`、`base_revision`、`commands` → `kind: plan` の EditPlan |
 | `edit.apply` | `edit apply` | 上記に `plan_hash`、`session_id`、`idempotency_key` を追加 → `kind: edit` の保存済み Event |
 | `edit.undo` | `edit undo` | `project`、`base_revision`、`session_id`、`idempotency_key`、`event_id` → 新しい Event |
-| `history.list` | `history list` | `project`、任意の `since_revision`（既定 `"0"`）/ `limit` / `session_id` → 現在 revision、Event / `undone`、次ページ cursor（API-001） |
+| `history.list` | `history list` | `project`、任意の `since_revision`（既定 `"0"`）/ `limit` / `session_id` → 現在 revision、Event / `undone`、next_since_revision（互換）/ next_cursor（API-002） |
 
 `base_revision` / `since_revision` は10進文字列、ID は UUID。Plan / HistoryResult の revision も10進文字列だが、既存 store の Event は JSON 整数の revision を返す。`idempotency_key` は空でない UTF-8 文字列（256 bytes 以下）を明示する。session は呼び出し元が決める。history は一つの SQLite 読み取り transaction で現在文書とイベントを取得し、revision 順に session・変更キー・undo_of・取り消し状態を返す。revision が進む前の receipt 再送でも元の Event 全体を返し、現在文書をその時点へ戻さない。
 
@@ -172,7 +172,7 @@ request envelope・既知 payload は未知 field と重複 field を拒否す�
 
 ### history.list のページング
 
-`since_revision` は exclusive cursor（既定 `"0"`）、limit は既定100、範囲1..=1000。任意の session_id で filter した Event を revision 昇順で返す。続きがあれば `next_since_revision` は最後に返した Event の10進 revision、なければ null。同じ filter で次の要求に cursor を渡す。結果は Event 全体（id / session_id / changed_keys / undo_of 等）、undone、現在 revision を含む。undone はページング・session filter の前に全保持履歴の Undo chain から計算するため、別 session や後続ページの Undo も反映する。各ページは一つの read transaction で整合するが、複数ページ全体を固定する snapshot cursor は提供しない。compact された Event は返さない。
+`since_revision` は exclusive cursor（既定 `"0"`）、limit は既定100、範囲1..=1000。任意の session_id で filter した Event を revision 昇順で返す。続きがあれば `next_since_revision` は最後に返した Event の10進 revision、なければ null。同じ filter で次の要求に cursor を渡す。結果は Event 全体（id / session_id / changed_keys / undo_of 等）、undone、現在 revision を含む。undone はページング・session filter の前に全保持履歴の Undo chain から計算するため、別 session や後続ページの Undo も反映する。next_since_revision のみの従来取得は各ページの read transaction 内で整合するが、ページ間は最新 revision に更新される。API-002 の next_cursor / cursor は初回 revision と undone を固定し、必要な履歴の compact は CURSOR_EXPIRED で拒否する（後述）。
 
 受け入れ条件、CPU 検証と未確認範囲は [API-001 の検証](../testing/api-001.md) を参照する。
 
@@ -490,10 +490,38 @@ MediaSlot の final compiler は既存 UNSUPPORTED_FEATURE、欠落は ASSET_MIS
   volume は同じ node の properties にある volume PropertyId。Media 音声だけに対応し、映像描画は
   COMP-002 まで `UNSUPPORTED_FEATURE`。既存 scene.query / property.sample にも同じ Property を公開する。
 - capabilities.features に document_audio / clip_volume / media_audio を追加した。
-  registry は33操作。API / Project schema と GeneratedAPI.swift を共有 generator から再生成する。
+  registry は36操作（API-002 は既存 query / EditCommand の拡張で追加操作なし）。API / Project schema と GeneratedAPI.swift を共有 generator から再生成する。
   `AvExportReport` に audio_source / audio_profile_version を追加し、省略した旧 report は explicit / 1。
 
 型付き失敗は `UNSUPPORTED_FEATURE`（profile / retime / effects / Generator / Media video）、
 `INVALID_AUDIO_INPUT`（Gain / Curve / audio compiler）、`INVALID_MEDIA_INPUT`（mode と clips の併用）、
 既存 `SOURCE_MISSING` / `ASSET_MISSING` / `ASSET_HASH_MISMATCH` / `AUDIO_SOURCE_TOO_SHORT` /
 `AUDIO_CLIPPING` / `AUDIO_OVERFLOW` / `TIME_ERROR`。検証の成功を GPU / hardware 稼働保証へ拡張しない。
+
+
+## API-002 の検索・固定ページ・CLI stream
+
+[ADR-0072](../adr/0072-scene-search-fixed-cursors-and-cli-events.md)、
+[検証](../testing/api-002.md) を契約とする。共有 registry は36操作のまま。
+
+- scene.query に search {tags,kinds,range?}、limit?（1..=1000）、cursor? を追加した。
+  tags は NFC 正規化後の case-sensitive all-of、kinds は閉じた enum の any-of。
+  range は mandatory active_range との authored local Composition time の半開区間 overlap。
+  evaluation time の可視性とは独立。所有 pre-order、InstancePath / NodeId、関係 key と revision を保持する。
+  roots / parents / children は検索や page の外の key を参照しうる。next_cursor で同じ snapshot を継続する。
+- history.list の cursor? / next_cursor は初回 revision の履歴と undone を固定する。
+  since_revision / limit / session_id は初回と同じ値を再送する。next_since_revision は互換用で、
+  それだけを使った次回要求は最新 snapshot を開始する。
+- cursor は Project UUID / operation / revision / 正規化 query parameters / 最後の stable key に束縛する。
+  INVALID_CURSOR / CURSOR_MISMATCH / CURSOR_EXPIRED は typed error。
+  compact で必要な snapshot / history prefix が消えたら初回から取得し直す。
+- SceneNode.tags は sorted set、既定空・保存省略。非空 NFC、制御文字なし、端の空白なし、
+  UTF-8 64 bytes 以下、32個以下。EditCommand.node_tags_set {composition,node,tags} が集合全体を
+  Undo 可能に置換する。Project schema version 1、旧ファイルの省略、UUID identity を維持する。
+- CLI --events ndjson は UTF-8 / LF / 各 record flush。header {record,version:1,sequence:0}、
+  0個以上の progress {record,sequence,completed,total}、一つの terminal
+  {record,sequence,outcome:end|cancelled|error,response:Response} の順。sequence は1ずつ増える。
+  end は exit 0、cancelled / error は非0。diagnostic は stderr、通常モードは一要求一 JSON と LF。
+  SIGINT は stdin 待ち・dispatch 前・frame 境界・manifest 公開前で協調取消し、書込済み状態は rollback しない。
+  stdout failure は stderr の OUTPUT_IO_ERROR、非0終了、取消 flag。閉じた pipe への terminal は保証できず、
+  terminal のない EOF は不完全。SIGTERM / SIGKILL、watch / replay / stream resume は保証しない。

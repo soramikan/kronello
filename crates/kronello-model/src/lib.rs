@@ -20,7 +20,8 @@ pub use builtin::{
 };
 pub use composition::{
     Composition, CompositionError, CompositionInstance, CompositionReference, DesignExtent,
-    InstancePath, MediaNode, NodeKind, ParentGraph, PropertyKey, SceneNode, validate_compositions,
+    InstancePath, MediaNode, NodeKind, ParentGraph, PropertyKey, SceneNode, normalize_search_tags,
+    valid_node_tags, validate_compositions,
 };
 pub use curve::{
     AnimationCurve, CurveDefinition, CurveError, CurveInterpolation, INTERPOLATION_VERSION,

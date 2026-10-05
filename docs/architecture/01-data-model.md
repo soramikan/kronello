@@ -78,3 +78,14 @@ Video / Image Media の描画は COMP-002 まで型付き未対応。
 Audio track も Composition source を持てる。Video CompositionClip は参照先の音声を一度継承する。
 出力 mode、時間写像、trim の sample phase と編集規則は
 [ADR-0063](../adr/0063-document-audio-and-clip-volume.md) と [基本音声](audio-000.md) を参照。
+
+
+## API-002 の検索 metadata
+
+SceneNode.tags は任意の sorted string set（既定空、空は保存省略）。NFC 正規形、非空、
+制御文字なし、先頭末尾の空白なし、UTF-8 64 bytes 以下、node 当たり32個以下。
+タグは runtime identity ではなく、共有 node_tags_set command と scene.query search だけが扱う metadata。
+Project schema version 1 と既存必須 active_range を維持する。
+range 検索は各 node の authored local Composition time の半開区間 overlap であり、
+評価時刻の可視性や親の retime を投影した時間とは区別する。
+[ADR-0072](../adr/0072-scene-search-fixed-cursors-and-cli-events.md) を参照。

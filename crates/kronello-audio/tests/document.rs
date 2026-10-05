@@ -65,6 +65,7 @@ fn fixture() -> (Project, CompositionId, AssetId) {
     let (id, aid) = (c.id, asset.id);
     let v = volume(PropertySource::Constant(scalar(0.5)));
     let node = SceneNode {
+        tags: Default::default(),
         name: None,
         enabled: true,
         id: NodeId::new(),
@@ -137,6 +138,7 @@ fn nested_placements_trim_negative_grid_and_request_order_are_independent() {
     // Same definition at two distinct placements; source and gain contexts stay separate.
     for offset in [t(0, 1), t(-1, 20)] {
         let n = SceneNode {
+            tags: Default::default(),
             name: None,
             enabled: true,
             id: NodeId::new(),
@@ -290,6 +292,7 @@ fn retime_effect_generator_missing_assets_and_recursive_audio_fail_typed() {
         panic!()
     };
     let recursive = SceneNode {
+        tags: Default::default(),
         name: None,
         enabled: true,
         id: NodeId::new(),

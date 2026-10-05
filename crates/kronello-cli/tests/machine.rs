@@ -51,6 +51,80 @@ fn explain_subcommands_and_tagged_requests_share_read_only_diagnostics() {
 }
 
 #[test]
+fn scene_search_history_cursors_and_tags_use_shared_cli_payloads() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("api2.kronello");
+    let mut doc = document();
+    for n in doc["compositions"][0]["nodes"].as_array_mut().unwrap() {
+        n["tags"] = json!(["search"]);
+    }
+    call(
+        &["project", "create"],
+        json!({"project":path,"document":doc}),
+        true,
+    );
+    let payload = json!({"project":path,"composition":doc["compositions"][0]["id"],"search":{"tags":["search"],"kinds":["shape","text"],"range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"1"}}},"limit":1});
+    let first = call(&["scene", "query"], payload.clone(), true);
+    let mut tagged = payload.clone();
+    tagged["operation"] = json!("scene.query");
+    jsonschema::validator_for(&kronello_service::api_json_schema())
+        .unwrap()
+        .validate(&tagged)
+        .unwrap();
+    assert_eq!(call(&[], tagged, true), first);
+    let mut second = payload.clone();
+    second["cursor"] = first["result"]["value"]["next_cursor"].clone();
+    let last = call(&["scene", "query"], second.clone(), true);
+    assert_ne!(
+        first["result"]["value"]["nodes"][0]["key"],
+        last["result"]["value"]["nodes"][0]["key"]
+    );
+    second["limit"] = json!(2);
+    assert_eq!(
+        call(&["scene", "query"], second, false)["error"]["code"],
+        "CURSOR_MISMATCH"
+    );
+    let commands = json!([{"node_tags_set":{"composition":doc["compositions"][0]["id"],"node":doc["compositions"][0]["nodes"][0]["id"],"tags":["new"]}}]);
+    let plan = call(
+        &["edit", "plan"],
+        json!({"project":path,"base_revision":"1","commands":commands}),
+        true,
+    );
+    let applied = call(
+        &["edit", "apply"],
+        json!({"project":path,"base_revision":"1","commands":commands,"plan_hash":plan["result"]["value"]["plan_hash"],"session_id":"96607679-eefd-407a-a3a8-59943f2bd82f","idempotency_key":"tags"}),
+        true,
+    );
+    let history = call(
+        &["history", "list"],
+        json!({"project":path,"limit":1}),
+        true,
+    );
+    let next = call(
+        &["history", "list"],
+        json!({"project":path,"limit":1,"cursor":history["result"]["value"]["next_cursor"]}),
+        true,
+    );
+    assert_eq!(
+        next["result"]["value"]["events"][0]["event"]["id"],
+        applied["result"]["value"]["id"]
+    );
+    assert_eq!(
+        next["result"]["value"]["revision"],
+        history["result"]["value"]["revision"]
+    );
+    call(
+        &["edit", "undo"],
+        json!({"project":path,"base_revision":"2","session_id":"96607679-eefd-407a-a3a8-59943f2bd82f","idempotency_key":"undo-tags","event_id":applied["result"]["value"]["id"]}),
+        true,
+    );
+    assert_eq!(
+        call(&["scene", "query"], payload, true)["result"]["value"]["nodes"][0]["tags"],
+        json!(["search"])
+    );
+}
+
+#[test]
 fn expression_commands_and_samples_use_the_shared_cli_api() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("expression.kronello");
@@ -663,6 +737,7 @@ fn concurrent_cli_same_key_returns_one_event_and_different_keys_conflict() {
 fn structured_api_queries_and_empty_capabilities_payload_from_real_cli() {
     let capabilities = call(&["capabilities", "get"], json!({}), true);
     assert_eq!(capabilities["result"]["kind"], "capabilities");
+    // API-002 adds parameters and an EditCommand, retaining 36 operations.
     assert_eq!(
         capabilities["result"]["value"]["commands"]
             .as_array()

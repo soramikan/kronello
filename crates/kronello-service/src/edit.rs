@@ -55,6 +55,11 @@ pub enum EditCommand {
         node: SceneNode,
         index: usize,
     },
+    NodeTagsSet {
+        composition: CompositionId,
+        node: NodeId,
+        tags: BTreeSet<String>,
+    },
     NodeRename {
         composition: CompositionId,
         node: NodeId,
@@ -134,6 +139,8 @@ pub struct UndoRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct HistoryRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
     pub project: PathBuf,
     #[serde(default = "zero")]
     pub since_revision: String,
@@ -173,6 +180,8 @@ pub struct HistoryResult {
     pub revision: String,
     pub events: Vec<HistoryEntry>,
     pub next_since_revision: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -670,6 +679,18 @@ fn apply_command(
                 property_id: property.id(),
             });
             n.properties.push(property.clone());
+        }
+        EditCommand::NodeTagsSet {
+            composition,
+            node,
+            tags,
+        } => {
+            if !kronello_model::valid_node_tags(tags) {
+                return Err(ServiceError::invalid("invalid node tags"));
+            }
+            let n = node_mut(composition_mut(project, *composition)?, *node)?;
+            structure(keys, n.id.as_uuid(), n.id.as_uuid());
+            n.tags = tags.clone();
         }
         EditCommand::NodeRename {
             composition,
@@ -1239,9 +1260,39 @@ pub(crate) fn history(r: HistoryRequest) -> Result<HistoryResult, ServiceError> 
     let store = open_existing(&r.project)?;
     let (s, events) = store.snapshot_and_events()?;
     store.close()?;
+    let binding =
+        serde_json::json!({"since_revision":since,"limit":r.limit,"session_id":r.session_id});
+    let cursor = r
+        .cursor
+        .as_deref()
+        .map(crate::paging::Cursor::decode)
+        .transpose()?;
+    let floor = events.first().map(|e| e.id.to_string());
+    let revision = if let Some(c) = &cursor {
+        c.validate("history.list", s.document.id, &binding)?;
+        if c.floor != floor || c.revision > s.revision {
+            return Err(crate::paging::expired());
+        }
+        c.revision
+    } else {
+        s.revision
+    };
+    let events: Vec<_> = events
+        .into_iter()
+        .filter(|e| e.revision <= revision)
+        .collect();
     let active = active(&events);
+    let after = if let Some(c) = &cursor {
+        events
+            .iter()
+            .find(|e| serde_json::json!(e.id) == c.after)
+            .ok_or_else(crate::paging::expired)?
+            .revision
+    } else {
+        since
+    };
     let mut selected = events.into_iter().filter(|e| {
-        e.revision > since && r.session_id.is_none_or(|session| e.session_id == session)
+        e.revision > after && r.session_id.is_none_or(|session| e.session_id == session)
     });
     let entries: Vec<_> = selected
         .by_ref()
@@ -1251,13 +1302,26 @@ pub(crate) fn history(r: HistoryRequest) -> Result<HistoryResult, ServiceError> 
             event,
         })
         .collect();
-    let next_since_revision = selected
-        .next()
-        .and_then(|_| entries.last().map(|e| e.event.revision.to_string()));
+    let more = selected.next().is_some();
+    let last = entries.last().filter(|_| more);
+    let next_cursor = last
+        .map(|entry| {
+            crate::paging::Cursor::new(
+                "history.list",
+                s.document.id,
+                revision,
+                binding,
+                serde_json::json!(entry.event.id),
+                floor,
+            )
+            .encode()
+        })
+        .transpose()?;
     Ok(HistoryResult {
-        revision: s.revision.to_string(),
+        revision: revision.to_string(),
+        next_since_revision: last.map(|e| e.event.revision.to_string()),
+        next_cursor,
         events: entries,
-        next_since_revision,
     })
 }
 
