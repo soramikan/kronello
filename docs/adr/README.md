@@ -89,6 +89,7 @@
 | [0072](0072-scene-search-fixed-cursors-and-cli-events.md) | Scene 検索・固定 revision cursor・CLI event framing | 採用 | 2026-10-05 |
 | [0073](0073-local-stroke-extensions.md) | 破線・線位置・affine 線幅を明示したローカル幾何版で扱う | 採用 | 2026-10-05 |
 
+| [0074](0074-windows-job-workers-and-process-evidence.md) | Windows worker の独立起動・確定と実プロセス検証 | 採用 | 2026-10-05 |
 | [0075](0075-sequence-edit-page-and-clip-split.md) | Sequence 編集ページと共有 Clip 分割 | 採用 | 2026-10-05 |
 | [0076](0076-buffered-device-clock-playback.md) | lock-free buffer と音声デバイス時計による再生 | 採用 | 2026-10-05 |
 | [0077](0077-template-instance-read-only-inspection.md) | テンプレート内部の評価値を停止時の読み取り検査として表示する | 採用 | 2026-10-05 |
