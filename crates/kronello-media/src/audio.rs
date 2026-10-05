@@ -28,6 +28,14 @@ impl MediaRuntime {
     /// Decode a caller-selected local audio stream and drain swresample to 48 kHz.
     /// Public project exports use decode_asset_audio for hash verification.
     pub fn decode_audio(&self, path: &Path, stream_index: u32) -> Result<DecodedAudio, MediaError> {
+        self.decode_audio_bounded(path, stream_index, MAX_AUDIO_FRAMES)
+    }
+    fn decode_audio_bounded(
+        &self,
+        path: &Path,
+        stream_index: u32,
+        budget: usize,
+    ) -> Result<DecodedAudio, MediaError> {
         let path = path.canonicalize()?;
         if !path.is_file() {
             return Err(MediaError::InvalidInput("expected local audio file".into()));
@@ -63,11 +71,12 @@ impl MediaRuntime {
             if frames
                 .len()
                 .checked_add(chunk.frames.len())
-                .is_none_or(|n| n > MAX_AUDIO_FRAMES)
+                .is_none_or(|n| n > budget.min(MAX_AUDIO_FRAMES))
             {
-                return Err(MediaError::InvalidInput(
+                return Err(kronello_audio::AudioError::BudgetExceeded(
                     "decoded audio sample budget exceeded".into(),
-                ));
+                )
+                .into());
             }
             frames.extend(chunk.frames);
         }
@@ -90,11 +99,21 @@ impl MediaRuntime {
         project_path: &Path,
         stream_index: u32,
     ) -> Result<DecodedAudio, MediaError> {
+        self.decode_asset_audio_bounded(asset, project_path, stream_index, MAX_AUDIO_FRAMES)
+    }
+    /// Decode with a remaining aggregate source budget, checked before append.
+    pub fn decode_asset_audio_bounded(
+        &self,
+        asset: &Asset,
+        project_path: &Path,
+        stream_index: u32,
+        budget: usize,
+    ) -> Result<DecodedAudio, MediaError> {
         if !matches!(asset.kind, AssetKind::Audio | AssetKind::Video) {
             return Err(MediaError::InvalidInput("asset is not audio/video".into()));
         }
         let path = resolve_asset(asset, project_path)?;
-        let decoded = self.decode_audio(&path, stream_index)?;
+        let decoded = self.decode_audio_bounded(&path, stream_index, budget)?;
         if content_hash(&path)? != asset.content_hash {
             return Err(MediaError::AssetHashMismatch(path.display().to_string()));
         }

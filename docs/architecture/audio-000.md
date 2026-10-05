@@ -1,6 +1,6 @@
 # AUDIO-000 基本音声と A/V 書き出し
 
-設計契約: [ADR-0049](../adr/0049-audio-bus-timing-and-codec.md)。基本音声の library API を実装する。AUDIO-000 の範囲は定数音量の明示配置。AUDIO-003 で文書由来の再帰配置・音量 Property / Curve と共有 `render.export` / `render.submit` を追加した。AUDIO-004 は明示 resample・audio clip Gain effect・Generator・crossfade を movie profile 3 へ追加した。実時間 callback、pitch-preserving stretch、長尺 streaming は後続。
+設計契約: [ADR-0049](../adr/0049-audio-bus-timing-and-codec.md)。基本音声の library API を実装する。AUDIO-000 の範囲は定数音量の明示配置。AUDIO-003 で文書由来の再帰配置・音量 Property / Curve と共有 `render.export` / `render.submit` を追加した。AUDIO-004 は明示 resample・audio clip Gain effect・Generator・crossfade を movie profile 3 へ追加した。AUDIO-002 は buffered realtime playback を追加した（実デバイスの受け入れは pending host run）。pitch-preserving stretch、長尺 streaming は後続。
 
 ## 依存境界
 
@@ -49,7 +49,7 @@ RenderSnapshot の既存 hash は映像文書・素材 lock を識別する。ex
 
 最終映像は explicit background を使う SDR linear Rec.709 → BT.709 encoded RGB → RGBA8 → ProRes。音声は stereo f32 → 明示 clipping policy → PCM24。stage の audio / video の sample 数・duration を要求と照合し、mux 後も codec / start PTS / duration / metadata を確認する。最終ファイルは既存成果物を上書きせず同じ volume の stage から確定する。
 
-保守的な memory budget と対応 codec / layout / timing の範囲は ADR-0049 に記載する。大型 export の streaming、hardware / GPU 常駐転送、cancel / resume、実時間 playback は別の契約で昇格する。検証は [AUDIO-000](../testing/audio-000.md) を参照。
+保守的な memory budget と対応 codec / layout / timing の範囲は ADR-0049 に記載する。大型 export の streaming、hardware / GPU 常駐転送、cancel / resume は後続。実時間 playback は下記 AUDIO-002 の別契約で扱う。検証は [AUDIO-000](../testing/audio-000.md) を参照。
 
 ## AUDIO-003: 文書音声と音量
 
@@ -117,3 +117,24 @@ Protected / hold / loop map、任意 Generator、外部 effect、pitch-preservin
 Composition target の profile 3 は既存の recursive unity audio を使う。typed error は
 `UNSUPPORTED_FEATURE`、`AUDIO_BUDGET_EXCEEDED`、`INVALID_AUDIO_INPUT`、
 `AUDIO_SOURCE_TOO_SHORT`、`AUDIO_OVERFLOW` と既存 asset / time / clipping codes。
+
+## AUDIO-002: buffered realtime playback
+
+[ADR-0076](../adr/0076-buffered-device-clock-playback.md)、[検証](../testing/audio-002.md)。
+`kronello-service::PreparedAudio` は revision を照合した owned evaluator-2 plan と immutable
+decoded sources を持つ preview runtime resource。共有 registry の operation ではない。
+`render_block` は absolute `[start_sample,start_sample+frames)`、最大4096 frames の binary stereo f32。
+同じ入力の export evaluator と PCM24 前の bits を比較する。source 合計は既存28800000 frames、
+decode は残 budget を append 前に確認し `AUDIO_BUDGET_EXCEEDED`。
+
+macOS の preparation / producer queues は作品・Metal worker と別。`AVAudioSourceNode` callback は
+32768-frame C11 lock-free SPSC ring の copy / silence だけ。Rust FFI / JSON / disk / evaluator を
+callback に入れない。snapshot 変更は producer block 境界で公開する。buffer の編集待ちは最大
+682.667 ms + output latency + preparation。source の再生に独立した GUI 編集状態を作らない。
+
+master は callback の output sampleTime / hostTime。exact integer math で latency を補償して
+frame floor を求める。seek は既存 rational floor 格子へ flush、stop/resume は整数 sample を保持。
+underrun は silence / count、遅着 sample は破棄し device clock を継続する。
+producer / timestamp / device change の typed failures を表示する。音声なし / mute / デバイスなしは
+理由付き host clock。実 engine + Metal の40秒×3-rate harness と解析手順は検証文書を参照し、
+CPU / export / synthetic callback checks を実時間同期の受け入れに読み替えない。

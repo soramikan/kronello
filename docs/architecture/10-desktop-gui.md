@@ -123,6 +123,19 @@ readout は軸ラベルの余白を避け、右端で左側へ反転する。foc
 
 ## 画面の範囲
 
+AUDIO-002 の playback は [ADR-0076](../adr/0076-buffered-device-clock-playback.md)、
+[実デバイスの測定手順](../testing/audio-002.md) に従う。`kronello-service::PreparedAudio` と
+producer-only binary C ABI は Metal と同様の preview runtime resource で、process-local handle を
+stateless Command / Query registry に追加しない。sample semantics は共有 export evaluator 2。
+preparation / producer queues、既存 project / Metal worker、AVAudioSourceNode render thread を分離する。
+callback は事前確保した32768-frame lock-free SPSC buffer の copy / silence と timestamp / counters だけ。
+MainActor の `EditorModel` が device sample / host timestamp による presentation timer を所有し、
+frame ごとの scene / project / history reload を行わない。MetalPreview は最新要求へ集約する。
+mute / 音声なし / デバイスなしは host clock と理由を status に示し、underrun と typed error も表面化する。
+GUI-003 は typed `configurePlayback(target: .sequence(id), rateNum: ..., rateDen: ...)` を使い、
+Motion は nil/default Composition。ページ側の再生 timer は不要。実 engine / Metal / listening と
+Dark / Light の status・単独 focus の確認は pending host run。
+
 | タスク | 内容 |
 |---|---|
 | FFI-001 | `kronello-ffi`、Swift からの Command / Query 呼び出し、CAMetalLayer へのプレビュー表示 |

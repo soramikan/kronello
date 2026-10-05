@@ -47,9 +47,15 @@ struct MetalPreview: NSViewRepresentable {
         let model: EditorModel
         weak var view: MetalView?
         var attached = false
+        var configuredSize: [UInt32] = []
         var needsRender = false
         var task: Task<Void, Never>?
-        init(_ model: EditorModel) { self.model = model }
+        init(_ model: EditorModel) {
+            self.model = model
+            model.waitForVideoPresentation = { [weak self] in
+                if let task = self?.task { await task.value }
+            }
+        }
         func schedule() {
             needsRender = true
             guard task == nil else { return }
@@ -58,7 +64,7 @@ struct MetalPreview: NSViewRepresentable {
                 do {
                     while needsRender && !Task.isCancelled {
                         needsRender = false
-                        guard let view, let native = model.transport as? NativeProjectTransport, let composition = model.ui.composition else { return }
+                        guard let view, let native = model.transport as? NativeProjectTransport, model.activePlaybackTarget != nil else { return }
                         // Surface configuration can change drawableSize. Always derive the next
                         // extent from view geometry so repeated half/quarter requests do not shrink.
                         let backing = view.window?.backingScaleFactor ?? 1
@@ -73,10 +79,19 @@ struct MetalPreview: NSViewRepresentable {
                         if !attached {
                             try await native.session.attach(metalLayer: Unmanaged.passUnretained(view.metal).toOpaque(), width: width, height: height)
                             attached = true
-                        } else { try await native.session.resize(width: width, height: height) }
-                        _ = try await native.session.redraw(NativeProjectTransport.request(["operation": "render.frame", "input": [
-                            "project": model.path, "composition": composition, "fonts": model.fonts,
-                            "region": ["origin": [0, 0], "extent": [model.extent.width, model.extent.height], "pixels": [width, height]]], "time": model.ui.time.wire]))
+                            configuredSize = [width, height]
+                        } else if configuredSize != [width, height] {
+                            try await native.session.resize(width: width, height: height); configuredSize = [width, height]
+                        }
+                        let frame = model.frame, time = model.ui.time.wire, epoch = model.playback.clockEpoch
+                        guard let target = model.activePlaybackTarget else { return }
+                        let response = try await native.session.redraw(NativeProjectTransport.request(["operation": "render.frame", "input": [
+                            "project": model.path, "target": target.wire, "fonts": model.fonts,
+                            "region": ["origin": [0, 0], "extent": [model.extent.width, model.extent.height], "pixels": [width, height]]], "time": time]))
+                        if model.playing, model.playback.master == .audioDevice, epoch == model.playback.clockEpoch,
+                           ProcessInfo.processInfo.environment["KRONELLO_AUDIO_TRACE"] != nil {
+                            try model.playbackEvidence.presented(frame: frame, rateNum: model.activePlaybackRateNum, rateDen: model.activePlaybackRateDen, playback: model.playback, response: response)
+                        }
                     }
                 } catch is CancellationError {} catch { model.previewFailure = model.serviceFailure(error) }
             }

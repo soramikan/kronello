@@ -8,6 +8,35 @@ use std::{
 };
 
 #[test]
+fn binary_audio_invalid_buffers_return_owned_typed_errors() {
+    let mut error = std::ptr::null_mut();
+    let mut has_audio = true;
+    // SAFETY: output pointers are writable; null input is rejected before reading.
+    let resource =
+        unsafe { kronello_audio_prepare(std::ptr::null(), 0, &mut has_audio, &mut error) };
+    assert!(resource.is_null());
+    assert!(!has_audio);
+    assert!(!error.is_null());
+    // SAFETY: live owned C string from prepare, freed once after decoding.
+    let value: Value =
+        unsafe { serde_json::from_slice(std::ffi::CStr::from_ptr(error).to_bytes()).unwrap() };
+    assert_eq!(value["code"], "INVALID_REQUEST");
+    unsafe { kronello_free(error) };
+    let mut output = [1.0; 2];
+    // SAFETY: invalid resource is null, error/output are writable.
+    assert!(!unsafe {
+        kronello_audio_render(std::ptr::null(), 0, 1, output.as_mut_ptr(), &mut error)
+    });
+    let value: Value =
+        unsafe { serde_json::from_slice(std::ffi::CStr::from_ptr(error).to_bytes()).unwrap() };
+    assert_eq!(value["code"], "INVALID_AUDIO_INPUT");
+    assert_eq!(output, [1.0; 2]);
+    unsafe {
+        kronello_free(error);
+        kronello_audio_free(std::ptr::null_mut());
+    }
+}
+#[test]
 fn explain_queries_cross_the_worker_abi_with_the_shared_schema() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("inspect.kronello");
@@ -257,6 +286,11 @@ fn header_matches_every_exported_function_signature() {
     let _: unsafe extern "C" fn(u64, *mut c_void, u32, u32) -> u64 = kronello_surface_attach;
     let _: extern "C" fn(u64, u32, u32) -> u64 = kronello_surface_resize;
     let _: unsafe extern "C" fn(u64, *const u8, usize) -> u64 = kronello_surface_redraw;
+    let _: unsafe extern "C" fn(*const u8, usize, *mut bool, *mut *mut c_char) -> *mut c_void =
+        kronello_audio_prepare;
+    let _: unsafe extern "C" fn(*const c_void, i64, usize, *mut f32, *mut *mut c_char) -> bool =
+        kronello_audio_render;
+    let _: unsafe extern "C" fn(*mut c_void) = kronello_audio_free;
     let header = include_str!("../../../apps/macos/Sources/CKronelloFFI/include/kronello.h");
     for declaration in [
         "uint64_t kronello_open(const uint8_t *path, size_t len, const uint8_t *worker_executable, size_t worker_executable_len);",
@@ -268,6 +302,9 @@ fn header_matches_every_exported_function_signature() {
         "uint64_t kronello_surface_attach(uint64_t handle, void *metal_layer, uint32_t width, uint32_t height);",
         "uint64_t kronello_surface_resize(uint64_t handle, uint32_t width, uint32_t height);",
         "uint64_t kronello_surface_redraw(uint64_t handle, const uint8_t *json, size_t len);",
+        "void *kronello_audio_prepare(const uint8_t *json, size_t len, bool *has_audio, char **error);",
+        "bool kronello_audio_render(const void *resource, int64_t start_sample, size_t frames, float *output, char **error);",
+        "void kronello_audio_free(void *resource);",
     ] {
         assert!(
             header.lines().any(|l| l == declaration),
@@ -279,9 +316,11 @@ fn header_matches_every_exported_function_signature() {
             .lines()
             .filter(|l| l.starts_with("uint64_t kronello_")
                 || l.starts_with("void kronello_")
+                || l.starts_with("void *kronello_")
+                || l.starts_with("bool kronello_")
                 || l.starts_with("char *kronello_"))
             .count(),
-        9
+        12
     );
 }
 

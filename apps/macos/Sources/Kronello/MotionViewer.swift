@@ -9,7 +9,6 @@ struct MotionViewer: View {
     @State private var canvasEdit: CanvasEdit?
     @State private var panOrigin: CGPoint?
     @State private var penPoints: [CGPoint] = []
-    @State private var playingTask: Task<Void, Never>?
     @State private var floatingPreview = CGSize.zero
     @State private var spatialPath = SpatialPath()
     @State private var parentPath = SpatialPath()
@@ -41,26 +40,21 @@ struct MotionViewer: View {
                     }.onAppear { viewerSize = proxy.size }
                         .onChange(of: proxy.size) { _, size in viewerSize = size; floatingPreview = .zero }
                 }.frame(maxHeight: .infinity).background(p.surface0)
+                HStack(spacing: 0) {
+                KRButton(icon: model.playbackMuted ? .volumeX : .volume2, accessibilityLabel: model.playbackMuted ? "音声のミュートを解除" : "音声をミュート") {
+                    model.playbackMuted.toggle()
+                }.padding(.horizontal, KRSpace.space2)
                 KRTransportBar(frames: Binding(get: { model.frame }, set: { _ in }), fps: model.nominalFPS, duration: model.durationCode,
                     playing: $model.playing, looping: $model.ui.looping, zoom: $model.ui.zoom, resolution: $model.ui.resolution,
                     onSeek: model.seek, onStep: { model.seek(model.frame + Int64($0)) }, onBoundary: { model.seek($0 ? model.durationFrames - 1 : 0) })
+                }
             }
         }.task(id: model.revision + "/" + (model.ui.selection ?? "") + "/" + (model.ui.composition ?? "")) {
             spatialPath = .init(); parentPath = .init(); pathParent = nil; pathFailure = nil
             do { parentPath = try await model.spatialPath(); remapPath() }
             catch is CancellationError {} catch { if !Task.isCancelled { pathFailure = model.serviceFailure(error) } }
         }.onChange(of: model.refreshToken) { _, _ in remapPath() }
-            .onChange(of: model.playing) { _, value in
-            playingTask?.cancel()
-            if value {
-                playingTask = Task { @MainActor in
-                    while !Task.isCancelled && model.playing {
-                        try? await Task.sleep(for: .seconds(Double(model.rateDen) / Double(model.rateNum)))
-                        if !Task.isCancelled { model.tick() }
-                    }
-                }
-            }
-        }.onDisappear { playingTask?.cancel(); model.playing = false }
+        .onDisappear { model.playing = false }
     }
     func remapPath() {
         guard !parentPath.points.isEmpty || !parentPath.keys.isEmpty else { return }

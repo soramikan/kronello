@@ -246,8 +246,14 @@ mod metal {
             }
             self.gpu.queue.submit([encoder.finish()]);
             self.gpu.queue.present(frame);
+            // Submission timestamp, not a physical scanout measurement.
+            unsafe extern "C" {
+                fn mach_absolute_time() -> u64;
+            }
+            // SAFETY: platform clock call without pointer arguments.
+            let presentation_host_time = unsafe { mach_absolute_time() };
             Ok(
-                json!({"status":"success","preview":{"revision":revision,"pixels":[self.config.width,self.config.height],"backend":"metal","image_readbacks":0,"presented":true}}),
+                json!({"status":"success","preview":{"revision":revision,"pixels":[self.config.width,self.config.height],"backend":"metal","image_readbacks":0,"presented":true,"presentation_host_time":presentation_host_time.to_string()}}),
             )
         }
     }

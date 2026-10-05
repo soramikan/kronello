@@ -96,6 +96,25 @@ fn request(path: &Path, rate: FrameRate) -> AvExportRequest {
     }
 }
 #[test]
+fn bounded_decode_rejects_before_exceeding_remaining_source_budget() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("bounded.wav");
+    write_wave(&path, 48000, 2, 128);
+    let asset = asset(&path);
+    let runtime = MediaRuntime::load().unwrap();
+    for budget in [0, 1, 127] {
+        let error = runtime
+            .decode_asset_audio_bounded(&asset, dir.path(), 0, budget)
+            .unwrap_err();
+        assert_eq!(error.code(), "AUDIO_BUDGET_EXCEEDED");
+    }
+    let decoded = runtime
+        .decode_asset_audio_bounded(&asset, dir.path(), 0, 128)
+        .unwrap();
+    let legacy = runtime.decode_asset_audio(&asset, dir.path(), 0).unwrap();
+    assert_eq!(decoded.buffer.frames(), legacy.buffer.frames());
+}
+#[test]
 fn bundled_pcm_fixture_decodes_exact_stereo_samples() {
     let runtime = MediaRuntime::load().unwrap();
     let bytes = std::fs::read(fixture()).unwrap();

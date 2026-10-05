@@ -1,7 +1,9 @@
 //! Asynchronous native transport using the shared service for all edits.
 //! Unsafe is limited to C buffer ownership and native Metal layer interop.
 #![allow(unsafe_code)]
+mod audio;
 mod preview;
+pub use audio::*;
 use kronello_service::{
     BackendSelection, ProjectRequest, Request, Response, Service, ServiceError,
 };

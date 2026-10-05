@@ -76,7 +76,26 @@ public struct EditCandidate {
     @Published public private(set) var pendingCandidate: EditCandidate?
     @Published public var candidateBounds: CGRect?
     @Published public var keySelection: Set<KeyReference> = []
-    @Published public var playing = false
+    @Published public var playing = false { didSet { if playing != oldValue { playbackRequested() } } }
+    @Published public private(set) var playbackStatus = "停止"
+    @Published public private(set) var playbackFailure: ServiceFailure?
+    @Published public var playbackMuted = false {
+        didSet {
+            if playing {
+                do { restartPlayback(at: try playback.samplePosition()) } catch { mapFailure(error); playing = false }
+            }
+        }
+    }
+    public let playback = RealtimePlayback()
+    public let playbackEvidence = PlaybackEvidence()
+    public var waitForVideoPresentation: (() async -> Void)?
+    public private(set) var playbackTarget: PlaybackTarget?
+    public private(set) var playbackRateNum: Int64?
+    public private(set) var playbackRateDen: Int64?
+    private var playbackControl: Task<Void, Never>?
+    private var presentationTimer: Task<Void, Never>?
+    private var resumeSample: Int64?
+    private var reportedUnderruns: UInt64 = 0
     @Published public private(set) var busy = false
     @Published public private(set) var refreshToken = 0
     @Published public private(set) var jobs: [[String: Any]] = []
@@ -94,16 +113,31 @@ public struct EditCandidate {
     public var canRedo: Bool { !undoState.redo.isEmpty && !busy && pendingCandidate == nil }
     public var rateNum: Int64 { max(1, Int64(current.object("edit_rate").string("num")) ?? 24) }
     public var rateDen: Int64 { max(1, Int64(current.object("edit_rate").string("den")) ?? 1) }
-    public var nominalFPS: Int { Int((rateNum + rateDen - 1) / rateDen) }
-    public var frame: Int64 { ui.time.frames(rateNum: rateNum, rateDen: rateDen) }
+    public var nominalFPS: Int { Int((activePlaybackRateNum + activePlaybackRateDen - 1) / activePlaybackRateDen) }
+    public var frame: Int64 { ui.time.frames(rateNum: activePlaybackRateNum, rateDen: activePlaybackRateDen) }
     public var durationFrames: Int64 {
+        if case .sequence(let id) = playbackTarget {
+            let sequence = document.objects("sequences").first { $0.string("id") == id } ?? [:]
+            return sequence.objects("tracks").flatMap { $0.objects("clips") }.map {
+                playbackEndFrame($0.object("timeline_range").object("end"))
+            }.max() ?? 0
+        }
         let duration = current.object("duration")
+        return playbackEndFrame(duration)
+    }
+    private func playbackEndFrame(_ duration: [String: Any]) -> Int64 {
         let n = Int64(duration.string("num")) ?? 0, d = Int64(duration.string("den")) ?? 1
-        let top = n.multipliedReportingOverflow(by: rateNum), bottom = d.multipliedReportingOverflow(by: rateDen)
+        let top = n.multipliedReportingOverflow(by: activePlaybackRateNum), bottom = d.multipliedReportingOverflow(by: activePlaybackRateDen)
         guard n > 0, d > 0, !top.overflow, !bottom.overflow, bottom.partialValue > 0 else { return 0 }
         return top.partialValue / bottom.partialValue + (top.partialValue % bottom.partialValue == 0 ? 0 : 1)
     }
-    public var extent: CGSize { CGSize(width: current.object("design_extent").number("width"), height: current.object("design_extent").number("height")) }
+    public var extent: CGSize {
+        let extent: [String: Any]
+        if case .sequence(let id) = playbackTarget {
+            extent = document.objects("sequences").first { $0.string("id") == id }?.object("extent") ?? [:]
+        } else { extent = current.object("design_extent") }
+        return CGSize(width: extent.number("width"), height: extent.number("height"))
+    }
     public var timecode: String { KRTimecode.format(frames: max(0, frame), fps: nominalFPS) }
     public var durationCode: String { KRTimecode.format(frames: max(0, durationFrames), fps: nominalFPS) }
     public var textFont: [String: Any]? {
@@ -113,6 +147,9 @@ public struct EditCandidate {
     }
     public init(path: String, transport: any ProjectTransport, stateStore: UIStateStore = .init()) {
         self.path = path; self.transport = transport; self.stateStore = stateStore
+        playback.onFailure = { [weak self] error in
+            self?.mapFailure(error); self?.playing = false
+        }
     }
     public func start(newDocument: [String: Any]? = nil) async throws {
         do {
@@ -134,6 +171,11 @@ public struct EditCandidate {
     }
     public func close() async {
         playing = false; polling?.cancel(); stateWrite?.cancel()
+        presentationTimer?.cancel(); playbackControl?.cancel()
+        do { try await playback.stop() } catch { mapFailure(error) }
+        if let path = ProcessInfo.processInfo.environment["KRONELLO_AUDIO_TRACE"] {
+            do { try playbackEvidence.write(to: URL(fileURLWithPath: path)) } catch { mapFailure(error) }
+        }
         if !projectID.isEmpty { do { try await stateStore.save(ui, projectID: projectID) } catch { mapFailure(error) } }
         transport.close()
     }
@@ -219,12 +261,16 @@ public struct EditCandidate {
             externalChange = "別のセッション（\(actor.prefix(8))）の変更を読み込みました（rev \(previous) → \(revision)）"
         }
         refreshToken += 1
+        if previous != revision && playing, let target = activePlaybackTarget {
+            Task { do { try await playback.updateSnapshot(path: path, target: target, revision: revision) } catch { mapFailure(error); playing = false } }
+        }
     }
     public func select(_ id: String?, canvas: Bool = false) {
         if let id, canvas && ui.locked.contains(id) { return }
         ui.selection = id; deletedSelection = nil; candidateBounds = nil; numberOrigin = nil
     }
     public func setComposition(_ id: String) {
+        playing = false; resumeSample = nil; playbackTarget = nil; playbackRateNum = nil; playbackRateDen = nil
         ui.composition = id; ui.selection = nil
         Task { do { try await reload() } catch { mapFailure(error) } }
     }
@@ -240,15 +286,90 @@ public struct EditCandidate {
     }
     public func seek(_ frame: Int64) {
         let bounded = min(max(0, frame), max(0, durationFrames - 1))
-        let product = bounded.multipliedReportingOverflow(by: rateDen)
+        let product = bounded.multipliedReportingOverflow(by: activePlaybackRateDen)
         guard !product.overflow else { return }
-        ui.time = RationalTime(num: product.partialValue, den: rateNum)
-        Task { do { try await reload() } catch { mapFailure(error) } }
+        ui.time = RationalTime(num: product.partialValue, den: activePlaybackRateNum)
+        do {
+            let sample = try PlaybackMath.seekSample(frame: bounded, rateNum: activePlaybackRateNum, rateDen: activePlaybackRateDen)
+            resumeSample = sample
+            if playing { restartPlayback(at: sample) }
+            else { Task { do { try await reload() } catch { mapFailure(error) } } }
+        } catch { mapFailure(error) }
     }
     public func tick() {
-        guard playing && !busy else { return }
-        if frame + 1 >= durationFrames { if ui.looping { seek(0) } else { playing = false } }
-        else { seek(frame + 1) }
+        guard playing else { return }
+        do {
+            let sample = try playback.samplePosition()
+            let next = try PlaybackMath.videoFrame(sample: sample, rateNum: activePlaybackRateNum, rateDen: activePlaybackRateDen)
+            let status = playback.status
+            if playbackStatus != status { playbackStatus = status }
+            if let clock = playback.clock, clock.underruns > reportedUnderruns {
+                reportedUnderruns = clock.underruns
+                playbackFailure = ServiceFailure(code: "AUDIO_UNDERRUN", message: "音声バッファが不足しました（\(clock.underruns) 回、\(clock.missingFrames) samples）。クロックは継続します")
+            }
+            if next >= durationFrames {
+                if ui.looping { seek(0) } else { playing = false }
+                return
+            }
+            if next != frame {
+                let product = next.multipliedReportingOverflow(by: activePlaybackRateDen)
+                guard !product.overflow else { throw NativeError.service("TIME_ERROR", "Playback frame time overflow") }
+                ui.time = RationalTime(num: product.partialValue, den: activePlaybackRateNum)
+                // Presentation invalidation only. No scene/project/history query per frame.
+            }
+        } catch { mapFailure(error); playing = false }
+    }
+    public var activePlaybackTarget: PlaybackTarget? { playbackTarget ?? ui.composition.map(PlaybackTarget.composition) }
+    public var activePlaybackRateNum: Int64 { playbackRateNum ?? rateNum }
+    public var activePlaybackRateDen: Int64 { playbackRateDen ?? rateDen }
+    /// GUI-003 configures a Sequence target on entry; Motion uses nil/default.
+    public func configurePlayback(target: PlaybackTarget?, rateNum: Int64, rateDen: Int64) {
+        do { _ = try PlaybackMath.seekSample(frame: 0, rateNum: rateNum, rateDen: rateDen) }
+        catch { mapFailure(error); return }
+        playing = false; resumeSample = nil
+        playbackControl?.cancel()
+        playbackTarget = target; playbackRateNum = rateNum; playbackRateDen = rateDen
+    }
+    private func playbackRequested() {
+        playbackControl?.cancel(); presentationTimer?.cancel()
+        if playing {
+            do {
+                let sample = try resumeSample ?? PlaybackMath.seekSample(frame: frame, rateNum: activePlaybackRateNum, rateDen: activePlaybackRateDen)
+                restartPlayback(at: sample)
+            } catch { mapFailure(error); playing = false }
+        } else {
+            do { resumeSample = try playback.samplePosition() } catch { mapFailure(error) }
+            playbackControl = Task {
+                do {
+                    let sample = try await playback.stop()
+                    guard !Task.isCancelled, !playing else { return }
+                    resumeSample = sample; playbackStatus = playback.status
+                }
+                catch { mapFailure(error) }
+            }
+        }
+    }
+    private func restartPlayback(at sample: Int64) {
+        playbackControl?.cancel(); presentationTimer?.cancel()
+        guard let target = activePlaybackTarget else { return }
+        let revision = revision
+        playbackStatus = "音声を準備中"
+        playbackControl = Task { [self] in
+            do {
+                _ = try await playback.stop()
+                await waitForVideoPresentation?()
+                try Task.checkCancellation()
+                try await playback.start(path: path, target: target, revision: revision, at: sample, muted: playbackMuted)
+                guard !Task.isCancelled, playing else { return }
+                playbackStatus = playback.status
+                presentationTimer = Task { [weak self] in
+                    while !Task.isCancelled, let self, self.playing {
+                        self.tick()
+                        try? await Task.sleep(for: .milliseconds(8))
+                    }
+                }
+            } catch is CancellationError {} catch { mapFailure(error); playing = false }
+        }
     }
     public func submit(_ commands: [[String: Any]], label: String, base: String? = nil) {
         guard !busy && pendingCandidate == nil else { return }
