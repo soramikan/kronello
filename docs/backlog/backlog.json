@@ -936,7 +936,7 @@
       "priority": "P2",
       "area": "api",
       "title": "scene検索・paging・固定履歴cursorとevent stream",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "API-001",
         "INTEGRATION-001"
