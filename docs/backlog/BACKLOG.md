@@ -13,7 +13,7 @@
 | M0 | 0 | 0 | 6 | 0 | 6 |
 | M1 | 0 | 0 | 14 | 0 | 14 |
 | M2 | 0 | 1 | 10 | 0 | 11 |
-| M3 | 7 | 4 | 14 | 0 | 25 |
+| M3 | 7 | 3 | 15 | 0 | 25 |
 | M4 | 12 | 0 | 0 | 0 | 12 |
 | M5 | 5 | 0 | 0 | 0 | 5 |
 | M6 | 4 | 0 | 0 | 0 | 4 |
@@ -548,7 +548,7 @@
 
 ### RELEASE-001 同梱FFmpegを含む配布packageの再配置・署名検証
 
-- 優先度: P1 / 領域: release / 状態: in_progress
+- 優先度: P1 / 領域: release / 状態: done
 - 依存: MEDIA-001, AUDIO-000, CLI-001, MCP-001
 - 受け入れ条件:
   - macOSの配布packageに同梱するFFmpeg共有library・SVT-AV1・dav1d・license原文・PATENTS・source manifestを固定し、GPL/nonfree・開発用system libraryを含めないことを検証する

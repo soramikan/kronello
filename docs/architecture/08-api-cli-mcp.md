@@ -17,6 +17,8 @@ GUI・CLI・MCP は同じ Command / Query API を使う（[ADR-0001](../adr/0001
 
 `document` は [公開 schema 1](../../schemas/project-v1.schema.json) の `Project` 型を共有する。request envelope は別の型であり、未知 field と重複 field を拒否する。Project 内の未知内容は store の規約で保持する。`project.create` は一時ファイル内で import / close を完了してから上書き禁止で公開する。`project.import` は既存ファイルを対象とし、明示した revision に一致する場合だけ更新する。project.create / project.import は store の event を記録するが、これら二つの操作の変更計画・再送の冪等性 API は未実装（以下の edit.* は対応済み）。読み取りと render で存在しない project を作成しない。
 
+JSON object の field 順は decode 結果に影響しない。`Value` / `PropertySource<T>` 等の tag 付き数値 payload は tag を確認してから raw JSON を具体型へ decode し、`value` が `kind` より先に来ても同じ値・検証結果を得る。未知 field・重複 field・不正値の拒否は維持する。保存時の未知数値の綴りと content hash を保つため、ADR-0046 の `arbitrary_precision` / `float_roundtrip` は維持する。公開 schema と保存形式の版は変更しない。[検証と型の監査](../testing/json-field-order.md) を参照。
+
 `RenderInput` は `project`、`composition`（stable UUID）または NLE-001 の `target`、`region`（origin / extent / pixels）、任意の `profile`（既定は linear Rec.709 / tolerance 0.02 px）、任意の `fonts` を持つ。fonts は `{ "identity": FontRef, "path": "local/file.otf" }` の配列とし、snapshot が必要とする font lock をすべて明示する。hash・face index・family・PostScript 名を照合し、システムフォント探索や外部取得はしない。path は process の作業ディレクトリ基準（絶対 path も可）。有理数は `{ "num": "1", "den": "2" }`、range は `{ "start": ..., "end": ... }` とする。
 
 ### 機械向け I/O

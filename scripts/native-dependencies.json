@@ -74,5 +74,5 @@
     }
   ],
   "hash_provenance": "Pinned upstream release archive hashes cross-checked against locally installed Homebrew source SBOM; downloads must match before extraction.",
-  "distribution": "Shared FFmpeg and SVT-AV1 libraries only; copy license texts, source URLs and this manifest. GPL/nonfree builds fail verification. System development builds are never distribution input."
+  "distribution": "Shared FFmpeg, SVT-AV1 and dav1d libraries only; copy license texts, PATENTS, source URLs and this manifest. GPL/nonfree builds fail verification. System development builds are never distribution input."
 }

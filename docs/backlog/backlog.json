@@ -971,7 +971,7 @@
       "priority": "P1",
       "area": "release",
       "title": "同梱FFmpegを含む配布packageの再配置・署名検証",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "MEDIA-001",
         "AUDIO-000",
