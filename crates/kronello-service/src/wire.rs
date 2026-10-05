@@ -40,6 +40,43 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                     background: mov.background,
                 })
             }
+            "av1_mp4" | "h264_mov" | "hevc_mov" => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct Delivery {
+                    profile_version: u32,
+                    #[serde(default)]
+                    audio: kronello_audio::AudioSourceMode,
+                    #[serde(default)]
+                    audio_codec: kronello_media::DeliveryAudioCodec,
+                    clips: Vec<crate::JobAudioClip>,
+                    background: [f32; 3],
+                }
+                let mov: Delivery = payload(&fields)?;
+                Ok(match format.as_str() {
+                    "av1_mp4" => Self::Av1Mp4 {
+                        profile_version: mov.profile_version,
+                        audio: mov.audio,
+                        audio_codec: mov.audio_codec,
+                        clips: mov.clips,
+                        background: mov.background,
+                    },
+                    "h264_mov" => Self::H264Mov {
+                        profile_version: mov.profile_version,
+                        audio: mov.audio,
+                        audio_codec: mov.audio_codec,
+                        clips: mov.clips,
+                        background: mov.background,
+                    },
+                    _ => Self::HevcMov {
+                        profile_version: mov.profile_version,
+                        audio: mov.audio,
+                        audio_codec: mov.audio_codec,
+                        clips: mov.clips,
+                        background: mov.background,
+                    },
+                })
+            }
             _ => Err(D::Error::custom("unknown job output format")),
         }
     }

@@ -21,6 +21,44 @@ use crate::{
     MediaRuntime,
 };
 
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum MovieProfile {
+    #[default]
+    ProResPcm24,
+    Av1Mp4AlacV1,
+    H264AlacV1,
+    HevcAlacV1,
+}
+impl MovieProfile {
+    pub fn video_codec(self) -> EncodeCodec {
+        match self {
+            Self::ProResPcm24 => EncodeCodec::ProRes,
+            Self::Av1Mp4AlacV1 => EncodeCodec::Av1,
+            Self::H264AlacV1 => EncodeCodec::H264,
+            Self::HevcAlacV1 => EncodeCodec::Hevc,
+        }
+    }
+    pub(crate) fn native_id(self) -> i32 {
+        match self {
+            Self::ProResPcm24 => 0,
+            Self::Av1Mp4AlacV1 => 1,
+            Self::H264AlacV1 => 2,
+            Self::HevcAlacV1 => 3,
+        }
+    }
+    fn codecs(self) -> (&'static str, &'static str) {
+        match self {
+            Self::ProResPcm24 => ("prores", "pcm_s24le"),
+            Self::Av1Mp4AlacV1 => ("av1", "alac"),
+            Self::H264AlacV1 => ("h264", "alac"),
+            Self::HevcAlacV1 => ("hevc", "alac"),
+        }
+    }
+}
+
 /// Owned export envelope. Version 1 retains explicit M2 audio; version 2
 /// pins source selection and document-compiled placements.
 /// Both inputs are owned, immutable through this API, and hashed together.
@@ -32,6 +70,8 @@ pub struct AvExportSnapshot {
     clips: Vec<AudioClip>,
     #[serde(default, skip_serializing_if = "is_explicit")]
     audio: AudioSourceMode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    movie_profile: Option<MovieProfile>,
 }
 impl AvExportSnapshot {
     pub fn new(render: &RenderSnapshot, clips: Vec<AudioClip>) -> Result<Self, MediaError> {
@@ -40,6 +80,7 @@ impl AvExportSnapshot {
             render: render.clone(),
             clips,
             audio: AudioSourceMode::Explicit,
+            movie_profile: None,
         };
         snapshot.validate()?;
         Ok(snapshot)
@@ -79,9 +120,30 @@ impl AvExportSnapshot {
             render: render.clone(),
             clips,
             audio,
+            movie_profile: None,
         };
         snapshot.validate()?;
         Ok(snapshot)
+    }
+    /// Additional movie profiles always pin evaluator 2 (audio envelope 3).
+    pub fn with_movie_profile(
+        render: &RenderSnapshot,
+        audio: AudioSourceMode,
+        clips: Vec<AudioClip>,
+        profile: MovieProfile,
+    ) -> Result<Self, MediaError> {
+        if profile == MovieProfile::ProResPcm24 {
+            return Err(MediaError::UnsupportedFeature(
+                "use legacy audio profile constructor".into(),
+            ));
+        }
+        let mut snapshot = Self::with_audio_profile(render, audio, clips, 3)?;
+        snapshot.movie_profile = Some(profile);
+        snapshot.validate()?;
+        Ok(snapshot)
+    }
+    pub fn movie_profile(&self) -> MovieProfile {
+        self.movie_profile.unwrap_or_default()
     }
     pub fn audio(&self) -> AudioSourceMode {
         self.audio
@@ -97,6 +159,14 @@ impl AvExportSnapshot {
         Ok(format!("{:x}", Sha256::digest(serde_json::to_vec(&value)?)))
     }
     pub fn validate(&self) -> Result<(), MediaError> {
+        if self
+            .movie_profile
+            .is_some_and(|p| p == MovieProfile::ProResPcm24 || self.schema_version != 3)
+        {
+            return Err(MediaError::UnsupportedFeature(
+                "delivery profiles require audio envelope 3".into(),
+            ));
+        }
         if !matches!(self.schema_version, 1..=3)
             || (self.schema_version == 1 && self.audio != AudioSourceMode::Explicit)
         {
@@ -179,6 +249,9 @@ pub struct MediaProbe {
 impl MediaProbe {
     /// Require zero-origin ProRes + stereo 48 kHz PCM24, within one audio sample.
     pub fn verify_av(&self) -> Result<(), MediaError> {
+        self.verify_movie(MovieProfile::ProResPcm24)
+    }
+    pub fn verify_movie(&self, profile: MovieProfile) -> Result<(), MediaError> {
         if self.streams.len() != 2 {
             return Err(MediaError::Encode(
                 "expected exactly two output streams".into(),
@@ -194,8 +267,9 @@ impl MediaProbe {
             .iter()
             .find(|s| s.kind == StreamKind::Audio)
             .ok_or_else(|| MediaError::Encode("missing audio stream".into()))?;
-        if video.codec != "prores"
-            || audio.codec != "pcm_s24le"
+        let (video_codec, audio_codec) = profile.codecs();
+        if video.codec != video_codec
+            || audio.codec != audio_codec
             || audio.sample_rate != Some(48_000)
             || audio.channels != Some(2)
             || video.start != Some(Rational::ZERO)
@@ -246,6 +320,8 @@ pub struct AvExportReport {
     pub audio_source: AudioSourceMode,
     #[serde(default = "legacy_audio_profile")]
     pub audio_profile_version: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub movie_profile: Option<MovieProfile>,
     pub request: AvExportRequest,
     pub sample_range: std::ops::Range<i64>,
     pub frames: Vec<FrameMetadata>,
@@ -269,6 +345,25 @@ impl MediaRuntime {
         output: &Path,
         render_hash: &str,
         export_hash: &str,
+    ) -> Result<MediaProbe, MediaError> {
+        self.mux_movie(
+            video,
+            audio,
+            output,
+            render_hash,
+            export_hash,
+            MovieProfile::ProResPcm24,
+        )
+    }
+    #[allow(clippy::too_many_arguments)] // Explicit codec contract accompanies both snapshot identities.
+    pub fn mux_movie(
+        &self,
+        video: &Path,
+        audio: &Path,
+        output: &Path,
+        render_hash: &str,
+        export_hash: &str,
+        profile: MovieProfile,
     ) -> Result<MediaProbe, MediaError> {
         for hash in [render_hash, export_hash] {
             if hash.len() != 64
@@ -300,12 +395,18 @@ impl MediaRuntime {
             render_snapshot_hash: String::new(),
             export_snapshot_hash: String::new(),
         }
-        .verify_av()?;
+        .verify_movie(profile)?;
         let temp = stage_file(output)?;
-        self.native
-            .mux_av(&video, &audio, temp.path(), render_hash, export_hash)?;
+        self.native.mux_av(
+            &video,
+            &audio,
+            temp.path(),
+            render_hash,
+            export_hash,
+            profile,
+        )?;
         let probe = self.probe(temp.path())?;
-        probe.verify_av()?;
+        probe.verify_movie(profile)?;
         for input in [video_stream, audio_stream] {
             let output_stream = probe
                 .streams
@@ -351,6 +452,17 @@ impl MediaRuntime {
     ) -> Result<AvExportReport, MediaError> {
         checkpoint(0)?;
         snapshot.validate()?;
+        let profile = snapshot.movie_profile();
+        if profile != MovieProfile::ProResPcm24 {
+            let encoder = self.capabilities.select_encoder(profile.video_codec())?;
+            if profile == MovieProfile::Av1Mp4AlacV1 && encoder.name != "libsvtav1" {
+                return Err(MediaError::EncoderUnavailable {
+                    encoder: "libsvtav1".into(),
+                    reason: "AV1 MP4 version 1 requires SVT-AV1".into(),
+                    ffmpeg: None,
+                });
+            }
+        }
         request.region.validate()?;
         if snapshot.render.profile().working_space != ColorSpace::LinearRec709 {
             return Err(MediaError::UnsupportedFeature(
@@ -465,14 +577,18 @@ impl MediaRuntime {
         let video = self.encode_video(
             &EncodeRequest {
                 output: video_file.clone(),
-                codec: EncodeCodec::ProRes,
+                codec: profile.video_codec(),
                 width: request.region.pixels[0],
                 height: request.region.pixels[1],
                 time_base: request.frame_rate.frame_to_time(1)?,
             },
             &frames,
         )?;
-        let audio = self.encode_audio(&bus, request.clipping, &audio_file)?;
+        let audio = if profile == MovieProfile::ProResPcm24 {
+            self.encode_audio(&bus, request.clipping, &audio_file)?
+        } else {
+            self.encode_alac(&bus, request.clipping, &audio_file)?
+        };
         let video_probe = self.probe(&video_file)?;
         let audio_probe = self.probe(&audio_file)?;
         let expected_video = request.range.end().checked_sub(request.range.start())?;
@@ -492,12 +608,13 @@ impl MediaRuntime {
             )));
         }
         checkpoint(frames.len() as u64)?;
-        let probe = self.mux_av(
+        let probe = self.mux_movie(
             &video_file,
             &audio_file,
             &request.output,
             &render_hash,
             &export_hash,
+            profile,
         )?;
         Ok(AvExportReport {
             schema_version: 1,
@@ -506,6 +623,7 @@ impl MediaRuntime {
             audio_render_snapshot_hash: render_hash,
             audio_source: snapshot.audio,
             audio_profile_version: snapshot.schema_version,
+            movie_profile: snapshot.movie_profile,
             request: request.clone(),
             sample_range: sample_range(request.range)?,
             frames: metadata,

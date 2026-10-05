@@ -518,6 +518,7 @@ unsafe extern "C" {
         path: *const c_char,
         samples: *const i32,
         count: i64,
+        alac: c_int,
     ) -> c_int;
     fn km_probe_open(k: *mut c_void, path: *const c_char) -> *mut c_void;
     fn km_probe_close(k: *mut c_void, format: *mut c_void);
@@ -532,6 +533,7 @@ unsafe extern "C" {
         path: *const c_char,
         render_hash: *const c_char,
         export_hash: *const c_char,
+        profile: c_int,
     ) -> c_int;
 }
 
@@ -639,12 +641,26 @@ impl Drop for NativeProbe<'_> {
     }
 }
 impl NativeRuntime {
-    pub(crate) fn encode_audio(&self, output: &Path, samples: &[i32]) -> Result<(), MediaError> {
+    pub(crate) fn encode_audio(
+        &self,
+        output: &Path,
+        samples: &[i32],
+        alac: bool,
+    ) -> Result<(), MediaError> {
         let path = path_string(output)?;
         let count = i64::try_from(samples.len() / 2)
             .map_err(|_| MediaError::InvalidInput("PCM size overflow".into()))?;
         // SAFETY: exactly two S32 samples per frame, live for the entire synchronous call.
-        if unsafe { km_audio_encode(self.0.as_ptr(), path.as_ptr(), samples.as_ptr(), count) } < 0 {
+        if unsafe {
+            km_audio_encode(
+                self.0.as_ptr(),
+                path.as_ptr(),
+                samples.as_ptr(),
+                count,
+                i32::from(alac),
+            )
+        } < 0
+        {
             return Err(MediaError::Encode(self.error()));
         }
         Ok(())
@@ -713,6 +729,7 @@ impl NativeRuntime {
         output: &Path,
         render_hash: &str,
         export_hash: &str,
+        profile: MovieProfile,
     ) -> Result<(), MediaError> {
         let video = path_string(video)?;
         let audio = path_string(audio)?;
@@ -730,6 +747,7 @@ impl NativeRuntime {
                 output.as_ptr(),
                 render_hash.as_ptr(),
                 export_hash.as_ptr(),
+                profile.native_id(),
             )
         } < 0
         {

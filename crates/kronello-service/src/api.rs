@@ -163,6 +163,7 @@ impl CapabilitiesResult {
                 "audio_gain_v1",
                 "audio_generator_v1",
                 "audio_crossfade_v1",
+                "movie_delivery_v1",
                 "composition",
                 "shape",
                 "text",
