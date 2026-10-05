@@ -6,6 +6,7 @@ from pathlib import Path
 import platform
 import stat
 import subprocess
+import threading
 from datetime import datetime, timezone
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -52,6 +53,42 @@ class Runner:
         if result.returncode not in allowed:
             raise ValueError(f"command failed ({result.returncode}): {command}: {result.stderr[-2000:]}")
         return result.stdout
+
+    def run_session(self, command, requests, *, cwd=None, env=None, timeout=180):
+        """Write JSON-RPC lines and keep stdin open until every request id has a response.
+
+        Closing stdin early would cancel in-flight requests (stdio EOF is a cancellation).
+        """
+        command = list(map(str, command))
+        cwd = str(Path(cwd).resolve()) if cwd else os.getcwd()
+        pending = {r["id"] for r in requests if "id" in r}
+        lines = []
+        process = subprocess.Popen(command, cwd=cwd, env=env, text=True, stdin=subprocess.PIPE,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        timer = threading.Timer(timeout, process.kill)
+        timer.start()
+        try:
+            for request in requests:
+                process.stdin.write(json.dumps(request) + "\n")
+            process.stdin.flush()
+            while pending:
+                line = process.stdout.readline()
+                if not line:
+                    break
+                lines.append(line)
+                message = json.loads(line)
+                pending.discard(message.get("id"))
+            process.stdin.close()
+            rest, stderr = process.communicate()
+            lines.append(rest)
+        finally:
+            timer.cancel()
+        stdout = "".join(lines)
+        self.commands.append({"command": command, "cwd": cwd, "exit_code": process.returncode,
+                              "stdout": stdout, "stderr": stderr})
+        if process.returncode != 0 or pending:
+            raise ValueError(f"session failed ({process.returncode}, missing {sorted(pending)}): {command}: {stderr[-2000:]}")
+        return stdout
 
 
 def clean_environment():

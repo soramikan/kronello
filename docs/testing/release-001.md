@@ -236,3 +236,19 @@ python3 scripts/verify_package.py \
 手順3は清掃した環境で実 binary を起動する検証を含む。CLI の実 argv は `<relocated>/bin/kronello --request-json '{"operation":"capabilities.get"}'`、MCP は `<relocated>/bin/kronello-mcp` に `initialize`（protocolVersion `2025-11-25`）→ `notifications/initialized` → `tools/call`（`capabilities.get`, arguments `{}`）の newline JSON を渡す。両方とも exit 0、canonical `library_directory=<relocated>/lib`、`substituted=false`、loaded5本の固定 ABI / LGPL / configuration と必須 codec を要求する。`<relocated>/tools/release_roundtrip <report-stem>-artifacts/roundtrip` も exit 0 / `status=passed` を要求する。実際の argv / stdin に対する応答 / cwd / exit code は verification report の `commands` に保存される。続けて ad-hoc replacement の override / 同じ roundtrip と、欠落 override / swresample の期待 exit 1 を確認する。
 
 手順3が成功した後、必要な GPU を持つ host で上記 `cargo test --workspace --locked` を実行する。公開配布は別候補に対する「Developer ID / notarization / Gatekeeper」の手動検証も必要。Windows / Linux package は別 platform 検証が必要。RELEASE-001 の完了判定、host の platform / revision / hashes / commands / exit codes 追記、backlog と ADR index の更新は supervisor が行う。
+
+## supervisor のホスト検証（2026-10-05、Apple Silicon、macOS-27.0-arm64-arm-64bit-Mach-O）
+
+統合ブランチを取り込んだ後の revision `a7a2b2a` で次を実行した。
+
+| 手順 | コマンド | 結果 |
+|---|---|---|
+| LGPL prefix の確認 | `python3 scripts/build_ffmpeg_lgpl.py --prefix target/native/ffmpeg-lgpl --verify-only` | exit 0。5 library・AV1・ProRes・PCM24 を確認 |
+| ad-hoc 署名済み package | `python3 scripts/package_macos.py --prefix target/native/ffmpeg-lgpl --sources target/native/downloads --output target/release-001/adhoc-package` | exit 0、package hash `cf9ca5658c8828990c890a65853c79ba0c8e5e55e20efc34dad729e29d2ca3bf` |
+| 再配置・署名・実起動・差し替え・roundtrip（1 回目） | `python3 scripts/verify_package.py --package target/release-001/adhoc-package --relocated "$TMPDIR/…" --report target/release-001/adhoc-verification.json` | exit 1（`PACKAGE_VERIFICATION_ERROR: 2`） |
+| 同（修正後） | 同じコマンド、report `adhoc-verification-2.json` | exit 0、`status=passed`、`acceptance_verified=true`、manifest `207e977a50f31297d99fed25de7a739bb76e558e951a7a462892d87eca9905ea` |
+
+1 回目の失敗の原因: verifier の MCP 確認は initialize / initialized / `tools/call capabilities.get` を書いた直後に stdin を閉じていた。MCP-002 以降の stdio server は EOF で処理中の要求を協調停止するため（[08 API](../architecture/08-api-cli-mcp.md)）、`tools/call` の応答が返らなかった。`Runner.run_session` を追加し、全要求 id の応答を受け取ってから stdin を閉じるように直した。package 本体・runtime は変更していない。
+
+公開用の Developer ID 署名・notarization・Gatekeeper の確認は Apple の資格情報が必要な手動工程であり、今回は実施していない（ad-hoc 署名での再配置後の起動までを確認した）。Windows / Linux の package は未検証で、保証経路に含めない。
+

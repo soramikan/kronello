@@ -56,8 +56,8 @@ def mcp_capabilities(binary, runner, env, cwd):
         {"jsonrpc": "2.0", "method": "notifications/initialized"},
         {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "capabilities.get", "arguments": {}}},
     ]
-    lines = runner.run([binary], env=env, cwd=cwd, input="".join(json.dumps(r) + "\n" for r in requests)).splitlines()
-    responses = {response["id"]: response for response in map(json.loads, lines)}
+    lines = runner.run_session([binary], requests, env=env, cwd=cwd).splitlines()
+    responses = {response["id"]: response for response in map(json.loads, filter(None, lines)) if "id" in response}
     if responses[1]["result"]["protocolVersion"] != "2025-11-25":
         raise ValueError("MCP initialization failed")
     result = responses[2]["result"]
