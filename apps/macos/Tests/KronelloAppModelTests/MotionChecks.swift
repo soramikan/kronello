@@ -24,7 +24,13 @@ func requireResult(_ value: Bool, _ message: String) throws { try require(value,
         let commands = try editor.creationCommands(tool: "rectangle", from: .init(x: 100, y: 100), to: .init(x: 300, y: 220))
         guard await editor.apply(.init(base: editor.revision, commands: commands, label: "Fixture")) != nil else { throw GUICheckError(message: editor.failure?.message ?? "create failed") }
         let node = editor.layers[0], property = node.property("kronello.transform.position")!, curve = UUID().uuidString.lowercased()
-        let keys: [[String: Any]] = (0..<count).map { i in ["time": RationalTime(num: Int64(i), den: 1).wire, "value": ["kind": "vec2", "value": [Double(i) * 100, Double(i) * 200]], "interpolation": ["kind": "cubic", "value": ["control1": [1.0 / 3, 1.0 / 3], "control2": [2.0 / 3, 2.0 / 3]]]] }
+        let easing: [String: Any] = ["control1": [1.0 / 3, 1.0 / 3], "control2": [2.0 / 3, 2.0 / 3]]
+        let interpolation: [String: Any] = ["kind": "cubic", "value": easing]
+        let keys: [[String: Any]] = (0..<count).map { i in
+            let position: [Double] = [Double(i) * 100, Double(i) * 200]
+            let value: [String: Any] = ["kind": "vec2", "value": position]
+            return ["time": RationalTime(num: Int64(i), den: 1).wire, "value": value, "interpolation": interpolation]
+        }
         let command: [String: Any] = ["property_source_set": ["object": node.id, "property": property.string("id"), "source": ["kind": "curve", "value": curve], "curve": ["id": curve, "value_type": "vec2", "keys": keys, "interpolation_version": 1]]]
         guard await editor.apply(.init(base: editor.revision, commands: [command], label: "Fixture Curve")) != nil else { throw GUICheckError(message: editor.failure?.message ?? "curve failed") }
         editor.select(node.id)
