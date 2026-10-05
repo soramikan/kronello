@@ -79,6 +79,7 @@ pub struct CapabilitiesResult {
     /// Loaded FFmpeg capabilities; discovery failures return a typed error.
     /// An explicitly supplied report avoids runtime initialization.
     pub media: Option<MediaCapabilities>,
+    pub export_profiles: Vec<ExportProfileCapability>,
 }
 
 macro_rules! commands {
@@ -190,6 +191,7 @@ impl CapabilitiesResult {
             backends: ["wgpu_rgba16f", "cpu_reference_float32"]
                 .map(String::from)
                 .to_vec(),
+            export_profiles: crate::export_profiles::export_profiles(media.as_ref()),
             media,
         }
     }

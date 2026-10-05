@@ -1,5 +1,9 @@
 //! Shared synchronous Command/Query boundary for headless rendering and edits.
 //! Entry points own transport only; storage, fonts and rendering compose here.
+mod export_profiles;
+pub use export_profiles::{
+    DeviceAvailability, ExportAudioCodec, ExportExecution, ExportProfileCapability,
+};
 mod nle;
 mod playback;
 pub use kronello_render::RenderTarget;
@@ -408,7 +412,7 @@ impl<'a> Service<'a> {
         &self,
         request: &FrameRenderRequest,
     ) -> Result<(String, kronello_render::RenderDag), ServiceError> {
-        self.with_render_input(&request.input, |snapshot, fonts| {
+        self.with_render_input(&request.input, None, |snapshot, fonts| {
             let scene = kronello_render::build_scene_ir(snapshot, request.time, fonts)?;
             let dag = kronello_render::build_render_dag(
                 &scene,
@@ -588,27 +592,40 @@ impl<'a> Service<'a> {
             }
             Request::RenderExport(r) => {
                 jobs::features(&r.required_features)?;
-                self.render(&r.render.input, |snapshot, fonts, backend| {
-                    jobs::validate_movie_destination(&r.render.output_directory, &r.output)?;
-                    let av = jobs::movie_snapshot(snapshot, &r.output)?;
-                    let settings = r.output.movie_settings()?;
-                    let runtime = kronello_media::MediaRuntime::load()?;
-                    let report = runtime.export_av(
-                        &av,
-                        &r.render.input.project,
-                        fonts,
-                        backend,
-                        &kronello_media::AvExportRequest {
-                            output: r.render.output_directory.clone(),
-                            range: r.render.range,
-                            frame_rate: r.render.frame_rate,
-                            region: r.render.input.region,
-                            background: settings.background,
-                            clipping: kronello_audio::ClippingPolicy::Reject,
-                        },
-                    )?;
-                    Ok(ResultData::Movie(Box::new(report)))
-                })
+                self.with_render_input(
+                    &r.render.input,
+                    r.expected_revision.as_deref(),
+                    |snapshot, fonts| {
+                        self.with_selected_backend(|backend| {
+                            let backend = &kronello_media::VideoRenderBackend {
+                                backend,
+                                project_path: &r.render.input.project,
+                            };
+                            jobs::validate_movie_destination(
+                                &r.render.output_directory,
+                                &r.output,
+                            )?;
+                            let av = jobs::movie_snapshot(snapshot, &r.output)?;
+                            let settings = r.output.movie_settings()?;
+                            let runtime = kronello_media::MediaRuntime::load()?;
+                            let report = runtime.export_av(
+                                &av,
+                                &r.render.input.project,
+                                fonts,
+                                backend,
+                                &kronello_media::AvExportRequest {
+                                    output: r.render.output_directory.clone(),
+                                    range: r.render.range,
+                                    frame_rate: r.render.frame_rate,
+                                    region: r.render.input.region,
+                                    background: settings.background,
+                                    clipping: kronello_audio::ClippingPolicy::Reject,
+                                },
+                            )?;
+                            Ok(ResultData::Movie(Box::new(report)))
+                        })
+                    },
+                )
             }
             Request::RenderSequence(r) => self.render(&r.input, |snapshot, fonts, backend| {
                 let total = kronello_render::frame_samples(r.range, r.frame_rate)?.len() as u64;
@@ -645,7 +662,7 @@ impl<'a> Service<'a> {
             &dyn RenderBackend,
         ) -> Result<T, ServiceError>,
     ) -> Result<T, ServiceError> {
-        self.with_render_input(input, |snapshot, fonts| {
+        self.with_render_input(input, None, |snapshot, fonts| {
             self.with_selected_backend(|backend| {
                 run(
                     snapshot,
@@ -688,12 +705,14 @@ impl<'a> Service<'a> {
     fn with_render_input<T>(
         &self,
         input: &RenderInput,
+        expected_revision: Option<&str>,
         run: impl FnOnce(&RenderSnapshot, &[FontData<'_>]) -> Result<T, ServiceError>,
     ) -> Result<T, ServiceError> {
         input.region.validate()?;
         let store = open_existing(&input.project)?;
         let stored = store.snapshot()?;
         store.close()?;
+        jobs::check_expected_revision(expected_revision, stored.revision)?;
         let snapshot = freeze_render_input(&stored, input)?;
         let bytes = load_locked_fonts(&snapshot, input)?;
         let fonts: Vec<_> = snapshot

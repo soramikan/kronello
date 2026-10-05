@@ -7,8 +7,9 @@ public enum KRJobState: Equatable, Sendable {
     case done(elapsed: String)
     case failed(KRDiagnostic)
     case cancelled
+    case interrupted
     var icon: KRIcon {
-        switch self { case .running: return .loaderCircle; case .queued: return .clock; case .done: return .circleCheck; case .failed: return .triangleAlert; case .cancelled: return .circleX }
+        switch self { case .running: return .loaderCircle; case .queued: return .clock; case .done: return .circleCheck; case .failed: return .triangleAlert; case .cancelled, .interrupted: return .circleX }
     }
 }
 
@@ -42,6 +43,7 @@ public struct KRJobRow<Actions: View>: View {
                 case .done(let elapsed): Text("完了 · \(elapsed)")
                 case .failed: Text("失敗")
                 case .cancelled: Text("中止")
+                case .interrupted: Text("中断 · 自動再開なし")
                 }
             }.krText(KRMono.label).foregroundStyle(p.inkMuted)
             actions

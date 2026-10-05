@@ -21,15 +21,16 @@ public struct KRConflictBanner: View {
     public let diagnostic: KRDiagnostic
     public let discard: () -> Void
     public let reapply: () -> Void
-    public init(_ diagnostic: KRDiagnostic, discard: @escaping () -> Void, reapply: @escaping () -> Void) {
-        self.diagnostic = diagnostic; self.discard = discard; self.reapply = reapply
+    public let reapplyLabel: String
+    public init(_ diagnostic: KRDiagnostic, reapplyLabel: String = "もう一度適用", discard: @escaping () -> Void, reapply: @escaping () -> Void) {
+        self.diagnostic = diagnostic; self.discard = discard; self.reapply = reapply; self.reapplyLabel = reapplyLabel
     }
     public var body: some View {
         HStack(spacing: KRSpace.space3) {
             KRErrorLine(diagnostic)
             Spacer(minLength: 0)
             KRButton("破棄", variant: .plain, action: discard)
-            KRButton("もう一度適用", variant: .secondary, action: reapply)
+            KRButton(reapplyLabel, variant: .secondary, action: reapply)
         }.padding(KRSpace.space3).background(p.surface200).krShadow(p.shadowPopover, cornerRadius: 0)
     }
 }

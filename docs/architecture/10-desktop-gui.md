@@ -93,7 +93,7 @@ session 長の `PROJECT_LOCKED` 保証は後続課題とし、本実装で store
 
 `apps/macos` の `Kronello` executable は Welcome、新規作成 / open / recent、4-page toolbar と status、
 Motion の Layers / Project、native Viewer、Transform / Text / Layout Inspector を持つ。Dope sheet のキー編集と Curve editor は GUI-002 で追加した。
-Edit は GUI-003 で追加した。Template / Export は後続タスクを説明する shell。Dark は既定で、OS theme へ自動追従しない。
+Edit は GUI-003、Template / Export は GUI-004 で追加した。Dark は既定で、OS theme へ自動追従しない。
 `scripts/build_macos_app.py` は開発 bundle を組み立て、CLI worker と resource fonts を配置して ad-hoc sign する。
 SwiftPM / bundle / Metal と visual fidelity は [GUI-001 の検証](../testing/gui-001.md) の host procedure で確認する。
 
@@ -162,3 +162,29 @@ AUDIO-002 が `activatePlayback(for:)` を `configurePlayback(target:.sequence(i
 | GUI-003 | Sequence tracks / Project / clip Inspector、共有配置・trim・split と Motion navigation |
 | AUDIO-002 | リアルタイム音声再生と A/V 同期 |
 | QA-002 | GUI / CLI / MCP の同等性、日本語 IME |
+
+
+## GUI-004 の実装範囲
+
+Template は264pxの Templates、中央の variant 比較、320pxの公開入力 / 版、
+右列を除く下段196pxの尺ポリシー。`TemplatePageModel` は immutable query の候補・選択・
+診断だけを保持し、作品の変更は `EditorModel.apply` の一つの template command を通す。
+公開入力は比較用の値と選んだ配置への適用を区別する。layout / ink / visual の切替は
+一回取得した `template.preview` の bounds を使う。overflow で nodes が返らない場合は
+型付き診断と bounds unavailable を示す。画素や glyph geometry を独自に再評価しない。
+保護尺の下書きは新 immutable edition の公開、配置の尺は set_duration、版の移行は
+migration_plan の差分確認 → 明示した適用として分け、既存 placement を自動更新しない。
+
+Export は320pxの設定、中央の native Viewer、304pxの確認、設定を除く下段232pxのジョブ。
+選択肢は Rust が返す `capabilities.get.export_profiles` の閉じた出力だけを使う。
+ハードウェア encoder の登録 / device の可否を区別し、AAC は選択肢から省略する。
+事前確認は範囲先頭の `render.explain`。全範囲・音声・codec の受理を保証しない文言を添え、
+型付きエラーと未確認 / 古い確認がある間は投入できない。投入時の `expected_revision`
+は捕捉した snapshot を検査 revision に固定し、競合は「再確認」の banner で扱う。
+`render.submit` の固定 snapshot・独立 worker、`job.cancel` を再利用し、1秒以上の
+間隔の一回の `job.list` で進捗 / 失敗を表示する。active job がないと停止し、ページ再入場と
+明示した更新で再読込できる。JobRow の interrupted は自動再開しない中断状態を示す。
+設定、選択、filter、比較入力は表示候補であり、編集可能な第二の作品状態ではない。
+
+設計判断は [ADR-0078](../adr/0078-template-export-pages-and-inspected-snapshot.md)、
+実行した checks と SwiftPM / Metal / 両 theme の pending 手順は [GUI-004 の検証](../testing/gui-004.md)。

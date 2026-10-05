@@ -84,6 +84,15 @@ pub(crate) struct MovieSettings<'a> {
     pub background: [f32; 3],
 }
 impl JobOutput {
+    pub(crate) fn supported_profile_versions(&self) -> &'static [u32] {
+        match self {
+            Self::ProResMov { .. } => &[1, 2, 3],
+            Self::ImageSequence
+            | Self::Av1Mp4 { .. }
+            | Self::H264Mov { .. }
+            | Self::HevcMov { .. } => &[1],
+        }
+    }
     pub(crate) fn movie_settings(&self) -> Result<MovieSettings<'_>, ServiceError> {
         let (profile, version, audio, audio_codec, clips, background) = match self {
             Self::ImageSequence => {
@@ -149,9 +158,11 @@ impl JobOutput {
         };
         let legacy = profile == MovieProfile::ProResPcm24;
         if (legacy
-            && (!matches!(version, 1..=3)
+            && (!self.supported_profile_versions().contains(&version)
                 || (version == 1 && audio != kronello_audio::AudioSourceMode::Explicit)))
-            || (!legacy && (version != 1 || audio_codec != DeliveryAudioCodec::Alac))
+            || (!legacy
+                && (!self.supported_profile_versions().contains(&version)
+                    || audio_codec != DeliveryAudioCodec::Alac))
         {
             return Err(ServiceError::new(
                 "UNSUPPORTED_FEATURE",
@@ -170,6 +181,9 @@ impl JobOutput {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RenderSubmitRequest {
+    /// Optional fence against changes since the caller inspected the project.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected_revision: Option<String>,
     /// Reuses the synchronous target and time/region request without a job-only
     /// target model. output_directory is the MOV filename for ProResMov.
     pub render: SequenceRenderRequest,
@@ -282,6 +296,7 @@ impl Service<'_> {
             font.path = absolute(&font.path)?;
         }
         let stored = kronello_store::ProjectStore::read_snapshot(&project_path)?;
+        check_expected_revision(request.expected_revision.as_deref(), stored.revision)?;
         crate::document_asset_locators(&stored.document)?;
         let snapshot = crate::freeze_render_input(&stored, &request.render.input)?;
         let total_frames =
@@ -673,6 +688,23 @@ pub(crate) fn validate_movie_destination(
             "INVALID_MEDIA_INPUT",
             format!("movie profile requires .{extension} destination"),
         ));
+    }
+    Ok(())
+}
+
+pub(crate) fn check_expected_revision(
+    expected: Option<&str>,
+    revision: u64,
+) -> Result<(), ServiceError> {
+    if let Some(expected) = expected {
+        let base = crate::parse_revision(expected)?;
+        if base != revision {
+            return Err(kronello_store::StoreError::RevisionConflict {
+                base,
+                current: revision,
+            }
+            .into());
+        }
     }
     Ok(())
 }

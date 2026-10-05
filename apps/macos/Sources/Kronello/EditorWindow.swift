@@ -16,6 +16,8 @@ struct EditorWindow: View {
             if model.safeMode { KRStateBand("安全モード：要求ごとに排他を取得します。処理中の競合は PROJECT_LOCKED。ウインドウ全体の排他は未対応です", details: { safeDetailsOpen = true }) }
             if model.ui.page == "motion" { MotionPage(model: model, historyOpen: $historyOpen) }
             else if model.ui.page == "edit" { EditPage(model: model) }
+            else if model.ui.page == "template" { TemplatePage(model: model) }
+            else if model.ui.page == "export" { ExportPage(model: model) }
             else { KREmptyState(icon: model.ui.page == "export" ? .clapperboard : .layers,
                 title: model.ui.page == "template" ? "テンプレートページ" : "書き出しページ",
                 message: "このページは GUI-004 で追加します。モーションページで作業を続けられます。")
