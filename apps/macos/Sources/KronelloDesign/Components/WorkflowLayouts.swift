@@ -64,7 +64,16 @@ public struct KRTemplateVariantView: View {
         VStack(alignment: .leading, spacing: KRSpace.space2) {
             HStack { KRIconView(.layoutTemplate); Text(name).krText(KRType.heading) }
             Text("\(String(format:"%.0f",extent.width))×\(String(format:"%.0f",extent.height)) · \(stage)").krText(KRMono.caption).foregroundStyle(p.inkMuted)
-            if let diagnostic { KRErrorLine(diagnostic) }
+            if let diagnostic {
+                VStack(alignment: .leading, spacing: KRSpace.space1) {
+                    HStack(alignment: .firstTextBaseline, spacing: KRSpace.space1) {
+                        KRIconView(.triangleAlert, size: 12)
+                        Text(diagnostic.code).krText(KRMono.caption).fixedSize(horizontal: true, vertical: false)
+                    }
+                    Text(diagnostic.message).krText(KRType.caption)
+                        .frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
+                }.foregroundStyle(p.danger).accessibilityElement(children: .combine)
+            }
             else { HStack(spacing: KRSpace.space1) { KRIconView(.circleCheck); Text("収まっています").krText(KRType.caption) }.foregroundStyle(p.inkMuted) }
             KRViewerFrame(aspectRatio: max(1, extent.width) / max(1, extent.height)) {
                 Canvas { context, size in
@@ -72,10 +81,20 @@ public struct KRTemplateVariantView: View {
                         let rect = CGRect(x: bounds.minX / max(1, extent.width) * size.width, y: bounds.minY / max(1, extent.height) * size.height,
                             width: bounds.width / max(1, extent.width) * size.width, height: bounds.height / max(1, extent.height) * size.height)
                         context.stroke(Path(rect), with: .color(diagnostic == nil ? p.selection : p.danger), style: StrokeStyle(lineWidth: 1, dash: diagnostic == nil ? [] : [4,3]))
-                        context.draw(Text("\(String(format:"%.0f",bounds.width)) × \(String(format:"%.0f",bounds.height))").font(KRMono.caption.font()).foregroundColor(diagnostic == nil ? p.selection : p.danger), at: CGPoint(x: rect.midX, y: rect.maxY + 8))
                     }
                 }
             }.frame(minHeight: 140)
+            if !bounds.isEmpty {
+                VStack(alignment: .leading, spacing: KRSpace.space1) {
+                    ForEach(bounds.indices, id: \.self) { index in
+                        HStack(spacing: KRSpace.space2) {
+                            Text("Bounds \(index + 1)").krText(KRType.caption).foregroundStyle(p.inkMuted)
+                            Text("\(String(format: "%.1f", bounds[index].width)) × \(String(format: "%.1f", bounds[index].height)) px")
+                                .krText(KRMono.caption).foregroundStyle(p.selection)
+                        }.accessibilityElement(children: .combine)
+                    }
+                }
+            }
             Text(bounds.isEmpty && diagnostic != nil ? "この variant の bounds は取得できません。入力または制約を直して再確認してください。" : "共有評価の bounds。画素・文字輪郭の描画結果ではありません。")
                 .krText(KRType.caption).foregroundStyle(p.inkMuted).fixedSize(horizontal: false, vertical: true)
         }.padding(KRSpace.space3).background(p.surface0)
