@@ -16,6 +16,8 @@ public struct ProjectUIState: Codable, Equatable, Sendable {
     public var workspace = "standard"
     public var layouts: [String: WorkspaceState] = ["standard": .init()]
     public var composition: String?
+    public var sequence: String?
+    public var clipSelection: String?
     public var selection: String?
     public var locked: Set<String> = []
     public var collapsed: Set<String> = []

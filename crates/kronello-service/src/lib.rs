@@ -192,6 +192,8 @@ fn render_input_schema(schema: &mut schemars::Schema) {
 pub struct FrameRenderRequest {
     pub input: RenderInput,
     pub time: Time,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backend: Option<BackendSelection>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -366,7 +368,9 @@ impl From<std::io::Error> for ServiceError {
 }
 
 /// Explicit execution choice. GPU initialization is lazy and never falls back.
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum BackendSelection {
     #[default]
@@ -574,22 +578,14 @@ impl<'a> Service<'a> {
                     document: snapshot.document,
                 })))
             }
-            Request::RenderFrame(r) => self.render(&r.input, |snapshot, fonts, backend| {
-                let frame = render_frame(
-                    snapshot,
-                    fonts,
-                    backend,
-                    FrameRequest {
-                        time: r.time,
-                        region: r.input.region,
-                    },
-                )?;
+            Request::RenderFrame(r) => {
+                let frame = self.render_requested_frame(&r)?;
                 Ok(ResultData::Frame(Box::new(FrameResult {
                     metadata: frame.metadata,
                     linear: frame.pixels.linear,
                     display: frame.pixels.display,
                 })))
-            }),
+            }
             Request::RenderExport(r) => {
                 jobs::features(&r.required_features)?;
                 self.render(&r.render.input, |snapshot, fonts, backend| {
@@ -661,6 +657,33 @@ impl<'a> Service<'a> {
                 )
             })
         })
+    }
+    /// Shared current-frame rendering, including the explicit media decode adapter.
+    /// Native presentation consumes these same pixels without a separate renderer.
+    pub fn render_requested_frame(
+        &self,
+        request: &FrameRenderRequest,
+    ) -> Result<kronello_render::RenderedFrame, ServiceError> {
+        let run =
+            |snapshot: &RenderSnapshot, fonts: &[FontData<'_>], backend: &dyn RenderBackend| {
+                Ok(render_frame(
+                    snapshot,
+                    fonts,
+                    backend,
+                    FrameRequest {
+                        time: request.time,
+                        region: request.input.region,
+                    },
+                )?)
+            };
+        match request.backend {
+            None => self.render(&request.input, run),
+            Some(selection) => {
+                let mut selected = Service::new(selection);
+                selected.gpu_factory = self.gpu_factory;
+                selected.render(&request.input, run)
+            }
+        }
     }
     fn with_render_input<T>(
         &self,

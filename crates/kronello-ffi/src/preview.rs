@@ -5,7 +5,7 @@ use std::ffi::c_void;
 #[cfg(target_os = "macos")]
 mod metal {
     use super::*;
-    use kronello_service::Request;
+    use kronello_service::{BackendSelection, Request};
     use objc2::{rc::Retained, runtime::AnyObject};
     use serde_json::json;
     pub struct Layer(pub Retained<AnyObject>);
@@ -167,7 +167,54 @@ mod metal {
                     "render region pixels must match surface size",
                 ));
             }
-            let (revision, dag) = service.preview_dag(&request)?;
+            let cpu = request.backend == Some(BackendSelection::CpuReference);
+            let (revision, texture, crop_origin, backend) = if cpu {
+                let rendered = service.render_requested_frame(&request)?;
+                let pixels = &rendered.pixels.linear;
+                let texture = self.gpu.device.create_texture(&wgpu::TextureDescriptor {
+                    label: Some("explicit CPU reference preview"),
+                    size: wgpu::Extent3d {
+                        width: self.config.width,
+                        height: self.config.height,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: wgpu::TextureFormat::Rgba32Float,
+                    usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
+                    view_formats: &[],
+                });
+                let bytes: Vec<u8> = pixels
+                    .iter()
+                    .flatten()
+                    .flat_map(|v| v.to_ne_bytes())
+                    .collect();
+                self.gpu.queue.write_texture(
+                    texture.as_image_copy(),
+                    &bytes,
+                    wgpu::TexelCopyBufferLayout {
+                        offset: 0,
+                        bytes_per_row: Some(self.config.width * 16),
+                        rows_per_image: Some(self.config.height),
+                    },
+                    wgpu::Extent3d {
+                        width: self.config.width,
+                        height: self.config.height,
+                        depth_or_array_layers: 1,
+                    },
+                );
+                (
+                    rendered.metadata.revision,
+                    texture,
+                    [0, 0],
+                    rendered.metadata.backend,
+                )
+            } else {
+                let (revision, dag) = service.preview_dag(&request)?;
+                let texture = self.gpu.preview_texture(&dag)?;
+                (revision, texture, dag.crop_origin(), "metal".into())
+            };
             let mut frame = self.surface.get_current_texture();
             if matches!(frame, wgpu::CurrentSurfaceTexture::Outdated) {
                 // The layer changed under us; reconfigure once and retry.
@@ -186,16 +233,15 @@ mod metal {
                         "timeout"
                     };
                     return Ok(
-                        json!({"status":"success","preview":{"revision":revision,"pixels":[self.config.width,self.config.height],"backend":"metal","image_readbacks":0,"presented":false,"skipped":skipped}}),
+                        json!({"status":"success","preview":{"revision":revision,"pixels":[self.config.width,self.config.height],"backend":backend,"image_readbacks":0,"presented":false,"skipped":skipped}}),
                     );
                 }
                 other => return Err(failure("SURFACE_ACQUIRE_FAILED", format!("{other:?}"))),
             };
-            let texture = self.gpu.preview_texture(&dag)?;
             let source = texture.create_view(&Default::default());
             let target = frame.texture.create_view(&Default::default());
             use wgpu::util::DeviceExt;
-            let [x, y] = dag.crop_origin();
+            let [x, y] = crop_origin;
             let bytes = [x as u32, y as u32, 0, 0]
                 .into_iter()
                 .flat_map(u32::to_ne_bytes)
@@ -253,7 +299,7 @@ mod metal {
             // SAFETY: platform clock call without pointer arguments.
             let presentation_host_time = unsafe { mach_absolute_time() };
             Ok(
-                json!({"status":"success","preview":{"revision":revision,"pixels":[self.config.width,self.config.height],"backend":"metal","image_readbacks":0,"presented":true,"presentation_host_time":presentation_host_time.to_string()}}),
+                json!({"status":"success","preview":{"revision":revision,"pixels":[self.config.width,self.config.height],"backend":backend,"image_readbacks":0,"cpu_uploads":u8::from(cpu),"presented":true,"presentation_host_time":presentation_host_time.to_string()}}),
             )
         }
     }

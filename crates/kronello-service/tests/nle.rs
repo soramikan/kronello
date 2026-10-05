@@ -159,6 +159,7 @@ fn region() -> OutputRegion {
 fn frame(path: &Path, target: RenderTarget, time: Time) -> FrameResult {
     let ResultData::Frame(value) = engine()
         .dispatch(Request::RenderFrame(FrameRenderRequest {
+            backend: None,
             input: RenderInput {
                 project: path.into(),
                 composition: None,

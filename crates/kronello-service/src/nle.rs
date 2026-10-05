@@ -23,6 +23,13 @@ pub enum TimelineCommand {
         clip: ClipId,
         range: TimeRange,
     },
+    /// Split strictly inside the placement, without implicit linked/transition edits.
+    ClipSplit {
+        sequence: SequenceId,
+        clip: ClipId,
+        time: kronello_time::Time,
+        right_clip: ClipId,
+    },
     ClipStretch {
         sequence: SequenceId,
         clip: ClipId,
@@ -110,6 +117,22 @@ pub struct SequenceQueryResult {
     pub revision: String,
     pub sequence: Sequence,
     pub clips: Vec<ClipQuery>,
+    pub asset_status: Vec<AssetStatus>,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AssetAvailability {
+    PresentUnverified,
+    Missing,
+    Error,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct AssetStatus {
+    pub asset: AssetId,
+    pub availability: AssetAvailability,
+    pub size_bytes: Option<u64>,
+    pub error: Option<ServiceError>,
 }
 pub(crate) fn sequence_query(
     request: SequenceQueryRequest,
@@ -119,6 +142,34 @@ pub(crate) fn sequence_query(
     store.close()?;
     let mut project = snapshot.document;
     let sequence = sequence_mut(&mut project, request.sequence)?.clone();
+    let asset_status = project
+        .assets
+        .iter()
+        .filter_map(|object| {
+            let DocumentObject::Known(asset) = object else {
+                return None;
+            };
+            let status = match kronello_media::locate_asset(asset, &request.project) {
+                Ok(located) => AssetStatus {
+                    asset: asset.id,
+                    availability: AssetAvailability::PresentUnverified,
+                    size_bytes: Some(located.size_bytes),
+                    error: None,
+                },
+                Err(error) => AssetStatus {
+                    asset: asset.id,
+                    availability: if error.code() == "ASSET_MISSING" {
+                        AssetAvailability::Missing
+                    } else {
+                        AssetAvailability::Error
+                    },
+                    size_bytes: None,
+                    error: Some(error.into()),
+                },
+            };
+            Some(status)
+        })
+        .collect();
     let mut clips = vec![];
     for track in &sequence.tracks {
         for clip in &track.clips {
@@ -203,6 +254,7 @@ pub(crate) fn sequence_query(
         revision: snapshot.revision.to_string(),
         sequence,
         clips,
+        asset_status,
     })
 }
 impl From<SequenceError> for ServiceError {
@@ -354,6 +406,77 @@ fn protected_content(project: &Project, root: CompositionId) -> bool {
     }
     false
 }
+
+// Commands are planned and then applied independently. Owned IDs must therefore
+// be deterministic from stable UUIDs, rather than allocated during mutation.
+fn split_owned_uuid(right: ClipId, original: Uuid) -> Uuid {
+    use sha2::{Digest, Sha256};
+    let mut digest = Sha256::new();
+    digest.update(b"kronello.clip-split-owned-v1");
+    digest.update(right.as_uuid().as_bytes());
+    digest.update(original.as_bytes());
+    let hash = digest.finalize();
+    let mut bytes = [0_u8; 16];
+    bytes.copy_from_slice(&hash[..16]);
+    // UUID v8, RFC variant: application-defined deterministic identity.
+    bytes[6] = (bytes[6] & 0x0f) | 0x80;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    Uuid::from_bytes(bytes)
+}
+
+fn split_owned_objects(clip: &mut Clip) -> Result<(), ServiceError> {
+    let right = clip.id;
+    let mut ids = std::collections::BTreeMap::new();
+    // Property's wire representation retains the source verbatim (including
+    // shared Curve/Expression IDs); only objects owned by this placement change.
+    fn copy_property(p: &Property, right: ClipId) -> Result<Property, ServiceError> {
+        let mut value = serde_json::to_value(p)?;
+        value["id"] = serde_json::json!(split_owned_uuid(right, p.id().as_uuid()));
+        for modifier in value["modifiers"].as_array_mut().into_iter().flatten() {
+            let original = serde_json::from_value::<Uuid>(modifier["id"].clone())?;
+            modifier["id"] = serde_json::json!(split_owned_uuid(right, original));
+        }
+        Ok(serde_json::from_value(value)?)
+    }
+    for property in &mut clip.properties {
+        let old = property.id();
+        *property = copy_property(property, right)?;
+        ids.insert(old, property.id());
+    }
+    if let Some(volume) = &mut clip.volume {
+        **volume = copy_property(volume, right)?;
+    }
+    for effect in &mut clip.effects {
+        let Effect::Known(effect) = effect else {
+            return Err(ServiceError::new(
+                "UNSUPPORTED_FEATURE",
+                "opaque split effect",
+            ));
+        };
+        let remap = |id: &mut PropertyId| -> Result<(), ServiceError> {
+            *id = *ids.get(id).ok_or_else(|| {
+                ServiceError::new("INVALID_EDIT", "split effect property missing")
+            })?;
+            Ok(())
+        };
+        match &mut effect.parameters {
+            EffectParameters::GaussianBlur { sigma } => remap(sigma)?,
+            EffectParameters::DropShadow {
+                sigma,
+                offset,
+                color,
+                opacity,
+            } => {
+                remap(sigma)?;
+                remap(offset)?;
+                remap(color)?;
+                remap(opacity)?;
+            }
+            EffectParameters::AudioGain { gain } => remap(gain)?,
+        }
+    }
+    Ok(())
+}
 pub(crate) fn mutate(
     project: &mut Project,
     command: &TimelineCommand,
@@ -364,6 +487,62 @@ pub(crate) fn mutate(
         parent_container_id: parent,
     };
     match command {
+        TimelineCommand::ClipSplit {
+            sequence,
+            clip,
+            time,
+            right_clip,
+        } => {
+            if project.sequences.iter().any(|object| matches!(object,
+                DocumentObject::Known(s) if s.tracks.iter().flat_map(|t| &t.clips).any(|c| c.id == *right_clip))) {
+                return Err(ServiceError::new("INVALID_EDIT", "split right clip ID already exists"));
+            }
+            let project_id = project.id;
+            let s = sequence_mut(project, *sequence)?;
+            if s.transitions
+                .iter()
+                .any(|t| t.outgoing == *clip || t.incoming == *clip)
+            {
+                return Err(ServiceError::new(
+                    "TRANSITION_EDIT_CONFLICT",
+                    "split requires explicit transition removal",
+                ));
+            }
+            let track = s
+                .tracks
+                .iter_mut()
+                .find(|t| t.clips.iter().any(|c| c.id == *clip))
+                .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "split clip missing"))?;
+            let index = track
+                .clips
+                .iter()
+                .position(|c| c.id == *clip)
+                .expect("located clip");
+            let original = &track.clips[index];
+            if !original.links.is_empty() {
+                return Err(ServiceError::new(
+                    "LINKED_EDIT_REQUIRED",
+                    "linked clip split is not implicit",
+                ));
+            }
+            if *time <= original.timeline_range.start() || *time >= original.timeline_range.end() {
+                return Err(ServiceError::new(
+                    "INVALID_EDIT",
+                    "split must be strictly inside the clip",
+                ));
+            }
+            let left_range = TimeRange::new(original.timeline_range.start(), *time)
+                .map_err(SequenceError::from)?;
+            let right_range = TimeRange::new(*time, original.timeline_range.end())
+                .map_err(SequenceError::from)?;
+            let left = original.trimmed(left_range)?;
+            let mut right = original.trimmed(right_range)?;
+            right.id = *right_clip;
+            split_owned_objects(&mut right)?;
+            track.clips[index] = left;
+            track.clips.insert(index + 1, right);
+            timeline_keys(s, project_id, &BTreeSet::from([*clip, *right_clip]), keys);
+        }
         TimelineCommand::ClipMove {
             sequence,
             clip,

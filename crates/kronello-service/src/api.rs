@@ -156,6 +156,8 @@ impl CapabilitiesResult {
                 "crossfade",
                 "ripple",
                 "linked_move",
+                "clip_split",
+                "asset_availability",
                 "document_audio",
                 "clip_volume",
                 "media_audio",

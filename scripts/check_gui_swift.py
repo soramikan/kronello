@@ -83,14 +83,14 @@ import Darwin
 @main struct Runner {
     @MainActor static func main() async {
         setbuf(stdout, nil)
-        do { try await GUIChecks().runAll(); try await MotionChecks().runAll(); try await PlaybackChecks().runAll() }
+        do { try await GUIChecks().runAll(); try await MotionChecks().runAll(); try await PlaybackChecks().runAll(); try await EditChecks().runAll() }
         catch { fputs("GUI checks failed: \(error)\n", stderr); exit(1) }
     }
 }
 ''')
         subprocess.run(common + ["-parse-as-library", "-lKronelloAppModel", "-lKronelloCore", "-lKronelloDesign", "-o", str(output / "GUIRunner"),
                                 str(PACKAGE / "Tests/KronelloAppModelTests/GUIChecks.swift"), str(PACKAGE / "Tests/KronelloAppModelTests/MotionChecks.swift"),
-                                str(PACKAGE / "Tests/KronelloAppModelTests/PlaybackChecks.swift"), str(runner)], check=True)
+                                str(PACKAGE / "Tests/KronelloAppModelTests/PlaybackChecks.swift"), str(PACKAGE / "Tests/KronelloAppModelTests/EditChecks.swift"), str(runner)], check=True)
         subprocess.run([str(output / "GUIRunner")], cwd=ROOT, check=True)
 
 

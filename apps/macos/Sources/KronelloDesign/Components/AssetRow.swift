@@ -51,7 +51,7 @@ public struct KRAssetRow: View {
                 Text(name).krText(KRType.body).foregroundStyle(missing == nil ? p.ink : p.danger).lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if let missing { Text(missing).krText(KRMono.caption).foregroundStyle(p.danger) }
-                else { Text(meta).krText(KRType.caption).foregroundStyle(p.inkMuted) }
+                else { Text(meta).krText(KRType.caption).foregroundStyle(p.inkMuted).lineLimit(1) }
                 Text(duration).krText(KRType.timecode).foregroundStyle(p.inkMuted).frame(minWidth: 76, alignment: .trailing)
             }.padding(.horizontal, KRSpace.space3).frame(height: KRSize.rowHeight)
                 .background(selected ? p.selectionBg : hover || appearance == .hover ? p.controlHover : .clear)
