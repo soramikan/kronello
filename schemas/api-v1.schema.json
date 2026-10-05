@@ -342,6 +342,12 @@
         "engine_version": {
           "type": "string"
         },
+        "export_profiles": {
+          "items": {
+            "$ref": "#/$defs/ExportProfileCapability"
+          },
+          "type": "array"
+        },
         "features": {
           "items": {
             "type": "string"
@@ -370,7 +376,8 @@
         "commands",
         "features",
         "effects",
-        "backends"
+        "backends",
+        "export_profiles"
       ],
       "type": "object"
     },
@@ -1174,6 +1181,14 @@
         "height"
       ],
       "type": "object"
+    },
+    "DeviceAvailability": {
+      "enum": [
+        "available",
+        "unavailable",
+        "unverified"
+      ],
+      "type": "string"
     },
     "DocumentObject": {
       "anyOf": [
@@ -2289,6 +2304,82 @@
         "information"
       ],
       "type": "string"
+    },
+    "ExportAudioCodec": {
+      "enum": [
+        "pcm_s24le",
+        "alac"
+      ],
+      "type": "string"
+    },
+    "ExportExecution": {
+      "enum": [
+        "software",
+        "hardware"
+      ],
+      "type": "string"
+    },
+    "ExportProfileCapability": {
+      "additionalProperties": false,
+      "properties": {
+        "audio_codecs": {
+          "description": "AAC is omitted until its export contract is adopted.",
+          "items": {
+            "$ref": "#/$defs/ExportAudioCodec"
+          },
+          "type": "array"
+        },
+        "audio_modes": {
+          "items": {
+            "$ref": "#/$defs/AudioSourceMode"
+          },
+          "type": "array"
+        },
+        "container_extension": {
+          "type": "string"
+        },
+        "device_availability": {
+          "$ref": "#/$defs/DeviceAvailability"
+        },
+        "encoder_registered": {
+          "type": "boolean"
+        },
+        "execution": {
+          "$ref": "#/$defs/ExportExecution"
+        },
+        "format": {
+          "type": "string"
+        },
+        "profile_versions": {
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ServiceError"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "format",
+        "profile_versions",
+        "audio_modes",
+        "audio_codecs",
+        "container_extension",
+        "execution",
+        "encoder_registered",
+        "device_availability"
+      ],
+      "type": "object"
     },
     "ExportResult": {
       "additionalProperties": false,
@@ -5996,6 +6087,13 @@
     "RenderSubmitRequest": {
       "additionalProperties": false,
       "properties": {
+        "expected_revision": {
+          "description": "Optional fence against changes since the caller inspected the project.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "output": {
           "$ref": "#/$defs/JobOutput",
           "default": {
@@ -6367,6 +6465,13 @@
         {
           "additionalProperties": false,
           "properties": {
+            "expected_revision": {
+              "description": "Optional fence against changes since the caller inspected the project.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "operation": {
               "const": "render.export",
               "type": "string"
@@ -6398,6 +6503,13 @@
         {
           "additionalProperties": false,
           "properties": {
+            "expected_revision": {
+              "description": "Optional fence against changes since the caller inspected the project.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "operation": {
               "const": "render.submit",
               "type": "string"

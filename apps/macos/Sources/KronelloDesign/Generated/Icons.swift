@@ -38,6 +38,7 @@ public enum KRIcon: String, CaseIterable, Sendable {
     case info = "info"
     case layers = "layers"
     case layoutPanelLeft = "layout-panel-left"
+    case layoutTemplate = "layout-template"
     case link = "link"
     case loaderCircle = "loader-circle"
     case lockOpen = "lock-open"
@@ -415,6 +416,10 @@ extension KRIcon {
             p.addRoundedRect(in: CGRect(x: 3, y: 3, width: 7, height: 18), cornerSize: CGSize(width: 1, height: 1))
             p.addRoundedRect(in: CGRect(x: 14, y: 3, width: 7, height: 7), cornerSize: CGSize(width: 1, height: 1))
             p.addRoundedRect(in: CGRect(x: 14, y: 14, width: 7, height: 7), cornerSize: CGSize(width: 1, height: 1))
+        case .layoutTemplate:
+            p.addRoundedRect(in: CGRect(x: 3, y: 3, width: 18, height: 7), cornerSize: CGSize(width: 1, height: 1))
+            p.addRoundedRect(in: CGRect(x: 3, y: 14, width: 9, height: 7), cornerSize: CGSize(width: 1, height: 1))
+            p.addRoundedRect(in: CGRect(x: 16, y: 14, width: 5, height: 7), cornerSize: CGSize(width: 1, height: 1))
         case .link:
             p.move(to: CGPoint(x: 10, y: 13))
             p.addCurve(to: CGPoint(x: 13.6466, y: 14.9923), control1: CGPoint(x: 10.869, y: 14.1617), control2: CGPoint(x: 12.1996, y: 14.8887))

@@ -33,7 +33,7 @@ extension View {
     }
 
     /// Attach only to a focus-owning control (Button, TextField), never its label.
-    func krControlFocusRing(_ active: Bool = false, cornerRadius: CGFloat = KRRadius.radiusSm, inset: Bool = false) -> some View {
+    public func krControlFocusRing(_ active: Bool = false, cornerRadius: CGFloat = KRRadius.radiusSm, inset: Bool = false) -> some View {
         modifier(KRControlFocusRing(active: active, cornerRadius: cornerRadius, inset: inset))
     }
 }
@@ -91,5 +91,5 @@ struct KRBottomLine: ViewModifier {
 }
 
 extension View {
-    func krBottomLine() -> some View { modifier(KRBottomLine()) }
+    public func krBottomLine() -> some View { modifier(KRBottomLine()) }
 }

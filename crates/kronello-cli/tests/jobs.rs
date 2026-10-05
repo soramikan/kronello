@@ -374,7 +374,7 @@ fn fifo_one_slot_and_fixed_snapshot_survive_project_edits() {
     f.service(json!({"operation":"render.sequence","input":f.render(&baseline)["input"],
         "range":f.render(&baseline)["range"],"frame_rate":f.render(&baseline)["frame_rate"],"output_directory":baseline}));
     let gate = f.temp.path().join("release");
-    let first = f.submit("first", Some(&gate));
+    let first = f.submit_request(json!({"operation":"render.submit", "expected_revision":"1", "render":f.render(&f.temp.path().join("first"))}), Some(&gate), false);
     f.wait(&first.id, JobStatus::Running);
     let second = f.submit("second", None);
     std::thread::sleep(Duration::from_millis(200));
@@ -1367,4 +1367,40 @@ fn host_hevc_delivery_sync_fixed_job_and_alac_match_quantized_evaluator() {
         "hevc_mov",
         kronello_media::MovieProfile::HevcAlacV1,
     );
+}
+
+#[test]
+fn inspected_revision_fence_rejects_submit_and_export_without_job_or_worker() {
+    let f = Fixture::new();
+    // A missing font would otherwise fail synchronous export before its fence.
+    let full_document: Value =
+        serde_json::from_str(include_str!("../../../examples/m1-demo.project.json")).unwrap();
+    f.service(json!({"operation":"project.import","project":f.project,"base_revision":"1","document":full_document}));
+    for operation in ["render.submit", "render.export"] {
+        let request = json!({"operation":operation,"expected_revision":"0", "render":f.render(&f.temp.path().join("fenced.mov")), "output":{"format":"pro_res_mov","profile_version":3,"audio":"silence","clips":[],"background":[0,0,0]}});
+        let mut command = f.command();
+        let mut child = command
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(request.to_string().as_bytes())
+            .unwrap();
+        let output = child.wait_with_output().unwrap();
+        let response: Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(response["error"]["code"], "REVISION_CONFLICT", "{response}");
+        assert!(f.store().list().unwrap().is_empty());
+        assert!(!f.temp.path().join("fenced.mov").exists());
+        let response = Service::new(BackendSelection::CpuReference)
+            .with_job_config(JobConfig::at(&f.state))
+            .execute_json(&request.to_string());
+        let response = serde_json::to_value(response).unwrap();
+        assert_eq!(response["error"]["code"], "REVISION_CONFLICT");
+        assert!(f.store().list().unwrap().is_empty());
+    }
 }
