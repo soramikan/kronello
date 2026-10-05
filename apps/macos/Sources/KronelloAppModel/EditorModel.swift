@@ -148,6 +148,10 @@ public struct EditCandidate {
     public var nominalFPS: Int { Int((activePlaybackRateNum + activePlaybackRateDen - 1) / activePlaybackRateDen) }
     public var frame: Int64 { ui.time.frames(rateNum: activePlaybackRateNum, rateDen: activePlaybackRateDen) }
     public var durationFrames: Int64 {
+        if case .sequence(let id) = playbackTarget {
+            let sequence = document.objects("sequences").first { $0.string("id") == id } ?? [:]
+            return sequence.objects("tracks").flatMap { $0.objects("clips") }.map { playbackEndFrame($0.object("timeline_range").object("end")) }.max() ?? 0
+        }
         if ui.page == "edit" { return sequenceDurationFrames }
         let duration = current.object("duration")
         return playbackEndFrame(duration)
@@ -158,7 +162,12 @@ public struct EditCandidate {
         guard n > 0, d > 0, !top.overflow, !bottom.overflow, bottom.partialValue > 0 else { return 0 }
         return top.partialValue / bottom.partialValue + (top.partialValue % bottom.partialValue == 0 ? 0 : 1)
     }
-    public var extent: CGSize { CGSize(width: activeExtent.number("width"), height: activeExtent.number("height")) }
+    public var extent: CGSize {
+        let dimensions: [String: Any]
+        if case .sequence(let id) = playbackTarget { dimensions = document.objects("sequences").first { $0.string("id") == id }?.object("extent") ?? [:] }
+        else { dimensions = activeExtent }
+        return CGSize(width: dimensions.number("width"), height: dimensions.number("height"))
+    }
     public var timecode: String { KRTimecode.format(frames: max(0, frame), fps: nominalFPS) }
     public var durationCode: String { KRTimecode.format(frames: max(0, durationFrames), fps: nominalFPS) }
     public var textFont: [String: Any]? {

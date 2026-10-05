@@ -53,7 +53,8 @@ struct MotionViewer: View {
             spatialPath = .init(); parentPath = .init(); pathParent = nil; pathFailure = nil
             do { parentPath = try await model.spatialPath(); remapPath() }
             catch is CancellationError {} catch { if !Task.isCancelled { pathFailure = model.serviceFailure(error) } }
-        }.onChange(of: model.refreshToken) { _, _ in remapPath() }
+        }.onAppear { model.configurePlayback(target: nil, rateNum: model.rateNum, rateDen: model.rateDen) }
+        .onChange(of: model.refreshToken) { _, _ in remapPath() }
         .onDisappear { model.playing = false }
     }
     func remapPath() {

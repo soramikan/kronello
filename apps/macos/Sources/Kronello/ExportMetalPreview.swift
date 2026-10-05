@@ -11,7 +11,7 @@ struct ExportMetalPreview: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(editor, onFailure: onFailure) }
     func makeNSView(context: Context) -> MetalView {
         let view = MetalView(); context.coordinator.view = view
-        view.changed = { [weak coordinator = context.coordinator] in coordinator?.schedule() }
+        view.changed = { [weak coordinator = context.coordinator] _ in coordinator?.schedule() }
         return view
     }
     func updateNSView(_ view: MetalView, context: Context) { context.coordinator.input = input; context.coordinator.time = time; context.coordinator.schedule() }

@@ -1,6 +1,6 @@
 # マイルストーン
 
-状態: M0 は完了。M1 は全 14 タスクが完了（2026-10-03。統合点は `scripts/demo_cli_m1.py`、[CLI-001 の検証](../testing/cli-001.md)）。M2 は P0 全 10 タスクが完了（2026-10-04。統合点は `scripts/demo_integration_m2.py`、[INTEGRATION-001 の検証](../testing/integration-001.md)）。共有編集・検査 API、CompositionClip、日本語テンプレート、基本音声と ProRes / PCM24 書き出し、blur / shadow、MCP stdio、固定 snapshot の独立 worker と 4K 画像連番を実装した。M2 の STORE-003（P2）は `in_progress` であり、M2 全 11 タスクの完了ではない。M1 で見送った範囲（VEC-004 / VEC-005 / STORE-003 / QA-004 / CACHE-003）と下記の M2 延期範囲は後続タスクに記録した。M3 以降と `apps/` は未着手。ここで実装済みと明記した範囲以外の API・CLI・スキーマは提案として扱う。タスクの詳細は [backlog](../backlog/BACKLOG.md)。
+状態: M0 は完了。M1 は全 14 タスクが完了（2026-10-03。統合点は `scripts/demo_cli_m1.py`、[CLI-001 の検証](../testing/cli-001.md)）。M2 は P0 全 10 タスクが完了（2026-10-04。統合点は `scripts/demo_integration_m2.py`、[INTEGRATION-001 の検証](../testing/integration-001.md)）。共有編集・検査 API、CompositionClip、日本語テンプレート、基本音声と ProRes / PCM24 書き出し、blur / shadow、MCP stdio、固定 snapshot の独立 worker と 4K 画像連番を実装した。M2 の STORE-003（P2）は `in_progress` であり、M2 全 11 タスクの完了ではない。M1 で見送った範囲（VEC-004 / VEC-005 / STORE-003 / QA-004 / CACHE-003）と下記の M2 延期範囲は後続タスクに記録した。M3 は主要コアと `apps/macos` の4ページ・実時間音声・横断検証を統合済みで、残タスクの受け入れを進めている。現在の完了判定は `backlog.json` と各検証文書を参照する。M4 以降は未着手。ここで実装済みと明記した範囲以外の API・CLI・スキーマは提案として扱う。タスクの詳細は [backlog](../backlog/BACKLOG.md)。
 
 | 段階 | 成果物 | 主な完了条件 | タスク数 |
 |---|---|---|---:|
