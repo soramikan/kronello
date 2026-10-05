@@ -887,3 +887,53 @@ fn nle2_generator_query_and_move_share_mcp_registry_and_transactions() {
         doc["sequences"][0]
     );
 }
+
+#[test]
+fn json_order_mcp_tool_call() {
+    let mut client = Client::spawn(&[], false);
+    client.ready(SUPPORTED_PROTOCOL_VERSIONS[0]);
+    client.send_raw(r#"{"jsonrpc":"2.0","id":"json-order","method":"tools/call","params":{"name":"edit.plan","arguments":{"commands":[{"property_source_set":{"source":{"value":{"value":1.5,"kind":"scalar"},"kind":"constant"},"property":"00000000-0000-0000-0000-000000000002","object":"00000000-0000-0000-0000-000000000001"}}],"base_revision":"0","project":"missing-json-order.kronello"}}}"#);
+    let response = client.receive();
+    assert_eq!(response["result"]["isError"], true, "{response}");
+    assert_eq!(
+        response["result"]["structuredContent"]["error"]["code"], "PROJECT_NOT_FOUND",
+        "{response}"
+    );
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("json-order.kronello");
+    let doc: Value =
+        serde_json::from_str(include_str!("../../../examples/m1-demo.project.json")).unwrap();
+    let node = &doc["compositions"][0]["nodes"][0];
+    let property = node["properties"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["descriptor"]["key"] == "kronello.opacity")
+        .unwrap();
+
+    assert_eq!(
+        client.call("project.create", json!({"project":path,"document":doc}))["isError"],
+        false
+    );
+    let mut arguments = json!({"operation":"edit.plan","project":path,"base_revision":"1","commands":[{"property_source_set":{"object":node["id"],"property":property["id"],"source":{"kind":"constant","value":{"kind":"scalar","value":0.5}}}}]});
+    arguments.as_object_mut().unwrap().remove("operation");
+    let canonical = client.call("edit.plan", arguments.clone());
+    assert_eq!(canonical["isError"], false, "{canonical}");
+    let request = json!({"jsonrpc":"2.0","id":"valid-json-order","method":"tools/call","params":{"name":"edit.plan","arguments":arguments}}).to_string();
+    let raw = request.replace(
+        r#""kind":"scalar","value":0.5"#,
+        r#""value":0.5,"kind":"scalar""#,
+    );
+    assert_ne!(raw, request);
+    client.send_raw(&raw);
+    let actual = client.receive();
+    assert_eq!(actual["result"], canonical);
+    client.send_raw(&raw.replace(r#""value":0.5"#, r#""value":"bad""#));
+    let invalid = client.receive();
+    assert_eq!(
+        invalid["result"]["structuredContent"]["error"]["code"],
+        "INVALID_REQUEST"
+    );
+    client.finish();
+}

@@ -90,7 +90,7 @@ pub struct SceneNode {
 }
 
 /// Content hooks only; geometry, text layout, and rendering are later layers.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, schemars::JsonSchema)]
 #[serde(
     tag = "kind",
     content = "value",
@@ -104,6 +104,43 @@ pub enum NodeKind {
     Text { content_ref: ContentId },
     CompositionInstance(CompositionInstance),
     Media(MediaNode),
+}
+
+impl<'de> Deserialize<'de> for NodeKind {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let wire = crate::wire::Adjacent::deserialize(d)?;
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Content {
+            content_ref: ContentId,
+        }
+        match wire.kind.as_str() {
+            "group" => wire.unit(Self::Group),
+            "null" => wire.unit(Self::Null),
+            "shape" => {
+                let p: Content = wire.value()?;
+                Ok(Self::Shape {
+                    content_ref: p.content_ref,
+                })
+            }
+            "text" => {
+                let p: Content = wire.value()?;
+                Ok(Self::Text {
+                    content_ref: p.content_ref,
+                })
+            }
+            "composition_instance" => wire.value().map(Self::CompositionInstance),
+            "media" => wire.value().map(Self::Media),
+            _ => Err(wire.unknown(&[
+                "group",
+                "null",
+                "shape",
+                "text",
+                "composition_instance",
+                "media",
+            ])),
+        }
+    }
 }
 
 /// Explicit media stream; AUDIO-003 executes audio only.

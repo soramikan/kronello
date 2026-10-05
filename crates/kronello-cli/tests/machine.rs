@@ -1081,3 +1081,43 @@ fn nle2_generator_query_and_move_use_shared_cli_plan_apply() {
     );
     assert_eq!(restored["result"]["value"]["sequence"], doc["sequences"][0]);
 }
+
+#[test]
+fn json_order_cli_machine_process() {
+    let (response, _) = invoke(
+        &[],
+        r#"{"commands":[{"property_source_set":{"source":{"value":{"value":1.5,"kind":"scalar"},"kind":"constant"},"property":"00000000-0000-0000-0000-000000000002","object":"00000000-0000-0000-0000-000000000001"}}],"base_revision":"0","project":"missing-json-order.kronello","operation":"edit.plan"}"#,
+        false,
+    );
+    assert_eq!(response["error"]["code"], "PROJECT_NOT_FOUND");
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("json-order.kronello");
+    let doc: Value =
+        serde_json::from_str(include_str!("../../../examples/m1-demo.project.json")).unwrap();
+    let node = &doc["compositions"][0]["nodes"][0];
+    let property = node["properties"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["descriptor"]["key"] == "kronello.opacity")
+        .unwrap();
+
+    call(
+        &["project", "create"],
+        json!({"project":path,"document":doc}),
+        true,
+    );
+    let canonical = json!({"operation":"edit.plan","project":path,"base_revision":"1","commands":[{"property_source_set":{"object":node["id"],"property":property["id"],"source":{"kind":"constant","value":{"kind":"scalar","value":0.5}}}}]});
+    let raw = canonical.to_string().replace(
+        r#""kind":"scalar","value":0.5"#,
+        r#""value":0.5,"kind":"scalar""#,
+    );
+    assert_ne!(raw, canonical.to_string());
+    let (actual, _) = invoke(&[], &raw, true);
+    assert_eq!(actual, call(&[], canonical, true));
+    let invalid = raw.replace(r#""value":0.5"#, r#""value":"bad""#);
+    assert_eq!(
+        invoke(&[], &invalid, false).0["error"]["code"],
+        "INVALID_REQUEST"
+    );
+}
