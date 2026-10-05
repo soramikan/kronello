@@ -26,6 +26,21 @@ fn volume(source: PropertySource<Value>) -> Property {
 fn scalar(v: f64) -> Value {
     Value::Scalar(FiniteF64::new(v).unwrap())
 }
+// Deserialize the legacy wire shape so new defaulted SceneNode fields do
+// not require test-only struct literal changes when integration is merged.
+fn node(kind: NodeKind, active_range: TimeRange, properties: Vec<Property>) -> SceneNode {
+    serde_json::from_value(serde_json::json!({
+        "id": NodeId::new(),
+        "kind": kind,
+        "properties": properties,
+        "active_range": active_range,
+        "child_order": [],
+        "containment_parent": null,
+        "transform_parent": null,
+        "effects": []
+    }))
+    .unwrap()
+}
 fn fixture() -> (Project, CompositionId, AssetId) {
     let mut p: Project =
         serde_json::from_str(include_str!("../../../examples/m1-demo.project.json")).unwrap();
@@ -64,22 +79,17 @@ fn fixture() -> (Project, CompositionId, AssetId) {
     };
     let (id, aid) = (c.id, asset.id);
     let v = volume(PropertySource::Constant(scalar(0.5)));
-    let node = SceneNode {
-        id: NodeId::new(),
-        kind: NodeKind::Media(MediaNode {
+    let node = node(
+        NodeKind::Media(MediaNode {
             asset: aid,
             stream_index: 0,
             source_in: t(1, 100),
             time_map: TimeMap::linear(Time::ZERO, Time::ONE).unwrap(),
             volume: v.id(),
         }),
-        properties: vec![v],
-        active_range: r(Time::ZERO, t(1, 10)),
-        child_order: vec![],
-        containment_parent: None,
-        transform_parent: None,
-        effects: vec![],
-    };
+        r(Time::ZERO, t(1, 10)),
+        vec![v],
+    );
     c.root_nodes.push(node.id);
     c.nodes.push(node);
     p.assets.push(DocumentObject::Known(asset));
@@ -134,22 +144,17 @@ fn nested_placements_trim_negative_grid_and_request_order_are_independent() {
     parent.root_nodes.clear();
     // Same definition at two distinct placements; source and gain contexts stay separate.
     for offset in [t(0, 1), t(-1, 20)] {
-        let n = SceneNode {
-            id: NodeId::new(),
-            kind: NodeKind::CompositionInstance(CompositionInstance {
+        let n = node(
+            NodeKind::CompositionInstance(CompositionInstance {
                 id: CompositionInstanceId::new(),
                 definition_ref: child,
                 input_bindings: Default::default(),
                 local_time_map: TimeMap::linear(offset, Time::ONE).unwrap(),
                 seed: 0,
             }),
-            properties: vec![],
-            effects: vec![],
-            child_order: vec![],
-            containment_parent: None,
-            transform_parent: None,
-            active_range: r(Time::ZERO, t(1, 5)),
-        };
+            r(Time::ZERO, t(1, 5)),
+            vec![],
+        );
         parent.root_nodes.push(n.id);
         parent.nodes.push(n);
     }
@@ -285,22 +290,17 @@ fn retime_effect_generator_missing_assets_and_recursive_audio_fail_typed() {
     let DocumentObject::Known(c) = &mut p.compositions[0] else {
         panic!()
     };
-    let recursive = SceneNode {
-        id: NodeId::new(),
-        kind: NodeKind::CompositionInstance(CompositionInstance {
+    let recursive = node(
+        NodeKind::CompositionInstance(CompositionInstance {
             id: CompositionInstanceId::new(),
             definition_ref: root,
             input_bindings: Default::default(),
             local_time_map: TimeMap::linear(Time::ZERO, Time::ONE).unwrap(),
             seed: 0,
         }),
-        active_range: r(Time::ZERO, t(1, 1)),
-        properties: vec![],
-        effects: vec![],
-        child_order: vec![],
-        containment_parent: None,
-        transform_parent: None,
-    };
+        r(Time::ZERO, t(1, 1)),
+        vec![],
+    );
     c.root_nodes.push(recursive.id);
     c.nodes.push(recursive);
     assert_eq!(
@@ -320,13 +320,12 @@ fn retime_effect_generator_missing_assets_and_recursive_audio_fail_typed() {
         version: 1,
         color: Color::from_srgb8([0; 3], None),
     };
-    // NLE-002 restricts generators to video tracks, so the shared Sequence
-    // validation rejects generator audio before AUDIO-004 exists.
+    // Shared storage now accepts audio Generators; evaluator 1 still rejects them.
     assert_eq!(
         DocumentAudioPlan::compile(&p, AudioTarget::Sequence(seq))
             .unwrap_err()
             .code(),
-        "INVALID_CLIP"
+        "UNSUPPORTED_FEATURE"
     );
 }
 fn m_restore(p: &mut Project) {

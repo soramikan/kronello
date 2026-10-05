@@ -157,6 +157,10 @@ impl CapabilitiesResult {
                 "document_audio",
                 "clip_volume",
                 "media_audio",
+                "audio_resample_v1",
+                "audio_gain_v1",
+                "audio_generator_v1",
+                "audio_crossfade_v1",
                 "composition",
                 "shape",
                 "text",
@@ -174,6 +178,7 @@ impl CapabilitiesResult {
             effects: vec![
                 kronello_model::GAUSSIAN_BLUR_ID.into(),
                 kronello_model::DROP_SHADOW_ID.into(),
+                kronello_model::AUDIO_GAIN_ID.into(),
             ],
             backends: ["wgpu_rgba16f", "cpu_reference_float32"]
                 .map(String::from)

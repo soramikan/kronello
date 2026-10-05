@@ -41,6 +41,7 @@ struct Placement {
 pub struct DocumentAudioPlan {
     placements: Vec<Placement>,
     curves: BTreeMap<CurveId, AnimationCurve>,
+    advanced: Option<Box<crate::advanced::AdvancedAudioPlan>>,
 }
 fn invalid(message: impl Into<String>) -> AudioError {
     AudioError::InvalidInput(message.into())
@@ -64,7 +65,7 @@ fn composition(project: &Project, id: CompositionId) -> Result<&Composition, Aud
         })
         .ok_or_else(|| unsupported(format!("missing or opaque audio composition {id}")))
 }
-fn has_audio(
+pub(super) fn has_audio(
     project: &Project,
     id: CompositionId,
     seen: &mut BTreeSet<CompositionId>,
@@ -115,7 +116,41 @@ fn validate_asset(project: &Project, id: AssetId, stream: u32) -> Result<(), Aud
     Ok(())
 }
 impl DocumentAudioPlan {
+    /// Version 1 retains AUDIO-003; version 2 opts into AUDIO-004 semantics.
+    pub fn compile_version(
+        project: &Project,
+        target: AudioTarget,
+        version: u32,
+    ) -> Result<Self, AudioError> {
+        match version {
+            1 => Self::compile(project, target),
+            2 if matches!(target, AudioTarget::Composition(_)) => Self::compile(project, target),
+            2 => Ok(Self {
+                advanced: Some(Box::new(crate::advanced::AdvancedAudioPlan::compile(
+                    project, target,
+                )?)),
+                ..Self::default()
+            }),
+            _ => Err(unsupported("audio evaluation version")),
+        }
+    }
     pub fn compile(project: &Project, target: AudioTarget) -> Result<Self, AudioError> {
+        Self::compile_impl(project, target, None)
+    }
+    /// The caller already validated the complete Sequence. Compile one clean
+    /// placement without copying unrelated Project resources or revalidating it.
+    pub(super) fn compile_isolated_clip(
+        project: &Project,
+        target: AudioTarget,
+        clip: &Clip,
+    ) -> Result<Self, AudioError> {
+        Self::compile_impl(project, target, Some(clip))
+    }
+    fn compile_impl(
+        project: &Project,
+        target: AudioTarget,
+        isolated: Option<&Clip>,
+    ) -> Result<Self, AudioError> {
         let mut plan = Self::default();
         match target {
             AudioTarget::Composition(id) => {
@@ -138,9 +173,15 @@ impl DocumentAudioPlan {
                         _ => None,
                     })
                     .ok_or_else(|| unsupported("missing or opaque audio sequence"))?;
-                sequence.validate(project)?;
+                if isolated.is_none() {
+                    sequence.validate(project)?;
+                }
                 for track in &sequence.tracks {
                     for clip in &track.clips {
+                        if isolated.is_some_and(|selected| selected.id != clip.id) {
+                            continue;
+                        }
+                        let clip = isolated.unwrap_or(clip);
                         let audible = match clip.source_ref {
                             SourceRef::Composition { composition } => {
                                 has_audio(project, composition, &mut BTreeSet::new())?
@@ -152,15 +193,22 @@ impl DocumentAudioPlan {
                         }
                         // Video crossfades blend pixels only; summing both audio
                         // placements at unity would be a silent approximation.
-                        if sequence
-                            .transitions
-                            .iter()
-                            .any(|tr| tr.outgoing == clip.id || tr.incoming == clip.id)
+                        if isolated.is_none()
+                            && sequence
+                                .transitions
+                                .iter()
+                                .any(|tr| tr.outgoing == clip.id || tr.incoming == clip.id)
                         {
                             return Err(unsupported("audio crossfade requires AUDIO-004"));
                         }
                         if !clip.effects.is_empty() {
                             return Err(unsupported("audio clip effects require AUDIO-004"));
+                        }
+                        if track.kind == TrackKind::Audio && !clip.properties.is_empty() {
+                            return Err(unsupported("audio clip Properties require AUDIO-004"));
+                        }
+                        if clip.audio_retime != AudioRetimePolicy::Reject {
+                            return Err(unsupported("audio_retime requires AUDIO-004 profile"));
                         }
                         let offset = clip
                             .source_in
@@ -350,11 +398,37 @@ impl DocumentAudioPlan {
         Ok(())
     }
     pub fn clips(&self) -> Vec<AudioClip> {
+        if let Some(plan) = &self.advanced {
+            return plan.clips();
+        }
         self.placements.iter().map(|p| p.clip.clone()).collect()
+    }
+    pub(super) fn audio4_sample_cost(&self) -> Result<u64, AudioError> {
+        if self.curves.values().any(|curve| curve.keys().len() > 4096)
+            || self
+                .curves
+                .values()
+                .map(|curve| curve.keys().len())
+                .sum::<usize>()
+                > 65536
+        {
+            return Err(AudioError::BudgetExceeded("audio Curve keys".into()));
+        }
+        Ok(self
+            .placements
+            .iter()
+            .map(|p| 1 + p.gains.len() as u64)
+            .sum())
+    }
+    pub(super) fn audio4_curve_keys(&self) -> usize {
+        self.curves.values().map(|curve| curve.keys().len()).sum()
     }
     /// Volume Properties and curves are immutable; every sample time is derived
     /// directly from its absolute index. Invocation order is irrelevant.
     pub fn mix(&self, sources: &AudioSources, range: TimeRange) -> Result<Bus, AudioError> {
+        if let Some(plan) = &self.advanced {
+            return plan.mix(sources, range);
+        }
         let active = self
             .placements
             .iter()
@@ -390,7 +464,7 @@ impl DocumentAudioPlan {
         })
     }
 }
-fn scalar_gain(value: Value) -> Result<Gain, AudioError> {
+pub(super) fn scalar_gain(value: Value) -> Result<Gain, AudioError> {
     let Value::Scalar(value) = value else {
         return Err(invalid("volume must be Scalar Gain"));
     };

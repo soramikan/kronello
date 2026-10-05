@@ -217,7 +217,11 @@ fn capabilities_registry_media_extension_without_device_initialization() {
     assert!(media.substituted && media.distribution_eligible && !media.development_only);
     assert_eq!(
         c.effects,
-        ["kronello.gaussian_blur", "kronello.drop_shadow"]
+        [
+            "kronello.gaussian_blur",
+            "kronello.drop_shadow",
+            "kronello.audio.gain"
+        ]
     );
     assert!(c.backends.contains(&"cpu_reference_float32".into()));
     let mutating: Vec<_> = c
