@@ -25,6 +25,8 @@ fn shared_relink_revision_and_portable_sqlite_collect() {
     let path = temp.path().join("source.kronello");
     let ResultData::Project(created) = service()
         .dispatch(Request::ProjectCreate(CreateRequest {
+            plan_hash: None,
+            idempotency_key: None,
             project: path.clone(),
             document,
         }))

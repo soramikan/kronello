@@ -96,6 +96,8 @@ fn setup(p: Project) -> (tempfile::TempDir, PathBuf) {
     let path = dir.path().join("nle2.kronello");
     service()
         .dispatch(Request::ProjectCreate(CreateRequest {
+            plan_hash: None,
+            idempotency_key: None,
             project: path.clone(),
             document: p,
         }))

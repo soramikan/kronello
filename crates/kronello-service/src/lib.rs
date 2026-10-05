@@ -12,6 +12,8 @@ mod query;
 pub use api::*;
 pub use inspect::*;
 pub use query::*;
+mod project;
+pub use project::{CreatePlanRequest, ImportPlanRequest, ProjectChangeKind, ProjectChangePlan};
 mod wire;
 pub use edit::{
     EditApplyRequest, EditCommand, EditPlan, HistoryEntry, HistoryRequest, HistoryResult,
@@ -121,16 +123,28 @@ pub enum Request {
     PropertySample(PropertySampleRequest),
     #[serde(rename = "capabilities.get")]
     CapabilitiesGet(CapabilitiesRequest),
+    #[serde(rename = "project.import_plan")]
+    ProjectImportPlan(ImportPlanRequest),
+    #[serde(rename = "project.create_plan")]
+    ProjectCreatePlan(CreatePlanRequest),
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateRequest {
     pub project: PathBuf,
     pub document: Project,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plan_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub idempotency_key: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ImportRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plan_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub idempotency_key: Option<String>,
     pub project: PathBuf,
     /// Decimal revision, independent of JSON number precision.
     pub base_revision: String,
@@ -235,6 +249,7 @@ pub enum ResultData {
     RenderExplanation(Box<RenderExplainResult>),
     Samples(PropertySampleResult),
     Capabilities(Box<CapabilitiesResult>),
+    ProjectPlan(Box<ProjectChangePlan>),
 }
 #[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
 #[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
@@ -519,18 +534,14 @@ impl<'a> Service<'a> {
             Request::HistoryList(r) => edit::history(r).map(ResultData::History),
             Request::AssetRelink(r) => media::relink(r).map(ResultData::Project),
             Request::ProjectCollect(r) => media::collect(r).map(ResultData::Collected),
-            Request::ProjectCreate(r) => create(r).map(ResultData::Project),
-            Request::ProjectImport(r) => {
-                let revision = parse_revision(&r.base_revision)?;
-                let json = serde_json::to_string(&r.document)?;
-                let mut store = open_existing(&r.project)?;
-                let previous = store.snapshot()?;
-                kronello_template::validate_stored_transition(&previous.document, &r.document)?;
-                store.import_json(revision, uuid::Uuid::new_v4(), &json)?;
-                let info = info(&store)?;
-                store.close()?;
-                Ok(ResultData::Project(info))
+            Request::ProjectCreatePlan(r) => {
+                project::create_plan(r).map(|p| ResultData::ProjectPlan(Box::new(p)))
             }
+            Request::ProjectImportPlan(r) => {
+                project::import_plan(r).map(|p| ResultData::ProjectPlan(Box::new(p)))
+            }
+            Request::ProjectCreate(r) => project::create(r).map(ResultData::Project),
+            Request::ProjectImport(r) => project::import(r).map(ResultData::Project),
             Request::ProjectInfo(r) => {
                 if self.read_only_inspection {
                     Ok(ResultData::Project(snapshot_info(
@@ -851,51 +862,6 @@ fn snapshot_info(
             .collect(),
     })
 }
-fn create(request: CreateRequest) -> Result<ProjectInfo, ServiceError> {
-    // Validate before creating anything. Exclusive publication prevents overwrite.
-    request
-        .document
-        .validate_storage()
-        .map_err(StoreError::from)?;
-    if request
-        .project
-        .extension()
-        .is_none_or(|ext| ext != "kronello")
-    {
-        return Err(ServiceError::invalid(
-            "project must use .kronello extension",
-        ));
-    }
-    kronello_template::validate_stored_project(&request.document)?;
-    let json = serde_json::to_string(&request.document)?;
-    let parent = request
-        .project
-        .parent()
-        .filter(|p| !p.as_os_str().is_empty())
-        .unwrap_or(Path::new("."));
-    // Publish a fully initialized, closed SQLite file. A failed import leaves
-    // no partially initialized target for another process to adopt.
-    let staging = tempfile::Builder::new()
-        .prefix(".kronello-create-")
-        .suffix(".kronello")
-        .tempfile_in(parent)?;
-    let mut store = ProjectStore::open(staging.path(), OpenOptions::default())?;
-    store.import_json(0, uuid::Uuid::new_v4(), &json)?;
-    let info = info(&store)?;
-    store.close()?;
-    staging.persist_noclobber(&request.project).map_err(|e| {
-        ServiceError::new(
-            if e.error.kind() == std::io::ErrorKind::AlreadyExists {
-                "PROJECT_EXISTS"
-            } else {
-                "IO_ERROR"
-            },
-            e.error.to_string(),
-        )
-    })?;
-    Ok(info)
-}
-
 /// Reject URI schemes at local-file boundaries, before any storage/font/output
 /// access. Material text and other opaque document strings remain inert data.
 fn local_locator(path: &Path) -> Result<(), ServiceError> {
@@ -966,6 +932,14 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
         }
         Request::JobGet(_) | Request::JobCancel(_) | Request::JobList(_) | Request::JobPrune(_) => {
             Ok(())
+        }
+        Request::ProjectCreatePlan(r) => {
+            local_locator(&r.project)?;
+            document_asset_locators(&r.document)
+        }
+        Request::ProjectImportPlan(r) => {
+            local_locator(&r.project)?;
+            document_asset_locators(&r.document)
         }
         Request::ProjectCreate(r) => {
             local_locator(&r.project)?;
@@ -1092,6 +1066,8 @@ mod tests {
         let mut service = Service::new(BackendSelection::default());
         service
             .dispatch(Request::ProjectCreate(CreateRequest {
+                plan_hash: None,
+                idempotency_key: None,
                 project: project.clone(),
                 document,
             }))

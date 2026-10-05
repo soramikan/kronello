@@ -90,3 +90,9 @@ audio track に Generator を保存できる。未知 Generator は保存時に�
 既知 effect id は `kronello.audio.gain` version 1。映像 effect evaluator は音声 effect を拒否する。
 公開 project / API schema の番号1は維持し、Rust generator と Swift transport を再生成する。
 旧文書・profile 1/2 の実行意味を変更せず、movie profile 3 が新音声 contract を固定する。
+
+SERVICE-002 の Modifier 編集は既存 Modifier の id / key / version / enabled / parameters と
+Property.modifiers の順序付き配列を使い、Project schema を変更しない。
+insert / replace / remove / reorder は共有 EditCommand とし、保存可能性と評価可能性を区別する。
+[ADR-0071](../adr/0071-project-change-plans-and-modifier-edits.md)、
+[03 プロパティとアニメーション](03-property-animation.md#service-002-の-modifier-authoring) を参照。
