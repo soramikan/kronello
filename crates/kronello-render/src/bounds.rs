@@ -179,6 +179,15 @@ pub(crate) fn derive_scene_bounds(nodes: &mut [SceneNodeIr]) -> Result<(), Rende
                     .map(|(min, max)| DesignBounds::checked(min, max))
                     .transpose()?;
                 let halo = resolved.stroke.as_ref().map_or(0.0, |s| {
+                    if let Some(o) = &s.options {
+                        let factor = match o.alignment {
+                            kronello_model::StrokeAlignment::Center => 1.0,
+                            kronello_model::StrokeAlignment::Inside => 0.0,
+                            kronello_model::StrokeAlignment::Outside => 2.0,
+                        };
+                        return factor
+                            * stroke_halo(s.width.get(), s.join, s.cap, s.miter_limit.get());
+                    }
                     // Rectangles/ellipses stay in their size box with half-width support.
                     if matches!(resolved.geometry, ResolvedGeometry::BezierPath(_)) {
                         stroke_halo(s.width.get(), s.join, s.cap, s.miter_limit.get())

@@ -49,6 +49,7 @@ impl OutputRegion {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CoveragePath {
+    pub stroke_geometry: Option<LocalStrokeGeometry>,
     /// Semantic local geometry identity before output mapping or paint.
     pub geometry_content_hash: String,
     /// Coordinates mapped to output pixels; +Y is down. Paint remains explicitly
@@ -65,6 +66,18 @@ pub struct CoveragePath {
     pub fill_gradient: Option<Box<ResolvedGradient>>,
     pub stroke_gradient: Option<Box<ResolvedGradient>>,
     pub paint_transform: [[f64; 3]; 2],
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LocalStrokeGeometry {
+    pub version: String,
+    pub contours: FlattenedPath,
+    pub output_to_local: [[f64; 3]; 2],
+    pub local_to_output: [[f64; 3]; 2],
+    pub alignment: kronello_model::StrokeAlignment,
+    pub fill_rule: FillRule,
+    pub dash_array: Vec<f64>,
+    pub dash_offset: f64,
 }
 #[derive(Debug, Clone, PartialEq)]
 pub enum DagNode {
@@ -321,13 +334,40 @@ impl Builder<'_> {
                     resolved.stroke.as_ref().and_then(|f| f.gradient.as_deref()),
                     bounds,
                 )?;
+                let stroke_geometry = resolved
+                    .stroke
+                    .as_ref()
+                    .and_then(|s| s.options.as_ref())
+                    .map(|o| -> Result<LocalStrokeGeometry, RenderError> {
+                        if o.alignment != kronello_model::StrokeAlignment::Center
+                            && contours.subpaths.iter().any(|c| !c.closed)
+                        {
+                            return Err(kronello_model::ShapeError::OpenStrokeAlignment.into());
+                        }
+                        Ok(LocalStrokeGeometry {
+                            version: o.geometry_version.clone(),
+                            contours: kronello_vector::dash_path(
+                                &contours,
+                                &o.dash_array,
+                                o.dash_offset,
+                            )?,
+                            output_to_local: inverse(transform)?,
+                            local_to_output: transform.0,
+                            alignment: o.alignment,
+                            fill_rule: o.fill_rule,
+                            dash_array: o.dash_array.clone(),
+                            dash_offset: o.dash_offset,
+                        })
+                    })
+                    .transpose()?;
                 let contours = map_contours(contours, transform)?;
                 let stroke = if let Some(stroke) = &resolved.stroke {
                     let x = a[0].hypot(b[0]);
                     let y = a[1].hypot(b[1]);
                     let dot = a[0] * a[1] + b[0] * b[1];
-                    if (x - y).abs() > 1e-10 * x.max(y).max(1.0)
-                        || dot.abs() > 1e-10 * (x * y).max(1.0)
+                    if stroke_geometry.is_none()
+                        && ((x - y).abs() > 1e-10 * x.max(y).max(1.0)
+                            || dot.abs() > 1e-10 * (x * y).max(1.0))
                     {
                         return Err(RenderError::UnsupportedFeature(format!(
                             "nonuniform transformed stroke on {:?}",
@@ -336,7 +376,7 @@ impl Builder<'_> {
                     }
                     Some((
                         stroke.color,
-                        stroke.width.get() * x,
+                        stroke.width.get() * if stroke_geometry.is_some() { 1.0 } else { x },
                         stroke.join,
                         stroke.cap,
                         stroke.miter_limit.get(),
@@ -348,6 +388,7 @@ impl Builder<'_> {
                     self.push(DagNode::CoverageDraw {
                         geometry,
                         path: CoveragePath {
+                            stroke_geometry,
                             geometry_content_hash,
                             contours,
                             fill: resolved.fill.as_ref().map(|f| (f.color, f.rule)),
@@ -391,6 +432,7 @@ impl Builder<'_> {
                     children.push(self.push(DagNode::CoverageDraw {
                         geometry,
                         path: CoveragePath {
+                            stroke_geometry: None,
                             geometry_content_hash,
                             contours,
                             fill: Some((glyph.fill, FillRule::Nonzero)),
@@ -708,11 +750,19 @@ fn derive_bounds(nodes: &[DagNode]) -> Vec<crate::NodeBounds> {
                                 .fold(f64::NEG_INFINITY, f64::max)
                         }),
                     };
-                    Some(b.expand(
-                        [path.stroke.map_or(0.0, |(_, w, join, cap, m)| {
-                            crate::bounds::stroke_halo(w, join, cap, m)
-                        }); 2],
-                    ))
+                    let halo = path.stroke.map_or(0.0, |(_, w, join, cap, m)| {
+                        crate::bounds::stroke_halo(w, join, cap, m)
+                    });
+                    let halo = path.stroke_geometry.as_ref().map_or([halo; 2], |g| {
+                        let factor = match g.alignment {
+                            kronello_model::StrokeAlignment::Center => 1.0,
+                            kronello_model::StrokeAlignment::Inside => 0.0,
+                            kronello_model::StrokeAlignment::Outside => 2.0,
+                        };
+                        g.local_to_output
+                            .map(|r| halo * factor * (r[0].abs() + r[1].abs()))
+                    });
+                    Some(b.expand(halo))
                 };
                 NodeBounds {
                     ink_bounds: ink,
