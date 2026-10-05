@@ -2,6 +2,7 @@
 
 統合ブランチは `m3-motion-authoring`。GUI / 音声 / QA / 第2段階の未コミット実装を元の作業ツリーを変更せず
 `codex/preserve-m3-*` に保存して統合し、JOB-002 の `6ce31a0` とその親履歴を取り込んだ。
+後続の `c860d07` / `9b5f2bc` は FIFO connection gate と OS 別 fixture / CI 対策、高負荷の成功記録を追加した。
 元4作業ツリーの tracked diff と未追跡ソースが保存した内容と一致することも再確認した。
 実装統合を受け入れ完了とは扱わない。タスク状態の正本は `docs/backlog/backlog.json`。
 
@@ -33,6 +34,7 @@ CommandLineTools の SwiftPM は `SwiftUIMacros` が欠落し、初回 build は
 | 第2段階 FFI 値表示 | 成功 | SwiftPM IntegrationTests が `target/m3-acceptance/integration-metal/gui-evidence.json` を明示取得して全値・boundsを照合 |
 | native IME 境界 | 成功 | QA の `ime.json`。未確定 / 取消の commit0、確定の単一 Event、UTF-8 の結合濁点差分 |
 | macOS JOB 実プロセス | 8 passed、0 failures、1 ignored | `--features test-worker --test processes`。ignored は load50 の明示 stress |
+| macOS JOB 高負荷、FIFO修正後 | CLI24/24を2回成功、146 workers / orphan0 | `c860d07` clean HEAD、64 burners、最後40 sampleのload79.06–99.68。[JOB-002](job-002.md)末尾 |
 | 第2段階 Metal 4K driver | 147 checksすべて成功 | `target/m3-acceptance/integration-metal/report.json`、横型 / 縦型 / 固定 snapshot / typed overflow |
 | AUDIO-002 実engine / Metal | 3fps、underrun0、seek / stop-resume一致 | `target/m3-acceptance/audio-report.json`。負荷並行条件、physical scanoutは未測定 |
 | GUI-003 実操作（Dark） | trim / Undo / blade各単一Event、Motion遷移でrevision不変 | `target/m3-acceptance/edit-*`、[GUI-003](gui-003.md)末尾 |
