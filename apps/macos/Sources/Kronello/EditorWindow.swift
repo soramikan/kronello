@@ -19,9 +19,9 @@ struct EditorWindow: View {
                 title: model.ui.page == "edit" ? "編集ページ" : model.ui.page == "template" ? "テンプレートページ" : "書き出しページ",
                 message: model.ui.page == "edit" ? "Sequence の編集は GUI-003 で追加します。モーションページで Composition を開いてください。" : "このページは GUI-004 で追加します。モーションページで作業を続けられます。")
                 .frame(maxWidth: .infinity, maxHeight: .infinity) }
-            KRStatusBar(saved: (model.busy ? "保存中" : "保存済み") + (model.safeMode ? " · 安全モード" : ""), revision: "rev " + model.revision,
+            KRStatusBar(saved: (model.busy ? "保存中" : "保存済み") + (model.safeMode ? " · 安全モード" : "") + " · " + model.playbackStatus, revision: "rev " + model.revision,
                 externalChange: model.externalChange, error: diagnostic, job: jobSummary,
-                onError: { if model.undoConflict != nil {} else if model.revisionConflict == nil { model.failure = model.previewFailure } }, onJobs: { jobsOpen = true })
+                onError: { if model.undoConflict != nil {} else if model.revisionConflict == nil { model.failure = model.previewFailure ?? model.playbackFailure } }, onJobs: { jobsOpen = true })
         }.frame(minWidth: KRWindowMetrics.width, minHeight: KRWindowMetrics.height)
             .background(p.surface100).foregroundStyle(p.ink)
             .sheet(item: $model.undoConflict) { error in
@@ -64,7 +64,7 @@ struct EditorWindow: View {
             .overlay(alignment: .bottom) { p.line.frame(height: 1) }
     }
     var diagnostic: KRDiagnostic? {
-        let failures = [model.failure, model.undoConflict, model.revisionConflict, model.previewFailure].compactMap { $0 }
+        let failures = [model.failure, model.undoConflict, model.revisionConflict, model.previewFailure, model.playbackFailure].compactMap { $0 }
         guard !failures.isEmpty else { return nil }
         return .init(failures.map(\.code).joined(separator: ", "), "\(failures.count) 件")
     }

@@ -3,6 +3,9 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#ifdef __APPLE__
+#include "playback.h"
+#endif
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -26,6 +29,16 @@ uint64_t kronello_subscribe(uint64_t handle, bool enable);
  * Maximum 64 accepted, unpolled requests per session. */
 char *kronello_poll(uint64_t handle);
 void kronello_free(char *ptr);
+/* Producer-only synchronous preview runtime resources, separate from session FIFO.
+ * Request = {project,target:{kind:composition|sequence,composition|sequence:UUID},expected_revision}.
+ * Preparation owns immutable evaluator-2 plan + verified decoded sources.
+ * All non-null error outputs are JSON ServiceError, freed with kronello_free.
+ * A resource has one serial owner; free must not race rendering. NEVER call
+ * these functions from an audio render callback. Up to 4096 stereo frames.
+ * Output is caller-owned native f32 interleaved left/right, unchanged on failure. */
+void *kronello_audio_prepare(const uint8_t *json, size_t len, bool *has_audio, char **error);
+bool kronello_audio_render(const void *resource, int64_t start_sample, size_t frames, float *output, char **error);
+void kronello_audio_free(void *resource);
 /* Main thread: install a live CAMetalLayer on an NSView before attach.
  * Rust retains the layer before returning. Do not change device/pixelFormat
  * after attach. Release occurs after replacement or queued work on close.

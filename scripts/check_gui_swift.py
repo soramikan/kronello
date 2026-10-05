@@ -25,6 +25,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--swiftc", default=shutil.which("swiftc"))
     parser.add_argument("--sdk", default=None)
+    parser.add_argument("--clang", default=None)
     parser.add_argument("--run-checks", action="store_true")
     parser.add_argument("--skip-modules", action="store_true", help="Reuse modules from a preceding direct check")
     parser.add_argument("--disable-plugin-sandbox", action="store_true", help="Avoid a nested compiler subprocess sandbox; the caller sandbox still applies")
@@ -39,6 +40,17 @@ def main():
               "-Xlinker", "-rpath", "-Xlinker", str(output), "-Xlinker", "-rpath", "-Xlinker", str(PACKAGE / "Libraries")]
     if args.disable_plugin_sandbox:
         common += ["-disable-sandbox"]
+    native = output / "playback.o"
+    clang = args.clang or str(Path(args.swiftc).with_name("clang"))
+    subprocess.run([clang, "-std=c11", "-Wall", "-Wextra", "-Werror", "-isysroot", sdk,
+                    "-target", "arm64-apple-macosx14.0", "-c", str(PACKAGE / "Sources/CKronelloFFI/playback.c"),
+                    "-o", str(native)], check=True)
+    if args.run_checks:
+        native_checks = output / "PlaybackNativeChecks"
+        subprocess.run([clang, "-std=c11", "-Wall", "-Wextra", "-Werror", "-isysroot", sdk,
+                        "-target", "arm64-apple-macosx14.0", "-framework", "AudioToolbox",
+                        str(PACKAGE / "Tests/PlaybackNativeChecks.c"), "-o", str(native_checks)], check=True)
+        subprocess.run([str(native_checks)], check=True)
     # Only the direct check uses this accessor. SwiftPM uses its own generated Bundle.module.
     accessor = output / "Resources.swift"
     accessor.write_text("import Foundation\nextension Bundle { static let module = Bundle(path: "
@@ -50,12 +62,16 @@ def main():
             sources.append(accessor)
         subprocess.run(common + ["-parse-as-library", "-enable-testing", "-emit-module", "-emit-library", "-module-name", module,
                                 "-emit-module-path", str(output / f"{module}.swiftmodule"),
-                                "-o", str(output / f"lib{module}.dylib")] + links + [str(p) for p in sources], check=True)
-    for module in ["Kronello", "KronelloDesignGallery"]:
+                                "-o", str(output / f"lib{module}.dylib")] + links + ([str(native)] if module == "KronelloCore" else []) + [str(p) for p in sources], check=True)
+    for module in ["Kronello", "KronelloDesignGallery", "KronelloAudioHarness"]:
         flags = ["-typecheck", "-module-name", module]
         if module == "Kronello":
             flags += ["-parse-as-library"]
         subprocess.run(common + flags + [str(p) for p in sorted((PACKAGE / f"Sources/{module}").glob("*.swift"))], check=True)
+        if module == "KronelloAudioHarness" and args.run_checks:
+            subprocess.run(common + ["-lKronelloAppModel", "-lKronelloCore", "-lKronelloDesign",
+                            "-o", str(output / "KronelloAudioHarness")]
+                           + [str(p) for p in sorted((PACKAGE / f"Sources/{module}").glob("*.swift"))], check=True)
     developer = Path(sdk).parent.parent
     subprocess.run(common + ["-typecheck", "-module-name", "KronelloAppModelTests",
                             "-F", str(developer / "Library/Frameworks"), "-I", str(developer / "usr/lib")]
@@ -67,13 +83,14 @@ import Darwin
 @main struct Runner {
     @MainActor static func main() async {
         setbuf(stdout, nil)
-        do { try await GUIChecks().runAll(); try await MotionChecks().runAll() }
+        do { try await GUIChecks().runAll(); try await MotionChecks().runAll(); try await PlaybackChecks().runAll() }
         catch { fputs("GUI checks failed: \(error)\n", stderr); exit(1) }
     }
 }
 ''')
         subprocess.run(common + ["-parse-as-library", "-lKronelloAppModel", "-lKronelloCore", "-lKronelloDesign", "-o", str(output / "GUIRunner"),
-                                str(PACKAGE / "Tests/KronelloAppModelTests/GUIChecks.swift"), str(PACKAGE / "Tests/KronelloAppModelTests/MotionChecks.swift"), str(runner)], check=True)
+                                str(PACKAGE / "Tests/KronelloAppModelTests/GUIChecks.swift"), str(PACKAGE / "Tests/KronelloAppModelTests/MotionChecks.swift"),
+                                str(PACKAGE / "Tests/KronelloAppModelTests/PlaybackChecks.swift"), str(runner)], check=True)
         subprocess.run([str(output / "GUIRunner")], cwd=ROOT, check=True)
 
 

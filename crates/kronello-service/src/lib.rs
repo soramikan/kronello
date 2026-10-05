@@ -1,8 +1,10 @@
 //! Shared synchronous Command/Query boundary for headless rendering and edits.
 //! Entry points own transport only; storage, fonts and rendering compose here.
 mod nle;
+mod playback;
 pub use kronello_render::RenderTarget;
 pub use nle::*;
+pub use playback::{AudioPrepareRequest, MAX_PLAYBACK_BLOCK_FRAMES, PreparedAudio};
 mod jobs;
 pub use jobs::*;
 mod api;
