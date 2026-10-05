@@ -241,3 +241,9 @@ ADR-0077 / 本書を追加した。共有GUIのhookは `InspectorPanel.swift` / 
 既存stage-1 driverの入力hook、direct Swift runnerの新check登録、gallery mainのsheet登録、
 architecture10の検査説明を追加した。core API / schema / generated Swift / GPU baselineは未変更。
 host証拠・統合後のGUI-003 / AUDIO-002との確認とbacklog更新はsupervisorが扱う。
+
+
+## M3 統合再検査（2026-10-06）
+
+統合後の SwiftPM / FFI / 三入口比較の結果と未確認範囲は
+[M3 統合受け入れ](m3-acceptance.md) に記録した。過去の worker 検査と現在の実機検査を区別する。

@@ -166,3 +166,9 @@ state-rootの書込制限はwritable `KRONELLO_STATE_ROOT`、xcrun cacheの制�
 workspaceの最終指定commandは未合格であり、先行PASS / 単独PASSを最終全suiteのPASSに読み替えない。
 SwiftPM build / test、実app、Instruments、manual listening、3率の実device / Metal測定、
 physical loopback / scanout、GUI-003統合後の確認はpending host / integration run。
+
+
+## M3 統合再検査（2026-10-06）
+
+統合後の SwiftPM / FFI / 三入口比較の結果と未確認範囲は
+[M3 統合受け入れ](m3-acceptance.md) に記録した。過去の worker 検査と現在の実機検査を区別する。
