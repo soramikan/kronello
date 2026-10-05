@@ -30,6 +30,7 @@ public enum KRMediaKind: String, CaseIterable, Codable, Sendable {
 public struct KRAssetRow: View {
     @Environment(\.krPalette) private var p
     @State private var hover = false
+    @FocusState private var focused: Bool
     public let name: String
     public let kind: KRMediaKind
     public let meta: String
@@ -51,11 +52,11 @@ public struct KRAssetRow: View {
                 Text(name).krText(KRType.body).foregroundStyle(missing == nil ? p.ink : p.danger).lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if let missing { Text(missing).krText(KRMono.caption).foregroundStyle(p.danger) }
-                else { Text(meta).krText(KRType.caption).foregroundStyle(p.inkMuted) }
+                else { Text(meta).krText(KRType.caption).foregroundStyle(p.inkMuted).lineLimit(1) }
                 Text(duration).krText(KRType.timecode).foregroundStyle(p.inkMuted).frame(minWidth: 76, alignment: .trailing)
             }.padding(.horizontal, KRSpace.space3).frame(height: KRSize.rowHeight)
                 .background(selected ? p.selectionBg : hover || appearance == .hover ? p.controlHover : .clear)
-        }.buttonStyle(.plain).krFocusRing(appearance == .focused).onHover { hover = $0 }
+        }.buttonStyle(.plain).focused($focused).krFocusRing(focused || appearance == .focused).onHover { hover = $0 }
             .simultaneousGesture(TapGesture(count: 2).onEnded(onOpen))
             .accessibilityLabel(name).accessibilityValue(missing ?? "\(meta) \(duration)")
             .accessibilityAddTraits(selected ? .isSelected : [])

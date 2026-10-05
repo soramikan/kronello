@@ -60,6 +60,14 @@ public struct EditCandidate {
     @Published public private(set) var revision = "0"
     @Published public private(set) var safeMode = false
     @Published public private(set) var compositions: [[String: Any]] = []
+    @Published public var sequenceResult: [String: Any] = [:]
+    @Published public var timelineCandidate: TimelineCandidate?
+    @Published public var sequenceLoading = false
+    @Published public var sequenceFailure: ServiceFailure?
+    @Published public var assetSelection: String?
+    @Published public var editTool = "select"
+    @Published public var editSnap = true
+    @Published public var editScale: Double = 1
     @Published public private(set) var layers: [Layer] = []
     @Published public private(set) var document: [String: Any] = [:]
     @Published public private(set) var history: [[String: Any]] = []
@@ -91,18 +99,19 @@ public struct EditCandidate {
     public var selected: Layer? { layers.first { $0.id == ui.selection } }
     public var canUndo: Bool { !undoState.undo.isEmpty && !busy && pendingCandidate == nil }
     public var canRedo: Bool { !undoState.redo.isEmpty && !busy && pendingCandidate == nil }
-    public var rateNum: Int64 { max(1, Int64(current.object("edit_rate").string("num")) ?? 24) }
-    public var rateDen: Int64 { max(1, Int64(current.object("edit_rate").string("den")) ?? 1) }
+    public var rateNum: Int64 { max(1, Int64(activeRate.string("num")) ?? 24) }
+    public var rateDen: Int64 { max(1, Int64(activeRate.string("den")) ?? 1) }
     public var nominalFPS: Int { Int((rateNum + rateDen - 1) / rateDen) }
     public var frame: Int64 { ui.time.frames(rateNum: rateNum, rateDen: rateDen) }
     public var durationFrames: Int64 {
+        if ui.page == "edit" { return sequenceDurationFrames }
         let duration = current.object("duration")
         let n = Int64(duration.string("num")) ?? 0, d = Int64(duration.string("den")) ?? 1
         let top = n.multipliedReportingOverflow(by: rateNum), bottom = d.multipliedReportingOverflow(by: rateDen)
         guard n > 0, d > 0, !top.overflow, !bottom.overflow, bottom.partialValue > 0 else { return 0 }
         return top.partialValue / bottom.partialValue + (top.partialValue % bottom.partialValue == 0 ? 0 : 1)
     }
-    public var extent: CGSize { CGSize(width: current.object("design_extent").number("width"), height: current.object("design_extent").number("height")) }
+    public var extent: CGSize { CGSize(width: activeExtent.number("width"), height: activeExtent.number("height")) }
     public var timecode: String { KRTimecode.format(frames: max(0, frame), fps: nominalFPS) }
     public var durationCode: String { KRTimecode.format(frames: max(0, durationFrames), fps: nominalFPS) }
     public var textFont: [String: Any]? {
@@ -146,9 +155,11 @@ public struct EditCandidate {
             return try await withCheckedThrowingContinuation { reloadWaiters.append($0) }
         }
         reloading = true
+        if ui.page == "edit" { sequenceLoading = true }
         var completion: Result<Void, Error> = .success(())
         defer {
             reloading = false
+            sequenceLoading = false
             let waiters = reloadWaiters; reloadWaiters.removeAll()
             for waiter in waiters { waiter.resume(with: completion) }
         }
@@ -162,17 +173,37 @@ public struct EditCandidate {
             let comps = export.object("document").objects("compositions")
             if !comps.contains(where: { $0.string("id") == ui.composition }) { ui.composition = comps.first?.string("id") }
             var scene: [String: Any] = [:]
-            if let composition = ui.composition {
+            if ui.page != "edit", let composition = ui.composition {
                 do { scene = try await request("scene.query", ["composition": composition, "evaluation": ["time": ui.time.wire, "fonts": fonts]]) }
                 catch { previewFailure = serviceFailure(error); scene = try await request("scene.query", ["composition": composition]) }
             }
+            var timeline: [String: Any] = [:]
+            let sequences = export.object("document").objects("sequences")
+            if !sequences.contains(where: { $0.string("id") == ui.sequence }) { ui.sequence = sequences.first?.string("id") }
+            if ui.page == "edit", let sequence = ui.sequence {
+                do { timeline = try await request("sequence.query", ["sequence": sequence]); sequenceFailure = nil }
+                catch { sequenceFailure = serviceFailure(error) }
+            }
             // Never combine two revisions. A read race schedules a new read, never a write retry.
-            if info.string("revision") != export.string("revision") || (!scene.isEmpty && scene.string("revision") != export.string("revision")) {
+            if (!timeline.isEmpty && timeline.string("revision") != export.string("revision")) || info.string("revision") != export.string("revision") || (!scene.isEmpty && scene.string("revision") != export.string("revision")) {
                 reloadAgain = true; continue
             }
+            sequenceResult = timeline
             history = try await historySince(old, through: export.string("revision"))
             let actor = history.last(where: { $0.object("event").string("session_id") != sessionID })?.object("event").string("session_id") ?? "外部プロセス"
             let previousSelection = ui.selection
+            let previousClipSelection = ui.clipSelection
+            let clipDeletion = history.last { entry in
+                let event = entry.object("event")
+                // Timeline replaces ordered tracks as one mutation. The removed
+                // placement's stable identity remains in the Event's structure keys.
+                return event.objects("changed_keys").contains { key in
+                    key.string("kind") == "structure" && key.string("object_id") == previousClipSelection
+                } || event.objects("mutations").contains { mutation in
+                    let path = mutation["path"] as? [String] ?? []
+                    return mutation.string("operation") == "remove" && (path.last == previousClipSelection || path.last == ui.sequence)
+                }
+            }?.object("event")
             let deletion = history.last { entry in
                 entry.object("event").objects("mutations").contains { mutation in
                     let path = mutation["path"] as? [String] ?? []
@@ -184,6 +215,10 @@ public struct EditCandidate {
             if previousSelection != nil && ui.selection == nil {
                 if let deletion { deletedSelection = "選択していたレイヤーは削除されました。\(deletion.string("session_id")) · rev \(deletion.string("revision"))" }
                 else { deletedSelection = "選択していたレイヤーは削除されました。削除した操作者は履歴で確認してください · 読込 rev \(revision)" }
+            }
+            if previousClipSelection != nil && ui.clipSelection == nil {
+                if let clipDeletion { deletedSelection = "選択していたクリップは削除されました。\(clipDeletion.string("session_id")) · rev \(clipDeletion.string("revision"))" }
+                else { deletedSelection = "選択していたクリップは削除されました。削除した操作者は履歴で確認してください · 読込 rev \(revision)" }
             }
         } while reloadAgain
         } catch { completion = .failure(error); throw error }
@@ -217,12 +252,14 @@ public struct EditCandidate {
             // Events carry a session, not a client kind; show a short session tag.
             externalChange = "別のセッション（\(actor.prefix(8))）の変更を読み込みました（rev \(previous) → \(revision)）"
         }
+        validateClipSelection(actor: actor)
         refreshToken += 1
     }
     public func select(_ id: String?, canvas: Bool = false) {
         if let id, canvas && ui.locked.contains(id) { return }
         ui.selection = id; deletedSelection = nil; candidateBounds = nil; numberOrigin = nil
     }
+    func setDeletedSelection(_ message: String?) { deletedSelection = message }
     public func setComposition(_ id: String) {
         ui.composition = id; ui.selection = nil
         Task { do { try await reload() } catch { mapFailure(error) } }
@@ -242,6 +279,7 @@ public struct EditCandidate {
         let product = bounded.multipliedReportingOverflow(by: rateDen)
         guard !product.overflow else { return }
         ui.time = RationalTime(num: product.partialValue, den: rateNum)
+        if ui.page == "edit" { refreshToken += 1; return }
         Task { do { try await reload() } catch { mapFailure(error) } }
     }
     public func tick() {

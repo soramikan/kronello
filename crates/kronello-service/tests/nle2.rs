@@ -16,6 +16,349 @@ use uuid::Uuid;
 fn t(n: i64, d: i64) -> Time {
     Time::new(n, d).unwrap()
 }
+
+#[test]
+fn split_retime_mapping_owned_properties_receipt_and_one_undo() {
+    let mut c = clip([60, 80, 120], 1, 5);
+    c.time_map = TimeMap::piecewise_linear(vec![
+        TimeMapPoint {
+            parent: t(0, 1),
+            local: t(0, 1),
+        },
+        TimeMapPoint {
+            parent: t(1, 1),
+            local: t(1, 2),
+        },
+        TimeMapPoint {
+            parent: t(4, 1),
+            local: t(3, 1),
+        },
+    ])
+    .unwrap();
+    let sigma = property(
+        "kronello.effect.sigma",
+        Value::Scalar(FiniteF64::new(2.0).unwrap()),
+    );
+    c.effects = vec![Effect::Known(EffectDefinition {
+        effect_id: GAUSSIAN_BLUR_ID.into(),
+        version: 1,
+        parameters: EffectParameters::GaussianBlur { sigma: sigma.id() },
+    })];
+    let mut opacity = property(
+        "kronello.opacity",
+        Value::Scalar(FiniteF64::new(0.75).unwrap()),
+    );
+    let modifier = Modifier {
+        id: ModifierId::new(),
+        key: SchemaKey::new("example.unsupported").unwrap(),
+        version: 1,
+        enabled: false,
+        parameters: Default::default(),
+    };
+    opacity
+        .set_modifiers(vec![modifier.clone()], &kronello_render::render_registry())
+        .unwrap();
+    c.properties = vec![sigma.clone(), opacity.clone()];
+    let volume = property(
+        "kronello.audio.volume",
+        Value::Scalar(FiniteF64::new(0.8).unwrap()),
+    );
+    c.volume = Some(Box::new(volume.clone()));
+    let original = c.clone();
+    let s = sequence(vec![c]);
+    let sequence_id = s.id;
+    let (_dir, path) = setup(project(s));
+    let before = export(&path);
+    let right_id = ClipId::new();
+    let command = TimelineCommand::ClipSplit {
+        sequence: sequence_id,
+        clip: original.id,
+        time: t(5, 2),
+        right_clip: right_id,
+    };
+    let request = apply_request(&path, vec![command.clone()], "split-receipt");
+    let second_plan = apply_request(&path, vec![command], "split-receipt");
+    assert_eq!(
+        request.plan_hash, second_plan.plan_hash,
+        "owned IDs are deterministic across plans"
+    );
+    let ResultData::Edit(event) = service()
+        .dispatch(Request::EditApply(request.clone()))
+        .unwrap()
+    else {
+        panic!()
+    };
+    let ResultData::Edit(replay) = service().dispatch(Request::EditApply(request)).unwrap() else {
+        panic!()
+    };
+    assert_eq!(event, replay);
+    assert_eq!(
+        export(&path).revision.parse::<u64>().unwrap(),
+        before.revision.parse::<u64>().unwrap() + 1
+    );
+    let after = export(&path);
+    let DocumentObject::Known(s) = &after.document.sequences[0] else {
+        panic!()
+    };
+    let [left, right] = s.tracks[0].clips.as_slice() else {
+        panic!()
+    };
+    assert_eq!(left.id, original.id);
+    assert_eq!(right.id, right_id);
+    assert_eq!(left.timeline_range, range(t(1, 1), t(5, 2)));
+    assert_eq!(right.timeline_range, range(t(5, 2), t(5, 1)));
+    for (part, times) in [
+        (left, vec![t(1, 1), t(2, 1), t(5, 2)]),
+        (right, vec![t(5, 2), t(3, 1), t(5, 1)]),
+    ] {
+        for time in times {
+            assert_eq!(
+                part.local_time(time).unwrap(),
+                original.local_time(time).unwrap()
+            );
+        }
+    }
+    assert_eq!(left.properties, original.properties);
+    assert_ne!(right.properties[0].id(), sigma.id());
+    assert_eq!(right.properties[0].source(), sigma.source());
+    assert_ne!(right.properties[1].id(), opacity.id());
+    assert_ne!(right.properties[1].modifiers()[0].id, modifier.id);
+    assert_eq!(
+        right.properties[1].modifiers()[0].parameters,
+        modifier.parameters
+    );
+    assert_ne!(right.volume.as_ref().unwrap().id(), volume.id());
+    assert_eq!(right.volume.as_ref().unwrap().source(), volume.source());
+    assert!(
+        matches!(&right.effects[0], Effect::Known(e) if e.parameters == EffectParameters::GaussianBlur { sigma: right.properties[0].id() })
+    );
+    undo(&path, event.id).unwrap();
+    assert_eq!(
+        export(&path).document,
+        before.document,
+        "one inverse restores all split objects"
+    );
+}
+
+#[test]
+fn split_rejects_boundaries_duplicate_links_and_transition_atomically() {
+    let c = clip([20, 40, 80], 0, 4);
+    let s = sequence(vec![c.clone()]);
+    let sequence_id = s.id;
+    let (_dir, path) = setup(project(s));
+    for time in [t(-1, 1), t(0, 1), t(4, 1), t(5, 1)] {
+        reject(
+            &path,
+            vec![TimelineCommand::ClipSplit {
+                sequence: sequence_id,
+                clip: c.id,
+                time,
+                right_clip: ClipId::new(),
+            }],
+            "INVALID_EDIT",
+        );
+    }
+    reject(
+        &path,
+        vec![TimelineCommand::ClipSplit {
+            sequence: sequence_id,
+            clip: c.id,
+            time: t(2, 1),
+            right_clip: c.id,
+        }],
+        "INVALID_EDIT",
+    );
+    reject(
+        &path,
+        vec![TimelineCommand::ClipSplit {
+            sequence: sequence_id,
+            clip: ClipId::new(),
+            time: t(2, 1),
+            right_clip: ClipId::new(),
+        }],
+        "SOURCE_MISSING",
+    );
+    let mut a = c.clone();
+    let mut b = clip([10, 10, 10], 4, 6);
+    a.links = vec![b.id];
+    b.links = vec![a.id];
+    let s = sequence(vec![a, b]);
+    let id = s.id;
+    let (_linked_dir, linked_path) = setup(project(s));
+    reject(
+        &linked_path,
+        vec![TimelineCommand::ClipSplit {
+            sequence: id,
+            clip: c.id,
+            time: t(2, 1),
+            right_clip: ClipId::new(),
+        }],
+        "LINKED_EDIT_REQUIRED",
+    );
+    let incoming = clip([10, 10, 10], 3, 6);
+    let mut s = sequence(vec![c.clone(), incoming.clone()]);
+    let id = s.id;
+    s.transitions = vec![Transition {
+        version: 1,
+        kind: TransitionKind::Crossfade,
+        outgoing: c.id,
+        incoming: incoming.id,
+        range: range(t(3, 1), t(4, 1)),
+    }];
+    let (_transition_dir, transition_path) = setup(project(s));
+    reject(
+        &transition_path,
+        vec![TimelineCommand::ClipSplit {
+            sequence: id,
+            clip: c.id,
+            time: t(2, 1),
+            right_clip: ClipId::new(),
+        }],
+        "TRANSITION_EDIT_CONFLICT",
+    );
+}
+
+#[test]
+fn split_undo_preserves_other_sequences_and_rejects_later_right_clip_edits() {
+    let left = clip([60, 80, 120], 0, 4);
+    let a = sequence(vec![left.clone()]);
+    let other = clip([20, 30, 40], 0, 2);
+    let b = sequence(vec![other.clone()]);
+    let mut p = project(a.clone());
+    p.sequences.push(DocumentObject::Known(b.clone()));
+    let (_dir, path) = setup(p.clone());
+    let right = ClipId::new();
+    let command = TimelineCommand::ClipSplit {
+        sequence: a.id,
+        clip: left.id,
+        time: t(2, 1),
+        right_clip: right,
+    };
+    let event = apply(&path, vec![command.clone()], "split-selective");
+    apply(
+        &path,
+        vec![TimelineCommand::ClipMove {
+            sequence: b.id,
+            clip: other.id,
+            delta: t(1, 1),
+            linked: false,
+        }],
+        "other-sequence",
+    );
+    let before_undo = export(&path);
+    undo(&path, event.id).unwrap();
+    let after = export(&path);
+    assert_eq!(after.document.sequences[0], DocumentObject::Known(a));
+    assert_eq!(
+        after.document.sequences[1],
+        before_undo.document.sequences[1]
+    );
+    let (_conflict_dir, conflict_path) = setup(p);
+    let split = apply(&conflict_path, vec![command], "split-conflict");
+    apply(
+        &conflict_path,
+        vec![TimelineCommand::ClipMove {
+            sequence: b.id,
+            clip: other.id,
+            delta: t(1, 1),
+            linked: false,
+        }],
+        "independent",
+    );
+    let sequence = match &export(&conflict_path).document.sequences[0] {
+        DocumentObject::Known(s) => s.id,
+        _ => panic!(),
+    };
+    apply(
+        &conflict_path,
+        vec![TimelineCommand::ClipMove {
+            sequence,
+            clip: right,
+            delta: t(1, 1),
+            linked: false,
+        }],
+        "right-edit",
+    );
+    let before = export(&conflict_path);
+    assert_eq!(
+        undo(&conflict_path, split.id).unwrap_err().code,
+        "UNDO_CONFLICT"
+    );
+    assert_eq!(export(&conflict_path).document, before.document);
+    assert_eq!(export(&conflict_path).revision, before.revision);
+}
+
+#[test]
+fn sequence_asset_availability_is_batched_and_never_claims_hash_verification() {
+    let s = sequence(vec![clip([0, 0, 0], 0, 2)]);
+    let id = s.id;
+    let mut p = project(s);
+    let assets_dir = tempfile::tempdir().unwrap();
+    let present = assets_dir.path().join("present.bin");
+    std::fs::write(
+        &present,
+        b"content whose hash is intentionally not recorded",
+    )
+    .unwrap();
+    let asset = |path: &Path| Asset {
+        id: AssetId::new(),
+        content_hash: "0".repeat(64),
+        kind: AssetKind::Video,
+        streams: vec![],
+        locator: AssetLocator {
+            relative: None,
+            absolute: Some(path.display().to_string()),
+        },
+    };
+    let present_asset = asset(&present);
+    let missing_asset = asset(&assets_dir.path().join("missing.bin"));
+    p.assets = vec![
+        DocumentObject::Known(present_asset.clone()),
+        DocumentObject::Known(missing_asset.clone()),
+    ];
+    let (_dir, path) = setup(p);
+    let ResultData::Timeline(result) = service()
+        .dispatch(Request::SequenceQuery(SequenceQueryRequest {
+            project: path.clone(),
+            sequence: id,
+        }))
+        .unwrap()
+    else {
+        panic!()
+    };
+    assert_eq!(result.asset_status.len(), 2);
+    let present_status = result
+        .asset_status
+        .iter()
+        .find(|s| s.asset == present_asset.id)
+        .unwrap();
+    assert_eq!(
+        present_status.availability,
+        AssetAvailability::PresentUnverified
+    );
+    assert_eq!(
+        present_status.size_bytes,
+        Some(std::fs::metadata(&present).unwrap().len())
+    );
+    assert!(
+        present_status.error.is_none(),
+        "a deliberately incorrect hash is not read by this query"
+    );
+    let missing_status = result
+        .asset_status
+        .iter()
+        .find(|s| s.asset == missing_asset.id)
+        .unwrap();
+    assert_eq!(missing_status.availability, AssetAvailability::Missing);
+    assert_eq!(missing_status.error.as_ref().unwrap().code, "ASSET_MISSING");
+    assert_eq!(
+        kronello_media::resolve_asset(&present_asset, &path)
+            .unwrap_err()
+            .code(),
+        "ASSET_HASH_MISMATCH",
+        "render resolver still verifies all content"
+    );
+}
 fn range(a: Time, b: Time) -> TimeRange {
     TimeRange::new(a, b).unwrap()
 }

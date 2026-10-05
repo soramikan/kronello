@@ -26,11 +26,12 @@ do {
         print("Gallery output: \(directory.path)")
         print("Bundled fonts: \(fonts.map(\.lastPathComponent).joined(separator: ", "))")
         for theme in KRTheme.allCases {
-            for (name, content) in ComponentSheets.all {
+            for (name, content) in ComponentSheets.all + EditSheets.all {
                 try save(AnyView(GallerySheet(name, theme: theme, content: content).krTheme(theme)), name: "\(name)-\(theme.rawValue)", directory: directory)
             }
             try save(AnyView(MotionScreen().krTheme(theme)), name: "Screen-motion-\(theme.rawValue)", directory: directory)
             try save(AnyView(MotionScreen(curveEditor: true).krTheme(theme)), name: "Screen-motion-curve-\(theme.rawValue)", directory: directory)
+            try save(AnyView(EditScreen().krTheme(theme)), name: "Screen-edit-\(theme.rawValue)", directory: directory)
         }
     }
 } catch {

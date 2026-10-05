@@ -43,6 +43,7 @@ func require(_ value: @autoclosure () -> Bool, _ message: String) throws {
     var lastEvent: [String: Any] = [:]
     var planCount = 0
     var applyCount = 0
+    var callCounts: [String: Int] = [:]
     var notificationHandler: ((String, [String: Any]) -> Void)? {
         get { native.notificationHandler }
         set { native.notificationHandler = newValue }
@@ -53,6 +54,7 @@ func require(_ value: @autoclosure () -> Bool, _ message: String) throws {
     func poll() throws { try native.poll() }
     func close() { native.close() }
     func call(_ request: [String: Any]) async throws -> [String: Any] {
+        callCounts[request.string("operation"), default: 0] += 1
         if request.string("operation") == "edit.plan" { planCount += 1 }
         if request.string("operation") == "edit.apply" { lastApply = request; applyCount += 1 }
         do {

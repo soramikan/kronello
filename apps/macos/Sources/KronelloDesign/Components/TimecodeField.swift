@@ -38,20 +38,23 @@ public struct KRTimecodeField: View {
     private let onSeek: (Int64) -> Void
     private let appearance: KRControlAppearance
     private let forcedInvalid: Bool
+    private let currentTime: Bool
+    private let label: String
     @State private var text: String
     @State private var invalid = false
     @FocusState private var focused: Bool
     public init(frames: Binding<Int64>, fps: Int, invalid: Bool = false, appearance: KRControlAppearance = .resting,
-                onSeek: @escaping (Int64) -> Void = { _ in }) {
+                currentTime: Bool = true, label: String = "現在時刻", onSeek: @escaping (Int64) -> Void = { _ in }) {
         _frames = frames; self.fps = fps; self.onSeek = onSeek; self.appearance = appearance; forcedInvalid = invalid
         _text = State(initialValue: KRTimecode.format(frames: frames.wrappedValue, fps: fps))
+        self.currentTime = currentTime; self.label = label
     }
     public var body: some View {
         Group {
             if staticRendering { Text(text).frame(maxWidth: .infinity) }
-            else { TextField("現在時刻", text: $text).textFieldStyle(.plain).focused($focused) }
+            else { TextField(label, text: $text).textFieldStyle(.plain).focused($focused) }
         }.krText(KRType.timecode).multilineTextAlignment(.center)
-            .foregroundStyle(focused || appearance == .focused ? p.ink : p.accentInk).tint(p.selection)
+            .foregroundStyle(!currentTime || focused || appearance == .focused ? p.ink : p.accentInk).tint(p.selection)
             .padding(.horizontal, KRSpace.space2).frame(width: 104, height: KRSize.controlHeight)
             .background(p.surface200, in: RoundedRectangle(cornerRadius: KRRadius.radiusSm))
             .overlay { RoundedRectangle(cornerRadius: KRRadius.radiusSm).strokeBorder(invalid || forcedInvalid ? p.danger : p.lineStrong, lineWidth: 1) }
@@ -65,6 +68,6 @@ public struct KRTimecodeField: View {
             .onChange(of: focused) { _, new in
                 if new { DispatchQueue.main.async { (NSApp.keyWindow?.firstResponder as? NSTextView)?.selectAll(nil) } }
             }
-            .accessibilityLabel("現在時刻").accessibilityValue(text)
+            .accessibilityLabel(label).accessibilityValue(text)
     }
 }

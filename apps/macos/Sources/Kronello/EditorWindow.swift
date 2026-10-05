@@ -15,14 +15,19 @@ struct EditorWindow: View {
             toolbar
             if model.safeMode { KRStateBand("安全モード：要求ごとに排他を取得します。処理中の競合は PROJECT_LOCKED。ウインドウ全体の排他は未対応です", details: { safeDetailsOpen = true }) }
             if model.ui.page == "motion" { MotionPage(model: model, historyOpen: $historyOpen) }
+            else if model.ui.page == "edit" { EditPage(model: model) }
             else { KREmptyState(icon: model.ui.page == "export" ? .clapperboard : .layers,
-                title: model.ui.page == "edit" ? "編集ページ" : model.ui.page == "template" ? "テンプレートページ" : "書き出しページ",
-                message: model.ui.page == "edit" ? "Sequence の編集は GUI-003 で追加します。モーションページで Composition を開いてください。" : "このページは GUI-004 で追加します。モーションページで作業を続けられます。")
+                title: model.ui.page == "template" ? "テンプレートページ" : "書き出しページ",
+                message: "このページは GUI-004 で追加します。モーションページで作業を続けられます。")
                 .frame(maxWidth: .infinity, maxHeight: .infinity) }
             KRStatusBar(saved: (model.busy ? "保存中" : "保存済み") + (model.safeMode ? " · 安全モード" : ""), revision: "rev " + model.revision,
                 externalChange: model.externalChange, error: diagnostic, job: jobSummary,
                 onError: { if model.undoConflict != nil {} else if model.revisionConflict == nil { model.failure = model.previewFailure } }, onJobs: { jobsOpen = true })
         }.frame(minWidth: KRWindowMetrics.width, minHeight: KRWindowMetrics.height)
+            .onChange(of: model.ui.page) { _, _ in
+                model.playing = false; model.cancelClipGesture()
+                Task { do { try await model.reload() } catch { model.mapFailure(error) } }
+            }
             .background(p.surface100).foregroundStyle(p.ink)
             .sheet(item: $model.undoConflict) { error in
                 KRDialog("『" + model.undoConflictLabel + "』を取り消せません", body: error.message + "。部分的には取り消しません。", code: error.code,
@@ -64,9 +69,11 @@ struct EditorWindow: View {
             .overlay(alignment: .bottom) { p.line.frame(height: 1) }
     }
     var diagnostic: KRDiagnostic? {
-        let failures = [model.failure, model.undoConflict, model.revisionConflict, model.previewFailure].compactMap { $0 }
-        guard !failures.isEmpty else { return nil }
-        return .init(failures.map(\.code).joined(separator: ", "), "\(failures.count) 件")
+        let failures = [model.failure, model.undoConflict, model.revisionConflict, model.previewFailure, model.sequenceFailure].compactMap { $0 }
+        let assetCodes = model.ui.page == "edit" ? model.sequenceResult.objects("asset_status").compactMap { $0.object("error")["code"] as? String } : []
+        let codes = failures.map(\.code) + assetCodes
+        guard !codes.isEmpty else { return nil }
+        return .init(Set(codes).sorted().joined(separator: ", "), "\(codes.count) 件")
     }
     var jobSummary: KRJobSummary? {
         let active = model.jobs.filter { ["queued", "running"].contains($0.string("status")) }

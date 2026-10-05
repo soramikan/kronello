@@ -27,6 +27,22 @@ pub fn content_hash(path: &Path) -> Result<String, MediaError> {
 /// Verify every resolve, without mtime/size-based shortcuts. If a relative file
 /// exists with wrong content, do not silently substitute the absolute candidate.
 pub fn resolve_asset(asset: &Asset, project_path: &Path) -> Result<PathBuf, MediaError> {
+    let located = locate_asset(asset, project_path)?;
+    if content_hash(&located.path)? != asset.content_hash {
+        return Err(MediaError::AssetHashMismatch(
+            located.path.display().to_string(),
+        ));
+    }
+    Ok(located.path)
+}
+
+/// Cheap availability only. A located regular file is not a verified hash match.
+/// Rendering and collection must continue to use `resolve_asset`.
+pub struct LocatedAsset {
+    pub path: PathBuf,
+    pub size_bytes: u64,
+}
+pub fn locate_asset(asset: &Asset, project_path: &Path) -> Result<LocatedAsset, MediaError> {
     asset.validate()?;
     let base = project_path.parent().unwrap_or(Path::new("."));
     let candidates = asset
@@ -38,10 +54,10 @@ pub fn resolve_asset(asset: &Asset, project_path: &Path) -> Result<PathBuf, Medi
     for path in candidates {
         match fs::metadata(&path) {
             Ok(meta) if meta.is_file() => {
-                if content_hash(&path)? != asset.content_hash {
-                    return Err(MediaError::AssetHashMismatch(path.display().to_string()));
-                }
-                return Ok(path.canonicalize()?);
+                return Ok(LocatedAsset {
+                    path: path.canonicalize()?,
+                    size_bytes: meta.len(),
+                });
             }
             Ok(_) => {
                 return Err(MediaError::InvalidInput(

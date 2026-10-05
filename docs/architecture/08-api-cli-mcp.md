@@ -388,6 +388,22 @@ tools (`listChanged:false`)、resources (`subscribe:false,listChanged:false`)、
 
 `sequence.query`（CLI `sequence query`、MCP の同名 tool）は project / sequence を受け取り、revision、Sequence、各配置の track / `ClipKind`（video / image / audio / composition / generator）、clip 本体、effective video color tags / assumptions、unsupported_reason を返す。GUI は表示名から kind を推測しない。image の描画、subtitle / adjustment は本タスクの範囲外。query は GPU や decoder を初期化せず、一つの保存 revision を読む。
 
+GUI-003 は `asset_status` を追加した。Project 全体の既知 Asset について `asset`、
+`availability`（`present_unverified` / `missing` / `error`）、`size_bytes`、`error` を一括で返す。
+render と同じ相対優先・絶対 fallback の `locate_asset` と regular-file stat だけを実行し、
+各 query で全内容 hash を読まない。存在するファイルを `present_unverified` とし、hash 一致を主張しない。
+欠落は `ASSET_MISSING`、その他の解決エラーは既存 `ServiceError`。現行 Asset は期待 size と検証 cache を
+持たないため、この経路から `ASSET_HASH_MISMATCH` を推測しない。render / collect は引き続き
+`resolve_asset` の全内容 hash 検証で mismatch を拒否する。
+
+同じ `edit.plan` / `edit.apply` の TimelineCommand に `clip_split {sequence, clip, time, right_clip}` を追加した。
+time は絶対有理数時刻で厳密な内点のみ。左 ID は維持、右 ID は caller が確保する。
+所有 Property / volume / Modifier の右側 ID を安定 UUID から決定的に作り、effect の参照を付け替える。
+`Clip::trimmed` で両側の source mapping を保存する。境界・範囲外・重複 ID は `INVALID_EDIT`、
+linked は `LINKED_EDIT_REQUIRED`、transition endpoint は `TRANSITION_EDIT_CONFLICT`。
+一つの Event / Undo、保守的な Sequence 構造 conflict key、idempotency を共有する。
+トップレベル operation は追加せず38操作を維持する。詳細は [ADR-0075](../adr/0075-sequence-edit-page-and-clip-split.md)。
+
 既存 edit.plan / edit.apply の TimelineCommand に `clip_move {sequence, clip, delta, linked}`、`clip_link {sequence, clips}`、`ripple {sequence, tracks, pivot, delta, linked}`、`transition_set {sequence, transition}`、`transition_remove {sequence, outgoing, incoming}`、`clip_set_effects {sequence, clip, properties, effects}` を追加した。clip Property は既存 property_source_set の対象にもなる。新しい入口専用の編集状態はない。
 
 同じ Sequence の構造編集は `Structure(sequence_id, sequence_id)`、影響した全配置は `Structure(clip_id, track_id)` を記録する。別 Sequence / 無関係 Property の selective Undo を保持し、active inverse の競合規則も変えない。全 command 後の候補を検証するため、配置＋transition と transition 除去＋move は一つの plan にできる。linked=false の部分移動は LINKED_EDIT_REQUIRED、一端だけの transition 移動は TRANSITION_EDIT_CONFLICT。source / overlap / map / unknown execution の既存 typed errors を保持する。

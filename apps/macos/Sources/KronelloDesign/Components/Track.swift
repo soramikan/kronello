@@ -9,12 +9,14 @@ public struct KRTrackHeader: View {
     public let selected: Bool
     public let hidden: Bool
     public let locked: Bool
+    public let visibilityEnabled: Bool
     private let visibility: () -> Void
     private let lock: () -> Void
     public init(_ number: String, _ name: String, kind: KRMediaKind, selected: Bool = false, hidden: Bool = false, locked: Bool = false,
-                onVisibility: @escaping () -> Void = {}, onLock: @escaping () -> Void = {}) {
+                visibilityEnabled: Bool = true, onVisibility: @escaping () -> Void = {}, onLock: @escaping () -> Void = {}) {
         self.number = number; self.name = name; self.kind = kind; self.selected = selected; self.hidden = hidden; self.locked = locked
         visibility = onVisibility; lock = onLock
+        self.visibilityEnabled = visibilityEnabled
     }
     public var body: some View {
         HStack(spacing: KRSpace.space1) {
@@ -22,6 +24,7 @@ public struct KRTrackHeader: View {
             Text(name).krText(KRType.label).foregroundStyle(p.ink).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
             KRButton(icon: kind == .audio ? (hidden ? .volumeX : .volume2) : (hidden ? .eyeOff : .eye),
                      accessibilityLabel: kind == .audio ? "ミュートを切り替える" : "表示を切り替える", pressed: hidden, iconSize: 12, action: visibility)
+                .disabled(!visibilityEnabled).help(visibilityEnabled ? "表示・ミュート" : "トラックの表示・ミュートは未対応です")
             KRButton(icon: locked ? .lock : .lockOpen, accessibilityLabel: "ロックを切り替える", pressed: locked, iconSize: 12, action: lock)
         }.padding(.leading, KRSpace.space3).padding(.trailing, KRSpace.space1).frame(height: KRSize.trackHeight)
             .background(selected ? p.selectionBg : p.surface100)

@@ -93,7 +93,7 @@ session 長の `PROJECT_LOCKED` 保証は後続課題とし、本実装で store
 
 `apps/macos` の `Kronello` executable は Welcome、新規作成 / open / recent、4-page toolbar と status、
 Motion の Layers / Project、native Viewer、Transform / Text / Layout Inspector を持つ。Dope sheet のキー編集と Curve editor は GUI-002 で追加した。
-残り3ページは後続タスクを説明する shell。Dark は既定で、OS theme へ自動追従しない。
+Edit は GUI-003 で追加した。Template / Export は後続タスクを説明する shell。Dark は既定で、OS theme へ自動追従しない。
 `scripts/build_macos_app.py` は開発 bundle を組み立て、CLI worker と resource fonts を配置して ad-hoc sign する。
 SwiftPM / bundle / Metal と visual fidelity は [GUI-001 の検証](../testing/gui-001.md) の host procedure で確認する。
 
@@ -117,10 +117,24 @@ Composition のフレームごとの共有 `scene.query` から最大600点、1p
 
 ## 画面の範囲
 
+GUI-003 の Edit は `KREditLayout` の Project280px / Viewer / Inspector296px / tracks312px。
+共有文書 export と一つの `sequence.query` を revision 照合して採用し、素材ごと・clip ごとの
+FFI request は発行しない。`asset_status` は locate/stat だけの存在確認で hash 未検証。
+色は種類の icon / 2px 下線、青の選択、amber の現在時刻、欠落の danger 破線・code を使う。
+asset の stream を明示して1倍速配置、同一 track 移動・subset trim・共有 ClipSplit を
+候補 geometry と release 時一つの Command / Event に接続する。Session Undo / conflicts は GUI-001 と共通。
+Composition clip の「モーションで開く」は参照先 Composition への UI navigation だけ。
+track mute/visibility は説明付き disabled、lock は UI state。reverse/composite/speed は表示のみと明示する。
+Sequence の seek は UI time / preview refresh だけで毎フレームの query を追加しない。
+AUDIO-002 が `activatePlayback(for:)` を `configurePlayback(target:.sequence(id),rateNum:,rateDen:)` に接続する。
+独自の playback timer は持たない。決定は [ADR-0075](../adr/0075-sequence-edit-page-and-clip-split.md)、
+検査・ホスト手順は [GUI-003](../testing/gui-003.md)。
+
 | タスク | 内容 |
 |---|---|
 | FFI-001 | `kronello-ffi`、Swift からの Command / Query 呼び出し、CAMetalLayer へのプレビュー表示 |
 | GUI-001 | Canvas、階層、変換操作、外部変更の検知 |
 | GUI-002 | Dope sheet、Curve editor（空間パスと時間イージングを区別して表示） |
+| GUI-003 | Sequence tracks / Project / clip Inspector、共有配置・trim・split と Motion navigation |
 | AUDIO-002 | リアルタイム音声再生と A/V 同期 |
 | QA-002 | GUI / CLI / MCP の同等性、日本語 IME |

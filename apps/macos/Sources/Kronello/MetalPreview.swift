@@ -6,7 +6,7 @@ import KronelloAppModel
 
 @MainActor final class MetalView: NSView {
     let metal = CAMetalLayer()
-    var changed: (() -> Void)?
+    var changed: ((Bool) -> Void)?
     override init(frame: NSRect) { super.init(frame: frame); wantsLayer = true; layer = metal; metal.isOpaque = true }
     required init?(coder: NSCoder) { fatalError("Use init(frame:)") }
     // Occluded frames are skipped by the FFI (not failures); redraw once visible again.
@@ -19,7 +19,7 @@ import KronelloAppModel
         occlusion = NotificationCenter.default.addObserver(forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, self.window?.occlusionState.contains(.visible) == true else { return }
-                self.changed?()
+                self.changed?(true)
             }
         }
     }
@@ -28,7 +28,7 @@ import KronelloAppModel
         let scale = window?.backingScaleFactor ?? 1
         metal.contentsScale = scale
         metal.drawableSize = CGSize(width: bounds.width * scale, height: bounds.height * scale)
-        changed?()
+        changed?(false)
     }
 }
 
@@ -38,7 +38,7 @@ struct MetalPreview: NSViewRepresentable {
     func makeNSView(context: Context) -> MetalView {
         let view = MetalView()
         context.coordinator.view = view
-        view.changed = { [weak coordinator = context.coordinator] in coordinator?.schedule() }
+        view.changed = { [weak coordinator = context.coordinator] force in coordinator?.schedule(force: force) }
         return view
     }
     func updateNSView(_ view: MetalView, context: Context) { context.coordinator.schedule() }
@@ -49,8 +49,14 @@ struct MetalPreview: NSViewRepresentable {
         var attached = false
         var needsRender = false
         var task: Task<Void, Never>?
+        var scheduledKey = ""
         init(_ model: EditorModel) { self.model = model }
-        func schedule() {
+        func schedule(force: Bool = false) {
+            guard let surface = view else { return }
+            let key = [model.ui.page, model.revision, "\(model.refreshToken)", model.ui.sequence ?? "", model.ui.composition ?? "", model.ui.time.num, model.ui.time.den,
+                       model.ui.resolution, model.ui.zoom, "\(surface.bounds.size)", "\(surface.window?.backingScaleFactor ?? 1)"].joined(separator: ":")
+            guard force || key != scheduledKey else { return }
+            scheduledKey = key
             needsRender = true
             guard task == nil else { return }
             task = Task {
@@ -58,7 +64,11 @@ struct MetalPreview: NSViewRepresentable {
                 do {
                     while needsRender && !Task.isCancelled {
                         needsRender = false
-                        guard let view, let native = model.transport as? NativeProjectTransport, let composition = model.ui.composition else { return }
+                        guard let view, let native = model.transport as? NativeProjectTransport else { return }
+                        let target: [String: Any]
+                        if model.ui.page == "edit", let sequence = model.ui.sequence { target = ["target": ["kind": "sequence", "sequence": sequence]] }
+                        else if let composition = model.ui.composition { target = ["composition": composition] }
+                        else { return }
                         // Surface configuration can change drawableSize. Always derive the next
                         // extent from view geometry so repeated half/quarter requests do not shrink.
                         let backing = view.window?.backingScaleFactor ?? 1
@@ -74,9 +84,11 @@ struct MetalPreview: NSViewRepresentable {
                             try await native.session.attach(metalLayer: Unmanaged.passUnretained(view.metal).toOpaque(), width: width, height: height)
                             attached = true
                         } else { try await native.session.resize(width: width, height: height) }
-                        _ = try await native.session.redraw(NativeProjectTransport.request(["operation": "render.frame", "input": [
-                            "project": model.path, "composition": composition, "fonts": model.fonts,
-                            "region": ["origin": [0, 0], "extent": [model.extent.width, model.extent.height], "pixels": [width, height]]], "time": model.ui.time.wire]))
+                        var input: [String: Any] = ["project": model.path, "fonts": model.fonts,
+                            "region": ["origin": [0, 0], "extent": [model.extent.width, model.extent.height], "pixels": [width, height]]]
+                        input.merge(target) { _, value in value }
+                        _ = try await native.session.redraw(NativeProjectTransport.request(["operation": "render.frame", "input": input, "time": model.ui.time.wire]))
+                        model.previewFailure = nil
                     }
                 } catch is CancellationError {} catch { model.previewFailure = model.serviceFailure(error) }
             }
