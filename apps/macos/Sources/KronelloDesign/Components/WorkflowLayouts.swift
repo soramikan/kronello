@@ -133,7 +133,7 @@ public struct KRDurationPolicyBands: View {
             }
             band("Authoring · " + authoring, duration:authoringSeconds)
             band("配置 · " + placement, duration:placementSeconds)
-            Text("intro · " + intro + "（保護）  /  中間 · " + mode + "  /  outro · " + outro + "（保護）")
+            Text("intro · \(intro)（保護）  /  中間 · \(mode)  /  outro · \(outro)（保護）")
                 .krText(KRMono.caption).foregroundStyle(p.inkMuted)
         }.padding(.horizontal, KRSpace.space3)
     }
