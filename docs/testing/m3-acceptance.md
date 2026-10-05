@@ -44,6 +44,7 @@ CommandLineTools の SwiftPM は `SwiftUIMacros` が欠落し、初回 build は
 | AUDIO-002 最終quiet実測 | 全3率exit0、underrun / missing0、seek2 / resume一致 | `target/m3-acceptance/audio-quiet/report.json`。38.539–38.603秒、929 / 929 / 1160提示、最大frame格子差0 / 0 / 1frames |
 | GUI-003 実操作（Dark） | trim / Undo / blade各単一Event、Motion遷移でrevision不変 | `target/m3-acceptance/edit-*`、[GUI-003](gui-003.md)末尾 |
 | GUI-004 実操作（Dark） | 入力 / Undo、版移行Cancel不変 / Apply単一Event | `target/m3-acceptance/template-*`、[GUI-004](gui-004.md)末尾 |
+| GUI-004 Export実操作（Dark / Light） | preflight disabled→ready、固定独立worker成功、OUTPUT_EXISTS / FONT_MISSING抑止 | `target/m3-acceptance/gui-export-jobs.json` / `gui-export-final.mov` / `export-*png`。Metal3frames、PCM24 6000samples |
 | 元 GUI 作業ツリーの保全 | 成功 | `.worktrees/m3-{gui3,gui4,integ2,qa2}` の tracked patch / 未追跡 source の bytes 一致 |
 
 SwiftPM 初回の debug FFI run は中断時点で未完了だった。sample 採取では音声やUIの停止ではなく、
