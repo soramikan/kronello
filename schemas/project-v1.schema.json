@@ -1310,7 +1310,6 @@
       ]
     },
     "Gradient": {
-      "description": "Local design-space, pad-only paint. Unknown fields/variants are retained by\nthe owning DocumentObject as opaque content and cannot execute.",
       "oneOf": [
         {
           "type": "object",
@@ -1326,6 +1325,27 @@
             "kind": {
               "type": "string",
               "const": "linear"
+            },
+            "options": {
+              "$ref": "#/$defs/GradientOptions",
+              "default": {
+                "interpolation": "working_linear_premultiplied",
+                "interpolation_version": 1,
+                "spread": "pad",
+                "transform": [
+                  [
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0
+                  ]
+                ],
+                "units": "local_design"
+              }
             },
             "start": {
               "type": "array",
@@ -1365,6 +1385,27 @@
               "type": "string",
               "const": "radial"
             },
+            "options": {
+              "$ref": "#/$defs/GradientOptions",
+              "default": {
+                "interpolation": "working_linear_premultiplied",
+                "interpolation_version": 1,
+                "spread": "pad",
+                "transform": [
+                  [
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0
+                  ]
+                ],
+                "units": "local_design"
+              }
+            },
             "radius": {
               "$ref": "#/$defs/FiniteF64"
             },
@@ -1382,7 +1423,200 @@
             "radius",
             "stops"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "center": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/FiniteF64"
+              },
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "focal": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/FiniteF64"
+              },
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "focal_radius": {
+              "$ref": "#/$defs/FiniteF64"
+            },
+            "kind": {
+              "type": "string",
+              "const": "focal_radial"
+            },
+            "options": {
+              "$ref": "#/$defs/GradientOptions",
+              "default": {
+                "interpolation": "working_linear_premultiplied",
+                "interpolation_version": 1,
+                "spread": "pad",
+                "transform": [
+                  [
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0
+                  ]
+                ],
+                "units": "local_design"
+              }
+            },
+            "radius": {
+              "$ref": "#/$defs/FiniteF64"
+            },
+            "stops": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/GradientStop"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "center",
+            "radius",
+            "focal",
+            "focal_radius",
+            "stops"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "center": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/FiniteF64"
+              },
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "kind": {
+              "type": "string",
+              "const": "conic"
+            },
+            "options": {
+              "$ref": "#/$defs/GradientOptions",
+              "default": {
+                "interpolation": "working_linear_premultiplied",
+                "interpolation_version": 1,
+                "spread": "pad",
+                "transform": [
+                  [
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0
+                  ]
+                ],
+                "units": "local_design"
+              }
+            },
+            "start_angle": {
+              "$ref": "#/$defs/FiniteF64"
+            },
+            "stops": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/GradientStop"
+              }
+            },
+            "sweep_angle": {
+              "$ref": "#/$defs/FiniteF64"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "center",
+            "start_angle",
+            "sweep_angle",
+            "stops"
+          ]
         }
+      ]
+    },
+    "GradientInterpolation": {
+      "type": "string",
+      "enum": [
+        "working_linear_premultiplied",
+        "working_linear_straight",
+        "srgb_straight",
+        "srgb_premultiplied"
+      ]
+    },
+    "GradientOptions": {
+      "type": "object",
+      "properties": {
+        "interpolation": {
+          "$ref": "#/$defs/GradientInterpolation",
+          "default": "working_linear_premultiplied"
+        },
+        "interpolation_version": {
+          "type": "integer",
+          "format": "uint32",
+          "default": 1,
+          "minimum": 0
+        },
+        "spread": {
+          "$ref": "#/$defs/GradientSpread",
+          "default": "pad"
+        },
+        "transform": {
+          "description": "Gradient coordinates to unit coordinates; bbox mapping is applied next.",
+          "type": "array",
+          "default": [
+            [
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0
+            ]
+          ],
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/FiniteF64"
+            },
+            "maxItems": 3,
+            "minItems": 3
+          },
+          "maxItems": 2,
+          "minItems": 2
+        },
+        "units": {
+          "$ref": "#/$defs/GradientUnits",
+          "default": "local_design"
+        }
+      },
+      "additionalProperties": false
+    },
+    "GradientSpread": {
+      "description": "Versioned paint settings. Missing settings preserve VEC-003 semantics.",
+      "type": "string",
+      "enum": [
+        "pad",
+        "repeat",
+        "reflect"
       ]
     },
     "GradientStop": {
@@ -1399,6 +1633,13 @@
       "required": [
         "color",
         "offset"
+      ]
+    },
+    "GradientUnits": {
+      "type": "string",
+      "enum": [
+        "local_design",
+        "object_bounding_box"
       ]
     },
     "Keyframe": {
@@ -2901,6 +3142,16 @@
         },
         "font": {
           "$ref": "#/$defs/FontRef"
+        },
+        "gradient": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Gradient"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "range": {
           "$ref": "#/$defs/TextRange"

@@ -176,13 +176,28 @@ fn gradient_manifest(g: &GradientPaint) -> Value {
         GradientGeometry::Radial { center, radius } => {
             json!({"kind":"radial","center":center,"radius":radius})
         }
+        GradientGeometry::FocalRadial {
+            center,
+            radius,
+            focal,
+            focal_radius,
+        } => {
+            json!({"kind":"focal_radial","center":center,"radius":radius,"focal":focal,"focal_radius":focal_radius})
+        }
+        GradientGeometry::Conic {
+            center,
+            start_angle,
+            sweep_angle,
+        } => {
+            json!({"kind":"conic","center":center,"start_angle":start_angle,"sweep_angle":sweep_angle})
+        }
     };
-    json!({"geometry":geometry,"spread":"pad","interpolation":"working-linear-premultiplied","equal_offsets":"last wins at offset","stops":g.stops.iter().map(|s|json!({"offset":s.offset,"rgba":s.paint.rgba,"space":format!("{:?}",s.paint.space)})).collect::<Vec<_>>()})
+    json!({"geometry":geometry,"spread":format!("{:?}",g.spread),"interpolation":format!("{:?}",g.interpolation),"interpolation_version":g.interpolation_version,"transform":g.transform,"equal_offsets":"last wins at offset","stops":g.stops.iter().map(|s|json!({"offset":s.offset,"rgba":s.paint.rgba,"space":format!("{:?}",s.paint.space)})).collect::<Vec<_>>()})
 }
 fn draw_manifest(scene: &DrawScene) -> Value {
     json!({"roots":scene.roots,"nodes":scene.nodes.iter().map(|node| match node {
         DrawNode::Raster(pixels)=>json!({"kind":"raster","pixels":pixels}),
-        DrawNode::Path(p)=>json!({"kind":"path","fill_gradient":p.fill_gradient.as_ref().map(gradient_manifest),"stroke_gradient":p.stroke_gradient.as_ref().map(gradient_manifest),"paint_transform":p.paint_transform,"contours":p.contours.iter().map(|c| json!({"points":c.points,"closed":c.closed})).collect::<Vec<_>>(),"fill":p.fill.map(|f| json!({"rgba":f.paint.rgba,"space":format!("{:?}",f.paint.space),"rule":format!("{:?}",f.rule)})),"stroke":p.stroke.map(|s| json!({"rgba":s.paint.rgba,"space":format!("{:?}",s.paint.space),"width":s.width,"cap":format!("{:?}",s.cap),"join":format!("{:?}",s.join),"miter_limit":s.miter_limit}))}),
+        DrawNode::Path(p)=>json!({"kind":"path","fill_gradient":p.fill_gradient.as_deref().map(gradient_manifest),"stroke_gradient":p.stroke_gradient.as_deref().map(gradient_manifest),"paint_transform":p.paint_transform,"contours":p.contours.iter().map(|c| json!({"points":c.points,"closed":c.closed})).collect::<Vec<_>>(),"fill":p.fill.map(|f| json!({"rgba":f.paint.rgba,"space":format!("{:?}",f.paint.space),"rule":format!("{:?}",f.rule)})),"stroke":p.stroke.map(|s| json!({"rgba":s.paint.rgba,"space":format!("{:?}",s.paint.space),"width":s.width,"cap":format!("{:?}",s.cap),"join":format!("{:?}",s.join),"miter_limit":s.miter_limit}))}),
         DrawNode::Group {children,opacity}=>json!({"kind":"isolated-group","children":children,"opacity":opacity}),
         DrawNode::Effect {source,effect}=>json!({"kind":"effect","source":source,"effect":effect,"kernel_version":effect.kernel_version(),"semantic_version":effect.semantic_version()}),
         DrawNode::Masked {source,matte,kind}=>json!({"kind":"masked","source":source,"matte":matte,"mode":format!("{:?}",kind)})
@@ -574,7 +589,7 @@ fn cpu_catalog_and_vec003_manifest_match_harness() {
         catalog["scene_ids"],
         json!(scenes.iter().map(|s| s.id).collect::<Vec<_>>())
     );
-    assert_eq!(scenes.len(), 28);
+    assert_eq!(scenes.len(), 36);
     let m = manifest(&scenes, "fixture-test", "font-test");
     assert_eq!(
         m["stroke_geometry_version"],

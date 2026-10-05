@@ -74,7 +74,9 @@ impl RenderError {
             Self::SingularLayoutTransform => "LAYOUT_SINGULAR_TRANSFORM",
             Self::Sequence(e) => e.code(),
             Self::Template(e) => e.code(),
-            Self::Effect(kronello_model::EffectError::UnsupportedFeature)
+            Self::Shape(ShapeError::UnsupportedGradientVersion)
+            | Self::Text(TextError::Gradient(ShapeError::UnsupportedGradientVersion))
+            | Self::Effect(kronello_model::EffectError::UnsupportedFeature)
             | Self::UnsupportedFeature(_) => "UNSUPPORTED_FEATURE",
             Self::UnsupportedSchema(_) => "UNSUPPORTED_SCHEMA",
             Self::Evaluation(e) => e.code(),
