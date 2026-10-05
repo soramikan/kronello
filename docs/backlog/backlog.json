@@ -902,7 +902,7 @@
       "priority": "P1",
       "area": "jobs",
       "title": "Windows workerのdetachと各OSの実プロセス検証",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "JOB-001",
         "MCP-001"
