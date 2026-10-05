@@ -52,6 +52,8 @@ fn constant(key: &str, value: Value) -> Property {
 }
 fn node(kind: NodeKind, properties: Vec<Property>) -> SceneNode {
     SceneNode {
+        name: None,
+        enabled: true,
         effects: vec![],
         id: NodeId::new(),
         kind,
@@ -211,6 +213,60 @@ fn comp_mut(p: &mut Project) -> &mut Composition {
         DocumentObject::Known(c) => c,
         _ => panic!(),
     }
+}
+
+#[test]
+fn cpu_visibility_snapshot_versions_preserve_legacy_and_hide_disabled_subtrees() {
+    let (mut child, shape) = rectangle([16.0, 12.0], Color::from_srgb8([200, 40, 10], None));
+    let mut parent = node(NodeKind::Group, vec![]);
+    parent.child_order.push(child.id);
+    child.containment_parent = Some(parent.id);
+    let composition = composition(vec![parent, child]);
+    let id = composition.id;
+    let mut project = Project {
+        name: "Visibility".into(),
+        ..Project::default()
+    };
+    project
+        .compositions
+        .push(DocumentObject::Known(composition));
+    project.shapes.push(DocumentObject::Known(shape));
+    let visible = snapshot(&project, id);
+    assert_eq!(visible.semantic_versions().visibility, 2);
+    let render = |snapshot: &RenderSnapshot| {
+        render_frame(
+            snapshot,
+            &[],
+            &CpuReferenceBackend,
+            FrameRequest {
+                time: Time::ZERO,
+                region: region(),
+            },
+        )
+        .unwrap()
+    };
+    let visible_frame = render(&visible);
+    let mut legacy = serde_json::to_value(&visible).unwrap();
+    legacy["semantic_versions"]
+        .as_object_mut()
+        .unwrap()
+        .remove("visibility");
+    let legacy: RenderSnapshot = serde_json::from_value(legacy).unwrap();
+    assert_eq!(legacy.semantic_versions().visibility, 1);
+    assert_eq!(render(&legacy).pixels, visible_frame.pixels);
+    comp_mut(&mut project).nodes[0].enabled = false;
+    let disabled = snapshot(&project, id);
+    let hidden = render(&disabled);
+    assert_ne!(visible_frame.pixels, hidden.pixels);
+    assert!(hidden.pixels.linear.iter().all(|pixel| *pixel == [0.0; 4]));
+    let mut legacy_contract = disabled.semantic_versions().clone();
+    legacy_contract.visibility = 1;
+    assert_eq!(
+        RenderSnapshot::with_contract(&project, id, 7, disabled.profile(), legacy_contract, vec![])
+            .unwrap_err()
+            .code(),
+        "UNSUPPORTED_FEATURE"
+    );
 }
 
 #[test]
@@ -2705,7 +2761,7 @@ fn fx_effect_animation_versions_and_cache_identity() {
     let snapshot = RenderSnapshot::new(&p, id, 0, RenderProfile::default()).unwrap();
     assert_eq!(
         snapshot.semantic_versions().effects,
-        BTreeMap::from([(GAUSSIAN_BLUR_ID.into(), 1), (DROP_SHADOW_ID.into(), 1)])
+        BTreeMap::from([(GAUSSIAN_BLUR_ID.into(), 2), (DROP_SHADOW_ID.into(), 2)])
     );
     let mut cache = RenderCache::new(CacheConfig::default());
     let mut identities = vec![];
@@ -2738,7 +2794,7 @@ fn fx_effect_animation_versions_and_cache_identity() {
     assert!(identities.windows(2).all(|v| v[0] != v[1]));
     assert!(cache.stats().raster.hits >= 3);
     let mut wire = serde_json::to_value(snapshot).unwrap();
-    wire["semantic_versions"]["effects"][GAUSSIAN_BLUR_ID] = serde_json::json!(2);
+    wire["semantic_versions"]["effects"][GAUSSIAN_BLUR_ID] = serde_json::json!(99);
     let restored: RenderSnapshot = serde_json::from_value(wire).unwrap();
     assert_eq!(
         restored.validate().unwrap_err().code(),
@@ -2852,4 +2908,190 @@ fn fx_stack_order_is_semantic_and_group_isolation_is_retained() {
             DagNode::IsolatedComposite { .. }
         ));
     }
+}
+
+fn fx002_project(case: usize) -> (Project, CompositionId) {
+    let (mut p, id) = fx_project();
+    let c = comp_mut(&mut p);
+    for e in &mut c.nodes[0].effects {
+        let Effect::Known(e) = e else { panic!() };
+        e.version = 2;
+    }
+    let sigma = c.nodes[0]
+        .properties
+        .iter()
+        .find(|p| p.descriptor().key.as_str() == "kronello.effect.sigma")
+        .unwrap()
+        .id();
+    c.nodes[0].effects.push(Effect::Known(EffectDefinition {
+        effect_id: GAUSSIAN_BLUR_ID.into(),
+        version: 2,
+        parameters: EffectParameters::GaussianBlur { sigma },
+    }));
+    let (scale, rotation) = match case {
+        0 => ((1.0, 1.0), 37.0),
+        1 => ((2.0, 0.75), 0.0),
+        _ => ((1.5, 0.8), 28.0),
+    };
+    c.nodes[0].properties.extend([
+        constant("kronello.transform.scale", v2(scale.0, scale.1)),
+        constant("kronello.transform.rotation", Value::Angle(f(rotation))),
+    ]);
+    if case == 2 {
+        // Nonuniform parent scale after child rotation produces actual shear.
+        let parent = node(
+            NodeKind::Null,
+            vec![constant("kronello.transform.scale", v2(1.2, 0.7))],
+        );
+        c.nodes[0].transform_parent = Some(parent.id);
+        c.root_nodes.push(parent.id);
+        c.nodes.push(parent);
+    }
+    (p, id)
+}
+fn assert_fx002_crop_and_tiles(backend: &dyn RenderBackend) {
+    for case in 0..3 {
+        let (p, id) = fx002_project(case);
+        for working in [ColorSpace::LinearRec709, ColorSpace::LinearRec2020] {
+            let snapshot = RenderSnapshot::new(
+                &p,
+                id,
+                7,
+                RenderProfile {
+                    working_space: working,
+                    ..RenderProfile::default()
+                },
+            )
+            .unwrap();
+            let scene = build_scene_ir(&snapshot, Time::ZERO, &[]).unwrap();
+            for scale in [0.5, 1.0, 2.0] {
+                // Both transforms and stack halos cross x=512; last tile is partial.
+                let full = OutputRegion {
+                    origin: [6.0 - 510.0 / scale, -4.0],
+                    extent: [529.0 / scale, 40.0 / scale],
+                    pixels: [529, 40],
+                };
+                let dag = build_render_dag(&scene, snapshot.profile(), full).unwrap();
+                let expected = backend.execute(&dag).unwrap();
+                assert!(
+                    expected.linear.iter().any(|p| p[3] > 0.01),
+                    "empty test case {case}"
+                );
+                let actual = render_frame(
+                    &snapshot,
+                    &[],
+                    backend,
+                    FrameRequest {
+                        time: Time::ZERO,
+                        region: full,
+                    },
+                )
+                .unwrap();
+                compare(&expected.linear, &actual.pixels.linear, 1.0 / 1024.0);
+                if backend.name() == "cpu_reference_float32" {
+                    for (i, (a, b)) in actual
+                        .pixels
+                        .linear
+                        .iter()
+                        .zip(&expected.linear)
+                        .enumerate()
+                    {
+                        assert_eq!(a, b, "tile case {case} {working:?} scale {scale} pixel {i}");
+                    }
+                    for (i, (a, b)) in actual
+                        .pixels
+                        .display
+                        .iter()
+                        .zip(&expected.display)
+                        .enumerate()
+                    {
+                        assert_eq!(
+                            a, b,
+                            "display tile case {case} {working:?} scale {scale} pixel {i}"
+                        );
+                    }
+                }
+                let crop = OutputRegion {
+                    origin: [full.origin[0] + 498.0 / scale, full.origin[1] + 4.0 / scale],
+                    extent: [28.0 / scale, 30.0 / scale],
+                    pixels: [28, 30],
+                };
+                let cropped = backend
+                    .execute(&build_render_dag(&scene, snapshot.profile(), crop).unwrap())
+                    .unwrap();
+                let mut reference = vec![];
+                for y in 0..30 {
+                    reference.extend_from_slice(
+                        &expected.linear[(y + 4) * 529 + 498..(y + 4) * 529 + 526],
+                    );
+                }
+                compare(&reference, &cropped.linear, 1.0 / 1024.0);
+                if backend.name() == "cpu_reference_float32" {
+                    for (i, (a, b)) in reference.iter().zip(&cropped.linear).enumerate() {
+                        assert_eq!(a, b, "crop case {case} {working:?} scale {scale} pixel {i}");
+                    }
+                }
+                if backend.name() != "cpu_reference_float32" {
+                    let cpu = CpuReferenceBackend.execute(&dag).unwrap();
+                    compare(&cpu.linear, &expected.linear, 1.0 / 1024.0);
+                }
+            }
+        }
+    }
+}
+#[test]
+fn fx002_rotation_nonuniform_shear_crop_and_tile_boundaries_match() {
+    assert_fx002_crop_and_tiles(&CpuReferenceBackend);
+}
+#[test]
+fn gpu_fx002_rotation_nonuniform_shear_crop_and_tile_boundaries_match_cpu() {
+    assert_fx002_crop_and_tiles(&kronello_gpu::GpuContext::new().expect("GPU required"));
+}
+#[test]
+fn fx002_legacy_snapshot_pin_and_effect_cache_identity() {
+    let (legacy, id) = fx_project();
+    let snapshot = snapshot(&legacy, id);
+    let expected = CpuReferenceBackend
+        .execute(&fx_dag(&legacy, id, fx_region()))
+        .unwrap();
+    let mut wire = serde_json::to_value(&snapshot).unwrap();
+    for name in [GAUSSIAN_BLUR_ID, DROP_SHADOW_ID] {
+        wire["semantic_versions"]["effects"][name] = serde_json::json!(1);
+    }
+    let restored: RenderSnapshot = serde_json::from_value(wire.clone()).unwrap();
+    restored.validate().unwrap();
+    assert_eq!(
+        render_frame(
+            &restored,
+            &[],
+            &CpuReferenceBackend,
+            FrameRequest {
+                time: Time::ZERO,
+                region: fx_region()
+            }
+        )
+        .unwrap()
+        .pixels,
+        expected
+    );
+    wire["project"]["compositions"][0]["nodes"][0]["effects"][0]["version"] = serde_json::json!(2);
+    let restored: RenderSnapshot = serde_json::from_value(wire).unwrap();
+    assert_eq!(
+        build_scene_ir(&restored, Time::ZERO, &[])
+            .unwrap_err()
+            .code(),
+        "UNSUPPORTED_FEATURE"
+    );
+    let mut upgraded = legacy.clone();
+    let Effect::Known(effect) = &mut comp_mut(&mut upgraded).nodes[0].effects[0] else {
+        panic!()
+    };
+    effect.version = 2;
+    let old = fx_dag(&legacy, id, fx_region());
+    let new = fx_dag(&upgraded, id, fx_region());
+    assert_ne!(
+        RasterCacheKey::for_dag(&old, "cpu").unwrap(),
+        RasterCacheKey::for_dag(&new, "cpu").unwrap()
+    );
+    assert_ne!(expected, CpuReferenceBackend.execute(&new).unwrap());
 }

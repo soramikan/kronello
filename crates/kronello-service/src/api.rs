@@ -92,6 +92,7 @@ macro_rules! commands {
             ("instance.retime", false, InstanceRetimeRequest, kronello_store::Event),
             ("template_instance.retime", false, TemplateInstanceRetimeRequest, kronello_store::Event),
 
+            ("render.export", true, RenderSubmitRequest, kronello_media::AvExportReport),
             ("render.submit", true, RenderSubmitRequest, kronello_jobs::JobRecord),
             ("job.get", true, JobRequest, kronello_jobs::JobRecord),
             ("job.list", true, JobListRequest, JobListResult),
@@ -153,6 +154,9 @@ impl CapabilitiesResult {
                 "crossfade",
                 "ripple",
                 "linked_move",
+                "document_audio",
+                "clip_volume",
+                "media_audio",
                 "composition",
                 "shape",
                 "text",

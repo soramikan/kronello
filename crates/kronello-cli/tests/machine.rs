@@ -668,7 +668,7 @@ fn structured_api_queries_and_empty_capabilities_payload_from_real_cli() {
             .as_array()
             .unwrap()
             .len(),
-        35
+        36
     );
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("query.kronello");

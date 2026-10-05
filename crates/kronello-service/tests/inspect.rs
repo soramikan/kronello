@@ -436,3 +436,29 @@ fn explain_rejects_unknown_fields_urls_and_missing_runtime_node_without_creating
     assert_eq!(execute(request)["error"]["code"], "PROJECT_NOT_FOUND");
     assert!(!path.exists());
 }
+
+#[test]
+fn disabled_node_and_disabled_containment_parent_are_explained() {
+    let mut doc = document();
+    let node = doc["compositions"][0]["nodes"][0]["id"].clone();
+    doc["compositions"][0]["nodes"][0]["enabled"] = json!(false);
+    let f = Fixture::new(doc);
+    let result = ok(f.node(&node, 0));
+    assert!(has(&result, "DISABLED"), "{result}");
+    assert_eq!(result["assessment"], "hidden", "{result}");
+    let mut doc = document();
+    let node = doc["compositions"][0]["nodes"][0]["id"].clone();
+    let group = parent(&mut doc, true, 1.0);
+    let index = doc["compositions"][0]["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .position(|n| n["id"] == group)
+        .unwrap();
+    doc["compositions"][0]["nodes"][index]["enabled"] = json!(false);
+    let f = Fixture::new(doc);
+    let result = ok(f.node(&node, 0));
+    assert!(has(&result, "ANCESTOR_DISABLED"), "{result}");
+    assert!(!has(&result, "DISABLED"), "{result}");
+    assert_eq!(result["assessment"], "hidden", "{result}");
+}

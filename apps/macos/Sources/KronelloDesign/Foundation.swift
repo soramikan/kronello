@@ -195,6 +195,11 @@ extension KRFonts {
     /// Returns the registered files; an empty result means `scripts/fetch_ui_fonts.py` was not run.
     @discardableResult
     public static func registerBundled() -> [URL] {
+        // Development app bundles place SwiftPM resources in Contents/Resources.
+        if let bundleURL = Bundle.main.url(forResource: "Kronello_KronelloDesign", withExtension: "bundle"),
+           let bundle = Bundle(url: bundleURL), let directory = bundle.url(forResource: "Fonts", withExtension: nil) {
+            return register(directory: directory)
+        }
         guard let directory = Bundle.module.url(forResource: "Fonts", withExtension: nil) else { return [] }
         return register(directory: directory)
     }

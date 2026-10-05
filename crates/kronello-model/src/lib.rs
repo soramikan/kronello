@@ -15,12 +15,12 @@ mod schema;
 mod value;
 
 pub use builtin::{
-    FILL_COLOR_ID, OPACITY_ID, STROKE_WIDTH_ID, TRANSFORM_ANCHOR_ID, TRANSFORM_POSITION_ID,
-    TRANSFORM_ROTATION_ID, TRANSFORM_SCALE_ID, TRANSFORM_SKEW_ID,
+    AUDIO_VOLUME_ID, FILL_COLOR_ID, OPACITY_ID, STROKE_WIDTH_ID, TRANSFORM_ANCHOR_ID,
+    TRANSFORM_POSITION_ID, TRANSFORM_ROTATION_ID, TRANSFORM_SCALE_ID, TRANSFORM_SKEW_ID,
 };
 pub use composition::{
     Composition, CompositionError, CompositionInstance, CompositionReference, DesignExtent,
-    InstancePath, NodeKind, ParentGraph, PropertyKey, SceneNode, validate_compositions,
+    InstancePath, MediaNode, NodeKind, ParentGraph, PropertyKey, SceneNode, validate_compositions,
 };
 pub use curve::{
     AnimationCurve, CurveDefinition, CurveError, CurveInterpolation, INTERPOLATION_VERSION,

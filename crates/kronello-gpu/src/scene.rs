@@ -196,9 +196,12 @@ impl DrawScene {
                         return Err(GpuError::InvalidInput("invalid group opacity"));
                     }
                 }
-                DrawNode::Effect { effect, .. } => effect
-                    .validate()
-                    .map_err(|_| GpuError::InvalidInput("invalid effect parameters"))?,
+                DrawNode::Effect { effect, .. } => effect.validate().map_err(|e| match e {
+                    kronello_render::RenderError::UnsupportedFeature(_) => {
+                        GpuError::UnsupportedFeature("effect transform or kernel budget")
+                    }
+                    _ => GpuError::InvalidInput("invalid effect parameters"),
+                })?,
                 DrawNode::Masked { .. } => {}
             }
         }

@@ -357,8 +357,8 @@ impl RasterCacheKey {
                 crate::DagNode::Effect { source, effect } => Some(Self(key(
                     "effect",
                     (
-                        crate::EFFECT_KERNEL_VERSION,
-                        kronello_model::EFFECT_VERSION,
+                        effect.kernel_version(),
+                        effect.semantic_version(),
                         keys[*source].map(|k| hex(k.0)),
                         effect,
                         dag.execution_region(),

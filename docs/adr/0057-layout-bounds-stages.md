@@ -1,6 +1,6 @@
 # ADR-0057: bounds の三段階を純粋値と明示した帯追従 policy で共有する
 
-- 状態: 採用
+- 状態: 部分置換（[ADR-0067](0067-affine-gaussian-effects.md): effect version 2 の非一様 affine と visual support。version 1 とその他の bounds 規則は維持）
 - 日付: 2026-10-04
 - 対象: LAYOUT-001
 

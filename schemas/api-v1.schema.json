@@ -94,12 +94,155 @@
       },
       "type": "object"
     },
+    "AudioEncodeReport": {
+      "properties": {
+        "channels": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "clipped_samples": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "codec": {
+          "type": "string"
+        },
+        "frames": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sample_rate": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "codec",
+        "sample_rate",
+        "channels",
+        "frames",
+        "clipped_samples"
+      ],
+      "type": "object"
+    },
     "AudioRetimePolicy": {
       "description": "NLE-001 never performs implicit pitch/speed conversion.",
       "enum": [
         "reject"
       ],
       "type": "string"
+    },
+    "AudioSourceMode": {
+      "enum": [
+        "document",
+        "explicit",
+        "silence"
+      ],
+      "type": "string"
+    },
+    "AvExportReport": {
+      "properties": {
+        "audio": {
+          "$ref": "#/$defs/AudioEncodeReport"
+        },
+        "audio_profile_version": {
+          "default": 1,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "audio_render_snapshot_hash": {
+          "type": "string"
+        },
+        "audio_source": {
+          "$ref": "#/$defs/AudioSourceMode",
+          "default": "explicit"
+        },
+        "export_snapshot_hash": {
+          "type": "string"
+        },
+        "frames": {
+          "items": {
+            "$ref": "#/$defs/FrameMetadata"
+          },
+          "type": "array"
+        },
+        "probe": {
+          "$ref": "#/$defs/MediaProbe"
+        },
+        "render_snapshot_hash": {
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/AvExportRequest"
+        },
+        "sample_range": {
+          "$ref": "#/$defs/Range_of_int64"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "video": {
+          "$ref": "#/$defs/MediaPathReport"
+        }
+      },
+      "required": [
+        "schema_version",
+        "render_snapshot_hash",
+        "export_snapshot_hash",
+        "audio_render_snapshot_hash",
+        "request",
+        "sample_range",
+        "frames",
+        "video",
+        "audio",
+        "probe"
+      ],
+      "type": "object"
+    },
+    "AvExportRequest": {
+      "properties": {
+        "background": {
+          "description": "Explicit opaque background, linear Rec.709 SDR, before BT.709 encoding.",
+          "items": {
+            "format": "float",
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "clipping": {
+          "$ref": "#/$defs/ClippingPolicy"
+        },
+        "frame_rate": {
+          "$ref": "#/$defs/FrameRate"
+        },
+        "output": {
+          "type": "string"
+        },
+        "range": {
+          "$ref": "#/$defs/TimeRange"
+        },
+        "region": {
+          "$ref": "#/$defs/OutputRegion"
+        }
+      },
+      "required": [
+        "output",
+        "range",
+        "frame_rate",
+        "region",
+        "background",
+        "clipping"
+      ],
+      "type": "object"
     },
     "BoundsStage": {
       "description": "Resolution-independent bounds stage selected by a layout consumer.",
@@ -311,6 +454,17 @@
         },
         "timeline_range": {
           "$ref": "#/$defs/TimeRange"
+        },
+        "volume": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Property"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Absent in M2 documents means unity. Evaluated in source-local time."
         }
       },
       "required": [
@@ -483,6 +637,13 @@
         "range"
       ],
       "type": "object"
+    },
+    "ClippingPolicy": {
+      "enum": [
+        "reject",
+        "saturate"
+      ],
+      "type": "string"
     },
     "CodecCapability": {
       "properties": {
@@ -1250,6 +1411,95 @@
         {
           "additionalProperties": false,
           "properties": {
+            "node_rename": {
+              "additionalProperties": false,
+              "properties": {
+                "composition": {
+                  "$ref": "#/$defs/CompositionId"
+                },
+                "name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                }
+              },
+              "required": [
+                "composition",
+                "node"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "node_rename"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "node_property_insert": {
+              "additionalProperties": false,
+              "properties": {
+                "composition": {
+                  "$ref": "#/$defs/CompositionId"
+                },
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                },
+                "property": {
+                  "$ref": "#/$defs/Property"
+                }
+              },
+              "required": [
+                "composition",
+                "node",
+                "property"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "node_property_insert"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "node_enabled_set": {
+              "additionalProperties": false,
+              "properties": {
+                "composition": {
+                  "$ref": "#/$defs/CompositionId"
+                },
+                "enabled": {
+                  "type": "boolean"
+                },
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                }
+              },
+              "required": [
+                "composition",
+                "node",
+                "enabled"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "node_enabled_set"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
             "node_remove": {
               "additionalProperties": false,
               "properties": {
@@ -1675,6 +1925,13 @@
       ],
       "type": "object"
     },
+    "ExecutionKind": {
+      "enum": [
+        "software",
+        "hardware"
+      ],
+      "type": "string"
+    },
     "ExplainBackend": {
       "oneOf": [
         {
@@ -1693,6 +1950,7 @@
     },
     "ExplanationCategory": {
       "enum": [
+        "enabled",
         "opacity",
         "active_range",
         "parent",
@@ -3238,6 +3496,10 @@
         {
           "additionalProperties": false,
           "properties": {
+            "audio": {
+              "$ref": "#/$defs/AudioSourceMode",
+              "default": "explicit"
+            },
             "background": {
               "items": {
                 "format": "float",
@@ -3256,6 +3518,12 @@
             "format": {
               "const": "pro_res_mov",
               "type": "string"
+            },
+            "profile_version": {
+              "default": 1,
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
             }
           },
           "required": [
@@ -3580,6 +3848,220 @@
       ],
       "type": "object"
     },
+    "MediaNode": {
+      "additionalProperties": false,
+      "description": "Explicit media stream; AUDIO-003 executes audio only.",
+      "properties": {
+        "asset": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "source_in": {
+          "$ref": "#/$defs/Rational"
+        },
+        "stream_index": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "time_map": {
+          "$ref": "#/$defs/TimeMap",
+          "description": "Maps time relative to the owning node's active_range.start."
+        },
+        "volume": {
+          "$ref": "#/$defs/PropertyId",
+          "description": "A kronello.audio.volume Property owned by the same SceneNode."
+        }
+      },
+      "required": [
+        "asset",
+        "stream_index",
+        "source_in",
+        "time_map",
+        "volume"
+      ],
+      "type": "object"
+    },
+    "MediaPathReport": {
+      "properties": {
+        "decoder": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "encoder": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "execution": {
+          "$ref": "#/$defs/ExecutionKind"
+        },
+        "input_pixel_format": {
+          "type": "string"
+        },
+        "output_pixel_format": {
+          "type": "string"
+        },
+        "transfer_path": {
+          "type": "string"
+        },
+        "transfers": {
+          "$ref": "#/$defs/MediaTransferStats"
+        }
+      },
+      "required": [
+        "execution",
+        "input_pixel_format",
+        "output_pixel_format",
+        "transfer_path",
+        "transfers"
+      ],
+      "type": "object"
+    },
+    "MediaProbe": {
+      "properties": {
+        "export_snapshot_hash": {
+          "type": "string"
+        },
+        "render_snapshot_hash": {
+          "type": "string"
+        },
+        "streams": {
+          "items": {
+            "$ref": "#/$defs/MediaStream"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "streams",
+        "render_snapshot_hash",
+        "export_snapshot_hash"
+      ],
+      "type": "object"
+    },
+    "MediaStream": {
+      "properties": {
+        "channels": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "codec": {
+          "type": "string"
+        },
+        "duration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rational"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "height": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "index": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "kind": {
+          "$ref": "#/$defs/StreamKind"
+        },
+        "sample_rate": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rational"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "time_base": {
+          "$ref": "#/$defs/Rational"
+        },
+        "width": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "index",
+        "kind",
+        "codec",
+        "time_base"
+      ],
+      "type": "object"
+    },
+    "MediaTransferStats": {
+      "properties": {
+        "cpu_conversion_input_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cpu_conversion_output_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cpu_copy_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cpu_readback_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cpu_upload_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "gpu_copy_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cpu_copy_bytes",
+        "cpu_conversion_input_bytes",
+        "cpu_conversion_output_bytes",
+        "cpu_upload_bytes",
+        "cpu_readback_bytes",
+        "gpu_copy_bytes"
+      ],
+      "type": "object"
+    },
     "Modifier": {
       "additionalProperties": false,
       "description": "Ordered modifier frame only, with semantic parameters and a stable identity.\nNo modifier algorithm or execution capability is implemented here. The\nanimation compiler must resolve kind/version and reject unsupported kinds.",
@@ -3871,6 +4353,23 @@
             },
             "value": {
               "$ref": "#/$defs/CompositionInstance"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "media",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/MediaNode"
             }
           },
           "required": [
@@ -4281,6 +4780,9 @@
         "name": {
           "type": "string"
         },
+        "open_mode": {
+          "$ref": "#/$defs/ProjectOpenMode"
+        },
         "project_id": {
           "type": "string"
         },
@@ -4299,6 +4801,7 @@
         }
       },
       "required": [
+        "open_mode",
         "project_id",
         "name",
         "revision",
@@ -4308,6 +4811,22 @@
         "compositions"
       ],
       "type": "object"
+    },
+    "ProjectOpenMode": {
+      "oneOf": [
+        {
+          "enum": [
+            "normal",
+            "safe"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "read_only_snapshot",
+          "description": "Read-only inspection (ADR-0064) read a snapshot without opening a store.",
+          "type": "string"
+        }
+      ]
     },
     "ProjectRequest": {
       "additionalProperties": false,
@@ -4560,6 +5079,23 @@
       "required": [
         "min",
         "max"
+      ],
+      "type": "object"
+    },
+    "Range_of_int64": {
+      "properties": {
+        "end": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "start": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start",
+        "end"
       ],
       "type": "object"
     },
@@ -5273,6 +5809,37 @@
             "idempotency_key",
             "instance",
             "duration"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "operation": {
+              "const": "render.export",
+              "type": "string"
+            },
+            "output": {
+              "$ref": "#/$defs/JobOutput",
+              "default": {
+                "format": "image_sequence"
+              }
+            },
+            "render": {
+              "$ref": "#/$defs/SequenceRenderRequest",
+              "description": "Reuses the synchronous target and time/region request without a job-only\ntarget model. output_directory is the MOV filename for ProResMov."
+            },
+            "required_features": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "operation",
+            "render"
           ],
           "type": "object"
         },
@@ -6141,6 +6708,97 @@
         {
           "additionalProperties": false,
           "properties": {
+            "AffineGaussianBlur": {
+              "properties": {
+                "linear": {
+                  "items": {
+                    "items": {
+                      "format": "double",
+                      "type": "number"
+                    },
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "type": "array"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                },
+                "sigma": {
+                  "format": "double",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "sigma",
+                "linear"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "AffineGaussianBlur"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "AffineDropShadow": {
+              "properties": {
+                "color": {
+                  "$ref": "#/$defs/Color"
+                },
+                "linear": {
+                  "items": {
+                    "items": {
+                      "format": "double",
+                      "type": "number"
+                    },
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "type": "array"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                },
+                "offset": {
+                  "items": {
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                },
+                "opacity": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "sigma": {
+                  "format": "double",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "sigma",
+                "linear",
+                "offset",
+                "color",
+                "opacity"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "AffineDropShadow"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
             "GaussianBlur": {
               "properties": {
                 "sigma": {
@@ -6250,6 +6908,23 @@
             },
             "value": {
               "$ref": "#/$defs/SequenceQueryResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "movie",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/AvExportReport"
             }
           },
           "required": [
@@ -6707,11 +7382,22 @@
           },
           "type": "array"
         },
+        "enabled": {
+          "description": "Disabled containment subtrees do not enter the evaluated scene.",
+          "type": "boolean"
+        },
         "id": {
           "$ref": "#/$defs/NodeId"
         },
         "kind": {
           "$ref": "#/$defs/NodeKind"
+        },
+        "name": {
+          "description": "Display only; never used as identity.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "properties": {
           "items": {
@@ -7023,6 +7709,12 @@
         "video_input": {
           "default": "nle002-sdr-rgba8-nearest-v1",
           "type": "string"
+        },
+        "visibility": {
+          "default": 1,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
@@ -7453,6 +8145,14 @@
           "type": "object"
         }
       ]
+    },
+    "StreamKind": {
+      "enum": [
+        "video",
+        "audio",
+        "other"
+      ],
+      "type": "string"
     },
     "StreamMetadata": {
       "additionalProperties": false,
@@ -9138,6 +9838,41 @@
         {
           "additionalProperties": false,
           "properties": {
+            "clip_set_volume": {
+              "additionalProperties": false,
+              "properties": {
+                "clip": {
+                  "$ref": "#/$defs/ClipId"
+                },
+                "sequence": {
+                  "$ref": "#/$defs/SequenceId"
+                },
+                "volume": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Property"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "sequence",
+                "clip"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "clip_set_volume"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
             "instance_retime": {
               "additionalProperties": false,
               "properties": {
@@ -9601,8 +10336,10 @@
       ]
     },
     "VisibilityCode": {
-      "description": "Stable semantic causes, extensible without adding state to the inspector.\nGUI's enabled/disabled document contract is integrated by its owning branch.",
+      "description": "Stable semantic causes, extensible without adding state to the inspector.",
       "enum": [
+        "DISABLED",
+        "ANCESTOR_DISABLED",
         "OPACITY_ZERO",
         "OUTSIDE_ACTIVE_RANGE",
         "ANCESTOR_OPACITY_ZERO",

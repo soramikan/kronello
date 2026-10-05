@@ -168,12 +168,30 @@ mod metal {
                 ));
             }
             let (revision, dag) = service.preview_dag(&request)?;
-            let texture = self.gpu.preview_texture(&dag)?;
-            let frame = match self.surface.get_current_texture() {
+            let mut frame = self.surface.get_current_texture();
+            if matches!(frame, wgpu::CurrentSurfaceTexture::Outdated) {
+                // The layer changed under us; reconfigure once and retry.
+                self.surface.configure(&self.gpu.device, &self.config);
+                frame = self.surface.get_current_texture();
+            }
+            let frame = match frame {
                 wgpu::CurrentSurfaceTexture::Success(frame)
                 | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
+                // Not failures: the host skips this frame and redraws when visible.
+                skipped @ (wgpu::CurrentSurfaceTexture::Occluded
+                | wgpu::CurrentSurfaceTexture::Timeout) => {
+                    let skipped = if matches!(skipped, wgpu::CurrentSurfaceTexture::Occluded) {
+                        "occluded"
+                    } else {
+                        "timeout"
+                    };
+                    return Ok(
+                        json!({"status":"success","preview":{"revision":revision,"pixels":[self.config.width,self.config.height],"backend":"metal","image_readbacks":0,"presented":false,"skipped":skipped}}),
+                    );
+                }
                 other => return Err(failure("SURFACE_ACQUIRE_FAILED", format!("{other:?}"))),
             };
+            let texture = self.gpu.preview_texture(&dag)?;
             let source = texture.create_view(&Default::default());
             let target = frame.texture.create_view(&Default::default());
             use wgpu::util::DeviceExt;
@@ -229,7 +247,7 @@ mod metal {
             self.gpu.queue.submit([encoder.finish()]);
             self.gpu.queue.present(frame);
             Ok(
-                json!({"status":"success","preview":{"revision":revision,"pixels":[self.config.width,self.config.height],"backend":"metal","image_readbacks":0}}),
+                json!({"status":"success","preview":{"revision":revision,"pixels":[self.config.width,self.config.height],"backend":"metal","image_readbacks":0,"presented":true}}),
             )
         }
     }

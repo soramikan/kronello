@@ -911,3 +911,81 @@ fn gpu_fx_blur_shadow_match_cpu_reference_in_both_working_spaces() {
         }
     }
 }
+
+#[test]
+fn gpu_fx002_transformed_kernels_and_offsets_match_cpu_in_both_spaces() {
+    for (_, size, _, scene) in fx002_scenes() {
+        for working in [WorkingSpace::LinearRec709, WorkingSpace::LinearRec2020] {
+            let expected =
+                render_scene_reference(RenderSize::pixels(size, size), &scene, working).unwrap();
+            let actual = gpu()
+                .render_scene(RenderSize::pixels(size, size), &scene, working)
+                .unwrap();
+            compare(size, working, &expected, &actual.pixels);
+            assert_eq!(actual.transfers.cpu_upload_pixel_operations, 0);
+        }
+    }
+}
+#[test]
+fn cpu_fx002_affine_impulse_matches_independent_elliptical_gaussian() {
+    let covariance = [5.0, 1.0, 1.0];
+    let mut source = vec![[0.0; 4]; 31 * 31];
+    source[15 * 31 + 15] = [0.25, 0.0, 0.0, 0.5];
+    let scene = DrawScene {
+        nodes: vec![
+            DrawNode::Raster(source),
+            DrawNode::Effect {
+                source: 0,
+                effect: PixelEffect::AffineGaussianBlur { covariance },
+            },
+        ],
+        roots: vec![1],
+    };
+    let pixels = render_scene_reference(
+        RenderSize::pixels(31, 31),
+        &scene,
+        WorkingSpace::LinearRec709,
+    )
+    .unwrap();
+    let mut weights = vec![];
+    for y in -3..=3 {
+        for x in -7..=7 {
+            let q = f64::from(x * x - 2 * x * y + 5 * y * y) / 4.0;
+            if q <= 9.0 {
+                weights.push((x, y, (-0.5 * q).exp()));
+            }
+        }
+    }
+    let sum: f64 = weights.iter().map(|(_, _, w)| w).sum();
+    let norm: f32 = weights.iter().map(|(_, _, w)| (w / sum) as f32).sum();
+    let half = |v| half::f16::from_f32(v).to_f32();
+    let mut expected = vec![[0.0; 4]; 31 * 31];
+    for (x, y, w) in weights {
+        let w = (w / sum) as f32;
+        expected[((15 + y) * 31 + 15 + x) as usize] =
+            [half(0.25 * w / norm), 0.0, 0.0, half(0.5 * w / norm)];
+    }
+    for (i, (actual, expected)) in pixels.iter().zip(expected).enumerate() {
+        assert_eq!(*actual, expected, "affine impulse pixel {i}");
+    }
+    let invalid = DrawScene {
+        nodes: vec![
+            DrawNode::Raster(vec![[0.0; 4]; 1]),
+            DrawNode::Effect {
+                source: 0,
+                effect: PixelEffect::AffineGaussianBlur {
+                    covariance: [1.0, 1.0, 1.0],
+                },
+            },
+        ],
+        roots: vec![1],
+    };
+    assert!(matches!(
+        render_scene_reference(
+            RenderSize::pixels(1, 1),
+            &invalid,
+            WorkingSpace::LinearRec709
+        ),
+        Err(GpuError::UnsupportedFeature(_))
+    ));
+}

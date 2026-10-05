@@ -49,6 +49,7 @@ pub enum VisibilityAssessment {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExplanationCategory {
+    Enabled,
     Opacity,
     ActiveRange,
     Parent,
@@ -66,11 +67,12 @@ pub enum ExplanationImpact {
     Information,
 }
 /// Stable semantic causes, extensible without adding state to the inspector.
-/// GUI's enabled/disabled document contract is integrated by its owning branch.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum VisibilityCode {
+    Disabled,
+    AncestorDisabled,
     OpacityZero,
     OutsideActiveRange,
     AncestorOpacityZero,
@@ -97,6 +99,8 @@ pub enum VisibilityCode {
 impl VisibilityCode {
     fn from_code(code: &str) -> Self {
         match code {
+            "DISABLED" => Self::Disabled,
+            "ANCESTOR_DISABLED" => Self::AncestorDisabled,
             "OPACITY_ZERO" => Self::OpacityZero,
             "OUTSIDE_ACTIVE_RANGE" => Self::OutsideActiveRange,
             "ANCESTOR_OPACITY_ZERO" => Self::AncestorOpacityZero,
@@ -626,6 +630,21 @@ pub(crate) fn node(r: NodeExplainRequest) -> Result<NodeExplainResult, ServiceEr
         };
         if own {
             result.local_time = local;
+        }
+        // Disabled containment subtrees never enter the evaluated scene (ADR-0061).
+        if !node_definition.enabled {
+            reason(
+                &mut result,
+                key,
+                if own { "DISABLED" } else { "ANCESTOR_DISABLED" },
+                if own {
+                    ExplanationCategory::Enabled
+                } else {
+                    ExplanationCategory::Parent
+                },
+                ExplanationImpact::Hides,
+                json!({"enabled":false}),
+            );
         }
         if let Some(time) = local {
             if !node_definition.active_range.contains(time) {

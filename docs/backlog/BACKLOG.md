@@ -13,7 +13,7 @@
 | M0 | 0 | 0 | 6 | 0 | 6 |
 | M1 | 0 | 0 | 14 | 0 | 14 |
 | M2 | 0 | 1 | 10 | 0 | 11 |
-| M3 | 14 | 5 | 6 | 0 | 25 |
+| M3 | 10 | 6 | 9 | 0 | 25 |
 | M4 | 11 | 0 | 0 | 0 | 11 |
 | M5 | 5 | 0 | 0 | 0 | 5 |
 | M6 | 4 | 0 | 0 | 0 | 4 |
@@ -346,7 +346,7 @@
 
 ### GUI-001 macOSネイティブGUI: Canvas・階層・変換操作
 
-- 優先度: P1 / 領域: gui / 状態: in_progress
+- 優先度: P1 / 領域: gui / 状態: done
 - 依存: FFI-001, RENDER-001
 - 受け入れ条件:
   - GUI操作が共通command/eventを使う
@@ -357,7 +357,7 @@
 
 ### GUI-002 Dope sheetとCurve editor
 
-- 優先度: P1 / 領域: gui / 状態: planned
+- 優先度: P1 / 領域: gui / 状態: in_progress
 - 依存: GUI-001, ANIM-001
 - 受け入れ条件:
   - キー移動/接線編集/UndoがCLIで読める同じモデルを変更する
@@ -458,7 +458,7 @@
 
 ### AUDIO-003 Sequence音声trackのA/V muxとclip音量
 
-- 優先度: P1 / 領域: audio / 状態: in_progress
+- 優先度: P1 / 領域: audio / 状態: done
 - 依存: NLE-001, AUDIO-000, JOB-001
 - 受け入れ条件:
   - Sequenceのaudio trackを同じ固定RenderSnapshotから音声配置へcompileし、映像と音声を同期exportおよびrender.submitのProRes/PCM24 MOVへmuxする
@@ -469,16 +469,17 @@
 
 ### AUDIO-004 リタイム音声・audio effects・Generator音声
 
-- 優先度: P1 / 領域: audio / 状態: planned
+- 優先度: P1 / 領域: audio / 状態: in_progress
 - 依存: AUDIO-003, ANIM-001
 - 受け入れ条件:
   - retimed audioのTimeMap・補間・pitchの扱いを設計して意味版を固定し、線形/区分線形map、trim/stretch、非整数sample境界で同期とsource範囲を検証する
   - audio effectsとGenerator音声の純粋評価・資源予算・固定入力の契約を定義し、同じsnapshotを任意順のbatchで評価して一致することを検証する
+  - Sequenceのcrossfadeに含まれる音声clipの音声crossfade（曲線・意味版・sample境界）を定義して検証し、現行のUNSUPPORTED_FEATUREを対応範囲内で解消する
   - 未対応map・effect・Generator、予算超過や非有限値を型付きエラーにし、暗黙の速度1・無音・clampで続行しない
 
 ### MEDIA-002 追加movie job profileと圧縮音声
 
-- 優先度: P1 / 領域: media / 状態: planned
+- 優先度: P1 / 領域: media / 状態: in_progress
 - 依存: MEDIA-001, AUDIO-000, JOB-001
 - 受け入れ条件:
   - AV1・H.264・HEVCを同期exportとrender.submitの版付き出力profileとして公開し、固定snapshot・PTS/duration・probe・no-clobber publicationを検証する
@@ -498,7 +499,7 @@
 
 ### MCP-002 MCP HTTP・resources/prompts・進捗とキャンセル
 
-- 優先度: P1 / 領域: mcp / 状態: in_progress
+- 優先度: P1 / 領域: mcp / 状態: done
 - 依存: MCP-001, JOB-001
 - 受け入れ条件:
   - HTTP transportの接続・認証・版交渉・終了の契約を定義し、stdioと同じCommand/Query registry・schema・型付き結果へ到達することを実クライアントで検証する
@@ -516,10 +517,11 @@
   - Windowsの上書き禁止publicationを設計し、同一volume・既存file/空directoryの拒否・cancel/lease競合を実プロセスで検証する
   - Linux/WindowsでFIFO slot・queued/running heartbeat・強制終了後のinterrupted・pruneを検証し、OS/版/コマンド/exitを記録する。未検証OSを保証経路に昇格しない
   - 高負荷時（load average 50 前後）に CLI の job テスト（例: sequence_target_job_preserves_placements_after_trim_and_project_removal）が Queued のまま 60 秒で timeout する事象を再現・原因調査し、状態 DB の lock 競合下でも job が開始されることを検証する
+  - テストが失敗・時間切れになっても、起動した detached worker（`kronello worker --job`）を必ず回収し、テスト後に孤立 process を残さないことを検証する（2026-10-05 に最長14時間残った worker を6件確認）
 
 ### FX-002 非一様affine下のblur/shadow
 
-- 優先度: P2 / 領域: effects / 状態: planned
+- 優先度: P2 / 領域: effects / 状態: in_progress
 - 依存: FX-001
 - 受け入れ条件:
   - 非一様scale/shear下の正sigmaのGaussian blur/drop shadowの意味を定義して版を管理し、現行のUNSUPPORTED_FEATUREを対応範囲内で解消する

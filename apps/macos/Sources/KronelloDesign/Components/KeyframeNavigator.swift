@@ -11,9 +11,11 @@ public struct KRKeyframeNavigator: View {
     private let previous: (() -> Void)?
     private let toggle: () -> Void
     private let next: (() -> Void)?
+    private let editingEnabled: Bool
     public init(source: KRPropertySource, onKeyframe: Bool = false, previous: (() -> Void)? = nil,
-                toggle: @escaping () -> Void = {}, next: (() -> Void)? = nil) {
+                toggle: @escaping () -> Void = {}, next: (() -> Void)? = nil, editingEnabled: Bool = true) {
         self.source = source; self.onKeyframe = onKeyframe; self.previous = previous; self.toggle = toggle; self.next = next
+        self.editingEnabled = editingEnabled
     }
     public var body: some View {
         Group {
@@ -28,6 +30,7 @@ public struct KRKeyframeNavigator: View {
                     KRKeyframeGlyph(.linear, hollow: source == .constant || !onKeyframe, on: source == .curve && onKeyframe,
                                     accessibilityLabel: onKeyframe ? "キーフレームを削除" : "キーフレームを追加", action: toggle)
                         .padding(.horizontal, -KRSpace.space1)
+                        .disabled(!editingEnabled).help(editingEnabled ? "" : "キーフレーム編集は GUI-002 で追加します")
                     arrow(right: true, action: next).opacity(source == .curve ? 1 : 0)
                 }
             }

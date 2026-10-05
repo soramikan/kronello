@@ -209,6 +209,54 @@ pub fn effect_scene(shadow: bool, working: WorkingSpace) -> DrawScene {
         roots: vec![1],
     }
 }
+pub fn affine_effect_scene(linear: [[f64; 2]; 2], shadow: bool) -> DrawScene {
+    let resolved = if shadow {
+        model::ResolvedEffect::AffineDropShadow {
+            sigma: 1.1,
+            linear,
+            offset: [
+                linear[0][0] * 2.25 - linear[0][1] * 1.5,
+                linear[1][0] * 2.25 - linear[1][1] * 1.5,
+            ],
+            color: model::Color::new(model::ColorSpace::Srgb, [0.2, 0.5, 0.9], 0.7).unwrap(),
+            opacity: 0.6,
+        }
+    } else {
+        model::ResolvedEffect::AffineGaussianBlur { sigma: 1.1, linear }
+    };
+    let effect = PixelEffect::from_design(&resolved, [1.0; 2]).unwrap();
+    let mut scene = effect_scene(shadow, WorkingSpace::LinearRec709);
+    scene.nodes[1] = DrawNode::Effect { source: 0, effect };
+    scene
+}
+pub fn fx002_scenes() -> Vec<(&'static str, u32, WorkingSpace, DrawScene)> {
+    vec![
+        (
+            "fx002-rotation",
+            16,
+            WorkingSpace::LinearRec709,
+            affine_effect_scene([[0.8, -0.6], [0.6, 0.8]], false),
+        ),
+        (
+            "fx002-nonuniform-rotation",
+            16,
+            WorkingSpace::LinearRec709,
+            affine_effect_scene([[1.6, -0.6], [1.2, 0.8]], false),
+        ),
+        (
+            "fx002-shear-shadow",
+            16,
+            WorkingSpace::LinearRec709,
+            affine_effect_scene([[1.5, 0.7], [0.0, 0.8]], true),
+        ),
+        (
+            "fx002-reflected-shear-shadow-rec2020",
+            16,
+            WorkingSpace::LinearRec2020,
+            affine_effect_scene([[-1.2, 0.5], [0.2, 0.8]], true),
+        ),
+    ]
+}
 pub fn scenes() -> Vec<(&'static str, u32, WorkingSpace, DrawScene)> {
     let mut scenes = vec![
         (
@@ -286,6 +334,7 @@ pub fn scenes() -> Vec<(&'static str, u32, WorkingSpace, DrawScene)> {
     ];
     scenes.extend(vec003_scenes());
     scenes.extend(vec004_scenes());
+    scenes.extend(fx002_scenes());
     scenes
 }
 

@@ -42,6 +42,7 @@ fn clip(composition: CompositionId, start: Time, end: Time, speed: Rational) -> 
         source_in: Time::ZERO,
         time_map: TimeMap::linear(Time::ZERO, speed).unwrap(),
         audio_retime: AudioRetimePolicy::Reject,
+        volume: None,
         links: vec![],
         effects: vec![],
         properties: vec![],
@@ -398,6 +399,8 @@ fn instance_retime_changes_only_internal_map_with_undo_and_domain_rejections() {
         root_nodes: vec![node],
         properties: vec![],
         nodes: vec![SceneNode {
+            name: None,
+            enabled: true,
             id: node,
             kind: NodeKind::CompositionInstance(CompositionInstance {
                 id: CompositionInstanceId::new(),
@@ -814,6 +817,7 @@ fn asset_audio_tracks_mix_on_absolute_grid_and_reject_retime() {
         source_in: t(1, 100),
         time_map: TimeMap::linear(Time::ZERO, Rational::ONE).unwrap(),
         audio_retime: AudioRetimePolicy::Reject,
+        volume: None,
         links: vec![],
         effects: vec![],
         properties: vec![],
@@ -1133,4 +1137,101 @@ fn variant_clip_stretch_cannot_bypass_protected_duration_policy() {
         },
         "PROTECTED_INTERVAL",
     );
+}
+
+#[test]
+fn clip_volume_edit_is_revisioned_idempotent_undoable_and_changes_fixed_hash() {
+    let mut p = fixture();
+    let s = sequence(&p);
+    let sid = s.id;
+    let cid = s.tracks[0].clips[0].id;
+    p.sequences.push(DocumentObject::Known(s));
+    let (_dir, path) = setup(p);
+    let before = export(&path);
+    let old = RenderSnapshot::for_target(
+        &before.document,
+        RenderTarget::Sequence { sequence: sid },
+        1,
+        Default::default(),
+    )
+    .unwrap();
+    let registry = SchemaRegistry::with_builtin();
+    let volume = Property::new(
+        PropertyId::new(),
+        DescriptorRef::new(
+            registry
+                .lookup(&SchemaKey::new("kronello.audio.volume").unwrap())
+                .unwrap(),
+        ),
+        PropertySource::Constant(Value::Scalar(FiniteF64::new(0.25).unwrap())),
+        vec![],
+        &registry,
+    )
+    .unwrap();
+    let commands = vec![EditCommand::Timeline(Box::new(
+        TimelineCommand::ClipSetVolume {
+            sequence: sid,
+            clip: cid,
+            volume: Some(volume),
+        },
+    ))];
+    let ResultData::Plan(plan) = engine()
+        .dispatch(Request::EditPlan(PlanRequest {
+            project: path.clone(),
+            base_revision: before.revision.clone(),
+            commands: commands.clone(),
+        }))
+        .unwrap()
+    else {
+        panic!()
+    };
+    let request = EditApplyRequest {
+        project: path.clone(),
+        base_revision: before.revision.clone(),
+        session_id: Uuid::new_v4(),
+        idempotency_key: "volume".into(),
+        plan_hash: plan.plan_hash,
+        commands,
+    };
+    let ResultData::Edit(event) = engine()
+        .dispatch(Request::EditApply(request.clone()))
+        .unwrap()
+    else {
+        panic!()
+    };
+    let ResultData::Edit(retry) = engine().dispatch(Request::EditApply(request)).unwrap() else {
+        panic!()
+    };
+    assert_eq!(event.id, retry.id);
+    assert_eq!(export(&path).revision, "2");
+    let changed = export(&path);
+    let new = RenderSnapshot::for_target(
+        &changed.document,
+        RenderTarget::Sequence { sequence: sid },
+        2,
+        Default::default(),
+    )
+    .unwrap();
+    assert_ne!(old.content_hash().unwrap(), new.content_hash().unwrap());
+    let old_av = kronello_media::AvExportSnapshot::with_audio(
+        &old,
+        kronello_audio::AudioSourceMode::Document,
+        vec![],
+    )
+    .unwrap();
+    let new_av = kronello_media::AvExportSnapshot::with_audio(
+        &new,
+        kronello_audio::AudioSourceMode::Document,
+        vec![],
+    )
+    .unwrap();
+    assert_ne!(
+        old_av.content_hash().unwrap(),
+        new_av.content_hash().unwrap()
+    );
+    // The old snapshot remains owned and stable across edit and Undo.
+    assert_eq!(old_av.render().project(), &before.document);
+    undo(&path, event);
+    assert_eq!(export(&path).document, before.document);
+    assert_eq!(export(&path).revision, "3");
 }
