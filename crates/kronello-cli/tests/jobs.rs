@@ -1267,3 +1267,175 @@ fn audio4_retime_gain_generator_crossfade_fixed_job_matches_sync_ntsc() {
         );
     }
 }
+
+fn delivery_sync_fixed_job_and_alac_match_quantized_evaluator(
+    format: &str,
+    profile: kronello_media::MovieProfile,
+) {
+    let f = Fixture::new();
+    let (document, mut render) = audio_sequence_fixture(&f, 0.5);
+    render["input"]["region"]["pixels"] = json!([64, 64]);
+    f.service(json!({"operation":"project.import","project":f.project,"base_revision":"1","document":document}));
+    let extension = if format == "av1_mp4" { "mp4" } else { "mov" };
+    let baseline_file = f.temp.path().join(format!("baseline.{extension}"));
+    render["output_directory"] = json!(baseline_file);
+    let output = json!({"format":format,"profile_version":1,"audio":"document","audio_codec":"alac","clips":[],"background":[0,0,0]});
+    let baseline = f.cli(
+        json!({"operation":"render.export","render":render,"output":output}),
+        None,
+        false,
+    );
+    let gate = f.temp.path().join("release-delivery");
+    render["output_directory"] = json!(f.temp.path().join(format!("job.{extension}")));
+    let job = f.submit_request(
+        json!({"operation":"render.submit","render":render,"output":output}),
+        Some(&gate),
+        false,
+    );
+    f.wait(&job.id, JobStatus::Running);
+    let input = std::fs::read(f.store().directory(&job.id).unwrap().join("input.json")).unwrap();
+    assert_eq!(format!("{:x}", Sha256::digest(&input)), job.input_hash);
+    let fixed: Value = serde_json::from_slice(&input).unwrap();
+    assert_eq!(
+        fixed["request"]["output"],
+        serde_json::to_value(
+            serde_json::from_value::<kronello_service::JobOutput>(output.clone()).unwrap()
+        )
+        .unwrap()
+    );
+    let mut changed_profile = fixed.clone();
+    changed_profile["request"]["output"]["profile_version"] = json!(2);
+    assert_ne!(
+        Sha256::digest(&input),
+        Sha256::digest(serde_json::to_vec(&changed_profile).unwrap())
+    );
+    let mut edited = document.clone();
+    edited["sequences"][0]["tracks"][1]["clips"][0]["volume"]["source"]["value"]["value"] =
+        json!(0);
+    edited["compositions"][0]["nodes"][0]["properties"][2]["source"]["value"]["value"]["components"]
+        ["r"] = json!(0);
+    f.service(json!({"operation":"project.import","project":f.project,"base_revision":"2","document":edited}));
+    std::fs::remove_file(&f.project).unwrap();
+    std::fs::write(gate, b"release").unwrap();
+    let done = f.wait(&job.id, JobStatus::Succeeded);
+    let report = &done.result.as_ref().unwrap()["report"];
+    assert_eq!(report["frames"], baseline["frames"]);
+    assert_eq!(
+        report["export_snapshot_hash"],
+        baseline["export_snapshot_hash"]
+    );
+    assert_eq!(
+        report["movie_profile"],
+        serde_json::to_value(profile).unwrap()
+    );
+    assert_eq!(report["audio_profile_version"], 3);
+    assert_eq!(report["sample_range"], json!({"start":0,"end":4804}));
+    let runtime = kronello_media::MediaRuntime::load().unwrap();
+    runtime
+        .probe(&job.destination)
+        .unwrap()
+        .verify_movie(profile)
+        .unwrap();
+    let original = runtime.decode_audio(&baseline_file, 1).unwrap();
+    let decoded = runtime.decode_audio(&job.destination, 1).unwrap();
+    assert_eq!(
+        serde_json::to_value(decoded.source_start).unwrap(),
+        json!({"num":"0","den":"1"})
+    );
+    assert_eq!(decoded.buffer, original.buffer);
+    assert_eq!(decoded.buffer.frames().len(), 4804);
+    let typed: kronello_model::Project = serde_json::from_value(document.clone()).unwrap();
+    let sequence = serde_json::from_value(document["sequences"][0]["id"].clone()).unwrap();
+    let plan = kronello_audio::DocumentAudioPlan::compile_version(
+        &typed,
+        kronello_audio::AudioTarget::Sequence(sequence),
+        2,
+    )
+    .unwrap();
+    let clip = &plan.clips()[0];
+    let asset = typed
+        .assets
+        .iter()
+        .find_map(|a| match a {
+            kronello_model::DocumentObject::Known(a) if a.id == clip.asset => Some(a),
+            _ => None,
+        })
+        .unwrap();
+    let source = runtime
+        .decode_asset_audio(asset, &f.project, clip.stream_index)
+        .unwrap()
+        .buffer;
+    let bus = plan
+        .mix(
+            &[((clip.asset, clip.stream_index), source)].into(),
+            serde_json::from_value(render["range"].clone()).unwrap(),
+        )
+        .unwrap();
+    let pcm = bus
+        .quantize_pcm24(kronello_audio::ClippingPolicy::Reject)
+        .unwrap();
+    for (actual, expected) in decoded.buffer.frames().iter().flatten().zip(pcm.samples) {
+        assert_eq!(
+            actual.to_bits(),
+            ((expected / 256) as f32 / 8388608.0).to_bits()
+        );
+    }
+    let mut original_video = runtime.open_video(&baseline_file).unwrap();
+    let mut fixed_video = runtime.open_video(&job.destination).unwrap();
+    for i in 0..3 {
+        let time =
+            serde_json::from_value(json!({"num":(i * 1001).to_string(),"den":"30000"})).unwrap();
+        let original = original_video.decode_at(time).unwrap();
+        let fixed = fixed_video.decode_at(time).unwrap();
+        assert_eq!(fixed.pts, time);
+        let end = serde_json::from_value(json!({"num":((i + 1) * 1001).to_string(),"den":"30000"}))
+            .unwrap();
+        assert_eq!(fixed.end, end);
+        assert_eq!(fixed.pixels, original.pixels);
+    }
+    // A destination created after submission remains unchanged at publication.
+    let f = Fixture::new();
+    let (document, mut render) = audio_sequence_fixture(&f, 0.5);
+    render["input"]["region"]["pixels"] = json!([64, 64]);
+    f.service(json!({"operation":"project.import","project":f.project,"base_revision":"1","document":document}));
+    render["output_directory"] = json!(f.temp.path().join(format!("race.{extension}")));
+    let gate = f.temp.path().join("release-race");
+    let job = f.submit_request(
+        json!({"operation":"render.submit","render":render,"output":output}),
+        Some(&gate),
+        false,
+    );
+    f.wait(&job.id, JobStatus::Running);
+    std::fs::write(&job.destination, b"existing delivery").unwrap();
+    std::fs::write(gate, b"release").unwrap();
+    let done = f.wait(&job.id, JobStatus::Failed);
+    assert_eq!(done.error.unwrap().code, "OUTPUT_EXISTS");
+    assert_eq!(
+        std::fs::read(job.destination).unwrap(),
+        b"existing delivery"
+    );
+    println!("{}", serde_json::to_string(report).unwrap());
+}
+#[test]
+fn av1_delivery_sync_fixed_job_and_alac_match_quantized_evaluator() {
+    delivery_sync_fixed_job_and_alac_match_quantized_evaluator(
+        "av1_mp4",
+        kronello_media::MovieProfile::Av1Mp4AlacV1,
+    );
+}
+#[test]
+#[ignore = "pending host run: requires physical VideoToolbox H.264 encoder"]
+fn host_h264_delivery_sync_fixed_job_and_alac_match_quantized_evaluator() {
+    delivery_sync_fixed_job_and_alac_match_quantized_evaluator(
+        "h264_mov",
+        kronello_media::MovieProfile::H264AlacV1,
+    );
+}
+#[test]
+#[ignore = "pending host run: requires physical VideoToolbox HEVC encoder"]
+fn host_hevc_delivery_sync_fixed_job_and_alac_match_quantized_evaluator() {
+    delivery_sync_fixed_job_and_alac_match_quantized_evaluator(
+        "hevc_mov",
+        kronello_media::MovieProfile::HevcAlacV1,
+    );
+}

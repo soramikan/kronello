@@ -98,9 +98,9 @@ heartbeat thread の join 中も watchdog は有効。全 process の停止中�
 
 Windows publication は同じ DB fence の中で `MoveFileExW(..., 0)` を使い、既存 file / 空 directory を `OUTPUT_EXISTS` として拒否する。copy/delete は許可せず、別 volume は `OUTPUT_CROSS_VOLUME`（Unix の EXDEV も同じ code）。同一 volume の rename と DB commit の間の電源断の窓は維持する。
 
-画像連番は destination volume の temporary directory に全 artifact を出力し、manifest・metadata・byte 長・hash・snapshot identity を再読検証する。MOV は ProRes + stereo 48 kHz PCM24、明示 background と選択 mode の音声を同じ AvExportSnapshot から出力し、stream / PTS / duration / snapshot metadata を probe する。frame 境界と確定前に cancel を確認する。DB transaction 内で lease / cancel を再確認し、atomic NOREPLACE rename で全 directory または MOV file を一度に確定する。既存成果物は空 directory も上書きしない。
+画像連番は destination volume の temporary directory に全 artifact を出力し、manifest・metadata・byte 長・hash・snapshot identity を再読検証する。既存 pro_res_mov は ProRes + stereo 48 kHz PCM24、明示 background と選択 mode の音声を同じ AvExportSnapshot から出力し、stream / PTS / duration / snapshot metadata を probe する。frame 境界と確定前に cancel を確認する。DB transaction 内で lease / cancel を再確認し、atomic NOREPLACE rename で全 directory または movie file を一度に確定する。既存成果物は空 directory も上書きしない。
 
-MOV の現行上限・SDR 契約は AUDIO-000 のまま。AV1 / H.264 / HEVC の job profile は未提供。SIGKILL は destination の temporary directory を残す場合がある。また rename と DB commit の間の電源断では検証済み成果物と interrupted 記録が共存しうる。temporary output 回収・成果物照合・再開は RECOVERY-001 で設計し、自動で成功扱いにしない。
+movie の現行上限・SDR 契約は AUDIO-000 のまま。MEDIA-002 の追加 profile は下記。SIGKILL は destination の temporary directory を残す場合がある。また rename と DB commit の間の電源断では検証済み成果物と interrupted 記録が共存しうる。temporary output 回収・成果物照合・再開は RECOVERY-001 で設計し、自動で成功扱いにしない。
 
 ## 保持と掃除
 
@@ -131,3 +131,15 @@ report の audio_source / audio_profile_version と両 snapshot hash は同期 `
 hash lock で検証し、欠落 / hash 不一致 / clipping で失敗した worker は MOV を publish しない。
 NTSC sample count / decoded A/V の固定性と failure publication は
 [AUDIO-003 の検証](../testing/audio-003.md) を参照。host GPU / hardware 検証は別 gate。
+
+## MEDIA-002: 追加 movie profile
+
+`av1_mp4` / `h264_mov` / `hevc_mov` の version 1 を同期 `render.export` と
+`render.submit` に追加する。audio mode と clips / background は同じ要求型。
+追加 profile は AvExportSnapshot schema 3 / evaluator 2 に固定し、codec / container と
+版付き MovieProfile を export hash / job input hash に含める。元作品を再読しない。
+AV1 は .mp4、H.264 / HEVC は .mov、全て48 kHz stereo native ALAC（PCM24量子化後）。
+probe は選択 profile の codec / start / duration / metadata を検証し、既存の lease / cancel
+fence と no-clobber publication を使う。AAC / 未知 version は UNSUPPORTED_FEATURE。
+既存 ProRes profile 1/2/3 と explicit / document / silence の意味は維持する。
+[ADR-0068](../adr/0068-versioned-delivery-movie-profiles.md)、[MEDIA-002 の検証](../testing/media-002.md)。

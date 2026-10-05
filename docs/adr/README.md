@@ -82,7 +82,9 @@
 | [0065](0065-relocatable-macos-distribution.md) | macOS 配布 runtime を再配置・署名後に全体検証する | 採用 | 2026-10-05 |
 | [0066](0066-explicit-gradient-semantics.md) | グラデーションの座標・spread・補間空間を明示する | 採用 | 2026-10-05 |
 | [0067](0067-affine-gaussian-effects.md) | 非一様 affine の Gaussian / shadow を明示した意味版 2 で扱う | 採用 | 2026-10-05 |
+| [0068](0068-versioned-delivery-movie-profiles.md) | 版付き配信映像と ALAC 音声の出力契約 | 採用 | 2026-10-05 |
 | [0069](0069-versioned-stateless-audio.md) | リタイム・effect・Generator・crossfade 音声を明示 profile に固定する | 採用 | 2026-10-05 |
+| [0070](0070-motion-keyframe-authoring.md) | Dope sheet と時間イージングの編集 | 採用 | 2026-10-05 |
 | [0071](0071-project-change-plans-and-modifier-edits.md) | Project 作成・import の計画と再送、Modifier の型付き編集 | 採用 | 2026-10-05 |
 | [0072](0072-scene-search-fixed-cursors-and-cli-events.md) | Scene 検索・固定 revision cursor・CLI event framing | 採用 | 2026-10-05 |
 | [0073](0073-local-stroke-extensions.md) | 破線・線位置・affine 線幅を明示したローカル幾何版で扱う | 採用 | 2026-10-05 |

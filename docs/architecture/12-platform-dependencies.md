@@ -72,7 +72,7 @@ install name の変更後に内側から署名し、元 prefix 外へ copy し�
 | 中間・納品用 | FFmpeg 内蔵の ProRes | 常に |
 | 画像連番 | — | 常に |
 
-H.264 / HEVC のエンコーダーがない環境で要求された場合は `ENCODER_UNAVAILABLE` を返し、代替を案内する。音声付き納品の初期経路は MOV / ProRes + 48 kHz stereo PCM24（FFmpeg native `pcm_s24le`）とする（[ADR-0049](../adr/0049-audio-bus-timing-and-codec.md)）。圧縮音声出力は未実装。
+H.264 / HEVC のエンコーダーがない環境で要求された場合は `ENCODER_UNAVAILABLE` を返し、代替を案内する。音声付き納品の初期経路は MOV / ProRes + 48 kHz stereo PCM24（FFmpeg native `pcm_s24le`）とする（[ADR-0049](../adr/0049-audio-bus-timing-and-codec.md)）。MEDIA-002 は追加出力に native ALAC を採用した。AAC / Opus の採用は保留（[ADR-0068](../adr/0068-versioned-delivery-movie-profiles.md)）。
 
 ## 主な Rust 依存の候補
 
@@ -133,3 +133,16 @@ Project の `assets` は stable AssetId、SHA-256 content_hash、kind、rational
 `kronello-audio` の純粋な 48 kHz stereo f32 Bus と、media の native decode / libswresample / PCM24 encode / MOV mux を実装する。libswresample は他の 4 library と同じ directory / ABI policy で動的ロードし、capabilities は全 5 library の license / configuration と PCM24 codec を検証する。mono は等倍複製、stereo は保持、多チャンネルの暗黙 downmix は拒否する。同梱 build の configure は swresample と native PCM を無効化しておらず、追加の外部 codec 依存はない。ビルドスクリプトの verify-only も全 5 library と PCM24 を調べる。配布物の受け入れでは、再配置後の media capabilities の verify_distribution と codec roundtrip も実行する。
 
 音量・量子化・snapshot / 時間の詳細は [基本音声](audio-000.md)、crate 単位の検証と host の残り範囲は [AUDIO-000 の検証](../testing/audio-000.md) を参照。
+
+## MEDIA-002 の追加出力
+
+共有同期 export / job に `av1_mp4` / `h264_mov` / `hevc_mov` の明示 version 1 を追加した。
+AV1 は SVT-AV1 software 固定、MP4 + ALAC。FFmpeg 9.0.2 は AV1 の MOV mux を拒否する。
+H.264 / HEVC は VideoToolbox `allow_sw=0`、MOV + ALAC、device 不在 / open 失敗は
+ENCODER_UNAVAILABLE。HEVC version 1 は `hvc1` sample entry と global-header parameter sets の
+`hvcC` を使う（未リリース profile の契約確定、版は維持）。ALAC は既存 native LGPL encoder、48 kHz stereo、PCM24 量子化後の
+lossless / zero priming / exact final samples。build flags / native manifest は変更しない。
+全5 library の LGPL構成を示す既存 runtime と system development FFmpeg を分けて検証する。
+AAC の distribution / patent review・品質評価、AV1 の Opus Web 配信、player compatibility、
+HDR は未検証・未採用。契約は [ADR-0068](../adr/0068-versioned-delivery-movie-profiles.md)、
+実行証拠と順序付き host 残件は [MEDIA-002](../testing/media-002.md)。

@@ -24,7 +24,13 @@ func requireResult(_ value: Bool, _ message: String) throws { try require(value,
         let commands = try editor.creationCommands(tool: "rectangle", from: .init(x: 100, y: 100), to: .init(x: 300, y: 220))
         guard await editor.apply(.init(base: editor.revision, commands: commands, label: "Fixture")) != nil else { throw GUICheckError(message: editor.failure?.message ?? "create failed") }
         let node = editor.layers[0], property = node.property("kronello.transform.position")!, curve = UUID().uuidString.lowercased()
-        let keys: [[String: Any]] = (0..<count).map { i in ["time": RationalTime(num: Int64(i), den: 1).wire, "value": ["kind": "vec2", "value": [Double(i) * 100, Double(i) * 200]], "interpolation": ["kind": "cubic", "value": ["control1": [1.0 / 3, 1.0 / 3], "control2": [2.0 / 3, 2.0 / 3]]]] }
+        let easing: [String: Any] = ["control1": [1.0 / 3, 1.0 / 3], "control2": [2.0 / 3, 2.0 / 3]]
+        let interpolation: [String: Any] = ["kind": "cubic", "value": easing]
+        let keys: [[String: Any]] = (0..<count).map { i in
+            let position: [Double] = [Double(i) * 100, Double(i) * 200]
+            let value: [String: Any] = ["kind": "vec2", "value": position]
+            return ["time": RationalTime(num: Int64(i), den: 1).wire, "value": value, "interpolation": interpolation]
+        }
         let command: [String: Any] = ["property_source_set": ["object": node.id, "property": property.string("id"), "source": ["kind": "curve", "value": curve], "curve": ["id": curve, "value_type": "vec2", "keys": keys, "interpolation_version": 1]]]
         guard await editor.apply(.init(base: editor.revision, commands: [command], label: "Fixture Curve")) != nil else { throw GUICheckError(message: editor.failure?.message ?? "curve failed") }
         editor.select(node.id)
@@ -311,6 +317,40 @@ func requireResult(_ value: Bool, _ message: String) throws { try require(value,
         try require(position.curveReadout(-48.24, velocity: true) == "-48.2 px/s", "Velocity preserves direction")
         try require(CurveDisplay.velocity([], frame: 60, positions: [], framesPerSecond: 24).isEmpty, "Absent curves do not invent a speed")
     }
+    func verifyVelocitySegmentBoundaries() throws {
+        let position = PropertyPresentation.of("kronello.transform.position")
+        let keys: [[String: Any]] = [
+            ["value": ["value": [240.0, 180.0]], "interpolation": ["kind": "linear"]],
+            ["value": ["value": [600.0, 360.0]], "interpolation": ["kind": "linear"]],
+            ["value": ["value": [840.0, 240.0]], "interpolation": ["kind": "hold"]]
+        ]
+        func check(_ source: [[String: Any]], _ frame: Double, _ expected: [Double], _ message: String, positions: [Double] = [0, 48, 96]) throws {
+            let velocity = CurveDisplay.velocity(source, frame: frame, positions: positions, framesPerSecond: 24)
+            try require(velocity.count == expected.count && zip(velocity, expected).allSatisfy { abs($0 - $1) < 1e-6 }, message)
+        }
+        try check(keys, -1, [0, 0], "Before the first key the value holds with zero velocity")
+        try check(keys, 0, [180, 90], "First key uses its outgoing derivative, not half the speed")
+        try check(keys, 3, [180, 90], "Inside the first segment velocity matches its slope")
+        try check(keys, 47.999, [180, 90], "A difference window near the next key never averages adjacent segments")
+        try check(keys, 48, [120, -60], "Middle key uses the outgoing slope, including negative direction")
+        try check(keys, 60, [120, -60], "Inside the second segment velocity matches its slope")
+        try check(keys, 96, [0, 0], "Last key starts the constant hold under half-open segment membership")
+        try check(keys, 97, [0, 0], "After the last key the value holds with zero velocity")
+        let readout = CurveDisplay.velocity(keys, frame: 0, positions: [0, 48, 96], framesPerSecond: 24).map { position.curveReadout($0, velocity: true) }
+        try require(readout == ["180.0 px/s", "90.0 px/s"], "Supervisor's exact-key readout agrees with plotted channel values")
+        var cubic = keys
+        cubic[0]["interpolation"] = ["kind": "cubic", "value": ["control1": [1.0 / 3, 1.0 / 3], "control2": [2.0 / 3, 2.0 / 3]]]
+        cubic[1]["interpolation"] = cubic[0]["interpolation"]
+        try check(cubic, 0, [180, 90], "Cubic linear easing also uses the full outgoing derivative at the first key")
+        try check(cubic, 48, [120, -60], "Cubic easing at a middle key selects the right segment")
+        try check(cubic, 60, [120, -60], "Cubic derivative inside a segment uses the same display calculation")
+        try check(cubic, 96, [0, 0], "Cubic last key also begins a constant hold")
+        var held = keys; held[0]["interpolation"] = ["kind": "hold"]
+        try check(held, 0, [0, 0], "Hold segment has zero outgoing velocity")
+        try check(held, 47.999, [0, 0], "Hold jump at the next key never produces a difference spike")
+        try check(held, 48, [120, -60], "Leaving a Hold uses only the new outgoing segment")
+        try check([keys[0]], 0, [0, 0], "A single key holds with zero velocity", positions: [0])
+    }
     func runAll() async throws {
         try await verifyNavigatorAddRemove(); print("PASS navigator Constant/Curve add/remove at current frame")
         try await verifyKeyMove(); print("PASS key move, rational frame time, CLI receipt")
@@ -326,5 +366,6 @@ func requireResult(_ value: Bool, _ message: String) throws { try require(value,
         try verifyCurvePlayheadReadouts(); print("PASS value/velocity playhead readouts, channel derivatives, per-second units and precision")
         try await verifySpatialPathParentSpaceAndFailures(); print("PASS one-request spatial path latency, integer JSON, parent-space mapping and typed failures")
         try verifyCurveReadoutPlacement(); print("PASS curve readout avoids axes/ruler and flips at graph edges")
+        try verifyVelocitySegmentBoundaries(); print("PASS half-open velocity segments, first/middle/last keys, Linear/Cubic/Hold and matching readout")
     }
 }

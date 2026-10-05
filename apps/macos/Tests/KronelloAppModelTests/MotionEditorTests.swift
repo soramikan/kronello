@@ -15,4 +15,5 @@ import XCTest
     func testCurvePlayheadReadouts() throws { try MotionChecks().verifyCurvePlayheadReadouts() }
     func testSpatialPathParentSpaceAndFailures() async throws { try await MotionChecks().verifySpatialPathParentSpaceAndFailures() }
     func testCurveReadoutPlacement() throws { try MotionChecks().verifyCurveReadoutPlacement() }
+    func testVelocitySegmentBoundaries() throws { try MotionChecks().verifyVelocitySegmentBoundaries() }
 }

@@ -616,7 +616,7 @@
       "priority": "P1",
       "area": "gui",
       "title": "Dope sheetとCurve editor",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "GUI-001",
         "ANIM-001"
@@ -685,7 +685,7 @@
       "priority": "P1",
       "area": "test",
       "title": "GUI/CLI/MCP同等性と日本語IME",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "GUI-002",
         "MCP-001",
@@ -845,7 +845,7 @@
       "priority": "P1",
       "area": "media",
       "title": "追加movie job profileと圧縮音声",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "MEDIA-001",
         "AUDIO-000",
