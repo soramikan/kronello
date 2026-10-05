@@ -48,16 +48,14 @@ public struct KRTextField: View {
     private let error: KRDiagnostic?
     private let appearance: KRControlAppearance
     private let onCommit: (String) -> Void
-    @State private var draft: String
-    @State private var dirty = false
     @State private var submitted = false
-    @FocusState private var focused: Bool
+    @State private var focused = false
+    @Environment(\.isEnabled) private var enabled
     public init(_ label: String, value: Binding<String>, placeholder: String = "", help: String? = nil,
                 error: KRDiagnostic? = nil, appearance: KRControlAppearance = .resting,
                 onCommit: @escaping (String) -> Void = { _ in }) {
         self.label = label; _value = value; self.placeholder = placeholder; self.help = help
         self.error = error; self.appearance = appearance; self.onCommit = onCommit
-        _draft = State(initialValue: value.wrappedValue)
     }
     public var body: some View {
         VStack(alignment: .leading, spacing: KRSpace.space1) {
@@ -69,20 +67,14 @@ public struct KRTextField: View {
                     .modifier(KRTextFieldChrome(invalid: error != nil, focused: appearance == .focused))
                     .accessibilityLabel(label)
             } else {
-                TextField(label, text: $draft, prompt: Text(placeholder).foregroundStyle(p.inkMuted))
-                    .textFieldStyle(KRTextFieldStyle(invalid: error != nil && (!focused || submitted), focused: focused || appearance == .focused))
-                    .focused($focused).onSubmit { commit(); submitted = true }
-                    .onChange(of: draft) { _, _ in dirty = true; submitted = false }
-                    .onChange(of: focused) { _, new in if !new { commit() } }
-                    .onChange(of: value) { _, new in if !focused { draft = new; dirty = false } }
-                    .onKeyPress(.escape) { draft = value; dirty = false; focused = false; return .handled }
+                KRCommittedTextInput(value: value, label: label, placeholder: placeholder, muted: NSColor(p.inkMuted), ink: NSColor(p.ink), selection: NSColor(p.selection), enabled: enabled,
+                    onCommit: { value = $0; submitted = true; onCommit($0) },
+                    onFocus: { focused = $0; if $0 { submitted = false } }, onDraftChange: { submitted = false })
+                    .frame(height: KRSize.controlHeight - 8)
+                    .modifier(KRTextFieldChrome(invalid: error != nil && (!focused || submitted), focused: focused || appearance == .focused))
             }
             if let error, !focused || submitted { KRErrorLine(error) }
             else if let help { Text(help).krText(KRType.caption).foregroundStyle(p.inkMuted) }
         }
-    }
-    private func commit() {
-        guard dirty else { return }; dirty = false
-        if draft != value { value = draft; onCommit(draft) }
     }
 }

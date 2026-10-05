@@ -66,7 +66,10 @@ build / ownership は [macOS package README](../../apps/macos/README.md) を参�
 
 UI 状態は、ユーザーごとの状態領域にプロジェクト ID で紐付けて保存する（[ADR-0033](../adr/0033-ui-state-in-user-state-area.md)）。`.kronello` には書き込まないため、GUI で開いて眺めただけではプロジェクトファイルは変わらない。別のマシンで開くと表示状態は初期値になる。
 
-- 未確定の IME 文字列を作品履歴へ大量に commit しない。確定時にコマンドを発行する。
+- 作品に結び付く文字列欄は native `NSTextInputClient` の marked text をローカル draft として保持し、変換・候補選択中は plan / apply を発行しない。
+  IME の確定（`unmarkText` / marked text を置換する `insertText`）、Return、blur は、marked text がなく値が変わった場合だけ一つの Command を発行する。
+  同じ確定に続く Return / blur は重複発行しない。Escape は draft を取り消し、Command を発行しない。
+  文字列の変更は UTF-8 bytes で判定し、合成済み文字と結合文字の違いを落とす Unicode 正規化は行わない。
 - ドラッグなど連続操作は、操作中はプレビュー用の候補スナップショットで表示し、確定時に一つのコマンドとして発行する。
 
 GUI-001 の候補表示は変換した bounds overlay とローカル field draft であり、候補画素は再レンダーしない。
