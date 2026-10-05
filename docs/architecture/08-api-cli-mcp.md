@@ -259,7 +259,7 @@ JOB-001 で `render.submit` / `job.get` / `job.list` / `job.cancel` / `job.prune
 | `job.list` | `{}` | `{jobs: JobRecord[]}`（投入順） |
 | `job.prune` | `{}` | `{pruned: UUID文字列[]}` |
 
-output の既定は `{format:"image_sequence"}`。MOV は `{format:"pro_res_mov",background:[r,g,b],clips:[{asset,stream_index,placement,source_in,gain}]}`。clips の gain は非負の線形振幅倍率、clipping は Reject。`render.output_directory` は画像連番では新規 directory、MOV では新規 .mov file の path とする。MOV は同梱 LGPL runtime の ProRes + PCM24 のみで、暗黙の codec / CPU fallback はない。
+output の既定は `{format:"image_sequence"}`。MOV は `{format:"pro_res_mov",background:[r,g,b],clips:[{asset,stream_index,placement,source_in,gain}]}`。clips の gain は非負の線形振幅倍率、clipping は Reject。`render.output_directory` は画像連番では新規 directory、MOV では新規 .mov file の path とする。既存 MOV は ProRes + PCM24。MEDIA-002 の追加 MP4 / MOV profile は末尾に記す。暗黙の codec / CPU fallback はない。
 
 `render.submit.render.input` は同期 `render.sequence.input` と同じ `RenderTarget`（Composition / Sequence）と legacy `composition` を受け取り、どちらか一つだけを指定する。同じ `freeze_render_input` が Sequence、配置、資産、意味版、revision を owned snapshot に固定する。worker は固定入力から描画し、元の `.kronello` を開かない。Sequence target の MOV もこの映像を使う。AUDIO-003 の version 2 / document mode は同じ固定 snapshot から audio tracks と再帰 Composition 音声を mux する。省略時の version 1 / explicit は従来どおり `output.clips` のみ（空なら silence）。
 
@@ -596,3 +596,28 @@ create / import / plan / edit の入口から受け取らない。
   SIGINT は stdin 待ち・dispatch 前・frame 境界・manifest 公開前で協調取消し、書込済み状態は rollback しない。
   stdout failure は stderr の OUTPUT_IO_ERROR、非0終了、取消 flag。閉じた pipe への terminal は保証できず、
   terminal のない EOF は不完全。SIGTERM / SIGKILL、watch / replay / stream resume は保証しない。
+
+## MEDIA-002: 版付き movie delivery output
+
+`render.export` / `render.submit` は同じ RenderSubmitRequest と固定 snapshot exporter を使う。
+新操作は増やさず、registry の操作数を変更しない。capabilities.features の movie_delivery_v1 は
+契約の存在、media.codecs は読み込んだ encoder 登録を表す。hardware device の成功は別途実行で確認する。
+
+```json
+{"format":"av1_mp4","profile_version":1,"audio":"document","audio_codec":"alac","clips":[],"background":[0,0,0]}
+```
+
+format は av1_mp4 / h264_mov / hevc_mov、追加形式の profile_version は必須で1のみ。
+audio は既存 explicit（省略値）/ document / silence、audio_codec は alac（省略値）/ aac の
+閉集合だが aac は未採用で UNSUPPORTED_FEATURE。clips / background は明示。
+document / silence と非空 clips は INVALID_MEDIA_INPUT。任意 codec / FFmpeg args / shellは拒否する。
+render.output_directory は av1_mp4 では新規 .mp4、他2形式では新規 .mov。拡張子不一致は
+INVALID_MEDIA_INPUT、未知 version / 未採用 codec は UNSUPPORTED_FEATURE。
+H.264 / HEVC の device / eligible encoder 不在は ENCODER_UNAVAILABLE、software fallback はしない。
+
+AvExportReport は movie_profile（av1_mp4_alac_v1 / h264_alac_v1 / hevc_alac_v1）、
+audio_profile_version:3、両 snapshot hash、probe と encoder / execution / transfer report を返す。
+追加形式は evaluator 2 に固定し、movie profile の version 1 と別物として報告する。
+旧 pro_res_mov の省略 profile 1 / explicit と version 2/3、旧 report の省略 field は維持する。
+契約と未採用 AAC / Web audio は [ADR-0068](../adr/0068-versioned-delivery-movie-profiles.md)、
+実行結果は [MEDIA-002](../testing/media-002.md)。

@@ -3,7 +3,9 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 
 use kronello_jobs::{JobConfig, JobError, JobRecord, JobStore, Submission};
-use kronello_media::{AvExportRequest, AvExportSnapshot, MediaRuntime};
+use kronello_media::{
+    AvExportRequest, AvExportSnapshot, DeliveryAudioCodec, MediaRuntime, MovieProfile,
+};
 use kronello_model::{AssetId, DocumentObject};
 use kronello_render::{RenderSnapshot, SequenceRequest, frame_samples};
 use kronello_time::{Time, TimeRange};
@@ -46,6 +48,124 @@ pub enum JobOutput {
         clips: Vec<JobAudioClip>,
         background: [f32; 3],
     },
+    Av1Mp4 {
+        profile_version: u32,
+        #[serde(default)]
+        audio: kronello_audio::AudioSourceMode,
+        #[serde(default)]
+        audio_codec: DeliveryAudioCodec,
+        clips: Vec<JobAudioClip>,
+        background: [f32; 3],
+    },
+    H264Mov {
+        profile_version: u32,
+        #[serde(default)]
+        audio: kronello_audio::AudioSourceMode,
+        #[serde(default)]
+        audio_codec: DeliveryAudioCodec,
+        clips: Vec<JobAudioClip>,
+        background: [f32; 3],
+    },
+    HevcMov {
+        profile_version: u32,
+        #[serde(default)]
+        audio: kronello_audio::AudioSourceMode,
+        #[serde(default)]
+        audio_codec: DeliveryAudioCodec,
+        clips: Vec<JobAudioClip>,
+        background: [f32; 3],
+    },
+}
+pub(crate) struct MovieSettings<'a> {
+    pub profile: MovieProfile,
+    pub audio_version: u32,
+    pub audio: kronello_audio::AudioSourceMode,
+    pub clips: &'a [JobAudioClip],
+    pub background: [f32; 3],
+}
+impl JobOutput {
+    pub(crate) fn movie_settings(&self) -> Result<MovieSettings<'_>, ServiceError> {
+        let (profile, version, audio, audio_codec, clips, background) = match self {
+            Self::ImageSequence => {
+                return Err(ServiceError::invalid(
+                    "render.export requires a movie profile",
+                ));
+            }
+            Self::ProResMov {
+                profile_version,
+                audio,
+                clips,
+                background,
+            } => (
+                MovieProfile::ProResPcm24,
+                *profile_version,
+                *audio,
+                DeliveryAudioCodec::Alac,
+                clips,
+                *background,
+            ),
+            Self::Av1Mp4 {
+                profile_version,
+                audio,
+                audio_codec,
+                clips,
+                background,
+            } => (
+                MovieProfile::Av1Mp4AlacV1,
+                *profile_version,
+                *audio,
+                *audio_codec,
+                clips,
+                *background,
+            ),
+            Self::H264Mov {
+                profile_version,
+                audio,
+                audio_codec,
+                clips,
+                background,
+            } => (
+                MovieProfile::H264AlacV1,
+                *profile_version,
+                *audio,
+                *audio_codec,
+                clips,
+                *background,
+            ),
+            Self::HevcMov {
+                profile_version,
+                audio,
+                audio_codec,
+                clips,
+                background,
+            } => (
+                MovieProfile::HevcAlacV1,
+                *profile_version,
+                *audio,
+                *audio_codec,
+                clips,
+                *background,
+            ),
+        };
+        let legacy = profile == MovieProfile::ProResPcm24;
+        if (legacy
+            && (!matches!(version, 1..=3)
+                || (version == 1 && audio != kronello_audio::AudioSourceMode::Explicit)))
+            || (!legacy && (version != 1 || audio_codec != DeliveryAudioCodec::Alac))
+        {
+            return Err(ServiceError::new(
+                "UNSUPPORTED_FEATURE",
+                "unsupported movie version/audio codec or legacy audio mode; AAC adoption is deferred",
+            ));
+        }
+        Ok(MovieSettings {
+            profile,
+            audio_version: if legacy { version } else { 3 },
+            audio,
+            clips,
+            background,
+        })
+    }
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -171,8 +291,8 @@ impl Service<'_> {
                 "job range must contain at least one frame",
             ));
         }
-        if let JobOutput::ProResMov { .. } = &request.output {
-            validate_movie_destination(&request.render.output_directory)?;
+        if !matches!(request.output, JobOutput::ImageSequence) {
+            validate_movie_destination(&request.render.output_directory, &request.output)?;
             movie_snapshot(&snapshot, &request.output)?;
         }
         let store = self.jobs()?;
@@ -316,7 +436,8 @@ impl Service<'_> {
                     )?;
                     serde_json::to_value(metadata)?
                 }
-                JobOutput::ProResMov { background, .. } => {
+                output => {
+                    let settings = output.movie_settings()?;
                     let runtime = MediaRuntime::load()?;
                     let av = movie_snapshot(&fixed.snapshot, &fixed.request.output)?;
                     let report = runtime.export_av_with_checkpoint(
@@ -329,7 +450,7 @@ impl Service<'_> {
                             range: request.range,
                             frame_rate: request.frame_rate,
                             region: request.input.region,
-                            background: *background,
+                            background: settings.background,
                             clipping: kronello_audio::ClippingPolicy::Reject,
                         },
                         &mut |n| checkpoint(n).map_err(kronello_media::MediaError::InvalidInput),
@@ -343,7 +464,7 @@ impl Service<'_> {
                     let probe = runtime.probe(&stage_path).map_err(|e| {
                         ServiceError::new("OUTPUT_VALIDATION_FAILED", e.to_string())
                     })?;
-                    probe.verify_av()?;
+                    probe.verify_movie(settings.profile)?;
                     if report.frames.len() as u64 != record.total_frames
                         || probe.render_snapshot_hash != record.snapshot_hash
                     {
@@ -514,37 +635,44 @@ pub(crate) fn movie_snapshot(
     snapshot: &RenderSnapshot,
     output: &JobOutput,
 ) -> Result<AvExportSnapshot, ServiceError> {
-    let JobOutput::ProResMov {
-        audio,
-        profile_version,
-        clips,
-        ..
-    } = output
-    else {
-        return Err(ServiceError::invalid("render.export requires pro_res_mov"));
-    };
-    if !matches!(profile_version, 1..=3)
-        || (*profile_version == 1 && *audio != kronello_audio::AudioSourceMode::Explicit)
-    {
-        return Err(ServiceError::new(
-            "UNSUPPORTED_FEATURE",
-            "unsupported movie profile or audio mode (document/silence requires profile 2/3)",
-        ));
-    }
-    let clips = clips
+    let settings = output.movie_settings()?;
+    let clips = settings
+        .clips
         .iter()
         .map(JobAudioClip::compile)
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(if *profile_version == 1 {
+    Ok(if settings.profile != MovieProfile::ProResPcm24 {
+        AvExportSnapshot::with_movie_profile(snapshot, settings.audio, clips, settings.profile)?
+    } else if settings.audio_version == 1 {
         AvExportSnapshot::new(snapshot, clips)?
     } else {
-        AvExportSnapshot::with_audio_profile(snapshot, *audio, clips, *profile_version)?
+        AvExportSnapshot::with_audio_profile(
+            snapshot,
+            settings.audio,
+            clips,
+            settings.audio_version,
+        )?
     })
 }
 
-pub(crate) fn validate_movie_destination(path: &Path) -> Result<(), ServiceError> {
-    if path.extension().is_none_or(|e| e != "mov") {
-        return Err(ServiceError::invalid("ProResMov requires .mov destination"));
+pub(crate) fn validate_movie_destination(
+    path: &Path,
+    output: &JobOutput,
+) -> Result<(), ServiceError> {
+    let settings = output.movie_settings()?;
+    let extension = if settings.profile == MovieProfile::Av1Mp4AlacV1 {
+        "mp4"
+    } else {
+        "mov"
+    };
+    if path.extension().is_none_or(|e| e != extension) {
+        if settings.profile == MovieProfile::ProResPcm24 {
+            return Err(ServiceError::invalid("ProResMov requires .mov destination"));
+        }
+        return Err(ServiceError::new(
+            "INVALID_MEDIA_INPUT",
+            format!("movie profile requires .{extension} destination"),
+        ));
     }
     Ok(())
 }

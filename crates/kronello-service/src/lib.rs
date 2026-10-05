@@ -591,11 +591,9 @@ impl<'a> Service<'a> {
             Request::RenderExport(r) => {
                 jobs::features(&r.required_features)?;
                 self.render(&r.render.input, |snapshot, fonts, backend| {
-                    jobs::validate_movie_destination(&r.render.output_directory)?;
+                    jobs::validate_movie_destination(&r.render.output_directory, &r.output)?;
                     let av = jobs::movie_snapshot(snapshot, &r.output)?;
-                    let JobOutput::ProResMov { background, .. } = r.output else {
-                        unreachable!()
-                    };
+                    let settings = r.output.movie_settings()?;
                     let runtime = kronello_media::MediaRuntime::load()?;
                     let report = runtime.export_av(
                         &av,
@@ -607,7 +605,7 @@ impl<'a> Service<'a> {
                             range: r.render.range,
                             frame_rate: r.render.frame_rate,
                             region: r.render.input.region,
-                            background,
+                            background: settings.background,
                             clipping: kronello_audio::ClippingPolicy::Reject,
                         },
                     )?;
