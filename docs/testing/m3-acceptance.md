@@ -24,6 +24,7 @@ CommandLineTools の SwiftPM は `SwiftUIMacros` が欠落し、初回 build は
 | 検証 | 結果 | 証拠 |
 |---|---|---|
 | Rust fmt / 公開 Swift schema / backlog | 成功 | `cargo fmt --all --check`、`generate_swift_api.py --check`、`backlog.py check`（77 tasks） |
+| Rust workspace、JOB 統合後 | 704 passed、0 failed、8 ignored、exit0 | GPU / FrameBridge を含む103 suites。RENDER-003統合前のbaseline |
 | Rust clippy、JOB 統合後 | 成功 | `cargo clippy --workspace --all-targets --locked -- -D warnings` |
 | SwiftPM build | 成功 | 統合4ページ / audio harness / design gallery をビルド |
 | SwiftPM XCTest | 68 passed、0 failures、0 skips | Design19 / Core4 / AppModel45。AppModel は Edit11 / Editor7 / Integration2 / Motion15 / Playback3 / QA2 / Workflow5 |
@@ -31,6 +32,9 @@ CommandLineTools の SwiftPM は `SwiftUIMacros` が欠落し、初回 build は
 | 第2段階 FFI 値表示 | 成功 | SwiftPM IntegrationTests が `target/m3-acceptance/integration-metal/gui-evidence.json` を明示取得して全値・boundsを照合 |
 | native IME 境界 | 成功 | QA の `ime.json`。未確定 / 取消の commit0、確定の単一 Event、UTF-8 の結合濁点差分 |
 | macOS JOB 実プロセス | 8 passed、0 failures、1 ignored | `--features test-worker --test processes`。ignored は load50 の明示 stress |
+| 第2段階 Metal 4K driver | 147 checksすべて成功 | `target/m3-acceptance/integration-metal/report.json`、横型 / 縦型 / 固定 snapshot / typed overflow |
+| AUDIO-002 実engine / Metal | 3fps、underrun0、seek / stop-resume一致 | `target/m3-acceptance/audio-report.json`。負荷並行条件、physical scanoutは未測定 |
+| GUI-003 実操作（Dark） | trim / Undo / blade各単一Event、Motion遷移でrevision不変 | `target/m3-acceptance/edit-*`、[GUI-003](gui-003.md)末尾 |
 | 元 GUI 作業ツリーの保全 | 成功 | `.worktrees/m3-{gui3,gui4,integ2,qa2}` の tracked patch / 未追跡 source の bytes 一致 |
 
 SwiftPM 初回の debug FFI run は中断時点で未完了だった。sample 採取では音声やUIの停止ではなく、
