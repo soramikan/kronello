@@ -4,9 +4,9 @@
 
 ## 版付きエフェクト
 
-基本エフェクト（FX-001）は `SceneNode.effects` に authored 順で保存する。`EffectDefinition` の `effect_id` は `kronello.gaussian_blur` / `kronello.drop_shadow`、`version` はそれぞれ **1**。parameters は型付きの PropertyId 参照で、局所 sigma / offset は `design_px`、色はタグ付き straight、opacity は無次元。未知 id・版・parameter variant・field を保存しても実行能力とは扱わず、必要な未知 effect は最終レンダーで `UNSUPPORTED_FEATURE`。
+基本エフェクト（FX-001 / FX-002）は `SceneNode.effects` に authored 順で保存する。`EffectDefinition` の `effect_id` は `kronello.gaussian_blur` / `kronello.drop_shadow`、`version` はそれぞれ **1 / 2**。1 は旧 separable 意味を固定し、2 は非一様 affine の elliptical kernel を明示選択する（[ADR-0067](../adr/0067-affine-gaussian-effects.md)）。parameters は型付きの PropertyId 参照で、局所 sigma / offset は `design_px`、色はタグ付き straight、opacity は無次元。未知 id・版・parameter variant・field を保存しても実行能力とは扱わず、必要な未知 effect は最終レンダーで `UNSUPPORTED_FEATURE`。
 
-`ResolvedEffect` → `PixelEffect` → DAG effect / GPU pass の境界に具象 GPU 資源を漏らさない。`required_input` は effect の halo を宣言し、stack の逆順で伝播する。`RenderSnapshot.semantic_versions.effects` は id ごとの意味版を固定し、kernel 版を含む cache identity を使う。処理順・変換制約・ROI・kernel 定義は [05 章](05-render-gpu.md#基本エフェクト)、受け入れ証拠は [FX-001](../testing/fx-001.md) を参照。
+`ResolvedEffect` → `PixelEffect` → DAG effect / GPU pass の境界に具象 GPU 資源を漏らさない。`required_input` は effect の halo を宣言し、stack の逆順で伝播する。`RenderSnapshot.semantic_versions.effects` は id ごとの対応版上限（新規 2 / 旧 1）を固定し、各 authored version が実際の意味を選ぶ。実際の kernel 版を含む cache identity を使う。処理順・変換制約・ROI・kernel 定義は [05 章](05-render-gpu.md#基本エフェクト)、受け入れ証拠は [FX-001](../testing/fx-001.md) / [FX-002](../testing/fx-002.md) を参照。
 
 ## Repeater
 

@@ -6,7 +6,7 @@ Sequence compiler は Composition の独立 instance に加え、動画 Asset �
 
 `VideoRenderBackend` は固定 DAG に入った Asset hash / locator だけを解決する。元 Project を再読込しない。software seek / decode、明示 SDR RGBA8 color conversion / inverse transfer / premultiply、CPU nearest sampling、選択 GPU への明示 RGBA16F upload を通す。未知 format / HDR / 色 tag、asset 欠落 / hash mismatch は typed error。タグ欠落時の明示 default（YUV: BT.709 limited、RGB: sRGB full）は sequence.query に assumptions として見える。native plane decode API の HDR 保持をこの SDR renderer の対応と同一視しない。
 
-clip effects は FX-001 の ordered DAG、affine 制限、halo / backward ROI、raster identity を共有する。`FrameMetadata.input_path` は active video の CPU decode / color / sampling と selected backend の経路を表し、GPU の低層 TransferStats は upload bytes / operations を数える。GPU-resident decode、frame interpolation、tile 間の decode cache は追加していない。CPU / GPU 比較の実行範囲は [NLE-002 の検証](../testing/nle-002.md)、時間・色・Generator と transition の意味版は [ADR-0062](../adr/0062-video-generator-and-timeline-edits.md) を参照する。
+clip effects は FX-001 / FX-002 の版付き ordered DAG、affine 契約、halo / backward ROI、raster identity を共有する。`FrameMetadata.input_path` は active video の CPU decode / color / sampling と selected backend の経路を表し、GPU の低層 TransferStats は upload bytes / operations を数える。GPU-resident decode、frame interpolation、tile 間の decode cache は追加していない。CPU / GPU 比較の実行範囲は [NLE-002 の検証](../testing/nle-002.md)、時間・色・Generator と transition の意味版は [ADR-0062](../adr/0062-video-generator-and-timeline-edits.md) を参照する。
 
 ## レンダー要求
 
@@ -83,9 +83,13 @@ OpenFX の入力領域 / 必要フレームの問い合わせに似た契約を�
 
 ## 基本エフェクト
 
-FX-001 は `SceneNode.effects` の順序付き stack と `DagNode::Effect` を実装する。sigma / offset / color / opacity はノード所有 Property で、評価済み `ResolvedEffect` を Scene IR に保持する。blur はローカル `design_px` の sigma を変換・出力倍率で画素へ写し、`radius = ceil(3σ)` の正規化 Gaussian を水平・垂直に畳み込む。透明 edge mode、内部線形 premultiplied RGBA16F と明示した binary16 RNE 面境界（CPU oracle も同じ丸め）を使い、shadow は blurred source alpha にタグ付き straight 色・opacity を掛けて source の下へ合成する。等方変換に対応し、正の sigma に対する非一様変換は型付き未対応。
+FX-001 は `SceneNode.effects` の順序付き stack と `DagNode::Effect` を実装する。sigma / offset / color / opacity はノード所有 Property で、評価済み `ResolvedEffect` を Scene IR に保持する。blur はローカル `design_px` の sigma を変換・出力倍率で画素へ写し、`radius = ceil(3σ)` の正規化 Gaussian を水平・垂直に畳み込む。透明 edge mode、内部線形 premultiplied RGBA16F と明示した binary16 RNE 面境界（CPU oracle も同じ丸め）を使い、shadow は blurred source alpha にタグ付き straight 色・opacity を掛けて source の下へ合成する。version 1 は等方変換に対応し、正の sigma に対する非一様変換は型付き未対応。この旧版の画素・制限は維持する。
 
-`PixelEffect::required_input` が output → input ROI を宣言し、DAG の逆順で Group / mask / 共有入力へ union を伝播する。初期 executor は必要領域の union を元の画素格子で描画し、要求画素へ crop する。`RenderDag::bounds()` の ink / visual は変換と離散 halo を含む output pixel bounds。effect params・意味版・upstream identities・ROI・色・backend namespace を cache key に含める。metadata は effect id ごとの意味版を固定する。GPU / golden の採用検証は [FX-001 の検証記録](../testing/fx-001.md) に分けて記録する。
+FX-002 は同じ effect id / parameters の明示した **version 2** を追加する（[ADR-0067](../adr/0067-affine-gaussian-effects.md)）。局所 Gaussian の covariance を `C = sigma² (S A)(S A)ᵀ` として出力格子へ写す。rotation / reflection / 非一様 scale / shear の cross term を保持する。整数 offset の `q = dᵀ C⁻¹ d <= 9` に `exp(-q/2)` の重みを与え、正規化した同じ f32 tap 列を CPU / GPU が一段で畳み込む。kernel 版は `fx002-affine-ellipse-lattice-rne16-v2`。sigma 0 は中心 tap、shadow offset は `S A offset`。shadow sampling は `floor(-offset)` の整数移動と offset だけから求めた fractional taps を分け、tile 原点で fraction が変わらない。面境界の binary16 RNE と transparent edge は共通。旧 version 1 から自動移行しない。
+
+semantic visual halo は軸別 `3 sigma hypot(A[i][0], A[i][1])`、pixel halo は `ceil(3 sqrt(Cii))`。shadow の bilinear floor / ceil と source union を含めて逆 ROI を要求する。有限非退化行列だけを扱い、normalized determinant `> 1e-6`、normalized covariance determinant `> 1e-12`、距離計算に使う直接 covariance determinant は正の normal f64、各 radius `<= 1024`、探索矩形 `<= 65,536 candidates` を要求する。超過・特異・近退化・covariance underflow は `UNSUPPORTED_FEATURE`。近似や clamp はしない。既存 surface memory 予算も適用する。CPU / GPU 比較と golden の実測状態は [FX-002](../testing/fx-002.md) に記録する。
+
+`PixelEffect::required_input` が output → input ROI を宣言し、DAG の逆順で Group / mask / 共有入力へ union を伝播する。初期 executor は必要領域の union を元の画素格子で描画し、要求画素へ crop する。`RenderDag::bounds()` の ink / visual は変換と離散 halo を含む output pixel bounds。effect params・意味版・upstream identities・ROI・色・backend namespace を cache key に含める。metadata は effect id ごとの対応版上限（新規 2 / 旧 1）を固定する。各 authored effect の版が algorithm を選び、上限 1 の snapshot に版 2 は入れない。GPU / golden の採用検証は [FX-001 の検証記録](../testing/fx-001.md) に分けて記録する。
 
 ## 高解像度
 
