@@ -1003,6 +1003,7 @@ dependencies = [
  "kronello-jobs",
  "kronello-media",
  "kronello-model",
+ "kronello-platform",
  "kronello-render",
  "kronello-service",
  "kronello-store",
@@ -1081,6 +1082,7 @@ name = "kronello-jobs"
 version = "0.0.0"
 dependencies = [
  "directories",
+ "kronello-platform",
  "nix",
  "rusqlite",
  "rustix",
@@ -1142,6 +1144,14 @@ dependencies = [
  "unicode-normalization",
  "unicode-segmentation",
  "uuid",
+]
+
+[[package]]
+name = "kronello-platform"
+version = "0.0.0"
+dependencies = [
+ "nix",
+ "windows-sys",
 ]
 
 [[package]]

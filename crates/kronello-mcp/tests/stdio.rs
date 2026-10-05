@@ -156,10 +156,10 @@ fn expression_commands_and_samples_use_the_shared_mcp_api() {
 
 struct Client {
     _state: tempfile::TempDir,
-    child: Child,
+    child: Option<Child>,
     input: Option<ChildStdin>,
     lines: Receiver<String>,
-    reader: std::thread::JoinHandle<()>,
+    reader: Option<std::thread::JoinHandle<()>>,
     next_id: u64,
 }
 impl Client {
@@ -208,10 +208,10 @@ impl Client {
         });
         Self {
             _state: state,
-            child,
+            child: Some(child),
             input,
             lines,
-            reader,
+            reader: Some(reader),
             next_id: 1,
         }
     }
@@ -284,14 +284,26 @@ impl Client {
     }
     fn finish(mut self) -> String {
         drop(self.input.take());
-        let output = self.child.wait_with_output().unwrap();
-        self.reader.join().unwrap();
+        let output = self.child.take().unwrap().wait_with_output().unwrap();
+        self.reader.take().unwrap().join().unwrap();
         assert!(output.status.success(), "{output:?}");
         assert!(
             self.lines.try_iter().next().is_none(),
             "unsolicited stdout output"
         );
         String::from_utf8(output.stderr).unwrap()
+    }
+}
+impl Drop for Client {
+    fn drop(&mut self) {
+        drop(self.input.take());
+        if let Some(child) = self.child.as_mut() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        if let Some(reader) = self.reader.take() {
+            let _ = reader.join();
+        }
     }
 }
 fn validate(tool: &Value, result: &Value) {
@@ -333,6 +345,7 @@ fn render_input(path: &std::path::Path, document: &Value) -> Value {
 fn submitted_job_survives_mcp_eof_and_is_queryable_on_new_connection() {
     let temp = tempfile::tempdir().unwrap();
     let state = temp.path().join("state");
+    let _workers = kronello_jobs::test_support::WorkerCleanup::new(&state).unwrap();
     let gate = temp.path().join("release");
     let project = temp.path().join("source.kronello");
     let destination = temp.path().join("frames");
@@ -355,6 +368,7 @@ fn submitted_job_survives_mcp_eof_and_is_queryable_on_new_connection() {
         "range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"8"}},
         "frame_rate":{"num":"24","den":"1"},"output_directory":destination}}),
     );
+    _workers.capture_registered().unwrap();
     assert_eq!(submitted["isError"], false, "{submitted}");
     validate(&schemas["render.submit"], &submitted);
     let id = submitted["structuredContent"]["id"]

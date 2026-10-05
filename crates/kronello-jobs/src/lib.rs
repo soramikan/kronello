@@ -7,6 +7,34 @@ use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+mod heartbeat;
+pub use heartbeat::WorkerHeartbeat;
+
+// SQLite 3.51.1 unix VFS can invert its global/inode mutexes when one
+// connection closes WAL while another thread opens the same DB. Hold this
+// process-local gate through all SQLite access and connection destruction.
+// Separate processes still coordinate through SQLite's normal file locks.
+static CONNECTION_LIFETIME: std::sync::Mutex<()> = std::sync::Mutex::new(());
+struct JobConnection {
+    // Field order matters: Connection closes before the gate is released.
+    db: Connection,
+    _lifetime: std::sync::MutexGuard<'static, ()>,
+}
+impl std::ops::Deref for JobConnection {
+    type Target = Connection;
+    fn deref(&self) -> &Connection {
+        &self.db
+    }
+}
+impl std::ops::DerefMut for JobConnection {
+    fn deref_mut(&mut self) -> &mut Connection {
+        &mut self.db
+    }
+}
+
+#[cfg(feature = "test-support")]
+pub mod test_support;
+
 #[derive(Debug, thiserror::Error)]
 pub enum JobError {
     #[error("{code}: {message}")]
@@ -34,6 +62,12 @@ impl JobError {
         }
     }
     pub fn is_retryable_heartbeat(&self) -> bool {
+        self.is_retryable_contention()
+    }
+    pub fn is_retryable_contention(&self) -> bool {
+        if matches!(self, Self::Typed { code, .. } if code == "JOB_PROCESS_BUSY") {
+            return true;
+        }
         matches!(self, Self::Sqlite(rusqlite::Error::SqliteFailure(error, _))
             if matches!(error.code, rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked))
     }
@@ -219,25 +253,7 @@ fn recover(db: &Connection, timeout: Duration) -> Result<(), JobError> {
     Ok(())
 }
 fn worker_is_alive(pid: u32) -> bool {
-    #[cfg(unix)]
-    {
-        let Ok(pid) = i32::try_from(pid) else {
-            return false;
-        };
-        if pid <= 0 {
-            return false;
-        }
-        // Signal zero only checks existence/permission; it sends no signal.
-        matches!(
-            nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid), None),
-            Ok(()) | Err(nix::errno::Errno::EPERM)
-        )
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = pid;
-        false
-    }
+    kronello_platform::process_is_alive(pid)
 }
 impl JobStore {
     pub fn open(config: JobConfig) -> Result<Self, JobError> {
@@ -254,10 +270,31 @@ impl JobStore {
     pub fn config(&self) -> &JobConfig {
         &self.config
     }
-    fn connect(&self) -> Result<Connection, JobError> {
+    fn connect(&self) -> Result<JobConnection, JobError> {
         self.connect_with_timeout(Duration::from_secs(5))
     }
-    fn connect_with_timeout(&self, timeout: Duration) -> Result<Connection, JobError> {
+    fn connect_with_timeout(&self, timeout: Duration) -> Result<JobConnection, JobError> {
+        let start = std::time::Instant::now();
+        let lifetime = loop {
+            match CONNECTION_LIFETIME.try_lock() {
+                Ok(guard) => break guard,
+                Err(std::sync::TryLockError::Poisoned(_)) => {
+                    return Err(JobError::new(
+                        "JOB_STORAGE_ERROR",
+                        "connection lifetime gate poisoned",
+                    ));
+                }
+                Err(std::sync::TryLockError::WouldBlock) => {
+                    if start.elapsed() >= timeout {
+                        return Err(JobError::new(
+                            "JOB_PROCESS_BUSY",
+                            "connection lifetime gate contended",
+                        ));
+                    }
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+            }
+        };
         let db = Connection::open(self.config.state_root.join("jobs.sqlite3"))?;
         db.busy_timeout(timeout)?;
         db.execute_batch("PRAGMA synchronous=FULL;")?;
@@ -265,7 +302,10 @@ impl JobStore {
         if version > 1 {
             return Err(JobError::new("UNSUPPORTED_SCHEMA_VERSION", "job database"));
         }
-        Ok(db)
+        Ok(JobConnection {
+            db,
+            _lifetime: lifetime,
+        })
     }
     pub fn directory(&self, id: &str) -> Result<PathBuf, JobError> {
         let parsed = uuid::Uuid::parse_str(id)
@@ -336,6 +376,17 @@ impl JobStore {
     }
     pub fn list(&self) -> Result<Vec<JobRecord>, JobError> {
         let mut db = self.connect()?;
+        // Most polling is a WAL read, not a competing writer. Recheck recovery
+        // inside the writer transaction only when a snapshot contains expiry.
+        let snapshot = records(&db)?;
+        if !snapshot.iter().any(|r| {
+            r.status.active()
+                && now_ms().saturating_sub(r.heartbeat_at_ms)
+                    > duration_ms(self.config.heartbeat_timeout)
+                && !r.worker_pid.is_some_and(worker_is_alive)
+        }) {
+            return Ok(snapshot);
+        }
         let tx = db.transaction_with_behavior(TransactionBehavior::Immediate)?;
         recover(&tx, self.config.heartbeat_timeout)?;
         let list = records(&tx)?;
@@ -354,7 +405,15 @@ impl JobStore {
         id: &str,
         f: impl FnOnce(&mut JobRecord) -> Result<(), JobError>,
     ) -> Result<JobRecord, JobError> {
-        let mut db = self.connect()?;
+        self.update_with_timeout(id, Duration::from_secs(5), f)
+    }
+    fn update_with_timeout(
+        &self,
+        id: &str,
+        timeout: Duration,
+        f: impl FnOnce(&mut JobRecord) -> Result<(), JobError>,
+    ) -> Result<JobRecord, JobError> {
+        let mut db = self.connect_with_timeout(timeout)?;
         let tx = db.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let mut r = read(&tx, id)?;
         f(&mut r)?;
@@ -374,10 +433,7 @@ impl JobStore {
     pub fn heartbeat(&self, id: &str) -> Result<(), JobError> {
         // Apply the bound before any SQLite operation, including connection setup.
         // A busy writer must not park this thread for the normal five seconds.
-        let budget = Duration::from_millis(100)
-            .min(self.config.heartbeat_interval)
-            .min(self.config.heartbeat_timeout / 4);
-        let mut db = self.connect_with_timeout(budget)?;
+        let mut db = self.connect_with_timeout(self.worker_lock_budget())?;
         let tx = db.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let mut r = read(&tx, id)?;
         if !r.status.active() || r.worker_pid.is_some_and(|pid| pid != std::process::id()) {
@@ -392,7 +448,7 @@ impl JobStore {
         Ok(())
     }
     pub fn claim(&self, id: &str) -> Result<bool, JobError> {
-        let mut db = self.connect()?;
+        let mut db = self.connect_with_timeout(self.worker_lock_budget())?;
         let tx = db.transaction_with_behavior(TransactionBehavior::Immediate)?;
         recover(&tx, self.config.heartbeat_timeout)?;
         let mut r = read(&tx, id)?;
@@ -433,19 +489,73 @@ impl JobStore {
         tx.commit()?;
         Ok(acquired)
     }
+    fn worker_lock_budget(&self) -> Duration {
+        Duration::from_millis(100)
+            .min(self.config.heartbeat_interval)
+            .min(self.config.heartbeat_timeout / 4)
+    }
+    /// Contention is a scheduler retry, never a terminal job failure. Ownership,
+    /// cancellation and terminal errors are still returned without retrying.
+    pub fn wait_for_slot(&self, id: &str) -> Result<(), JobError> {
+        let start = std::time::Instant::now();
+        let mut contended = false;
+        loop {
+            match self.claim(id) {
+                Ok(true) => {
+                    eprintln!(
+                        "worker slot acquired job={id} wait_ms={} contention={contended}",
+                        start.elapsed().as_millis()
+                    );
+                    return Ok(());
+                }
+                Ok(false) => (),
+                Err(error) if error.is_retryable_contention() => {
+                    if !contended {
+                        eprintln!(
+                            "worker slot contention job={id} at_ms={}: {error}",
+                            now_ms()
+                        );
+                    }
+                    contended = true;
+                }
+                Err(error) => return Err(error),
+            }
+            std::thread::sleep(
+                self.config
+                    .heartbeat_interval
+                    .min(Duration::from_millis(50)),
+            );
+        }
+    }
     pub fn checkpoint(&self, id: &str, completed: u64) -> Result<(), JobError> {
-        self.update(id, |r| {
-            if r.status != JobStatus::Running || r.worker_pid != Some(std::process::id()) {
-                return Err(JobError::new("JOB_INTERRUPTED", "execution lease lost"));
+        loop {
+            let result = self.update_with_timeout(id, self.worker_lock_budget(), |r| {
+                if r.status != JobStatus::Running || r.worker_pid != Some(std::process::id()) {
+                    return Err(JobError::new("JOB_INTERRUPTED", "execution lease lost"));
+                }
+                if r.cancel_requested {
+                    return Err(JobError::new("JOB_CANCELED", "cancel requested"));
+                }
+                r.completed_frames = completed;
+                r.heartbeat_at_ms = now_ms();
+                Ok(())
+            });
+            match result {
+                Ok(_) => return Ok(()),
+                Err(error) if error.is_retryable_contention() => {
+                    eprintln!(
+                        "worker checkpoint contention job={id} at_ms={}: {error}",
+                        now_ms()
+                    );
+                    std::thread::sleep(
+                        self.config
+                            .heartbeat_interval
+                            .min(Duration::from_millis(50)),
+                    );
+                }
+                Err(error) => return Err(error),
             }
-            if r.cancel_requested {
-                return Err(JobError::new("JOB_CANCELED", "cancel requested"));
-            }
-            r.completed_frames = completed;
-            r.heartbeat_at_ms = now_ms();
-            Ok(())
-        })?;
-        Ok(())
+        }
     }
     pub fn finish_error(&self, id: &str, error: &JobError) -> Result<(), JobError> {
         self.update(id, |r| {
@@ -527,6 +637,7 @@ impl JobStore {
         command
             .args(["worker", "--job", id])
             .env("KRONELLO_STATE_ROOT", &self.config.state_root)
+            .env("KRONELLO_WORKER_LOG", directory.join("worker.log"))
             .env("KRONELLO_JOB_SLOTS", self.config.slots.to_string())
             .env(
                 "KRONELLO_JOB_HEARTBEAT_MS",
@@ -541,7 +652,7 @@ impl JobStore {
                 self.config.retention.as_secs().to_string(),
             )
             .stdin(Stdio::null())
-            .stdout(Stdio::null())
+            .stdout(log.try_clone()?)
             .stderr(log);
         // The child calls setsid before opening state. It must not be a group
         // leader beforehand. No inherited transport pipe can keep a caller alive.
@@ -558,10 +669,36 @@ impl JobStore {
                     "another worker owns job",
                 ));
             }
-            let spawned = command.spawn()?;
+            #[cfg(windows)]
+            let spawned = kronello_platform::spawn_detached(&command);
+            #[cfg(not(windows))]
+            let spawned = command.spawn();
+            let spawned = spawned.map_err(|e| {
+                JobError::new(
+                    "WORKER_DETACH_ERROR",
+                    format!("independent spawn failed: {e}"),
+                )
+            })?;
+            #[cfg(windows)]
+            let mode = spawned.detach_mode();
+            #[cfg(not(windows))]
+            let mode = "setsid";
             r.worker_pid = Some(spawned.id());
             r.heartbeat_at_ms = now_ms();
             child = Some(spawned);
+            // Keep the child owned before fallible logging: an I/O failure must
+            // reach the rollback/kill/wait path, never leak an unregistered PID.
+            use std::io::Write;
+            let mut log = std::fs::OpenOptions::new()
+                .append(true)
+                .open(directory.join("worker.log"))?;
+            log.write_all(
+                format!(
+                    "worker launch job={id} pid={} detach_mode: \"{mode}\"\n",
+                    r.worker_pid.unwrap()
+                )
+                .as_bytes(),
+            )?;
             Ok(())
         }) {
             if let Some(mut child) = child {
@@ -580,18 +717,8 @@ impl JobStore {
     }
 }
 pub fn detach_worker() -> Result<(), JobError> {
-    #[cfg(unix)]
-    {
-        nix::unistd::setsid().map_err(|e| JobError::new("WORKER_DETACH_ERROR", e.to_string()))?;
-        Ok(())
-    }
-    #[cfg(not(unix))]
-    {
-        Err(JobError::new(
-            "UNSUPPORTED_FEATURE",
-            "detached worker requires Unix",
-        ))
-    }
+    kronello_platform::detach_worker()
+        .map_err(|e| JobError::new("WORKER_DETACH_ERROR", e.to_string()))
 }
 /// Atomic no-clobber publication on the destination volume, for files and dirs.
 pub fn publish_path(staged: &Path, destination: &Path) -> Result<(), JobError> {
@@ -607,13 +734,33 @@ pub fn publish_path(staged: &Path, destination: &Path) -> Result<(), JobError> {
         .map_err(|e| {
             if e == rustix::io::Errno::EXIST {
                 JobError::new("OUTPUT_EXISTS", destination.display().to_string())
+            } else if e == rustix::io::Errno::XDEV {
+                JobError::new(
+                    "OUTPUT_CROSS_VOLUME",
+                    "publication requires the destination volume",
+                )
             } else {
                 JobError::Io(e.into())
             }
         })?;
         Ok(())
     }
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    #[cfg(windows)]
+    {
+        kronello_platform::rename_noreplace(staged, destination).map_err(|e| {
+            if e.kind() == std::io::ErrorKind::AlreadyExists {
+                JobError::new("OUTPUT_EXISTS", destination.display().to_string())
+            } else if e.raw_os_error() == Some(17) {
+                JobError::new(
+                    "OUTPUT_CROSS_VOLUME",
+                    "publication requires the destination volume",
+                )
+            } else {
+                JobError::Io(e)
+            }
+        })
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
     {
         let _ = (staged, destination);
         Err(JobError::new(

@@ -1,6 +1,6 @@
 # 14 ジョブ
 
-長時間の処理（最終レンダー、書き出し）を、投入したプロセスや接続の寿命から独立して実行する仕組み。[ADR-0025](../adr/0025-detached-render-workers.md) による。JOB-001（M2）で macOS の CLI / MCP と明示 CPU reference の実プロセスを検証した。実装判断は [ADR-0050](../adr/0050-fixed-job-execution-and-publication.md)、条件ごとの結果は [JOB-001 の検証](../testing/job-001.md)。再開・Windows worker・GPU 実機経路は後続の範囲。
+長時間の処理（最終レンダー、書き出し）を、投入したプロセスや接続の寿命から独立して実行する仕組み。[ADR-0025](../adr/0025-detached-render-workers.md) による。JOB-001（M2）で macOS の CLI / MCP と明示 CPU reference の実プロセスを検証した。実装判断は [ADR-0050](../adr/0050-fixed-job-execution-and-publication.md) と [ADR-0074](../adr/0074-windows-job-workers-and-process-evidence.md)、条件ごとの結果は [JOB-001](../testing/job-001.md) / [JOB-002](../testing/job-002.md)。初回Linux JOB-002 CI evidenceは成功、Windows jobs/platform の修正版はCI再実行待ち。Windows full CLI/MCP、再開・GPU 実機経路は未検証。
 
 ## 構成
 
@@ -22,7 +22,8 @@ GUI / CLI / MCP
 - 常駐するプロセスはない。worker はジョブ 1 件のために起動し、終わると終了する。
 - GUI から投入したジョブも同じ仕組みで動く。GUI を閉じても書き出しは続く。
 - worker は投入したプロセスと同じ版の実行ファイルから起動する。ジョブにはエンジンの版を記録する。
-- CLI は `kronello worker --job <id>`、MCP は同じ実装の `kronello-mcp worker --job <id>` を起動する。worker 開始時に `setsid`、stdin / stdout は null、stderr は worker.log とし、MCP pipe を継承しない。埋込み service は worker executable を注入できる。
+- CLI は `kronello worker --job <id>`、MCP は同じ実装の `kronello-mcp worker --job <id>` を起動する。Unix worker 開始時に `setsid`、stdin は null、stdout/stderr は worker.log とし、MCP pipe を継承しない。埋込み service は worker executable を注入できる。
+- Windows は `kronello-platform` の `CreateProcessW` に NEW_PROCESS_GROUP / DETACHED_PROCESS / BREAKAWAY_FROM_JOB、handle inheritance FALSE を指定する。ERROR_ACCESS_DENIEDかつ親がJob Object内の場合だけbreakaway flagを外して1回再試行する。他のerror・2回目の失敗は `WORKER_DETACH_ERROR`。worker 自身が NUL / worker.log を開き、consoleがないことを確認する。実所属を `detach_mode: "breakaway"` / `"in_parent_job"` としてlog / evidenceへ記録する。後者も親CLI/MCP process終了後は続行するが、外側Job Objectの終了は越えられない。親生存中は reaper thread、親終了後は OS 回収。Windows の full CLI/MCP build は media loader 移植待ちで、CI は同じ jobs/platform API を使う test-only worker で検証する。
 
 ## 置き場所
 
@@ -75,8 +76,16 @@ GUI / CLI / MCP
 - `KRONELLO_JOB_SLOTS=1` が既定。heartbeat は queued / running を別 thread で維持し、間隔1000 ms・期限30000 ms が既定（`KRONELLO_JOB_HEARTBEAT_MS` / `KRONELLO_JOB_TIMEOUT_MS`）。全入口は同じ設定を使う。slot 取得は `BEGIN IMMEDIATE` で DB の投入順 seq と running 数を照合する。
 - heartbeat 専用 connection の SQLite busy 待機は `min(100 ms, heartbeat_interval, heartbeat_timeout / 4)` とする。通常の状態操作の5秒待機を使わない。`SQLITE_BUSY` / `SQLITE_LOCKED` は worker.log に記録し、次の間隔で再試行する。所有喪失など他のエラーは記録して heartbeat thread を終了する。worker 起動・heartbeat 開始・書込み失敗・復帰・thread panic も stderr（切り離した worker では worker.log）へ記録する。
 - プレビュー（`preview.render`）はジョブではなく、呼び出したプロセス内で即時に実行する。スロットを消費しない。
+- slot claim / frame checkpoint も heartbeat と同じ短い busy 待機と競合のみの再試行を使う。slot 待機時間と contention、checkpoint contention を記録する。get/list は通常 WAL read、期限切れかつ死亡した active record のある場合のみ writer を取得して最新状態を再確認する。lock が解放されなければ完了時刻は保証しない。
 
 ## 中断と取り消し
+
+JOB-002 は SQLite 3.51.1 の Unix VFS の concurrent WAL close / open の mutex deadlock を防ぐため、
+job DB の connection 寿命（open / SQL / close）を process-local gate で直列化する。
+heartbeat 用 gate の取得待機も bounded、`JOB_PROCESS_BUSY` は競合として再試行する。
+`WorkerHeartbeat` の独立 watchdog は最後の heartbeat 成功から heartbeat_timeout で log を記録し process を終了する。
+native mutex が待ち続けても DB へ終了記録を書こうとせず、次の reader の stale / dead 判定で interrupted にする。
+heartbeat thread の join 中も watchdog は有効。全 process の停止中は watchdog も動かない。
 
 - `job.cancel` は状態 DB に取り消し要求を記録する。worker は処理の区切りで要求を確認し、一時出力を片付けて `canceled` にする。
 - heartbeat が一定時間途絶え、所有 worker の生存も確認できないジョブは、次に状態を読んだプロセスが `interrupted` と判定し、スロットを解放する。
@@ -85,7 +94,9 @@ GUI / CLI / MCP
 
 中断判定は [ADR-0050](../adr/0050-fixed-job-execution-and-publication.md) のとおり、heartbeat の期限に Unix の生存確認を組み合わせる。起動側は child PID を DB に登録してから submit を返すため、worker が heartbeat thread を開始する前も確認できる。期限を超えた queued / running record でも `kill(pid, 0)` が成功、または `EPERM`（存在するが権限なし）なら中断させない。PID が未登録・不正、または生存を確認できない場合は従来どおり期限で中断する。get / list、slot 取得、prune は同じ判定を使う。terminal record の復活、自動再開、成果物の自動成功補正は行わず、publish の DB fence は維持する。
 
-この生存確認はプロセスの進捗や起動 identity を証明しない。停止・hang・未回収 zombie、PID 再利用では slot 解放が遅れる場合がある。生存中のプロセスを期限だけで中断する方法へ戻さず、進捗監視・起動 identity の強化は後続で設計する。Unix 以外の生存確認は実装しておらず、Windows detached worker の `UNSUPPORTED_FEATURE` は維持する。
+この生存確認はプロセスの進捗や起動 identity を証明しない。停止・hang・未回収 zombie、PID 再利用では slot 解放が遅れる場合がある。生存中のプロセスを期限だけで中断する方法へ戻さず、進捗監視・起動 identity の強化は後続で設計する。Windows は `OpenProcess(SYNCHRONIZE)` / `WaitForSingleObject(..., 0)` で生存を確認し、ACCESS_DENIED は生存を否定できないものとして扱う。死亡した worker の期限切れ record は interrupted にする。
+
+Windows publication は同じ DB fence の中で `MoveFileExW(..., 0)` を使い、既存 file / 空 directory を `OUTPUT_EXISTS` として拒否する。copy/delete は許可せず、別 volume は `OUTPUT_CROSS_VOLUME`（Unix の EXDEV も同じ code）。同一 volume の rename と DB commit の間の電源断の窓は維持する。
 
 画像連番は destination volume の temporary directory に全 artifact を出力し、manifest・metadata・byte 長・hash・snapshot identity を再読検証する。既存 pro_res_mov は ProRes + stereo 48 kHz PCM24、明示 background と選択 mode の音声を同じ AvExportSnapshot から出力し、stream / PTS / duration / snapshot metadata を probe する。frame 境界と確定前に cancel を確認する。DB transaction 内で lease / cancel を再確認し、atomic NOREPLACE rename で全 directory または movie file を一度に確定する。既存成果物は空 directory も上書きしない。
 

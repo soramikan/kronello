@@ -2,6 +2,24 @@ use kronello_jobs::*;
 use serde_json::json;
 use std::time::Duration;
 
+fn claim_retrying_contention(store: &JobStore, id: &str) -> Result<bool, JobError> {
+    let start = std::time::Instant::now();
+    loop {
+        match store.claim(id) {
+            Err(error)
+                if error.is_retryable_contention() && start.elapsed() < Duration::from_secs(5) =>
+            {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            result => return result,
+        }
+    }
+}
+
+#[cfg(unix)]
+#[path = "../src/test_support.rs"]
+mod cleanup;
+
 #[test]
 #[cfg(unix)]
 fn spawn_registers_owner_before_worker_initialization() {
@@ -12,7 +30,9 @@ fn spawn_registers_owner_before_worker_initialization() {
     std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
     let store = JobStore::open(JobConfig::at(temp.path())).unwrap();
     let record = submit(&store);
+    let _cleanup = cleanup::WorkerCleanup::new(temp.path()).unwrap();
     store.spawn(&record.id, &executable).unwrap();
+    _cleanup.capture_registered().unwrap();
     let owner = store.get(&record.id).unwrap();
     let pid =
         nix::unistd::Pid::from_raw(owner.worker_pid.expect("spawn must register child PID") as i32);
@@ -37,7 +57,7 @@ fn heartbeat_lock_wait_is_bounded_and_can_be_retried() {
     config.heartbeat_timeout = Duration::from_secs(3);
     let store = JobStore::open(config).unwrap();
     let record = submit(&store);
-    assert!(store.claim(&record.id).unwrap());
+    assert!(claim_retrying_contention(&store, &record.id).unwrap());
     let db = rusqlite::Connection::open(temp.path().join("jobs.sqlite3")).unwrap();
     db.execute_batch("BEGIN IMMEDIATE").unwrap();
     let pulse_store = store.clone();
@@ -51,23 +71,22 @@ fn heartbeat_lock_wait_is_bounded_and_can_be_retried() {
     let error = bounded
         .expect("heartbeat waited behind a writer for over 500 ms")
         .unwrap_err();
-    assert!(
-        matches!(error, JobError::Sqlite(rusqlite::Error::SqliteFailure(ref error, _))
-        if error.code == rusqlite::ErrorCode::DatabaseBusy)
-    );
+    // Concurrent tests may consume the process-local gate before this call
+    // reaches the held SQLite writer lock. Both waits must stay bounded and
+    // return retryable contention, with no assumption about which wins first.
+    assert!(error.is_retryable_heartbeat(), "{error}");
     store.heartbeat(&record.id).unwrap();
     assert_eq!(store.get(&record.id).unwrap().status, JobStatus::Running);
 }
 
 #[test]
-#[cfg(unix)]
 fn expired_heartbeat_of_live_owner_preserves_queued_and_running_leases() {
     let temp = tempfile::tempdir().unwrap();
     let store = JobStore::open(JobConfig::at(temp.path())).unwrap();
     let running = submit(&store);
-    assert!(store.claim(&running.id).unwrap());
+    assert!(claim_retrying_contention(&store, &running.id).unwrap());
     let queued = submit(&store);
-    assert!(!store.claim(&queued.id).unwrap());
+    assert!(!claim_retrying_contention(&store, &queued.id).unwrap());
     let db = rusqlite::Connection::open(temp.path().join("jobs.sqlite3")).unwrap();
     for record in [&running, &queued] {
         let mut expired = store.get(&record.id).unwrap();
@@ -81,7 +100,7 @@ fn expired_heartbeat_of_live_owner_preserves_queued_and_running_leases() {
     assert_eq!(store.get(&running.id).unwrap().status, JobStatus::Running);
     assert_eq!(store.get(&queued.id).unwrap().status, JobStatus::Queued);
     store.prune().unwrap();
-    assert!(!store.claim(&queued.id).unwrap());
+    assert!(!claim_retrying_contention(&store, &queued.id).unwrap());
     store.heartbeat(&running.id).unwrap();
 }
 
@@ -110,19 +129,25 @@ fn transactional_slots_obey_fifo_and_configured_parallelism() {
     let a = submit(&store);
     let b = submit(&store);
     let c = submit(&store);
-    assert!(!store.claim(&c.id).unwrap());
+    assert!(!claim_retrying_contention(&store, &c.id).unwrap());
     let sa = store.clone();
     let sb = store.clone();
     let aid = a.id.clone();
     let bid = b.id.clone();
-    let ta = std::thread::spawn(move || sa.claim(&aid).unwrap());
-    let tb = std::thread::spawn(move || sb.claim(&bid).unwrap());
-    assert!(ta.join().unwrap() && tb.join().unwrap());
-    assert!(!store.claim(&c.id).unwrap());
+    // claim() deliberately returns bounded, retryable contention. Exercise the
+    // worker's retry path while racing two slots, rather than treating a busy
+    // process-local connection gate as a terminal scheduler failure.
+    let ta = std::thread::spawn(move || sa.wait_for_slot(&aid));
+    let tb = std::thread::spawn(move || sb.wait_for_slot(&bid));
+    ta.join().unwrap().unwrap();
+    tb.join().unwrap().unwrap();
+    assert_eq!(store.get(&a.id).unwrap().status, JobStatus::Running);
+    assert_eq!(store.get(&b.id).unwrap().status, JobStatus::Running);
+    assert!(!claim_retrying_contention(&store, &c.id).unwrap());
     store
         .finish_error(&a.id, &JobError::new("TEST_FAILURE", "test"))
         .unwrap();
-    assert!(store.claim(&c.id).unwrap());
+    assert!(claim_retrying_contention(&store, &c.id).unwrap());
 }
 #[test]
 fn stale_lease_cannot_publish_or_become_successful_again() {
@@ -132,7 +157,7 @@ fn stale_lease_cannot_publish_or_become_successful_again() {
     config.heartbeat_timeout = Duration::from_secs(1);
     let store = JobStore::open(config).unwrap();
     let r = submit(&store);
-    assert!(store.claim(&r.id).unwrap());
+    assert!(claim_retrying_contention(&store, &r.id).unwrap());
     let db = rusqlite::Connection::open(temp.path().join("jobs.sqlite3")).unwrap();
     let mut expired = store.get(&r.id).unwrap();
     expired.heartbeat_at_ms = now_ms() - 2000;
@@ -166,7 +191,12 @@ fn stale_lease_cannot_publish_or_become_successful_again() {
         rusqlite::params![serde_json::to_string(&expired).unwrap(), next.id],
     )
     .unwrap();
-    assert_eq!(store.claim(&next.id).unwrap_err().code(), "JOB_INTERRUPTED");
+    assert_eq!(
+        claim_retrying_contention(&store, &next.id)
+            .unwrap_err()
+            .code(),
+        "JOB_INTERRUPTED"
+    );
     store
         .finish_error(&next.id, &JobError::new("TEST_FAILURE", "test"))
         .unwrap();

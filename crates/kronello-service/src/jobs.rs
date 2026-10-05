@@ -1,6 +1,5 @@
 //! Fixed-input job orchestration shared by CLI and MCP.
 use std::path::{Path, PathBuf};
-use std::sync::mpsc;
 
 use kronello_jobs::{JobConfig, JobError, JobRecord, JobStore, Submission};
 use kronello_media::{
@@ -564,71 +563,29 @@ pub fn worker_entry() -> Option<std::process::ExitCode> {
     if args.first().map(String::as_str) != Some("worker") {
         return None;
     }
-    eprintln!(
-        "worker startup pid={} at_ms={} args={args:?}",
-        std::process::id(),
-        kronello_jobs::now_ms()
-    );
     let result = (|| {
         kronello_jobs::detach_worker()?;
+        eprintln!(
+            "worker startup pid={} at_ms={} args={args:?}",
+            std::process::id(),
+            kronello_jobs::now_ms()
+        );
         if args.len() != 3 || args[1] != "--job" {
             return Err(JobError::new("INVALID_REQUEST", "worker --job <id>"));
         }
         let store = JobStore::open(JobConfig::from_env()?)?;
         let id = &args[2];
         store.get(id)?;
-        let (stop, receive) = mpsc::channel();
-        let pulse_store = store.clone();
-        let pulse_id = id.clone();
-        let heartbeat = std::thread::spawn(move || {
-            eprintln!(
-                "worker heartbeat started job={pulse_id} at_ms={}",
-                kronello_jobs::now_ms()
-            );
-            let mut missed = false;
-            while receive.recv_timeout(pulse_store.config().heartbeat_interval)
-                == Err(mpsc::RecvTimeoutError::Timeout)
-            {
-                match pulse_store.heartbeat(&pulse_id) {
-                    Ok(()) => {
-                        if missed {
-                            eprintln!(
-                                "worker heartbeat recovered job={pulse_id} at_ms={}",
-                                kronello_jobs::now_ms()
-                            );
-                            missed = false;
-                        }
-                    }
-                    Err(error) => {
-                        eprintln!(
-                            "worker heartbeat failed job={pulse_id} at_ms={}: {error}",
-                            kronello_jobs::now_ms()
-                        );
-                        if !error.is_retryable_heartbeat() {
-                            break;
-                        }
-                        missed = true;
-                    }
-                }
-            }
-        });
+        let heartbeat = kronello_jobs::WorkerHeartbeat::start(store.clone(), id.clone());
         let result = (|| {
-            loop {
-                if store.claim(id)? {
-                    break;
-                }
-                std::thread::sleep(std::time::Duration::from_millis(50));
-            }
+            store.wait_for_slot(id)?;
             let record = store.get(id)?;
             let fixed: FixedInput = serde_json::from_slice(&store.input(&record)?)?;
             Service::new(fixed.backend)
                 .render_fixed_job(&store, &record, &fixed)
                 .map_err(job_error)
         })();
-        let _ = stop.send(());
-        if heartbeat.join().is_err() {
-            eprintln!("worker heartbeat thread panicked job={id}");
-        }
+        drop(heartbeat);
         if let Err(error) = &result {
             store.finish_error(id, error)?;
         }

@@ -26,7 +26,8 @@ serde_json = { version = "1", features = ["float_roundtrip"] }
 kronello-audio = { path = "../kronello-audio" }
 kronello-media = { path = "../kronello-media" }
 kronello-service = { path = "../kronello-service", features = ["test-adapter-unavailable", "test-job-control"] }
-kronello-jobs = { path = "../kronello-jobs" }
+kronello-jobs = { path = "../kronello-jobs", features = ["test-support"] }
+kronello-platform = { path = "../kronello-platform" }
 rusqlite = { version = "0.38", features = ["bundled"] }
 nix = { version = "0.31", features = ["process", "signal"] }
 kronello-model = { path = "../kronello-model" }
