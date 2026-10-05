@@ -18,6 +18,7 @@ name = "kronello"
 path = "src/main.rs"
 
 [dependencies]
+tokio = { version = "1", features = ["rt", "signal"] }
 kronello-service = { path = "../kronello-service" }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 

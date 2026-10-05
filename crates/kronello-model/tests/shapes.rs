@@ -85,6 +85,7 @@ fn fixture() -> (Project, SchemaRegistry) {
         }),
     };
     let node = SceneNode {
+        tags: Default::default(),
         name: None,
         enabled: true,
         effects: vec![],

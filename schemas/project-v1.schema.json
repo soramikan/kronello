@@ -2243,6 +2243,15 @@
             "$ref": "#/$defs/Property"
           }
         },
+        "tags": {
+          "description": "Search metadata only; never runtime identity.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "uniqueItems": true
+        },
         "transform_parent": {
           "anyOf": [
             {

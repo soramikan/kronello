@@ -536,6 +536,7 @@ fn document_audio_source_modes_are_explicit_backward_compatible_and_hashed() {
     )
     .unwrap();
     let node = SceneNode {
+        tags: Default::default(),
         name: None,
         enabled: true,
         id: NodeId::new(),

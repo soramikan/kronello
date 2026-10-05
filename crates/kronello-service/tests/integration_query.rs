@@ -98,6 +98,29 @@ fn evaluated_template_queries_share_layout_inputs_and_do_not_initialize_gpu_or_e
     let f = Fixture::new();
     let before = f.ok(json!({"operation":"project.export","project":f.path}));
     let scene = f.ok(f.scene());
+    // API-002 filtering/paging retains render-consistent template bindings,
+    // text layout, effects and runtime paths from this explicit evaluation.
+    let expected: Vec<_> = scene["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|node| matches!(node["kind"]["kind"].as_str(), Some("text" | "shape")))
+        .cloned()
+        .collect();
+    let mut query = f.scene();
+    query["search"] = json!({"kinds":["text","shape"]});
+    query["limit"] = json!(1);
+    let mut paged = Vec::new();
+    loop {
+        let page = f.ok(query.clone());
+        assert_eq!(page["revision"], scene["revision"]);
+        paged.extend(page["nodes"].as_array().unwrap().iter().cloned());
+        let Some(cursor) = page.get("next_cursor") else {
+            break;
+        };
+        query["cursor"] = cursor.clone();
+    }
+    assert_eq!(paged, expected);
     let band = scene["nodes"]
         .as_array()
         .unwrap()

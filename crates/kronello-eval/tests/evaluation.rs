@@ -51,6 +51,7 @@ fn unsupported_opacity() -> Property {
 }
 fn node(properties: Vec<Property>) -> SceneNode {
     SceneNode {
+        tags: Default::default(),
         name: None,
         enabled: true,
         effects: vec![],

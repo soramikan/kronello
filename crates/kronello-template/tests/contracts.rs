@@ -310,6 +310,7 @@ fn nested_template_inputs_and_definition_are_frozen() {
         panic!()
     };
     let node = SceneNode {
+        tags: Default::default(),
         name: None,
         enabled: true,
         id: NodeId::new(),

@@ -143,6 +143,11 @@ impl Project {
         }
         let mut ids = std::collections::BTreeSet::from([self.id]);
         for object in &self.compositions {
+            if let DocumentObject::Known(c) = object
+                && c.nodes.iter().any(|n| !crate::valid_node_tags(&n.tags))
+            {
+                return Err(ProjectError::InvalidDocument("invalid node tags".into()));
+            }
             let id = match object {
                 DocumentObject::Known(value) => value.id.as_uuid(),
                 DocumentObject::Opaque(value) => value.id,

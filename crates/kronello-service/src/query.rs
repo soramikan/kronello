@@ -14,12 +14,54 @@ use crate::{ServiceError, edit, open_existing};
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SceneQueryRequest {
+    #[serde(default)]
+    pub search: SceneSearch,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(range(min = 1, max = 1000))]
+    pub limit: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
     pub project: PathBuf,
     pub composition: CompositionId,
     #[serde(default)]
     pub expand_instances: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub evaluation: Option<SceneEvaluationRequest>,
+}
+#[derive(Debug, Clone, Default, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SceneSearch {
+    #[serde(default)]
+    pub tags: std::collections::BTreeSet<String>,
+    #[serde(default)]
+    pub kinds: std::collections::BTreeSet<SceneKind>,
+    /// Overlap in each node's authored local composition time, not visibility.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub range: Option<TimeRange>,
+}
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum SceneKind {
+    Group,
+    Null,
+    Shape,
+    Text,
+    CompositionInstance,
+    Media,
+}
+impl SceneKind {
+    fn of(kind: &NodeKind) -> Self {
+        match kind {
+            NodeKind::Group => Self::Group,
+            NodeKind::Null => Self::Null,
+            NodeKind::Shape { .. } => Self::Shape,
+            NodeKind::Text { .. } => Self::Text,
+            NodeKind::CompositionInstance(_) => Self::CompositionInstance,
+            NodeKind::Media(_) => Self::Media,
+        }
+    }
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -53,6 +95,8 @@ pub struct SceneNodeKey {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SceneQueryNode {
+    #[serde(default, skip_serializing_if = "std::collections::BTreeSet::is_empty")]
+    pub tags: std::collections::BTreeSet<String>,
     pub key: SceneNodeKey,
     pub composition: CompositionId,
     pub kind: NodeKind,
@@ -69,6 +113,8 @@ pub struct SceneQueryNode {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SceneQueryResult {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
     pub revision: String,
     pub composition: CompositionId,
     pub duration: Duration,
@@ -167,9 +213,38 @@ fn definitions(project: &kronello_model::Project) -> Result<Vec<Composition>, Se
         })
         .collect()
 }
-pub(crate) fn scene(r: SceneQueryRequest) -> Result<SceneQueryResult, ServiceError> {
+pub(crate) fn scene(mut r: SceneQueryRequest) -> Result<SceneQueryResult, ServiceError> {
+    if r.limit.is_some_and(|limit| limit == 0 || limit > 1000)
+        || r.search.range.is_some_and(|range| range.is_empty())
+    {
+        return Err(ServiceError::invalid(
+            "scene limit must be 1..=1000 and search range nonempty",
+        ));
+    }
+    r.search.tags = kronello_model::normalize_search_tags(&r.search.tags);
+    if !kronello_model::valid_node_tags(&r.search.tags) {
+        return Err(ServiceError::invalid("invalid search tags"));
+    }
+    let binding = serde_json::json!({"composition":r.composition,"expand_instances":r.expand_instances,
+        "evaluation":r.evaluation,"search":r.search,"limit":r.limit});
+    let cursor = r
+        .cursor
+        .as_deref()
+        .map(crate::paging::Cursor::decode)
+        .transpose()?;
     let store = open_existing(&r.project)?;
-    let snapshot = store.snapshot()?;
+    let snapshot = if let Some(cursor) = &cursor {
+        cursor.validate("scene.query", store.snapshot()?.document.id, &binding)?;
+        store.snapshot_at(cursor.revision).map_err(|e| {
+            if e.code() == "SNAPSHOT_NOT_FOUND" {
+                crate::paging::expired()
+            } else {
+                e.into()
+            }
+        })?
+    } else {
+        store.snapshot()?
+    };
     store.close()?;
     let compositions = definitions(&snapshot.document)?;
     let evaluated = r
@@ -249,6 +324,7 @@ pub(crate) fn scene(r: SceneQueryRequest) -> Result<SceneQueryResult, ServiceErr
             pending.push((child.clone(), enclosing));
         }
         nodes.push(SceneQueryNode {
+            tags: n.tags.clone(),
             evaluated: evaluated
                 .as_ref()
                 .and_then(|scene| {
@@ -279,7 +355,47 @@ pub(crate) fn scene(r: SceneQueryRequest) -> Result<SceneQueryResult, ServiceErr
             active_range: n.active_range,
         });
     }
+    let mut nodes: Vec<_> = nodes
+        .into_iter()
+        .filter(|n| {
+            r.search.tags.is_subset(&n.tags)
+                && (r.search.kinds.is_empty() || r.search.kinds.contains(&SceneKind::of(&n.kind)))
+                && r.search.range.is_none_or(|range| {
+                    !n.active_range.is_empty()
+                        && n.active_range.start() < range.end()
+                        && range.start() < n.active_range.end()
+                })
+        })
+        .collect();
+    if let Some(cursor) = &cursor {
+        let after: SceneNodeKey = serde_json::from_value(cursor.after.clone())
+            .map_err(|_| ServiceError::new("INVALID_CURSOR", "invalid scene continuation key"))?;
+        let at = nodes
+            .iter()
+            .position(|n| n.key == after)
+            .ok_or_else(crate::paging::expired)?;
+        nodes.drain(..=at);
+    }
+    let next_cursor = if let Some(limit) = r.limit
+        && nodes.len() > limit
+    {
+        nodes.truncate(limit);
+        Some(
+            crate::paging::Cursor::new(
+                "scene.query",
+                snapshot.document.id,
+                snapshot.revision,
+                binding,
+                serde_json::to_value(&nodes.last().expect("nonempty page").key)?,
+                None,
+            )
+            .encode()?,
+        )
+    } else {
+        None
+    };
     Ok(SceneQueryResult {
+        next_cursor,
         revision: snapshot.revision.to_string(),
         composition: r.composition,
         duration: root.duration,

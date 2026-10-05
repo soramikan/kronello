@@ -213,6 +213,7 @@ fn undo(path: &Path, event: &Event, key: &str) -> Event {
 fn history(path: &Path, since: &str) -> HistoryResult {
     let ResultData::History(h) = service()
         .dispatch(Request::HistoryList(HistoryRequest {
+            cursor: None,
             project: path.into(),
             since_revision: since.into(),
             limit: 100,
@@ -226,6 +227,7 @@ fn history(path: &Path, since: &str) -> HistoryResult {
 }
 fn node(kind: NodeKind, p: &Project, parent: Option<NodeId>) -> SceneNode {
     SceneNode {
+        tags: Default::default(),
         name: None,
         enabled: true,
         id: NodeId::new(),
