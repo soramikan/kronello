@@ -138,6 +138,27 @@ fn movie_roundtrip(profile: MovieProfile) {
             )
             .unwrap();
         report.probe.verify_movie(profile).unwrap();
+        if profile == MovieProfile::HevcAlacV1 {
+            let video = report
+                .probe
+                .streams
+                .iter()
+                .find(|s| s.kind == StreamKind::Video)
+                .unwrap();
+            assert_eq!(
+                runtime.probe_codec_tag(&req.output, video.index).unwrap(),
+                u32::from_le_bytes(*b"hvc1")
+            );
+        } else if profile == MovieProfile::Av1Mp4AlacV1 {
+            assert_eq!(
+                runtime.probe_codec_tag(&req.output, 0).unwrap(),
+                u32::from_le_bytes(*b"av01")
+            );
+            assert_eq!(
+                runtime.probe_codec_tag(&req.output, 2).unwrap_err().code(),
+                "INVALID_MEDIA_INPUT"
+            );
+        }
         assert_eq!(report.movie_profile, Some(profile));
         assert_eq!(report.audio_profile_version, 3);
         assert_eq!(

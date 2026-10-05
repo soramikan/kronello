@@ -646,6 +646,7 @@ void km_probe_stream(AVFormatContext *format,int i,StreamInfo *out) {
         p->sample_rate,p->ch_layout.nb_channels,p->width,p->height};
 }
 const char *km_probe_codec(Km *k,AVFormatContext *format,int i) { return k->avcodec_get_name(format->streams[i]->codecpar->codec_id); }
+uint32_t km_probe_codec_tag(AVFormatContext *format,int i) { return format->streams[i]->codecpar->codec_tag; }
 const char *km_probe_tag(Km *k,AVFormatContext *format,const char *key) {
     const AVDictionaryEntry *entry=k->av_dict_get(format->metadata,key,NULL,0);
     return entry?entry->value:"";
@@ -663,6 +664,8 @@ static int read_mux_packet(Km *k,AVFormatContext *f,AVPacket *p,int stream) {
         k->av_packet_unref(p);
     }
 }
+/* HEVC delivery stores parameter sets in hvcC, with a fixed hvc1 sample entry. */
+uint32_t km_mux_video_tag(int profile) { return profile==3?MKTAG('h','v','c','1'):0; }
 int km_mux_av(Km *k,const char *video,const char *audio,const char *path,
     const char *render_hash,const char *export_hash,int profile) {
     AVFormatContext *input[2]={NULL,NULL},*out=NULL;AVPacket *packets[2]={NULL,NULL};
@@ -690,7 +693,10 @@ int km_mux_av(Km *k,const char *video,const char *audio,const char *path,
         streams[i]=k->avformat_new_stream(out,NULL);if(!streams[i]){ret=fail(k,AVERROR(ENOMEM),"mux stream allocation");goto done;}
         AVStream *s=input[i]->streams[index[i]];
         ret=k->avcodec_parameters_copy(streams[i]->codecpar,s->codecpar);if(ret<0){fail(k,ret,"mux codec parameters");goto done;}
-        streams[i]->codecpar->codec_tag=0;streams[i]->time_base=s->time_base;
+        streams[i]->codecpar->codec_tag=i?0:km_mux_video_tag(profile);streams[i]->time_base=s->time_base;
+        if(!i && profile==3 && (!streams[i]->codecpar->extradata || streams[i]->codecpar->extradata_size<=0)) {
+            ret=fail(k,AVERROR_INVALIDDATA,"hvc1 requires HEVC global-header parameter sets");goto done;
+        }
     }
     k->av_dict_set(&out->metadata,"kronello_render_snapshot_hash",render_hash,0);
     k->av_dict_set(&out->metadata,"kronello_export_snapshot_hash",export_hash,0);

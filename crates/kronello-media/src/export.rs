@@ -330,6 +330,10 @@ pub struct AvExportReport {
     pub probe: MediaProbe,
 }
 impl MediaRuntime {
+    /// Read the stream's container codec tag (little-endian FourCC when textual).
+    pub fn probe_codec_tag(&self, path: &Path, stream_index: u32) -> Result<u32, MediaError> {
+        self.native.probe_codec_tag(path, stream_index)
+    }
     pub fn probe(&self, path: &Path) -> Result<MediaProbe, MediaError> {
         let path = path.canonicalize()?;
         if !path.is_file() {
@@ -407,6 +411,18 @@ impl MediaRuntime {
         )?;
         let probe = self.probe(temp.path())?;
         probe.verify_movie(profile)?;
+        if profile == MovieProfile::HevcAlacV1 {
+            let video = probe
+                .streams
+                .iter()
+                .find(|s| s.kind == StreamKind::Video)
+                .unwrap();
+            if self.probe_codec_tag(temp.path(), video.index)? != u32::from_le_bytes(*b"hvc1") {
+                return Err(MediaError::Encode(
+                    "HEVC delivery requires hvc1 sample entry".into(),
+                ));
+            }
+        }
         for input in [video_stream, audio_stream] {
             let output_stream = probe
                 .streams

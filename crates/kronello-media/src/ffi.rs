@@ -425,6 +425,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn hevc_delivery_mux_configuration_requires_hvc1() {
+        for profile in [
+            MovieProfile::ProResPcm24,
+            MovieProfile::Av1Mp4AlacV1,
+            MovieProfile::H264AlacV1,
+        ] {
+            // SAFETY: the same pure tag selector is used by km_mux_av before writing its header.
+            assert_eq!(unsafe { km_mux_video_tag(profile.native_id()) }, 0);
+        }
+        // SAFETY: a closed profile ID is accepted without opening a codec or device.
+        assert_eq!(
+            unsafe { km_mux_video_tag(MovieProfile::HevcAlacV1.native_id()) },
+            u32::from_le_bytes(*b"hvc1")
+        );
+    }
+
+    #[test]
     fn native_probe_recognizes_hardware_and_hybrid_capability_bits() {
         // Public FFmpeg AV_CODEC_CAP_* bit values. Exercise the same C predicate
         // used by codec enumeration without loading FFmpeg or opening a device.
@@ -525,6 +542,9 @@ unsafe extern "C" {
     fn km_probe_count(format: *mut c_void) -> c_int;
     fn km_probe_stream(format: *mut c_void, index: c_int, out: *mut NativeStreamInfo);
     fn km_probe_codec(k: *mut c_void, format: *mut c_void, index: c_int) -> *const c_char;
+    fn km_probe_codec_tag(format: *mut c_void, index: c_int) -> u32;
+    #[cfg(test)]
+    fn km_mux_video_tag(profile: c_int) -> u32;
     fn km_probe_tag(k: *mut c_void, format: *mut c_void, key: *const c_char) -> *const c_char;
     fn km_mux_av(
         k: *mut c_void,
@@ -641,6 +661,29 @@ impl Drop for NativeProbe<'_> {
     }
 }
 impl NativeRuntime {
+    pub(crate) fn probe_codec_tag(
+        &self,
+        path: &Path,
+        stream_index: u32,
+    ) -> Result<u32, MediaError> {
+        let path = path_string(path)?;
+        // SAFETY: the stream index is checked against the live probe's stream count.
+        unsafe {
+            let ptr = NonNull::new(km_probe_open(self.0.as_ptr(), path.as_ptr()))
+                .ok_or_else(|| MediaError::Decode(self.error()))?;
+            let probe = NativeProbe { ptr, runtime: self };
+            let count = km_probe_count(probe.ptr.as_ptr());
+            if !(0..=1024).contains(&count) || i64::from(stream_index) >= i64::from(count) {
+                return Err(MediaError::InvalidInput(
+                    "probe stream index out of range".into(),
+                ));
+            }
+            Ok(km_probe_codec_tag(
+                probe.ptr.as_ptr(),
+                stream_index as c_int,
+            ))
+        }
+    }
     pub(crate) fn encode_audio(
         &self,
         output: &Path,

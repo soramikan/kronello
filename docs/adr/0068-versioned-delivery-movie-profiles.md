@@ -17,6 +17,14 @@
 | `h264_mov` / 1 | MOV / `.mov` | `h264_videotoolbox`、hardware 必須 | 同上 |
 | `hevc_mov` / 1 | MOV / `.mov` | `hevc_videotoolbox`、hardware 必須 | 同上 |
 
+`hevc_mov` version 1 の sample entry は `hvc1` に固定する。VideoToolbox は既存の
+`AV_CODEC_FLAG_GLOBAL_HEADER` を使い、コピーした extradata / parameter sets を MOV の
+`hvcC` sample description に格納する。最終 mux は header を書く前に output stream の
+codec_tag を `MKTAG('h','v','c','1')` に設定し、空 extradata と出力 tag 不一致を拒否する。
+407fa0d の Apple M1 host では既定 `hev1` の MOV と HEVC track 単独が
+AVFoundation isPlayable=false だったため修正する。未リリースの version 1 の契約確定であり、
+profile version は増やさない（supervisor 指示）。hardware / fallback / audio の意味は変更しない。
+
 FFmpeg 9.0.2 の実 CPU 検証で MOV mux header が `av1 only supported in MP4 and AVIF.` と拒否した。
 この結果に基づき supervisor 承認で AV1 を MP4 にした。MOV 名のまま MP4 を出力しない。
 H.264 / HEVC は `allow_sw=0` を維持する。登録がない、hardware-capable でない、device open が失敗する場合は
@@ -82,7 +90,9 @@ LGPL source license から特許許諾の結論を導かない。supervisor が�
 
 今回の AV1 / ALAC MP4 は両 codec を受理する player に限る。一般的な browser / AVFoundation の
 再生互換性を保証しない。ffprobe の codec / packet / format と AVFoundation の isPlayable / track format は
-pending host run として記録する。H.264 / HEVC MOV / ALAC も同じ host 受理確認を残す。
+revision / platform 付きで検証文書へ記録する。407fa0d / Apple M1 の AV1 MP4 は
+isPlayable=false（M1 の AV1 decode 非対応という互換性制限）、H.264 MOV と ALAC-only m4a は
+playable。HEVC は `hvc1` 修正後の host 受理確認を残す。
 AV1 + Opus の MP4 / WebM 配信は範囲外。libopus を同梱 LGPL build へ追加し、Opus pre-skip、
 codec delay、seek pre-roll、discard padding と最後の実 samples / container timestamp grid を別契約にする必要がある。
 WebM の粗い time_base を今回の sample 精度契約へ黙って混ぜない。

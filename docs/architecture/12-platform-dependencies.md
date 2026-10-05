@@ -123,7 +123,8 @@ Project の `assets` は stable AssetId、SHA-256 content_hash、kind、rational
 共有同期 export / job に `av1_mp4` / `h264_mov` / `hevc_mov` の明示 version 1 を追加した。
 AV1 は SVT-AV1 software 固定、MP4 + ALAC。FFmpeg 9.0.2 は AV1 の MOV mux を拒否する。
 H.264 / HEVC は VideoToolbox `allow_sw=0`、MOV + ALAC、device 不在 / open 失敗は
-ENCODER_UNAVAILABLE。ALAC は既存 native LGPL encoder、48 kHz stereo、PCM24 量子化後の
+ENCODER_UNAVAILABLE。HEVC version 1 は `hvc1` sample entry と global-header parameter sets の
+`hvcC` を使う（未リリース profile の契約確定、版は維持）。ALAC は既存 native LGPL encoder、48 kHz stereo、PCM24 量子化後の
 lossless / zero priming / exact final samples。build flags / native manifest は変更しない。
 全5 library の LGPL構成を示す既存 runtime と system development FFmpeg を分けて検証する。
 AAC の distribution / patent review・品質評価、AV1 の Opus Web 配信、player compatibility、

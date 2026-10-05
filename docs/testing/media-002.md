@@ -1,16 +1,20 @@
 # MEDIA-002: 追加 movie profile / ALAC の検証
 
-対象: branch `m3-media2`、開始 HEAD `880f62749fce7191466bda04223df35c23366fa0`、clean worktree からの未 commit 変更。
+対象: branch `m3-media2`。初回実装は HEAD `880f62749fce7191466bda04223df35c23366fa0` から開始し、
+supervisor が commit / 統合した。今回の `hvc1` 修正は clean HEAD
+`407fa0d84df593c1668aae5371a9d7e90784388e` 上の未 commit 変更。
 設計: [ADR-0068](../adr/0068-versioned-delivery-movie-profiles.md)。worker は CPU / software codec のみ。
-VideoToolbox / GPU / AVFoundation は pending host run。受け入れの最終判定・backlog・commit は supervisor が担当する。
+407fa0d / Apple M1 の VideoToolbox / AVFoundation 結果は下記 supervisor 提供表。
+`hvc1` 修正後の HEVC host 再検証と GPU は pending host run。
+受け入れの最終判定・backlog・commit は supervisor が担当する。
 
 ## 受け入れ条件と証拠
 
 | # | 条件 | tests / 再現手順 | status |
 |---|---|---|---|
-| 1 | AV1 / H.264 / HEVC の版付き同期・job、固定 snapshot、PTS / duration、probe、no-clobber | media profiles `av1_alac_movie_roundtrip_pts_duration_and_publication`、CLI jobs `av1_delivery_sync_fixed_job_and_alac_match_quantized_evaluator`。同じ helper を hardware profile に適用する下記 host tests | AV1 の CPU 検証、hardware 2形式は pending host run。24 / 30000/1001 / 60000/1001 の非ゼロ絶対 range、3 frame の先頭・末尾・exclusive end、zero-origin / exact sample count / duration、両 hashes。実同期 / worker、投下後に volume / 映像を変更して Project を削除し全 decoded A/V を維持。提出後の既存 destination race で OUTPUT_EXISTS と既存 bytes保持 |
-| 2 | VideoToolbox allow_sw=0、未対応 host は ENCODER_UNAVAILABLE、codec / transfer 記録 | profiles `delivery_profile_hash_versions_and_missing_hardware_are_closed`、既存 media selector / HARDWARE+HYBRID / native error tests、native km_encoder_open の既存 allow_sw=0、host tests / movie_profiles example | CPU は hardware 登録を除去した selector の型付き失敗・非選択を検証。実 device open / hardware encode は pending host run。AV1 success は software とだけ報告 |
-| 3 | AAC / ALAC / AV1 音声の採用前契約、priming / padding / final samples / 配布・特許、採用形式の A/V sync / roundtrip | ADR-0068、profiles `alac_pcm24_bit_exact_partial_final_frames_and_no_clobber`、同期 / job helper、movie_profiles example | ALAC の CPU roundtripは全 channel sampleのbit一致。1 / 31 / 4095 / 4096 / 4097 / 4804 frames、±full scale、量子化誤差と最後の実 sampleを検証。AV1 MP4/ALAC の実sync。H.264/HEVC MOV/ALACはhost待ち。AAC-LC契約は文書化したが品質・配布/特許レビュー未実施で未採用。Opus Web配信も未採用 |
+| 1 | AV1 / H.264 / HEVC の版付き同期・job、固定 snapshot、PTS / duration、probe、no-clobber | media profiles `av1_alac_movie_roundtrip_pts_duration_and_publication`、CLI jobs `av1_delivery_sync_fixed_job_and_alac_match_quantized_evaluator`。同じ helper を hardware profile に適用する下記 host tests | AV1 の CPU 検証、hardware 2形式は407fa0d / M1のsupervisor提供結果でpass。hvc1修正後のHEVCはpending host run。24 / 30000/1001 / 60000/1001 の非ゼロ絶対 range、3 frame の先頭・末尾・exclusive end、zero-origin / exact sample count / duration、両 hashes。実同期 / worker、投下後に volume / 映像を変更して Project を削除し全 decoded A/V を維持。提出後の既存 destination race で OUTPUT_EXISTS と既存 bytes保持 |
+| 2 | VideoToolbox allow_sw=0、未対応 host は ENCODER_UNAVAILABLE、codec / transfer 記録 | profiles `delivery_profile_hash_versions_and_missing_hardware_are_closed`、既存 media selector / HARDWARE+HYBRID / native error tests、native km_encoder_open の既存 allow_sw=0、host tests / movie_profiles example | CPU は hardware 登録を除去した selector の型付き失敗・非選択を検証。実 device open / hardware encode は407fa0d / M1のsupervisor提供結果でpass。hvc1修正後は再検証待ち。AV1 success は software とだけ報告 |
+| 3 | AAC / ALAC / AV1 音声の採用前契約、priming / padding / final samples / 配布・特許、採用形式の A/V sync / roundtrip | ADR-0068、profiles `alac_pcm24_bit_exact_partial_final_frames_and_no_clobber`、同期 / job helper、movie_profiles example | ALAC の CPU roundtripは全 channel sampleのbit一致。1 / 31 / 4095 / 4096 / 4097 / 4804 frames、±full scale、量子化誤差と最後の実 sampleを検証。AV1 MP4/ALAC の実sync。H.264/HEVC MOV/ALACのroundtripは407fa0d / M1のsupervisor提供結果でpass。HEVC player受理は失敗し、hvc1修正後は再検証待ち。AAC-LC契約は文書化したが品質・配布/特許レビュー未実施で未採用。Opus Web配信も未採用 |
 | 4 | 同梱 LGPLとsystem developmentの区別、閉API、未対応の型付き失敗、HDRはCOLOR-001 | service media `delivery_output_wire_versions_audio_and_container_contracts_are_strict`、API / nle_schema / Swift checks、example capabilities.verify_distribution | 閉形式のwire roundtrip、必須profile_version、AAC/未知版→UNSUPPORTED_FEATURE、拡張子→INVALID_MEDIA_INPUT、任意codec/args/shell・duplicate fields拒否。固定LGPL prefixを読取利用。build/manifest変更なし。package署名/再配置、system FFmpegのruntime検証、HDRは今回実行していない |
 
 host で実行する4 tests は通常 suiteで明示 ignored にしており、ignored を hardware成功へ数えない。
@@ -57,7 +61,7 @@ export PATH=/Users/sora/Repositories/soramikan/kronello/target/native/ffmpeg-lgp
   profileが全寸法を受理すると主張しない。次回は固定要求のbackgroundがJSON integer0からf32 0.0へ
   正規化された差をtestが誤比較したため失敗。typed JobOutputの正規化済み値と照合するよう修正した。
 
-## pending host run（順序固定）
+## 初回 host 手順（順序固定、407fa0d の実行結果は下記）
 
 同じworktreeと上記Cargo/native環境を使う。新規出力rootを一つだけ作る。
 各commandのexitとrevision / platform / encoder / execution / transfer_pathを保存する。
@@ -129,7 +133,7 @@ swift "$KRONELLO_MEDIA_HOST_OUT/inspect.swift" "$KRONELLO_MEDIA_HOST_OUT/av1/del
 
 ffprobe期待:codec AV1/H.264/HEVCとALAC 24-bit / stereo48k、start0、video3ticks、audio4096+708samples、
 両snapshot metadata、packet PTS/duration保持。B-frameではDTSが負でもPTSはpresentation格子と照合する。
-AVFoundationはisPlayable / duration / FourCCの実報告を記録する（command自体も未実行）。
+AVFoundationはisPlayable / duration / FourCCの実報告を記録する（worker未実行、407fa0dのsupervisor結果は下記）。
 AV1 / ALAC MP4のisPlayable=trueを既知事実として要求しない。false / load errorはplayer互換性の制限として記録する。
 metadata照会を実再生/qualityの検証とは扱わない。
 
@@ -164,7 +168,7 @@ warningを出すが、packet/sample/timingとbit比較は成功した。warning�
 これらはCPU/native software測定で、VideoToolbox、AVFoundation、GPU、全package検証の証拠ではない。
 
 
-## 最終 CPU checks
+## 初回実装の CPU checks（今回修正前）
 
 最初のworkspace CPU run（media002-workspace.log）はexit0、568 passed / 0 failed / 5 ignored / 10 filtered、
 84 suite。途中で旧ProResの拡張子エラーをINVALID_REQUESTに維持するguardを戻したため、
@@ -190,9 +194,9 @@ filtered10は指定のgpu_ substring filterによる除外であり、成功と�
 CLI focused log の失敗を上書きで隠さず、修正後の同testの成功は最終workspace logを証拠とする。
 logsは上記管理TMPDIR内。別runtime / platform / hardware結果や長尺品質の証拠へ読み替えない。
 
-## 変更ファイル
+## 初回実装の変更ファイル（407fa0d に含まれる）
 
-開始時のworktreeはcleanで、以下20 filesが今回の変更（新規4 filesを含む）。
+初回開始時のworktreeはcleanで、以下20 filesを変更した（新規4 filesを含む）。今回修正の差分とは分ける。
 
 - media: crates/kronello-media/src/audio.rs、src/export.rs、src/ffi.rs、native/media.c、
   tests/profiles.rs（新規）、examples/movie_profiles.rs（新規）。
@@ -206,3 +210,135 @@ logsは上記管理TMPDIR内。別runtime / platform / hardware結果や長尺�
 schemas/project-v1.schema.json は再生成して差分なし。Cargo.lock、FFmpeg build script / manifest、
 backlog、ADR index、open questions、docs README / design-system は変更なし。
 コミット・push・merge、別worktreeへの書込み、hardware / GPU commandは実行していない。
+
+## Supervisor 提供の host 結果（修正前）
+
+revision `407fa0d`（完全 HEAD は本書冒頭）、Apple M1。下表は supervisor の報告であり、
+worker による再実行ではない。OS version / 生 log / artifact path は今回提供されていない。
+結果を今回の `hvc1` 修正後の測定へ読み替えない。
+
+| command / 検査 | supervisor 提供結果 |
+|---|---|
+| capabilities `--verify-distribution` | exit0 |
+| media `--test profiles` 通常 suite | 3 passed / 2 ignored |
+| AV1 example | exit0、libsvtav1 / software / cpu_rgba_to_software_encoder |
+| host_h264 profile roundtrip | 1 passed |
+| host_hevc profile roundtrip | 1 passed |
+| host_h264 CLI fixed-job | 1 passed |
+| host_hevc CLI fixed-job | 1 passed |
+| H.264 example | exit0、h264_videotoolbox / hardware / cpu_rgba_to_hardware_encoder |
+| HEVC example | exit0、hevc_videotoolbox / hardware / cpu_rgba_to_hardware_encoder |
+| ffprobe | AV1 / H.264 / HEVC 全3 files ok。HEVC codec_tag は hev1 |
+| AVFoundation H.264 MOV | isPlayable=true、duration=4805/48000 |
+| AVFoundation HEVC MOV / HEVC video track 単独 | いずれも isPlayable=false |
+| AVFoundation ALAC-only m4a | playable |
+| AVFoundation AV1 MP4 | isPlayable=false。M1 の AV1 decode 非対応による player 互換性制限（supervisor の判断）、encode / ffprobe 失敗ではない |
+
+従って407fa0dで hardware encode / A/V roundtrip / fixed job は確認されたが、
+HEVC の Apple player 受理は失敗した。H.264 の asset duration は実報告の4805/48000を
+そのまま記録し、CPU ffprobe の stream duration と同一だと推測しない。
+実再生品質・GPU統合・package署名/再配置の結果はこの報告に含まれない。
+
+## HEVC hvc1 修正と pending host run
+
+最終 mux の HEVC stream に header 前の hvc1 tagを固定し、global-header extradata 不在を拒否する。
+既存 VideoToolbox global-header / allow_sw=0 を維持し、コピーした parameter sets を hvcC に格納する。
+公開 codec 指定・fallback・version bump は追加しない（未リリース profile version 1 の確定）。
+出力 tagを再probeして hvc1でなければpublishしない。
+Rust `MediaRuntime::probe_codec_tag(path, stream_index)` はbounded file probeからu32の
+little-endian FourCCを返す。wire/schema/report形状は変更しない。
+
+CPU unit `ffi::tests::hevc_delivery_mux_configuration_requires_hvc1` は実muxが使うC tag selectorを
+deviceなしで検証する。AV1 roundtrip は同probeの av01 と範囲外streamの型付き拒否を検証する。
+ignored HEVC profile testは最終MOVのcodec_tag=hvc1を同probeでassertする。
+これらCPU checksはhvcCの実parameter sets・VideoToolbox・AVFoundation受理を証明しない。
+
+次を同じworktree / native環境で順番に実行する。全て修正後は pending host run。
+
+```sh
+export KRONELLO_HEVC_HOST_OUT="$TMPDIR/media002-hvc1-host-$(date +%Y%m%d%H%M%S)"
+cargo test -p kronello-media --test profiles --locked host_hevc_alac_movie_roundtrip_pts_duration_and_publication -- --ignored --exact --nocapture
+cargo test -p kronello-cli --test jobs --locked host_hevc_delivery_sync_fixed_job_and_alac_match_quantized_evaluator -- --ignored --exact --nocapture
+cargo run -p kronello-media --example movie_profiles --locked -- "$KRONELLO_HEVC_HOST_OUT" hevc
+ffprobe -v error -show_format -show_streams -show_packets -of json "$KRONELLO_HEVC_HOST_OUT/delivery.mov" > "$KRONELLO_HEVC_HOST_OUT/ffprobe.json"
+python3 - "$KRONELLO_HEVC_HOST_OUT" <<'PY'
+import json, sys
+from pathlib import Path
+root = Path(sys.argv[1])
+probe = json.loads((root / 'ffprobe.json').read_text())
+video = next(s for s in probe['streams'] if s['codec_type'] == 'video')
+assert video['codec_name'] == 'hevc' and video['codec_tag_string'] == 'hvc1', video
+assert video['extradata_size'] > 0, video
+data = (root / 'delivery.mov').read_bytes()
+offset = data.index(b'hvcC')
+size = int.from_bytes(data[offset-4:offset], 'big')
+assert size >= 31 and offset + size - 4 <= len(data)
+config = data[offset+4:offset+size-4]
+assert config[0] == 1 and len(config) >= 23
+cursor, parameter_types = 23, set()
+for _ in range(config[22]):
+    flags = config[cursor]
+    count = int.from_bytes(config[cursor+1:cursor+3], 'big')
+    cursor += 3
+    for _ in range(count):
+        length = int.from_bytes(config[cursor:cursor+2], 'big')
+        cursor += 2
+        assert length > 0 and cursor + length <= len(config)
+        assert (config[cursor] >> 1) & 63 == flags & 63
+        cursor += length
+    if count:
+        parameter_types.add(flags & 63)
+        if flags & 63 in (32, 33, 34):
+            assert flags & 128, 'hvc1 parameter-set array must be complete'
+assert cursor == len(config) and {32, 33, 34} <= parameter_types, parameter_types
+print('hvc1 / hvcC VPS,SPS,PPS verified')
+PY
+cat > "$KRONELLO_HEVC_HOST_OUT/playable.swift" <<'SWIFT'
+import AVFoundation
+import CoreMedia
+import Foundation
+let asset = AVURLAsset(url: URL(fileURLWithPath: CommandLine.arguments[1]))
+let playable = try await asset.load(.isPlayable)
+let duration = try await asset.load(.duration)
+let tracks = try await asset.loadTracks(withMediaType: .video)
+var codecs: [UInt32] = []
+for track in tracks {
+    for format in try await track.load(.formatDescriptions) {
+        codecs.append(CMFormatDescriptionGetMediaSubType(format))
+    }
+}
+print("isPlayable=\(playable) duration=\(duration.value)/\(duration.timescale) codec_fourcc=\(codecs)")
+guard playable, codecs == [0x68766331] else { throw NSError(domain: "MEDIA-002-hvc1", code: 1) }
+SWIFT
+swift "$KRONELLO_HEVC_HOST_OUT/playable.swift" "$KRONELLO_HEVC_HOST_OUT/delivery.mov"
+```
+
+期待:各test 1 passed、example exit0でhevc_videotoolbox / hardware /
+cpu_rgba_to_hardware_encoder、ffprobe hvc1、hvcCにcomplete VPS/SPS/PPS、
+Swift exit0 / isPlayable=true / hvc1 FourCC。durationは実値を保存する。
+SwiftとhvcC検査command自体もhost未実行。AVFoundationの受理を実再生品質と同一視しない。
+
+## hvc1 修正の worker 実行結果
+
+HEAD `407fa0d84df593c1668aae5371a9d7e90784388e` 上の今回の未commit差分、CPU sandbox、
+共有 Cargo cache / target と管理 TMPDIR、CARGO_BUILD_JOBS=3、既存 LGPL native prefixを使用。
+
+| 実行 command | worker 実結果 |
+|---|---|
+| `cargo fmt --all --check` | exit0 |
+| `cargo clippy --workspace --all-targets --locked -- -D warnings` | exit0、media002-hvc1-clippy.log |
+| `cargo test -p kronello-media --all-targets --locked -- --skip gpu_` | exit0、27 passed / 0 failed / 2 ignored / 0 filtered、media002-hvc1-media.log。新規CPU mux configuration testを含む |
+| `cargo test -p kronello-cli --test jobs --locked av1_delivery_sync_fixed_job_and_alac_match_quantized_evaluator -- --exact` | exit0、1 passed / 0 failed / 22 filtered、media002-hvc1-cli.log |
+| `python3 scripts/generate_swift_api.py --check` | exit0、schema / generated Swift変更なし |
+| `git diff --check` | exit0 |
+
+27 media testsとfocused CLI testはCPU/softwareの実行。ignored 2件をhardware成功に数えない。
+今回workspace全tests / GPU / VideoToolbox / AVFoundationは実行していない。
+logsは上記管理TMPDIR。初回workerのenv helperはscratch回収で消えていたため最初のsourceは失敗し、
+本書の指定環境を明示exportして上記checksを実行した。
+
+今回変更: crates/kronello-media/native/media.c、src/ffi.rs、src/export.rs、tests/profiles.rs、
+docs/adr/0068-versioned-delivery-movie-profiles.md、docs/architecture/12-platform-dependencies.md、
+docs/testing/media-002.md（7 files）。既存commitの20 filesを今回の新規実装とは数えない。
+FFmpeg flags / manifest、backlog、Cargo.lock、API / Project schema、generated Swiftは変更なし。
+今回もworkerはcommit / push / mergeや他worktreeへの書込みを実行していない。
