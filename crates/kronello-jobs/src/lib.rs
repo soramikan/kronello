@@ -7,6 +7,7 @@ use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+mod connection_gate;
 mod heartbeat;
 pub use heartbeat::WorkerHeartbeat;
 
@@ -14,11 +15,12 @@ pub use heartbeat::WorkerHeartbeat;
 // connection closes WAL while another thread opens the same DB. Hold this
 // process-local gate through all SQLite access and connection destruction.
 // Separate processes still coordinate through SQLite's normal file locks.
-static CONNECTION_LIFETIME: std::sync::Mutex<()> = std::sync::Mutex::new(());
+static CONNECTION_LIFETIME: connection_gate::ConnectionGate =
+    connection_gate::ConnectionGate::new();
 struct JobConnection {
     // Field order matters: Connection closes before the gate is released.
     db: Connection,
-    _lifetime: std::sync::MutexGuard<'static, ()>,
+    _lifetime: connection_gate::ConnectionLease<'static>,
 }
 impl std::ops::Deref for JobConnection {
     type Target = Connection;
@@ -274,27 +276,7 @@ impl JobStore {
         self.connect_with_timeout(Duration::from_secs(5))
     }
     fn connect_with_timeout(&self, timeout: Duration) -> Result<JobConnection, JobError> {
-        let start = std::time::Instant::now();
-        let lifetime = loop {
-            match CONNECTION_LIFETIME.try_lock() {
-                Ok(guard) => break guard,
-                Err(std::sync::TryLockError::Poisoned(_)) => {
-                    return Err(JobError::new(
-                        "JOB_STORAGE_ERROR",
-                        "connection lifetime gate poisoned",
-                    ));
-                }
-                Err(std::sync::TryLockError::WouldBlock) => {
-                    if start.elapsed() >= timeout {
-                        return Err(JobError::new(
-                            "JOB_PROCESS_BUSY",
-                            "connection lifetime gate contended",
-                        ));
-                    }
-                    std::thread::sleep(Duration::from_millis(1));
-                }
-            }
-        };
+        let lifetime = CONNECTION_LIFETIME.acquire(timeout)?;
         let db = Connection::open(self.config.state_root.join("jobs.sqlite3"))?;
         db.busy_timeout(timeout)?;
         db.execute_batch("PRAGMA synchronous=FULL;")?;

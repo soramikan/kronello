@@ -22,7 +22,7 @@ impl Fixture {
         let root = temp.path().join("state");
         let cleanup = WorkerCleanup::new(&root).unwrap();
         let mut config = JobConfig::at(root);
-        config.heartbeat_interval = Duration::from_millis(50);
+        config.heartbeat_interval = (heartbeat_timeout / 20).min(Duration::from_millis(500));
         // Keep routine process tests independent of subsecond disk/scheduler
         // latency. The watchdog test below explicitly supplies a short limit.
         config.heartbeat_timeout = heartbeat_timeout;
@@ -70,7 +70,14 @@ impl Fixture {
             .arg(input)
             .arg(destination)
             .env("KRONELLO_STATE_ROOT", &self.store.config().state_root)
-            .env("KRONELLO_JOB_HEARTBEAT_MS", "50")
+            .env(
+                "KRONELLO_JOB_HEARTBEAT_MS",
+                self.store
+                    .config()
+                    .heartbeat_interval
+                    .as_millis()
+                    .to_string(),
+            )
             .env(
                 "KRONELLO_JOB_TIMEOUT_MS",
                 self.store
@@ -119,6 +126,16 @@ impl Fixture {
             "orphan worker {pid}"
         );
     }
+    fn wait_for_heartbeat(&self, id: &str, previous: i64) {
+        let start = Instant::now();
+        while self.store.get(id).unwrap().heartbeat_at_ms <= previous {
+            assert!(
+                start.elapsed() < Duration::from_secs(5),
+                "heartbeat did not advance job={id}"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
 }
 
 #[test]
@@ -129,9 +146,8 @@ fn parent_exit_fixed_input_fifo_heartbeats_forced_kill_and_prune() {
     let b = f.submit("second", true);
     let queued = f.store.get(&b.id).unwrap();
     assert_eq!(queued.status, JobStatus::Queued);
-    std::thread::sleep(Duration::from_millis(250));
-    assert!(f.store.get(&a.id).unwrap().heartbeat_at_ms > running.heartbeat_at_ms);
-    assert!(f.store.get(&b.id).unwrap().heartbeat_at_ms > queued.heartbeat_at_ms);
+    f.wait_for_heartbeat(&a.id, running.heartbeat_at_ms);
+    f.wait_for_heartbeat(&b.id, queued.heartbeat_at_ms);
     // Mutate the source request, never the saved job input.
     std::fs::write(f.temp.path().join("second.json"), b"changed").unwrap();
     f.release("first");

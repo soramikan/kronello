@@ -83,6 +83,8 @@ GUI / CLI / MCP
 JOB-002 は SQLite 3.51.1 の Unix VFS の concurrent WAL close / open の mutex deadlock を防ぐため、
 job DB の connection 寿命（open / SQL / close）を process-local gate で直列化する。
 heartbeat 用 gate の取得待機も bounded、`JOB_PROCESS_BUSY` は競合として再試行する。
+gate は FIFO 待機列を持ち、終了した thread の即時再取得で既存 waiter を追い越さない。
+期限切れ waiter は列から取り除き、後続を妨げない。Connection の close 完了まで ownership を保持する。
 `WorkerHeartbeat` の独立 watchdog は最後の heartbeat 成功から heartbeat_timeout で log を記録し process を終了する。
 native mutex が待ち続けても DB へ終了記録を書こうとせず、次の reader の stale / dead 判定で interrupted にする。
 heartbeat thread の join 中も watchdog は有効。全 process の停止中は watchdog も動かない。

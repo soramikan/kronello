@@ -20,22 +20,35 @@ fn run() -> Result<(), JobError> {
         if args[0] == "restricted-parent" {
             kronello_platform::prohibit_test_parent_breakaway()?;
         }
-        let store = JobStore::open(JobConfig::from_env()?)?;
+        let store = JobStore::open(JobConfig::from_env()?).map_err(|error| {
+            JobError::new(error.code(), format!("opening parent job state: {error}"))
+        })?;
         let input = std::fs::read(&args[1])?;
-        let r = store.submit(
-            &input,
-            Submission {
-                engine_version: "test".into(),
-                project_id: "fixed".into(),
-                revision: "1".into(),
-                snapshot_hash: "fixed".into(),
-                output_profile: serde_json::json!({}),
-                destination: PathBuf::from(&args[2]),
-                total_frames: 1,
-            },
-        )?;
-        store.spawn(&r.id, &std::env::current_exe()?)?;
-        println!("{}", serde_json::to_string(&store.get(&r.id)?)?);
+        let r = store
+            .submit(
+                &input,
+                Submission {
+                    engine_version: "test".into(),
+                    project_id: "fixed".into(),
+                    revision: "1".into(),
+                    snapshot_hash: "fixed".into(),
+                    output_profile: serde_json::json!({}),
+                    destination: PathBuf::from(&args[2]),
+                    total_frames: 1,
+                },
+            )
+            .map_err(|error| {
+                JobError::new(error.code(), format!("submitting parent job: {error}"))
+            })?;
+        store
+            .spawn(&r.id, &std::env::current_exe()?)
+            .map_err(|error| {
+                JobError::new(error.code(), format!("spawning parent job: {error}"))
+            })?;
+        let record = store.get(&r.id).map_err(|error| {
+            JobError::new(error.code(), format!("reading parent response: {error}"))
+        })?;
+        println!("{}", serde_json::to_string(&record)?);
         return Ok(());
     }
     if args.len() != 3 || args[0] != "worker" || args[1] != "--job" {
@@ -52,9 +65,19 @@ fn run() -> Result<(), JobError> {
         let input: serde_json::Value = serde_json::from_slice(&store.input(&r)?)?;
         let gate = PathBuf::from(input["gate"].as_str().unwrap());
         while !gate.exists() {
-            store.checkpoint(id, 0)?;
+            // No frames advance while waiting for a test gate. Keep lease
+            // heartbeat writes in the pulse thread, rather than flooding FULL
+            // synchronous storage with redundant zero-frame checkpoints.
+            let record = store.get(id)?;
+            if record.status != kronello_jobs::JobStatus::Running {
+                return Err(JobError::new("JOB_INTERRUPTED", "execution lease lost"));
+            }
+            if record.cancel_requested {
+                return Err(JobError::new("JOB_CANCELED", "cancel requested"));
+            }
             std::thread::sleep(Duration::from_millis(20));
         }
+        store.checkpoint(id, 0)?;
         let staged = r.destination.with_extension(format!("{id}.staged"));
         let directory = input["directory"].as_bool().unwrap_or(false);
         if directory {
