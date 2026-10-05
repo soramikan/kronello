@@ -288,7 +288,15 @@ pub(crate) fn validate(project: &Project) -> Result<(), ServiceError> {
         }
     }
     kronello_model::validate_compositions(&compositions, &r).map_err(invalid)?;
-    kronello_model::validate_shape_contents(project, &r).map_err(invalid)?;
+    kronello_model::validate_shape_contents(project, &r).map_err(|e| match e {
+        kronello_model::ShapeError::UnsupportedStrokeVersion
+        | kronello_model::ShapeError::InvalidDashArray
+        | kronello_model::ShapeError::StrokeBudgetExceeded
+        | kronello_model::ShapeError::OpenStrokeAlignment => {
+            ServiceError::from(kronello_render::RenderError::Shape(e))
+        }
+        _ => invalid(e),
+    })?;
     kronello_model::validate_text_contents(project, &r).map_err(invalid)?;
     for (_, p) in properties(project) {
         p.validate_sources(&r, &Catalog(project)).map_err(invalid)?;

@@ -14,7 +14,8 @@ Path、Fill、Stroke、Gradient、ClipPath を意味的 IR に保持する。最
 SVG 読み込みは対応表を持つ。外部 URL、script、外部フォント等は自動取得・実行せず、明示インポートする。
 
 初期から矩形、角丸矩形、楕円、ベジェパス、単色塗り・線・基本グラデーションを扱う。
-Trim path、線端・破線のアニメーション、Path boolean、morph は段階実装する。
+破線 offset のアニメーションは VEC-005 の明示 stroke options で扱う。
+Trim path、線端のアニメーション、Path boolean、morph は段階実装する。
 
 ### VEC-001 の実装規約
 
@@ -28,14 +29,14 @@ Trim path、線端・破線のアニメーション、Path boolean、morph は�
 
 ### 線とグラデーションの実装範囲
 
-M1 の VEC-003 と M3 の VEC-004 の範囲、後続タスクの境界を固定する。未対応の機能を含む文書は保存時に失わないが、最終レンダーは `UNSUPPORTED_FEATURE` で拒否する（[ADR-0010](../adr/0010-unsupported-features-fail-final-render.md)）。
+M1 の VEC-003 と M3 の VEC-004 / VEC-005 の範囲、後続タスクの境界を固定する。未対応の機能を含む文書は保存時に失わないが、最終レンダーは `UNSUPPORTED_FEATURE` で拒否する（[ADR-0010](../adr/0010-unsupported-features-fail-final-render.md)）。
 
-| 項目 | M1（VEC-003） | M3（VEC-004）/ 後続 |
+| 項目 | M1（VEC-003） | M3（VEC-004 / VEC-005）/ 後続 |
 |---|---|---|
 | 線の join / cap | miter（miter limit 既定 4）/ bevel / round、butt / square / round | — |
-| 破線 | なし | dash 配列・offset とそのアニメーション（VEC-005） |
-| 線の位置 | 中央のみ | 内側・外側（VEC-005） |
-| 非一様 scale / skew 下の線幅 | `UNSUPPORTED_FEATURE` | 意味を定義して解消（VEC-005） |
+| 破線 | なし | 明示 options の dash 配列・offset Property（VEC-005、Metal 検証待ち） |
+| 線の位置 | 中央のみ | center / inside / outside、closed contour の fill-rule clip（VEC-005） |
+| 非一様 scale / skew 下の線幅 | `UNSUPPORTED_FEATURE` | version 2 はローカル線を affine で写す（VEC-005） |
 | グラデーションの種類 | 線形、放射（中心と半径） | 焦点付き放射（焦点位置・焦点半径）、円錐 / sweep（VEC-004、Metal 検証待ち） |
 | 範囲外の扱い（spread） | pad のみ | repeat / reflect（VEC-004） |
 | 色の補間空間 | 作業用線形空間の premultiplied に固定 | グラデーションごとの明示指定（sRGB・straight 等）と補間空間の意味の版（VEC-004） |
@@ -52,7 +53,7 @@ M1 の VEC-003 と M3 の VEC-004 の範囲、後続タスクの境界を固定�
 - `GradientStop` の color / offset はノード所有の `PropertyId`。再利用可能な `kronello.shape.gradient_color` / `kronello.shape.gradient_offset` descriptor を登録する。stop descriptor は一つのノードに複数配置でき、評価は PropertyId ごとに行う。transform / opacity 等の singleton descriptor 重複は引き続き拒否する。offset は有限の `[0,1]`、stop 数は 2〜256、保存順は offset の非減少順。評価後にも検証し、アニメーションで順序が逆転したら `ShapeError::InvalidGradient` とする。並べ替え・clamp で修正しない。同位置ではその位置の最後の stop が勝つ右連続の段差とし、直前の区間は最初の同位置 stop に向かう。
 - stop の色を個別に sRGB decode / 原色変換 → 作業用線形空間 → premultiply し、その値を補間する。各 4×4 AA サンプルで paint を評価・被覆に応じて蓄積し、fill / stroke を別々に平均して stroke を fill へ source-over する。内部補間を unpremultiply しない。透明 stop の RGB を持ち込まず、HDR の負値・1 超も clamp しない。
 - CPU / GPU は同じ float32 の展開済み三角形・円を使う。curve の flatten は既存の画素 tolerance（既定 0.02 px）。snapshot の coverage は `vec003-grid4-v2`、stroke geometry は `vec003-centered-stroke-v1`、gradient interpolation は `vec003-linear-premultiplied-pad-v1`。vector flatten / color の既存意味版は変更しない。raster key は stop 値・gradient geometry・逆写像・線幅 / join / cap / limit・追加意味版を含む。paint 変更ではローカル輪郭の geometry cache を再利用する。
-- VEC-005 と未知の gradient フィールド・variant は strict な既知 Shape / Text として解釈せず、`DocumentObject::Opaque` で値と所属を保持する。選択出力が必要とする opaque content は最終レンダーで `UNSUPPORTED_FEATURE`。非一様変換の線も同じエラー。機能を既定値へ置換しない。
+- options を伴わない未知の stroke 拡張と未知の gradient フィールド・variant は strict な既知 Shape / Text として解釈せず、`DocumentObject::Opaque` で値と所属を保持する。選択出力が必要とする opaque content は最終レンダーで `UNSUPPORTED_FEATURE`。旧 stroke 幾何版の非一様変換の線も同じエラー。機能を既定値へ置換しない。
 
 受け入れ条件のテスト対応と検証範囲は [VEC-003 の検証](../testing/vec-003.md) を参照。
 
@@ -74,6 +75,20 @@ paint の変更で cluster / AnimationUnit / outline / layout key を変えず�
 意味版は `vec004-explicit-interpolation-v1`、未知の補間版は最終レンダーで `UNSUPPORTED_FEATURE`。
 SDR dither は採用せず、現行の RGBA16F / 16bit PNG にノイズを追加しない。
 CPU / 静的検証と Metal / golden の残件は [VEC-004 の検証](../testing/vec-004.md) を参照。
+
+### VEC-005 の実装規約
+
+[ADR-0073](../adr/0073-local-stroke-extensions.md) に従い `Stroke.options` を明示選択する。
+省略した作品は `vec003-centered-stroke-v1` の演算順・非一様変換拒否を維持する。
+新 `vec005-local-stroke-v2` は局所の線幅・cap / join を affine で写す。
+破線は flattened path のローカル弧長、奇数配列は複製、負 offset は周期 wrap、閉 contour の seam は結合する。
+zero dash は butt 無被覆 / round 円 / square 局所軸の正方形。非空全 zero・負長・非有限長は拒否する。
+16,384 subdivision steps / fragments の上限超過は `STROKE_BUDGET_EXCEEDED`。
+`kronello.shape.dash_offset` は Scalar / DesignPx の通常 animatable Property。
+inside / outside は幅 2w の中央線と fill-rule interior / 補集合の交差。
+開 contour は `STROKE_OPEN_ALIGNMENT`。layout envelope は維持し、ink / visual と pixel ROI に affine support を反映する。
+共通 `ShapeSet` / Property / Curve 編集、snapshot の対応版、raster cache と golden manifest に入力を記録する。
+[VEC-005 検証](../testing/vec-005.md) に CPU 証拠と pending host run を分けて記録する。
 
 ### 設計寸法と出力解像度
 

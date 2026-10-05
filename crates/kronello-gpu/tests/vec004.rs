@@ -277,6 +277,7 @@ fn overflowing_gradient_scenes() -> (RenderSize, Vec<DrawScene>) {
     let scene = DrawScene {
         roots: vec![0],
         nodes: vec![DrawNode::Path(PathDraw {
+            stroke_geometry: None,
             contours: vec![Contour {
                 points: vec![[0.0, 0.0], [4.0, 0.0], [4.0, 4.0], [0.0, 4.0]],
                 closed: true,

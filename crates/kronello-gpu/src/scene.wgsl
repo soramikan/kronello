@@ -17,6 +17,8 @@ struct Params {
     stroke_y: vec4<f32>,
     paint_x: vec4<f32>,
     paint_y: vec4<f32>,
+    local_stroke_x: vec4<f32>,
+    local_stroke_y: vec4<f32>,
 }
 struct Edge { points: vec4<f32>, flags: vec4<u32>, extra: vec4<f32> }
 struct Stop { rgba: vec4<f32>, offset: vec4<f32>, space: vec4<u32> }
@@ -141,9 +143,10 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
                     let p = (vec2<f32>(id.xy)+(vec2<f32>(f32(sx),f32(sy))+0.5)/4.0)*params.scale.xy;
                     var winding = 0i;
                     var stroked = false;
+                    let stroke_p = vec2<f32>(dot(params.local_stroke_x.xy,p)+params.local_stroke_x.z,dot(params.local_stroke_y.xy,p)+params.local_stroke_y.z);
                     for (var e=0u; e<params.config.y; e++) {
                         if edges[e].flags.y!=0u {
-                            stroked=stroked || primitive_hit(p,edges[e]);
+                            stroked=stroked || primitive_hit(stroke_p,edges[e]);
                         } else {
                             let a=edges[e].points.xy; let b=edges[e].points.zw;
                             let cross=cross2(b-a,p-a);
@@ -152,7 +155,9 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
                         }
                     }
                     if (params.config.z==0u && winding!=0i) || (params.config.z==1u && winding%2i!=0i) { fill_color+=gradient_paint(params.fill,params.spaces.x,params.fill_gradient,params.fill_geometry,params.fill_extra,params.fill_x,params.fill_y,p)/16.0; }
-                    if stroked { stroke_color+=gradient_paint(params.stroke,params.spaces.y,params.stroke_gradient,params.stroke_geometry,params.stroke_extra,params.stroke_x,params.stroke_y,p)/16.0; }
+                    let inside = (params.boundary.z==0u && winding!=0i) || (params.boundary.z==1u && winding%2i!=0i);
+                    let aligned = params.boundary.y==0u || (params.boundary.y==1u && inside) || (params.boundary.y==2u && !inside);
+                    if stroked && aligned { stroke_color+=gradient_paint(params.stroke,params.spaces.y,params.stroke_gradient,params.stroke_geometry,params.stroke_extra,params.stroke_x,params.stroke_y,p)/16.0; }
                 }
             }
             result=over(stroke_color,fill_color);

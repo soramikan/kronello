@@ -1036,6 +1036,7 @@ fn supported_stroke_styles_nonuniform_transform_and_zero_scale() {
     let cap = constant("kronello.shape.stroke_cap", Value::Enum("round".into()));
     let miter = constant("kronello.shape.miter_limit", scalar(4.0));
     shape.stroke = Some(Stroke {
+        options: None,
         gradient: None,
         color: color.id(),
         width: width.id(),
@@ -2318,6 +2319,7 @@ fn malformed_gradient_and_vec005_payloads_roundtrip_but_fail_final_render() {
         panic!()
     };
     shape.stroke = Some(Stroke {
+        options: None,
         gradient: None,
         color: shape.fill.as_ref().unwrap().color,
         width: width.id(),
@@ -3094,4 +3096,286 @@ fn fx002_legacy_snapshot_pin_and_effect_cache_identity() {
         RasterCacheKey::for_dag(&new, "cpu").unwrap()
     );
     assert_ne!(expected, CpuReferenceBackend.execute(&new).unwrap());
+}
+
+fn vec005_project(alignment: StrokeAlignment, animated: bool) -> (Project, CompositionId) {
+    let (mut n, mut shape) = rectangle([12.3, 9.7], Color::from_srgb8([255, 0, 0], None));
+    shape.fill = None;
+    let color = constant(
+        "kronello.shape.stroke_color",
+        Value::Color(Color::from_srgb8([40, 180, 250], None)),
+    );
+    let width = constant("kronello.stroke_width", scalar(1.7));
+    let join = constant("kronello.shape.stroke_join", Value::Enum("round".into()));
+    let cap = constant("kronello.shape.stroke_cap", Value::Enum("round".into()));
+    let limit = constant("kronello.shape.miter_limit", scalar(4.0));
+    let curve = AnimationCurve::new(
+        CurveId::new(),
+        ValueType::Scalar,
+        vec![
+            Keyframe {
+                time: t(0, 1),
+                value: scalar(0.37),
+                interpolation: CurveInterpolation::Linear,
+            },
+            Keyframe {
+                time: t(1, 1),
+                value: scalar(3.37),
+                interpolation: CurveInterpolation::Linear,
+            },
+        ],
+    )
+    .unwrap();
+    let offset = if animated {
+        prop(
+            "kronello.shape.dash_offset",
+            PropertySource::Curve(curve.id()),
+        )
+    } else {
+        constant("kronello.shape.dash_offset", scalar(0.37))
+    };
+    shape.stroke = Some(Stroke {
+        options: Some(Box::new(StrokeOptions {
+            geometry_version: EXTENDED_STROKE_VERSION.into(),
+            alignment,
+            fill_rule: FillRule::Evenodd,
+            dash_array: vec![f(3.17), f(1.31), f(2.23)],
+            dash_offset: offset.id(),
+        })),
+        gradient: None,
+        color: color.id(),
+        width: width.id(),
+        join: join.id(),
+        cap: cap.id(),
+        miter_limit: limit.id(),
+    });
+    n.properties.extend([
+        color,
+        width,
+        join,
+        cap,
+        limit,
+        offset,
+        constant("kronello.transform.position", v2(10.031, 7.019)),
+        constant("kronello.transform.scale", v2(1.3, 0.8)),
+        constant("kronello.transform.skew", Value::Angle(f(17.0))),
+    ]);
+    let c = composition(vec![n]);
+    let id = c.id;
+    (
+        Project {
+            compositions: vec![DocumentObject::Known(c)],
+            shapes: vec![DocumentObject::Known(shape)],
+            curves: if animated {
+                vec![DocumentObject::Known(curve)]
+            } else {
+                vec![]
+            },
+            ..Default::default()
+        },
+        id,
+    )
+}
+
+#[test]
+fn vec005_offset_animation_instances_and_raster_identity() {
+    let (mut p, id) = vec005_project(StrokeAlignment::Center, true);
+    let root = composition(
+        [0, 1]
+            .map(|i| {
+                node(
+                    NodeKind::CompositionInstance(CompositionInstance {
+                        id: CompositionInstanceId::new(),
+                        definition_ref: id,
+                        input_bindings: Default::default(),
+                        local_time_map: TimeMap::linear(t(i, 2), t(1, 1)).unwrap(),
+                        seed: 42,
+                    }),
+                    vec![],
+                )
+            })
+            .to_vec(),
+    );
+    let root_id = root.id;
+    p.compositions.push(DocumentObject::Known(root));
+    let scene = build_scene_ir(&snapshot(&p, root_id), Time::ZERO, &[]).unwrap();
+    let offsets: Vec<_> = scene
+        .nodes
+        .iter()
+        .filter_map(|n| match &n.content {
+            SceneContent::Shape { resolved, .. } => Some((
+                n.key.instance_path.clone(),
+                resolved
+                    .stroke
+                    .as_ref()
+                    .unwrap()
+                    .options
+                    .as_ref()
+                    .unwrap()
+                    .dash_offset,
+            )),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(offsets.len(), 2);
+    assert_ne!(offsets[0].0, offsets[1].0);
+    assert_eq!((offsets[0].1, offsets[1].1), (0.37, 1.87));
+    let s = snapshot(&p, id);
+    let mut cache = RenderCache::default();
+    let before = cached_frame(&s, t(0, 1), region(), &mut cache);
+    cache.reset_stats();
+    let after = cached_frame(&s, t(1, 2), region(), &mut cache);
+    assert_ne!(before.pixels.linear, after.pixels.linear);
+    assert!(cache.stats().geometry.hits > 0);
+    assert!(cache.stats().raster.misses > 0);
+    let again = cached_frame(&s, t(0, 1), region(), &mut cache);
+    assert_eq!(before.pixels, again.pixels);
+}
+
+fn assert_vec005_affine_crop(backend: &dyn RenderBackend) {
+    for alignment in [
+        StrokeAlignment::Center,
+        StrokeAlignment::Inside,
+        StrokeAlignment::Outside,
+    ] {
+        let (p, id) = vec005_project(alignment, true);
+        for working_space in [ColorSpace::LinearRec709, ColorSpace::LinearRec2020] {
+            let s = RenderSnapshot::new(
+                &p,
+                id,
+                0,
+                RenderProfile {
+                    working_space,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            for time in [t(0, 1), t(1, 2), t(1, 1)] {
+                let ir = build_scene_ir(&s, time, &[]).unwrap();
+                let full_dag = build_render_dag(&ir, s.profile(), region()).unwrap();
+                let full = backend.execute(&full_dag).unwrap();
+                let expected = CpuReferenceBackend.execute(&full_dag).unwrap();
+                for (a, b) in full.linear.iter().zip(&expected.linear) {
+                    for i in 0..4 {
+                        assert!((a[i] - b[i]).abs() <= (1.0 / 1024.0) * b[i].abs().max(1.0));
+                    }
+                }
+                let crop = OutputRegion {
+                    origin: [8.0, 5.0],
+                    extent: [32.0, 20.0],
+                    pixels: [32, 20],
+                };
+                let actual = backend
+                    .execute(&build_render_dag(&ir, s.profile(), crop).unwrap())
+                    .unwrap();
+                for y in 0..20 {
+                    for x in 0..32 {
+                        assert_eq!(actual.linear[y * 32 + x], full.linear[(y + 5) * 64 + x + 8]);
+                    }
+                }
+                let bounds = ir.nodes[0].bounds;
+                let visual = bounds.visual_bounds.unwrap();
+                assert_eq!(bounds.ink_bounds, bounds.visual_bounds);
+                for y in 0..32 {
+                    for x in 0..64 {
+                        if full.linear[y * 64 + x][3] > 0.0 {
+                            assert!(
+                                (x as f64) + 1.0 >= visual.min[0] && (x as f64) <= visual.max[0]
+                            );
+                            assert!(
+                                (y as f64) + 1.0 >= visual.min[1] && (y as f64) <= visual.max[1]
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+#[test]
+fn vec005_nonuniform_skew_bounds_and_roi_are_conservative() {
+    assert_vec005_affine_crop(&CpuReferenceBackend);
+}
+#[test]
+fn gpu_vec005_affine_animation_alignment_and_roi_match_cpu() {
+    assert_vec005_affine_crop(&kronello_gpu::GpuContext::new().unwrap());
+}
+
+#[test]
+fn vec005_legacy_snapshot_pixels_and_unknown_versions() {
+    let (mut p, id) = vec005_project(StrokeAlignment::Center, false);
+    let DocumentObject::Known(shape) = &mut p.shapes[0] else {
+        panic!()
+    };
+    shape.stroke.as_mut().unwrap().options = None;
+    comp_mut(&mut p).nodes[0].properties.retain(|p| {
+        !matches!(
+            p.descriptor().key.as_str(),
+            "kronello.transform.scale" | "kronello.transform.skew"
+        )
+    });
+    let current = snapshot(&p, id);
+    let mut wire = serde_json::to_value(&current).unwrap();
+    wire["semantic_versions"]["stroke_geometry"] = serde_json::json!(LEGACY_STROKE_VERSION);
+    let old = vec005_restore(&wire).unwrap();
+    assert_eq!(
+        frame(&current, Time::ZERO).pixels,
+        frame(&old, Time::ZERO).pixels
+    );
+    wire["semantic_versions"]["stroke_geometry"] = serde_json::json!("future");
+    assert_eq!(
+        vec005_restore(&wire).unwrap_err().code(),
+        "UNSUPPORTED_FEATURE"
+    );
+    let (p, id) = vec005_project(StrokeAlignment::Center, false);
+    let mut wire = serde_json::to_value(snapshot(&p, id)).unwrap();
+    wire["semantic_versions"]["stroke_geometry"] = serde_json::json!(LEGACY_STROKE_VERSION);
+    let old = vec005_restore(&wire).unwrap();
+    assert_eq!(
+        build_scene_ir(&old, Time::ZERO, &[]).unwrap_err().code(),
+        "UNSUPPORTED_FEATURE"
+    );
+}
+
+#[test]
+fn vec005_invalid_dash_open_alignment_budget_and_version_are_typed() {
+    for (kind, code) in [
+        (0, "STROKE_INVALID_DASH"),
+        (1, "STROKE_OPEN_ALIGNMENT"),
+        (2, "STROKE_BUDGET_EXCEEDED"),
+        (3, "UNSUPPORTED_FEATURE"),
+    ] {
+        let (mut p, id) = vec005_project(StrokeAlignment::Inside, false);
+        let DocumentObject::Known(shape) = &mut p.shapes[0] else {
+            panic!()
+        };
+        let options = shape.stroke.as_mut().unwrap().options.as_mut().unwrap();
+        match kind {
+            0 => options.dash_array = vec![f(-1.0), f(2.0)],
+            1 => {
+                let path = constant(
+                    "kronello.shape.path",
+                    Value::Path(Path {
+                        segments: vec![
+                            PathSegment::MoveTo([f(0.0); 2]),
+                            PathSegment::LineTo([f(10.0), f(0.0)]),
+                        ],
+                    }),
+                );
+                shape.geometry = ShapeGeometry::BezierPath { path: path.id() };
+                comp_mut(&mut p).nodes[0].properties.push(path);
+            }
+            2 => options.dash_array = vec![f(1e-9), f(1e-9)],
+            _ => options.geometry_version = "future".into(),
+        }
+        let result = build_scene_ir(&snapshot(&p, id), Time::ZERO, &[])
+            .and_then(|ir| build_render_dag(&ir, RenderProfile::default(), region()));
+        assert_eq!(result.unwrap_err().code(), code);
+    }
+}
+
+fn vec005_restore(wire: &serde_json::Value) -> Result<RenderSnapshot, RenderError> {
+    let snapshot: RenderSnapshot = serde_json::from_value(wire.clone()).unwrap();
+    snapshot.validate()?;
+    Ok(snapshot)
 }

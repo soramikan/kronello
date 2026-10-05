@@ -7,6 +7,7 @@ pub fn paint(rgba: [f32; 4], space: InputSpace) -> Paint {
 }
 pub fn rectangle(min: [f32; 2], max: [f32; 2], color: Paint) -> DrawNode {
     DrawNode::Path(PathDraw {
+        stroke_geometry: None,
         fill_gradient: None,
         stroke_gradient: None,
         paint_transform: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
@@ -71,6 +72,7 @@ pub fn matte(kind: MaskKind) -> DrawScene {
 pub fn edges() -> DrawScene {
     DrawScene {
         nodes: vec![DrawNode::Path(PathDraw {
+            stroke_geometry: None,
             fill_gradient: None,
             stroke_gradient: None,
             paint_transform: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
@@ -139,6 +141,7 @@ pub fn glyph() -> DrawScene {
         )
         .unwrap();
         nodes.push(DrawNode::Path(PathDraw {
+            stroke_geometry: None,
             fill_gradient: None,
             stroke_gradient: None,
             paint_transform: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
@@ -171,6 +174,7 @@ pub fn fill_rules(rule: FillRule) -> DrawScene {
     };
     DrawScene {
         nodes: vec![DrawNode::Path(PathDraw {
+            stroke_geometry: None,
             fill_gradient: None,
             stroke_gradient: None,
             paint_transform: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
@@ -335,6 +339,7 @@ pub fn scenes() -> Vec<(&'static str, u32, WorkingSpace, DrawScene)> {
     scenes.extend(vec003_scenes());
     scenes.extend(vec004_scenes());
     scenes.extend(fx002_scenes());
+    scenes.extend(vec005_scenes());
     scenes
 }
 
@@ -343,6 +348,7 @@ pub fn stroke_styles(caps: bool, fallback: bool) -> DrawScene {
     for i in 0..3 {
         let x = 2.0 + 10.0 * i as f32;
         nodes.push(DrawNode::Path(PathDraw {
+            stroke_geometry: None,
             fill_gradient: None,
             stroke_gradient: None,
             paint_transform: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
@@ -576,4 +582,138 @@ pub fn vec004_scenes() -> Vec<(&'static str, u32, WorkingSpace, DrawScene)> {
             )
         })
         .collect()
+}
+
+pub fn vec005_scenes() -> Vec<(&'static str, u32, WorkingSpace, DrawScene)> {
+    use model::StrokeAlignment;
+    [
+        "stroke-dashes",
+        "stroke-inside-evenodd",
+        "stroke-outside-nonzero",
+        "stroke-affine-reflected",
+    ]
+    .into_iter()
+    .enumerate()
+    .map(|(case, id)| {
+        let mut local = vec![Contour {
+            points: vec![
+                [0.031, 0.019],
+                [12.331, 0.019],
+                [12.331, 9.719],
+                [0.031, 9.719],
+            ],
+            closed: true,
+        }];
+        if case == 1 || case == 2 {
+            let mut hole = vec![
+                [3.137, 3.271],
+                [9.113, 3.271],
+                [9.113, 6.317],
+                [3.137, 6.317],
+            ];
+            if case == 2 {
+                hole.reverse();
+            }
+            local.push(Contour {
+                points: hole,
+                closed: true,
+            });
+        }
+        let matrix: [[f32; 3]; 2] = if case == 3 {
+            [[-1.3, 0.29, 24.037], [0.17, 0.83, 7.043]]
+        } else {
+            [[1.17, 0.23, 7.037], [0.13, 1.07, 5.043]]
+        };
+        let det = matrix[0][0] * matrix[1][1] - matrix[0][1] * matrix[1][0];
+        let inverse = [
+            [
+                matrix[1][1] / det,
+                -matrix[0][1] / det,
+                (matrix[0][1] * matrix[1][2] - matrix[1][1] * matrix[0][2]) / det,
+            ],
+            [
+                -matrix[1][0] / det,
+                matrix[0][0] / det,
+                (matrix[1][0] * matrix[0][2] - matrix[0][0] * matrix[1][2]) / det,
+            ],
+        ];
+        let array = if case == 0 {
+            vec![0.0, 2.173, 3.317]
+        } else if case == 3 {
+            vec![3.173, 1.317]
+        } else {
+            vec![]
+        };
+        let offset = 0.371;
+        let flattened = kronello_vector::FlattenedPath {
+            subpaths: local
+                .iter()
+                .map(|c| kronello_vector::Polyline {
+                    points: c.points.iter().map(|p| p.map(f64::from)).collect(),
+                    closed: c.closed,
+                })
+                .collect(),
+        };
+        let dashed = kronello_vector::dash_path(&flattened, &array, offset).unwrap();
+        let alignment = match case {
+            1 => StrokeAlignment::Inside,
+            2 => StrokeAlignment::Outside,
+            _ => StrokeAlignment::Center,
+        };
+        let rule = if case == 1 {
+            FillRule::Evenodd
+        } else {
+            FillRule::Nonzero
+        };
+        let draw = PathDraw {
+            stroke_geometry: Some(LocalStrokeGeometry {
+                version: model::EXTENDED_STROKE_VERSION.into(),
+                contours: dashed
+                    .subpaths
+                    .into_iter()
+                    .map(|c| Contour {
+                        points: c.points.into_iter().map(|p| p.map(|x| x as f32)).collect(),
+                        closed: c.closed,
+                    })
+                    .collect(),
+                output_to_local: inverse,
+                alignment,
+                fill_rule: rule,
+                dash_array: array,
+                dash_offset: offset,
+            }),
+            contours: local
+                .into_iter()
+                .map(|c| Contour {
+                    points: c
+                        .points
+                        .into_iter()
+                        .map(|p| matrix.map(|r| r[0] * p[0] + r[1] * p[1] + r[2]))
+                        .collect(),
+                    closed: c.closed,
+                })
+                .collect(),
+            fill: None,
+            stroke: Some(RoundStroke {
+                width: 1.713,
+                join: StrokeJoin::Round,
+                cap: StrokeCap::Round,
+                miter_limit: 4.0,
+                paint: paint([0.17, 0.63, 1.3, 0.83], InputSpace::LinearRec709),
+            }),
+            fill_gradient: None,
+            stroke_gradient: None,
+            paint_transform: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+        };
+        (
+            id,
+            32,
+            WorkingSpace::LinearRec709,
+            DrawScene {
+                nodes: vec![DrawNode::Path(draw)],
+                roots: vec![0],
+            },
+        )
+    })
+    .collect()
 }

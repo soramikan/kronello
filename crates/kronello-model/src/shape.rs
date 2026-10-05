@@ -64,6 +64,9 @@ pub struct Fill {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Stroke {
+    /// Absent options retain the exact VEC-003 execution path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub options: Option<Box<StrokeOptions>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gradient: Option<Box<Gradient>>,
     pub color: PropertyId,
@@ -74,6 +77,56 @@ pub struct Stroke {
     pub cap: PropertyId,
     /// Dimensionless Scalar Property, at least 1.
     pub miter_limit: PropertyId,
+}
+
+pub const LEGACY_STROKE_VERSION: &str = "vec003-centered-stroke-v1";
+pub const EXTENDED_STROKE_VERSION: &str = "vec005-local-stroke-v2";
+
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum StrokeAlignment {
+    #[default]
+    Center,
+    Inside,
+    Outside,
+}
+
+/// Explicit opt-in; lengths are local design_px, offset is an evaluated Property.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct StrokeOptions {
+    pub geometry_version: String,
+    pub alignment: StrokeAlignment,
+    /// Defines the interior independently of whether the shape has fill paint.
+    pub fill_rule: FillRule,
+    pub dash_array: Vec<FiniteF64>,
+    pub dash_offset: PropertyId,
+}
+impl StrokeOptions {
+    pub fn validate(&self) -> Result<(), ShapeError> {
+        if self.geometry_version != EXTENDED_STROKE_VERSION {
+            return Err(ShapeError::UnsupportedStrokeVersion);
+        }
+        if self.dash_array.len() > 256 {
+            return Err(ShapeError::StrokeBudgetExceeded);
+        }
+        validate_dash_array(&self.dash_array.iter().map(|x| x.get()).collect::<Vec<_>>())
+    }
+}
+
+pub fn validate_dash_array(array: &[f64]) -> Result<(), ShapeError> {
+    if array.len() > 256 {
+        return Err(ShapeError::StrokeBudgetExceeded);
+    }
+    if array.iter().any(|x| !x.is_finite() || *x < 0.0)
+        || (!array.is_empty() && array.iter().all(|x| *x == 0.0))
+        || !(array.iter().sum::<f64>() * if array.len() % 2 == 1 { 2.0 } else { 1.0 }).is_finite()
+    {
+        return Err(ShapeError::InvalidDashArray);
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -458,6 +511,7 @@ pub struct ResolvedFill {
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResolvedStroke {
+    pub options: Option<Box<ResolvedStrokeOptions>>,
     pub gradient: Option<Box<ResolvedGradient>>,
     pub color: Color,
     pub width: FiniteF64,
@@ -466,8 +520,25 @@ pub struct ResolvedStroke {
     pub miter_limit: FiniteF64,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct ResolvedStrokeOptions {
+    pub geometry_version: String,
+    pub alignment: StrokeAlignment,
+    pub fill_rule: FillRule,
+    pub dash_array: Vec<f64>,
+    pub dash_offset: f64,
+}
+
 #[derive(Debug, Clone, PartialEq, Error)]
 pub enum ShapeError {
+    #[error("unsupported stroke geometry version")]
+    UnsupportedStrokeVersion,
+    #[error("dash lengths must be finite, nonnegative and not all zero")]
+    InvalidDashArray,
+    #[error("stroke work budget exceeded")]
+    StrokeBudgetExceeded,
+    #[error("inside/outside stroke requires closed contours")]
+    OpenStrokeAlignment,
     #[error("unsupported gradient interpolation semantics version")]
     UnsupportedGradientVersion,
     #[error("invalid gradient geometry or stops (2..=256, ordered offsets in [0,1])")]
@@ -503,6 +574,7 @@ enum Parameter {
     Cap,
     Miter,
     Offset,
+    DashOffset,
 }
 impl Parameter {
     fn value_type(self) -> ValueType {
@@ -516,7 +588,9 @@ impl Parameter {
     }
     fn unit(self) -> Unit {
         match self {
-            Self::Size | Self::Radius | Self::Path | Self::Width => Unit::DesignPx,
+            Self::Size | Self::Radius | Self::Path | Self::Width | Self::DashOffset => {
+                Unit::DesignPx
+            }
             _ => Unit::Dimensionless,
         }
     }
@@ -526,6 +600,7 @@ impl Parameter {
             (Self::Radius | Self::Width, Value::Scalar(v)) => v.get() >= 0.0,
             (Self::Miter, Value::Scalar(v)) => v.get() >= 1.0,
             (Self::Offset, Value::Scalar(v)) => (0.0..=1.0).contains(&v.get()),
+            (Self::DashOffset, Value::Scalar(_)) => true,
             (Self::Path, Value::Path(path)) => {
                 validate_path(path)?;
                 true
@@ -575,6 +650,9 @@ impl Shape {
             refs.push((fill.color, Parameter::Color));
         }
         if let Some(stroke) = &self.stroke {
+            if let Some(options) = &stroke.options {
+                refs.push((options.dash_offset, Parameter::DashOffset));
+            }
             refs.extend([
                 (stroke.color, Parameter::Color),
                 (stroke.width, Parameter::Width),
@@ -616,6 +694,9 @@ impl Shape {
         properties: &[Property],
         registry: &SchemaRegistry,
     ) -> Result<(), ShapeError> {
+        if let Some(options) = self.stroke.as_ref().and_then(|s| s.options.as_ref()) {
+            options.validate()?;
+        }
         for gradient in self
             .fill
             .as_ref()
@@ -681,6 +762,9 @@ impl Shape {
         &self,
         values: &BTreeMap<PropertyId, Value>,
     ) -> Result<ResolvedShape, ShapeError> {
+        if let Some(options) = self.stroke.as_ref().and_then(|s| s.options.as_ref()) {
+            options.validate()?;
+        }
         for (id, parameter) in self.parameters() {
             parameter.validate(
                 id,
@@ -731,6 +815,15 @@ impl Shape {
             rule: f.rule,
         });
         let stroke = self.stroke.as_ref().map(|s| ResolvedStroke {
+            options: s.options.as_ref().map(|o| {
+                Box::new(ResolvedStrokeOptions {
+                    geometry_version: o.geometry_version.clone(),
+                    alignment: o.alignment,
+                    fill_rule: o.fill_rule,
+                    dash_array: o.dash_array.iter().map(|x| x.get()).collect(),
+                    dash_offset: scalar(o.dash_offset).get(),
+                })
+            }),
             gradient: stroke_gradient.map(Box::new),
             color: color(s.color),
             width: scalar(s.width),
@@ -796,6 +889,12 @@ pub fn validate_shape_contents(
 pub fn shape_descriptors() -> Vec<PropertyDescriptor> {
     let n = |v| FiniteF64::new(v).expect("finite descriptor default");
     let entries = [
+        (
+            0x9cf34ec6_523a_4c20_86cf_091c243798ab,
+            "dash_offset",
+            Unit::DesignPx,
+            Value::Scalar(n(0.0)),
+        ),
         (
             0x3d761408_24b1_4281_a10c_be02f8b0d876,
             "gradient_color",
