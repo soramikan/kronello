@@ -129,7 +129,7 @@ GUI・CLI・MCP サーバーはそれぞれ別プロセスとして同じ `.kron
 
 判定と上書き手段は [ADR-0046](../adr/0046-store-format-and-location-policy.md) で具体化した。
 
-実同期フォルダ・ネットワーク FS での確認用に `kronello-store` の `sync_folder_check` example を用意した。[STORE-003 の検証](../testing/store-003.md) のコマンドで実際の `Auto` 判定、journal mode、別プロセスの `PROJECT_LOCKED`、close 後の再 open と清掃を確認する。macOS のローカル対照試験は実行済みだが、iCloud Drive / Dropbox / ネットワーク FS と Linux / Windows の実行は未確認。Windows の保存層専用 CI job を追加したが、CI 結果はまだない。
+実同期フォルダ・ネットワーク FS での確認用に `kronello-store` の `sync_folder_check` example を用意した。[STORE-003 の検証](../testing/store-003.md) のコマンドで実際の `Auto` 判定、journal mode、別プロセスの `PROJECT_LOCKED`、close 後の再 open と清掃を確認する。macOS のローカル対照試験と実 iCloud Drive は2026-10-04に確認済み。Linux / Windows の競合・強制終了回復は2026-10-06の CI run `37426096876` で確認済み（各 storage 35 passed / 0 failed / 0 ignored）。Dropbox と実ネットワーク FS は未確認であり、STORE-003 は `in_progress` を維持する。CI のローカル filesystem 成功を実同期サービスの保証に置き換えない。
 
 `OpenMode::Auto` は canonical path と実ファイルシステムを調べる。macOS の home 配下 `Library/CloudStorage` / `Library/Mobile Documents`、Dropbox / OneDrive / Google Drive 系フォルダ名、および `statfs` の smbfs / nfs / afpfs / webdav 等を安全モードにする。Linux は NFS / SMB / CIFS / SMB2 / FUSE、Windows は UNC を検出する。`ForceNormal` / `ForceSafe` で誤判定を上書きできるが、既存プロセスの排他ロックは突破しない。判定器は `LocationDetector` として注入できる。非標準同期先や Windows のドライブ文字でのネットワーク接続は完全には検出できず、`ForceSafe` を指定する。
 

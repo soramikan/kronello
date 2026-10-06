@@ -1,92 +1,73 @@
 # 11 ワークスペースと実装責務
 
-状態: Cargo workspace を整備済み。M0 の GPU / FrameBridge スパイク、M1 の store / animation / eval / vector / text / render / service / cli と、M2 の media / audio / template / mcp / jobs の各 crate を実装した。M2 の P0 全 10 タスクは完了し、共有編集・検査 API、CompositionClip のマルチトラック配置、公開入力・保護時間区間付き日本語テンプレート、基本音声と ProRes / PCM24 書き出し、blur / shadow、MCP stdio、固定 snapshot の独立 worker、4K 縦断デモを接続した（実装範囲と検証は下記・各タスクの記録）。延期範囲は[後続タスク](../roadmap/milestones.md#m2-の延期範囲と後続タスク)に記録し、STORE-003 は実環境検証の残件により `in_progress`。M3 以降と `apps/` は未着手。以下の全体構成は引き続き構成案であり、記録した範囲外の API・crate の機能を実装済みとは扱わない。
+状態: 2026-10-06、M0・M1・M2のP0・M3・M4を受け入れ済み。`apps/macos` は実装済みで、Windows / Linux GUIは未実装（GUI-005 / GUI-006）。STORE-003は実Dropbox管理フォルダ・実ネットワークFSの検証が残る。機能の保証範囲は [M4受け入れ](../testing/m4-acceptance.md)、未実装・未検証の対応表は [現在の実装範囲と残件](../roadmap/implementation-status.md) を参照する。
 
-初期は以下を論理モジュールとして開始し、ビルド依存やテスト境界に応じて crate 分割する。過度な micro-crate 化はしない。
+## 現在の配置
+
+以下は現行 `Cargo.toml` と各crateのmanifestに存在する構成。論理上の機能名と独立crateの有無を混同しない。
 
 ```text
 crates/
-  kronello-model/          # IDs, document types, property descriptors, versions
+  kronello-model/          # document types, IDs, property descriptors, versions
   kronello-time/           # rational time, ranges, TimeMap, sampling
-  kronello-animation/      # curves, interpolation, modifier contracts
-  kronello-expr/           # typed AST, dependencies, bounded evaluator
-  kronello-scene/          # composition, parenting, masks, Scene IR
-  kronello-layout/         # responsive constraints, metrics, bounds
-  kronello-text/           # fonts, Japanese layout, glyph/cluster mappings
-  kronello-vector/         # paths, shape IR, geometry operations
-  kronello-render/         # DAG compiler, region/time planner, scheduler
-  kronello-gpu/            # wgpu, pipelines, color/alpha, texture pools
-  kronello-media/          # FFmpeg integration, seek, decode/encode
-  kronello-framebridge/    # OS/GPU specific interop and synchronization
-  kronello-audio/          # mixer, buses, feature-data integration
+  kronello-animation/      # curves and interpolation
+  kronello-eval/           # property evaluation, bounded expression AST
+  kronello-text/           # fonts, Japanese horizontal layout, glyph/cluster mappings
+  kronello-vector/         # paths, geometry, fill and stroke
+  kronello-render/         # scene compilation, layout, DAG, region/time requests, cache
+  kronello-gpu/            # wgpu execution, color/alpha, texture cache and pools
+  kronello-media/          # FFmpeg runtime, seek, decode/encode
+  kronello-framebridge/    # native interop and resident VideoToolbox/Metal decode
+  kronello-audio/          # document audio, mixing, stateless effects
   kronello-store/          # SQLite, snapshots, migrations, event journal
-  kronello-template/       # typed inputs, bindings, duration, versions
-  kronello-service/        # commands, queries, policies, job orchestration
-  kronello-cli/            # machine-oriented CLI adapter (binary: kronello)
-  kronello-mcp/            # MCP adapter
-  kronello-jobs/           # detached workers, execution state, leases, publication
-  kronello-ffi/            # FFI boundary for native GUI apps
+  kronello-template/       # inputs, bindings, durations and versions
+  kronello-service/        # shared commands, queries, policies and orchestration
+  kronello-cli/            # machine-oriented CLI (binary: kronello)
+  kronello-mcp/            # stdio/HTTP MCP adapter
+  kronello-jobs/           # detached workers, leases, publication and recovery
+  kronello-platform/       # OS process and publication primitives
+  kronello-ffi/            # native GUI C ABI
+  kronello-testkit/        # fixtures, CPU reference and golden support
 apps/
-  macos/                     # Swift (SwiftUI / AppKit) desktop app
-  windows/                   # 将来
-  linux/                     # 将来
+  macos/                  # SwiftUI / AppKit application and SwiftPM tests
 ```
 
-v0.2 仕様からの変更: 接頭辞 `ved-` → `kronello-`。`ved-desktop` を廃し、`kronello-ffi` と `apps/` に置き換えた（[10 デスクトップ GUI](10-desktop-gui.md)）。
+`kronello-expr` / `kronello-scene` / `kronello-layout` は独立crateとして存在しない。式評価は主にeval、scene compilationとlayoutはrender等に実装されている。`apps/windows` / `apps/linux` は将来の配置候補であり、存在するアプリとして列挙しない。高度な音声特徴量はAUDIO-001、縦書き・ルビはTEXT-002の未実装範囲である。
 
 ## 依存の向き
 
-処理の流れは「意味的文書 → 値・組版・Scene IR → Render DAG / 実行計画 → backend」。コード依存は以下の `利用側 → 型・契約の提供側` として読む（[ADR-0043](../adr/0043-semantic-dependencies-and-units.md)「論理モジュールとコード依存」）。
+意味上の流れは「文書 → 値・組版・Scene IR → Render DAG / 実行計画 → backend」。[ADR-0043](../adr/0043-semantic-dependencies-and-units.md) の論理境界を保ちつつ、実crateの依存は各 `Cargo.toml` を正本とする。主要なproduction依存は次のとおり（全依存を列挙した図ではない）。
 
 ```text
 model -> time
-animation / expr / text / vector -> model / time
-layout -> model / time / text
-scene -> model / time / animation / expr / layout / text / vector
-template / store -> model / time
-render -> scene / model / time (+ evaluation / layout / geometry)
-backend (gpu / media / audio) -> render contracts / model / time
-framebridge -> gpu / media adapters
-service -> store / template / scene / render / backend / framebridge
+animation / eval / text / vector -> model / time
+render -> eval / vector / text / template / model / time
+store / template -> model / time
+service -> store / render / media / audio / jobs / model
 cli / mcp / ffi -> service
 ```
 
-- Timeline の文書型（Sequence / Clip）は model、Composition のシーン処理は scene、Property の評価は animation / expr、配置と Scene IR を共通 DAG へまとめる責務は render に置く。専用 Timeline crate を追加する決定ではない。
-- render は具象 backend を import せず、非依存の契約を定義し、実装を service / worker から受け取る。Property / Layout の依存 DAG は意味的入力値で接続し、crate の循環依存を作らない。
-- store は文書を供給し、service が評価エンジンを呼ぶ。UI は共通 API 経由で利用し、評価エンジンは store / service / UI へ逆依存しない。
-- GPU texture、AVFrame、SQLite connection、Tokio runtime の型を model に漏らさない。
-- FFmpeg や wgpu の API 差分はアダプターで吸収し、`Cargo.lock` と native dependencies manifest を固定する。
-- cli / mcp / ffi は service の薄いアダプターとし、編集の意味を持たない。
+- Timelineの文書型はmodel、配置とScene IRをDAGへまとめる責務はrenderに置く。
+- renderのproduction依存にgpuはない。テスト用のgpu dev-dependencyと区別する。
+- serviceがstoreの文書から評価・描画を呼ぶ。評価エンジンはstore / service / UIへ逆依存しない。
+- GPU texture、AVFrame、SQLite connection、Tokio runtimeの型をmodelへ漏らさない。
+- CLI / MCP / FFIは同じCommand / Queryを利用し、GUI専用の作品状態を持たない。
+- jobsとplatformの責務、Windowsのnative handle隔離は [ADR-0074](../adr/0074-windows-job-workers-and-process-evidence.md) と [ADR-0082](../adr/0082-windows-ffmpeg-runtime.md) に従う。
 
-## FFI-001 の native 境界
+## FFI とアプリ
 
-FFI-001 は `crates/kronello-ffi` と `apps/macos` の SwiftPM package を追加した。
-FFI は service の共有 decoder / Command / Query と preview DAG preparation、gpu の既存 lowering を利用する。
-純粋層への native 型の追加はない。C ABI は9関数、Swift 型は公開 API schema から stdlib Python script で生成する。
-FFI crate の package 設定は workspace を継承し、lint は framebridge と同じ明記方式で unsafe_code のみ allow にする。
-macOS CI に library build と Swift build/test を追加し、Linux / Windows job の手順は変更しない。
-SwiftPM targets と dynamic library の配置は [macOS README](../../apps/macos/README.md)、
-実装判断は [ADR-0056](../adr/0056-native-ffi-worker-and-swiftpm.md)、
-host 実行待ちの条件は [FFI-001 検証](../testing/ffi-001.md) を参照。
+`kronello-ffi` は9関数のC ABI、非同期worker、共有要求のdecoder、native previewを持つ。Swiftの公開型はJSON Schemaから生成する。FFI-002では安全モードのstoreをセッション中保持する。純粋層のunsafe禁止は維持し、native interopだけにunsafeを隔離する。
+
+macOSはEdit / Motion / Template / Exportの4ページと実時間音声を実装した。[macOS README](../../apps/macos/README.md) にbuild手順、[M3受け入れ](../testing/m3-acceptance.md) と [FFI-002](../testing/ffi-002.md) にGUI・process検証を記録する。開発アプリのad-hoc署名と製品配布の保証は異なる（RELEASE-002〜004）。
 
 ## ツールチェーンと CI
 
-[ADR-0038](../adr/0038-toolchain-and-ci.md) による。
+- Rust stable 1.95.0、edition 2024、workspace `rust-version` 1.95、resolver 3。`Cargo.lock` を管理する。
+- virtual workspaceは `crates/*`。共通packageはversion 0.0.0、`MIT OR Apache-2.0`、`publish = false`。各crateは共通設定とlintを継承し、native interop層だけ明記した例外を持つ。
+- [CI workflow](../../.github/workflows/ci.yml) はmainへのpushとpull requestを対象とし、checkout/cache等のactionをcommit SHAで固定する。
+- macOS Apple Silicon / Linux Mesa lavapipeでfmt、warningsを拒否するclippy、workspace tests、CPU統合、MCP SDK、実process・FFI終了、backlog検証を行う。macOSはSwift build/testも実行する。
+- Windowsは固定したLGPL runtimeとCLI/MCPをbuildし、実media roundtrip、親終了後のworker、保存層・運用example・processを検証する。workspace全体をmacOS/Linuxと同じコマンドで実行したとは扱わない。
+- QA-004のLinux Vulkan / Windows DX12画像比較を別jobで実行する。software adapterの結果をhardware resident保証に置き換えない。Apple Silicon / Metalは採用済み基準に対する実機比較を [golden手順](../testing/golden-comparison.md) で行う。
+- [run 37426096876](https://github.com/soramikan/kronello/actions/runs/37426096876) は全5jobs成功。実行環境・件数・checkout・証拠は [M4受け入れ](../testing/m4-acceptance.md) を参照。古い証拠を再アップロードしないよう、cache復元後に検証出力を消去し、実行されたproducerの証拠だけをuploadする。
 
-- `rust-toolchain.toml` で Rust stable 1.95.0 に固定済み。MSRV は 1.95、edition は 2024。更新時は toolchain と workspace の `rust-version` を同時に更新する。
-- ルート `Cargo.toml` は virtual workspace（`members = ["crates/*"]`、resolver 3）。共通 package 設定は version 0.0.0、`MIT OR Apache-2.0`、`publish = false`。各 crate は共通設定と lint を継承し、`Cargo.lock` を管理する。
-- rustfmt と clippy を必須とし、警告をエラーとして扱う。
-- `.github/workflows/ci.yml` は main への push と pull request を対象とし、`macos-latest`（Apple Silicon）と `ubuntu-latest`（Mesa lavapipe）の両方で fmt / clippy / workspace test / backlog check を実行する。checkout と cache の action は commit SHA に固定し、Rust は `rustup show` で toolchain ファイルから導入する。
-- Linux は `VK_DRIVER_FILES` で lavapipe の ICD を選び、`WGPU_BACKEND=vulkan` を設定する。`vulkaninfo --summary` で CPU device とソフトウェア driver を確認する。GPU-001 は M1 / Metal の実機で検証済み。Linux は cross-check のみで、CI / lavapipe の実行成功は未確認。
-- CI では値とレイアウトの意味的比較を通常の `cargo test` に含めて必須とする。GPU-001 の色・alpha・座標・転送経路も通常テストに含む。GPU 画素の golden harness は実装済みで CI の必須ジョブにせず、[固定環境の比較手順](../testing/golden-comparison.md) に従う。M4 参照機の基準は未登録。
-
-## GPU-001 で追加した crate
-
-| crate | 現在の実装範囲 | 依存・境界 |
-|---|---|---|
-| `kronello-gpu` | wgpu 30.0.1 / pollster 1.0.1、CPU 色参照、矩形・PAM の線形 RGBA16F 合成、degree 回転、設計寸法と出力解像度の分離、最小 isolated root group opacity、readback、転送 counters、ignored golden harness | 純粋モデル層に依存・GPU 型を追加しない。`kronello-testkit` は dev-dependency。製品 Render DAG / texture pool は未実装 |
-| `kronello-framebridge` | `PathKind` / `TransferPath`、CPU upload / GPU copy / readback、macOS の同一 Metal device 上での IOSurface BGRA8 取り込み・出力スパイク | gpu と wgpu に依存。native interop と unsafe は macOS module。VideoToolbox session は未実装 |
-
-共通 package 設定は両 crate とも継承する。`kronello-gpu` は共通 lint の `unsafe_code=forbid` を継承する。`kronello-framebridge` だけは native interop のため `unsafe_code=allow` とし、Cargo が lint テーブルの部分上書きと workspace 継承を併用できないため、workspace の他の lint 設定を crate に明記する。純粋層の forbid は変更していない。
-
-M1 の通常テストは GPU 13 / FrameBridge 3 が成功。Linux lavapipe、VideoToolbox、M4 参照機は未検証。計測値・転送の数え方・後続タスクの境界は [M0 GPU スパイク報告](../testing/gpu-spike-m0.md) を参照。
+M0の矩形/PAM/IOSurface技術スパイクの履歴は [スパイク報告](../testing/gpu-spike-m0.md) に残す。現在のGPU DAG・texture cache/pool・VideoToolbox resident decodeの範囲は [05 レンダラー](05-render-gpu.md) と [GPU-003](../testing/gpu-003.md) を参照し、M0当時の未実装一覧を現状と扱わない。

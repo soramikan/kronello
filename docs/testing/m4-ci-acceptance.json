@@ -684,5 +684,760 @@
     "actions-final-macos.log": "1ccb4071e33c96cf56f961c777683fce4e0751d7d85bcc2a1426b884607600e9",
     "actions-final-linux.log": "40454b60492d8f0b2a3fbfde6ef573b0fd80488036b58731d208589122b195b7",
     "windows-fde889e-full.log": "a038364c80c5bc7763c5269faa771ad79ec3837fa5e596316dea8d8b2d438508"
+  },
+  "final_verification": {
+    "run_id": 37426096876,
+    "url": "https://github.com/soramikan/kronello/actions/runs/37426096876",
+    "head_sha": "153922384937f41c697da825948daf903f312bc6",
+    "checkout_merge_sha": "78fe20300f87b712ce9b6565d2aa6edb5c1250b5",
+    "status": "completed",
+    "jobs": [
+      {
+        "completedAt": "2026-10-06T07:21:22Z",
+        "conclusion": "success",
+        "databaseId": 112145981134,
+        "name": "Windows (full CLI/MCP and LGPL media)",
+        "startedAt": "2026-10-06T06:51:12Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-10-06T06:51:14Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-10-06T06:51:13Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:51:22Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09",
+            "number": 2,
+            "startedAt": "2026-10-06T06:51:14Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:51:33Z",
+            "conclusion": "success",
+            "name": "Install pinned Rust toolchain",
+            "number": 3,
+            "startedAt": "2026-10-06T06:51:22Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T07:08:44Z",
+            "conclusion": "success",
+            "name": "Build hash-pinned LGPL runtime with MinGW",
+            "number": 4,
+            "startedAt": "2026-10-06T06:51:33Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T07:12:59Z",
+            "conclusion": "success",
+            "name": "Build full CLI and MCP with the pinned runtime headers",
+            "number": 5,
+            "startedAt": "2026-10-06T07:08:44Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T07:17:25Z",
+            "conclusion": "success",
+            "name": "Execute real media roundtrip and CLI/MCP parent-exit evidence",
+            "number": 6,
+            "startedAt": "2026-10-06T07:12:59Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T07:17:26Z",
+            "conclusion": "success",
+            "name": "Upload MEDIA-003 evidence and native receipt",
+            "number": 7,
+            "startedAt": "2026-10-06T07:17:25Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T07:19:33Z",
+            "conclusion": "success",
+            "name": "Test storage and operational example",
+            "number": 8,
+            "startedAt": "2026-10-06T07:17:26Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T07:21:17Z",
+            "conclusion": "success",
+            "name": "Verify jobs/platform real processes and record evidence",
+            "number": 9,
+            "startedAt": "2026-10-06T07:19:33Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T07:21:18Z",
+            "conclusion": "success",
+            "name": "Upload JOB-002 evidence",
+            "number": 10,
+            "startedAt": "2026-10-06T07:21:17Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T07:21:20Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09",
+            "number": 20,
+            "startedAt": "2026-10-06T07:21:18Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T07:21:20Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 21,
+            "startedAt": "2026-10-06T07:21:20Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/soramikan/kronello/actions/runs/37426096876/job/112145981134"
+      },
+      {
+        "completedAt": "2026-10-06T06:59:36Z",
+        "conclusion": "success",
+        "databaseId": 112145981202,
+        "name": "Linux (Mesa lavapipe)",
+        "startedAt": "2026-10-06T06:51:12Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-10-06T06:51:14Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-10-06T06:51:13Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:51:17Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09",
+            "number": 2,
+            "startedAt": "2026-10-06T06:51:14Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:51:33Z",
+            "conclusion": "success",
+            "name": "Install and select Mesa lavapipe",
+            "number": 3,
+            "startedAt": "2026-10-06T06:51:17Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:51:40Z",
+            "conclusion": "success",
+            "name": "Install pinned Rust toolchain",
+            "number": 4,
+            "startedAt": "2026-10-06T06:51:33Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:52:08Z",
+            "conclusion": "success",
+            "name": "Cache Cargo dependencies and build artifacts",
+            "number": 5,
+            "startedAt": "2026-10-06T06:51:40Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:52:09Z",
+            "conclusion": "success",
+            "name": "Clear restored verification evidence",
+            "number": 6,
+            "startedAt": "2026-10-06T06:52:08Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:52:09Z",
+            "conclusion": "success",
+            "name": "Report disk available for workspace tests",
+            "number": 7,
+            "startedAt": "2026-10-06T06:52:09Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:52:29Z",
+            "conclusion": "success",
+            "name": "Install FFmpeg development dependencies",
+            "number": 8,
+            "startedAt": "2026-10-06T06:52:09Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:52:29Z",
+            "conclusion": "success",
+            "name": "Check formatting",
+            "number": 9,
+            "startedAt": "2026-10-06T06:52:29Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:52:43Z",
+            "conclusion": "success",
+            "name": "Lint with warnings denied",
+            "number": 10,
+            "startedAt": "2026-10-06T06:52:29Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:52:43Z",
+            "conclusion": "success",
+            "name": "Fetch hash-pinned test fixtures",
+            "number": 11,
+            "startedAt": "2026-10-06T06:52:43Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:52:47Z",
+            "conclusion": "success",
+            "name": "Generate and validate fixtures",
+            "number": 12,
+            "startedAt": "2026-10-06T06:52:43Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:57:23Z",
+            "conclusion": "success",
+            "name": "Run workspace tests",
+            "number": 13,
+            "startedAt": "2026-10-06T06:52:47Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:57:58Z",
+            "conclusion": "success",
+            "name": "Verify job real processes and record evidence",
+            "number": 14,
+            "startedAt": "2026-10-06T06:57:23Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:57:59Z",
+            "conclusion": "success",
+            "name": "Upload JOB-002 evidence",
+            "number": 15,
+            "startedAt": "2026-10-06T06:57:58Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:59:25Z",
+            "conclusion": "success",
+            "name": "Run small CPU integration test",
+            "number": 16,
+            "startedAt": "2026-10-06T06:57:59Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:59:29Z",
+            "conclusion": "success",
+            "name": "Verify MCP 2026 with the official pinned v2 SDK",
+            "number": 17,
+            "startedAt": "2026-10-06T06:59:25Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:59:30Z",
+            "conclusion": "success",
+            "name": "Upload MCP-003 SDK evidence",
+            "number": 18,
+            "startedAt": "2026-10-06T06:59:29Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:59:31Z",
+            "conclusion": "success",
+            "name": "Verify native safe-session close and process termination",
+            "number": 19,
+            "startedAt": "2026-10-06T06:59:30Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:59:32Z",
+            "conclusion": "success",
+            "name": "Upload FFI-002 real process evidence",
+            "number": 20,
+            "startedAt": "2026-10-06T06:59:31Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:59:32Z",
+            "conclusion": "success",
+            "name": "Validate backlog",
+            "number": 21,
+            "startedAt": "2026-10-06T06:59:32Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:59:33Z",
+            "conclusion": "success",
+            "name": "Post Cache Cargo dependencies and build artifacts",
+            "number": 41,
+            "startedAt": "2026-10-06T06:59:32Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:59:33Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09",
+            "number": 42,
+            "startedAt": "2026-10-06T06:59:33Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:59:33Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 43,
+            "startedAt": "2026-10-06T06:59:33Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/soramikan/kronello/actions/runs/37426096876/job/112145981202"
+      },
+      {
+        "completedAt": "2026-10-06T06:52:45Z",
+        "conclusion": "success",
+        "databaseId": 112145981230,
+        "name": "QA-004 linux-vulkan (actual adapter)",
+        "startedAt": "2026-10-06T06:51:12Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-10-06T06:51:13Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-10-06T06:51:13Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:51:15Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09",
+            "number": 2,
+            "startedAt": "2026-10-06T06:51:13Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:51:28Z",
+            "conclusion": "success",
+            "name": "Select actual Linux software Vulkan adapter",
+            "number": 3,
+            "startedAt": "2026-10-06T06:51:15Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:51:36Z",
+            "conclusion": "success",
+            "name": "Install pinned Rust and input fixtures",
+            "number": 4,
+            "startedAt": "2026-10-06T06:51:28Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:52:33Z",
+            "conclusion": "success",
+            "name": "Generate candidate with CPU oracle (does not adopt)",
+            "number": 5,
+            "startedAt": "2026-10-06T06:51:36Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:52:41Z",
+            "conclusion": "success",
+            "name": "Compare reviewed platform baseline",
+            "number": 6,
+            "startedAt": "2026-10-06T06:52:33Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:52:43Z",
+            "conclusion": "success",
+            "name": "Upload candidate, actual adapter provenance and comparison evidence",
+            "number": 7,
+            "startedAt": "2026-10-06T06:52:41Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:52:43Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09",
+            "number": 14,
+            "startedAt": "2026-10-06T06:52:43Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:52:43Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 15,
+            "startedAt": "2026-10-06T06:52:43Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/soramikan/kronello/actions/runs/37426096876/job/112145981230"
+      },
+      {
+        "completedAt": "2026-10-06T07:18:13Z",
+        "conclusion": "success",
+        "databaseId": 112145981237,
+        "name": "macOS (Apple Silicon)",
+        "startedAt": "2026-10-06T06:51:17Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-10-06T06:51:19Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-10-06T06:51:18Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:51:25Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09",
+            "number": 2,
+            "startedAt": "2026-10-06T06:51:19Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:51:25Z",
+            "conclusion": "success",
+            "name": "Verify Apple Silicon",
+            "number": 3,
+            "startedAt": "2026-10-06T06:51:25Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:51:37Z",
+            "conclusion": "success",
+            "name": "Install pinned Rust toolchain",
+            "number": 4,
+            "startedAt": "2026-10-06T06:51:25Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:53:09Z",
+            "conclusion": "success",
+            "name": "Cache Cargo dependencies and build artifacts",
+            "number": 5,
+            "startedAt": "2026-10-06T06:51:37Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:53:09Z",
+            "conclusion": "success",
+            "name": "Clear restored verification evidence",
+            "number": 6,
+            "startedAt": "2026-10-06T06:53:09Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:53:19Z",
+            "conclusion": "success",
+            "name": "Install FFmpeg development dependencies",
+            "number": 7,
+            "startedAt": "2026-10-06T06:53:09Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:53:20Z",
+            "conclusion": "success",
+            "name": "Check formatting",
+            "number": 8,
+            "startedAt": "2026-10-06T06:53:19Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:53:48Z",
+            "conclusion": "success",
+            "name": "Lint with warnings denied",
+            "number": 9,
+            "startedAt": "2026-10-06T06:53:20Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:53:49Z",
+            "conclusion": "success",
+            "name": "Fetch hash-pinned test fixtures",
+            "number": 10,
+            "startedAt": "2026-10-06T06:53:48Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:53:55Z",
+            "conclusion": "success",
+            "name": "Generate and validate fixtures",
+            "number": 11,
+            "startedAt": "2026-10-06T06:53:49Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T07:05:44Z",
+            "conclusion": "success",
+            "name": "Run workspace tests",
+            "number": 12,
+            "startedAt": "2026-10-06T06:53:55Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T07:06:42Z",
+            "conclusion": "success",
+            "name": "Verify job real processes and record evidence",
+            "number": 13,
+            "startedAt": "2026-10-06T07:05:44Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T07:06:44Z",
+            "conclusion": "success",
+            "name": "Upload JOB-002 evidence",
+            "number": 14,
+            "startedAt": "2026-10-06T07:06:42Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T07:09:58Z",
+            "conclusion": "success",
+            "name": "Run small CPU integration test",
+            "number": 15,
+            "startedAt": "2026-10-06T07:06:44Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T07:17:48Z",
+            "conclusion": "success",
+            "name": "Build and test the macOS FFI package",
+            "number": 16,
+            "startedAt": "2026-10-06T07:09:58Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T07:17:54Z",
+            "conclusion": "success",
+            "name": "Verify MCP 2026 with the official pinned v2 SDK",
+            "number": 17,
+            "startedAt": "2026-10-06T07:17:48Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T07:17:55Z",
+            "conclusion": "success",
+            "name": "Upload MCP-003 SDK evidence",
+            "number": 18,
+            "startedAt": "2026-10-06T07:17:54Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T07:18:01Z",
+            "conclusion": "success",
+            "name": "Verify native safe-session close and process termination",
+            "number": 19,
+            "startedAt": "2026-10-06T07:17:55Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T07:18:02Z",
+            "conclusion": "success",
+            "name": "Upload FFI-002 real process evidence",
+            "number": 20,
+            "startedAt": "2026-10-06T07:18:01Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T07:18:02Z",
+            "conclusion": "success",
+            "name": "Validate backlog",
+            "number": 21,
+            "startedAt": "2026-10-06T07:18:02Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T07:18:02Z",
+            "conclusion": "success",
+            "name": "Validate design system preview",
+            "number": 22,
+            "startedAt": "2026-10-06T07:18:02Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T07:18:10Z",
+            "conclusion": "success",
+            "name": "Post Cache Cargo dependencies and build artifacts",
+            "number": 43,
+            "startedAt": "2026-10-06T07:18:02Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T07:18:11Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09",
+            "number": 44,
+            "startedAt": "2026-10-06T07:18:10Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T07:18:12Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 45,
+            "startedAt": "2026-10-06T07:18:11Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/soramikan/kronello/actions/runs/37426096876/job/112145981237"
+      },
+      {
+        "completedAt": "2026-10-06T06:59:50Z",
+        "conclusion": "success",
+        "databaseId": 112145981395,
+        "name": "QA-004 windows-dx12 (actual adapter)",
+        "startedAt": "2026-10-06T06:51:12Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-10-06T06:51:14Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-10-06T06:51:13Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:51:20Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09",
+            "number": 2,
+            "startedAt": "2026-10-06T06:51:14Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:51:20Z",
+            "conclusion": "skipped",
+            "name": "Select actual Linux software Vulkan adapter",
+            "number": 3,
+            "startedAt": "2026-10-06T06:51:20Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:51:41Z",
+            "conclusion": "success",
+            "name": "Install pinned Rust and input fixtures",
+            "number": 4,
+            "startedAt": "2026-10-06T06:51:20Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:56:47Z",
+            "conclusion": "success",
+            "name": "Generate candidate with CPU oracle (does not adopt)",
+            "number": 5,
+            "startedAt": "2026-10-06T06:51:41Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:59:46Z",
+            "conclusion": "success",
+            "name": "Compare reviewed platform baseline",
+            "number": 6,
+            "startedAt": "2026-10-06T06:56:47Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:59:47Z",
+            "conclusion": "success",
+            "name": "Upload candidate, actual adapter provenance and comparison evidence",
+            "number": 7,
+            "startedAt": "2026-10-06T06:59:46Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:59:49Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09",
+            "number": 14,
+            "startedAt": "2026-10-06T06:59:47Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-06T06:59:49Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 15,
+            "startedAt": "2026-10-06T06:59:49Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/soramikan/kronello/actions/runs/37426096876/job/112145981395"
+      }
+    ],
+    "artifact_freshness": [
+      {
+        "artifact": "job-002-Windows-X64",
+        "artifact_id": 11396213095,
+        "job_id": 112145981134,
+        "checkout_revision": "78fe20300f87b712ce9b6565d2aa6edb5c1250b5",
+        "fresh": true
+      },
+      {
+        "artifact": "mcp-003-Linux-X64",
+        "artifact_id": 11395184275,
+        "job_id": 112145981202,
+        "checkout_revision": "78fe20300f87b712ce9b6565d2aa6edb5c1250b5",
+        "fresh": true
+      },
+      {
+        "artifact": "ffi-002-Linux-X64",
+        "artifact_id": 11395435352,
+        "job_id": 112145981202,
+        "checkout_revision": "78fe20300f87b712ce9b6565d2aa6edb5c1250b5",
+        "fresh": true
+      },
+      {
+        "artifact": "job-002-Linux-X64",
+        "artifact_id": 11395308126,
+        "job_id": 112145981202,
+        "checkout_revision": "78fe20300f87b712ce9b6565d2aa6edb5c1250b5",
+        "fresh": true
+      },
+      {
+        "artifact": "mcp-003-macOS-ARM64",
+        "artifact_id": 11395832997,
+        "job_id": 112145981237,
+        "checkout_revision": "78fe20300f87b712ce9b6565d2aa6edb5c1250b5",
+        "fresh": true
+      },
+      {
+        "artifact": "ffi-002-macOS-ARM64",
+        "artifact_id": 11395648186,
+        "job_id": 112145981237,
+        "checkout_revision": "78fe20300f87b712ce9b6565d2aa6edb5c1250b5",
+        "fresh": true
+      },
+      {
+        "artifact": "job-002-macOS-ARM64",
+        "artifact_id": 11394599853,
+        "job_id": 112145981237,
+        "checkout_revision": "78fe20300f87b712ce9b6565d2aa6edb5c1250b5",
+        "fresh": true
+      }
+    ],
+    "log_sha256": {
+      "macOS-ARM64.log": "58543379fa22d147435cc5f06aac2ff774902eb0d62f8c6e80c51679aab0c13e",
+      "Linux-X64.log": "7ab20f3e401d6a3897f39a4faa59c81474c72ff3f8ed7e83ab4579ea9dde9532",
+      "Windows-X64.log": "f19b8de4006303fbdf843f69b64d9c4aee6116fd46abf28c16c3be7a5c9a438b"
+    },
+    "merged_pr": 8,
+    "merge_commit": "0c0822c",
+    "scope": "Final implementation and Inspector/CI freshness fixes; earlier top-level CI record is retained as historical evidence."
   }
 }

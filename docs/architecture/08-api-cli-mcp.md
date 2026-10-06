@@ -73,7 +73,7 @@ AST node は externally tagged の一要素 object。`"time"` は unit variant�
 
 候補は AST 型と参照 / 依存 DAG を検証する。新しい `EXPRESSION_BUDGET_EXCEEDED` に加え、`EVALUATION_ERROR`、経路付き `PROPERTY_DEPENDENCY_CYCLE`、`UNSUPPORTED_FEATURE` が sample / render / 編集検証から伝播する。編集対象や source catalog の不適合には既存 `INVALID_EDIT` を使う。禁止能力や未知 field を command に含めた場合は `INVALID_REQUEST`。revision / idempotency / Undo は既存の transaction 契約を使う。式の root ごとに同じ予算を適用し、最終レンダーは式の失敗時に停止する。RenderSnapshot の `semantic_versions.expression` と Project 内の AST を固定し、現在文書へ読み替えない。
 
-詳細は [ADR-0058](../adr/0058-bounded-canonical-expression-ast.md)、検証結果は [EXPR-001](../testing/expr-001.md) を参照する。DataAsset / 動的 Property sample / 人間向け parser は未実装。
+詳細は [ADR-0058](../adr/0058-bounded-canonical-expression-ast.md)、検証結果は [EXPR-001](../testing/expr-001.md) を参照する。DataAsset / 動的 Property sample はEXPR-003、人間向けparserはOQ-17 / EXPR-002の未実装範囲として追跡する。
 
 ## M2 SERVICE-001 の実装範囲
 

@@ -89,7 +89,7 @@ AST は `id / version / value_type / budget / nodes` を保存する。nodes は
 
 既定かつ上限は 1024 nodes、64 参照先、4096 命令、1048576 bytes の保守的一時メモリ、64 sample 要求。budget は上限を下げられる。同じ要求 Property の transitive dependency closure にも既定上限を課し、batch の各 root は独立に評価する。式の失敗は `EVALUATION_ERROR`、予算超過は `EXPRESSION_BUDGET_EXCEEDED`、循環は経路付き `PROPERTY_DEPENDENCY_CYCLE`、未知版は `UNSUPPORTED_FEATURE`。Property.sample と render は同じ評価器を使い、代替値を返さない。
 
-DataAsset 参照、動的な過去 Property sample、連続補間 noise は未実装。保存された未知能力は opaque に保持できるが実行しない。
+DataAsset 参照、動的な過去 Property sample、連続補間 noise は未実装（EXPR-003、M5）。人間向け構文・parser/formatter・入力UIはOQ-17 / EXPR-002で別に追跡する。保存された未知能力は opaque に保持できるが実行しない。
 
 人間向けには、中置演算と関数呼び出しだけの小さな式言語を後から追加する（[ADR-0040](../adr/0040-expression-language-policy.md)）。文・ループ・代入は持たず、AST と一対一に往復でき、JavaScript 互換にはしない。構文の詳細は未決（[OQ-17](../open-questions.md)）。
 

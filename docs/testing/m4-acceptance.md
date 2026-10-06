@@ -1,7 +1,7 @@
 # M4 統合受け入れ
 
 正本は [backlog.json](../backlog/backlog.json)。12 タスクすべての受け入れ条件と最終全 OS CI を確認し、2026-10-06にM4を完了した。
-変更は [PR #8](https://github.com/soramikan/kronello/pull/8) に統合する。
+変更は [PR #8](https://github.com/soramikan/kronello/pull/8) で main にmerge済み（merge commit `0c0822c`）。
 
 ## 基準機でのローカル検証
 
@@ -85,4 +85,12 @@ M4全12タスクを `done` とする。M2のSTORE-003の実環境残件は別範
 
 同runでは未実行のMCP/FFI検証が、target cacheに残った旧checkout `275380d2` の成功JSONをアップロードしていた。macOS/Linuxではcache復元直後に3種類の検証出力だけを削除し、証拠のuploadは対応する検証stepがsuccessまたはfailureになった場合に限定する。未実行・キャンセル時の古い成功報告を除外し、実際に失敗した検証の診断は残す。
 
-ローカル検証はSwift全71件成功・失敗0・skip0（統合evidence指定、独立state root）、集中テスト20/20回成功、workflow YAMLとstep依存・upload条件の構造検査成功。root agentがrelease FFIで再構築したアプリをCUAで直接操作し、Motionの連続時刻変更、再生中の更新保留、停止後のInspector更新と日本語字幕・258×36のbounds表示を確認した。競合の順序は決定的テスト、実画面はGUI操作で確認する。生ログと画面 `gui-inspector.png` は `target/ci-fix/` に保存する。修正を含むCIの結果はPR #8の最新headで確認する。
+ローカル検証はSwift全71件成功・失敗0・skip0（統合evidence指定、独立state root）、集中テスト20/20回成功、workflow YAMLとstep依存・upload条件の構造検査成功。root agentがrelease FFIで再構築したアプリをCUAで直接操作し、Motionの連続時刻変更、再生中の更新保留、停止後のInspector更新と日本語字幕・258×36のbounds表示を確認した。競合の順序は決定的テスト、実画面はGUI操作で確認する。生ログと画面 `gui-inspector.png` は `target/ci-fix/` に保存する。修正を含む最終 [run 37426096876](https://github.com/soramikan/kronello/actions/runs/37426096876) は全5jobs成功。
+head `153922384937f41c697da825948daf903f312bc6`、実checkout merge
+`78fe20300f87b712ce9b6565d2aa6edb5c1250b5`。Linux workspace は753 passed / 0 failed / 30 ignored、
+macOS は755 passed / 0 failed / 38 ignored。Swift は71 executed / 0 failures / 1 explicit integration-evidence skip、
+`testInspectionScheduling` は成功した。Windows の実media / worker と両platform goldenも成功。
+macOS / Linux の MCP・FFI・JOB と Windows JOB の7 artifactsを実際に取得し、全JSONのrevisionが
+上記checkout SHAと一致、MCP / FFIはpassed、JOBはexit 0 / no_orphans=trueを確認した。
+先行run `37418631507` と失敗run `37421914965` は履歴として保持し、最終成功証拠とは区別する。
+[CI記録](m4-ci-acceptance.json)の `final_verification` に最終jobsとfreshness証拠を保存する。

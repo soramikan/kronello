@@ -1,15 +1,15 @@
 # 00 概要
 
-状態: 提案仕様。ソフトウェアの実装・実機性能検証を完了したものではない。
+状態: 採用済み設計と将来計画を含む。2026-10-06時点でM0・M1・M2のP0・M3・M4を受け入れ済み。実装・検証の範囲は [現在の実装範囲と残件](../roadmap/implementation-status.md) と各タスクの検証記録を参照し、設計例だけで対応済みと判断しない。
 対象: Rust / FFmpeg / wgpu を基盤とする、GUI・CLI・MCP 共通の動画編集ソフトウェア Kronello。
-元仕様: [v0.2](../archive/motion_editor_architecture_v0_2.md)（2026-10-01）。本書群は 2026-10-03 までの検討結果を反映した改訂版。
+元仕様: [v0.2](../archive/motion_editor_architecture_v0_2.md)（2026-10-01）。本書群は採用ADRと実装の進展に合わせて更新する。
 
 ## 結論
 
 NLE（カット編集）の Timeline と、モーショングラフィックスの Composition を別の編集モデルとし、同じ時間・プロパティ・組版・合成・レンダー基盤へコンパイルする。
 Composition は SourceRef として Timeline へ配置できる。Composition の中から別の Composition も参照できるが、参照循環は禁止する。
 
-配置から Composition、Property、Render へ至る意味の追跡順と、crate のコード依存は区別する。依存境界と単位は [ADR-0043](../adr/0043-semantic-dependencies-and-units.md)、色・alpha は [ADR-0044](../adr/0044-color-and-alpha-contracts.md)、保存と実行の互換性は [ADR-0045](../adr/0045-snapshot-compatibility-boundaries.md) を契約とする。これらは採用した設計規約であり、実装による検証は未了。
+配置から Composition、Property、Render へ至る意味の追跡順と、crate のコード依存は区別する。依存境界と単位は [ADR-0043](../adr/0043-semantic-dependencies-and-units.md)、色・alpha は [ADR-0044](../adr/0044-color-and-alpha-contracts.md)、保存と実行の互換性は [ADR-0045](../adr/0045-snapshot-compatibility-boundaries.md) を契約とする。これらは採用した設計規約であり、個々の受け入れ証拠は [バックログ](../backlog/BACKLOG.md) と [M4記録](../testing/m4-acceptance.md) に対応付ける。
 
 GUI・CLI・MCP は同格の入口であり、同じ Command / Query API を通る（[ADR-0001](../adr/0001-shared-command-query-api.md)）。
 
@@ -28,7 +28,7 @@ GUI・CLI・MCP は同格の入口であり、同じ Command / Query API を通�
 ### 後段で実装する機能
 
 - 高度な式、Path morph、Trim path、Repeater、音声連動、ルビ・縦書きの完全な編集 UI。
-- 多重サンプルの高品質モーションブラー、チェックポイント付きシミュレーション。
+- チェックポイント付きシミュレーション。多重時間サンプルのroot合成はM4で実装済みであり、対応範囲と資源上限は [05](05-render-gpu.md) を参照する。
 - 2.5D カメラ、完全な 3D、外部プラグイン互換、分散レンダー。
 
 初期から 3D 描画を実装するのではなく、出力ポート・時間・変換型・拡張バージョンの境界を確保する。
@@ -70,8 +70,8 @@ GUI・CLI・MCP はそれぞれ別プロセスになりうる。各プロセス�
 独立 worker の状態・FIFO・lease は `kronello-jobs`、Windows の native 起動・生存確認・
 no-clobber publication は `kronello-platform` に置く。安全な API の外に OS handle を出さず、
 model / time / service / jobs の unsafe forbid を維持する。
-Windows の確認済み検証範囲は jobs/platform。MEDIA-003 で FFmpeg loader と full CLI/MCP の
-移植・実プロセス CI を追加しているが、実機結果の確認前には保証しない
+WindowsはMEDIA-003でFFmpeg loaderとfull CLI/MCPの実media・worker CIまで確認済み。
+Windows/Linux GUIとhardware resident decodeは未実装・未保証であり、CLIの成功から保証を広げない
 （[ADR-0074](../adr/0074-windows-job-workers-and-process-evidence.md)、
 [ADR-0082](../adr/0082-windows-ffmpeg-runtime.md)、[12](12-platform-dependencies.md)）。
 

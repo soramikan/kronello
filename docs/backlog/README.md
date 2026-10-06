@@ -1,6 +1,6 @@
 # バックログ
 
-実装計画のタスク一覧。未実装の計画データであり、GitHub 等に登録した Issue ではない（[ADR-0020](../adr/0020-backlog-in-repository.md)）。
+実装計画と受け入れ進捗の一覧。`done` と未着手・進行中を区別し、GitHub 等に登録した Issue とは別に管理する（[ADR-0020](../adr/0020-backlog-in-repository.md)）。
 
 | ファイル | 役割 |
 |---|---|
@@ -36,6 +36,10 @@ python3 scripts/backlog.py render
 | `status` | `planned` / `in_progress` / `done` / `dropped` |
 | `dependencies` | 先に完了している必要があるタスクの ID |
 | `acceptance_criteria` | 完了の判定条件。すべて確認できて初めて `done` |
+
+## 2026-10-06 の実装状況監査
+
+77 → 93タスク。M3/M4の完了を維持し、文書にあった未割当範囲を16件のplannedタスクへ分離した。内容・根拠・配置は [現在の実装範囲と残件](../roadmap/implementation-status.md) を参照する。M5/M6への配置は開発計画であり、製品公開日や未決事項の採用判断ではない。STORE-003はOS検証の達成を記録し、Dropbox/network FSの確認までin_progressを維持する。
 
 ## 0.4 からの変更（schema_version 0.5）
 

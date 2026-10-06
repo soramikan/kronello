@@ -1,6 +1,6 @@
 # STORE-003 の検証
 
-STORE-003 は **`in_progress`**。条件 1 の比較評価・採否の記録は完了した。条件 2 は iCloud Drive のみホストで確認済みで、Dropbox・ネットワーク FS、条件 3 の Linux / Windows 実行は未確認であり、タスク全体の受け入れ完了ではない。
+STORE-003 は **`in_progress`**。条件 1 の比較評価・採否の記録は完了した。条件 2 は iCloud Drive のみホストで確認済み。条件 3 の Linux / Windows 競合・強制終了回復は2026-10-06の実 CI で確認済みだが、Dropbox・ネットワーク FS は未確認であり、タスク全体の受け入れ完了ではない。
 
 ## 適応的 snapshot の比較
 
@@ -101,15 +101,24 @@ cargo clippy -p kronello-store --all-targets --locked -- -D warnings
 
 `std::process::Command` は `current_exe()` の test actor を起動し、パスは `OsStr` のまま環境変数に渡す。ready / release file の存在を期限付きで待つ。強制終了は `Child::kill()`、終了確認は `wait()` を使う。子を reap し、全 SQLite / project handle を閉じてから復旧・清掃するため、Windows の live handle による削除拒否を避ける。実行中の DB の rename / replace は行わない。symlink の追加チェックだけは `cfg(unix)` で、プロセス競合・回復の試験には OS 除外がない。
 
-`.github/workflows/ci.yml` に Windows の保存層専用 job（15 分上限、bundled SQLite、FFmpeg / GPU setup 不要）を追加した。Linux の既存 workspace test job は保存層の integration tests を含む。今回 push / CI 実行は行っていない。
+2026-10-06の [CI run 37426096876](https://github.com/soramikan/kronello/actions/runs/37426096876) で実行した。
+head `153922384937f41c697da825948daf903f312bc6`、実 checkout merge
+`78fe20300f87b712ce9b6565d2aa6edb5c1250b5`。Linux は workspace tests、Windows は
+現在の `Windows (full CLI/MCP and LGPL media)` job（60分上限）の
+`cargo test -p kronello-store --all-targets --locked` に保存層検証を含む。
+旧15分の保存層専用 job は現在の構成ではない。両 OS で上表の6つの実プロセス試験がすべて `ok`、
+`tests/storage.rs` はそれぞれ35 passed / 0 failed / 0 ignored。
+ローカル保存先は `target/ci-fix/freshness-37426096876/{Linux-X64,Windows-X64}.log`、
+job ID は Linux `112145981202`、Windows `112145981134`。
+CI はローカル filesystem の競合・回復証拠であり、実同期サービス・ネットワーク mount の証拠ではない。
 
 | 実行 OS | 状態 | 証拠または未確認の理由 |
 |---|---|---|
 | macOS arm64 | ローカル確認済み | unit 2 + storage 33 + threshold 1 + example 2 = 38 passed、測定 1 ignored。測定は別途明示実行して passed |
-| Linux | 未確認 | machine / VM / container runtime がない。既存 CI は未実行 |
-| Windows | 未確認 | machine / VM がない。追加 CI job は未実行 |
+| Linux | CI確認済み（2026-10-06） | storage 35 passed / 0 failed / 0 ignored。実二writer・初期化競合、安全モード排他、WAL / DELETE journal kill回復成功 |
+| Windows | CI確認済み（2026-10-06） | storage 35 passed / 0 failed / 0 ignored。実二writer・初期化競合、安全モード排他、WAL / DELETE journal kill回復成功 |
 
-## 今回の検証コマンド
+## 初回ローカル検証コマンド（2026-10-04）
 
 ```sh
 cargo fmt --all
