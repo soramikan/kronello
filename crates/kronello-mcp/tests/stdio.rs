@@ -4,7 +4,7 @@ use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
-use kronello_mcp::SUPPORTED_PROTOCOL_VERSIONS;
+use kronello_mcp::LEGACY_PROTOCOL_VERSIONS as SUPPORTED_PROTOCOL_VERSIONS;
 use serde_json::{Value, json};
 
 #[test]

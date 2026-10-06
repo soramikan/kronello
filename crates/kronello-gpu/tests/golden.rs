@@ -196,6 +196,7 @@ fn gradient_manifest(g: &GradientPaint) -> Value {
 }
 fn draw_manifest(scene: &DrawScene) -> Value {
     json!({"roots":scene.roots,"nodes":scene.nodes.iter().map(|node| match node {
+        DrawNode::GpuRaster(_) => panic!("golden fixtures must use explicit serializable image inputs"),
         DrawNode::Raster(pixels)=>json!({"kind":"raster","pixels":pixels}),
         DrawNode::Path(p)=>json!({"kind":"path","stroke_geometry_version":p.stroke_geometry.as_ref().map_or(kronello_model::LEGACY_STROKE_VERSION,|g|g.version.as_str()),"local_stroke":p.stroke_geometry.as_ref().map(|g|json!({"version":g.version,"alignment":g.alignment,"fill_rule":format!("{:?}",g.fill_rule),"inverse":g.output_to_local,"dash_array":g.dash_array,"dash_offset":g.dash_offset,"contours":g.contours.iter().map(|c|json!({"points":c.points,"closed":c.closed})).collect::<Vec<_>>()})),"fill_gradient":p.fill_gradient.as_deref().map(gradient_manifest),"stroke_gradient":p.stroke_gradient.as_deref().map(gradient_manifest),"paint_transform":p.paint_transform,"contours":p.contours.iter().map(|c| json!({"points":c.points,"closed":c.closed})).collect::<Vec<_>>(),"fill":p.fill.map(|f| json!({"rgba":f.paint.rgba,"space":format!("{:?}",f.paint.space),"rule":format!("{:?}",f.rule)})),"stroke":p.stroke.map(|s| json!({"rgba":s.paint.rgba,"space":format!("{:?}",s.paint.space),"width":s.width,"cap":format!("{:?}",s.cap),"join":format!("{:?}",s.join),"miter_limit":s.miter_limit}))}),
         DrawNode::Group {children,opacity}=>json!({"kind":"isolated-group","children":children,"opacity":opacity}),

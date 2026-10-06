@@ -8,6 +8,8 @@ mod effect;
 mod inspect;
 pub use inspect::*;
 mod output;
+mod temporal;
+pub use temporal::*;
 mod snapshot;
 mod template;
 pub use effect::*;
@@ -112,12 +114,49 @@ pub struct BackendFrame {
     pub display: Vec<[f32; 4]>,
 }
 
+/// Actual execution transfers; GPU compute writes do not count as copies.
+#[derive(
+    Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
+)]
+pub struct RenderTransferStats {
+    pub cpu_upload_pixel_bytes: u64,
+    pub cpu_upload_pixel_operations: u64,
+    pub cpu_upload_control_bytes: u64,
+    pub cpu_upload_control_operations: u64,
+    pub gpu_copy_bytes: u64,
+    pub gpu_copy_operations: u64,
+    pub gpu_readback_bytes: u64,
+    pub gpu_readback_operations: u64,
+}
 pub trait RenderBackend {
+    fn requires_gpu_resident(&self) -> bool {
+        false
+    }
+    fn transfer_stats(&self) -> Option<RenderTransferStats> {
+        None
+    }
     fn name(&self) -> &str;
+    /// Opt in with a stable numeric implementation and device/driver identity.
+    fn cache_namespace(&self) -> Option<String> {
+        None
+    }
     fn input_path(&self) -> &str {
         "semantic_scene"
     }
+    fn image_input_path(&self) -> &str {
+        self.input_path()
+    }
     fn execute(&self, dag: &RenderDag) -> Result<BackendFrame, RenderError>;
+    /// Convert the accumulated working-space premultiplied image once.
+    fn display_from_linear(
+        &self,
+        _linear: &[[f32; 4]],
+        _working: kronello_model::ColorSpace,
+    ) -> Result<Vec<[f32; 4]>, RenderError> {
+        Err(RenderError::UnsupportedFeature(
+            "temporal output transform".into(),
+        ))
+    }
     /// Backends opt in only with a stable execution namespace/fingerprint.
     /// The default deliberately does not cache device results.
     fn execute_with_cache(

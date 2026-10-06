@@ -5,7 +5,8 @@ mod audio;
 mod preview;
 pub use audio::*;
 use kronello_service::{
-    BackendSelection, ProjectRequest, Request, Response, Service, ServiceError,
+    AudioPreparationInput, AudioPrepareRequest, BackendSelection, ProjectRequest, ProjectSession,
+    Request, Response, Service, ServiceError,
 };
 use serde_json::{Value, json};
 use std::{
@@ -22,11 +23,16 @@ use std::{
 const MAX_JSON: usize = 16 * 1024 * 1024;
 const CAPACITY: usize = 64;
 struct Session {
+    path: std::path::PathBuf,
     sender: mpsc::SyncSender<(u64, Work)>,
     output: Arc<Mutex<VecDeque<Value>>>,
     outstanding: Mutex<usize>,
 }
 enum Work {
+    CaptureAudio(
+        AudioPrepareRequest,
+        mpsc::SyncSender<Result<AudioPreparationInput, ServiceError>>,
+    ),
     Call(String),
     Subscribe(bool),
     Attach(preview::Layer, u32, u32),
@@ -90,6 +96,40 @@ fn notify(output: &Mutex<VecDeque<Value>>, name: &str, response: Value) {
     q.retain(|v| v["notification"] != name);
     q.push_back(json!({"notification":name,"response_json":response.to_string()}));
 }
+fn capture_session_audio(
+    request: AudioPrepareRequest,
+) -> Result<Option<AudioPreparationInput>, ServiceError> {
+    let canonical = request.project.canonicalize().ok();
+    let sender = {
+        let entries = lock(sessions());
+        entries
+            .values()
+            .find(|entry| match &canonical {
+                Some(path) => entry.path.canonicalize().ok().as_ref() == Some(path),
+                None => entry.path == request.project,
+            })
+            .map(|entry| entry.sender.clone())
+    };
+    let Some(sender) = sender else {
+        return Ok(None);
+    };
+    let (reply, result) = mpsc::sync_channel(1);
+    sender
+        .try_send((0, Work::CaptureAudio(request, reply)))
+        .map_err(|_| ServiceError::new("BACKPRESSURE", "audio snapshot queue unavailable"))?;
+    result
+        .recv_timeout(Duration::from_secs(30))
+        .map_err(|_| {
+            ServiceError::new("SESSION_CLOSED", "audio snapshot capture did not complete")
+        })?
+        .map(Some)
+}
+fn with_session<T>(session: &Option<ProjectSession>, operation: impl FnOnce() -> T) -> T {
+    match session {
+        Some(session) => session.scope(operation),
+        None => operation(),
+    }
+}
 fn worker(
     path: String,
     executable: Option<String>,
@@ -101,7 +141,16 @@ fn worker(
     if let Some(executable) = executable {
         service = service.with_worker_executable(executable.into());
     }
-    let mut previous = info(&service, &path);
+    let mut session = None;
+    let mut open_error = None;
+    match ProjectSession::open(std::path::Path::new(&path)) {
+        Ok(value) => session = Some(value),
+        Err(e) if e.code == "PROJECT_NOT_FOUND" => (),
+        Err(e) => open_error = Some(error(&e.code, e.message)),
+    }
+    let mut previous = open_error
+        .clone()
+        .unwrap_or_else(|| with_session(&session, || info(&service, &path)));
     publish(
         &output,
         json!({"request_id":0,"response_json":previous.to_string()}),
@@ -112,7 +161,42 @@ fn worker(
     loop {
         match receiver.recv_timeout(Duration::from_millis(250)) {
             Ok((id, work)) => {
-                let result = catch_unwind(AssertUnwindSafe(|| match work {
+                if let Work::CaptureAudio(request, reply) = work {
+                    let result = if let Some(value) = &open_error {
+                        Err(
+                            serde_json::from_value::<ServiceError>(value["error"].clone())
+                                .expect("typed session error"),
+                        )
+                    } else {
+                        catch_unwind(AssertUnwindSafe(|| {
+                            with_session(&session, || service.capture_audio_input(request))
+                        }))
+                        .unwrap_or_else(|_| {
+                            Err(ServiceError::new(
+                                "FFI_PANIC",
+                                "audio snapshot capture panicked",
+                            ))
+                        })
+                    };
+                    let _ = reply.send(result);
+                    continue;
+                }
+                // A session created before project.create adopts its store on
+                // the next request. An initially locked/failed session remains
+                // failed even after an external holder releases its lock.
+                if session.is_none()
+                    && open_error.is_none()
+                    && std::path::Path::new(&path).is_file()
+                {
+                    match ProjectSession::open(std::path::Path::new(&path)) {
+                        Ok(value) => session = Some(value),
+                        Err(e) => open_error = Some(error(&e.code, e.message)),
+                    }
+                }
+                let result = open_error.clone().unwrap_or_else(|| {
+                    with_session(&session, || {
+                        catch_unwind(AssertUnwindSafe(|| match work {
+                    Work::CaptureAudio(..) => unreachable!("capture handled separately"),
                     Work::Call(json) => {
                         // Use the exact shared strict Request decoder. The embedder
                         // must provide the CLI worker; a Swift executable cannot
@@ -154,7 +238,9 @@ fn worker(
                         None => error("SURFACE_NOT_ATTACHED", "attach a surface first"),
                     },
                 }))
-                .unwrap_or_else(|_| error("FFI_PANIC", "native worker panicked; request failed"));
+                .unwrap_or_else(|_| error("FFI_PANIC", "native worker panicked; request failed"))
+                    })
+                });
                 publish(
                     &output,
                     json!({"request_id":id,"response_json":result.to_string()}),
@@ -164,13 +250,17 @@ fn worker(
             Err(mpsc::RecvTimeoutError::Timeout) => (),
         }
         if subscribed {
-            let current = info(&service, &path);
+            let current = open_error
+                .clone()
+                .unwrap_or_else(|| with_session(&session, || info(&service, &path)));
             if current != previous {
                 notify(&output, "revision_changed", current.clone());
                 previous = current;
             }
-            let jobs = serde_json::to_value(service.execute(Request::JobList(Default::default())))
-                .expect("response JSON");
+            let jobs = serde_json::to_value(with_session(&session, || {
+                service.execute(Request::JobList(Default::default()))
+            }))
+            .expect("response JSON");
             if jobs != previous_jobs {
                 notify(&output, "job_progress", jobs.clone());
                 previous_jobs = jobs;
@@ -204,6 +294,7 @@ pub unsafe extern "C" fn kronello_open(
             };
             Some(value)
         };
+        let session_path = std::path::PathBuf::from(&path);
         let (sender, receiver) = mpsc::sync_channel(CAPACITY);
         let output = Arc::new(Mutex::new(VecDeque::new()));
         let worker_output = output.clone();
@@ -218,6 +309,7 @@ pub unsafe extern "C" fn kronello_open(
         lock(sessions()).insert(
             handle,
             Session {
+                path: session_path,
                 sender,
                 output,
                 outstanding: Mutex::new(0),

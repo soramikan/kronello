@@ -36,4 +36,6 @@ sha2 = "0.10"
 tempfile = "3"
 
 [dev-dependencies]
+png = "0.18"
+kronello-framebridge = { path = "../kronello-framebridge" }
 jsonschema = { version = "0.46", default-features = false }

@@ -1,6 +1,6 @@
 # ADR-0074: Windows worker の独立起動・成果物確定と実プロセス検証
 
-- 状態: 採用（OS ごとの受け入れ確認は別 gate）
+- 状態: 部分置換（[ADR-0082](0082-windows-ffmpeg-runtime.md): Windows media / CLI / MCP の実装・検証方針。OS ごとの受け入れ確認は別 gate）
 - 日付: 2026-10-05
 - 対象: JOB-002
 - 部分置換: [ADR-0050](0050-fixed-job-execution-and-publication.md) の Windows 未実装境界、worker の競合待機、状態照会の writer 取得。固定入力、共有 API、FIFO、lease/cancel fence、保持、電源断の窓は維持する。

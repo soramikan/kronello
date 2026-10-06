@@ -120,7 +120,7 @@ async fn close_stops_queued_work_and_stream_drop_does_not_cancel() {
 }
 
 #[tokio::test]
-async fn unsupported_features_and_new_revision_never_advertise_support() {
+async fn unsupported_features_remain_unadvertised_and_unversioned_discovery_is_rejected() {
     let connection = ready(Arc::new(Semaphore::new(1)));
     for method in [
         "sampling/createMessage",
@@ -141,7 +141,7 @@ async fn unsupported_features_and_new_revision_never_advertise_support() {
     .unwrap();
     assert_eq!(
         error["error"]["data"]["supported"],
-        json!(["2025-06-18", "2025-11-25"])
+        json!(kronello_mcp::SUPPORTED_PROTOCOL_VERSIONS)
     );
     assert_eq!(
         error["error"]["data"]["code"],
@@ -187,7 +187,7 @@ async fn active_request_limit_and_invalid_tokens_are_rejected() {
     )
     .unwrap();
     assert_eq!(limit["error"]["data"]["code"], "RESOURCE_LIMIT");
-    for token in [Value::Null, json!(false), json!(0.5), json!({})] {
+    for token in [Value::Null, json!(false), json!([]), json!({})] {
         let invalid = immediate(&connection, json!({"jsonrpc":"2.0","id":34,"method":"tools/call","params":{"name":"job.list","_meta":{"progressToken":token}}})).unwrap();
         assert_eq!(invalid["error"]["code"], -32602);
     }

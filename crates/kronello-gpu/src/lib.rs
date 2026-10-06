@@ -1,5 +1,7 @@
 //! GPU rendering boundary, independent of the pure document model.
 pub mod color;
+mod resident;
+pub use resident::ResidentImage;
 pub mod render_adapter;
 mod renderer;
 mod scene;
@@ -285,3 +287,28 @@ pub fn render_reference(
 mod effect;
 pub use effect::{EFFECT_KERNEL_VERSION, PixelEffect};
 pub const EFFECT_SHADER: &str = include_str!("effect.wgsl");
+
+impl TransferStats {
+    pub fn accumulate(&mut self, other: &Self) {
+        self.cpu_upload_pixel_bytes += other.cpu_upload_pixel_bytes;
+        self.cpu_upload_pixel_operations += other.cpu_upload_pixel_operations;
+        self.cpu_upload_control_bytes += other.cpu_upload_control_bytes;
+        self.cpu_upload_control_operations += other.cpu_upload_control_operations;
+        self.gpu_copy_bytes += other.gpu_copy_bytes;
+        self.gpu_copy_operations += other.gpu_copy_operations;
+        self.gpu_readback_bytes += other.gpu_readback_bytes;
+        self.gpu_readback_operations += other.gpu_readback_operations;
+    }
+    pub fn render_stats(&self) -> kronello_render::RenderTransferStats {
+        kronello_render::RenderTransferStats {
+            cpu_upload_pixel_bytes: self.cpu_upload_pixel_bytes,
+            cpu_upload_pixel_operations: self.cpu_upload_pixel_operations,
+            cpu_upload_control_bytes: self.cpu_upload_control_bytes,
+            cpu_upload_control_operations: self.cpu_upload_control_operations,
+            gpu_copy_bytes: self.gpu_copy_bytes,
+            gpu_copy_operations: self.gpu_copy_operations,
+            gpu_readback_bytes: self.gpu_readback_bytes,
+            gpu_readback_operations: self.gpu_readback_operations,
+        }
+    }
+}

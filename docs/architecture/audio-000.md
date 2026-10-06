@@ -58,7 +58,7 @@ RenderSnapshot の既存 hash は映像文書・素材 lock を識別する。ex
 Sequence audio tracks と Composition Media / nested instances を確定配置へ変換する。
 Video CompositionClip も同じ音声を一度継承し、Audio track の Composition も対応する。
 Media は明示 Asset / stream と node-owned `kronello.audio.volume` Property を参照する。
-Audio Media は描画内容を持たず、Video / Image Media の描画は COMP-002 まで型付き未対応。
+Audio Media は描画内容を持たない。COMP-002 の Image / Video 視覚 stream は document audio の配置から除外し、Video asset の別音声 stream は従来どおり明示 MediaNode で配置する。
 
 `JobOutput::ProResMov` の省略値は `profile_version: 1, audio: explicit`。version 2 の document は
 文書音声、explicit は clips（空なら無音）、silence は意図的な無音。document / silence と

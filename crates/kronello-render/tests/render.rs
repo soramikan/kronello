@@ -1457,6 +1457,7 @@ fn cache_state_order_eviction_clear_resolution_match_direct_cpu_execution() {
         layout: tiny,
         geometry: tiny,
         raster: tiny,
+        temporal: tiny,
     });
     let mut warm = RenderCache::default();
     let mut disabled = RenderCache::new(CacheConfig::disabled());
@@ -3453,4 +3454,628 @@ fn streaming_rejects_cumulative_halo_before_backend_allocation() {
     assert_eq!(error.code(), "UNSUPPORTED_FEATURE", "{error:?}");
     assert!(error.to_string().contains("streaming tile surface budget"));
     assert_eq!(tiles, 0);
+}
+
+fn temporal_settings() -> TemporalSettings {
+    TemporalSettings {
+        frame_rate: FrameRate::new(24, 1).unwrap(),
+        shutter_angle: t(180, 1),
+        shutter_phase: t(-1, 4),
+        samples: 8,
+        cut_policy: CutPolicy::AvoidCrossing,
+    }
+}
+#[test]
+fn temporal_whole_composition_matches_independent_subtime_baseline_and_tiles() {
+    let (p, c) = project();
+    let s = snapshot(&p, c);
+    let request = FrameRequest {
+        time: t(1, 2),
+        region: region(),
+    };
+    let result = render_temporal_frame(
+        &s,
+        &fonts(),
+        &CpuReferenceBackend,
+        request,
+        temporal_settings(),
+    )
+    .unwrap();
+    let mut expected = vec![[0.0_f64; 4]; 64 * 32];
+    for sample in &result.temporal.samples {
+        let reference = frame(&s, sample.time);
+        let weight = sample.weight.numerator() as f64 / sample.weight.denominator() as f64;
+        for (sum, p) in expected.iter_mut().zip(reference.pixels.linear) {
+            for i in 0..4 {
+                sum[i] += f64::from(p[i]) * weight;
+            }
+        }
+    }
+    assert_eq!(
+        result.frame.pixels.linear,
+        expected
+            .into_iter()
+            .map(|p| p.map(|v| v as f32))
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        result.frame.pixels.display,
+        CpuReferenceBackend
+            .display_from_linear(&result.frame.pixels.linear, s.profile().working_space)
+            .unwrap()
+    );
+    let mut tiles = vec![];
+    let metadata = render_temporal_frame_tiles(
+        &s,
+        &fonts(),
+        &CpuReferenceBackend,
+        request,
+        temporal_settings(),
+        &mut |_, _, frame| {
+            tiles.push(frame);
+            Ok(())
+        },
+    )
+    .unwrap();
+    assert_eq!(tiles, vec![result.frame.pixels]);
+    assert_eq!(metadata, result.temporal);
+    assert_eq!(result.frame.metadata.time, request.time);
+}
+#[test]
+fn temporal_phase_is_rational_and_zero_exposure_collapses_duplicate_samples() {
+    let (p, c) = project();
+    let s = snapshot(&p, c);
+    let settings = temporal_settings();
+    let samples = temporal_samples(&s, t(1, 2), settings).unwrap();
+    assert_eq!(samples[0].time, t(377, 768));
+    assert_eq!(samples.last().unwrap().time, t(391, 768));
+    let zero = temporal_samples(
+        &s,
+        t(1, 2),
+        TemporalSettings {
+            shutter_angle: Time::ZERO,
+            ..settings
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        zero,
+        vec![TemporalSample {
+            time: t(1, 2),
+            weight: Time::ONE
+        }]
+    );
+    assert!(
+        temporal_samples(
+            &s,
+            Time::ZERO,
+            TemporalSettings {
+                samples: 4097,
+                ..settings
+            }
+        )
+        .is_err()
+    );
+}
+#[test]
+fn temporal_sequence_exports_exact_plan_and_rejects_rate_mismatch_before_publication() {
+    let (p, c) = project();
+    let s = snapshot(&p, c);
+    let directory = tempfile::tempdir().unwrap();
+    let request = SequenceRequest {
+        range: TimeRange::new(Time::ZERO, t(1, 24)).unwrap(),
+        frame_rate: FrameRate::new(24, 1).unwrap(),
+        region: region(),
+    };
+    let sequence = render_temporal_sequence_with_checkpoint(
+        &s,
+        &fonts(),
+        &CpuReferenceBackend,
+        request,
+        temporal_settings(),
+        directory.path().join("temporal"),
+        &mut |_| Ok(()),
+    )
+    .unwrap();
+    assert!(sequence.frames[0].metadata.temporal.is_some());
+    let out = directory.path().join("bad-rate");
+    assert!(
+        render_temporal_sequence_with_checkpoint(
+            &s,
+            &fonts(),
+            &CpuReferenceBackend,
+            request,
+            TemporalSettings {
+                frame_rate: FrameRate::new(30, 1).unwrap(),
+                ..temporal_settings()
+            },
+            &out,
+            &mut |_| Ok(())
+        )
+        .is_err()
+    );
+    assert!(!out.exists());
+}
+
+fn temporal_cut_sequence() -> (Project, SequenceId) {
+    let id = SequenceId::new();
+    let clips = [(0, 1, [255, 0, 0]), (1, 2, [0, 0, 255])].map(|(start, end, rgb)| Clip {
+        id: ClipId::new(),
+        source_ref: SourceRef::Generator {
+            generator: SOLID_GENERATOR_ID.into(),
+            version: 1,
+            color: Color::from_srgb8(rgb, None),
+        },
+        timeline_range: TimeRange::new(t(start, 1), t(end, 1)).unwrap(),
+        source_in: Time::ZERO,
+        time_map: TimeMap::linear(Time::ZERO, Time::ONE).unwrap(),
+        audio_retime: Default::default(),
+        volume: None,
+        links: vec![],
+        effects: vec![],
+        properties: vec![],
+    });
+    (
+        Project {
+            sequences: vec![DocumentObject::Known(Sequence {
+                id,
+                extent: DesignExtent::new(2.0, 2.0).unwrap(),
+                frame_rate: FrameRate::new(24, 1).unwrap(),
+                audio_rate: kronello_time::SampleRate::HZ_48000,
+                working_space: ColorSpace::LinearRec709,
+                tracks: vec![Track {
+                    id: TrackId::new(),
+                    kind: TrackKind::Video,
+                    clips: clips.to_vec(),
+                }],
+                transitions: vec![],
+            })],
+            ..Project::default()
+        },
+        id,
+    )
+}
+#[test]
+fn temporal_cut_policy_clips_to_incoming_half_open_interval() {
+    let (p, id) = temporal_cut_sequence();
+    let s = RenderSnapshot::for_target(
+        &p,
+        RenderTarget::Sequence { sequence: id },
+        7,
+        RenderProfile::default(),
+    )
+    .unwrap();
+    let settings = TemporalSettings {
+        frame_rate: FrameRate::new(1, 1).unwrap(),
+        shutter_angle: t(360, 1),
+        shutter_phase: t(-1, 2),
+        samples: 8,
+        cut_policy: CutPolicy::AvoidCrossing,
+    };
+    let clipped = temporal_samples(&s, Time::ONE, settings).unwrap();
+    assert!(
+        clipped
+            .iter()
+            .all(|s| s.time >= Time::ONE && s.time < t(2, 1))
+    );
+    assert_eq!(clipped[0].time, t(33, 32));
+    let crossing = temporal_samples(
+        &s,
+        Time::ONE,
+        TemporalSettings {
+            cut_policy: CutPolicy::AllowCrossing,
+            ..settings
+        },
+    )
+    .unwrap();
+    assert!(crossing.iter().any(|s| s.time < Time::ONE));
+    let r = FrameRequest {
+        time: Time::ONE,
+        region: OutputRegion {
+            origin: [0.0; 2],
+            extent: [2.0; 2],
+            pixels: [2; 2],
+        },
+    };
+    let frame = render_temporal_frame(&s, &[], &CpuReferenceBackend, r, settings).unwrap();
+    assert_eq!(frame.frame.pixels.linear[0], [0.0, 0.0, 1.0, 1.0]);
+    let mixed = render_temporal_frame(
+        &s,
+        &[],
+        &CpuReferenceBackend,
+        r,
+        TemporalSettings {
+            cut_policy: CutPolicy::AllowCrossing,
+            ..settings
+        },
+    )
+    .unwrap();
+    assert_eq!(mixed.frame.pixels.linear[0], [0.5, 0.0, 0.5, 1.0]);
+}
+#[test]
+fn temporal_negative_ntsc_exposure_and_nested_scope_are_exact() {
+    let (p, id) = temporal_cut_sequence();
+    let s = RenderSnapshot::for_target(
+        &p,
+        RenderTarget::Sequence { sequence: id },
+        7,
+        RenderProfile::default(),
+    )
+    .unwrap();
+    let settings = TemporalSettings {
+        frame_rate: FrameRate::new(30000, 1001).unwrap(),
+        shutter_angle: t(360, 1),
+        shutter_phase: t(-1, 2),
+        samples: 2,
+        cut_policy: CutPolicy::AllowCrossing,
+    };
+    let times = temporal_samples(&s, t(-1, 1), settings).unwrap();
+    assert_eq!(times[0].time, t(-121001, 120000));
+    assert_eq!(times[1].time, t(-118999, 120000));
+    let (child, shape) = rectangle([2.0; 2], Color::from_srgb8([255, 0, 0], None));
+    let target = composition(vec![child]);
+    let root = composition(vec![node(
+        NodeKind::CompositionInstance(CompositionInstance {
+            id: CompositionInstanceId::new(),
+            definition_ref: target.id,
+            input_bindings: BTreeMap::new(),
+            local_time_map: TimeMap::linear(Time::ZERO, t(2, 1)).unwrap(),
+            seed: 0,
+        }),
+        vec![],
+    )]);
+    let id = root.id;
+    let p = Project {
+        compositions: vec![DocumentObject::Known(root), DocumentObject::Known(target)],
+        shapes: vec![DocumentObject::Known(shape)],
+        ..Project::default()
+    };
+    struct Counting(std::cell::Cell<usize>);
+    impl RenderBackend for Counting {
+        fn name(&self) -> &str {
+            "counting"
+        }
+        fn execute(&self, dag: &RenderDag) -> Result<BackendFrame, RenderError> {
+            self.0.set(self.0.get() + 1);
+            CpuReferenceBackend.execute(dag)
+        }
+        fn display_from_linear(
+            &self,
+            p: &[[f32; 4]],
+            w: ColorSpace,
+        ) -> Result<Vec<[f32; 4]>, RenderError> {
+            CpuReferenceBackend.display_from_linear(p, w)
+        }
+    }
+    let backend = Counting(std::cell::Cell::new(0));
+    let frame = render_temporal_frame(
+        &snapshot(&p, id),
+        &[],
+        &backend,
+        FrameRequest {
+            time: t(1, 2),
+            region: OutputRegion {
+                origin: [0.0; 2],
+                extent: [4.0; 2],
+                pixels: [4; 2],
+            },
+        },
+        settings,
+    )
+    .unwrap();
+    assert_eq!(backend.0.get(), 2);
+    assert_eq!(frame.temporal.samples.len(), 2);
+}
+
+#[test]
+fn temporal_crossfade_endpoints_are_not_hard_cuts() {
+    let (mut p, id) = temporal_cut_sequence();
+    let DocumentObject::Known(sequence) = &mut p.sequences[0] else {
+        panic!()
+    };
+    sequence.tracks[0].clips[0].timeline_range = TimeRange::new(Time::ZERO, t(3, 2)).unwrap();
+    let outgoing = sequence.tracks[0].clips[0].id;
+    let incoming = sequence.tracks[0].clips[1].id;
+    sequence.transitions.push(Transition {
+        outgoing,
+        incoming,
+        range: TimeRange::new(Time::ONE, t(3, 2)).unwrap(),
+        kind: TransitionKind::Crossfade,
+        version: 1,
+    });
+    let s = RenderSnapshot::for_target(
+        &p,
+        RenderTarget::Sequence { sequence: id },
+        7,
+        RenderProfile::default(),
+    )
+    .unwrap();
+    let settings = TemporalSettings {
+        frame_rate: FrameRate::new(1, 1).unwrap(),
+        shutter_angle: t(360, 1),
+        shutter_phase: t(-1, 2),
+        samples: 8,
+        cut_policy: CutPolicy::AvoidCrossing,
+    };
+    let at_start = temporal_samples(&s, Time::ONE, settings).unwrap();
+    assert!(at_start.iter().any(|s| s.time < Time::ONE));
+    let at_end = temporal_samples(&s, t(3, 2), settings).unwrap();
+    assert!(at_end.iter().any(|s| s.time > t(3, 2)));
+}
+#[test]
+fn temporal_cache_region_shutter_and_nested_time_map_invalidate_and_remain_bounded() {
+    let (child, shape) = rectangle([2.0; 2], Color::from_srgb8([255, 0, 0], None));
+    let target = composition(vec![child]);
+    let root = composition(vec![node(
+        NodeKind::CompositionInstance(CompositionInstance {
+            id: CompositionInstanceId::new(),
+            definition_ref: target.id,
+            input_bindings: BTreeMap::new(),
+            local_time_map: TimeMap::linear(Time::ZERO, Time::ONE).unwrap(),
+            seed: 0,
+        }),
+        vec![],
+    )]);
+    let id = root.id;
+    let mut p = Project {
+        compositions: vec![DocumentObject::Known(root), DocumentObject::Known(target)],
+        shapes: vec![DocumentObject::Known(shape)],
+        ..Project::default()
+    };
+    let s = snapshot(&p, id);
+    let request = FrameRequest {
+        time: t(1, 2),
+        region: OutputRegion {
+            origin: [0.0; 2],
+            extent: [4.0; 2],
+            pixels: [4; 2],
+        },
+    };
+    let settings = TemporalSettings {
+        samples: 2,
+        ..temporal_settings()
+    };
+    let mut cache = RenderCache::default();
+    let first = render_temporal_frame_with_cache(
+        &s,
+        &[],
+        &CpuReferenceBackend,
+        request,
+        settings,
+        &mut cache,
+    )
+    .unwrap();
+    let warm = render_temporal_frame_with_cache(
+        &s,
+        &[],
+        &CpuReferenceBackend,
+        request,
+        settings,
+        &mut cache,
+    )
+    .unwrap();
+    assert_eq!(first, warm);
+    assert_eq!(cache.stats().temporal.hits, 1);
+    render_temporal_frame_with_cache(
+        &s,
+        &[],
+        &CpuReferenceBackend,
+        FrameRequest {
+            region: OutputRegion {
+                origin: [1.0, 0.0],
+                ..request.region
+            },
+            ..request
+        },
+        settings,
+        &mut cache,
+    )
+    .unwrap();
+    assert_eq!(cache.stats().temporal.misses, 2);
+    render_temporal_frame_with_cache(
+        &s,
+        &[],
+        &CpuReferenceBackend,
+        request,
+        TemporalSettings {
+            shutter_phase: Time::ZERO,
+            ..settings
+        },
+        &mut cache,
+    )
+    .unwrap();
+    assert_eq!(cache.stats().temporal.misses, 3);
+    let DocumentObject::Known(root) = &mut p.compositions[0] else {
+        panic!()
+    };
+    let NodeKind::CompositionInstance(instance) = &mut root.nodes[0].kind else {
+        panic!()
+    };
+    instance.local_time_map = TimeMap::linear(t(4, 1), Time::ONE).unwrap();
+    let changed = snapshot(&p, id);
+    let cached = render_temporal_frame_with_cache(
+        &changed,
+        &[],
+        &CpuReferenceBackend,
+        request,
+        settings,
+        &mut cache,
+    )
+    .unwrap();
+    let direct =
+        render_temporal_frame(&changed, &[], &CpuReferenceBackend, request, settings).unwrap();
+    assert_eq!(cached, direct);
+    assert_ne!(first.frame.pixels, cached.frame.pixels);
+    assert_eq!(cache.stats().temporal.misses, 4);
+    let tiny = CacheCapacity {
+        entries: 1,
+        bytes: 512,
+    };
+    let mut bounded = RenderCache::new(CacheConfig {
+        temporal: tiny,
+        ..CacheConfig::disabled()
+    });
+    for time in [Time::ZERO, t(1, 2), Time::ONE] {
+        render_temporal_frame_with_cache(
+            &s,
+            &[],
+            &CpuReferenceBackend,
+            FrameRequest { time, ..request },
+            settings,
+            &mut bounded,
+        )
+        .unwrap();
+    }
+    assert_eq!(bounded.stats().temporal.entries, 1);
+    assert_eq!(bounded.stats().temporal.evictions, 2);
+    assert!(bounded.stats().temporal.bytes <= 512);
+    bounded.clear();
+    assert_eq!(bounded.stats().temporal.entries, 0);
+}
+
+#[test]
+fn temporal_gpu_matches_whole_composition_cpu_and_warm_cache() {
+    let gpu = kronello_gpu::GpuContext::new().expect("GPU required; no fallback");
+    let (p, id) = temporal_cut_sequence();
+    let s = RenderSnapshot::for_target(
+        &p,
+        RenderTarget::Sequence { sequence: id },
+        7,
+        RenderProfile::default(),
+    )
+    .unwrap();
+    let settings = TemporalSettings {
+        frame_rate: FrameRate::new(1, 1).unwrap(),
+        shutter_angle: t(360, 1),
+        shutter_phase: t(-1, 2),
+        samples: 4,
+        cut_policy: CutPolicy::AllowCrossing,
+    };
+    let r = FrameRequest {
+        time: Time::ONE,
+        region: OutputRegion {
+            origin: [0.0; 2],
+            extent: [2.0; 2],
+            pixels: [2; 2],
+        },
+    };
+    let cpu = render_temporal_frame(&s, &[], &CpuReferenceBackend, r, settings).unwrap();
+    let mut cache = RenderCache::default();
+    let cold = render_temporal_frame_with_cache(&s, &[], &gpu, r, settings, &mut cache).unwrap();
+    compare(
+        &cpu.frame.pixels.linear,
+        &cold.frame.pixels.linear,
+        1.0 / 1024.0,
+    );
+    compare(
+        &cpu.frame.pixels.display,
+        &cold.frame.pixels.display,
+        1.0 / 1024.0,
+    );
+    let warm = render_temporal_frame_with_cache(&s, &[], &gpu, r, settings, &mut cache).unwrap();
+    assert_eq!(cold.frame.pixels, warm.frame.pixels);
+    assert_eq!(cache.stats().temporal.hits, 1);
+}
+
+#[test]
+fn temporal_warm_cache_cannot_hide_missing_fonts_or_changed_effect_halo() {
+    let (p, id) = project();
+    let s = snapshot(&p, id);
+    let r = FrameRequest {
+        time: t(1, 2),
+        region: OutputRegion {
+            pixels: [4, 2],
+            ..region()
+        },
+    };
+    let settings = TemporalSettings {
+        samples: 2,
+        ..temporal_settings()
+    };
+    let mut cache = RenderCache::default();
+    render_temporal_frame_with_cache(&s, &fonts(), &CpuReferenceBackend, r, settings, &mut cache)
+        .unwrap();
+    assert_eq!(
+        render_temporal_frame_with_cache(&s, &[], &CpuReferenceBackend, r, settings, &mut cache)
+            .unwrap_err()
+            .code(),
+        "ASSET_MISSING"
+    );
+    let (child, shape) = rectangle([2.0; 2], Color::from_srgb8([255, 0, 0], None));
+    let c = composition(vec![child]);
+    let id = c.id;
+    let mut p = Project {
+        compositions: vec![DocumentObject::Known(c)],
+        shapes: vec![DocumentObject::Known(shape)],
+        ..Project::default()
+    };
+    let r = FrameRequest {
+        time: t(1, 2),
+        region: OutputRegion {
+            origin: [0.0; 2],
+            extent: [4.0; 2],
+            pixels: [4; 2],
+        },
+    };
+    let mut cache = RenderCache::default();
+    let unblurred = render_temporal_frame_with_cache(
+        &snapshot(&p, id),
+        &[],
+        &CpuReferenceBackend,
+        r,
+        settings,
+        &mut cache,
+    )
+    .unwrap();
+    let sigma = constant("kronello.effect.sigma", scalar(1.0));
+    let node = &mut comp_mut(&mut p).nodes[0];
+    node.effects.push(Effect::Known(EffectDefinition {
+        effect_id: GAUSSIAN_BLUR_ID.into(),
+        version: 1,
+        parameters: EffectParameters::GaussianBlur { sigma: sigma.id() },
+    }));
+    node.properties.push(sigma);
+    let s = snapshot(&p, id);
+    let blurred =
+        render_temporal_frame_with_cache(&s, &[], &CpuReferenceBackend, r, settings, &mut cache)
+            .unwrap();
+    assert_ne!(unblurred.frame.pixels, blurred.frame.pixels);
+    assert_eq!(cache.stats().temporal.misses, 2);
+    assert_eq!(
+        blurred,
+        render_temporal_frame(&s, &[], &CpuReferenceBackend, r, settings).unwrap()
+    );
+}
+
+#[test]
+fn temporal_semantic_pin_is_required_and_legacy_snapshot_hash_is_preserved() {
+    let (p, id) = temporal_cut_sequence();
+    let snapshot = RenderSnapshot::for_target(
+        &p,
+        RenderTarget::Sequence { sequence: id },
+        7,
+        RenderProfile::default(),
+    )
+    .unwrap();
+    let mut legacy = serde_json::to_value(&snapshot).unwrap();
+    legacy["semantic_versions"]
+        .as_object_mut()
+        .unwrap()
+        .remove("temporal");
+    let restored: RenderSnapshot = serde_json::from_value(legacy.clone()).unwrap();
+    restored.validate().unwrap();
+    assert_eq!(serde_json::to_value(&restored).unwrap(), legacy);
+    assert_eq!(
+        restored.content_hash().unwrap(),
+        format!("{:x}", Sha256::digest(serde_json::to_vec(&legacy).unwrap()))
+    );
+    legacy["profile"]["temporal"] = serde_json::to_value(temporal_settings()).unwrap();
+    let missing: RenderSnapshot = serde_json::from_value(legacy.clone()).unwrap();
+    assert_eq!(
+        missing.validate().unwrap_err().code(),
+        "UNSUPPORTED_FEATURE"
+    );
+    legacy["semantic_versions"]["temporal"] = serde_json::json!(99);
+    let future: RenderSnapshot = serde_json::from_value(legacy).unwrap();
+    assert_eq!(future.validate().unwrap_err().code(), "UNSUPPORTED_FEATURE");
 }

@@ -149,6 +149,8 @@ impl CapabilitiesResult {
             ),
             commands: command_registry(),
             features: [
+                "temporal_sampling_v1",
+                "composition_media_v1",
                 "sequence",
                 "composition_clip",
                 "video_clip",

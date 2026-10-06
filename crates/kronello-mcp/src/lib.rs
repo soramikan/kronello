@@ -5,10 +5,12 @@ use kronello_service::Response;
 use serde::Deserialize;
 use serde_json::{Value, json, value::RawValue};
 
-pub const SUPPORTED_PROTOCOL_VERSIONS: [&str; 2] = ["2025-06-18", "2025-11-25"];
+pub const LEGACY_PROTOCOL_VERSIONS: [&str; 2] = ["2025-06-18", "2025-11-25"];
+pub const SUPPORTED_PROTOCOL_VERSIONS: [&str; 3] = ["2026-07-28", "2025-11-25", "2025-06-18"];
 pub const MAX_MESSAGE_BYTES: usize = 16 * 1024 * 1024;
 mod connection;
 pub mod http;
+mod modern;
 mod resources;
 mod strict;
 pub use connection::{Connection, Reply, serve_stdio};

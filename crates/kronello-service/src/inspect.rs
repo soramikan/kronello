@@ -226,6 +226,12 @@ pub(crate) fn render(
     backend: ExplainBackend,
 ) -> Result<RenderExplainResult, ServiceError> {
     r.input.region.validate()?;
+    if r.input.profile.temporal.is_some() {
+        return Err(kronello_render::RenderError::UnsupportedFeature(
+            "render.explain temporal multi-time plans".into(),
+        )
+        .into());
+    }
     let stored = stored(&r.input.project)?;
     let target = match (r.input.composition, r.input.target) {
         (Some(composition), None) => composition.into(),

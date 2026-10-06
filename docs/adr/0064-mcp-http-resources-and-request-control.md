@@ -1,6 +1,6 @@
 # ADR-0064: MCP HTTP・明示 resource・request 制御を共有 service に接続する
 
-- 状態: 採用
+- 状態: 部分置換（[ADR-0084](0084-per-request-mcp-2026.md): protocol version と transport session。共有 service・明示 project path・security / limit policy は維持）
 - 日付: 2026-10-05
 - 対象: MCP-002
 

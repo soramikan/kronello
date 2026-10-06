@@ -8,7 +8,11 @@
 #include <libavutil/hwcontext.h>
 #include <libswscale/swscale.h>
 #include <libswresample/swresample.h>
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <dlfcn.h>
+#endif
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -122,7 +126,13 @@ static int fail(Km *k, int code, const char *where) {
 }
 void km_close(Km *k) {
     if (!k) return;
-    for (int i=4; i>=0; --i) if (k->libs[i]) dlclose(k->libs[i]);
+    for (int i=4; i>=0; --i) if (k->libs[i]) {
+#ifdef _WIN32
+        FreeLibrary((HMODULE)k->libs[i]);
+#else
+        dlclose(k->libs[i]);
+#endif
+    }
     free(k);
 }
 const char *km_error(Km *k) { return k->error; }
@@ -136,16 +146,33 @@ Km *km_open(const char *directory, char *error, size_t capacity) {
     int majors[5] = {LIBAVUTIL_VERSION_MAJOR, LIBAVCODEC_VERSION_MAJOR, LIBAVFORMAT_VERSION_MAJOR, LIBSWSCALE_VERSION_MAJOR, LIBSWRESAMPLE_VERSION_MAJOR};
     for (int i=0; i<5; ++i) {
         char path[4096];
-#ifdef __APPLE__
+#ifdef _WIN32
+        int n=snprintf(path, sizeof(path), "%s/%s-%d.dll", directory, names[i], majors[i]);
+#elif defined(__APPLE__)
         int n=snprintf(path, sizeof(path), "%s/lib%s.%d.dylib", directory, names[i], majors[i]);
 #else
         int n=snprintf(path, sizeof(path), "%s/lib%s.so.%d", directory, names[i], majors[i]);
 #endif
         if (n<0 || (size_t)n>=sizeof(path)) { snprintf(error, capacity, "library path too long"); km_close(k); return NULL; }
+#ifdef _WIN32
+        wchar_t wide[4096];
+        if (!MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, wide, 4096)) {
+            snprintf(error, capacity, "invalid UTF-8 library path"); km_close(k); return NULL;
+        }
+        k->libs[i]=(void *)LoadLibraryExW(wide, NULL,
+            LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+        if (!k->libs[i]) { snprintf(error, capacity, "%s: Windows loader error %lu", path, (unsigned long)GetLastError()); km_close(k); return NULL; }
+#else
         k->libs[i]=dlopen(path, RTLD_NOW | RTLD_LOCAL);
         if (!k->libs[i]) { snprintf(error, capacity, "%s: %s", path, dlerror()); km_close(k); return NULL; }
+#endif
     }
-#define LOAD(i, name) do { *(void **)(&k->name) = dlsym(k->libs[i], #name); if (!k->name) { snprintf(error, capacity, "missing symbol: %s", #name); km_close(k); return NULL; } } while(0)
+#ifdef _WIN32
+#define KM_SYMBOL(handle, name) ((void *)GetProcAddress((HMODULE)(handle), (name)))
+#else
+#define KM_SYMBOL(handle, name) dlsym((handle), (name))
+#endif
+#define LOAD(i, name) do { *(void **)(&k->name) = KM_SYMBOL(k->libs[i], #name); if (!k->name) { snprintf(error, capacity, "missing symbol: %s", #name); km_close(k); return NULL; } } while(0)
     LOAD(0, avutil_version);
     LOAD(0, avutil_license);
     LOAD(0, avutil_configuration);

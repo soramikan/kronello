@@ -13,7 +13,7 @@ struct EditorWindow: View {
     var body: some View {
         VStack(spacing: 0) {
             toolbar
-            if model.safeMode { KRStateBand("安全モード：要求ごとに排他を取得します。処理中の競合は PROJECT_LOCKED。ウインドウ全体の排他は未対応です", details: { safeDetailsOpen = true }) }
+            if model.safeMode { KRStateBand("安全モード：このプロジェクトは編集セッション中、排他で開いています。CLI / MCP の open は PROJECT_LOCKED になります", details: { safeDetailsOpen = true }) }
             if model.ui.page == "motion" { MotionPage(model: model, historyOpen: $historyOpen) }
             else if model.ui.page == "edit" { EditPage(model: model) }
             else if model.ui.page == "template" { TemplatePage(model: model) }
@@ -51,7 +51,7 @@ struct EditorWindow: View {
                     actions: [.init("ok", "閉じる", variant: .primary) { jobsOpen = false }]).krTheme(theme)
             }
             .sheet(isPresented: $safeDetailsOpen) {
-                KRDialog("安全モード", body: "共有 project.info が safe を返しました。現行 FFI は要求ごとに store を開閉します。ウインドウを開いているだけでは CLI / MCP を排除しません。セッション全体の排他保持は後続課題です。",
+                KRDialog("安全モード", body: "共有 project.info が safe を返しました。編集中の同じ store をセッションが保持し、CLI / MCP による open を排除します。プロジェクトを閉じるかアプリを終了すると、処理の完了後に排他を解放します。",
                     actions: [.init("ok", "OK", variant: .primary) { safeDetailsOpen = false }]).krTheme(theme)
             }
     }

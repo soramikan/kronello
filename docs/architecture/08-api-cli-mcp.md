@@ -296,7 +296,7 @@ kronello render --project demo.kronello --profile hevc-4k \
 
 `kronello-mcp` crate の同名 binary は、同期 stdio の薄い JSON-RPC 2.0 adapter。UTF-8 の一行一メッセージで要求・応答を交換し、stdout は protocol のみ、診断・使用法は stderr に出す。各入力の上限は改行を除き16 MiB。stdin の EOF で終了する。HTTP transport、resources、prompts、進捗と request cancellation は後述の M3 MCP-002 で追加した。sampling / MCP tasks は未対応。MCP-001 時点の同期 stdio は同じ共有 registry を使う非同期 request dispatcher に拡張した。
 
-対応版は `2025-06-18` と `2025-11-25`。[MCP lifecycle](https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle) に沿って initialize → notifications/initialized → tools/list または tools/call の順に使う。[MCP の版交渉規定](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle#version-negotiation) に従い、対応版の initialize は要求と同じ `protocolVersion` を返し、対応外の文字列なら最新対応版 `2025-11-25` を返して初期化を継続する。クライアントが応答版に対応していなければ接続を切断する判断を行う。いずれも tools capability（listChanged: false）を返す。MCP-002 は resources / prompts の capability も広告する（後述）。初期化前および完了通知前の tool 要求は `-32002`。ping は初期化前後とも可能。同一接続の再 initialize は拒否する。
+legacy initialize の対応版は `2025-06-18` と `2025-11-25`。MCP-003 で追加した `2026-07-28` は後述の要求ごとの版指定を使う。[MCP lifecycle](https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle) に沿って initialize → notifications/initialized → tools/list または tools/call の順に使う。[MCP の版交渉規定](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle#version-negotiation) に従い、対応版の initialize は要求と同じ `protocolVersion` を返し、対応外の文字列なら最新対応版 `2025-11-25` を返して初期化を継続する。クライアントが応答版に対応していなければ接続を切断する判断を行う。いずれも tools capability（listChanged: false）を返す。MCP-002 は resources / prompts の capability も広告する（後述）。初期化前および完了通知前の tool 要求は `-32002`。ping は初期化前後とも可能。同一接続の再 initialize は拒否する。
 
 `tools/list` は `kronello-service::command_registry()` の全操作を同名で公開する。固定の MCP 操作一覧は持たず、MEDIA-001 等で registry と service Request を拡張すれば同じ経路で公開される。request_schema / response_schema が指す公開 API 型から `api_json_schema()` を生成し、各 schema に必要な `$defs` の参照閉包を同梱する。外部 schema fetch は不要。inputSchema は operation を除いた service payload と同一。outputSchema は成功値の schema と公開 Response の error branch の union で、エラー結果も schema に適合する。`_meta.kronello` に元の schema refs と readOnlyProject を返す。read_only は作品に対する性質であり、render.sequence の成果物書き出しも含むため MCP の readOnlyHint に置き換えない。
 
@@ -323,7 +323,7 @@ cargo run -p kronello-mcp --locked -- --backend cpu-reference
 
 ## M3 MCP-002 の実装範囲
 
-詳細は [ADR-0064](../adr/0064-mcp-http-resources-and-request-control.md)、再現手順と実行記録は [MCP-002 の検証](../testing/mcp-002.md)。protocol 基準は固定した `2025-11-25`。`2025-06-18` と合わせて既存 initialize lifecycle を保持する。最新 `2026-07-28` は未対応で、その版の initialize は最新対応版 `2025-11-25` を返す。`server/discover` は `-32601` / `UNSUPPORTED_PROTOCOL_VERSION` と対応版一覧、対応外 HTTP version header は400を返す。
+詳細は [ADR-0064](../adr/0064-mcp-http-resources-and-request-control.md)、再現手順と実行記録は [MCP-002 の検証](../testing/mcp-002.md)。protocol 基準は固定した `2025-11-25`。`2025-06-18` と合わせて既存 initialize lifecycle を保持する。MCP-003 は `2026-07-28` の要求ごとの版指定と `server/discover` を追加した。legacy initialize に未知版を指定した場合は `2025-11-25` を返す。
 
 ### HTTP 接続と認証
 
@@ -489,7 +489,7 @@ migrate: {instance,definition,variant,inputs} を追加した。
 これが指定した instance だけを変更し、既存の hash 照合・revision・receipt・Undo を使う。
 import は pin を変更できない。
 新しい error は INVALID_DATA_TABLE、TEMPLATE_VARIANT_NOT_FOUND、TEMPLATE_MIGRATION_INCOMPATIBLE。
-MediaSlot の final compiler は既存 UNSUPPORTED_FEATURE、欠落は ASSET_MISSING。
+MediaSlot の final compiler は COMP-002 の視覚 Media 契約を使い、欠落は ASSET_MISSING、内容不一致は ASSET_HASH_MISMATCH。未対応 codec / 色 / 意味版は UNSUPPORTED_FEATURE。
 すべての新 font path と project path に既存 local locator policy を適用する。
 具体的な保存型・制約と MediaSlot の後続境界は
 [07 テンプレート](07-templates.md)、[ADR-0059](../adr/0059-template-duration-variants-and-migration.md)、
@@ -512,7 +512,7 @@ MediaSlot の final compiler は既存 UNSUPPORTED_FEATURE、欠落は ASSET_MIS
   edit.plan / apply / undo の revision / idempotency / conflict 規則は維持する。
 - SceneNode の `kind: {kind: media, value: {asset, stream_index, source_in, time_map, volume}}` を追加した。
   volume は同じ node の properties にある volume PropertyId。Media 音声だけに対応し、映像描画は
-  COMP-002 まで `UNSUPPORTED_FEATURE`。既存 scene.query / property.sample にも同じ Property を公開する。
+  COMP-002 の source time / 素材 lock / 色契約で描画する。既存 scene.query / property.sample にも同じ Property を公開する。
 - capabilities.features に document_audio / clip_volume / media_audio を追加した。
   registry は38操作（SERVICE-002 の2 Query を含む。API-002 は既存 query / EditCommand の拡張で追加操作なし）。API / Project schema と GeneratedAPI.swift を共有 generator から再生成する。
   `AvExportReport` に audio_source / audio_profile_version を追加し、省略した旧 report は explicit / 1。
@@ -636,3 +636,11 @@ movie の `render.export` / 固定 worker report は任意の `streaming` を返
 公開fileの実byte長（取得不可ならnull）。OSの物理I/OやRSSの推定値ではない。
 request / snapshot / codec / sampleの意味版を変更しない。
 [ADR-0079](../adr/0079-bounded-streaming-movie-export.md)、[検証](../testing/render-003.md)。
+
+## M4 MCP-003 の実装範囲
+
+[ADR-0084](../adr/0084-per-request-mcp-2026.md) に従い、`2026-07-28` は各要求の `_meta.io.modelcontextprotocol/protocolVersion` と `clientCapabilities` を検証する。`server/discover` は実装した版と capability のみを返し、initialize を必要としない。共有 registry・schema・service の構造化結果は legacy と共通である。
+
+modern HTTP は POST ごとに独立し、session ID を発行しない。`MCP-Protocol-Version` / `Mcp-Method` / 対象 method の `Mcp-Name` を body と照合する。header 不一致は 400 / -32020、未知版は 400 / -32022、未知 method は 404 / -32601。SSE stream の切断はその要求の協調取消とし、独立 render job の取消にはしない。legacy HTTP の session と明示取消は上記の契約を維持する。
+
+modern response は `resultType: complete` と serverInfo metadata を返し、cacheable result は `ttlMs: 0` / `cacheScope: private` とする。公式 Python SDK 2.3.0 の実 stdio / HTTP 検証は [MCP-003](../testing/mcp-003.md) を参照する。

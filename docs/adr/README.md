@@ -70,7 +70,7 @@
 | [0053](0053-integration-evaluated-queries-and-render-tiles.md) | 縦断デモの評価 query と大解像度の tile 実行 | 部分置換（0079） | 2026-10-04 |
 | [0054](0054-gui-design-system.md) | GUI の見た目を全 OS 共通のデザインシステムで定める | 採用 | 2026-10-04 |
 | [0055](0055-main-window-pages-and-workspaces.md) | メインウインドウをページとワークスペースで構成する | 採用 | 2026-10-04 |
-| [0056](0056-native-ffi-worker-and-swiftpm.md) | native FFI の非同期 worker と SwiftPM 境界 | 採用 | 2026-10-04 |
+| [0056](0056-native-ffi-worker-and-swiftpm.md) | native FFI の非同期 worker と SwiftPM 境界 | 部分置換（0083） | 2026-10-04 |
 | [0057](0057-layout-bounds-stages.md) | bounds の三段階を純粋値と明示した帯追従 policy で共有する | 部分置換（[0067](0067-affine-gaussian-effects.md)） | 2026-10-04 |
 | [0058](0058-bounded-canonical-expression-ast.md) | 正規 postorder AST と有界 Expression 評価 | 採用 | 2026-10-04 |
 | [0059](0059-template-duration-variants-and-migration.md) | テンプレートの保護尺・variant・data と明示した版移行を共有する | 採用 | 2026-10-05 |
@@ -78,7 +78,7 @@
 | [0061](0061-macos-editor-session-and-ui-state.md) | macOS 編集セッションと UI 状態 | 採用 | 2026-10-05 |
 | [0062](0062-video-generator-and-timeline-edits.md) | 動画・Generator Clip と明示した Timeline 編集範囲 | 採用 | 2026-10-05 |
 | [0063](0063-document-audio-and-clip-volume.md) | 文書音声の配置・音量 Property と明示的な出力選択 | 採用 | 2026-10-05 |
-| [0064](0064-mcp-http-resources-and-request-control.md) | MCP HTTP・明示 resource・request 制御 | 採用 | 2026-10-05 |
+| [0064](0064-mcp-http-resources-and-request-control.md) | MCP HTTP・明示 resource・request 制御 | 部分置換（0084） | 2026-10-05 |
 | [0065](0065-relocatable-macos-distribution.md) | macOS 配布 runtime を再配置・署名後に全体検証する | 採用 | 2026-10-05 |
 | [0066](0066-explicit-gradient-semantics.md) | グラデーションの座標・spread・補間空間を明示する | 採用 | 2026-10-05 |
 | [0067](0067-affine-gaussian-effects.md) | 非一様 affine の Gaussian / shadow を明示した意味版 2 で扱う | 採用 | 2026-10-05 |
@@ -89,12 +89,20 @@
 | [0072](0072-scene-search-fixed-cursors-and-cli-events.md) | Scene 検索・固定 revision cursor・CLI event framing | 採用 | 2026-10-05 |
 | [0073](0073-local-stroke-extensions.md) | 破線・線位置・affine 線幅を明示したローカル幾何版で扱う | 採用 | 2026-10-05 |
 
-| [0074](0074-windows-job-workers-and-process-evidence.md) | Windows worker の独立起動・確定と実プロセス検証 | 採用 | 2026-10-05 |
+| [0074](0074-windows-job-workers-and-process-evidence.md) | Windows worker の独立起動・確定と実プロセス検証 | 部分置換（0082） | 2026-10-05 |
 | [0075](0075-sequence-edit-page-and-clip-split.md) | Sequence 編集ページと共有 Clip 分割 | 採用 | 2026-10-05 |
 | [0076](0076-buffered-device-clock-playback.md) | lock-free buffer と音声デバイス時計による再生 | 採用 | 2026-10-05 |
 | [0077](0077-template-instance-read-only-inspection.md) | テンプレート内部の評価値を停止時の読み取り検査として表示する | 採用 | 2026-10-05 |
 | [0078](0078-template-export-pages-and-inspected-snapshot.md) | テンプレート比較と検査した revision の書き出し | 採用 | 2026-10-05 |
 | [0079](0079-bounded-streaming-movie-export.md) | movie export の payload を有界 streaming で処理する | 採用 | 2026-10-06 |
+| [0080](0080-root-temporal-integration.md) | root scope の有理数露光積分と temporal cache | 採用 | 2026-10-06 |
+| [0081](0081-guaranteed-metal-hardware-video-decode.md) | Metal / VideoToolbox の明示 GPU 常駐デコード | 採用 | 2026-10-06 |
+| [0082](0082-windows-ffmpeg-runtime.md) | Windows の FFmpeg runtime と実 worker の検証 | 採用 | 2026-10-06 |
+| [0083](0083-native-safe-project-session.md) | native セッション中の安全モード排他 | 採用 | 2026-10-06 |
+
+| [0084](0084-per-request-mcp-2026.md) | MCP の要求ごとの版指定と stateless HTTP | 採用 | 2026-10-06 |
+
+| [0085](0085-composition-media-and-template-slots.md) | Composition の視覚 Media と Template MediaSlot | 採用 | 2026-10-06 |
 
 ## 追加と変更の規則
 

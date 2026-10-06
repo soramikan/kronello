@@ -813,7 +813,7 @@ fn data_projection_variant_inputs_durations_versions_and_preview_failures_are_is
 }
 
 #[test]
-fn media_slots_validate_refs_expose_bindings_and_reject_final_execution() {
+fn media_slots_validate_refs_and_draw_final_instance_overrides() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("media.kronello");
     let service = Service::new(BackendSelection::CpuReference);
@@ -822,11 +822,37 @@ fn media_slots_validate_refs_expose_bindings_and_reject_final_execution() {
     definition.variants.clear();
     let slot = NodeId::new();
     let asset = AssetId::new();
+    let make_image = |name: &str, rgb: [u8; 4]| {
+        let mut encoder =
+            png::Encoder::new(std::fs::File::create(dir.path().join(name)).unwrap(), 2, 2);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        encoder.set_source_srgb(png::SrgbRenderingIntent::Perceptual);
+        let mut writer = encoder.write_header().unwrap();
+        writer.write_image_data(&rgb.repeat(4)).unwrap();
+        writer.finish().unwrap();
+        kronello_media::content_hash(&dir.path().join(name)).unwrap()
+    };
+    let red_hash = make_image("logo.png", [255, 0, 0, 255]);
+    let blue_hash = make_image("alternate.png", [0, 0, 255, 255]);
     p.assets.push(DocumentObject::Known(Asset {
         id: asset,
-        content_hash: "a".repeat(64),
+        content_hash: red_hash,
         kind: AssetKind::Image,
-        streams: vec![],
+        streams: vec![StreamMetadata {
+            index: 0,
+            codec: "png".into(),
+            time_base: Time::new(1, 24).unwrap(),
+            duration: None,
+            start_time: None,
+            width: Some(2),
+            height: Some(2),
+            pixel_format: Some("rgba".into()),
+            color_primaries: Some("bt709".into()),
+            color_transfer: Some("iec61966-2-1".into()),
+            color_matrix: Some("gbr".into()),
+            color_range: Some("pc".into()),
+        }],
         locator: AssetLocator {
             relative: Some("logo.png".into()),
             absolute: None,
@@ -837,7 +863,7 @@ fn media_slots_validate_refs_expose_bindings_and_reject_final_execution() {
         panic!()
     };
     asset2.id = second_asset;
-    asset2.content_hash = "b".repeat(64);
+    asset2.content_hash = blue_hash;
     asset2.locator.relative = Some("alternate.png".into());
     p.assets.push(DocumentObject::Known(asset2));
     let DocumentObject::Known(c) = p
@@ -896,16 +922,21 @@ fn media_slots_validate_refs_expose_bindings_and_reject_final_execution() {
             instance: second.clone(),
             time: Time::ONE,
             fonts: fonts.clone(),
-            region: None,
+            region: Some(kronello_render::OutputRegion {
+                origin: [0.0; 2],
+                extent: [2.0; 2],
+                pixels: [2; 2],
+            }),
         }))
         .unwrap()
     else {
         panic!()
     };
     assert_eq!(second_preview.media_slots[&slot], second_asset);
+    assert!(second_preview.diagnostic.is_none());
     assert_eq!(
-        second_preview.diagnostic.unwrap().code,
-        "UNSUPPORTED_FEATURE"
+        second_preview.frame.as_ref().unwrap().linear[0],
+        [0.0, 0.0, 1.0, 1.0]
     );
     let ResultData::TemplatePreview(preview) = service
         .dispatch(Request::TemplatePreview(TemplatePreviewRequest {
@@ -920,9 +951,9 @@ fn media_slots_validate_refs_expose_bindings_and_reject_final_execution() {
         panic!()
     };
     assert_eq!(preview.media_slots[&slot], asset);
-    assert_eq!(preview.diagnostic.unwrap().code, "UNSUPPORTED_FEATURE");
-    error(
-        service.dispatch(Request::RenderFrame(FrameRenderRequest {
+    assert!(preview.diagnostic.is_none());
+    let ResultData::Frame(rendered) = service
+        .dispatch(Request::RenderFrame(FrameRenderRequest {
             backend: None,
             input: RenderInput {
                 project: path.clone(),
@@ -934,11 +965,20 @@ fn media_slots_validate_refs_expose_bindings_and_reject_final_execution() {
                     pixels: [64, 32],
                 },
                 profile: Default::default(),
-                fonts,
+                fonts: fonts.clone(),
             },
             time: Time::ONE,
-        })),
-        "UNSUPPORTED_FEATURE",
+        }))
+        .unwrap()
+    else {
+        panic!("frame expected")
+    };
+    assert_eq!(rendered.linear[0], [0.0, 0.0, 1.0, 1.0]);
+    assert!(
+        rendered
+            .metadata
+            .input_path
+            .starts_with("png_native_8_16bit")
     );
     error(
         service.dispatch(Request::TemplateSetInput(TemplateSetInputRequest {
@@ -952,6 +992,26 @@ fn media_slots_validate_refs_expose_bindings_and_reject_final_execution() {
         })),
         "ASSET_MISSING",
     );
+    let file = dir.path().join("alternate.png");
+    std::fs::write(&file, b"modified source").unwrap();
+    let ResultData::TemplatePreview(corrupt) = service
+        .dispatch(Request::TemplatePreview(TemplatePreviewRequest {
+            project: path.clone(),
+            instance: second.clone(),
+            time: Time::ONE,
+            fonts: fonts.clone(),
+            region: Some(kronello_render::OutputRegion {
+                origin: [0.0; 2],
+                extent: [2.0; 2],
+                pixels: [2; 2],
+            }),
+        }))
+        .unwrap()
+    else {
+        panic!()
+    };
+    assert!(corrupt.frame.is_none());
+    assert_eq!(corrupt.diagnostic.unwrap().code, "ASSET_HASH_MISMATCH");
     let saved = export(&service, &path);
     assert_eq!(saved.revision, "4");
     assert_eq!(pin(&saved.document, instance.id), &instance);

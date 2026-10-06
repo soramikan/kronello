@@ -479,6 +479,17 @@ impl MediaRuntime {
     ) -> Result<AvExportReport, MediaError> {
         checkpoint(0)?;
         snapshot.validate()?;
+        if snapshot
+            .render
+            .profile()
+            .temporal
+            .as_ref()
+            .is_some_and(|t| t.frame_rate != request.frame_rate)
+        {
+            return Err(MediaError::InvalidInput(
+                "temporal frame rate must match movie export frame rate".into(),
+            ));
+        }
         let profile = snapshot.movie_profile();
         if profile != MovieProfile::ProResPcm24 {
             let encoder = self.capabilities.select_encoder(profile.video_codec())?;

@@ -56,6 +56,10 @@ pub struct FrameMetadata {
     pub display: ImageFormat,
     pub backend: String,
     pub input_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transfer_stats: Option<crate::RenderTransferStats>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub temporal: Option<crate::TemporalMetadata>,
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct RenderedFrame {
@@ -79,6 +83,22 @@ pub fn render_frame(
 }
 
 pub fn render_frame_with_cache(
+    snapshot: &RenderSnapshot,
+    fonts: &[FontData<'_>],
+    backend: &dyn RenderBackend,
+    request: FrameRequest,
+    cache: &mut crate::RenderCache,
+) -> Result<RenderedFrame, RenderError> {
+    if let Some(settings) = snapshot.profile().temporal {
+        return Ok(crate::render_temporal_frame_with_cache(
+            snapshot, fonts, backend, request, settings, cache,
+        )?
+        .frame);
+    }
+    render_single_frame_with_cache(snapshot, fonts, backend, request, cache)
+}
+
+pub(crate) fn render_single_frame_with_cache(
     snapshot: &RenderSnapshot,
     fonts: &[FontData<'_>],
     backend: &dyn RenderBackend,
@@ -109,6 +129,15 @@ pub fn render_frame_tiles(
     request: FrameRequest,
     sink: &mut dyn FnMut([u32; 2], OutputRegion, BackendFrame) -> Result<(), RenderError>,
 ) -> Result<FrameMetadata, RenderError> {
+    if let Some(settings) = snapshot.profile().temporal {
+        let temporal =
+            crate::render_temporal_frame_tiles(snapshot, fonts, backend, request, settings, sink)?;
+        let mut cache = crate::RenderCache::new(crate::CacheConfig::disabled());
+        let scene = crate::build_scene_ir_with_cache(snapshot, request.time, fonts, &mut cache)?;
+        let mut metadata = frame_metadata(snapshot, &scene, backend, request)?;
+        metadata.temporal = Some(temporal);
+        return Ok(metadata);
+    }
     request.region.validate()?;
     let mut cache = crate::RenderCache::new(crate::CacheConfig::disabled());
     let scene = crate::build_scene_ir_with_cache(snapshot, request.time, fonts, &mut cache)?;
@@ -136,7 +165,7 @@ pub fn render_frame_tiles(
     frame_metadata(snapshot, &scene, backend, request)
 }
 
-fn frame_metadata(
+pub(crate) fn frame_metadata(
     snapshot: &RenderSnapshot,
     scene: &crate::SceneIr,
     backend: &dyn RenderBackend,
@@ -144,6 +173,7 @@ fn frame_metadata(
 ) -> Result<FrameMetadata, RenderError> {
     let working = snapshot.profile().working_space;
     let metadata = FrameMetadata {
+        temporal: None,
         schema_version: 1,
         snapshot_schema_version: crate::SNAPSHOT_SCHEMA_VERSION,
         project_schema_version: snapshot.project().schema_version,
@@ -184,7 +214,10 @@ fn frame_metadata(
             clipping: "unit_interval_after_output_transform; no_tone_mapping".into(),
         },
         backend: backend.name().into(),
-        input_path: if scene
+        transfer_stats: backend.transfer_stats(),
+        input_path: if scene.nodes.iter().any(|n| matches!(&n.content, crate::SceneContent::Video {asset, ..} if asset.kind == kronello_model::AssetKind::Image)) {
+            backend.image_input_path().into()
+        } else if scene
             .nodes
             .iter()
             .any(|n| matches!(n.content, crate::SceneContent::Video { .. }))
@@ -210,6 +243,11 @@ fn execute_tiles(
     const EDGE: u32 = 512;
     if region.pixels.iter().all(|v| *v <= EDGE) {
         let dag = crate::build_render_dag_with_cache(scene, profile, region, cache)?;
+        if dag.tile_surface_bytes(16)? > 512 * 1024 * 1024 {
+            return Err(RenderError::UnsupportedFeature(
+                "tile surface budget exceeded".into(),
+            ));
+        }
         return backend.execute_with_cache(&dag, cache);
     }
     let count = region.pixels[0] as usize * region.pixels[1] as usize;
@@ -220,6 +258,11 @@ fn execute_tiles(
     for ([x, y], tile) in frame_tiles(region) {
         let pixels = tile.pixels;
         let dag = crate::build_render_dag_with_cache(scene, profile, tile, cache)?;
+        if dag.tile_surface_bytes(16)? > 512 * 1024 * 1024 {
+            return Err(RenderError::UnsupportedFeature(
+                "tile surface budget exceeded".into(),
+            ));
+        }
         let output = backend.execute_with_cache(&dag, cache)?;
         let tile_count = pixels[0] as usize * pixels[1] as usize;
         if output.linear.len() != tile_count || output.display.len() != tile_count {
@@ -273,7 +316,7 @@ pub fn frame_tiles(region: OutputRegion) -> Vec<([u32; 2], OutputRegion)> {
     tiles
 }
 
-fn validate_pixels(pixels: &[[f32; 4]], internal: bool) -> Result<(), RenderError> {
+pub(crate) fn validate_pixels(pixels: &[[f32; 4]], internal: bool) -> Result<(), RenderError> {
     if pixels.iter().any(|p| {
         p.iter().any(|v| !v.is_finite())
             || p[..3].iter().any(|v| v.abs() > 65504.0)
@@ -435,6 +478,7 @@ pub fn render_sequence_with_cache(
         request,
         directory.as_ref(),
         (cache, &mut |_| Ok(())),
+        None,
     )
 }
 
@@ -457,6 +501,7 @@ pub fn render_sequence_with_checkpoint(
             &mut crate::RenderCache::new(crate::CacheConfig::disabled()),
             checkpoint,
         ),
+        None,
     )
 }
 
@@ -470,8 +515,18 @@ fn render_sequence_controlled(
         &mut crate::RenderCache,
         &mut dyn FnMut(u64) -> Result<(), RenderError>,
     ),
+    temporal: Option<crate::TemporalSettings>,
 ) -> Result<SequenceMetadata, RenderError> {
     let (cache, checkpoint) = control;
+    let temporal = temporal.or(snapshot.profile().temporal);
+    if let Some(settings) = temporal {
+        settings.validate()?;
+        if settings.frame_rate != request.frame_rate {
+            return Err(RenderError::InvalidInput(
+                "temporal/output frame rate mismatch".into(),
+            ));
+        }
+    }
     snapshot.validate()?;
     request.region.validate()?;
     let samples = frame_samples(request.range, request.frame_rate)?;
@@ -486,16 +541,23 @@ fn render_sequence_controlled(
     let mut frames = Vec::with_capacity(samples.len());
     for (ordinal, (index, time)) in samples.into_iter().enumerate() {
         checkpoint(ordinal as u64)?;
-        let mut frame = render_frame_with_cache(
-            snapshot,
-            fonts,
-            backend,
-            FrameRequest {
-                time,
-                region: request.region,
-            },
-            cache,
-        )?;
+        let frame_request = FrameRequest {
+            time,
+            region: request.region,
+        };
+        let mut frame = if let Some(settings) = temporal {
+            crate::render_temporal_frame_with_cache(
+                snapshot,
+                fonts,
+                backend,
+                frame_request,
+                settings,
+                cache,
+            )?
+            .frame
+        } else {
+            render_frame_with_cache(snapshot, fonts, backend, frame_request, cache)?
+        };
         frame.metadata.frame_index = Some(index.to_string());
         frame.metadata.sequence_number = Some(ordinal as u64);
         let numeric = write_artifact(
@@ -550,4 +612,34 @@ fn render_sequence_controlled(
     staging.close()?;
     guard.committed = true;
     Ok(metadata)
+}
+
+/// Image sequence export shares the temporal executor and cancellation path.
+pub fn render_temporal_sequence_with_checkpoint(
+    snapshot: &RenderSnapshot,
+    fonts: &[FontData<'_>],
+    backend: &dyn RenderBackend,
+    request: SequenceRequest,
+    settings: crate::TemporalSettings,
+    directory: impl AsRef<Path>,
+    checkpoint: &mut dyn FnMut(u64) -> Result<(), RenderError>,
+) -> Result<SequenceMetadata, RenderError> {
+    settings.validate()?;
+    if settings.frame_rate != request.frame_rate {
+        return Err(RenderError::InvalidInput(
+            "temporal/output frame rate mismatch".into(),
+        ));
+    }
+    render_sequence_controlled(
+        snapshot,
+        fonts,
+        backend,
+        request,
+        directory.as_ref(),
+        (
+            &mut crate::RenderCache::new(crate::CacheConfig::disabled()),
+            checkpoint,
+        ),
+        Some(settings),
+    )
 }

@@ -39,15 +39,19 @@ async fn main() -> std::process::ExitCode {
                 backend = match args.next().as_deref() {
                     Some("gpu") => BackendSelection::Gpu,
                     Some("cpu-reference") => BackendSelection::CpuReference,
+                    Some("gpu-resident-bgra8") => BackendSelection::GpuResidentBgra8,
+                    Some("gpu-resident-nv12") => BackendSelection::GpuResidentNv12,
                     _ => {
-                        eprintln!("INVALID_REQUEST: --backend requires gpu or cpu-reference");
+                        eprintln!(
+                            "INVALID_REQUEST: --backend requires gpu, cpu-reference, gpu-resident-bgra8 or gpu-resident-nv12"
+                        );
                         return std::process::ExitCode::FAILURE;
                     }
                 };
             }
             "--help" | "-h" => {
                 eprintln!(
-                    "kronello-mcp [--backend gpu|cpu-reference] [--http] [--bind IP:port] [--auth-token-env NAME]\nDefault: stdio. HTTP default: 127.0.0.1:8765/mcp. Non-loopback requires authentication."
+                    "kronello-mcp [--backend gpu|cpu-reference|gpu-resident-bgra8|gpu-resident-nv12] [--http] [--bind IP:port] [--auth-token-env NAME]\nDefault: stdio. HTTP default: 127.0.0.1:8765/mcp. Non-loopback requires authentication."
                 );
                 return std::process::ExitCode::SUCCESS;
             }

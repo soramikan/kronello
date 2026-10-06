@@ -1131,3 +1131,43 @@ fn all_filesystem_boundaries_reject_uris_before_access() {
         }
     }
 }
+
+#[test]
+fn temporal_profile_reaches_shared_frame_sequence_and_fixed_job_input() {
+    let mut p = fixture();
+    p.texts.clear();
+    for c in &mut p.compositions {
+        if let DocumentObject::Known(c) = c {
+            c.nodes.retain(|n| !matches!(n.kind, NodeKind::Text { .. }));
+            c.root_nodes
+                .retain(|id| c.nodes.iter().any(|n| n.id == *id));
+        }
+    }
+    let c = comp(&p).id;
+    let (_dir, path) = setup(p);
+    let service = Service::new(BackendSelection::CpuReference);
+    let settings = json!({"frame_rate":{"num":"24","den":"1"},"shutter_angle":{"num":"180","den":"1"},"shutter_phase":{"num":"-1","den":"4"},"samples":2,"cut_policy":"avoid_crossing"});
+    let input = json!({"project":path,"composition":c,"region":{"origin":[0,0],"extent":[64,32],"pixels":[4,2]},"profile":{"working_space":"linear_rec709","flatten_tolerance_px":0.02,"temporal":settings}});
+    let response = service.execute_json(
+        &json!({"operation":"render.frame","input":input,"time":{"num":"1","den":"2"}}).to_string(),
+    );
+    let result = success(response);
+    let ResultData::Frame(frame) = result else {
+        panic!("expected frame");
+    };
+    assert_eq!(frame.metadata.temporal.as_ref().unwrap().samples.len(), 2);
+    let out = _dir.path().join("temporal-sequence");
+    let render = json!({"input":input,"range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"24"}},"frame_rate":{"num":"24","den":"1"},"output_directory":out});
+    let mut sequence_request = render.clone();
+    sequence_request["operation"] = json!("render.sequence");
+    let response = service.execute_json(&sequence_request.to_string());
+    let ResultData::Sequence(sequence) = success(response) else {
+        panic!("expected sequence");
+    };
+    assert!(sequence.frames[0].metadata.temporal.is_some());
+    // Job submission serializes the same profile without a job-only shutter model.
+    let submit: RenderSubmitRequest =
+        serde_json::from_value(json!({"render":render,"output":{"format":"image_sequence"}}))
+            .unwrap();
+    assert_eq!(submit.render.input.profile.temporal.unwrap().samples, 2);
+}

@@ -44,6 +44,12 @@ fn paint(color: kronello_model::Color) -> Paint {
     }
 }
 fn lower(dag: &RenderDag) -> Result<(RenderSize, DrawScene, WorkingSpace), RenderError> {
+    lower_with_resident(dag, &std::collections::BTreeMap::new())
+}
+fn lower_with_resident(
+    dag: &RenderDag,
+    resident: &std::collections::BTreeMap<usize, crate::ResidentImage>,
+) -> Result<(RenderSize, DrawScene, WorkingSpace), RenderError> {
     let mut scene = DrawScene {
         nodes: vec![],
         roots: vec![],
@@ -58,9 +64,9 @@ fn lower(dag: &RenderDag) -> Result<(RenderSize, DrawScene, WorkingSpace), Rende
     for (index, node) in dag.nodes().iter().enumerate() {
         let draw = match node {
             DagNode::VideoDraw { .. } => {
-                return Err(RenderError::UnsupportedFeature(
-                    "video requires explicit media backend".into(),
-                ));
+                DrawNode::GpuRaster(resident.get(&index).cloned().ok_or_else(|| {
+                    RenderError::UnsupportedFeature("video requires explicit media backend".into())
+                })?)
             }
             DagNode::RasterInput { pixels } => DrawNode::Raster(pixels.clone()),
             DagNode::Geometry { .. } | DagNode::TextLayout { .. } => continue,
@@ -162,6 +168,38 @@ const DISPLAY: OutputTransform = OutputTransform {
 };
 
 impl GpuContext {
+    /// Execute the original DAG with device-bound video inputs. The only image
+    /// readbacks are the requested final linear/display output boundaries.
+    pub fn execute_resident_video(
+        &self,
+        dag: &RenderDag,
+        resident: &std::collections::BTreeMap<usize, crate::ResidentImage>,
+    ) -> Result<BackendFrame, RenderError> {
+        Ok(self.execute_resident_video_with_stats(dag, resident)?.0)
+    }
+    pub fn execute_resident_video_with_stats(
+        &self,
+        dag: &RenderDag,
+        resident: &std::collections::BTreeMap<usize, crate::ResidentImage>,
+    ) -> Result<(BackendFrame, crate::TransferStats), RenderError> {
+        let (size, scene, working) = lower_with_resident(dag, resident)?;
+        let linear = self.render_scene(size, &scene, working).map_err(error)?;
+        let display = self
+            .render_scene_output(size, &scene, working, DISPLAY)
+            .map_err(error)?;
+        let mut stats = linear.transfers;
+        stats.accumulate(&display.transfers);
+        Ok((
+            crop(
+                dag,
+                BackendFrame {
+                    linear: linear.pixels,
+                    display: display.pixels,
+                },
+            ),
+            stats,
+        ))
+    }
     /// Uses the same DAG lowering as export without image readback.
     pub fn preview_texture(&self, dag: &RenderDag) -> Result<wgpu::Texture, RenderError> {
         let (size, scene, working) = lower(dag)?;
@@ -181,6 +219,19 @@ impl GpuContext {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CpuReferenceBackend;
 impl RenderBackend for CpuReferenceBackend {
+    fn cache_namespace(&self) -> Option<String> {
+        Some("cpu-reference-f32-v1".into())
+    }
+    fn display_from_linear(
+        &self,
+        linear: &[[f32; 4]],
+        working: kronello_model::ColorSpace,
+    ) -> Result<Vec<[f32; 4]>, RenderError> {
+        linear
+            .iter()
+            .map(|p| convert_output_reference(*p, space(working), DISPLAY).map_err(error))
+            .collect()
+    }
     fn name(&self) -> &str {
         "cpu_reference_float32"
     }
@@ -246,6 +297,24 @@ impl RenderBackend for CpuReferenceBackend {
     }
 }
 impl RenderBackend for GpuContext {
+    fn cache_namespace(&self) -> Option<String> {
+        Some(format!(
+            "wgpu-rgba16f-v1:{:?}:{:?}:{:?}",
+            self.adapter_info,
+            self.device.features(),
+            self.device.limits()
+        ))
+    }
+    fn display_from_linear(
+        &self,
+        linear: &[[f32; 4]],
+        working: kronello_model::ColorSpace,
+    ) -> Result<Vec<[f32; 4]>, RenderError> {
+        linear
+            .iter()
+            .map(|p| convert_output_reference(*p, space(working), DISPLAY).map_err(error))
+            .collect()
+    }
     fn name(&self) -> &str {
         "wgpu_rgba16f"
     }

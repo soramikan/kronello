@@ -511,6 +511,10 @@ impl ScenePass<'_> {
         }
         let blank = self.blank.clone();
         let t = match &scene.nodes[id] {
+            DrawNode::GpuRaster(image) => {
+                image.validate_for(self.gpu, self.size.output_resolution, self.working)?;
+                image.texture().clone()
+            }
             DrawNode::Raster(pixels) => {
                 if pixels.len()
                     != pixel_count(

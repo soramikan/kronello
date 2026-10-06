@@ -34,6 +34,7 @@ pub struct CacheConfig {
     pub layout: CacheCapacity,
     pub geometry: CacheCapacity,
     pub raster: CacheCapacity,
+    pub temporal: CacheCapacity,
 }
 impl CacheConfig {
     /// Zero-capacity caches execute the same code without retaining entries.
@@ -47,6 +48,7 @@ impl CacheConfig {
             layout: zero,
             geometry: zero,
             raster: zero,
+            temporal: zero,
         }
     }
 }
@@ -72,6 +74,8 @@ pub struct RenderCacheStats {
     pub layout: CacheStats,
     pub geometry: CacheStats,
     pub raster: CacheStats,
+    #[serde(default)]
+    pub temporal: CacheStats,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Key([u8; 32]);
@@ -140,6 +144,7 @@ pub struct RenderCache {
     layout: Lru<LayoutResult>,
     geometry: Lru<FlattenedPath>,
     raster: Lru<Vec<[f32; 4]>>,
+    temporal: Lru<crate::BackendFrame>,
 }
 impl Default for RenderCache {
     fn default() -> Self {
@@ -153,6 +158,7 @@ impl RenderCache {
             layout: Lru::new(config.layout),
             geometry: Lru::new(config.geometry),
             raster: Lru::new(config.raster),
+            temporal: Lru::new(config.temporal),
         }
     }
     pub fn stats(&self) -> RenderCacheStats {
@@ -161,6 +167,7 @@ impl RenderCache {
             layout: self.layout.stats,
             geometry: self.geometry.stats,
             raster: self.raster.stats,
+            temporal: self.temporal.stats,
         }
     }
     pub fn clear(&mut self) {
@@ -168,14 +175,32 @@ impl RenderCache {
         self.layout.clear();
         self.geometry.clear();
         self.raster.clear();
+        self.temporal.clear();
     }
     pub fn reset_stats(&mut self) {
         self.values.reset_stats();
         self.layout.reset_stats();
         self.geometry.reset_stats();
         self.raster.reset_stats();
+        self.temporal.reset_stats();
     }
 
+    pub(crate) fn temporal_get(
+        &mut self,
+        identity: &str,
+    ) -> Result<Option<crate::BackendFrame>, RenderError> {
+        Ok(self.temporal.get(key("temporal-region-v1", identity)?))
+    }
+    pub(crate) fn temporal_insert(
+        &mut self,
+        identity: &str,
+        frame: crate::BackendFrame,
+    ) -> Result<(), RenderError> {
+        let bytes = (frame.linear.len() + frame.display.len()) * 16;
+        self.temporal
+            .insert(key("temporal-region-v1", identity)?, frame, bytes);
+        Ok(())
+    }
     pub(crate) fn evaluate(
         &mut self,
         graph: &DependencyGraph<'_>,

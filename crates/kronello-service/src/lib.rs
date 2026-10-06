@@ -1,5 +1,7 @@
 //! Shared synchronous Command/Query boundary for headless rendering and edits.
 //! Entry points own transport only; storage, fonts and rendering compose here.
+mod session;
+pub use session::ProjectSession;
 mod export_profiles;
 pub use export_profiles::{
     DeviceAvailability, ExportAudioCodec, ExportExecution, ExportProfileCapability,
@@ -8,7 +10,9 @@ mod nle;
 mod playback;
 pub use kronello_render::RenderTarget;
 pub use nle::*;
-pub use playback::{AudioPrepareRequest, MAX_PLAYBACK_BLOCK_FRAMES, PreparedAudio};
+pub use playback::{
+    AudioPreparationInput, AudioPrepareRequest, MAX_PLAYBACK_BLOCK_FRAMES, PreparedAudio,
+};
 mod jobs;
 pub use jobs::*;
 mod api;
@@ -50,7 +54,7 @@ use kronello_render::{
     RenderSnapshot, SequenceMetadata, SequenceRequest, render_frame,
     render_sequence_with_checkpoint,
 };
-use kronello_store::{OpenOptions, ProjectStore, StoreError};
+use kronello_store::{ProjectStore, StoreError};
 use kronello_text::FontData;
 use kronello_time::{FrameRate, Time, TimeRange};
 use serde::{Deserialize, Serialize};
@@ -380,6 +384,9 @@ pub enum BackendSelection {
     #[default]
     Gpu,
     CpuReference,
+    /// Strict VideoToolbox hardware decode and same-device Metal import.
+    GpuResidentBgra8,
+    GpuResidentNv12,
 }
 enum Backend<'a> {
     Injected(&'a dyn RenderBackend),
@@ -413,6 +420,13 @@ impl<'a> Service<'a> {
         request: &FrameRenderRequest,
     ) -> Result<(String, kronello_render::RenderDag), ServiceError> {
         self.with_render_input(&request.input, None, |snapshot, fonts| {
+            if snapshot.profile().temporal.is_some() {
+                return Err(RenderError::UnsupportedFeature(
+                    "single DAG native preview cannot integrate temporal samples; use render.frame"
+                        .into(),
+                )
+                .into());
+            }
             let scene = kronello_render::build_scene_ir(snapshot, request.time, fonts)?;
             let dag = kronello_render::build_render_dag(
                 &scene,
@@ -518,6 +532,12 @@ impl<'a> Service<'a> {
                     Backend::Selected(BackendSelection::Gpu) => {
                         kronello_render::ExplainBackend::Gpu
                     }
+                    Backend::Selected(BackendSelection::GpuResidentBgra8) => {
+                        kronello_render::ExplainBackend::GpuResidentBgra8
+                    }
+                    Backend::Selected(BackendSelection::GpuResidentNv12) => {
+                        kronello_render::ExplainBackend::GpuResidentNv12
+                    }
                     Backend::Selected(BackendSelection::CpuReference) => {
                         kronello_render::ExplainBackend::CpuReference
                     }
@@ -596,11 +616,7 @@ impl<'a> Service<'a> {
                     &r.render.input,
                     r.expected_revision.as_deref(),
                     |snapshot, fonts| {
-                        self.with_selected_backend(|backend| {
-                            let backend = &kronello_media::VideoRenderBackend {
-                                backend,
-                                project_path: &r.render.input.project,
-                            };
+                        self.with_video_backend(&r.render.input.project, |backend| {
                             jobs::validate_movie_destination(
                                 &r.render.output_directory,
                                 &r.output,
@@ -663,16 +679,7 @@ impl<'a> Service<'a> {
         ) -> Result<T, ServiceError>,
     ) -> Result<T, ServiceError> {
         self.with_render_input(input, None, |snapshot, fonts| {
-            self.with_selected_backend(|backend| {
-                run(
-                    snapshot,
-                    fonts,
-                    &kronello_media::VideoRenderBackend {
-                        backend,
-                        project_path: &input.project,
-                    },
-                )
-            })
+            self.with_video_backend(&input.project, |backend| run(snapshot, fonts, backend))
         })
     }
     /// Shared current-frame rendering, including the explicit media decode adapter.
@@ -723,6 +730,36 @@ impl<'a> Service<'a> {
             .collect();
         run(&snapshot, &fonts)
     }
+    pub(crate) fn with_video_backend<T>(
+        &self,
+        project_path: &Path,
+        run: impl FnOnce(&dyn RenderBackend) -> Result<T, ServiceError>,
+    ) -> Result<T, ServiceError> {
+        if let Backend::Selected(
+            selection @ (BackendSelection::GpuResidentBgra8 | BackendSelection::GpuResidentNv12),
+        ) = self.backend
+        {
+            let gpu =
+                (self.gpu_factory)().map_err(|e| ServiceError::new("GPU_ERROR", e.to_string()))?;
+            let backend = kronello_media::ResidentVideoRenderBackend::new(
+                &gpu,
+                project_path,
+                if selection == BackendSelection::GpuResidentBgra8 {
+                    kronello_media::ResidentVideoFormat::Bgra8
+                } else {
+                    kronello_media::ResidentVideoFormat::Nv12VideoRange
+                },
+            );
+            run(&backend)
+        } else {
+            self.with_selected_backend(|backend| {
+                run(&kronello_media::VideoRenderBackend {
+                    backend,
+                    project_path,
+                })
+            })
+        }
+    }
     fn with_selected_backend<T>(
         &self,
         run: impl FnOnce(&dyn RenderBackend) -> Result<T, ServiceError>,
@@ -730,7 +767,11 @@ impl<'a> Service<'a> {
         match self.backend {
             Backend::Injected(backend) => run(backend),
             Backend::Selected(BackendSelection::CpuReference) => run(&CpuReferenceBackend),
-            Backend::Selected(BackendSelection::Gpu) => {
+            Backend::Selected(
+                BackendSelection::Gpu
+                | BackendSelection::GpuResidentBgra8
+                | BackendSelection::GpuResidentNv12,
+            ) => {
                 let gpu = (self.gpu_factory)().map_err(|e| {
                     let code = match e {
                         GpuError::AdapterUnavailable(_) => "ADAPTER_UNAVAILABLE",
@@ -843,14 +884,8 @@ fn parse_revision(value: &str) -> Result<u64, ServiceError> {
         .parse()
         .map_err(|_| ServiceError::invalid("base_revision overflow"))
 }
-fn open_existing(path: &Path) -> Result<ProjectStore, ServiceError> {
-    if !path.is_file() {
-        return Err(ServiceError::new(
-            "PROJECT_NOT_FOUND",
-            "project file does not exist",
-        ));
-    }
-    Ok(ProjectStore::open(path, OpenOptions::default())?)
+fn open_existing(path: &Path) -> Result<session::StoreLease, ServiceError> {
+    session::open_existing(path)
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]

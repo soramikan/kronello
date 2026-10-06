@@ -309,11 +309,21 @@
     },
     "BackendSelection": {
       "description": "Explicit execution choice. GPU initialization is lazy and never falls back.",
-      "enum": [
-        "gpu",
-        "cpu_reference"
-      ],
-      "type": "string"
+      "oneOf": [
+        {
+          "enum": [
+            "gpu",
+            "cpu_reference",
+            "gpu_resident_nv12"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "gpu_resident_bgra8",
+          "description": "Strict VideoToolbox hardware decode and same-device Metal import.",
+          "type": "string"
+        }
+      ]
     },
     "BoundsStage": {
       "description": "Resolution-independent bounds stage selected by a layout consumer.",
@@ -1145,6 +1155,13 @@
           "type": "object"
         }
       ]
+    },
+    "CutPolicy": {
+      "enum": [
+        "avoid_crossing",
+        "allow_crossing"
+      ],
+      "type": "string"
     },
     "DataTable": {
       "additionalProperties": false,
@@ -2332,6 +2349,8 @@
         {
           "enum": [
             "gpu",
+            "gpu_resident_bgra8",
+            "gpu_resident_nv12",
             "cpu_reference"
           ],
           "type": "string"
@@ -3138,8 +3157,28 @@
         "target": {
           "$ref": "#/$defs/RenderTarget"
         },
+        "temporal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TemporalMetadata"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "time": {
           "$ref": "#/$defs/Rational"
+        },
+        "transfer_stats": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RenderTransferStats"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "working_space": {
           "$ref": "#/$defs/ColorSpace"
@@ -5866,6 +5905,17 @@
         "raster": {
           "$ref": "#/$defs/CacheStats"
         },
+        "temporal": {
+          "$ref": "#/$defs/CacheStats",
+          "default": {
+            "bytes": 0,
+            "entries": 0,
+            "evictions": 0,
+            "hits": 0,
+            "inserts": 0,
+            "misses": 0
+          }
+        },
         "values": {
           "$ref": "#/$defs/CacheStats"
         }
@@ -6098,6 +6148,16 @@
           "format": "double",
           "type": "number"
         },
+        "temporal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TemporalSettings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "working_space": {
           "$ref": "#/$defs/ColorSpace"
         }
@@ -6266,6 +6326,62 @@
         "stages",
         "budget_surfaces_estimate",
         "surface_bytes_estimate"
+      ],
+      "type": "object"
+    },
+    "RenderTransferStats": {
+      "description": "Actual execution transfers; GPU compute writes do not count as copies.",
+      "properties": {
+        "cpu_upload_control_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cpu_upload_control_operations": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cpu_upload_pixel_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cpu_upload_pixel_operations": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "gpu_copy_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "gpu_copy_operations": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "gpu_readback_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "gpu_readback_operations": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cpu_upload_pixel_bytes",
+        "cpu_upload_pixel_operations",
+        "cpu_upload_control_bytes",
+        "cpu_upload_control_operations",
+        "gpu_copy_bytes",
+        "gpu_copy_operations",
+        "gpu_readback_bytes",
+        "gpu_readback_operations"
       ],
       "type": "object"
     },
@@ -8596,6 +8712,14 @@
         "color": {
           "type": "string"
         },
+        "composition_media": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "coverage": {
           "type": "string"
         },
@@ -8644,6 +8768,14 @@
         },
         "stroke_geometry": {
           "type": "string"
+        },
+        "temporal": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "time_map": {
           "format": "uint32",
@@ -10313,6 +10445,76 @@
         "targets",
         "constraints",
         "content_hash"
+      ],
+      "type": "object"
+    },
+    "TemporalMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "samples": {
+          "items": {
+            "$ref": "#/$defs/TemporalSample"
+          },
+          "type": "array"
+        },
+        "sampling_scope": {
+          "type": "string"
+        },
+        "settings": {
+          "$ref": "#/$defs/TemporalSettings"
+        }
+      },
+      "required": [
+        "settings",
+        "samples",
+        "sampling_scope"
+      ],
+      "type": "object"
+    },
+    "TemporalSample": {
+      "additionalProperties": false,
+      "properties": {
+        "time": {
+          "$ref": "#/$defs/Rational"
+        },
+        "weight": {
+          "$ref": "#/$defs/Rational"
+        }
+      },
+      "required": [
+        "time",
+        "weight"
+      ],
+      "type": "object"
+    },
+    "TemporalSettings": {
+      "additionalProperties": false,
+      "description": "Phase is an exact frame offset of the exposure start, not an angle.",
+      "properties": {
+        "cut_policy": {
+          "$ref": "#/$defs/CutPolicy"
+        },
+        "frame_rate": {
+          "$ref": "#/$defs/FrameRate"
+        },
+        "samples": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "shutter_angle": {
+          "$ref": "#/$defs/Rational"
+        },
+        "shutter_phase": {
+          "$ref": "#/$defs/Rational"
+        }
+      },
+      "required": [
+        "frame_rate",
+        "shutter_angle",
+        "shutter_phase",
+        "samples",
+        "cut_policy"
       ],
       "type": "object"
     },

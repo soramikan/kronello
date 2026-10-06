@@ -3,7 +3,7 @@ use crate::ServiceError;
 use kronello_audio::{AudioSources, AudioTarget, DocumentAudioPlan, MAX_AUDIO_FRAMES};
 use kronello_model::DocumentObject;
 use kronello_render::RenderTarget;
-use kronello_store::ProjectStore;
+use kronello_store::{ProjectStore, Snapshot};
 use kronello_time::{Time, TimeRange};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -19,6 +19,40 @@ pub struct AudioPrepareRequest {
     pub project: PathBuf,
     pub target: RenderTarget,
     pub expected_revision: String,
+}
+
+/// Immutable project input captured by the shared service on the editing thread.
+/// The preparation producer compiles and decodes it without reopening the DB.
+pub struct AudioPreparationInput {
+    request: AudioPrepareRequest,
+    stored: Snapshot,
+}
+impl AudioPreparationInput {
+    pub fn prepare(self) -> Result<PreparedAudio, ServiceError> {
+        PreparedAudio::prepare_snapshot(
+            &self.request.project,
+            self.request.target,
+            &self.request.expected_revision,
+            self.stored,
+        )
+    }
+}
+impl crate::Service<'_> {
+    pub fn capture_audio_input(
+        &self,
+        request: AudioPrepareRequest,
+    ) -> Result<AudioPreparationInput, ServiceError> {
+        let store = crate::open_existing(&request.project)?;
+        let stored = store.snapshot()?;
+        store.close()?;
+        if stored.revision.to_string() != request.expected_revision {
+            return Err(ServiceError::new(
+                "REVISION_CONFLICT",
+                "audio preparation revision differs",
+            ));
+        }
+        Ok(AudioPreparationInput { request, stored })
+    }
 }
 
 pub struct PreparedAudio {
@@ -37,6 +71,14 @@ impl PreparedAudio {
         expected_revision: &str,
     ) -> Result<Self, ServiceError> {
         let stored = ProjectStore::read_snapshot(project)?;
+        Self::prepare_snapshot(project, target, expected_revision, stored)
+    }
+    fn prepare_snapshot(
+        project: &Path,
+        target: RenderTarget,
+        expected_revision: &str,
+        stored: Snapshot,
+    ) -> Result<Self, ServiceError> {
         if stored.revision.to_string() != expected_revision {
             return Err(ServiceError::new(
                 "REVISION_CONFLICT",

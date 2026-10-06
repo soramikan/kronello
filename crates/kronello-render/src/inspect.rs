@@ -19,6 +19,8 @@ pub fn inspection_layout_dependencies(
 #[serde(rename_all = "snake_case")]
 pub enum ExplainBackend {
     Gpu,
+    GpuResidentBgra8,
+    GpuResidentNv12,
     CpuReference,
     /// An injected backend has no known resource/transfer contract.
     Unknown,
@@ -134,8 +136,10 @@ pub fn explain_render_path(
                     // Estimate: one RGBA f32 upload of the drawn pixel bounds per frame.
                     let w = (bounds.max[0] - bounds.min[0]).max(0.0).ceil() as u64;
                     let h = (bounds.max[1] - bounds.min[1]).max(0.0).ceil() as u64;
-                    image_upload_bytes += w * h * 16;
-                    image_uploads += 1;
+                    if backend == ExplainBackend::Gpu {
+                        image_upload_bytes += w * h * 16;
+                        image_uploads += 1;
+                    }
                     ("VIDEO_DRAW", None, true)
                 }
                 DagNode::RasterInput { pixels } => {
@@ -151,7 +155,9 @@ pub fn explain_render_path(
                 "cpu"
             } else {
                 match backend {
-                    ExplainBackend::Gpu => "gpu",
+                    ExplainBackend::Gpu
+                    | ExplainBackend::GpuResidentBgra8
+                    | ExplainBackend::GpuResidentNv12 => "gpu",
                     ExplainBackend::CpuReference => "cpu",
                     ExplainBackend::Unknown => "unknown",
                 }
@@ -169,7 +175,9 @@ pub fn explain_render_path(
         let area = u64::from(pixels[0]) * u64::from(pixels[1]);
         let surface_bytes = area * 8;
         let intermediate = match backend {
-            ExplainBackend::Gpu => Some(surface_bytes * surfaces),
+            ExplainBackend::Gpu
+            | ExplainBackend::GpuResidentBgra8
+            | ExplainBackend::GpuResidentNv12 => Some(surface_bytes * surfaces),
             ExplainBackend::CpuReference => Some(area * 16 * surfaces),
             ExplainBackend::Unknown => None,
         };
@@ -210,13 +218,35 @@ pub fn explain_render_path(
             intermediate_bytes_estimate: intermediate,
         });
     }
-    if backend == ExplainBackend::Gpu {
+    if matches!(
+        backend,
+        ExplainBackend::Gpu | ExplainBackend::GpuResidentBgra8 | ExplainBackend::GpuResidentNv12
+    ) {
         result.notices.push(ProcessingNotice {
             code: "DUPLICATE_LINEAR_DISPLAY_RENDER".into(),
             tile: None,
             actual_estimate: Some(2),
             limit: None,
         });
+    }
+    if matches!(
+        backend,
+        ExplainBackend::GpuResidentBgra8 | ExplainBackend::GpuResidentNv12
+    ) {
+        result.notices.push(ProcessingNotice {
+            code: "REQUIRE_GPU_RESIDENT_HARDWARE_DECODE_SAME_DEVICE_IMPORT".into(),
+            tile: None,
+            actual_estimate: None,
+            limit: None,
+        });
+        if profile.temporal.is_some() {
+            result.notices.push(ProcessingNotice {
+                code: "REQUIRE_GPU_RESIDENT_REJECTS_CPU_TEMPORAL_ACCUMULATION".into(),
+                tile: None,
+                actual_estimate: None,
+                limit: None,
+            });
+        }
     }
     let transparent = scene.nodes.iter().filter(|n| n.opacity == 0.0).count() as u64;
     if transparent > 0 {
@@ -227,7 +257,10 @@ pub fn explain_render_path(
             limit: None,
         });
     }
-    let gpu = backend == ExplainBackend::Gpu;
+    let gpu = matches!(
+        backend,
+        ExplainBackend::Gpu | ExplainBackend::GpuResidentBgra8 | ExplainBackend::GpuResidentNv12
+    );
     let known = backend != ExplainBackend::Unknown;
     let mut transfer = |code: &str, direction: &str, bytes, operations| {
         result.transfers.push(TransferEstimate {

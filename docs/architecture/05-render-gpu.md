@@ -320,3 +320,30 @@ effect の3 temporaryと root reserveを execution ROI union で数える。
 movie は RGBA8 1面だけを全画面保持し、1 frame ごとに native encoderへ渡す。
 音声の spool / bounded Bus、I/O report、実測 RSS と検証範囲は
 [RENDER-003](../testing/render-003.md) を参照する。
+
+### M4 temporal executor（RENDER-002 / CACHE-002）
+
+`RenderProfile.temporal` の optional 設定は共通 render.frame / render.sequence / movie export /
+固定 worker snapshot に保存する。版 1 は有理数の露光開始位相と midpoint 標本を
+root composition scope で共有し、全体合成の線形 premultiplied RGBA を逐次平均する。
+Sequence の nominal time を含む視覚編集区間へ露光を切り詰める既定方針と、明示的に跨ぐ
+方針を持つ。crossfade は連続な重なりとして扱う。表示変換は平均後の一回だけである。
+独立した bounded temporal LRU は snapshot 全内容・全標本依存・requested/execution ROI halo・
+backend namespace を key に含む。動画は外部ファイルの検証を省かないため temporal 出力を
+保持しない。詳細と制約は [ADR-0080](../adr/0080-root-temporal-integration.md)、
+再現手順は [検証記録](../testing/render-002.md) を参照する。
+
+## GPU-003 の strict resident video 経路
+
+[ADR-0081](../adr/0081-guaranteed-metal-hardware-video-decode.md) の
+`gpu_resident_bgra8` / `gpu_resident_nv12` は共有 service / CLI / MCP で明示選択する。
+framebridge が local compressed demux、VideoToolbox hardware required + query、
+IOSurface / same-device Metal import と native ownership を扱う。
+GPU shader が BT.709 color conversion / nearest affine sampling を行い、
+`ResidentImage` を scene image input として合成する。foreign context は allocation 時の
+identity token で拒否し、CPU oracle は resident input を暗黙 readback しない。
+最終 linear / display 出力 readback、GPU copy、control upload は
+`FrameMetadata.transfer_stats` の actual cumulative counter へ保存する。
+`render.explain` は resident selection の estimate と policy notice を返す。
+HDR / 10-bit / full-range と CPU temporal accumulation の resident 強制併用は typed unsupported。
+形式別の受け入れ実測と未検証範囲は [GPU-003](../testing/gpu-003.md) に記録する。

@@ -4,6 +4,8 @@ use std::time::{Duration, Instant};
 #[cfg(target_os = "macos")]
 mod macos;
 #[cfg(target_os = "macos")]
+pub mod resident;
+#[cfg(target_os = "macos")]
 pub mod videotoolbox;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PathKind {

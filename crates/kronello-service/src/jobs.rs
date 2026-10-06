@@ -294,7 +294,7 @@ impl Service<'_> {
         for font in &mut request.render.input.fonts {
             font.path = absolute(&font.path)?;
         }
-        let stored = kronello_store::ProjectStore::read_snapshot(&project_path)?;
+        let stored = crate::session::read_snapshot(&project_path)?;
         check_expected_revision(request.expected_revision.as_deref(), stored.revision)?;
         crate::document_asset_locators(&stored.document)?;
         let snapshot = crate::freeze_render_input(&stored, &request.render.input)?;
@@ -412,12 +412,7 @@ impl Service<'_> {
                 message
             })
         };
-        let rendered = self.with_selected_backend(|backend| {
-            let video_backend = kronello_media::VideoRenderBackend {
-                backend,
-                project_path: &fixed.request.render.input.project,
-            };
-            let backend = &video_backend;
+        let rendered = self.with_video_backend(&fixed.request.render.input.project, |backend| {
             let request = &fixed.request.render;
             let result = match &fixed.request.output {
                 JobOutput::ImageSequence => {

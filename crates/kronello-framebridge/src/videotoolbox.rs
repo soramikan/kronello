@@ -27,6 +27,7 @@ pub enum NativeStage {
     Encode,
     EncoderComplete,
     FormatDescription,
+    FrameSelection,
     DecoderCreate,
     Decode,
     DecoderWait,
@@ -43,12 +44,24 @@ pub struct NativeError {
     pub status: Option<i32>,
     pub detail: String,
 }
+impl NativeError {
+    pub fn code(&self) -> &'static str {
+        if self.stage == NativeStage::FrameSelection {
+            "FRAME_NOT_FOUND"
+        } else {
+            "UNSUPPORTED_FEATURE"
+        }
+    }
+}
 impl fmt::Display for NativeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "UNSUPPORTED_FEATURE: stage={:?}, OSStatus={:?}, {}",
-            self.stage, self.status, self.detail
+            "{}: stage={:?}, OSStatus={:?}, {}",
+            self.code(),
+            self.stage,
+            self.status,
+            self.detail
         )
     }
 }
@@ -189,8 +202,8 @@ fn seed(buffer: &CVPixelBuffer, pattern: bool) -> Result<Vec<u8>, NativeError> {
 }
 // Tokens allow retain/release across callback/HAL threads, not concurrent pixel
 // access. Pixel and sample buffers are immutable while asynchronous work uses them.
-struct PixelToken(CFRetained<CVPixelBuffer>);
-struct SampleToken(CFRetained<CMSampleBuffer>);
+pub(crate) struct PixelToken(pub(crate) CFRetained<CVPixelBuffer>);
+pub(crate) struct SampleToken(pub(crate) CFRetained<CMSampleBuffer>);
 // SAFETY: CF retain/release are thread-safe; no mutation is exposed by tokens.
 unsafe impl Send for PixelToken {}
 // SAFETY: Samples come from completed encoder callbacks and remain immutable;
@@ -219,7 +232,7 @@ impl TextureLifetime {
         drop(cache);
     }
 }
-fn cache(gpu: &GpuContext) -> Result<CFRetained<CVMetalTextureCache>, NativeError> {
+pub(crate) fn cache(gpu: &GpuContext) -> Result<CFRetained<CVMetalTextureCache>, NativeError> {
     // SAFETY: Borrow the exact wgpu Metal device without external GPU submission.
     let hal = unsafe { gpu.device.as_hal::<wgpu::hal::api::Metal>() }
         .ok_or_else(|| error(NativeStage::TextureCacheCreate, "wgpu device is not Metal"))?;
@@ -234,7 +247,7 @@ fn cache(gpu: &GpuContext) -> Result<CFRetained<CVMetalTextureCache>, NativeErro
     )?;
     owned(raw, NativeStage::TextureCacheCreate)
 }
-fn import_plane(
+pub(crate) fn import_plane(
     gpu: &GpuContext,
     buffer: &CFRetained<CVPixelBuffer>,
     cache: &CFRetained<CVMetalTextureCache>,
@@ -243,7 +256,11 @@ fn import_plane(
 ) -> Result<wgpu::Texture, NativeError> {
     verify_surface(buffer)?;
     let (width, height, metal, format) = if nv12 {
-        if plane > 1 || CVPixelBufferGetPlaneCount(buffer) != 2 {
+        if plane > 1
+            || CVPixelBufferGetPlaneCount(buffer) != 2
+            || CVPixelBufferGetPixelFormatType(buffer)
+                != kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+        {
             return Err(error(NativeStage::Import, "NV12 must have two planes"));
         }
         (
@@ -437,7 +454,9 @@ struct Encoded {
 }
 #[derive(Default)]
 struct Decoded {
-    frames: Mutex<Vec<(i32, Option<PixelToken>)>>,
+    frames: Mutex<Vec<(i32, Option<PixelToken>, CMTime)>>,
+    selection: Option<(i64, i64)>,
+    failure: Mutex<Option<i32>>,
 }
 unsafe extern "C-unwind" fn encoded_callback(
     context: *mut c_void,
@@ -464,7 +483,7 @@ unsafe extern "C-unwind" fn decoded_callback(
     code: i32,
     _flags: VTDecodeInfoFlags,
     image: *mut CVImageBuffer,
-    _pts: CMTime,
+    pts: CMTime,
     _duration: CMTime,
 ) {
     // SAFETY: Decoder guard owns context through wait/invalidate; image is a
@@ -473,11 +492,25 @@ unsafe extern "C-unwind" fn decoded_callback(
     // SAFETY: A non-null decoded image is valid during this callback. Retain
     // gives PixelToken ownership through subsequent import and GPU completion.
     let image = NonNull::new(image).map(|p| PixelToken(unsafe { CFRetained::retain(p) }));
-    state
-        .frames
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .push((code, image));
+    if code != 0 || image.is_none() || pts.timescale <= 0 {
+        let code = if code != 0 { code } else { -12909 };
+        *state.failure.lock().unwrap_or_else(|e| e.into_inner()) = Some(code);
+        return;
+    }
+    let mut frames = state.frames.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((num, den)) = state.selection {
+        if i128::from(pts.value) * i128::from(den) > i128::from(num) * i128::from(pts.timescale) {
+            return;
+        }
+        if frames.first().is_some_and(|(_, _, previous)| {
+            i128::from(previous.value) * i128::from(pts.timescale)
+                >= i128::from(pts.value) * i128::from(previous.timescale)
+        }) {
+            return;
+        }
+        frames.clear();
+    }
+    frames.push((code, image, pts));
 }
 struct Encoder {
     session: CFRetained<VTCompressionSession>,
@@ -507,7 +540,7 @@ impl Drop for Decoder {
         }
     }
 }
-fn encode() -> Result<(Vec<SampleToken>, Vec<u8>), NativeError> {
+pub(crate) fn encode() -> Result<(Vec<SampleToken>, Vec<u8>), NativeError> {
     let mut state = Box::<Encoded>::default();
     let attributes = attrs(kCVPixelFormatType_32BGRA);
     let mut raw = ptr::null_mut();
@@ -612,10 +645,13 @@ fn encode() -> Result<(Vec<SampleToken>, Vec<u8>), NativeError> {
     }
     Ok((frames, expected))
 }
-fn decode(
+type DecodedFrames = (Vec<PixelToken>, Option<bool>, i32, Vec<CMTime>);
+pub(crate) fn decode(
     samples: &[SampleToken],
     nv12: bool,
-) -> Result<(Vec<PixelToken>, Option<bool>, i32), NativeError> {
+    require_hardware: bool,
+    selection: Option<(i64, i64)>,
+) -> Result<DecodedFrames, NativeError> {
     let first = samples
         .first()
         .ok_or_else(|| error(NativeStage::FormatDescription, "no sample"))?;
@@ -626,17 +662,38 @@ fn decode(
             "sample has no format description",
         )
     })?;
+    // SAFETY: Retained format description is valid for this completed sample.
+    let codec = unsafe { format.media_sub_type() };
+    if require_hardware && codec != kCMVideoCodecType_H264 && codec != kCMVideoCodecType_HEVC {
+        return Err(error(
+            NativeStage::FormatDescription,
+            "resident decoder accepts actual H.264/HEVC compressed formats only",
+        ));
+    }
     let pixel_format = if nv12 {
         kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
     } else {
         kCVPixelFormatType_32BGRA
     };
     let attributes = attrs(pixel_format);
-    let mut state = Box::<Decoded>::default();
+    let mut state = Box::new(Decoded {
+        selection,
+        ..Decoded::default()
+    });
     let mut raw = ptr::null_mut();
     let callback = VTDecompressionOutputCallbackRecord {
         decompressionOutputCallback: Some(decoded_callback),
         decompressionOutputRefCon: (&mut *state as *mut Decoded).cast(),
+    };
+    // SAFETY: The VT specification key is a process-lifetime CFString constant;
+    // dictionary retains a typed CFBoolean and remains alive through create.
+    let specification = unsafe {
+        CFDictionary::<CFString, CFType>::from_slices(
+            &[kVTVideoDecoderSpecification_RequireHardwareAcceleratedVideoDecoder],
+            &[CFBoolean::new(require_hardware).as_ref()],
+        )
+        .as_opaque()
+        .retain()
     };
     // SAFETY: Callback/context stable until session invalidation; format comes
     // from encoder sample; output attributes specify IOSurface/Metal compatibility.
@@ -646,7 +703,7 @@ fn decode(
             VTDecompressionSession::create(
                 None,
                 &format,
-                None,
+                Some(&specification),
                 Some(&attributes),
                 &callback,
                 NonNull::from(&mut raw),
@@ -714,6 +771,26 @@ fn decode(
     } else {
         None
     };
+    if require_hardware && hardware != Some(true) {
+        return Err(error(
+            NativeStage::HardwareDecoderQuery,
+            format!(
+                "require_gpu_resident needs hardware decoder, property={hardware:?}, OSStatus={query}"
+            ),
+        ));
+    }
+    if let Some(code) = *decoder
+        .state
+        .failure
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+    {
+        status(
+            NativeStage::Decode,
+            code,
+            "sticky decompression output callback error",
+        )?;
+    }
     let results = std::mem::take(
         &mut *decoder
             .state
@@ -722,14 +799,16 @@ fn decode(
             .unwrap_or_else(|e| e.into_inner()),
     );
     let mut frames = Vec::new();
-    for (code, image) in results {
+    let mut timestamps = Vec::new();
+    for (code, image, pts) in results {
+        timestamps.push(pts);
         status(NativeStage::Decode, code, "decompression output callback")?;
         let image =
             image.ok_or_else(|| error(NativeStage::Decode, "null decoded CVPixelBuffer"))?;
         verify_surface(&image.0)?;
         frames.push(image);
     }
-    if frames.len() != samples.len() {
+    if selection.is_none() && frames.len() != samples.len() {
         return Err(error(
             NativeStage::Decode,
             format!(
@@ -739,7 +818,7 @@ fn decode(
             ),
         ));
     }
-    Ok((frames, hardware, query))
+    Ok((frames, hardware, query, timestamps))
 }
 fn verify_nv12(buffer: &CVPixelBuffer, actual: &[u8]) -> Result<(), NativeError> {
     let w = CVPixelBufferGetWidth(buffer);
@@ -815,7 +894,7 @@ fn import_decoded(
     nv12: bool,
 ) -> Result<Measurement, NativeError> {
     let start = Instant::now();
-    let (frames, hardware, query) = decode(samples, nv12)?;
+    let (frames, hardware, query, _) = decode(samples, nv12, false, None)?;
     let cache = cache(gpu)?;
     let mut transfers = TransferStats::default();
     let mut max_error = 0u8;

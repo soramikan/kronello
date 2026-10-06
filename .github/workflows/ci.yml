@@ -19,15 +19,37 @@ env:
 
 jobs:
   windows-store:
-    name: Windows (storage and job processes)
+    name: Windows (full CLI/MCP and LGPL media)
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
       - name: Install pinned Rust toolchain
         run: rustup show
+      - name: Build hash-pinned LGPL runtime with MinGW
+        shell: pwsh
+        run: |
+          $env:MSYSTEM = "MINGW64"
+          $env:CHERE_INVOKING = "1"
+          & C:/msys64/usr/bin/bash.exe -lc 'pacman --noconfirm -S --needed mingw-w64-x86_64-toolchain mingw-w64-x86_64-python mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja mingw-w64-x86_64-meson mingw-w64-x86_64-pkgconf mingw-w64-x86_64-nasm make && python scripts/build_ffmpeg_lgpl.py --jobs 3'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "KRONELLO_FFMPEG_PREFIX=$env:GITHUB_WORKSPACE/target/native/ffmpeg-lgpl" >> $env:GITHUB_ENV
+          "KRONELLO_FFMPEG_LIB_DIR=$env:GITHUB_WORKSPACE/target/native/ffmpeg-lgpl/bin" >> $env:GITHUB_ENV
+      - name: Build full CLI and MCP with the pinned runtime headers
+        run: cargo build -p kronello-cli -p kronello-mcp --all-targets --locked
+      - name: Execute real media roundtrip and CLI/MCP parent-exit evidence
+        run: python scripts/media_003_evidence.py
+      - name: Upload MEDIA-003 evidence and native receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: media-003-${{ runner.os }}-${{ runner.arch }}
+          path: |
+            target/media-003-evidence
+            target/native/ffmpeg-lgpl/build-receipt.json
+          if-no-files-found: error
       - name: Test storage and operational example
         run: cargo test -p kronello-store --all-targets --locked
       - name: Verify jobs/platform real processes and record evidence
@@ -103,6 +125,30 @@ jobs:
           python3 scripts/build_ffi.py
           swift build --package-path apps/macos -j 3
           swift test --package-path apps/macos -j 3
+      - name: Verify MCP 2026 with the official pinned v2 SDK
+        run: |
+          cargo build -p kronello-mcp --locked
+          python3 -m venv target/mcp-003-sdk
+          target/mcp-003-sdk/bin/python -m pip install -r scripts/mcp-003-client-requirements.txt
+          target/mcp-003-sdk/bin/python scripts/mcp_003_client_check.py
+      - name: Upload MCP-003 SDK evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mcp-003-${{ runner.os }}-${{ runner.arch }}
+          path: target/mcp-003-evidence
+          if-no-files-found: error
+      - name: Verify native safe-session close and process termination
+        run: |
+          cargo build -p kronello-ffi -p kronello-cli -p kronello-mcp --locked
+          python3 scripts/ffi_002_evidence.py
+      - name: Upload FFI-002 real process evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ffi-002-${{ runner.os }}-${{ runner.arch }}
+          path: target/ffi-002-evidence
+          if-no-files-found: error
       - name: Validate backlog
         run: python3 scripts/backlog.py check
       - name: Validate design system preview
@@ -185,5 +231,29 @@ jobs:
         run: |
           cargo build -p kronello-cli -p kronello-mcp --locked
           python3 -m unittest scripts.tests.test_integration_m2.IntegrationM2.test_small_cpu_reference -v
+      - name: Verify MCP 2026 with the official pinned v2 SDK
+        run: |
+          cargo build -p kronello-mcp --locked
+          python3 -m venv target/mcp-003-sdk
+          target/mcp-003-sdk/bin/python -m pip install -r scripts/mcp-003-client-requirements.txt
+          target/mcp-003-sdk/bin/python scripts/mcp_003_client_check.py
+      - name: Upload MCP-003 SDK evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mcp-003-${{ runner.os }}-${{ runner.arch }}
+          path: target/mcp-003-evidence
+          if-no-files-found: error
+      - name: Verify native safe-session close and process termination
+        run: |
+          cargo build -p kronello-ffi -p kronello-cli -p kronello-mcp --locked
+          python3 scripts/ffi_002_evidence.py
+      - name: Upload FFI-002 real process evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ffi-002-${{ runner.os }}-${{ runner.arch }}
+          path: target/ffi-002-evidence
+          if-no-files-found: error
       - name: Validate backlog
         run: python3 scripts/backlog.py check

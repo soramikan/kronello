@@ -5,6 +5,7 @@ import ctypes
 import hashlib
 import json
 import os
+import platform
 from pathlib import Path
 import shutil
 import subprocess
@@ -67,10 +68,12 @@ def run(command, cwd=None, env=None):
 def verify(prefix, manifest):
     names = [("avutil", 61), ("avcodec", 63), ("avformat", 63), ("swscale", 10), ("swresample", 7)]
     libraries = []
+    runtime_dir = prefix / ("bin" if sys.platform == "win32" else "lib")
+    dll_cookie = os.add_dll_directory(str(runtime_dir)) if sys.platform == "win32" else None
     ffmpeg_version = None
     for name, major in names:
-        filename = f"lib{name}.{major}.dylib" if sys.platform == "darwin" else f"lib{name}.so.{major}"
-        path = prefix / "lib" / filename
+        filename = f"{name}-{major}.dll" if sys.platform == "win32" else (f"lib{name}.{major}.dylib" if sys.platform == "darwin" else f"lib{name}.so.{major}")
+        path = runtime_dir / filename
         lib = ctypes.CDLL(str(path))
         license_fn = getattr(lib, name + "_license")
         license_fn.restype = ctypes.c_char_p
@@ -101,7 +104,12 @@ def verify(prefix, manifest):
         ("svt-av1", "libSvtAv1Enc.4.dylib" if sys.platform == "darwin" else "libSvtAv1Enc.so.4", "svt_av1_get_version"),
         ("dav1d", "libdav1d.7.dylib" if sys.platform == "darwin" else "libdav1d.so.7", "dav1d_version"),
     ]:
-        library = ctypes.CDLL(str(prefix / "lib" / filename))
+        if sys.platform == "win32":
+            matches = list(runtime_dir.glob("*SvtAv1Enc*.dll" if dependency == "svt-av1" else "*dav1d*.dll"))
+            if len(matches) != 1:
+                raise ValueError(f"one pinned dependency DLL required: {dependency}")
+            filename = matches[0].name
+        library = ctypes.CDLL(str(runtime_dir / filename))
         version = getattr(library, symbol)
         version.restype = ctypes.c_char_p
         actual = version().decode().removeprefix("v")
@@ -109,8 +117,8 @@ def verify(prefix, manifest):
         if actual != expected:
             raise ValueError(f"pinned dependency version mismatch: {dependency}: {actual}")
         external_versions[dependency] = actual
-    shared = sorted(p for p in (prefix / "lib").iterdir() if p.is_file() and not p.is_symlink() and (".so" in p.name or p.suffix == ".dylib"))
-    if not shared or any(p.suffix == ".a" for p in (prefix / "lib").iterdir()):
+    shared = sorted(p for p in runtime_dir.iterdir() if p.is_file() and not p.is_symlink() and (".so" in p.name or p.suffix in {".dylib", ".dll"}))
+    if not shared or any(p.suffix == ".a" and not p.name.endswith(".dll.a") for p in (prefix / "lib").iterdir()):
         raise ValueError("shared libraries only required")
     license_files = [prefix / "licenses" / entry["name"] / name
                      for entry in manifest["dependencies"] for name in entry["license_files"]]
@@ -118,8 +126,10 @@ def verify(prefix, manifest):
                "external_versions": external_versions,
                "licenses": [{"file": str(p.relative_to(prefix)), "sha256": sha256(p)} for p in license_files],
                "shared_libraries": [{"file": p.name, "sha256": sha256(p)} for p in shared],
-               "platform": sys.platform, "machine": os.uname().machine}
+               "platform": sys.platform, "machine": platform.machine()}
     (prefix / "build-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
+    if dll_cookie is not None:
+        dll_cookie.close()
     print(f"verified five LGPL shared libraries, AV1, ProRes and PCM24: {prefix}")
 
 
@@ -154,18 +164,30 @@ def main():
     run(["meson", "compile", "-C", dav1d_build, "-j", args.jobs])
     run(["meson", "install", "-C", dav1d_build])
     svt_build = work / "svt-build"
-    run(["cmake", "-S", svt_source, "-B", svt_build, *svt["cmake"], *svt.get("platform_cmake", {}).get(sys.platform, []), f"-DCMAKE_INSTALL_PREFIX={prefix}", "-DCMAKE_INSTALL_LIBDIR=lib"])
+    run(["cmake", *(["-G", "Ninja"] if sys.platform == "win32" else []), "-S", svt_source, "-B", svt_build, *svt["cmake"], *svt.get("platform_cmake", {}).get(sys.platform, []), f"-DCMAKE_INSTALL_PREFIX={prefix}", "-DCMAKE_INSTALL_LIBDIR=lib"])
     run(["cmake", "--build", svt_build, "--parallel", args.jobs])
     run(["cmake", "--install", svt_build])
     env = dict(os.environ, PKG_CONFIG_PATH=str(prefix / "lib/pkgconfig"), PKG_CONFIG_LIBDIR=str(prefix / "lib/pkgconfig"))
     ffmpeg_build = work / "ffmpeg-build"
     ffmpeg_build.mkdir()
-    flags = [*ffmpeg["configure"], f"--prefix={prefix}", f"--extra-ldflags=-Wl,-rpath,{prefix / 'lib'}"]
+    flags = [*ffmpeg["configure"], f"--prefix={prefix.as_posix()}"]
+    if sys.platform == "win32":
+        flags += ["--target-os=mingw32", "--arch=x86_64", "--cc=gcc", "--cxx=g++"]
+    else:
+        flags += [f"--extra-ldflags=-Wl,-rpath,{prefix / 'lib'}"]
     if sys.platform == "darwin":
         flags += [*ffmpeg["platform_configure"]["darwin"], f"--install-name-dir={prefix / 'lib'}"]
-    run([ffmpeg_source / "configure", *flags], cwd=ffmpeg_build, env=env)
+    run([*(["bash"] if sys.platform == "win32" else []), (ffmpeg_source / "configure").as_posix(), *flags], cwd=ffmpeg_build, env=env)
     run(["make", f"-j{args.jobs}"], cwd=ffmpeg_build, env=env)
     run(["make", "install"], cwd=ffmpeg_build, env=env)
+    if sys.platform == "win32":
+        # Copy only the MinGW runtime DLLs into the explicit runtime directory;
+        # loading the finished runtime never depends on MSYS being on PATH.
+        for name in ["libwinpthread-1.dll", "libgcc_s_seh-1.dll", "libstdc++-6.dll"]:
+            dependency = next((Path(part) / name for part in os.environ.get("PATH", "").split(os.pathsep) if (Path(part) / name).is_file()), None)
+            if dependency is None:
+                raise ValueError(f"missing MinGW runtime DLL: {name}")
+            shutil.copy2(dependency, prefix / "bin" / name)
     licenses = prefix / "licenses"
     licenses.mkdir()
     for entry, source_dir in [(ffmpeg, ffmpeg_source), (svt, svt_source), (dav1d, dav1d_source)]:

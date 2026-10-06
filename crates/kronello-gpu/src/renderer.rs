@@ -9,6 +9,7 @@ pub struct GpuContext {
     pub queue: wgpu::Queue,
     pub adapter_info: wgpu::AdapterInfo,
     pipeline: wgpu::ComputePipeline,
+    pub(crate) identity: std::sync::Arc<()>,
 }
 #[derive(Debug)]
 pub struct RenderOutput {
@@ -124,6 +125,7 @@ impl GpuContext {
             queue,
             adapter_info,
             pipeline,
+            identity: std::sync::Arc::new(()),
         })
     }
     fn check_size(&self, width: u32, height: u32) -> Result<(), GpuError> {

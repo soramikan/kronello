@@ -30,3 +30,6 @@ objc2-metal = { version = "0.3.2", features = ["objc2-io-surface"] }
 
 [dev-dependencies]
 kronello-testkit = { path = "../kronello-testkit" }
+
+[build-dependencies]
+cc = "1"

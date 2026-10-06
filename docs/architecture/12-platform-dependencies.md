@@ -22,7 +22,11 @@ workspace lints の mirror は unsafe_code=deny のみ例外で、private native
 jobs / service の unsafe forbid と純粋層の依存境界は維持する
 （[ADR-0074](../adr/0074-windows-job-workers-and-process-evidence.md)）。
 
-Windows full CLI/MCP は media C loader の dlfcn.h / Unix loading と pkg-config headers の移植待ち。
+Windows full CLI/MCP は MEDIA-003 で `LoadLibraryExW` による明示 DLL directory の読み込みと、
+MinGW で作った LGPL FFmpeg を MSVC ABI の C shim から利用する経路を実装中。
+build-time headers は `KRONELLO_FFMPEG_PREFIX` で固定する。
+実装方針は [ADR-0082](../adr/0082-windows-ffmpeg-runtime.md)、実行結果は
+[MEDIA-003](../testing/media-003.md) を参照する。Windows 実機 CI の成功前には保証しない。
 JOB-002 CI は deterministic test payload で jobs/platform の本番 launch / state / publication を確認し、
 Windows の CLI/MCP render を保証した結果として扱わない。
 Linux は CLI/MCP 実プロセスを追加実行し、初回CIのJOB-002 evidenceは成功した。

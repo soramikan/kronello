@@ -1475,3 +1475,49 @@ fn inspected_revision_fence_rejects_submit_and_export_without_job_or_worker() {
         assert!(f.store().list().unwrap().is_empty());
     }
 }
+
+#[test]
+fn temporal_job_pins_shutter_and_executes_after_project_removal() {
+    let f = Fixture::new();
+    let destination = f.temp.path().join("temporal-output");
+    let mut render = f.render(&destination);
+    render["input"]["region"]["pixels"] = json!([4, 2]);
+    let temporal = json!({"frame_rate":{"num":"24","den":"1"},"shutter_angle":{"num":"180","den":"1"},"shutter_phase":{"num":"-1","den":"4"},"samples":3,"cut_policy":"avoid_crossing"});
+    render["input"]["profile"] =
+        json!({"working_space":"linear_rec709","flatten_tolerance_px":0.02,"temporal":temporal});
+    let gate = f.temp.path().join("temporal-release");
+    let submitted=f.submit_request(json!({"operation":"render.submit","render":render,"required_features":["temporal_sampling_v1"]}),Some(&gate),false);
+    f.wait(&submitted.id, JobStatus::Running);
+    let fixed: Value = serde_json::from_slice(
+        &std::fs::read(
+            f.store()
+                .directory(&submitted.id)
+                .unwrap()
+                .join("input.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(fixed["snapshot"]["profile"]["temporal"], temporal);
+    assert_eq!(fixed["snapshot"]["semantic_versions"]["temporal"], 1);
+    std::fs::remove_file(&f.project).unwrap();
+    std::fs::write(&gate, b"release").unwrap();
+    let finished = f.wait(&submitted.id, JobStatus::Succeeded);
+    assert_eq!(finished.completed_frames, 3);
+    let metadata: Value =
+        serde_json::from_slice(&std::fs::read(destination.join("sequence.json")).unwrap()).unwrap();
+    for frame in metadata["frames"].as_array().unwrap() {
+        assert_eq!(
+            frame["metadata"]["snapshot_content_hash"],
+            submitted.snapshot_hash
+        );
+        assert_eq!(frame["metadata"]["temporal"]["settings"], temporal);
+        assert_eq!(
+            frame["metadata"]["temporal"]["samples"]
+                .as_array()
+                .unwrap()
+                .len(),
+            3
+        );
+    }
+}
