@@ -64,6 +64,8 @@ Windows DX12 も同 run で CPU oracle 40 scenes を通過し、root の画像�
 
 Windows FFmpeg configure が WSL の bare bash を拾った問題は、23dde7a で検証済み absolute MSYS2 bash に修正した（[MEDIA-003](media-003.md)）。
 その後の23dde7a、4b75d40、6384858の CI は全 job が step 開始前に終了した。
-[最新 run 37412738412](https://github.com/soramikan/kronello/actions/runs/37412738412) の annotation は account payment failure または spending limit の引き上げが必要と報告している。
+[run 37412738412](https://github.com/soramikan/kronello/actions/runs/37412738412) の annotation は account payment failure または spending limit の引き上げが必要と報告している。
 利用者へ Actions 再開の確認を依頼し、有料設定は変更していない。
 Windows native 修正の再検証、Windows baseline 通常比較、最終全 OS gate は未完了である。利用者のリセット連絡後に同runを一度再実行したが、attempt 2のWindows annotationも同じ請求・利用上限理由でstep開始前に停止した。
+
+性能受け入れ済みの25dc305をpushした[run 37414848745](https://github.com/soramikan/kronello/actions/runs/37414848745)も、全5jobsがsteps=[]のまま停止した。Windowsのannotationは同じaccount payment failure / spending limit理由だった。未検証の2タスクはin_progressを維持し、外部のActions実行再開を待つ。
