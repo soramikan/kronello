@@ -14,6 +14,9 @@ unsafe_code = "allow"
 all = "warn"
 
 [dependencies]
+png = "0.18"
+kronello-framebridge = { path = "../kronello-framebridge" }
+kronello-gpu = { path = "../kronello-gpu" }
 kronello-audio = { path = "../kronello-audio" }
 kronello-text = { path = "../kronello-text" }
 schemars = "1"
@@ -31,5 +34,5 @@ cc = "1"
 pkg-config = "0.3"
 
 [dev-dependencies]
-kronello-gpu = { path = "../kronello-gpu" }
+kronello-template = { path = "../kronello-template" }
 uuid = { version = "1", features = ["v4"] }

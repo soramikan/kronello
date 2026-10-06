@@ -16,6 +16,10 @@ struct Fixture {
     document: Value,
     heartbeat_timeout: Duration,
     wait_timeout: Duration,
+    after_rename_gate: Option<PathBuf>,
+    disk_full: bool,
+    device_lost: bool,
+    gate_after_frame: u64,
 }
 impl Fixture {
     fn new() -> Self {
@@ -41,6 +45,10 @@ impl Fixture {
             document,
             heartbeat_timeout: Duration::from_secs(30),
             wait_timeout: Duration::from_secs(60),
+            after_rename_gate: None,
+            disk_full: false,
+            device_lost: false,
+            gate_after_frame: 0,
         };
         fixture.service(json!({"operation":"project.create","project":fixture.project,"document":fixture.document}));
         fixture
@@ -52,6 +60,14 @@ impl Fixture {
         let response = serde_json::to_value(response).unwrap();
         assert_eq!(response["status"], "success", "{response}");
         response["result"]["value"].clone()
+    }
+    fn service_error(&self, request: Value) -> Value {
+        let response = Service::new(BackendSelection::CpuReference)
+            .with_job_config(self.store().config().clone())
+            .execute_json(&request.to_string());
+        let response = serde_json::to_value(response).unwrap();
+        assert_eq!(response["status"], "error", "{response}");
+        response["error"].clone()
     }
     fn command(&self) -> Command {
         let mut c = Command::new(env!("CARGO_BIN_EXE_kronello"));
@@ -66,7 +82,26 @@ impl Fixture {
             .env_remove("KRONELLO_JOB_RETENTION_SECONDS")
             .env_remove("KRONELLO_TEST_JOB_GATE")
             .env_remove("KRONELLO_TEST_JOB_CORRUPT_OUTPUT")
+            .env_remove("KRONELLO_TEST_JOB_AFTER_RENAME_GATE")
+            .env_remove("KRONELLO_TEST_JOB_DISK_FULL")
+            .env_remove("KRONELLO_TEST_JOB_DEVICE_LOST")
+            .env_remove("KRONELLO_TEST_JOB_GATE_AFTER_FRAME")
             .env_remove("KRONELLO_TEST_ADAPTER_UNAVAILABLE");
+        if let Some(gate) = &self.after_rename_gate {
+            c.env("KRONELLO_TEST_JOB_AFTER_RENAME_GATE", gate);
+        }
+        if self.disk_full {
+            c.env("KRONELLO_TEST_JOB_DISK_FULL", "1");
+        }
+        if self.device_lost {
+            c.env("KRONELLO_TEST_JOB_DEVICE_LOST", "1");
+        }
+        if self.gate_after_frame > 0 {
+            c.env(
+                "KRONELLO_TEST_JOB_GATE_AFTER_FRAME",
+                self.gate_after_frame.to_string(),
+            );
+        }
         c
     }
     fn cli(&self, request: Value, gate: Option<&Path>, corrupt: bool) -> Value {
@@ -148,6 +183,178 @@ impl Fixture {
             std::thread::sleep(Duration::from_millis(20));
         }
     }
+    fn expire_terminated_worker(&self, record: &JobRecord) {
+        assert!(!kronello_platform::process_is_alive(
+            record.worker_pid.unwrap()
+        ));
+        // Advance only the confirmed-dead worker's recorded deadline. Healthy
+        // peers keep the production timeout under loaded CI scheduling.
+        rewrite_record(self, &record.id, |r| {
+            r.heartbeat_at_ms =
+                kronello_jobs::now_ms() - self.heartbeat_timeout.as_millis() as i64 - 1000;
+        });
+    }
+}
+
+#[test]
+fn recovery_resume_rebuilds_killed_output_from_fixed_snapshot() {
+    let mut f = Fixture::new();
+    f.gate_after_frame = 1;
+    let initial = std::fs::read(&f.project).unwrap();
+    let submitted = f.submit("resume-output", Some(&f.temp.path().join("never")));
+    let running = f.wait(&submitted.id, JobStatus::Running);
+    let staging = submitted.destination.parent().unwrap().join(format!(
+        ".kronello-job-{}-{}-{}",
+        submitted.id, submitted.input_hash, submitted.attempt
+    ));
+    let start = Instant::now();
+    while f.store().get(&submitted.id).unwrap().completed_frames < 1 {
+        assert!(start.elapsed() < Duration::from_secs(5));
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(staging.join("owner.json").exists());
+    kronello_platform::ProcessGuard::capture(running.worker_pid.unwrap())
+        .unwrap()
+        .terminate_and_wait()
+        .unwrap();
+    f.expire_terminated_worker(&running);
+    f.wait(&submitted.id, JobStatus::Interrupted);
+    std::fs::write(staging.join("incomplete"), b"abandoned").unwrap();
+    let unrelated = staging.parent().unwrap().join(".kronello-job-unrelated");
+    std::fs::create_dir(&unrelated).unwrap();
+    std::fs::write(unrelated.join("keep"), b"keep").unwrap();
+    let mut newer = f.document.clone();
+    newer["project"]["name"] = json!("Edited after interruption");
+    f.service(json!({"operation":"project.import","project":f.project,"base_revision":"1","document":newer}));
+    let resumed: JobRecord = serde_json::from_value(f.cli(
+        json!({"operation":"job.resume","job":submitted.id}),
+        None,
+        false,
+    ))
+    .unwrap();
+    assert_eq!(resumed.completed_frames, 0);
+    assert_eq!(resumed.input_hash, submitted.input_hash);
+    let finished = f.wait(&submitted.id, JobStatus::Succeeded);
+    assert_eq!(finished.snapshot_hash, submitted.snapshot_hash);
+    assert_eq!(finished.revision, "1");
+    assert_ne!(std::fs::read(&f.project).unwrap(), initial);
+    assert!(!staging.exists());
+    assert!(unrelated.join("keep").is_file());
+}
+
+#[test]
+fn recovery_capacity_failure_cleans_staging_and_resume_uses_new_attempt() {
+    recovery_fault_case(false);
+}
+#[test]
+fn recovery_device_loss_cleans_staging_and_resume_preserves_completed_output() {
+    recovery_fault_case(true);
+}
+fn recovery_fault_case(device_lost: bool) {
+    let mut f = Fixture::new();
+    let original = std::fs::read(&f.project).unwrap();
+    let completed = f.submit("already-completed", None);
+    f.wait(&completed.id, JobStatus::Succeeded);
+    let published = std::fs::read(completed.destination.join("sequence.json")).unwrap();
+    f.disk_full = !device_lost;
+    f.device_lost = device_lost;
+    let submitted = f.submit("capacity-output", None);
+    let failed = f.wait(&submitted.id, JobStatus::Failed);
+    // Terminal state is committed before the detached process has fully exited.
+    // Wait and reap the actual worker without killing it before resuming.
+    f.cleanup
+        .wait_for_exit(failed.worker_pid.unwrap(), f.wait_timeout)
+        .unwrap();
+    assert_eq!(
+        failed.error.unwrap().code,
+        if device_lost {
+            "GPU_DEVICE_LOST"
+        } else {
+            "IO_ERROR"
+        }
+    );
+    assert!(!submitted.destination.exists());
+    assert!(!std::fs::read_dir(f.temp.path()).unwrap().any(|entry| {
+        entry
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .starts_with(".kronello-job-")
+    }));
+    f.disk_full = false;
+    f.device_lost = false;
+    let resumed: JobRecord = serde_json::from_value(f.cli(
+        json!({"operation":"job.resume","job":submitted.id}),
+        None,
+        false,
+    ))
+    .unwrap();
+    assert_eq!(resumed.attempt, 1);
+    let finished = f.wait(&submitted.id, JobStatus::Succeeded);
+    assert_eq!(finished.completed_frames, 3);
+    assert_eq!(std::fs::read(&f.project).unwrap(), original);
+    assert_eq!(
+        std::fs::read(completed.destination.join("sequence.json")).unwrap(),
+        published
+    );
+}
+
+#[test]
+fn recovery_reconciles_rename_before_database_commit_only_after_artifact_verification() {
+    for movie in [false, true] {
+        recovery_rename_case(movie);
+    }
+}
+fn recovery_rename_case(movie: bool) {
+    let mut f = Fixture::new();
+    f.after_rename_gate = Some(f.temp.path().join("never-after-rename"));
+    let gate = f.temp.path().join("before-render");
+    let submitted = if movie {
+        f.submit_request(json!({"operation":"render.submit","render":f.render(&f.temp.path().join("rename-window.mov")),"output":{"format":"pro_res_mov","clips":[],"background":[0.1,0.1,0.1]}}), Some(&gate), false)
+    } else {
+        f.submit("rename-window", Some(&gate))
+    };
+    let running = f.wait(&submitted.id, JobStatus::Running);
+    let guard = kronello_platform::ProcessGuard::capture(running.worker_pid.unwrap()).unwrap();
+    std::fs::write(gate, b"go").unwrap();
+    let start = Instant::now();
+    while !submitted.destination.exists() {
+        assert!(start.elapsed() < Duration::from_secs(10));
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    guard.terminate_and_wait().unwrap();
+    f.expire_terminated_worker(&running);
+    f.wait(&submitted.id, JobStatus::Interrupted);
+    let manifest = if movie {
+        submitted.destination.clone()
+    } else {
+        submitted.destination.join("sequence.json")
+    };
+    let original = std::fs::read(&manifest).unwrap();
+    std::fs::write(&manifest, b"tampered").unwrap();
+    let response = Service::new(BackendSelection::CpuReference)
+        .with_job_config(f.store().config().clone())
+        .execute_json(&json!({"operation":"job.resume","job":submitted.id}).to_string());
+    assert_eq!(
+        serde_json::to_value(response).unwrap()["error"]["code"],
+        "OUTPUT_VALIDATION_FAILED"
+    );
+    assert_eq!(std::fs::read(&manifest).unwrap(), b"tampered");
+    assert_eq!(
+        f.store().get(&submitted.id).unwrap().status,
+        JobStatus::Interrupted
+    );
+    std::fs::write(&manifest, original).unwrap();
+    let reconciled: JobRecord = serde_json::from_value(f.cli(
+        json!({"operation":"job.resume","job":submitted.id}),
+        None,
+        false,
+    ))
+    .unwrap();
+    assert_eq!(reconciled.status, JobStatus::Succeeded);
+    assert_eq!(reconciled.worker_pid, running.worker_pid);
+    assert_eq!(reconciled.completed_frames, 3);
+    assert_eq!(reconciled.result.unwrap()["validated"], true);
 }
 
 #[test]
@@ -420,8 +627,7 @@ fn fifo_one_slot_and_fixed_snapshot_survive_project_edits() {
 
 #[test]
 fn sigkill_is_detected_by_heartbeat_and_releases_slot() {
-    let mut f = Fixture::new();
-    f.heartbeat_timeout = Duration::from_secs(1);
+    let f = Fixture::new();
     let first = f.submit("killed", Some(&f.temp.path().join("never")));
     let running = f.wait(&first.id, JobStatus::Running);
     let second = f.submit("next", None);
@@ -429,6 +635,7 @@ fn sigkill_is_detected_by_heartbeat_and_releases_slot() {
         .unwrap()
         .terminate_and_wait()
         .unwrap();
+    f.expire_terminated_worker(&running);
     let dead = f.wait(&first.id, JobStatus::Interrupted);
     assert_eq!(dead.error.unwrap().code, "JOB_INTERRUPTED");
     f.wait(&second.id, JobStatus::Succeeded);
@@ -755,6 +962,10 @@ fn changed_asset_content_fails_worker_with_typed_error() {
         "ASSET_HASH_MISMATCH"
     );
     assert!(!queued.destination.exists());
+    assert_eq!(
+        f.service_error(json!({"operation":"job.resume","job":queued.id}))["code"],
+        "ASSET_HASH_MISMATCH"
+    );
 }
 
 #[test]
@@ -778,6 +989,10 @@ fn worker_verifies_saved_font_lock_before_output() {
         "ASSET_HASH_MISMATCH"
     );
     assert!(!submitted.destination.exists());
+    assert_eq!(
+        f.service_error(json!({"operation":"job.resume","job":submitted.id}))["code"],
+        "ASSET_HASH_MISMATCH"
+    );
 }
 
 #[test]
@@ -815,6 +1030,10 @@ fn worker_checks_saved_schema_semantics_features_and_input_hash() {
             expected
         );
         assert!(!queued.destination.exists());
+        assert_eq!(
+            f.service_error(json!({"operation":"job.resume","job":queued.id}))["code"],
+            expected
+        );
     }
 }
 
@@ -1473,5 +1692,112 @@ fn inspected_revision_fence_rejects_submit_and_export_without_job_or_worker() {
         let response = serde_json::to_value(response).unwrap();
         assert_eq!(response["error"]["code"], "REVISION_CONFLICT");
         assert!(f.store().list().unwrap().is_empty());
+    }
+}
+
+#[test]
+fn temporal_job_pins_shutter_and_executes_after_project_removal() {
+    let f = Fixture::new();
+    let destination = f.temp.path().join("temporal-output");
+    let mut render = f.render(&destination);
+    render["input"]["region"]["pixels"] = json!([4, 2]);
+    let temporal = json!({"frame_rate":{"num":"24","den":"1"},"shutter_angle":{"num":"180","den":"1"},"shutter_phase":{"num":"-1","den":"4"},"samples":3,"cut_policy":"avoid_crossing"});
+    render["input"]["profile"] =
+        json!({"working_space":"linear_rec709","flatten_tolerance_px":0.02,"temporal":temporal});
+    let gate = f.temp.path().join("temporal-release");
+    let submitted=f.submit_request(json!({"operation":"render.submit","render":render,"required_features":["temporal_sampling_v1"]}),Some(&gate),false);
+    f.wait(&submitted.id, JobStatus::Running);
+    let fixed: Value = serde_json::from_slice(
+        &std::fs::read(
+            f.store()
+                .directory(&submitted.id)
+                .unwrap()
+                .join("input.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(fixed["snapshot"]["profile"]["temporal"], temporal);
+    assert_eq!(fixed["snapshot"]["semantic_versions"]["temporal"], 1);
+    std::fs::remove_file(&f.project).unwrap();
+    std::fs::write(&gate, b"release").unwrap();
+    let finished = f.wait(&submitted.id, JobStatus::Succeeded);
+    assert_eq!(finished.completed_frames, 3);
+    let metadata: Value =
+        serde_json::from_slice(&std::fs::read(destination.join("sequence.json")).unwrap()).unwrap();
+    for frame in metadata["frames"].as_array().unwrap() {
+        assert_eq!(
+            frame["metadata"]["snapshot_content_hash"],
+            submitted.snapshot_hash
+        );
+        assert_eq!(frame["metadata"]["temporal"]["settings"], temporal);
+        assert_eq!(
+            frame["metadata"]["temporal"]["samples"]
+                .as_array()
+                .unwrap()
+                .len(),
+            3
+        );
+    }
+}
+
+#[test]
+fn color001_hdr_sync_and_fixed_worker_pq_hlg_roundtrip() {
+    for (transfer, profile) in [
+        ("pq", kronello_media::MovieProfile::ProResPqPcm24V1),
+        ("hlg", kronello_media::MovieProfile::ProResHlgPcm24V1),
+    ] {
+        let f = Fixture::new();
+        let baseline_file = f.temp.path().join("baseline-hdr.mov");
+        let mut render = f.render(&baseline_file);
+        render["input"]["profile"] = json!({"working_space":"linear_rec2020","flatten_tolerance_px":0.02,"hdr":{"transfer":transfer}});
+        let output = json!({"format":"pro_res_hdr_mov","profile_version":1,"transfer":transfer,"audio":"silence","clips":[],"background":[3,3,3]});
+        let baseline = f.cli(
+            json!({"operation":"render.export","render":render,"output":output}),
+            None,
+            false,
+        );
+        let gate = f.temp.path().join("release-hdr");
+        render["output_directory"] = json!(f.temp.path().join("worker-hdr.mov"));
+        let job=f.submit_request(json!({"operation":"render.submit","render":render,"output":output,"required_features":["hdr_rec2100_203nits_v1"]}),Some(&gate),false);
+        f.wait(&job.id, JobStatus::Running);
+        let fixed: Value = serde_json::from_slice(
+            &std::fs::read(f.store().directory(&job.id).unwrap().join("input.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(fixed["snapshot"]["profile"]["hdr"]["transfer"], transfer);
+        assert_eq!(fixed["snapshot"]["semantic_versions"]["hdr"], 1);
+        assert_eq!(
+            fixed["request"]["output"],
+            serde_json::to_value(
+                serde_json::from_value::<kronello_service::JobOutput>(output.clone()).unwrap()
+            )
+            .unwrap()
+        );
+        std::fs::remove_file(&f.project).unwrap();
+        std::fs::write(&gate, b"release").unwrap();
+        let finished = f.wait(&job.id, JobStatus::Succeeded);
+        assert_eq!(finished.completed_frames, 3);
+        let runtime = kronello_media::MediaRuntime::load().unwrap();
+        let probe = runtime.probe(&finished.destination).unwrap();
+        probe.verify_movie(profile).unwrap();
+        assert_eq!(probe.render_snapshot_hash, job.snapshot_hash);
+        let mut sync = runtime.open_video(&baseline_file).unwrap();
+        let mut worker = runtime.open_video(&finished.destination).unwrap();
+        for frame in baseline["frames"].as_array().unwrap() {
+            let time = serde_json::from_value(frame["time"].clone()).unwrap();
+            let a = sync.decode_at(time).unwrap();
+            let b = worker.decode_at(time).unwrap();
+            assert_eq!(a.pixel_format, "yuv422p10le");
+            assert_eq!(a.pixels, b.pixels);
+            assert_eq!(
+                a.color_transfer,
+                if transfer == "pq" {
+                    "smpte2084"
+                } else {
+                    "arib-std-b67"
+                }
+            );
+        }
     }
 }

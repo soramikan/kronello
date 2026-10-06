@@ -14,7 +14,7 @@
 | M1 | 0 | 0 | 14 | 0 | 14 |
 | M2 | 0 | 1 | 10 | 0 | 11 |
 | M3 | 0 | 0 | 25 | 0 | 25 |
-| M4 | 12 | 0 | 0 | 0 | 12 |
+| M4 | 0 | 0 | 12 | 0 | 12 |
 | M5 | 5 | 0 | 0 | 0 | 5 |
 | M6 | 4 | 0 | 0 | 0 | 4 |
 
@@ -560,7 +560,7 @@
 
 ### RENDER-002 時間サンプルと高品質モーションブラー
 
-- 優先度: P1 / 領域: render / 状態: planned
+- 優先度: P1 / 領域: render / 状態: done
 - 依存: RENDER-001, CACHE-001, ANIM-001
 - 受け入れ条件:
   - サブ時刻ごとの全体合成を基準に比較する
@@ -568,7 +568,7 @@
 
 ### GPU-003 各OSのFrameBridge保証経路
 
-- 優先度: P1 / 領域: gpu / 状態: planned
+- 優先度: P1 / 領域: gpu / 状態: done
 - 依存: GPU-001, GPU-002, MEDIA-001, NLE-002
 - 受け入れ条件:
   - macOS (Metal / VideoToolbox) を最初の保証経路とし、Windows/Linuxは順次昇格する
@@ -578,7 +578,7 @@
 
 ### COLOR-001 HDR/alpha/高解像度品質
 
-- 優先度: P1 / 領域: color / 状態: planned
+- 優先度: P1 / 領域: color / 状態: done
 - 依存: GPU-002, RENDER-002, QA-001, JOB-001, MEDIA-002
 - 受け入れ条件:
   - HDRの表示変換を最終出力へ勝手に焼き込まない
@@ -589,7 +589,7 @@
 
 ### CACHE-002 temporal/region cacheと無効化
 
-- 優先度: P1 / 領域: cache / 状態: planned
+- 優先度: P1 / 領域: cache / 状態: done
 - 依存: CACHE-001, RENDER-002
 - 受け入れ条件:
   - ROI haloと複数時刻依存をkeyに含める
@@ -597,7 +597,7 @@
 
 ### PERF-001 参照シーンbenchmarkと資源予算
 
-- 優先度: P1 / 領域: performance / 状態: planned
+- 優先度: P1 / 領域: performance / 状態: done
 - 依存: GPU-003, COLOR-001, CACHE-002, RENDER-003
 - 受け入れ条件:
   - warm/cold・proxy/full・preview/finalを分けてp50/p95を出す
@@ -605,10 +605,11 @@
   - GPUのlinear/display二重描画の統合とrenderer APIの転送統計集約を評価し、最適化前後の画素一致・実転送/待機・node別tile allocationのpeak memoryを測定する
   - MEDIA-001のstream startからのdecode forwardを正確なseekテストを維持して効率化し、CFR/VFR/B-frameのforward/backward/repeated要求で性能を比較する
   - ADR-0052の合成debug測定と区別して実作品/release buildの履歴復元頻度・遅延・SQLite/WAL物理I/Oを測り、opt-in snapshot・数/容量予算・root patch重複削減の再検討要否を記録する。採用変更が必要なら新ADRで決める
+  - ADR-0093の基準機・既定cache・固定基本4K作品で、画素が変わる21要求のwarm native preview p95が33.3ms以下となる。coldは別報告し、動画decode・GUI presentation込みのFPS保証とは区別する
 
 ### RECOVERY-001 GPU lost/容量不足/worker停止の復旧
 
-- 優先度: P1 / 領域: reliability / 状態: planned
+- 優先度: P1 / 領域: reliability / 状態: done
 - 依存: JOB-001, GPU-003, STORE-001
 - 受け入れ条件:
   - 失敗でProjectや確定済み成果物が壊れない
@@ -620,7 +621,7 @@
 
 ### QA-004 Vulkan/Windowsのgolden基準と許容誤差の校正
 
-- 優先度: P1 / 領域: qa / 状態: planned
+- 優先度: P1 / 領域: qa / 状態: done
 - 依存: QA-003, GPU-003
 - 受け入れ条件:
   - Linux(Vulkan)とWindowsの比較環境ごとに基準画像を持ち、明示実行で比較する
@@ -628,7 +629,7 @@
 
 ### CACHE-003 GPU資源とディスクのraster cache
 
-- 優先度: P2 / 領域: cache / 状態: planned
+- 優先度: P2 / 領域: cache / 状態: done
 - 依存: CACHE-001, CACHE-002
 - 受け入れ条件:
   - GPU textureのcacheを容量予算つきで持ち、意味的keyをCPU側のcacheと共有する
@@ -638,7 +639,7 @@
 
 ### COMP-002 Composition の Media ノード（画像・映像）と MediaSlot の描画
 
-- 優先度: P1 / 領域: render / 状態: planned
+- 優先度: P1 / 領域: render / 状態: done
 - 依存: TEMPLATE-002, NLE-002
 - 受け入れ条件:
   - Composition の Media ノードを素材参照・source time・色契約つきで描画し、CPU 参照と明示 GPU 実行で検証する
@@ -646,7 +647,7 @@
 
 ### MCP-003 MCP 2026-07-28 版（server/discover・要求ごとの版指定）への対応
 
-- 優先度: P2 / 領域: api / 状態: planned
+- 優先度: P2 / 領域: api / 状態: done
 - 依存: MCP-002
 - 受け入れ条件:
   - 2026-07-28 版の server/discover と要求ごとの版指定を、2025-11-25 版の initialize と併存させて実装し、同じ Command/Query registry・schema・型付き結果へ到達することを外部 client SDK で検証する
@@ -654,7 +655,7 @@
 
 ### FFI-002 GUI セッション中の安全モード排他の保持
 
-- 優先度: P2 / 領域: gui / 状態: planned
+- 優先度: P2 / 領域: gui / 状態: done
 - 依存: GUI-001
 - 受け入れ条件:
   - 安全モードで開いたプロジェクトについて、GUI を開いている間は他プロセス（CLI / MCP）が PROJECT_LOCKED になるよう、FFI / service の store の寿命を GUI セッションに合わせる
@@ -662,7 +663,7 @@
 
 ### MEDIA-003 Windows の FFmpeg 実行時読み込みと CLI/MCP の Windows ビルド
 
-- 優先度: P1 / 領域: media / 状態: planned
+- 優先度: P1 / 領域: media / 状態: done
 - 依存: MEDIA-001, JOB-002, RELEASE-001
 - 受け入れ条件:
   - kronello-media の native 読み込み（dlfcn / pkg-config 前提）を Windows の LGPL FFmpeg 共有 library に対応させ、CLI / MCP を Windows でビルドする

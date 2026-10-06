@@ -1,5 +1,7 @@
 //! Shared synchronous Command/Query boundary for headless rendering and edits.
 //! Entry points own transport only; storage, fonts and rendering compose here.
+mod session;
+pub use session::ProjectSession;
 mod export_profiles;
 pub use export_profiles::{
     DeviceAvailability, ExportAudioCodec, ExportExecution, ExportProfileCapability,
@@ -8,7 +10,9 @@ mod nle;
 mod playback;
 pub use kronello_render::RenderTarget;
 pub use nle::*;
-pub use playback::{AudioPrepareRequest, MAX_PLAYBACK_BLOCK_FRAMES, PreparedAudio};
+pub use playback::{
+    AudioPreparationInput, AudioPrepareRequest, MAX_PLAYBACK_BLOCK_FRAMES, PreparedAudio,
+};
 mod jobs;
 pub use jobs::*;
 mod api;
@@ -50,7 +54,7 @@ use kronello_render::{
     RenderSnapshot, SequenceMetadata, SequenceRequest, render_frame,
     render_sequence_with_checkpoint,
 };
-use kronello_store::{OpenOptions, ProjectStore, StoreError};
+use kronello_store::{ProjectStore, StoreError};
 use kronello_text::FontData;
 use kronello_time::{FrameRate, Time, TimeRange};
 use serde::{Deserialize, Serialize};
@@ -84,6 +88,8 @@ pub enum Request {
     JobList(JobListRequest),
     #[serde(rename = "job.cancel")]
     JobCancel(JobRequest),
+    #[serde(rename = "job.resume")]
+    JobResume(JobRequest),
     #[serde(rename = "job.prune")]
     JobPrune(JobPruneRequest),
     #[serde(rename = "template.preview")]
@@ -380,6 +386,9 @@ pub enum BackendSelection {
     #[default]
     Gpu,
     CpuReference,
+    /// Strict VideoToolbox hardware decode and same-device Metal import.
+    GpuResidentBgra8,
+    GpuResidentNv12,
 }
 enum Backend<'a> {
     Injected(&'a dyn RenderBackend),
@@ -413,6 +422,16 @@ impl<'a> Service<'a> {
         request: &FrameRenderRequest,
     ) -> Result<(String, kronello_render::RenderDag), ServiceError> {
         self.with_render_input(&request.input, None, |snapshot, fonts| {
+            if snapshot.profile().hdr.is_some() {
+                return Err(RenderError::UnsupportedFeature("native single DAG preview has no HDR display conversion; use render.frame SDR display artifact".into()).into());
+            }
+            if snapshot.profile().temporal.is_some() {
+                return Err(RenderError::UnsupportedFeature(
+                    "single DAG native preview cannot integrate temporal samples; use render.frame"
+                        .into(),
+                )
+                .into());
+            }
             let scene = kronello_render::build_scene_ir(snapshot, request.time, fonts)?;
             let dag = kronello_render::build_render_dag(
                 &scene,
@@ -505,6 +524,7 @@ impl<'a> Service<'a> {
                 .cancel(&r.job)
                 .map(|r| ResultData::Job(Box::new(r)))
                 .map_err(Into::into),
+            Request::JobResume(r) => self.resume_job(r).map(|r| ResultData::Job(Box::new(r))),
             Request::JobList(_) => Ok(ResultData::Jobs(JobListResult {
                 jobs: self.jobs()?.list()?,
             })),
@@ -517,6 +537,12 @@ impl<'a> Service<'a> {
                 let backend = match self.backend {
                     Backend::Selected(BackendSelection::Gpu) => {
                         kronello_render::ExplainBackend::Gpu
+                    }
+                    Backend::Selected(BackendSelection::GpuResidentBgra8) => {
+                        kronello_render::ExplainBackend::GpuResidentBgra8
+                    }
+                    Backend::Selected(BackendSelection::GpuResidentNv12) => {
+                        kronello_render::ExplainBackend::GpuResidentNv12
                     }
                     Backend::Selected(BackendSelection::CpuReference) => {
                         kronello_render::ExplainBackend::CpuReference
@@ -596,11 +622,7 @@ impl<'a> Service<'a> {
                     &r.render.input,
                     r.expected_revision.as_deref(),
                     |snapshot, fonts| {
-                        self.with_selected_backend(|backend| {
-                            let backend = &kronello_media::VideoRenderBackend {
-                                backend,
-                                project_path: &r.render.input.project,
-                            };
+                        self.with_video_backend(&r.render.input.project, |backend| {
                             jobs::validate_movie_destination(
                                 &r.render.output_directory,
                                 &r.output,
@@ -663,16 +685,7 @@ impl<'a> Service<'a> {
         ) -> Result<T, ServiceError>,
     ) -> Result<T, ServiceError> {
         self.with_render_input(input, None, |snapshot, fonts| {
-            self.with_selected_backend(|backend| {
-                run(
-                    snapshot,
-                    fonts,
-                    &kronello_media::VideoRenderBackend {
-                        backend,
-                        project_path: &input.project,
-                    },
-                )
-            })
+            self.with_video_backend(&input.project, |backend| run(snapshot, fonts, backend))
         })
     }
     /// Shared current-frame rendering, including the explicit media decode adapter.
@@ -723,14 +736,51 @@ impl<'a> Service<'a> {
             .collect();
         run(&snapshot, &fonts)
     }
+    pub(crate) fn with_video_backend<T>(
+        &self,
+        project_path: &Path,
+        run: impl FnOnce(&dyn RenderBackend) -> Result<T, ServiceError>,
+    ) -> Result<T, ServiceError> {
+        if let Backend::Selected(
+            selection @ (BackendSelection::GpuResidentBgra8 | BackendSelection::GpuResidentNv12),
+        ) = self.backend
+        {
+            let gpu =
+                (self.gpu_factory)().map_err(|e| ServiceError::new("GPU_ERROR", e.to_string()))?;
+            let backend = kronello_media::ResidentVideoRenderBackend::new(
+                &gpu,
+                project_path,
+                if selection == BackendSelection::GpuResidentBgra8 {
+                    kronello_media::ResidentVideoFormat::Bgra8
+                } else {
+                    kronello_media::ResidentVideoFormat::Nv12VideoRange
+                },
+            );
+            run(&backend)
+        } else {
+            self.with_selected_backend(project_path, |backend| {
+                let runtime = kronello_media::MediaRuntime::load();
+                run(&kronello_media::SequentialVideoRenderBackend::new(
+                    backend,
+                    project_path,
+                    runtime.as_ref(),
+                ))
+            })
+        }
+    }
     fn with_selected_backend<T>(
         &self,
+        project_path: &Path,
         run: impl FnOnce(&dyn RenderBackend) -> Result<T, ServiceError>,
     ) -> Result<T, ServiceError> {
         match self.backend {
             Backend::Injected(backend) => run(backend),
             Backend::Selected(BackendSelection::CpuReference) => run(&CpuReferenceBackend),
-            Backend::Selected(BackendSelection::Gpu) => {
+            Backend::Selected(
+                BackendSelection::Gpu
+                | BackendSelection::GpuResidentBgra8
+                | BackendSelection::GpuResidentNv12,
+            ) => {
                 let gpu = (self.gpu_factory)().map_err(|e| {
                     let code = match e {
                         GpuError::AdapterUnavailable(_) => "ADAPTER_UNAVAILABLE",
@@ -739,10 +789,98 @@ impl<'a> Service<'a> {
                     };
                     ServiceError::new(code, e.to_string())
                 })?;
+                if matches!(self.backend, Backend::Selected(BackendSelection::Gpu)) {
+                    configure_external_raster_cache(&gpu, project_path)?;
+                }
                 run(&gpu)
             }
         }
     }
+}
+fn configure_external_raster_cache(gpu: &GpuContext, project: &Path) -> Result<(), ServiceError> {
+    if std::env::var("KRONELLO_RASTER_CACHE_DISABLE").as_deref() == Ok("1") {
+        gpu.record_memory_only_policy(
+            kronello_render::PersistentRasterCachePolicy::ExplicitlyDisabled,
+        )
+        .map_err(|e| ServiceError::new("CACHE_CONFIGURATION", e.to_string()))?;
+        return Ok(());
+    }
+    let explicit = std::env::var_os("KRONELLO_RASTER_CACHE_ROOT").is_some();
+    let directory =
+        if let Some(path) = std::env::var_os("KRONELLO_RASTER_CACHE_ROOT") {
+            std::path::PathBuf::from(path)
+        } else if cfg!(target_os = "macos") {
+            std::path::PathBuf::from(
+                std::env::var_os("HOME")
+                    .ok_or_else(|| ServiceError::new("CACHE_CONFIGURATION", "HOME unavailable"))?,
+            )
+            .join("Library/Caches/kronello/raster")
+        } else if cfg!(target_os = "windows") {
+            std::path::PathBuf::from(std::env::var_os("LOCALAPPDATA").ok_or_else(|| {
+                ServiceError::new("CACHE_CONFIGURATION", "LOCALAPPDATA unavailable")
+            })?)
+            .join("kronello/raster")
+        } else if let Some(path) = std::env::var_os("XDG_CACHE_HOME") {
+            std::path::PathBuf::from(path).join("kronello/raster")
+        } else {
+            std::path::PathBuf::from(
+                std::env::var_os("HOME")
+                    .ok_or_else(|| ServiceError::new("CACHE_CONFIGURATION", "HOME unavailable"))?,
+            )
+            .join(".cache/kronello/raster")
+        };
+    if !directory.is_absolute() {
+        return Err(ServiceError::new(
+            "CACHE_CONFIGURATION",
+            "raster cache directory must be absolute",
+        ));
+    }
+    let parent = project.parent().unwrap_or(Path::new("."));
+    let project_directory = parent
+        .canonicalize()
+        .map_err(|e| ServiceError::new("CACHE_CONFIGURATION", e.to_string()))?;
+    // Resolve existing ancestors before creating the directory, including
+    // symlinks. A cache may never be published within the project directory.
+    let mut ancestor = directory.as_path();
+    let mut tail = vec![];
+    while !ancestor.exists() {
+        tail.push(
+            ancestor
+                .file_name()
+                .ok_or_else(|| ServiceError::new("CACHE_CONFIGURATION", "invalid cache ancestor"))?
+                .to_owned(),
+        );
+        ancestor = ancestor
+            .parent()
+            .ok_or_else(|| ServiceError::new("CACHE_CONFIGURATION", "invalid cache ancestor"))?;
+    }
+    let mut resolved = ancestor
+        .canonicalize()
+        .map_err(|e| ServiceError::new("CACHE_CONFIGURATION", e.to_string()))?;
+    for component in tail.into_iter().rev() {
+        resolved.push(component);
+    }
+    if resolved.starts_with(project_directory) {
+        if !explicit {
+            gpu.record_memory_only_policy(
+                kronello_render::PersistentRasterCachePolicy::DefaultDirectoryOverlapsProject,
+            )
+            .map_err(|e| ServiceError::new("CACHE_CONFIGURATION", e.to_string()))?;
+            return Ok(());
+        }
+        return Err(ServiceError::new(
+            "CACHE_CONFIGURATION",
+            "raster cache must be outside the project directory",
+        ));
+    }
+    gpu.configure_cache(kronello_gpu::GpuCacheConfig {
+        disk: Some(kronello_gpu::DiskRasterConfig {
+            directory: resolved,
+            capacity: kronello_render::CacheCapacity::default(),
+        }),
+        ..Default::default()
+    })
+    .map_err(|e| ServiceError::new("CACHE_CONFIGURATION", e.to_string()))
 }
 /// One target compiler for synchronous rendering and fixed asynchronous input.
 /// New render target variants belong here, never in a separate job target model.
@@ -843,14 +981,8 @@ fn parse_revision(value: &str) -> Result<u64, ServiceError> {
         .parse()
         .map_err(|_| ServiceError::invalid("base_revision overflow"))
 }
-fn open_existing(path: &Path) -> Result<ProjectStore, ServiceError> {
-    if !path.is_file() {
-        return Err(ServiceError::new(
-            "PROJECT_NOT_FOUND",
-            "project file does not exist",
-        ));
-    }
-    Ok(ProjectStore::open(path, OpenOptions::default())?)
+fn open_existing(path: &Path) -> Result<session::StoreLease, ServiceError> {
+    session::open_existing(path)
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -975,9 +1107,11 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
             local_locator(&r.render.output_directory)?;
             render_locators(&r.render.input)
         }
-        Request::JobGet(_) | Request::JobCancel(_) | Request::JobList(_) | Request::JobPrune(_) => {
-            Ok(())
-        }
+        Request::JobGet(_)
+        | Request::JobCancel(_)
+        | Request::JobResume(_)
+        | Request::JobList(_)
+        | Request::JobPrune(_) => Ok(()),
         Request::ProjectCreatePlan(r) => {
             local_locator(&r.project)?;
             document_asset_locators(&r.document)

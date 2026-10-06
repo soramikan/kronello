@@ -97,7 +97,7 @@ def digest(data):
 
 
 def load_manifest():
-    manifest = json.loads(MANIFEST.read_text())
+    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     require(manifest["schema_version"] == 1, "unsupported manifest schema")
     ids = [entry["id"] for entry in manifest["fixtures"]]
     require(len(ids) == len(set(ids)), "duplicate fixture IDs")
@@ -125,7 +125,7 @@ def require(condition, message):
 
 
 def run(command):
-    return subprocess.check_output(command, text=True, stderr=subprocess.PIPE)
+    return subprocess.check_output(command, text=True, encoding="utf-8", stderr=subprocess.PIPE)
 
 
 def media_command(entry, output):
@@ -221,11 +221,11 @@ def check(external, generated):
     require(total <= manifest["limits"]["bundled_total_bytes"], "bundled fixture budget exceeded")
     for name, expected in canonical_data().items():
         require((ROOT / "tests/fixtures/data" / name).read_bytes() == expected, f"noncanonical fixture: {name}")
-    validate_timing(json.loads((ROOT / "tests/fixtures/data/timing.json").read_text()))
-    ledger = (ROOT / "tests/fixtures/LEDGER.md").read_text()
+    validate_timing(json.loads((ROOT / "tests/fixtures/data/timing.json").read_text(encoding="utf-8")))
+    ledger = (ROOT / "tests/fixtures/LEDGER.md").read_text(encoding="utf-8")
     for entry in manifest["fixtures"]:
         require(f"`{entry['id']}`" in ledger, f"missing ledger entry: {entry['id']}")
-    scenes = json.loads((ROOT / "tests/golden/scenes.json").read_text())
+    scenes = json.loads((ROOT / "tests/golden/scenes.json").read_text(encoding="utf-8"))
     require(scenes["schema_version"] == 1 and scenes["scenes"], "missing scenes")
     scene_ids = set()
     fixture_ids = {entry["id"] for entry in manifest["fixtures"]}
@@ -241,7 +241,7 @@ def check(external, generated):
             for value in scene["input"]["interval"] + scene["input"]["times"]:
                 parse_rational(value)
     if generated is not None:
-        receipt = json.loads((generated / "receipt.json").read_text())
+        receipt = json.loads((generated / "receipt.json").read_text(encoding="utf-8"))
         entries = {item["id"]: item for item in receipt["fixtures"]}
         required = [item for item in manifest["fixtures"] if item["storage"] == "generated"]
         require(len(entries) == len(receipt["fixtures"]) and set(entries) == {item["id"] for item in required}, "invalid receipt coverage")

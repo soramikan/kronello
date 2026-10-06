@@ -104,6 +104,8 @@ pub enum DrawNode {
     /// CPU-prepared premultiplied working-space image. GPU execution uploads it
     /// explicitly; this is never reported as a GPU-resident decode path.
     Raster(Vec<[f32; 4]>),
+    /// Device-bound premultiplied working-space image; never implicitly read back.
+    GpuRaster(crate::ResidentImage),
     Path(PathDraw),
     Group {
         children: Vec<usize>,
@@ -147,6 +149,7 @@ impl DrawScene {
         let mut edges = 0;
         for node in &self.nodes {
             match node {
+                DrawNode::GpuRaster(image) => image.validate()?,
                 DrawNode::Raster(pixels) => {
                     if pixels.iter().any(|p| {
                         p.iter().any(|v| !v.is_finite() || v.abs() > 65504.0)
@@ -308,7 +311,7 @@ impl DrawScene {
 }
 pub(crate) fn inputs(node: &DrawNode) -> Vec<usize> {
     match node {
-        DrawNode::Path(_) | DrawNode::Raster(_) => vec![],
+        DrawNode::Path(_) | DrawNode::Raster(_) | DrawNode::GpuRaster(_) => vec![],
         DrawNode::Group { children, .. } => children.clone(),
         DrawNode::Effect { source, .. } => vec![*source],
         DrawNode::Masked { source, matte, .. } => vec![*source, *matte],
@@ -901,6 +904,11 @@ pub(crate) fn render_scene_reference_with_resolvers(
         let [w, h] = size.output_resolution;
         let mut pixels = vec![[0.0; 4]; (w as usize) * (h as usize)];
         match &scene.nodes[id] {
+            DrawNode::GpuRaster(_) => {
+                return Err(GpuError::UnsupportedFeature(
+                    "CPU reference rejects GPU-resident image",
+                ));
+            }
             DrawNode::Raster(pixels) => {
                 if pixels.len()
                     != pixel_count(size.output_resolution[0], size.output_resolution[1])?

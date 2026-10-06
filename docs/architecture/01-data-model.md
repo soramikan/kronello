@@ -74,7 +74,7 @@ Property の単位・座標系・範囲は ADR-0043 に従う。保存 Color は
 `NodeKind::Media` は `MediaNode { asset, stream_index, source_in, time_map, volume }` を保存し、
 volume は同じ SceneNode の properties にある volume PropertyId。
 Media の音声と CompositionInstance の再帰音声を文書音声としてコンパイルする。
-Video / Image Media の描画は COMP-002 まで型付き未対応。
+Video / Image Media は source time と固定素材 lock を持つ外部画像入力として描画する（[ADR-0085](../adr/0085-composition-media-and-template-slots.md)）。音声 stream と視覚 stream は明示 stream_index で分ける。
 Audio track も Composition source を持てる。Video CompositionClip は参照先の音声を一度継承する。
 出力 mode、時間写像、trim の sample phase と編集規則は
 [ADR-0063](../adr/0063-document-audio-and-clip-volume.md) と [基本音声](audio-000.md) を参照。
@@ -106,3 +106,7 @@ Project schema version 1 と既存必須 active_range を維持する。
 range 検索は各 node の authored local Composition time の半開区間 overlap であり、
 評価時刻の可視性や親の retime を投影した時間とは区別する。
 [ADR-0072](../adr/0072-scene-search-fixed-cursors-and-cli-events.md) を参照。
+
+### M4 HDR 固定入力
+
+`RenderProfile.hdr` は optional な `HdrSettings`（PQ/HLG）で、`LinearRec2020` と `SemanticVersions.hdr = 1` を必要とする。1 working unit は 203 cd/m²、HLG version 1 は peak 1000 cd/m² / gamma 1.2。版欠落の legacy snapshot は HDR profile がない場合だけ復元でき、欠落を維持して JSON/hash を変えない。GPU/native handle を snapshot に保存しない。詳細は [ADR-0086](../adr/0086-rec2100-native-precision-and-fixed-hdr-output.md)。

@@ -647,7 +647,45 @@ fn document_audio_source_modes_are_explicit_backward_compatible_and_hashed() {
     let snapshot =
         AvExportSnapshot::with_audio(&render, AudioSourceMode::Document, vec![]).unwrap();
     let req = request(
-        &dir.path().join("unsupported-video.mov"),
+        &dir.path().join("video-container-audio.mov"),
+        FrameRate::new(24, 1).unwrap(),
+    );
+    runtime
+        .export_av(
+            &snapshot,
+            &dir.path().join("project.kronello"),
+            &[],
+            &CpuReferenceBackend,
+            &req,
+        )
+        .unwrap();
+    let decoded = runtime.decode_audio(&req.output, 1).unwrap();
+    assert!(decoded.buffer.frames().iter().flatten().any(|v| *v != 0.0));
+
+    // Visual streams contribute no document audio; container audio remains explicit.
+    let DocumentObject::Known(a) = &mut p.assets[0] else {
+        panic!()
+    };
+    a.streams[0].width = Some(16);
+    a.streams[0].height = Some(16);
+    let render = RenderSnapshot::new(&p, id, 1, Default::default()).unwrap();
+    let visual = AvExportSnapshot::with_audio(&render, AudioSourceMode::Document, vec![]).unwrap();
+    assert!(visual.clips().is_empty());
+
+    // Unsupported actual audio still fails before publication.
+    write_wave(&path, 48000, 3, 48000);
+    let DocumentObject::Known(a) = &mut p.assets[0] else {
+        panic!()
+    };
+    a.kind = AssetKind::Audio;
+    a.content_hash = content_hash(&path).unwrap();
+    a.streams[0].width = None;
+    a.streams[0].height = None;
+    let render = RenderSnapshot::new(&p, id, 1, Default::default()).unwrap();
+    let snapshot =
+        AvExportSnapshot::with_audio(&render, AudioSourceMode::Document, vec![]).unwrap();
+    let req = request(
+        &dir.path().join("unsupported-audio.mov"),
         FrameRate::new(24, 1).unwrap(),
     );
     assert_eq!(

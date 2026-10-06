@@ -1,6 +1,6 @@
 # ADR-0047: GPU golden は Apple Silicon + Metal の共通基準で比較する
 
-- 状態: 採用
+- 状態: 一部置換（比較環境・同梱合計サイズは [ADR-0088](0088-platform-golden-baselines.md)）
 - 日付: 2026-10-03
 - 部分置換: [ADR-0038](0038-toolchain-and-ci.md) の GPU 画素 golden 固定環境（参照機）の条項のみ
 

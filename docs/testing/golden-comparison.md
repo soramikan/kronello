@@ -1,4 +1,4 @@
-# GPU 画素の golden 比較（Apple Silicon + Metal）
+# GPU 画素の golden 比較
 
 VEC-005 は `stroke-dashes` / `stroke-inside-evenodd` / `stroke-outside-nonzero` / `stroke-affine-reflected` を追加し、現在は **40 シーン・40 comparison frames**。新しい stroke の候補生成・採用・比較は pending host run（[VEC-005](vec-005.md)）。baseline は worker が変更しない。
 
@@ -33,7 +33,7 @@ QA-003 は [ADR-0047](../adr/0047-apple-silicon-metal-golden.md) に従い、GPU
 | `srgb-output-roundtrip/external-srgb-straight.rgba16f` | encoded straight の外部出力証拠。内部作業値とは区別する |
 | `target/golden/run.*/` | candidate / actual、差分、report、environment / provenance、失敗情報。Git 管理しない |
 
-同梱上限は **1 ファイル 256 KiB・合計 1 MiB**。採用スクリプトは全 candidate、保持する README / カタログ、既存 `tests/fixtures/` と他の `tests/golden/` ファイルを合わせて検証する。採用対象のシーンの実 byte 数は host 採用ログに記録する。大きい Noto フォントは外部 fixture とし、この同梱合計に含めない。
+[ADR-0088](../adr/0088-platform-golden-baselines.md) による同梱上限は **1 ファイル 256 KiB・fixtures と全環境基準の合計 3 MiB**。採用スクリプトは全 candidate、保持する README / カタログ、既存 `tests/fixtures/` と他の `tests/golden/` ファイルを合わせて検証する。採用対象のシーンの実 byte 数は host 採用ログに記録する。大きい Noto フォントは外部 fixture とし、この同梱合計に含めない。
 
 採用の CPU 回帰は `python3 scripts/test_golden_adopt.py` で実行する。dirty / revision / hash / platform / zero scenes / 非有限値 / サイズ上限の拒否と採用・publish 失敗時の復元を synthetic fixture で検証する。GPU の基準比較の代用にはしない。
 
@@ -56,7 +56,7 @@ QA-003 は [ADR-0047](../adr/0047-apple-silicon-metal-golden.md) に従い、GPU
    python3 scripts/golden_adopt.py "$KRONELLO_GOLDEN_OUTPUT/candidate"
    ```
 
-   採用スクリプトは working tree が clean、候補生成時も clean、候補 revision が現在の HEAD と一致、対象が Apple Silicon + Metal、成功 report と全シーン数・設定が一致、全ファイル hash / byte 数が一致、RGBA16F のサイズ・有限値・premultiplied alpha が有効であることを検証する。256 KiB / 1 MiB 上限も検証し、**変更前に採用 manifest と byte 集計を標準出力に出す**。検証後に staging directory から baseline 全体を置換する。失敗時は既存 baseline を保持する。UPDATE は baseline を直接書き換えない。
+   採用スクリプトは working tree が clean、候補生成時も clean、候補 revision が現在の HEAD と一致、対象が Apple Silicon + Metal、成功 report と全シーン数・設定が一致、全ファイル hash / byte 数が一致、RGBA16F のサイズ・有限値・premultiplied alpha が有効であることを検証する。256 KiB / 3 MiB 上限も検証し、**変更前に採用 manifest と byte 集計を標準出力に出す**。検証後に staging directory から baseline 全体を置換する。失敗時は既存 baseline を保持する。UPDATE は baseline を直接書き換えない。
 4. UPDATE を付けず、新規出力先で比較する。採用後の working tree には baseline 差分があるため dirty だが、通常比較は provenance として記録して実行する。
 
    ```sh
@@ -101,3 +101,7 @@ VEC-005 の各 draw は dash 配列・評価済み phase・alignment・fill rule
 manifest schema は 3。coverage は `vec003-grid4-v2`、stroke の対応上限は `vec005-local-stroke-v2`、各 draw の実際の版は旧 `vec003-centered-stroke-v1` または新しい文字列、gradient は `vec004-explicit-interpolation-v1`。固定 4×4 の pixel sample pattern を GPU / CPU で共有する。`samples_per_frame=16` は空間 AA であり、時間・motion blur のサンプル数ではない。全 draw-list、font hash、flatten tolerance 0.02 px、gradient stops / paint transform / stroke join・cap・miter limit を記録する。
 
 過去の UPDATE は旧方針の candidate-only として実行したもので、今回の baseline 登録へ流用しない。GPU-001 / GPU-002 の実測範囲は [M0 スパイク報告](gpu-spike-m0.md)、VEC-003 の実測は [検証記録](vec-003.md) を参照。新しい clean commit で生成した M1 候補を明示採用する。
+
+## QA-004 の環境別基準
+
+Linux Vulkan / Windows Direct3D12 の実 adapter 検証・環境別の明示採用、および既存 M1 基準に対する M4 の実測は [QA-004](qa-004.md) を参照する。Apple Silicon 共通基準は維持する。

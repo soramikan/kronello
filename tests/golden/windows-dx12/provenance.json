@@ -1,0 +1,18 @@
+{
+  "cargo_lock_sha256": "0c2bacb88b6c5cd7d8604c148eb034dd0bba0c1f42cc1e4f6b9828b766662563",
+  "color_code_sha256": "bd0c5e95f8be0f9bcf0bc78010d1b82dbbf4907d51a549c0086513223968a66f",
+  "comparison_code_sha256": "0f09357830b18b3abd193030880e442a65171954f5774e399a4bb0d17f7b2112",
+  "draw_fixture_code_sha256": "6d517fc60ede21eea9abfa338bc1720b1bcf064bf5cc1c449696372ebcec96b8",
+  "effect_kernel_code_sha256": "410950ce1720fd8da961fa257a959311e402110ab792d0800f9cc6aa0edd2e0e",
+  "effect_reference_code_sha256": "ac4bd1ba138e663a0a9b21106d935849dac385e963584d87df6586a68e397fde",
+  "effect_shader_sha256": "8a985ae2a71f0b1b802f18a406bb7cd77cef96c7b0c963e29b6f06b4ed8bc292",
+  "fixture_manifest_sha256": "13060d35e1ed680a0666197b3d0a6de2606933030f43fda63c169923377aec22",
+  "renderer_code_sha256": "c5fcf2256cb73d1975140b65fef0d2a37d2f24c8ca0a017fea54c5b99c3a6ad1",
+  "revision": "91b7b263331ed3a8a13fc8f33184790de687bf85",
+  "scene_code_sha256": "a7ab3cad28dc034b13d8a0d2987674e8f88e6f547cfe44de58224d9747317461",
+  "scene_gpu_code_sha256": "c72f2265729e15d1d6f5dd13464fb913755af5f224ab40dd5565229856b56b62",
+  "scene_reference_code_sha256": "a27104c1ef1af9e5896030fe4d1cd34388f43901d730afacfbc50c70485ccd27",
+  "scene_shader_sha256": "d2f84a4b8ecdc71e27e428deeee9bd6d129b71bdbb3de4ed7470416e3bae2738",
+  "shader_sha256": "f78694ed5b0dbc653a28601fb6f2d319e9b8d9ed0e02cb60cc8dfad6b5b8c069",
+  "status": ""
+}

@@ -119,7 +119,7 @@ TemplateInputTarget::DataTable の明示した row / column を Text / Property 
 
 MediaSlot は Value::AssetRef と TemplateInputTarget::MediaSlot {node}、対象は明示した Null slot。
 既知 Project.assets の参照を検証し、欠落は ASSET_MISSING。
-preview / diff は binding と asset ID を返すが、Composition Media-node 描画は後続タスク。
+preview / diff は binding と asset ID を返し、COMP-002 は MediaSlot を instance ごとの最終描画へ接続する。Image は静止画、Video は slot local time で評価し、素材 lock を backend で照合する（[ADR-0085](../adr/0085-composition-media-and-template-slots.md)）。
 active slot の final render は UNSUPPORTED_FEATURE で拒否する。空画像の成功扱いはしない。
 全入力は default を持ち、空の optional MediaSlot は今回追加しない。
 

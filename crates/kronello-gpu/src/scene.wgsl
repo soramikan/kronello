@@ -136,6 +136,13 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     var result = vec4<f32>(0.0);
     switch params.config.x {
         case 0u: {
+            // Write every pixel, including pooled surface pixels outside the path.
+            // Bounds are conservative; uncertain inputs keep the legacy loop.
+            let origin=vec2<f32>(id.xy)*params.scale.xy;
+            if params.boundary.w==1u && (any(origin<params.fill_extra.xy) || any(origin>params.fill_extra.zw)) {
+                textureStore(output,position,vec4<f32>(0.0));
+                return;
+            }
             var fill_color=vec4<f32>(0.0);
             var stroke_color=vec4<f32>(0.0);
             for (var sy=0u; sy<4u; sy++) {

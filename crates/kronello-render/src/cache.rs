@@ -14,7 +14,7 @@ use crate::{
     COLOR_VERSION, COVERAGE_VERSION, CoveragePath, OutputRegion, RenderError, VECTOR_VERSION,
 };
 
-const KEY_VERSION: &str = "cache001-json-sha256-v1";
+const KEY_VERSION: &str = "cache003-json-sha256-v2";
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CacheCapacity {
     pub entries: usize,
@@ -34,6 +34,7 @@ pub struct CacheConfig {
     pub layout: CacheCapacity,
     pub geometry: CacheCapacity,
     pub raster: CacheCapacity,
+    pub temporal: CacheCapacity,
 }
 impl CacheConfig {
     /// Zero-capacity caches execute the same code without retaining entries.
@@ -47,6 +48,7 @@ impl CacheConfig {
             layout: zero,
             geometry: zero,
             raster: zero,
+            temporal: zero,
         }
     }
 }
@@ -72,6 +74,8 @@ pub struct RenderCacheStats {
     pub layout: CacheStats,
     pub geometry: CacheStats,
     pub raster: CacheStats,
+    #[serde(default)]
+    pub temporal: CacheStats,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Key([u8; 32]);
@@ -140,6 +144,7 @@ pub struct RenderCache {
     layout: Lru<LayoutResult>,
     geometry: Lru<FlattenedPath>,
     raster: Lru<Vec<[f32; 4]>>,
+    temporal: Lru<crate::BackendFrame>,
 }
 impl Default for RenderCache {
     fn default() -> Self {
@@ -153,6 +158,7 @@ impl RenderCache {
             layout: Lru::new(config.layout),
             geometry: Lru::new(config.geometry),
             raster: Lru::new(config.raster),
+            temporal: Lru::new(config.temporal),
         }
     }
     pub fn stats(&self) -> RenderCacheStats {
@@ -161,6 +167,7 @@ impl RenderCache {
             layout: self.layout.stats,
             geometry: self.geometry.stats,
             raster: self.raster.stats,
+            temporal: self.temporal.stats,
         }
     }
     pub fn clear(&mut self) {
@@ -168,14 +175,32 @@ impl RenderCache {
         self.layout.clear();
         self.geometry.clear();
         self.raster.clear();
+        self.temporal.clear();
     }
     pub fn reset_stats(&mut self) {
         self.values.reset_stats();
         self.layout.reset_stats();
         self.geometry.reset_stats();
         self.raster.reset_stats();
+        self.temporal.reset_stats();
     }
 
+    pub(crate) fn temporal_get(
+        &mut self,
+        identity: &str,
+    ) -> Result<Option<crate::BackendFrame>, RenderError> {
+        Ok(self.temporal.get(key("temporal-region-v1", identity)?))
+    }
+    pub(crate) fn temporal_insert(
+        &mut self,
+        identity: &str,
+        frame: crate::BackendFrame,
+    ) -> Result<(), RenderError> {
+        let bytes = (frame.linear.len() + frame.display.len()) * 16;
+        self.temporal
+            .insert(key("temporal-region-v1", identity)?, frame, bytes);
+        Ok(())
+    }
     pub(crate) fn evaluate(
         &mut self,
         graph: &DependencyGraph<'_>,
@@ -302,19 +327,54 @@ impl RenderCache {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RasterCacheKey(Key);
 impl RasterCacheKey {
+    /// Stable semantic digest shared by CPU, GPU and persistent raster stores.
+    pub fn digest(self) -> [u8; 32] {
+        self.0.0
+    }
+
     /// Effect identities include the ordered dependency image identity, exact
     /// evaluated parameters, semantic versions, ROI, color and backend namespace.
     pub fn for_dag(
         dag: &crate::RenderDag,
         backend_namespace: &str,
     ) -> Result<Vec<Option<Self>>, RenderError> {
+        Self::for_dag_with_inputs(dag, backend_namespace, &std::collections::BTreeMap::new())
+    }
+    /// Native producers supply content-addressed source identities; unresolved
+    /// sources remain typed unsupported, never pixel readback substitutes.
+    pub fn for_dag_with_inputs(
+        dag: &crate::RenderDag,
+        backend_namespace: &str,
+        inputs: &std::collections::BTreeMap<usize, Self>,
+    ) -> Result<Vec<Option<Self>>, RenderError> {
         let mut keys: Vec<Option<Self>> = vec![];
-        for node in dag.nodes() {
+        for (index, node) in dag.nodes().iter().enumerate() {
             let value = match node {
-                crate::DagNode::VideoDraw { .. } => {
-                    return Err(RenderError::UnsupportedFeature(
-                        "unresolved video input".into(),
-                    ));
+                crate::DagNode::VideoDraw {
+                    stream_index,
+                    time,
+                    extent,
+                    output_to_local,
+                    bounds,
+                    ..
+                } => {
+                    let input = inputs.get(&index).ok_or_else(|| {
+                        RenderError::UnsupportedFeature("unresolved video cache identity".into())
+                    })?;
+                    Some(Self(key(
+                        "resident-video-raster",
+                        (
+                            input.digest(),
+                            stream_index,
+                            time,
+                            extent,
+                            output_to_local,
+                            bounds,
+                            dag.execution_region(),
+                            dag.working_space(),
+                            backend_namespace,
+                        ),
+                    )?))
                 }
                 crate::DagNode::RasterInput { pixels } => Some(Self(key(
                     "video-raster",
@@ -340,6 +400,9 @@ impl RasterCacheKey {
                             .map(|id| keys[*id].map(|k| hex(k.0)))
                             .collect::<Vec<_>>(),
                         opacity,
+                        dag.execution_region(),
+                        dag.working_space(),
+                        backend_namespace,
                     ),
                 )?)),
                 crate::DagNode::Mask {
@@ -352,6 +415,9 @@ impl RasterCacheKey {
                         keys[*source].map(|k| hex(k.0)),
                         keys[*matte].map(|k| hex(k.0)),
                         kind,
+                        dag.execution_region(),
+                        dag.working_space(),
+                        backend_namespace,
                     ),
                 )?)),
                 crate::DagNode::Effect { source, effect } => Some(Self(key(
@@ -371,6 +437,24 @@ impl RasterCacheKey {
             keys.push(value);
         }
         Ok(keys)
+    }
+    pub fn external_source(
+        identity: &str,
+        region: OutputRegion,
+        working: ColorSpace,
+        namespace: &str,
+    ) -> Result<Self, RenderError> {
+        Ok(Self(key(
+            "external-source",
+            (
+                identity,
+                region,
+                working,
+                namespace,
+                COLOR_VERSION,
+                COVERAGE_VERSION,
+            ),
+        )?))
     }
     pub fn new(
         path: &CoveragePath,

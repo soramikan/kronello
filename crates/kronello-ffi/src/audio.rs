@@ -49,7 +49,10 @@ pub unsafe extern "C" fn kronello_audio_prepare(
         let text = unsafe { crate::input(json, len) }
             .ok_or_else(|| ServiceError::invalid("audio request buffer"))?;
         let r: AudioPrepareRequest = serde_json::from_str(&text)?;
-        let prepared = PreparedAudio::prepare(&r.project, r.target, &r.expected_revision)?;
+        let prepared = match crate::capture_session_audio(r.clone())? {
+            Some(input) => input.prepare()?,
+            None => PreparedAudio::prepare(&r.project, r.target, &r.expected_revision)?,
+        };
         Ok::<_, ServiceError>(prepared)
     }))
     .unwrap_or_else(|_| Err(panicked()));

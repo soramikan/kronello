@@ -15,6 +15,8 @@ fn error(e: GpuError) -> RenderError {
         GpuError::UnsupportedFeature(_) => "UNSUPPORTED_FEATURE",
         GpuError::InvalidInput(_) => "INVALID_INPUT",
         GpuError::Readback(_) => "READBACK_FAILED",
+        GpuError::CacheIo(_) => "CACHE_IO",
+        GpuError::ObservationBusy => "RENDER_BACKEND_BUSY",
     };
     RenderError::Backend {
         code,
@@ -43,7 +45,25 @@ fn paint(color: kronello_model::Color) -> Paint {
         },
     }
 }
+// Only the compiler's final synthetic output root may alias its single child.
+// The final scene composite still performs normalization and numeric validation.
+fn elided_output_root(dag: &RenderDag) -> Option<usize> {
+    let root = dag.nodes().len().checked_sub(2)?;
+    match (&dag.nodes()[root], dag.nodes().last()?) {
+        (
+            DagNode::IsolatedComposite { children, opacity },
+            DagNode::OutputTransform { source, .. },
+        ) if *source == root && children.len() == 1 && *opacity == 1.0 => Some(root),
+        _ => None,
+    }
+}
 fn lower(dag: &RenderDag) -> Result<(RenderSize, DrawScene, WorkingSpace), RenderError> {
+    lower_with_resident(dag, &std::collections::BTreeMap::new())
+}
+fn lower_with_resident(
+    dag: &RenderDag,
+    resident: &std::collections::BTreeMap<usize, crate::ResidentImage>,
+) -> Result<(RenderSize, DrawScene, WorkingSpace), RenderError> {
     let mut scene = DrawScene {
         nodes: vec![],
         roots: vec![],
@@ -55,12 +75,19 @@ fn lower(dag: &RenderDag) -> Result<(RenderSize, DrawScene, WorkingSpace), Rende
             .flatten()
             .ok_or_else(|| RenderError::InvalidInput("DAG expects an image input".into()))
     };
+    let elided_root = elided_output_root(dag);
     for (index, node) in dag.nodes().iter().enumerate() {
+        if Some(index) == elided_root
+            && let DagNode::IsolatedComposite { children, .. } = node
+        {
+            ids[index] = Some(image(&ids, children[0])?);
+            continue;
+        }
         let draw = match node {
             DagNode::VideoDraw { .. } => {
-                return Err(RenderError::UnsupportedFeature(
-                    "video requires explicit media backend".into(),
-                ));
+                DrawNode::GpuRaster(resident.get(&index).cloned().ok_or_else(|| {
+                    RenderError::UnsupportedFeature("video requires explicit media backend".into())
+                })?)
             }
             DagNode::RasterInput { pixels } => DrawNode::Raster(pixels.clone()),
             DagNode::Geometry { .. } | DagNode::TextLayout { .. } => continue,
@@ -162,13 +189,80 @@ const DISPLAY: OutputTransform = OutputTransform {
 };
 
 impl GpuContext {
+    /// Explicit nonblocking execution for a caller that will retry a busy
+    /// shared context. Normal frame requests serialize instead.
+    pub fn try_execute(&self, dag: &RenderDag) -> Result<BackendFrame, RenderError> {
+        let _scope = self.try_render_scope().map_err(error)?;
+        self.execute(dag)
+    }
+
+    /// Execute the original DAG with device-bound video inputs. The only image
+    /// readbacks are the requested final linear/display output boundaries.
+    pub fn execute_resident_video(
+        &self,
+        dag: &RenderDag,
+        resident: &std::collections::BTreeMap<usize, crate::ResidentImage>,
+    ) -> Result<BackendFrame, RenderError> {
+        Ok(self.execute_resident_video_with_stats(dag, resident)?.0)
+    }
+    pub fn execute_resident_video_with_stats(
+        &self,
+        dag: &RenderDag,
+        resident: &std::collections::BTreeMap<usize, crate::ResidentImage>,
+    ) -> Result<(BackendFrame, crate::TransferStats), RenderError> {
+        let (size, scene, working) = lower_with_resident(dag, resident)?;
+        let pair = self
+            .render_scene_pair(size, &scene, working, DISPLAY)
+            .map_err(error)?;
+        Ok((
+            crop(
+                dag,
+                BackendFrame {
+                    linear: pair.linear,
+                    display: pair.display,
+                },
+            ),
+            pair.transfers,
+        ))
+    }
+    /// Cached native inputs remain GPU-resident. Disk lookup/persistence is
+    /// explicitly disabled because it would introduce intermediate CPU pixels.
+    pub fn execute_resident_video_cached_with_stats(
+        &self,
+        dag: &RenderDag,
+        resident: &std::collections::BTreeMap<usize, crate::ResidentImage>,
+        inputs: &std::collections::BTreeMap<usize, kronello_render::RasterCacheKey>,
+    ) -> Result<(BackendFrame, crate::TransferStats), RenderError> {
+        let (size, scene, working) = lower_with_resident(dag, resident)?;
+        let keys = kronello_render::RasterCacheKey::for_dag_with_inputs(
+            dag,
+            &self.cache_namespace().unwrap(),
+            inputs,
+        )?;
+        let keys = map_scene_keys(dag, &keys);
+        let pair = self
+            .render_scene_pair_cached(size, &scene, working, Some(&keys), false, DISPLAY)
+            .map_err(error)?;
+        Ok((
+            crop(
+                dag,
+                BackendFrame {
+                    linear: pair.linear,
+                    display: pair.display,
+                },
+            ),
+            pair.transfers,
+        ))
+    }
     /// Uses the same DAG lowering as export without image readback.
     pub fn preview_texture(&self, dag: &RenderDag) -> Result<wgpu::Texture, RenderError> {
         let (size, scene, working) = lower(dag)?;
-        self.render_scene_texture(
+        let keys = scene_keys(dag, &self.cache_namespace().unwrap())?;
+        self.render_scene_texture_cached(
             size,
             &scene,
             working,
+            &keys,
             OutputTransform {
                 space: InputSpace::LinearRec709,
                 alpha: OutputAlpha::Premultiplied,
@@ -181,6 +275,19 @@ impl GpuContext {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CpuReferenceBackend;
 impl RenderBackend for CpuReferenceBackend {
+    fn cache_namespace(&self) -> Option<String> {
+        Some("cpu-reference-f32-v1".into())
+    }
+    fn display_from_linear(
+        &self,
+        linear: &[[f32; 4]],
+        working: kronello_model::ColorSpace,
+    ) -> Result<Vec<[f32; 4]>, RenderError> {
+        linear
+            .iter()
+            .map(|p| convert_output_reference(*p, space(working), DISPLAY).map_err(error))
+            .collect()
+    }
     fn name(&self) -> &str {
         "cpu_reference_float32"
     }
@@ -246,23 +353,99 @@ impl RenderBackend for CpuReferenceBackend {
     }
 }
 impl RenderBackend for GpuContext {
+    fn begin_observation_scope(
+        &self,
+    ) -> Result<Option<Box<dyn kronello_render::RenderObservationScope + '_>>, RenderError> {
+        Ok(Some(Box::new(self.render_scope().map_err(error)?)))
+    }
+
+    fn cache_namespace(&self) -> Option<String> {
+        Some(format!(
+            "wgpu-rgba16f-v1:{}:{:?}:{:?}:{:?}",
+            self.strict_namespace(),
+            self.adapter_info,
+            self.device.features(),
+            self.device.limits()
+        ))
+    }
+    fn display_from_linear(
+        &self,
+        linear: &[[f32; 4]],
+        working: kronello_model::ColorSpace,
+    ) -> Result<Vec<[f32; 4]>, RenderError> {
+        linear
+            .iter()
+            .map(|p| convert_output_reference(*p, space(working), DISPLAY).map_err(error))
+            .collect()
+    }
     fn name(&self) -> &str {
         "wgpu_rgba16f"
     }
-    fn execute(&self, dag: &RenderDag) -> Result<BackendFrame, RenderError> {
-        let (size, scene, working) = lower(dag)?;
-        let linear = self
-            .render_scene(size, &scene, working)
-            .map_err(error)?
-            .pixels;
-        // External output conversion stays on GPU. Each call reports its own
-        // explicit image/status readback; no CPU color transform is substituted.
-        let display = self
-            .render_scene_output(size, &scene, working, DISPLAY)
-            .map_err(error)?
-            .pixels;
-        Ok(crop(dag, BackendFrame { linear, display }))
+    fn resource_cache_stats(&self) -> Option<kronello_render::RenderResourceCacheStats> {
+        Some(self.render_cache_stats())
     }
+    fn transfer_stats_total(&self) -> Option<kronello_render::RenderTransferStats> {
+        Some(
+            self.total_transfers
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .render_stats(),
+        )
+    }
+    fn transfer_stats(&self) -> Option<kronello_render::RenderTransferStats> {
+        Some(
+            self.last_transfers
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .render_stats(),
+        )
+    }
+    fn execute(&self, dag: &RenderDag) -> Result<BackendFrame, RenderError> {
+        let _scope = self.render_scope().map_err(error)?;
+        let (size, scene, working) = lower(dag)?;
+        let keys = scene_keys(dag, &self.cache_namespace().unwrap())?;
+        let pair = self
+            .render_scene_pair_cached(size, &scene, working, Some(&keys), true, DISPLAY)
+            .map_err(error)?;
+        self.record_transfers(&pair.transfers);
+        Ok(crop(
+            dag,
+            BackendFrame {
+                linear: pair.linear,
+                display: pair.display,
+            },
+        ))
+    }
+}
+
+fn scene_keys(
+    dag: &RenderDag,
+    namespace: &str,
+) -> Result<Vec<Option<kronello_render::RasterCacheKey>>, RenderError> {
+    Ok(map_scene_keys(
+        dag,
+        &kronello_render::RasterCacheKey::for_dag(dag, namespace)?,
+    ))
+}
+fn map_scene_keys(
+    dag: &RenderDag,
+    keys: &[Option<kronello_render::RasterCacheKey>],
+) -> Vec<Option<kronello_render::RasterCacheKey>> {
+    let elided_root = elided_output_root(dag);
+    dag.nodes()
+        .iter()
+        .enumerate()
+        .filter_map(|(i, node)| {
+            (Some(i) != elided_root
+                && !matches!(
+                    node,
+                    DagNode::Geometry { .. }
+                        | DagNode::TextLayout { .. }
+                        | DagNode::OutputTransform { .. }
+                ))
+            .then_some(keys[i])
+        })
+        .collect()
 }
 
 fn gradient(g: &kronello_model::ResolvedGradient) -> crate::GradientPaint {
@@ -346,5 +529,85 @@ fn crop(dag: &RenderDag, frame: BackendFrame) -> BackendFrame {
     BackendFrame {
         linear: extract(frame.linear),
         display: extract(frame.display),
+    }
+}
+
+#[cfg(test)]
+mod output_root_tests {
+    use super::*;
+    #[test]
+    fn only_final_singleton_root_is_elided_and_cache_keys_stay_aligned() {
+        let mut document: kronello_model::Project =
+            serde_json::from_str(include_str!("../../../examples/m1-demo.project.json")).unwrap();
+        let kronello_model::DocumentObject::Known(composition) = &mut document.compositions[0]
+        else {
+            panic!()
+        };
+        composition.nodes.truncate(1);
+        composition.root_nodes.truncate(1);
+        let id = composition.id;
+        document.texts.clear();
+        let profile = kronello_render::RenderProfile::default();
+        let snapshot = kronello_render::RenderSnapshot::new(&document, id, 1, profile).unwrap();
+        let scene =
+            kronello_render::build_scene_ir(&snapshot, kronello_time::Time::ZERO, &[]).unwrap();
+        let dag = kronello_render::build_render_dag(
+            &scene,
+            profile,
+            kronello_render::OutputRegion {
+                origin: [0.0; 2],
+                extent: [1920.0, 1080.0],
+                pixels: [32, 18],
+            },
+        )
+        .unwrap();
+        assert_eq!(elided_output_root(&dag), Some(dag.nodes().len() - 2));
+        let (_, lowered, _) = lower(&dag).unwrap();
+        let keys = scene_keys(&dag, "root-elision-test").unwrap();
+        assert_eq!(keys.len(), lowered.nodes.len());
+        // The actual composition child remains isolated; only synthetic root goes.
+        assert!(
+            lowered
+                .nodes
+                .iter()
+                .any(|node| matches!(node, DrawNode::Group { .. }))
+        );
+        assert_eq!(lowered.roots.len(), 1);
+        let mut empty = scene.clone();
+        empty.nodes.clear();
+        let empty = kronello_render::build_render_dag(&empty, profile, dag.region()).unwrap();
+        assert_eq!(elided_output_root(&empty), None);
+    }
+    #[test]
+    #[ignore = "requires an actual GPU adapter and 4K surface memory"]
+    fn perf001_basic_4k_preview_admits_elided_root() {
+        let mut document: kronello_model::Project =
+            serde_json::from_str(include_str!("../../../examples/m1-demo.project.json")).unwrap();
+        let kronello_model::DocumentObject::Known(composition) = &mut document.compositions[0]
+        else {
+            panic!()
+        };
+        composition.nodes.truncate(1);
+        composition.root_nodes.truncate(1);
+        let id = composition.id;
+        document.texts.clear();
+        let profile = kronello_render::RenderProfile::default();
+        let snapshot = kronello_render::RenderSnapshot::new(&document, id, 1, profile).unwrap();
+        let scene =
+            kronello_render::build_scene_ir(&snapshot, kronello_time::Time::ZERO, &[]).unwrap();
+        let dag = kronello_render::build_render_dag(
+            &scene,
+            profile,
+            kronello_render::OutputRegion {
+                origin: [0.0; 2],
+                extent: [1920.0, 1080.0],
+                pixels: [3840, 2160],
+            },
+        )
+        .unwrap();
+        let gpu = GpuContext::new().unwrap();
+        let texture = gpu.preview_texture(&dag).unwrap();
+        assert_eq!([texture.width(), texture.height()], [3840, 2160]);
+        gpu.wait().unwrap();
     }
 }

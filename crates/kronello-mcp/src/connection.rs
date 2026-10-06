@@ -10,8 +10,9 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tokio::sync::{Notify, Semaphore, mpsc};
 
 use crate::{
-    Initialize, MAX_MESSAGE_BYTES, RpcRequest, SUPPORTED_PROTOCOL_VERSIONS, ToolCall, ToolList,
-    invalid_params, resources, result, rpc_error, tool_result, tools,
+    Initialize, LEGACY_PROTOCOL_VERSIONS, MAX_MESSAGE_BYTES, RpcRequest,
+    SUPPORTED_PROTOCOL_VERSIONS, ToolCall, ToolList, invalid_params, resources, result, rpc_error,
+    tool_result, tools,
 };
 
 pub const MAX_ACTIVE_REQUESTS: usize = 32;
@@ -169,6 +170,17 @@ impl Connection {
             }
             return Reply::Immediate(None);
         };
+        let modern = match crate::modern::validate(&raw) {
+            Ok(modern) => modern,
+            Err(error) => return immediate(error),
+        };
+        let immediate = |value| {
+            Reply::Immediate(Some(if modern {
+                crate::modern::complete(value, &request.method)
+            } else {
+                value
+            }))
+        };
         if let Err(error) = super::strict::validate(message) {
             // Keep the existing typed tool error contract for invalid service
             // arguments while rejecting duplicate protocol fields as RPC errors.
@@ -191,8 +203,11 @@ impl Connection {
         if state.active.contains_key(&id.to_string()) {
             return immediate(invalid_params(id, "Request ID is already active"));
         }
-        // 2026-07-28 discovery is not implemented; advertise only actual support.
+        // Modern requests carry their own era and never initialize legacy state.
         if request.method == "server/discover" {
+            if modern {
+                return immediate(crate::modern::discover(id));
+            }
             return immediate(rpc_error(
                 id,
                 -32601,
@@ -206,6 +221,14 @@ impl Connection {
                 Err(error) => invalid_params(id, error),
             });
         }
+        if request.method == "initialize" && modern {
+            return immediate(rpc_error(
+                id,
+                -32601,
+                "initialize is a legacy method",
+                Value::Null,
+            ));
+        }
         if request.method == "initialize" {
             if !matches!(state.lifecycle, Lifecycle::New) {
                 return immediate(invalid_params(id, "Already initialized"));
@@ -215,7 +238,7 @@ impl Connection {
                 Err(error) => return immediate(invalid_params(id, error)),
             };
             let version =
-                if SUPPORTED_PROTOCOL_VERSIONS.contains(&initialize.protocol_version.as_str()) {
+                if LEGACY_PROTOCOL_VERSIONS.contains(&initialize.protocol_version.as_str()) {
                     initialize.protocol_version
                 } else {
                     "2025-11-25".into()
@@ -239,7 +262,7 @@ impl Connection {
             },"serverInfo":{"name":"kronello-mcp","version":env!("CARGO_PKG_VERSION")}}),
             ));
         }
-        if !matches!(state.lifecycle, Lifecycle::Ready) {
+        if !modern && !matches!(state.lifecycle, Lifecycle::Ready) {
             return immediate(rpc_error(id, -32002, "Server not initialized", Value::Null));
         }
         match request.method.as_str() {
@@ -326,7 +349,11 @@ impl Connection {
                     if worker_control.0.lock().expect("request state").progress == 0 {
                         worker_control.progress(1, 1);
                     }
-                    response
+                    if modern {
+                        crate::modern::complete(response, &method)
+                    } else {
+                        response
+                    }
                 })
                 .await
                 .unwrap_or_else(|error| {
@@ -348,7 +375,7 @@ impl Connection {
 }
 
 fn valid_id(id: &Value) -> bool {
-    id.is_string() || id.as_i64().is_some() || id.as_u64().is_some()
+    id.is_string() || id.is_number()
 }
 fn progress_token(params: &str) -> Result<Option<Value>, &'static str> {
     let params: Value = serde_json::from_str(params).map_err(|_| "Invalid params")?;
@@ -358,7 +385,7 @@ fn progress_token(params: &str) -> Result<Option<Value>, &'static str> {
         }
         if let Some(token) = meta.get("progressToken") {
             if !valid_id(token) {
-                return Err("progressToken must be a string or integer");
+                return Err("progressToken must be a string or number");
             }
             return Ok(Some(token.clone()));
         }

@@ -299,3 +299,118 @@ fn videotoolbox_hybrid_registration_is_hardware_capable() {
         }
     }
 }
+
+#[test]
+fn exact_forward_state_is_bounded_and_errors_reset_history() {
+    let runtime = MediaRuntime::load().unwrap();
+    for (name, times) in [
+        (
+            "cfr-30000-1001.nut",
+            (0..6).map(|i| r(i * 1001, 30000)).collect::<Vec<_>>(),
+        ),
+        (
+            "vfr.nut",
+            [0, 1, 3, 6, 10, 15].into_iter().map(|i| r(i, 30)).collect(),
+        ),
+        ("bframes.nut", (1..7).map(|i| r(i, 24)).collect()),
+    ] {
+        let path = fixtures().join(name);
+        let mut decoder = runtime.open_video(&path).unwrap();
+        for time in &times {
+            let expected = runtime.open_video(&path).unwrap().decode_at(*time).unwrap();
+            assert_eq!(decoder.decode_at(*time).unwrap(), expected);
+        }
+        assert_eq!(decoder.decode_stats().seeks, 1);
+        assert_eq!(decoder.decode_stats().decoded_frames, 6);
+        assert_eq!(decoder.decode_stats().peak_cached_frame_bytes, 768);
+        for _ in 0..20 {
+            decoder.decode_at(times[5]).unwrap();
+        }
+        assert_eq!(decoder.decode_stats().interval_hits, 20);
+        assert_eq!(decoder.decode_stats().decoded_frames, 6);
+        assert_eq!(decoder.decode_stats().cache_clone_bytes, 6 * 384);
+        assert_eq!(decoder.decode_stats().returned_clone_bytes, 20 * 384);
+        assert_eq!(
+            decoder.path_report().transfers.cpu_copy_bytes,
+            (6 + 6 + 20) * 384
+        );
+        decoder.decode_at(times[0]).unwrap();
+        assert_eq!(decoder.decode_stats().seeks, 2);
+        assert_eq!(
+            decoder.decode_at(r(-1, 1)).unwrap_err().code(),
+            "FRAME_NOT_FOUND"
+        );
+        // Out-of-range and metadata inspection cannot corrupt the next query.
+        let metadata = decoder.stream_metadata().unwrap();
+        assert_eq!(metadata.start_time, Some(times[0]));
+        assert_eq!(
+            decoder.decode_at(times[4]).unwrap(),
+            runtime
+                .open_video(&path)
+                .unwrap()
+                .decode_at(times[4])
+                .unwrap()
+        );
+    }
+}
+
+#[test]
+#[ignore = "developer FFmpeg native negative-origin fixture acceptance; run explicitly"]
+fn negative_origin_bframes_exact_forward_backward_and_repeated() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("negative.ts");
+    assert!(
+        std::process::Command::new("ffmpeg")
+            .args([
+                "-v",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc2=size=16x16:rate=24",
+                "-frames:v",
+                "6",
+                "-c:v",
+                "mpeg2video",
+                "-bf",
+                "2",
+                "-muxdelay",
+                "0",
+                "-output_ts_offset",
+                "-0.125",
+                "-avoid_negative_ts",
+                "disabled",
+                "-y",
+            ])
+            .arg(&path)
+            .status()
+            .unwrap()
+            .success()
+    );
+    let runtime = MediaRuntime::load().unwrap();
+    let mut decoder = runtime.open_video(&path).unwrap();
+    assert_eq!(
+        decoder.stream_metadata().unwrap().start_time,
+        Some(r(-3, 24))
+    );
+    for i in [-3, -2, -1, 0, 1, 2, 2, -3, 1, 1] {
+        let start = r(i, 24);
+        let middle = start.checked_add(r(1, 48)).unwrap();
+        let expected = runtime
+            .open_video(&path)
+            .unwrap()
+            .decode_at(middle)
+            .unwrap();
+        assert_eq!(expected.pts, start);
+        assert_eq!(expected.end, r(i + 1, 24));
+        assert_eq!(decoder.decode_at(middle).unwrap(), expected);
+    }
+    assert_eq!(
+        decoder.decode_at(r(-4, 24)).unwrap_err().code(),
+        "FRAME_NOT_FOUND"
+    );
+    assert_eq!(
+        decoder.decode_at(r(3, 24)).unwrap_err().code(),
+        "FRAME_NOT_FOUND"
+    );
+}

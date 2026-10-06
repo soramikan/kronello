@@ -4,7 +4,7 @@ mod events;
 
 use kronello_service::{BackendSelection, Request, Response, Service, ServiceError};
 
-const USAGE: &str = "kronello [--events ndjson] [--backend gpu|cpu-reference] [--request-json JSON] [project create|create_plan|import|import_plan|export|info|collect | asset relink | render frame|sequence|export|submit|explain | node explain | job get|list|cancel|prune | edit plan|apply|undo | history list | scene query | property sample | capabilities get | sequence create|query | clip place|trim|stretch | instance retime | template_instance retime | template define|instantiate|set_input|set_duration|preview|migration_plan] | worker --job <id>; otherwise read a tagged service Request from stdin";
+const USAGE: &str = "kronello [--events ndjson] [--backend gpu|cpu-reference|gpu-resident-bgra8|gpu-resident-nv12] [--request-json JSON] [project create|create_plan|import|import_plan|export|info|collect | asset relink | render frame|sequence|export|submit|explain | node explain | job get|list|cancel|prune | edit plan|apply|undo | history list | scene query | property sample | capabilities get | sequence create|query | clip place|trim|stretch | instance retime | template_instance retime | template define|instantiate|set_input|set_duration|preview|migration_plan] | worker --job <id>; otherwise read a tagged service Request from stdin";
 fn run(stream: Option<&events::Stream>) -> Result<Response, ServiceError> {
     let mut selection = BackendSelection::Gpu;
     let mut literal = None;
@@ -21,9 +21,11 @@ fn run(stream: Option<&events::Stream>) -> Result<Response, ServiceError> {
                 selection = match args.next().as_deref() {
                     Some("gpu") => BackendSelection::Gpu,
                     Some("cpu-reference") => BackendSelection::CpuReference,
+                    Some("gpu-resident-bgra8") => BackendSelection::GpuResidentBgra8,
+                    Some("gpu-resident-nv12") => BackendSelection::GpuResidentNv12,
                     _ => {
                         return Err(ServiceError::invalid(
-                            "--backend requires gpu or cpu-reference",
+                            "--backend requires gpu, cpu-reference, gpu-resident-bgra8 or gpu-resident-nv12",
                         ));
                     }
                 }

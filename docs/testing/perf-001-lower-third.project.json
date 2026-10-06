@@ -1,0 +1,1382 @@
+{
+  "compositions": [
+    {
+      "design_extent": {
+        "height": 180.0,
+        "width": 320.0
+      },
+      "duration": {
+        "den": "1",
+        "num": "8"
+      },
+      "edit_rate": {
+        "den": "1",
+        "num": "24"
+      },
+      "id": "89028f05-042b-49dc-a813-a45ab80c20d3",
+      "nodes": [
+        {
+          "active_range": {
+            "end": {
+              "den": "1",
+              "num": "8"
+            },
+            "start": {
+              "den": "1",
+              "num": "0"
+            }
+          },
+          "child_order": [],
+          "containment_parent": null,
+          "id": "de65b4e5-2563-458d-af80-0b38f60b3d17",
+          "kind": {
+            "kind": "composition_instance",
+            "value": {
+              "definition_ref": "e706c050-13fa-4654-9350-dcef30f1d792",
+              "id": "03e967b4-6b6e-4c0a-a00e-898104232641",
+              "input_bindings": {},
+              "local_time_map": {
+                "kind": "piecewise_linear",
+                "points": [
+                  {
+                    "local": {
+                      "den": "1",
+                      "num": "0"
+                    },
+                    "parent": {
+                      "den": "1",
+                      "num": "0"
+                    }
+                  },
+                  {
+                    "local": {
+                      "den": "5",
+                      "num": "2"
+                    },
+                    "parent": {
+                      "den": "5",
+                      "num": "2"
+                    }
+                  },
+                  {
+                    "local": {
+                      "den": "10",
+                      "num": "47"
+                    },
+                    "parent": {
+                      "den": "10",
+                      "num": "77"
+                    }
+                  },
+                  {
+                    "local": {
+                      "den": "1",
+                      "num": "5"
+                    },
+                    "parent": {
+                      "den": "1",
+                      "num": "8"
+                    }
+                  }
+                ]
+              },
+              "seed": 0
+            }
+          },
+          "properties": [],
+          "transform_parent": null
+        }
+      ],
+      "properties": [],
+      "root_nodes": [
+        "de65b4e5-2563-458d-af80-0b38f60b3d17"
+      ]
+    },
+    {
+      "design_extent": {
+        "height": 180.0,
+        "width": 320.0
+      },
+      "duration": {
+        "den": "1",
+        "num": "6"
+      },
+      "edit_rate": {
+        "den": "1",
+        "num": "24"
+      },
+      "id": "12000000-0000-4000-8000-000000000002",
+      "nodes": [
+        {
+          "active_range": {
+            "end": {
+              "den": "1",
+              "num": "6"
+            },
+            "start": {
+              "den": "1",
+              "num": "0"
+            }
+          },
+          "child_order": [],
+          "containment_parent": null,
+          "id": "dcca0f28-ab00-4bcb-a18f-6c205c5b4641",
+          "kind": {
+            "kind": "composition_instance",
+            "value": {
+              "definition_ref": "e706c050-13fa-4654-9350-dcef30f1d792",
+              "id": "909e86f1-04c7-414d-bfe5-dedb394b0d3f",
+              "input_bindings": {},
+              "local_time_map": {
+                "kind": "piecewise_linear",
+                "points": [
+                  {
+                    "local": {
+                      "den": "1",
+                      "num": "0"
+                    },
+                    "parent": {
+                      "den": "1",
+                      "num": "0"
+                    }
+                  },
+                  {
+                    "local": {
+                      "den": "5",
+                      "num": "2"
+                    },
+                    "parent": {
+                      "den": "5",
+                      "num": "2"
+                    }
+                  },
+                  {
+                    "local": {
+                      "den": "10",
+                      "num": "47"
+                    },
+                    "parent": {
+                      "den": "10",
+                      "num": "57"
+                    }
+                  },
+                  {
+                    "local": {
+                      "den": "1",
+                      "num": "5"
+                    },
+                    "parent": {
+                      "den": "1",
+                      "num": "6"
+                    }
+                  }
+                ]
+              },
+              "seed": 0
+            }
+          },
+          "properties": [],
+          "transform_parent": null
+        }
+      ],
+      "properties": [],
+      "root_nodes": [
+        "dcca0f28-ab00-4bcb-a18f-6c205c5b4641"
+      ]
+    },
+    {
+      "design_extent": {
+        "height": 180.0,
+        "width": 320.0
+      },
+      "duration": {
+        "den": "1",
+        "num": "5"
+      },
+      "edit_rate": {
+        "den": "1",
+        "num": "24"
+      },
+      "id": "e706c050-13fa-4654-9350-dcef30f1d792",
+      "nodes": [
+        {
+          "active_range": {
+            "end": {
+              "den": "1",
+              "num": "5"
+            },
+            "start": {
+              "den": "1",
+              "num": "0"
+            }
+          },
+          "child_order": [],
+          "containment_parent": null,
+          "effects": [
+            {
+              "effect_id": "kronello.drop_shadow",
+              "parameters": {
+                "color": "13000000-0000-4000-8000-000000000003",
+                "kind": "drop_shadow",
+                "offset": "13000000-0000-4000-8000-000000000002",
+                "opacity": "13000000-0000-4000-8000-000000000004",
+                "sigma": "13000000-0000-4000-8000-000000000001"
+              },
+              "version": 1
+            }
+          ],
+          "id": "adcfcd01-95a0-4292-ba82-61369bf4ac8c",
+          "kind": {
+            "kind": "shape",
+            "value": {
+              "content_ref": "36bbe1b1-f5c0-46ba-90f3-3b4cb000e200"
+            }
+          },
+          "properties": [
+            {
+              "descriptor": {
+                "key": "kronello.shape.size",
+                "version": 1
+              },
+              "id": "1d77434e-64ef-4de4-9e38-98bb71bb03fe",
+              "modifiers": [],
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "vec2",
+                  "value": [
+                    16.0,
+                    12.0
+                  ]
+                }
+              }
+            },
+            {
+              "descriptor": {
+                "key": "kronello.shape.corner_radius",
+                "version": 1
+              },
+              "id": "561797a3-732d-406d-8755-57fd074c0050",
+              "modifiers": [],
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 0.0
+                }
+              }
+            },
+            {
+              "descriptor": {
+                "key": "kronello.fill_color",
+                "version": 1
+              },
+              "id": "4e4837d7-b8f7-47e6-a455-cc35e5b00cdd",
+              "modifiers": [],
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "color",
+                  "value": {
+                    "components": {
+                      "alpha": 1.0,
+                      "b": 0.0392156862745098,
+                      "g": 0.1568627450980392,
+                      "r": 0.7843137254901961
+                    },
+                    "space": "srgb"
+                  }
+                }
+              }
+            },
+            {
+              "descriptor": {
+                "key": "kronello.transform.position",
+                "version": 1
+              },
+              "id": "cecd9404-ac4e-4245-9d6a-84aa26590fc6",
+              "modifiers": [],
+              "source": {
+                "kind": "curve",
+                "value": "a06bc70e-d4cd-48d2-87f3-c7b5d8984c93"
+              }
+            },
+            {
+              "descriptor": {
+                "key": "kronello.opacity",
+                "version": 1
+              },
+              "id": "04f5a966-c8a3-45b0-a1a9-ee990e09ab0e",
+              "modifiers": [],
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 1.0
+                }
+              }
+            },
+            {
+              "descriptor": {
+                "key": "kronello.effect.sigma",
+                "version": 1
+              },
+              "id": "13000000-0000-4000-8000-000000000001",
+              "modifiers": [],
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 0.0
+                }
+              }
+            },
+            {
+              "descriptor": {
+                "key": "kronello.effect.offset",
+                "version": 1
+              },
+              "id": "13000000-0000-4000-8000-000000000002",
+              "modifiers": [],
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "vec2",
+                  "value": [
+                    6.0,
+                    6.0
+                  ]
+                }
+              }
+            },
+            {
+              "descriptor": {
+                "key": "kronello.effect.color",
+                "version": 1
+              },
+              "id": "13000000-0000-4000-8000-000000000003",
+              "modifiers": [],
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "color",
+                  "value": {
+                    "components": {
+                      "alpha": 0.5,
+                      "b": 0.0,
+                      "g": 0.0,
+                      "r": 0.0
+                    },
+                    "space": "srgb"
+                  }
+                }
+              }
+            },
+            {
+              "descriptor": {
+                "key": "kronello.effect.opacity",
+                "version": 1
+              },
+              "id": "13000000-0000-4000-8000-000000000004",
+              "modifiers": [],
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 0.6
+                }
+              }
+            }
+          ],
+          "transform_parent": null
+        },
+        {
+          "active_range": {
+            "end": {
+              "den": "1",
+              "num": "5"
+            },
+            "start": {
+              "den": "1",
+              "num": "0"
+            }
+          },
+          "child_order": [],
+          "containment_parent": null,
+          "id": "955f3ce9-88f6-4025-978a-6d42e5c08d31",
+          "kind": {
+            "kind": "text",
+            "value": {
+              "content_ref": "295fc1de-bbfb-4744-8bcf-1f3875a93ed1"
+            }
+          },
+          "properties": [
+            {
+              "descriptor": {
+                "key": "kronello.text.font_size",
+                "version": 1
+              },
+              "id": "e84691d5-ae83-453b-a30d-5580455c224a",
+              "modifiers": [],
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 12.0
+                }
+              }
+            },
+            {
+              "descriptor": {
+                "key": "kronello.fill_color",
+                "version": 1
+              },
+              "id": "8ab51dda-b6ed-4e08-9342-ba0c44f35a8d",
+              "modifiers": [],
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "color",
+                  "value": {
+                    "components": {
+                      "alpha": 1.0,
+                      "b": 0.23529411764705882,
+                      "g": 0.6274509803921569,
+                      "r": 0.0784313725490196
+                    },
+                    "space": "srgb"
+                  }
+                }
+              }
+            },
+            {
+              "descriptor": {
+                "key": "kronello.text.wrap_width",
+                "version": 1
+              },
+              "id": "e9de66ef-6359-4dbb-ae53-19289e9acce2",
+              "modifiers": [],
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 250.0
+                }
+              }
+            },
+            {
+              "descriptor": {
+                "key": "kronello.text.line_height",
+                "version": 1
+              },
+              "id": "a506f1e9-55f2-4187-bbc6-3e1b4c8830cf",
+              "modifiers": [],
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 16.0
+                }
+              }
+            },
+            {
+              "descriptor": {
+                "key": "kronello.text.alignment",
+                "version": 1
+              },
+              "id": "f5cb616d-6566-46a3-9999-45e432b573b2",
+              "modifiers": [],
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "enum",
+                  "value": "start"
+                }
+              }
+            },
+            {
+              "descriptor": {
+                "key": "kronello.transform.position",
+                "version": 1
+              },
+              "id": "4bdb44e9-7c70-47e4-8b37-de23c38efb21",
+              "modifiers": [],
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "vec2",
+                  "value": [
+                    32.0,
+                    120.0
+                  ]
+                }
+              }
+            }
+          ],
+          "transform_parent": null
+        }
+      ],
+      "properties": [],
+      "root_nodes": [
+        "adcfcd01-95a0-4292-ba82-61369bf4ac8c",
+        "955f3ce9-88f6-4025-978a-6d42e5c08d31"
+      ]
+    },
+    {
+      "design_extent": {
+        "height": 320.0,
+        "width": 180.0
+      },
+      "duration": {
+        "den": "1",
+        "num": "5"
+      },
+      "edit_rate": {
+        "den": "1",
+        "num": "24"
+      },
+      "id": "3df89725-a068-54c9-84b6-7a0fd0dbf79e",
+      "nodes": [
+        {
+          "active_range": {
+            "end": {
+              "den": "1",
+              "num": "5"
+            },
+            "start": {
+              "den": "1",
+              "num": "0"
+            }
+          },
+          "child_order": [],
+          "containment_parent": null,
+          "effects": [
+            {
+              "effect_id": "kronello.drop_shadow",
+              "parameters": {
+                "color": "b8e3946c-79c6-50d2-bee5-5cd285cfd9f9",
+                "kind": "drop_shadow",
+                "offset": "ab55cff4-e85d-5dca-b638-9557bb1cb1e1",
+                "opacity": "d2fb1bbd-9a4a-53bb-9281-546cee0f548a",
+                "sigma": "7a083d3f-7469-54cc-a56f-72014a413d51"
+              },
+              "version": 1
+            }
+          ],
+          "id": "ec28e649-4b07-5a08-91e2-18dbb299fea4",
+          "kind": {
+            "kind": "shape",
+            "value": {
+              "content_ref": "1c8228a4-c079-5385-be2f-56c64d511e1b"
+            }
+          },
+          "name": "Portrait band",
+          "properties": [
+            {
+              "descriptor": {
+                "key": "kronello.shape.size",
+                "version": 1
+              },
+              "id": "05183cb5-f13c-5c47-840c-d7c316c9bd08",
+              "modifiers": [],
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "vec2",
+                  "value": [
+                    16.0,
+                    12.0
+                  ]
+                }
+              }
+            },
+            {
+              "descriptor": {
+                "key": "kronello.shape.corner_radius",
+                "version": 1
+              },
+              "id": "23edf9d8-fe6e-5b77-bcfa-d6005a652151",
+              "modifiers": [],
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 0.0
+                }
+              }
+            },
+            {
+              "descriptor": {
+                "key": "kronello.fill_color",
+                "version": 1
+              },
+              "id": "7dea48e3-3667-5b9a-98a9-531c2b9bac73",
+              "modifiers": [],
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "color",
+                  "value": {
+                    "components": {
+                      "alpha": 1.0,
+                      "b": 0.0392156862745098,
+                      "g": 0.1568627450980392,
+                      "r": 0.7843137254901961
+                    },
+                    "space": "srgb"
+                  }
+                }
+              }
+            },
+            {
+              "descriptor": {
+                "key": "kronello.transform.position",
+                "version": 1
+              },
+              "id": "1970302c-742d-5fa6-8f1d-4b6b88724644",
+              "modifiers": [],
+              "source": {
+                "kind": "curve",
+                "value": "a06bc70e-d4cd-48d2-87f3-c7b5d8984c93"
+              }
+            },
+            {
+              "descriptor": {
+                "key": "kronello.opacity",
+                "version": 1
+              },
+              "id": "d747e7a2-d9a3-599f-9f5c-f6f57edcc051",
+              "modifiers": [],
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 1.0
+                }
+              }
+            },
+            {
+              "descriptor": {
+                "key": "kronello.effect.sigma",
+                "version": 1
+              },
+              "id": "7a083d3f-7469-54cc-a56f-72014a413d51",
+              "modifiers": [],
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 0.0
+                }
+              }
+            },
+            {
+              "descriptor": {
+                "key": "kronello.effect.offset",
+                "version": 1
+              },
+              "id": "ab55cff4-e85d-5dca-b638-9557bb1cb1e1",
+              "modifiers": [],
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "vec2",
+                  "value": [
+                    6.0,
+                    6.0
+                  ]
+                }
+              }
+            },
+            {
+              "descriptor": {
+                "key": "kronello.effect.color",
+                "version": 1
+              },
+              "id": "b8e3946c-79c6-50d2-bee5-5cd285cfd9f9",
+              "modifiers": [],
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "color",
+                  "value": {
+                    "components": {
+                      "alpha": 0.5,
+                      "b": 0.0,
+                      "g": 0.0,
+                      "r": 0.0
+                    },
+                    "space": "srgb"
+                  }
+                }
+              }
+            },
+            {
+              "descriptor": {
+                "key": "kronello.effect.opacity",
+                "version": 1
+              },
+              "id": "d2fb1bbd-9a4a-53bb-9281-546cee0f548a",
+              "modifiers": [],
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 0.6
+                }
+              }
+            }
+          ],
+          "transform_parent": null
+        },
+        {
+          "active_range": {
+            "end": {
+              "den": "1",
+              "num": "5"
+            },
+            "start": {
+              "den": "1",
+              "num": "0"
+            }
+          },
+          "child_order": [],
+          "containment_parent": null,
+          "id": "3d87a24e-e502-5c87-9422-370feb4edfac",
+          "kind": {
+            "kind": "text",
+            "value": {
+              "content_ref": "700f4e8e-24d5-53f2-b49a-ab1a66264609"
+            }
+          },
+          "name": "Portrait headline",
+          "properties": [
+            {
+              "descriptor": {
+                "key": "kronello.text.font_size",
+                "version": 1
+              },
+              "id": "c917c400-2ced-59fb-8d58-e0f25974dae9",
+              "modifiers": [],
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 12.0
+                }
+              }
+            },
+            {
+              "descriptor": {
+                "key": "kronello.fill_color",
+                "version": 1
+              },
+              "id": "3b800cea-48fc-5089-ab86-7ccb32c12197",
+              "modifiers": [],
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "color",
+                  "value": {
+                    "components": {
+                      "alpha": 1.0,
+                      "b": 0.23529411764705882,
+                      "g": 0.6274509803921569,
+                      "r": 0.0784313725490196
+                    },
+                    "space": "srgb"
+                  }
+                }
+              }
+            },
+            {
+              "descriptor": {
+                "key": "kronello.text.wrap_width",
+                "version": 1
+              },
+              "id": "2b85ed47-5c73-5ab6-ad71-483839a14b3f",
+              "modifiers": [],
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 48.0
+                }
+              }
+            },
+            {
+              "descriptor": {
+                "key": "kronello.text.line_height",
+                "version": 1
+              },
+              "id": "efc1d201-9d10-5f71-aab6-e1fb2b5ede86",
+              "modifiers": [],
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 16.0
+                }
+              }
+            },
+            {
+              "descriptor": {
+                "key": "kronello.text.alignment",
+                "version": 1
+              },
+              "id": "6310c170-203b-5139-ba06-cb8b236973fb",
+              "modifiers": [],
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "enum",
+                  "value": "start"
+                }
+              }
+            },
+            {
+              "descriptor": {
+                "key": "kronello.transform.position",
+                "version": 1
+              },
+              "id": "a9e35bf2-f3fa-51e6-a5eb-b16783c5ec25",
+              "modifiers": [],
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "vec2",
+                  "value": [
+                    32.0,
+                    220.0
+                  ]
+                }
+              }
+            }
+          ],
+          "transform_parent": null
+        }
+      ],
+      "properties": [],
+      "root_nodes": [
+        "ec28e649-4b07-5a08-91e2-18dbb299fea4",
+        "3d87a24e-e502-5c87-9422-370feb4edfac"
+      ]
+    },
+    {
+      "design_extent": {
+        "height": 320.0,
+        "width": 180.0
+      },
+      "duration": {
+        "den": "1",
+        "num": "8"
+      },
+      "edit_rate": {
+        "den": "1",
+        "num": "24"
+      },
+      "id": "a6232ef6-0fb9-565d-8453-ee45a7c53ddb",
+      "nodes": [
+        {
+          "active_range": {
+            "end": {
+              "den": "1",
+              "num": "8"
+            },
+            "start": {
+              "den": "1",
+              "num": "0"
+            }
+          },
+          "child_order": [],
+          "containment_parent": null,
+          "id": "1a1b3a9f-b94c-4c9b-a055-def99e2fb383",
+          "kind": {
+            "kind": "composition_instance",
+            "value": {
+              "definition_ref": "3df89725-a068-54c9-84b6-7a0fd0dbf79e",
+              "id": "df295445-4f7f-4dab-8b18-a4a7640dc115",
+              "input_bindings": {},
+              "local_time_map": {
+                "kind": "piecewise_linear",
+                "points": [
+                  {
+                    "local": {
+                      "den": "1",
+                      "num": "0"
+                    },
+                    "parent": {
+                      "den": "1",
+                      "num": "0"
+                    }
+                  },
+                  {
+                    "local": {
+                      "den": "5",
+                      "num": "2"
+                    },
+                    "parent": {
+                      "den": "5",
+                      "num": "2"
+                    }
+                  },
+                  {
+                    "local": {
+                      "den": "10",
+                      "num": "47"
+                    },
+                    "parent": {
+                      "den": "10",
+                      "num": "77"
+                    }
+                  },
+                  {
+                    "local": {
+                      "den": "1",
+                      "num": "5"
+                    },
+                    "parent": {
+                      "den": "1",
+                      "num": "8"
+                    }
+                  }
+                ]
+              },
+              "seed": 0
+            }
+          },
+          "properties": [],
+          "transform_parent": null
+        }
+      ],
+      "properties": [],
+      "root_nodes": [
+        "1a1b3a9f-b94c-4c9b-a055-def99e2fb383"
+      ]
+    }
+  ],
+  "curves": [
+    {
+      "id": "a06bc70e-d4cd-48d2-87f3-c7b5d8984c93",
+      "interpolation_version": 1,
+      "keys": [
+        {
+          "interpolation": {
+            "kind": "linear"
+          },
+          "time": {
+            "den": "1",
+            "num": "0"
+          },
+          "value": {
+            "kind": "vec2",
+            "value": [
+              1.0,
+              1.0
+            ]
+          }
+        },
+        {
+          "interpolation": {
+            "kind": "linear"
+          },
+          "time": {
+            "den": "1",
+            "num": "1"
+          },
+          "value": {
+            "kind": "vec2",
+            "value": [
+              9.0,
+              1.0
+            ]
+          }
+        }
+      ],
+      "value_type": "vec2"
+    }
+  ],
+  "id": "d5808faa-5b6f-4921-9797-8bbc0dcf5416",
+  "name": "INTEGRATION-001 日本語 lower-third",
+  "schema_version": 1,
+  "semantic_version": 1,
+  "sequences": [
+    {
+      "audio_rate": 48000,
+      "extent": {
+        "height": 180.0,
+        "width": 320.0
+      },
+      "frame_rate": {
+        "den": "1",
+        "num": "24"
+      },
+      "id": "16e402a5-7419-4d40-b441-345b167424ae",
+      "tracks": [
+        {
+          "clips": [
+            {
+              "audio_retime": "reject",
+              "effects": [],
+              "id": "0d1a44a5-3f9c-4c18-91ea-b44472e26e15",
+              "links": [],
+              "source_in": {
+                "den": "1",
+                "num": "0"
+              },
+              "source_ref": {
+                "composition": "89028f05-042b-49dc-a813-a45ab80c20d3",
+                "kind": "composition"
+              },
+              "time_map": {
+                "kind": "linear",
+                "offset": {
+                  "den": "1",
+                  "num": "0"
+                },
+                "speed": {
+                  "den": "1",
+                  "num": "1"
+                }
+              },
+              "timeline_range": {
+                "end": {
+                  "den": "1",
+                  "num": "8"
+                },
+                "start": {
+                  "den": "1",
+                  "num": "0"
+                }
+              }
+            },
+            {
+              "audio_retime": "reject",
+              "effects": [],
+              "id": "7d20ae6d-cd16-4d74-b7c5-f109edf59ddf",
+              "links": [],
+              "source_in": {
+                "den": "1",
+                "num": "0"
+              },
+              "source_ref": {
+                "composition": "12000000-0000-4000-8000-000000000002",
+                "kind": "composition"
+              },
+              "time_map": {
+                "kind": "linear",
+                "offset": {
+                  "den": "1",
+                  "num": "0"
+                },
+                "speed": {
+                  "den": "1",
+                  "num": "1"
+                }
+              },
+              "timeline_range": {
+                "end": {
+                  "den": "1",
+                  "num": "14"
+                },
+                "start": {
+                  "den": "1",
+                  "num": "8"
+                }
+              }
+            }
+          ],
+          "id": "c81fdd28-c2d4-4650-8c98-6365993c55e7",
+          "kind": "video"
+        }
+      ],
+      "working_space": "linear_rec709"
+    }
+  ],
+  "shapes": [
+    {
+      "fill": {
+        "color": "4e4837d7-b8f7-47e6-a455-cc35e5b00cdd",
+        "rule": "nonzero"
+      },
+      "geometry": {
+        "kind": "rectangle",
+        "value": {
+          "corner_radius": "561797a3-732d-406d-8755-57fd074c0050",
+          "size": "1d77434e-64ef-4de4-9e38-98bb71bb03fe"
+        }
+      },
+      "id": "36bbe1b1-f5c0-46ba-90f3-3b4cb000e200",
+      "stroke": null
+    },
+    {
+      "fill": {
+        "color": "7dea48e3-3667-5b9a-98a9-531c2b9bac73",
+        "rule": "nonzero"
+      },
+      "geometry": {
+        "kind": "rectangle",
+        "value": {
+          "corner_radius": "23edf9d8-fe6e-5b77-bcfa-d6005a652151",
+          "size": "05183cb5-f13c-5c47-840c-d7c316c9bd08"
+        }
+      },
+      "id": "1c8228a4-c079-5385-be2f-56c64d511e1b",
+      "stroke": null
+    }
+  ],
+  "template_instances": [
+    {
+      "definition_ref": "66f4eafb-9865-43cd-9438-1c0b00e0ac80",
+      "duration": {
+        "den": "1",
+        "num": "8"
+      },
+      "id": "03e967b4-6b6e-4c0a-a00e-898104232641",
+      "inputs": {
+        "accent": {
+          "kind": "color",
+          "value": {
+            "components": {
+              "alpha": 1.0,
+              "b": 0.05,
+              "g": 0.5,
+              "r": 0.9
+            },
+            "space": "srgb"
+          }
+        },
+        "headline": {
+          "kind": "string",
+          "value": "日本語の字幕\n背景帯が追従"
+        }
+      },
+      "version": "1.0.0"
+    },
+    {
+      "definition_ref": "66f4eafb-9865-43cd-9438-1c0b00e0ac80",
+      "duration": {
+        "den": "1",
+        "num": "6"
+      },
+      "id": "909e86f1-04c7-414d-bfe5-dedb394b0d3f",
+      "inputs": {
+        "accent": {
+          "kind": "color",
+          "value": {
+            "components": {
+              "alpha": 1.0,
+              "b": 0.9,
+              "g": 0.2,
+              "r": 0.05
+            },
+            "space": "srgb"
+          }
+        },
+        "headline": {
+          "kind": "string",
+          "value": "別の字幕"
+        }
+      },
+      "version": "1.0.0"
+    },
+    {
+      "definition_ref": "66f4eafb-9865-43cd-9438-1c0b00e0ac80",
+      "duration": {
+        "den": "1",
+        "num": "8"
+      },
+      "id": "df295445-4f7f-4dab-8b18-a4a7640dc115",
+      "inputs": {
+        "accent": {
+          "kind": "color",
+          "value": {
+            "components": {
+              "alpha": 1.0,
+              "b": 0.05,
+              "g": 0.5,
+              "r": 0.9
+            },
+            "space": "srgb"
+          }
+        },
+        "headline": {
+          "kind": "string",
+          "value": "日本語の字幕\n背景帯が追従"
+        }
+      },
+      "variant": "portrait",
+      "version": "1.0.0"
+    }
+  ],
+  "templates": [
+    {
+      "composition_ref": "e706c050-13fa-4654-9350-dcef30f1d792",
+      "constraints": {
+        "bands": [
+          {
+            "band_node": "adcfcd01-95a0-4292-ba82-61369bf4ac8c",
+            "padding": [
+              4.0,
+              2.0
+            ],
+            "position_property": "cecd9404-ac4e-4245-9d6a-84aa26590fc6",
+            "size_property": "1d77434e-64ef-4de4-9e38-98bb71bb03fe",
+            "text_node": "955f3ce9-88f6-4025-978a-6d42e5c08d31"
+          }
+        ],
+        "max_lines": {
+          "955f3ce9-88f6-4025-978a-6d42e5c08d31": 2
+        }
+      },
+      "content_hash": "95d4b24ff41d878899551d097eda583aa6f98e7ce381826a0579a49df2ed83ec",
+      "duration_policy": {
+        "intro": {
+          "den": "5",
+          "num": "2"
+        },
+        "middle_mode": "stretch",
+        "minimum_middle": {
+          "den": "2",
+          "num": "1"
+        },
+        "outro": {
+          "den": "10",
+          "num": "3"
+        }
+      },
+      "id": "66f4eafb-9865-43cd-9438-1c0b00e0ac80",
+      "public_inputs": {
+        "accent": {
+          "choices": [],
+          "default": {
+            "kind": "color",
+            "value": {
+              "components": {
+                "alpha": 1.0,
+                "b": 0.0392156862745098,
+                "g": 0.1568627450980392,
+                "r": 0.7843137254901961
+              },
+              "space": "srgb"
+            }
+          },
+          "maximum": null,
+          "minimum": null,
+          "target": {
+            "property": {
+              "node": "adcfcd01-95a0-4292-ba82-61369bf4ac8c",
+              "property": "4e4837d7-b8f7-47e6-a455-cc35e5b00cdd"
+            }
+          },
+          "value_type": "color"
+        },
+        "headline": {
+          "choices": [],
+          "default": {
+            "kind": "string",
+            "value": "日本語"
+          },
+          "maximum": null,
+          "minimum": null,
+          "target": {
+            "text": {
+              "node": "955f3ce9-88f6-4025-978a-6d42e5c08d31"
+            }
+          },
+          "value_type": "string"
+        }
+      },
+      "template_id": "9b131e76-d1cf-41aa-a621-f142d71447d0",
+      "variants": {
+        "portrait": {
+          "composition_ref": "3df89725-a068-54c9-84b6-7a0fd0dbf79e",
+          "constraints": {
+            "bands": [
+              {
+                "band_node": "ec28e649-4b07-5a08-91e2-18dbb299fea4",
+                "padding": [
+                  4.0,
+                  2.0
+                ],
+                "position_property": "1970302c-742d-5fa6-8f1d-4b6b88724644",
+                "size_property": "05183cb5-f13c-5c47-840c-d7c316c9bd08",
+                "text_node": "3d87a24e-e502-5c87-9422-370feb4edfac"
+              }
+            ],
+            "max_lines": {
+              "3d87a24e-e502-5c87-9422-370feb4edfac": 4
+            }
+          },
+          "content_hash": "c34758a9e9e0704130f1be965c05c8346d1677fa618289f0bdfbc1172111c6e1",
+          "targets": {
+            "accent": {
+              "property": {
+                "node": "ec28e649-4b07-5a08-91e2-18dbb299fea4",
+                "property": "7dea48e3-3667-5b9a-98a9-531c2b9bac73"
+              }
+            },
+            "headline": {
+              "text": {
+                "node": "3d87a24e-e502-5c87-9422-370feb4edfac"
+              }
+            }
+          }
+        }
+      },
+      "version": "1.0.0"
+    }
+  ],
+  "texts": [
+    {
+      "alignment": "f5cb616d-6566-46a3-9999-45e432b573b2",
+      "direction": "horizontal",
+      "id": "295fc1de-bbfb-4744-8bcf-1f3875a93ed1",
+      "layout_version": 1,
+      "line_height": "a506f1e9-55f2-4187-bbc6-3e1b4c8830cf",
+      "styles": [
+        {
+          "fill": "8ab51dda-b6ed-4e08-9342-ba0c44f35a8d",
+          "font": {
+            "face_index": 0,
+            "family": "Noto Sans CJK JP",
+            "postscript_name": "NotoSansCJKjp-Regular",
+            "sha256": "68a3fc98800b2a27b371f2fb79991daf3633bd89309d4ffaa6946fd587f375b5"
+          },
+          "range": {
+            "end": 9,
+            "start": 0
+          },
+          "size": "e84691d5-ae83-453b-a30d-5580455c224a"
+        }
+      ],
+      "text": "日本語",
+      "wrap_width": "e9de66ef-6359-4dbb-ae53-19289e9acce2"
+    },
+    {
+      "alignment": "6310c170-203b-5139-ba06-cb8b236973fb",
+      "direction": "horizontal",
+      "id": "700f4e8e-24d5-53f2-b49a-ab1a66264609",
+      "layout_version": 1,
+      "line_height": "efc1d201-9d10-5f71-aab6-e1fb2b5ede86",
+      "styles": [
+        {
+          "fill": "3b800cea-48fc-5089-ab86-7ccb32c12197",
+          "font": {
+            "face_index": 0,
+            "family": "Noto Sans CJK JP",
+            "postscript_name": "NotoSansCJKjp-Regular",
+            "sha256": "68a3fc98800b2a27b371f2fb79991daf3633bd89309d4ffaa6946fd587f375b5"
+          },
+          "range": {
+            "end": 9,
+            "start": 0
+          },
+          "size": "c917c400-2ced-59fb-8d58-e0f25974dae9"
+        }
+      ],
+      "text": "日本語",
+      "wrap_width": "2b85ed47-5c73-5ab6-ad71-483839a14b3f"
+    }
+  ]
+}

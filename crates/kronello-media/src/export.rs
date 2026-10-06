@@ -29,11 +29,27 @@ pub enum MovieProfile {
     Av1Mp4AlacV1,
     H264AlacV1,
     HevcAlacV1,
+    ProResPqPcm24V1,
+    ProResHlgPcm24V1,
+    ProResSdrFromHdrPcm24V1,
 }
 impl MovieProfile {
+    pub fn hdr_transfer(self) -> Option<kronello_render::HdrTransfer> {
+        match self {
+            Self::ProResPqPcm24V1 => Some(kronello_render::HdrTransfer::Pq),
+            Self::ProResHlgPcm24V1 => Some(kronello_render::HdrTransfer::Hlg),
+            _ => None,
+        }
+    }
+    pub fn is_prores(self) -> bool {
+        self.video_codec() == EncodeCodec::ProRes
+    }
     pub fn video_codec(self) -> EncodeCodec {
         match self {
-            Self::ProResPcm24 => EncodeCodec::ProRes,
+            Self::ProResPcm24
+            | Self::ProResPqPcm24V1
+            | Self::ProResHlgPcm24V1
+            | Self::ProResSdrFromHdrPcm24V1 => EncodeCodec::ProRes,
             Self::Av1Mp4AlacV1 => EncodeCodec::Av1,
             Self::H264AlacV1 => EncodeCodec::H264,
             Self::HevcAlacV1 => EncodeCodec::Hevc,
@@ -41,7 +57,10 @@ impl MovieProfile {
     }
     pub(crate) fn native_id(self) -> i32 {
         match self {
-            Self::ProResPcm24 => 0,
+            Self::ProResPcm24
+            | Self::ProResPqPcm24V1
+            | Self::ProResHlgPcm24V1
+            | Self::ProResSdrFromHdrPcm24V1 => 0,
             Self::Av1Mp4AlacV1 => 1,
             Self::H264AlacV1 => 2,
             Self::HevcAlacV1 => 3,
@@ -49,7 +68,10 @@ impl MovieProfile {
     }
     fn codecs(self) -> (&'static str, &'static str) {
         match self {
-            Self::ProResPcm24 => ("prores", "pcm_s24le"),
+            Self::ProResPcm24
+            | Self::ProResPqPcm24V1
+            | Self::ProResHlgPcm24V1
+            | Self::ProResSdrFromHdrPcm24V1 => ("prores", "pcm_s24le"),
             Self::Av1Mp4AlacV1 => ("av1", "alac"),
             Self::H264AlacV1 => ("h264", "alac"),
             Self::HevcAlacV1 => ("hevc", "alac"),
@@ -98,6 +120,15 @@ impl AvExportSnapshot {
         clips: Vec<AudioClip>,
         profile: u32,
     ) -> Result<Self, MediaError> {
+        Self::with_audio_movie_profile(render, audio, clips, profile, None)
+    }
+    fn with_audio_movie_profile(
+        render: &RenderSnapshot,
+        audio: AudioSourceMode,
+        clips: Vec<AudioClip>,
+        profile: u32,
+        movie_profile: Option<MovieProfile>,
+    ) -> Result<Self, MediaError> {
         if !matches!(profile, 2 | 3) {
             return Err(MediaError::UnsupportedFeature(
                 "audio profile version".into(),
@@ -118,7 +149,7 @@ impl AvExportSnapshot {
             render: render.clone(),
             clips,
             audio,
-            movie_profile: None,
+            movie_profile,
         };
         snapshot.validate()?;
         Ok(snapshot)
@@ -135,10 +166,7 @@ impl AvExportSnapshot {
                 "use legacy audio profile constructor".into(),
             ));
         }
-        let mut snapshot = Self::with_audio_profile(render, audio, clips, 3)?;
-        snapshot.movie_profile = Some(profile);
-        snapshot.validate()?;
-        Ok(snapshot)
+        Self::with_audio_movie_profile(render, audio, clips, 3, Some(profile))
     }
     pub fn movie_profile(&self) -> MovieProfile {
         self.movie_profile.unwrap_or_default()
@@ -173,6 +201,14 @@ impl AvExportSnapshot {
             ));
         }
         self.render.validate()?;
+        if (self.movie_profile() == MovieProfile::ProResSdrFromHdrPcm24V1
+            && self.render.profile().hdr.is_none())
+            || (self.movie_profile() != MovieProfile::ProResSdrFromHdrPcm24V1
+                && self.movie_profile().hdr_transfer()
+                    != self.render.profile().hdr.map(|h| h.transfer))
+        {
+            return Err(MediaError::UnsupportedFeature("movie HDR profile must match the fixed render HDR transfer; explicit SDR conversion required".into()));
+        }
         if self.audio == AudioSourceMode::Document
             && document_plan(&self.render, self.schema_version)?.clips() != self.clips
         {
@@ -237,6 +273,16 @@ pub struct MediaStream {
     pub channels: Option<u32>,
     pub width: Option<u32>,
     pub height: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pixel_format: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color_primaries: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color_transfer: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color_matrix: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color_range: Option<String>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct MediaProbe {
@@ -277,6 +323,23 @@ impl MediaProbe {
                 "invalid A/V codec, sample format or start PTS".into(),
             ));
         }
+        if let Some(transfer) = profile.hdr_transfer()
+            && (video.pixel_format.as_deref() != Some("yuv422p10le")
+                || video.color_primaries.as_deref() != Some("bt2020")
+                || video.color_transfer.as_deref() != Some(transfer.tag())
+                || video.color_matrix.as_deref() != Some("bt2020nc")
+                || video.color_range.as_deref() != Some("tv"))
+        {
+            return Err(MediaError::Encode(format!(
+                "HDR codec/10-bit/color metadata roundtrip mismatch: expected yuv422p10le/bt2020/{}/bt2020nc/tv; observed pixel_format={:?}, primaries={:?}, transfer={:?}, matrix={:?}, range={:?}",
+                transfer.tag(),
+                video.pixel_format,
+                video.color_primaries,
+                video.color_transfer,
+                video.color_matrix,
+                video.color_range,
+            )));
+        }
         let video_duration = video
             .duration
             .ok_or_else(|| MediaError::Encode("missing video duration".into()))?;
@@ -304,7 +367,7 @@ pub struct AvExportRequest {
     pub range: TimeRange,
     pub frame_rate: FrameRate,
     pub region: OutputRegion,
-    /// Explicit opaque background, linear Rec.709 SDR, before BT.709 encoding.
+    /// Explicit opaque background in the fixed profile working space (HDR 1=203 nits).
     pub background: [f32; 3],
     pub clipping: ClippingPolicy,
 }
@@ -479,8 +542,19 @@ impl MediaRuntime {
     ) -> Result<AvExportReport, MediaError> {
         checkpoint(0)?;
         snapshot.validate()?;
+        if snapshot
+            .render
+            .profile()
+            .temporal
+            .as_ref()
+            .is_some_and(|t| t.frame_rate != request.frame_rate)
+        {
+            return Err(MediaError::InvalidInput(
+                "temporal frame rate must match movie export frame rate".into(),
+            ));
+        }
         let profile = snapshot.movie_profile();
-        if profile != MovieProfile::ProResPcm24 {
+        if !profile.is_prores() {
             let encoder = self.capabilities.select_encoder(profile.video_codec())?;
             if profile == MovieProfile::Av1Mp4AlacV1 && encoder.name != "libsvtav1" {
                 return Err(MediaError::EncoderUnavailable {
@@ -491,18 +565,34 @@ impl MediaRuntime {
             }
         }
         request.region.validate()?;
-        if snapshot.render.profile().working_space != ColorSpace::LinearRec709 {
+        if snapshot.render.profile().working_space
+            != if profile.hdr_transfer().is_some()
+                || profile == MovieProfile::ProResSdrFromHdrPcm24V1
+            {
+                ColorSpace::LinearRec2020
+            } else {
+                ColorSpace::LinearRec709
+            }
+        {
             return Err(MediaError::UnsupportedFeature(
-                "A/V export requires SDR linear Rec.709".into(),
+                "A/V working space must match explicit SDR/HDR movie profile".into(),
             ));
         }
+        let background_peak = snapshot
+            .render
+            .profile()
+            .hdr
+            .map_or(1.0, |h| match h.transfer {
+                kronello_render::HdrTransfer::Pq => 10000.0 / 203.0,
+                kronello_render::HdrTransfer::Hlg => 1000.0 / 203.0,
+            });
         if request
             .background
             .iter()
-            .any(|v| !v.is_finite() || !(0.0..=1.0).contains(v))
+            .any(|v| !v.is_finite() || !(0.0..=background_peak).contains(v))
         {
             return Err(MediaError::InvalidInput(
-                "background must be finite linear Rec.709 SDR".into(),
+                "background must be finite nonnegative linear RGB within the explicit transfer range".into(),
             ));
         }
         for time in [request.range.start(), request.range.end()] {
@@ -562,11 +652,8 @@ impl MediaRuntime {
         if samples.is_empty() {
             return Err(MediaError::InvalidInput("empty audio output".into()));
         }
-        let mut audio_encoder = crate::ffi::NativeAudioEncoder::open(
-            &self.native,
-            &audio_file,
-            profile != MovieProfile::ProResPcm24,
-        )?;
+        let mut audio_encoder =
+            crate::ffi::NativeAudioEncoder::open(&self.native, &audio_file, !profile.is_prores())?;
         let mut clipped_samples = 0_usize;
         let mut start = samples.start;
         while start < samples.end {
@@ -597,7 +684,7 @@ impl MediaRuntime {
         let audio_window_read_bytes = sources.read_bytes();
         drop(sources);
         let audio = AudioEncodeReport {
-            codec: if profile == MovieProfile::ProResPcm24 {
+            codec: if profile.is_prores() {
                 "pcm_s24le"
             } else {
                 "alac"
@@ -617,13 +704,18 @@ impl MediaRuntime {
             time_base: request.frame_rate.frame_to_time(1)?,
         };
         let mut metadata = Vec::new();
-        let video = self.encode_video_stream(&encode_request, times.len(), &mut |number| {
+        let stride = if profile.hdr_transfer().is_some() {
+            8
+        } else {
+            4
+        };
+        let mut produce = |number: usize| {
             checkpoint(number as u64)?;
             let (index, time) = times[number];
             let mut rgba =
                 vec![
                     0_u8;
-                    request.region.pixels[0] as usize * request.region.pixels[1] as usize * 4
+                    request.region.pixels[0] as usize * request.region.pixels[1] as usize * stride
                 ];
             let mut frame_metadata = render_frame_tiles(
                 &snapshot.render,
@@ -634,17 +726,35 @@ impl MediaRuntime {
                     region: request.region,
                 },
                 &mut |[x, y], tile, output| {
-                    // The sole full-frame buffer is RGBA8. No full-frame linear
+                    // The sole full-frame buffer is RGBA8 or HDR RGBA64. No full-frame linear
                     // or display surface is allocated by this movie path.
-                    let bytes = bt709_rgba(&output.linear, request.background).map_err(|e| {
-                        kronello_render::RenderError::UnsupportedFeature(e.to_string())
-                    })?;
+                    let bytes = if let Some(transfer) = profile.hdr_transfer() {
+                        hdr_rgba(&output.linear, request.background, transfer)
+                    } else if profile == MovieProfile::ProResSdrFromHdrPcm24V1 {
+                        let mapped: Vec<_> = output
+                            .linear
+                            .iter()
+                            .map(|p| {
+                                let opaque = [
+                                    p[0] + request.background[0] * (1.0 - p[3]),
+                                    p[1] + request.background[1] * (1.0 - p[3]),
+                                    p[2] + request.background[2] * (1.0 - p[3]),
+                                    1.0,
+                                ];
+                                kronello_render::hdr_to_sdr_linear(opaque)
+                            })
+                            .collect();
+                        bt709_rgba(&mapped, [0.0; 3])
+                    } else {
+                        bt709_rgba(&output.linear, request.background)
+                    }
+                    .map_err(|e| kronello_render::RenderError::UnsupportedFeature(e.to_string()))?;
                     for row in 0..tile.pixels[1] as usize {
                         let destination = ((y as usize + row) * request.region.pixels[0] as usize
                             + x as usize)
-                            * 4;
-                        let source = row * tile.pixels[0] as usize * 4;
-                        let width = tile.pixels[0] as usize * 4;
+                            * stride;
+                        let source = row * tile.pixels[0] as usize * stride;
+                        let width = tile.pixels[0] as usize * stride;
                         rgba[destination..destination + width]
                             .copy_from_slice(&bytes[source..source + width]);
                     }
@@ -663,7 +773,12 @@ impl MediaRuntime {
                 pts: time.checked_sub(request.range.start())?,
                 rgba,
             })
-        })?;
+        };
+        let video = if let Some(transfer) = profile.hdr_transfer() {
+            self.encode_hdr_video_stream(&encode_request, times.len(), transfer, &mut produce)?
+        } else {
+            self.encode_video_stream(&encode_request, times.len(), &mut produce)?
+        };
         let audio_stage_bytes = std::fs::metadata(&audio_file)?.len();
         let video_stage_bytes = std::fs::metadata(&video_file)?.len();
         let video_probe = self.probe(&video_file)?;
@@ -716,6 +831,30 @@ impl MediaRuntime {
             }),
         })
     }
+}
+fn hdr_rgba(
+    pixels: &[[f32; 4]],
+    background: [f32; 3],
+    transfer: kronello_render::HdrTransfer,
+) -> Result<Vec<u8>, MediaError> {
+    let mut bytes = Vec::with_capacity(pixels.len() * 8);
+    for p in pixels {
+        let alpha = f64::from(p[3]);
+        if !alpha.is_finite() || !(0.0..=1.0).contains(&alpha) {
+            return Err(MediaError::InvalidInput("HDR alpha".into()));
+        }
+        let rgb = [0, 1, 2].map(|i| f64::from(p[i]) + f64::from(background[i]) * (1.0 - alpha));
+        let code = transfer.encode(rgb).ok_or_else(|| {
+            MediaError::UnsupportedFeature(
+                "HDR output outside transfer range; explicit gamut/tone conversion required".into(),
+            )
+        })?;
+        for v in code {
+            bytes.extend(((v * 65535.0).round() as u16).to_le_bytes());
+        }
+        bytes.extend(u16::MAX.to_le_bytes());
+    }
+    Ok(bytes)
 }
 fn bt709_rgba(pixels: &[[f32; 4]], background: [f32; 3]) -> Result<Vec<u8>, MediaError> {
     let mut rgba = Vec::with_capacity(pixels.len() * 4);

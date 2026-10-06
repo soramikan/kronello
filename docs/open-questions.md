@@ -16,11 +16,6 @@
 
 決定時期: 公開前。名前の確保は早いほどよい。
 
-### OQ-14 性能目標の確定
-
-[13 品質と性能](architecture/13-quality-performance.md) の数値は暫定目標として採用した。合否基準としての確定は、参照シーンを第一の基準機（M4 Mac mini 32GB）で実測した後に行う。
-決定時期: PERF-001（M4）。
-
 ### OQ-17 式言語の構文
 
 方針は決定した（[ADR-0040](adr/0040-expression-language-policy.md)）: 正本は AST、人間向けには中置演算と関数呼び出しだけの式言語、JavaScript 互換にしない。構文の詳細（演算子、リテラル、Property 参照の書き方、エラー表示）は未定。
@@ -44,14 +39,13 @@ MEDIA-002 では AV1 / H.264 / HEVC の MOV profile の音声を ALAC に限り�
 | 高頻度経路での FFI の JSON 直列化コストの計測と対策 | FFI-001 |
 | 外部変更が来たときの GUI 上の扱い（選択中のオブジェクトの消失など）。提案は [エラーと競合の状態](design-system/screens/states.md) | GUI-001 |
 | UI フォントの同梱形態（可変フォントかウェイト別か、サブセット）と、デザイントークンを Swift の定数へ写す方法 | GUI-001 |
-| 中断したジョブの再開で、完了済み区間をどこまで再利用できるか | RECOVERY-001 |
-| HDR のトーンマッピングと色域圧縮の演算の詳細 | COLOR-001 |
 | Windows / Linux でのプレビュー面の受け渡し | 各 GUI の着手時（タスク未作成） |
 
 ## 解決済み
 
 | 項目 | 決定 |
 |---|---|
+| OQ-14 性能目標の確定 | [ADR-0093](adr/0093-m4-reference-preview-performance-target.md) |
 | OQ-01 GUI / CLI / MCP の優先順位の判断基準 | [ADR-0041](adr/0041-core-api-gui-order.md) |
 | OQ-03 レンダージョブの実行主体 | [ADR-0025](adr/0025-detached-render-workers.md) |
 | OQ-04 複数プロセス編集時の Undo の意味 | [ADR-0026](adr/0026-selective-undo.md) |
@@ -75,3 +69,5 @@ MEDIA-002 では AV1 / H.264 / HEVC の MOV profile の音声を ALAC に限り�
 | 履歴警告の閾値（STORE-001） | [ADR-0046](adr/0046-store-format-and-location-policy.md) |
 | 素材の hash 照合頻度・同梱 FFmpeg の版と configure（MEDIA-001） | [ADR-0048](adr/0048-media-native-build-and-asset-verification.md) |
 | 音声コーデックの選定（AUDIO-000） | [ADR-0049](adr/0049-audio-bus-timing-and-codec.md) |
+| 中断ジョブの完了区間再利用と公開境界の照合（RECOVERY-001） | [ADR-0087](adr/0087-fixed-job-resume-and-reconciliation.md) |
+| HDR の表示変換と明示 SDR 出力の演算（COLOR-001） | [ADR-0086](adr/0086-rec2100-native-precision-and-fixed-hdr-output.md) |

@@ -11,6 +11,7 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+data-encoding = "2.11.1"
 kronello-service = { path = "../kronello-service" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip", "raw_value"] }

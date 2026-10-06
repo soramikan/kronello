@@ -88,9 +88,12 @@ GUI の Undo は、その GUI セッションが発行した操作だけを新�
 
 CLI / MCP（エージェント）が同じプロジェクトを編集している場合、GUI は revision 通知を購読し再読込する（[09 保存と同時編集](09-storage-concurrency.md)）。stable ID が残れば selection を保持する。選択中の node が外部削除された場合は selection を解除し、Inspector に削除通知、session ID / revision と履歴への導線を出す。別の node は自動選択しない。
 
-`project.info.open_mode` で actual store mode を表示する（store を開かない read-only inspection では `read_only_snapshot`）。現行 FFI/service の safe-mode 排他は要求ごとであり、
-GUI window の寿命全体を排他にするものではない。32px の band にその制約を表示する。
-session 長の `PROJECT_LOCKED` 保証は後続課題とし、本実装で store lifetime を変更しない。
+`project.info.open_mode` で actual store mode を表示する（store を開かない read-only inspection では `read_only_snapshot`）。
+FFI-002 は安全モードの store を native session の生存中保持し、同じ project の共有要求へ貸し出す。
+他プロセスの通常 Command / Query は `PROJECT_LOCKED` となる。32px の band に安全モードを表示する。
+close 後は受け付け済み処理の終了時に解放し、異常終了では OS が lock を解放する。
+通常モードの外部編集と通知は要求ごとの store を維持する。
+設計は [ADR-0083](../adr/0083-native-safe-project-session.md)、確認範囲は [FFI-002](../testing/ffi-002.md) を参照する。
 
 ## GUI-001 の実装範囲
 

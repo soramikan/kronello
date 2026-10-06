@@ -1,6 +1,6 @@
 # ADR-0056: native FFI の非同期 worker と SwiftPM 境界
 
-- 状態: 採用
+- 状態: 部分置換（[ADR-0083](0083-native-safe-project-session.md): 安全モード store の session 寿命保持）
 - 日付: 2026-10-04
 
 ## 背景
@@ -56,4 +56,3 @@ release app bundle / signing、Windows / Linux surface、実 GUI、候補 snapsh
 - [ADR-0031](0031-ffi-c-abi-json.md)
 - [10 デスクトップ GUI](../architecture/10-desktop-gui.md)
 - [FFI-001 の検証](../testing/ffi-001.md)
-

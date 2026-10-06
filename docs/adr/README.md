@@ -61,16 +61,16 @@
 | [0044](0044-color-and-alpha-contracts.md) | 作業用線形色と alpha の入出力契約を固定する | 採用 | 2026-10-03 |
 | [0045](0045-snapshot-compatibility-boundaries.md) | 保存・意味・実行能力の互換性を分けて判定する | 採用 | 2026-10-03 |
 | [0046](0046-store-format-and-location-policy.md) | 保存の外枠・安全モード判定・履歴警告を固定する | 採用 | 2026-10-03 |
-| [0047](0047-apple-silicon-metal-golden.md) | GPU golden は Apple Silicon + Metal の共通基準で比較する | 採用 | 2026-10-03 |
-| [0048](0048-media-native-build-and-asset-verification.md) | FFmpeg ABI 境界・同梱ビルド・素材検証を固定する | 採用 | 2026-10-03 |
+| [0047](0047-apple-silicon-metal-golden.md) | GPU golden は Apple Silicon + Metal の共通基準で比較する | 部分置換（0088） | 2026-10-03 |
+| [0048](0048-media-native-build-and-asset-verification.md) | FFmpeg ABI 境界・同梱ビルド・素材検証を固定する | 部分置換（0062 / 0091） | 2026-10-03 |
 | [0049](0049-audio-bus-timing-and-codec.md) | 音声 Bus・サンプル格子・PCM24 の書き出しを固定する | 部分置換（0079） | 2026-10-04 |
-| [0050](0050-fixed-job-execution-and-publication.md) | 固定ジョブ入力・実行 lease・成果物確定を共有 service で扱う | 部分置換（0074 / 0079） | 2026-10-04 |
+| [0050](0050-fixed-job-execution-and-publication.md) | 固定ジョブ入力・実行 lease・成果物確定を共有 service で扱う | 部分置換（0074 / 0079 / 0087） | 2026-10-04 |
 | [0051](0051-nle-placement-and-retime.md) | Sequence の配置・合成順序と三つの時間編集を固定する | 採用 | 2026-10-04 |
 | [0052](0052-snapshot-policy-evaluation.md) | サイズ閾値による追加 snapshot の既定採用を見送る | 採用 | 2026-10-04 |
 | [0053](0053-integration-evaluated-queries-and-render-tiles.md) | 縦断デモの評価 query と大解像度の tile 実行 | 部分置換（0079） | 2026-10-04 |
 | [0054](0054-gui-design-system.md) | GUI の見た目を全 OS 共通のデザインシステムで定める | 採用 | 2026-10-04 |
 | [0055](0055-main-window-pages-and-workspaces.md) | メインウインドウをページとワークスペースで構成する | 採用 | 2026-10-04 |
-| [0056](0056-native-ffi-worker-and-swiftpm.md) | native FFI の非同期 worker と SwiftPM 境界 | 採用 | 2026-10-04 |
+| [0056](0056-native-ffi-worker-and-swiftpm.md) | native FFI の非同期 worker と SwiftPM 境界 | 部分置換（0083） | 2026-10-04 |
 | [0057](0057-layout-bounds-stages.md) | bounds の三段階を純粋値と明示した帯追従 policy で共有する | 部分置換（[0067](0067-affine-gaussian-effects.md)） | 2026-10-04 |
 | [0058](0058-bounded-canonical-expression-ast.md) | 正規 postorder AST と有界 Expression 評価 | 採用 | 2026-10-04 |
 | [0059](0059-template-duration-variants-and-migration.md) | テンプレートの保護尺・variant・data と明示した版移行を共有する | 採用 | 2026-10-05 |
@@ -78,7 +78,7 @@
 | [0061](0061-macos-editor-session-and-ui-state.md) | macOS 編集セッションと UI 状態 | 採用 | 2026-10-05 |
 | [0062](0062-video-generator-and-timeline-edits.md) | 動画・Generator Clip と明示した Timeline 編集範囲 | 採用 | 2026-10-05 |
 | [0063](0063-document-audio-and-clip-volume.md) | 文書音声の配置・音量 Property と明示的な出力選択 | 採用 | 2026-10-05 |
-| [0064](0064-mcp-http-resources-and-request-control.md) | MCP HTTP・明示 resource・request 制御 | 採用 | 2026-10-05 |
+| [0064](0064-mcp-http-resources-and-request-control.md) | MCP HTTP・明示 resource・request 制御 | 部分置換（0084） | 2026-10-05 |
 | [0065](0065-relocatable-macos-distribution.md) | macOS 配布 runtime を再配置・署名後に全体検証する | 採用 | 2026-10-05 |
 | [0066](0066-explicit-gradient-semantics.md) | グラデーションの座標・spread・補間空間を明示する | 採用 | 2026-10-05 |
 | [0067](0067-affine-gaussian-effects.md) | 非一様 affine の Gaussian / shadow を明示した意味版 2 で扱う | 採用 | 2026-10-05 |
@@ -88,13 +88,26 @@
 | [0071](0071-project-change-plans-and-modifier-edits.md) | Project 作成・import の計画と再送、Modifier の型付き編集 | 採用 | 2026-10-05 |
 | [0072](0072-scene-search-fixed-cursors-and-cli-events.md) | Scene 検索・固定 revision cursor・CLI event framing | 採用 | 2026-10-05 |
 | [0073](0073-local-stroke-extensions.md) | 破線・線位置・affine 線幅を明示したローカル幾何版で扱う | 採用 | 2026-10-05 |
-
-| [0074](0074-windows-job-workers-and-process-evidence.md) | Windows worker の独立起動・確定と実プロセス検証 | 採用 | 2026-10-05 |
+| [0074](0074-windows-job-workers-and-process-evidence.md) | Windows worker の独立起動・確定と実プロセス検証 | 部分置換（0082） | 2026-10-05 |
 | [0075](0075-sequence-edit-page-and-clip-split.md) | Sequence 編集ページと共有 Clip 分割 | 採用 | 2026-10-05 |
 | [0076](0076-buffered-device-clock-playback.md) | lock-free buffer と音声デバイス時計による再生 | 採用 | 2026-10-05 |
 | [0077](0077-template-instance-read-only-inspection.md) | テンプレート内部の評価値を停止時の読み取り検査として表示する | 採用 | 2026-10-05 |
 | [0078](0078-template-export-pages-and-inspected-snapshot.md) | テンプレート比較と検査した revision の書き出し | 採用 | 2026-10-05 |
 | [0079](0079-bounded-streaming-movie-export.md) | movie export の payload を有界 streaming で処理する | 採用 | 2026-10-06 |
+| [0080](0080-root-temporal-integration.md) | root scope の有理数露光積分と temporal cache | 採用 | 2026-10-06 |
+| [0081](0081-guaranteed-metal-hardware-video-decode.md) | Metal / VideoToolbox の明示 GPU 常駐デコード | 採用 | 2026-10-06 |
+| [0082](0082-windows-ffmpeg-runtime.md) | Windows の FFmpeg runtime と実 worker の検証 | 採用 | 2026-10-06 |
+| [0083](0083-native-safe-project-session.md) | native セッション中の安全モード排他 | 採用 | 2026-10-06 |
+| [0084](0084-per-request-mcp-2026.md) | MCP の要求ごとの版指定と stateless HTTP | 採用 | 2026-10-06 |
+| [0085](0085-composition-media-and-template-slots.md) | Composition の視覚 Media と Template MediaSlot | 採用 | 2026-10-06 |
+| [0086](0086-rec2100-native-precision-and-fixed-hdr-output.md) | Rec.2100 の native 精度と固定 HDR 出力 | 採用 | 2026-10-06 |
+| [0087](0087-fixed-job-resume-and-reconciliation.md) | 固定入力ジョブの再実行と公開境界の照合 | 採用 | 2026-10-06 |
+| [0088](0088-platform-golden-baselines.md) | GPU golden の環境別基準と software adapter の明示 | 採用 | 2026-10-06 |
+| [0089](0089-budgeted-gpu-and-external-raster-cache.md) | 容量制限付き GPU texture と project 外 raster cache | 採用 | 2026-10-06 |
+| [0090](0090-release-performance-evidence-and-snapshot-policy.md) | release 性能の観測と snapshot 方針の再評価 | 採用（性能目標は0093） | 2026-10-06 |
+| [0091](0091-exact-forward-decoder-and-bounded-render-scope.md) | 正確な順方向デコードとレンダー範囲の有限寿命 | 採用 | 2026-10-06 |
+| [0092](0092-single-graph-gpu-final-output-and-observations.md) | GPU graph の単一実行と要求単位の観測 | 採用 | 2026-10-06 |
+| [0093](0093-m4-reference-preview-performance-target.md) | M4 基準プレビューの性能目標 | 採用 | 2026-10-06 |
 
 ## 追加と変更の規則
 

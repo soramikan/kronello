@@ -81,7 +81,9 @@ pub(super) fn has_audio(
     let mut found = false;
     for n in &c.nodes {
         match &n.kind {
-            NodeKind::Media(_) => found = true,
+            NodeKind::Media(media) => {
+                found |= media_has_audio(project, media.asset, media.stream_index)?
+            }
             NodeKind::CompositionInstance(i) => {
                 found |= has_audio(project, i.definition_ref, seen)?
             }
@@ -351,6 +353,9 @@ impl DocumentAudioPlan {
             }
             match &node.kind {
                 NodeKind::Media(media) => {
+                    if !media_has_audio(project, media.asset, media.stream_index)? {
+                        continue;
+                    }
                     if effects {
                         return Err(unsupported("audio node effects require AUDIO-004"));
                     }
@@ -486,4 +491,30 @@ pub(super) fn scalar_gain(value: Value) -> Result<Gain, AudioError> {
         return Err(invalid("volume outside Gain range"));
     }
     Gain::new(value.get() as f32)
+}
+
+fn media_has_audio(project: &Project, id: AssetId, stream: u32) -> Result<bool, AudioError> {
+    let asset = project
+        .assets
+        .iter()
+        .find_map(|a| match a {
+            DocumentObject::Known(a) if a.id == id => Some(a),
+            _ => None,
+        })
+        .ok_or(AudioError::AssetMissing(id))?;
+    if asset.kind == AssetKind::Image {
+        return Ok(false);
+    }
+    let selected = asset
+        .streams
+        .iter()
+        .find(|s| s.index == stream)
+        .ok_or_else(|| invalid("audio stream missing"))?;
+    if asset.kind == AssetKind::Video && selected.width.is_some() && selected.height.is_some() {
+        return Ok(false);
+    }
+    if !matches!(asset.kind, AssetKind::Audio | AssetKind::Video) {
+        return Err(unsupported("selected Media stream is not audio"));
+    }
+    Ok(true)
 }

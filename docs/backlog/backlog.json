@@ -990,7 +990,7 @@
       "priority": "P1",
       "area": "render",
       "title": "時間サンプルと高品質モーションブラー",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "RENDER-001",
         "CACHE-001",
@@ -1007,7 +1007,7 @@
       "priority": "P1",
       "area": "gpu",
       "title": "各OSのFrameBridge保証経路",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "GPU-001",
         "GPU-002",
@@ -1027,7 +1027,7 @@
       "priority": "P1",
       "area": "color",
       "title": "HDR/alpha/高解像度品質",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "GPU-002",
         "RENDER-002",
@@ -1049,7 +1049,7 @@
       "priority": "P1",
       "area": "cache",
       "title": "temporal/region cacheと無効化",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "CACHE-001",
         "RENDER-002"
@@ -1065,7 +1065,7 @@
       "priority": "P1",
       "area": "performance",
       "title": "参照シーンbenchmarkと資源予算",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "GPU-003",
         "COLOR-001",
@@ -1077,7 +1077,8 @@
         "decode面/atlas/accumulation/encoderを含めたpeak memoryを記録する",
         "GPUのlinear/display二重描画の統合とrenderer APIの転送統計集約を評価し、最適化前後の画素一致・実転送/待機・node別tile allocationのpeak memoryを測定する",
         "MEDIA-001のstream startからのdecode forwardを正確なseekテストを維持して効率化し、CFR/VFR/B-frameのforward/backward/repeated要求で性能を比較する",
-        "ADR-0052の合成debug測定と区別して実作品/release buildの履歴復元頻度・遅延・SQLite/WAL物理I/Oを測り、opt-in snapshot・数/容量予算・root patch重複削減の再検討要否を記録する。採用変更が必要なら新ADRで決める"
+        "ADR-0052の合成debug測定と区別して実作品/release buildの履歴復元頻度・遅延・SQLite/WAL物理I/Oを測り、opt-in snapshot・数/容量予算・root patch重複削減の再検討要否を記録する。採用変更が必要なら新ADRで決める",
+        "ADR-0093の基準機・既定cache・固定基本4K作品で、画素が変わる21要求のwarm native preview p95が33.3ms以下となる。coldは別報告し、動画decode・GUI presentation込みのFPS保証とは区別する"
       ]
     },
     {
@@ -1086,7 +1087,7 @@
       "priority": "P1",
       "area": "reliability",
       "title": "GPU lost/容量不足/worker停止の復旧",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "JOB-001",
         "GPU-003",
@@ -1107,7 +1108,7 @@
       "priority": "P1",
       "area": "qa",
       "title": "Vulkan/Windowsのgolden基準と許容誤差の校正",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "QA-003",
         "GPU-003"
@@ -1123,7 +1124,7 @@
       "priority": "P2",
       "area": "cache",
       "title": "GPU資源とディスクのraster cache",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "CACHE-001",
         "CACHE-002"
@@ -1295,7 +1296,7 @@
       "priority": "P1",
       "area": "render",
       "title": "Composition の Media ノード（画像・映像）と MediaSlot の描画",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "TEMPLATE-002",
         "NLE-002"
@@ -1311,7 +1312,7 @@
       "priority": "P2",
       "area": "api",
       "title": "MCP 2026-07-28 版（server/discover・要求ごとの版指定）への対応",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "MCP-002"
       ],
@@ -1326,7 +1327,7 @@
       "priority": "P2",
       "area": "gui",
       "title": "GUI セッション中の安全モード排他の保持",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "GUI-001"
       ],
@@ -1341,7 +1342,7 @@
       "priority": "P1",
       "area": "media",
       "title": "Windows の FFmpeg 実行時読み込みと CLI/MCP の Windows ビルド",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "MEDIA-001",
         "JOB-002",

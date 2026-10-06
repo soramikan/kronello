@@ -82,6 +82,9 @@ public struct TemplateInspectionNode: Identifiable {
     /// SwiftUI cancels superseded tasks; generation also rejects late FFI replies.
     /// Debounce before issuing a SINGLE expanded query, never a per-node/per-frame loop.
     public func refresh(_ model: EditorModel, debounce: Duration = .milliseconds(150)) async {
+        // A cancelled SwiftUI task may enter after its replacement has started.
+        // It must not steal that request's generation or mutate presentation state.
+        guard !Task.isCancelled else { return }
         generation += 1; let issued = generation
         let nextContext = (model.ui.composition ?? "") + "/" + (model.ui.selection ?? "")
         if context != nextContext {

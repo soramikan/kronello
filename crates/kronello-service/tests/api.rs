@@ -226,8 +226,12 @@ fn capabilities_registry_media_extension_without_device_initialization() {
     ) else {
         panic!()
     };
-    // API-002 extends existing payloads and EditCommand; no new operation.
-    assert_eq!(c.commands.len(), 38);
+    assert_eq!(c.commands.len(), command_registry().len());
+    assert!(
+        c.commands
+            .iter()
+            .any(|command| command.name == "job.resume")
+    );
     assert_eq!(c.api_schema_version, 1);
     assert_eq!(c.semantic_versions.document, PROJECT_SEMANTIC_VERSION);
     let media = c.media.unwrap();
@@ -588,6 +592,7 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
             "frame_rate":{"num":"24","den":"1"},"output_directory":"frames"}}),
         json!({"operation":"job.get","job":uuid.to_string()}),
         json!({"operation":"job.cancel","job":uuid.to_string()}),
+        json!({"operation":"job.resume","job":uuid.to_string()}),
         json!({"operation":"job.list"}),
         json!({"operation":"job.prune"}),
         json!({"operation":"project.create", "project":path, "document":p}),
@@ -942,6 +947,34 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
     let job = execute(json!({"operation":"render.submit", "render":{"input":input,
         "range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"1"}},
         "frame_rate":{"num":"1","den":"1"},"output_directory":dir.path().join("job-frames")}}));
+    // Save a real fixed input as a failed, unclaimed job, then exercise the
+    // service's validation and detached-worker launch through job.resume.
+    let original: kronello_jobs::JobRecord = serde_json::from_value(job.clone()).unwrap();
+    let jobs =
+        kronello_jobs::JobStore::open(kronello_jobs::JobConfig::at(job_state.path())).unwrap();
+    let retry = jobs
+        .submit(
+            &jobs.input(&original).unwrap(),
+            kronello_jobs::Submission {
+                engine_version: original.engine_version.clone(),
+                project_id: original.project_id.clone(),
+                revision: original.revision.clone(),
+                snapshot_hash: original.snapshot_hash.clone(),
+                output_profile: original.output_profile.clone(),
+                destination: original.destination.clone(),
+                total_frames: original.total_frames,
+            },
+        )
+        .unwrap();
+    jobs.finish_error(
+        &retry.id,
+        &kronello_jobs::JobError::new("TEST_FAILURE", "retry fixture"),
+    )
+    .unwrap();
+    let resumed = execute(json!({"operation":"job.resume","job":retry.id}));
+    assert_eq!(resumed["attempt"], 1);
+    assert_eq!(resumed["input_hash"], retry.input_hash);
+    assert_eq!(resumed["status"], "queued");
     execute(json!({"operation":"job.get","job":job["id"]}));
     execute(json!({"operation":"job.cancel","job":job["id"]}));
     execute(json!({"operation":"job.list"}));
@@ -1130,4 +1163,44 @@ fn all_filesystem_boundaries_reject_uris_before_access() {
             invalid_locator(request);
         }
     }
+}
+
+#[test]
+fn temporal_profile_reaches_shared_frame_sequence_and_fixed_job_input() {
+    let mut p = fixture();
+    p.texts.clear();
+    for c in &mut p.compositions {
+        if let DocumentObject::Known(c) = c {
+            c.nodes.retain(|n| !matches!(n.kind, NodeKind::Text { .. }));
+            c.root_nodes
+                .retain(|id| c.nodes.iter().any(|n| n.id == *id));
+        }
+    }
+    let c = comp(&p).id;
+    let (_dir, path) = setup(p);
+    let service = Service::new(BackendSelection::CpuReference);
+    let settings = json!({"frame_rate":{"num":"24","den":"1"},"shutter_angle":{"num":"180","den":"1"},"shutter_phase":{"num":"-1","den":"4"},"samples":2,"cut_policy":"avoid_crossing"});
+    let input = json!({"project":path,"composition":c,"region":{"origin":[0,0],"extent":[64,32],"pixels":[4,2]},"profile":{"working_space":"linear_rec709","flatten_tolerance_px":0.02,"temporal":settings}});
+    let response = service.execute_json(
+        &json!({"operation":"render.frame","input":input,"time":{"num":"1","den":"2"}}).to_string(),
+    );
+    let result = success(response);
+    let ResultData::Frame(frame) = result else {
+        panic!("expected frame");
+    };
+    assert_eq!(frame.metadata.temporal.as_ref().unwrap().samples.len(), 2);
+    let out = _dir.path().join("temporal-sequence");
+    let render = json!({"input":input,"range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"24"}},"frame_rate":{"num":"24","den":"1"},"output_directory":out});
+    let mut sequence_request = render.clone();
+    sequence_request["operation"] = json!("render.sequence");
+    let response = service.execute_json(&sequence_request.to_string());
+    let ResultData::Sequence(sequence) = success(response) else {
+        panic!("expected sequence");
+    };
+    assert!(sequence.frames[0].metadata.temporal.is_some());
+    // Job submission serializes the same profile without a job-only shutter model.
+    let submit: RenderSubmitRequest =
+        serde_json::from_value(json!({"render":render,"output":{"format":"image_sequence"}}))
+            .unwrap();
+    assert_eq!(submit.render.input.profile.temporal.unwrap().samples, 2);
 }

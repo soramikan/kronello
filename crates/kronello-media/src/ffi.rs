@@ -50,6 +50,17 @@ unsafe extern "C" {
         full_range: c_int,
         output: *mut u8,
     ) -> c_int;
+    fn km_video_rgba64(
+        k: *mut c_void,
+        input: *const u8,
+        input_size: c_int,
+        format: *const c_char,
+        width: c_int,
+        height: c_int,
+        full_range: c_int,
+        bt2020: c_int,
+        output: *mut u8,
+    ) -> c_int;
     fn km_decoder_close(d: *mut c_void);
     fn km_decoder_name(d: *mut c_void) -> *const c_char;
     fn km_decoder_time_base(d: *mut c_void, num: *mut c_int, den: *mut c_int);
@@ -61,7 +72,7 @@ unsafe extern "C" {
     fn km_frame_info(d: *mut c_void, out: *mut FrameInfo);
     fn km_frame_label(d: *mut c_void, index: c_int) -> *const c_char;
     fn km_frame_copy(d: *mut c_void, buffer: *mut u8, size: c_int) -> c_int;
-    fn km_encoder_open(
+    fn km_encoder_open_color(
         k: *mut c_void,
         path: *const c_char,
         name: *const c_char,
@@ -69,6 +80,7 @@ unsafe extern "C" {
         height: c_int,
         num: c_int,
         den: c_int,
+        hdr: c_int,
     ) -> *mut c_void;
     fn km_encoder_close(e: *mut c_void);
     fn km_encoder_frame(e: *mut c_void, rgba: *const u8, pts: i64) -> c_int;
@@ -195,7 +207,77 @@ pub(crate) struct RawFrame {
     pub labels: [String; 5],
     pub pixels: Vec<u8>,
 }
+fn needs_prores_range_verification(stream: &MediaStream) -> bool {
+    stream.kind == StreamKind::Video
+        && stream.codec == "prores"
+        && matches!(stream.color_range.as_deref(), None | Some("unknown"))
+}
+fn verify_prores_range(stream: &mut MediaStream, frame: &RawFrame) -> bool {
+    if !needs_prores_range_verification(stream)
+        || stream.width != Some(frame.width)
+        || stream.height != Some(frame.height)
+        || [
+            stream.pixel_format.as_deref(),
+            stream.color_primaries.as_deref(),
+            stream.color_transfer.as_deref(),
+            stream.color_matrix.as_deref(),
+        ] != std::array::from_fn(|i| Some(frame.labels[i].as_str()))
+        || frame.labels[4] != "tv"
+    {
+        return false;
+    }
+    stream.color_range = Some(frame.labels[4].clone());
+    true
+}
+#[cfg(test)]
+mod prores_probe_tests {
+    use super::*;
+    #[test]
+    fn unspecified_prores_range_requires_matching_native_frame_evidence() {
+        let stream: MediaStream = serde_json::from_value(serde_json::json!({
+            "index":0,"kind":"video","codec":"prores",
+            "time_base":{"num":"1","den":"24"},"start":null,"duration":null,
+            "sample_rate":null,"channels":null,"width":16,"height":16,
+            "pixel_format":"yuv422p10le","color_primaries":"bt2020",
+            "color_transfer":"smpte2084","color_matrix":"bt2020nc","color_range":"unknown"
+        }))
+        .unwrap();
+        let mut frame = RawFrame {
+            pts: Rational::ZERO,
+            duration: Rational::ZERO,
+            width: 16,
+            height: 16,
+            labels: ["yuv422p10le", "bt2020", "smpte2084", "bt2020nc", "tv"].map(str::to_owned),
+            pixels: vec![],
+        };
+        let mut verified = stream.clone();
+        assert!(verify_prores_range(&mut verified, &frame));
+        assert_eq!(verified.color_range.as_deref(), Some("tv"));
+        for i in 0..5 {
+            let original = frame.labels[i].clone();
+            frame.labels[i] = "mismatch".into();
+            let mut unchanged = stream.clone();
+            assert!(!verify_prores_range(&mut unchanged, &frame));
+            assert_eq!(unchanged, stream);
+            frame.labels[i] = original;
+        }
+        frame.width = 32;
+        let mut unchanged = stream.clone();
+        assert!(!verify_prores_range(&mut unchanged, &frame));
+        assert_eq!(unchanged, stream);
+        frame.width = 16;
+        for (codec, range) in [("prores", "pc"), ("prores", "tv"), ("h264", "unknown")] {
+            let mut explicit = stream.clone();
+            explicit.codec = codec.into();
+            explicit.color_range = Some(range.into());
+            let before = explicit.clone();
+            assert!(!verify_prores_range(&mut explicit, &frame));
+            assert_eq!(explicit, before);
+        }
+    }
+}
 pub(crate) struct NativeDecoder<'a> {
+    path: std::path::PathBuf,
     ptr: NonNull<c_void>,
     runtime: &'a NativeRuntime,
     pub time_base: Rational,
@@ -210,6 +292,7 @@ impl<'a> NativeDecoder<'a> {
         path: &Path,
         stream: Option<u32>,
     ) -> Result<Self, MediaError> {
+        let source_path = path.to_path_buf();
         let path = path_string(path)?;
         let ptr = NonNull::new(match stream {
             Some(stream) => {
@@ -230,6 +313,7 @@ impl<'a> NativeDecoder<'a> {
             }
         };
         Ok(Self {
+            path: source_path,
             ptr,
             runtime,
             time_base,
@@ -250,6 +334,17 @@ impl<'a> NativeDecoder<'a> {
             Ok(Some(
                 Rational::from_integer(duration).checked_mul(self.time_base)?,
             ))
+        }
+    }
+    pub(crate) fn restart_origin(&mut self) -> Result<(), MediaError> {
+        if self.origin() < 0 {
+            // Timestamp seeking cannot reliably rewind negative-origin TS.
+            // Reopening the same stream starts from its exact first packet.
+            let replacement = Self::open_stream(self.runtime, &self.path, Some(self.stream()))?;
+            *self = replacement;
+            Ok(())
+        } else {
+            self.seek(self.origin())
         }
     }
     pub(crate) fn seek(&mut self, pts: i64) -> Result<(), MediaError> {
@@ -342,6 +437,45 @@ pub(crate) fn video_rgba(
     }
     Ok(output)
 }
+pub(crate) fn video_rgba64(
+    runtime: &NativeRuntime,
+    frame: &kronello_render::DecodedVideoFrame,
+    full_range: bool,
+    bt2020: bool,
+) -> Result<Vec<u8>, MediaError> {
+    if frame.width == 0
+        || frame.height == 0
+        || u64::from(frame.width) * u64::from(frame.height) > 16_777_216
+    {
+        return Err(MediaError::InvalidInput(
+            "video frame dimensions/budget".into(),
+        ));
+    }
+    let format = CString::new(frame.pixel_format.as_str())
+        .map_err(|_| MediaError::InvalidInput("video pixel format".into()))?;
+    let size = c_int::try_from(frame.pixels.len())
+        .map_err(|_| MediaError::InvalidInput("video pixel budget".into()))?;
+    let mut output = vec![0; frame.width as usize * frame.height as usize * 8];
+    // SAFETY: dimensions and exact packed input size are verified by the shim;
+    // the RGBA64 output allocation covers width*height*8 and lives through the call.
+    if unsafe {
+        km_video_rgba64(
+            runtime.0.as_ptr(),
+            frame.pixels.as_ptr(),
+            size,
+            format.as_ptr(),
+            frame.width as c_int,
+            frame.height as c_int,
+            c_int::from(full_range),
+            c_int::from(bt2020),
+            output.as_mut_ptr(),
+        )
+    } < 0
+    {
+        return Err(MediaError::Decode(runtime.error()));
+    }
+    Ok(output)
+}
 impl Drop for NativeDecoder<'_> {
     fn drop(&mut self) {
         unsafe { km_decoder_close(self.ptr.as_ptr()) }
@@ -354,13 +488,14 @@ pub(crate) struct NativeEncoder<'a> {
     pub frame_size: u64,
 }
 impl<'a> NativeEncoder<'a> {
-    pub(crate) fn open(
+    pub(crate) fn open_color(
         runtime: &'a NativeRuntime,
         path: &Path,
         codec: &CodecCapability,
         width: i32,
         height: i32,
         time_base: Rational,
+        hdr: Option<kronello_render::HdrTransfer>,
     ) -> Result<Self, MediaError> {
         let path = path_string(path)?;
         let name = CString::new(codec.name.as_str())
@@ -370,7 +505,7 @@ impl<'a> NativeEncoder<'a> {
         let den = i32::try_from(time_base.denominator())
             .map_err(|_| MediaError::InvalidInput("time base denominator".into()))?;
         let ptr = NonNull::new(unsafe {
-            km_encoder_open(
+            km_encoder_open_color(
                 runtime.0.as_ptr(),
                 path.as_ptr(),
                 name.as_ptr(),
@@ -378,6 +513,11 @@ impl<'a> NativeEncoder<'a> {
                 height,
                 num,
                 den,
+                match hdr {
+                    None => 0,
+                    Some(kronello_render::HdrTransfer::Pq) => 1,
+                    Some(kronello_render::HdrTransfer::Hlg) => 2,
+                },
             )
         })
         .ok_or_else(|| {
@@ -474,13 +614,14 @@ mod tests {
             .clone();
         codec.hardware = true;
         let temp = tempfile::NamedTempFile::new().unwrap();
-        let error = NativeEncoder::open(
+        let error = NativeEncoder::open_color(
             &runtime.native,
             temp.path(),
             &codec,
             0,
             64,
             Rational::new(1, 24).unwrap(),
+            None,
         )
         .err()
         .expect("zero width must fail avcodec_open2");
@@ -547,6 +688,12 @@ unsafe extern "C" {
     fn km_probe_count(format: *mut c_void) -> c_int;
     fn km_probe_stream(format: *mut c_void, index: c_int, out: *mut NativeStreamInfo);
     fn km_probe_codec(k: *mut c_void, format: *mut c_void, index: c_int) -> *const c_char;
+    fn km_probe_color(
+        k: *mut c_void,
+        format: *mut c_void,
+        index: c_int,
+        field: c_int,
+    ) -> *const c_char;
     fn km_probe_codec_tag(format: *mut c_void, index: c_int) -> u32;
     #[cfg(test)]
     fn km_mux_video_tag(profile: c_int) -> u32;
@@ -773,6 +920,7 @@ impl NativeRuntime {
         Ok(())
     }
     pub(crate) fn probe(&self, path: &Path) -> Result<MediaProbe, MediaError> {
+        let source_path = path;
         let path = path_string(path)?;
         // SAFETY: all native stream accesses are bounded by the queried count;
         // strings are copied while the probe is live. RAII frees on every error.
@@ -814,18 +962,40 @@ impl NativeRuntime {
                     channels: u32::try_from(info.channels).ok().filter(|v| *v != 0),
                     width: u32::try_from(info.width).ok().filter(|v| *v != 0),
                     height: u32::try_from(info.height).ok().filter(|v| *v != 0),
+                    pixel_format: (info.kind == 0)
+                        .then(|| string(km_probe_color(self.0.as_ptr(), ptr.as_ptr(), index, 0))),
+                    color_primaries: (info.kind == 0)
+                        .then(|| string(km_probe_color(self.0.as_ptr(), ptr.as_ptr(), index, 1))),
+                    color_transfer: (info.kind == 0)
+                        .then(|| string(km_probe_color(self.0.as_ptr(), ptr.as_ptr(), index, 2))),
+                    color_matrix: (info.kind == 0)
+                        .then(|| string(km_probe_color(self.0.as_ptr(), ptr.as_ptr(), index, 3))),
+                    color_range: (info.kind == 0)
+                        .then(|| string(km_probe_color(self.0.as_ptr(), ptr.as_ptr(), index, 4))),
                 });
             }
             let tag = |name: &str| {
                 let key = CString::new(name).expect("constant tag without NUL");
                 string(km_probe_tag(self.0.as_ptr(), ptr.as_ptr(), key.as_ptr()))
             };
-            let result = MediaProbe {
+            let mut result = MediaProbe {
                 streams,
                 render_snapshot_hash: tag("kronello_render_snapshot_hash"),
                 export_snapshot_hash: tag("kronello_export_snapshot_hash"),
             };
             drop(probe);
+            // MOV nclc does not carry a range flag. Older FFmpeg versions leave
+            // the ProRes stream range unspecified, while its native decoder
+            // reports the bitstream's limited range on the decoded frame.
+            for stream in &mut result.streams {
+                if needs_prores_range_verification(stream)
+                    && let Ok(mut decoder) =
+                        NativeDecoder::open_stream(self, source_path, Some(stream.index))
+                    && let Ok(Some(frame)) = decoder.next()
+                {
+                    verify_prores_range(stream, &frame);
+                }
+            }
             Ok(result)
         }
     }

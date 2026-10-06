@@ -1,12 +1,19 @@
 //! GPU rendering boundary, independent of the pure document model.
+mod allocation;
+mod observation;
+pub use allocation::{GpuAllocationStats, GpuNodeResourcePeak, GpuResourceUsage};
 pub mod color;
+mod resident;
+mod resource_cache;
+pub use resident::ResidentImage;
+pub use resource_cache::{DiskRasterConfig, GpuCacheConfig, GpuCacheStats, SurfaceLease};
 pub mod render_adapter;
 mod renderer;
 mod scene;
 mod scene_gpu;
 pub use renderer::{GpuContext, RenderOutput, SHADER, decode_rgba16f};
 pub use scene::*;
-pub use scene_gpu::ExternalFrame;
+pub use scene_gpu::{ExternalFrame, SceneFramePair};
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -16,6 +23,8 @@ pub enum GpuError {
     UnsupportedFeature(&'static str),
     InvalidInput(&'static str),
     Readback(String),
+    CacheIo(String),
+    ObservationBusy,
 }
 impl Display for GpuError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -25,6 +34,8 @@ impl Display for GpuError {
             Self::DeviceUnavailable(_) => "DEVICE_UNAVAILABLE",
             Self::InvalidInput(_) => "INVALID_INPUT",
             Self::Readback(_) => "READBACK_FAILED",
+            Self::CacheIo(_) => "CACHE_IO",
+            Self::ObservationBusy => "RENDER_BACKEND_BUSY",
         };
         write!(f, "{code}: {self:?}")
     }
@@ -210,6 +221,8 @@ pub struct TransferStats {
     /// Includes required row padding, unlike logical RGBA16F output bytes.
     pub gpu_readback_bytes: u64,
     pub gpu_readback_operations: u64,
+    pub gpu_wait_operations: u64,
+    pub gpu_compute_dispatches: u64,
 }
 /// Design coordinates stay fixed when only output resolution changes.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -285,3 +298,35 @@ pub fn render_reference(
 mod effect;
 pub use effect::{EFFECT_KERNEL_VERSION, PixelEffect};
 pub const EFFECT_SHADER: &str = include_str!("effect.wgsl");
+
+impl TransferStats {
+    pub fn accumulate(&mut self, other: &Self) {
+        self.cpu_upload_pixel_bytes += other.cpu_upload_pixel_bytes;
+        self.cpu_upload_pixel_operations += other.cpu_upload_pixel_operations;
+        self.cpu_upload_control_bytes += other.cpu_upload_control_bytes;
+        self.cpu_upload_control_operations += other.cpu_upload_control_operations;
+        self.gpu_copy_bytes += other.gpu_copy_bytes;
+        self.gpu_copy_operations += other.gpu_copy_operations;
+        self.gpu_readback_bytes += other.gpu_readback_bytes;
+        self.gpu_readback_operations += other.gpu_readback_operations;
+        self.gpu_wait_operations += other.gpu_wait_operations;
+        self.gpu_compute_dispatches += other.gpu_compute_dispatches;
+    }
+    pub fn render_stats(&self) -> kronello_render::RenderTransferStats {
+        kronello_render::RenderTransferStats {
+            cpu_upload_pixel_bytes: self.cpu_upload_pixel_bytes,
+            cpu_upload_pixel_operations: self.cpu_upload_pixel_operations,
+            cpu_upload_control_bytes: self.cpu_upload_control_bytes,
+            cpu_upload_control_operations: self.cpu_upload_control_operations,
+            gpu_copy_bytes: self.gpu_copy_bytes,
+            gpu_copy_operations: self.gpu_copy_operations,
+            gpu_readback_bytes: self.gpu_readback_bytes,
+            gpu_readback_operations: self.gpu_readback_operations,
+            gpu_wait_operations: self.gpu_wait_operations,
+            gpu_compute_dispatches: self.gpu_compute_dispatches,
+        }
+    }
+}
+
+#[cfg(test)]
+mod perf_tests;

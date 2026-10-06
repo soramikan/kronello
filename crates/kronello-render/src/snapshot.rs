@@ -20,6 +20,8 @@ pub const NODE_VISIBILITY_VERSION: u32 = 2;
 fn legacy_visibility_version() -> u32 {
     1
 }
+pub const COMPOSITION_MEDIA_VERSION: u32 = 1;
+pub const TEMPORAL_VERSION: u32 = 1;
 pub const VIDEO_INPUT_VERSION: &str = "nle002-sdr-rgba8-nearest-v1";
 fn initial_video_version() -> String {
     VIDEO_INPUT_VERSION.into()
@@ -52,6 +54,12 @@ pub struct SemanticVersions {
     pub generators: BTreeMap<String, u32>,
     #[serde(default = "initial_video_version")]
     pub video_input: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub temporal: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub composition_media: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hdr: Option<u32>,
 }
 fn generator_versions() -> BTreeMap<String, u32> {
     BTreeMap::from([(SOLID_GENERATOR_ID.into(), 1)])
@@ -81,6 +89,9 @@ impl SemanticVersions {
             ]),
             generators: generator_versions(),
             video_input: initial_video_version(),
+            temporal: Some(TEMPORAL_VERSION),
+            composition_media: Some(COMPOSITION_MEDIA_VERSION),
+            hdr: Some(crate::HDR_VERSION),
         }
     }
 }
@@ -90,12 +101,18 @@ impl SemanticVersions {
 pub struct RenderProfile {
     pub working_space: ColorSpace,
     pub flatten_tolerance_px: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub temporal: Option<crate::TemporalSettings>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hdr: Option<crate::HdrSettings>,
 }
 impl Default for RenderProfile {
     fn default() -> Self {
         Self {
             working_space: ColorSpace::LinearRec709,
             flatten_tolerance_px: 0.02,
+            temporal: None,
+            hdr: None,
         }
     }
 }
@@ -303,6 +320,9 @@ impl RenderSnapshot {
         Ok(format!("{:x}", Sha256::digest(serde_json::to_vec(&value)?)))
     }
     pub fn validate(&self) -> Result<(), RenderError> {
+        if let Some(temporal) = self.profile.temporal {
+            temporal.validate()?;
+        }
         if self.schema_version != SNAPSHOT_SCHEMA_VERSION {
             return Err(RenderError::UnsupportedSchema(self.schema_version));
         }
@@ -313,7 +333,31 @@ impl RenderSnapshot {
             .validate_storage()
             .map_err(|e| RenderError::InvalidInput(e.to_string()))?;
         // Legacy visibility v1 is equivalent only when every authored node is enabled.
+        if self.profile.temporal.is_some()
+            && self.semantic_versions.temporal != Some(TEMPORAL_VERSION)
+        {
+            return Err(RenderError::UnsupportedFeature(
+                "temporal profile requires an explicit supported temporal semantic version".into(),
+            ));
+        }
+        if self.profile.hdr.is_some()
+            && (self.semantic_versions.hdr != Some(crate::HDR_VERSION)
+                || self.profile.working_space != ColorSpace::LinearRec2020)
+        {
+            return Err(RenderError::UnsupportedFeature(
+                "HDR requires pinned hdr version 1 and LinearRec2020 working space".into(),
+            ));
+        }
         let mut supported_versions = SemanticVersions::current(self.project.semantic_version);
+        if self.semantic_versions.hdr.is_none() && self.profile.hdr.is_none() {
+            supported_versions.hdr = None;
+        }
+        if self.semantic_versions.composition_media.is_none() {
+            supported_versions.composition_media = None;
+        }
+        if self.semantic_versions.temporal.is_none() && self.profile.temporal.is_none() {
+            supported_versions.temporal = None;
+        }
         if self.semantic_versions.stroke_geometry == LEGACY_STROKE_VERSION {
             supported_versions.stroke_geometry = LEGACY_STROKE_VERSION.into();
         }
@@ -619,11 +663,6 @@ pub fn build_scene_ir_with_cache(
     let mut nodes = vec![];
     let mut used_fonts = BTreeSet::new();
     for n in evaluated.nodes {
-        if let Some(asset) = templates.media_slots.get(&n.key) {
-            return Err(RenderError::UnsupportedFeature(format!(
-                "Composition MediaSlot drawing for asset {asset}"
-            )));
-        }
         let values: BTreeMap<_, _> = n
             .properties
             .iter()
@@ -702,19 +741,57 @@ pub fn build_scene_ir_with_cache(
                 SceneContent::Text(layout)
             }
             NodeKind::Media(media) => {
-                let asset = content(&snapshot.project.assets, media.asset.as_uuid(), |a| {
-                    a.id.as_uuid()
-                })?
-                .ok_or_else(|| RenderError::UnsupportedFeature("missing media asset".into()))?;
-                if asset.kind != kronello_model::AssetKind::Audio {
-                    return Err(RenderError::UnsupportedFeature(
-                        "Media video/image drawing requires COMP-002".into(),
-                    ));
+                let asset = content_asset(&snapshot.project, media.asset)?;
+                match asset.kind {
+                    AssetKind::Audio => SceneContent::Empty,
+                    AssetKind::Video | AssetKind::Image => {
+                        let stream = asset
+                            .streams
+                            .iter()
+                            .find(|s| s.index == media.stream_index)
+                            .ok_or_else(|| {
+                                RenderError::InvalidInput("Media stream missing".into())
+                            })?;
+                        if asset.kind == AssetKind::Video
+                            && stream.width.is_none()
+                            && stream.height.is_none()
+                        {
+                            SceneContent::Empty
+                        } else {
+                            require_composition_media(snapshot)?;
+                            let relative =
+                                n.local_time.checked_sub(authored.active_range.start())?;
+                            let source =
+                                media.source_in.checked_add(media.time_map.map(relative)?)?;
+                            media_content(asset, media.stream_index, source)?
+                        }
+                    }
+                    AssetKind::Data => {
+                        return Err(RenderError::UnsupportedFeature(
+                            "Data asset is not visual media".into(),
+                        ));
+                    }
                 }
-                SceneContent::Empty
             }
             _ => SceneContent::Empty,
         };
+        if let Some(asset) = templates.media_slots.get(&n.key) {
+            require_composition_media(snapshot)?;
+            let asset = content_asset(&snapshot.project, *asset)?;
+            let stream = asset
+                .streams
+                .iter()
+                .find(|s| s.width.is_some() && s.height.is_some())
+                .ok_or_else(|| {
+                    RenderError::UnsupportedFeature("MediaSlot has no visual stream".into())
+                })?;
+            let relative = n.local_time.checked_sub(authored.active_range.start())?;
+            let source = stream
+                .start_time
+                .unwrap_or(Time::ZERO)
+                .checked_add(relative)?;
+            content = media_content(asset, stream.index, source)?;
+        }
         let mut post_effect_opacity = 1.0;
         if let Some(sequence) = snapshot
             .sequence
@@ -816,4 +893,59 @@ pub fn render_registry() -> SchemaRegistry {
             .expect("distinct built-in render descriptors");
     }
     registry
+}
+
+fn require_composition_media(snapshot: &RenderSnapshot) -> Result<(), RenderError> {
+    if snapshot.semantic_versions.composition_media != Some(COMPOSITION_MEDIA_VERSION) {
+        return Err(RenderError::UnsupportedFeature("Composition visual Media/MediaSlot requires explicit composition_media semantic version 1".into()));
+    }
+    Ok(())
+}
+fn media_content(
+    asset: &Asset,
+    stream_index: u32,
+    source: Time,
+) -> Result<SceneContent, RenderError> {
+    if !matches!(asset.kind, AssetKind::Video | AssetKind::Image) {
+        return Err(RenderError::UnsupportedFeature(
+            "MediaSlot requires image/video asset".into(),
+        ));
+    }
+    let stream = asset
+        .streams
+        .iter()
+        .find(|s| s.index == stream_index)
+        .ok_or_else(|| RenderError::InvalidInput("visual media stream missing".into()))?;
+    let (Some(width), Some(height)) = (stream.width, stream.height) else {
+        return Err(RenderError::UnsupportedFeature(
+            "visual media dimensions missing".into(),
+        ));
+    };
+    if width == 0 || height == 0 {
+        return Err(RenderError::InvalidInput(
+            "visual media dimensions must be positive".into(),
+        ));
+    }
+    let time = if asset.kind == AssetKind::Image {
+        stream.start_time.unwrap_or(Time::ZERO)
+    } else {
+        let start = stream.start_time.unwrap_or(Time::ZERO);
+        if source < start
+            || stream
+                .duration
+                .is_some_and(|duration| source >= start.checked_add(duration).unwrap_or(start))
+        {
+            return Err(RenderError::Backend {
+                code: "FRAME_NOT_FOUND",
+                message: "Composition media source time is outside the locked stream".into(),
+            });
+        }
+        source
+    };
+    Ok(SceneContent::Video {
+        asset: asset.clone(),
+        stream_index,
+        time,
+        extent: [f64::from(width), f64::from(height)],
+    })
 }

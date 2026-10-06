@@ -272,7 +272,7 @@
     "AvExportRequest": {
       "properties": {
         "background": {
-          "description": "Explicit opaque background, linear Rec.709 SDR, before BT.709 encoding.",
+          "description": "Explicit opaque background in the fixed profile working space (HDR 1=203 nits).",
           "items": {
             "format": "float",
             "type": "number"
@@ -309,11 +309,21 @@
     },
     "BackendSelection": {
       "description": "Explicit execution choice. GPU initialization is lazy and never falls back.",
-      "enum": [
-        "gpu",
-        "cpu_reference"
-      ],
-      "type": "string"
+      "oneOf": [
+        {
+          "enum": [
+            "gpu",
+            "cpu_reference",
+            "gpu_resident_nv12"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "gpu_resident_bgra8",
+          "description": "Strict VideoToolbox hardware decode and same-device Metal import.",
+          "type": "string"
+        }
+      ]
     },
     "BoundsStage": {
       "description": "Resolution-independent bounds stage selected by a layout consumer.",
@@ -1145,6 +1155,13 @@
           "type": "object"
         }
       ]
+    },
+    "CutPolicy": {
+      "enum": [
+        "avoid_crossing",
+        "allow_crossing"
+      ],
+      "type": "string"
     },
     "DataTable": {
       "additionalProperties": false,
@@ -2332,6 +2349,8 @@
         {
           "enum": [
             "gpu",
+            "gpu_resident_bgra8",
+            "gpu_resident_nv12",
             "cpu_reference"
           ],
           "type": "string"
@@ -3094,6 +3113,16 @@
             "null"
           ]
         },
+        "hdr": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HdrMetadata"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "input_path": {
           "type": "string"
         },
@@ -3107,6 +3136,16 @@
         },
         "region": {
           "$ref": "#/$defs/OutputRegion"
+        },
+        "resource_cache_stats": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RenderResourceCacheStats"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "revision": {
           "type": "string"
@@ -3138,8 +3177,28 @@
         "target": {
           "$ref": "#/$defs/RenderTarget"
         },
+        "temporal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TemporalMetadata"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "time": {
           "$ref": "#/$defs/Rational"
+        },
+        "transfer_stats": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RenderTransferStats"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "working_space": {
           "$ref": "#/$defs/ColorSpace"
@@ -3581,6 +3640,51 @@
       "enum": [
         "local_design",
         "object_bounding_box"
+      ],
+      "type": "string"
+    },
+    "HdrMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "hlg_peak_nits": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "reference_white_nits": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "transfer": {
+          "$ref": "#/$defs/HdrTransfer"
+        }
+      },
+      "required": [
+        "transfer",
+        "reference_white_nits"
+      ],
+      "type": "object"
+    },
+    "HdrSettings": {
+      "additionalProperties": false,
+      "properties": {
+        "transfer": {
+          "$ref": "#/$defs/HdrTransfer"
+        }
+      },
+      "required": [
+        "transfer"
+      ],
+      "type": "object"
+    },
+    "HdrTransfer": {
+      "enum": [
+        "pq",
+        "hlg"
       ],
       "type": "string"
     },
@@ -4065,6 +4169,90 @@
               "$ref": "#/$defs/AudioSourceMode",
               "default": "explicit"
             },
+            "background": {
+              "items": {
+                "format": "float",
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/JobAudioClip"
+              },
+              "type": "array"
+            },
+            "format": {
+              "const": "pro_res_sdr_from_hdr_mov",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "clips",
+            "background"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/AudioSourceMode",
+              "default": "explicit"
+            },
+            "background": {
+              "items": {
+                "format": "float",
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/JobAudioClip"
+              },
+              "type": "array"
+            },
+            "format": {
+              "const": "pro_res_hdr_mov",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "transfer": {
+              "$ref": "#/$defs/HdrTransfer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "transfer",
+            "clips",
+            "background"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/AudioSourceMode",
+              "default": "explicit"
+            },
             "audio_codec": {
               "$ref": "#/$defs/DeliveryAudioCodec",
               "default": "alac"
@@ -4199,6 +4387,12 @@
     "JobRecord": {
       "additionalProperties": false,
       "properties": {
+        "attempt": {
+          "default": 0,
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
         "cancel_requested": {
           "type": "boolean"
         },
@@ -4246,6 +4440,13 @@
         "output_profile": true,
         "project_id": {
           "type": "string"
+        },
+        "publication_hash": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "result": true,
         "revision": {
@@ -4612,6 +4813,30 @@
         "codec": {
           "type": "string"
         },
+        "color_matrix": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "color_primaries": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "color_range": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "color_transfer": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "duration": {
           "anyOf": [
             {
@@ -4637,6 +4862,12 @@
         },
         "kind": {
           "$ref": "#/$defs/StreamKind"
+        },
+        "pixel_format": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "sample_rate": {
           "format": "uint32",
@@ -4763,7 +4994,10 @@
         "pro_res_pcm24",
         "av1_mp4_alac_v1",
         "h264_alac_v1",
-        "hevc_alac_v1"
+        "hevc_alac_v1",
+        "pro_res_pq_pcm24_v1",
+        "pro_res_hlg_pcm24_v1",
+        "pro_res_sdr_from_hdr_pcm24_v1"
       ],
       "type": "string"
     },
@@ -5285,6 +5519,16 @@
           "type": "object"
         }
       ]
+    },
+    "PersistentRasterCachePolicy": {
+      "enum": [
+        "memory_only",
+        "enabled",
+        "explicitly_disabled",
+        "default_directory_overlaps_project",
+        "disabled_for_gpu_resident"
+      ],
+      "type": "string"
     },
     "PlanRequest": {
       "additionalProperties": false,
@@ -5866,6 +6110,17 @@
         "raster": {
           "$ref": "#/$defs/CacheStats"
         },
+        "temporal": {
+          "$ref": "#/$defs/CacheStats",
+          "default": {
+            "bytes": 0,
+            "entries": 0,
+            "evictions": 0,
+            "hits": 0,
+            "inserts": 0,
+            "misses": 0
+          }
+        },
         "values": {
           "$ref": "#/$defs/CacheStats"
         }
@@ -6098,6 +6353,26 @@
           "format": "double",
           "type": "number"
         },
+        "hdr": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HdrSettings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "temporal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TemporalSettings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "working_space": {
           "$ref": "#/$defs/ColorSpace"
         }
@@ -6105,6 +6380,36 @@
       "required": [
         "working_space",
         "flatten_tolerance_px"
+      ],
+      "type": "object"
+    },
+    "RenderResourceCacheStats": {
+      "additionalProperties": false,
+      "properties": {
+        "disk_raster": {
+          "$ref": "#/$defs/CacheStats"
+        },
+        "gpu_pool": {
+          "$ref": "#/$defs/CacheStats"
+        },
+        "gpu_textures": {
+          "$ref": "#/$defs/CacheStats"
+        },
+        "persistent_disk_policy": {
+          "$ref": "#/$defs/PersistentRasterCachePolicy",
+          "default": "memory_only"
+        },
+        "rejected_disk_entries": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "gpu_textures",
+        "gpu_pool",
+        "disk_raster",
+        "rejected_disk_entries"
       ],
       "type": "object"
     },
@@ -6266,6 +6571,74 @@
         "stages",
         "budget_surfaces_estimate",
         "surface_bytes_estimate"
+      ],
+      "type": "object"
+    },
+    "RenderTransferStats": {
+      "description": "Actual execution transfers; GPU compute writes do not count as copies.",
+      "properties": {
+        "cpu_upload_control_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cpu_upload_control_operations": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cpu_upload_pixel_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cpu_upload_pixel_operations": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "gpu_compute_dispatches": {
+          "default": 0,
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "gpu_copy_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "gpu_copy_operations": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "gpu_readback_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "gpu_readback_operations": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "gpu_wait_operations": {
+          "default": 0,
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cpu_upload_pixel_bytes",
+        "cpu_upload_pixel_operations",
+        "cpu_upload_control_bytes",
+        "cpu_upload_control_operations",
+        "gpu_copy_bytes",
+        "gpu_copy_operations",
+        "gpu_readback_bytes",
+        "gpu_readback_operations"
       ],
       "type": "object"
     },
@@ -6646,6 +7019,23 @@
             },
             "operation": {
               "const": "job.cancel",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "job"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "job": {
+              "type": "string"
+            },
+            "operation": {
+              "const": "job.resume",
               "type": "string"
             }
           },
@@ -8596,6 +8986,14 @@
         "color": {
           "type": "string"
         },
+        "composition_media": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "coverage": {
           "type": "string"
         },
@@ -8632,6 +9030,14 @@
         "gradient_interpolation": {
           "type": "string"
         },
+        "hdr": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "interpolation": {
           "format": "uint32",
           "minimum": 0,
@@ -8644,6 +9050,14 @@
         },
         "stroke_geometry": {
           "type": "string"
+        },
+        "temporal": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "time_map": {
           "format": "uint32",
@@ -10313,6 +10727,76 @@
         "targets",
         "constraints",
         "content_hash"
+      ],
+      "type": "object"
+    },
+    "TemporalMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "samples": {
+          "items": {
+            "$ref": "#/$defs/TemporalSample"
+          },
+          "type": "array"
+        },
+        "sampling_scope": {
+          "type": "string"
+        },
+        "settings": {
+          "$ref": "#/$defs/TemporalSettings"
+        }
+      },
+      "required": [
+        "settings",
+        "samples",
+        "sampling_scope"
+      ],
+      "type": "object"
+    },
+    "TemporalSample": {
+      "additionalProperties": false,
+      "properties": {
+        "time": {
+          "$ref": "#/$defs/Rational"
+        },
+        "weight": {
+          "$ref": "#/$defs/Rational"
+        }
+      },
+      "required": [
+        "time",
+        "weight"
+      ],
+      "type": "object"
+    },
+    "TemporalSettings": {
+      "additionalProperties": false,
+      "description": "Phase is an exact frame offset of the exposure start, not an angle.",
+      "properties": {
+        "cut_policy": {
+          "$ref": "#/$defs/CutPolicy"
+        },
+        "frame_rate": {
+          "$ref": "#/$defs/FrameRate"
+        },
+        "samples": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "shutter_angle": {
+          "$ref": "#/$defs/Rational"
+        },
+        "shutter_phase": {
+          "$ref": "#/$defs/Rational"
+        }
+      },
+      "required": [
+        "frame_rate",
+        "shutter_angle",
+        "shutter_phase",
+        "samples",
+        "cut_policy"
       ],
       "type": "object"
     },

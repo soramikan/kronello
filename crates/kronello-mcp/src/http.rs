@@ -12,11 +12,15 @@ use axum::response::{IntoResponse, Response, Sse, sse::Event};
 use axum::{Json, Router, routing::any};
 use futures_util::stream;
 use kronello_service::BackendSelection;
-use serde_json::{Value, json};
+use serde_json::Value;
+#[cfg(test)]
+use serde_json::json;
 use tokio::sync::Semaphore;
 
+#[cfg(test)]
+use crate::SUPPORTED_PROTOCOL_VERSIONS;
 use crate::connection::{Connection, Reply};
-use crate::{MAX_MESSAGE_BYTES, SUPPORTED_PROTOCOL_VERSIONS, rpc_error};
+use crate::{LEGACY_PROTOCOL_VERSIONS, MAX_MESSAGE_BYTES, rpc_error};
 
 pub const MAX_SESSIONS: usize = 64;
 pub const SESSION_IDLE_TIMEOUT: Duration = Duration::from_secs(30 * 60);
@@ -55,6 +59,7 @@ struct HttpState {
     config: HttpConfig,
     backend: BackendSelection,
     slots: Arc<Semaphore>,
+    modern_slots: Arc<Semaphore>,
     sessions: Mutex<BTreeMap<String, Session>>,
 }
 impl HttpState {
@@ -75,6 +80,7 @@ pub async fn serve_http(config: HttpConfig, backend: BackendSelection) -> std::i
         config,
         backend,
         slots: Arc::new(Semaphore::new(3)),
+        modern_slots: Arc::new(Semaphore::new(crate::connection::MAX_ACTIVE_REQUESTS)),
         sessions: Mutex::new(BTreeMap::new()),
     });
     let app = Router::new()
@@ -155,11 +161,12 @@ async fn endpoint(State(state): State<Arc<HttpState>>, request: Request) -> Resp
         Ok(version) => version,
         Err(status) => return status.into_response(),
     };
-    if let Some(version) = version
-        && !SUPPORTED_PROTOCOL_VERSIONS.contains(&version)
+    if version.is_some_and(|value| !LEGACY_PROTOCOL_VERSIONS.contains(&value))
+        || headers.contains_key("mcp-method")
     {
-        return (StatusCode::BAD_REQUEST, Json(rpc_error(Value::Null, -32600, "Unsupported HTTP protocol version", json!({"code":"UNSUPPORTED_PROTOCOL_VERSION","supported":SUPPORTED_PROTOCOL_VERSIONS})))).into_response();
+        return modern_post(state, request).await;
     }
+    let all_headers = headers.clone();
     let session_id = match header(headers, "mcp-session-id") {
         Ok(id) => id.map(str::to_owned),
         Err(status) => return status.into_response(),
@@ -236,6 +243,16 @@ async fn endpoint(State(state): State<Arc<HttpState>>, request: Request) -> Resp
     if serde_json::from_str::<Value>(message)
         .ok()
         .is_some_and(|value| {
+            value["params"]["_meta"]
+                .get(crate::modern::VERSION_KEY)
+                .is_some()
+        })
+    {
+        return modern_message(state, &all_headers, message);
+    }
+    if serde_json::from_str::<Value>(message)
+        .ok()
+        .is_some_and(|value| {
             value.get("method").is_none()
                 && (value.get("result").is_some() || value.get("error").is_some())
         })
@@ -307,6 +324,181 @@ async fn endpoint(State(state): State<Arc<HttpState>>, request: Request) -> Resp
     }
 }
 
+async fn modern_post(state: Arc<HttpState>, request: Request) -> Response {
+    if request.method() != Method::POST {
+        return (StatusCode::METHOD_NOT_ALLOWED, [("allow", "POST")]).into_response();
+    }
+    let headers = request.headers().clone();
+    if header(&headers, "accept")
+        .ok()
+        .flatten()
+        .is_none_or(|value| {
+            !has_media(value, "application/json") || !has_media(value, "text/event-stream")
+        })
+    {
+        return StatusCode::NOT_ACCEPTABLE.into_response();
+    }
+    if header(&headers, "content-type")
+        .ok()
+        .flatten()
+        .is_none_or(|value| value.split(';').next().map(str::trim) != Some("application/json"))
+    {
+        return StatusCode::UNSUPPORTED_MEDIA_TYPE.into_response();
+    }
+    let body = match to_bytes(request.into_body(), MAX_MESSAGE_BYTES).await {
+        Ok(body) => body,
+        Err(_) => return StatusCode::PAYLOAD_TOO_LARGE.into_response(),
+    };
+    let message = match std::str::from_utf8(&body) {
+        Ok(message) => message,
+        Err(_) => return StatusCode::BAD_REQUEST.into_response(),
+    };
+    modern_message(state, &headers, message)
+}
+fn decoded_name(value: &str) -> Option<String> {
+    if let Some(encoded) = value.strip_prefix("=?base64?") {
+        let encoded = encoded.strip_suffix("?=")?;
+        return String::from_utf8(data_encoding::BASE64.decode(encoded.as_bytes()).ok()?).ok();
+    }
+    if value.starts_with(' ')
+        || value.ends_with(' ')
+        || value.starts_with('\t')
+        || value.ends_with('\t')
+        || !value
+            .bytes()
+            .all(|byte| byte == b'\t' || (0x20..=0x7e).contains(&byte))
+    {
+        return None;
+    }
+    Some(value.to_owned())
+}
+fn modern_message(state: Arc<HttpState>, headers: &HeaderMap, message: &str) -> Response {
+    let raw: Value = match serde_json::from_str(message) {
+        Ok(raw) => raw,
+        Err(error) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(rpc_error(
+                    Value::Null,
+                    -32700,
+                    error.to_string(),
+                    Value::Null,
+                )),
+            )
+                .into_response();
+        }
+    };
+    let id = raw.get("id").cloned().unwrap_or(Value::Null);
+    let mismatch = |detail| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(rpc_error(id.clone(), -32020, detail, Value::Null)),
+        )
+            .into_response()
+    };
+    let version = match header(headers, "mcp-protocol-version") {
+        Ok(Some(value)) => value,
+        _ => return mismatch("Missing or malformed MCP-Protocol-Version"),
+    };
+    if version != crate::modern::VERSION {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(crate::modern::unsupported(id, version)),
+        )
+            .into_response();
+    }
+    if raw["params"]["_meta"][crate::modern::VERSION_KEY] != version {
+        return mismatch("MCP-Protocol-Version does not match request metadata");
+    }
+    let method = match header(headers, "mcp-method") {
+        Ok(Some(value)) if raw["method"] == value => value,
+        _ => return mismatch("Missing, malformed or mismatched Mcp-Method"),
+    };
+    if matches!(method, "tools/call" | "resources/read" | "prompts/get") {
+        let source = if method == "resources/read" {
+            "uri"
+        } else {
+            "name"
+        };
+        let decoded = header(headers, "mcp-name")
+            .ok()
+            .flatten()
+            .and_then(decoded_name);
+        match (decoded.as_deref(), raw["params"][source].as_str()) {
+            (Some(header_name), Some(body_name)) if header_name == body_name => {}
+            _ => return mismatch("Missing, malformed or mismatched Mcp-Name"),
+        }
+    }
+    if raw.get("id").is_none() {
+        // Cancellation of HTTP work is stream closure, not a notification POST.
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(rpc_error(
+                Value::Null,
+                -32600,
+                "No modern HTTP client notification is implemented",
+                Value::Null,
+            )),
+        )
+            .into_response();
+    }
+    let request_permit = match state.modern_slots.clone().try_acquire_owned() {
+        Ok(permit) => permit,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(rpc_error(
+                    id,
+                    -32000,
+                    "Too many active HTTP requests",
+                    serde_json::json!({"code":"RESOURCE_LIMIT"}),
+                )),
+            )
+                .into_response();
+        }
+    };
+    let connection = Connection::new(state.backend, state.slots.clone());
+    match connection.submit(message) {
+        Reply::Immediate(Some(value)) => {
+            let status = match value["error"]["code"].as_i64() {
+                Some(-32601) => StatusCode::NOT_FOUND,
+                Some(_) => StatusCode::BAD_REQUEST,
+                None => StatusCode::OK,
+            };
+            (status, Json(value)).into_response()
+        }
+        Reply::Immediate(None) => StatusCode::ACCEPTED.into_response(),
+        Reply::Stream(receiver) => {
+            struct RequestStream {
+                receiver: tokio::sync::mpsc::UnboundedReceiver<Value>,
+                connection: Arc<Connection>,
+                _permit: tokio::sync::OwnedSemaphorePermit,
+            }
+            impl Drop for RequestStream {
+                fn drop(&mut self) {
+                    self.connection.close();
+                }
+            }
+            let stream = RequestStream {
+                receiver,
+                connection,
+                _permit: request_permit,
+            };
+            let events = stream::unfold(stream, |mut stream| async {
+                stream.receiver.recv().await.map(|value| {
+                    (
+                        Ok::<_, Infallible>(
+                            Event::default().event("message").data(value.to_string()),
+                        ),
+                        stream,
+                    )
+                })
+            });
+            ([("x-accel-buffering", "no")], Sse::new(events)).into_response()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -317,6 +509,7 @@ mod tests {
             config: HttpConfig::default(),
             backend: BackendSelection::CpuReference,
             slots: Arc::new(Semaphore::new(3)),
+            modern_slots: Arc::new(Semaphore::new(crate::connection::MAX_ACTIVE_REQUESTS)),
             sessions: Mutex::new(BTreeMap::new()),
         })
     }
@@ -356,6 +549,192 @@ mod tests {
         .unwrap()
     }
 
+    fn modern_request(method: &str, params: Value) -> Value {
+        let mut params = params;
+        params["_meta"] = json!({"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}});
+        json!({"jsonrpc":"2.0","id":1,"method":method,"params":params})
+    }
+    async fn modern_post_test(
+        state: Arc<HttpState>,
+        value: Value,
+        version: Option<&str>,
+        method: Option<&str>,
+        name: Option<&str>,
+    ) -> Response {
+        let mut request = Request::builder()
+            .method("POST")
+            .uri("/mcp")
+            .header("host", "127.0.0.1:8765")
+            .header("content-type", "application/json")
+            .header("accept", "application/json, text/event-stream");
+        if let Some(value) = version {
+            request = request.header("mcp-protocol-version", value);
+        }
+        if let Some(value) = method {
+            request = request.header("mcp-method", value);
+        }
+        if let Some(value) = name {
+            request = request.header("mcp-name", value);
+        }
+        endpoint(
+            State(state),
+            request.body(Body::from(value.to_string())).unwrap(),
+        )
+        .await
+    }
+    #[tokio::test]
+    async fn modern_http_is_stateless_and_validates_mirrored_headers() {
+        let state = state();
+        let value = modern_request("server/discover", json!({}));
+        let response = modern_post_test(
+            state.clone(),
+            value.clone(),
+            Some("2026-07-28"),
+            Some("server/discover"),
+            None,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(!response.headers().contains_key("mcp-session-id"));
+        assert_eq!(
+            json_body(response).await["result"]["resultType"],
+            "complete"
+        );
+        assert!(state.sessions.lock().unwrap().is_empty());
+        for (version, method) in [
+            (None, Some("server/discover")),
+            (Some("2026-07-28"), None),
+            (Some("2026-07-28"), Some("tools/list")),
+        ] {
+            let response =
+                modern_post_test(state.clone(), value.clone(), version, method, None).await;
+            assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+            assert_eq!(json_body(response).await["error"]["code"], -32020);
+        }
+        let call = modern_request(
+            "tools/call",
+            json!({"name":"capabilities.get","arguments":{}}),
+        );
+        let mismatch = modern_post_test(
+            state.clone(),
+            call,
+            Some("2026-07-28"),
+            Some("tools/call"),
+            Some("project.info"),
+        )
+        .await;
+        assert_eq!(json_body(mismatch).await["error"]["code"], -32020);
+        for (method, params) in [
+            ("tools/call", json!({"arguments":{}})),
+            ("resources/read", json!({})),
+            ("prompts/get", json!({"name":42})),
+        ] {
+            let response = modern_post_test(
+                state.clone(),
+                modern_request(method, params),
+                Some("2026-07-28"),
+                Some(method),
+                Some("=?base64?%%%?="),
+            )
+            .await;
+            assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+            assert_eq!(json_body(response).await["error"]["code"], -32020);
+        }
+        let read = modern_request("resources/read", json!({"uri":"kronello://schema/api-v1"}));
+        let name = format!(
+            "=?base64?{}?=",
+            data_encoding::BASE64.encode(b"kronello://schema/api-v1")
+        );
+        let response = modern_post_test(
+            state.clone(),
+            read,
+            Some("2026-07-28"),
+            Some("resources/read"),
+            Some(&name),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = to_bytes(response.into_body(), MAX_MESSAGE_BYTES)
+            .await
+            .unwrap();
+        let body = std::str::from_utf8(&bytes).unwrap();
+        let value: Value = serde_json::from_str(
+            body.lines()
+                .find_map(|line| line.strip_prefix("data: "))
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(value["result"]["cacheScope"], "private");
+        let unknown = modern_request("unsupported/method", json!({}));
+        let response = modern_post_test(
+            state,
+            unknown,
+            Some("2026-07-28"),
+            Some("unsupported/method"),
+            None,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(json_body(response).await["error"]["code"], -32601);
+    }
+    #[tokio::test]
+    async fn modern_http_active_requests_have_a_process_limit() {
+        let state = state();
+        let permit = state
+            .modern_slots
+            .clone()
+            .acquire_many_owned(crate::connection::MAX_ACTIVE_REQUESTS as u32)
+            .await
+            .unwrap();
+        let value = modern_request("tools/list", json!({}));
+        let response = modern_post_test(
+            state.clone(),
+            value.clone(),
+            Some("2026-07-28"),
+            Some("tools/list"),
+            None,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(
+            json_body(response).await["error"]["data"]["code"],
+            "RESOURCE_LIMIT"
+        );
+        drop(permit);
+        assert_eq!(
+            modern_post_test(state, value, Some("2026-07-28"), Some("tools/list"), None)
+                .await
+                .status(),
+            StatusCode::OK
+        );
+    }
+    #[tokio::test]
+    async fn modern_http_stream_drop_cancels_queued_mutation() {
+        let state = state();
+        let _permit = state.slots.clone().acquire_many_owned(3).await.unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("never-created.kronello");
+        let document: Value =
+            serde_json::from_str(include_str!("../../../examples/ffi-preview.project.json"))
+                .unwrap();
+        let value = modern_request(
+            "tools/call",
+            json!({"name":"project.create","arguments":{"project":path,"document":document}}),
+        );
+        let response = modern_post_test(
+            state.clone(),
+            value,
+            Some("2026-07-28"),
+            Some("tools/call"),
+            Some("project.create"),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        drop(response);
+        drop(_permit);
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(!path.exists());
+    }
     #[test]
     fn bind_defaults_and_remote_auth_are_explicit() {
         let default = HttpConfig::default();
@@ -412,7 +791,7 @@ mod tests {
                 .status(),
             StatusCode::BAD_REQUEST
         );
-        let unsupported = post(state.clone(), ping.clone(), Some(&id), Some("2026-07-28")).await;
+        let unsupported = post(state.clone(), ping.clone(), Some(&id), Some("2100-01-01")).await;
         assert_eq!(unsupported.status(), StatusCode::BAD_REQUEST);
         assert_eq!(
             json_body(unsupported).await["error"]["data"]["supported"],
@@ -464,6 +843,7 @@ mod tests {
             },
             backend: BackendSelection::CpuReference,
             slots: Arc::new(Semaphore::new(3)),
+            modern_slots: Arc::new(Semaphore::new(crate::connection::MAX_ACTIVE_REQUESTS)),
             sessions: Mutex::new(BTreeMap::new()),
         });
         for method in ["POST", "GET", "DELETE", "OPTIONS"] {
