@@ -19,6 +19,22 @@ if not MANIFEST.is_file():
     MANIFEST = ROOT / "native-dependencies.json"
 
 
+def msys2_bash():
+    # Windows CreateProcess searches System32 before PATH for a bare executable
+    # name, which can select the WSL launcher even inside an MSYS2 shell.
+    candidate = os.environ.get("KRONELLO_MSYS2_BASH") or shutil.which("bash.exe")
+    if not candidate:
+        raise ValueError("set KRONELLO_MSYS2_BASH to the absolute MSYS2 bash.exe path")
+    executable = Path(candidate).resolve()
+    if not executable.is_file():
+        raise ValueError(f"MSYS2 bash executable does not exist: {executable}")
+    probe = subprocess.run([str(executable), "-c", "uname -s"], check=True,
+                           capture_output=True, text=True)
+    if not probe.stdout.strip().startswith(("MSYS_NT-", "MINGW32_NT-", "MINGW64_NT-", "UCRT64_NT-", "CLANG64_NT-")):
+        raise ValueError(f"MSYS2 bash required, found {probe.stdout.strip()!r}")
+    return executable
+
+
 def sha256(path):
     with path.open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
@@ -147,6 +163,7 @@ def main():
         return
     if args.jobs < 1 or prefix.exists():
         raise ValueError("positive jobs and a fresh output prefix required")
+    bash = msys2_bash() if sys.platform == "win32" else None
     cache = ROOT / "target/native/downloads"
     cache.mkdir(parents=True, exist_ok=True)
     sources = {entry["name"]: source(entry, cache, args.offline) for entry in manifest["dependencies"]}
@@ -177,7 +194,7 @@ def main():
         flags += [f"--extra-ldflags=-Wl,-rpath,{prefix / 'lib'}"]
     if sys.platform == "darwin":
         flags += [*ffmpeg["platform_configure"]["darwin"], f"--install-name-dir={prefix / 'lib'}"]
-    run([*(["bash"] if sys.platform == "win32" else []), (ffmpeg_source / "configure").as_posix(), *flags], cwd=ffmpeg_build, env=env)
+    run([*([bash] if bash else []), (ffmpeg_source / "configure").as_posix(), *flags], cwd=ffmpeg_build, env=env)
     run(["make", f"-j{args.jobs}"], cwd=ffmpeg_build, env=env)
     run(["make", "install"], cwd=ffmpeg_build, env=env)
     if sys.platform == "win32":

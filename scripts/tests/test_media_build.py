@@ -15,6 +15,17 @@ import build_ffmpeg_lgpl as build
 
 
 class NativeBuildTests(unittest.TestCase):
+    def test_windows_configure_uses_verified_absolute_msys2_bash(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            executable = Path(temporary) / "bash.exe"
+            executable.write_bytes(b"test executable")
+            with patch.dict(build.os.environ, {"KRONELLO_MSYS2_BASH": str(executable)}), patch.object(build.shutil, "which", side_effect=AssertionError("explicit MSYS2 path must override WSL PATH")), patch.object(build.subprocess, "run", return_value=Mock(stdout="MINGW64_NT-10.0-26100\n")) as probe:
+                self.assertEqual(build.msys2_bash(), executable.resolve())
+                self.assertEqual(probe.call_args.args[0][0], str(executable.resolve()))
+            with patch.dict(build.os.environ, {"KRONELLO_MSYS2_BASH": str(executable)}), patch.object(build.subprocess, "run", return_value=Mock(stdout="Linux\n")):
+                with self.assertRaisesRegex(ValueError, "MSYS2 bash required"):
+                    build.msys2_bash()
+
     def test_manifest_pins_license_versions_and_no_gpl(self):
         manifest = json.loads(build.MANIFEST.read_text())
         self.assertEqual(manifest["ffmpeg_major"], 9)

@@ -34,6 +34,7 @@ jobs:
         run: |
           $env:MSYSTEM = "MINGW64"
           $env:CHERE_INVOKING = "1"
+          $env:KRONELLO_MSYS2_BASH = "C:/msys64/usr/bin/bash.exe"
           & C:/msys64/usr/bin/bash.exe -lc 'pacman --noconfirm -S --needed mingw-w64-x86_64-toolchain mingw-w64-x86_64-python mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja mingw-w64-x86_64-meson mingw-w64-x86_64-pkgconf mingw-w64-x86_64-nasm make && python scripts/build_ffmpeg_lgpl.py --jobs 3'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "KRONELLO_FFMPEG_PREFIX=$env:GITHUB_WORKSPACE/target/native/ffmpeg-lgpl" >> $env:GITHUB_ENV
