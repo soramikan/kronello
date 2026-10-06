@@ -2,6 +2,12 @@
 
 対象: CLI / MCP と LGPL FFmpeg runtime の macOS 配布 directory。[ADR-0065](../adr/0065-relocatable-macos-distribution.md) と [12 プラットフォームと依存](../architecture/12-platform-dependencies.md) に従う。GUI app bundle、Metal / VideoToolbox、Windows / Linux package の受け入れはこの結果に含めない。
 
+## 現在の受け入れ境界
+
+末尾の supervisor 実測で macOS CLI/MCP directory の ad-hoc 署名・再配置・実起動・runtime 差し替え・roundtrip は成功済み。以下に残る `pending host run` は各 interrupted / resumed job 時点の履歴、または未実施の Developer ID / notarization / Gatekeeper 工程を指す。履歴の失敗・未実施記録は上書きしない。
+
+公開製品の署名 / 公証 / Gatekeeper と GUI app bundle は RELEASE-002（M6）、Windows installer は RELEASE-003（M6）、Linux package は RELEASE-004（M6）の未実装・未検証範囲。通常 CI の codec / CLI/MCP 成功や開発用 GUI `.app` の起動を製品配布の受け入れに含めない。
+
 ## 配置と固定 input
 
 ```text
@@ -33,13 +39,13 @@ FFmpeg 9.0.2 / SVT-AV1 4.2.0 / dav1d 1.5.4 と source URL / archive SHA-256 / co
 
 FFmpeg 本体を Rust に静的リンクしない。library の ID は `@rpath/<name>`、内部依存 / rpath は `@loader_path`、executable の依存 / rpath は `@executable_path/../lib`。すべての Mach-O に `lipo -archs` と `otool -L/-l`、全7 library に `otool -D` を実行する。Apple `/usr/lib/` と `/System/Library/Frameworks/` 以外の absolute dependency、外部 rpath、期待しない Mach-O、欠落 library、host architecture 不一致は失敗にする。
 
-`package-manifest.json` がある executable は root の `lib/` を既定ロードする。`KRONELLO_FFMPEG_LIB_DIR` は lib directory そのものを指定する override。指定の欠落・ABI 不一致で開発 prefix / system へ戻らない。将来 GUI app はこの directory 全体を Resources 内へ内包できるが、FFI host は同じ `lib/` を明示して GUI 自身の再配置・署名を検証する。`scripts/build_macos_app.py` / GUI bundle は変更していない。
+`package-manifest.json` がある executable は root の `lib/` を既定ロードする。`KRONELLO_FFMPEG_LIB_DIR` は lib directory そのものを指定する override。指定の欠落・ABI 不一致で開発 prefix / system へ戻らない。将来 GUI app はこの directory 全体を Resources 内へ内包できるが、FFI host は同じ `lib/` を明示して GUI 自身の再配置・署名を検証する。RELEASE-001 は `scripts/build_macos_app.py` / GUI bundle を対象にしていない。現在の開発用 GUI build の存在は、公開製品 bundle の配布検証を意味しない。
 
 ## 再現手順
 
 macOS、Rust 1.95.0、Python 3.12 以上、C/C++ compiler、pkg-config、CMake / Meson / Ninja / make、Xcode command-line tools が必要。共有環境の `CARGO_HOME` / `CARGO_TARGET_DIR` / `TMPDIR` を維持し、jobs は3に制限する。出力 directory と report は新規 path のみ。失敗した候補を次の成功に流用せず、新規名で再実行する。
 
-native prefix がなければ次を実行する。これは **pending host run**。期待結果は exit 0、5 library の LGPL / ABI、SVT / dav1d の版、AV1 / ProRes / PCM24、license hashes を含む receipt。
+native prefix がなければ次を実行する。fresh build は当時 **pending host run** であり、末尾の host 受け入れは既存 prefix の verify-only を使用した。期待結果は exit 0、5 library の LGPL / ABI、SVT / dav1d の版、AV1 / ProRes / PCM24、license hashes を含む receipt。
 
 ```sh
 python3 scripts/build_ffmpeg_lgpl.py --prefix target/native/ffmpeg-lgpl --jobs 3
@@ -51,7 +57,7 @@ python3 scripts/build_ffmpeg_lgpl.py --prefix target/native/ffmpeg-lgpl --jobs 3
 python3 scripts/build_ffmpeg_lgpl.py --prefix target/native/ffmpeg-lgpl --verify-only
 ```
 
-署名を含む以下は **pending host run**。package script は manifest / hashes を確認後、pinned headers の `PKG_CONFIG_PATH` / `PKG_CONFIG_LIBDIR` と jobs=3 で release CLI / MCP / acceptance executable をビルドする。Cargo artifact JSON から shared target directory の実パスを取得し、Mach-O に install-name 変更用 header space を確保する。source がビルド中に変化したら成功 inventory を作らない。
+以下は ad-hoc host 受け入れを再現する手順（末尾の実行記録は成功済み）。package script は manifest / hashes を確認後、pinned headers の `PKG_CONFIG_PATH` / `PKG_CONFIG_LIBDIR` と jobs=3 で release CLI / MCP / acceptance executable をビルドする。Cargo artifact JSON から shared target directory の実パスを取得し、Mach-O に install-name 変更用 header space を確保する。source がビルド中に変化したら成功 inventory を作らない。
 
 ```sh
 python3 scripts/package_macos.py \

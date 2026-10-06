@@ -9,8 +9,8 @@
 | M2 | NLE 統合・CLI / MCP | CompositionClip、日本語 title、基本音声、基本エフェクト、固定 snapshot、計画 / 適用、書き出し、縦断デモ第 1 段階 | 11 |
 | M3 | 実用的な Motion Authoring | macOS ネイティブ GUI（canvas / curve editor、編集・テンプレート・書き出しページ）、テンプレート拡張、基本式、responsive layout、リアルタイム再生、M2 の後続機能、縦断デモ第 2 段階 | 25 |
 | M4 | 高品質・高解像度 | サブフレームブラー、temporal cache、8K / HDR 品質、GPU 経路診断、Composition の Media ノード、MCP 新版・GUI の安全モード排他・Windows FFmpeg runtime | 12 |
-| M5 | 高度な 2D Motion | Repeater、path 演出、音声連動、ルビ・縦書き、Simulation | 5 |
-| M6 | 拡張 | 2.5D、外部レンダー、互換アダプター、プラグイン、分散 | 4 |
+| M5 | 高度な 2D Motion・未割当編集機能 | Repeater、path 演出、音声連動、ルビ・縦書き、Simulation、式構文、Matte、macOS編集UI、名称・音声採否と経路整理 | 13 |
+| M6 | 拡張・他OS・製品配布 | 2.5D、互換アダプター、プラグイン、分散、Windows/Linux GUI、各OSの製品packageとresident保証の拡張 | 12 |
 
 ## 方針
 
@@ -29,9 +29,13 @@
 | M3 | INTEGRATION-002: [縦断デモ第 2 段階](vertical-slice.md)、QA-002: GUI / CLI / MCP 同等性 |
 | M4 | PERF-001: 参照シーンの benchmark |
 
+## 2026-10-06 の未割当範囲の整理
+
+[現在の実装範囲と残件](implementation-status.md) に、確認済み・未実装・未検証・保証外を対応付けた。NAME-001、EXPR-002/003、AUDIO-005、MATTE-001、FRAMEBRIDGE-001、GUI-007、INSPECT-002をM5、GUI-005/006、RELEASE-002〜004、GPU-004〜006をM6のplannedへ追加した。配置は作業計画であり、納期・未決事項の採否を確定するものではない。M3/M4の受け入れ範囲と完了は維持する。
+
 ## M2 の延期範囲と後続タスク
 
-M2 の P0 完了は以下の機能や検証の完了を意味しない。既存タスクの受け入れ条件を補い、未割当の範囲は M3 の `planned` タスクへ追加した。RECOVERY-001、GPU-003、COLOR-001、CACHE-003、PERF-001 は既存の M4 配置を維持する。ADR の決定は変更していない。
+以下はM2 closeout時に整理した延期範囲の履歴であり、現在もすべて未完了という意味ではない。M3/M4配置の項目は各受け入れ範囲で完了し、AAC/Opusや製品署名など範囲外の残件は上記の新規タスクへ分離した。M2 の P0 完了は以下の機能や検証の完了を意味しない。既存タスクの受け入れ条件を補い、未割当の範囲は M3 の `planned` タスクへ追加した。RECOVERY-001、GPU-003、COLOR-001、CACHE-003、PERF-001 は既存の M4 配置を維持する。ADR の決定は変更していない。
 
 | 後続タスク | 延期範囲 | 根拠 |
 |---|---|---|
@@ -54,6 +58,6 @@ M2 の P0 完了は以下の機能や検証の完了を意味しない。既存�
 | COLOR-001（更新、M4） | source 色変換 / 10-bit PQ・HLG 保持、HDR job profile と出力検証 | [ADR-0048](../adr/0048-media-native-build-and-asset-verification.md)、[ADR-0049](../adr/0049-audio-bus-timing-and-codec.md)、[ADR-0050](../adr/0050-fixed-job-execution-and-publication.md) |
 | CACHE-003（更新、M4） | GPU texture cache / surface pool、厳密 cache の backend / driver fingerprint | [FX-001](../testing/fx-001.md)、[05 レンダラー](../architecture/05-render-gpu.md) |
 | PERF-001（更新、M4） | GPU 二重描画・転送統計の集約、exact seek の効率化、実作品の保存・復元性能と snapshot 再検討 | [05 レンダラー](../architecture/05-render-gpu.md)、[ADR-0048](../adr/0048-media-native-build-and-asset-verification.md)、[ADR-0052](../adr/0052-snapshot-policy-evaluation.md) |
-| STORE-003（更新、M2 / P2、in_progress） | Dropbox / ネットワーク FS の安全モード・PROJECT_LOCKED、Linux / Windows の競合・強制終了回復 | [STORE-003](../testing/store-003.md)。適応的 snapshot の既定不採用と iCloud Drive の host 検証は完了。残る環境は利用可能な machine / mount がなく未確認 |
+| STORE-003（更新、M2 / P2、in_progress） | Dropbox / ネットワーク FS の安全モード・PROJECT_LOCKED | [STORE-003](../testing/store-003.md)。適応的 snapshot の既定不採用、iCloud Drive、Linux/Windowsの競合・強制終了回復CIは確認済み。実Dropbox管理フォルダ・実network mountが未確認 |
 
 INTEGRATION-001 の host 記録は Apple M1 / macOS / Metal、clean revision `31ea36f` の 4K image_sequence（2 frames / 55 checks）。通常 24 fps 動画・音声 mux・tight-ink 追従・streaming の検証とは扱わない。M2 closeout ではこの既存記録を参照し、実機コマンドを再実行していない。

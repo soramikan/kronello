@@ -35,7 +35,7 @@
 - GUI / CLI / MCP の同じ編集操作が同じ snapshot に到達すること。
 - 複数プロセスからの同時書き込みで、古い `base_revision` が必ず拒否されること。
 
-ARC-001 で固定した規約の具体的な検証契約は [ADR-0043](../adr/0043-semantic-dependencies-and-units.md)（TIME-001 / PROP-001）、[ADR-0044](../adr/0044-color-and-alpha-contracts.md)（GPU-001 / COLOR-001）、[ADR-0045](../adr/0045-snapshot-compatibility-boundaries.md)（PROP-001 / STORE-001 / RENDER-001 / JOB-001）を参照。これらは今後の受け入れ検証項目であり、実行済みテストの結果ではない。
+ARC-001 で固定した規約の具体的な検証契約は [ADR-0043](../adr/0043-semantic-dependencies-and-units.md)（TIME-001 / PROP-001）、[ADR-0044](../adr/0044-color-and-alpha-contracts.md)（GPU-001 / COLOR-001）、[ADR-0045](../adr/0045-snapshot-compatibility-boundaries.md)（PROP-001 / STORE-001 / RENDER-001 / JOB-001）を参照。この一覧は将来範囲を含む検証方針であり、それ自体は実行済みテストの結果ではない。完了済み範囲は [M3](../testing/m3-acceptance.md) / [M4](../testing/m4-acceptance.md) の受け入れ証拠、未実装・未検証の追跡先は [現在の実装範囲と残件](../roadmap/implementation-status.md) を参照する。
 
 ## 障害
 

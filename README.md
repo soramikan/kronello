@@ -37,6 +37,7 @@
 | [docs/roadmap/milestones.md](docs/roadmap/milestones.md) | マイルストーン M0〜M6 |
 | [docs/roadmap/vertical-slice.md](docs/roadmap/vertical-slice.md) | 最初の縦断テスト作品 |
 | [docs/backlog/](docs/backlog/README.md) | 実装バックログ（正本は `backlog.json`） |
+| [docs/roadmap/implementation-status.md](docs/roadmap/implementation-status.md) | 現在の実装範囲、未完了・未検証・保証外と後続タスク |
 | [docs/open-questions.md](docs/open-questions.md) | 未決事項 |
 | [docs/glossary.md](docs/glossary.md) | 用語集 |
 | [AGENTS.md](AGENTS.md) | コーディングエージェント向けの作業規約 |
@@ -52,7 +53,7 @@ cargo test --workspace --locked
 python3 scripts/backlog.py check
 ```
 
-CI は macOS (Apple Silicon) と Linux (Mesa lavapipe) でworkspaceを検証し、Windowsではworkerの実プロセス検査を行う。GPU画素は [固定環境のgolden比較手順](docs/testing/golden-comparison.md) と [最終Metal 40 scene比較の記録](docs/testing/m3-acceptance.md) を参照。
+CI は macOS (Apple Silicon) と Linux (Mesa lavapipe) でworkspaceを検証し、Windowsでは固定LGPL runtimeとCLI/MCPのbuild、実media、worker、保存層を検証する。Linux Vulkan / Windows DX12のsoftware adapter画像比較も別jobで実行する。GPU画素は [固定環境のgolden比較手順](docs/testing/golden-comparison.md) と [最終Metal 40 scene比較の記録](docs/testing/m3-acceptance.md) を参照。
 
 macOSの開発アプリは [apps/macos/README.md](apps/macos/README.md) の手順で `python3 scripts/build_macos_app.py --release` を実行すると、`target/macos/Kronello.app` に組み立てる。配布用signing / notarization済みの製品ではない。
 

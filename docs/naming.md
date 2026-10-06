@@ -5,6 +5,8 @@
 調べた範囲は crates.io、npm、PyPI、Homebrew（formula / cask）、GitHub のリポジトリ検索、Web 検索。
 **商標データベース（J-PlatPat、USPTO、EUIPO）は照会していない。** public にする前に確認する（[OQ-02](open-questions.md)）。
 
+2026-10-06追記: 以下の名称調査は当時の記録であり、現在の商標・domain/crateの利用可否を保証しない。repo公開後も商標照会と確保状況は未確認で、[OQ-02](open-questions.md#oq-02-商標の確認と名前の確保) / NAME-001で追跡する。
+
 ## `koma`（撤回）
 
 | 対象 | 結果 |

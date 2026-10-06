@@ -4,7 +4,7 @@
 
 - schema_version: 0.5
 - 更新日: 2026-10-06
-- タスク数: 77
+- タスク数: 93
 
 ## 集計
 
@@ -15,8 +15,8 @@
 | M2 | 0 | 1 | 10 | 0 | 11 |
 | M3 | 0 | 0 | 25 | 0 | 25 |
 | M4 | 0 | 0 | 12 | 0 | 12 |
-| M5 | 5 | 0 | 0 | 0 | 5 |
-| M6 | 4 | 0 | 0 | 0 | 4 |
+| M5 | 13 | 0 | 0 | 0 | 13 |
+| M6 | 12 | 0 | 0 | 0 | 12 |
 
 ## M0
 
@@ -310,7 +310,7 @@
   - patchの累計が文書サイズを超えたときにも完全snapshotを取る方式を評価し、採否を記録する
   - iCloud Drive・Dropbox等の実際の同期フォルダとネットワークファイルシステムで、安全モードとPROJECT_LOCKEDを手順で確認して記録する
   - Linux/Windowsで複数プロセスの競合と強制終了後の回復を確認する
-  - 2026-10-04時点の完了範囲（適応的snapshotの既定不採用: ADR-0052、host iCloud Drive検証）と未確認範囲（Dropbox・ネットワークFS・Linux・Windows）をdocs/testing/store-003.mdに分けて記録し、残る実環境検証が完了するまでin_progressを維持する
+  - 2026-10-06時点の確認済み範囲（ADR-0052、host iCloud Drive、run 37426096876のLinux/Windows競合・強制終了回復）と未確認範囲（実Dropbox管理フォルダ・実ネットワークFS）をdocs/testing/store-003.mdに分けて記録し、残る実環境検証が完了するまでin_progressを維持する
 
 
 ## M3
@@ -713,6 +713,77 @@
   - 順次再生とcheckpointからのseekを固定環境で比較する
   - 入力変更で影響するcheckpointを無効化する
 
+### NAME-001 名称の商標照会・名前確保状況の記録
+
+- 優先度: P1 / 領域: release / 状態: planned
+- 依存: なし
+- 受け入れ条件:
+  - OQ-02に従いJ-PlatPat・USPTO・EUIPOの照会結果、対象区分・地域・照会日・未判断の点を記録し、検索結果だけで法的利用可能性を断定しない
+  - crates.ioのkronelloと主要crate、ドメインについて所有・利用可否・取得要否を日付付きで確認する。取得・登録等は所有者の判断を記録してから実行する
+  - 公開前という旧目安を過ぎた未解決事項として追跡し、採否の決定記録をOQ-02から参照する
+
+### EXPR-002 人間向け式構文とASTの往復・入力UI
+
+- 優先度: P1 / 領域: expression / 状態: planned
+- 依存: EXPR-001, GUI-001
+- 受け入れ条件:
+  - 実装着手前にOQ-17の演算子・リテラル・Property参照・診断の構文を決定記録に固定する。ASTを正本としJavaScript互換にしない方針を維持する
+  - parser/formatterの往復、型・単位・依存・予算の診断を検証し、既存AST評価と同じ結果を得る
+  - GUIの式入力を共有編集APIへ接続し、構文エラー・IME確定・revision競合・Undoを確認する
+
+### AUDIO-005 圧縮音声AAC・Opusの採否と採用profileの検証
+
+- 優先度: P1 / 領域: audio / 状態: planned
+- 依存: MEDIA-002, AUDIO-003, RELEASE-001
+- 受け入れ条件:
+  - OQ-21（旧重複番号OQ-19）の採否を先に決定し、AAC-LC・Opusと対応containerごとの保証範囲を明記する。未採用形式は型付き拒否を維持する
+  - 採用する場合はLGPL配布構成・encoder品質・priming/padding・pre-skip/codec delay/discard padding・終端sampleとA/V同期を実測し、source manifestとprofileを固定する
+  - 採用形式は共有APIの固定snapshot書き出し・roundtripで検証する。採用を見送る場合は理由と代替profileを決定記録に残し、実装済みと扱わない
+
+### MATTE-001 Matte関係の作品モデル・保存・共有編集
+
+- 優先度: P1 / 領域: render / 状態: planned
+- 依存: RENDER-001, SERVICE-002, GUI-001
+- 受け入れ条件:
+  - transientなRenderSnapshot.MatteBindingと区別して文書matte関係・ID・版・参照循環・欠落時の意味を設計記録に固定する
+  - 共有edit.plan/apply、公開schema、保存再読込、revision・Undoへ接続し、alpha/luminance・invert・外部編集を検証する
+  - GUIから同じmatte関係を編集し、CLI/MCPと同じ固定snapshotの合成結果を得る。未知機能を黙って無視しない
+
+### FRAMEBRIDGE-001 generic VideoToolbox経路の意味と診断の整理
+
+- 優先度: P2 / 領域: gpu / 状態: planned
+- 依存: GPU-003
+- 受け入れ条件:
+  - PathKind::VideoToolboxの未実装診断と具体的なBgra8/Nv12 decode経路を区別し、generic経路の維持・廃止・具体化の判断を記録する
+  - 経路一覧・require_gpu_resident・診断・テストを整合させ、汎用decode/encodeや非対応形式が保証済みに見えないことを確認する
+
+### GUI-007 macOS編集UIの未接続操作を共有APIへ接続
+
+- 優先度: P2 / 領域: gui / 状態: planned
+- 依存: GUI-003, GUI-004, SERVICE-002
+- 受け入れ条件:
+  - EditのEffects追加、速度・ソース開始・逆再生・不透明度/合成設定、トラック表示/ミュートについて対応する共有モデル/APIの有無を先に整理し、必要なコア契約を固定する
+  - Motionのガイド/スナップ、色・書体/ウェイト・複数Text style spanの編集、およびEditの手のひら操作を実装する。GUI専用の作品状態を作らず、表示だけの状態はUI stateに分離する
+  - 実装済み操作だけを有効にし、共有APIとの同等性・Undo・外部変更・競合・IMEと実GUI操作を検証する。既存GUI-001〜004の完了範囲と区別して記録する
+
+### INSPECT-002 render.explainの見積もりを単一graph実行へ整合
+
+- 優先度: P1 / 領域: inspection / 状態: planned
+- 依存: INSPECT-001, PERF-001
+- 受け入れ条件:
+  - ADR-0092の単一graph・status readback一回に合わせ、render.explainのDUPLICATE_LINEAR_DISPLAY_RENDER診断と旧二重実行の転送見積もりを修正する
+  - 通常GPU・resident・CPU reference・temporal/tileごとの見積もりと実測の境界を示し、固定入力で実行countersとの整合をテストする
+  - explainは読み取り専用の計画でありGPUを実行しないことを維持し、native previewの画像readbackなしとfinal readbackを区別する
+
+### EXPR-003 DataAsset参照・過去時刻sample・連続noiseの式拡張
+
+- 優先度: P2 / 領域: expression / 状態: planned
+- 依存: EXPR-001, AUDIO-001
+- 受け入れ条件:
+  - 未実装のDataAsset参照、動的な過去Property sample、連続補間noiseの型・時間写像・静的依存と循環拒否・意味版を設計記録に固定する
+  - 不変の入力hashと固定seedを使い、外部I/Oや時計を評価へ持ち込まず、命令・メモリ・sample予算を実際の追加処理に適用する
+  - 任意時刻・逆順・再試行の決定性、時間境界・資産欠落・循環・予算超過を共有APIと最終renderで検証する。人間向け構文のEXPR-002とは独立にAST契約を検証する
+
 
 ## M6
 
@@ -747,3 +818,75 @@
 - 受け入れ条件:
   - 素材/フォント/engine versionsをworker間で照合する
   - 未ベイクstateful区間を任意frameへ自由分割しない
+
+### GUI-005 WindowsネイティブGUIとプレビュー面の接続
+
+- 優先度: P2 / 領域: gui / 状態: planned
+- 依存: FFI-002, GUI-004
+- 受け入れ条件:
+  - ADR-0032のWinUI 3で共有C ABIとCommand/Queryを使い、対象OSのsurface受け渡し・所有権・同期・resize/closeを実環境で検証する
+  - Edit/Motion/Template/Exportの共有デザインとUI state分離を実装し、revision通知・競合・Undo・安全モード排他をCLI/MCPと照合する
+  - 日本語IME・アクセシビリティ・キーボード操作・再生停止・例外時の終了を実GUIで確認し、対象OS/adapter/版と保証範囲を記録する
+
+### GUI-006 LinuxネイティブGUIとプレビュー面の接続
+
+- 優先度: P2 / 領域: gui / 状態: planned
+- 依存: FFI-002, GUI-004
+- 受け入れ条件:
+  - ADR-0032のGTK4で共有C ABIとCommand/Queryを使い、対象OSのsurface受け渡し・所有権・同期・resize/closeを実環境で検証する
+  - Edit/Motion/Template/Exportの共有デザインとUI state分離を実装し、revision通知・競合・Undo・安全モード排他をCLI/MCPと照合する
+  - 日本語IME・アクセシビリティ・キーボード操作・再生停止・例外時の終了を実GUIで確認し、対象OS/adapter/版と保証範囲を記録する
+
+### RELEASE-002 macOS製品署名・notarization・実ダウンロード検証
+
+- 優先度: P1 / 領域: release / 状態: planned
+- 依存: RELEASE-001, GUI-004, NAME-001
+- 受け入れ条件:
+  - 開発用ad-hoc署名と区別してDeveloper IDの署名・hardened runtime・entitlements・notarizationを製品package全体で検証する
+  - 配布形式を確定し、対象に適したstaple・Gatekeeper・quarantineを保持した実ダウンロードから初回起動・FFmpeg/helper起動まで確認する
+  - LGPL再リンク可能性・license/source manifest・package hash・署名者・検証環境・コマンドとexitを記録し、資格情報を含めない
+
+### RELEASE-003 Windows製品packageとクリーン環境での配布検証
+
+- 優先度: P2 / 領域: release / 状態: planned
+- 依存: RELEASE-001, NAME-001, GUI-005
+- 受け入れ条件:
+  - Windowsの配布形式・署名/検証方法を定め、GUI・CLI/MCP・workerとLGPL runtimeの依存・license/source manifestを固定する
+  - 開発環境の絶対path/system libraryに依存せず、再配置・実ダウンロード・インストール/起動/削除をクリーン環境で検証する
+  - 対応OS/architecture・runtime版・package hash・検証コマンド/exitを記録し、CI内のビルド成功だけで配布可能と判定しない
+
+### RELEASE-004 Linux製品packageとクリーン環境での配布検証
+
+- 優先度: P2 / 領域: release / 状態: planned
+- 依存: RELEASE-001, NAME-001, GUI-006
+- 受け入れ条件:
+  - Linuxの配布形式・署名/検証方法を定め、GUI・CLI/MCP・workerとLGPL runtimeの依存・license/source manifestを固定する
+  - 開発環境の絶対path/system libraryに依存せず、再配置・実ダウンロード・インストール/起動/削除をクリーン環境で検証する
+  - 対応OS/architecture・runtime版・package hash・検証コマンド/exitを記録し、CI内のビルド成功だけで配布可能と判定しない
+
+### GPU-004 WindowsのGPU常駐media/render経路の昇格
+
+- 優先度: P2 / 領域: gpu / 状態: planned
+- 依存: GPU-003, MEDIA-003
+- 受け入れ条件:
+  - Windowsで保証するadapter/API/codec/pixel formatを設計記録に固定し、hardware decodeからrenderまでのdevice・同期・所有権・寿命を実機で確認する
+  - CPU upload/readback・GPU copy・transfer countersを測定し、software golden成功をhardware常駐保証の代替にしない
+  - 固定入力の画素/PTS・seek・再利用/解放・異常系を比較し、非対応環境は明示software選択またはrequire_gpu_residentの型付き拒否を維持する
+
+### GPU-005 LinuxのGPU常駐media/render経路の昇格
+
+- 優先度: P2 / 領域: gpu / 状態: planned
+- 依存: GPU-003, MEDIA-001
+- 受け入れ条件:
+  - Linuxで保証するadapter/API/codec/pixel formatを設計記録に固定し、hardware decodeからrenderまでのdevice・同期・所有権・寿命を実機で確認する
+  - CPU upload/readback・GPU copy・transfer countersを測定し、software golden成功をhardware常駐保証の代替にしない
+  - 固定入力の画素/PTS・seek・再利用/解放・異常系を比較し、非対応環境は明示software選択またはrequire_gpu_residentの型付き拒否を維持する
+
+### GPU-006 macOS常駐デコードの追加形式・色精度の保証評価
+
+- 優先度: P2 / 領域: gpu / 状態: planned
+- 依存: GPU-003, COLOR-001
+- 受け入れ条件:
+  - GPU-003で未保証のHDR/10-bit/full-range/HEVC hev1について形式別の採否と必要なmetadata/変換を設計記録に固定する
+  - 採用する形式はVideoToolboxからMetalの所有権・同期・PTS・色精度と転送量を実機で測定し、native software経路と比較する
+  - 未採用または未検証の形式は型付き拒否を維持し、8-bit SDRの既存保証やCOLOR-001のsoftware HDRと混同しない

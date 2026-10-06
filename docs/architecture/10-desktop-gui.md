@@ -24,8 +24,8 @@ kronello-ffi  --->  kronello-service (Command / Query API)
 | OS | フレームワーク | 状態 |
 |---|---|---|
 | macOS | SwiftUI / AppKit | 先行実装（M3） |
-| Windows | WinUI 3 | macOS 版の後（[ADR-0032](../adr/0032-windows-winui-linux-gtk.md)） |
-| Linux | GTK4 | macOS 版の後（[ADR-0032](../adr/0032-windows-winui-linux-gtk.md)） |
+| Windows | WinUI 3 | 未実装。GUI-005（M6）でsurfaceを含め検証（[ADR-0032](../adr/0032-windows-winui-linux-gtk.md)） |
+| Linux | GTK4 | 未実装。GUI-006（M6）でsurfaceを含め検証（[ADR-0032](../adr/0032-windows-winui-linux-gtk.md)） |
 
 ## 見た目
 
@@ -206,3 +206,7 @@ Export は320pxの設定、中央の native Viewer、304pxの確認、設定を�
 
 設計判断は [ADR-0078](../adr/0078-template-export-pages-and-inspected-snapshot.md)、
 実行した checks と SwiftPM / Metal / 両 theme の pending 手順は [GUI-004 の検証](../testing/gui-004.md)。
+
+## 未接続の編集操作の追跡
+
+GUI-001〜004の完了は、すべての設計上のコントロールが編集可能という意味ではない。EditのEffects追加・速度/ソース開始/逆再生・合成設定・トラック表示/ミュート、Motionのガイド/スナップ、色・書体/ウェイト・複数Text style spanなど、コード上で無効化または表示専用の操作をGUI-007（M5）で追跡する。根拠とAPI/UIの区別は [現在の実装範囲と残件](../roadmap/implementation-status.md#macos-gui-で残る明示的な制限) を参照する。

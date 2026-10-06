@@ -3,7 +3,7 @@
 決まっていない論点の一覧。解決したら ADR を追加し、ここから項目を削除して「解決済み」に ADR へのリンクを残す。
 「決定時期」は、遅くともそのタスクの着手前に決める必要がある目安。
 
-番号は欠番を詰めない。
+番号は欠番を詰めない。2026-10-06 に重複を整理した: 過去の「OQ-19 イベントと逆操作情報の保持期間」はその番号を維持する。「OQ-19 圧縮音声 AAC と配信向け音声の採用」として重複掲載していた未決事項は、未使用の OQ-21 へ移した。圧縮音声を指す旧 OQ-19 の参照は OQ-21 として読む。保持期間の過去の決定・参照は変更しない。
 
 ## 未決
 
@@ -14,21 +14,21 @@
 - 商標データベース（J-PlatPat、USPTO、EUIPO）の照会。これまでの調査では一度も照会していない。
 - crates.io の `kronello` と主要な `kronello-*`、ドメイン（調査時点で `kronello.com` は未登録）の確保。いずれも先着順。
 
-決定時期: 公開前。名前の確保は早いほどよい。
+決定時期: 公開前としていたが、2026-10-06 時点でリポジトリは public であり、この判断時期は経過した。商標照会・名前の確保を実施済みとは扱わず、未決のまま [NAME-001](backlog/backlog.json)（planned）で確認と採用判断を行う。新しい期限や取得の承認をここでは決めない。
 
 ### OQ-17 式言語の構文
 
 方針は決定した（[ADR-0040](adr/0040-expression-language-policy.md)）: 正本は AST、人間向けには中置演算と関数呼び出しだけの式言語、JavaScript 互換にしない。構文の詳細（演算子、リテラル、Property 参照の書き方、エラー表示）は未定。
-決定時期: EXPR-001 の後、GUI で式入力が必要になる M3。
+決定時期: EXPR-001 の後、M3 としていたが、M3 の受け入れ完了後も構文の詳細は未決である。AST の評価実装を GUI の式入力・parser の実装済み根拠にしない。[EXPR-002](backlog/backlog.json)（planned）は構文の採用判断を前提とする後続タスクであり、新しい期限や構文をここでは決めない。
 
-### OQ-19 圧縮音声 AAC と配信向け音声の採用
+### OQ-21 圧縮音声 AAC と配信向け音声の採用
 
 MEDIA-002 では AV1 / H.264 / HEVC の MOV profile の音声を ALAC に限り、AAC は `UNSUPPORTED_FEATURE` とした（[ADR-0068](adr/0068-versioned-delivery-movie-profiles.md)）。残っているのは次の点。
 
 - AAC-LC を採用するかどうか。配布と特許の確認、FFmpeg 内蔵 AAC encoder の品質評価、priming / padding と終端 sample の扱いの実測が済んでいない。
 - Web 配信向けの AV1 の音声（MP4 / WebM の Opus）。LGPL 構成の FFmpeg に libopus を追加する必要がある。
 
-決定時期: Web 配信向けの書き出しを保証する前（M4 以降）。
+決定時期: Web 配信向けの圧縮音声出力を保証する前。[AUDIO-005](backlog/backlog.json)（planned）は採用判断を前提とする後続タスクであり、M4 の完了だけを AAC / Opus の採用・配信互換の保証としない。新しい期限や codec の採用はここでは決めない。
 
 ## タスク内で設計する事項
 
@@ -39,7 +39,8 @@ MEDIA-002 では AV1 / H.264 / HEVC の MOV profile の音声を ALAC に限り�
 | 高頻度経路での FFI の JSON 直列化コストの計測と対策 | FFI-001 |
 | 外部変更が来たときの GUI 上の扱い（選択中のオブジェクトの消失など）。提案は [エラーと競合の状態](design-system/screens/states.md) | GUI-001 |
 | UI フォントの同梱形態（可変フォントかウェイト別か、サブセット）と、デザイントークンを Swift の定数へ写す方法 | GUI-001 |
-| Windows / Linux でのプレビュー面の受け渡し | 各 GUI の着手時（タスク未作成） |
+| Windows でのプレビュー面の受け渡し | [GUI-005](backlog/backlog.json)（planned）の着手時 |
+| Linux でのプレビュー面の受け渡し | [GUI-006](backlog/backlog.json)（planned）の着手時 |
 
 ## 解決済み
 

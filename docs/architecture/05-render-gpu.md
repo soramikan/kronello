@@ -2,11 +2,13 @@
 
 ## NLE-002 の動画 / Generator / clip effects
 
+以下の SDR software 経路は NLE-002 の初期契約。M4 では COLOR-001 の明示 HDR profile、GPU-003 の strict resident 経路、PERF-001 の bounded sequential decode を追加した。各経路の制限は本章末尾と各検証記録に従う。
+
 Sequence compiler は Composition の独立 instance に加え、動画 Asset の明示 stream / rational PTS 要求と `kronello.solid` version 1 を同じ Scene IR / Render DAG へ lowering する。Clip.properties は配置 transform / effects を Sequence time で評価する。動画は native dimensions、Generator は Sequence extent を local rectangle とする。track 順は下→上、transition の同一 track 内は開始時刻順。effects の後に crossfade incoming の opacity を掛ける。
 
 `VideoRenderBackend` は固定 DAG に入った Asset hash / locator だけを解決する。元 Project を再読込しない。software seek / decode、明示 SDR RGBA8 color conversion / inverse transfer / premultiply、CPU nearest sampling、選択 GPU への明示 RGBA16F upload を通す。未知 format / HDR / 色 tag、asset 欠落 / hash mismatch は typed error。タグ欠落時の明示 default（YUV: BT.709 limited、RGB: sRGB full）は sequence.query に assumptions として見える。native plane decode API の HDR 保持をこの SDR renderer の対応と同一視しない。
 
-clip effects は FX-001 / FX-002 の版付き ordered DAG、affine 契約、halo / backward ROI、raster identity を共有する。`FrameMetadata.input_path` は active video の CPU decode / color / sampling と selected backend の経路を表し、GPU の低層 TransferStats は upload bytes / operations を数える。GPU-resident decode、frame interpolation、tile 間の decode cache は追加していない。CPU / GPU 比較の実行範囲は [NLE-002 の検証](../testing/nle-002.md)、時間・色・Generator と transition の意味版は [ADR-0062](../adr/0062-video-generator-and-timeline-edits.md) を参照する。
+clip effects は FX-001 / FX-002 の版付き ordered DAG、affine 契約、halo / backward ROI、raster identity を共有する。`FrameMetadata.input_path` は active video の CPU decode / color / sampling と selected backend の経路を表し、GPU の低層 TransferStats は upload bytes / operations を数える。NLE-002 時点では GPU-resident decode、frame interpolation、tile 間の decode cache は追加していなかった。frame interpolation は現在も未対応。CPU / GPU 比較の実行範囲は [NLE-002 の検証](../testing/nle-002.md)、時間・色・Generator と transition の意味版は [ADR-0062](../adr/0062-video-generator-and-timeline-edits.md) を参照する。
 
 ## レンダー要求
 
@@ -56,7 +58,7 @@ semantic bounds は局所 support を変換し、pixel bounds / backward ROI は
 snapshot は旧 stroke 版も認識するが、旧版に固定した snapshot で新 options を実行しない。
 cache / golden draw manifest は実際の版と dash / phase / alignment / local primitive 入力を固定する。
 [ADR-0073](../adr/0073-local-stroke-extensions.md)、[VEC-005 検証](../testing/vec-005.md) を参照。
-Metal parity / baseline 採用は host run 待ちであり、CPU・Naga 合格とは区別する。
+Metal parity と baseline 採用の現行実測は [VEC-005](../testing/vec-005.md) と [QA-004](../testing/qa-004.md) に記録する。CPU・Naga 合格とは区別する。
 
 ### VEC-004 の gradient paint
 
@@ -74,7 +76,7 @@ CPU の面検証と GPU の sticky validation flag で型付きエラーにし�
 旧固定 snapshot は意味版の不一致を拒否し、旧 Project の省略 options は従来値へ正規化する。
 16bit PNG / RGBA16F は従来の出力規約を維持し、VEC-004 では dither を追加しない。
 native preview の Bgra8Unorm は banding の可能性を残す。8bit 出力 / preview の対策は将来の量子化境界で検討する。
-Metal 実機の一致・32 シーンの新 golden 候補生成 / 明示採用 / 比較は host run 待ち。
+Metal 実機の一致・golden 明示採用 / 比較の現行証跡は [VEC-004](../testing/vec-004.md) と [QA-004](../testing/qa-004.md) を参照する。現在の QA-004 基準は 40 scenes。
 [検証記録](../testing/vec-004.md) の残件を完了するまで GPU の受け入れ成功と扱わない。
 
 ## 色
@@ -154,7 +156,7 @@ M1 / M2 は互換経路でも実装を進め、転送コストを明示する。
 
 共通 Query `render.explain` は Composition / Sequence の snapshot、Scene IR、tile ごとの Render DAG を組立て、stage code / inputs / SceneKey、要求・halo 実行領域、面数・メモリ・転送の推定を返す。frame executor と同じ `frame_tiles` を使う。`executed:false` であり、GPU の可用性や転送時間の実測ではない。失敗時は `plan:null` と型付き diagnostics を返し、代替 backend を選ばない。
 
-control upload / image upload / GPU image copy / image・status readback を分ける。組込 GPU の frame export は tile ごとに linear / display の二回描画を行い、二つの RGBA16F image（256-byte row padding）と二つの4-byte statusを readback する。control upload の bytes / operations は未推定の null。CPU の GPU 転送は0。注入 backend の未知使用量も null とする。
+control upload / image upload / GPU image copy / image・status readback を分ける。現行 `render.explain` の推定は tile ごとに linear / display の二回描画と二つの RGBA16F image（256-byte row padding）・二つの4-byte status readback を数えている。これは PERF-001 の実 executor の一回 graph / 一つの status に未追従であり、`DUPLICATE_LINEAR_DISPLAY_RENDER` notice も現在の実行回数を示さない。実際の転送は `FrameMetadata.transfer_stats` で確認する。control upload の bytes / operations は未推定の null。CPU の GPU 転送は0。注入 backend の未知使用量も null とする。
 
 RGBA16F 面は8 bytes/pixel、CPU 参照面は16 bytes/pixel、最終 host の linear / display は合計32 bytes/pixel。中間面は既存 backend の保守的な安全予算式による `_estimate` で、allocator / driver / geometry / font / RSS / 実測 peak を含まない。`DUPLICATE_LINEAR_DISPLAY_RENDER`、`ZERO_OPACITY_STILL_PROCESSED`、`EFFECT_HALO_EXPANSION`、`SURFACE_BUDGET_EXCEEDED` は処理・安全予算上の notice。OQ-14 の性能合否を決めない。
 
@@ -184,9 +186,9 @@ cache_key = hash(
 
 ## M0 GPU スパイクの実装範囲
 
-GPU-001 の `kronello-gpu` は wgpu 30.0.1 / pollster 1.0.1 を使い、矩形・PAM 素材から線形 premultiplied RGBA16F までの最短経路を実装した。CPU upload / GPU 内コピー / GPU→CPU readback を別の `TransferStats` として記録する。`kronello-framebridge` の unsafe native interop は macOS のモジュール内に隔離し、IOSurface の BGRA8 単一面取り込み・出力を検証する。M0 スパイク自体は通常 renderer / Render DAG を提供しない。M1 の RENDER-001 は下記の節で接続し、他形式の GPU 常駐保証は未実装。実測結果と制約は [スパイク報告](../testing/gpu-spike-m0.md)、基準未登録の golden harness は [比較手順](../testing/golden-comparison.md) を参照。
+GPU-001 の `kronello-gpu` は wgpu 30.0.1 / pollster 1.0.1 を使い、矩形・PAM 素材から線形 premultiplied RGBA16F までの最短経路を実装した。CPU upload / GPU 内コピー / GPU→CPU readback を別の `TransferStats` として記録する。`kronello-framebridge` の unsafe native interop は macOS のモジュール内に隔離し、IOSurface の BGRA8 単一面取り込み・出力を検証する。M0 スパイク自体は通常 renderer / Render DAG を提供しない。M1 の RENDER-001 は下記の節で接続した。現在は M4 の GPU-003 が BGRA8 / NV12 の限定された動画 GPU 常駐経路を保証する。M0 時点の実測結果と制約は [スパイク報告](../testing/gpu-spike-m0.md)、現在の採用済み基準と golden harness は [比較手順](../testing/golden-comparison.md) を参照。
 
-M1 / Metal の追加実測では、wgpu 30.0.1 の同一 MTLDevice による IOSurface の零コピー import / output と、CVPixelBuffer → CVMetalTextureCache → HAL import が成功した。VideoToolbox の H.264 decode 出力は BGRA8 および NV12 biplanar（R8 / RG8）を取り込めた。H.264 3 frame は両形式で hardware decoder 使用を確認し、BGRA8 のテストパターン最大 channel 誤差は 1。wgpu 出力の VideoToolbox encoder 投入と YCbCr→RGB 精度は未検証。形式ごとの実測値・寿命・同期・転送 counters の範囲は [追加スパイク報告](../testing/gpu-spike-m0.md#corevideo--videotoolbox-追加スパイク) を参照。
+M1 / Metal の追加実測では、wgpu 30.0.1 の同一 MTLDevice による IOSurface の零コピー import / output と、CVPixelBuffer → CVMetalTextureCache → HAL import が成功した。VideoToolbox の H.264 decode 出力は BGRA8 および NV12 biplanar（R8 / RG8）を取り込めた。H.264 3 frame は両形式で hardware decoder 使用を確認し、BGRA8 のテストパターン最大 channel 誤差は 1。この追加スパイク時点では wgpu 出力の VideoToolbox encoder 投入と YCbCr→RGB 精度は未検証だった。M4 GPU-003 は後者を検証したが、GPU 常駐出力から VideoToolbox encoder への直接投入は現在も保証しない。形式ごとの実測値・寿命・同期・転送 counters の範囲は [追加スパイク報告](../testing/gpu-spike-m0.md#corevideo--videotoolbox-追加スパイク) を参照。
 
 ## M1 GPU-002 の描画境界
 
@@ -244,11 +246,11 @@ DAG は topological なノード列と明示 input index を持つ。index は�
 
 Shape の単色 / linear・radial・focal_radial・conic gradient fill / stroke と miter / bevel / round join、butt / square / round cap を接続する。stroke の非一様 scale / shear は `UNSUPPORTED_FEATURE`。fill / text の非一様変換は対応する。未知 paint / 後続 stroke 機能は opaque で保持し、必要な最終出力は拒否する。glyph ごとに coverage を作り、text の opacity は glyph 全体の合成に一度掛ける。Group / Null / 配置の containment 枠も局所 opacity と順序を保持する。
 
-現行文書型には matte 欄がないため `MatteBinding` を snapshot の明示レンダー入力とする。source / matte とも stable SceneKey。matte は表示 root / children から除外し、`visible = true` の場合だけ表示する。source ごとの binding は一つ、共有 matte の DAG は再利用する。欠落・非アクティブ参照・containment / matte を合わせた循環は失敗する。
+Project / Node の永続モデルには matte 欄がなく、共有編集 Command / GUI から保存・編集する契約は未実装（後続 MATTE-001、M5）。現在の `MatteBinding` は transient な `RenderSnapshot` 入力であり、永続モデル対応の代替ではない。source / matte とも stable SceneKey。matte は表示 root / children から除外し、`visible = true` の場合だけ表示する。source ごとの binding は一つ、共有 matte の DAG は再利用する。欠落・非アクティブ参照・containment / matte を合わせた循環は失敗する。
 
-scene 1,024 node、DAG 4,096 node、containment / matte recursion 24、出力 16,777,216 pixel の保守的上限を設ける。backend は GPU-002 の 1,024 draw node・32 depth・65,536 edge・512 MiB 面予算をさらに適用し、限界を超えた要求はエラーにする。INTEGRATION-001 / [ADR-0053](../adr/0053-integration-evaluated-queries-and-render-tiles.md) で幅または高さが512 pixelsを超える出力を最大512×512のtileへ分け、元画素格子と既存effect ROI haloを保って同じbackendで実行する。metadataは元のregion、最終linear / display面は全画面のまま。movie export は RENDER-003 の tile sink から1枚の RGBA8 buffer に組み立てて即 encode し、全画面 linear / display と全 frames payload を保持しない。巨大 cumulative halo は node 別の保守的 allocation 総額512 MiBで backend allocation 前に拒否する。GPU texture cache・資源pool・性能保証は未実装。CACHE-001 のインメモリ cache は下記の範囲で実装した。
+scene 1,024 node、DAG 4,096 node、containment / matte recursion 24、出力 16,777,216 pixel の保守的上限を設ける。backend は GPU-002 の 1,024 draw node・32 depth・65,536 edge・512 MiB 面予算をさらに適用し、限界を超えた要求はエラーにする。INTEGRATION-001 / [ADR-0053](../adr/0053-integration-evaluated-queries-and-render-tiles.md) で幅または高さが512 pixelsを超える出力を最大512×512のtileへ分け、元画素格子と既存effect ROI haloを保って同じbackendで実行する。metadataは元のregion、最終linear / display面は全画面のまま。movie export は RENDER-003 の tile sink から1枚の RGBA8 buffer に組み立てて即 encode し、全画面 linear / display と全 frames payload を保持しない。巨大 cumulative halo は node 別の保守的 allocation 総額512 MiBで backend allocation 前に拒否する。M4 CACHE-003 では GPU texture LRU・資源 pool・外部 disk cache を実装した。性能の測定範囲と制限は PERF-001 の記録に従い、一般的な性能保証にはしない。CACHE-001 の初期インメモリ cache は下記の範囲で実装した。
 
-GPU adapter は同じ lowering 済み DrawScene について `render_scene` と `render_scene_output` を各一回呼ぶ。両経路とも合成・mask・色変換を GPU 上で行い、それぞれ image と validation status を readback する。CPU へ持ち帰った線形画素を出力変換する GPU 名義の経路ではない。二回の描画を統合する最適化と renderer API での転送統計の集約は後続課題。
+M1 の GPU adapter は linear / display 用に同じ DrawScene を二回実行していた。現在の M4 PERF-001 は一回の graph 実行から linear / display を GPU 上で生成し、二つの image と一つの validation status を readback する。renderer API の actual 転送統計は要求単位で集約する。詳細は [GPU fusion 検証](../testing/perf-001-gpu-fusion.md) を参照する。
 
 ### 連番・ファイル・metadata schema 1
 
@@ -270,17 +272,19 @@ RGBA16F の各 component は有限、alpha は `[0,1]`、RGB の絶対値は 65,
 - 正規化有理数 `time`（num / den は10進文字列）、連番時の `frame_index`（10進文字列）と `sequence_number`。任意時刻の still では後二項目は null。
 - `design_extent`、`region`（origin / extent / pixels）、2×3 の `design_to_pixel`、`working_space`、`flatten_tolerance_px`。
 - `numeric` / `display` の各 `ImageFormat`（color_space、transfer_function、alpha、association_space、pixel_format、channel_order、row_order、byte_order、clipping）。
-- `backend`（`cpu_reference_float32` または `wgpu_rgba16f`）、`input_path`（通常の `semantic_scene`、または動画 CPU decode / color / sample と selected backend の明示経路）。厳密 cache の GPU / driver fingerprint 固定は CACHE / QA の後続範囲。
+- `backend`（`cpu_reference_float32` または `wgpu_rgba16f`）、`input_path`（通常の `semantic_scene`、または動画 CPU decode / color / sample と selected backend の明示経路）。GPU / driver fingerprint は M4 CACHE-003 の厳密 raster namespace に含める。
 
-出力先は新しい directory を排他的に作り、既存 directory は拒否する。全 frame を内部 staging へ生成・検証・sync してから確定名に rename し、最後に `sequence.json` を確定する。通常エラーでは今回作った directory を rollback する。既存成果物は上書きしない。プロセス強制終了時の orphan 回収・resume・directory 全体の crash durability は JOB / RECOVERY の未実装範囲。
+出力先は新しい directory を排他的に作り、既存 directory は拒否する。全 frame を内部 staging へ生成・検証・sync してから確定名に rename し、最後に `sequence.json` を確定する。通常エラーでは今回作った directory を rollback する。既存成果物は上書きしない。この直接同期 API 自体のプロセス強制終了時の orphan 回収・resume・directory 全体の crash durability は保証しない。固定 worker の crash recovery / publication は別の [RECOVERY-001](../testing/recovery-001.md) の契約として実装・検証する。
 
 受け入れ条件と CPU / host 検証の区別は [RENDER-001 の検証](../testing/render-001.md) を参照。
 
 ## M1 CACHE-001 の分離 cache
 
-`kronello-render::RenderCache` は呼出側が所有する削除可能な導出データで、Project / `.kronello` に保存しない。ディスク cache は追加せず、将来追加する場合も ADR-0006 と `kronello-store::render_cache_location` に従う。GPU / SQLite の型や pointer identity を key に使わない。
+以下は CACHE-001 の初期保証範囲。現在の GPU texture / pool / disk cache は本章の CACHE-003 節で定義し、この CPU cache の歴史的制限と区別する。
 
-key は `cache001-json-sha256-v1` と level namespace を付けた入力を、sorted object keys の compact UTF-8 JSON にして SHA-256 で生成する。文書の編集 revision だけで区別しない。下流への伝播は content hash で行い、別ノードの entry を一括削除しない。過去の key の entry は容量内で残り、同じ内容に戻した場合も再利用できる。
+`kronello-render::RenderCache` は呼出側が所有する削除可能な導出データで、Project / `.kronello` に保存しない。CACHE-001 自体はディスク cache を追加せず、M4 CACHE-003 の外部 disk cache も ADR-0006 と `kronello-store::render_cache_location` に従う。GPU / SQLite の型や pointer identity を key に使わない。
+
+CACHE-001 初期 key は `cache001-json-sha256-v1`。現行 shared semantic key は CACHE-003 の `cache003-json-sha256-v2` と level namespace を付けた入力を、sorted object keys の compact UTF-8 JSON にして SHA-256 で生成する。文書の編集 revision だけで区別しない。下流への伝播は content hash で行い、別ノードの entry を一括削除しない。過去の key の entry は容量内で残り、同じ内容に戻した場合も再利用できる。
 
 | level | key の意味的入力 | 保持する導出値 |
 |---|---|---|
@@ -303,10 +307,10 @@ layout の取得後に、その時刻の各 style の fill を `style_index` で
 - `RenderSnapshot::evaluation_content_hash()` は `content_hash()` と同じ入力から revision だけ除外する。metadata の `content_hash()` は従来どおり revision も含む。
 - `layout_content_hash(&ResolvedText)`、`SceneNodeIr.layout_content_hash`、`CoveragePath.geometry_content_hash` は意味的 key の下流伝播に使う。
 - `RenderBackend::execute_with_cache` の既定実装は `execute` を呼ぶ。`CpuReferenceBackend` は `RasterCacheKey` と `RenderCache::rasterize` を使い、実際の path raster だけを再利用する。Group の opacity・合成順・mask・display transform は毎回既存の CPU 参照演算で計算する。
-- raster namespace `cpu-reference-f32-v1` は CPU の float32 演算を区別する。GPU backend は今回は texture / raster を保持しない。将来 GPU cache を追加する場合は backend・device・driver の fingerprint を namespace へ固定する。backend 名だけで異なる GPU の画素を共有しない。
+- raster namespace `cpu-reference-f32-v1` は CPU の float32 演算を区別する。CACHE-001 時点の GPU backend は texture / raster を保持しなかった。現在の CACHE-003 は backend・device・driver の fingerprint を namespace へ固定する。backend 名だけで異なる GPU の画素を共有しない。
 - `kronello-eval::DependencyGraph::evaluate_scene_with_properties` は値の取得を純粋な callback として受け、render cache へ逆依存しない。`kronello-text::validate_fonts` は導出 layout 再利用時の明示 byte 照合を提供する。
 
-受け入れ条件の per-level counter、CPU の cached / disabled / direct 実行、cold / warm / 逆順 / eviction / clear、連番ファイル一致の検証は [CACHE-001 の検証](../testing/cache-001.md) を参照。GPU 実機での画素 cache、ディスク永続化、性能目標の実測は今回の保証範囲に含めない。
+受け入れ条件の per-level counter、CPU の cached / disabled / direct 実行、cold / warm / 逆順 / eviction / clear、連番ファイル一致の検証は [CACHE-001 の検証](../testing/cache-001.md) を参照。GPU 実機での画素 cache、ディスク永続化、性能目標の実測は CACHE-001 の保証範囲に含めず、M4 の CACHE-003 / PERF-001 で別途検証した。
 
 ## RENDER-003 の movie export
 
@@ -317,7 +321,7 @@ ROI / halo は従来の backwards compiler と絶対画素格子を共有する�
 effect の3 temporaryと root reserveを execution ROI union で数える。
 512 MiB超過は `UNSUPPORTED_FEATURE`。backend 固有の安全予算も適用する。
 一般 frame / image sequence の最終2面と render.explain の host 面推定は従来のまま。
-movie は RGBA8 1面だけを全画面保持し、1 frame ごとに native encoderへ渡す。
+SDR movie は RGBA8 1面だけを全画面保持し、1 frame ごとに native encoderへ渡す。
 音声の spool / bounded Bus、I/O report、実測 RSS と検証範囲は
 [RENDER-003](../testing/render-003.md) を参照する。
 
@@ -371,3 +375,11 @@ GPU lowering は compiler が末尾に付加した synthetic output root（直�
 単色の fill-only outline で有限かつ保守的な境界を求められる場合は、境界外の画素を透明で書き、16点の被覆計算を省く。境界には浮動小数点丸めと画素幅の余裕を加える。stroke、gradient、非有限・極端な座標や scale、境界が不確かな入力は従来のループへ戻る。dispatch の領域は変えず、再利用 surface の全画素を書き直す。被覆のある画素の色変換・sticky validation、scene の容量上限、所有権と意味キーは維持する。
 
 小数座標・異方的 scale・4K相当scale・複数 contour・Evenodd・暗黙の閉路、cache/pool再利用、隠れた数値エラーを旧経路と厳密比較する。実測と適用限界は [GPU検証](../testing/perf-001-gpu-fusion.md) および [PERF-001](../testing/perf-001.md) を参照。
+
+### resident と generic FrameBridge の未対応境界
+
+GPU-003 の保証は macOS Metal の H.264 / HEVC `hvc1` MOV、BT.709 limited-range 8-bit 4:2:0 を BGRA8 / NV12 に取り込む具体経路に限る。Windows / Linux の resident decode は未実装（GPU-004 / GPU-005、M6）。macOS の追加 container / pixel format、10-bit / P010 / HDR resident は未対応（GPU-006、M6）。COLOR-001 の software 高精度 HDR 対応を resident HDR 対応と読み替えない。
+
+`kronello-framebridge::PathKind::VideoToolbox` は generic な spike selector で、現在も typed `UnsupportedFeature` を返す。具体的な `VideoToolboxDecodeBgra8` / `VideoToolboxDecodeNv12Biplanar` の probe と `resident::decode_file`、共有 service の strict resident backend は別の API である。generic selector の整理は FRAMEBRIDGE-001（M5）で追跡する。
+
+`render.explain` の旧二重実行見積もりと実行countersの不整合は INSPECT-002（M5 / P1）で追跡する。受け入れ済みの単一graph実行を元に戻す修正ではない。

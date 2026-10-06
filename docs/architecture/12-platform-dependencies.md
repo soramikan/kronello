@@ -4,11 +4,11 @@
 
 [ADR-0015](../adr/0015-macos-first-platform-priority.md) により macOS (Apple Silicon) を先行する。
 
-| プラットフォーム | GPU | デコード / エンコード | GUI | 保証水準（M2 時点の目標） |
+| プラットフォーム | GPU | デコード / エンコード | GUI | 現在の実装・保証境界 |
 |---|---|---|---|---|
-| macOS (Apple Silicon) | Metal | VideoToolbox | SwiftUI / AppKit（M3） | 第一級。GPU 常駐経路の保証を最初に昇格 |
-| Windows | D3D12 / Vulkan | 未定 | WinUI 3（macOS 版の後） | 互換経路（CPU 往復を許容） |
-| Linux | Vulkan | 未定 | GTK4（macOS 版の後） | 互換経路（CPU 往復を許容）で CI を通す |
+| macOS (Apple Silicon) | Metal | FFmpeg / 限定 VideoToolbox resident decode | SwiftUI / AppKit | GPU-003 の SDR BGRA8 / NV12 具体経路を保証。HDR resident は未対応 |
+| Windows | D3D12 / Vulkan | FFmpeg software | 未実装（GUI-005、M6） | MEDIA-003 の CLI/MCP と QA-004 の D3D12 software adapter 基準を検証。resident は GPU-004（M6） |
+| Linux | Vulkan | FFmpeg software | 未実装（GUI-006、M6） | CLI/MCP と QA-004 の Vulkan software adapter 基準を検証。resident は GPU-005（M6） |
 
 「互換経路」でも結果の意味は同じでなければならない。差が出るのは転送コストと速度であり、`render.explain` で使用経路を報告する。
 
@@ -23,14 +23,14 @@ jobs / service の unsafe forbid と純粋層の依存境界は維持する
 （[ADR-0074](../adr/0074-windows-job-workers-and-process-evidence.md)）。
 
 Windows full CLI/MCP は MEDIA-003 で `LoadLibraryExW` による明示 DLL directory の読み込みと、
-MinGW で作った LGPL FFmpeg を MSVC ABI の C shim から利用する経路を実装中。
+MinGW で作った LGPL FFmpeg を MSVC ABI の C shim から利用する経路を実装した。
 build-time headers は `KRONELLO_FFMPEG_PREFIX` で固定する。
 実装方針は [ADR-0082](../adr/0082-windows-ffmpeg-runtime.md)、実行結果は
-[MEDIA-003](../testing/media-003.md) を参照する。Windows 実機 CI の成功前には保証しない。
+[MEDIA-003](../testing/media-003.md) を参照する。Windows 実 CI の受け入れ成功と、その範囲を同記録に固定する。
 JOB-002 CI は deterministic test payload で jobs/platform の本番 launch / state / publication を確認し、
 Windows の CLI/MCP render を保証した結果として扱わない。
 Linux は CLI/MCP 実プロセスを追加実行し、初回CIのJOB-002 evidenceは成功した。
-Windowsの修正版は再実行待ち。breakaway拒否環境では `in_parent_job` として親process終了後は続行できるが、
+Windows の修正版 JOB evidence も成功済み。breakaway拒否環境では `in_parent_job` として親process終了後は続行できるが、
 外側Job Object（CI step / service manager等）の終了で停止する制限を持つ。
 未検証経路を保証へ昇格させない。OS 別revision / command / exitの証跡は [JOB-002](../testing/job-002.md) に記録する。
 
@@ -104,11 +104,11 @@ Kronello 本体は `MIT OR Apache-2.0`（[ADR-0019](../adr/0019-dual-license-mit
 
 ## M0 GPU スパイクの実装範囲
 
-GPU-001 の `kronello-gpu` は wgpu 30.0.1 / pollster 1.0.1 を使い、矩形・PAM 素材から線形 premultiplied RGBA16F までの最短経路を実装した。CPU upload / GPU 内コピー / GPU→CPU readback を別の `TransferStats` として記録する。`kronello-framebridge` の unsafe native interop は macOS のモジュール内に隔離し、IOSurface の BGRA8 単一面取り込み・出力を検証する。通常 renderer / Render DAG / 他形式の GPU 常駐保証は未実装。実測結果と制約は [スパイク報告](../testing/gpu-spike-m0.md)、Apple Silicon + Metal 共通基準の golden harness（機種・OS・driver は provenance のみ、[ADR-0047](../adr/0047-apple-silicon-metal-golden.md)）は [比較手順](../testing/golden-comparison.md) を参照。
+GPU-001 の `kronello-gpu` は wgpu 30.0.1 / pollster 1.0.1 を使い、矩形・PAM 素材から線形 premultiplied RGBA16F までの最短経路を実装した。CPU upload / GPU 内コピー / GPU→CPU readback を別の `TransferStats` として記録する。`kronello-framebridge` の unsafe native interop は macOS のモジュール内に隔離し、IOSurface の BGRA8 単一面取り込み・出力を検証する。これは M0 時点の範囲であり、現在は RENDER-001 の通常 renderer / Render DAG と GPU-003 の限定 BGRA8 / NV12 resident decode を実装・検証済み。実測結果と制約は [スパイク報告](../testing/gpu-spike-m0.md)、Apple Silicon + Metal 共通基準の golden harness（機種・OS・driver は provenance のみ、[ADR-0047](../adr/0047-apple-silicon-metal-golden.md)）は [比較手順](../testing/golden-comparison.md) を参照。
 
 ## VideoToolbox / CoreVideo の M0 実測
 
-macOS target の `kronello-framebridge` に CVPixelBuffer import と H.264 decode のスパイクを実装した。M1 / Metal で、IOSurface 裏付け BGRA8 CVPixelBuffer を同じ MTLDevice の CVMetalTextureCache から wgpu 30.0.1 に取り込み、shader readback を照合した。メモリ内の H.264 3 frame encode / decode は BGRA8 と NV12 biplanar（R8 / RG8）の両経路で成功し、両形式で hardware decoder 使用、BGRA8 は最大 channel 誤差 1 を確認した。CVPixelBuffer / CVMetalTexture / cache は HAL drop token で保持する。NV12 の YCbCr→RGB と wgpu 出力の encoder 投入は未検証。詳細は [GPU / FrameBridge スパイク](../testing/gpu-spike-m0.md) を参照。
+macOS target の `kronello-framebridge` に CVPixelBuffer import と H.264 decode のスパイクを実装した。M1 / Metal で、IOSurface 裏付け BGRA8 CVPixelBuffer を同じ MTLDevice の CVMetalTextureCache から wgpu 30.0.1 に取り込み、shader readback を照合した。メモリ内の H.264 3 frame encode / decode は BGRA8 と NV12 biplanar（R8 / RG8）の両経路で成功し、両形式で hardware decoder 使用、BGRA8 は最大 channel 誤差 1 を確認した。CVPixelBuffer / CVMetalTexture / cache は HAL drop token で保持する。当時は NV12 の YCbCr→RGB と wgpu 出力の encoder 投入は未検証だった。前者は M4 GPU-003 で検証済み、後者の GPU 常駐 encoder 投入は現在も保証しない。詳細は [GPU / FrameBridge スパイク](../testing/gpu-spike-m0.md) を参照。
 
 追加の objc2-core-video / objc2-core-media / objc2-video-toolbox と推移依存の objc2-core-audio / objc2-core-audio-types は `Cargo.lock` で各 0.3.2、ライセンスは `Zlib OR Apache-2.0 OR MIT` から MIT を選択できる。wgpu 30.0.1 は `MIT OR Apache-2.0`。Apple の system framework のみを使い、GPL / LGPL 依存と FFmpeg を追加していない。既存 objc2 系を含む解決版・ライセンス一覧は [スパイク報告の依存確認](../testing/gpu-spike-m0.md#依存とライセンス) に記録する。
 
@@ -126,7 +126,7 @@ CFR / VFR / B-frame は次 PTS を presentation interval の上端とし、平�
 
 NLE-002 の SDR RGBA8 変換と明示 GPU upload は [ADR-0062](../adr/0062-video-generator-and-timeline-edits.md)、hardware decode / GPU resident media は [ADR-0081](../adr/0081-guaranteed-metal-hardware-video-decode.md) に従う。HDR は [ADR-0086](../adr/0086-rec2100-native-precision-and-fixed-hdr-output.md) により native 10-bit PQ/HLG の tags と精度を保持して RGBA64 から linear Rec.2020 へ変換する。strict resident HDR は型付き未対応のまま。
 
-AV1 / ProRes の software encode と VideoToolbox H.264 / HEVC encode は公開 enum から選ぶ。入力は opaque BT.709 RGBA8。BT.709 matrix を明示して native YUV に変換し、MOV / MP4 の track timescale によって rational PTS を保持する。path report の CPU copy / conversion / upload counters は logical payload bytes であり、driver の内部転送・待機の実測と区別する。
+AV1 / ProRes の software encode と VideoToolbox H.264 / HEVC encode は公開 enum から選ぶ。SDR 入力は opaque BT.709 RGBA8。M4 COLOR-001 の明示 HDR ProRes profile は高精度 RGBA64 と PQ / HLG の契約を別途持つ。SDRではBT.709 matrix を明示して native YUV に変換し、MOV / MP4 の track timescale によって rational PTS を保持する。path report の CPU copy / conversion / upload counters は logical payload bytes であり、driver の内部転送・待機の実測と区別する。
 
 VideoToolbox の codec 登録は `AV_CODEC_CAP_HYBRID` を含めて検出し、open 時に `allow_sw=0` を指定する。`ENCODER_UNAVAILABLE` は encoder 名と理由、native 初期化失敗時には `FfmpegErrorDetail`（元の戻り値、処理名、`av_strerror` の説明）を保持する。`avcodec_open2` 失敗では pixel format・寸法・time_base も処理名に記録する。
 
@@ -150,5 +150,11 @@ ENCODER_UNAVAILABLE。HEVC version 1 は `hvc1` sample entry と global-header p
 lossless / zero priming / exact final samples。build flags / native manifest は変更しない。
 全5 library の LGPL構成を示す既存 runtime と system development FFmpeg を分けて検証する。
 AAC の distribution / patent review・品質評価、AV1 の Opus Web 配信、player compatibility、
-HDR は未検証・未採用。契約は [ADR-0068](../adr/0068-versioned-delivery-movie-profiles.md)、
+この MEDIA-002 version 1 配信用 profile の HDR は未検証・未採用。COLOR-001 の HDR ProRes profile とは区別する。契約は [ADR-0068](../adr/0068-versioned-delivery-movie-profiles.md)、
 実行証拠と順序付き host 残件は [MEDIA-002](../testing/media-002.md)。
+
+## 現在の配布・native route の残件
+
+RELEASE-001 は macOS CLI/MCP directory の ad-hoc 署名、再配置、実起動、LGPL runtime 差し替えと codec roundtrip を受け入れた。Developer ID / notarization / Gatekeeper と GUI を含む公開製品配布は未検証（RELEASE-002、M6）。Windows の開発・CI runtime 成功は製品 installer の検証ではなく RELEASE-003（M6）、Linux package は RELEASE-004（M6）で追跡する。詳細は [RELEASE-001](../testing/release-001.md)。
+
+`PathKind::VideoToolbox` の generic spike selector は typed unsupported のまま。具体 probe と GPU-003 の `resident::decode_file` を区別する（FRAMEBRIDGE-001、M5）。macOS resident の追加形式 / HDR は GPU-006（M6）で追跡し、現在の software HDR decode / encode を resident 保証へ読み替えない。

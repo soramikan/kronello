@@ -36,7 +36,7 @@ GUI / CLI / MCP
 
 ジョブは「このマシンでの実行」であり、作品の内容ではない。ジョブの進行で `.kronello` へ書き込まない。
 
-`KRONELLO_STATE_ROOT` / `Service::with_job_config` で state root を注入する。全テストは一時 directory を使い、実ユーザー領域を開かない。Linux の既定 root はユーザーの data-local 領域の Kronello（実プロセスは未検証）。
+`KRONELLO_STATE_ROOT` / `Service::with_job_config` で state root を注入する。全テストは一時 directory を使い、実ユーザー領域を開かない。Linux の既定 root はユーザーの data-local 領域の Kronello。隔離したstate rootでのLinux/Windows実プロセス検証は完了している（[JOB-002](../testing/job-002.md)、[M4記録](../testing/m4-acceptance.md)）。実ユーザーの既定領域での実行証拠とは区別する。
 
 ## ジョブの記録
 
