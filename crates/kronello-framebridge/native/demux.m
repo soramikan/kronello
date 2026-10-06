@@ -36,7 +36,7 @@ static int resident_format_supported(CMFormatDescriptionRef format) {
         CFTypeRef value=CMFormatDescriptionGetExtension(format,keys[i]);
         if (!value) { if (tagged709) continue; return 0; }
         if (CFGetTypeID(value)!=CFStringGetTypeID()) return 0;
-        if (!CFEqual(value,expected[i]) && !(i==1 && CFEqual(value,kCVImageBufferTransferFunction_sRGB))) return 0;
+        if (!CFEqual(value,expected[i]) && !(i==1 && tagged709 && CFEqual(value,kCVImageBufferTransferFunction_sRGB))) return 0;
     }
     CFTypeRef range=CMFormatDescriptionGetExtension(format,kCMFormatDescriptionExtension_FullRangeVideo);
     if (range && (CFGetTypeID(range)!=CFBooleanGetTypeID() || CFBooleanGetValue(range))) return 0;
@@ -118,7 +118,7 @@ int kronello_fb_read_samples(const char *path, uint32_t stream, int64_t time_num
             if (!resident_format_supported(CMSampleBufferGetFormatDescription(sample))) {
                 CFRelease(sample);
                 [reader cancelReading];
-                snprintf(error,error_size,"actual compressed color/range/chroma/bit depth unsupported or unverified; require tagged SDR BT709/sRGB 8-bit 420");
+                snprintf(error,error_size,"actual compressed color/range/chroma/bit depth unsupported or unverified; require tagged SDR BT709 8-bit 420");
                 return -8;
             }
             compressed_bytes += CMSampleBufferGetTotalSampleSize(sample);

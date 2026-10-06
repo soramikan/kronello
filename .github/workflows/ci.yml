@@ -257,3 +257,59 @@ jobs:
           if-no-files-found: error
       - name: Validate backlog
         run: python3 scripts/backlog.py check
+
+  qa004-platform-golden:
+    name: QA-004 ${{ matrix.profile }} (actual adapter)
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            profile: linux-vulkan
+            backend: vulkan
+          - runner: windows-latest
+            profile: windows-dx12
+            backend: dx12
+    env:
+      WGPU_BACKEND: ${{ matrix.backend }}
+      KRONELLO_GOLDEN: "1"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: Select actual Linux software Vulkan adapter
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes mesa-vulkan-drivers vulkan-tools
+          driver="$(find /usr/share/vulkan/icd.d -maxdepth 1 -name 'lvp_icd*.json' -print)"
+          test -f "$driver"
+          printf 'VK_DRIVER_FILES=%s\n' "$driver" >> "$GITHUB_ENV"
+          printf 'XDG_RUNTIME_DIR=%s\n' "$RUNNER_TEMP/kronello-qa004-xdg" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/kronello-qa004-xdg"
+          chmod 700 "$RUNNER_TEMP/kronello-qa004-xdg"
+      - name: Install pinned Rust and input fixtures
+        run: |
+          rustup show
+          python scripts/fetch_fixtures.py
+      - name: Generate candidate with CPU oracle (does not adopt)
+        env:
+          KRONELLO_GOLDEN_UPDATE: "1"
+        run: |
+          export KRONELLO_GOLDEN_OUTPUT="$GITHUB_WORKSPACE/target/golden/run.qa004.candidate"
+          cargo test -p kronello-gpu --test golden --locked -- --ignored --nocapture
+      - name: Compare reviewed platform baseline
+        run: |
+          export KRONELLO_GOLDEN_OUTPUT="$GITHUB_WORKSPACE/target/golden/run.qa004.compare"
+          cargo test -p kronello-gpu --test golden --locked -- --ignored --nocapture
+      - name: Upload candidate, actual adapter provenance and comparison evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: qa004-${{ matrix.profile }}
+          path: target/golden
+          if-no-files-found: error

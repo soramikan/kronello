@@ -409,6 +409,7 @@ fn actual_hdr_ten_bit_full_range_reject_forged_sdr_locks() {
         ("pq10", "p010le", "bt2020", "smpte2084", "bt2020nc", "tv"),
         ("sdr10", "p010le", "bt709", "bt709", "bt709", "tv"),
         ("full8", "nv12", "bt709", "bt709", "bt709", "pc"),
+        ("srgb8", "nv12", "bt709", "iec61966-2-1", "bt709", "tv"),
     ] {
         let movie = temp.path().join(format!("{name}.mov"));
         let status = std::process::Command::new(root.join("target/native/ffmpeg-lgpl/bin/ffmpeg"))

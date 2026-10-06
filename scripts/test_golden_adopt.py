@@ -75,6 +75,26 @@ class AdoptionTests(unittest.TestCase):
         self.assertEqual((self.baseline / "README.md").read_text(), "synthetic baseline")
         self.assertEqual((self.baseline / "test-scene/frame-0.rgba16f").read_bytes(), struct.pack("<4e", 0.5, 0, 0, 1))
 
+    def test_platform_adoption_is_explicit_and_preserves_other_baseline(self):
+        for profile, target, backend in (("linux-vulkan", "x86_64-unknown-linux-gnu", "Vulkan"),
+                                         ("windows-dx12", "x86_64-pc-windows-msvc", "Dx12")):
+            with self.subTest(profile=profile):
+                destination = Path("tests/golden") / profile
+                folder = self.root / destination
+                folder.mkdir()
+                self.write(folder / "scenes.json", self.catalog)
+                (folder / "README.md").write_text("platform baseline")
+                self.environment.update(target=target, baseline_profile=profile,
+                                        adapter={"backend": backend, "name": "software", "device_type": "Cpu", "software_adapter": True})
+                self.write(self.candidate / "environment.json", self.environment)
+                self.seal()
+                with self.assertRaisesRegex(ValueError, "candidate platform"):
+                    golden.validate(self.root, self.candidate)
+                with contextlib.redirect_stdout(io.StringIO()):
+                    golden.adopt(self.root, self.candidate, destination)
+                self.assertEqual(golden.load(folder / "environment.json")["adapter"]["device_type"], "Cpu")
+                self.assertFalse((self.baseline / "manifest.json").exists())
+
     def test_publish_failure_restores_previous_baseline(self):
         original = Path.rename
 
@@ -125,7 +145,7 @@ class AdoptionTests(unittest.TestCase):
         for target, backend in (("x86_64-apple-darwin", "Metal"), ("aarch64-apple-darwin", "Vulkan")):
             with self.subTest(target=target, backend=backend):
                 self.write(self.candidate / "environment.json", {"target": target, "adapter": {"backend": backend}})
-                with self.assertRaisesRegex(ValueError, "Apple Silicon"):
+                with self.assertRaisesRegex(ValueError, "candidate platform"):
                     golden.validate(self.root, self.candidate)
 
     def test_zero_scenes_and_unsuccessful_run(self):
@@ -145,7 +165,7 @@ class AdoptionTests(unittest.TestCase):
         self.seal()
         with patch.object(golden, "PER_FILE", 1), self.assertRaisesRegex(ValueError, "256 KiB"):
             golden.validate(self.root, self.candidate)
-        with patch.object(golden, "TOTAL", 1), self.assertRaisesRegex(ValueError, "1 MiB"):
+        with patch.object(golden, "TOTAL", 1), self.assertRaisesRegex(ValueError, "3 MiB"):
             golden.validate(self.root, self.candidate)
 
     def test_model_os_adapter_name_are_metadata_only(self):

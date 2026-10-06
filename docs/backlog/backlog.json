@@ -1123,7 +1123,7 @@
       "priority": "P2",
       "area": "cache",
       "title": "GPU資源とディスクのraster cache",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "CACHE-001",
         "CACHE-002"

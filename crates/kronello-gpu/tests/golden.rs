@@ -210,7 +210,9 @@ fn manifest(scenes: &[Scene], fixture_hash: &str, font_hash: &str) -> Value {
 
 // Hardware model, OS, driver and dependency versions are provenance only.
 fn eligible_environment(target: &str, backend: &str) -> bool {
-    target == "aarch64-apple-darwin" && backend == "Metal"
+    (target == "aarch64-apple-darwin" && backend == "Metal")
+        || (target.ends_with("-linux-gnu") && backend == "Vulkan")
+        || (target.ends_with("-windows-msvc") && backend == "Dx12")
 }
 
 fn artifact_manifest(
@@ -297,10 +299,18 @@ fn run(output: &Path) -> Result<Value> {
     if std::env::var("KRONELLO_GOLDEN").as_deref() != Ok("1") {
         return Err("KRONELLO_GOLDEN=1 required".into());
     }
-    if !cfg!(all(target_os = "macos", target_arch = "aarch64"))
-        || std::env::var("WGPU_BACKEND").as_deref() != Ok("metal")
-    {
-        return Err("golden requires native aarch64 macOS and WGPU_BACKEND=metal".into());
+    let (target, profile, required_backend) =
+        if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+            ("aarch64-apple-darwin", "apple-silicon-metal", "metal")
+        } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+            ("x86_64-unknown-linux-gnu", "linux-vulkan", "vulkan")
+        } else if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
+            ("x86_64-pc-windows-msvc", "windows-dx12", "dx12")
+        } else {
+            return Err("unsupported golden platform".into());
+        };
+    if std::env::var("WGPU_BACKEND").as_deref() != Ok(required_backend) {
+        return Err("explicit platform WGPU_BACKEND required".into());
     }
     let update = match std::env::var("KRONELLO_GOLDEN_UPDATE") {
         Ok(v) if v == "1" => true,
@@ -310,13 +320,10 @@ fn run(output: &Path) -> Result<Value> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .canonicalize()?;
-    let baseline = root.join("tests/golden/apple-silicon-metal");
+    let baseline = root.join("tests/golden").join(profile);
     let gpu = GpuContext::new()?;
-    if !eligible_environment(
-        "aarch64-apple-darwin",
-        &format!("{:?}", gpu.adapter_info.backend),
-    ) {
-        return Err("selected adapter is not Metal".into());
+    if !eligible_environment(target, &format!("{:?}", gpu.adapter_info.backend)) {
+        return Err("selected adapter backend differs from golden platform".into());
     }
     let metadata: Value = serde_json::from_str(&command(
         "cargo",
@@ -343,8 +350,33 @@ fn run(output: &Path) -> Result<Value> {
         .collect::<serde_json::Map<_, _>>()
         .into();
     let info = &gpu.adapter_info;
-    let hardware = json!({"model":command("sysctl",&["-n","hw.model"],&root)?,"cpu":command("sysctl",&["-n","machdep.cpu.brand_string"],&root)?,"memory":command("sysctl",&["-n","hw.memsize"],&root)?});
-    let environment = json!({"schema_version":1,"target":"aarch64-apple-darwin","hardware":hardware,"architecture":command("uname",&["-m"],&root)?,"os":command("sw_vers",&[],&root)?,"metal":serde_json::from_str::<Value>(&command("system_profiler",&["SPDisplaysDataType","-json"],&root)?)?,"rust":command("rustc",&["--version","--verbose"],&root)?,"cargo":command("cargo",&["--version"],&root)?,"dependencies":dependencies,"adapter":{"name":info.name,"backend":format!("{:?}",info.backend),"device_type":format!("{:?}",info.device_type),"vendor":info.vendor,"device":info.device,"driver":info.driver,"driver_info":info.driver_info,"driver_version":"Metal driver separately unavailable; macOS build in os"},"required_features":format!("{:?}",gpu.device.features()),"required_limits":format!("{:?}",gpu.device.limits())});
+    let (hardware, architecture, os, platform_details) = if cfg!(target_os = "macos") {
+        (
+            json!({"model":command("sysctl",&["-n","hw.model"],&root)?,"cpu":command("sysctl",&["-n","machdep.cpu.brand_string"],&root)?,"memory":command("sysctl",&["-n","hw.memsize"],&root)?}),
+            command("uname", &["-m"], &root)?,
+            command("sw_vers", &[], &root)?,
+            serde_json::from_str::<Value>(&command(
+                "system_profiler",
+                &["SPDisplaysDataType", "-json"],
+                &root,
+            )?)?,
+        )
+    } else if cfg!(target_os = "windows") {
+        (
+            json!({"computer":std::env::var("COMPUTERNAME").unwrap_or_default(),"processor":std::env::var("PROCESSOR_IDENTIFIER").unwrap_or_default()}),
+            std::env::consts::ARCH.to_owned(),
+            command("cmd", &["/C", "ver"], &root)?,
+            json!({"api":"Direct3D12"}),
+        )
+    } else {
+        (
+            json!({"cpuinfo":fs::read_to_string("/proc/cpuinfo")?,"memory":fs::read_to_string("/proc/meminfo")?}),
+            command("uname", &["-m"], &root)?,
+            command("uname", &["-a"], &root)?,
+            json!({"api":"Vulkan","icd":std::env::var("VK_DRIVER_FILES").ok()}),
+        )
+    };
+    let environment = json!({"schema_version":1,"target":target,"baseline_profile":profile,"hardware":hardware,"architecture":architecture,"os":os,"platform_details":platform_details,"rust":command("rustc",&["--version","--verbose"],&root)?,"cargo":command("cargo",&["--version"],&root)?,"dependencies":dependencies,"adapter":{"name":info.name,"backend":format!("{:?}",info.backend),"device_type":format!("{:?}",info.device_type),"software_adapter":info.device_type==wgpu::DeviceType::Cpu,"vendor":info.vendor,"device":info.device,"driver":info.driver,"driver_info":info.driver_info},"required_features":format!("{:?}",gpu.device.features()),"required_limits":format!("{:?}",gpu.device.limits())});
     let pam_path = kronello_testkit::resolve_fixture("alpha")?;
     let pam_bytes = fs::read(pam_path)?;
     let scenes = scenes(Image::from_pam(&pam_bytes)?);
@@ -385,7 +417,13 @@ fn run(output: &Path) -> Result<Value> {
             output.join("environment-diff.json"),
             &json!({"baseline":old,"actual":environment,"equal":old==environment}),
         )?;
-        // The difference is diagnostic; provenance never gates comparison.
+        // Hardware/OS generations are provenance; a software adapter must not
+        // silently consume a hardware baseline (or vice versa).
+        if !update && old["adapter"]["device_type"] != environment["adapter"]["device_type"] {
+            return Err(
+                "baseline adapter class differs; explicit separate adoption required".into(),
+            );
+        }
     } else if !update {
         return Err("baseline environment.json missing; comparison cannot pass".into());
     }
@@ -510,7 +548,7 @@ fn run(output: &Path) -> Result<Value> {
             &artifact_manifest(&destination, &manifest, &environment, &provenance)?,
         )?;
     }
-    let report = json!({"test_count":1,"scene_count":scenes.len(),"frame_count":scenes.len(),"status":if update {"candidate-only; no baseline comparison"} else if failed {"fail"} else {"pass"},"eligible_reference_hardware":true,"candidate_may_be_adopted":update && provenance["status"] == "","provenance":provenance,"scenes":reports});
+    let report = json!({"test_count":1,"scene_count":scenes.len(),"frame_count":scenes.len(),"status":if update {"candidate-only; no baseline comparison"} else if failed {"fail"} else {"pass"},"eligible_reference_hardware":info.device_type!=wgpu::DeviceType::Cpu,"eligible_comparison_environment":true,"candidate_may_be_adopted":update && provenance["status"] == "","provenance":provenance,"scenes":reports});
     write_json(output.join("report.json"), &report)?;
     if failed {
         return Err("golden pixel comparison failed; see report and differences".into());
@@ -518,7 +556,7 @@ fn run(output: &Path) -> Result<Value> {
     Ok(report)
 }
 #[test]
-#[ignore = "requires explicit Apple Silicon + Metal execution; UPDATE is candidate-only"]
+#[ignore = "requires explicit platform GPU execution; UPDATE is candidate-only"]
 fn fixed_environment_golden() -> Result<()> {
     if std::env::var("KRONELLO_GOLDEN").as_deref() != Ok("1") {
         return Err("KRONELLO_GOLDEN=1 required".into());
@@ -652,6 +690,8 @@ fn cpu_catalog_and_vec003_manifest_match_harness() {
 #[test]
 fn cpu_environment_gate_ignores_provenance() {
     assert!(eligible_environment("aarch64-apple-darwin", "Metal"));
+    assert!(eligible_environment("x86_64-unknown-linux-gnu", "Vulkan"));
+    assert!(eligible_environment("x86_64-pc-windows-msvc", "Dx12"));
     assert!(!eligible_environment("x86_64-apple-darwin", "Metal"));
     assert!(!eligible_environment("aarch64-unknown-linux-gnu", "Metal"));
     assert!(!eligible_environment("aarch64-apple-darwin", "Vulkan"));

@@ -20,7 +20,7 @@
 ## 実行環境
 
 - CI（GitHub Actions）では、値とレイアウトの意味的比較を必須とする。
-- GPU 画素の golden 比較は Apple Silicon ネイティブ + Metal の共通基準で実行する（[ADR-0047](../adr/0047-apple-silicon-metal-golden.md)）。機種・OS・driver・Rust / wgpu 版は provenance として記録し、比較の可否判定に使わない。
+- GPU 画素の golden 比較は Apple Silicon ネイティブ + Metal の共通基準と Linux Vulkan / Windows Direct3D12 の環境別基準で実行する（[ADR-0088](../adr/0088-platform-golden-baselines.md)）。機種・OS・driver・Rust / wgpu 版は provenance として記録し、比較の可否判定に使わない。
 
 共通基準の provenance、実行・明示採用コマンド、許容誤差 `2^-10` と失敗時の扱いは [golden 比較手順](../testing/golden-comparison.md) に記載する。[QA-003](../testing/qa-003.md) で初回 M1 基準登録と 21 シーン比較に成功した。性能計測の M4 Mac mini 基準は変更しない。
 

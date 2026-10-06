@@ -26,9 +26,10 @@ impl GpuContext {
         let backends = match std::env::var("WGPU_BACKEND").as_deref() {
             Ok("metal") => wgpu::Backends::METAL,
             Ok("vulkan") => wgpu::Backends::VULKAN,
+            Ok("dx12") => wgpu::Backends::DX12,
             Ok(_) => {
                 return Err(GpuError::UnsupportedFeature(
-                    "spike supports explicit metal or vulkan backend",
+                    "supports explicit metal, vulkan or dx12 backend",
                 ));
             }
             Err(std::env::VarError::NotPresent) => {

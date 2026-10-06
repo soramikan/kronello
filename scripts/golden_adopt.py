@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Adopt a reviewed, clean-revision Apple Silicon + Metal golden candidate."""
+"""Adopt a reviewed, clean-revision platform GPU golden candidate."""
 import argparse
 import hashlib
 import json
@@ -14,7 +14,7 @@ import math
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE = Path("tests/golden/apple-silicon-metal")
 PER_FILE = 256 * 1024
-TOTAL = 1024 * 1024
+TOTAL = 3 * 1024 * 1024
 
 
 def require(condition, message):
@@ -30,7 +30,7 @@ def load(path):
     return json.loads(path.read_bytes())
 
 
-def validate(root, candidate):
+def validate(root, candidate, baseline_path=BASELINE):
     require(not git(root, "status", "--porcelain", "--untracked-files=all"),
             "working tree is dirty; commit code changes before adoption")
     require(candidate.is_dir() and not candidate.is_symlink(), "candidate directory missing or symlinked")
@@ -38,14 +38,19 @@ def validate(root, candidate):
     require(provenance["revision"] == git(root, "rev-parse", "HEAD"), "candidate revision differs from HEAD")
     require(provenance["status"] == "", "candidate was generated from a dirty tree")
     environment = load(candidate / "environment.json")
-    require(environment["target"] == "aarch64-apple-darwin" and environment["adapter"]["backend"] == "Metal",
-            "candidate requires Apple Silicon + Metal")
+    profiles = {"apple-silicon-metal": ("aarch64-apple-darwin", "Metal"),
+                "linux-vulkan": ("x86_64-unknown-linux-gnu", "Vulkan"),
+                "windows-dx12": ("x86_64-pc-windows-msvc", "Dx12")}
+    require(baseline_path.name in profiles, "unsupported baseline profile")
+    target, backend = profiles[baseline_path.name]
+    require(environment["target"] == target and environment["adapter"]["backend"] == backend,
+            "candidate platform differs from requested baseline")
     manifest = load(candidate / "manifest.json")
     adoption = load(candidate / "adoption.json")
     report = load(candidate.parent / "report.json")
     scenes = manifest["scenes"]
     ids = [s["id"] for s in scenes]
-    catalog = load(root / BASELINE / "scenes.json")
+    catalog = load(root / baseline_path / "scenes.json")
     require(ids and ids == catalog["scene_ids"] and len(set(ids)) == len(ids), "zero or mismatched scenes")
     require(all(re.fullmatch(r"[a-zA-Z0-9-]+", name) for name in ids), "unsafe scene id")
     require(manifest["catalog"] == catalog, "catalog settings differ")
@@ -92,22 +97,22 @@ def validate(root, candidate):
             require(0 <= pixel[3] <= 1 and (pixel[3] != 0 or pixel[:3] == (0, 0, 0)),
                     "invalid premultiplied pixel")
     files = [p for p in candidate.rglob("*") if p.is_file()]
-    preserved = [root / BASELINE / name for name in ("README.md", "scenes.json")]
+    preserved = [root / baseline_path / name for name in ("README.md", "scenes.json")]
     fixtures = [p for p in (root / "tests/fixtures").rglob("*") if p.is_file()]
     other_golden = [p for p in (root / "tests/golden").rglob("*")
-                    if p.is_file() and not p.is_relative_to(root / BASELINE)]
+                    if p.is_file() and not p.is_relative_to(root / baseline_path)]
     all_files = files + preserved + fixtures + other_golden
     require(all(p.stat().st_size <= PER_FILE for p in all_files), "fixture exceeds 256 KiB")
     total = sum(p.stat().st_size for p in all_files)
-    require(total <= TOTAL, "fixtures plus golden exceed 1 MiB")
+    require(total <= TOTAL, "fixtures plus platform goldens exceed 3 MiB")
     return adoption, {"scene_count": len(scenes), "candidate_bytes": sum(p.stat().st_size for p in files),
                       "fixture_total_bytes": total, "largest_file_bytes": max(p.stat().st_size for p in all_files)}
 
 
-def adopt(root, candidate):
-    adoption, sizes = validate(root, candidate)
+def adopt(root, candidate, baseline_path=BASELINE):
+    adoption, sizes = validate(root, candidate, baseline_path)
     print(json.dumps({"adoption_manifest": adoption, "sizes": sizes}, indent=2), flush=True)
-    baseline = root / BASELINE
+    baseline = root / baseline_path
     # Validate everything before mutation, then publish a complete directory.
     with tempfile.TemporaryDirectory(prefix="adopt.", dir=root / "target/golden") as temp:
         stage = Path(temp) / "baseline"
@@ -119,7 +124,7 @@ def adopt(root, candidate):
             if source.is_file():
                 require(source.read_bytes() == (stage / source.relative_to(candidate)).read_bytes(),
                         "candidate changed while copying")
-        validate(root, candidate)
+        validate(root, candidate, baseline_path)
         backup = Path(temp) / "previous"
         baseline.rename(backup)
         try:
@@ -133,11 +138,12 @@ def adopt(root, candidate):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("candidate", type=Path, help="target/golden/run.*/candidate from a successful UPDATE")
+    parser.add_argument("--profile", choices=("apple-silicon-metal", "linux-vulkan", "windows-dx12"), default="apple-silicon-metal")
     args = parser.parse_args()
     candidate = args.candidate.resolve()
     require(candidate.is_relative_to(ROOT / "target/golden") and candidate.name == "candidate",
             "candidate must be beneath target/golden and named candidate")
-    adopt(ROOT, candidate)
+    adopt(ROOT, candidate, Path("tests/golden") / args.profile)
 
 
 if __name__ == "__main__":
