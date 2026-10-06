@@ -10,6 +10,12 @@ pub struct GpuContext {
     pub adapter_info: wgpu::AdapterInfo,
     pipeline: wgpu::ComputePipeline,
     pub(crate) identity: std::sync::Arc<()>,
+    pub(crate) resources: std::sync::Mutex<crate::resource_cache::ResourceCache>,
+    pub(crate) surface_pool: std::sync::Arc<std::sync::Mutex<crate::resource_cache::PoolState>>,
+    pub(crate) last_transfers: std::sync::Mutex<TransferStats>,
+    pub(crate) total_transfers: std::sync::Mutex<TransferStats>,
+    pub(crate) observation: std::sync::Arc<crate::observation::ObservationState>,
+    pub(crate) allocations: std::sync::Arc<std::sync::Mutex<crate::allocation::AllocationTracker>>,
 }
 #[derive(Debug)]
 pub struct RenderOutput {
@@ -121,13 +127,32 @@ impl GpuContext {
             compilation_options: Default::default(),
             cache: None,
         });
+        let fingerprint = crate::resource_cache::fingerprint(&adapter_info);
         Ok(Self {
+            resources: std::sync::Mutex::new(crate::resource_cache::ResourceCache::new(
+                fingerprint,
+            )),
+            surface_pool: Self::create_pool(),
+            last_transfers: std::sync::Mutex::new(TransferStats::default()),
+            total_transfers: std::sync::Mutex::new(TransferStats::default()),
+            allocations: Default::default(),
+            observation: Default::default(),
             device,
             queue,
             adapter_info,
             pipeline,
             identity: std::sync::Arc::new(()),
         })
+    }
+    pub(crate) fn record_transfers(&self, stats: &TransferStats) {
+        *self
+            .last_transfers
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = stats.clone();
+        self.total_transfers
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .accumulate(stats);
     }
     fn check_size(&self, width: u32, height: u32) -> Result<(), GpuError> {
         pixel_count(width, height)?;
@@ -278,6 +303,7 @@ impl GpuContext {
                 pass.set_pipeline(&self.pipeline);
                 pass.set_bind_group(0, &group, &[]);
                 pass.dispatch_workgroups(width.div_ceil(8), height.div_ceil(8), 1);
+                stats.gpu_compute_dispatches += 1;
             }
             current = 1 - current;
         }
@@ -368,6 +394,7 @@ impl GpuContext {
             pass.set_pipeline(&pipeline);
             pass.set_bind_group(0, &group, &[]);
             pass.dispatch_workgroups(width.div_ceil(8), height.div_ceil(8), 1);
+            stats.gpu_compute_dispatches += 1;
         }
         self.queue.submit([encoder.finish()]);
         self.finish_render(size, &output, working, stats)
@@ -387,9 +414,13 @@ impl GpuContext {
             wgpu::TextureFormat::Rgba16Float,
             wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::COPY_DST,
         )?;
+        let _allocation = self.track_resource(
+            crate::allocation::ResourceKind::Copy,
+            u64::from(width) * u64::from(height) * 8,
+        );
         encoder.copy_texture_to_texture(texture.as_image_copy(), copy.as_image_copy(), copy.size());
-        stats.gpu_copy_bytes = u64::from(width) * u64::from(height) * 8;
-        stats.gpu_copy_operations = 1;
+        stats.gpu_copy_bytes += u64::from(width) * u64::from(height) * 8;
+        stats.gpu_copy_operations += 1;
         self.queue.submit([encoder.finish()]);
         let bytes = self.read_texture(&copy, 8, &mut stats)?;
         let pixels = decode_rgba16f(&bytes)?;
@@ -420,6 +451,7 @@ impl GpuContext {
         bytes_per_pixel: u32,
         stats: &mut TransferStats,
     ) -> Result<Vec<u8>, GpuError> {
+        let _scope = self.render_scope()?;
         let expected_bpp = match texture.format() {
             wgpu::TextureFormat::Rgba16Float => 8,
             wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Rgba8Unorm => 4,
@@ -439,6 +471,7 @@ impl GpuContext {
                 "readback exceeds buffer limit",
             ));
         }
+        let _allocation = self.track_resource(crate::allocation::ResourceKind::Readback, size);
         let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("readback"),
             size,
@@ -482,6 +515,7 @@ impl GpuContext {
         buffer.unmap();
         stats.gpu_readback_bytes += size;
         stats.gpu_readback_operations += 1;
+        stats.gpu_wait_operations += 1;
         Ok(bytes)
     }
 }

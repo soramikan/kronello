@@ -226,8 +226,12 @@ fn capabilities_registry_media_extension_without_device_initialization() {
     ) else {
         panic!()
     };
-    // API-002 extends existing payloads and EditCommand; no new operation.
-    assert_eq!(c.commands.len(), 38);
+    assert_eq!(c.commands.len(), command_registry().len());
+    assert!(
+        c.commands
+            .iter()
+            .any(|command| command.name == "job.resume")
+    );
     assert_eq!(c.api_schema_version, 1);
     assert_eq!(c.semantic_versions.document, PROJECT_SEMANTIC_VERSION);
     let media = c.media.unwrap();
@@ -588,6 +592,7 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
             "frame_rate":{"num":"24","den":"1"},"output_directory":"frames"}}),
         json!({"operation":"job.get","job":uuid.to_string()}),
         json!({"operation":"job.cancel","job":uuid.to_string()}),
+        json!({"operation":"job.resume","job":uuid.to_string()}),
         json!({"operation":"job.list"}),
         json!({"operation":"job.prune"}),
         json!({"operation":"project.create", "project":path, "document":p}),
@@ -942,6 +947,34 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
     let job = execute(json!({"operation":"render.submit", "render":{"input":input,
         "range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"1"}},
         "frame_rate":{"num":"1","den":"1"},"output_directory":dir.path().join("job-frames")}}));
+    // Save a real fixed input as a failed, unclaimed job, then exercise the
+    // service's validation and detached-worker launch through job.resume.
+    let original: kronello_jobs::JobRecord = serde_json::from_value(job.clone()).unwrap();
+    let jobs =
+        kronello_jobs::JobStore::open(kronello_jobs::JobConfig::at(job_state.path())).unwrap();
+    let retry = jobs
+        .submit(
+            &jobs.input(&original).unwrap(),
+            kronello_jobs::Submission {
+                engine_version: original.engine_version.clone(),
+                project_id: original.project_id.clone(),
+                revision: original.revision.clone(),
+                snapshot_hash: original.snapshot_hash.clone(),
+                output_profile: original.output_profile.clone(),
+                destination: original.destination.clone(),
+                total_frames: original.total_frames,
+            },
+        )
+        .unwrap();
+    jobs.finish_error(
+        &retry.id,
+        &kronello_jobs::JobError::new("TEST_FAILURE", "retry fixture"),
+    )
+    .unwrap();
+    let resumed = execute(json!({"operation":"job.resume","job":retry.id}));
+    assert_eq!(resumed["attempt"], 1);
+    assert_eq!(resumed["input_hash"], retry.input_hash);
+    assert_eq!(resumed["status"], "queued");
     execute(json!({"operation":"job.get","job":job["id"]}));
     execute(json!({"operation":"job.cancel","job":job["id"]}));
     execute(json!({"operation":"job.list"}));

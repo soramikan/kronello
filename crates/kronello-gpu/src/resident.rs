@@ -6,6 +6,7 @@ pub struct ResidentImage {
     texture: wgpu::Texture,
     identity: std::sync::Arc<()>,
     working: WorkingSpace,
+    _allocation: crate::allocation::AllocationGuard,
 }
 impl ResidentImage {
     /// Allocate on the recorded device; no foreign texture can forge ownership.
@@ -15,6 +16,7 @@ impl ResidentImage {
         size: [u32; 2],
         working: WorkingSpace,
     ) -> Result<Self, GpuError> {
+        let _scope = gpu.render_scope()?;
         let texture = gpu.texture(
             size[0],
             size[1],
@@ -26,8 +28,15 @@ impl ResidentImage {
         Ok(Self {
             texture,
             identity: gpu.identity.clone(),
+            _allocation: gpu.track_resource(
+                crate::allocation::ResourceKind::Resident,
+                u64::from(size[0]) * u64::from(size[1]) * 8,
+            ),
             working,
         })
+    }
+    pub(crate) fn allocation_guard(&self) -> crate::allocation::AllocationGuard {
+        self._allocation.clone()
     }
     pub fn texture(&self) -> &wgpu::Texture {
         &self.texture

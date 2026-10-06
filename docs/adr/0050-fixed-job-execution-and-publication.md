@@ -1,6 +1,6 @@
 # ADR-0050: 固定ジョブ入力・実行 lease・成果物確定を共有 service で扱う
 
-- 状態: 部分置換（[ADR-0074](0074-windows-job-workers-and-process-evidence.md): Windows 起動・生存確認・publication、worker の競合待機、状態照会。[ADR-0079](0079-bounded-streaming-movie-export.md): movie export の AUDIO-000 payload 上限の継承。その他の決定は維持）
+- 状態: 部分置換（[ADR-0074](0074-windows-job-workers-and-process-evidence.md): Windows 起動・生存確認・publication、worker の競合待機、状態照会。[ADR-0079](0079-bounded-streaming-movie-export.md): movie export の AUDIO-000 payload 上限の継承。[ADR-0087](0087-fixed-job-resume-and-reconciliation.md): 固定入力の明示再開・temporary output 回収・公開境界照合。その他の決定は維持）
 - 日付: 2026-10-04
 - 対象: JOB-001
 

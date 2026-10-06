@@ -48,6 +48,19 @@ impl JobOutput {
                 clips: vec![],
                 background: [0.0; 3],
             },
+            Self::ProResSdrFromHdrMov {
+                audio: Explicit,
+                profile_version: 1,
+                clips: vec![],
+                background: [0.0; 3],
+            },
+            Self::ProResHdrMov {
+                audio: Explicit,
+                profile_version: 1,
+                transfer: kronello_render::HdrTransfer::Pq,
+                clips: vec![],
+                background: [0.0; 3],
+            },
             Self::Av1Mp4 {
                 audio: Explicit,
                 audio_codec: Alac,
@@ -75,7 +88,9 @@ impl JobOutput {
         use kronello_audio::AudioSourceMode::{Document, Explicit, Silence};
         let (modes, codecs, extension, encoder, hardware) = match self {
             Self::ImageSequence => (vec![], vec![], "", "", false),
-            Self::ProResMov { .. } => (
+            Self::ProResSdrFromHdrMov { .. }
+            | Self::ProResMov { .. }
+            | Self::ProResHdrMov { .. } => (
                 vec![Explicit, Document, Silence],
                 vec!["pcm_s24le"],
                 "mov",

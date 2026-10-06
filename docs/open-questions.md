@@ -44,8 +44,6 @@ MEDIA-002 では AV1 / H.264 / HEVC の MOV profile の音声を ALAC に限り�
 | 高頻度経路での FFI の JSON 直列化コストの計測と対策 | FFI-001 |
 | 外部変更が来たときの GUI 上の扱い（選択中のオブジェクトの消失など）。提案は [エラーと競合の状態](design-system/screens/states.md) | GUI-001 |
 | UI フォントの同梱形態（可変フォントかウェイト別か、サブセット）と、デザイントークンを Swift の定数へ写す方法 | GUI-001 |
-| 中断したジョブの再開で、完了済み区間をどこまで再利用できるか | RECOVERY-001 |
-| HDR のトーンマッピングと色域圧縮の演算の詳細 | COLOR-001 |
 | Windows / Linux でのプレビュー面の受け渡し | 各 GUI の着手時（タスク未作成） |
 
 ## 解決済み
@@ -75,3 +73,5 @@ MEDIA-002 では AV1 / H.264 / HEVC の MOV profile の音声を ALAC に限り�
 | 履歴警告の閾値（STORE-001） | [ADR-0046](adr/0046-store-format-and-location-policy.md) |
 | 素材の hash 照合頻度・同梱 FFmpeg の版と configure（MEDIA-001） | [ADR-0048](adr/0048-media-native-build-and-asset-verification.md) |
 | 音声コーデックの選定（AUDIO-000） | [ADR-0049](adr/0049-audio-bus-timing-and-codec.md) |
+| 中断ジョブの完了区間再利用と公開境界の照合（RECOVERY-001） | [ADR-0087](adr/0087-fixed-job-resume-and-reconciliation.md) |
+| HDR の表示変換と明示 SDR 出力の演算（COLOR-001） | [ADR-0086](adr/0086-rec2100-native-precision-and-fixed-hdr-output.md) |

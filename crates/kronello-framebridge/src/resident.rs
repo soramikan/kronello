@@ -70,6 +70,9 @@ impl HardwareFrame {
         transfer: VideoTransfer,
         stats: &mut TransferStats,
     ) -> Result<ResidentImage, NativeError> {
+        let _scope = gpu
+            .observation_scope()
+            .map_err(|e| error(NativeStage::Sample, e.to_string()))?;
         if output.contains(&0)
             || extent
                 .iter()
@@ -175,6 +178,7 @@ impl HardwareFrame {
             pass.dispatch_workgroups(output[0].div_ceil(8), output[1].div_ceil(8), 1);
         }
         gpu.queue.submit([encoder.finish()]);
+        stats.gpu_compute_dispatches += 1;
         stats.cpu_upload_control_bytes += bytes.len() as u64;
         stats.cpu_upload_control_operations += 1;
         // GPU shader writes are computation, not a texture copy or CPU transfer.

@@ -5,7 +5,7 @@
 ## 比較の方針
 
 - 値とレイアウトの比較は厳密に行う（意味的比較）。
-- GPU 画素の比較は、Apple Silicon + Metal 共通の基準画像と許容誤差で行う。
+- GPU 画素の比較は、Apple Silicon + Metal 共通基準と Linux Vulkan / Windows Direct3D12 の環境別基準で行う。許容誤差は ADR-0088 に従い、hardware / software adapter の結果を区別する。
 - 異なる GPU / CPU 間の浮動小数点のビット一致は約束しない。
 
 ## テスト素材
@@ -65,3 +65,10 @@ ARC-001 で固定した規約の具体的な検証契約は [ADR-0043](../adr/00
 ### 計測項目
 
 `compile_ms`、`eval_ms`、`layout_ms`、`raster_ms`、`gpu_ms`、`decode_wait_ms`、`encode_wait_ms`、CPU / GPU transfer bytes、`peak_memory`、`cache_hit_ratio`、`samples_per_frame`。
+
+
+## M4 の測定方法と未達条件
+
+[ADR-0090](../adr/0090-release-performance-evidence-and-snapshot-policy.md) に従い、release・固定作品・既定 cache・quiet host で cold/warm を各21回測定し、全画素の参照照合を行う。停止画面の cache hit と画素が変わる時刻列を区別する。native preview、tile final、movie encoding は別の経路として記録し、GPU descriptor payload、idle pool、CPU Vec、OS sampled RSS/footprint、保守的 admission estimate を混同しない。
+
+M4 Mac mini 32GB の動く基本4K native preview は p50 43.956ms / p95 45.782msで、暫定33.3msを満たさなかった。GUI presentation を含むFPS保証ではない。complex lower-third のnative1080p/4Kは既存512MiB admissionで明示拒否され、proxy preview と tiled final を使用する。OQ-14は未決のままとし、数値目標を実測に合わせて自動変更しない。[全測定結果](../testing/perf-001.md)を参照。

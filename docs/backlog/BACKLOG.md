@@ -14,7 +14,7 @@
 | M1 | 0 | 0 | 14 | 0 | 14 |
 | M2 | 0 | 1 | 10 | 0 | 11 |
 | M3 | 0 | 0 | 25 | 0 | 25 |
-| M4 | 1 | 5 | 6 | 0 | 12 |
+| M4 | 0 | 3 | 9 | 0 | 12 |
 | M5 | 5 | 0 | 0 | 0 | 5 |
 | M6 | 4 | 0 | 0 | 0 | 4 |
 
@@ -578,7 +578,7 @@
 
 ### COLOR-001 HDR/alpha/高解像度品質
 
-- 優先度: P1 / 領域: color / 状態: in_progress
+- 優先度: P1 / 領域: color / 状態: done
 - 依存: GPU-002, RENDER-002, QA-001, JOB-001, MEDIA-002
 - 受け入れ条件:
   - HDRの表示変換を最終出力へ勝手に焼き込まない
@@ -597,7 +597,7 @@
 
 ### PERF-001 参照シーンbenchmarkと資源予算
 
-- 優先度: P1 / 領域: performance / 状態: planned
+- 優先度: P1 / 領域: performance / 状態: in_progress
 - 依存: GPU-003, COLOR-001, CACHE-002, RENDER-003
 - 受け入れ条件:
   - warm/cold・proxy/full・preview/finalを分けてp50/p95を出す
@@ -608,7 +608,7 @@
 
 ### RECOVERY-001 GPU lost/容量不足/worker停止の復旧
 
-- 優先度: P1 / 領域: reliability / 状態: in_progress
+- 優先度: P1 / 領域: reliability / 状態: done
 - 依存: JOB-001, GPU-003, STORE-001
 - 受け入れ条件:
   - 失敗でProjectや確定済み成果物が壊れない
@@ -628,7 +628,7 @@
 
 ### CACHE-003 GPU資源とディスクのraster cache
 
-- 優先度: P2 / 領域: cache / 状態: in_progress
+- 優先度: P2 / 領域: cache / 状態: done
 - 依存: CACHE-001, CACHE-002
 - 受け入れ条件:
   - GPU textureのcacheを容量予算つきで持ち、意味的keyをCPU側のcacheと共有する

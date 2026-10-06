@@ -106,3 +106,7 @@ Project schema version 1 と既存必須 active_range を維持する。
 range 検索は各 node の authored local Composition time の半開区間 overlap であり、
 評価時刻の可視性や親の retime を投影した時間とは区別する。
 [ADR-0072](../adr/0072-scene-search-fixed-cursors-and-cli-events.md) を参照。
+
+### M4 HDR 固定入力
+
+`RenderProfile.hdr` は optional な `HdrSettings`（PQ/HLG）で、`LinearRec2020` と `SemanticVersions.hdr = 1` を必要とする。1 working unit は 203 cd/m²、HLG version 1 は peak 1000 cd/m² / gamma 1.2。版欠落の legacy snapshot は HDR profile がない場合だけ復元でき、欠落を維持して JSON/hash を変えない。GPU/native handle を snapshot に保存しない。詳細は [ADR-0086](../adr/0086-rec2100-native-precision-and-fixed-hdr-output.md)。

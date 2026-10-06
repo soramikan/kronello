@@ -15,15 +15,27 @@ pub struct ExternalFrame {
     pub rgba16f: Vec<u8>,
     pub transfers: TransferStats,
 }
+#[derive(Debug)]
+pub struct SceneFramePair {
+    pub linear: Vec<[f32; 4]>,
+    pub display: Vec<[f32; 4]>,
+    pub transfers: TransferStats,
+}
 struct ScenePass<'a> {
     gpu: &'a GpuContext,
     size: RenderSize,
     working: WorkingSpace,
     pipeline: wgpu::ComputePipeline,
     effect_pipeline: wgpu::ComputePipeline,
-    blank: wgpu::Texture,
+    blank: SurfaceLease,
+    semantic_keys: Option<&'a [Option<kronello_render::RasterCacheKey>]>,
+    allow_disk: bool,
+    pending_cache: Vec<(kronello_render::RasterCacheKey, SurfaceLease)>,
     stats: TransferStats,
     validation: wgpu::Buffer,
+    controls: Vec<(wgpu::Buffer, crate::allocation::AllocationGuard)>,
+    // Drop ownership after all retained resource handles are released.
+    _scope: crate::observation::RenderScope,
 }
 fn space(space: InputSpace) -> u32 {
     match space {
@@ -33,11 +45,9 @@ fn space(space: InputSpace) -> u32 {
     }
 }
 impl ScenePass<'_> {
-    fn texture(&self) -> Result<wgpu::Texture, GpuError> {
-        self.gpu.texture(
-            self.size.output_resolution[0],
-            self.size.output_resolution[1],
-            wgpu::TextureFormat::Rgba16Float,
+    fn texture(&self) -> Result<SurfaceLease, GpuError> {
+        self.gpu.acquire_surface_with_usage(
+            self.size.output_resolution,
             wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::STORAGE_BINDING
                 | wgpu::TextureUsages::COPY_SRC,
@@ -46,12 +56,12 @@ impl ScenePass<'_> {
     fn pass(
         &mut self,
         mode: u32,
-        inputs: (&wgpu::Texture, &wgpu::Texture),
+        inputs: (&SurfaceLease, &SurfaceLease),
         path: Option<&PathDraw>,
         opacity: f32,
         kind: MaskKind,
         output_transform: Option<OutputTransform>,
-    ) -> Result<wgpu::Texture, GpuError> {
+    ) -> Result<SurfaceLease, GpuError> {
         let (source, previous) = inputs;
         let output = self.texture()?;
         let edge_list = path.map(edges).unwrap_or_default();
@@ -267,6 +277,13 @@ impl ScenePass<'_> {
         self.stats.cpu_upload_control_bytes +=
             (params.len() + edge_bytes.len() + stop_bytes.len()) as u64;
         self.stats.cpu_upload_control_operations += 3;
+        for buffer in [&stop_buffer, &uniform, &edge_buffer] {
+            self.controls.push((
+                buffer.clone(),
+                self.gpu
+                    .track_resource(crate::allocation::ResourceKind::Control, buffer.size()),
+            ));
+        }
         let views = [
             source.create_view(&Default::default()),
             previous.create_view(&Default::default()),
@@ -321,16 +338,17 @@ impl ScenePass<'_> {
             );
         }
         self.gpu.queue.submit([encoder.finish()]);
+        self.stats.gpu_compute_dispatches += 1;
         Ok(output)
     }
     fn effect_pass(
         &mut self,
-        source: &wgpu::Texture,
-        original: &wgpu::Texture,
+        source: &SurfaceLease,
+        original: &SurfaceLease,
         weights: &[f32],
         axis: u32,
         shadow: Option<([f32; 2], [f32; 4])>,
-    ) -> Result<wgpu::Texture, GpuError> {
+    ) -> Result<SurfaceLease, GpuError> {
         let output = self.texture()?;
         let mut params = Vec::new();
         params.extend(
@@ -379,6 +397,13 @@ impl ScenePass<'_> {
                 });
         self.stats.cpu_upload_control_bytes += (params.len() + weights.len()) as u64;
         self.stats.cpu_upload_control_operations += 2;
+        for buffer in [&uniform, &weights_buffer] {
+            self.controls.push((
+                buffer.clone(),
+                self.gpu
+                    .track_resource(crate::allocation::ResourceKind::Control, buffer.size()),
+            ));
+        }
         let views = [
             source.create_view(&Default::default()),
             original.create_view(&Default::default()),
@@ -429,13 +454,14 @@ impl ScenePass<'_> {
             );
         }
         self.gpu.queue.submit([encoder.finish()]);
+        self.stats.gpu_compute_dispatches += 1;
         Ok(output)
     }
     fn effect(
         &mut self,
-        source: &wgpu::Texture,
+        source: &SurfaceLease,
         effect: &PixelEffect,
-    ) -> Result<wgpu::Texture, GpuError> {
+    ) -> Result<SurfaceLease, GpuError> {
         let blurred = if let Some(covariance) = effect.covariance() {
             let taps = kronello_render::affine_gaussian_kernel(covariance).map_err(|_| {
                 GpuError::UnsupportedFeature("affine Gaussian covariance or kernel budget")
@@ -464,6 +490,16 @@ impl ScenePass<'_> {
         }
     }
     fn validate(&mut self) -> Result<(), GpuError> {
+        self.controls.push((
+            self.validation.clone(),
+            self.gpu.track_resource(
+                crate::allocation::ResourceKind::Control,
+                self.validation.size(),
+            ),
+        ));
+        let _allocation = self
+            .gpu
+            .track_resource(crate::allocation::ResourceKind::Readback, 4);
         let readback = self.gpu.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("GPU-002 validation status"),
             size: 4,
@@ -493,10 +529,16 @@ impl ScenePass<'_> {
         readback.unmap();
         self.stats.gpu_readback_bytes += 4;
         self.stats.gpu_readback_operations += 1;
+        self.stats.gpu_wait_operations += 1;
         if failed {
             return Err(GpuError::InvalidInput(
                 "RGBA16F surface value outside finite representable range",
             ));
+        }
+        // Publish only after the entire graph's sticky status is known valid.
+        // A later opaque draw must not hide an invalid cached intermediate.
+        for (key, surface) in &self.pending_cache {
+            self.gpu.retain_surface(*key, surface.clone());
         }
         Ok(())
     }
@@ -504,16 +546,28 @@ impl ScenePass<'_> {
         &mut self,
         scene: &DrawScene,
         id: usize,
-        cache: &mut [Option<wgpu::Texture>],
-    ) -> Result<wgpu::Texture, GpuError> {
+        cache: &mut [Option<SurfaceLease>],
+    ) -> Result<SurfaceLease, GpuError> {
+        let _node = self.gpu.track_node(id);
         if let Some(t) = &cache[id] {
             return Ok(t.clone());
+        }
+        if let Some(key) = self.semantic_keys.and_then(|keys| keys[id])
+            && let Some(surface) = self.gpu.cached_surface(
+                key,
+                self.size.output_resolution,
+                &mut self.stats,
+                self.allow_disk,
+            )?
+        {
+            cache[id] = Some(surface.clone());
+            return Ok(surface);
         }
         let blank = self.blank.clone();
         let t = match &scene.nodes[id] {
             DrawNode::GpuRaster(image) => {
                 image.validate_for(self.gpu, self.size.output_resolution, self.working)?;
-                image.texture().clone()
+                SurfaceLease::external(self.gpu, image)
             }
             DrawNode::Raster(pixels) => {
                 if pixels.len()
@@ -524,11 +578,11 @@ impl ScenePass<'_> {
                 {
                     return Err(GpuError::InvalidInput("raster input dimensions"));
                 }
-                let texture = self.gpu.texture(
-                    self.size.output_resolution[0],
-                    self.size.output_resolution[1],
-                    wgpu::TextureFormat::Rgba16Float,
-                    wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                let texture = self.gpu.acquire_surface_with_usage(
+                    self.size.output_resolution,
+                    wgpu::TextureUsages::TEXTURE_BINDING
+                        | wgpu::TextureUsages::COPY_DST
+                        | wgpu::TextureUsages::COPY_SRC,
                 )?;
                 let bytes: Vec<_> = pixels
                     .iter()
@@ -542,7 +596,7 @@ impl ScenePass<'_> {
                     .collect();
                 self.gpu.queue.write_texture(
                     wgpu::TexelCopyTextureInfo {
-                        texture: &texture,
+                        texture: texture.texture(),
                         mip_level: 0,
                         origin: wgpu::Origin3d::ZERO,
                         aspect: wgpu::TextureAspect::All,
@@ -584,6 +638,9 @@ impl ScenePass<'_> {
                 self.pass(3, (&source, &matte), None, 1.0, *kind, None)?
             }
         };
+        if let Some(key) = self.semantic_keys.and_then(|keys| keys[id]) {
+            self.pending_cache.push((key, t.clone()));
+        }
         cache[id] = Some(t.clone());
         Ok(t)
     }
@@ -591,8 +648,8 @@ impl ScenePass<'_> {
         &mut self,
         scene: &DrawScene,
         ids: &[usize],
-        cache: &mut [Option<wgpu::Texture>],
-    ) -> Result<wgpu::Texture, GpuError> {
+        cache: &mut [Option<SurfaceLease>],
+    ) -> Result<SurfaceLease, GpuError> {
         let mut current = self.blank.clone();
         for &id in ids {
             let source = self.node(scene, id, cache)?;
@@ -608,15 +665,20 @@ impl GpuContext {
         scene: &DrawScene,
         working: WorkingSpace,
     ) -> Result<ScenePass<'_>, GpuError> {
+        let scope = self.render_scope()?;
         size.validate()?;
         scene.validate()?;
+        // A warm parent hit cannot hide a foreign resource in its inputs.
+        for node in &scene.nodes {
+            if let DrawNode::GpuRaster(image) = node {
+                image.validate_for(self, size.output_resolution, working)?;
+            }
+        }
         // RGBA16F intermediate surfaces are retained for shared references. Bound
         // the conservative peak including root/child composite temporaries.
         check_scene_budget(size, scene, 8)?;
-        let blank = self.texture(
-            size.output_resolution[0],
-            size.output_resolution[1],
-            wgpu::TextureFormat::Rgba16Float,
+        let blank = self.acquire_surface_with_usage(
+            size.output_resolution,
             wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_SRC,
         )?;
         let shader = self
@@ -652,7 +714,12 @@ impl GpuContext {
                     cache: None,
                 });
         Ok(ScenePass {
+            _scope: scope,
             gpu: self,
+            semantic_keys: None,
+            allow_disk: false,
+            pending_cache: vec![],
+            controls: vec![],
             size,
             working,
             pipeline,
@@ -685,7 +752,7 @@ impl GpuContext {
         let mut cache = vec![None; scene.nodes.len()];
         let texture = pass.composite(scene, &scene.roots, &mut cache)?;
         pass.validate()?;
-        self.finish_render(size, &texture, working, pass.stats)
+        self.finish_render(size, texture.texture(), working, pass.stats)
     }
     /// Same scene pipeline followed by explicit external color/alpha conversion.
     pub fn render_scene_output(
@@ -708,7 +775,7 @@ impl GpuContext {
             Some(transform),
         )?;
         pass.validate()?;
-        let rgba16f = self.read_texture(&output, 8, &mut pass.stats)?;
+        let rgba16f = self.read_texture(output.texture(), 8, &mut pass.stats)?;
         // This boundary currently produces zero RGB at alpha zero for both
         // associations, so the existing finite/binary16 validator also applies.
         let pixels = decode_rgba16f(&rgba16f)?;
@@ -720,6 +787,130 @@ impl GpuContext {
             rgba16f,
             transfers: pass.stats,
         })
+    }
+    #[cfg(test)]
+    pub(crate) fn render_scene_cached(
+        &self,
+        size: RenderSize,
+        scene: &DrawScene,
+        working: WorkingSpace,
+        keys: &[Option<kronello_render::RasterCacheKey>],
+        allow_disk: bool,
+        output: Option<OutputTransform>,
+    ) -> Result<RenderOutput, GpuError> {
+        let mut pass = self.scene_pass(size, scene, working)?;
+        pass.semantic_keys = Some(keys);
+        pass.allow_disk = allow_disk;
+        let mut cache = vec![None; scene.nodes.len()];
+        let texture = pass.composite(scene, &scene.roots, &mut cache)?;
+        let texture = if let Some(transform) = output {
+            let blank = pass.blank.clone();
+            pass.pass(
+                4,
+                (&texture, &blank),
+                None,
+                1.0,
+                MaskKind::Alpha,
+                Some(transform),
+            )?
+        } else {
+            texture
+        };
+        pass.validate()?;
+        if pass.allow_disk {
+            for (key, surface) in &pass.pending_cache {
+                self.persist_surface(*key, surface, &mut pass.stats)?;
+            }
+        }
+        if output.is_some() {
+            let rgba16f = self.read_texture(texture.texture(), 8, &mut pass.stats)?;
+            let pixels = decode_rgba16f(&rgba16f)?;
+            Ok(RenderOutput {
+                width: size.output_resolution[0],
+                height: size.output_resolution[1],
+                working_space: working,
+                design_extent: size.design_extent,
+                pixels,
+                rgba16f,
+                transfers: pass.stats,
+            })
+        } else {
+            self.finish_render(size, texture.texture(), working, pass.stats)
+        }
+    }
+    /// Produce both final boundaries from one validated graph. No intermediate
+    /// pixels leave the GPU, and no duplicate graph execution is performed.
+    pub fn render_scene_pair(
+        &self,
+        size: RenderSize,
+        scene: &DrawScene,
+        working: WorkingSpace,
+        transform: OutputTransform,
+    ) -> Result<SceneFramePair, GpuError> {
+        self.render_scene_pair_cached(size, scene, working, None, false, transform)
+    }
+    pub(crate) fn render_scene_pair_cached(
+        &self,
+        size: RenderSize,
+        scene: &DrawScene,
+        working: WorkingSpace,
+        keys: Option<&[Option<kronello_render::RasterCacheKey>]>,
+        allow_disk: bool,
+        transform: OutputTransform,
+    ) -> Result<SceneFramePair, GpuError> {
+        let mut pass = self.scene_pass(size, scene, working)?;
+        pass.semantic_keys = keys;
+        pass.allow_disk = allow_disk;
+        let mut cache = vec![None; scene.nodes.len()];
+        let linear = pass.composite(scene, &scene.roots, &mut cache)?;
+        let blank = pass.blank.clone();
+        let display = pass.pass(
+            4,
+            (&linear, &blank),
+            None,
+            1.0,
+            MaskKind::Alpha,
+            Some(transform),
+        )?;
+        pass.validate()?;
+        if pass.allow_disk {
+            for (key, surface) in &pass.pending_cache {
+                self.persist_surface(*key, surface, &mut pass.stats)?;
+            }
+        }
+        let linear = decode_rgba16f(&self.read_texture(linear.texture(), 8, &mut pass.stats)?)?;
+        let display = decode_rgba16f(&self.read_texture(display.texture(), 8, &mut pass.stats)?)?;
+        Ok(SceneFramePair {
+            linear,
+            display,
+            transfers: pass.stats,
+        })
+    }
+    pub(crate) fn render_scene_texture_cached(
+        &self,
+        size: RenderSize,
+        scene: &DrawScene,
+        working: WorkingSpace,
+        keys: &[Option<kronello_render::RasterCacheKey>],
+        transform: OutputTransform,
+    ) -> Result<wgpu::Texture, GpuError> {
+        let mut pass = self.scene_pass(size, scene, working)?;
+        pass.semantic_keys = Some(keys);
+        // Native preview remains resident: persistence readbacks are disabled.
+        let mut cache = vec![None; scene.nodes.len()];
+        let texture = pass.composite(scene, &scene.roots, &mut cache)?;
+        let blank = pass.blank.clone();
+        let output = pass.pass(
+            4,
+            (&texture, &blank),
+            None,
+            1.0,
+            MaskKind::Alpha,
+            Some(transform),
+        )?;
+        pass.validate()?;
+        self.record_transfers(&pass.stats);
+        Ok(output.detach())
     }
     /// GPU-resident display output for native surfaces. Only the four-byte
     /// shader validation status is read back; image pixels stay on the device.
@@ -743,6 +934,6 @@ impl GpuContext {
             Some(transform),
         )?;
         pass.validate()?;
-        Ok(output)
+        Ok(output.detach())
     }
 }

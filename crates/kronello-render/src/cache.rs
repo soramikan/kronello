@@ -14,7 +14,7 @@ use crate::{
     COLOR_VERSION, COVERAGE_VERSION, CoveragePath, OutputRegion, RenderError, VECTOR_VERSION,
 };
 
-const KEY_VERSION: &str = "cache001-json-sha256-v1";
+const KEY_VERSION: &str = "cache003-json-sha256-v2";
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CacheCapacity {
     pub entries: usize,
@@ -327,19 +327,54 @@ impl RenderCache {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RasterCacheKey(Key);
 impl RasterCacheKey {
+    /// Stable semantic digest shared by CPU, GPU and persistent raster stores.
+    pub fn digest(self) -> [u8; 32] {
+        self.0.0
+    }
+
     /// Effect identities include the ordered dependency image identity, exact
     /// evaluated parameters, semantic versions, ROI, color and backend namespace.
     pub fn for_dag(
         dag: &crate::RenderDag,
         backend_namespace: &str,
     ) -> Result<Vec<Option<Self>>, RenderError> {
+        Self::for_dag_with_inputs(dag, backend_namespace, &std::collections::BTreeMap::new())
+    }
+    /// Native producers supply content-addressed source identities; unresolved
+    /// sources remain typed unsupported, never pixel readback substitutes.
+    pub fn for_dag_with_inputs(
+        dag: &crate::RenderDag,
+        backend_namespace: &str,
+        inputs: &std::collections::BTreeMap<usize, Self>,
+    ) -> Result<Vec<Option<Self>>, RenderError> {
         let mut keys: Vec<Option<Self>> = vec![];
-        for node in dag.nodes() {
+        for (index, node) in dag.nodes().iter().enumerate() {
             let value = match node {
-                crate::DagNode::VideoDraw { .. } => {
-                    return Err(RenderError::UnsupportedFeature(
-                        "unresolved video input".into(),
-                    ));
+                crate::DagNode::VideoDraw {
+                    stream_index,
+                    time,
+                    extent,
+                    output_to_local,
+                    bounds,
+                    ..
+                } => {
+                    let input = inputs.get(&index).ok_or_else(|| {
+                        RenderError::UnsupportedFeature("unresolved video cache identity".into())
+                    })?;
+                    Some(Self(key(
+                        "resident-video-raster",
+                        (
+                            input.digest(),
+                            stream_index,
+                            time,
+                            extent,
+                            output_to_local,
+                            bounds,
+                            dag.execution_region(),
+                            dag.working_space(),
+                            backend_namespace,
+                        ),
+                    )?))
                 }
                 crate::DagNode::RasterInput { pixels } => Some(Self(key(
                     "video-raster",
@@ -365,6 +400,9 @@ impl RasterCacheKey {
                             .map(|id| keys[*id].map(|k| hex(k.0)))
                             .collect::<Vec<_>>(),
                         opacity,
+                        dag.execution_region(),
+                        dag.working_space(),
+                        backend_namespace,
                     ),
                 )?)),
                 crate::DagNode::Mask {
@@ -377,6 +415,9 @@ impl RasterCacheKey {
                         keys[*source].map(|k| hex(k.0)),
                         keys[*matte].map(|k| hex(k.0)),
                         kind,
+                        dag.execution_region(),
+                        dag.working_space(),
+                        backend_namespace,
                     ),
                 )?)),
                 crate::DagNode::Effect { source, effect } => Some(Self(key(
@@ -396,6 +437,24 @@ impl RasterCacheKey {
             keys.push(value);
         }
         Ok(keys)
+    }
+    pub fn external_source(
+        identity: &str,
+        region: OutputRegion,
+        working: ColorSpace,
+        namespace: &str,
+    ) -> Result<Self, RenderError> {
+        Ok(Self(key(
+            "external-source",
+            (
+                identity,
+                region,
+                working,
+                namespace,
+                COLOR_VERSION,
+                COVERAGE_VERSION,
+            ),
+        )?))
     }
     pub fn new(
         path: &CoveragePath,

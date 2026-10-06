@@ -98,6 +98,7 @@ macro_rules! commands {
             ("job.get", true, JobRequest, kronello_jobs::JobRecord),
             ("job.list", true, JobListRequest, JobListResult),
             ("job.cancel", true, JobRequest, kronello_jobs::JobRecord),
+            ("job.resume", true, JobRequest, kronello_jobs::JobRecord),
             ("job.prune", true, JobPruneRequest, kronello_jobs::PruneResult),
             ("project.create_plan", true, CreatePlanRequest, ProjectChangePlan),
             ("project.import_plan", true, ImportPlanRequest, ProjectChangePlan),
@@ -151,6 +152,7 @@ impl CapabilitiesResult {
             features: [
                 "temporal_sampling_v1",
                 "composition_media_v1",
+                "hdr_rec2100_203nits_v1",
                 "sequence",
                 "composition_clip",
                 "video_clip",

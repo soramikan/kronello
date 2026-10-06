@@ -272,7 +272,7 @@
     "AvExportRequest": {
       "properties": {
         "background": {
-          "description": "Explicit opaque background, linear Rec.709 SDR, before BT.709 encoding.",
+          "description": "Explicit opaque background in the fixed profile working space (HDR 1=203 nits).",
           "items": {
             "format": "float",
             "type": "number"
@@ -3113,6 +3113,16 @@
             "null"
           ]
         },
+        "hdr": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HdrMetadata"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "input_path": {
           "type": "string"
         },
@@ -3126,6 +3136,16 @@
         },
         "region": {
           "$ref": "#/$defs/OutputRegion"
+        },
+        "resource_cache_stats": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RenderResourceCacheStats"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "revision": {
           "type": "string"
@@ -3623,6 +3643,51 @@
       ],
       "type": "string"
     },
+    "HdrMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "hlg_peak_nits": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "reference_white_nits": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "transfer": {
+          "$ref": "#/$defs/HdrTransfer"
+        }
+      },
+      "required": [
+        "transfer",
+        "reference_white_nits"
+      ],
+      "type": "object"
+    },
+    "HdrSettings": {
+      "additionalProperties": false,
+      "properties": {
+        "transfer": {
+          "$ref": "#/$defs/HdrTransfer"
+        }
+      },
+      "required": [
+        "transfer"
+      ],
+      "type": "object"
+    },
+    "HdrTransfer": {
+      "enum": [
+        "pq",
+        "hlg"
+      ],
+      "type": "string"
+    },
     "HistoryEntry": {
       "additionalProperties": false,
       "properties": {
@@ -4104,6 +4169,90 @@
               "$ref": "#/$defs/AudioSourceMode",
               "default": "explicit"
             },
+            "background": {
+              "items": {
+                "format": "float",
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/JobAudioClip"
+              },
+              "type": "array"
+            },
+            "format": {
+              "const": "pro_res_sdr_from_hdr_mov",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "clips",
+            "background"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/AudioSourceMode",
+              "default": "explicit"
+            },
+            "background": {
+              "items": {
+                "format": "float",
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/JobAudioClip"
+              },
+              "type": "array"
+            },
+            "format": {
+              "const": "pro_res_hdr_mov",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "transfer": {
+              "$ref": "#/$defs/HdrTransfer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "transfer",
+            "clips",
+            "background"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/AudioSourceMode",
+              "default": "explicit"
+            },
             "audio_codec": {
               "$ref": "#/$defs/DeliveryAudioCodec",
               "default": "alac"
@@ -4238,6 +4387,12 @@
     "JobRecord": {
       "additionalProperties": false,
       "properties": {
+        "attempt": {
+          "default": 0,
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
         "cancel_requested": {
           "type": "boolean"
         },
@@ -4285,6 +4440,13 @@
         "output_profile": true,
         "project_id": {
           "type": "string"
+        },
+        "publication_hash": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "result": true,
         "revision": {
@@ -4651,6 +4813,30 @@
         "codec": {
           "type": "string"
         },
+        "color_matrix": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "color_primaries": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "color_range": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "color_transfer": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "duration": {
           "anyOf": [
             {
@@ -4676,6 +4862,12 @@
         },
         "kind": {
           "$ref": "#/$defs/StreamKind"
+        },
+        "pixel_format": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "sample_rate": {
           "format": "uint32",
@@ -4802,7 +4994,10 @@
         "pro_res_pcm24",
         "av1_mp4_alac_v1",
         "h264_alac_v1",
-        "hevc_alac_v1"
+        "hevc_alac_v1",
+        "pro_res_pq_pcm24_v1",
+        "pro_res_hlg_pcm24_v1",
+        "pro_res_sdr_from_hdr_pcm24_v1"
       ],
       "type": "string"
     },
@@ -5324,6 +5519,16 @@
           "type": "object"
         }
       ]
+    },
+    "PersistentRasterCachePolicy": {
+      "enum": [
+        "memory_only",
+        "enabled",
+        "explicitly_disabled",
+        "default_directory_overlaps_project",
+        "disabled_for_gpu_resident"
+      ],
+      "type": "string"
     },
     "PlanRequest": {
       "additionalProperties": false,
@@ -6148,6 +6353,16 @@
           "format": "double",
           "type": "number"
         },
+        "hdr": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HdrSettings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "temporal": {
           "anyOf": [
             {
@@ -6165,6 +6380,36 @@
       "required": [
         "working_space",
         "flatten_tolerance_px"
+      ],
+      "type": "object"
+    },
+    "RenderResourceCacheStats": {
+      "additionalProperties": false,
+      "properties": {
+        "disk_raster": {
+          "$ref": "#/$defs/CacheStats"
+        },
+        "gpu_pool": {
+          "$ref": "#/$defs/CacheStats"
+        },
+        "gpu_textures": {
+          "$ref": "#/$defs/CacheStats"
+        },
+        "persistent_disk_policy": {
+          "$ref": "#/$defs/PersistentRasterCachePolicy",
+          "default": "memory_only"
+        },
+        "rejected_disk_entries": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "gpu_textures",
+        "gpu_pool",
+        "disk_raster",
+        "rejected_disk_entries"
       ],
       "type": "object"
     },
@@ -6352,6 +6597,12 @@
           "minimum": 0,
           "type": "integer"
         },
+        "gpu_compute_dispatches": {
+          "default": 0,
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
         "gpu_copy_bytes": {
           "format": "uint64",
           "minimum": 0,
@@ -6368,6 +6619,12 @@
           "type": "integer"
         },
         "gpu_readback_operations": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "gpu_wait_operations": {
+          "default": 0,
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
@@ -6762,6 +7019,23 @@
             },
             "operation": {
               "const": "job.cancel",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "job"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "job": {
+              "type": "string"
+            },
+            "operation": {
+              "const": "job.resume",
               "type": "string"
             }
           },
@@ -8755,6 +9029,14 @@
         },
         "gradient_interpolation": {
           "type": "string"
+        },
+        "hdr": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "interpolation": {
           "format": "uint32",

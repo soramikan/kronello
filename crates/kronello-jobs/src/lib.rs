@@ -9,7 +9,9 @@ use sha2::{Digest, Sha256};
 
 mod connection_gate;
 mod heartbeat;
+mod recovery;
 pub use heartbeat::WorkerHeartbeat;
+pub use recovery::JobStaging;
 
 // SQLite 3.51.1 unix VFS can invert its global/inode mutexes when one
 // connection closes WAL while another thread opens the same DB. Hold this
@@ -183,6 +185,10 @@ pub struct JobRecord {
     pub result: Option<serde_json::Value>,
     pub error: Option<JobFailure>,
     pub directory_pruned: bool,
+    #[serde(default)]
+    pub attempt: u64,
+    #[serde(default)]
+    pub publication_hash: Option<String>,
 }
 pub struct Submission {
     pub engine_version: String,
@@ -261,6 +267,7 @@ impl JobStore {
     pub fn open(config: JobConfig) -> Result<Self, JobError> {
         config.validate()?;
         std::fs::create_dir_all(config.state_root.join("jobs"))?;
+        std::fs::create_dir_all(config.state_root.join("job-results"))?;
         let store = Self { config };
         let db = store.connect()?;
         let version: u32 = db.query_row("PRAGMA user_version", [], |r| r.get(0))?;
@@ -334,6 +341,8 @@ impl JobStore {
                 result: None,
                 error: None,
                 directory_pruned: false,
+                attempt: 0,
+                publication_hash: None,
             };
             self.connect()?.execute(
                 "INSERT INTO jobs(id,record) VALUES(?1,?2)",
@@ -357,6 +366,9 @@ impl JobStore {
         Ok(bytes)
     }
     pub fn list(&self) -> Result<Vec<JobRecord>, JobError> {
+        self.hydrate_results(self.list_records()?)
+    }
+    fn list_records(&self) -> Result<Vec<JobRecord>, JobError> {
         let mut db = self.connect()?;
         // Most polling is a WAL read, not a competing writer. Recheck recovery
         // inside the writer transaction only when a snapshot contains expiry.
@@ -367,20 +379,24 @@ impl JobStore {
                     > duration_ms(self.config.heartbeat_timeout)
                 && !r.worker_pid.is_some_and(worker_is_alive)
         }) {
+            drop(db);
             return Ok(snapshot);
         }
         let tx = db.transaction_with_behavior(TransactionBehavior::Immediate)?;
         recover(&tx, self.config.heartbeat_timeout)?;
         let list = records(&tx)?;
         tx.commit()?;
+        drop(db);
         Ok(list)
     }
     pub fn get(&self, id: &str) -> Result<JobRecord, JobError> {
         self.directory(id)?;
-        self.list()?
+        let record = self
+            .list_records()?
             .into_iter()
             .find(|r| r.id == id)
-            .ok_or_else(|| JobError::new("JOB_NOT_FOUND", id))
+            .ok_or_else(|| JobError::new("JOB_NOT_FOUND", id))?;
+        Ok(self.hydrate_results(vec![record])?.remove(0))
     }
     fn update(
         &self,
@@ -546,7 +562,30 @@ impl JobStore {
         }
     }
     pub fn finish_error(&self, id: &str, error: &JobError) -> Result<(), JobError> {
+        self.finish_error_generation(id, None, error)
+    }
+    /// A delayed controller or worker cannot fail a newer execution generation.
+    pub fn finish_error_attempt(
+        &self,
+        id: &str,
+        attempt: u64,
+        error: &JobError,
+    ) -> Result<(), JobError> {
+        self.finish_error_generation(id, Some(attempt), error)
+    }
+    fn finish_error_generation(
+        &self,
+        id: &str,
+        attempt: Option<u64>,
+        error: &JobError,
+    ) -> Result<(), JobError> {
         self.update(id, |r| {
+            if attempt.is_some_and(|attempt| r.attempt != attempt) {
+                return Err(JobError::new(
+                    "JOB_INTERRUPTED",
+                    "error completion attempt changed",
+                ));
+            }
             if r.status.active() && r.worker_pid.is_none_or(|pid| pid == std::process::id()) {
                 r.status = if error.code() == "JOB_CANCELED" {
                     JobStatus::Canceled
@@ -571,8 +610,29 @@ impl JobStore {
         result: serde_json::Value,
         publish: impl FnOnce() -> Result<(), JobError>,
     ) -> Result<(), JobError> {
+        self.publish_generation(id, None, result, publish)
+    }
+    pub fn publish_attempt(
+        &self,
+        id: &str,
+        attempt: u64,
+        result: serde_json::Value,
+        publish: impl FnOnce() -> Result<(), JobError>,
+    ) -> Result<(), JobError> {
+        self.publish_generation(id, Some(attempt), result, publish)
+    }
+    fn publish_generation(
+        &self,
+        id: &str,
+        attempt: Option<u64>,
+        result: serde_json::Value,
+        publish: impl FnOnce() -> Result<(), JobError>,
+    ) -> Result<(), JobError> {
         self.update(id, |r| {
-            if r.status != JobStatus::Running || r.worker_pid != Some(std::process::id()) {
+            if r.status != JobStatus::Running
+                || r.worker_pid != Some(std::process::id())
+                || attempt.is_some_and(|attempt| r.attempt != attempt)
+            {
                 return Err(JobError::new("JOB_INTERRUPTED", "execution lease lost"));
             }
             if r.cancel_requested {
@@ -581,7 +641,11 @@ impl JobStore {
             publish()?;
             r.status = JobStatus::Succeeded;
             r.completed_frames = r.total_frames;
-            r.result = Some(result);
+            r.result = if r.publication_hash.is_some() {
+                None
+            } else {
+                Some(result)
+            };
             r.finished_at_ms = Some(now_ms());
             Ok(())
         })?;
@@ -616,6 +680,18 @@ impl JobStore {
         Ok(PruneResult { pruned })
     }
     pub fn spawn(&self, id: &str, executable: &Path) -> Result<(), JobError> {
+        self.spawn_generation(id, None, executable)
+    }
+    /// Register the child only if the submitting controller still owns this attempt.
+    pub fn spawn_attempt(&self, id: &str, attempt: u64, executable: &Path) -> Result<(), JobError> {
+        self.spawn_generation(id, Some(attempt), executable)
+    }
+    fn spawn_generation(
+        &self,
+        id: &str,
+        attempt: Option<u64>,
+        executable: &Path,
+    ) -> Result<(), JobError> {
         let directory = self.directory(id)?;
         let log = std::fs::OpenOptions::new()
             .create(true)
@@ -648,6 +724,12 @@ impl JobStore {
         // Spawn and register under the writer lock, so recovery cannot observe
         // an unregistered child even if either process is delayed at startup.
         if let Err(error) = self.update(id, |r| {
+            if attempt.is_some_and(|attempt| r.attempt != attempt) {
+                return Err(JobError::new(
+                    "JOB_INTERRUPTED",
+                    "worker launch attempt changed",
+                ));
+            }
             if !r.status.active() {
                 return Err(JobError::new("JOB_INTERRUPTED", "job is terminal"));
             }

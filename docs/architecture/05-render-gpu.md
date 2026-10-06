@@ -347,3 +347,20 @@ identity token で拒否し、CPU oracle は resident input を暗黙 readback �
 `render.explain` は resident selection の estimate と policy notice を返す。
 HDR / 10-bit / full-range と CPU temporal accumulation の resident 強制併用は typed unsupported。
 形式別の受け入れ実測と未検証範囲は [GPU-003](../testing/gpu-003.md) に記録する。
+
+## M4 HDR と 8K 出力
+
+[ADR-0086](../adr/0086-rec2100-native-precision-and-fixed-hdr-output.md) の optional HDR profile と意味版 1 で、linear Rec.2020 の 1 を 203 cd/m² と定める。PQ/HLG native 10-bit source は RGBA64 を経由して working RGB へ変換する。CPU と明示 GPU upload は共通の working 値を実行する。numeric artifact / HDR movie と SDR display の変換を分離し、SDR movie tone map は独立した明示 profile に限定する。8K は tile ごとの bounded 実行を使い、CPU 全フレーム保持の上限を引き上げない。
+
+## CACHE-003 の実 GPU resource cache
+
+CPU / GPU は同じ版付き `RasterCacheKey` に入力 hash、時刻、ROI / halo、色 / effect 意味版、backend namespace を固定する。GPU node cache は実 RGBA16F texture の容量制限付き LRU、idle pool は独立した entry / byte 容量を持つ。clone / context identity と queue ordering で寿命を守り、公開 preview 面を再利用しない。外部 resident 入力は親の cache hit 前にも検証する。
+
+任意の永続 cache は project 外の OS cache directory に置く。既定 path が HOME 等の広い project 親の内側なら disk のみ無効化し、metadata に判断を残す。明示 project 内 override は typed error。adapter / driver / OS build / shader / 依存版と意味キーが一致する checksum 検証済み面だけを使い、破損は miss、実 I/O failure は `CACHE_IO`。同時 writer は no-replace atomic publication を使う。通常 disk 書込 / hit の readback / upload を実測する。strict GPU-resident と texture preview は disk 往復を使わない。[ADR-0089](../adr/0089-budgeted-gpu-and-external-raster-cache.md)、[検証](../testing/cache-003.md) を参照。
+
+## PERF-001 の単一 GPU graph と観測
+
+最終 linear / display は同じ graph 面から生成し、一度の sticky validation 後に最終出力だけを読み戻す。linear 専用の texture copy は不要。strict resident 動画もこの経路を共有する。`RenderBackend::transfer_stats_total` の入口・出口差分で全 tile / temporal sample を集計し、cache が実行を省略した要求は transfer 0 とする。`GpuContext::allocation_stats` は具体的な renderer 所有 descriptor payload の分類別 live / peak と node peak を返し、idle pool と driver / decoder private memory の未知部分を区別する。[ADR-0092](../adr/0092-single-graph-gpu-final-output-and-observations.md) を参照。
+
+
+GPU lowering は compiler が末尾に付加した synthetic output root（直前の単一子 `IsolatedComposite`、opacity 1、末尾 `OutputTransform` からの参照）だけを省略する。内部 group の isolation は保つ。最終 SourceOver/store と sticky validation、resident input の事前検証は維持し、GPU cache key 配列も同じ省略に合わせる。保守的 surface admission は省略後の graph に対して行い、512 MiB cap を変更しない。単純 4K preview の限定的な受け入れと複雑 scene の typed failure は別に扱う（[ADR-0092](../adr/0092-single-graph-gpu-final-output-and-observations.md)）。

@@ -1027,7 +1027,7 @@
       "priority": "P1",
       "area": "color",
       "title": "HDR/alpha/高解像度品質",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "GPU-002",
         "RENDER-002",
@@ -1065,7 +1065,7 @@
       "priority": "P1",
       "area": "performance",
       "title": "参照シーンbenchmarkと資源予算",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "GPU-003",
         "COLOR-001",
@@ -1086,7 +1086,7 @@
       "priority": "P1",
       "area": "reliability",
       "title": "GPU lost/容量不足/worker停止の復旧",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "JOB-001",
         "GPU-003",
@@ -1123,7 +1123,7 @@
       "priority": "P2",
       "area": "cache",
       "title": "GPU資源とディスクのraster cache",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "CACHE-001",
         "CACHE-002"

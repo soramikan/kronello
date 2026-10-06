@@ -1,5 +1,7 @@
 //! Immutable scene compilation and image-sequence export. Concrete execution
 //! is injected through RenderBackend; this crate imports no GPU or store API.
+mod hdr;
+pub use hdr::*;
 mod bounds;
 mod cache;
 pub use bounds::{DesignBounds, LayoutValue};
@@ -127,12 +129,107 @@ pub struct RenderTransferStats {
     pub gpu_copy_operations: u64,
     pub gpu_readback_bytes: u64,
     pub gpu_readback_operations: u64,
+    #[serde(default)]
+    pub gpu_wait_operations: u64,
+    #[serde(default)]
+    pub gpu_compute_dispatches: u64,
 }
+impl RenderTransferStats {
+    /// Difference between monotonically accumulated execution observations.
+    pub fn since(&self, before: &Self) -> Self {
+        Self {
+            cpu_upload_pixel_bytes: self
+                .cpu_upload_pixel_bytes
+                .saturating_sub(before.cpu_upload_pixel_bytes),
+            cpu_upload_pixel_operations: self
+                .cpu_upload_pixel_operations
+                .saturating_sub(before.cpu_upload_pixel_operations),
+            cpu_upload_control_bytes: self
+                .cpu_upload_control_bytes
+                .saturating_sub(before.cpu_upload_control_bytes),
+            cpu_upload_control_operations: self
+                .cpu_upload_control_operations
+                .saturating_sub(before.cpu_upload_control_operations),
+            gpu_copy_bytes: self.gpu_copy_bytes.saturating_sub(before.gpu_copy_bytes),
+            gpu_copy_operations: self
+                .gpu_copy_operations
+                .saturating_sub(before.gpu_copy_operations),
+            gpu_readback_bytes: self
+                .gpu_readback_bytes
+                .saturating_sub(before.gpu_readback_bytes),
+            gpu_readback_operations: self
+                .gpu_readback_operations
+                .saturating_sub(before.gpu_readback_operations),
+            gpu_wait_operations: self
+                .gpu_wait_operations
+                .saturating_sub(before.gpu_wait_operations),
+            gpu_compute_dispatches: self
+                .gpu_compute_dispatches
+                .saturating_sub(before.gpu_compute_dispatches),
+        }
+    }
+}
+
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum PersistentRasterCachePolicy {
+    #[default]
+    MemoryOnly,
+    Enabled,
+    ExplicitlyDisabled,
+    DefaultDirectoryOverlapsProject,
+    DisabledForGpuResident,
+}
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    schemars::JsonSchema,
+)]
+#[serde(deny_unknown_fields)]
+pub struct RenderResourceCacheStats {
+    pub gpu_textures: CacheStats,
+    pub gpu_pool: CacheStats,
+    pub disk_raster: CacheStats,
+    pub rejected_disk_entries: u64,
+    #[serde(default)]
+    pub persistent_disk_policy: PersistentRasterCachePolicy,
+}
+/// RAII observation ownership; platform locks remain inside the concrete backend.
+pub trait RenderObservationScope {}
 pub trait RenderBackend {
+    fn begin_observation_scope(
+        &self,
+    ) -> Result<Option<Box<dyn RenderObservationScope + '_>>, RenderError> {
+        Ok(None)
+    }
     fn requires_gpu_resident(&self) -> bool {
         false
     }
     fn transfer_stats(&self) -> Option<RenderTransferStats> {
+        None
+    }
+    /// Monotonic execution totals for request-local tile/temporal deltas.
+    /// None keeps older injected backends' explicit last-execution semantics.
+    fn transfer_stats_total(&self) -> Option<RenderTransferStats> {
+        None
+    }
+    fn resource_cache_stats(&self) -> Option<RenderResourceCacheStats> {
         None
     }
     fn name(&self) -> &str;

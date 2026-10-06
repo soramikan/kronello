@@ -250,7 +250,7 @@ inspect -> draft operations -> edit.plan -> preview(candidate snapshot)
 
 ### ジョブ
 
-JOB-001 で `render.submit` / `job.get` / `job.list` / `job.cancel` / `job.prune` を共有 registry / wire / schema に実装した。作品に対する read_only はすべて true。job.* は per-user 状態 DB の操作であり project target を持たない。render.submit は render.sequence と同じ `SequenceRenderRequest` を `render` member に受け取り、固定 snapshot の保存・queued 記録・独立 worker 起動後に JobRecord（id を含む）を返す。`job.resume` は RECOVERY-001 の提案で、未登録のため INVALID_REQUEST。検証と設定は [14 ジョブ](14-jobs.md)、[JOB-001 の検証](../testing/job-001.md)、[ADR-0050](../adr/0050-fixed-job-execution-and-publication.md)。
+JOB-001 で `render.submit` / `job.get` / `job.list` / `job.cancel` / `job.prune` を共有 registry / wire / schema に実装した。作品に対する read_only はすべて true。job.* は per-user 状態 DB の操作であり project target を持たない。render.submit は render.sequence と同じ `SequenceRenderRequest` を `render` member に受け取り、固定 snapshot の保存・queued 記録・独立 worker 起動後に JobRecord（id を含む）を返す。`job.resume` は RECOVERY-001 で共有 registry / wire / schema に登録した。固定入力の再検証後、新 attempt で全 frame を再実行する。公開済み output がある場合は DB に anchor された receipt と全 artifact を照合し、成功した場合だけ worker を再起動せず succeeded に補正する（[ADR-0087](../adr/0087-fixed-job-resume-and-reconciliation.md)）。検証と設定は [14 ジョブ](14-jobs.md)、[JOB-001 の検証](../testing/job-001.md)、[ADR-0050](../adr/0050-fixed-job-execution-and-publication.md)。
 
 | 操作 | payload | successful result |
 |---|---|---|
@@ -644,3 +644,9 @@ request / snapshot / codec / sampleの意味版を変更しない。
 modern HTTP は POST ごとに独立し、session ID を発行しない。`MCP-Protocol-Version` / `Mcp-Method` / 対象 method の `Mcp-Name` を body と照合する。header 不一致は 400 / -32020、未知版は 400 / -32022、未知 method は 404 / -32601。SSE stream の切断はその要求の協調取消とし、独立 render job の取消にはしない。legacy HTTP の session と明示取消は上記の契約を維持する。
 
 modern response は `resultType: complete` と serverInfo metadata を返し、cacheable result は `ttlMs: 0` / `cacheScope: private` とする。公式 Python SDK 2.3.0 の実 stdio / HTTP 検証は [MCP-003](../testing/mcp-003.md) を参照する。
+
+### M4 HDR movie profile
+
+共通 `render.export` / `render.submit` の `JobOutput` は `pro_res_hdr_mov` version 1（`transfer: pq|hlg`）と `pro_res_sdr_from_hdr_mov` version 1 を持つ。前者は固定 render HDR transfer と一致する ProRes HQ 10-bit / Rec.2100 + PCM24、後者は明示 SDR tone map + BT.709 + PCM24 を指定する。capability は `hdr_rec2100_203nits_v1` と閉じた profile discovery を返す。固定 worker は snapshot/profile/意味版を再解釈せず、codec/bit depth/color tags を probe で検証する。
+
+`FrameMetadata.hdr` は transfer / reference white 203 / HLG peak 1000 を示す。`MediaProbe` の video stream は native pixel format / primaries / transfer / matrix / range を返す。HDR movie は display PNG の SDR tone map を使わない。native GUI の single DAG preview には HDR display 処理を持たせず、HDR は型付き未対応として `render.frame` の display artifact に案内する。[ADR-0086](../adr/0086-rec2100-native-precision-and-fixed-hdr-output.md) を参照。

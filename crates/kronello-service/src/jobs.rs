@@ -47,6 +47,21 @@ pub enum JobOutput {
         clips: Vec<JobAudioClip>,
         background: [f32; 3],
     },
+    ProResSdrFromHdrMov {
+        profile_version: u32,
+        #[serde(default)]
+        audio: kronello_audio::AudioSourceMode,
+        clips: Vec<JobAudioClip>,
+        background: [f32; 3],
+    },
+    ProResHdrMov {
+        profile_version: u32,
+        transfer: kronello_render::HdrTransfer,
+        #[serde(default)]
+        audio: kronello_audio::AudioSourceMode,
+        clips: Vec<JobAudioClip>,
+        background: [f32; 3],
+    },
     Av1Mp4 {
         profile_version: u32,
         #[serde(default)]
@@ -86,7 +101,9 @@ impl JobOutput {
     pub(crate) fn supported_profile_versions(&self) -> &'static [u32] {
         match self {
             Self::ProResMov { .. } => &[1, 2, 3],
-            Self::ImageSequence
+            Self::ProResSdrFromHdrMov { .. }
+            | Self::ProResHdrMov { .. }
+            | Self::ImageSequence
             | Self::Av1Mp4 { .. }
             | Self::H264Mov { .. }
             | Self::HevcMov { .. } => &[1],
@@ -106,6 +123,36 @@ impl JobOutput {
                 background,
             } => (
                 MovieProfile::ProResPcm24,
+                *profile_version,
+                *audio,
+                DeliveryAudioCodec::Alac,
+                clips,
+                *background,
+            ),
+            Self::ProResSdrFromHdrMov {
+                profile_version,
+                audio,
+                clips,
+                background,
+            } => (
+                MovieProfile::ProResSdrFromHdrPcm24V1,
+                *profile_version,
+                *audio,
+                DeliveryAudioCodec::Alac,
+                clips,
+                *background,
+            ),
+            Self::ProResHdrMov {
+                profile_version,
+                transfer,
+                audio,
+                clips,
+                background,
+            } => (
+                match transfer {
+                    kronello_render::HdrTransfer::Pq => MovieProfile::ProResPqPcm24V1,
+                    kronello_render::HdrTransfer::Hlg => MovieProfile::ProResHlgPcm24V1,
+                },
                 *profile_version,
                 *audio,
                 DeliveryAudioCodec::Alac,
@@ -330,8 +377,8 @@ impl Service<'_> {
             None => std::env::current_exe()?,
         };
         let record = store.submit(&serde_json::to_vec(&fixed)?, submission)?;
-        if let Err(error) = store.spawn(&record.id, &executable) {
-            store.finish_error(&record.id, &error)?;
+        if let Err(error) = store.spawn_attempt(&record.id, record.attempt, &executable) {
+            store.finish_error_attempt(&record.id, record.attempt, &error)?;
             return Err(error.into());
         }
         Ok(record)
@@ -339,6 +386,86 @@ impl Service<'_> {
     fn render_fixed_job(
         &self,
         store: &JobStore,
+        record: &JobRecord,
+        fixed: &FixedInput,
+    ) -> Result<(), ServiceError> {
+        self.validate_fixed_job(record, fixed)?;
+        self.execute_fixed_job(store, record, fixed)
+    }
+    pub(crate) fn resume_job(&self, request: JobRequest) -> Result<JobRecord, ServiceError> {
+        let store = self.jobs()?;
+        let record = store.get(&request.job)?;
+        if record.directory_pruned {
+            return Err(ServiceError::new(
+                "JOB_INPUT_UNAVAILABLE",
+                "fixed input was pruned",
+            ));
+        }
+        let fixed: FixedInput = serde_json::from_slice(&store.input(&record)?)?;
+        self.validate_fixed_job(&record, &fixed)?;
+        if record.destination.exists()
+            && let Some(result) = store.publication_result(&record)?
+        {
+            match &fixed.request.output {
+                JobOutput::ImageSequence => {
+                    let metadata: kronello_render::SequenceMetadata =
+                        serde_json::from_value(result["report"].clone())?;
+                    validate_sequence(
+                        &record.destination,
+                        &metadata,
+                        record.total_frames,
+                        &record.snapshot_hash,
+                    )
+                    .map_err(|error| {
+                        ServiceError::new("OUTPUT_VALIDATION_FAILED", error.to_string())
+                    })?;
+                }
+                output => {
+                    let settings = output.movie_settings()?;
+                    let probe =
+                        MediaRuntime::load()?
+                            .probe(&record.destination)
+                            .map_err(|error| {
+                                ServiceError::new("OUTPUT_VALIDATION_FAILED", error.to_string())
+                            })?;
+                    probe.verify_movie(settings.profile).map_err(|error| {
+                        ServiceError::new("OUTPUT_VALIDATION_FAILED", error.to_string())
+                    })?;
+                    let expected = movie_snapshot(&fixed.snapshot, output)?;
+                    let report: kronello_media::AvExportReport =
+                        serde_json::from_value(result["report"].clone())?;
+                    if probe.render_snapshot_hash != record.snapshot_hash
+                        || probe.export_snapshot_hash != expected.content_hash()?
+                        || report.frames.len() as u64 != record.total_frames
+                        || report.render_snapshot_hash != record.snapshot_hash
+                        || report
+                            .frames
+                            .iter()
+                            .any(|frame| frame.snapshot_content_hash != record.snapshot_hash)
+                    {
+                        return Err(ServiceError::new(
+                            "OUTPUT_VALIDATION_FAILED",
+                            "published movie snapshot differs",
+                        ));
+                    }
+                }
+            }
+        }
+        let resumed = store.resume(&record.id)?;
+        if resumed.status == kronello_jobs::JobStatus::Queued {
+            let executable = self
+                .worker_executable
+                .clone()
+                .unwrap_or(std::env::current_exe()?);
+            if let Err(error) = store.spawn_attempt(&resumed.id, resumed.attempt, &executable) {
+                store.finish_error_attempt(&resumed.id, resumed.attempt, &error)?;
+                return Err(error.into());
+            }
+        }
+        Ok(resumed)
+    }
+    fn validate_fixed_job(
+        &self,
         record: &JobRecord,
         fixed: &FixedInput,
     ) -> Result<(), ServiceError> {
@@ -355,6 +482,10 @@ impl Service<'_> {
             ));
         }
         fixed.snapshot.validate()?;
+        fixed.request.render.input.region.validate()?;
+        if !matches!(fixed.request.output, JobOutput::ImageSequence) {
+            movie_snapshot(&fixed.snapshot, &fixed.request.output)?;
+        }
         features(&fixed.request.required_features)?;
         if fixed.snapshot.content_hash()? != record.snapshot_hash {
             return Err(ServiceError::new(
@@ -377,6 +508,29 @@ impl Service<'_> {
             }
         }
         let font_bytes = crate::load_locked_fonts(&fixed.snapshot, &fixed.request.render.input)?;
+        let _ = font_bytes;
+        if fixed.request.render.output_directory != record.destination
+            || serde_json::to_value(&fixed.request)? != record.output_profile
+            || fixed.snapshot.project().id.to_string() != record.project_id
+            || fixed.snapshot.revision().to_string() != record.revision
+            || frame_samples(fixed.request.render.range, fixed.request.render.frame_rate)?.len()
+                as u64
+                != record.total_frames
+        {
+            return Err(ServiceError::new(
+                "JOB_INPUT_HASH_MISMATCH",
+                "fixed request identity differs",
+            ));
+        }
+        Ok(())
+    }
+    fn execute_fixed_job(
+        &self,
+        store: &JobStore,
+        record: &JobRecord,
+        fixed: &FixedInput,
+    ) -> Result<(), ServiceError> {
+        let font_bytes = crate::load_locked_fonts(&fixed.snapshot, &fixed.request.render.input)?;
         let fonts: Vec<_> = fixed
             .snapshot
             .font_locks()
@@ -385,19 +539,41 @@ impl Service<'_> {
             .map(|(identity, bytes)| kronello_text::FontData { identity, bytes })
             .collect();
         let destination = &fixed.request.render.output_directory;
-        let parent = destination
-            .parent()
-            .ok_or_else(|| ServiceError::invalid("destination has no parent"))?;
-        let staging = tempfile::Builder::new()
-            .prefix(".kronello-job-")
-            .tempdir_in(parent)?;
-        let stage_path = staging.path().join("output");
+        let staging = store.staging(record)?;
+        let stage_path = staging.output();
         let mut failure = None;
         let mut checkpoint = |completed| {
             #[cfg(all(feature = "test-job-control", debug_assertions))]
+            if completed > 0
+                && std::env::var_os("KRONELLO_TEST_JOB_DEVICE_LOST").as_deref()
+                    == Some(std::ffi::OsStr::new("1"))
+            {
+                let error = JobError::new(
+                    "GPU_DEVICE_LOST",
+                    "injected device loss after first completed frame",
+                );
+                let message = error.to_string();
+                failure = Some(error);
+                return Err(message);
+            }
+            #[cfg(all(feature = "test-job-control", debug_assertions))]
+            if completed > 0
+                && std::env::var_os("KRONELLO_TEST_JOB_DISK_FULL").as_deref()
+                    == Some(std::ffi::OsStr::new("1"))
+            {
+                let error = JobError::Io(std::io::Error::from(std::io::ErrorKind::StorageFull));
+                let message = error.to_string();
+                failure = Some(error);
+                return Err(message);
+            }
+            #[cfg(all(feature = "test-job-control", debug_assertions))]
             if let Some(gate) = std::env::var_os("KRONELLO_TEST_JOB_GATE") {
                 let gate = PathBuf::from(gate);
-                while !gate.exists() {
+                let after = std::env::var("KRONELLO_TEST_JOB_GATE_AFTER_FRAME")
+                    .ok()
+                    .and_then(|value| value.parse::<u64>().ok())
+                    .unwrap_or(0);
+                while completed >= after && !gate.exists() {
                     if let Err(error) = store.checkpoint(&record.id, completed) {
                         let message = error.to_string();
                         failure = Some(error);
@@ -497,8 +673,16 @@ impl Service<'_> {
         }
         let result =
             serde_json::json!({"destination": destination, "validated": true, "report": result});
-        store.publish(&record.id, result, || {
-            kronello_jobs::publish_path(&stage_path, destination)
+        store.prepare_publication(record, &stage_path, result.clone())?;
+        store.publish_attempt(&record.id, record.attempt, result, || {
+            kronello_jobs::publish_path(&stage_path, destination)?;
+            #[cfg(all(feature = "test-job-control", debug_assertions))]
+            if let Some(gate) = std::env::var_os("KRONELLO_TEST_JOB_AFTER_RENAME_GATE") {
+                while !Path::new(&gate).exists() {
+                    std::thread::sleep(std::time::Duration::from_millis(20));
+                }
+            }
+            Ok(())
         })?;
         Ok(())
     }
@@ -570,7 +754,7 @@ pub fn worker_entry() -> Option<std::process::ExitCode> {
         }
         let store = JobStore::open(JobConfig::from_env()?)?;
         let id = &args[2];
-        store.get(id)?;
+        let owned_attempt = store.get(id)?.attempt;
         let heartbeat = kronello_jobs::WorkerHeartbeat::start(store.clone(), id.clone());
         let result = (|| {
             store.wait_for_slot(id)?;
@@ -582,7 +766,7 @@ pub fn worker_entry() -> Option<std::process::ExitCode> {
         })();
         drop(heartbeat);
         if let Err(error) = &result {
-            store.finish_error(id, error)?;
+            store.finish_error_attempt(id, owned_attempt, error)?;
         }
         result
     })();

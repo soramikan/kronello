@@ -1,6 +1,6 @@
 # 14 ジョブ
 
-長時間の処理（最終レンダー、書き出し）を、投入したプロセスや接続の寿命から独立して実行する仕組み。[ADR-0025](../adr/0025-detached-render-workers.md) による。JOB-001（M2）で macOS の CLI / MCP と明示 CPU reference の実プロセスを検証した。実装判断は [ADR-0050](../adr/0050-fixed-job-execution-and-publication.md) と [ADR-0074](../adr/0074-windows-job-workers-and-process-evidence.md)、条件ごとの結果は [JOB-001](../testing/job-001.md) / [JOB-002](../testing/job-002.md)。初回Linux JOB-002 CI evidenceは成功、Windows jobs/platform の修正版はCI再実行待ち。Windows full CLI/MCP、再開・GPU 実機経路は未検証。
+長時間の処理（最終レンダー、書き出し）を、投入したプロセスや接続の寿命から独立して実行する仕組み。[ADR-0025](../adr/0025-detached-render-workers.md) による。JOB-001（M2）で macOS の CLI / MCP と明示 CPU reference の実プロセスを検証した。実装判断は [ADR-0050](../adr/0050-fixed-job-execution-and-publication.md) と [ADR-0074](../adr/0074-windows-job-workers-and-process-evidence.md)、条件ごとの結果は [JOB-001](../testing/job-001.md) / [JOB-002](../testing/job-002.md)。Linux / Windows jobs/platform の実プロセスは JOB-002 で確認済み。Windows full CLI/MCP は MEDIA-003 の CI で受け入れ確認中。固定入力の明示再開と公開境界の照合は [ADR-0087](../adr/0087-fixed-job-resume-and-reconciliation.md) / [RECOVERY-001](../testing/recovery-001.md) による。
 
 ## 構成
 
@@ -23,7 +23,7 @@ GUI / CLI / MCP
 - GUI から投入したジョブも同じ仕組みで動く。GUI を閉じても書き出しは続く。
 - worker は投入したプロセスと同じ版の実行ファイルから起動する。ジョブにはエンジンの版を記録する。
 - CLI は `kronello worker --job <id>`、MCP は同じ実装の `kronello-mcp worker --job <id>` を起動する。Unix worker 開始時に `setsid`、stdin は null、stdout/stderr は worker.log とし、MCP pipe を継承しない。埋込み service は worker executable を注入できる。
-- Windows は `kronello-platform` の `CreateProcessW` に NEW_PROCESS_GROUP / DETACHED_PROCESS / BREAKAWAY_FROM_JOB、handle inheritance FALSE を指定する。ERROR_ACCESS_DENIEDかつ親がJob Object内の場合だけbreakaway flagを外して1回再試行する。他のerror・2回目の失敗は `WORKER_DETACH_ERROR`。worker 自身が NUL / worker.log を開き、consoleがないことを確認する。実所属を `detach_mode: "breakaway"` / `"in_parent_job"` としてlog / evidenceへ記録する。後者も親CLI/MCP process終了後は続行するが、外側Job Objectの終了は越えられない。親生存中は reaper thread、親終了後は OS 回収。Windows の full CLI/MCP build は media loader 移植待ちで、CI は同じ jobs/platform API を使う test-only worker で検証する。
+- Windows は `kronello-platform` の `CreateProcessW` に NEW_PROCESS_GROUP / DETACHED_PROCESS / BREAKAWAY_FROM_JOB、handle inheritance FALSE を指定する。ERROR_ACCESS_DENIEDかつ親がJob Object内の場合だけbreakaway flagを外して1回再試行する。他のerror・2回目の失敗は `WORKER_DETACH_ERROR`。worker 自身が NUL / worker.log を開き、consoleがないことを確認する。実所属を `detach_mode: "breakaway"` / `"in_parent_job"` としてlog / evidenceへ記録する。後者も親CLI/MCP process終了後は続行するが、外側Job Objectの終了は越えられない。親生存中は reaper thread、親終了後は OS 回収。Windows の full CLI/MCP build と同梱 media runtime は MEDIA-003 で実装し、同じ jobs/platform API を使う test-only worker とともに CI で検証する。
 
 ## 置き場所
 
@@ -92,10 +92,10 @@ heartbeat thread の join 中も watchdog は有効。全 process の停止中�
 
 - `job.cancel` は状態 DB に取り消し要求を記録する。worker は処理の区切りで要求を確認し、一時出力を片付けて `canceled` にする。
 - heartbeat が一定時間途絶え、所有 worker の生存も確認できないジョブは、次に状態を読んだプロセスが `interrupted` と判定し、スロットを解放する。
-- `interrupted` のジョブは自動では再開しない。`job.resume` は RECOVERY-001 の提案で、JOB-001 の registry / wire にはなく `INVALID_REQUEST`。出力ファイルへの無条件 append を再開方法に使わない。
+- `interrupted` のジョブは自動では再開しない。明示 `job.resume` は interrupted / failed / canceled の固定 envelope・版・asset・font lock を再検証し、新 attempt の専有 staging で全 frame を再実行する。active job や生存 worker の lease は奪わず、現在の Project や途中の出力への append を入力に使わない。
 - 失敗や中断で、プロジェクトや確定済みの成果物を壊さない。
 
-中断判定は [ADR-0050](../adr/0050-fixed-job-execution-and-publication.md) のとおり、heartbeat の期限に Unix の生存確認を組み合わせる。起動側は child PID を DB に登録してから submit を返すため、worker が heartbeat thread を開始する前も確認できる。期限を超えた queued / running record でも `kill(pid, 0)` が成功、または `EPERM`（存在するが権限なし）なら中断させない。PID が未登録・不正、または生存を確認できない場合は従来どおり期限で中断する。get / list、slot 取得、prune は同じ判定を使う。terminal record の復活、自動再開、成果物の自動成功補正は行わず、publish の DB fence は維持する。
+中断判定は [ADR-0050](../adr/0050-fixed-job-execution-and-publication.md) のとおり、heartbeat の期限に Unix の生存確認を組み合わせる。起動側は child PID を DB に登録してから submit を返すため、worker が heartbeat thread を開始する前も確認できる。期限を超えた queued / running record でも `kill(pid, 0)` が成功、または `EPERM`（存在するが権限なし）なら中断させない。PID が未登録・不正、または生存を確認できない場合は従来どおり期限で中断する。get / list、slot 取得、prune は同じ判定を使う。通常の状態照会で terminal record の復活、自動再開、成果物の自動成功補正は行わない。明示 resume だけが検証後に状態を遷移させ、publish の DB fence は維持する。
 
 この生存確認はプロセスの進捗や起動 identity を証明しない。停止・hang・未回収 zombie、PID 再利用では slot 解放が遅れる場合がある。生存中のプロセスを期限だけで中断する方法へ戻さず、進捗監視・起動 identity の強化は後続で設計する。Windows は `OpenProcess(SYNCHRONIZE)` / `WaitForSingleObject(..., 0)` で生存を確認し、ACCESS_DENIED は生存を否定できないものとして扱う。死亡した worker の期限切れ record は interrupted にする。
 
@@ -103,7 +103,7 @@ Windows publication は同じ DB fence の中で `MoveFileExW(..., 0)` を使い
 
 画像連番は destination volume の temporary directory に全 artifact を出力し、manifest・metadata・byte 長・hash・snapshot identity を再読検証する。既存 pro_res_mov は ProRes + stereo 48 kHz PCM24、明示 background と選択 mode の音声を同じ AvExportSnapshot から出力し、stream / PTS / duration / snapshot metadata を probe する。frame 境界と確定前に cancel を確認する。DB transaction 内で lease / cancel を再確認し、atomic NOREPLACE rename で全 directory または movie file を一度に確定する。既存成果物は空 directory も上書きしない。
 
-movie の現行上限・SDR 契約は AUDIO-000 のまま。MEDIA-002 の追加 profile は下記。SIGKILL は destination の temporary directory を残す場合がある。また rename と DB commit の間の電源断では検証済み成果物と interrupted 記録が共存しうる。temporary output 回収・成果物照合・再開は RECOVERY-001 で設計し、自動で成功扱いにしない。
+movie の bounded streaming は ADR-0079、HDR profile は ADR-0086 に従う。SIGKILL は destination volume に temporary directory を残しうるが、resume は job / input / snapshot / attempt が一致する owner marker だけを回収する。公開前に全 artifact の streaming hash と結果を state root の `job-results/{job}-{attempt}.json` に fsync し、その byte hash を短い DB transaction に anchor してから NOREPLACE rename する。hash・receipt 書き込み・owned stage 回収は writer transaction の外で行う。rename 後・DB commit 前の中断では、明示 resume が receipt と全 artifact の hash・metadata を照合し、一致した場合だけ新 worker なしで succeeded に補正する。壊れた output や別 job の成果物は変更しない。巨大な result は receipt から DB connection / process gate を閉じた後に読み込み、公開 JobRecord に復元する。receipt は input / log の prune 後も保持する。
 
 ## 保持と掃除
 
@@ -117,9 +117,9 @@ movie の現行上限・SDR 契約は AUDIO-000 のまま。MEDIA-002 の追加 
 
 GUI の UI 状態も同じ状態領域に保存する（[10 デスクトップ GUI](10-desktop-gui.md)）。
 
-## 未決事項
+## 再開の範囲
 
-- 再開時に完了済みの区間をどこまで再利用できるか（RECOVERY-001 で設計）。
+ADR-0087 は新 attempt で全 frame を再実行する。途中の区間再利用は行わない。公開済み artifact の照合成功時だけ再実行を省略する。
 
 ## AUDIO-003 の固定音声入力
 
@@ -153,6 +153,6 @@ fence と no-clobber publication を使う。AAC / 未知 version は UNSUPPORTE
 1-frame encodeを使う。input schema / snapshot hash / MovieProfileと publication fenceは維持する。
 source chunk、audio block、video frameと最終mux前にcancelを確認する。
 通常エラーで destination volume の一時 directoryを回収し、既存成果物を上書きしない。
-強制終了後の回収とresumeはRECOVERY-001。
+強制終了後の回収と resume は ADR-0087 の owner marker / anchored receipt 検証に従う。
 `AvExportReport.streaming` の byte counters とホスト検証範囲は
 [ADR-0079](../adr/0079-bounded-streaming-movie-export.md)、[RENDER-003](../testing/render-003.md) を参照する。

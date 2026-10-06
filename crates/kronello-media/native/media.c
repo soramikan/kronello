@@ -413,9 +413,27 @@ int km_video_rgba(Km *k, const uint8_t *input, int input_size, const char *forma
     return ret==height ? 0 : fail(k,ret<0?ret:AVERROR(EINVAL),"video RGBA conversion");
 }
 
+/* Preserve source precision before Rust applies the pinned transfer function. */
+int km_video_rgba64(Km *k, const uint8_t *input, int input_size, const char *format,
+                   int width, int height, int full_range, int bt2020, uint8_t *output) {
+    enum AVPixelFormat fmt=k->av_get_pix_fmt(format);
+    int size=k->av_image_get_buffer_size(fmt,width,height,1);
+    if(size<0 || size!=input_size)return fail(k,AVERROR(EINVAL),"HDR video pixel layout");
+    uint8_t *planes[4]={0}; int strides[4]={0};
+    int ret=k->av_image_fill_arrays(planes,strides,input,fmt,width,height,1);
+    if(ret<0)return fail(k,ret,"HDR video planes");
+    struct SwsContext *sws=k->sws_getContext(width,height,fmt,width,height,AV_PIX_FMT_RGBA64LE,SWS_BILINEAR,NULL,NULL,NULL);
+    if(!sws)return fail(k,AVERROR(EINVAL),"HDR RGBA64 converter");
+    const int *coeff=k->sws_getCoefficients(bt2020?SWS_CS_BT2020:SWS_CS_ITU709);
+    ret=k->sws_setColorspaceDetails(sws,coeff,full_range,coeff,1,0,1<<16,1<<16);
+    if(ret>=0) { uint8_t *dst[4]={output,NULL,NULL,NULL};int dst_stride[4]={width*8,0,0,0};ret=k->sws_scale(sws,(const uint8_t *const *)planes,strides,0,height,dst,dst_stride); }
+    k->sws_freeContext(sws);
+    return ret==height ? 0 : fail(k,ret<0?ret:AVERROR(EINVAL),"HDR RGBA64 conversion");
+}
+
 typedef struct Encoder {
     Km *k; AVFormatContext *format; AVCodecContext *codec; AVFrame *frame; AVPacket *packet;
-    struct SwsContext *sws; AVStream *stream; int header;
+    struct SwsContext *sws; AVStream *stream; int header, input_stride;
 } Encoder;
 void km_encoder_close(Encoder *e) {
     if(!e)return;
@@ -425,11 +443,13 @@ void km_encoder_close(Encoder *e) {
     if(e->format) { if(e->format->pb)k->avio_closep(&e->format->pb); k->avformat_free_context(e->format); }
     free(e);
 }
-Encoder *km_encoder_open(Km *k, const char *path, const char *name, int width, int height, int num, int den) {
+Encoder *km_encoder_open_color(Km *k, const char *path, const char *name, int width, int height, int num, int den, int hdr) {
     Encoder *e=calloc(1,sizeof(*e)); if(!e) {fail(k,AVERROR(ENOMEM),"encoder allocation");return NULL;} e->k=k;
     const AVCodec *codec=k->avcodec_find_encoder_by_name(name);
     if(!codec) {fail(k,AVERROR_ENCODER_NOT_FOUND,"encoder unavailable");goto failed;}
     int prores=!strcmp(name,"prores_ks");
+    if(hdr && (!prores || (hdr!=1 && hdr!=2))){fail(k,AVERROR(EINVAL),"unsupported HDR encoder/profile");goto failed;}
+    e->input_stride=width*(hdr?8:4);
     int ret=k->avformat_alloc_output_context2(&e->format,NULL,prores?"mov":"mp4",path);
     if(ret<0 || !e->format) {fail(k,ret<0?ret:AVERROR(ENOMEM),"output context");goto failed;}
     e->codec=k->avcodec_alloc_context3(codec); e->frame=k->av_frame_alloc();e->packet=k->av_packet_alloc();e->stream=k->avformat_new_stream(e->format,NULL);
@@ -437,9 +457,11 @@ Encoder *km_encoder_open(Km *k, const char *path, const char *name, int width, i
     e->codec->width=width; e->codec->height=height;e->codec->time_base=(AVRational){num,den};e->codec->framerate=(AVRational){den,num};
     e->codec->pix_fmt=prores?AV_PIX_FMT_YUV422P10LE:AV_PIX_FMT_YUV420P;
     e->codec->color_primaries=AVCOL_PRI_BT709;e->codec->color_trc=AVCOL_TRC_BT709;e->codec->colorspace=AVCOL_SPC_BT709;e->codec->color_range=AVCOL_RANGE_MPEG;
+    if(hdr){e->codec->color_primaries=AVCOL_PRI_BT2020;e->codec->color_trc=hdr==1?AVCOL_TRC_SMPTE2084:AVCOL_TRC_ARIB_STD_B67;e->codec->colorspace=AVCOL_SPC_BT2020_NCL;}
     e->codec->thread_count=1;e->codec->bit_rate=2000000;
     if(e->format->oformat->flags & AVFMT_GLOBALHEADER)e->codec->flags|=AV_CODEC_FLAG_GLOBAL_HEADER;
     AVDictionary *options=NULL;
+    if(hdr){k->av_dict_set(&options,"profile","3",0);}
     if(strstr(name,"videotoolbox")){k->av_dict_set(&options,"allow_sw","0",0);}
     if(!strcmp(name,"libsvtav1")){k->av_dict_set(&options,"preset","12",0);k->av_dict_set(&options,"svtav1-params","lp=1",0);}
     if(!strcmp(name,"libaom-av1")){k->av_dict_set(&options,"cpu-used","8",0);k->av_dict_set(&options,"usage","realtime",0);}
@@ -460,13 +482,16 @@ Encoder *km_encoder_open(Km *k, const char *path, const char *name, int width, i
     e->frame->format=e->codec->pix_fmt;e->frame->width=width;e->frame->height=height;
     e->frame->color_primaries=e->codec->color_primaries;e->frame->color_trc=e->codec->color_trc;e->frame->colorspace=e->codec->colorspace;e->frame->color_range=e->codec->color_range;
     ret=k->av_frame_get_buffer(e->frame,32);if(ret<0){fail(k,ret,"frame buffer");goto failed;}
-    e->sws=k->sws_getContext(width,height,AV_PIX_FMT_RGBA,width,height,e->codec->pix_fmt,SWS_BILINEAR,NULL,NULL,NULL);
+    e->sws=k->sws_getContext(width,height,hdr?AV_PIX_FMT_RGBA64LE:AV_PIX_FMT_RGBA,width,height,e->codec->pix_fmt,SWS_BILINEAR,NULL,NULL,NULL);
     if(!e->sws){fail(k,AVERROR(ENOMEM),"pixel conversion");goto failed;}
-    const int *coeff=k->sws_getCoefficients(SWS_CS_ITU709);
+    const int *coeff=k->sws_getCoefficients(hdr?SWS_CS_BT2020:SWS_CS_ITU709);
     ret=k->sws_setColorspaceDetails(e->sws,coeff,1,coeff,0,0,1<<16,1<<16);
     if(ret<0){fail(k,ret,"BT.709 pixel conversion");goto failed;}
     return e;
 failed:km_encoder_close(e);return NULL;
+}
+Encoder *km_encoder_open(Km *k,const char *path,const char *name,int width,int height,int num,int den) {
+    return km_encoder_open_color(k,path,name,width,height,num,den,0);
 }
 static int write_packets(Encoder *e) {
     for(;;){
@@ -482,7 +507,7 @@ static int write_packets(Encoder *e) {
 }
 int km_encoder_frame(Encoder *e,const uint8_t *rgba,int64_t pts) {
     int ret=e->k->av_frame_make_writable(e->frame);if(ret<0)return fail(e->k,ret,"writable frame");
-    const uint8_t *data[4]={rgba,NULL,NULL,NULL};int stride[4]={e->codec->width*4,0,0,0};
+    const uint8_t *data[4]={rgba,NULL,NULL,NULL};int stride[4]={e->input_stride,0,0,0};
     ret=e->k->sws_scale(e->sws,data,stride,0,e->codec->height,e->frame->data,e->frame->linesize);
     if(ret!=e->codec->height)return fail(e->k,AVERROR_INVALIDDATA,"pixel conversion");
     e->frame->pts=pts; e->frame->duration=1;
@@ -701,6 +726,10 @@ void km_probe_stream(AVFormatContext *format,int i,StreamInfo *out) {
         p->sample_rate,p->ch_layout.nb_channels,p->width,p->height};
 }
 const char *km_probe_codec(Km *k,AVFormatContext *format,int i) { return k->avcodec_get_name(format->streams[i]->codecpar->codec_id); }
+const char *km_probe_color(Km *k,AVFormatContext *format,int i,int field) {
+    AVCodecParameters *p=format->streams[i]->codecpar;
+    switch(field){case 0:return k->av_get_pix_fmt_name(p->format);case 1:return k->av_color_primaries_name(p->color_primaries);case 2:return k->av_color_transfer_name(p->color_trc);case 3:return k->av_color_space_name(p->color_space);default:return k->av_color_range_name(p->color_range);}
+}
 uint32_t km_probe_codec_tag(AVFormatContext *format,int i) { return format->streams[i]->codecpar->codec_tag; }
 const char *km_probe_tag(Km *k,AVFormatContext *format,const char *key) {
     const AVDictionaryEntry *entry=k->av_dict_get(format->metadata,key,NULL,0);

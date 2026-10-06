@@ -335,7 +335,10 @@ fn verify_codec(encoder: &str, filter: &str) {
                 let stats = actual.metadata.transfer_stats.unwrap();
                 assert_eq!(stats.cpu_upload_pixel_bytes, 0);
                 // Scene root/output GPU copies are reported explicitly.
-                assert!(stats.gpu_copy_bytes > 0);
+                assert_eq!(stats.gpu_copy_bytes, 0);
+                assert_eq!(stats.gpu_copy_operations, 0);
+                assert_eq!(stats.gpu_readback_operations, 3);
+                assert_eq!(stats.gpu_wait_operations, 3);
                 assert!(stats.cpu_upload_control_bytes >= 48);
                 assert!(stats.gpu_readback_bytes > 0);
                 eprintln!(

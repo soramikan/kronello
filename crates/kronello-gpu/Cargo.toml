@@ -16,11 +16,13 @@ kronello-model = { path = "../kronello-model" }
 wgpu = "30.0.1"
 pollster = "1.0.1"
 half = "2.7"
+sha2 = "0.10"
+serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
+kronello-time = { path = "../kronello-time" }
 kronello-testkit = { path = "../kronello-testkit" }
 serde_json = "1"
-sha2 = "0.10"
 png = "0.18"
 naga = { version = "30.0.1", features = ["wgsl-in"] }
 kronello-vector = { path = "../kronello-vector" }

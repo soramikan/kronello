@@ -34,3 +34,10 @@ python scripts/media_003_evidence.py
 
 Windows 実行 artifact は未取得。CI の追加を成功証拠として扱わず、MEDIA-003 は
 `in_progress` を維持する。macOS の互換性チェック結果は Windows の保証に代用しない。
+
+
+初回 Windows CI は FFmpeg configure の bare `bash` が System32 の WSL launcher に解決され失敗した。
+CI で `KRONELLO_MSYS2_BASH=C:/msys64/usr/bin/bash.exe` を指定し、builder は absolute path と
+`uname -s` の MSYS/MINGW 判定後、その実行ファイルを使う。7 Python regressions が成功した。
+修正コミット `23dde7a` の CI は GitHub account billing の制限で step 開始前に停止しており、
+修正済み Windows runtime の受け入れ証拠はまだ得られていない。

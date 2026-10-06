@@ -80,6 +80,30 @@ pub fn video_color_policy(stream: &StreamMetadata) -> Result<VideoColorPolicy, M
     })
 }
 
+fn hdr_video_color_policy(stream: &StreamMetadata) -> Result<VideoColorPolicy, MediaError> {
+    let format = stream.pixel_format.as_deref().unwrap_or("");
+    if stream.color_primaries.as_deref() != Some("bt2020")
+        || !matches!(
+            stream.color_transfer.as_deref(),
+            Some("smpte2084" | "arib-std-b67")
+        )
+        || stream.color_matrix.as_deref() != Some("bt2020nc")
+        || !matches!(stream.color_range.as_deref(), Some("tv" | "pc"))
+        || !matches!(format, "yuv420p10le" | "yuv422p10le" | "yuv444p10le")
+    {
+        return Err(MediaError::UnsupportedFeature(
+            "HDR requires explicit Rec.2020 PQ/HLG 10-bit native YUV tags".into(),
+        ));
+    }
+    Ok(VideoColorPolicy {
+        primaries: "bt2020".into(),
+        transfer: stream.color_transfer.clone().unwrap(),
+        matrix: "bt2020nc".into(),
+        range: stream.color_range.clone().unwrap(),
+        assumptions: vec![],
+    })
+}
+
 impl MediaRuntime {
     pub fn open_video_stream(
         &self,
@@ -107,7 +131,13 @@ impl MediaRuntime {
             transfer_path: "software_decode_to_cpu_native_planes".into(),
             transfers: MediaTransferStats::default(),
         };
-        Ok(VideoDecoder { native, report })
+        Ok(VideoDecoder {
+            native,
+            report,
+            stats: VideoDecodeStats::default(),
+            current: None,
+            lookahead: None,
+        })
     }
     pub fn decode_video_image(
         &self,
@@ -117,8 +147,41 @@ impl MediaRuntime {
         time: Time,
         working: ColorSpace,
     ) -> Result<VideoImage, MediaError> {
+        self.decode_video_image_with_hdr(asset, project_path, stream_index, time, working, None)
+    }
+    pub fn decode_video_image_with_hdr(
+        &self,
+        asset: &Asset,
+        project_path: &Path,
+        stream_index: u32,
+        time: Time,
+        working: ColorSpace,
+        hdr: Option<kronello_render::HdrSettings>,
+    ) -> Result<VideoImage, MediaError> {
         let path = resolve_asset(asset, project_path)?;
         let mut decoder = self.open_video_stream(&path, stream_index)?;
+        self.decode_video_image_from_decoder(
+            &mut decoder,
+            asset,
+            project_path,
+            stream_index,
+            time,
+            working,
+            hdr,
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn decode_video_image_from_decoder(
+        &self,
+        decoder: &mut VideoDecoder<'_>,
+        asset: &Asset,
+        project_path: &Path,
+        stream_index: u32,
+        time: Time,
+        working: ColorSpace,
+        hdr: Option<kronello_render::HdrSettings>,
+    ) -> Result<VideoImage, MediaError> {
+        resolve_asset(asset, project_path)?;
         let frame = decoder.decode_at(time)?;
         let metadata = StreamMetadata {
             index: stream_index,
@@ -147,8 +210,22 @@ impl MediaRuntime {
                 "decoded video dimensions/native format differ from locked metadata".into(),
             ));
         }
-        let pinned = video_color_policy(locked)?;
-        let policy = video_color_policy(&metadata)?;
+        let is_hdr = matches!(
+            locked.color_transfer.as_deref(),
+            Some("smpte2084" | "arib-std-b67")
+        );
+        if is_hdr && (hdr.is_none() || working != ColorSpace::LinearRec2020) {
+            return Err(MediaError::UnsupportedFeature(
+                "HDR video requires explicit pinned HDR LinearRec2020 profile".into(),
+            ));
+        }
+        let policy_fn = if is_hdr {
+            hdr_video_color_policy
+        } else {
+            video_color_policy
+        };
+        let pinned = policy_fn(locked)?;
+        let policy = policy_fn(&metadata)?;
         if (
             pinned.primaries.as_str(),
             pinned.transfer.as_str(),
@@ -163,6 +240,57 @@ impl MediaRuntime {
             return Err(MediaError::UnsupportedFeature(
                 "decoded video color differs from locked color contract".into(),
             ));
+        }
+        if hdr.is_some() {
+            let rgba = ffi::video_rgba64(&self.native, &frame, policy.range == "pc", is_hdr)?;
+            resolve_asset(asset, project_path)?;
+            let transfer = if policy.transfer == "smpte2084" {
+                kronello_render::HdrTransfer::Pq
+            } else {
+                kronello_render::HdrTransfer::Hlg
+            };
+            let pixels = rgba
+                .chunks_exact(8)
+                .map(|p| {
+                    let code = [0, 1, 2]
+                        .map(|i| f64::from(u16::from_le_bytes([p[2 * i], p[2 * i + 1]])) / 65535.0);
+                    let mut rgb = if is_hdr {
+                        transfer.decode(code)
+                    } else {
+                        code.map(|v| {
+                            if policy.transfer == "iec61966-2-1" {
+                                if v <= 0.04045 {
+                                    v / 12.92
+                                } else {
+                                    ((v + 0.055) / 1.055).powf(2.4)
+                                }
+                            } else if v < 0.081 {
+                                v / 4.5
+                            } else {
+                                ((v + 0.099) / 1.099).powf(1.0 / 0.45)
+                            }
+                        })
+                    };
+                    if !is_hdr && working == ColorSpace::LinearRec2020 {
+                        rgb = [
+                            0.6274039 * rgb[0] + 0.3292830 * rgb[1] + 0.0433131 * rgb[2],
+                            0.0690973 * rgb[0] + 0.9195404 * rgb[1] + 0.0113623 * rgb[2],
+                            0.0163914 * rgb[0] + 0.0880133 * rgb[1] + 0.8955953 * rgb[2],
+                        ];
+                    }
+                    let alpha = f64::from(u16::from_le_bytes([p[6], p[7]])) / 65535.0;
+                    [
+                        (rgb[0] * alpha) as f32,
+                        (rgb[1] * alpha) as f32,
+                        (rgb[2] * alpha) as f32,
+                        alpha as f32,
+                    ]
+                })
+                .collect();
+            return Ok(VideoImage {
+                size: [frame.width, frame.height],
+                pixels,
+            });
         }
         let rgba = ffi::video_rgba(&self.native, &frame, policy.range == "pc")?;
         resolve_asset(asset, project_path)?;
@@ -218,10 +346,15 @@ pub struct VideoRenderBackend<'a> {
     pub project_path: &'a Path,
 }
 impl RenderBackend for VideoRenderBackend<'_> {
+    fn begin_observation_scope(
+        &self,
+    ) -> Result<Option<Box<dyn kronello_render::RenderObservationScope + '_>>, RenderError> {
+        self.backend.begin_observation_scope()
+    }
     fn cache_namespace(&self) -> Option<String> {
         self.backend
             .cache_namespace()
-            .map(|n| format!("software-video-sdr-v1:{n}"))
+            .map(|n| format!("software-video-sdr-hdr203-v1:{n}"))
     }
 
     fn display_from_linear(
@@ -236,9 +369,9 @@ impl RenderBackend for VideoRenderBackend<'_> {
     }
     fn input_path(&self) -> &str {
         if self.backend.name() == "wgpu_rgba16f" {
-            "software_video_decode_cpu_sdr_color_cpu_nearest_sample_explicit_gpu_pixel_upload"
+            "software_video_decode_native_8_16bit_cpu_pinned_sdr_hdr203_color_cpu_nearest_sample_explicit_gpu_pixel_upload"
         } else {
-            "software_video_decode_cpu_sdr_color_cpu_nearest_sample_to_selected_backend"
+            "software_video_decode_native_8_16bit_cpu_pinned_sdr_hdr203_color_cpu_nearest_sample_to_selected_backend"
         }
     }
     fn image_input_path(&self) -> &str {
@@ -247,6 +380,15 @@ impl RenderBackend for VideoRenderBackend<'_> {
         } else {
             "png_native_8_16bit_cpu_color_premultiply_nearest_selected_backend"
         }
+    }
+    fn transfer_stats(&self) -> Option<kronello_render::RenderTransferStats> {
+        self.backend.transfer_stats()
+    }
+    fn transfer_stats_total(&self) -> Option<kronello_render::RenderTransferStats> {
+        self.backend.transfer_stats_total()
+    }
+    fn resource_cache_stats(&self) -> Option<kronello_render::RenderResourceCacheStats> {
+        self.backend.resource_cache_stats()
     }
     fn execute(&self, dag: &RenderDag) -> Result<BackendFrame, RenderError> {
         self.execute_with_cache(
@@ -259,6 +401,7 @@ impl RenderBackend for VideoRenderBackend<'_> {
         dag: &RenderDag,
         cache: &mut RenderCache,
     ) -> Result<BackendFrame, RenderError> {
+        let _scope = self.begin_observation_scope()?;
         let runtime = if dag
             .nodes()
             .iter()
@@ -276,10 +419,173 @@ impl RenderBackend for VideoRenderBackend<'_> {
             runtime
                 .as_ref()
                 .expect("video runtime")
-                .decode_video_image(asset, self.project_path, stream, time, working)
+                .decode_video_image_with_hdr(
+                    asset,
+                    self.project_path,
+                    stream,
+                    time,
+                    working,
+                    dag.hdr(),
+                )
                 .map_err(render_error)
         })?;
         self.backend.execute_with_cache(&resolved, cache)
+    }
+}
+/// Native handles live only for one service render scope, never in pure caches.
+/// At most two decoders and 128 MiB of retained presentation buffers survive calls.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+pub struct DecoderPoolStats {
+    pub hits: u64,
+    pub misses: u64,
+    pub evictions: u64,
+    pub active_decoders: usize,
+    pub retained_frame_bytes: usize,
+    pub peak_retained_frame_bytes: usize,
+}
+pub struct SequentialVideoRenderBackend<'a> {
+    base: VideoRenderBackend<'a>,
+    runtime: Result<&'a MediaRuntime, &'a MediaError>,
+    pool: std::cell::RefCell<Vec<(String, VideoDecoder<'a>)>>,
+    pool_stats: std::cell::RefCell<DecoderPoolStats>,
+}
+impl<'a> SequentialVideoRenderBackend<'a> {
+    pub fn new(
+        backend: &'a dyn RenderBackend,
+        project_path: &'a Path,
+        runtime: Result<&'a MediaRuntime, &'a MediaError>,
+    ) -> Self {
+        Self {
+            base: VideoRenderBackend {
+                backend,
+                project_path,
+            },
+            runtime,
+            pool: std::cell::RefCell::new(Vec::new()),
+            pool_stats: std::cell::RefCell::new(DecoderPoolStats::default()),
+        }
+    }
+    pub fn pool_stats(&self) -> DecoderPoolStats {
+        *self.pool_stats.borrow()
+    }
+    pub fn decoder_stats(&self) -> Vec<VideoDecodeStats> {
+        self.pool
+            .borrow()
+            .iter()
+            .map(|(_, d)| d.decode_stats())
+            .collect()
+    }
+}
+impl RenderBackend for SequentialVideoRenderBackend<'_> {
+    fn begin_observation_scope(
+        &self,
+    ) -> Result<Option<Box<dyn kronello_render::RenderObservationScope + '_>>, RenderError> {
+        self.base.begin_observation_scope()
+    }
+    fn name(&self) -> &str {
+        self.base.name()
+    }
+    fn cache_namespace(&self) -> Option<String> {
+        self.base.cache_namespace()
+    }
+    fn input_path(&self) -> &str {
+        self.base.input_path()
+    }
+    fn image_input_path(&self) -> &str {
+        self.base.image_input_path()
+    }
+    fn transfer_stats(&self) -> Option<kronello_render::RenderTransferStats> {
+        self.base.transfer_stats()
+    }
+    fn transfer_stats_total(&self) -> Option<kronello_render::RenderTransferStats> {
+        self.base.transfer_stats_total()
+    }
+    fn resource_cache_stats(&self) -> Option<kronello_render::RenderResourceCacheStats> {
+        self.base.resource_cache_stats()
+    }
+    fn display_from_linear(
+        &self,
+        linear: &[[f32; 4]],
+        working: ColorSpace,
+    ) -> Result<Vec<[f32; 4]>, RenderError> {
+        self.base.display_from_linear(linear, working)
+    }
+    fn execute(&self, dag: &RenderDag) -> Result<BackendFrame, RenderError> {
+        self.execute_with_cache(
+            dag,
+            &mut RenderCache::new(kronello_render::CacheConfig::disabled()),
+        )
+    }
+    fn execute_with_cache(
+        &self,
+        dag: &RenderDag,
+        cache: &mut RenderCache,
+    ) -> Result<BackendFrame, RenderError> {
+        let _scope = self.begin_observation_scope()?;
+        let resolved = dag.resolve_video(|asset, stream, time, working| {
+            if asset.kind == kronello_model::AssetKind::Image {
+                return crate::decode_image_asset(asset, self.base.project_path, stream, working)
+                    .map_err(render_error);
+            }
+            let runtime = self.runtime.map_err(|error| RenderError::Backend {
+                code: error.code(),
+                message: error.to_string(),
+            })?;
+            // Revalidate the local content on every access, including interval hits.
+            let path = resolve_asset(asset, self.base.project_path).map_err(render_error)?;
+            let key = format!(
+                "{}:{stream}:{}",
+                path.display(),
+                serde_json::to_string(asset).map_err(|e| RenderError::Backend {
+                    code: "INVALID_INPUT",
+                    message: e.to_string()
+                })?
+            );
+            let mut pool = self.pool.borrow_mut();
+            let mut stats = self.pool_stats.borrow_mut();
+            let mut entry = if let Some(index) = pool.iter().position(|(k, _)| *k == key) {
+                stats.hits += 1;
+                pool.remove(index)
+            } else {
+                stats.misses += 1;
+                if pool.len() >= 2 {
+                    pool.remove(0);
+                    stats.evictions += 1;
+                }
+                (
+                    key,
+                    runtime
+                        .open_video_stream(&path, stream)
+                        .map_err(render_error)?,
+                )
+            };
+            let result = runtime.decode_video_image_from_decoder(
+                &mut entry.1,
+                asset,
+                self.base.project_path,
+                stream,
+                time,
+                working,
+                dag.hdr(),
+            );
+            pool.push(entry);
+            while pool
+                .iter()
+                .map(|(_, d)| d.cached_frame_bytes())
+                .sum::<usize>()
+                > 128 * 1024 * 1024
+            {
+                pool.remove(0);
+                stats.evictions += 1;
+            }
+            stats.active_decoders = pool.len();
+            stats.retained_frame_bytes = pool.iter().map(|(_, d)| d.cached_frame_bytes()).sum();
+            stats.peak_retained_frame_bytes = stats
+                .peak_retained_frame_bytes
+                .max(stats.retained_frame_bytes);
+            result.map_err(render_error)
+        })?;
+        self.base.backend.execute_with_cache(&resolved, cache)
     }
 }
 fn render_error(error: MediaError) -> RenderError {
@@ -335,6 +641,11 @@ impl<'a> ResidentVideoRenderBackend<'a> {
     }
 }
 impl RenderBackend for ResidentVideoRenderBackend<'_> {
+    fn begin_observation_scope(
+        &self,
+    ) -> Result<Option<Box<dyn kronello_render::RenderObservationScope + '_>>, RenderError> {
+        self.gpu.begin_observation_scope()
+    }
     fn requires_gpu_resident(&self) -> bool {
         true
     }
@@ -342,6 +653,9 @@ impl RenderBackend for ResidentVideoRenderBackend<'_> {
         Some(self.transfers.borrow().render_stats())
     }
 
+    fn transfer_stats_total(&self) -> Option<kronello_render::RenderTransferStats> {
+        Some(self.transfers.borrow().render_stats())
+    }
     fn cache_namespace(&self) -> Option<String> {
         self.gpu
             .cache_namespace()
@@ -368,7 +682,14 @@ impl RenderBackend for ResidentVideoRenderBackend<'_> {
     ) -> Result<Vec<[f32; 4]>, RenderError> {
         self.gpu.display_from_linear(linear, working)
     }
+    fn resource_cache_stats(&self) -> Option<kronello_render::RenderResourceCacheStats> {
+        let mut stats = self.gpu.render_cache_stats();
+        stats.persistent_disk_policy =
+            kronello_render::PersistentRasterCachePolicy::DisabledForGpuResident;
+        Some(stats)
+    }
     fn execute(&self, dag: &RenderDag) -> Result<BackendFrame, RenderError> {
+        let _scope = self.begin_observation_scope()?;
         #[cfg(not(target_os = "macos"))]
         {
             let _ = dag;
@@ -386,6 +707,7 @@ impl RenderBackend for ResidentVideoRenderBackend<'_> {
                     message: e.to_string(),
                 };
             let mut resident = std::collections::BTreeMap::new();
+            let mut source_keys = std::collections::BTreeMap::new();
             let mut stats = TransferStats::default();
             for (index, node) in dag.nodes().iter().enumerate() {
                 if let kronello_render::DagNode::VideoDraw {
@@ -467,11 +789,29 @@ impl RenderBackend for ResidentVideoRenderBackend<'_> {
                         )
                         .map_err(native_error)?;
                     resolve_asset(asset, self.project_path).map_err(render_error)?;
+                    use sha2::Digest;
+                    let conversion = sha2::Sha256::digest(include_bytes!(
+                        "../../kronello-framebridge/src/resident.wgsl"
+                    ));
+                    let identity = format!(
+                        "native-video-source-v1:{}:{metadata:?}:{:?}:{conversion:x}",
+                        asset.content_hash, self.format
+                    );
+                    source_keys.insert(
+                        index,
+                        kronello_render::RasterCacheKey::external_source(
+                            &identity,
+                            dag.execution_region(),
+                            dag.working_space(),
+                            &self.cache_namespace().unwrap(),
+                        )?,
+                    );
                     resident.insert(index, image);
                 }
             }
             let (frame, final_stats) =
-                self.gpu.execute_resident_video_with_stats(dag, &resident)?;
+                self.gpu
+                    .execute_resident_video_cached_with_stats(dag, &resident, &source_keys)?;
             stats.accumulate(&final_stats);
             self.transfers.borrow_mut().accumulate(&stats);
             Ok(frame)

@@ -737,13 +737,14 @@ fn concurrent_cli_same_key_returns_one_event_and_different_keys_conflict() {
 fn structured_api_queries_and_empty_capabilities_payload_from_real_cli() {
     let capabilities = call(&["capabilities", "get"], json!({}), true);
     assert_eq!(capabilities["result"]["kind"], "capabilities");
-    // API-002 adds parameters and an EditCommand, adding no operation.
-    assert_eq!(
-        capabilities["result"]["value"]["commands"]
-            .as_array()
-            .unwrap()
-            .len(),
-        38
+    let commands = capabilities["result"]["value"]["commands"]
+        .as_array()
+        .unwrap();
+    assert_eq!(commands.len(), kronello_service::command_registry().len());
+    assert!(
+        commands
+            .iter()
+            .any(|command| command["name"] == "job.resume")
     );
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("query.kronello");

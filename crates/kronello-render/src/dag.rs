@@ -26,7 +26,7 @@ impl OutputRegion {
             .any(|v| !v.is_finite())
             || self.extent.iter().any(|v| *v <= 0.0)
             || self.pixels.contains(&0)
-            || u64::from(self.pixels[0]) * u64::from(self.pixels[1]) > 16_777_216
+            || u64::from(self.pixels[0]) * u64::from(self.pixels[1]) > 33_177_600
         {
             return Err(RenderError::InvalidInput(
                 "invalid output region or pixel budget".into(),
@@ -145,6 +145,7 @@ pub struct RenderDag {
     nodes: Vec<DagNode>,
     region: OutputRegion,
     working_space: ColorSpace,
+    hdr: Option<crate::HdrSettings>,
     execution_region: OutputRegion,
     requests: Vec<Option<crate::PixelBounds>>,
     bounds: Vec<crate::NodeBounds>,
@@ -229,6 +230,9 @@ impl RenderDag {
     }
     pub fn region(&self) -> OutputRegion {
         self.region
+    }
+    pub fn hdr(&self) -> Option<crate::HdrSettings> {
+        self.hdr
     }
     pub fn working_space(&self) -> ColorSpace {
         self.working_space
@@ -654,6 +658,7 @@ fn build_unpadded_dag(
         nodes: b.nodes,
         region,
         working_space: profile.working_space,
+        hdr: profile.hdr,
         execution_region: region,
         requests: vec![],
         bounds: vec![],

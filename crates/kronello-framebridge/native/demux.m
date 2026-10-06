@@ -56,7 +56,26 @@ static int resident_format_supported(CMFormatDescriptionRef format) {
     }
     // Baseline/Main/High AVC profiles admit 8-bit 4:2:0. High10/422/444 and
     // incomplete records are unsupported, even if caller says yuv420p.
-    return size>=7 && bytes[0]==1 && (bytes[1]==66 || bytes[1]==77 || bytes[1]==100);
+    if (size<7 || bytes[0]!=1) return 0;
+    if (bytes[1]==66 || bytes[1]==77) return 1;
+    if (bytes[1]!=100) return 0;
+    // High-profile avcC carries explicit chroma/bit-depth extension fields.
+    // Profile alone is insufficient to prove non-monochrome 4:2:0.
+    CFIndex offset=6;
+    unsigned sps=bytes[5]&31;
+    for (unsigned i=0;i<sps;i++) {
+        if (offset+2>size) return 0;
+        unsigned length=((unsigned)bytes[offset]<<8)|bytes[offset+1];offset+=2;
+        if (offset+length>size) return 0;offset+=length;
+    }
+    if (offset>=size) return 0;
+    unsigned pps=bytes[offset++];
+    for (unsigned i=0;i<pps;i++) {
+        if (offset+2>size) return 0;
+        unsigned length=((unsigned)bytes[offset]<<8)|bytes[offset+1];offset+=2;
+        if (offset+length>size) return 0;offset+=length;
+    }
+    return offset+4<=size && (bytes[offset]&3)==1 && (bytes[offset+1]&7)==0 && (bytes[offset+2]&7)==0;
 }
 
 // Return retained compressed samples in a bounded caller buffer. The caller

@@ -3,9 +3,21 @@ use kronello_render::{DecodedVideoFrame, RenderError, VideoDecodeBackend};
 use kronello_time::Rational;
 use std::path::Path;
 
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+pub struct VideoDecodeStats {
+    pub seeks: u64,
+    pub decoded_frames: u64,
+    pub interval_hits: u64,
+    pub peak_cached_frame_bytes: u64,
+    pub cache_clone_bytes: u64,
+    pub returned_clone_bytes: u64,
+}
 pub struct VideoDecoder<'a> {
     pub(crate) native: ffi::NativeDecoder<'a>,
     pub(crate) report: MediaPathReport,
+    pub(crate) stats: VideoDecodeStats,
+    pub(crate) current: Option<DecodedVideoFrame>,
+    pub(crate) lookahead: Option<ffi::RawFrame>,
 }
 impl MediaRuntime {
     /// Open a canonical local file. URL and playlist sources are rejected.
@@ -26,7 +38,13 @@ impl MediaRuntime {
             transfer_path: "software_decode_to_cpu_native_planes".into(),
             transfers: MediaTransferStats::default(),
         };
-        Ok(VideoDecoder { native, report })
+        Ok(VideoDecoder {
+            native,
+            report,
+            stats: VideoDecodeStats::default(),
+            current: None,
+            lookahead: None,
+        })
     }
     /// Explicit SDR BT.709 RGBA8 straight input. HDR/linear input belongs to the
     /// color pipeline and cannot be implicitly clipped into this interface.
@@ -48,6 +66,7 @@ impl MediaRuntime {
             frames.len(),
             &mut |index| Ok(frames[index].clone()),
             capabilities,
+            None,
         )
     }
     /// Synchronous producer backpressure: exactly one RGBA8 frame is retained.
@@ -58,7 +77,28 @@ impl MediaRuntime {
         count: usize,
         frame: &mut dyn FnMut(usize) -> Result<EncodeFrame, MediaError>,
     ) -> Result<MediaPathReport, MediaError> {
-        self.encode_video_stream_with_capabilities(request, count, frame, &self.capabilities)
+        self.encode_video_stream_with_capabilities(request, count, frame, &self.capabilities, None)
+    }
+    /// Explicit straight Rec.2100 RGBA64LE input; no 8-bit intermediary.
+    pub fn encode_hdr_video_stream(
+        &self,
+        request: &EncodeRequest,
+        count: usize,
+        transfer: kronello_render::HdrTransfer,
+        frame: &mut dyn FnMut(usize) -> Result<EncodeFrame, MediaError>,
+    ) -> Result<MediaPathReport, MediaError> {
+        if request.codec != EncodeCodec::ProRes {
+            return Err(MediaError::UnsupportedFeature(
+                "HDR encoder profile supports only ProRes 10-bit".into(),
+            ));
+        }
+        self.encode_video_stream_with_capabilities(
+            request,
+            count,
+            frame,
+            &self.capabilities,
+            Some(transfer),
+        )
     }
     fn encode_video_stream_with_capabilities(
         &self,
@@ -66,7 +106,9 @@ impl MediaRuntime {
         count: usize,
         produce: &mut dyn FnMut(usize) -> Result<EncodeFrame, MediaError>,
         capabilities: &MediaCapabilities,
+        hdr: Option<kronello_render::HdrTransfer>,
     ) -> Result<MediaPathReport, MediaError> {
+        let stride = if hdr.is_some() { 8 } else { 4 };
         let codec = capabilities.select_encoder(request.codec)?;
         let actual = self.capabilities.select_encoder(request.codec)?;
         if actual.name != codec.name {
@@ -81,7 +123,7 @@ impl MediaRuntime {
         let height = i32::try_from(request.height)
             .map_err(|_| MediaError::InvalidInput("height overflow".into()))?;
         if width <= 0
-            || width > i32::MAX / 4
+            || width > i32::MAX / stride
             || height <= 0
             || width % 2 != 0
             || height % 2 != 0
@@ -94,7 +136,7 @@ impl MediaRuntime {
         }
         let size = (width as usize)
             .checked_mul(height as usize)
-            .and_then(|s| s.checked_mul(4))
+            .and_then(|s| s.checked_mul(stride as usize))
             .ok_or_else(|| MediaError::InvalidInput("frame size overflow".into()))?;
         let parent = request
             .output
@@ -105,13 +147,14 @@ impl MediaRuntime {
             return Err(MediaError::OutputExists(request.output.clone()));
         }
         let temp = tempfile::NamedTempFile::new_in(parent)?;
-        let mut encoder = ffi::NativeEncoder::open(
+        let mut encoder = ffi::NativeEncoder::open_color(
             &self.native,
             temp.path(),
             codec,
             width,
             height,
             request.time_base,
+            hdr,
         )?;
         let mut previous = None;
         for index in 0..count {
@@ -121,7 +164,13 @@ impl MediaRuntime {
                 || tick.denominator() != 1
                 || tick.numerator() < 0
                 || previous.is_some_and(|p| frame.pts <= p)
-                || frame.rgba.chunks_exact(4).any(|p| p[3] != 255)
+                || frame.rgba.chunks_exact(stride as usize).any(|p| {
+                    if hdr.is_some() {
+                        p[6] != 255 || p[7] != 255
+                    } else {
+                        p[3] != 255
+                    }
+                })
             {
                 return Err(MediaError::InvalidInput(
                     "opaque RGBA length and strictly increasing integral nonnegative PTS required"
@@ -158,9 +207,11 @@ impl MediaRuntime {
             } else {
                 ExecutionKind::Software
             },
-            input_pixel_format: "rgba".into(),
+            input_pixel_format: if hdr.is_some() { "rgba64le" } else { "rgba" }.into(),
             output_pixel_format: pixel_format,
-            transfer_path: if codec.hardware {
+            transfer_path: if hdr.is_some() {
+                "cpu_rec2100_rgba64_to_prores_10bit"
+            } else if codec.hardware {
                 "cpu_rgba_to_hardware_encoder"
             } else {
                 "cpu_rgba_to_software_encoder"
@@ -192,8 +243,22 @@ pub struct EncodeFrame {
     pub rgba: Vec<u8>,
 }
 impl VideoDecoder<'_> {
+    pub(crate) fn cached_frame_bytes(&self) -> usize {
+        self.current.as_ref().map_or(0, |f| f.pixels.len())
+            + self.lookahead.as_ref().map_or(0, |f| f.pixels.len())
+    }
+    pub fn decode_stats(&self) -> VideoDecodeStats {
+        self.stats
+    }
+    fn seek_origin(&mut self) -> Result<(), MediaError> {
+        self.current = None;
+        self.lookahead = None;
+        self.native.restart_origin()?;
+        self.stats.seeks += 1;
+        Ok(())
+    }
     pub fn stream_metadata(&mut self) -> Result<kronello_model::StreamMetadata, MediaError> {
-        self.native.seek(self.native.origin())?;
+        self.seek_origin()?;
         let frame = self
             .next()?
             .ok_or_else(|| MediaError::Decode("empty video stream".into()))?;
@@ -222,12 +287,37 @@ impl VideoDecoder<'_> {
     pub fn path_report(&self) -> &MediaPathReport {
         &self.report
     }
-    /// Conservative exact seek: reset to the first indexed presentation point
-    /// and decode forward. This avoids assuming a VFR frame duration or a GOP
-    /// preroll bound. Keyframe acceleration is deferred, never a correctness fallback.
+    /// Exact presentation intervals with bounded forward state. Backward requests
+    /// restart at the indexed origin; no GOP or VFR duration approximation is used.
     pub fn decode_at(&mut self, time: Rational) -> Result<DecodedVideoFrame, MediaError> {
-        self.native.seek(self.native.origin())?;
-        let mut current = self.next()?;
+        let result = self.decode_at_inner(time);
+        if result.is_err() {
+            self.current = None;
+            self.lookahead = None;
+        }
+        result
+    }
+    fn decode_at_inner(&mut self, time: Rational) -> Result<DecodedVideoFrame, MediaError> {
+        if let Some(frame) = &self.current {
+            if time >= frame.pts && time < frame.end {
+                let cloned = frame.clone();
+                let bytes = cloned.pixels.len() as u64;
+                self.stats.interval_hits += 1;
+                self.stats.returned_clone_bytes += bytes;
+                self.record_copy(bytes)?;
+                return Ok(cloned);
+            }
+            if time < frame.pts {
+                self.seek_origin()?;
+            }
+        } else {
+            self.seek_origin()?;
+        }
+        let mut current = if self.current.take().is_some() {
+            self.lookahead.take()
+        } else {
+            self.next()?
+        };
         loop {
             let Some(frame) = current else {
                 return Err(MediaError::FrameNotFound(format!("{time:?}")));
@@ -258,7 +348,7 @@ impl VideoDecoder<'_> {
                     color_matrix,
                     color_range,
                 ] = frame.labels;
-                return Ok(DecodedVideoFrame {
+                let decoded = DecodedVideoFrame {
                     pts: frame.pts,
                     end,
                     width: frame.width,
@@ -269,22 +359,35 @@ impl VideoDecoder<'_> {
                     color_matrix,
                     color_range,
                     pixels: frame.pixels,
-                });
+                };
+                let bytes = decoded.pixels.len() as u64
+                    + next.as_ref().map_or(0, |n| n.pixels.len() as u64);
+                self.stats.peak_cached_frame_bytes = self.stats.peak_cached_frame_bytes.max(bytes);
+                self.lookahead = next;
+                self.stats.cache_clone_bytes += decoded.pixels.len() as u64;
+                self.record_copy(decoded.pixels.len() as u64)?;
+                self.current = Some(decoded.clone());
+                return Ok(decoded);
             }
             current = next;
         }
     }
+    fn record_copy(&mut self, bytes: u64) -> Result<(), MediaError> {
+        self.report.transfers.cpu_copy_bytes = self
+            .report
+            .transfers
+            .cpu_copy_bytes
+            .checked_add(bytes)
+            .ok_or_else(|| MediaError::Decode("transfer counter overflow".into()))?;
+        Ok(())
+    }
     fn next(&mut self) -> Result<Option<ffi::RawFrame>, MediaError> {
         let frame = self.native.next()?;
         if let Some(f) = &frame {
+            self.stats.decoded_frames += 1;
             self.report.input_pixel_format = f.labels[0].clone();
             self.report.output_pixel_format = f.labels[0].clone();
-            self.report.transfers.cpu_copy_bytes = self
-                .report
-                .transfers
-                .cpu_copy_bytes
-                .checked_add(f.pixels.len() as u64)
-                .ok_or_else(|| MediaError::Decode("transfer counter overflow".into()))?;
+            self.record_copy(f.pixels.len() as u64)?;
         }
         Ok(frame)
     }

@@ -40,6 +40,44 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                     background: mov.background,
                 })
             }
+            "pro_res_sdr_from_hdr_mov" => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct SdrMov {
+                    profile_version: u32,
+                    #[serde(default)]
+                    audio: kronello_audio::AudioSourceMode,
+                    clips: Vec<crate::JobAudioClip>,
+                    background: [f32; 3],
+                }
+                let mov: SdrMov = payload(&fields)?;
+                Ok(Self::ProResSdrFromHdrMov {
+                    profile_version: mov.profile_version,
+                    audio: mov.audio,
+                    clips: mov.clips,
+                    background: mov.background,
+                })
+            }
+            "pro_res_hdr_mov" => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct HdrMov {
+                    profile_version: u32,
+                    transfer: kronello_render::HdrTransfer,
+                    #[serde(default)]
+                    audio: kronello_audio::AudioSourceMode,
+                    clips: Vec<crate::JobAudioClip>,
+                    background: [f32; 3],
+                }
+                let mov: HdrMov = payload(&fields)?;
+                Ok(Self::ProResHdrMov {
+                    profile_version: mov.profile_version,
+                    transfer: mov.transfer,
+                    audio: mov.audio,
+                    clips: mov.clips,
+                    background: mov.background,
+                })
+            }
             "av1_mp4" | "h264_mov" | "hevc_mov" => {
                 #[derive(Deserialize)]
                 #[serde(deny_unknown_fields)]
@@ -135,6 +173,7 @@ impl<'de> Deserialize<'de> for Request {
             "job.get" => payload(&fields).map(Self::JobGet),
             "job.list" => payload(&fields).map(Self::JobList),
             "job.cancel" => payload(&fields).map(Self::JobCancel),
+            "job.resume" => payload(&fields).map(Self::JobResume),
             "job.prune" => payload(&fields).map(Self::JobPrune),
             "template.set_duration" => payload(&fields).map(Self::TemplateSetDuration),
             "template.preview" => payload(&fields).map(Self::TemplatePreview),

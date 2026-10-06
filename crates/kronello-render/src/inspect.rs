@@ -218,6 +218,20 @@ pub fn explain_render_path(
             intermediate_bytes_estimate: intermediate,
         });
     }
+    if profile.hdr.is_some() {
+        result.notices.push(ProcessingNotice {
+            code: "HDR_LINEAR_REC2020_REFERENCE_WHITE_203_NITS".into(),
+            tile: None,
+            actual_estimate: Some(203),
+            limit: None,
+        });
+        result.notices.push(ProcessingNotice {
+            code: "HDR_DISPLAY_ONLY_REC709_REINHARD_SRGB_LINEAR_UNCHANGED".into(),
+            tile: None,
+            actual_estimate: None,
+            limit: None,
+        });
+    }
     if matches!(
         backend,
         ExplainBackend::Gpu | ExplainBackend::GpuResidentBgra8 | ExplainBackend::GpuResidentNv12

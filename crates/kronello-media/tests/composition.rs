@@ -524,3 +524,112 @@ fn png8_srgb_gray_palette_and_alpha_sources_preserve_numeric_meaning() {
         assert!((f64::from(image.pixels[0][3]) - alpha).abs() < 1e-7);
     }
 }
+
+#[test]
+fn sequential_product_backend_reuses_exact_decoder_and_revalidates_hash() {
+    let runtime = MediaRuntime::load().unwrap();
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/fixtures/generated/media/cfr-30000-1001.nut")
+        .canonicalize()
+        .unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let copy = dir.path().join("video.nut");
+    std::fs::copy(&path, &copy).unwrap();
+    let metadata = runtime
+        .open_video(&copy)
+        .unwrap()
+        .stream_metadata()
+        .unwrap();
+    let asset = Asset {
+        id: AssetId::new(),
+        kind: AssetKind::Video,
+        content_hash: content_hash(&copy).unwrap(),
+        locator: AssetLocator {
+            relative: None,
+            absolute: Some(copy.to_str().unwrap().into()),
+        },
+        streams: vec![metadata],
+    };
+    let (mut project, id) = media_project(asset);
+    let DocumentObject::Known(c) = &mut project.compositions[0] else {
+        unreachable!()
+    };
+    let NodeKind::Media(media) = &mut c.nodes[0].kind else {
+        unreachable!()
+    };
+    media.source_in = Time::ZERO;
+    media.time_map = TimeMap::linear(Time::ZERO, Time::ONE).unwrap();
+    let snapshot = RenderSnapshot::new(&project, id, 1, RenderProfile::default()).unwrap();
+    let backend = SequentialVideoRenderBackend::new(&CpuReferenceBackend, dir.path(), Ok(&runtime));
+    for time in (0..6)
+        .map(|i| t(i * 1001, 30000))
+        .chain([t(4004, 30000); 3])
+    {
+        let expected = frame(&snapshot, dir.path(), &CpuReferenceBackend, time);
+        let request = FrameRequest {
+            time,
+            region: OutputRegion {
+                origin: [0.0; 2],
+                extent: [2.0; 2],
+                pixels: [2; 2],
+            },
+        };
+        let actual = render_frame(&snapshot, &[], &backend, request).unwrap();
+        assert_eq!(actual.pixels, expected.pixels);
+    }
+    assert_eq!(backend.decoder_stats().len(), 1);
+    assert_eq!(backend.decoder_stats()[0].seeks, 2);
+    assert_eq!(backend.decoder_stats()[0].interval_hits, 2);
+    assert_eq!(backend.pool_stats().misses, 1);
+    assert_eq!(backend.pool_stats().hits, 8);
+    for _ in 0..2 {
+        let mut another = project.clone();
+        let fresh = AssetId::new();
+        let DocumentObject::Known(asset) = &mut another.assets[0] else {
+            unreachable!()
+        };
+        asset.id = fresh;
+        let DocumentObject::Known(c) = &mut another.compositions[0] else {
+            unreachable!()
+        };
+        let NodeKind::Media(media) = &mut c.nodes[0].kind else {
+            unreachable!()
+        };
+        media.asset = fresh;
+        let snapshot = RenderSnapshot::new(&another, id, 1, RenderProfile::default()).unwrap();
+        render_frame(
+            &snapshot,
+            &[],
+            &backend,
+            FrameRequest {
+                time: Time::ZERO,
+                region: OutputRegion {
+                    origin: [0.0; 2],
+                    extent: [2.0; 2],
+                    pixels: [2; 2],
+                },
+            },
+        )
+        .unwrap();
+    }
+    assert_eq!(backend.pool_stats().active_decoders, 2);
+    assert_eq!(backend.pool_stats().evictions, 1);
+    assert_eq!(backend.pool_stats().retained_frame_bytes, 1536);
+    assert!(backend.pool_stats().peak_retained_frame_bytes <= 128 * 1024 * 1024);
+    std::fs::write(&copy, b"changed").unwrap();
+    let error = render_frame(
+        &snapshot,
+        &[],
+        &backend,
+        FrameRequest {
+            time: t(4004, 30000),
+            region: OutputRegion {
+                origin: [0.0; 2],
+                extent: [2.0; 2],
+                pixels: [2; 2],
+            },
+        },
+    )
+    .unwrap_err();
+    assert_eq!(error.code(), "ASSET_HASH_MISMATCH");
+}

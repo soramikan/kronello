@@ -921,20 +921,24 @@ fn gpu_animated_shape_and_japanese_text_match_cpu_all_pixels_and_order() {
         );
         previous.push((time, gpu_frame));
     }
-    for (time, expected) in previous.into_iter().rev() {
-        assert_eq!(
-            render_frame(
-                &s,
-                &fonts(),
-                &gpu,
-                FrameRequest {
-                    time,
-                    region: region()
-                }
-            )
-            .unwrap(),
-            expected
-        );
+    for (time, mut expected) in previous.into_iter().rev() {
+        let mut actual = render_frame(
+            &s,
+            &fonts(),
+            &gpu,
+            FrameRequest {
+                time,
+                region: region(),
+            },
+        )
+        .unwrap();
+        // Resource observations depend on cache warmth, while every pixel and
+        // semantic metadata field must remain independent of request order.
+        actual.metadata.transfer_stats = None;
+        expected.metadata.transfer_stats = None;
+        actual.metadata.resource_cache_stats = None;
+        expected.metadata.resource_cache_stats = None;
+        assert_eq!(actual, expected);
     }
     let cpu = render_frame(
         &s,
@@ -4078,4 +4082,308 @@ fn temporal_semantic_pin_is_required_and_legacy_snapshot_hash_is_preserved() {
     legacy["semantic_versions"]["temporal"] = serde_json::json!(99);
     let future: RenderSnapshot = serde_json::from_value(legacy).unwrap();
     assert_eq!(future.validate().unwrap_err().code(), "UNSUPPORTED_FEATURE");
+}
+
+#[test]
+#[ignore = "8K actual GPU host acceptance; run explicitly with --ignored"]
+fn color001_8k_offline_text_mask_glow_preserves_hdr_and_alpha() {
+    use std::io::{Seek, SeekFrom, Write};
+    let (mut p, id) = project();
+    let (matte, shape) = rectangle(
+        [54.0, 32.0],
+        Color::new(ColorSpace::LinearRec2020, [1.0; 3], 0.5).unwrap(),
+    );
+    let matte_id = matte.id;
+    p.shapes.push(DocumentObject::Known(shape));
+    let DocumentObject::Known(c) = &mut p.compositions[0] else {
+        panic!()
+    };
+    c.design_extent = DesignExtent::new(1024.0, 576.0).unwrap();
+    let text = c
+        .nodes
+        .iter_mut()
+        .find(|n| matches!(n.kind, NodeKind::Text { .. }))
+        .unwrap();
+    let source = text.id;
+    for property in &mut text.properties {
+        if property.descriptor().key.as_str() == "kronello.fill_color" {
+            *property = Property::new(
+                property.id(),
+                property.descriptor().clone(),
+                PropertySource::Constant(Value::Color(
+                    Color::new(ColorSpace::LinearRec2020, [3.0, 2.0, 1.0], 1.0).unwrap(),
+                )),
+                vec![],
+                &render_registry(),
+            )
+            .unwrap();
+        }
+    }
+    let sigma = constant("kronello.effect.sigma", scalar(0.5));
+    let offset = constant("kronello.effect.offset", v2(0.0, 0.0));
+    let color = constant(
+        "kronello.effect.color",
+        Value::Color(Color::new(ColorSpace::LinearRec2020, [3.0, 2.0, 1.0], 1.0).unwrap()),
+    );
+    let opacity = constant("kronello.effect.opacity", scalar(0.5));
+    text.effects.push(Effect::Known(EffectDefinition {
+        effect_id: DROP_SHADOW_ID.into(),
+        version: 2,
+        parameters: EffectParameters::DropShadow {
+            sigma: sigma.id(),
+            offset: offset.id(),
+            color: color.id(),
+            opacity: opacity.id(),
+        },
+    }));
+    text.properties.extend([sigma, offset, color, opacity]);
+    c.root_nodes.push(matte_id);
+    c.nodes.push(matte);
+    let profile = RenderProfile {
+        working_space: ColorSpace::LinearRec2020,
+        hdr: Some(HdrSettings {
+            transfer: HdrTransfer::Pq,
+        }),
+        ..Default::default()
+    };
+    let snapshot = RenderSnapshot::with_contract(
+        &p,
+        id,
+        1,
+        profile,
+        SemanticVersions::current(1),
+        vec![MatteBinding {
+            source: SceneKey {
+                instance_path: InstancePath::root(),
+                node: source,
+            },
+            matte: SceneKey {
+                instance_path: InstancePath::root(),
+                node: matte_id,
+            },
+            kind: MatteKind::Alpha,
+            visible: false,
+        }],
+    )
+    .unwrap();
+    let gpu = kronello_gpu::GpuContext::new()
+        .expect("8K acceptance requires explicit actual GPU; no fallback");
+    let oracle = render_frame(
+        &snapshot,
+        &fonts(),
+        &CpuReferenceBackend,
+        FrameRequest {
+            time: Time::ZERO,
+            region: OutputRegion {
+                origin: [20.0, 40.0 / 7.5],
+                extent: [64.0 / 7.5; 2],
+                pixels: [64; 2],
+            },
+        },
+    )
+    .unwrap();
+    let boundary_oracle = render_frame(
+        &snapshot,
+        &fonts(),
+        &CpuReferenceBackend,
+        FrameRequest {
+            time: Time::ZERO,
+            region: OutputRegion {
+                origin: [375.0 / 7.5, 40.0 / 7.5],
+                extent: [64.0 / 7.5; 2],
+                pixels: [64; 2],
+            },
+        },
+    )
+    .unwrap();
+    assert!(boundary_oracle.pixels.linear.iter().any(|p| p[3] > 0.0));
+    for row in 0..64 {
+        for column in 30..64 {
+            assert_eq!(boundary_oracle.pixels.linear[row * 64 + column][3], 0.0);
+        }
+    }
+    let mut compared = false;
+    let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/m4-acceptance/color-001");
+    std::fs::create_dir_all(&directory).unwrap();
+    let mut file = std::fs::File::create(directory.join("8k-linear.rgba16f")).unwrap();
+    let mut display_file = std::fs::File::create(directory.join("8k-display.rgba8")).unwrap();
+    display_file.set_len(7680 * 4320 * 4).unwrap();
+    file.set_len(7680 * 4320 * 8).unwrap();
+    let mut count = 0_u64;
+    let mut high = false;
+    let mut coverage = false;
+    let metadata = render_frame_tiles(
+        &snapshot,
+        &fonts(),
+        &gpu,
+        FrameRequest {
+            time: Time::ZERO,
+            region: OutputRegion {
+                origin: [0.0; 2],
+                extent: [1024.0, 576.0],
+                pixels: [7680, 4320],
+            },
+        },
+        &mut |[x, y], tile, output| {
+            if [x, y] == [0, 0] {
+                for row in 0..64 {
+                    for column in 0..64 {
+                        let actual =
+                            output.linear[(40 + row) * tile.pixels[0] as usize + 150 + column];
+                        let expected = oracle.pixels.linear[row * 64 + column];
+                        for i in 0..4 {
+                            assert!(
+                                (actual[i] - expected[i]).abs() < 0.01,
+                                "8K GPU/CPU ROI: {actual:?} vs {expected:?}"
+                            );
+                        }
+                    }
+                }
+                for row in 0..64 {
+                    for column in 0..64 {
+                        let actual =
+                            output.linear[(40 + row) * tile.pixels[0] as usize + 375 + column];
+                        let expected = boundary_oracle.pixels.linear[row * 64 + column];
+                        for i in 0..4 {
+                            assert!(
+                                (actual[i] - expected[i]).abs() < 0.01,
+                                "8K matte boundary GPU/CPU: {actual:?} vs {expected:?}"
+                            );
+                        }
+                    }
+                }
+                let mut encoder = png::Encoder::new(
+                    std::fs::File::create(directory.join("8k-top-left-tile-display.png"))?,
+                    tile.pixels[0],
+                    tile.pixels[1],
+                );
+                encoder.set_color(png::ColorType::Rgba);
+                encoder.set_depth(png::BitDepth::Eight);
+                encoder.set_source_srgb(png::SrgbRenderingIntent::Perceptual);
+                let mut writer = encoder
+                    .write_header()
+                    .map_err(|e| RenderError::InvalidInput(e.to_string()))?;
+                let display: Vec<_> = output
+                    .display
+                    .iter()
+                    .flat_map(|p| p.map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8))
+                    .collect();
+                writer
+                    .write_image_data(&display)
+                    .map_err(|e| RenderError::InvalidInput(e.to_string()))?;
+                writer
+                    .finish()
+                    .map_err(|e| RenderError::InvalidInput(e.to_string()))?;
+                compared = true;
+            }
+            count += output.linear.len() as u64;
+            high |= output.linear.iter().any(|p| p[0] > 1.0);
+            coverage |= output.linear.iter().any(|p| p[3] > 0.0 && p[3] < 1.0);
+            let bytes = encode_rgba16f(&output.linear)?;
+            for row in 0..tile.pixels[1] as usize {
+                file.seek(SeekFrom::Start(
+                    ((y as u64 + row as u64) * 7680 + x as u64) * 8,
+                ))?;
+                let start = row * tile.pixels[0] as usize * 8;
+                file.write_all(&bytes[start..start + tile.pixels[0] as usize * 8])?;
+                display_file.seek(SeekFrom::Start(
+                    ((y as u64 + row as u64) * 7680 + x as u64) * 4,
+                ))?;
+                let display: Vec<_> = output.display
+                    [row * tile.pixels[0] as usize..(row + 1) * tile.pixels[0] as usize]
+                    .iter()
+                    .flat_map(|p| p.map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8))
+                    .collect();
+                display_file.write_all(&display)?;
+            }
+            Ok(())
+        },
+    )
+    .unwrap();
+    file.sync_all().unwrap();
+    display_file.sync_all().unwrap();
+    drop(display_file);
+    let mut encoder = png::Encoder::new(
+        std::fs::File::create(directory.join("8k-display.png")).unwrap(),
+        7680,
+        4320,
+    );
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    encoder.set_source_srgb(png::SrgbRenderingIntent::Perceptual);
+    let mut writer = encoder.write_header().unwrap();
+    {
+        let mut stream = writer.stream_writer().unwrap();
+        let mut source = std::fs::File::open(directory.join("8k-display.rgba8")).unwrap();
+        std::io::copy(&mut source, &mut stream).unwrap();
+        stream.finish().unwrap();
+    }
+    writer.finish().unwrap();
+    eprintln!(
+        "8K artifacts {}: {} pixels; numeric {} bytes; maximum linear/display tile payload {} bytes",
+        directory.display(),
+        count,
+        count * 8,
+        512 * 512 * 32
+    );
+    assert_eq!(count, 7680 * 4320);
+    assert_eq!(file.metadata().unwrap().len(), count * 8);
+    assert!(high && coverage && compared);
+    assert_eq!(metadata.numeric.clipping, "none");
+    assert!(metadata.display.clipping.starts_with("display_only"));
+}
+
+#[test]
+fn color001_legacy_hdr_pin_hash_and_future_profile_rejection() {
+    let (p, id) = project();
+    let snapshot = RenderSnapshot::new(&p, id, 1, Default::default()).unwrap();
+    let mut legacy = serde_json::to_value(snapshot).unwrap();
+    legacy["semantic_versions"]
+        .as_object_mut()
+        .unwrap()
+        .remove("hdr");
+    let restored: RenderSnapshot = serde_json::from_value(legacy.clone()).unwrap();
+    restored.validate().unwrap();
+    assert_eq!(serde_json::to_value(&restored).unwrap(), legacy);
+    assert_eq!(
+        restored.content_hash().unwrap(),
+        format!("{:x}", Sha256::digest(serde_json::to_vec(&legacy).unwrap()))
+    );
+    legacy["profile"]["working_space"] = serde_json::json!("linear_rec2020");
+    legacy["profile"]["hdr"] = serde_json::json!({"transfer":"pq"});
+    let missing: RenderSnapshot = serde_json::from_value(legacy.clone()).unwrap();
+    assert_eq!(
+        missing.validate().unwrap_err().code(),
+        "UNSUPPORTED_FEATURE"
+    );
+    legacy["semantic_versions"]["hdr"] = serde_json::json!(99);
+    let future: RenderSnapshot = serde_json::from_value(legacy).unwrap();
+    assert_eq!(future.validate().unwrap_err().code(), "UNSUPPORTED_FEATURE");
+    let hdr = RenderSnapshot::new(
+        &p,
+        id,
+        1,
+        RenderProfile {
+            working_space: ColorSpace::LinearRec2020,
+            hdr: Some(HdrSettings {
+                transfer: HdrTransfer::Hlg,
+            }),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let metadata = render_frame(
+        &hdr,
+        &fonts(),
+        &CpuReferenceBackend,
+        FrameRequest {
+            time: Time::ZERO,
+            region: region(),
+        },
+    )
+    .unwrap()
+    .metadata;
+    assert_eq!(metadata.hdr.unwrap().reference_white_nits, 203);
+    assert_eq!(metadata.hdr.unwrap().hlg_peak_nits, Some(1000));
 }

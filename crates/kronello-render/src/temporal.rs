@@ -147,6 +147,8 @@ pub fn render_temporal_frame_with_cache(
     settings: TemporalSettings,
     cache: &mut RenderCache,
 ) -> Result<TemporalFrame, RenderError> {
+    let _scope = backend.begin_observation_scope()?;
+    let before = backend.transfer_stats_total();
     if backend.requires_gpu_resident() {
         return Err(RenderError::UnsupportedFeature("require_gpu_resident rejects CPU temporal accumulation; select explicit nonresident backend".into()));
     }
@@ -212,6 +214,7 @@ pub fn render_temporal_frame_with_cache(
             samples: samples.clone(),
             sampling_scope: "root_composition".into(),
         });
+        crate::output::apply_transfer_delta(&mut metadata, backend, before);
         return Ok(TemporalFrame {
             frame: RenderedFrame { pixels, metadata },
             temporal: TemporalMetadata {
@@ -247,7 +250,11 @@ pub fn render_temporal_frame_with_cache(
         .map(|p| p.map(|v| v as f32))
         .collect();
     crate::output::validate_pixels(&linear, true)?;
-    let display = backend.display_from_linear(&linear, snapshot.profile().working_space)?;
+    let display = if snapshot.profile().hdr.is_some() {
+        crate::hdr::hdr_sdr_display(&linear)
+    } else {
+        backend.display_from_linear(&linear, snapshot.profile().working_space)?
+    };
     if display.len() != linear.len() {
         return Err(RenderError::InvalidInput(
             "temporal display pixel count mismatch".into(),
@@ -266,6 +273,8 @@ pub fn render_temporal_frame_with_cache(
     let mut metadata = metadata.expect("nonempty sample plan");
     metadata.time = request.time;
     metadata.transfer_stats = backend.transfer_stats();
+    metadata.resource_cache_stats = backend.resource_cache_stats();
+    crate::output::apply_transfer_delta(&mut metadata, backend, before);
     metadata.temporal = Some(TemporalMetadata {
         settings,
         samples: samples.clone(),
@@ -310,6 +319,7 @@ pub fn render_temporal_frame_tiles(
     settings: TemporalSettings,
     sink: &mut dyn FnMut([u32; 2], crate::OutputRegion, BackendFrame) -> Result<(), RenderError>,
 ) -> Result<TemporalMetadata, RenderError> {
+    let _scope = backend.begin_observation_scope()?;
     request.region.validate()?;
     let mut cache = RenderCache::new(crate::CacheConfig::disabled());
     let samples = temporal_samples(snapshot, request.time, settings)?;

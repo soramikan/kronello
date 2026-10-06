@@ -34,6 +34,8 @@ pub struct ImageFormat {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FrameMetadata {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hdr: Option<crate::HdrMetadata>,
     pub schema_version: u32,
     pub snapshot_schema_version: u32,
     pub project_schema_version: u32,
@@ -58,6 +60,8 @@ pub struct FrameMetadata {
     pub input_path: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transfer_stats: Option<crate::RenderTransferStats>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resource_cache_stats: Option<crate::RenderResourceCacheStats>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub temporal: Option<crate::TemporalMetadata>,
 }
@@ -89,13 +93,16 @@ pub fn render_frame_with_cache(
     request: FrameRequest,
     cache: &mut crate::RenderCache,
 ) -> Result<RenderedFrame, RenderError> {
-    if let Some(settings) = snapshot.profile().temporal {
-        return Ok(crate::render_temporal_frame_with_cache(
-            snapshot, fonts, backend, request, settings, cache,
-        )?
-        .frame);
-    }
-    render_single_frame_with_cache(snapshot, fonts, backend, request, cache)
+    let _scope = backend.begin_observation_scope()?;
+    let before = backend.transfer_stats_total();
+    let mut frame = if let Some(settings) = snapshot.profile().temporal {
+        crate::render_temporal_frame_with_cache(snapshot, fonts, backend, request, settings, cache)?
+            .frame
+    } else {
+        render_single_frame_with_cache(snapshot, fonts, backend, request, cache)?
+    };
+    apply_transfer_delta(&mut frame.metadata, backend, before);
+    Ok(frame)
 }
 
 pub(crate) fn render_single_frame_with_cache(
@@ -105,18 +112,24 @@ pub(crate) fn render_single_frame_with_cache(
     request: FrameRequest,
     cache: &mut crate::RenderCache,
 ) -> Result<RenderedFrame, RenderError> {
+    let _scope = backend.begin_observation_scope()?;
+    let before = backend.transfer_stats_total();
     request.region.validate()?;
     let scene = crate::build_scene_ir_with_cache(snapshot, request.time, fonts, cache)?;
-    let pixels = execute_tiles(&scene, snapshot.profile(), request.region, backend, cache)?;
+    let mut pixels = execute_tiles(&scene, snapshot.profile(), request.region, backend, cache)?;
     let count = u64::from(request.region.pixels[0]) * u64::from(request.region.pixels[1]);
     if pixels.linear.len() as u64 != count || pixels.display.len() as u64 != count {
         return Err(RenderError::InvalidInput(
             "backend returned wrong pixel count".into(),
         ));
     }
+    if snapshot.profile().hdr.is_some() {
+        pixels.display = crate::hdr::hdr_sdr_display(&pixels.linear);
+    }
     validate_pixels(&pixels.linear, true)?;
     validate_pixels(&pixels.display, false)?;
-    let metadata = frame_metadata(snapshot, &scene, backend, request)?;
+    let mut metadata = frame_metadata(snapshot, &scene, backend, request)?;
+    apply_transfer_delta(&mut metadata, backend, before);
     Ok(RenderedFrame { pixels, metadata })
 }
 
@@ -129,6 +142,8 @@ pub fn render_frame_tiles(
     request: FrameRequest,
     sink: &mut dyn FnMut([u32; 2], OutputRegion, BackendFrame) -> Result<(), RenderError>,
 ) -> Result<FrameMetadata, RenderError> {
+    let _scope = backend.begin_observation_scope()?;
+    let before = backend.transfer_stats_total();
     if let Some(settings) = snapshot.profile().temporal {
         let temporal =
             crate::render_temporal_frame_tiles(snapshot, fonts, backend, request, settings, sink)?;
@@ -136,6 +151,7 @@ pub fn render_frame_tiles(
         let scene = crate::build_scene_ir_with_cache(snapshot, request.time, fonts, &mut cache)?;
         let mut metadata = frame_metadata(snapshot, &scene, backend, request)?;
         metadata.temporal = Some(temporal);
+        apply_transfer_delta(&mut metadata, backend, before);
         return Ok(metadata);
     }
     request.region.validate()?;
@@ -151,7 +167,10 @@ pub fn render_frame_tiles(
                 "streaming tile surface budget exceeded: {bytes} bytes > 536870912"
             )));
         }
-        let output = backend.execute_with_cache(&dag, &mut cache)?;
+        let mut output = backend.execute_with_cache(&dag, &mut cache)?;
+        if snapshot.profile().hdr.is_some() {
+            output.display = crate::hdr::hdr_sdr_display(&output.linear);
+        }
         let count = tile.pixels[0] as usize * tile.pixels[1] as usize;
         if output.linear.len() != count || output.display.len() != count {
             return Err(RenderError::InvalidInput(
@@ -162,7 +181,19 @@ pub fn render_frame_tiles(
         validate_pixels(&output.display, false)?;
         sink(offset, tile, output)?;
     }
-    frame_metadata(snapshot, &scene, backend, request)
+    let mut metadata = frame_metadata(snapshot, &scene, backend, request)?;
+    apply_transfer_delta(&mut metadata, backend, before);
+    Ok(metadata)
+}
+
+pub(crate) fn apply_transfer_delta(
+    metadata: &mut FrameMetadata,
+    backend: &dyn RenderBackend,
+    before: Option<crate::RenderTransferStats>,
+) {
+    if let (Some(before), Some(after)) = (before, backend.transfer_stats_total()) {
+        metadata.transfer_stats = Some(after.since(&before));
+    }
 }
 
 pub(crate) fn frame_metadata(
@@ -173,6 +204,7 @@ pub(crate) fn frame_metadata(
 ) -> Result<FrameMetadata, RenderError> {
     let working = snapshot.profile().working_space;
     let metadata = FrameMetadata {
+        hdr:snapshot.profile().hdr.map(Into::into),
         temporal: None,
         schema_version: 1,
         snapshot_schema_version: crate::SNAPSHOT_SCHEMA_VERSION,
@@ -211,10 +243,11 @@ pub(crate) fn frame_metadata(
             channel_order: "RGBA".into(),
             row_order: "top_to_bottom".into(),
             byte_order: "big_endian".into(),
-            clipping: "unit_interval_after_output_transform; no_tone_mapping".into(),
+            clipping: if snapshot.profile().hdr.is_some() { "display_only_rec2020_to_rec709_reinhard_srgb; linear_HDR_unchanged" } else { "unit_interval_after_output_transform; no_tone_mapping" }.into(),
         },
         backend: backend.name().into(),
         transfer_stats: backend.transfer_stats(),
+        resource_cache_stats: backend.resource_cache_stats(),
         input_path: if scene.nodes.iter().any(|n| matches!(&n.content, crate::SceneContent::Video {asset, ..} if asset.kind == kronello_model::AssetKind::Image)) {
             backend.image_input_path().into()
         } else if scene
@@ -251,6 +284,12 @@ fn execute_tiles(
         return backend.execute_with_cache(&dag, cache);
     }
     let count = region.pixels[0] as usize * region.pixels[1] as usize;
+    if count as u64 * 32 > 512 * 1024 * 1024 {
+        return Err(RenderError::UnsupportedFeature(
+            "full-frame CPU surface budget exceeded; use streaming tiles/movie export for 8K"
+                .into(),
+        ));
+    }
     let mut frame = BackendFrame {
         linear: vec![[0.0; 4]; count],
         display: vec![[0.0; 4]; count],

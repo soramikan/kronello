@@ -58,6 +58,8 @@ pub struct SemanticVersions {
     pub temporal: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub composition_media: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hdr: Option<u32>,
 }
 fn generator_versions() -> BTreeMap<String, u32> {
     BTreeMap::from([(SOLID_GENERATOR_ID.into(), 1)])
@@ -89,6 +91,7 @@ impl SemanticVersions {
             video_input: initial_video_version(),
             temporal: Some(TEMPORAL_VERSION),
             composition_media: Some(COMPOSITION_MEDIA_VERSION),
+            hdr: Some(crate::HDR_VERSION),
         }
     }
 }
@@ -100,6 +103,8 @@ pub struct RenderProfile {
     pub flatten_tolerance_px: f64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub temporal: Option<crate::TemporalSettings>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hdr: Option<crate::HdrSettings>,
 }
 impl Default for RenderProfile {
     fn default() -> Self {
@@ -107,6 +112,7 @@ impl Default for RenderProfile {
             working_space: ColorSpace::LinearRec709,
             flatten_tolerance_px: 0.02,
             temporal: None,
+            hdr: None,
         }
     }
 }
@@ -334,7 +340,18 @@ impl RenderSnapshot {
                 "temporal profile requires an explicit supported temporal semantic version".into(),
             ));
         }
+        if self.profile.hdr.is_some()
+            && (self.semantic_versions.hdr != Some(crate::HDR_VERSION)
+                || self.profile.working_space != ColorSpace::LinearRec2020)
+        {
+            return Err(RenderError::UnsupportedFeature(
+                "HDR requires pinned hdr version 1 and LinearRec2020 working space".into(),
+            ));
+        }
         let mut supported_versions = SemanticVersions::current(self.project.semantic_version);
+        if self.semantic_versions.hdr.is_none() && self.profile.hdr.is_none() {
+            supported_versions.hdr = None;
+        }
         if self.semantic_versions.composition_media.is_none() {
             supported_versions.composition_media = None;
         }

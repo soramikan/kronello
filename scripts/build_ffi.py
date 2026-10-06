@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,6 +20,11 @@ def main():
     command = ["cargo", "build", "-p", "kronello-ffi", "-p", "kronello-cli", "--locked", "--message-format=json-render-diagnostics"]
     if args.release:
         command.append("--release")
+        # Rust 1.95's Mach-O debug stripping can misalign the LINKEDIT string
+        # pool, which Xcode 27 rejects. Keep the final FFI dylib unstripped;
+        # release optimization and the CLI/dependency profiles are unchanged.
+        if sys.platform == "darwin":
+            command.extend(["--config", 'profile.release.package.kronello-ffi.strip="none"'])
     result = subprocess.run(command, cwd=ROOT, env=env, check=True, text=True, stdout=subprocess.PIPE)
     artifacts = {}
     for line in result.stdout.splitlines():
@@ -39,4 +45,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

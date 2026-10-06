@@ -653,15 +653,11 @@ fn preview_candidate(
                 .zip(&bytes)
                 .map(|(identity, bytes)| kronello_text::FontData { identity, bytes })
                 .collect();
-            service.with_selected_backend(|backend| {
-                let backend = kronello_media::VideoRenderBackend {
-                    backend,
-                    project_path: path,
-                };
+            service.with_video_backend(path, |backend| {
                 let frame = kronello_render::render_frame(
                     &snapshot,
                     &locked,
-                    &backend,
+                    backend,
                     kronello_render::FrameRequest { time, region },
                 )?;
                 Ok(crate::FrameResult {
