@@ -260,6 +260,11 @@ fn recovery_fault_case(device_lost: bool) {
     f.device_lost = device_lost;
     let submitted = f.submit("capacity-output", None);
     let failed = f.wait(&submitted.id, JobStatus::Failed);
+    // Terminal state is committed before the detached process has fully exited.
+    // Wait and reap the actual worker without killing it before resuming.
+    f.cleanup
+        .wait_for_exit(failed.worker_pid.unwrap(), f.wait_timeout)
+        .unwrap();
     assert_eq!(
         failed.error.unwrap().code,
         if device_lost {

@@ -330,9 +330,15 @@ impl MediaProbe {
                 || video.color_matrix.as_deref() != Some("bt2020nc")
                 || video.color_range.as_deref() != Some("tv"))
         {
-            return Err(MediaError::Encode(
-                "HDR codec/10-bit/color metadata roundtrip mismatch".into(),
-            ));
+            return Err(MediaError::Encode(format!(
+                "HDR codec/10-bit/color metadata roundtrip mismatch: expected yuv422p10le/bt2020/{}/bt2020nc/tv; observed pixel_format={:?}, primaries={:?}, transfer={:?}, matrix={:?}, range={:?}",
+                transfer.tag(),
+                video.pixel_format,
+                video.color_primaries,
+                video.color_transfer,
+                video.color_matrix,
+                video.color_range,
+            )));
         }
         let video_duration = video
             .duration

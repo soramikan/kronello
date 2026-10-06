@@ -80,6 +80,22 @@ impl WorkerCleanup {
         }
         Ok(captured)
     }
+    /// Wait without signalling: a terminal DB record may precede process exit,
+    /// and adopted Linux workers remain zombies until the test reaps them.
+    // This shared file is also included by state tests that only need cleanup.
+    #[allow(dead_code)]
+    pub fn wait_for_exit(&self, pid: u32, timeout: std::time::Duration) -> Result<(), JobError> {
+        self.capture_registered()?;
+        if let Some(worker) = self.workers.borrow().get(&pid) {
+            worker.wait_for_exit(timeout)?;
+        } else if kronello_platform::process_is_alive(pid) {
+            return Err(JobError::new(
+                "TEST_WORKER_NOT_CAPTURED",
+                "live worker was not captured",
+            ));
+        }
+        Ok(())
+    }
     pub fn reap(&self) -> Result<(), JobError> {
         self.capture_registered()?;
         for worker in self.workers.borrow().values() {
