@@ -75,3 +75,7 @@ Windows native 修正の再検証、Windows baseline 通常比較、最終全 OS
 利用者の明示的な指示によりrepositoryをpublicへ変更し、run 37414923914 attempt 2の全5jobsが実際に開始した。請求制限による実行前停止は解消した。Linux Vulkan / Windows DX12は採用済み基準の通常比較で各40scenes / 20,950pixels、mismatched pixels=0。全actual PNGも基準とbyte一致し、QA-004を受け入れ済みとする（[証拠](qa-004.md)）。
 
 同runのLinux全体検証でHDRメタデータ確認とworker失敗直後のresumeテスト2件が失敗した。23960feでテストに実workerの終了待ち・reapを追加し、HDRの期待値/実測値を型付きエラーに含めた。生存workerの再開拒否とHDRの検証基準は維持する。後続CIで修正を確認する。
+
+67a0b50の[run 37417246467](https://github.com/soramikan/kronello/actions/runs/37417246467)でLinux全体検証・実process・公式MCP SDK・FFI終了検証が成功し、HDRとresumeテストの修正を実環境で確認した。Windows実行では拡張絶対パスとDLL名の間にforward slashが入ることによるloader error 126を確認し、b98af22でWindows用separatorに統一した。DLL検索範囲は維持し、実Windowsの再検証を進める。
+
+macOSの初回再開jobは全体30分上限でFFIテスト中にcancelされた。先行Rust検証に失敗はなく、workspace 1,018秒、実process 127秒、CPU integration 238秒を要し、FFI step開始がjob開始約25分後だった。Rust/Swiftビルド後には約112秒しか残らなかった。全test・個別timeoutを維持し、macOS jobだけ60分へ変更する。Linuxは15分22秒で完了しており30分を維持する。
