@@ -147,7 +147,7 @@ Km *km_open(const char *directory, char *error, size_t capacity) {
     for (int i=0; i<5; ++i) {
         char path[4096];
 #ifdef _WIN32
-        int n=snprintf(path, sizeof(path), "%s/%s-%d.dll", directory, names[i], majors[i]);
+        int n=snprintf(path, sizeof(path), "%s\\%s-%d.dll", directory, names[i], majors[i]);
 #elif defined(__APPLE__)
         int n=snprintf(path, sizeof(path), "%s/lib%s.%d.dylib", directory, names[i], majors[i]);
 #else
@@ -155,6 +155,10 @@ Km *km_open(const char *directory, char *error, size_t capacity) {
 #endif
         if (n<0 || (size_t)n>=sizeof(path)) { snprintf(error, capacity, "library path too long"); km_close(k); return NULL; }
 #ifdef _WIN32
+        /* Canonical Windows paths use the extended \\?\ namespace, which does
+         * not normalize forward slashes. Preserve that prefix and normalize
+         * separators before the Unicode loader; never widen DLL search. */
+        for (int j=0;j<n;++j) if (path[j]=='/') path[j]='\\';
         wchar_t wide[4096];
         if (!MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, wide, 4096)) {
             snprintf(error, capacity, "invalid UTF-8 library path"); km_close(k); return NULL;
