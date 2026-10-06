@@ -1,0 +1,1002 @@
+{
+  "alpha_absolute": 0.0009765625,
+  "comparison_version": 1,
+  "environment": {
+    "adapter": {
+      "backend": "Dx12",
+      "device": 140,
+      "device_type": "Cpu",
+      "driver": "10.0.26100.33438",
+      "driver_info": "",
+      "name": "Microsoft Basic Render Driver",
+      "software_adapter": true,
+      "vendor": 5140
+    },
+    "architecture": "x86_64",
+    "baseline_profile": "windows-dx12",
+    "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+    "dependencies": {
+      "naga": "30.0.1",
+      "objc2-core-foundation": "0.3.2",
+      "objc2-io-surface": "0.3.2",
+      "objc2-metal": "0.3.2",
+      "wgpu": "30.0.1",
+      "wgpu-core": "30.0.1",
+      "wgpu-hal": "30.0.1"
+    },
+    "hardware": {
+      "computer": "runnervmfi6oq",
+      "processor": "AMD64 Family 25 Model 17 Stepping 1, AuthenticAMD"
+    },
+    "os": "\r\nMicrosoft Windows [Version 10.0.26100.33438]",
+    "platform_details": {
+      "api": "Direct3D12"
+    },
+    "required_features": "Features { features_wgpu: FeaturesWGPU(0x0), features_webgpu: FeaturesWebGPU(0x0) }",
+    "required_limits": "Limits { max_texture_dimension_1d: 8192, max_texture_dimension_2d: 8192, max_texture_dimension_3d: 2048, max_texture_array_layers: 256, max_bind_groups: 4, max_bind_groups_plus_vertex_buffers: 24, max_bindings_per_bind_group: 1000, max_dynamic_uniform_buffers_per_pipeline_layout: 8, max_dynamic_storage_buffers_per_pipeline_layout: 4, max_sampled_textures_per_shader_stage: 16, max_samplers_per_shader_stage: 16, max_storage_buffers_per_shader_stage: 8, max_storage_textures_per_shader_stage: 4, max_uniform_buffers_per_shader_stage: 12, max_binding_array_elements_per_shader_stage: 0, max_binding_array_acceleration_structure_elements_per_shader_stage: 0, max_binding_array_sampler_elements_per_shader_stage: 0, max_uniform_buffer_binding_size: 65536, max_storage_buffer_binding_size: 134217728, max_vertex_buffers: 8, max_buffer_size: 268435456, max_vertex_attributes: 16, max_vertex_buffer_array_stride: 2048, max_inter_stage_shader_variables: 16, min_uniform_buffer_offset_alignment: 256, min_storage_buffer_offset_alignment: 256, max_color_attachments: 8, max_color_attachment_bytes_per_sample: 32, max_compute_workgroup_storage_size: 16384, max_compute_invocations_per_workgroup: 256, max_compute_workgroup_size_x: 256, max_compute_workgroup_size_y: 256, max_compute_workgroup_size_z: 64, max_compute_workgroups_per_dimension: 65535, max_immediate_size: 0, max_non_sampler_bindings: 1000000, max_task_workgroup_total_count: 0, max_task_workgroups_per_dimension: 0, max_mesh_workgroup_total_count: 0, max_mesh_workgroups_per_dimension: 0, max_task_invocations_per_workgroup: 0, max_task_invocations_per_dimension: 0, max_mesh_invocations_per_workgroup: 0, max_mesh_invocations_per_dimension: 0, max_task_payload_size: 0, max_mesh_output_vertices: 0, max_mesh_output_primitives: 0, max_mesh_output_layers: 0, max_mesh_multiview_view_count: 0, max_blas_primitive_count: 0, max_blas_geometry_count: 0, max_tlas_instance_count: 0, max_acceleration_structures_per_shader_stage: 0, max_buffers_and_acceleration_structures_per_shader_stage: 28, max_multiview_view_count: 0, max_ray_dispatch_count: 0, max_ray_recursion_depth: 0 }",
+    "rust": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: x86_64-pc-windows-msvc\nrelease: 1.95.0\nLLVM version: 22.1.2",
+    "schema_version": 1,
+    "target": "x86_64-pc-windows-msvc"
+  },
+  "files": {
+    "alpha-boundary/frame-0.png": {
+      "bytes": 68,
+      "sha256": "f7d6efe2a2b946460e215bc9392553ca983b3159e338b98688f8218846eeac75"
+    },
+    "alpha-boundary/frame-0.rgba16f": {
+      "bytes": 8,
+      "sha256": "8054b39cac529d73352a4e81eb095ed1283945c5ca3904804f7dbfcd993aaed7"
+    },
+    "alpha-matte-reference/frame-0.png": {
+      "bytes": 128,
+      "sha256": "91246f2756e8ddfadd545ff00b9a89fc528e9c40016d4e588c00ba0b71fff05b"
+    },
+    "alpha-matte-reference/frame-0.rgba16f": {
+      "bytes": 512,
+      "sha256": "f69d7733e97fa225bf9c39551bb7e5f844cd51f6ae3de5f025bfddc810f8357a"
+    },
+    "coverage-fill-stroke/frame-0.png": {
+      "bytes": 254,
+      "sha256": "3f06868da76314844aa8cb3ed65a791a5fae5cf5be6f9505dd589d8fe0d941dd"
+    },
+    "coverage-fill-stroke/frame-0.rgba16f": {
+      "bytes": 512,
+      "sha256": "67e6c66838ec24c36148b16ce65310a5f95a63ae5c347ad4c5501e47cfd4799a"
+    },
+    "coverage-srgb-rec2020/frame-0.png": {
+      "bytes": 255,
+      "sha256": "3e7bfd8dda19bbe092449063dcce22a0e3c0fc4b4404aa7274cac5ae8a1b00ea"
+    },
+    "coverage-srgb-rec2020/frame-0.rgba16f": {
+      "bytes": 512,
+      "sha256": "ac30749b89208e1e97ab17df812603b32a6e9a4bcfce1fc25a8e89197575d2a4"
+    },
+    "environment.json": {
+      "bytes": 3350,
+      "sha256": "2fb482fd20bfe1695d7a4017821e507459758135b939ac47bee3fa53b64c67c1"
+    },
+    "fill-evenodd-hole/frame-0.png": {
+      "bytes": 133,
+      "sha256": "a79a2a2dfd02a7b1c6a2e7db4c9ae2124344e16f157147fb01a81ce220058056"
+    },
+    "fill-evenodd-hole/frame-0.rgba16f": {
+      "bytes": 512,
+      "sha256": "67ff2f9b6c943dcceb09be2f72616e7a1786b404e2af085c3a23a0ea5c1cb83f"
+    },
+    "fill-nonzero-winding/frame-0.png": {
+      "bytes": 107,
+      "sha256": "cb125d3c6964f9cdb2cdb42bc23cebbf771f18f59584a8494b0acf7f2ed45c73"
+    },
+    "fill-nonzero-winding/frame-0.rgba16f": {
+      "bytes": 512,
+      "sha256": "dda9c240259bc3c25cae97fa584113ab103607aeadf39aa66c2ad6f17447c410"
+    },
+    "fx-gaussian-alpha/frame-0.png": {
+      "bytes": 327,
+      "sha256": "0a941671b0b7c8fc667e0819dfd2af3465f66aa8a4a6bb3c3cf7e3d131be047a"
+    },
+    "fx-gaussian-alpha/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "0abab13a96acdf63538e4333d565081304fb9b8f7f478ee3611ab7c061de7e65"
+    },
+    "fx-shadow-rec2020/frame-0.png": {
+      "bytes": 400,
+      "sha256": "be497f7e8cf7551afb3501bf942b2791ad853487e9530aa35572cfae1c6cbdfa"
+    },
+    "fx-shadow-rec2020/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "656a0bd0da7bb1dd9da4e141a4ba31f34e611743d6ab40a5a79675168c8abae3"
+    },
+    "fx-shadow-srgb/frame-0.png": {
+      "bytes": 405,
+      "sha256": "62276ae4a70f9ce8fd17cc24807957abd894bb93dcc09353ada0194ec8001013"
+    },
+    "fx-shadow-srgb/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "05b1bec7de126e01a74a919ba497675fa9493838a43905e2fc639b73dbad272c"
+    },
+    "fx002-nonuniform-rotation/frame-0.png": {
+      "bytes": 397,
+      "sha256": "e1b671df6eb8d47f045d61b96a92e116dc809df1664fe68db2728041c5d039d3"
+    },
+    "fx002-nonuniform-rotation/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "0ee6ce2d1c33ae928a03c2641c3ad8f5eb06240582316a5ac5bc094dfbf4e9b0"
+    },
+    "fx002-reflected-shear-shadow-rec2020/frame-0.png": {
+      "bytes": 404,
+      "sha256": "006259492451449344d76dcdc6cfd1ddf044de9129c6155b7ca17ae6e62353f2"
+    },
+    "fx002-reflected-shear-shadow-rec2020/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "ef09a6bdfa3a6dcf077ad87016f6d543e14dd8f7549c4684e7fc474d32dd07c3"
+    },
+    "fx002-rotation/frame-0.png": {
+      "bytes": 322,
+      "sha256": "6922c4f252aabfd8f0b7eedd6513f9bef1280d71e49e6cf7bd431f7afdbdc26e"
+    },
+    "fx002-rotation/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "f78c72448ac7d82b76acdd6f3554dd8153c68f128c14aa09a2537c93e92ed87e"
+    },
+    "fx002-shear-shadow/frame-0.png": {
+      "bytes": 442,
+      "sha256": "7e1df999d79b5436cf695f3aad1100f00fd1c103b8caa0893ae1165f95e3692f"
+    },
+    "fx002-shear-shadow/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "0790baf7f984629bdca613c217cd4e49ab7cfb628d818b0c393cd3d0863921a9"
+    },
+    "glyph-outline-edges/frame-0.png": {
+      "bytes": 576,
+      "sha256": "8a940ae2fd380ab13c67ab9b9195789973b7d1d6a4ba22edaa642c1c5ef348e8"
+    },
+    "glyph-outline-edges/frame-0.rgba16f": {
+      "bytes": 8192,
+      "sha256": "73f23877c510f06ba9825ebb08c74ee70237e3eb816aa76bd8ab4581a02dfae6"
+    },
+    "gradient-conic/frame-0.png": {
+      "bytes": 1619,
+      "sha256": "4df2be941374d576facc8945ff816626764d92d50eae3254e20fb5081e867361"
+    },
+    "gradient-conic/frame-0.rgba16f": {
+      "bytes": 8192,
+      "sha256": "3a66b179a1e83c2a414e446a75ccf2114f1dbd2a123516acd6dbe46c38bdf1a3"
+    },
+    "gradient-focal-radial/frame-0.png": {
+      "bytes": 2940,
+      "sha256": "92d1c95a0190ae8866f4953914a84fac7a87cb13bc8a12f409c7bb20a1ef2d13"
+    },
+    "gradient-focal-radial/frame-0.rgba16f": {
+      "bytes": 8192,
+      "sha256": "c51220a1e9066fa815604459328dc86953a4cd5f2a7251648f5a21304fdd4f8b"
+    },
+    "gradient-linear-fill-stroke/frame-0.png": {
+      "bytes": 877,
+      "sha256": "226e0a42b3c2822d838b77936f3aefa53983adc537da2b5f848752ee8fc82665"
+    },
+    "gradient-linear-fill-stroke/frame-0.rgba16f": {
+      "bytes": 8192,
+      "sha256": "4789ce5252810f2c38dfa09359623e39cfacf9af23193ad991fd95bbda042638"
+    },
+    "gradient-linear-straight/frame-0.png": {
+      "bytes": 1272,
+      "sha256": "c4eb92a71b03cf32d818adbb0f315a3fcd0f42134623c9e866956293fcd510bb"
+    },
+    "gradient-linear-straight/frame-0.rgba16f": {
+      "bytes": 8192,
+      "sha256": "55e7e440efe864b35a6645267ce020b643e4935ec72142a35157d4183ede07bd"
+    },
+    "gradient-radial-fill-stroke/frame-0.png": {
+      "bytes": 1029,
+      "sha256": "b5190a5cca2b858128389b3695e6611409aaab732330d3414bc8c37f5d1e5f58"
+    },
+    "gradient-radial-fill-stroke/frame-0.rgba16f": {
+      "bytes": 8192,
+      "sha256": "0ec00cc63de68c87d18f3515cd5383fa24a3ed972543f58a2c5abe61a7601d20"
+    },
+    "gradient-reflect/frame-0.png": {
+      "bytes": 2065,
+      "sha256": "f51f27e5e28c3855db9c324ddf0478ebf8b04018e908fd9f958fdf36be182c18"
+    },
+    "gradient-reflect/frame-0.rgba16f": {
+      "bytes": 8192,
+      "sha256": "3e0415b86da7cac3891c1b25309e38c6cf0d4934b7a257e4f88f955e445237d5"
+    },
+    "gradient-repeat/frame-0.png": {
+      "bytes": 2085,
+      "sha256": "98e4bebd177cf7f2194e70d38e0eb613a990481158c78e253620baf2fb420983"
+    },
+    "gradient-repeat/frame-0.rgba16f": {
+      "bytes": 8192,
+      "sha256": "1aa1d583fcf21d2be2bb255ba52b2f99ac12cda8957398e75c34f4683a5a7794"
+    },
+    "gradient-srgb-premultiplied/frame-0.png": {
+      "bytes": 1018,
+      "sha256": "b075da13bf5ff327165166543a5d9553c5c570811c95261db5c2edd7859952d8"
+    },
+    "gradient-srgb-premultiplied/frame-0.rgba16f": {
+      "bytes": 8192,
+      "sha256": "9151bc427ab5e87d3502708efeacc735bbad1b0494b6dd32f797f8b11a8bcede"
+    },
+    "gradient-srgb-straight/frame-0.png": {
+      "bytes": 1138,
+      "sha256": "e0894da085e7312f331d625e8c646e125a37734883cd26d8114f169dd135c839"
+    },
+    "gradient-srgb-straight/frame-0.rgba16f": {
+      "bytes": 8192,
+      "sha256": "c8c805197b71a823f1b450883153ca14e67890531ccb258f039046d35dddb316"
+    },
+    "gradient-text-fill/frame-0.png": {
+      "bytes": 1092,
+      "sha256": "298c87c73ba0bbcc50e1af7baafbe1692718bbf61aebc845e0c94e20d739b638"
+    },
+    "gradient-text-fill/frame-0.rgba16f": {
+      "bytes": 8192,
+      "sha256": "3ccff813b7284ff78dfd1701bfe64a9a737b7c634bb416516e7468742dbc1808"
+    },
+    "hdr-no-clamp/frame-0.png": {
+      "bytes": 70,
+      "sha256": "8d29c946a7168f3325b047daae9dd9fded0e42b29be6bf0f8d14a8f0cd5189c4"
+    },
+    "hdr-no-clamp/frame-0.rgba16f": {
+      "bytes": 8,
+      "sha256": "7024c5b6e79201da6257d4b26f3c9d118d6fa8552b458083710c2e46a7863db3"
+    },
+    "isolated-nested-overlap/frame-0.png": {
+      "bytes": 108,
+      "sha256": "c187bff81f2e080a1689b3ad7226fd7747888646ccfbc78ab57aacaf69911d8a"
+    },
+    "isolated-nested-overlap/frame-0.rgba16f": {
+      "bytes": 512,
+      "sha256": "5d1a1d0d6c2762dbcf0918a4d17c71d3fb1310c2bb31431596d3eedbe8282bf2"
+    },
+    "luma-matte-rec2020/frame-0.png": {
+      "bytes": 129,
+      "sha256": "fad944ab120b786dd0c92983ffe048a30bae03ed59e702b4930357f37f46abe8"
+    },
+    "luma-matte-rec2020/frame-0.rgba16f": {
+      "bytes": 512,
+      "sha256": "f4bef8c68880b146e3d1eaf3be53bf46f8476997bb47941a273d0396073c65da"
+    },
+    "luma-matte-rec709/frame-0.png": {
+      "bytes": 129,
+      "sha256": "fad944ab120b786dd0c92983ffe048a30bae03ed59e702b4930357f37f46abe8"
+    },
+    "luma-matte-rec709/frame-0.rgba16f": {
+      "bytes": 512,
+      "sha256": "a8a5e6d38abbaff24c17fbd6eac7ad7059ae7b1fb0b722c194be078c516e559a"
+    },
+    "manifest.json": {
+      "bytes": 176806,
+      "sha256": "51cc5278b88ebc5904fb0819f73684ed768bbe3556b7fccf70dba3a3d5c98805"
+    },
+    "provenance.json": {
+      "bytes": 1405,
+      "sha256": "fb29642c6e1954c80eceddeb51bbf5f8c9c0e27049af773c919845c82d00c20b"
+    },
+    "rec2020-conversion/frame-0.png": {
+      "bytes": 91,
+      "sha256": "f595ea5ad2b60ea70369e53a6291cc3cf05635bc20a3ab35c7a9a0f062aadd0b"
+    },
+    "rec2020-conversion/frame-0.rgba16f": {
+      "bytes": 128,
+      "sha256": "7e9887d52e86861efb849d6d13b38508f871c37ffd4dfabdde5471777e6f5b96"
+    },
+    "source-over/frame-0.png": {
+      "bytes": 90,
+      "sha256": "c7de85ab48611655a7100e4adebda5fc8e2ed9e3526818714bf42d5efde827b3"
+    },
+    "source-over/frame-0.rgba16f": {
+      "bytes": 512,
+      "sha256": "80fe4a6773d0c39ea10e99c679267df7bb7752d7a873d6e7d2612bd762940535"
+    },
+    "srgb-output-roundtrip/external-srgb-straight.rgba16f": {
+      "bytes": 512,
+      "sha256": "70feec19585beac2ee64b08a6e9ab22238f60fa646411cc9348aa88ce051f103"
+    },
+    "srgb-output-roundtrip/frame-0.png": {
+      "bytes": 255,
+      "sha256": "3b567aa1f1895600672410cc4a7f0eba0779c0804c829bd84eb6c09f6191f5fe"
+    },
+    "srgb-output-roundtrip/frame-0.rgba16f": {
+      "bytes": 512,
+      "sha256": "78fbb70c594e8e2684589c64fae684935f79d36609807dd76c98b57bcd7b0e05"
+    },
+    "srgb-pam/frame-0.png": {
+      "bytes": 78,
+      "sha256": "e9bf5184f3f266dc3c53ccce3815de7e9a8758c5c28cae101c6df8f888f8fd8b"
+    },
+    "srgb-pam/frame-0.rgba16f": {
+      "bytes": 32,
+      "sha256": "3350080c8c88204204ca18d5713dca70a32197d080e86a376e70ba172b341082"
+    },
+    "stroke-affine-reflected/frame-0.png": {
+      "bytes": 391,
+      "sha256": "3f033263040b19642487724d5d5852a745fbcf0f0cd591b4255d06e091a76d98"
+    },
+    "stroke-affine-reflected/frame-0.rgba16f": {
+      "bytes": 8192,
+      "sha256": "69a1248c34d079c2b3c6e2d49290a83faaa0e21de5fae3278fe56703a627dc28"
+    },
+    "stroke-caps/frame-0.png": {
+      "bytes": 196,
+      "sha256": "4ead1a67e082afd3a892c6c0e83d4e41958fd632b1bf0c0351f89c46c1ff54e0"
+    },
+    "stroke-caps/frame-0.rgba16f": {
+      "bytes": 8192,
+      "sha256": "e32edc33a1f1af2b7fce1425df32ff5c44d13d677a7bafa117fd89a22bd1df6a"
+    },
+    "stroke-dashes/frame-0.png": {
+      "bytes": 395,
+      "sha256": "6db396aac3e3dbee9261140238a14435762d45dd08d544cd0245441ae287f618"
+    },
+    "stroke-dashes/frame-0.rgba16f": {
+      "bytes": 8192,
+      "sha256": "ffcada3fa74dd3fc012555bfd5542f164a110327a6081696a21abdf27b638fdb"
+    },
+    "stroke-inside-evenodd/frame-0.png": {
+      "bytes": 370,
+      "sha256": "21f59210b97f817311ed63b055a3aaf01e14d0fce99744f06b4b1407ffa215c1"
+    },
+    "stroke-inside-evenodd/frame-0.rgba16f": {
+      "bytes": 8192,
+      "sha256": "e3299ba6891ffdc71c694a9d3de278540065b4f1d9724b3990593bf6ec8dd2a1"
+    },
+    "stroke-joins/frame-0.png": {
+      "bytes": 188,
+      "sha256": "67ccc9d5826b7f4c230bffe3678a615536c8acd2c4df266928afcf68236882da"
+    },
+    "stroke-joins/frame-0.rgba16f": {
+      "bytes": 8192,
+      "sha256": "5baf2ae0279ead6105dfceaaceafb6c09a2830f2c1e6a1798fdff548dc8856d6"
+    },
+    "stroke-miter-limit/frame-0.png": {
+      "bytes": 192,
+      "sha256": "a96df16fd24f60ebf7ca102443c7273d63541a5cedd427b9ba8e8968d8e89b51"
+    },
+    "stroke-miter-limit/frame-0.rgba16f": {
+      "bytes": 8192,
+      "sha256": "df92af6ce09c4ead78cd91f9036e06c617b80744ade77ace4ec94984ce966d4d"
+    },
+    "stroke-outside-nonzero/frame-0.png": {
+      "bytes": 447,
+      "sha256": "b3a4bacc1ee504d3b478b931a4b949d7f54378f449d6372763269e523ef4121a"
+    },
+    "stroke-outside-nonzero/frame-0.rgba16f": {
+      "bytes": 8192,
+      "sha256": "1845e8236ea855d6df6ff9c8a8f0c333204b83b76dc95142c8d0b3622308d925"
+    },
+    "translated-rotation/frame-0.png": {
+      "bytes": 106,
+      "sha256": "6689291a3cfcbb4f639301f417f141e267d3eb50ed6019e805db33c82caf099b"
+    },
+    "translated-rotation/frame-0.rgba16f": {
+      "bytes": 512,
+      "sha256": "a05fd24f8aa7ef72cc2bfeced44b48ffd8b5ffa8411f2feaae5524afce5535c0"
+    }
+  },
+  "provenance": {
+    "cargo_lock_sha256": "0c2bacb88b6c5cd7d8604c148eb034dd0bba0c1f42cc1e4f6b9828b766662563",
+    "color_code_sha256": "bd0c5e95f8be0f9bcf0bc78010d1b82dbbf4907d51a549c0086513223968a66f",
+    "comparison_code_sha256": "0f09357830b18b3abd193030880e442a65171954f5774e399a4bb0d17f7b2112",
+    "draw_fixture_code_sha256": "6d517fc60ede21eea9abfa338bc1720b1bcf064bf5cc1c449696372ebcec96b8",
+    "effect_kernel_code_sha256": "410950ce1720fd8da961fa257a959311e402110ab792d0800f9cc6aa0edd2e0e",
+    "effect_reference_code_sha256": "ac4bd1ba138e663a0a9b21106d935849dac385e963584d87df6586a68e397fde",
+    "effect_shader_sha256": "8a985ae2a71f0b1b802f18a406bb7cd77cef96c7b0c963e29b6f06b4ed8bc292",
+    "fixture_manifest_sha256": "13060d35e1ed680a0666197b3d0a6de2606933030f43fda63c169923377aec22",
+    "renderer_code_sha256": "c5fcf2256cb73d1975140b65fef0d2a37d2f24c8ca0a017fea54c5b99c3a6ad1",
+    "revision": "91b7b263331ed3a8a13fc8f33184790de687bf85",
+    "scene_code_sha256": "a7ab3cad28dc034b13d8a0d2987674e8f88e6f547cfe44de58224d9747317461",
+    "scene_gpu_code_sha256": "c72f2265729e15d1d6f5dd13464fb913755af5f224ab40dd5565229856b56b62",
+    "scene_reference_code_sha256": "a27104c1ef1af9e5896030fe4d1cd34388f43901d730afacfbc50c70485ccd27",
+    "scene_shader_sha256": "d2f84a4b8ecdc71e27e428deeee9bd6d129b71bdbb3de4ed7470416e3bae2738",
+    "shader_sha256": "f78694ed5b0dbc653a28601fb6f2d319e9b8d9ed0e02cb60cc8dfad6b5b8c069",
+    "status": ""
+  },
+  "rgb_absolute": 0.0009765625,
+  "rgb_relative": 0.0009765625,
+  "scene_settings": [
+    {
+      "alpha": "premultiplied",
+      "id": "source-over",
+      "sample_id": "frame-0",
+      "samples_per_frame": 1,
+      "size": [
+        8,
+        8
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "srgb-pam",
+      "sample_id": "frame-0",
+      "samples_per_frame": 1,
+      "size": [
+        4,
+        1
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "translated-rotation",
+      "sample_id": "frame-0",
+      "samples_per_frame": 1,
+      "size": [
+        8,
+        8
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "rec2020-conversion",
+      "sample_id": "frame-0",
+      "samples_per_frame": 1,
+      "size": [
+        4,
+        4
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec2020"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "hdr-no-clamp",
+      "sample_id": "frame-0",
+      "samples_per_frame": 1,
+      "size": [
+        1,
+        1
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec2020"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "alpha-boundary",
+      "sample_id": "frame-0",
+      "samples_per_frame": 1,
+      "size": [
+        1,
+        1
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx-gaussian-alpha",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx-shadow-srgb",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx-shadow-rec2020",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec2020"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "isolated-nested-overlap",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        8,
+        8
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "alpha-matte-reference",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        8,
+        8
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "luma-matte-rec709",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        8,
+        8
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "luma-matte-rec2020",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        8,
+        8
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec2020"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "coverage-fill-stroke",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        8,
+        8
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "coverage-srgb-rec2020",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        8,
+        8
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec2020"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fill-evenodd-hole",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        8,
+        8
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fill-nonzero-winding",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        8,
+        8
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "glyph-outline-edges",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "stroke-joins",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "stroke-caps",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "stroke-miter-limit",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "gradient-linear-fill-stroke",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "gradient-radial-fill-stroke",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec2020"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "gradient-repeat",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "gradient-reflect",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec2020"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "gradient-focal-radial",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "gradient-conic",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec2020"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "gradient-linear-straight",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "gradient-srgb-straight",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec2020"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "gradient-srgb-premultiplied",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "gradient-text-fill",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec2020"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx002-rotation",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx002-nonuniform-rotation",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx002-shear-shadow",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx002-reflected-shear-shadow-rec2020",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec2020"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "stroke-dashes",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "stroke-inside-evenodd",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "stroke-outside-nonzero",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "stroke-affine-reflected",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "srgb-output-roundtrip",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        8,
+        8
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec2020"
+    }
+  ],
+  "schema_version": 1
+}
