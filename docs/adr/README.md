@@ -104,9 +104,10 @@
 | [0087](0087-fixed-job-resume-and-reconciliation.md) | 固定入力ジョブの再実行と公開境界の照合 | 採用 | 2026-10-06 |
 | [0088](0088-platform-golden-baselines.md) | GPU golden の環境別基準と software adapter の明示 | 採用 | 2026-10-06 |
 | [0089](0089-budgeted-gpu-and-external-raster-cache.md) | 容量制限付き GPU texture と project 外 raster cache | 採用 | 2026-10-06 |
-| [0090](0090-release-performance-evidence-and-snapshot-policy.md) | release 性能の観測と snapshot 方針の再評価 | 採用（性能目標は未決） | 2026-10-06 |
+| [0090](0090-release-performance-evidence-and-snapshot-policy.md) | release 性能の観測と snapshot 方針の再評価 | 採用（性能目標は0093） | 2026-10-06 |
 | [0091](0091-exact-forward-decoder-and-bounded-render-scope.md) | 正確な順方向デコードとレンダー範囲の有限寿命 | 採用 | 2026-10-06 |
 | [0092](0092-single-graph-gpu-final-output-and-observations.md) | GPU graph の単一実行と要求単位の観測 | 採用 | 2026-10-06 |
+| [0093](0093-m4-reference-preview-performance-target.md) | M4 基準プレビューの性能目標 | 採用 | 2026-10-06 |
 
 ## 追加と変更の規則
 

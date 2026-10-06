@@ -364,3 +364,10 @@ CPU / GPU は同じ版付き `RasterCacheKey` に入力 hash、時刻、ROI / ha
 
 
 GPU lowering は compiler が末尾に付加した synthetic output root（直前の単一子 `IsolatedComposite`、opacity 1、末尾 `OutputTransform` からの参照）だけを省略する。内部 group の isolation は保つ。最終 SourceOver/store と sticky validation、resident input の事前検証は維持し、GPU cache key 配列も同じ省略に合わせる。保守的 surface admission は省略後の graph に対して行い、512 MiB cap を変更しない。単純 4K preview の限定的な受け入れと複雑 scene の typed failure は別に扱う（[ADR-0092](../adr/0092-single-graph-gpu-final-output-and-observations.md)）。
+
+
+### 被覆計算の限定的な省略
+
+単色の fill-only outline で有限かつ保守的な境界を求められる場合は、境界外の画素を透明で書き、16点の被覆計算を省く。境界には浮動小数点丸めと画素幅の余裕を加える。stroke、gradient、非有限・極端な座標や scale、境界が不確かな入力は従来のループへ戻る。dispatch の領域は変えず、再利用 surface の全画素を書き直す。被覆のある画素の色変換・sticky validation、scene の容量上限、所有権と意味キーは維持する。
+
+小数座標・異方的 scale・4K相当scale・複数 contour・Evenodd・暗黙の閉路、cache/pool再利用、隠れた数値エラーを旧経路と厳密比較する。実測と適用限界は [GPU検証](../testing/perf-001-gpu-fusion.md) および [PERF-001](../testing/perf-001.md) を参照。

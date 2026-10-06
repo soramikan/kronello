@@ -25,6 +25,7 @@ struct ScenePass<'a> {
     gpu: &'a GpuContext,
     size: RenderSize,
     working: WorkingSpace,
+    coverage_bounds_enabled: bool,
     pipeline: wgpu::ComputePipeline,
     effect_pipeline: wgpu::ComputePipeline,
     blank: SurfaceLease,
@@ -43,6 +44,47 @@ fn space(space: InputSpace) -> u32 {
         InputSpace::LinearRec709 => 1,
         InputSpace::LinearRec2020 => 2,
     }
+}
+// Restrict the fast path to fill-only outlines with a trustworthy finite AABB.
+// Strokes and numerically extreme inputs retain the original sample loop.
+fn coverage_bounds(path: &PathDraw, scale: [f32; 2]) -> Option<[f32; 4]> {
+    if path.stroke.is_some()
+        || path.stroke_geometry.is_some()
+        || path.fill_gradient.is_some()
+        || path.stroke_gradient.is_some()
+        || scale
+            .iter()
+            .any(|v| !v.is_finite() || *v <= 0.0 || *v > 1.0e6)
+    {
+        return None;
+    }
+    let mut bounds = [
+        f32::INFINITY,
+        f32::INFINITY,
+        f32::NEG_INFINITY,
+        f32::NEG_INFINITY,
+    ];
+    for (a, b, _) in edges(path) {
+        for p in [a, b] {
+            if p.iter().any(|v| !v.is_finite() || v.abs() > 1.0e6) {
+                return None;
+            }
+            for axis in 0..2 {
+                bounds[axis] = bounds[axis].min(p[axis]);
+                bounds[axis + 2] = bounds[axis + 2].max(p[axis]);
+            }
+        }
+    }
+    if !bounds.iter().all(|v| v.is_finite()) {
+        return None;
+    }
+    for axis in 0..2 {
+        let magnitude = bounds[axis].abs().max(bounds[axis + 2].abs()).max(1.0);
+        let guard = magnitude * f32::EPSILON * 64.0 + scale[axis] * 2.0;
+        bounds[axis] -= guard;
+        bounds[axis + 2] += guard;
+    }
+    Some(bounds)
 }
 impl ScenePass<'_> {
     fn texture(&self) -> Result<SurfaceLease, GpuError> {
@@ -109,6 +151,9 @@ impl ScenePass<'_> {
             .flat_map(u32::to_le_bytes),
         );
         let scale = self.size.pixel_scale();
+        let bounds = path
+            .filter(|_| self.coverage_bounds_enabled)
+            .and_then(|path| coverage_bounds(path, scale));
         params.extend(
             [scale[0], scale[1], opacity, stroke.map_or(0.0, |s| s.width)]
                 .into_iter()
@@ -146,17 +191,20 @@ impl ScenePass<'_> {
                     }),
                 path.and_then(|p| p.stroke_geometry.as_ref())
                     .map_or(0, |g| u32::from(g.fill_rule == FillRule::Evenodd)),
-                0,
+                u32::from(bounds.is_some()),
             ]
             .into_iter()
             .flat_map(u32::to_le_bytes),
         );
         let mut stop_bytes = Vec::new();
         let mut stop_count = 0u32;
-        for g in [
+        for (gradient_index, g) in [
             path.and_then(|p| p.fill_gradient.as_ref()),
             path.and_then(|p| p.stroke_gradient.as_ref()),
-        ] {
+        ]
+        .into_iter()
+        .enumerate()
+        {
             let (kind, geometry, extra) = match g.map(|g| g.geometry) {
                 Some(crate::GradientGeometry::Linear { start, end }) => {
                     (1u32, [start[0], start[1], end[0], end[1]], [0.0; 4])
@@ -211,6 +259,11 @@ impl ScenePass<'_> {
                     .flat_map(u32::to_le_bytes),
             );
             params.extend(geometry.into_iter().flat_map(f32::to_le_bytes));
+            let extra = if gradient_index == 0 {
+                bounds.unwrap_or(extra)
+            } else {
+                extra
+            };
             params.extend(extra.into_iter().flat_map(f32::to_le_bytes));
             for row in g.map_or([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], |g| g.transform) {
                 params.extend(
@@ -722,6 +775,7 @@ impl GpuContext {
             controls: vec![],
             size,
             working,
+            coverage_bounds_enabled: true,
             pipeline,
             effect_pipeline,
             blank,
@@ -935,5 +989,337 @@ impl GpuContext {
         )?;
         pass.validate()?;
         Ok(output.detach())
+    }
+}
+
+#[cfg(test)]
+mod coverage_bounds_tests {
+    use super::*;
+    fn path(offset: [f32; 2], alpha: f32) -> PathDraw {
+        PathDraw {
+            stroke_geometry: None,
+            fill_gradient: None,
+            stroke_gradient: None,
+            paint_transform: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+            contours: vec![Contour {
+                points: vec![
+                    [offset[0], offset[1]],
+                    [offset[0] + 9.25, offset[1] + 1.125],
+                    [offset[0] + 7.75, offset[1] + 8.625],
+                    [offset[0] - 1.25, offset[1] + 6.5],
+                ],
+                closed: true,
+            }],
+            fill: Some(Fill {
+                paint: Paint {
+                    rgba: [0.75, 0.25, 0.125, alpha],
+                    space: InputSpace::LinearRec709,
+                },
+                rule: FillRule::Nonzero,
+            }),
+            stroke: None,
+        }
+    }
+    fn draw(
+        gpu: &GpuContext,
+        scene: &DrawScene,
+        enabled: bool,
+        keys: Option<&[Option<kronello_render::RasterCacheKey>]>,
+    ) -> Result<SceneFramePair, GpuError> {
+        draw_scaled(
+            gpu,
+            scene,
+            enabled,
+            keys,
+            RenderSize {
+                output_resolution: [48, 32],
+                design_extent: [24.0, 40.0],
+            },
+        )
+    }
+    fn draw_scaled(
+        gpu: &GpuContext,
+        scene: &DrawScene,
+        enabled: bool,
+        keys: Option<&[Option<kronello_render::RasterCacheKey>]>,
+        size: RenderSize,
+    ) -> Result<SceneFramePair, GpuError> {
+        let mut pass = gpu.scene_pass(size, scene, WorkingSpace::LinearRec709)?;
+        pass.coverage_bounds_enabled = enabled;
+        pass.semantic_keys = keys;
+        let mut cache = vec![None; scene.nodes.len()];
+        let linear = pass.composite(scene, &scene.roots, &mut cache)?;
+        let blank = pass.blank.clone();
+        let display = pass.pass(
+            4,
+            (&linear, &blank),
+            None,
+            1.0,
+            MaskKind::Alpha,
+            Some(OutputTransform {
+                space: InputSpace::Srgb,
+                alpha: OutputAlpha::Straight,
+            }),
+        )?;
+        pass.validate()?;
+        Ok(SceneFramePair {
+            linear: decode_rgba16f(&gpu.read_texture(linear.texture(), 8, &mut pass.stats)?)?,
+            display: decode_rgba16f(&gpu.read_texture(display.texture(), 8, &mut pass.stats)?)?,
+            transfers: pass.stats,
+        })
+    }
+    #[test]
+    fn coverage_bound_uncertain_inputs_retain_original_loop() {
+        let mut p = path([0.0; 2], 1.0);
+        assert!(coverage_bounds(&p, [1.0; 2]).is_some());
+        for v in [f32::NAN, f32::INFINITY, 1.0e10] {
+            p.contours[0].points[0][0] = v;
+            assert!(coverage_bounds(&p, [1.0; 2]).is_none());
+        }
+        assert!(coverage_bounds(&path([0.0; 2], 1.0), [f32::NAN, 1.0]).is_none());
+    }
+    #[test]
+    #[ignore = "requires an actual GPU adapter"]
+    fn gpu_coverage_bounds_exact_fractional_clipping_stroke_gradient_pool() {
+        let gpu = GpuContext::new().unwrap();
+        for cold in [true, false] {
+            if cold {
+                gpu.configure_cache(GpuCacheConfig {
+                    textures: kronello_render::CacheCapacity {
+                        entries: 0,
+                        bytes: 0,
+                    },
+                    pool: kronello_render::CacheCapacity {
+                        entries: 0,
+                        bytes: 0,
+                    },
+                    disk: None,
+                })
+                .unwrap();
+            } else {
+                gpu.configure_cache(GpuCacheConfig::default()).unwrap();
+            }
+            for offset in [
+                [0.125, 0.375],
+                [-4.375, -2.125],
+                [42.125, 28.875],
+                [100.0, 100.0],
+            ] {
+                for alpha in [0.0, 0.00000006, 0.5, 1.0] {
+                    for variant in 0..3 {
+                        let mut p = path(offset, alpha);
+                        if variant == 1 {
+                            p.stroke = Some(RoundStroke {
+                                join: StrokeJoin::Miter,
+                                cap: StrokeCap::Round,
+                                miter_limit: 4.0,
+                                paint: p.fill.unwrap().paint,
+                                width: 1.75,
+                            });
+                        }
+                        if variant == 2 {
+                            p.fill_gradient = Some(Box::new(GradientPaint {
+                                spread: GradientSpread::Reflect,
+                                interpolation: GradientInterpolation::WorkingLinearStraight,
+                                interpolation_version: 1,
+                                transform: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+                                geometry: GradientGeometry::Linear {
+                                    start: [0.0; 2],
+                                    end: [8.0, 2.0],
+                                },
+                                stops: vec![
+                                    GradientStop {
+                                        offset: 0.0,
+                                        paint: p.fill.unwrap().paint,
+                                    },
+                                    GradientStop {
+                                        offset: 1.0,
+                                        paint: Paint {
+                                            rgba: [0.25, 0.75, 0.125, alpha],
+                                            space: InputSpace::LinearRec709,
+                                        },
+                                    },
+                                ],
+                            }));
+                        }
+                        assert_eq!(coverage_bounds(&p, [1.0; 2]).is_some(), variant == 0);
+                        let scene = DrawScene {
+                            nodes: vec![
+                                DrawNode::Path(p),
+                                DrawNode::Group {
+                                    children: vec![0],
+                                    opacity: 0.75,
+                                },
+                            ],
+                            roots: vec![1],
+                        };
+                        let old = draw(&gpu, &scene, false, None).unwrap();
+                        let new = draw(&gpu, &scene, true, None).unwrap();
+                        for (a, b) in old
+                            .linear
+                            .iter()
+                            .chain(&old.display)
+                            .zip(new.linear.iter().chain(&new.display))
+                        {
+                            assert_eq!(
+                                a.map(f32::to_bits),
+                                b.map(f32::to_bits),
+                                "offset={offset:?} alpha={alpha} variant={variant}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+    #[test]
+    #[ignore = "requires an actual GPU adapter"]
+    fn gpu_coverage_bounds_sticky_failure_and_cache_are_unchanged() {
+        let gpu = GpuContext::new().unwrap();
+        for opaque_parent in [false, true] {
+            for enabled in [false, true] {
+                gpu.configure_cache(GpuCacheConfig::default()).unwrap();
+                let mut invalid = path([2.125, 1.375], 1.0);
+                invalid.fill.as_mut().unwrap().paint = Paint {
+                    rgba: [65504.0, 0.0, 0.0, 1.0],
+                    space: InputSpace::LinearRec2020,
+                };
+                let mut scene = DrawScene {
+                    nodes: vec![
+                        DrawNode::Path(invalid),
+                        DrawNode::Group {
+                            children: vec![0],
+                            opacity: 0.0,
+                        },
+                    ],
+                    roots: vec![1],
+                };
+                if opaque_parent {
+                    let mut opaque = path([0.0; 2], 1.0);
+                    opaque.contours[0].points =
+                        vec![[0.0, 0.0], [48.0, 0.0], [48.0, 32.0], [0.0, 32.0]];
+                    scene.nodes.push(DrawNode::Path(opaque));
+                    scene.roots.push(2);
+                }
+                let keys: Vec<_> = (0..scene.nodes.len())
+                    .map(|i| {
+                        Some(
+                            kronello_render::RasterCacheKey::external_source(
+                                &format!("coverage-invalid-{opaque_parent}-{i}"),
+                                kronello_render::OutputRegion {
+                                    origin: [0.0; 2],
+                                    extent: [48.0, 32.0],
+                                    pixels: [48, 32],
+                                },
+                                kronello_model::ColorSpace::LinearRec709,
+                                &gpu.strict_namespace(),
+                            )
+                            .unwrap(),
+                        )
+                    })
+                    .collect();
+                for _ in 0..2 {
+                    assert!(matches!(
+                        draw(&gpu, &scene, enabled, Some(&keys)),
+                        Err(GpuError::InvalidInput(
+                            "RGBA16F surface value outside finite representable range"
+                        ))
+                    ));
+                }
+                assert_eq!(gpu.render_cache_stats().gpu_textures.inserts, 0);
+            }
+        }
+    }
+    #[test]
+    #[ignore = "requires an actual GPU adapter"]
+    fn gpu_coverage_bounds_valid_cache_hit_matches_legacy() {
+        let gpu = GpuContext::new().unwrap();
+        let scene = DrawScene {
+            nodes: vec![
+                DrawNode::Path(path([3.125, 2.375], 0.5)),
+                DrawNode::Group {
+                    children: vec![0],
+                    opacity: 0.75,
+                },
+            ],
+            roots: vec![1],
+        };
+        let keys: Vec<_> = (0..2)
+            .map(|i| {
+                Some(
+                    kronello_render::RasterCacheKey::external_source(
+                        &format!("coverage-valid-{i}"),
+                        kronello_render::OutputRegion {
+                            origin: [0.0; 2],
+                            extent: [24.0, 40.0],
+                            pixels: [48, 32],
+                        },
+                        kronello_model::ColorSpace::LinearRec709,
+                        &gpu.strict_namespace(),
+                    )
+                    .unwrap(),
+                )
+            })
+            .collect();
+        let old = draw(&gpu, &scene, false, None).unwrap();
+        for _ in 0..2 {
+            let new = draw(&gpu, &scene, true, Some(&keys)).unwrap();
+            for (a, b) in old
+                .linear
+                .iter()
+                .chain(&old.display)
+                .zip(new.linear.iter().chain(&new.display))
+            {
+                assert_eq!(a.map(f32::to_bits), b.map(f32::to_bits));
+            }
+        }
+        assert!(gpu.render_cache_stats().gpu_textures.hits > 0);
+    }
+    #[test]
+    #[ignore = "requires an actual GPU adapter"]
+    fn gpu_coverage_bounds_4k_scale_evenodd_implicit_close_and_negative_coordinates() {
+        let gpu = GpuContext::new().unwrap();
+        let scale = [64.0 / 3840.0, 32.0 / 2160.0];
+        let size = RenderSize {
+            output_resolution: [48, 32],
+            design_extent: [48.0 * scale[0], 32.0 * scale[1]],
+        };
+        for offset in [[-0.375, -1.125], [5.125, 8.375]] {
+            let mut p = path(offset, 0.5);
+            p.fill.as_mut().unwrap().rule = FillRule::Evenodd;
+            p.contours[0].closed = false;
+            p.contours.push(Contour {
+                points: vec![
+                    [offset[0] + 2.25, offset[1] + 2.25],
+                    [offset[0] + 5.25, offset[1] + 2.25],
+                    [offset[0] + 5.25, offset[1] + 4.25],
+                    [offset[0] + 2.25, offset[1] + 4.25],
+                ],
+                closed: false,
+            });
+            for c in &mut p.contours {
+                for point in &mut c.points {
+                    for axis in 0..2 {
+                        point[axis] *= scale[axis];
+                    }
+                }
+            }
+            assert!(coverage_bounds(&p, scale).is_some());
+            let scene = DrawScene {
+                nodes: vec![DrawNode::Path(p)],
+                roots: vec![0],
+            };
+            let old = draw_scaled(&gpu, &scene, false, None, size).unwrap();
+            let new = draw_scaled(&gpu, &scene, true, None, size).unwrap();
+            assert!(old.linear.iter().any(|p| p[3] > 0.0));
+            for (a, b) in old
+                .linear
+                .iter()
+                .chain(&old.display)
+                .zip(new.linear.iter().chain(&new.display))
+            {
+                assert_eq!(a.map(f32::to_bits), b.map(f32::to_bits));
+            }
+        }
     }
 }

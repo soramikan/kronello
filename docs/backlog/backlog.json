@@ -1065,7 +1065,7 @@
       "priority": "P1",
       "area": "performance",
       "title": "参照シーンbenchmarkと資源予算",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "GPU-003",
         "COLOR-001",
@@ -1077,7 +1077,8 @@
         "decode面/atlas/accumulation/encoderを含めたpeak memoryを記録する",
         "GPUのlinear/display二重描画の統合とrenderer APIの転送統計集約を評価し、最適化前後の画素一致・実転送/待機・node別tile allocationのpeak memoryを測定する",
         "MEDIA-001のstream startからのdecode forwardを正確なseekテストを維持して効率化し、CFR/VFR/B-frameのforward/backward/repeated要求で性能を比較する",
-        "ADR-0052の合成debug測定と区別して実作品/release buildの履歴復元頻度・遅延・SQLite/WAL物理I/Oを測り、opt-in snapshot・数/容量予算・root patch重複削減の再検討要否を記録する。採用変更が必要なら新ADRで決める"
+        "ADR-0052の合成debug測定と区別して実作品/release buildの履歴復元頻度・遅延・SQLite/WAL物理I/Oを測り、opt-in snapshot・数/容量予算・root patch重複削減の再検討要否を記録する。採用変更が必要なら新ADRで決める",
+        "ADR-0093の基準機・既定cache・固定基本4K作品で、画素が変わる21要求のwarm native preview p95が33.3ms以下となる。coldは別報告し、動画decode・GUI presentation込みのFPS保証とは区別する"
       ]
     },
     {

@@ -14,7 +14,7 @@
 | M1 | 0 | 0 | 14 | 0 | 14 |
 | M2 | 0 | 1 | 10 | 0 | 11 |
 | M3 | 0 | 0 | 25 | 0 | 25 |
-| M4 | 0 | 3 | 9 | 0 | 12 |
+| M4 | 0 | 2 | 10 | 0 | 12 |
 | M5 | 5 | 0 | 0 | 0 | 5 |
 | M6 | 4 | 0 | 0 | 0 | 4 |
 
@@ -597,7 +597,7 @@
 
 ### PERF-001 参照シーンbenchmarkと資源予算
 
-- 優先度: P1 / 領域: performance / 状態: in_progress
+- 優先度: P1 / 領域: performance / 状態: done
 - 依存: GPU-003, COLOR-001, CACHE-002, RENDER-003
 - 受け入れ条件:
   - warm/cold・proxy/full・preview/finalを分けてp50/p95を出す
@@ -605,6 +605,7 @@
   - GPUのlinear/display二重描画の統合とrenderer APIの転送統計集約を評価し、最適化前後の画素一致・実転送/待機・node別tile allocationのpeak memoryを測定する
   - MEDIA-001のstream startからのdecode forwardを正確なseekテストを維持して効率化し、CFR/VFR/B-frameのforward/backward/repeated要求で性能を比較する
   - ADR-0052の合成debug測定と区別して実作品/release buildの履歴復元頻度・遅延・SQLite/WAL物理I/Oを測り、opt-in snapshot・数/容量予算・root patch重複削減の再検討要否を記録する。採用変更が必要なら新ADRで決める
+  - ADR-0093の基準機・既定cache・固定基本4K作品で、画素が変わる21要求のwarm native preview p95が33.3ms以下となる。coldは別報告し、動画decode・GUI presentation込みのFPS保証とは区別する
 
 ### RECOVERY-001 GPU lost/容量不足/worker停止の復旧
 

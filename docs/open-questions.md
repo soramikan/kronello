@@ -16,11 +16,6 @@
 
 決定時期: 公開前。名前の確保は早いほどよい。
 
-### OQ-14 性能目標の確定
-
-[13 品質と性能](architecture/13-quality-performance.md) の数値は暫定目標として採用した。合否基準としての確定は、参照シーンを第一の基準機（M4 Mac mini 32GB）で実測した後に行う。
-決定時期: PERF-001（M4）。
-
 ### OQ-17 式言語の構文
 
 方針は決定した（[ADR-0040](adr/0040-expression-language-policy.md)）: 正本は AST、人間向けには中置演算と関数呼び出しだけの式言語、JavaScript 互換にしない。構文の詳細（演算子、リテラル、Property 参照の書き方、エラー表示）は未定。
@@ -50,6 +45,7 @@ MEDIA-002 では AV1 / H.264 / HEVC の MOV profile の音声を ALAC に限り�
 
 | 項目 | 決定 |
 |---|---|
+| OQ-14 性能目標の確定 | [ADR-0093](adr/0093-m4-reference-preview-performance-target.md) |
 | OQ-01 GUI / CLI / MCP の優先順位の判断基準 | [ADR-0041](adr/0041-core-api-gui-order.md) |
 | OQ-03 レンダージョブの実行主体 | [ADR-0025](adr/0025-detached-render-workers.md) |
 | OQ-04 複数プロセス編集時の Undo の意味 | [ADR-0026](adr/0026-selective-undo.md) |

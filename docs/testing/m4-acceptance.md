@@ -1,7 +1,7 @@
 # M4 統合受け入れ
 
-正本は [backlog.json](../backlog/backlog.json)。12 タスク中 9 タスクを受け入れ済みであり、M4 全体の完了宣言ではない。
-PERF-001 の OQ-14 基準確定、MEDIA-003 の Windows native 実行、QA-004 の Windows 通常比較と最終全 OS 検証が残る。
+正本は [backlog.json](../backlog/backlog.json)。12 タスク中 10 タスクを受け入れ済みであり、M4 全体の完了宣言ではない。
+MEDIA-003 の Windows native 実行、QA-004 の Windows 通常比較と最終全 OS 検証が残る。
 変更は [PR #8](https://github.com/soramikan/kronello/pull/8) に統合する。
 
 ## 基準機と最終ローカル検証
@@ -11,15 +11,16 @@ PERF-001 の OQ-14 基準確定、MEDIA-003 の Windows native 実行、QA-004 �
 
 | 検証 | 結果・証拠 |
 |---|---|
-| fmt / workspace all-targets clippy | 成功。final-fmt.log / final-clippy.log |
-| workspace test | 753 passed / 0 failed / 34 ignored。final-workspace-root-elision.log |
-| SwiftPM、統合 evidence 指定 | 48 tests / 0 failures / 0 skipped。final-swift-root-elision.log。8つの landscape / portrait と時刻の組で Inspector / Viewer の共有 FFI parity も含む |
-| Metal golden | 40 scenes 全件成功。target/golden/run.m4-root-elision-20261006/report.json。M1 基準と許容誤差は変更していない |
-| 8K HDR 明示実行 | 1 passed。final-hdr-root-elision.log。33,177,600 pixels、linear 265,420,800 bytes、最大 linear/display tile payload 8,388,608 bytes |
+| fmt / workspace all-targets clippy | 成功。final-coverage-fmt.log / final-coverage-clippy.log |
+| workspace test | 754 passed / 0 failed / 38 ignored。final-coverage-workspace.log |
+| SwiftPM、統合 evidence 指定 | 48 tests / 0 failures / 0 skipped。final-coverage-swift.log。8つの landscape / portrait と時刻の組で Inspector / Viewer の共有 FFI parity も含む |
+| Metal golden | 40 scenes 全件成功。target/golden/run.m4-coverage-20261006/report.json。M1 基準と許容誤差は変更していない |
+| VideoToolbox / Metal 常駐経路 | 4 tests / 0 failures / 0 skipped。final-coverage-resident.log |
+| 8K HDR 明示実行 | 1 passed。final-coverage-hdr.log。33,177,600 pixels、linear 265,420,800 bytes、最大 linear/display tile payload 8,388,608 bytes |
 | 公開 API | schema / Swift 再生成・整合検査成功 |
 | 公式 MCP SDK 2.3.0 | 実 stdio / HTTP と legacy 回帰が成功。final-mcp-sdk.log |
 | Python | native build regression 7件、golden adoption regression 11件成功 |
-| release macOS app | build・通常の ad-hoc signing・署名検証成功。final-macos-root-elision-build.log |
+| release macOS app | build・通常の ad-hoc signing・署名検証成功。final-coverage-macos-build.log |
 
 ignored の実機専用項目は、通常 workspace 件数と明示実行の結果を区別する。
 HDR 全体画像と原寸の日本語文字・マスク境界は root agent が目視確認した。
@@ -31,8 +32,8 @@ CUA で release app を直接操作し、M3 実機作品の独立した SQLite b
 Motion の日本語字幕・背景帯と Inspector の bounds、Edit の 7:23→8:00 の字幕切替と逆方向の復帰、Full / Quarter の解像度切替、Template の横/縦 variant、Export の入力検証を確認した。
 出力先入力後の preflight は成功した。GUI から実書き出しは開始していない。
 
-最後の synthetic output root 省略後も実画像と Inspector を再確認し、Cmd-W で Welcome、Cmd-Q で process 終了を確認した。
-画像は gui-final/motion-root-elision.png、edit-cut.png、edit-full-reverse.png、export-preflight.png。
+synthetic output root 省略後、および coverage bounds 最適化後も実画像と Inspector・クリップ境界を再確認し、Cmd-W で Welcome、Cmd-Q で process 終了を確認した。
+画像は gui-final/motion-coverage.png、edit-coverage-cut.png、edit-full-reverse.png、export-preflight.png。
 再生時の host clock / underrun 0 は、音声の可聴品質や物理 display FPS の測定を意味しない。
 安全モード・共有 project session・音声と close の先行検証は [FFI-002](ffi-002.md)を参照。
 
@@ -48,7 +49,11 @@ Motion の日本語字幕・背景帯と Inspector の bounds、Edit の 7:23→
 basic 4K native preview は最後の不要な単一子 root の省略で既定 admission 内に収まり、実機検証に成功した。
 complex lower-third の whole-graph preview は 1080p / 4K とも既存512MiBの保守的 admission で型付き拒否となる。
 1080p は execution 1956×1116 / 45面 / 785,842,560 bytes の見積もりである。
-これは実 GPU 物理使用量ではない。proxy preview と tile 化済み final を分けて測る。測定は完了した。動く基本4K native preview は21 samples / 21 distinct hashes、p50 43.96ms / p95 45.78msであり、暫定33.3ms目標を満たさない。停止画面のp95 9.55msを再生性能に流用しない。OQ-14の正式基準は利用者へ確認中である。
+これは実 GPU 物理使用量ではない。proxy preview と tile 化済み final を分けて測る。被覆範囲外の計算省略後、動く基本4K native preview は21 samples / 21 distinct hashes、p50 17.163ms / p95 22.139msとなった。利用者が承認したwarm p95≤33.3ms基準に合格する（[ADR-0093](../adr/0093-m4-reference-preview-performance-target.md)）。cold p95は34.166msとして別途報告し、GUI表示込みFPSとは区別する。
+
+最適化前後のbasic 44組・complex 66組の解像度/時刻別linear/display hashと作品SHA256が完全一致した。complex tiled4K finalのwarm静止p95は8,369.600msから858.174msへ短縮した。この作品の異時刻出力は同じ画素であり、動くシーンの性能とは区別する。
+
+1080pの共有render.frameで4つの異なる時刻を合成し、独立したf64平均・平均後のdisplay変換・fresh再描画と全画素が一致した。10ms OS samplingの最大RSS181,698,560bytes / footprint354,828,984bytes、GPU所有payload peak77,416,824bytesを記録した。CPU accumulatorの要求payload66,355,200bytesは計算値であり、OS観測やallocator peakとは区別する。whole4K temporalの既存budget拒否も維持する。詳細と全測定値は[PERF-001](perf-001.md)に保存し、PERF-001を受け入れ済みとする。
 
 ## CI と外部実行制限
 
@@ -58,7 +63,7 @@ Windows DX12 も同 run で CPU oracle 40 scenes を通過し、root の画像�
 これらは後続の HDR / recovery / cache / performance 変更を含む最終全 OS gate の代用ではない。
 
 Windows FFmpeg configure が WSL の bare bash を拾った問題は、23dde7a で検証済み absolute MSYS2 bash に修正した（[MEDIA-003](media-003.md)）。
-その後の23dde7aと4b75d40の CI は全 job が step 開始前に終了した。
-[run 37402180651](https://github.com/soramikan/kronello/actions/runs/37402180651) の annotation は account payment failure または spending limit の引き上げが必要と報告している。
+その後の23dde7a、4b75d40、6384858の CI は全 job が step 開始前に終了した。
+[最新 run 37412738412](https://github.com/soramikan/kronello/actions/runs/37412738412) の annotation は account payment failure または spending limit の引き上げが必要と報告している。
 利用者へ Actions 再開の確認を依頼し、有料設定は変更していない。
-Windows native 修正の再検証、Windows baseline 通常比較、最終全 OS gate は未完了である。
+Windows native 修正の再検証、Windows baseline 通常比較、最終全 OS gate は未完了である。利用者のリセット連絡後に同runを一度再実行したが、attempt 2のWindows annotationも同じ請求・利用上限理由でstep開始前に停止した。

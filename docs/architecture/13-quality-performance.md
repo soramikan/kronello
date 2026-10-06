@@ -44,13 +44,13 @@ ARC-001 で固定した規約の具体的な検証契約は [ADR-0043](../adr/00
 - 循環式、巨大 Path、過大複製数、長大テキスト、zip 展開上限、外部参照拒否。
 - 失敗で Project や確定済み成果物が壊れないこと。出力は一時ファイルを検証してから確定名へ切り替える。
 
-## 性能目標（暫定）
+## 性能目標
 
-以下は実測前の暫定目標であり、設計判断の目安として使う。合否基準としての確定は、参照シーンを実測した後に PERF-001 で行う（[OQ-14](../open-questions.md)）。
+M4の合否基準は基準機の実測後、利用者の確認により [ADR-0093](../adr/0093-m4-reference-preview-performance-target.md) で確定した。
 
 - GPU を使わない単純な値 / レイアウト更新が UI 操作を長時間ブロックしないこと。
 - 参照シーンを固定し、warm / cold、proxy / full、preview / final を別々に測定する。
-- 基本 4K30 プレビューで 1 フレーム 33.3ms 内を目標とし、デコード待ちとレンダーのみを分けて p50 / p95 を報告する。
+- M4 Mac mini 32GB / Metal・既定cache・固定の基本4K作品について、画素が変わる21要求の warm native preview p95 ≤33.3msを合否基準とする。p50とcold値も別に報告する。動画デコード待ちとGUI presentationはこの基準に含めず、別途測定する。
 - 60fps は同じ品質での追加目標であり、8K、多重ブラー、全エフェクトについて一律保証しない。
 - 8K / HDR はまず正しい offline 出力を合格条件にし、リアルタイム要件は別ベンチマークにする。
 
@@ -71,4 +71,4 @@ ARC-001 で固定した規約の具体的な検証契約は [ADR-0043](../adr/00
 
 [ADR-0090](../adr/0090-release-performance-evidence-and-snapshot-policy.md) に従い、release・固定作品・既定 cache・quiet host で cold/warm を各21回測定し、全画素の参照照合を行う。停止画面の cache hit と画素が変わる時刻列を区別する。native preview、tile final、movie encoding は別の経路として記録し、GPU descriptor payload、idle pool、CPU Vec、OS sampled RSS/footprint、保守的 admission estimate を混同しない。
 
-M4 Mac mini 32GB の動く基本4K native preview は p50 43.956ms / p95 45.782msで、暫定33.3msを満たさなかった。GUI presentation を含むFPS保証ではない。complex lower-third のnative1080p/4Kは既存512MiB admissionで明示拒否され、proxy preview と tiled final を使用する。OQ-14は未決のままとし、数値目標を実測に合わせて自動変更しない。[全測定結果](../testing/perf-001.md)を参照。
+保守的な被覆範囲外の計算省略により、M4 Mac mini 32GB の動く基本4K native preview は p50 17.163ms / p95 22.139msとなり、採用したwarm33.3ms基準を満たした。cold p95は34.166msとして別に報告する。GUI presentationを含むFPS保証ではない。complex lower-third のnative1080p/4Kは既存512MiB admissionで明示拒否され、proxy previewとtiled finalを使用する。[全測定結果](../testing/perf-001.md)を参照。

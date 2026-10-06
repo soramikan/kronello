@@ -46,7 +46,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--binary")
     parser.add_argument("--build", action="store_true")
-    parser.add_argument("--kind", choices=["history", "render"], default="history")
+    parser.add_argument("--kind", choices=["history", "render", "temporal"], default="history")
     parser.add_argument("--font", default="target/fixtures/external/NotoSansCJKjp-Regular.otf")
     parser.add_argument("--project", default="target/m3-acceptance/integration-metal/lower-third.kronello")
     parser.add_argument("--output", required=True)
@@ -55,7 +55,7 @@ def main():
     output.mkdir(parents=True, exist_ok=False)
     source_files = [Path("Cargo.toml"), Path("Cargo.lock"), Path("rust-toolchain.toml"), Path(__file__)]
     for crate in Path("crates").iterdir():
-        source_files.extend(path for directory in (crate / "src", crate / "native") if directory.exists() for path in directory.rglob("*") if path.is_file() and path.suffix in (".rs", ".c", ".h", ".m"))
+        source_files.extend(path for directory in (crate / "src", crate / "native") if directory.exists() for path in directory.rglob("*") if path.is_file() and path.suffix in (".rs", ".c", ".h", ".m", ".mm", ".wgsl", ".metal"))
         source_files.extend(path for path in (crate / "Cargo.toml", crate / "build.rs") if path.is_file())
     source_files.extend(Path("crates/kronello-service/examples").glob("perf_001_*.rs"))
     source_hashes = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(source_files)}
@@ -129,6 +129,8 @@ def main():
             child.kill()
             child.wait()
         stderr.close()
+    if any(hashlib.sha256(path.read_bytes()).hexdigest() != source_hashes[str(path)] for path in source_files):
+        raise RuntimeError("production/harness source changed during benchmark; measurements not accepted")
     if report.get("compiled_source_id") != source_id:
         raise RuntimeError("binary source identity does not match manifest; rebuild with --build")
     binary = Path(command[0])

@@ -1,6 +1,6 @@
 # PERF-001 参照シーンと履歴の release 測定
 
-受け入れ判定は全測定結果と OQ-14 の目標確認後に行う。本書は測定経路と境界を記録し、部分実行だけを全条件の成功として扱わない。
+PERF-001の受け入れ条件を確認した。正式目標は利用者承認済みのADR-0093に従う。以下の各参照作品・入口・資源観測の範囲に限定し、全作品の4K30、GUIの物理display FPS、未知のdriver/codec allocationを保証しない。
 
 ## 再現方法
 
@@ -59,7 +59,7 @@ macOS は `proc_pid_rusage(RUSAGE_INFO_V4)` の `ri_diskio_bytesread/written`、
 
 - 最初の native pixel oracle は uncropped execution halo と final plane を比較して失敗した。DAG crop contractを適用した proxy 検査では全画素完全一致した。製品バグや許容誤差変更として扱っていない。
 - 次の complex 4K native preview は既存512MiB admissionで `UNSUPPORTED_FEATURE` を返した。元の上限を上げず、作品も置換せず、この境界を保存する。
-- 最終 source freeze と root workspace/GUI gate の後に各 matrix・expanded history・GPU fusion の release値を確定した。OQ-14は下記の未達結果を示して利用者へ確認中である。
+- 最終 source freeze と root workspace/GUI gate の後に各 matrix・expanded history・GPU fusion の release値を確定した。この時点のOQ-14は下記の最適化前未達結果を示して利用者へ確認した。後続ADR-0093で正式目標を確定し、最適化後の測定へ適用した。
 
 ## 最終 release 測定（2026-10-06）
 
@@ -79,7 +79,7 @@ macOS は `proc_pid_rusage(RUSAGE_INFO_V4)` の `ri_diskio_bytesread/written`、
 | complex / 1080 / final | 1623.050/1698.304 | 1612.105/1648.774 | 1613.674/1684.744 |
 | complex / 4K / final | 8073.458/8375.442 | 8037.388/8369.600 | 8027.905/8336.845 |
 
-basic native4Kの動く画素は p50 43.956ms / p95 45.782ms。33.3msを達成していない。停止画面の8.729msを再生性能へ流用しない。OQ-14の受け入れ目標は利用者の判断待ちであり、PERF-001完了の根拠にはしない。GUI presentationと実時間再生の計測ではない。
+basic native4Kの動く画素は p50 43.956ms / p95 45.782ms。33.3msを達成していない。停止画面の8.729msを再生性能へ流用しない。これは最適化前の結果であり、当時のOQ-14は未決だった。後続の正式目標は[ADR-0093](../adr/0093-m4-reference-preview-performance-target.md)で利用者が承認した。最適化後の結果は以下の補足に保存する。GUI presentationと実時間再生の計測ではない。
 
 complex native1080は execution1956×1116・45 surfacesの保守的推定785,842,560bytes >536,870,912bytes、native4Kも同じ上限を超える typed unsupported。tiled4K finalは全要求成功した。未対応caseに時間のゼロ値を補わない。
 
@@ -108,3 +108,49 @@ complex tiled4K warm静止は tracked owned GPU peak最大123,796,516bytes、idl
 ADR-0052のdebug合成・root置換中心の候補比較とはworkload、build、percentileの統計量が異なり、その速度値を直接before/afterとして扱わない。今回の実作品releaseでは固定周期の最悪63patchを含む復元p95約23.7ms、DB約0.81MiBを観測した。自動追加snapshot候補の物理I/Oを今回比較しておらず、全作品の既定変更を正当化する根拠は不足する。既存64revision周期/明示compact/履歴自動削除禁止を維持し、頻繁な大型作品復元や確定した遅延目標が生じたら候補の容量・物理I/Oを同じrelease workloadで比較する。
 
 最終harness `cargo clippy -p kronello-service --examples --locked -- -D warnings` は成功した。production全workspace/実Metal/Swift/GUIの統合検証はrootの受け入れ記録を正本とする。
+
+## 被覆範囲最適化後の補足（2026-10-06）
+
+[ADR-0093](../adr/0093-m4-reference-preview-performance-target.md) の正式基準はM4 Mac mini32GB / Metal /既定64MiB texture cache+64MiB pool、基本4Kの画素が変わる21時刻のwarm native preview p95≤33.3ms。coldは別報告であり、この合否を適用しない。動画decodeとGUI presentation/物理display FPSは含まない。
+
+GPUの保守的なcoverage範囲外計算省略後、同じbasic matrixの12cases×21samplesが厳密fresh oracleに合格した。全44組の解像度/正規化有理時刻のlinear/display hash mapとsource document SHA256は最適化前と完全一致した。[追加測定JSON](perf-001-coverage-temporal-measurements.json)に新しいbinary/source manifestを保存した。新manifestはWGSL/Metal/Objective-C++も含み、build前後・実行後のsource一致を検証する。最適化前のraw JSONは変更しない。
+
+基本4K warm animatedはp50 **17.163458ms** /p95 **22.138833ms**、21時刻で21個の異なるhash。最適化前43.955666/45.782250msから短縮し、正式warm目標に合格した。cold staticは31.440709/34.166000ms、warm静止は8.910916/9.462167ms。後者を動く画素の性能へ流用しない。
+
+rootの最適化後workspace/native/Swift/GUI gateとapp終了後、別のexclusive quiet windowでcomplex matrixと4sample temporal資源観測を完了した。全production sourceは凍結し、driverが実行終了時にもsource一致を確認した。historyは保存層が変わっていないため元のrelease実作品記録を維持する。
+
+### 実4sample temporal accumulationの資源観測
+
+```sh
+python3 scripts/perf_001_history.py --kind temporal --build \
+  --project examples/ffi-preview.project.json \
+  --output target/perf-001-evidence/temporal-1080-coverage-after
+```
+
+同じ動く基本shapeを**1920×1080の共有render.frame**、time1/2、24fps、shutter180°、phase−1/4 frame、4samplesで1回処理した。Serviceのsnapshot callbackは公開されていないため、4Kstreaming APIを追加せず既存のsupported1080経路を測る。CPUaccumulatorはwhole regionであり512tileのaccumulatorと呼ばない。sampleのGPU描画は各12tiles、4samples計48sample tiles。whole4K要求は測定外で`UNSUPPORTED_FEATURE: temporal accumulation budget exceeded`を確認し、count×96=796,262,400bytes >536,870,912bytesの既存guardを維持した。未対応4Kを資源測定成功として扱わない。
+
+実metadataは時刻63/128、191/384、193/384、65/128、weight各1/4を返し、4個の異なるlinear hashを確認した。測定外のfresh contextで共有APIの各瞬間frameを描き、独立したf64 weighted mean全画素と、平均後のdisplay変換をSHA256で厳密照合した。fresh共有temporal再描画もlinear/displayとも一致し、time1/2の瞬間frameとは異なる。
+
+測定phaseの10ms OS sample最大RSSは**181,698,560bytes**、physical footprintは**354,828,984bytes**。これは実temporal処理を含む観測値であり、瞬間の真のphysical peakを保証しない。untimed oracleの大きな参照配列はこのphaseに含めない。GPUのtracked owned descriptor payload peakは77,416,824bytes。CPU f64x4 accumulatorの**requested payload**は1920×1080×32=66,355,200bytes（sourceからの計算）であり、allocator capacity/overheadや実physical peakと同一視しない。4samplesは同じaccumulatorへ逐次加算する。返されたlinear/display Vecの観測capacityは合計66,732,032bytesで、瞬間sample出力・cache挿入前のtemporary clone・GPU/readback面は別の寿命を持つ。単純に各分類を足して同時physical peakと呼ばない。
+
+実転送合計はdispatch240、readback144回/132,710,592bytes、backend wait144回、pixel upload0/copy0。control upload116,160bytes/768回。1回496.915msは資源条件の確認用でありp50/p95や正式preview性能のサンプルに流用しない。動画decode/atlas/encoderはこのshape処理で使わず、decode/encoder込みprocess観測は既存movie測定を参照する。driver private memoryと内部accumulatorのallocator peakは未知。追加raw JSONはrequest、全sample/weight、tile plan、transfer/allocation/cache counters、OS観測、source/binary SHAと独立oracle結果を保持する。
+
+### 最適化後の全matrix
+
+各verified caseは21samples。complex native1080/4Kのtyped unsupportedはn=0で維持する。complex全66組のresolution/time linear/display hash mapとsource document SHA256も最適化前と完全一致した。異時刻のcomplexは全て同じ画素であり、表の異時刻列をmotionの合否に使わない。
+
+| 作品 / 解像度 / 入口 | context cold p50/p95 ms | warm静止 p50/p95 ms | warm異時刻 p50/p95 ms |
+|---|---:|---:|---:|
+| basic / proxy / preview | 14.645/15.485 | 2.907/3.248 | 3.420/4.119 |
+| basic / proxy / final | 56.781/58.146 | 42.683/45.499 | 45.201/47.432 |
+| basic / 4K / preview | 31.441/34.166 | 8.911/9.462 | 17.163/22.139 |
+| basic / 4K / final | 401.917/410.666 | 387.716/395.254 | 385.822/398.357 |
+| complex / proxy / preview | 191.258/194.585 | 169.162/170.599 | 170.361/171.025 |
+| complex / proxy / final | 251.568/255.526 | 216.757/221.623 | 216.749/222.796 |
+| complex / 1080 / preview | 未対応 n=0 | 未対応 n=0 | 未対応 n=0 |
+| complex / 1080 / final | 376.781/383.443 | 366.979/378.572 | 362.973/371.949 |
+| complex / 4K / final | 848.706/875.630 | 836.819/858.174 | 837.334/864.614 |
+
+最適化後basic warm動作4Kのtracked GPU peakは398,133,624bytes、idle pool66,355,200bytesで前と同じ。OS sampled RSS45,449,216bytes / footprint537,035,376bytes。complex tiled4K warm静止のtracked GPU peak123,796,516bytes /idle pool64,726,016bytesも同じで、sampled RSS417,398,784bytes /footprint642,728,848bytesだった。資源使用量の改善は主張しない。既定budget・surface/admission guard・型付き数値失敗契約は維持した。
+
+最適化後basic/complexを合わせ24verified cases×21=504samples、1080/4K nativeの4typed unsupported境界、独立temporal資源1runを完了した。GPU fusion before/after252samples、media forward/backward/repeatedと実movie、通常編集の実作品履歴/物理I/Oを別のraw記録とともに保持する。正式warm基準と資源条件を満たしたことは、これらの対象経路内に限定する。
