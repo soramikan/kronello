@@ -89,6 +89,8 @@ jobs:
             ~/.cargo/git/db
             target
           key: cargo-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', '**/Cargo.toml', 'Cargo.lock') }}
+      - name: Clear restored verification evidence
+        run: rm -rf -- target/mcp-003-evidence target/ffi-002-evidence target/job-002-evidence
       - name: Install FFmpeg development dependencies
         run: brew list ffmpeg >/dev/null 2>&1 || brew install ffmpeg
       - name: Check formatting
@@ -105,10 +107,11 @@ jobs:
       - name: Run workspace tests
         run: cargo test --workspace --locked
       - name: Verify job real processes and record evidence
+        id: verify_jobs
         if: always()
         run: python3 scripts/job_evidence.py
       - name: Upload JOB-002 evidence
-        if: always()
+        if: always() && (steps.verify_jobs.outcome == 'success' || steps.verify_jobs.outcome == 'failure')
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: job-002-${{ runner.os }}-${{ runner.arch }}
@@ -129,24 +132,26 @@ jobs:
           swift build --package-path apps/macos -j 3
           swift test --package-path apps/macos -j 3
       - name: Verify MCP 2026 with the official pinned v2 SDK
+        id: verify_mcp
         run: |
           cargo build -p kronello-mcp --locked
           python3 -m venv target/mcp-003-sdk
           target/mcp-003-sdk/bin/python -m pip install -r scripts/mcp-003-client-requirements.txt
           target/mcp-003-sdk/bin/python scripts/mcp_003_client_check.py
       - name: Upload MCP-003 SDK evidence
-        if: always()
+        if: always() && (steps.verify_mcp.outcome == 'success' || steps.verify_mcp.outcome == 'failure')
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: mcp-003-${{ runner.os }}-${{ runner.arch }}
           path: target/mcp-003-evidence
           if-no-files-found: error
       - name: Verify native safe-session close and process termination
+        id: verify_ffi
         run: |
           cargo build -p kronello-ffi -p kronello-cli -p kronello-mcp --locked
           python3 scripts/ffi_002_evidence.py
       - name: Upload FFI-002 real process evidence
-        if: always()
+        if: always() && (steps.verify_ffi.outcome == 'success' || steps.verify_ffi.outcome == 'failure')
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ffi-002-${{ runner.os }}-${{ runner.arch }}
@@ -199,6 +204,8 @@ jobs:
             ~/.cargo/git/db
             target
           key: cargo-${{ runner.os }}-${{ runner.arch }}-lean-v1-${{ hashFiles('rust-toolchain.toml', '**/Cargo.toml', 'Cargo.lock') }}
+      - name: Clear restored verification evidence
+        run: rm -rf -- target/mcp-003-evidence target/ffi-002-evidence target/job-002-evidence
       - name: Report disk available for workspace tests
         run: df -h "$GITHUB_WORKSPACE" "$RUNNER_TEMP"
       - name: Install FFmpeg development dependencies
@@ -219,10 +226,11 @@ jobs:
       - name: Run workspace tests
         run: cargo test --workspace --locked
       - name: Verify job real processes and record evidence
+        id: verify_jobs
         if: always()
         run: python3 scripts/job_evidence.py
       - name: Upload JOB-002 evidence
-        if: always()
+        if: always() && (steps.verify_jobs.outcome == 'success' || steps.verify_jobs.outcome == 'failure')
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: job-002-${{ runner.os }}-${{ runner.arch }}
@@ -235,24 +243,26 @@ jobs:
           cargo build -p kronello-cli -p kronello-mcp --locked
           python3 -m unittest scripts.tests.test_integration_m2.IntegrationM2.test_small_cpu_reference -v
       - name: Verify MCP 2026 with the official pinned v2 SDK
+        id: verify_mcp
         run: |
           cargo build -p kronello-mcp --locked
           python3 -m venv target/mcp-003-sdk
           target/mcp-003-sdk/bin/python -m pip install -r scripts/mcp-003-client-requirements.txt
           target/mcp-003-sdk/bin/python scripts/mcp_003_client_check.py
       - name: Upload MCP-003 SDK evidence
-        if: always()
+        if: always() && (steps.verify_mcp.outcome == 'success' || steps.verify_mcp.outcome == 'failure')
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: mcp-003-${{ runner.os }}-${{ runner.arch }}
           path: target/mcp-003-evidence
           if-no-files-found: error
       - name: Verify native safe-session close and process termination
+        id: verify_ffi
         run: |
           cargo build -p kronello-ffi -p kronello-cli -p kronello-mcp --locked
           python3 scripts/ffi_002_evidence.py
       - name: Upload FFI-002 real process evidence
-        if: always()
+        if: always() && (steps.verify_ffi.outcome == 'success' || steps.verify_ffi.outcome == 'failure')
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ffi-002-${{ runner.os }}-${{ runner.arch }}

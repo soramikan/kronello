@@ -56,7 +56,7 @@ complex lower-third の whole-graph preview は 1080p / 4K とも既存512MiBの
 
 ## 最終 CI と受け入れ
 
-[run 37418631507](https://github.com/soramikan/kronello/actions/runs/37418631507) は全5jobsが成功した。検証対象の実装headは `fde889e002287903564fe8e267b93225156cdbe8`、実checkoutはmainとのmerge `275380d2eb41b15f3b7c94a0d2115c252a9a5c26`。後続の完了記録変更は文書のみであり、検証した実装を変更していない。[CI記録](m4-ci-acceptance.json)にjobs・steps・ログhashを保存する。
+[run 37418631507](https://github.com/soramikan/kronello/actions/runs/37418631507) は全5jobsが成功した。検証対象の実装headは `fde889e002287903564fe8e267b93225156cdbe8`、実checkoutはmainとのmerge `275380d2eb41b15f3b7c94a0d2115c252a9a5c26`。[CI記録](m4-ci-acceptance.json)にjobs・steps・ログhashを保存する。その後の文書のみのhead `6f6f143` の再実行で、下記のSwift競合と古い証拠の再アップロードを検出した。先行成功と後続修正の検証は区別する。
 
 | 環境 | 最終結果 |
 |---|---|
@@ -76,3 +76,13 @@ CI Swiftの1 skipは実機stage-2 evidenceを要求する `testStage2FFIPresenta
 - macOSの全体30分予算不足: workspace 1,018秒、実process 127秒、CPU integration 238秒を要した実測に基づきjobだけ60分へ変更した。全testsと個別timeoutは維持した。最終Swiftは408.744秒で完走し、失敗はなかった。
 
 M4全12タスクを `done` とする。M2のSTORE-003の実環境残件は別範囲であり、ここでは完了に変更しない。
+
+## 後続 CI の Inspector 競合修正
+
+[run 37421914965](https://github.com/soramikan/kronello/actions/runs/37421914965) はmacOSの `testInspectionScheduling` だけが失敗し、他4jobsは成功した。テストが20msのsleep後に100msの模擬応答をキャンセルできると仮定していたが、負荷によって応答が先に完了し、次の同時刻queryがcacheに命中して型付き失敗の検証に到達しなかった。
+
+模擬transportを明示的な応答ゲートに置き換え、要求の実送信を確認してからキャンセル・再生・応答解放を行う。キャンセル済みの遅延成功と、キャンセルされていない旧generationの遅延成功の両方を拒否し、停止後に新しいqueryを発行することを確認する。開始前にキャンセルされたrefreshが新しいrefreshのgenerationを変更する本体の競合も再現したため、入口でキャンセル状態を確認し、状態変更前に戻るように修正した。後者の回帰テストは本体修正前に失敗し、修正後は集中テスト20回すべて成功した。
+
+同runでは未実行のMCP/FFI検証が、target cacheに残った旧checkout `275380d2` の成功JSONをアップロードしていた。macOS/Linuxではcache復元直後に3種類の検証出力だけを削除し、証拠のuploadは対応する検証stepがsuccessまたはfailureになった場合に限定する。未実行・キャンセル時の古い成功報告を除外し、実際に失敗した検証の診断は残す。
+
+ローカル検証はSwift全71件成功・失敗0・skip0（統合evidence指定、独立state root）、集中テスト20/20回成功、workflow YAMLとstep依存・upload条件の構造検査成功。root agentがrelease FFIで再構築したアプリをCUAで直接操作し、Motionの連続時刻変更、再生中の更新保留、停止後のInspector更新と日本語字幕・258×36のbounds表示を確認した。競合の順序は決定的テスト、実画面はGUI操作で確認する。生ログと画面 `gui-inspector.png` は `target/ci-fix/` に保存する。修正を含むCIの結果はPR #8の最新headで確認する。

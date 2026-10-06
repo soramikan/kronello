@@ -9,7 +9,9 @@ import KronelloDesign
     var requests: [[String: Any]] = []
     var scenes: [[String: Any]] = []
     var response: [String: Any] = [:]
-    var delay: Duration = .zero
+    private var holdNext = false
+    private var held: CheckedContinuation<Void, Never>?
+    private var submissionWaiters: [CheckedContinuation<Void, Never>] = []
     var fail: ServiceFailure?
     init(path: String? = nil) throws {
         native = try path.map { try NativeProjectTransport(path: $0, worker: nil) }
@@ -18,9 +20,27 @@ import KronelloDesign
     func subscribe() async throws {}
     func poll() throws {}
     func close() { native?.close() }
+    func holdNextCall() { holdNext = true }
+    func waitForHeldCall() async {
+        if held != nil { return }
+        await withCheckedContinuation { submissionWaiters.append($0) }
+    }
+    func releaseHeldCall() {
+        let continuation = held; held = nil
+        continuation?.resume()
+    }
     func call(_ request: [String: Any]) async throws -> [String: Any] {
         requests.append(request)
-        if delay > .zero { try await Task.sleep(for: delay) }
+        if holdNext {
+            holdNext = false
+            // Deliberately deliver a late successful reply even after cancellation,
+            // as an already submitted native query may do.
+            await withCheckedContinuation { continuation in
+                held = continuation
+                let waiters = submissionWaiters; submissionWaiters = []
+                waiters.forEach { $0.resume() }
+            }
+        }
         if let fail { throw fail }
         let result = try await native?.call(request) ?? response
         if request.string("operation") == "scene.query" { scenes.append(result) }
@@ -32,6 +52,7 @@ import KronelloDesign
     func verifyScheduling() async throws {
         let folder = try GUIChecks().temporary(); defer { try? FileManager.default.removeItem(at: folder) }
         let transport = try InspectionTransport()
+        defer { transport.releaseHeldCall() }
         let editor = EditorModel(path: folder.appendingPathComponent("unused.kronello").path, transport: transport,
                                  stateStore: UIStateStore(root: folder))
         let comp = UUID().uuidString, placement = UUID().uuidString, instance = UUID().uuidString, internalNode = UUID().uuidString
@@ -59,19 +80,36 @@ import KronelloDesign
         try require(transport.requests.count == 2 && !inspection.stale, "Pause updates once")
         editor.ui.time = RationalTime(num: 1, den: 1)
         let scrub = Task { await inspection.refresh(editor) }
-        try await Task.sleep(for: .milliseconds(30))
+        // Cancel a pending scrub before yielding the actor to the replacement.
         scrub.cancel(); editor.ui.time = RationalTime(num: 2, den: 1)
         await inspection.refresh(editor); await scrub.value
-        try require(transport.requests.count == 3 && transport.requests.last?.object("evaluation").object("time").string("num") == "2", "150ms idle debounce cancels a superseded scrub before submission")
-        transport.delay = .milliseconds(100)
+        try require(transport.requests.count == 3 && transport.requests.last?.object("evaluation").object("time").string("num") == "2", "A cancelled pending scrub is never submitted; the replacement uses the current time")
+        transport.holdNextCall()
         editor.ui.time = RationalTime(num: 3, den: 1)
         let obsolete = Task { await inspection.refresh(editor, debounce: .zero) }
-        try await Task.sleep(for: .milliseconds(20)); obsolete.cancel()
-        editor.playing = true; await inspection.refresh(editor, debounce: .zero); await obsolete.value
+        defer { obsolete.cancel(); transport.releaseHeldCall() }
+        await transport.waitForHeldCall()
+        try require(transport.requests.count == 4 && inspection.loading, "Obsolete query is actually submitted and held before cancellation")
+        obsolete.cancel()
+        editor.playing = true; await inspection.refresh(editor, debounce: .zero)
+        transport.releaseHeldCall(); await obsolete.value
         try require(inspection.stale && inspection.nodes.first?.layer.evaluated.string("text") == "日本語", "Cancelled in-flight reply cannot adopt during playback")
-        editor.playing = false; transport.delay = .zero
+        editor.playing = false
+        editor.ui.time = RationalTime(num: 4, den: 1)
+        transport.holdNextCall()
+        let superseded = Task { await inspection.refresh(editor, debounce: .zero) }
+        defer { superseded.cancel(); transport.releaseHeldCall() }
+        await transport.waitForHeldCall()
+        editor.playing = true; await inspection.refresh(editor, debounce: .zero)
+        // Restore the same paused key before delivering the uncancelled reply.
+        // Only the changed generation can reject it, not playback or key guards.
+        editor.playing = false
+        transport.releaseHeldCall(); await superseded.value
+        try require(inspection.stale && inspection.nodes.first?.layer.evaluated.string("text") == "日本語", "Generation rejects a late success even when the transport task is not cancelled")
+        editor.playing = false
         transport.fail = .init(code: "FONT_MISSING", message: "Test font is missing")
         await inspection.refresh(editor, debounce: .zero)
+        try require(transport.requests.count == 6, "Late superseded success never fills the query cache; pause submits a fresh query")
         try require(inspection.failure?.code == "FONT_MISSING" && inspection.nodes.isEmpty, "Typed failure is visible, never fabricated values")
         transport.fail = nil; transport.response["revision"] = "2"
         await inspection.refresh(editor, debounce: .zero)
