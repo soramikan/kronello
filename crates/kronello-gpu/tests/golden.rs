@@ -176,19 +176,35 @@ fn gradient_manifest(g: &GradientPaint) -> Value {
         GradientGeometry::Radial { center, radius } => {
             json!({"kind":"radial","center":center,"radius":radius})
         }
+        GradientGeometry::FocalRadial {
+            center,
+            radius,
+            focal,
+            focal_radius,
+        } => {
+            json!({"kind":"focal_radial","center":center,"radius":radius,"focal":focal,"focal_radius":focal_radius})
+        }
+        GradientGeometry::Conic {
+            center,
+            start_angle,
+            sweep_angle,
+        } => {
+            json!({"kind":"conic","center":center,"start_angle":start_angle,"sweep_angle":sweep_angle})
+        }
     };
-    json!({"geometry":geometry,"spread":"pad","interpolation":"working-linear-premultiplied","equal_offsets":"last wins at offset","stops":g.stops.iter().map(|s|json!({"offset":s.offset,"rgba":s.paint.rgba,"space":format!("{:?}",s.paint.space)})).collect::<Vec<_>>()})
+    json!({"geometry":geometry,"spread":format!("{:?}",g.spread),"interpolation":format!("{:?}",g.interpolation),"interpolation_version":g.interpolation_version,"transform":g.transform,"equal_offsets":"last wins at offset","stops":g.stops.iter().map(|s|json!({"offset":s.offset,"rgba":s.paint.rgba,"space":format!("{:?}",s.paint.space)})).collect::<Vec<_>>()})
 }
 fn draw_manifest(scene: &DrawScene) -> Value {
     json!({"roots":scene.roots,"nodes":scene.nodes.iter().map(|node| match node {
-        DrawNode::Path(p)=>json!({"kind":"path","fill_gradient":p.fill_gradient.as_ref().map(gradient_manifest),"stroke_gradient":p.stroke_gradient.as_ref().map(gradient_manifest),"paint_transform":p.paint_transform,"contours":p.contours.iter().map(|c| json!({"points":c.points,"closed":c.closed})).collect::<Vec<_>>(),"fill":p.fill.map(|f| json!({"rgba":f.paint.rgba,"space":format!("{:?}",f.paint.space),"rule":format!("{:?}",f.rule)})),"stroke":p.stroke.map(|s| json!({"rgba":s.paint.rgba,"space":format!("{:?}",s.paint.space),"width":s.width,"cap":format!("{:?}",s.cap),"join":format!("{:?}",s.join),"miter_limit":s.miter_limit}))}),
+        DrawNode::Raster(pixels)=>json!({"kind":"raster","pixels":pixels}),
+        DrawNode::Path(p)=>json!({"kind":"path","stroke_geometry_version":p.stroke_geometry.as_ref().map_or(kronello_model::LEGACY_STROKE_VERSION,|g|g.version.as_str()),"local_stroke":p.stroke_geometry.as_ref().map(|g|json!({"version":g.version,"alignment":g.alignment,"fill_rule":format!("{:?}",g.fill_rule),"inverse":g.output_to_local,"dash_array":g.dash_array,"dash_offset":g.dash_offset,"contours":g.contours.iter().map(|c|json!({"points":c.points,"closed":c.closed})).collect::<Vec<_>>()})),"fill_gradient":p.fill_gradient.as_deref().map(gradient_manifest),"stroke_gradient":p.stroke_gradient.as_deref().map(gradient_manifest),"paint_transform":p.paint_transform,"contours":p.contours.iter().map(|c| json!({"points":c.points,"closed":c.closed})).collect::<Vec<_>>(),"fill":p.fill.map(|f| json!({"rgba":f.paint.rgba,"space":format!("{:?}",f.paint.space),"rule":format!("{:?}",f.rule)})),"stroke":p.stroke.map(|s| json!({"rgba":s.paint.rgba,"space":format!("{:?}",s.paint.space),"width":s.width,"cap":format!("{:?}",s.cap),"join":format!("{:?}",s.join),"miter_limit":s.miter_limit}))}),
         DrawNode::Group {children,opacity}=>json!({"kind":"isolated-group","children":children,"opacity":opacity}),
-        DrawNode::Effect {source,effect}=>json!({"kind":"effect","source":source,"effect":effect,"kernel_version":EFFECT_KERNEL_VERSION,"semantic_version":kronello_model::EFFECT_VERSION}),
+        DrawNode::Effect {source,effect}=>json!({"kind":"effect","source":source,"effect":effect,"kernel_version":effect.kernel_version(),"semantic_version":effect.semantic_version()}),
         DrawNode::Masked {source,matte,kind}=>json!({"kind":"masked","source":source,"matte":matte,"mode":format!("{:?}",kind)})
     }).collect::<Vec<_>>()})
 }
 fn manifest(scenes: &[Scene], fixture_hash: &str, font_hash: &str) -> Value {
-    json!({"schema_version":3,"effect_kernel_version":EFFECT_KERNEL_VERSION,"effect_semantic_versions":{kronello_model::GAUSSIAN_BLUR_ID:kronello_model::EFFECT_VERSION,kronello_model::DROP_SHADOW_ID:kronello_model::EFFECT_VERSION},"stroke_geometry_version":kronello_render::STROKE_GEOMETRY_VERSION,"gradient_interpolation_version":kronello_render::GRADIENT_INTERPOLATION_VERSION,"comparison_version":1,"rgb_absolute":1.0/1024.0,"rgb_relative":1.0/1024.0,"alpha_absolute":1.0/1024.0,"fixture_hash":fixture_hash,"font_hash":font_hash,"flatten_tolerance_px":0.02,"catalog":serde_json::from_str::<Value>(include_str!("../../../tests/golden/apple-silicon-metal/scenes.json")).unwrap(),"scenes":scenes.iter().map(|s| json!({"id":s.id,"sample_id":"frame-0","size":[s.width,s.height],"design_extent":[s.width,s.height],"origin":[0,0],"time":{"num":"0","den":"1"},"working_space":format!("{:?}",s.space),"alpha":"premultiplied","output_transform":s.output.map(|o| format!("{:?}",o)),"comparison_space":"linear working-space premultiplied; external output decoded back before comparison","display_transform":"external-unpremultiply-then-srgb-clamp; visualization only","color_pipeline_id":if s.draw.is_some() {"vec003-grid4-v2"} else {"gpu001-linear-v1"},"samples_per_frame":if s.draw.is_some() {16} else {1},"seed":0,"draw":s.draw.as_ref().map(draw_manifest),"layers":s.layers.iter().map(|l| json!({"size":l.size,"translation":l.translation,"rotation_degrees":l.rotation_degrees,"input_space":format!("{:?}",l.image.space),"input_size":[l.image.width,l.image.height],"straight_pixels":l.image.pixels})).collect::<Vec<_>>()})).collect::<Vec<_>>()})
+    json!({"schema_version":3,"affine_effect_kernel_version":kronello_render::AFFINE_EFFECT_KERNEL_VERSION,"affine_effect_semantic_version":kronello_model::AFFINE_EFFECT_VERSION,"effect_kernel_version":EFFECT_KERNEL_VERSION,"effect_semantic_versions":{kronello_model::GAUSSIAN_BLUR_ID:kronello_model::EFFECT_VERSION,kronello_model::DROP_SHADOW_ID:kronello_model::EFFECT_VERSION},"stroke_geometry_version":kronello_render::STROKE_GEOMETRY_VERSION,"gradient_interpolation_version":kronello_render::GRADIENT_INTERPOLATION_VERSION,"comparison_version":1,"rgb_absolute":1.0/1024.0,"rgb_relative":1.0/1024.0,"alpha_absolute":1.0/1024.0,"fixture_hash":fixture_hash,"font_hash":font_hash,"flatten_tolerance_px":0.02,"catalog":serde_json::from_str::<Value>(include_str!("../../../tests/golden/apple-silicon-metal/scenes.json")).unwrap(),"scenes":scenes.iter().map(|s| json!({"id":s.id,"sample_id":"frame-0","size":[s.width,s.height],"design_extent":[s.width,s.height],"origin":[0,0],"time":{"num":"0","den":"1"},"working_space":format!("{:?}",s.space),"alpha":"premultiplied","output_transform":s.output.map(|o| format!("{:?}",o)),"comparison_space":"linear working-space premultiplied; external output decoded back before comparison","display_transform":"external-unpremultiply-then-srgb-clamp; visualization only","color_pipeline_id":if s.draw.is_some() {"vec003-grid4-v2"} else {"gpu001-linear-v1"},"samples_per_frame":if s.draw.is_some() {16} else {1},"seed":0,"draw":s.draw.as_ref().map(draw_manifest),"layers":s.layers.iter().map(|l| json!({"size":l.size,"translation":l.translation,"rotation_degrees":l.rotation_degrees,"input_space":format!("{:?}",l.image.space),"input_size":[l.image.width,l.image.height],"straight_pixels":l.image.pixels})).collect::<Vec<_>>()})).collect::<Vec<_>>()})
 }
 
 // Hardware model, OS, driver and dependency versions are provenance only.
@@ -573,7 +589,7 @@ fn cpu_catalog_and_vec003_manifest_match_harness() {
         catalog["scene_ids"],
         json!(scenes.iter().map(|s| s.id).collect::<Vec<_>>())
     );
-    assert_eq!(scenes.len(), 24);
+    assert_eq!(scenes.len(), 40);
     let m = manifest(&scenes, "fixture-test", "font-test");
     assert_eq!(
         m["stroke_geometry_version"],
@@ -597,7 +613,38 @@ fn cpu_catalog_and_vec003_manifest_match_harness() {
             4
         );
         assert_eq!(path["stroke"]["miter_limit"], 4.0);
+        assert_eq!(
+            path["stroke_geometry_version"],
+            kronello_model::LEGACY_STROKE_VERSION
+        );
         assert!(path["paint_transform"].is_array());
+    }
+    for (id, alignment) in [
+        ("stroke-dashes", "center"),
+        ("stroke-inside-evenodd", "inside"),
+        ("stroke-outside-nonzero", "outside"),
+        ("stroke-affine-reflected", "center"),
+    ] {
+        let scene = m["scenes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["id"] == id)
+            .unwrap();
+        let path = &scene["draw"]["nodes"][0];
+        assert_eq!(
+            path["stroke_geometry_version"],
+            kronello_model::EXTENDED_STROKE_VERSION
+        );
+        assert_eq!(
+            path["local_stroke"]["version"],
+            kronello_model::EXTENDED_STROKE_VERSION
+        );
+        assert_eq!(path["local_stroke"]["alignment"], alignment);
+        assert!(path["local_stroke"]["inverse"].is_array());
+        assert!(path["local_stroke"]["contours"].is_array());
+        assert_eq!(path["local_stroke"]["dash_offset"], 0.371);
+        assert!(path["local_stroke"]["dash_array"].is_array());
     }
 }
 

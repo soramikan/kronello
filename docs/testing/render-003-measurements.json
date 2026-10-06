@@ -1,0 +1,125 @@
+{
+  "date": "2026-10-06",
+  "base_revision": "c3173f3a9aae1269b1ee1ad2b64f1251d45cf09f",
+  "host": {
+    "model": "Mac16,10",
+    "ram_bytes": 34359738368,
+    "os": "macOS 27.0.1 / 26A434",
+    "architecture": "arm64"
+  },
+  "runtime": {
+    "rust": "1.95.0",
+    "ffmpeg": "9.0.2 LGPL build",
+    "video_encoder": "prores_ks",
+    "audio_encoder": "pcm_s24le",
+    "render_backend": "cpu_reference_float32",
+    "build_profile": "debug"
+  },
+  "measurements": {
+    "long": {
+      "command": [
+        "/Users/sora/Repositories/soramikan/kronello/.worktrees/m3-render3/target/debug/deps/streaming-e38184c2c5c97269",
+        "long_export_exceeds_source_and_bus_limits",
+        "--ignored",
+        "--exact",
+        "--nocapture"
+      ],
+      "platform": "darwin",
+      "exit_code": 0,
+      "file_limit_bytes": null,
+      "elapsed_seconds": 39.94300216699776,
+      "peak_rss_bytes": 26017792,
+      "user_seconds": 38.383325,
+      "system_seconds": 0.6795519999999999,
+      "input_blocks": 0,
+      "output_blocks": 0,
+      "io_note": "Kernel block counters; cached reads/writes may be zero. Not logical byte counts.",
+      "logical_io": {
+        "audio_spool_write_bytes": 230784000,
+        "audio_window_read_bytes": 230784000,
+        "audio_stage_bytes": 173089419,
+        "video_stage_bytes": 109514,
+        "published_bytes": 173205025
+      }
+    },
+    "four_k": {
+      "command": [
+        "/Users/sora/Repositories/soramikan/kronello/.worktrees/m3-render3/target/debug/deps/streaming-e38184c2c5c97269",
+        "four_k_export_exceeds_previous_video_payload_limit",
+        "--ignored",
+        "--exact",
+        "--nocapture"
+      ],
+      "platform": "darwin",
+      "exit_code": 0,
+      "file_limit_bytes": null,
+      "elapsed_seconds": 74.09362287499971,
+      "peak_rss_bytes": 109985792,
+      "user_seconds": 71.785606,
+      "system_seconds": 1.053919,
+      "input_blocks": 0,
+      "output_blocks": 0,
+      "io_note": "Kernel block counters; cached reads/writes may be zero. Not logical byte counts.",
+      "logical_io": {
+        "audio_spool_write_bytes": 0,
+        "audio_window_read_bytes": 0,
+        "audio_stage_bytes": 108739,
+        "video_stage_bytes": 804109,
+        "published_bytes": 913096
+      }
+    },
+    "native_capacity": {
+      "command": [
+        "/Users/sora/Repositories/soramikan/kronello/.worktrees/m3-render3/target/debug/deps/streaming-e38184c2c5c97269",
+        "native_write_capacity_failure_removes_temporary_outputs",
+        "--ignored",
+        "--exact",
+        "--nocapture"
+      ],
+      "platform": "darwin",
+      "exit_code": 0,
+      "file_limit_bytes": 65536,
+      "elapsed_seconds": 0.01552833299501799,
+      "peak_rss_bytes": 14024704,
+      "user_seconds": 0.009861,
+      "system_seconds": 0.003926,
+      "input_blocks": 0,
+      "output_blocks": 0,
+      "io_note": "Kernel block counters; cached reads/writes may be zero. Not logical byte counts."
+    },
+    "spool_capacity": {
+      "command": [
+        "/Users/sora/Repositories/soramikan/kronello/.worktrees/m3-render3/target/debug/deps/streaming-e38184c2c5c97269",
+        "source_spool_capacity_failure_removes_temporary_outputs",
+        "--ignored",
+        "--exact",
+        "--nocapture"
+      ],
+      "platform": "darwin",
+      "exit_code": 0,
+      "file_limit_bytes": 16384,
+      "elapsed_seconds": 0.3534568329996546,
+      "peak_rss_bytes": 15155200,
+      "user_seconds": 0.007861,
+      "system_seconds": 0.006279,
+      "input_blocks": 0,
+      "output_blocks": 0,
+      "io_note": "Kernel block counters; cached reads/writes may be zero. Not logical byte counts."
+    }
+  },
+  "source_sha256": {
+    "crates/kronello-audio/src/lib.rs": "8fa279fe68b1fa94014af503773701ca85bfebfcd434946f17278fca26eef632",
+    "crates/kronello-audio/src/advanced.rs": "29780b58b5c38f158aad62c17a2a096a72ebf7a22763f0647eeae1849cbb09c1",
+    "crates/kronello-audio/src/document.rs": "5fab32509e1d0be85860ef03c55dc734356dee16d98297599bbe6f0282022ac0",
+    "crates/kronello-media/src/audio.rs": "b2b7dcfb0999890a61f7204c6bd89e08e835e3f6162ed2cc8cd07247f1b4f03e",
+    "crates/kronello-media/src/export.rs": "529062eaeb1dab7c23cf09bee6a8403818d7ff85b64957b50c7aefb27b6aa88f",
+    "crates/kronello-media/src/streaming.rs": "13c632069f9122a9eae089a7153ecb45316981f315916a0b8f1da58ec1e578d5",
+    "crates/kronello-media/src/video.rs": "61f88cd0644aa56ff89a8208f6dc680a8087c41b094f741e5c6392597a500b43",
+    "crates/kronello-media/src/ffi.rs": "1c0ca7b271bc85fbfe9d1cd438fcf5290f42e88ad302bec36e64c2165324fe86",
+    "crates/kronello-media/native/media.c": "792d097a52140d17d25f951a787e7c54e4697e75369fcd67cae1bf346433c3a0",
+    "crates/kronello-render/src/dag.rs": "6d5065ae7774df5468be2a8ac7cf31651109eb1b37560650edb52d3b5a37d414",
+    "crates/kronello-render/src/output.rs": "5220dfdba5a37455bdd5771aa24ac85396d4fba30dac5f7bbc89835a87e9793b",
+    "crates/kronello-media/tests/streaming.rs": "c532e3b858e31845d5a7d8862fcb496e1677cb628fa3f15a56c50f1602e3c339",
+    "scripts/measure_export_streaming.py": "f4480ad290e11a91dc9dfbdb84ca14b07b04b8365bc64c984004283743eef9c4"
+  }
+}

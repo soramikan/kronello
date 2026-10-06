@@ -3,8 +3,8 @@
 <!-- このファイルは scripts/backlog.py render が生成する。直接編集しない。正本は backlog.json。 -->
 
 - schema_version: 0.5
-- 更新日: 2026-10-04
-- タスク数: 71
+- 更新日: 2026-10-06
+- タスク数: 77
 
 ## 集計
 
@@ -13,8 +13,8 @@
 | M0 | 0 | 0 | 6 | 0 | 6 |
 | M1 | 0 | 0 | 14 | 0 | 14 |
 | M2 | 0 | 1 | 10 | 0 | 11 |
-| M3 | 23 | 0 | 0 | 0 | 23 |
-| M4 | 8 | 0 | 0 | 0 | 8 |
+| M3 | 0 | 0 | 25 | 0 | 25 |
+| M4 | 12 | 0 | 0 | 0 | 12 |
 | M5 | 5 | 0 | 0 | 0 | 5 |
 | M6 | 4 | 0 | 0 | 0 | 4 |
 
@@ -317,7 +317,7 @@
 
 ### EXPR-001 型付きASTと有界式評価
 
-- 優先度: P1 / 領域: expression / 状態: planned
+- 優先度: P1 / 領域: expression / 状態: done
 - 依存: EVAL-001, API-001
 - 受け入れ条件:
   - 静的依存列挙と命令/メモリ/サンプル予算を実装する
@@ -327,7 +327,7 @@
 
 ### LAYOUT-001 responsive layoutとbounds段階
 
-- 優先度: P1 / 領域: layout / 状態: planned
+- 優先度: P1 / 領域: layout / 状態: done
 - 依存: TEXT-001, VEC-001, EVAL-001
 - 受け入れ条件:
   - layout/ink/visual boundsを区別する
@@ -336,7 +336,7 @@
 
 ### TEMPLATE-002 長さ・縦横比variant・data入力・版移行
 
-- 優先度: P1 / 領域: template / 状態: planned
+- 優先度: P1 / 領域: template / 状態: done
 - 依存: TEMPLATE-001, LAYOUT-001
 - 受け入れ条件:
   - 短尺拒否/hold/loop/stretchを明示する
@@ -346,7 +346,7 @@
 
 ### GUI-001 macOSネイティブGUI: Canvas・階層・変換操作
 
-- 優先度: P1 / 領域: gui / 状態: planned
+- 優先度: P1 / 領域: gui / 状態: done
 - 依存: FFI-001, RENDER-001
 - 受け入れ条件:
   - GUI操作が共通command/eventを使う
@@ -357,7 +357,7 @@
 
 ### GUI-002 Dope sheetとCurve editor
 
-- 優先度: P1 / 領域: gui / 状態: planned
+- 優先度: P1 / 領域: gui / 状態: done
 - 依存: GUI-001, ANIM-001
 - 受け入れ条件:
   - キー移動/接線編集/UndoがCLIで読める同じモデルを変更する
@@ -365,7 +365,7 @@
 
 ### AUDIO-002 リアルタイム音声再生とA/V同期
 
-- 優先度: P1 / 領域: audio / 状態: planned
+- 優先度: P1 / 領域: audio / 状態: done
 - 依存: AUDIO-000, GUI-001
 - 受け入れ条件:
   - 音声コールバックをプロジェクト更新・ディスク読み出し・式評価と別の実行系にする
@@ -374,7 +374,7 @@
 
 ### INSPECT-001 非表示原因・依存・レンダー経路のexplain
 
-- 優先度: P1 / 領域: inspection / 状態: planned
+- 優先度: P1 / 領域: inspection / 状態: done
 - 依存: API-001, LAYOUT-001, CACHE-001
 - 受け入れ条件:
   - opacity/active range/parent/mask/asset不足を要因別に返す
@@ -382,7 +382,7 @@
 
 ### FFI-001 kronello-ffi: ネイティブGUI向けCommand/Query境界
 
-- 優先度: P1 / 領域: ffi / 状態: planned
+- 優先度: P1 / 領域: ffi / 状態: done
 - 依存: API-001
 - 受け入れ条件:
   - SwiftからCommand/Query APIを呼び、CLIと同じrevision/eventへ到達する
@@ -394,7 +394,7 @@
 
 ### QA-002 GUI/CLI/MCP同等性と日本語IME
 
-- 優先度: P1 / 領域: test / 状態: planned
+- 優先度: P1 / 領域: test / 状態: done
 - 依存: GUI-002, MCP-001, INTEGRATION-001
 - 受け入れ条件:
   - 同じ編集操作の結果snapshotが一致する
@@ -402,15 +402,32 @@
 
 ### INTEGRATION-002 縦断デモ第2段階: GUI閲覧と縦型variant
 
-- 優先度: P1 / 領域: integration / 状態: planned
+- 優先度: P1 / 領域: integration / 状態: done
 - 依存: INTEGRATION-001, TEMPLATE-002, GUI-001
 - 受け入れ条件:
   - 第1段階と同じプロジェクトをmacOS GUIで開き、CLI/MCPと同じ値・layout boundsを表示する
   - 同じtemplate定義を縦型variantで再利用し、再レイアウト結果を検証する
 
+### GUI-003 macOS GUI: 編集ページ（Sequence のトラック・素材一覧・クリップの Inspector）
+
+- 優先度: P2 / 領域: gui / 状態: done
+- 依存: GUI-001, NLE-002
+- 受け入れ条件:
+  - docs/design-system/screens/edit.md の配置で Project の素材一覧・Sequence の Viewer・クリップの Inspector・トラックを表示し、種類の色・選択・ASSET_MISSING を仕様どおりに示す
+  - クリップの配置・トリム・ブレードを共通 command/event で行い、ドラッグ中は候補表示、確定時に 1 コマンドを発行する。Undo・外部変更・競合は GUI-001 と同じ扱いにする
+  - Composition クリップからモーションページへ移り、その Composition を開ける
+
+### GUI-004 macOS GUI: テンプレートページと書き出しページ
+
+- 優先度: P2 / 領域: gui / 状態: done
+- 依存: GUI-001, TEMPLATE-002, INSPECT-001
+- 受け入れ条件:
+  - docs/design-system/screens/template.md の配置で variant を並べて layout/ink/visual bounds と TEMPLATE_OVERFLOW 等の診断を表示し、公開入力・版の差分計画・尺のポリシーを共通 API で扱う。既存配置を暗黙に更新しない
+  - docs/design-system/screens/export.md の配置で書き出し設定・書き出し前の確認・ジョブ一覧を表示し、型付きエラーがある間は書き出しを開始できない。投入した job は固定 snapshot の独立 worker で実行し、進捗・失敗を JobRow で示す
+
 ### VEC-004 グラデーションの拡張
 
-- 優先度: P2 / 領域: vector / 状態: planned
+- 優先度: P2 / 領域: vector / 状態: done
 - 依存: VEC-003
 - 受け入れ条件:
   - repeat/reflectのspreadを実装する
@@ -422,7 +439,7 @@
 
 ### VEC-005 線の拡張: 破線・線の位置・非一様変換
 
-- 優先度: P2 / 領域: vector / 状態: planned
+- 優先度: P2 / 領域: vector / 状態: done
 - 依存: VEC-003
 - 受け入れ条件:
   - 破線(dash配列・offset)とoffsetのアニメーションを実装する
@@ -431,7 +448,7 @@
 
 ### NLE-002 動画Asset/Generator ClipとTimeline編集の拡張
 
-- 優先度: P1 / 領域: timeline / 状態: planned
+- 優先度: P1 / 領域: timeline / 状態: done
 - 依存: NLE-001, MEDIA-001, FX-001
 - 受け入れ条件:
   - 動画Asset Clipを明示stream・source_in・TimeMapで描画し、CFR/VFR/B-frameの正確なseekと配置境界、異なる配置の独立性を検証する
@@ -441,7 +458,7 @@
 
 ### AUDIO-003 Sequence音声trackのA/V muxとclip音量
 
-- 優先度: P1 / 領域: audio / 状態: planned
+- 優先度: P1 / 領域: audio / 状態: done
 - 依存: NLE-001, AUDIO-000, JOB-001
 - 受け入れ条件:
   - Sequenceのaudio trackを同じ固定RenderSnapshotから音声配置へcompileし、映像と音声を同期exportおよびrender.submitのProRes/PCM24 MOVへmuxする
@@ -452,16 +469,17 @@
 
 ### AUDIO-004 リタイム音声・audio effects・Generator音声
 
-- 優先度: P1 / 領域: audio / 状態: planned
+- 優先度: P1 / 領域: audio / 状態: done
 - 依存: AUDIO-003, ANIM-001
 - 受け入れ条件:
   - retimed audioのTimeMap・補間・pitchの扱いを設計して意味版を固定し、線形/区分線形map、trim/stretch、非整数sample境界で同期とsource範囲を検証する
   - audio effectsとGenerator音声の純粋評価・資源予算・固定入力の契約を定義し、同じsnapshotを任意順のbatchで評価して一致することを検証する
+  - Sequenceのcrossfadeに含まれる音声clipの音声crossfade（曲線・意味版・sample境界）を定義して検証し、現行のUNSUPPORTED_FEATUREを対応範囲内で解消する
   - 未対応map・effect・Generator、予算超過や非有限値を型付きエラーにし、暗黙の速度1・無音・clampで続行しない
 
 ### MEDIA-002 追加movie job profileと圧縮音声
 
-- 優先度: P1 / 領域: media / 状態: planned
+- 優先度: P1 / 領域: media / 状態: done
 - 依存: MEDIA-001, AUDIO-000, JOB-001
 - 受け入れ条件:
   - AV1・H.264・HEVCを同期exportとrender.submitの版付き出力profileとして公開し、固定snapshot・PTS/duration・probe・no-clobber publicationを検証する
@@ -471,7 +489,7 @@
 
 ### RENDER-003 長尺・大解像度exportのstreaming
 
-- 優先度: P1 / 領域: render / 状態: planned
+- 優先度: P1 / 領域: render / 状態: done
 - 依存: JOB-001, AUDIO-000, FX-001
 - 受け入れ条件:
   - 音声source/Busと映像payloadを有界batchでdecode・render・encode/muxし、10分/全source 28800000 stereo frames・映像256 MiBの現行上限を超える長尺exportを再現可能な手順で検証する
@@ -481,7 +499,7 @@
 
 ### MCP-002 MCP HTTP・resources/prompts・進捗とキャンセル
 
-- 優先度: P1 / 領域: mcp / 状態: planned
+- 優先度: P1 / 領域: mcp / 状態: done
 - 依存: MCP-001, JOB-001
 - 受け入れ条件:
   - HTTP transportの接続・認証・版交渉・終了の契約を定義し、stdioと同じCommand/Query registry・schema・型付き結果へ到達することを実クライアントで検証する
@@ -492,16 +510,18 @@
 
 ### JOB-002 Windows workerのdetachと各OSの実プロセス検証
 
-- 優先度: P1 / 領域: jobs / 状態: planned
+- 優先度: P1 / 領域: jobs / 状態: done
 - 依存: JOB-001, MCP-001
 - 受け入れ条件:
   - WindowsでCLI/MCPの終了から独立するworker起動・stdio/log・回収の契約を実装し、親終了後も固定入力のジョブが継続することを実機またはCIで検証する
   - Windowsの上書き禁止publicationを設計し、同一volume・既存file/空directoryの拒否・cancel/lease競合を実プロセスで検証する
   - Linux/WindowsでFIFO slot・queued/running heartbeat・強制終了後のinterrupted・pruneを検証し、OS/版/コマンド/exitを記録する。未検証OSを保証経路に昇格しない
+  - 高負荷時（load average 50 前後）に CLI の job テスト（例: sequence_target_job_preserves_placements_after_trim_and_project_removal）が Queued のまま 60 秒で timeout する事象を再現・原因調査し、状態 DB の lock 競合下でも job が開始されることを検証する
+  - テストが失敗・時間切れになっても、起動した detached worker（`kronello worker --job`）を必ず回収し、テスト後に孤立 process を残さないことを検証する（2026-10-05 に最長14時間残った worker を6件確認）
 
 ### FX-002 非一様affine下のblur/shadow
 
-- 優先度: P2 / 領域: effects / 状態: planned
+- 優先度: P2 / 領域: effects / 状態: done
 - 依存: FX-001
 - 受け入れ条件:
   - 非一様scale/shear下の正sigmaのGaussian blur/drop shadowの意味を定義して版を管理し、現行のUNSUPPORTED_FEATUREを対応範囲内で解消する
@@ -509,7 +529,7 @@
 
 ### API-002 scene検索・paging・固定履歴cursorとevent stream
 
-- 優先度: P2 / 領域: api / 状態: planned
+- 優先度: P2 / 領域: api / 状態: done
 - 依存: API-001, INTEGRATION-001
 - 受け入れ条件:
   - scene.queryに範囲・タグ・種類による検索とpagingを追加し、InstancePath/NodeId・所有順・revisionを保ち、既存の明示evaluation modeとの整合性を検証する
@@ -519,7 +539,7 @@
 
 ### SERVICE-002 project作成/importの計画・冪等性とModifier編集
 
-- 優先度: P2 / 領域: service / 状態: planned
+- 優先度: P2 / 領域: service / 状態: done
 - 依存: SERVICE-001, API-001
 - 受け入れ条件:
   - project.create/importの変更計画・再送の冪等性を共通APIで設計し、createの出力予約とimportのrevision照合、同一キー異payloadの拒否、保存後再送を実プロセスで検証する
@@ -528,7 +548,7 @@
 
 ### RELEASE-001 同梱FFmpegを含む配布packageの再配置・署名検証
 
-- 優先度: P1 / 領域: release / 状態: planned
+- 優先度: P1 / 領域: release / 状態: done
 - 依存: MEDIA-001, AUDIO-000, CLI-001, MCP-001
 - 受け入れ条件:
   - macOSの配布packageに同梱するFFmpeg共有library・SVT-AV1・dav1d・license原文・PATENTS・source manifestを固定し、GPL/nonfree・開発用system libraryを含めないことを検証する
@@ -615,6 +635,39 @@
   - プロジェクト外のcache領域へraster結果を永続化し、削除しても描画結果が変わらない
   - GPU texture/surface poolの所有権・寿命・予算とtile/halo再利用を検証し、非対応資源をCPU cacheへ黙って置換しない
   - 厳密raster cacheのbackend/GPU/driver fingerprintと意味版をkeyへ固定し、異なる実行環境の結果を誤再利用しない
+
+### COMP-002 Composition の Media ノード（画像・映像）と MediaSlot の描画
+
+- 優先度: P1 / 領域: render / 状態: planned
+- 依存: TEMPLATE-002, NLE-002
+- 受け入れ条件:
+  - Composition の Media ノードを素材参照・source time・色契約つきで描画し、CPU 参照と明示 GPU 実行で検証する
+  - TEMPLATE-002 の MediaSlot 入力を最終レンダーへ接続し、素材不足・hash 不一致は型付き失敗にする
+
+### MCP-003 MCP 2026-07-28 版（server/discover・要求ごとの版指定）への対応
+
+- 優先度: P2 / 領域: api / 状態: planned
+- 依存: MCP-002
+- 受け入れ条件:
+  - 2026-07-28 版の server/discover と要求ごとの版指定を、2025-11-25 版の initialize と併存させて実装し、同じ Command/Query registry・schema・型付き結果へ到達することを外部 client SDK で検証する
+  - 未対応の版や機能を対応済みとして広告しない
+
+### FFI-002 GUI セッション中の安全モード排他の保持
+
+- 優先度: P2 / 領域: gui / 状態: planned
+- 依存: GUI-001
+- 受け入れ条件:
+  - 安全モードで開いたプロジェクトについて、GUI を開いている間は他プロセス（CLI / MCP）が PROJECT_LOCKED になるよう、FFI / service の store の寿命を GUI セッションに合わせる
+  - GUI を閉じたとき・異常終了したときに lock が解放され、再 open できることを実プロセスで検証する
+
+### MEDIA-003 Windows の FFmpeg 実行時読み込みと CLI/MCP の Windows ビルド
+
+- 優先度: P1 / 領域: media / 状態: planned
+- 依存: MEDIA-001, JOB-002, RELEASE-001
+- 受け入れ条件:
+  - kronello-media の native 読み込み（dlfcn / pkg-config 前提）を Windows の LGPL FFmpeg 共有 library に対応させ、CLI / MCP を Windows でビルドする
+  - Windows で ProRes / PCM24 と AV1 の書き出し・roundtrip、capabilities を実行し、OS / 版 / コマンド / exit を記録する
+  - JOB-002 で jobs / platform 層だけを検証した Windows の detached worker を、実際の `kronello worker --job` で親終了後も継続することを CI で検証する
 
 
 ## M5

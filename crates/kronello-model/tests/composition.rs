@@ -20,6 +20,9 @@ fn instance_id(value: u128) -> CompositionInstanceId {
 }
 fn node(id: u128, kind: NodeKind) -> SceneNode {
     SceneNode {
+        tags: Default::default(),
+        name: None,
+        enabled: true,
         effects: vec![],
         id: node_id(id),
         kind,

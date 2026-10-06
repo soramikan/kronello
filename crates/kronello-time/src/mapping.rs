@@ -1,4 +1,4 @@
-use crate::{Rational, Time, TimeError};
+use crate::{Duration, Rational, Time, TimeError};
 use serde::{Deserialize, Serialize};
 
 /// An exact parent/local control point.
@@ -9,15 +9,15 @@ pub struct TimeMapPoint {
     pub local: Time,
 }
 
-/// Exact, stateless mappings. Reverse playback, looping, stopping and nonlinear
-/// mapping are unsupported. Future nonlinear variants require a versioned
-/// quantization, rounding and evaluation contract; no floating time is stored.
+/// Exact, stateless mappings. Protected middle segments support hold and loop.
+/// Reverse and general nonlinear playback remain unsupported.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(try_from = "MapWire", into = "MapWire")]
 #[non_exhaustive]
 pub enum TimeMap {
     Linear(LinearTimeMap),
     PiecewiseLinear(PiecewiseTimeMap),
+    Protected(ProtectedTimeMap),
 }
 
 /// A validated positive-speed affine mapping over all representable times.
@@ -33,7 +33,42 @@ pub struct PiecewiseTimeMap {
     points: Vec<TimeMapPoint>,
 }
 
+/// Only the middle is retimed; intro/outro retain unit speed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ProtectedMiddleMode {
+    Hold,
+    Loop,
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProtectedTimeMap {
+    authoring: Duration,
+    requested: Duration,
+    intro: Duration,
+    outro: Duration,
+    mode: ProtectedMiddleMode,
+}
 impl TimeMap {
+    pub fn protected(
+        authoring: Duration,
+        requested: Duration,
+        intro: Duration,
+        outro: Duration,
+        mode: ProtectedMiddleMode,
+    ) -> Result<Self, TimeError> {
+        let protected = intro.as_time().checked_add(outro.as_time())?;
+        if authoring.as_time() <= protected || requested.as_time() <= protected {
+            return Err(TimeError::OutsideMapDomain);
+        }
+        Ok(Self::Protected(ProtectedTimeMap {
+            authoring,
+            requested,
+            intro,
+            outro,
+            mode,
+        }))
+    }
+
     /// local = offset + parent * speed. Speed is dimensionless and positive.
     pub fn linear(offset: Time, speed: Rational) -> Result<Self, TimeError> {
         if speed <= Rational::ZERO {
@@ -64,6 +99,31 @@ impl TimeMap {
     pub fn map(&self, parent: Time) -> Result<Time, TimeError> {
         match self {
             Self::Linear(map) => map.offset.checked_add(parent.checked_mul(map.speed)?),
+            Self::Protected(map) => {
+                if parent < Time::ZERO || parent > map.requested.as_time() {
+                    return Err(TimeError::OutsideMapDomain);
+                }
+                let intro = map.intro.as_time();
+                let end = map.requested.as_time().checked_sub(map.outro.as_time())?;
+                let source_end = map.authoring.as_time().checked_sub(map.outro.as_time())?;
+                if parent < intro {
+                    return Ok(parent);
+                }
+                if parent >= end {
+                    return source_end.checked_add(parent.checked_sub(end)?);
+                }
+                match map.mode {
+                    ProtectedMiddleMode::Hold => Ok(intro),
+                    ProtectedMiddleMode::Loop => {
+                        let period = source_end.checked_sub(intro)?;
+                        let elapsed = parent.checked_sub(intro)?;
+                        let cycles = elapsed.checked_div(period)?.floor();
+                        intro.checked_add(
+                            elapsed.checked_sub(period.checked_mul(Time::from_integer(cycles))?)?,
+                        )
+                    }
+                }
+            }
             Self::PiecewiseLinear(map) => {
                 // Construction guarantees at least two ordered points.
                 let points = &map.points;
@@ -104,8 +164,20 @@ impl PiecewiseTimeMap {
 #[derive(Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 enum MapWire {
-    Linear { offset: Time, speed: Rational },
-    PiecewiseLinear { points: Vec<TimeMapPoint> },
+    Linear {
+        offset: Time,
+        speed: Rational,
+    },
+    PiecewiseLinear {
+        points: Vec<TimeMapPoint>,
+    },
+    Protected {
+        authoring: Duration,
+        requested: Duration,
+        intro: Duration,
+        outro: Duration,
+        mode: ProtectedMiddleMode,
+    },
 }
 
 impl TryFrom<MapWire> for TimeMap {
@@ -115,6 +187,13 @@ impl TryFrom<MapWire> for TimeMap {
         match value {
             MapWire::Linear { offset, speed } => Self::linear(offset, speed),
             MapWire::PiecewiseLinear { points } => Self::piecewise_linear(points),
+            MapWire::Protected {
+                authoring,
+                requested,
+                intro,
+                outro,
+                mode,
+            } => Self::protected(authoring, requested, intro, outro, mode),
         }
     }
 }
@@ -127,6 +206,13 @@ impl From<TimeMap> for MapWire {
                 speed: map.speed,
             },
             TimeMap::PiecewiseLinear(map) => Self::PiecewiseLinear { points: map.points },
+            TimeMap::Protected(map) => Self::Protected {
+                authoring: map.authoring,
+                requested: map.requested,
+                intro: map.intro,
+                outro: map.outro,
+                mode: map.mode,
+            },
         }
     }
 }

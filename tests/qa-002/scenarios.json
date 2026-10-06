@@ -1,0 +1,1107 @@
+{
+  "format": 1,
+  "document": {
+    "id": "d5808faa-5b6f-4921-9797-8bbc0dcf5416",
+    "schema_version": 1,
+    "semantic_version": 1,
+    "name": "QA-002 独立入口",
+    "compositions": [
+      {
+        "id": "e706c050-13fa-4654-9350-dcef30f1d792",
+        "duration": {
+          "num": "3",
+          "den": "1"
+        },
+        "design_extent": {
+          "width": 64.0,
+          "height": 32.0
+        },
+        "edit_rate": {
+          "num": "24",
+          "den": "1"
+        },
+        "root_nodes": [
+          "adcfcd01-95a0-4292-ba82-61369bf4ac8c",
+          "955f3ce9-88f6-4025-978a-6d42e5c08d31"
+        ],
+        "nodes": [
+          {
+            "id": "adcfcd01-95a0-4292-ba82-61369bf4ac8c",
+            "kind": {
+              "kind": "shape",
+              "value": {
+                "content_ref": "36bbe1b1-f5c0-46ba-90f3-3b4cb000e200"
+              }
+            },
+            "containment_parent": null,
+            "transform_parent": null,
+            "child_order": [],
+            "active_range": {
+              "start": {
+                "num": "-2",
+                "den": "1"
+              },
+              "end": {
+                "num": "3",
+                "den": "1"
+              }
+            },
+            "properties": [
+              {
+                "id": "1d77434e-64ef-4de4-9e38-98bb71bb03fe",
+                "descriptor": {
+                  "key": "kronello.shape.size",
+                  "version": 1
+                },
+                "source": {
+                  "kind": "constant",
+                  "value": {
+                    "kind": "vec2",
+                    "value": [
+                      16.0,
+                      12.0
+                    ]
+                  }
+                },
+                "modifiers": []
+              },
+              {
+                "id": "561797a3-732d-406d-8755-57fd074c0050",
+                "descriptor": {
+                  "key": "kronello.shape.corner_radius",
+                  "version": 1
+                },
+                "source": {
+                  "kind": "constant",
+                  "value": {
+                    "kind": "scalar",
+                    "value": 0.0
+                  }
+                },
+                "modifiers": []
+              },
+              {
+                "id": "4e4837d7-b8f7-47e6-a455-cc35e5b00cdd",
+                "descriptor": {
+                  "key": "kronello.fill_color",
+                  "version": 1
+                },
+                "source": {
+                  "kind": "constant",
+                  "value": {
+                    "kind": "color",
+                    "value": {
+                      "space": "srgb",
+                      "components": {
+                        "r": 0.7843137254901961,
+                        "g": 0.1568627450980392,
+                        "b": 0.0392156862745098,
+                        "alpha": 1.0
+                      }
+                    }
+                  }
+                },
+                "modifiers": []
+              },
+              {
+                "id": "cecd9404-ac4e-4245-9d6a-84aa26590fc6",
+                "descriptor": {
+                  "key": "kronello.transform.position",
+                  "version": 1
+                },
+                "source": {
+                  "kind": "curve",
+                  "value": "a06bc70e-d4cd-48d2-87f3-c7b5d8984c93"
+                },
+                "modifiers": []
+              },
+              {
+                "id": "04f5a966-c8a3-45b0-a1a9-ee990e09ab0e",
+                "descriptor": {
+                  "key": "kronello.opacity",
+                  "version": 1
+                },
+                "source": {
+                  "kind": "constant",
+                  "value": {
+                    "kind": "scalar",
+                    "value": 0.75
+                  }
+                },
+                "modifiers": []
+              },
+              {
+                "id": "30b3d1de-cfdf-5046-9823-0bd2522d0b5e",
+                "descriptor": {
+                  "key": "kronello.transform.scale",
+                  "version": 1
+                },
+                "source": {
+                  "kind": "constant",
+                  "value": {
+                    "kind": "vec2",
+                    "value": [
+                      1.0,
+                      1.0
+                    ]
+                  }
+                },
+                "modifiers": []
+              },
+              {
+                "id": "98e6a0cf-731b-5605-a0c4-d5efdaea6703",
+                "descriptor": {
+                  "key": "kronello.transform.rotation",
+                  "version": 1
+                },
+                "source": {
+                  "kind": "constant",
+                  "value": {
+                    "kind": "angle",
+                    "value": 0.0
+                  }
+                },
+                "modifiers": []
+              }
+            ]
+          },
+          {
+            "id": "955f3ce9-88f6-4025-978a-6d42e5c08d31",
+            "kind": {
+              "kind": "text",
+              "value": {
+                "content_ref": "295fc1de-bbfb-4744-8bcf-1f3875a93ed1"
+              }
+            },
+            "containment_parent": null,
+            "transform_parent": null,
+            "child_order": [],
+            "active_range": {
+              "start": {
+                "num": "-2",
+                "den": "1"
+              },
+              "end": {
+                "num": "3",
+                "den": "1"
+              }
+            },
+            "properties": [
+              {
+                "id": "e84691d5-ae83-453b-a30d-5580455c224a",
+                "descriptor": {
+                  "key": "kronello.text.font_size",
+                  "version": 1
+                },
+                "source": {
+                  "kind": "constant",
+                  "value": {
+                    "kind": "scalar",
+                    "value": 12.0
+                  }
+                },
+                "modifiers": []
+              },
+              {
+                "id": "8ab51dda-b6ed-4e08-9342-ba0c44f35a8d",
+                "descriptor": {
+                  "key": "kronello.fill_color",
+                  "version": 1
+                },
+                "source": {
+                  "kind": "constant",
+                  "value": {
+                    "kind": "color",
+                    "value": {
+                      "space": "srgb",
+                      "components": {
+                        "r": 0.0784313725490196,
+                        "g": 0.6274509803921569,
+                        "b": 0.23529411764705882,
+                        "alpha": 1.0
+                      }
+                    }
+                  }
+                },
+                "modifiers": []
+              },
+              {
+                "id": "e9de66ef-6359-4dbb-ae53-19289e9acce2",
+                "descriptor": {
+                  "key": "kronello.text.wrap_width",
+                  "version": 1
+                },
+                "source": {
+                  "kind": "constant",
+                  "value": {
+                    "kind": "scalar",
+                    "value": 50.0
+                  }
+                },
+                "modifiers": []
+              },
+              {
+                "id": "a506f1e9-55f2-4187-bbc6-3e1b4c8830cf",
+                "descriptor": {
+                  "key": "kronello.text.line_height",
+                  "version": 1
+                },
+                "source": {
+                  "kind": "constant",
+                  "value": {
+                    "kind": "scalar",
+                    "value": 16.0
+                  }
+                },
+                "modifiers": []
+              },
+              {
+                "id": "f5cb616d-6566-46a3-9999-45e432b573b2",
+                "descriptor": {
+                  "key": "kronello.text.alignment",
+                  "version": 1
+                },
+                "source": {
+                  "kind": "constant",
+                  "value": {
+                    "kind": "enum",
+                    "value": "start"
+                  }
+                },
+                "modifiers": []
+              },
+              {
+                "id": "4bdb44e9-7c70-47e4-8b37-de23c38efb21",
+                "descriptor": {
+                  "key": "kronello.transform.position",
+                  "version": 1
+                },
+                "source": {
+                  "kind": "constant",
+                  "value": {
+                    "kind": "vec2",
+                    "value": [
+                      20.0,
+                      5.0
+                    ]
+                  }
+                },
+                "modifiers": []
+              }
+            ]
+          }
+        ],
+        "properties": []
+      }
+    ],
+    "curves": [
+      {
+        "id": "a06bc70e-d4cd-48d2-87f3-c7b5d8984c93",
+        "value_type": "vec2",
+        "keys": [
+          {
+            "time": {
+              "num": "0",
+              "den": "1"
+            },
+            "value": {
+              "kind": "vec2",
+              "value": [
+                0.0,
+                0.0
+              ]
+            },
+            "interpolation": {
+              "kind": "cubic",
+              "value": {
+                "control1": [
+                  0.3333333333333333,
+                  0.3333333333333333
+                ],
+                "control2": [
+                  0.6666666666666666,
+                  0.6666666666666666
+                ]
+              }
+            }
+          },
+          {
+            "time": {
+              "num": "1",
+              "den": "1"
+            },
+            "value": {
+              "kind": "vec2",
+              "value": [
+                100.0,
+                200.0
+              ]
+            },
+            "interpolation": {
+              "kind": "cubic",
+              "value": {
+                "control1": [
+                  0.3333333333333333,
+                  0.3333333333333333
+                ],
+                "control2": [
+                  0.6666666666666666,
+                  0.6666666666666666
+                ]
+              }
+            }
+          },
+          {
+            "time": {
+              "num": "2",
+              "den": "1"
+            },
+            "value": {
+              "kind": "vec2",
+              "value": [
+                200.0,
+                400.0
+              ]
+            },
+            "interpolation": {
+              "kind": "cubic",
+              "value": {
+                "control1": [
+                  0.3333333333333333,
+                  0.3333333333333333
+                ],
+                "control2": [
+                  0.6666666666666666,
+                  0.6666666666666666
+                ]
+              }
+            }
+          }
+        ],
+        "interpolation_version": 1
+      }
+    ],
+    "shapes": [
+      {
+        "id": "36bbe1b1-f5c0-46ba-90f3-3b4cb000e200",
+        "geometry": {
+          "kind": "rectangle",
+          "value": {
+            "size": "1d77434e-64ef-4de4-9e38-98bb71bb03fe",
+            "corner_radius": "561797a3-732d-406d-8755-57fd074c0050"
+          }
+        },
+        "fill": {
+          "color": "4e4837d7-b8f7-47e6-a455-cc35e5b00cdd",
+          "rule": "nonzero"
+        },
+        "stroke": null
+      }
+    ],
+    "texts": [
+      {
+        "id": "295fc1de-bbfb-4744-8bcf-1f3875a93ed1",
+        "layout_version": 1,
+        "text": "日本語",
+        "styles": [
+          {
+            "range": {
+              "start": 0,
+              "end": 9
+            },
+            "font": {
+              "family": "Noto Sans CJK JP",
+              "postscript_name": "NotoSansCJKjp-Regular",
+              "sha256": "68a3fc98800b2a27b371f2fb79991daf3633bd89309d4ffaa6946fd587f375b5",
+              "face_index": 0
+            },
+            "size": "e84691d5-ae83-453b-a30d-5580455c224a",
+            "fill": "8ab51dda-b6ed-4e08-9342-ba0c44f35a8d"
+          }
+        ],
+        "direction": "horizontal",
+        "wrap_width": "e9de66ef-6359-4dbb-ae53-19289e9acce2",
+        "line_height": "a506f1e9-55f2-4187-bbc6-3e1b4c8830cf",
+        "alignment": "f5cb616d-6566-46a3-9999-45e432b573b2"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "name": "transform.position0",
+      "action": "numeric",
+      "property": "kronello.transform.position",
+      "axis": 0,
+      "display": 123.25,
+      "commands": [
+        {
+          "keyframe_upsert": {
+            "curve": "a06bc70e-d4cd-48d2-87f3-c7b5d8984c93",
+            "key": {
+              "interpolation": {
+                "kind": "cubic",
+                "value": {
+                  "control1": [
+                    0.3333333333333333,
+                    0.3333333333333333
+                  ],
+                  "control2": [
+                    0.6666666666666666,
+                    0.6666666666666666
+                  ]
+                }
+              },
+              "time": {
+                "den": "1",
+                "num": "0"
+              },
+              "value": {
+                "kind": "vec2",
+                "value": [
+                  123.25,
+                  0
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "transform.position1",
+      "action": "numeric",
+      "property": "kronello.transform.position",
+      "axis": 1,
+      "display": -12.5,
+      "commands": [
+        {
+          "keyframe_upsert": {
+            "curve": "a06bc70e-d4cd-48d2-87f3-c7b5d8984c93",
+            "key": {
+              "interpolation": {
+                "kind": "cubic",
+                "value": {
+                  "control1": [
+                    0.3333333333333333,
+                    0.3333333333333333
+                  ],
+                  "control2": [
+                    0.6666666666666666,
+                    0.6666666666666666
+                  ]
+                }
+              },
+              "time": {
+                "den": "1",
+                "num": "0"
+              },
+              "value": {
+                "kind": "vec2",
+                "value": [
+                  123.25,
+                  -12.5
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "transform.scale0",
+      "action": "numeric",
+      "property": "kronello.transform.scale",
+      "axis": 0,
+      "display": 125.0,
+      "commands": [
+        {
+          "property_source_set": {
+            "object": "adcfcd01-95a0-4292-ba82-61369bf4ac8c",
+            "property": "30b3d1de-cfdf-5046-9823-0bd2522d0b5e",
+            "source": {
+              "kind": "constant",
+              "value": {
+                "kind": "vec2",
+                "value": [
+                  1.25,
+                  1
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "transform.scale1",
+      "action": "numeric",
+      "property": "kronello.transform.scale",
+      "axis": 1,
+      "display": 87.5,
+      "commands": [
+        {
+          "property_source_set": {
+            "object": "adcfcd01-95a0-4292-ba82-61369bf4ac8c",
+            "property": "30b3d1de-cfdf-5046-9823-0bd2522d0b5e",
+            "source": {
+              "kind": "constant",
+              "value": {
+                "kind": "vec2",
+                "value": [
+                  1.25,
+                  0.875
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "transform.rotation0",
+      "action": "numeric",
+      "property": "kronello.transform.rotation",
+      "axis": 0,
+      "display": 32.5,
+      "commands": [
+        {
+          "property_source_set": {
+            "object": "adcfcd01-95a0-4292-ba82-61369bf4ac8c",
+            "property": "98e6a0cf-731b-5605-a0c4-d5efdaea6703",
+            "source": {
+              "kind": "constant",
+              "value": {
+                "kind": "angle",
+                "value": 32.5
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "opacity0",
+      "action": "numeric",
+      "property": "kronello.opacity",
+      "axis": 0,
+      "display": 48.25,
+      "commands": [
+        {
+          "property_source_set": {
+            "object": "adcfcd01-95a0-4292-ba82-61369bf4ac8c",
+            "property": "04f5a966-c8a3-45b0-a1a9-ee990e09ab0e",
+            "source": {
+              "kind": "constant",
+              "value": {
+                "kind": "scalar",
+                "value": 0.4825
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "rename-japanese",
+      "action": "rename",
+      "value": "見出し が 葛󠄀",
+      "commands": [
+        {
+          "node_rename": {
+            "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+            "name": "見出し が 葛󠄀",
+            "node": "adcfcd01-95a0-4292-ba82-61369bf4ac8c"
+          }
+        }
+      ]
+    },
+    {
+      "name": "text-precomposed",
+      "action": "text",
+      "value": "が",
+      "commands": [
+        {
+          "text_set": {
+            "text": {
+              "id": "295fc1de-bbfb-4744-8bcf-1f3875a93ed1",
+              "layout_version": 1,
+              "text": "が",
+              "styles": [
+                {
+                  "range": {
+                    "start": 0,
+                    "end": 3
+                  },
+                  "font": {
+                    "family": "Noto Sans CJK JP",
+                    "postscript_name": "NotoSansCJKjp-Regular",
+                    "sha256": "68a3fc98800b2a27b371f2fb79991daf3633bd89309d4ffaa6946fd587f375b5",
+                    "face_index": 0
+                  },
+                  "size": "e84691d5-ae83-453b-a30d-5580455c224a",
+                  "fill": "8ab51dda-b6ed-4e08-9342-ba0c44f35a8d"
+                }
+              ],
+              "direction": "horizontal",
+              "wrap_width": "e9de66ef-6359-4dbb-ae53-19289e9acce2",
+              "line_height": "a506f1e9-55f2-4187-bbc6-3e1b4c8830cf",
+              "alignment": "f5cb616d-6566-46a3-9999-45e432b573b2"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "text-decomposed",
+      "action": "text",
+      "value": "が",
+      "commands": [
+        {
+          "text_set": {
+            "text": {
+              "id": "295fc1de-bbfb-4744-8bcf-1f3875a93ed1",
+              "layout_version": 1,
+              "text": "が",
+              "styles": [
+                {
+                  "range": {
+                    "start": 0,
+                    "end": 6
+                  },
+                  "font": {
+                    "family": "Noto Sans CJK JP",
+                    "postscript_name": "NotoSansCJKjp-Regular",
+                    "sha256": "68a3fc98800b2a27b371f2fb79991daf3633bd89309d4ffaa6946fd587f375b5",
+                    "face_index": 0
+                  },
+                  "size": "e84691d5-ae83-453b-a30d-5580455c224a",
+                  "fill": "8ab51dda-b6ed-4e08-9342-ba0c44f35a8d"
+                }
+              ],
+              "direction": "horizontal",
+              "wrap_width": "e9de66ef-6359-4dbb-ae53-19289e9acce2",
+              "line_height": "a506f1e9-55f2-4187-bbc6-3e1b4c8830cf",
+              "alignment": "f5cb616d-6566-46a3-9999-45e432b573b2"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "text-combining-and-ivs",
+      "action": "text",
+      "value": "日本語 が 葛󠄀",
+      "commands": [
+        {
+          "text_set": {
+            "text": {
+              "alignment": "f5cb616d-6566-46a3-9999-45e432b573b2",
+              "direction": "horizontal",
+              "id": "295fc1de-bbfb-4744-8bcf-1f3875a93ed1",
+              "layout_version": 1,
+              "line_height": "a506f1e9-55f2-4187-bbc6-3e1b4c8830cf",
+              "styles": [
+                {
+                  "fill": "8ab51dda-b6ed-4e08-9342-ba0c44f35a8d",
+                  "font": {
+                    "face_index": 0,
+                    "family": "Noto Sans CJK JP",
+                    "postscript_name": "NotoSansCJKjp-Regular",
+                    "sha256": "68a3fc98800b2a27b371f2fb79991daf3633bd89309d4ffaa6946fd587f375b5"
+                  },
+                  "range": {
+                    "end": 24,
+                    "start": 0
+                  },
+                  "size": "e84691d5-ae83-453b-a30d-5580455c224a"
+                }
+              ],
+              "text": "日本語 が 葛󠄀",
+              "wrap_width": "e9de66ef-6359-4dbb-ae53-19289e9acce2"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "disable",
+      "action": "enabled",
+      "commands": [
+        {
+          "node_enabled_set": {
+            "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+            "enabled": false,
+            "node": "adcfcd01-95a0-4292-ba82-61369bf4ac8c"
+          }
+        }
+      ]
+    },
+    {
+      "name": "enable",
+      "action": "enabled",
+      "commands": [
+        {
+          "node_enabled_set": {
+            "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+            "enabled": true,
+            "node": "adcfcd01-95a0-4292-ba82-61369bf4ac8c"
+          }
+        }
+      ]
+    },
+    {
+      "name": "insert",
+      "action": "insert",
+      "frame": 12,
+      "commands": [
+        {
+          "keyframe_insert": {
+            "curve": "a06bc70e-d4cd-48d2-87f3-c7b5d8984c93",
+            "key": {
+              "interpolation": {
+                "kind": "linear"
+              },
+              "time": {
+                "den": "2",
+                "num": "1"
+              },
+              "value": {
+                "kind": "vec2",
+                "value": [
+                  111.625,
+                  93.75
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "move",
+      "action": "move",
+      "frame": 24,
+      "delta": 5,
+      "commands": [
+        {
+          "keyframe_remove": {
+            "curve": "a06bc70e-d4cd-48d2-87f3-c7b5d8984c93",
+            "time": {
+              "den": "1",
+              "num": "1"
+            }
+          }
+        },
+        {
+          "keyframe_insert": {
+            "curve": "a06bc70e-d4cd-48d2-87f3-c7b5d8984c93",
+            "key": {
+              "interpolation": {
+                "kind": "cubic",
+                "value": {
+                  "control1": [
+                    0.3333333333333333,
+                    0.3333333333333333
+                  ],
+                  "control2": [
+                    0.6666666666666666,
+                    0.6666666666666666
+                  ]
+                }
+              },
+              "time": {
+                "den": "24",
+                "num": "29"
+              },
+              "value": {
+                "kind": "vec2",
+                "value": [
+                  100,
+                  200
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "interpolation-hold",
+      "action": "interpolation",
+      "frame": 29,
+      "mode": "hold",
+      "commands": [
+        {
+          "keyframe_replace": {
+            "curve": "a06bc70e-d4cd-48d2-87f3-c7b5d8984c93",
+            "key": {
+              "interpolation": {
+                "kind": "hold"
+              },
+              "time": {
+                "den": "24",
+                "num": "29"
+              },
+              "value": {
+                "kind": "vec2",
+                "value": [
+                  100,
+                  200
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "interpolation-linear",
+      "action": "interpolation",
+      "frame": 29,
+      "mode": "linear",
+      "commands": [
+        {
+          "keyframe_replace": {
+            "curve": "a06bc70e-d4cd-48d2-87f3-c7b5d8984c93",
+            "key": {
+              "interpolation": {
+                "kind": "linear"
+              },
+              "time": {
+                "den": "24",
+                "num": "29"
+              },
+              "value": {
+                "kind": "vec2",
+                "value": [
+                  100,
+                  200
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "interpolation-cubic",
+      "action": "interpolation",
+      "frame": 29,
+      "mode": "cubic",
+      "commands": [
+        {
+          "keyframe_replace": {
+            "curve": "a06bc70e-d4cd-48d2-87f3-c7b5d8984c93",
+            "key": {
+              "interpolation": {
+                "kind": "cubic",
+                "value": {
+                  "control1": [
+                    0.3333333333333333,
+                    0.3333333333333333
+                  ],
+                  "control2": [
+                    0.6666666666666666,
+                    0.6666666666666666
+                  ]
+                }
+              },
+              "time": {
+                "den": "24",
+                "num": "29"
+              },
+              "value": {
+                "kind": "vec2",
+                "value": [
+                  100,
+                  200
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "tangent-aligned",
+      "action": "tangent",
+      "aligned": true,
+      "commands": [
+        {
+          "keyframe_replace": {
+            "curve": "a06bc70e-d4cd-48d2-87f3-c7b5d8984c93",
+            "key": {
+              "interpolation": {
+                "kind": "cubic",
+                "value": {
+                  "control1": [
+                    0.3333333333333333,
+                    0.3333333333333333
+                  ],
+                  "control2": [
+                    0.6666666666666666,
+                    7.157328805885682
+                  ]
+                }
+              },
+              "time": {
+                "den": "2",
+                "num": "1"
+              },
+              "value": {
+                "kind": "vec2",
+                "value": [
+                  111.625,
+                  93.75
+                ]
+              }
+            }
+          }
+        },
+        {
+          "keyframe_replace": {
+            "curve": "a06bc70e-d4cd-48d2-87f3-c7b5d8984c93",
+            "key": {
+              "interpolation": {
+                "kind": "cubic",
+                "value": {
+                  "control1": [
+                    0.25,
+                    0.6
+                  ],
+                  "control2": [
+                    0.6666666666666666,
+                    0.6666666666666666
+                  ]
+                }
+              },
+              "time": {
+                "den": "24",
+                "num": "29"
+              },
+              "value": {
+                "kind": "vec2",
+                "value": [
+                  100,
+                  200
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "tangent-broken",
+      "action": "tangent",
+      "aligned": false,
+      "commands": [
+        {
+          "keyframe_replace": {
+            "curve": "a06bc70e-d4cd-48d2-87f3-c7b5d8984c93",
+            "key": {
+              "interpolation": {
+                "kind": "cubic",
+                "value": {
+                  "control1": [
+                    0.25,
+                    0.4
+                  ],
+                  "control2": [
+                    0.6666666666666666,
+                    0.6666666666666666
+                  ]
+                }
+              },
+              "time": {
+                "den": "24",
+                "num": "29"
+              },
+              "value": {
+                "kind": "vec2",
+                "value": [
+                  100,
+                  200
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "delete-others",
+      "action": "delete",
+      "last": false,
+      "commands": [
+        {
+          "keyframe_remove": {
+            "curve": "a06bc70e-d4cd-48d2-87f3-c7b5d8984c93",
+            "time": {
+              "den": "1",
+              "num": "0"
+            }
+          }
+        },
+        {
+          "keyframe_remove": {
+            "curve": "a06bc70e-d4cd-48d2-87f3-c7b5d8984c93",
+            "time": {
+              "den": "2",
+              "num": "1"
+            }
+          }
+        },
+        {
+          "keyframe_remove": {
+            "curve": "a06bc70e-d4cd-48d2-87f3-c7b5d8984c93",
+            "time": {
+              "den": "24",
+              "num": "29"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "last-key-delete",
+      "action": "delete",
+      "last": true,
+      "commands": [
+        {
+          "property_source_set": {
+            "object": "adcfcd01-95a0-4292-ba82-61369bf4ac8c",
+            "property": "cecd9404-ac4e-4245-9d6a-84aa26590fc6",
+            "source": {
+              "kind": "constant",
+              "value": {
+                "kind": "vec2",
+                "value": [
+                  200,
+                  400
+                ]
+              }
+            }
+          }
+        },
+        {
+          "keyframe_remove": {
+            "curve": "a06bc70e-d4cd-48d2-87f3-c7b5d8984c93",
+            "time": {
+              "den": "1",
+              "num": "2"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "undo-last-key",
+      "action": "undo"
+    },
+    {
+      "name": "redo-last-key",
+      "action": "redo"
+    }
+  ]
+}

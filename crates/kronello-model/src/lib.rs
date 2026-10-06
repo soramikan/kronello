@@ -8,24 +8,31 @@ mod builtin;
 mod composition;
 mod curve;
 mod error;
+mod expression;
 mod id;
 mod property;
 mod schema;
 mod value;
+mod wire;
 
 pub use builtin::{
-    FILL_COLOR_ID, OPACITY_ID, STROKE_WIDTH_ID, TRANSFORM_ANCHOR_ID, TRANSFORM_POSITION_ID,
-    TRANSFORM_ROTATION_ID, TRANSFORM_SCALE_ID, TRANSFORM_SKEW_ID,
+    AUDIO_VOLUME_ID, FILL_COLOR_ID, OPACITY_ID, STROKE_WIDTH_ID, TRANSFORM_ANCHOR_ID,
+    TRANSFORM_POSITION_ID, TRANSFORM_ROTATION_ID, TRANSFORM_SCALE_ID, TRANSFORM_SKEW_ID,
 };
 pub use composition::{
     Composition, CompositionError, CompositionInstance, CompositionReference, DesignExtent,
-    InstancePath, NodeKind, ParentGraph, PropertyKey, SceneNode, validate_compositions,
+    InstancePath, MediaNode, NodeKind, ParentGraph, PropertyKey, SceneNode, normalize_search_tags,
+    valid_node_tags, validate_compositions,
 };
 pub use curve::{
     AnimationCurve, CurveDefinition, CurveError, CurveInterpolation, INTERPOLATION_VERSION,
     Keyframe, TimeBezier,
 };
 pub use error::{JsonError, ModelError, from_json};
+pub use expression::{
+    EXPRESSION_VERSION, Expression, ExpressionBudget, ExpressionDependency, ExpressionError,
+    ExpressionNode, expression_value_bytes,
+};
 pub use id::{
     AssetId, ClipId, CompositionId, CompositionInstanceId, ContentId, CurveId, DescriptorId,
     ExpressionId, ModifierId, NodeId, PropertyId, SchemaKey, SequenceId, TrackId,
@@ -36,7 +43,7 @@ pub use schema::{
     NumericRange, PropertyDescriptor, SchemaRegistry, Unit, ValueRange,
 };
 pub use value::{
-    Color, ColorComponents, ColorSpace, FiniteF64, Path, PathSegment, Value, ValueType,
+    Color, ColorComponents, ColorSpace, DataTable, FiniteF64, Path, PathSegment, Value, ValueType,
 };
 
 mod project;
@@ -47,10 +54,12 @@ pub use project::{
 
 mod shape;
 pub use shape::{
-    Fill, FillRule, Gradient, GradientGeometry, GradientStop, ResolvedFill, ResolvedGeometry,
-    ResolvedGradient, ResolvedGradientStop, ResolvedShape, ResolvedStroke, Shape, ShapeError,
-    ShapeGeometry, Stroke, StrokeCap, StrokeJoin, shape_descriptors, validate_path,
-    validate_shape_contents,
+    EXTENDED_STROKE_VERSION, Fill, FillRule, Gradient, GradientGeometry, GradientInterpolation,
+    GradientOptions, GradientSpread, GradientStop, GradientUnits, LEGACY_STROKE_VERSION,
+    ResolvedFill, ResolvedGeometry, ResolvedGradient, ResolvedGradientStop, ResolvedShape,
+    ResolvedStroke, ResolvedStrokeOptions, Shape, ShapeError, ShapeGeometry, Stroke,
+    StrokeAlignment, StrokeCap, StrokeJoin, StrokeOptions, shape_descriptors, validate_dash_array,
+    validate_path, validate_shape_contents,
 };
 
 mod text;

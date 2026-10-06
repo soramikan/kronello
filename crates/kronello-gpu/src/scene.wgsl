@@ -7,10 +7,18 @@ struct Params {
     boundary: vec4<u32>, // output alpha association
     fill_gradient: vec4<u32>,
     fill_geometry: vec4<f32>,
+    fill_extra: vec4<f32>,
+    fill_x: vec4<f32>,
+    fill_y: vec4<f32>,
     stroke_gradient: vec4<u32>,
     stroke_geometry: vec4<f32>,
+    stroke_extra: vec4<f32>,
+    stroke_x: vec4<f32>,
+    stroke_y: vec4<f32>,
     paint_x: vec4<f32>,
     paint_y: vec4<f32>,
+    local_stroke_x: vec4<f32>,
+    local_stroke_y: vec4<f32>,
 }
 struct Edge { points: vec4<f32>, flags: vec4<u32>, extra: vec4<f32> }
 struct Stop { rgba: vec4<f32>, offset: vec4<f32>, space: vec4<u32> }
@@ -53,24 +61,73 @@ fn primitive_hit(p:vec2<f32>,e:Edge)->bool {
     let x=cross2(b-a,p-a); let y=cross2(c-b,p-b); let z=cross2(a-c,p-c);
     return (x>=0.0 && y>=0.0 && z>=0.0)||(x<=0.0 && y<=0.0 && z<=0.0);
 }
-fn gradient_paint(solid:vec4<f32>,space:u32,g:vec4<u32>,geometry:vec4<f32>,p:vec2<f32>)->vec4<f32> {
+fn gradient_prepare(s:Stop, mode:u32)->vec4<f32> {
+    // Premultiplied modes discard hidden RGB before any conversion overflow.
+    if (mode==0u || mode==3u) && s.rgba.a==0.0 { return vec4<f32>(0.0); }
+    var rgb=s.rgba.rgb;
+    if s.space.x==0u { rgb=vec3<f32>(decode(rgb.r),decode(rgb.g),decode(rgb.b)); }
+    rgb=primaries(rgb,s.space.x==2u,mode<2u && params.config.w==1u);
+    if mode>=2u { rgb=vec3<f32>(encode(rgb.r),encode(rgb.g),encode(rgb.b)); }
+    if mode==0u || mode==3u { rgb=rgb*s.rgba.a; }
+    return vec4<f32>(rgb,s.rgba.a);
+}
+fn gradient_finish(value:vec4<f32>, mode:u32)->vec4<f32> {
+    if mode==0u { return value; }
+    if value.a==0.0 { return vec4<f32>(0.0); }
+    if mode==1u { return vec4<f32>(value.rgb*value.a,value.a); }
+    var rgb=value.rgb;
+    if mode==3u {
+        rgb=rgb/value.a;
+    }
+    rgb=vec3<f32>(decode(rgb.r),decode(rgb.g),decode(rgb.b));
+    return vec4<f32>(primaries(rgb,false,params.config.w==1u)*value.a,value.a);
+}
+fn finite_parameter(v:f32)->bool {
+    return (bitcast<u32>(v)&0x7f800000u)!=0x7f800000u;
+}
+fn gradient_paint(solid:vec4<f32>,space:u32,g:vec4<u32>,geometry:vec4<f32>,extra:vec4<f32>,gx:vec4<f32>,gy:vec4<f32>,p:vec2<f32>)->vec4<f32> {
     if g.x==0u { return paint(solid,space); }
-    let local=vec2<f32>(dot(params.paint_x.xy,p)+params.paint_x.z,dot(params.paint_y.xy,p)+params.paint_y.z);
+    let object=vec2<f32>(dot(params.paint_x.xy,p)+params.paint_x.z,dot(params.paint_y.xy,p)+params.paint_y.z);
+    let local=vec2<f32>(dot(gx.xy,object)+gx.z,dot(gy.xy,object)+gy.z);
+    if !finite_parameter(local.x) || !finite_parameter(local.y) {
+        atomicStore(&validation,1u); return vec4<f32>(0.0);
+    }
     var t=0.0;
     if g.x==1u { let d=geometry.zw-geometry.xy; t=dot(local-geometry.xy,d)/dot(d,d); }
-    else { t=length(local-geometry.xy)/geometry.z; }
+    else if g.x==2u { t=length(local-geometry.xy)/geometry.z; }
+    else if g.x==3u {
+        let q=local-extra.xy; let d=geometry.xy-extra.xy; let dr=geometry.z-extra.z;
+        let a=dr*dr-dot(d,d); let b=dot(q,d)+extra.z*dr; let c=dot(q,q)-extra.z*extra.z;
+        if c>0.0 {
+            let root=sqrt(b*b+a*c);
+            if !finite_parameter(root) { atomicStore(&validation,1u); return vec4<f32>(0.0); }
+            if b>=0.0 { t=c/(root+b); } else { t=(root-b)/a; }
+        }
+    } else {
+        let q=local-geometry.xy;
+        if any(q!=vec2<f32>(0.0)) {
+            let angle=atan2(q.y,q.x)-geometry.z;
+            let tau=6.283185307179586;
+            t=(angle-tau*floor(angle/tau))/geometry.w;
+        }
+    }
+    let spread=g.w&3u; let mode=g.w>>2u;
+    // Preserve legacy pad endpoints at infinity; periodic phase is undefined.
+    if !finite_parameter(t) && (spread!=0u || t!=t) { atomicStore(&validation,1u); return vec4<f32>(0.0); }
+    if spread==1u { t=t-floor(t); }
+    else if spread==2u { let u=t-2.0*floor(t/2.0); t=select(u,2.0-u,u>1.0); }
     var previous=stops[g.y];
-    if t<previous.offset.x { return paint(previous.rgba,previous.space.x); }
+    if t<previous.offset.x { return gradient_finish(gradient_prepare(previous,mode),mode); }
     for (var i=1u;i<g.z;i++) {
         let stop=stops[g.y+i];
         if t<stop.offset.x {
             let f=(t-previous.offset.x)/(stop.offset.x-previous.offset.x);
-            let a=paint(previous.rgba,previous.space.x); let b=paint(stop.rgba,stop.space.x);
-            return a+(b-a)*f;
+            let a=gradient_prepare(previous,mode); let b=gradient_prepare(stop,mode);
+            return gradient_finish(a+(b-a)*f,mode);
         }
         previous=stop;
     }
-    return paint(previous.rgba,previous.space.x);
+    return gradient_finish(gradient_prepare(previous,mode),mode);
 }
 @compute @workgroup_size(8,8)
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
@@ -86,9 +143,10 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
                     let p = (vec2<f32>(id.xy)+(vec2<f32>(f32(sx),f32(sy))+0.5)/4.0)*params.scale.xy;
                     var winding = 0i;
                     var stroked = false;
+                    let stroke_p = vec2<f32>(dot(params.local_stroke_x.xy,p)+params.local_stroke_x.z,dot(params.local_stroke_y.xy,p)+params.local_stroke_y.z);
                     for (var e=0u; e<params.config.y; e++) {
                         if edges[e].flags.y!=0u {
-                            stroked=stroked || primitive_hit(p,edges[e]);
+                            stroked=stroked || primitive_hit(stroke_p,edges[e]);
                         } else {
                             let a=edges[e].points.xy; let b=edges[e].points.zw;
                             let cross=cross2(b-a,p-a);
@@ -96,8 +154,10 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
                             if b.y<=p.y && a.y>p.y && cross<0.0 { winding--; }
                         }
                     }
-                    if (params.config.z==0u && winding!=0i) || (params.config.z==1u && winding%2i!=0i) { fill_color+=gradient_paint(params.fill,params.spaces.x,params.fill_gradient,params.fill_geometry,p)/16.0; }
-                    if stroked { stroke_color+=gradient_paint(params.stroke,params.spaces.y,params.stroke_gradient,params.stroke_geometry,p)/16.0; }
+                    if (params.config.z==0u && winding!=0i) || (params.config.z==1u && winding%2i!=0i) { fill_color+=gradient_paint(params.fill,params.spaces.x,params.fill_gradient,params.fill_geometry,params.fill_extra,params.fill_x,params.fill_y,p)/16.0; }
+                    let inside = (params.boundary.z==0u && winding!=0i) || (params.boundary.z==1u && winding%2i!=0i);
+                    let aligned = params.boundary.y==0u || (params.boundary.y==1u && inside) || (params.boundary.y==2u && !inside);
+                    if stroked && aligned { stroke_color+=gradient_paint(params.stroke,params.spaces.y,params.stroke_gradient,params.stroke_geometry,params.stroke_extra,params.stroke_x,params.stroke_y,p)/16.0; }
                 }
             }
             result=over(stroke_color,fill_color);

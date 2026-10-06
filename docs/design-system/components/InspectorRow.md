@@ -35,3 +35,4 @@
 
 - する: セクション見出し（`Transform` など）は `heading` で行の上に置き、行は字下げしない。
 - しない: アニメーション中であることを値の色（赤・青など）で示さない。選択色の `selection` を状態表示に流用しない。
+- アニメーションしない設定（書体・太さ・文字揃え・表示する bounds など）は設定行（`KRInspectorSettingRow`）に置く。ナビゲータの 48px 列を空けたままにし、ラベルを Property の行と同じ列に揃える。値の列には PopupButton・SegmentedControl・TextField を置く。Popover の行を Inspector に流用しない。

@@ -6,7 +6,7 @@
     "assets": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject7"
+        "$ref": "#/$defs/DocumentObject8"
       }
     },
     "compositions": {
@@ -19,6 +19,12 @@
       "type": "array",
       "items": {
         "$ref": "#/$defs/DocumentObject2"
+      }
+    },
+    "expressions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DocumentObject3"
       }
     },
     "id": {
@@ -42,31 +48,31 @@
     "sequences": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject8"
+        "$ref": "#/$defs/DocumentObject9"
       }
     },
     "shapes": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject3"
+        "$ref": "#/$defs/DocumentObject4"
       }
     },
     "template_instances": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject6"
+        "$ref": "#/$defs/DocumentObject7"
       }
     },
     "templates": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject5"
+        "$ref": "#/$defs/DocumentObject6"
       }
     },
     "texts": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject4"
+        "$ref": "#/$defs/DocumentObject5"
       }
     }
   },
@@ -178,7 +184,17 @@
       "description": "NLE-001 never performs implicit pitch/speed conversion.",
       "type": "string",
       "enum": [
-        "reject"
+        "reject",
+        "resample_v1"
+      ]
+    },
+    "BoundsStage": {
+      "description": "Resolution-independent bounds stage selected by a layout consumer.",
+      "type": "string",
+      "enum": [
+        "layout",
+        "ink",
+        "visual"
       ]
     },
     "Clip": {
@@ -205,6 +221,13 @@
             "$ref": "#/$defs/ClipId"
           }
         },
+        "properties": {
+          "description": "Placement transform and effect parameters, evaluated in sequence time.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Property"
+          }
+        },
         "source_in": {
           "$ref": "#/$defs/Rational"
         },
@@ -216,6 +239,17 @@
         },
         "timeline_range": {
           "$ref": "#/$defs/TimeRange"
+        },
+        "volume": {
+          "description": "Absent in M2 documents means unity. Evaluated in source-local time.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Property"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -428,6 +462,32 @@
         }
       ]
     },
+    "DataTable": {
+      "description": "Inline material data; columns are explicit and every row has the same shape.",
+      "type": "object",
+      "properties": {
+        "columns": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ValueType"
+          }
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/$defs/Value"
+            }
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "columns",
+        "rows"
+      ]
+    },
     "DescriptorRef": {
       "type": "object",
       "properties": {
@@ -489,7 +549,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/Shape"
+          "$ref": "#/$defs/Expression"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -500,7 +560,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/TextDocument"
+          "$ref": "#/$defs/Shape"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -511,7 +571,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/TemplateDefinition"
+          "$ref": "#/$defs/TextDocument"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -522,7 +582,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/TemplateInstance"
+          "$ref": "#/$defs/TemplateDefinition"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -533,7 +593,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/Asset"
+          "$ref": "#/$defs/TemplateInstance"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -541,6 +601,17 @@
       ]
     },
     "DocumentObject8": {
+      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Asset"
+        },
+        {
+          "$ref": "#/$defs/OpaqueObject"
+        }
+      ]
+    },
+    "DocumentObject9": {
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
@@ -648,13 +719,528 @@
             "color",
             "opacity"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "gain": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "audio_gain"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "gain"
+          ]
         }
+      ]
+    },
+    "Expression": {
+      "type": "object",
+      "properties": {
+        "budget": {
+          "$ref": "#/$defs/ExpressionBudget",
+          "default": {
+            "dependencies": 64,
+            "instructions": 4096,
+            "memory_bytes": 1048576,
+            "nodes": 1024,
+            "samples": 64
+          }
+        },
+        "id": {
+          "$ref": "#/$defs/ExpressionId"
+        },
+        "nodes": {
+          "description": "Ordered postorder tree; the last node is the root. No sharing or dead nodes.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExpressionNode"
+          }
+        },
+        "value_type": {
+          "$ref": "#/$defs/ValueType"
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "value_type",
+        "nodes"
+      ]
+    },
+    "ExpressionBudget": {
+      "type": "object",
+      "properties": {
+        "dependencies": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "instructions": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "memory_bytes": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "nodes": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "samples": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "instructions",
+        "memory_bytes",
+        "samples",
+        "nodes",
+        "dependencies"
       ]
     },
     "ExpressionId": {
       "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
       "type": "string",
       "format": "uuid"
+    },
+    "ExpressionNode": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "literal": {
+              "$ref": "#/$defs/Value"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "literal"
+          ]
+        },
+        {
+          "description": "Seconds in the authored source scope, after its rational time mapping.",
+          "type": "string",
+          "const": "time"
+        },
+        {
+          "description": "Stable property in the authored source scope; None means composition input.",
+          "type": "object",
+          "properties": {
+            "property": {
+              "type": "object",
+              "properties": {
+                "node": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/NodeId"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "property": {
+                  "$ref": "#/$defs/PropertyId"
+                },
+                "value_type": {
+                  "$ref": "#/$defs/ValueType"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "property",
+                "value_type"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "property"
+          ]
+        },
+        {
+          "description": "Explicit rational offset; no dynamic property sampling or recursion.",
+          "type": "object",
+          "properties": {
+            "curve_sample": {
+              "type": "object",
+              "properties": {
+                "curve": {
+                  "$ref": "#/$defs/CurveId"
+                },
+                "offset": {
+                  "$ref": "#/$defs/Rational"
+                },
+                "value_type": {
+                  "$ref": "#/$defs/ValueType"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "curve",
+                "offset",
+                "value_type"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "curve_sample"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "add": {
+              "type": "object",
+              "properties": {
+                "left": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "right": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "left",
+                "right"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "add"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "subtract": {
+              "type": "object",
+              "properties": {
+                "left": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "right": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "left",
+                "right"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "subtract"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "multiply": {
+              "type": "object",
+              "properties": {
+                "left": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "right": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "left",
+                "right"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "multiply"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "divide": {
+              "type": "object",
+              "properties": {
+                "left": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "right": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "left",
+                "right"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "divide"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "clamp": {
+              "type": "object",
+              "properties": {
+                "max": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "min": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "value": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "value",
+                "min",
+                "max"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "clamp"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "lerp": {
+              "type": "object",
+              "properties": {
+                "amount": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "from": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "to": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "from",
+                "to",
+                "amount"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "lerp"
+          ]
+        },
+        {
+          "description": "Radians, explicitly dimensionless scalar input.",
+          "type": "object",
+          "properties": {
+            "sin": {
+              "type": "object",
+              "properties": {
+                "input": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "input"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "sin"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "vec2": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "y": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "x",
+                "y"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "vec2"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "vec3": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "y": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "z": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "x",
+                "y",
+                "z"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "vec3"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "angle": {
+              "type": "object",
+              "properties": {
+                "degrees": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "degrees"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "angle"
+          ]
+        },
+        {
+          "description": "Fixed hash noise in [-1, 1], keyed by seed, instance, element and input.",
+          "type": "object",
+          "properties": {
+            "noise": {
+              "type": "object",
+              "properties": {
+                "element": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "input": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "seed": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "seed",
+                "element",
+                "input"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "noise"
+          ]
+        }
+      ]
     },
     "Fill": {
       "type": "object",
@@ -742,7 +1328,6 @@
       ]
     },
     "Gradient": {
-      "description": "Local design-space, pad-only paint. Unknown fields/variants are retained by\nthe owning DocumentObject as opaque content and cannot execute.",
       "oneOf": [
         {
           "type": "object",
@@ -758,6 +1343,27 @@
             "kind": {
               "type": "string",
               "const": "linear"
+            },
+            "options": {
+              "$ref": "#/$defs/GradientOptions",
+              "default": {
+                "interpolation": "working_linear_premultiplied",
+                "interpolation_version": 1,
+                "spread": "pad",
+                "transform": [
+                  [
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0
+                  ]
+                ],
+                "units": "local_design"
+              }
             },
             "start": {
               "type": "array",
@@ -797,6 +1403,27 @@
               "type": "string",
               "const": "radial"
             },
+            "options": {
+              "$ref": "#/$defs/GradientOptions",
+              "default": {
+                "interpolation": "working_linear_premultiplied",
+                "interpolation_version": 1,
+                "spread": "pad",
+                "transform": [
+                  [
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0
+                  ]
+                ],
+                "units": "local_design"
+              }
+            },
             "radius": {
               "$ref": "#/$defs/FiniteF64"
             },
@@ -814,7 +1441,200 @@
             "radius",
             "stops"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "center": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/FiniteF64"
+              },
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "focal": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/FiniteF64"
+              },
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "focal_radius": {
+              "$ref": "#/$defs/FiniteF64"
+            },
+            "kind": {
+              "type": "string",
+              "const": "focal_radial"
+            },
+            "options": {
+              "$ref": "#/$defs/GradientOptions",
+              "default": {
+                "interpolation": "working_linear_premultiplied",
+                "interpolation_version": 1,
+                "spread": "pad",
+                "transform": [
+                  [
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0
+                  ]
+                ],
+                "units": "local_design"
+              }
+            },
+            "radius": {
+              "$ref": "#/$defs/FiniteF64"
+            },
+            "stops": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/GradientStop"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "center",
+            "radius",
+            "focal",
+            "focal_radius",
+            "stops"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "center": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/FiniteF64"
+              },
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "kind": {
+              "type": "string",
+              "const": "conic"
+            },
+            "options": {
+              "$ref": "#/$defs/GradientOptions",
+              "default": {
+                "interpolation": "working_linear_premultiplied",
+                "interpolation_version": 1,
+                "spread": "pad",
+                "transform": [
+                  [
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0
+                  ]
+                ],
+                "units": "local_design"
+              }
+            },
+            "start_angle": {
+              "$ref": "#/$defs/FiniteF64"
+            },
+            "stops": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/GradientStop"
+              }
+            },
+            "sweep_angle": {
+              "$ref": "#/$defs/FiniteF64"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "center",
+            "start_angle",
+            "sweep_angle",
+            "stops"
+          ]
         }
+      ]
+    },
+    "GradientInterpolation": {
+      "type": "string",
+      "enum": [
+        "working_linear_premultiplied",
+        "working_linear_straight",
+        "srgb_straight",
+        "srgb_premultiplied"
+      ]
+    },
+    "GradientOptions": {
+      "type": "object",
+      "properties": {
+        "interpolation": {
+          "$ref": "#/$defs/GradientInterpolation",
+          "default": "working_linear_premultiplied"
+        },
+        "interpolation_version": {
+          "type": "integer",
+          "format": "uint32",
+          "default": 1,
+          "minimum": 0
+        },
+        "spread": {
+          "$ref": "#/$defs/GradientSpread",
+          "default": "pad"
+        },
+        "transform": {
+          "description": "Gradient coordinates to unit coordinates; bbox mapping is applied next.",
+          "type": "array",
+          "default": [
+            [
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0
+            ]
+          ],
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/FiniteF64"
+            },
+            "maxItems": 3,
+            "minItems": 3
+          },
+          "maxItems": 2,
+          "minItems": 2
+        },
+        "units": {
+          "$ref": "#/$defs/GradientUnits",
+          "default": "local_design"
+        }
+      },
+      "additionalProperties": false
+    },
+    "GradientSpread": {
+      "description": "Versioned paint settings. Missing settings preserve VEC-003 semantics.",
+      "type": "string",
+      "enum": [
+        "pad",
+        "repeat",
+        "reflect"
       ]
     },
     "GradientStop": {
@@ -831,6 +1651,13 @@
       "required": [
         "color",
         "offset"
+      ]
+    },
+    "GradientUnits": {
+      "type": "string",
+      "enum": [
+        "local_design",
+        "object_bounding_box"
       ]
     },
     "Keyframe": {
@@ -852,6 +1679,39 @@
         "time",
         "value",
         "interpolation"
+      ]
+    },
+    "MediaNode": {
+      "description": "Explicit media stream; AUDIO-003 executes audio only.",
+      "type": "object",
+      "properties": {
+        "asset": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "source_in": {
+          "$ref": "#/$defs/Rational"
+        },
+        "stream_index": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "time_map": {
+          "description": "Maps time relative to the owning node's active_range.start.",
+          "$ref": "#/$defs/TimeMap"
+        },
+        "volume": {
+          "description": "A kronello.audio.volume Property owned by the same SceneNode.",
+          "$ref": "#/$defs/PropertyId"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "asset",
+        "stream_index",
+        "source_in",
+        "time_map",
+        "volume"
       ]
     },
     "Modifier": {
@@ -988,6 +1848,23 @@
             },
             "value": {
               "$ref": "#/$defs/CompositionInstance"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "media"
+            },
+            "value": {
+              "$ref": "#/$defs/MediaNode"
             }
           },
           "additionalProperties": false,
@@ -1266,6 +2143,14 @@
         }
       ]
     },
+    "ProtectedMiddleMode": {
+      "description": "Only the middle is retimed; intro/outro retain unit speed.",
+      "type": "string",
+      "enum": [
+        "hold",
+        "loop"
+      ]
+    },
     "Rational": {
       "type": "object",
       "properties": {
@@ -1335,17 +2220,37 @@
             "$ref": "#/$defs/Effect"
           }
         },
+        "enabled": {
+          "description": "Disabled containment subtrees do not enter the evaluated scene.",
+          "type": "boolean"
+        },
         "id": {
           "$ref": "#/$defs/NodeId"
         },
         "kind": {
           "$ref": "#/$defs/NodeKind"
         },
+        "name": {
+          "description": "Display only; never used as identity.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "properties": {
           "type": "array",
           "items": {
             "$ref": "#/$defs/Property"
           }
+        },
+        "tags": {
+          "description": "Search metadata only; never runtime identity.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "uniqueItems": true
         },
         "transform_parent": {
           "anyOf": [
@@ -1391,6 +2296,12 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/Track"
+          }
+        },
+        "transitions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Transition"
           }
         },
         "working_space": {
@@ -1580,12 +2491,30 @@
         {
           "type": "object",
           "properties": {
+            "color": {
+              "$ref": "#/$defs/Color",
+              "default": {
+                "components": {
+                  "alpha": 1.0,
+                  "b": 0.0,
+                  "g": 0.0,
+                  "r": 0.0
+                },
+                "space": "srgb"
+              }
+            },
             "generator": {
               "type": "string"
             },
             "kind": {
               "type": "string",
               "const": "generator"
+            },
+            "version": {
+              "type": "integer",
+              "format": "uint32",
+              "default": 1,
+              "minimum": 0
             }
           },
           "additionalProperties": false,
@@ -1655,6 +2584,17 @@
             "null"
           ]
         },
+        "start_time": {
+          "description": "Absolute PTS origin. Missing legacy metadata means zero, never latest.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rational"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "time_base": {
           "$ref": "#/$defs/Rational"
         },
@@ -1702,6 +2642,17 @@
           "description": "Dimensionless Scalar Property, at least 1.",
           "$ref": "#/$defs/PropertyId"
         },
+        "options": {
+          "description": "Absent options retain the exact VEC-003 execution path.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StrokeOptions"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "width": {
           "$ref": "#/$defs/PropertyId"
         }
@@ -1715,11 +2666,56 @@
         "miter_limit"
       ]
     },
+    "StrokeAlignment": {
+      "type": "string",
+      "enum": [
+        "center",
+        "inside",
+        "outside"
+      ]
+    },
+    "StrokeOptions": {
+      "description": "Explicit opt-in; lengths are local design_px, offset is an evaluated Property.",
+      "type": "object",
+      "properties": {
+        "alignment": {
+          "$ref": "#/$defs/StrokeAlignment"
+        },
+        "dash_array": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FiniteF64"
+          }
+        },
+        "dash_offset": {
+          "$ref": "#/$defs/PropertyId"
+        },
+        "fill_rule": {
+          "description": "Defines the interior independently of whether the shape has fill paint.",
+          "$ref": "#/$defs/FillRule"
+        },
+        "geometry_version": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "geometry_version",
+        "alignment",
+        "fill_rule",
+        "dash_array",
+        "dash_offset"
+      ]
+    },
     "TemplateBandBinding": {
       "type": "object",
       "properties": {
         "band_node": {
           "$ref": "#/$defs/NodeId"
+        },
+        "bounds": {
+          "description": "Explicit bounds stage; omitted legacy bindings keep the layout box.",
+          "$ref": "#/$defs/BoundsStage"
         },
         "padding": {
           "type": "array",
@@ -1748,6 +2744,56 @@
         "padding"
       ]
     },
+    "TemplateCellTarget": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "property": {
+              "type": "object",
+              "properties": {
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                },
+                "property": {
+                  "$ref": "#/$defs/PropertyId"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "node",
+                "property"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "property"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "object",
+              "properties": {
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "node"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "text"
+          ]
+        }
+      ]
+    },
     "TemplateConstraints": {
       "type": "object",
       "properties": {
@@ -1769,6 +2815,28 @@
         }
       },
       "additionalProperties": false
+    },
+    "TemplateDataBinding": {
+      "type": "object",
+      "properties": {
+        "column": {
+          "type": "string"
+        },
+        "row": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "target": {
+          "$ref": "#/$defs/TemplateCellTarget"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "row",
+        "column",
+        "target"
+      ]
     },
     "TemplateDefinition": {
       "type": "object",
@@ -1799,6 +2867,12 @@
         "template_id": {
           "type": "string",
           "format": "uuid"
+        },
+        "variants": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/TemplateVariant"
+          }
         },
         "version": {
           "type": "string"
@@ -1934,6 +3008,51 @@
           "required": [
             "text"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "media_slot": {
+              "type": "object",
+              "properties": {
+                "node": {
+                  "$ref": "#/$defs/NodeId"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "node"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "media_slot"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "data_table": {
+              "type": "object",
+              "properties": {
+                "bindings": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/TemplateDataBinding"
+                  }
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "bindings"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "data_table"
+          ]
         }
       ]
     },
@@ -1957,6 +3076,12 @@
           },
           "default": {}
         },
+        "variant": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "version": {
           "type": "string"
         }
@@ -1972,7 +3097,37 @@
     "TemplateMiddleMode": {
       "type": "string",
       "enum": [
+        "hold",
+        "loop",
         "stretch"
+      ]
+    },
+    "TemplateVariant": {
+      "description": "Each aspect variant freezes a separate authored Composition and bindings.",
+      "type": "object",
+      "properties": {
+        "composition_ref": {
+          "$ref": "#/$defs/CompositionId"
+        },
+        "constraints": {
+          "$ref": "#/$defs/TemplateConstraints"
+        },
+        "content_hash": {
+          "type": "string"
+        },
+        "targets": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/TemplateInputTarget"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "composition_ref",
+        "targets",
+        "constraints",
+        "content_hash"
       ]
     },
     "TextDirection": {
@@ -2067,6 +3222,16 @@
         "font": {
           "$ref": "#/$defs/FontRef"
         },
+        "gradient": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Gradient"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "range": {
           "$ref": "#/$defs/TextRange"
         },
@@ -2111,7 +3276,7 @@
       ]
     },
     "TimeMap": {
-      "description": "Exact, stateless mappings. Reverse playback, looping, stopping and nonlinear\nmapping are unsupported. Future nonlinear variants require a versioned\nquantization, rounding and evaluation contract; no floating time is stored.",
+      "description": "Exact, stateless mappings. Protected middle segments support hold and loop.\nReverse and general nonlinear playback remain unsupported.",
       "oneOf": [
         {
           "type": "object",
@@ -2152,6 +3317,39 @@
           "required": [
             "kind",
             "points"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "authoring": {
+              "$ref": "#/$defs/Duration"
+            },
+            "intro": {
+              "$ref": "#/$defs/Duration"
+            },
+            "kind": {
+              "type": "string",
+              "const": "protected"
+            },
+            "mode": {
+              "$ref": "#/$defs/ProtectedMiddleMode"
+            },
+            "outro": {
+              "$ref": "#/$defs/Duration"
+            },
+            "requested": {
+              "$ref": "#/$defs/Duration"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "authoring",
+            "requested",
+            "intro",
+            "outro",
+            "mode"
           ]
         }
       ]
@@ -2223,6 +3421,42 @@
       "enum": [
         "video",
         "audio"
+      ]
+    },
+    "Transition": {
+      "type": "object",
+      "properties": {
+        "incoming": {
+          "$ref": "#/$defs/ClipId"
+        },
+        "kind": {
+          "$ref": "#/$defs/TransitionKind"
+        },
+        "outgoing": {
+          "$ref": "#/$defs/ClipId"
+        },
+        "range": {
+          "$ref": "#/$defs/TimeRange"
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "outgoing",
+        "incoming",
+        "range",
+        "kind",
+        "version"
+      ]
+    },
+    "TransitionKind": {
+      "type": "string",
+      "enum": [
+        "crossfade"
       ]
     },
     "Value": {
@@ -2396,6 +3630,23 @@
           "properties": {
             "kind": {
               "type": "string",
+              "const": "data_table"
+            },
+            "value": {
+              "$ref": "#/$defs/DataTable"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
               "const": "path"
             },
             "value": {
@@ -2422,6 +3673,7 @@
         "enum",
         "string",
         "asset_ref",
+        "data_table",
         "path"
       ]
     }

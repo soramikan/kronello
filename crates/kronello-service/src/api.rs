@@ -79,11 +79,13 @@ pub struct CapabilitiesResult {
     /// Loaded FFmpeg capabilities; discovery failures return a typed error.
     /// An explicitly supplied report avoids runtime initialization.
     pub media: Option<MediaCapabilities>,
+    pub export_profiles: Vec<ExportProfileCapability>,
 }
 
 macro_rules! commands {
     ($emit:ident) => {
         $emit! {
+            ("sequence.query", true, SequenceQueryRequest, SequenceQueryResult),
             ("sequence.create", false, SequenceCreateRequest, kronello_store::Event),
             ("clip.place", false, ClipPlaceRequest, kronello_store::Event),
             ("clip.trim", false, ClipTrimRequest, kronello_store::Event),
@@ -91,11 +93,14 @@ macro_rules! commands {
             ("instance.retime", false, InstanceRetimeRequest, kronello_store::Event),
             ("template_instance.retime", false, TemplateInstanceRetimeRequest, kronello_store::Event),
 
+            ("render.export", true, RenderSubmitRequest, kronello_media::AvExportReport),
             ("render.submit", true, RenderSubmitRequest, kronello_jobs::JobRecord),
             ("job.get", true, JobRequest, kronello_jobs::JobRecord),
             ("job.list", true, JobListRequest, JobListResult),
             ("job.cancel", true, JobRequest, kronello_jobs::JobRecord),
             ("job.prune", true, JobPruneRequest, kronello_jobs::PruneResult),
+            ("project.create_plan", true, CreatePlanRequest, ProjectChangePlan),
+            ("project.import_plan", true, ImportPlanRequest, ProjectChangePlan),
             ("project.create", false, CreateRequest, ProjectInfo),
             ("project.import", false, ImportRequest, ProjectInfo),
             ("project.export", true, ProjectRequest, ExportResult),
@@ -109,8 +114,12 @@ macro_rules! commands {
             ("edit.undo", false, UndoRequest, kronello_store::Event),
             ("history.list", true, HistoryRequest, HistoryResult),
             ("scene.query", true, SceneQueryRequest, SceneQueryResult),
+            ("node.explain", true, NodeExplainRequest, NodeExplainResult),
+            ("render.explain", true, RenderExplainRequest, RenderExplainResult),
             ("property.sample", true, PropertySampleRequest, PropertySampleResult),
             ("capabilities.get", true, CapabilitiesRequest, CapabilitiesResult),
+            ("template.preview", true, TemplatePreviewRequest, TemplatePreviewResult),
+            ("template.migration_plan", true, TemplateMigrationPlanRequest, TemplateMigrationPlan),
             ("template.define", false, TemplateDefineRequest, kronello_store::Event),
             ("template.instantiate", false, TemplateInstantiateRequest, kronello_store::Event),
             ("template.set_input", false, TemplateSetInputRequest, kronello_store::Event),
@@ -142,6 +151,22 @@ impl CapabilitiesResult {
             features: [
                 "sequence",
                 "composition_clip",
+                "video_clip",
+                "generator_clip",
+                "clip_effects",
+                "crossfade",
+                "ripple",
+                "linked_move",
+                "clip_split",
+                "asset_availability",
+                "document_audio",
+                "clip_volume",
+                "media_audio",
+                "audio_resample_v1",
+                "audio_gain_v1",
+                "audio_generator_v1",
+                "audio_crossfade_v1",
+                "movie_delivery_v1",
                 "composition",
                 "shape",
                 "text",
@@ -150,7 +175,10 @@ impl CapabilitiesResult {
                 "composition_instance",
                 "constant",
                 "curve",
+                "expression",
                 "selective_undo",
+                "project_change_plans",
+                "modifier_editing",
                 "template",
             ]
             .map(String::from)
@@ -158,10 +186,12 @@ impl CapabilitiesResult {
             effects: vec![
                 kronello_model::GAUSSIAN_BLUR_ID.into(),
                 kronello_model::DROP_SHADOW_ID.into(),
+                kronello_model::AUDIO_GAIN_ID.into(),
             ],
             backends: ["wgpu_rgba16f", "cpu_reference_float32"]
                 .map(String::from)
                 .to_vec(),
+            export_profiles: crate::export_profiles::export_profiles(media.as_ref()),
             media,
         }
     }
@@ -170,7 +200,7 @@ impl CapabilitiesResult {
 #[schemars(untagged)]
 #[allow(dead_code)]
 enum ApiEnvelope {
-    Request(Request),
+    Request(Box<Request>),
     Response(Response),
 }
 
@@ -185,6 +215,7 @@ pub fn api_json_schema() -> serde_json::Value {
         };
     }
     commands!(schemas);
+    let _ = generator.subschema_for::<CliEvent>();
     let _ = generator.subschema_for::<Request>();
     let _ = generator.subschema_for::<Response>();
     let schema = generator.into_root_schema_for::<ApiEnvelope>();

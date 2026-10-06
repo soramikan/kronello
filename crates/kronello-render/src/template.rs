@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 pub(crate) struct TemplateRuntime {
     pub inputs: BTreeMap<RuntimePropertyKey, Value>,
     pub texts: BTreeMap<NodeKey, String>,
+    pub media_slots: BTreeMap<NodeKey, AssetId>,
     pub dependencies: DependencyDeclarations,
     pub layouts: BTreeMap<NodeKey, LayoutResult>,
     bands: Vec<(InstancePath, TemplateBandBinding)>,
@@ -84,11 +85,13 @@ impl TemplateRuntime {
                     }) else {
                         continue;
                     };
-                    let d = kronello_template::definition(project, i.definition_ref)?;
-                    let values = kronello_template::resolved_inputs(d, i)?;
-                    for (name, input) in &d.public_inputs {
-                        let value = values[name].clone();
-                        match input.target {
+                    let edition = kronello_template::definition(project, i.definition_ref)?;
+                    let selected =
+                        kronello_template::selected_definition(edition, i.variant.as_deref())?;
+                    let d = &selected;
+                    let values = kronello_template::resolved_inputs(edition, i)?;
+                    for (target, value) in kronello_template::input_bindings(d, &values)? {
+                        match target {
                             TemplateInputTarget::Property { node, property } => {
                                 runtime.inputs.insert(key(&child, node, property), value);
                             }
@@ -104,6 +107,22 @@ impl TemplateRuntime {
                                     value,
                                 );
                             }
+                            TemplateInputTarget::MediaSlot { node } => {
+                                kronello_template::validate_asset(project, &value)?;
+                                let Value::AssetRef(asset) = value else {
+                                    unreachable!("validated type")
+                                };
+                                runtime.media_slots.insert(
+                                    NodeKey {
+                                        instance_path: child.clone(),
+                                        node,
+                                    },
+                                    asset,
+                                );
+                            }
+                            TemplateInputTarget::DataTable { .. } => {
+                                unreachable!("projected bindings")
+                            }
                         }
                     }
                     for b in &d.constraints.bands {
@@ -112,11 +131,46 @@ impl TemplateRuntime {
                             .iter()
                             .find(|n| n.id == b.text_node)
                             .unwrap();
-                        let upstream: Vec<_> = text
+                        let mut upstream: Vec<_> = text
                             .properties
                             .iter()
                             .map(|p| key(&child, text.id, p.id()))
                             .collect();
+                        if b.bounds == BoundsStage::Visual {
+                            // Effect support is in Composition coordinates, so visual
+                            // following also depends on the shared parent transform chain.
+                            let mut current =
+                                text.transform_parent.map(|node| (child.clone(), node));
+                            let mut scope = child.clone();
+                            loop {
+                                if let Some((path, node)) = current.take() {
+                                    let composition = path
+                                        .resolve(root, definitions)
+                                        .map_err(|e| RenderError::InvalidInput(e.to_string()))?;
+                                    let parent =
+                                        composition.nodes.iter().find(|n| n.id == node).unwrap();
+                                    upstream.extend(
+                                        parent.properties.iter().map(|p| key(&path, node, p.id())),
+                                    );
+                                    if let Some(node) = parent.transform_parent {
+                                        current = Some((path, node));
+                                        continue;
+                                    }
+                                    scope = path;
+                                }
+                                let Some((last, ids)) = scope.ids().split_last() else {
+                                    break;
+                                };
+                                let path = InstancePath::new(ids.to_vec());
+                                let composition = path
+                                    .resolve(root, definitions)
+                                    .map_err(|e| RenderError::InvalidInput(e.to_string()))?;
+                                let parent = composition.nodes.iter().find(|n| {
+                                    matches!(&n.kind, NodeKind::CompositionInstance(p) if p.id == *last)
+                                }).unwrap();
+                                current = Some((path, parent.id));
+                            }
+                        }
                         for target in [b.size_property, b.position_property] {
                             let layout = RuntimePropertyKey::LayoutValue {
                                 instance_path: child.clone(),
@@ -248,9 +302,40 @@ impl TemplateRuntime {
             if let Some(limit) = self.limits.get(&node) {
                 kronello_template::check_lines(node.node, layout.lines.len(), *limit)?;
             }
+            crate::bounds::check_overflow(&node, &layout)?;
             self.layouts.insert(node, layout);
         }
-        for (path, b) in &self.bands {
+        let targets: Vec<_> = self
+            .bands
+            .iter()
+            .flat_map(|(path, b)| {
+                [
+                    key(path, b.band_node, b.size_property),
+                    key(path, b.band_node, b.position_property),
+                ]
+            })
+            .collect();
+        let order: BTreeMap<_, _> = graph
+            .dependency_order(&targets)?
+            .into_iter()
+            .enumerate()
+            .map(|(i, k)| (k, i))
+            .collect();
+        let mut bands: Vec<_> = self.bands.iter().collect();
+        bands.sort_by_key(|(path, b)| {
+            [b.size_property, b.position_property]
+                .map(|consumer| {
+                    order[&RuntimePropertyKey::LayoutValue {
+                        instance_path: path.clone(),
+                        text: b.text_node,
+                        consumer,
+                    }]
+                })
+                .into_iter()
+                .max()
+                .unwrap()
+        });
+        for (path, b) in bands {
             let node = NodeKey {
                 instance_path: path.clone(),
                 node: b.text_node,
@@ -261,26 +346,46 @@ impl TemplateRuntime {
             let transform = graph
                 .node_transform_with_inputs(&node, time, &self.inputs)?
                 .affine();
-            let bounds = layout.layout_bounds;
-            let corners = [
-                [bounds.min[0], bounds.min[1]],
-                [bounds.min[0], bounds.max[1]],
-                [bounds.max[0], bounds.min[1]],
-                [bounds.max[0], bounds.max[1]],
-            ]
-            .map(|point| transform.transform_point(point));
-            let min = [0, 1].map(|axis| {
-                corners
+            let mut bounds = crate::bounds::text_bounds(layout, transform, &[])?;
+            if b.bounds == BoundsStage::Visual {
+                let c = path
+                    .resolve(definitions[0].id, definitions)
+                    .map_err(|e| RenderError::InvalidInput(e.to_string()))?;
+                let authored = c.nodes.iter().find(|n| n.id == b.text_node).unwrap();
+                let keys: Vec<_> = authored
+                    .properties
                     .iter()
-                    .map(|p| p[axis])
-                    .fold(f64::INFINITY, f64::min)
-            });
-            let max = [0, 1].map(|axis| {
-                corners
+                    .map(|p| key(path, b.text_node, p.id()))
+                    .collect();
+                let values = graph
+                    .evaluate_properties_with_inputs(&keys, time, &self.inputs)?
+                    .into_iter()
+                    .filter_map(|(k, v)| match k {
+                        RuntimePropertyKey::Node(k) => Some((k.property, v)),
+                        _ => None,
+                    })
+                    .collect();
+                let effects = authored
+                    .effects
                     .iter()
-                    .map(|p| p[axis])
-                    .fold(f64::NEG_INFINITY, f64::max)
+                    .map(|e| Ok(e.definition()?.resolve(&values)?))
+                    .collect::<Result<Vec<_>, RenderError>>()?;
+                let parent =
+                    graph.node_parent_world_transform_with_inputs(&node, time, &self.inputs)?;
+                let visual =
+                    crate::bounds::text_bounds(layout, parent.compose(transform), &effects)?
+                        .visual_bounds;
+                bounds.visual_bounds = visual.map(|b| b.transform(inverse(parent)?)).transpose()?;
+            }
+            let selected = bounds.select(b.bounds).unwrap_or_else(|| {
+                let origin = transform.transform_point([0.0; 2]);
+                crate::DesignBounds {
+                    min: origin,
+                    max: origin,
+                }
             });
+            let min = selected.min;
+            let max = selected.max;
             let (size, position) = kronello_template::band_values(min, max, [0.0; 2], b.padding)?;
             self.inputs.insert(
                 RuntimePropertyKey::LayoutValue {
@@ -300,5 +405,156 @@ impl TemplateRuntime {
             );
         }
         Ok(())
+    }
+}
+
+fn inverse(affine: kronello_eval::Affine2) -> Result<kronello_eval::Affine2, RenderError> {
+    let [a, b] = affine.0;
+    let det = a[0] * b[1] - a[1] * b[0];
+    if det == 0.0 || !det.is_finite() {
+        return Err(RenderError::SingularLayoutTransform);
+    }
+    let matrix = kronello_eval::Affine2([
+        [b[1] / det, -a[1] / det, (a[1] * b[2] - b[1] * a[2]) / det],
+        [-b[0] / det, a[0] / det, (b[0] * a[2] - a[0] * b[2]) / det],
+    ]);
+    if !matrix.0.iter().flatten().all(|v| v.is_finite()) {
+        return Err(RenderError::SingularLayoutTransform);
+    }
+    Ok(matrix)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kronello_eval::{EvaluationError, EvaluationSnapshot};
+
+    #[test]
+    fn compiler_declares_each_stage_and_diagnoses_closed_wrap_band_cycles() {
+        for stage in [BoundsStage::Layout, BoundsStage::Ink, BoundsStage::Visual] {
+            let mut project: Project =
+                serde_json::from_str(include_str!("../../../examples/template-001.project.json"))
+                    .unwrap();
+            let mut d: TemplateDefinition = serde_json::from_str(include_str!(
+                "../../../examples/template-001.definition.json"
+            ))
+            .unwrap();
+            d.constraints.bands[0].bounds = stage;
+            d.content_hash =
+                kronello_template::authoring_hash(&project, d.composition_ref).unwrap();
+            let duration = kronello_time::Duration::new(Time::from_integer(5)).unwrap();
+            let id = CompositionInstanceId::new();
+            let DocumentObject::Known(root) = &mut project.compositions[0] else {
+                panic!()
+            };
+            let node = SceneNode {
+                tags: Default::default(),
+                name: None,
+                enabled: true,
+                id: NodeId::new(),
+                kind: NodeKind::CompositionInstance(CompositionInstance {
+                    id,
+                    definition_ref: d.composition_ref,
+                    input_bindings: BTreeMap::new(),
+                    local_time_map: kronello_template::duration_map(
+                        duration,
+                        duration,
+                        &d.duration_policy,
+                    )
+                    .unwrap(),
+                    seed: 0,
+                }),
+                containment_parent: None,
+                transform_parent: None,
+                child_order: vec![],
+                active_range: kronello_time::TimeRange::from_start_duration(Time::ZERO, duration)
+                    .unwrap(),
+                properties: vec![],
+                effects: vec![],
+            };
+            root.root_nodes.push(node.id);
+            root.nodes.push(node);
+            let root_id = root.id;
+            project.templates.push(DocumentObject::Known(d.clone()));
+            project
+                .template_instances
+                .push(DocumentObject::Known(TemplateInstance {
+                    id,
+                    definition_ref: d.id,
+                    version: d.version,
+                    duration,
+                    variant: None,
+                    inputs: BTreeMap::new(),
+                }));
+            let definitions: Vec<_> = project
+                .compositions
+                .iter()
+                .map(|c| {
+                    let DocumentObject::Known(c) = c else {
+                        panic!()
+                    };
+                    c.clone()
+                })
+                .collect();
+            let runtime = TemplateRuntime::compile(&project, &definitions, root_id).unwrap();
+            let binding = &d.constraints.bands[0];
+            let path = InstancePath::root().child(id);
+            let text = definitions[1]
+                .nodes
+                .iter()
+                .find(|n| n.id == binding.text_node)
+                .unwrap();
+            let wrap = text
+                .properties
+                .iter()
+                .find(|p| p.descriptor().key.as_str() == "kronello.text.wrap_width")
+                .unwrap();
+            let size = key(&path, binding.band_node, binding.size_property);
+            let wrap = key(&path, binding.text_node, wrap.id());
+            let layout = RuntimePropertyKey::LayoutValue {
+                instance_path: path,
+                text: binding.text_node,
+                consumer: binding.size_property,
+            };
+            assert_eq!(runtime.dependencies[&size], std::slice::from_ref(&layout));
+            assert!(runtime.dependencies[&layout].contains(&wrap));
+            let mut dependencies = runtime.dependencies;
+            // The reverse declaration is the EXPR/constraint compiler boundary;
+            // no expression execution or dynamic dependency discovery is involved.
+            dependencies.insert(wrap.clone(), vec![size.clone()]);
+            let registry = crate::render_registry();
+            let refs = Default::default();
+            let curves: Vec<_> = project
+                .curves
+                .iter()
+                .map(|c| {
+                    let DocumentObject::Known(c) = c else {
+                        panic!()
+                    };
+                    c.clone()
+                })
+                .collect();
+            let expressions = Vec::new();
+            let error = DependencyGraph::compile(
+                EvaluationSnapshot {
+                    expressions: &expressions,
+                    compositions: &definitions,
+                    curves: &curves,
+                    registry: &registry,
+                    reference_bindings: &refs,
+                    dependencies: &dependencies,
+                    working_space: ColorSpace::LinearRec709,
+                },
+                root_id,
+            )
+            .err()
+            .unwrap();
+            assert_eq!(error.code(), "PROPERTY_DEPENDENCY_CYCLE");
+            let EvaluationError::DependencyCycle { path } = error else {
+                panic!()
+            };
+            assert_eq!(path.first(), path.last());
+            assert!(path.contains(&layout) && path.contains(&wrap) && path.contains(&size));
+        }
     }
 }

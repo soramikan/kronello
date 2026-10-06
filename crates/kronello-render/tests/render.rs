@@ -52,6 +52,9 @@ fn constant(key: &str, value: Value) -> Property {
 }
 fn node(kind: NodeKind, properties: Vec<Property>) -> SceneNode {
     SceneNode {
+        tags: Default::default(),
+        name: None,
+        enabled: true,
         effects: vec![],
         id: NodeId::new(),
         kind,
@@ -143,6 +146,7 @@ fn project() -> (Project, CompositionId) {
         layout_version: TEXT_LAYOUT_VERSION,
         text: "日本語".into(),
         styles: vec![TextStyleSpan {
+            gradient: None,
             range: TextRange {
                 start: 0,
                 end: "日本語".len(),
@@ -210,6 +214,60 @@ fn comp_mut(p: &mut Project) -> &mut Composition {
         DocumentObject::Known(c) => c,
         _ => panic!(),
     }
+}
+
+#[test]
+fn cpu_visibility_snapshot_versions_preserve_legacy_and_hide_disabled_subtrees() {
+    let (mut child, shape) = rectangle([16.0, 12.0], Color::from_srgb8([200, 40, 10], None));
+    let mut parent = node(NodeKind::Group, vec![]);
+    parent.child_order.push(child.id);
+    child.containment_parent = Some(parent.id);
+    let composition = composition(vec![parent, child]);
+    let id = composition.id;
+    let mut project = Project {
+        name: "Visibility".into(),
+        ..Project::default()
+    };
+    project
+        .compositions
+        .push(DocumentObject::Known(composition));
+    project.shapes.push(DocumentObject::Known(shape));
+    let visible = snapshot(&project, id);
+    assert_eq!(visible.semantic_versions().visibility, 2);
+    let render = |snapshot: &RenderSnapshot| {
+        render_frame(
+            snapshot,
+            &[],
+            &CpuReferenceBackend,
+            FrameRequest {
+                time: Time::ZERO,
+                region: region(),
+            },
+        )
+        .unwrap()
+    };
+    let visible_frame = render(&visible);
+    let mut legacy = serde_json::to_value(&visible).unwrap();
+    legacy["semantic_versions"]
+        .as_object_mut()
+        .unwrap()
+        .remove("visibility");
+    let legacy: RenderSnapshot = serde_json::from_value(legacy).unwrap();
+    assert_eq!(legacy.semantic_versions().visibility, 1);
+    assert_eq!(render(&legacy).pixels, visible_frame.pixels);
+    comp_mut(&mut project).nodes[0].enabled = false;
+    let disabled = snapshot(&project, id);
+    let hidden = render(&disabled);
+    assert_ne!(visible_frame.pixels, hidden.pixels);
+    assert!(hidden.pixels.linear.iter().all(|pixel| *pixel == [0.0; 4]));
+    let mut legacy_contract = disabled.semantic_versions().clone();
+    legacy_contract.visibility = 1;
+    assert_eq!(
+        RenderSnapshot::with_contract(&project, id, 7, disabled.profile(), legacy_contract, vec![])
+            .unwrap_err()
+            .code(),
+        "UNSUPPORTED_FEATURE"
+    );
 }
 
 #[test]
@@ -458,6 +516,14 @@ fn snapshot_versions_hash_locks_profile_and_independent_unknown_content() {
             .code(),
         "UNSUPPORTED_FEATURE"
     );
+    let mut version = s.semantic_versions().clone();
+    version.bounds = 99;
+    assert_eq!(
+        RenderSnapshot::with_contract(&p, id, 7, s.profile(), version, vec![])
+            .unwrap_err()
+            .code(),
+        "UNSUPPORTED_FEATURE"
+    );
     let value = serde_json::to_value(&s).unwrap();
     let restored: RenderSnapshot = serde_json::from_value(value.clone()).unwrap();
     assert_eq!(restored.content_hash().unwrap(), hash);
@@ -518,7 +584,7 @@ fn expression_missing_font_glyph_hash_and_failed_sequence_are_typed() {
         },
     )
     .unwrap_err();
-    assert_eq!(error.code(), "UNSUPPORTED_FEATURE");
+    assert_eq!(error.code(), "EVALUATION_ERROR");
     let dir = tempfile::tempdir().unwrap();
     let out = dir.path().join("failed");
     assert!(
@@ -971,6 +1037,7 @@ fn supported_stroke_styles_nonuniform_transform_and_zero_scale() {
     let cap = constant("kronello.shape.stroke_cap", Value::Enum("round".into()));
     let miter = constant("kronello.shape.miter_limit", scalar(4.0));
     shape.stroke = Some(Stroke {
+        options: None,
         gradient: None,
         color: color.id(),
         width: width.id(),
@@ -987,6 +1054,22 @@ fn supported_stroke_styles_nonuniform_transform_and_zero_scale() {
         ..Project::default()
     };
     let s = snapshot(&p, id);
+    let bounds = build_scene_ir(&s, t(0, 1), &[]).unwrap().nodes[0].bounds;
+    assert_eq!(
+        bounds.layout_bounds,
+        Some(DesignBounds {
+            min: [0.0; 2],
+            max: [16.0; 2]
+        })
+    );
+    assert_eq!(
+        bounds.ink_bounds,
+        Some(DesignBounds {
+            min: [-2.0; 2],
+            max: [18.0; 2]
+        })
+    );
+    assert_eq!(bounds.visual_bounds, bounds.ink_bounds);
     let frame = render_frame(
         &s,
         &[],
@@ -1635,6 +1718,7 @@ fn gradient_project(animated: bool) -> (Project, CompositionId) {
     };
     let fill = shape.fill.as_mut().unwrap();
     fill.gradient = Some(Box::new(Gradient::Linear {
+        options: Default::default(),
         start: [f(0.0); 2],
         end: [f(16.0), f(0.0)],
         stops: vec![
@@ -1704,6 +1788,430 @@ fn gradient_stop_color_and_offset_animate_through_scene_evaluator() {
         GRADIENT_INTERPOLATION_VERSION
     );
     assert_eq!(versions.coverage, COVERAGE_VERSION);
+}
+
+#[test]
+fn vec004_legacy_project_without_options_keeps_identical_pixels() {
+    for radial in [false, true] {
+        let (mut p, id) = gradient_project(true);
+        if radial {
+            let DocumentObject::Known(shape) = &mut p.shapes[0] else {
+                panic!()
+            };
+            let gradient = shape.fill.as_mut().unwrap().gradient.as_mut().unwrap();
+            **gradient = Gradient::Radial {
+                center: [f(8.0); 2],
+                radius: f(8.0),
+                stops: gradient.stops().to_vec(),
+                options: Default::default(),
+            };
+        }
+        let mut json = serde_json::to_value(&p).unwrap();
+        let shape = &mut json["shapes"][0];
+        for paint in ["fill", "stroke"] {
+            if let Some(gradient) = shape
+                .get_mut(paint)
+                .and_then(|paint| paint.get_mut("gradient"))
+                .and_then(serde_json::Value::as_object_mut)
+            {
+                assert!(gradient.remove("options").is_some());
+            }
+        }
+        serde_json::from_str::<Shape>(&serde_json::to_string(shape).unwrap())
+            .expect("legacy shape must remain supported");
+        let old: Project = serde_json::from_value(json).unwrap();
+        for working_space in [ColorSpace::LinearRec709, ColorSpace::LinearRec2020] {
+            let profile = RenderProfile {
+                working_space,
+                ..Default::default()
+            };
+            let current = RenderSnapshot::new(&p, id, 1, profile).unwrap();
+            let legacy = RenderSnapshot::new(&old, id, 1, profile).unwrap();
+            for time in [t(0, 1), t(1, 2), t(1, 1)] {
+                let request = FrameRequest {
+                    time,
+                    region: region(),
+                };
+                assert_eq!(
+                    render_frame(&current, &[], &CpuReferenceBackend, request)
+                        .unwrap()
+                        .pixels,
+                    render_frame(&legacy, &[], &CpuReferenceBackend, request)
+                        .unwrap()
+                        .pixels
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn vec004_unknown_interpolation_version_has_shared_unsupported_code() {
+    let (mut p, id) = gradient_project(false);
+    let DocumentObject::Known(shape) = &mut p.shapes[0] else {
+        panic!()
+    };
+    let Gradient::Linear { options, .. } = shape
+        .fill
+        .as_mut()
+        .unwrap()
+        .gradient
+        .as_deref_mut()
+        .unwrap()
+    else {
+        panic!()
+    };
+    options.interpolation_version = 2;
+    let gradient = shape.fill.as_ref().unwrap().gradient.clone().unwrap();
+    let error = render_frame(
+        &snapshot(&p, id),
+        &[],
+        &CpuReferenceBackend,
+        FrameRequest {
+            time: t(0, 1),
+            region: region(),
+        },
+    )
+    .unwrap_err();
+    assert_eq!(error.code(), "UNSUPPORTED_FEATURE");
+    assert!(matches!(
+        error,
+        RenderError::Shape(ShapeError::UnsupportedGradientVersion)
+    ));
+
+    let stop_ids: Vec<_> = gradient
+        .stops()
+        .iter()
+        .flat_map(|s| [s.color, s.offset])
+        .collect();
+    let properties: Vec<_> = comp_mut(&mut p).nodes[0]
+        .properties
+        .iter()
+        .filter(|property| stop_ids.contains(&property.id()))
+        .cloned()
+        .collect();
+    let (mut text_project, text_id) = project();
+    let DocumentObject::Known(text) = &mut text_project.texts[0] else {
+        panic!()
+    };
+    text.styles[0].gradient = Some(gradient);
+    comp_mut(&mut text_project).nodes[1]
+        .properties
+        .extend(properties);
+    let error = render_frame(
+        &snapshot(&text_project, text_id),
+        &fonts(),
+        &CpuReferenceBackend,
+        FrameRequest {
+            time: t(0, 1),
+            region: region(),
+        },
+    )
+    .unwrap_err();
+    assert_eq!(error.code(), "UNSUPPORTED_FEATURE");
+    assert!(matches!(
+        error,
+        RenderError::Text(TextError::Gradient(ShapeError::UnsupportedGradientVersion))
+    ));
+}
+
+#[test]
+fn vec004_bbox_and_gradient_transform_match_local_mapping_and_reject_degeneracy() {
+    let (mut p, id) = gradient_project(false);
+    let local = cached_frame(
+        &snapshot(&p, id),
+        t(0, 1),
+        region(),
+        &mut RenderCache::default(),
+    );
+    let DocumentObject::Known(shape) = &mut p.shapes[0] else {
+        panic!()
+    };
+    let Gradient::Linear { end, options, .. } = shape
+        .fill
+        .as_mut()
+        .unwrap()
+        .gradient
+        .as_deref_mut()
+        .unwrap()
+    else {
+        panic!()
+    };
+    *end = [f(0.5), f(0.0)];
+    options.units = GradientUnits::ObjectBoundingBox;
+    options.transform = [[f(2.0), f(0.0), f(0.0)], [f(0.0), f(1.0), f(0.0)]];
+    let bbox = cached_frame(
+        &snapshot(&p, id),
+        t(0, 1),
+        region(),
+        &mut RenderCache::default(),
+    );
+    assert_eq!(bbox.pixels.linear, local.pixels.linear);
+    let ir = build_scene_ir(&snapshot(&p, id), t(0, 1), &[]).unwrap();
+    let dag = build_render_dag(&ir, RenderProfile::default(), region()).unwrap();
+    let lowered = dag
+        .nodes()
+        .iter()
+        .find_map(|n| match n {
+            DagNode::CoverageDraw { path, .. } => path.fill_gradient.as_ref(),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(lowered.options.units, GradientUnits::LocalDesign);
+    assert_eq!(lowered.options.transform[0][0], f(32.0));
+    // Geometry cache is independent of units, spread, and interpolation paint.
+    let mut cache = RenderCache::default();
+    cached_frame(&snapshot(&p, id), t(0, 1), region(), &mut cache);
+    cache.reset_stats();
+    let DocumentObject::Known(shape) = &mut p.shapes[0] else {
+        panic!()
+    };
+    let Gradient::Linear { options, .. } = shape
+        .fill
+        .as_mut()
+        .unwrap()
+        .gradient
+        .as_deref_mut()
+        .unwrap()
+    else {
+        panic!()
+    };
+    options.interpolation = GradientInterpolation::SrgbStraight;
+    cached_frame(&snapshot(&p, id), t(0, 1), region(), &mut cache);
+    assert!(cache.stats().geometry.hits > 0);
+    assert!(cache.stats().raster.misses > 0);
+    comp_mut(&mut p).nodes[0].properties[0]
+        .set_source(PropertySource::Constant(v2(0.0, 16.0)), &render_registry())
+        .unwrap();
+    assert!(
+        render_frame(
+            &snapshot(&p, id),
+            &[],
+            &CpuReferenceBackend,
+            FrameRequest {
+                time: t(0, 1),
+                region: region()
+            }
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn vec004_text_gradient_reuses_layout_and_keeps_one_object_coordinate_system() {
+    let (mut p, id) = project();
+    let plain = build_scene_ir(&snapshot(&p, id), t(0, 1), &fonts()).unwrap();
+    let red = constant(
+        "kronello.shape.gradient_color",
+        Value::Color(Color::from_srgb8([255, 0, 0], None)),
+    );
+    let blue = constant(
+        "kronello.shape.gradient_color",
+        Value::Color(Color::from_srgb8([0, 0, 255], None)),
+    );
+    let start = constant("kronello.shape.gradient_offset", scalar(0.0));
+    let end = constant("kronello.shape.gradient_offset", scalar(1.0));
+    let gradient = Gradient::Linear {
+        start: [f(0.0); 2],
+        end: [f(1.0), f(0.0)],
+        options: GradientOptions {
+            units: GradientUnits::ObjectBoundingBox,
+            interpolation: GradientInterpolation::SrgbStraight,
+            ..Default::default()
+        },
+        stops: vec![
+            GradientStop {
+                color: red.id(),
+                offset: start.id(),
+            },
+            GradientStop {
+                color: blue.id(),
+                offset: end.id(),
+            },
+        ],
+    };
+    let mut cache = RenderCache::default();
+    let before = cached_frame(&snapshot(&p, id), t(0, 1), region(), &mut cache);
+    let DocumentObject::Known(text) = &mut p.texts[0] else {
+        panic!()
+    };
+    text.styles[0].gradient = Some(Box::new(gradient));
+    comp_mut(&mut p).nodes[1]
+        .properties
+        .extend([red, blue, start, end]);
+    let imported: Project = serde_json::from_str(&serde_json::to_string(&p).unwrap()).unwrap();
+    assert_eq!(imported, p);
+    p = imported;
+    cache.reset_stats();
+    let after = cached_frame(&snapshot(&p, id), t(0, 1), region(), &mut cache);
+    assert_ne!(before.pixels.linear, after.pixels.linear);
+    assert!(cache.stats().layout.hits > 0);
+    assert_eq!(cache.stats().layout.misses, 0);
+    let painted = build_scene_ir(&snapshot(&p, id), t(0, 1), &fonts()).unwrap();
+    let extract = |ir: &SceneIr| {
+        ir.nodes
+            .iter()
+            .find_map(|n| match &n.content {
+                SceneContent::Text(l) => Some(l.clone()),
+                _ => None,
+            })
+            .unwrap()
+    };
+    let mut layout = extract(&painted);
+    assert!(layout.glyphs.iter().all(|g| g.gradient.is_some()));
+    for g in &mut layout.glyphs {
+        g.gradient = None;
+    }
+    assert_eq!(layout, extract(&plain));
+    let dag = build_render_dag(&painted, RenderProfile::default(), region()).unwrap();
+    let gradients: Vec<_> = dag
+        .nodes()
+        .iter()
+        .filter_map(|n| match n {
+            DagNode::CoverageDraw { path, .. } => path.fill_gradient.as_ref(),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(gradients.len(), layout.glyphs.len());
+    assert!(
+        gradients
+            .windows(2)
+            .all(|pair| pair[0].options.transform == pair[1].options.transform)
+    );
+}
+
+fn vec004_projects() -> Vec<(Project, CompositionId)> {
+    (0..4)
+        .map(|kind| {
+            let (mut p, id) = gradient_project(true);
+            let DocumentObject::Known(shape) = &mut p.shapes[0] else {
+                panic!()
+            };
+            let stops = shape
+                .fill
+                .as_ref()
+                .unwrap()
+                .gradient
+                .as_ref()
+                .unwrap()
+                .stops()
+                .to_vec();
+            let options = GradientOptions {
+                units: GradientUnits::ObjectBoundingBox,
+                spread: if kind % 2 == 0 {
+                    GradientSpread::Repeat
+                } else {
+                    GradientSpread::Reflect
+                },
+                interpolation: [
+                    GradientInterpolation::WorkingLinearPremultiplied,
+                    GradientInterpolation::WorkingLinearStraight,
+                    GradientInterpolation::SrgbStraight,
+                    GradientInterpolation::SrgbPremultiplied,
+                ][kind],
+                transform: [[f(0.8), f(0.15), f(0.05)], [f(-0.1), f(0.9), f(0.05)]],
+                ..Default::default()
+            };
+            shape.fill.as_mut().unwrap().gradient = Some(Box::new(match kind {
+                0 => Gradient::Linear {
+                    start: [f(0.0); 2],
+                    end: [f(0.5), f(0.0)],
+                    stops,
+                    options,
+                },
+                1 => Gradient::Radial {
+                    center: [f(0.5); 2],
+                    radius: f(0.4),
+                    stops,
+                    options,
+                },
+                2 => Gradient::FocalRadial {
+                    center: [f(0.5); 2],
+                    radius: f(0.4),
+                    focal: [f(0.4), f(0.5)],
+                    focal_radius: f(0.05),
+                    stops,
+                    options,
+                },
+                _ => Gradient::Conic {
+                    center: [f(0.5); 2],
+                    start_angle: f(20.0),
+                    sweep_angle: f(240.0),
+                    stops,
+                    options,
+                },
+            }));
+            comp_mut(&mut p).nodes[0].properties.extend([
+                constant("kronello.transform.position", v2(4.0, 3.0)),
+                constant("kronello.transform.rotation", Value::Angle(f(15.0))),
+            ]);
+            (p, id)
+        })
+        .collect()
+}
+
+#[test]
+fn vec004_all_geometries_lower_through_bbox_animation_and_cache() {
+    for (p, id) in vec004_projects() {
+        let imported: Project = serde_json::from_str(&serde_json::to_string(&p).unwrap()).unwrap();
+        assert_eq!(imported, p);
+        let p = imported;
+        for working_space in [ColorSpace::LinearRec709, ColorSpace::LinearRec2020] {
+            let s = RenderSnapshot::new(
+                &p,
+                id,
+                1,
+                RenderProfile {
+                    working_space,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            let mut cache = RenderCache::default();
+            for time in [t(1, 1), t(0, 1), t(1, 2), t(1, 1)] {
+                let request = FrameRequest {
+                    time,
+                    region: region(),
+                };
+                let direct = render_frame(&s, &[], &CpuReferenceBackend, request).unwrap();
+                let cached =
+                    render_frame_with_cache(&s, &[], &CpuReferenceBackend, request, &mut cache)
+                        .unwrap();
+                assert_eq!(direct.pixels, cached.pixels);
+                assert!(direct.pixels.linear.iter().flatten().all(|v| v.is_finite()));
+            }
+            assert!(cache.stats().geometry.hits > 0);
+            assert!(cache.stats().raster.hits > 0);
+        }
+    }
+}
+
+#[test]
+fn gpu_vec004_bbox_transform_animation_match_cpu_reference() {
+    let gpu = kronello_gpu::GpuContext::new().expect("GPU required; no fallback");
+    for (p, id) in vec004_projects() {
+        for working_space in [ColorSpace::LinearRec709, ColorSpace::LinearRec2020] {
+            let s = RenderSnapshot::new(
+                &p,
+                id,
+                1,
+                RenderProfile {
+                    working_space,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            for time in [t(0, 1), t(1, 2), t(1, 1)] {
+                let request = FrameRequest {
+                    time,
+                    region: region(),
+                };
+                let cpu = render_frame(&s, &[], &CpuReferenceBackend, request).unwrap();
+                let actual = render_frame(&s, &[], &gpu, request).unwrap();
+                compare(&cpu.pixels.linear, &actual.pixels.linear, 2.0_f32.powi(-10));
+            }
+        }
+    }
 }
 #[test]
 fn gradient_color_changes_invalidate_raster_and_geometry_changes_invalidate_both() {
@@ -1778,11 +2286,13 @@ fn invalid_gradient_stops_and_geometry_fail_with_typed_shape_errors() {
     ));
     for geometry in [
         Gradient::Linear {
+            options: Default::default(),
             start: [f(0.0); 2],
             end: [f(0.0); 2],
             stops: vec![],
         },
         Gradient::Radial {
+            options: Default::default(),
             center: [f(0.0); 2],
             radius: f(0.0),
             stops: vec![],
@@ -1800,7 +2310,7 @@ fn invalid_gradient_stops_and_geometry_fail_with_typed_shape_errors() {
     }
 }
 #[test]
-fn vec004_vec005_payloads_roundtrip_but_fail_final_render() {
+fn malformed_gradient_and_vec005_payloads_roundtrip_but_fail_final_render() {
     let (mut p, id) = gradient_project(false);
     let width = constant("kronello.stroke_width", scalar(2.0));
     let join = constant("kronello.shape.stroke_join", Value::Enum("miter".into()));
@@ -1810,6 +2320,7 @@ fn vec004_vec005_payloads_roundtrip_but_fail_final_render() {
         panic!()
     };
     shape.stroke = Some(Stroke {
+        options: None,
         gradient: None,
         color: shape.fill.as_ref().unwrap().color,
         width: width.id(),
@@ -1892,7 +2403,7 @@ fn gpu_gradient_dag_transform_and_animation_match_cpu_reference() {
 }
 
 #[test]
-fn text_gradient_is_preserved_as_opaque_and_snapshot_refuses_it() {
+fn malformed_text_gradient_is_preserved_as_opaque_and_snapshot_refuses_it() {
     let (p, id) = cache_project();
     let mut value = serde_json::to_value(&p).unwrap();
     value["texts"][0]["styles"][0]["gradient"] = serde_json::json!({"kind":"linear","stops":[{"offset":0,"color":"red"},{"offset":1,"color":"blue"}]});
@@ -1959,9 +2470,94 @@ fn fx_dag(p: &Project, id: CompositionId, region: OutputRegion) -> RenderDag {
     let scene = build_scene_ir(&snapshot, t(0, 1), &[]).unwrap();
     build_render_dag(&scene, RenderProfile::default(), region).unwrap()
 }
+
+#[test]
+fn inspect_path_reports_halos_budgets_and_preserves_the_live_render_cache() {
+    let (p, id) = fx_project();
+    let snapshot = snapshot(&p, id);
+    let mut live = RenderCache::default();
+    let request = FrameRequest {
+        time: Time::ZERO,
+        region: fx_region(),
+    };
+    let expected =
+        render_frame_with_cache(&snapshot, &[], &CpuReferenceBackend, request, &mut live).unwrap();
+    let before = live.stats();
+    let mut isolated = RenderCache::default();
+    let scene = build_scene_ir_with_cache(&snapshot, Time::ZERO, &[], &mut isolated).unwrap();
+    let plan = explain_render_path(
+        &scene,
+        snapshot.profile(),
+        fx_region(),
+        ExplainBackend::Gpu,
+        &mut isolated,
+    )
+    .unwrap();
+    assert!(
+        plan.notices
+            .iter()
+            .any(|n| n.code == "EFFECT_HALO_EXPANSION")
+    );
+    assert!(plan.tiles[0].stages.iter().any(|s| s.code == "EFFECT"));
+    let dag = build_render_dag(&scene, snapshot.profile(), fx_region()).unwrap();
+    assert_eq!(plan.tiles[0].execution, dag.execution_region());
+    assert_eq!(plan.tiles[0].stages.len(), dag.nodes().len());
+    for (stage, node) in plan.tiles[0].stages.iter().zip(dag.nodes()) {
+        assert_eq!(stage.inputs, node.inputs());
+    }
+    assert_eq!(live.stats(), before);
+    assert_eq!(
+        render_frame_with_cache(&snapshot, &[], &CpuReferenceBackend, request, &mut live)
+            .unwrap()
+            .pixels,
+        expected.pixels
+    );
+    assert_eq!(live.stats().raster.misses, before.raster.misses);
+    let mut heavy = scene.clone();
+    for _ in 0..180 {
+        let mut n = heavy.nodes[0].clone();
+        n.key.node = NodeId::new();
+        heavy.nodes.push(n);
+    }
+    let large = OutputRegion {
+        origin: [0.0; 2],
+        extent: [512.0; 2],
+        pixels: [512; 2],
+    };
+    let plan = explain_render_path(
+        &heavy,
+        snapshot.profile(),
+        large,
+        ExplainBackend::Gpu,
+        &mut RenderCache::default(),
+    )
+    .unwrap();
+    assert!(
+        plan.notices
+            .iter()
+            .any(|n| n.code == "SURFACE_BUDGET_EXCEEDED"
+                && n.actual_estimate.unwrap() > n.limit.unwrap())
+    );
+    assert!(!plan.executed);
+}
 #[test]
 fn fx_halo_requests_and_transformed_visual_bounds_are_analytical() {
     let (p, id) = fx_project();
+    let scene = build_scene_ir(&snapshot(&p, id), t(0, 1), &[]).unwrap();
+    assert_eq!(
+        scene.nodes[0].bounds.ink_bounds,
+        Some(DesignBounds {
+            min: [6.0, 8.0],
+            max: [10.0, 14.0],
+        })
+    );
+    assert_eq!(
+        scene.nodes[0].bounds.visual_bounds,
+        Some(DesignBounds {
+            min: [5.25, 3.5],
+            max: [15.25, 15.5],
+        })
+    );
     let dag = fx_dag(&p, id, fx_region());
     let effect_index = dag
         .nodes()
@@ -2000,6 +2596,36 @@ fn fx_halo_requests_and_transformed_visual_bounds_are_analytical() {
             extent: [31.0, 31.0],
             pixels: [31; 2]
         }
+    );
+}
+
+#[test]
+fn group_bounds_union_children_and_apply_group_effect_after_child_effects() {
+    let (mut p, id, group_id, _) = group_project();
+    let sigma = constant("kronello.effect.sigma", scalar(2.0));
+    let group = &mut comp_mut(&mut p).nodes[0];
+    group.effects.push(Effect::Known(EffectDefinition {
+        effect_id: GAUSSIAN_BLUR_ID.into(),
+        version: 1,
+        parameters: EffectParameters::GaussianBlur { sigma: sigma.id() },
+    }));
+    group.properties.push(sigma);
+    let scene = build_scene_ir(&snapshot(&p, id), Time::ZERO, &[]).unwrap();
+    let group = scene.nodes.iter().find(|n| n.key.node == group_id).unwrap();
+    assert_eq!(
+        group.bounds.layout_bounds,
+        Some(DesignBounds {
+            min: [0.0; 2],
+            max: [16.0; 2]
+        })
+    );
+    assert_eq!(group.bounds.ink_bounds, group.bounds.layout_bounds);
+    assert_eq!(
+        group.bounds.visual_bounds,
+        Some(DesignBounds {
+            min: [-6.0; 2],
+            max: [22.0; 2]
+        })
     );
 }
 fn assert_fx_crop(backend: &dyn RenderBackend) {
@@ -2094,6 +2720,28 @@ fn tiled_frame_matches_full_frame_across_shadow_halo_and_partial_tiles() {
         )
         .unwrap();
         assert_eq!(actual.pixels, expected, "scale {scale}");
+        let mut streamed = vec![[0.0; 4]; 529 * 35];
+        render_frame_tiles(
+            &snapshot,
+            &[],
+            &CpuReferenceBackend,
+            FrameRequest {
+                time: t(0, 1),
+                region,
+            },
+            &mut |[x, y], tile, output| {
+                for row in 0..tile.pixels[1] as usize {
+                    let dest = (y as usize + row) * 529 + x as usize;
+                    let source = row * tile.pixels[0] as usize;
+                    let width = tile.pixels[0] as usize;
+                    streamed[dest..dest + width]
+                        .copy_from_slice(&output.linear[source..source + width]);
+                }
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(streamed, expected.linear, "streamed halo scale {scale}");
         assert_eq!(actual.metadata.region, region);
         assert_eq!(actual.metadata.revision, "7");
         assert_eq!(actual.metadata.design_to_pixel, region.design_to_pixel().0);
@@ -2138,7 +2786,7 @@ fn fx_effect_animation_versions_and_cache_identity() {
     let snapshot = RenderSnapshot::new(&p, id, 0, RenderProfile::default()).unwrap();
     assert_eq!(
         snapshot.semantic_versions().effects,
-        BTreeMap::from([(GAUSSIAN_BLUR_ID.into(), 1), (DROP_SHADOW_ID.into(), 1)])
+        BTreeMap::from([(GAUSSIAN_BLUR_ID.into(), 2), (DROP_SHADOW_ID.into(), 2)])
     );
     let mut cache = RenderCache::new(CacheConfig::default());
     let mut identities = vec![];
@@ -2171,7 +2819,7 @@ fn fx_effect_animation_versions_and_cache_identity() {
     assert!(identities.windows(2).all(|v| v[0] != v[1]));
     assert!(cache.stats().raster.hits >= 3);
     let mut wire = serde_json::to_value(snapshot).unwrap();
-    wire["semantic_versions"]["effects"][GAUSSIAN_BLUR_ID] = serde_json::json!(2);
+    wire["semantic_versions"]["effects"][GAUSSIAN_BLUR_ID] = serde_json::json!(99);
     let restored: RenderSnapshot = serde_json::from_value(wire).unwrap();
     assert_eq!(
         restored.validate().unwrap_err().code(),
@@ -2218,6 +2866,11 @@ fn fx_local_halos_offsets_follow_uniform_scale_rotation_and_reject_anisotropy() 
     for (actual, expected) in b.min.into_iter().chain(b.max).zip([-9.0, 6.0, 15.0, 27.0]) {
         assert!((actual - expected).abs() < 1e-10);
     }
+    let scene = build_scene_ir(&snapshot(&p, id), Time::ZERO, &[]).unwrap();
+    let b = scene.nodes[0].bounds.visual_bounds.unwrap();
+    for (actual, expected) in b.min.into_iter().chain(b.max).zip([-9.0, 6.5, 15.0, 26.5]) {
+        assert!((actual - expected).abs() < 1e-10);
+    }
     let DocumentObject::Known(c) = &mut p.compositions[0] else {
         unreachable!()
     };
@@ -2229,11 +2882,8 @@ fn fx_local_halos_offsets_follow_uniform_scale_rotation_and_reject_anisotropy() 
         .set_source(PropertySource::Constant(v2(2.0, 1.0)), &render_registry())
         .unwrap();
     let snapshot = RenderSnapshot::new(&p, id, 0, RenderProfile::default()).unwrap();
-    let scene = build_scene_ir(&snapshot, t(0, 1), &[]).unwrap();
     assert_eq!(
-        build_render_dag(&scene, RenderProfile::default(), fx_region())
-            .unwrap_err()
-            .code(),
+        build_scene_ir(&snapshot, t(0, 1), &[]).unwrap_err().code(),
         "UNSUPPORTED_FEATURE"
     );
 }
@@ -2283,4 +2933,524 @@ fn fx_stack_order_is_semantic_and_group_isolation_is_retained() {
             DagNode::IsolatedComposite { .. }
         ));
     }
+}
+
+fn fx002_project(case: usize) -> (Project, CompositionId) {
+    let (mut p, id) = fx_project();
+    let c = comp_mut(&mut p);
+    for e in &mut c.nodes[0].effects {
+        let Effect::Known(e) = e else { panic!() };
+        e.version = 2;
+    }
+    let sigma = c.nodes[0]
+        .properties
+        .iter()
+        .find(|p| p.descriptor().key.as_str() == "kronello.effect.sigma")
+        .unwrap()
+        .id();
+    c.nodes[0].effects.push(Effect::Known(EffectDefinition {
+        effect_id: GAUSSIAN_BLUR_ID.into(),
+        version: 2,
+        parameters: EffectParameters::GaussianBlur { sigma },
+    }));
+    let (scale, rotation) = match case {
+        0 => ((1.0, 1.0), 37.0),
+        1 => ((2.0, 0.75), 0.0),
+        _ => ((1.5, 0.8), 28.0),
+    };
+    c.nodes[0].properties.extend([
+        constant("kronello.transform.scale", v2(scale.0, scale.1)),
+        constant("kronello.transform.rotation", Value::Angle(f(rotation))),
+    ]);
+    if case == 2 {
+        // Nonuniform parent scale after child rotation produces actual shear.
+        let parent = node(
+            NodeKind::Null,
+            vec![constant("kronello.transform.scale", v2(1.2, 0.7))],
+        );
+        c.nodes[0].transform_parent = Some(parent.id);
+        c.root_nodes.push(parent.id);
+        c.nodes.push(parent);
+    }
+    (p, id)
+}
+fn assert_fx002_crop_and_tiles(backend: &dyn RenderBackend) {
+    for case in 0..3 {
+        let (p, id) = fx002_project(case);
+        for working in [ColorSpace::LinearRec709, ColorSpace::LinearRec2020] {
+            let snapshot = RenderSnapshot::new(
+                &p,
+                id,
+                7,
+                RenderProfile {
+                    working_space: working,
+                    ..RenderProfile::default()
+                },
+            )
+            .unwrap();
+            let scene = build_scene_ir(&snapshot, Time::ZERO, &[]).unwrap();
+            for scale in [0.5, 1.0, 2.0] {
+                // Both transforms and stack halos cross x=512; last tile is partial.
+                let full = OutputRegion {
+                    origin: [6.0 - 510.0 / scale, -4.0],
+                    extent: [529.0 / scale, 40.0 / scale],
+                    pixels: [529, 40],
+                };
+                let dag = build_render_dag(&scene, snapshot.profile(), full).unwrap();
+                let expected = backend.execute(&dag).unwrap();
+                assert!(
+                    expected.linear.iter().any(|p| p[3] > 0.01),
+                    "empty test case {case}"
+                );
+                let actual = render_frame(
+                    &snapshot,
+                    &[],
+                    backend,
+                    FrameRequest {
+                        time: Time::ZERO,
+                        region: full,
+                    },
+                )
+                .unwrap();
+                compare(&expected.linear, &actual.pixels.linear, 1.0 / 1024.0);
+                if backend.name() == "cpu_reference_float32" {
+                    for (i, (a, b)) in actual
+                        .pixels
+                        .linear
+                        .iter()
+                        .zip(&expected.linear)
+                        .enumerate()
+                    {
+                        assert_eq!(a, b, "tile case {case} {working:?} scale {scale} pixel {i}");
+                    }
+                    for (i, (a, b)) in actual
+                        .pixels
+                        .display
+                        .iter()
+                        .zip(&expected.display)
+                        .enumerate()
+                    {
+                        assert_eq!(
+                            a, b,
+                            "display tile case {case} {working:?} scale {scale} pixel {i}"
+                        );
+                    }
+                }
+                let crop = OutputRegion {
+                    origin: [full.origin[0] + 498.0 / scale, full.origin[1] + 4.0 / scale],
+                    extent: [28.0 / scale, 30.0 / scale],
+                    pixels: [28, 30],
+                };
+                let cropped = backend
+                    .execute(&build_render_dag(&scene, snapshot.profile(), crop).unwrap())
+                    .unwrap();
+                let mut reference = vec![];
+                for y in 0..30 {
+                    reference.extend_from_slice(
+                        &expected.linear[(y + 4) * 529 + 498..(y + 4) * 529 + 526],
+                    );
+                }
+                compare(&reference, &cropped.linear, 1.0 / 1024.0);
+                if backend.name() == "cpu_reference_float32" {
+                    for (i, (a, b)) in reference.iter().zip(&cropped.linear).enumerate() {
+                        assert_eq!(a, b, "crop case {case} {working:?} scale {scale} pixel {i}");
+                    }
+                }
+                if backend.name() != "cpu_reference_float32" {
+                    let cpu = CpuReferenceBackend.execute(&dag).unwrap();
+                    compare(&cpu.linear, &expected.linear, 1.0 / 1024.0);
+                }
+            }
+        }
+    }
+}
+#[test]
+fn fx002_rotation_nonuniform_shear_crop_and_tile_boundaries_match() {
+    assert_fx002_crop_and_tiles(&CpuReferenceBackend);
+}
+#[test]
+fn gpu_fx002_rotation_nonuniform_shear_crop_and_tile_boundaries_match_cpu() {
+    assert_fx002_crop_and_tiles(&kronello_gpu::GpuContext::new().expect("GPU required"));
+}
+#[test]
+fn fx002_legacy_snapshot_pin_and_effect_cache_identity() {
+    let (legacy, id) = fx_project();
+    let snapshot = snapshot(&legacy, id);
+    let expected = CpuReferenceBackend
+        .execute(&fx_dag(&legacy, id, fx_region()))
+        .unwrap();
+    let mut wire = serde_json::to_value(&snapshot).unwrap();
+    for name in [GAUSSIAN_BLUR_ID, DROP_SHADOW_ID] {
+        wire["semantic_versions"]["effects"][name] = serde_json::json!(1);
+    }
+    let restored: RenderSnapshot = serde_json::from_value(wire.clone()).unwrap();
+    restored.validate().unwrap();
+    assert_eq!(
+        render_frame(
+            &restored,
+            &[],
+            &CpuReferenceBackend,
+            FrameRequest {
+                time: Time::ZERO,
+                region: fx_region()
+            }
+        )
+        .unwrap()
+        .pixels,
+        expected
+    );
+    wire["project"]["compositions"][0]["nodes"][0]["effects"][0]["version"] = serde_json::json!(2);
+    let restored: RenderSnapshot = serde_json::from_value(wire).unwrap();
+    assert_eq!(
+        build_scene_ir(&restored, Time::ZERO, &[])
+            .unwrap_err()
+            .code(),
+        "UNSUPPORTED_FEATURE"
+    );
+    let mut upgraded = legacy.clone();
+    let Effect::Known(effect) = &mut comp_mut(&mut upgraded).nodes[0].effects[0] else {
+        panic!()
+    };
+    effect.version = 2;
+    let old = fx_dag(&legacy, id, fx_region());
+    let new = fx_dag(&upgraded, id, fx_region());
+    assert_ne!(
+        RasterCacheKey::for_dag(&old, "cpu").unwrap(),
+        RasterCacheKey::for_dag(&new, "cpu").unwrap()
+    );
+    assert_ne!(expected, CpuReferenceBackend.execute(&new).unwrap());
+}
+
+fn vec005_project(alignment: StrokeAlignment, animated: bool) -> (Project, CompositionId) {
+    let (mut n, mut shape) = rectangle([12.3, 9.7], Color::from_srgb8([255, 0, 0], None));
+    shape.fill = None;
+    let color = constant(
+        "kronello.shape.stroke_color",
+        Value::Color(Color::from_srgb8([40, 180, 250], None)),
+    );
+    let width = constant("kronello.stroke_width", scalar(1.7));
+    let join = constant("kronello.shape.stroke_join", Value::Enum("round".into()));
+    let cap = constant("kronello.shape.stroke_cap", Value::Enum("round".into()));
+    let limit = constant("kronello.shape.miter_limit", scalar(4.0));
+    let curve = AnimationCurve::new(
+        CurveId::new(),
+        ValueType::Scalar,
+        vec![
+            Keyframe {
+                time: t(0, 1),
+                value: scalar(0.37),
+                interpolation: CurveInterpolation::Linear,
+            },
+            Keyframe {
+                time: t(1, 1),
+                value: scalar(3.37),
+                interpolation: CurveInterpolation::Linear,
+            },
+        ],
+    )
+    .unwrap();
+    let offset = if animated {
+        prop(
+            "kronello.shape.dash_offset",
+            PropertySource::Curve(curve.id()),
+        )
+    } else {
+        constant("kronello.shape.dash_offset", scalar(0.37))
+    };
+    shape.stroke = Some(Stroke {
+        options: Some(Box::new(StrokeOptions {
+            geometry_version: EXTENDED_STROKE_VERSION.into(),
+            alignment,
+            fill_rule: FillRule::Evenodd,
+            dash_array: vec![f(3.17), f(1.31), f(2.23)],
+            dash_offset: offset.id(),
+        })),
+        gradient: None,
+        color: color.id(),
+        width: width.id(),
+        join: join.id(),
+        cap: cap.id(),
+        miter_limit: limit.id(),
+    });
+    n.properties.extend([
+        color,
+        width,
+        join,
+        cap,
+        limit,
+        offset,
+        constant("kronello.transform.position", v2(10.031, 7.019)),
+        constant("kronello.transform.scale", v2(1.3, 0.8)),
+        constant("kronello.transform.skew", Value::Angle(f(17.0))),
+    ]);
+    let c = composition(vec![n]);
+    let id = c.id;
+    (
+        Project {
+            compositions: vec![DocumentObject::Known(c)],
+            shapes: vec![DocumentObject::Known(shape)],
+            curves: if animated {
+                vec![DocumentObject::Known(curve)]
+            } else {
+                vec![]
+            },
+            ..Default::default()
+        },
+        id,
+    )
+}
+
+#[test]
+fn vec005_offset_animation_instances_and_raster_identity() {
+    let (mut p, id) = vec005_project(StrokeAlignment::Center, true);
+    let root = composition(
+        [0, 1]
+            .map(|i| {
+                node(
+                    NodeKind::CompositionInstance(CompositionInstance {
+                        id: CompositionInstanceId::new(),
+                        definition_ref: id,
+                        input_bindings: Default::default(),
+                        local_time_map: TimeMap::linear(t(i, 2), t(1, 1)).unwrap(),
+                        seed: 42,
+                    }),
+                    vec![],
+                )
+            })
+            .to_vec(),
+    );
+    let root_id = root.id;
+    p.compositions.push(DocumentObject::Known(root));
+    let scene = build_scene_ir(&snapshot(&p, root_id), Time::ZERO, &[]).unwrap();
+    let offsets: Vec<_> = scene
+        .nodes
+        .iter()
+        .filter_map(|n| match &n.content {
+            SceneContent::Shape { resolved, .. } => Some((
+                n.key.instance_path.clone(),
+                resolved
+                    .stroke
+                    .as_ref()
+                    .unwrap()
+                    .options
+                    .as_ref()
+                    .unwrap()
+                    .dash_offset,
+            )),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(offsets.len(), 2);
+    assert_ne!(offsets[0].0, offsets[1].0);
+    assert_eq!((offsets[0].1, offsets[1].1), (0.37, 1.87));
+    let s = snapshot(&p, id);
+    let mut cache = RenderCache::default();
+    let before = cached_frame(&s, t(0, 1), region(), &mut cache);
+    cache.reset_stats();
+    let after = cached_frame(&s, t(1, 2), region(), &mut cache);
+    assert_ne!(before.pixels.linear, after.pixels.linear);
+    assert!(cache.stats().geometry.hits > 0);
+    assert!(cache.stats().raster.misses > 0);
+    let again = cached_frame(&s, t(0, 1), region(), &mut cache);
+    assert_eq!(before.pixels, again.pixels);
+}
+
+fn assert_vec005_affine_crop(backend: &dyn RenderBackend) {
+    for alignment in [
+        StrokeAlignment::Center,
+        StrokeAlignment::Inside,
+        StrokeAlignment::Outside,
+    ] {
+        let (p, id) = vec005_project(alignment, true);
+        for working_space in [ColorSpace::LinearRec709, ColorSpace::LinearRec2020] {
+            let s = RenderSnapshot::new(
+                &p,
+                id,
+                0,
+                RenderProfile {
+                    working_space,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            for time in [t(0, 1), t(1, 2), t(1, 1)] {
+                let ir = build_scene_ir(&s, time, &[]).unwrap();
+                let full_dag = build_render_dag(&ir, s.profile(), region()).unwrap();
+                let full = backend.execute(&full_dag).unwrap();
+                let expected = CpuReferenceBackend.execute(&full_dag).unwrap();
+                for (a, b) in full.linear.iter().zip(&expected.linear) {
+                    for i in 0..4 {
+                        assert!((a[i] - b[i]).abs() <= (1.0 / 1024.0) * b[i].abs().max(1.0));
+                    }
+                }
+                let crop = OutputRegion {
+                    origin: [8.0, 5.0],
+                    extent: [32.0, 20.0],
+                    pixels: [32, 20],
+                };
+                let actual = backend
+                    .execute(&build_render_dag(&ir, s.profile(), crop).unwrap())
+                    .unwrap();
+                for y in 0..20 {
+                    for x in 0..32 {
+                        assert_eq!(actual.linear[y * 32 + x], full.linear[(y + 5) * 64 + x + 8]);
+                    }
+                }
+                let bounds = ir.nodes[0].bounds;
+                let visual = bounds.visual_bounds.unwrap();
+                assert_eq!(bounds.ink_bounds, bounds.visual_bounds);
+                for y in 0..32 {
+                    for x in 0..64 {
+                        if full.linear[y * 64 + x][3] > 0.0 {
+                            assert!(
+                                (x as f64) + 1.0 >= visual.min[0] && (x as f64) <= visual.max[0]
+                            );
+                            assert!(
+                                (y as f64) + 1.0 >= visual.min[1] && (y as f64) <= visual.max[1]
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+#[test]
+fn vec005_nonuniform_skew_bounds_and_roi_are_conservative() {
+    assert_vec005_affine_crop(&CpuReferenceBackend);
+}
+#[test]
+fn gpu_vec005_affine_animation_alignment_and_roi_match_cpu() {
+    assert_vec005_affine_crop(&kronello_gpu::GpuContext::new().unwrap());
+}
+
+#[test]
+fn vec005_legacy_snapshot_pixels_and_unknown_versions() {
+    let (mut p, id) = vec005_project(StrokeAlignment::Center, false);
+    let DocumentObject::Known(shape) = &mut p.shapes[0] else {
+        panic!()
+    };
+    shape.stroke.as_mut().unwrap().options = None;
+    comp_mut(&mut p).nodes[0].properties.retain(|p| {
+        !matches!(
+            p.descriptor().key.as_str(),
+            "kronello.transform.scale" | "kronello.transform.skew"
+        )
+    });
+    let current = snapshot(&p, id);
+    let mut wire = serde_json::to_value(&current).unwrap();
+    wire["semantic_versions"]["stroke_geometry"] = serde_json::json!(LEGACY_STROKE_VERSION);
+    let old = vec005_restore(&wire).unwrap();
+    assert_eq!(
+        frame(&current, Time::ZERO).pixels,
+        frame(&old, Time::ZERO).pixels
+    );
+    wire["semantic_versions"]["stroke_geometry"] = serde_json::json!("future");
+    assert_eq!(
+        vec005_restore(&wire).unwrap_err().code(),
+        "UNSUPPORTED_FEATURE"
+    );
+    let (p, id) = vec005_project(StrokeAlignment::Center, false);
+    let mut wire = serde_json::to_value(snapshot(&p, id)).unwrap();
+    wire["semantic_versions"]["stroke_geometry"] = serde_json::json!(LEGACY_STROKE_VERSION);
+    let old = vec005_restore(&wire).unwrap();
+    assert_eq!(
+        build_scene_ir(&old, Time::ZERO, &[]).unwrap_err().code(),
+        "UNSUPPORTED_FEATURE"
+    );
+}
+
+#[test]
+fn vec005_invalid_dash_open_alignment_budget_and_version_are_typed() {
+    for (kind, code) in [
+        (0, "STROKE_INVALID_DASH"),
+        (1, "STROKE_OPEN_ALIGNMENT"),
+        (2, "STROKE_BUDGET_EXCEEDED"),
+        (3, "UNSUPPORTED_FEATURE"),
+    ] {
+        let (mut p, id) = vec005_project(StrokeAlignment::Inside, false);
+        let DocumentObject::Known(shape) = &mut p.shapes[0] else {
+            panic!()
+        };
+        let options = shape.stroke.as_mut().unwrap().options.as_mut().unwrap();
+        match kind {
+            0 => options.dash_array = vec![f(-1.0), f(2.0)],
+            1 => {
+                let path = constant(
+                    "kronello.shape.path",
+                    Value::Path(Path {
+                        segments: vec![
+                            PathSegment::MoveTo([f(0.0); 2]),
+                            PathSegment::LineTo([f(10.0), f(0.0)]),
+                        ],
+                    }),
+                );
+                shape.geometry = ShapeGeometry::BezierPath { path: path.id() };
+                comp_mut(&mut p).nodes[0].properties.push(path);
+            }
+            2 => options.dash_array = vec![f(1e-9), f(1e-9)],
+            _ => options.geometry_version = "future".into(),
+        }
+        let result = build_scene_ir(&snapshot(&p, id), Time::ZERO, &[])
+            .and_then(|ir| build_render_dag(&ir, RenderProfile::default(), region()));
+        assert_eq!(result.unwrap_err().code(), code);
+    }
+}
+
+fn vec005_restore(wire: &serde_json::Value) -> Result<RenderSnapshot, RenderError> {
+    let snapshot: RenderSnapshot = serde_json::from_value(wire.clone()).unwrap();
+    snapshot.validate()?;
+    Ok(snapshot)
+}
+
+#[test]
+fn streaming_rejects_cumulative_halo_before_backend_allocation() {
+    let (mut project, id) = fx_project();
+    let c = comp_mut(&mut project);
+    let sigma = c.nodes[0]
+        .properties
+        .iter()
+        .find(|p| p.descriptor().key.as_str() == "kronello.effect.sigma")
+        .unwrap()
+        .id();
+    c.nodes[0]
+        .properties
+        .iter_mut()
+        .find(|p| p.id() == sigma)
+        .unwrap()
+        .set_source(PropertySource::Constant(scalar(20.0)), &render_registry())
+        .unwrap();
+    c.nodes[0].effects = (0..16)
+        .map(|_| {
+            Effect::Known(EffectDefinition {
+                effect_id: GAUSSIAN_BLUR_ID.into(),
+                version: 1,
+                parameters: EffectParameters::GaussianBlur { sigma },
+            })
+        })
+        .collect();
+    let snap = RenderSnapshot::new(&project, id, 0, RenderProfile::default()).unwrap();
+    let mut tiles = 0;
+    let region = OutputRegion {
+        origin: [0.0; 2],
+        extent: [512.0; 2],
+        pixels: [512; 2],
+    };
+    let error = render_frame_tiles(
+        &snap,
+        &[],
+        &CpuReferenceBackend,
+        FrameRequest {
+            time: t(0, 1),
+            region,
+        },
+        &mut |_, _, _| {
+            tiles += 1;
+            Ok(())
+        },
+    )
+    .unwrap_err();
+    assert_eq!(error.code(), "UNSUPPORTED_FEATURE", "{error:?}");
+    assert!(error.to_string().contains("streaming tile surface budget"));
+    assert_eq!(tiles, 0);
 }

@@ -1,8 +1,12 @@
 //! Immutable scene compilation and image-sequence export. Concrete execution
 //! is injected through RenderBackend; this crate imports no GPU or store API.
+mod bounds;
 mod cache;
+pub use bounds::{DesignBounds, LayoutValue};
 mod dag;
 mod effect;
+mod inspect;
+pub use inspect::*;
 mod output;
 mod snapshot;
 mod template;
@@ -20,6 +24,16 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum RenderError {
+    #[error("text {node} line {line} advances {advance} beyond wrap width {wrap_width}")]
+    LayoutOverflow {
+        node: kronello_model::NodeId,
+        instance_path: kronello_model::InstancePath,
+        line: usize,
+        advance: f64,
+        wrap_width: f64,
+    },
+    #[error("visual bounds follower requires an invertible parent transform")]
+    SingularLayoutTransform,
     #[error(transparent)]
     Sequence(#[from] kronello_model::SequenceError),
     #[error(transparent)]
@@ -56,11 +70,19 @@ pub enum RenderError {
 impl RenderError {
     pub fn code(&self) -> &'static str {
         match self {
+            Self::LayoutOverflow { .. } => "LAYOUT_OVERFLOW",
+            Self::SingularLayoutTransform => "LAYOUT_SINGULAR_TRANSFORM",
             Self::Sequence(e) => e.code(),
             Self::Template(e) => e.code(),
-            Self::Effect(kronello_model::EffectError::UnsupportedFeature)
+            Self::Shape(ShapeError::UnsupportedGradientVersion)
+            | Self::Shape(ShapeError::UnsupportedStrokeVersion)
+            | Self::Text(TextError::Gradient(ShapeError::UnsupportedGradientVersion))
+            | Self::Effect(kronello_model::EffectError::UnsupportedFeature)
             | Self::UnsupportedFeature(_) => "UNSUPPORTED_FEATURE",
             Self::UnsupportedSchema(_) => "UNSUPPORTED_SCHEMA",
+            Self::Shape(ShapeError::InvalidDashArray) => "STROKE_INVALID_DASH",
+            Self::Shape(ShapeError::StrokeBudgetExceeded) => "STROKE_BUDGET_EXCEEDED",
+            Self::Shape(ShapeError::OpenStrokeAlignment) => "STROKE_OPEN_ALIGNMENT",
             Self::Evaluation(e) => e.code(),
             Self::Layout(LayoutError::MissingFont { .. }) => "ASSET_MISSING",
             Self::Layout(
@@ -92,6 +114,9 @@ pub struct BackendFrame {
 
 pub trait RenderBackend {
     fn name(&self) -> &str;
+    fn input_path(&self) -> &str {
+        "semantic_scene"
+    }
     fn execute(&self, dag: &RenderDag) -> Result<BackendFrame, RenderError>;
     /// Backends opt in only with a stable execution namespace/fingerprint.
     /// The default deliberately does not cache device results.
@@ -105,7 +130,7 @@ pub trait RenderBackend {
 }
 
 mod media;
-pub use media::{DecodedVideoFrame, VideoDecodeBackend};
+pub use media::{DecodedVideoFrame, VideoDecodeBackend, VideoImage};
 
 mod sequence;
-pub use sequence::RenderTarget;
+pub use sequence::{RenderTarget, lower_sequence};

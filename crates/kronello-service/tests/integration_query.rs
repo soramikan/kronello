@@ -12,16 +12,33 @@ struct Fixture {
 }
 impl Fixture {
     fn new() -> Self {
+        Self::with_options(None, None)
+    }
+    fn with_options(stage: Option<&str>, wrap_width: Option<f64>) -> Self {
         let temp = tempfile::tempdir().unwrap();
         let path = temp.path().join("query.kronello");
-        let document: Value = serde_json::from_str(include_str!(
+        let mut document: Value = serde_json::from_str(include_str!(
             "../../../examples/integration-001.project.json"
         ))
         .unwrap();
-        let definition: Value = serde_json::from_str(include_str!(
+        let mut definition: Value = serde_json::from_str(include_str!(
             "../../../examples/integration-001.definition.json"
         ))
         .unwrap();
+        if let Some(stage) = stage {
+            definition["constraints"]["bands"][0]["bounds"] = json!(stage);
+        }
+        if let Some(width) = wrap_width {
+            for composition in document["compositions"].as_array_mut().unwrap() {
+                for node in composition["nodes"].as_array_mut().unwrap() {
+                    for p in node["properties"].as_array_mut().unwrap() {
+                        if p["descriptor"]["key"] == "kronello.text.wrap_width" {
+                            p["source"]["value"]["value"] = json!(width);
+                        }
+                    }
+                }
+            }
+        }
         let instance = uuid::Uuid::new_v4();
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let font = json!({"identity":document["texts"][0]["styles"][0]["font"],
@@ -38,6 +55,11 @@ impl Fixture {
         fixture
             .ok(json!({"operation":"project.create","project":fixture.path,"document":document}));
         let session = uuid::Uuid::new_v4();
+        let headline = if wrap_width.is_some() {
+            "日"
+        } else {
+            "長い日本語字幕"
+        };
         fixture.ok(
             json!({"operation":"template.define","project":fixture.path,"base_revision":"1",
             "session_id":session,"idempotency_key":"define","definition":definition}),
@@ -46,7 +68,7 @@ impl Fixture {
             "session_id":session,"idempotency_key":"instantiate","composition":fixture.composition,
             "node":uuid::Uuid::new_v4(),"index":0,"instance":{"id":instance,
             "definition_ref":definition["id"],"version":"1.0.0","duration":{"num":"8","den":"1"},
-            "inputs":{"headline":{"kind":"string","value":"長い日本語字幕"},
+            "inputs":{"headline":{"kind":"string","value":headline},
             "accent":{"kind":"color","value":{"space":"srgb","components":{"r":0.1,"g":0.2,"b":0.9,"alpha":1.0}}}}}}));
         fixture
     }
@@ -76,6 +98,29 @@ fn evaluated_template_queries_share_layout_inputs_and_do_not_initialize_gpu_or_e
     let f = Fixture::new();
     let before = f.ok(json!({"operation":"project.export","project":f.path}));
     let scene = f.ok(f.scene());
+    // API-002 filtering/paging retains render-consistent template bindings,
+    // text layout, effects and runtime paths from this explicit evaluation.
+    let expected: Vec<_> = scene["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|node| matches!(node["kind"]["kind"].as_str(), Some("text" | "shape")))
+        .cloned()
+        .collect();
+    let mut query = f.scene();
+    query["search"] = json!({"kinds":["text","shape"]});
+    query["limit"] = json!(1);
+    let mut paged = Vec::new();
+    loop {
+        let page = f.ok(query.clone());
+        assert_eq!(page["revision"], scene["revision"]);
+        paged.extend(page["nodes"].as_array().unwrap().iter().cloned());
+        let Some(cursor) = page.get("next_cursor") else {
+            break;
+        };
+        query["cursor"] = cursor.clone();
+    }
+    assert_eq!(paged, expected);
     let band = scene["nodes"]
         .as_array()
         .unwrap()
@@ -121,6 +166,28 @@ fn evaluated_template_queries_share_layout_inputs_and_do_not_initialize_gpu_or_e
 }
 
 #[test]
+fn node_explain_reports_renderer_layout_dependencies_for_template_band() {
+    let f = Fixture::new();
+    let before = f.ok(json!({"operation":"project.export","project":f.path}));
+    let result = f.ok(json!({"operation":"node.explain","project":f.path,"composition":f.composition,"key":{"instance_path":[f.instance],"node":f.band},"time":{"num":"0","den":"1"},"fonts":[f.font]}));
+    assert!(
+        result["render_diagnostics"].as_array().unwrap().is_empty(),
+        "{result}"
+    );
+    assert!(
+        result["dependencies"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|d| d["upstream"]["kind"] == "layout" && d["upstream"]["text"] == f.text)
+    );
+    assert_eq!(
+        f.ok(json!({"operation":"project.export","project":f.path})),
+        before
+    );
+}
+
+#[test]
 fn evaluated_queries_keep_font_errors_local_paths_and_inactive_node_boundaries() {
     let f = Fixture::new();
     for operation in ["scene", "sample"] {
@@ -161,4 +228,99 @@ fn evaluated_queries_keep_font_errors_local_paths_and_inactive_node_boundaries()
     let mut request = f.sample();
     request["times"] = json!([{"num":"8","den":"1"}]);
     assert_eq!(f.execute(request)["error"]["code"], "INVALID_REQUEST");
+}
+
+#[test]
+fn evaluated_query_returns_all_bounds_stages_and_explicit_follower_values() {
+    for stage in ["layout", "ink", "visual"] {
+        let f = Fixture::with_options(Some(stage), None);
+        let scene = f.ok(f.scene());
+        let nodes = scene["nodes"].as_array().unwrap();
+        let text = &nodes.iter().find(|n| n["key"]["node"] == f.text).unwrap()["evaluated"];
+        let band = &nodes.iter().find(|n| n["key"]["node"] == f.band).unwrap()["evaluated"];
+        let bounds = &text["bounds"];
+        for name in ["layout_bounds", "ink_bounds", "visual_bounds"] {
+            assert!(bounds[name]["min"].is_array());
+            assert!(bounds[name]["max"].is_array());
+        }
+        assert_ne!(bounds["layout_bounds"], bounds["ink_bounds"]);
+        let chosen = &bounds[format!("{stage}_bounds")];
+        let size = &band["properties"]["1d77434e-64ef-4de4-9e38-98bb71bb03fe"]["value"];
+        for (axis, padding) in [8.0, 4.0].into_iter().enumerate() {
+            assert_eq!(
+                size[axis].as_f64().unwrap(),
+                chosen["max"][axis].as_f64().unwrap() - chosen["min"][axis].as_f64().unwrap()
+                    + padding
+            );
+        }
+        // Legacy local layout_bounds is unchanged; canonical bounds share the
+        // root Composition coordinate space for all stages and node kinds.
+        assert_eq!(text["layout_bounds"]["min"], json!([0.0, 0.0]));
+        assert_eq!(bounds["layout_bounds"]["min"], json!([32.0, 120.0]));
+        assert_ne!(
+            band["bounds"]["ink_bounds"],
+            band["bounds"]["visual_bounds"]
+        );
+        let root = nodes
+            .iter()
+            .find(|n| n["key"]["instance_path"] == json!([]))
+            .unwrap();
+        assert!(root["evaluated"]["bounds"]["visual_bounds"]["min"].is_array());
+    }
+}
+
+#[test]
+fn evaluated_query_and_final_render_share_structured_width_overflow() {
+    let f = Fixture::with_options(Some("ink"), Some(1.0));
+    let error = f.execute(f.scene());
+    assert_eq!(error["error"]["code"], "LAYOUT_OVERFLOW");
+    assert_eq!(error["error"]["details"]["node"], f.text);
+    assert_eq!(
+        error["error"]["details"]["instance_path"],
+        json!([f.instance])
+    );
+    assert_eq!(error["error"]["details"]["line"], 0);
+    assert_eq!(error["error"]["details"]["wrap_width"], 1.0);
+    let request = json!({"operation":"render.frame","time":{"num":"0","den":"1"},
+        "input":{"project":f.path,"composition":f.composition,"fonts":[f.font],
+            "region":{"origin":[0.0,0.0],"extent":[320.0,180.0],"pixels":[32,18]}}});
+    let frame = serde_json::to_value(
+        Service::new(BackendSelection::CpuReference).execute_json(&request.to_string()),
+    )
+    .unwrap();
+    assert_eq!(frame["error"], error["error"]);
+}
+
+#[test]
+fn cycle_diagnostics_keep_closed_typed_runtime_keys_in_service_details() {
+    use kronello_eval::{EvaluationError, RuntimePropertyKey};
+    use kronello_model::{InstancePath, NodeId, PropertyId, PropertyKey};
+    let node = NodeId::new();
+    let property = PropertyId::new();
+    let wrap = RuntimePropertyKey::Node(PropertyKey {
+        instance_path: InstancePath::root(),
+        node,
+        property,
+    });
+    let layout = RuntimePropertyKey::LayoutValue {
+        instance_path: InstancePath::root(),
+        text: node,
+        consumer: property,
+    };
+    let error: kronello_service::ServiceError =
+        kronello_render::RenderError::Evaluation(EvaluationError::DependencyCycle {
+            path: vec![wrap.clone(), layout, wrap],
+        })
+        .into();
+    assert_eq!(error.code, "PROPERTY_DEPENDENCY_CYCLE");
+    let path = error.details.unwrap()["path"].as_array().unwrap().clone();
+    assert_eq!(path[0], path[2]);
+    assert_eq!(
+        path[0],
+        json!({"kind":"node","instance_path":[],"node":node,"property":property})
+    );
+    assert_eq!(
+        path[1],
+        json!({"kind":"layout","instance_path":[],"text":node,"consumer":property})
+    );
 }

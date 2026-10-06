@@ -7,8 +7,8 @@ use std::{
 use crate::{ServiceError, open_existing, parse_revision};
 use kronello_model::{
     AnimationCurve, Composition, CompositionId, CurveId, DocumentObject, ExpressionId, Keyframe,
-    NodeId, NodeKind, Project, Property, PropertyId, PropertySource, SceneNode, SchemaRegistry,
-    Shape, SourceResolver, TextDocument, Value, ValueType,
+    Modifier, ModifierId, NodeId, NodeKind, Project, Property, PropertyId, PropertySource,
+    SceneNode, SchemaRegistry, Shape, SourceResolver, TextDocument, Value, ValueType,
 };
 use kronello_store::{ApplyRequest, ChangedKey, Event, Mutation, ProjectStore, StoreError};
 use kronello_time::Time;
@@ -23,6 +23,9 @@ use uuid::Uuid;
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum EditCommand {
     Timeline(Box<crate::TimelineCommand>),
+    ExpressionSet {
+        expression: kronello_model::Expression,
+    },
     Template(Box<crate::TemplateCommand>),
     PropertySourceSet {
         object: Uuid,
@@ -51,6 +54,26 @@ pub enum EditCommand {
         composition: CompositionId,
         node: SceneNode,
         index: usize,
+    },
+    NodeTagsSet {
+        composition: CompositionId,
+        node: NodeId,
+        tags: BTreeSet<String>,
+    },
+    NodeRename {
+        composition: CompositionId,
+        node: NodeId,
+        name: Option<String>,
+    },
+    NodePropertyInsert {
+        composition: CompositionId,
+        node: NodeId,
+        property: Property,
+    },
+    NodeEnabledSet {
+        composition: CompositionId,
+        node: NodeId,
+        enabled: bool,
     },
     NodeRemove {
         composition: CompositionId,
@@ -86,6 +109,27 @@ pub enum EditCommand {
         node: SceneNode,
         index: usize,
     },
+    ModifierInsert {
+        object: Uuid,
+        property: PropertyId,
+        modifier: Modifier,
+        index: usize,
+    },
+    ModifierReplace {
+        object: Uuid,
+        property: PropertyId,
+        modifier: Modifier,
+    },
+    ModifierRemove {
+        object: Uuid,
+        property: PropertyId,
+        modifier: ModifierId,
+    },
+    ModifierReorder {
+        object: Uuid,
+        property: PropertyId,
+        order: Vec<ModifierId>,
+    },
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -116,6 +160,8 @@ pub struct UndoRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct HistoryRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
     pub project: PathBuf,
     #[serde(default = "zero")]
     pub since_revision: String,
@@ -155,6 +201,8 @@ pub struct HistoryResult {
     pub revision: String,
     pub events: Vec<HistoryEntry>,
     pub next_since_revision: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -191,15 +239,23 @@ impl SourceResolver for Catalog<'_> {
             _ => None,
         })
     }
-    fn expression_value_type(&self, _: ExpressionId) -> Option<ValueType> {
-        None
+    fn expression_value_type(&self, id: ExpressionId) -> Option<ValueType> {
+        self.0.expressions.iter().find_map(|e| match e {
+            DocumentObject::Known(e) if e.id == id => Some(e.value_type),
+            _ => None,
+        })
     }
 }
 pub(crate) fn validate(project: &Project) -> Result<(), ServiceError> {
+    for s in &project.sequences {
+        if let DocumentObject::Known(s) = s {
+            s.validate(project)?;
+        }
+    }
     project.ensure_editable().map_err(StoreError::from)?;
     kronello_template::validate_project(project)?;
     let r = registry();
-    let compositions: Vec<_> = project
+    let mut compositions: Vec<_> = project
         .compositions
         .iter()
         .map(|c| match c {
@@ -207,6 +263,11 @@ pub(crate) fn validate(project: &Project) -> Result<(), ServiceError> {
             _ => unreachable!(),
         })
         .collect();
+    for s in &project.sequences {
+        if let DocumentObject::Known(s) = s {
+            compositions.push(kronello_render::lower_sequence(project, s.id)?);
+        }
+    }
     // Commands and changed keys address objects by UUID without a type tag.
     // Reject cross-kind aliases that would make lookup or conflict checks
     // ambiguous even when each model collection is independently valid.
@@ -214,6 +275,10 @@ pub(crate) fn validate(project: &Project) -> Result<(), ServiceError> {
     object_ids.extend(project.curves.iter().filter_map(|c| match c {
         DocumentObject::Known(c) => Some(c.id().as_uuid()),
         DocumentObject::Opaque(_) => None,
+    }));
+    object_ids.extend(project.expressions.iter().filter_map(|e| match e {
+        DocumentObject::Known(e) => Some(e.id.as_uuid()),
+        _ => None,
     }));
     object_ids.extend(project.shapes.iter().filter_map(|s| match s {
         DocumentObject::Known(s) => Some(s.id.as_uuid()),
@@ -239,17 +304,29 @@ pub(crate) fn validate(project: &Project) -> Result<(), ServiceError> {
         }
     }
     for c in &compositions {
-        if !object_ids.insert(c.id.as_uuid()) {
+        let lowered = project
+            .sequences
+            .iter()
+            .any(|s| matches!(s, DocumentObject::Known(s) if s.id.as_uuid() == c.id.as_uuid()));
+        if !lowered && !object_ids.insert(c.id.as_uuid()) {
             return Err(invalid("ambiguous object id"));
         }
         for n in &c.nodes {
-            if !object_ids.insert(n.id.as_uuid()) {
+            if !lowered && !object_ids.insert(n.id.as_uuid()) {
                 return Err(invalid("ambiguous object id"));
             }
         }
     }
     kronello_model::validate_compositions(&compositions, &r).map_err(invalid)?;
-    kronello_model::validate_shape_contents(project, &r).map_err(invalid)?;
+    kronello_model::validate_shape_contents(project, &r).map_err(|e| match e {
+        kronello_model::ShapeError::UnsupportedStrokeVersion
+        | kronello_model::ShapeError::InvalidDashArray
+        | kronello_model::ShapeError::StrokeBudgetExceeded
+        | kronello_model::ShapeError::OpenStrokeAlignment => {
+            ServiceError::from(kronello_render::RenderError::Shape(e))
+        }
+        _ => invalid(e),
+    })?;
     kronello_model::validate_text_contents(project, &r).map_err(invalid)?;
     for (_, p) in properties(project) {
         p.validate_sources(&r, &Catalog(project)).map_err(invalid)?;
@@ -274,10 +351,68 @@ pub(crate) fn validate(project: &Project) -> Result<(), ServiceError> {
             }
         }
     }
+    for sequence in &project.sequences {
+        if let DocumentObject::Known(sequence) = sequence {
+            for clip in sequence.tracks.iter().flat_map(|t| &t.clips) {
+                if let Some(volume) = &clip.volume {
+                    volume
+                        .validate_sources(&r, &Catalog(project))
+                        .map_err(invalid)?;
+                }
+            }
+        }
+    }
+    let expressions: Vec<_> = project
+        .expressions
+        .iter()
+        .filter_map(|e| match e {
+            DocumentObject::Known(e) => Some(e.clone()),
+            _ => None,
+        })
+        .collect();
+    for e in &expressions {
+        e.validate()
+            .map_err(|e| ServiceError::new(e.code(), e.to_string()))?;
+    }
+    let curves: Vec<_> = project
+        .curves
+        .iter()
+        .filter_map(|c| match c {
+            DocumentObject::Known(c) => Some(c.clone()),
+            _ => None,
+        })
+        .collect();
+    let refs = Default::default();
+    let deps = Default::default();
+    for c in &compositions {
+        kronello_eval::DependencyGraph::compile(
+            kronello_eval::EvaluationSnapshot {
+                compositions: &compositions,
+                curves: &curves,
+                expressions: &expressions,
+                registry: &r,
+                reference_bindings: &refs,
+                dependencies: &deps,
+                working_space: kronello_model::ColorSpace::LinearRec709,
+            },
+            c.id,
+        )
+        .map_err(|e| ServiceError::new(e.code(), e.to_string()))?;
+    }
     Ok(())
 }
 fn properties(project: &Project) -> Vec<(Uuid, &Property)> {
     let mut result = Vec::new();
+    for s in &project.sequences {
+        if let DocumentObject::Known(s) = s {
+            result.extend(
+                s.tracks
+                    .iter()
+                    .flat_map(|t| &t.clips)
+                    .flat_map(|c| c.properties.iter().map(|p| (c.id.as_uuid(), p))),
+            );
+        }
+    }
     for c in &project.compositions {
         if let DocumentObject::Known(c) = c {
             result.extend(c.properties.iter().map(|p| (c.id.as_uuid(), p)));
@@ -293,6 +428,19 @@ fn property_mut(
     object: Uuid,
     id: PropertyId,
 ) -> Result<&mut Property, ServiceError> {
+    for s in &mut project.sequences {
+        if let DocumentObject::Known(s) = s {
+            for c in s.tracks.iter_mut().flat_map(|t| &mut t.clips) {
+                if c.id.as_uuid() == object {
+                    return c
+                        .properties
+                        .iter_mut()
+                        .find(|p| p.id() == id)
+                        .ok_or_else(|| invalid("clip property not found"));
+                }
+            }
+        }
+    }
     for c in &mut project.compositions {
         if let DocumentObject::Known(c) = c {
             if c.id.as_uuid() == object {
@@ -391,6 +539,121 @@ fn apply_command(
     keys: &mut BTreeSet<ChangedKey>,
 ) -> Result<(), ServiceError> {
     match command {
+        EditCommand::ModifierInsert {
+            object,
+            property,
+            modifier,
+            index,
+        } => {
+            let p = property_mut(project, *object, *property)?;
+            let mut modifiers = p.modifiers().to_vec();
+            if *index > modifiers.len() {
+                return Err(invalid("modifier index out of bounds"));
+            }
+            modifiers.insert(*index, modifier.clone());
+            p.set_modifiers(modifiers, &registry()).map_err(invalid)?;
+            keys.insert(ChangedKey::Value {
+                object_id: *object,
+                property_id: *property,
+            });
+        }
+        EditCommand::ModifierReplace {
+            object,
+            property,
+            modifier,
+        } => {
+            let p = property_mut(project, *object, *property)?;
+            let mut modifiers = p.modifiers().to_vec();
+            let current = modifiers
+                .iter_mut()
+                .find(|m| m.id == modifier.id)
+                .ok_or_else(|| invalid("modifier not found"))?;
+            *current = modifier.clone();
+            p.set_modifiers(modifiers, &registry()).map_err(invalid)?;
+            keys.insert(ChangedKey::Value {
+                object_id: *object,
+                property_id: *property,
+            });
+        }
+        EditCommand::ModifierRemove {
+            object,
+            property,
+            modifier,
+        } => {
+            let p = property_mut(project, *object, *property)?;
+            let mut modifiers = p.modifiers().to_vec();
+            let index = modifiers
+                .iter()
+                .position(|m| m.id == *modifier)
+                .ok_or_else(|| invalid("modifier not found"))?;
+            modifiers.remove(index);
+            p.set_modifiers(modifiers, &registry()).map_err(invalid)?;
+            keys.insert(ChangedKey::Value {
+                object_id: *object,
+                property_id: *property,
+            });
+        }
+        EditCommand::ModifierReorder {
+            object,
+            property,
+            order,
+        } => {
+            let p = property_mut(project, *object, *property)?;
+            let ids: BTreeSet<_> = p.modifiers().iter().map(|m| m.id).collect();
+            if order.len() != ids.len() || order.iter().copied().collect::<BTreeSet<_>>() != ids {
+                return Err(invalid("modifier order must be an exact permutation"));
+            }
+            let modifiers = order
+                .iter()
+                .map(|id| p.modifiers().iter().find(|m| m.id == *id).unwrap().clone())
+                .collect();
+            p.set_modifiers(modifiers, &registry()).map_err(invalid)?;
+            keys.insert(ChangedKey::Value {
+                object_id: *object,
+                property_id: *property,
+            });
+        }
+        EditCommand::ExpressionSet { expression } => {
+            expression
+                .validate()
+                .map_err(|e| ServiceError::new(e.code(), e.to_string()))?;
+            structure(keys, expression.id.as_uuid(), expression.id.as_uuid());
+            for (object, p) in properties(project) {
+                if p.source() == &PropertySource::Expression(expression.id) {
+                    keys.insert(ChangedKey::Value {
+                        object_id: object,
+                        property_id: p.id(),
+                    });
+                }
+            }
+            for c in &project.compositions {
+                if let DocumentObject::Known(c) = c {
+                    for n in &c.nodes {
+                        if let NodeKind::CompositionInstance(i) = &n.kind {
+                            for (property, source) in &i.input_bindings {
+                                if source == &PropertySource::Expression(expression.id) {
+                                    keys.insert(ChangedKey::Value {
+                                        object_id: n.id.as_uuid(),
+                                        property_id: *property,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if let Some(existing) = project
+                .expressions
+                .iter_mut()
+                .find(|e| matches!(e, DocumentObject::Known(e) if e.id == expression.id))
+            {
+                *existing = DocumentObject::Known(expression.clone());
+            } else {
+                project
+                    .expressions
+                    .push(DocumentObject::Known(expression.clone()));
+            }
+        }
         EditCommand::Timeline(command) => crate::nle::mutate(project, command, keys)?,
         EditCommand::Template(command) => crate::template::mutate(project, command, keys)?,
         EditCommand::PropertySourceSet {
@@ -399,11 +662,8 @@ fn apply_command(
             source,
             curve,
         } => {
-            if matches!(source, PropertySource::Expression(_)) {
-                return Err(ServiceError::new(
-                    "UNSUPPORTED_FEATURE",
-                    "expression edits are not implemented",
-                ));
+            if let PropertySource::Expression(id) = source {
+                structure(keys, id.as_uuid(), id.as_uuid());
             }
             if let Some(curve) = curve {
                 if source != &PropertySource::Curve(curve.id()) {
@@ -496,6 +756,64 @@ fn apply_command(
             }
             order.insert(*index, node.id);
             c.nodes.push(node.clone());
+        }
+        EditCommand::NodePropertyInsert {
+            composition,
+            node,
+            property,
+        } => {
+            if properties(project)
+                .iter()
+                .any(|(_, p)| p.id() == property.id())
+            {
+                return Err(invalid("property ID already exists"));
+            }
+            let n = node_mut(composition_mut(project, *composition)?, *node)?;
+            if n.properties
+                .iter()
+                .any(|p| p.descriptor().key == property.descriptor().key)
+            {
+                return Err(invalid("property key already exists on node"));
+            }
+            property.validate(&registry()).map_err(invalid)?;
+            structure(keys, n.id.as_uuid(), n.id.as_uuid());
+            keys.insert(ChangedKey::Value {
+                object_id: n.id.as_uuid(),
+                property_id: property.id(),
+            });
+            n.properties.push(property.clone());
+        }
+        EditCommand::NodeTagsSet {
+            composition,
+            node,
+            tags,
+        } => {
+            if !kronello_model::valid_node_tags(tags) {
+                return Err(ServiceError::invalid("invalid node tags"));
+            }
+            let n = node_mut(composition_mut(project, *composition)?, *node)?;
+            structure(keys, n.id.as_uuid(), n.id.as_uuid());
+            n.tags = tags.clone();
+        }
+        EditCommand::NodeRename {
+            composition,
+            node,
+            name,
+        } => {
+            let c = composition_mut(project, *composition)?;
+            let n = node_mut(c, *node)?;
+            structure(keys, n.id.as_uuid(), n.id.as_uuid());
+            n.name = name.clone();
+        }
+        EditCommand::NodeEnabledSet {
+            composition,
+            node,
+            enabled,
+        } => {
+            let c = composition_mut(project, *composition)?;
+            let n = node_mut(c, *node)?;
+            structure(keys, n.id.as_uuid(), n.id.as_uuid());
+            n.enabled = *enabled;
         }
         EditCommand::NodeRemove { composition, node } => {
             let c = composition_mut(project, *composition)?;
@@ -613,6 +931,9 @@ fn apply_command(
 }
 fn node_references(node: &SceneNode, keys: &mut BTreeSet<ChangedKey>) {
     for p in &node.properties {
+        if let PropertySource::Expression(id) = p.source() {
+            structure(keys, id.as_uuid(), id.as_uuid());
+        }
         if let PropertySource::Curve(id) = p.source() {
             structure(keys, id.as_uuid(), id.as_uuid());
         }
@@ -624,6 +945,9 @@ fn node_references(node: &SceneNode, keys: &mut BTreeSet<ChangedKey>) {
         NodeKind::CompositionInstance(i) => {
             structure(keys, i.definition_ref.as_uuid(), i.definition_ref.as_uuid());
             for source in i.input_bindings.values() {
+                if let PropertySource::Expression(id) = source {
+                    structure(keys, id.as_uuid(), id.as_uuid());
+                }
                 if let PropertySource::Curve(id) = source {
                     structure(keys, id.as_uuid(), id.as_uuid());
                 }
@@ -655,7 +979,7 @@ fn unordered_collection(path: &[String]) -> bool {
     match path {
         [collection] => matches!(
             collection.as_str(),
-            "compositions" | "curves" | "shapes" | "texts" | "sequences"
+            "compositions" | "curves" | "expressions" | "shapes" | "texts" | "sequences"
         ),
         [compositions, _, collection] if compositions == "compositions" => {
             matches!(collection.as_str(), "nodes" | "properties")
@@ -681,7 +1005,12 @@ fn diff(old: &Json, new: &Json, path: &mut Vec<String>, out: &mut Vec<Mutation>)
                     if path.len() == 1
                         && matches!(
                             key.as_str(),
-                            "shapes" | "texts" | "templates" | "template_instances" | "sequences"
+                            "expressions"
+                                | "shapes"
+                                | "texts"
+                                | "templates"
+                                | "template_instances"
+                                | "sequences"
                         )
                     {
                         diff(value, &Json::Array(vec![]), path, out);
@@ -697,7 +1026,12 @@ fn diff(old: &Json, new: &Json, path: &mut Vec<String>, out: &mut Vec<Mutation>)
                     if path.len() == 1
                         && matches!(
                             key.as_str(),
-                            "shapes" | "texts" | "templates" | "template_instances" | "sequences"
+                            "expressions"
+                                | "shapes"
+                                | "texts"
+                                | "templates"
+                                | "template_instances"
+                                | "sequences"
                         )
                     {
                         diff(&Json::Array(vec![]), value, path, out);
@@ -745,7 +1079,7 @@ fn diff(old: &Json, new: &Json, path: &mut Vec<String>, out: &mut Vec<Mutation>)
         }),
     }
 }
-fn build(
+pub(crate) fn build(
     document: Project,
     base: u64,
     commands: Vec<EditCommand>,
@@ -759,7 +1093,17 @@ fn build(
     for command in &commands {
         apply_command(&mut candidate, command, &mut changed_keys)?;
     }
-    kronello_template::validate_transition(&document, &candidate)?;
+    let migrations = commands
+        .iter()
+        .filter_map(|command| match command {
+            EditCommand::Template(command) => match command.as_ref() {
+                crate::TemplateCommand::Migrate { instance, .. } => Some(*instance),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect();
+    kronello_template::validate_migration_transition(&document, &candidate, &migrations)?;
     validate(&candidate)?;
     let mut mutations = Vec::new();
     let mut value = serde_json::to_value(&document)?;
@@ -1019,9 +1363,39 @@ pub(crate) fn history(r: HistoryRequest) -> Result<HistoryResult, ServiceError> 
     let store = open_existing(&r.project)?;
     let (s, events) = store.snapshot_and_events()?;
     store.close()?;
+    let binding =
+        serde_json::json!({"since_revision":since,"limit":r.limit,"session_id":r.session_id});
+    let cursor = r
+        .cursor
+        .as_deref()
+        .map(crate::paging::Cursor::decode)
+        .transpose()?;
+    let floor = events.first().map(|e| e.id.to_string());
+    let revision = if let Some(c) = &cursor {
+        c.validate("history.list", s.document.id, &binding)?;
+        if c.floor != floor || c.revision > s.revision {
+            return Err(crate::paging::expired());
+        }
+        c.revision
+    } else {
+        s.revision
+    };
+    let events: Vec<_> = events
+        .into_iter()
+        .filter(|e| e.revision <= revision)
+        .collect();
     let active = active(&events);
+    let after = if let Some(c) = &cursor {
+        events
+            .iter()
+            .find(|e| serde_json::json!(e.id) == c.after)
+            .ok_or_else(crate::paging::expired)?
+            .revision
+    } else {
+        since
+    };
     let mut selected = events.into_iter().filter(|e| {
-        e.revision > since && r.session_id.is_none_or(|session| e.session_id == session)
+        e.revision > after && r.session_id.is_none_or(|session| e.session_id == session)
     });
     let entries: Vec<_> = selected
         .by_ref()
@@ -1031,13 +1405,26 @@ pub(crate) fn history(r: HistoryRequest) -> Result<HistoryResult, ServiceError> 
             event,
         })
         .collect();
-    let next_since_revision = selected
-        .next()
-        .and_then(|_| entries.last().map(|e| e.event.revision.to_string()));
+    let more = selected.next().is_some();
+    let last = entries.last().filter(|_| more);
+    let next_cursor = last
+        .map(|entry| {
+            crate::paging::Cursor::new(
+                "history.list",
+                s.document.id,
+                revision,
+                binding,
+                serde_json::json!(entry.event.id),
+                floor,
+            )
+            .encode()
+        })
+        .transpose()?;
     Ok(HistoryResult {
-        revision: s.revision.to_string(),
+        revision: revision.to_string(),
+        next_since_revision: last.map(|e| e.event.revision.to_string()),
+        next_cursor,
         events: entries,
-        next_since_revision,
     })
 }
 

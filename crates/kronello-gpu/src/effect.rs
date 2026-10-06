@@ -11,10 +11,7 @@ pub(crate) fn kernel(sigma: f32) -> Result<Vec<f32>, GpuError> {
     })
 }
 pub(crate) fn shadow_color(effect: &PixelEffect, working: WorkingSpace) -> [f32; 4] {
-    let PixelEffect::DropShadow {
-        color: c, opacity, ..
-    } = effect
-    else {
+    let Some((_, c, opacity)) = effect.shadow() else {
         return [0.0; 4];
     };
     let c0 = c.components();
@@ -87,6 +84,10 @@ fn bilinear(source: &[[f32; 4]], size: [u32; 2], p: [f32; 2]) -> [f32; 4] {
     let x = p[0].floor() as i32;
     let y = p[1].floor() as i32;
     let f = [p[0] - x as f32, p[1] - y as f32];
+    bilinear_parts(source, size, [x, y], f)
+}
+fn bilinear_parts(source: &[[f32; 4]], size: [u32; 2], base: [i32; 2], f: [f32; 2]) -> [f32; 4] {
+    let [x, y] = base;
     let a = load(source, size, x, y);
     let b = load(source, size, x + 1, y);
     let c = load(source, size, x, y + 1);
@@ -103,20 +104,56 @@ pub(crate) fn apply_reference(
     effect: &PixelEffect,
     working: WorkingSpace,
 ) -> Result<Vec<[f32; 4]>, GpuError> {
-    effect
-        .validate()
-        .map_err(|_| GpuError::InvalidInput("invalid effect parameters"))?;
+    effect.validate().map_err(|e| match e {
+        kronello_render::RenderError::UnsupportedFeature(_) => {
+            GpuError::UnsupportedFeature("effect transform or kernel budget")
+        }
+        _ => GpuError::InvalidInput("invalid effect parameters"),
+    })?;
     let source = surface_pixels(source)?;
-    let [sx, sy] = effect.sigma();
-    let horizontal = convolve(&source, size, &kernel(sx)?, 0)?;
-    let blurred = convolve(&horizontal, size, &kernel(sy)?, 1)?;
-    if let PixelEffect::DropShadow { offset, .. } = effect {
+    let blurred = if let Some(c) = effect.covariance() {
+        let taps = kronello_render::affine_gaussian_kernel(c).map_err(|_| {
+            GpuError::UnsupportedFeature("affine Gaussian covariance or kernel budget")
+        })?;
+        let norm: f32 = taps.iter().map(|t| t.weight).sum();
+        let mut output = vec![[0.0; 4]; source.len()];
+        for y in 0..size[1] as i32 {
+            for x in 0..size[0] as i32 {
+                let mut result = [0.0; 4];
+                for tap in &taps {
+                    let p = load(&source, size, x + tap.offset[0], y + tap.offset[1]);
+                    for ch in 0..4 {
+                        result[ch] += p[ch] * tap.weight;
+                    }
+                }
+                output[(y as u32 * size[0] + x as u32) as usize] = result.map(|v| v / norm);
+            }
+        }
+        surface_pixels(&output)?
+    } else {
+        let [sx, sy] = effect.sigma();
+        let horizontal = convolve(&source, size, &kernel(sx)?, 0)?;
+        convolve(&horizontal, size, &kernel(sy)?, 1)?
+    };
+    if let Some((offset, _, _)) = effect.shadow() {
         let color = shadow_color(effect, working);
         let mut output = source.to_vec();
         for y in 0..size[1] {
             for x in 0..size[0] {
-                let alpha =
-                    bilinear(&blurred, size, [x as f32 - offset[0], y as f32 - offset[1]])[3];
+                let alpha = if effect.covariance().is_some() {
+                    // Separate integer translation from fractional taps so
+                    // changing the tile origin cannot change interpolation.
+                    let shift = offset.map(|v| (-v).floor());
+                    let fraction = [0, 1].map(|i| -offset[i] - shift[i]);
+                    bilinear_parts(
+                        &blurred,
+                        size,
+                        [x as i32 + shift[0] as i32, y as i32 + shift[1] as i32],
+                        fraction,
+                    )[3]
+                } else {
+                    bilinear(&blurred, size, [x as f32 - offset[0], y as f32 - offset[1]])[3]
+                };
                 let i = (y * size[0] + x) as usize;
                 output[i] = color::source_over(source[i], color.map(|v| v * alpha));
             }

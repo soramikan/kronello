@@ -3,7 +3,7 @@ use kronello_gpu::render_adapter::CpuReferenceBackend;
 use kronello_media::*;
 use kronello_model::*;
 use kronello_render::*;
-use kronello_time::{Duration, FrameRate, Rational, TimeRange};
+use kronello_time::{Duration, FrameRate, Rational, Time, TimeRange};
 use std::path::{Path, PathBuf};
 fn t(n: i64, d: i64) -> Rational {
     Rational::new(n, d).unwrap()
@@ -94,6 +94,25 @@ fn request(path: &Path, rate: FrameRate) -> AvExportRequest {
         background: [0.1, 0.2, 0.3],
         clipping: ClippingPolicy::Reject,
     }
+}
+#[test]
+fn bounded_decode_rejects_before_exceeding_remaining_source_budget() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("bounded.wav");
+    write_wave(&path, 48000, 2, 128);
+    let asset = asset(&path);
+    let runtime = MediaRuntime::load().unwrap();
+    for budget in [0, 1, 127] {
+        let error = runtime
+            .decode_asset_audio_bounded(&asset, dir.path(), 0, budget)
+            .unwrap_err();
+        assert_eq!(error.code(), "AUDIO_BUDGET_EXCEEDED");
+    }
+    let decoded = runtime
+        .decode_asset_audio_bounded(&asset, dir.path(), 0, 128)
+        .unwrap();
+    let legacy = runtime.decode_asset_audio(&asset, dir.path(), 0).unwrap();
+    assert_eq!(decoded.buffer.frames(), legacy.buffer.frames());
 }
 #[test]
 fn bundled_pcm_fixture_decodes_exact_stereo_samples() {
@@ -428,7 +447,7 @@ fn export_rejects_bad_ranges_versions_missing_assets_clipping_and_existing_outpu
     );
     assert!(!request.output.exists());
     let mut value = serde_json::to_value(&snapshot).unwrap();
-    value["schema_version"] = 2.into();
+    value["schema_version"] = 999.into();
     let unsupported: AvExportSnapshot = serde_json::from_value(value).unwrap();
     assert_eq!(
         unsupported.validate().unwrap_err().code(),
@@ -497,4 +516,152 @@ fn mux_rejects_duration_mismatch_before_publication() {
             .is_err()
     );
     assert!(!output.exists());
+}
+
+#[test]
+fn document_audio_source_modes_are_explicit_backward_compatible_and_hashed() {
+    let runtime = MediaRuntime::load().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("source.wav");
+    write_wave(&path, 48000, 2, 48000);
+    let mut a = asset(&path);
+    a.streams.push(StreamMetadata {
+        index: 0,
+        codec: "pcm_s16le".into(),
+        time_base: t(1, 48000),
+        duration: Some(t(1, 1)),
+        start_time: None,
+        width: None,
+        height: None,
+        pixel_format: None,
+        color_primaries: None,
+        color_transfer: None,
+        color_matrix: None,
+        color_range: None,
+    });
+    let aid = a.id;
+    let (mut p, id) = project(a);
+    let registry = SchemaRegistry::with_builtin();
+    let volume = Property::new(
+        PropertyId::new(),
+        DescriptorRef::new(
+            registry
+                .lookup(&SchemaKey::new("kronello.audio.volume").unwrap())
+                .unwrap(),
+        ),
+        PropertySource::Constant(Value::Scalar(FiniteF64::new(0.5).unwrap())),
+        vec![],
+        &registry,
+    )
+    .unwrap();
+    let node = SceneNode {
+        tags: Default::default(),
+        name: None,
+        enabled: true,
+        id: NodeId::new(),
+        kind: NodeKind::Media(MediaNode {
+            asset: aid,
+            stream_index: 0,
+            source_in: Time::ZERO,
+            time_map: kronello_time::TimeMap::linear(Time::ZERO, Time::ONE).unwrap(),
+            volume: volume.id(),
+        }),
+        active_range: TimeRange::new(Time::ZERO, t(1, 1)).unwrap(),
+        properties: vec![volume],
+        containment_parent: None,
+        transform_parent: None,
+        child_order: vec![],
+        effects: vec![],
+    };
+    let DocumentObject::Known(c) = &mut p.compositions[0] else {
+        panic!()
+    };
+    c.root_nodes.push(node.id);
+    c.nodes.push(node);
+    let render = RenderSnapshot::new(&p, id, 1, Default::default()).unwrap();
+    let legacy = AvExportSnapshot::new(&render, vec![]).unwrap();
+    assert!(
+        serde_json::to_value(&legacy)
+            .unwrap()
+            .get("audio")
+            .is_none()
+    );
+    let restored: AvExportSnapshot =
+        serde_json::from_slice(&serde_json::to_vec(&legacy).unwrap()).unwrap();
+    assert_eq!(restored.audio(), AudioSourceMode::Explicit);
+    assert_eq!(
+        restored.content_hash().unwrap(),
+        legacy.content_hash().unwrap()
+    );
+    let document =
+        AvExportSnapshot::with_audio(&render, AudioSourceMode::Document, vec![]).unwrap();
+    assert_eq!(document.clips().len(), 1);
+    let silence = AvExportSnapshot::with_audio(&render, AudioSourceMode::Silence, vec![]).unwrap();
+    assert_ne!(
+        document.content_hash().unwrap(),
+        silence.content_hash().unwrap()
+    );
+    assert_ne!(
+        silence.content_hash().unwrap(),
+        legacy.content_hash().unwrap()
+    );
+    for mode in [AudioSourceMode::Document, AudioSourceMode::Silence] {
+        assert_eq!(
+            AvExportSnapshot::with_audio(&render, mode, document.clips().to_vec())
+                .unwrap_err()
+                .code(),
+            "INVALID_MEDIA_INPUT"
+        );
+    }
+    // Every mode is deliberate; explicit/silence ignore document audio, never add it twice.
+    for (name, snapshot, audible) in [
+        ("legacy", legacy, false),
+        ("silence", silence, false),
+        ("document", document, true),
+    ] {
+        let req = request(
+            &dir.path().join(format!("{name}.mov")),
+            FrameRate::new(30000, 1001).unwrap(),
+        );
+        let report = runtime
+            .export_av(
+                &snapshot,
+                &dir.path().join("project.kronello"),
+                &[],
+                &CpuReferenceBackend,
+                &req,
+            )
+            .unwrap();
+        report.probe.verify_av().unwrap();
+        let decoded = runtime.decode_audio(&req.output, 1).unwrap();
+        assert_eq!(
+            decoded.buffer.frames().iter().flatten().any(|v| *v != 0.0),
+            audible
+        );
+    }
+    let DocumentObject::Known(a) = &mut p.assets[0] else {
+        panic!()
+    };
+    a.kind = AssetKind::Video;
+    let render = RenderSnapshot::new(&p, id, 1, Default::default()).unwrap();
+    let snapshot =
+        AvExportSnapshot::with_audio(&render, AudioSourceMode::Document, vec![]).unwrap();
+    let req = request(
+        &dir.path().join("unsupported-video.mov"),
+        FrameRate::new(24, 1).unwrap(),
+    );
+    assert_eq!(
+        runtime
+            .export_av(
+                &snapshot,
+                &dir.path().join("project.kronello"),
+                &[],
+                &CpuReferenceBackend,
+                &req
+            )
+            .unwrap_err()
+            .code(),
+        "UNSUPPORTED_FEATURE"
+    );
+    assert!(!req.output.exists());
 }

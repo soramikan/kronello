@@ -14,6 +14,8 @@ pub struct Sequence {
     pub working_space: ColorSpace,
     /// Authored bottom-to-top compositing order.
     pub tracks: Vec<Track>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub transitions: Vec<Transition>,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -38,10 +40,16 @@ pub struct Clip {
     pub time_map: TimeMap,
     #[serde(default)]
     pub audio_retime: AudioRetimePolicy,
+    /// Absent in M2 documents means unity. Evaluated in source-local time.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub volume: Option<Box<Property>>,
     #[serde(default)]
     pub links: Vec<ClipId>,
     #[serde(default)]
     pub effects: Vec<Effect>,
+    /// Placement transform and effect parameters, evaluated in sequence time.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub properties: Vec<Property>,
 }
 /// NLE-001 never performs implicit pitch/speed conversion.
 #[derive(
@@ -51,13 +59,128 @@ pub struct Clip {
 pub enum AudioRetimePolicy {
     #[default]
     Reject,
+    // AUDIO-004 v1: linear sample interpolation, with pitch following speed.
+    ResampleV1,
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, schemars::JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum SourceRef {
-    Composition { composition: CompositionId },
-    Asset { asset: AssetId, stream_index: u32 },
-    Generator { generator: String },
+    Composition {
+        composition: CompositionId,
+    },
+    Asset {
+        asset: AssetId,
+        stream_index: u32,
+    },
+    Generator {
+        generator: String,
+        #[serde(default = "generator_version")]
+        version: u32,
+        #[serde(default = "generator_color")]
+        color: Color,
+    },
+}
+// Decode variant payloads directly from JSON. Serde's internally-tagged Content
+// buffer cannot preserve arbitrary-precision float values inside Color.
+impl<'de> Deserialize<'de> for SourceRef {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        use serde::de::Error;
+        type Fields = std::collections::BTreeMap<String, Box<serde_json::value::RawValue>>;
+        struct Unique;
+        impl<'de> serde::de::Visitor<'de> for Unique {
+            type Value = Fields;
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("source object with unique fields")
+            }
+            fn visit_map<M: serde::de::MapAccess<'de>>(
+                self,
+                mut map: M,
+            ) -> Result<Fields, M::Error> {
+                let mut fields = Fields::new();
+                while let Some((key, value)) =
+                    map.next_entry::<String, Box<serde_json::value::RawValue>>()?
+                {
+                    if fields.insert(key.clone(), value).is_some() {
+                        return Err(M::Error::custom(format!("duplicate source field: {key}")));
+                    }
+                }
+                Ok(fields)
+            }
+        }
+        let mut fields = deserializer.deserialize_map(Unique)?;
+        let kind = fields
+            .remove("kind")
+            .ok_or_else(|| D::Error::missing_field("kind"))?;
+        let kind: String = serde_json::from_str(kind.get()).map_err(D::Error::custom)?;
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct CompositionSource {
+            composition: CompositionId,
+        }
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct AssetSource {
+            asset: AssetId,
+            stream_index: u32,
+        }
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct GeneratorSource {
+            generator: String,
+            #[serde(default = "generator_version")]
+            version: u32,
+            #[serde(default = "generator_color")]
+            color: Color,
+        }
+        let json = serde_json::to_string(&fields).map_err(D::Error::custom)?;
+        match kind.as_str() {
+            "composition" => {
+                let p: CompositionSource = serde_json::from_str(&json).map_err(D::Error::custom)?;
+                Ok(Self::Composition {
+                    composition: p.composition,
+                })
+            }
+            "asset" => {
+                let p: AssetSource = serde_json::from_str(&json).map_err(D::Error::custom)?;
+                Ok(Self::Asset {
+                    asset: p.asset,
+                    stream_index: p.stream_index,
+                })
+            }
+            "generator" => {
+                let p: GeneratorSource = serde_json::from_str(&json).map_err(D::Error::custom)?;
+                Ok(Self::Generator {
+                    generator: p.generator,
+                    version: p.version,
+                    color: p.color,
+                })
+            }
+            _ => Err(D::Error::custom("unknown source kind")),
+        }
+    }
+}
+pub const SOLID_GENERATOR_ID: &str = "kronello.solid";
+pub const GENERATOR_VERSION: u32 = 1;
+fn generator_version() -> u32 {
+    GENERATOR_VERSION
+}
+fn generator_color() -> Color {
+    Color::from_srgb8([0; 3], None)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Transition {
+    pub outgoing: ClipId,
+    pub incoming: ClipId,
+    pub range: TimeRange,
+    pub kind: TransitionKind,
+    pub version: u32,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TransitionKind {
+    Crossfade,
 }
 #[derive(Debug, Error)]
 pub enum SequenceError {
@@ -177,8 +300,39 @@ impl Sequence {
             .flat_map(|t| &t.clips)
             .map(|c| c.id)
             .collect();
+        for (index, transition) in self.transitions.iter().enumerate() {
+            let pair = self
+                .tracks
+                .iter()
+                .find_map(|track| {
+                    let a = track.clips.iter().find(|c| c.id == transition.outgoing)?;
+                    let b = track.clips.iter().find(|c| c.id == transition.incoming)?;
+                    Some((track, a, b))
+                })
+                .ok_or_else(|| {
+                    SequenceError::Invalid("transition requires clips on one track".into())
+                })?;
+            let (track, a, b) = pair;
+            if a.timeline_range.start() >= b.timeline_range.start()
+                || a.timeline_range.end() >= b.timeline_range.end()
+                || a.timeline_range.intersection(b.timeline_range) != Some(transition.range)
+                || self.transitions[..index].iter().any(|old| {
+                    old.outgoing == transition.outgoing && old.incoming == transition.incoming
+                })
+                || track.clips.iter().any(|c| {
+                    c.id != a.id
+                        && c.id != b.id
+                        && c.timeline_range.intersection(transition.range).is_some()
+                })
+            {
+                return Err(SequenceError::Invalid("invalid crossfade overlap".into()));
+            }
+        }
         for track in &self.tracks {
             for (index, clip) in track.clips.iter().enumerate() {
+                if let Some(volume) = &clip.volume {
+                    validate_volume(volume).map_err(|e| SequenceError::Invalid(e.to_string()))?;
+                }
                 if clip.timeline_range.is_empty()
                     || clip.source_in < Time::ZERO
                     || clip
@@ -190,10 +344,45 @@ impl Sequence {
                         "empty range, negative source_in or invalid link".into(),
                     ));
                 }
-                if track.clips[..index]
+                if clip
+                    .links
                     .iter()
-                    .any(|c| c.timeline_range.intersection(clip.timeline_range).is_some())
+                    .collect::<std::collections::BTreeSet<_>>()
+                    .len()
+                    != clip.links.len()
+                    || clip.links.iter().any(|id| {
+                        !self
+                            .tracks
+                            .iter()
+                            .flat_map(|t| &t.clips)
+                            .any(|c| c.id == *id && c.links.contains(&clip.id))
+                    })
                 {
+                    return Err(SequenceError::Invalid(
+                        "links must be unique and reciprocal".into(),
+                    ));
+                }
+                let mut properties = std::collections::BTreeSet::new();
+                for p in &clip.properties {
+                    if !properties.insert(p.id()) {
+                        return Err(SequenceError::Invalid("clip property identity".into()));
+                    }
+                }
+                if clip.effects.len() > 16 {
+                    return Err(SequenceError::Invalid("clip effect budget".into()));
+                }
+                // Unknown effects remain storable and fail when the selected target executes.
+                if track.clips[..index].iter().any(|c| {
+                    c.timeline_range
+                        .intersection(clip.timeline_range)
+                        .is_some_and(|overlap| {
+                            !self.transitions.iter().any(|tr| {
+                                tr.range == overlap
+                                    && ((tr.outgoing == c.id && tr.incoming == clip.id)
+                                        || (tr.outgoing == clip.id && tr.incoming == c.id))
+                            })
+                        })
+                }) {
                     return Err(SequenceError::Overlap(track.id));
                 }
                 let start = clip.local_time(clip.timeline_range.start())?;
@@ -203,11 +392,6 @@ impl Sequence {
                 }
                 match &clip.source_ref {
                     SourceRef::Composition { composition } => {
-                        if track.kind != TrackKind::Video {
-                            return Err(SequenceError::Invalid(
-                                "composition requires video track".into(),
-                            ));
-                        }
                         if project.compositions.iter().any(|c| matches!(c, DocumentObject::Opaque(c) if c.id == composition.as_uuid())) { continue; }
                         let source = project
                             .compositions
@@ -228,6 +412,7 @@ impl Sequence {
                         stream_index,
                     } => {
                         if track.kind == TrackKind::Audio
+                            && clip.audio_retime == AudioRetimePolicy::Reject
                             && !matches!(&clip.time_map, TimeMap::Linear(m) if m.speed() == kronello_time::Rational::ONE)
                         {
                             return Err(SequenceError::Unsupported(
@@ -252,7 +437,19 @@ impl Sequence {
                             .iter()
                             .find(|s| s.index == *stream_index)
                             .ok_or_else(|| SequenceError::MissingSource("asset stream".into()))?;
-                        if stream.duration.is_some_and(|duration| end > duration) {
+                        let origin = if track.kind == TrackKind::Video {
+                            stream.start_time.unwrap_or(Time::ZERO)
+                        } else {
+                            // Audio source time remains relative to decoded sample zero.
+                            Time::ZERO
+                        };
+                        if start < origin
+                            || stream
+                                .duration
+                                .map(|duration| origin.checked_add(duration))
+                                .transpose()?
+                                .is_some_and(|limit| end > limit)
+                        {
                             return Err(SequenceError::Invalid("asset source bounds".into()));
                         }
                         if (track.kind == TrackKind::Audio
@@ -271,4 +468,13 @@ impl Sequence {
         }
         Ok(())
     }
+}
+
+/// Shared clip/media gain Property contract. Curves are resolved at execution.
+pub fn validate_volume(property: &Property) -> Result<(), ModelError> {
+    property.validate(&SchemaRegistry::with_builtin())?;
+    if property.descriptor().key.as_str() != "kronello.audio.volume" {
+        return Err(ModelError::SourceNotAllowed);
+    }
+    Ok(())
 }

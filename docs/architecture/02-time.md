@@ -30,7 +30,7 @@ Sequence time
 
 基本写像は `local = source_in + time_map(parent_time - placement_start)`。
 
-TimeMap には後から区分線形、逆再生、ループ、停止、非線形を追加する。初期は線形と区分線形を実装する。
+TimeMap の初版は線形と区分線形。M3 の TEMPLATE-002 は保護した中間区間の hold / loop を追加した。逆再生と汎用の非線形写像は後続範囲とする。
 非線形写像は浮動小数点計算や求根を伴うため、完全に有理数だけで解けるとは扱わない。量子化精度・丸め・評価アルゴリズムの版を固定する。
 
 Composition は既定で親の連続時刻で評価する。編集レートが 24fps でも 60fps 出力時に整数の 24fps フレームへ勝手に丸めない。
@@ -45,7 +45,20 @@ Composition は既定で親の連続時刻で評価する。編集レートが 2
 - `frame_floor` と `sample_floor` は負時刻にも数学的 floor を適用する。フレーム・サンプルの原点は時刻ゼロ。フレームから時刻への変換は整数フレーム境界を返し、時刻からフレームへの厳密変換はサブフレーム位置を保持する。
 - 音声バッチは絶対時刻に対する `floor(start * sample_rate)..floor(end * sample_rate)` とする。隣接フレームは同じ境界を共有し、丸め済みのフレーム長を積算しない。これはバッチ境界の規約であり、各サンプルの時刻が量子化前の区間に含まれるという規約ではない。
 - 線形 TimeMap は `local = offset + parent * speed`、`speed > 0` とする。区分線形は親時刻・ローカル時刻とも厳密増加する 2 点以上の制御点を必要とし、隣接点の間を有理数で厳密補間する。制御点を含む閉区間を評価 domain とし、端点そのものは保存した値を返す。内部の各有理数演算が表現できなければ overflow、domain 外は型付きエラーとし、外挿・clamp・フレームへの量子化をしない。この domain は配置の半開区間とは区別する。
-- TimeMap の JSON は `kind` に `linear` / `piecewise_linear` を持つ。前者は `offset` / `speed`、後者は `points` 配列の `parent` / `local` を保存する。初期の enum は将来の拡張を許すが、逆再生・loop・停止・非線形を表す variant は提供しない。ゼロ・負の傾きは拒否する。非線形の量子化精度・丸め・評価アルゴリズムの版は未設計で、対応を追加する前に契約を固定する。浮動小数点時刻で代替しない。
+- TimeMap の JSON は `kind` に `linear` / `piecewise_linear` を持つ。前者は `offset` / `speed`、後者は `points` 配列の `parent` / `local` を保存する。TIME-001 時点の enum は将来の拡張を許し、逆再生・loop・停止・非線形を表す variant は提供しなかった。ゼロ・負の傾きは拒否する。非線形の量子化精度・丸め・評価アルゴリズムの版は未設計で、対応を追加する前に契約を固定する。浮動小数点時刻で代替しない。
+
+### TEMPLATE-002 の保護中間 map
+
+TimeMap::Protected（kind: protected）は authoring / requested / intro / outro の Duration と
+mode: hold | loop を保存する。中間長は正、map の domain は [0,requested]。
+intro / outro は傾き 1、中間の hold は intro 時刻の pose、
+loop は authoring-intro-outro を周期とする checked 有理数剰余へ写す。
+outro 開始は authoring-outro へ明示的に切り替える。
+PiecewiseLinear の正傾斜と既存 stretch の保存・意味は変更しない。
+汎用 Clip の Protected map の trim / stretch / lowering は型付き未対応。
+template_instance.retime は選択 variant の authoring 尺と公開 duration policy を使う。
+詳細は [ADR-0059](../adr/0059-template-duration-variants-and-migration.md) と
+[07 テンプレート](07-templates.md)。
 
 ## 純粋評価
 

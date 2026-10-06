@@ -26,6 +26,15 @@
 方針は決定した（[ADR-0040](adr/0040-expression-language-policy.md)）: 正本は AST、人間向けには中置演算と関数呼び出しだけの式言語、JavaScript 互換にしない。構文の詳細（演算子、リテラル、Property 参照の書き方、エラー表示）は未定。
 決定時期: EXPR-001 の後、GUI で式入力が必要になる M3。
 
+### OQ-19 圧縮音声 AAC と配信向け音声の採用
+
+MEDIA-002 では AV1 / H.264 / HEVC の MOV profile の音声を ALAC に限り、AAC は `UNSUPPORTED_FEATURE` とした（[ADR-0068](adr/0068-versioned-delivery-movie-profiles.md)）。残っているのは次の点。
+
+- AAC-LC を採用するかどうか。配布と特許の確認、FFmpeg 内蔵 AAC encoder の品質評価、priming / padding と終端 sample の扱いの実測が済んでいない。
+- Web 配信向けの AV1 の音声（MP4 / WebM の Opus）。LGPL 構成の FFmpeg に libopus を追加する必要がある。
+
+決定時期: Web 配信向けの書き出しを保証する前（M4 以降）。
+
 ## タスク内で設計する事項
 
 方針は決定済みで、細部を担当タスクの中で決めるもの。未決事項としては扱わない。

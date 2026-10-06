@@ -5,6 +5,149 @@ use std::collections::BTreeMap;
 fn t(n: i64, d: i64) -> Time {
     Time::new(n, d).unwrap()
 }
+
+#[test]
+fn protected_hold_loop_stretch_have_exact_boundaries_and_no_history() {
+    let (_, mut d) = fixture();
+    for mode in [
+        TemplateMiddleMode::Hold,
+        TemplateMiddleMode::Loop,
+        TemplateMiddleMode::Stretch,
+    ] {
+        d.duration_policy.middle_mode = mode;
+        let map = duration_map(duration(5, 1), duration(10, 1), &d.duration_policy).unwrap();
+        let encoded = serde_json::to_string(&map).unwrap();
+        assert_eq!(
+            serde_json::from_str::<kronello_time::TimeMap>(&encoded).unwrap(),
+            map
+        );
+        for time in [Time::ZERO, t(1, 5), t(2, 5)] {
+            assert_eq!(map.map(time).unwrap(), time);
+        }
+        for elapsed in [Time::ZERO, t(1, 10), t(3, 10)] {
+            assert_eq!(
+                map.map(t(97, 10).checked_add(elapsed).unwrap()).unwrap(),
+                t(47, 10).checked_add(elapsed).unwrap()
+            );
+        }
+        let samples = [t(47, 10), t(1, 1), t(9, 1), t(46, 10)];
+        let forward: Vec<_> = samples.iter().map(|time| map.map(*time).unwrap()).collect();
+        for (time, expected) in samples.iter().zip(forward).rev() {
+            assert_eq!(map.map(*time).unwrap(), expected);
+        }
+        match mode {
+            TemplateMiddleMode::Hold => assert_eq!(map.map(t(9, 1)).unwrap(), t(2, 5)),
+            TemplateMiddleMode::Loop => {
+                assert_eq!(map.map(t(46, 10)).unwrap(), t(46, 10));
+                assert_eq!(map.map(t(47, 10)).unwrap(), t(2, 5));
+                assert_eq!(map.map(t(9, 1)).unwrap(), t(2, 5));
+                assert_eq!(map.map(t(95, 10)).unwrap(), t(9, 10));
+            }
+            TemplateMiddleMode::Stretch => assert_eq!(map.map(t(101, 20)).unwrap(), t(51, 20)),
+        }
+        for requested in [duration(1, 1), duration(119, 100), duration(7, 10)] {
+            assert_eq!(
+                duration_map(duration(5, 1), requested, &d.duration_policy)
+                    .unwrap_err()
+                    .code(),
+                "DURATION_TOO_SHORT"
+            );
+        }
+        assert!(duration_map(duration(5, 1), duration(6, 5), &d.duration_policy).is_ok());
+        assert!(map.map(t(-1, 10)).is_err());
+        assert!(map.map(t(101, 10)).is_err());
+    }
+    assert!(serde_json::from_value::<kronello_time::TimeMap>(serde_json::json!({
+        "kind":"protected", "authoring":{"num":"0","den":"1"}, "requested":{"num":"1","den":"1"},
+        "intro":{"num":"0","den":"1"}, "outro":{"num":"0","den":"1"}, "mode":"loop"
+    })).is_err());
+}
+
+#[test]
+fn table_schema_projections_variants_and_authoring_pins_are_explicit() {
+    let mut p: Project =
+        serde_json::from_str(include_str!("../../../examples/template-002.project.json")).unwrap();
+    let mut d: TemplateDefinition = serde_json::from_str(include_str!(
+        "../../../examples/template-002.definition.json"
+    ))
+    .unwrap();
+    d.content_hash = authoring_hash(&p, d.composition_ref).unwrap();
+    for v in d.variants.values_mut() {
+        v.content_hash = authoring_hash(&p, v.composition_ref).unwrap();
+    }
+    validate_definition(&p, &d).unwrap();
+    let portrait = selected_definition(&d, Some("portrait")).unwrap();
+    assert_ne!(portrait.composition_ref, d.composition_ref);
+    assert_eq!(
+        portrait.public_inputs["data"].default,
+        d.public_inputs["data"].default
+    );
+    assert_ne!(
+        portrait.public_inputs["data"].target,
+        d.public_inputs["data"].target
+    );
+    let input = &d.public_inputs["data"];
+    let Value::DataTable(default) = &input.default else {
+        panic!()
+    };
+    for mutation in 0..5 {
+        let mut bad = default.clone();
+        match mutation {
+            0 => {
+                bad.rows[0].remove("headline");
+            }
+            1 => {
+                bad.rows[0].insert("private".into(), Value::Bool(true));
+            }
+            2 => {
+                bad.rows[0].insert(
+                    "headline".into(),
+                    Value::Scalar(FiniteF64::new(1.0).unwrap()),
+                );
+            }
+            3 => {
+                bad.columns.insert("headline".into(), ValueType::Bool);
+            }
+            _ => {
+                bad.rows.clear();
+            }
+        }
+        let value = Value::DataTable(bad);
+        let values = BTreeMap::from([("data".into(), value)]);
+        assert!(input_bindings(&d, &values).is_err());
+    }
+    let mut collision = d.clone();
+    collision
+        .public_inputs
+        .insert("duplicate".into(), collision.public_inputs["data"].clone());
+    assert!(validate_definition(&p, &collision).is_err());
+    let mut missing = d.clone();
+    missing
+        .variants
+        .get_mut("portrait")
+        .unwrap()
+        .targets
+        .clear();
+    assert!(validate_definition(&p, &missing).is_err());
+    assert_eq!(
+        selected_definition(&d, Some("missing")).unwrap_err().code(),
+        "TEMPLATE_VARIANT_NOT_FOUND"
+    );
+    let id = portrait.composition_ref;
+    let DocumentObject::Known(c) = p
+        .compositions
+        .iter_mut()
+        .find(|c| matches!(c,DocumentObject::Known(c) if c.id == id))
+        .unwrap()
+    else {
+        panic!()
+    };
+    c.design_extent = DesignExtent::new(100.0, 200.0).unwrap();
+    assert_eq!(
+        validate_definition(&p, &d).unwrap_err().code(),
+        "TEMPLATE_DEFINITION_CHANGED"
+    );
+}
 fn duration(n: i64, d: i64) -> Duration {
     Duration::new(t(n, d)).unwrap()
 }
@@ -82,6 +225,7 @@ fn defaults_constraints_and_public_input_isolation() {
         definition_ref: d.id,
         version: d.version.clone(),
         duration: duration(5, 1),
+        variant: None,
         inputs: BTreeMap::new(),
     };
     let b = a.clone();
@@ -159,12 +303,16 @@ fn nested_template_inputs_and_definition_are_frozen() {
         definition_ref: nested.id,
         version: nested.version.clone(),
         duration: duration(8, 1),
+        variant: None,
         inputs: BTreeMap::new(),
     };
     let DocumentObject::Known(root) = &mut project.compositions[0] else {
         panic!()
     };
     let node = SceneNode {
+        tags: Default::default(),
+        name: None,
+        enabled: true,
         id: NodeId::new(),
         kind: NodeKind::CompositionInstance(CompositionInstance {
             id: instance.id,

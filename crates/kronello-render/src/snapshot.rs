@@ -13,40 +13,74 @@ pub const SNAPSHOT_SCHEMA_VERSION: u32 = 1;
 pub const COLOR_VERSION: &str = "gpu002-color-v1";
 pub const VECTOR_VERSION: &str = "render001-kurbo-flatten-v1";
 pub const COVERAGE_VERSION: &str = "vec003-grid4-v2";
-pub const STROKE_GEOMETRY_VERSION: &str = "vec003-centered-stroke-v1";
-pub const GRADIENT_INTERPOLATION_VERSION: &str = "vec003-linear-premultiplied-pad-v1";
+pub const STROKE_GEOMETRY_VERSION: &str = EXTENDED_STROKE_VERSION;
+pub const GRADIENT_INTERPOLATION_VERSION: &str = "vec004-explicit-interpolation-v1";
+pub const LAYOUT_BOUNDS_VERSION: u32 = 1;
+pub const NODE_VISIBILITY_VERSION: u32 = 2;
+fn legacy_visibility_version() -> u32 {
+    1
+}
+pub const VIDEO_INPUT_VERSION: &str = "nle002-sdr-rgba8-nearest-v1";
+fn initial_video_version() -> String {
+    VIDEO_INPUT_VERSION.into()
+}
+fn initial_bounds_version() -> u32 {
+    1
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SemanticVersions {
     pub document: u32,
+    #[serde(default = "legacy_visibility_version")]
+    pub visibility: u32,
+    #[serde(default = "expression_version")]
+    pub expression: u32,
     pub interpolation: u32,
     pub time_map: u32,
     pub layout: u32,
+    /// Absent legacy snapshots use the initial bounds contract, never latest.
+    #[serde(default = "initial_bounds_version")]
+    pub bounds: u32,
     pub vector: String,
     pub color: String,
     pub coverage: String,
     pub stroke_geometry: String,
     pub gradient_interpolation: String,
     pub effects: BTreeMap<String, u32>,
+    #[serde(default = "generator_versions")]
+    pub generators: BTreeMap<String, u32>,
+    #[serde(default = "initial_video_version")]
+    pub video_input: String,
+}
+fn generator_versions() -> BTreeMap<String, u32> {
+    BTreeMap::from([(SOLID_GENERATOR_ID.into(), 1)])
+}
+fn expression_version() -> u32 {
+    EXPRESSION_VERSION
 }
 impl SemanticVersions {
     /// Pins explicitly at snapshot creation, never at execution or resume.
     pub fn current(document: u32) -> Self {
         Self {
             document,
+            visibility: NODE_VISIBILITY_VERSION,
+            expression: EXPRESSION_VERSION,
             interpolation: INTERPOLATION_VERSION,
             time_map: 1,
             layout: TEXT_LAYOUT_VERSION,
+            bounds: LAYOUT_BOUNDS_VERSION,
             vector: VECTOR_VERSION.into(),
             color: COLOR_VERSION.into(),
             coverage: COVERAGE_VERSION.into(),
             stroke_geometry: STROKE_GEOMETRY_VERSION.into(),
             gradient_interpolation: GRADIENT_INTERPOLATION_VERSION.into(),
             effects: BTreeMap::from([
-                (GAUSSIAN_BLUR_ID.into(), EFFECT_VERSION),
-                (DROP_SHADOW_ID.into(), EFFECT_VERSION),
+                (GAUSSIAN_BLUR_ID.into(), AFFINE_EFFECT_VERSION),
+                (DROP_SHADOW_ID.into(), AFFINE_EFFECT_VERSION),
             ]),
+            generators: generator_versions(),
+            video_input: initial_video_version(),
         }
     }
 }
@@ -84,7 +118,7 @@ pub struct RenderSnapshot {
     font_locks: Vec<FontRef>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum MatteKind {
     Alpha,
@@ -94,7 +128,7 @@ pub enum MatteKind {
 /// Explicit render inputs until a document-level matte model is implemented.
 /// A consumed matte is removed from display roots/children, unless visible is
 /// true. Keys use stable instance paths, never document-array positions.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct MatteBinding {
     pub source: SceneKey,
@@ -102,7 +136,9 @@ pub struct MatteBinding {
     pub kind: MatteKind,
     pub visible: bool,
 }
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, schemars::JsonSchema,
+)]
 #[serde(deny_unknown_fields)]
 pub struct SceneKey {
     pub instance_path: InstancePath,
@@ -230,6 +266,11 @@ impl RenderSnapshot {
     pub fn profile(&self) -> RenderProfile {
         self.profile
     }
+    /// Explicit transient matte inputs; does not alter the saved Project.
+    pub fn with_mattes(mut self, mattes: Vec<MatteBinding>) -> Self {
+        self.mattes = mattes;
+        self
+    }
     pub fn composition(&self) -> CompositionId {
         self.composition
     }
@@ -271,8 +312,27 @@ impl RenderSnapshot {
         self.project
             .validate_storage()
             .map_err(|e| RenderError::InvalidInput(e.to_string()))?;
+        // Legacy visibility v1 is equivalent only when every authored node is enabled.
+        let mut supported_versions = SemanticVersions::current(self.project.semantic_version);
+        if self.semantic_versions.stroke_geometry == LEGACY_STROKE_VERSION {
+            supported_versions.stroke_geometry = LEGACY_STROKE_VERSION.into();
+        }
+        if self.semantic_versions.visibility == 1
+            && self
+                .project
+                .compositions
+                .iter()
+                .all(|c| matches!(c, DocumentObject::Known(c) if c.nodes.iter().all(|n| n.enabled)))
+        {
+            supported_versions.visibility = 1;
+        }
+        for (id, version) in &mut supported_versions.effects {
+            if self.semantic_versions.effects.get(id) == Some(&EFFECT_VERSION) {
+                *version = EFFECT_VERSION;
+            }
+        }
         if self.project.semantic_version != PROJECT_SEMANTIC_VERSION
-            || self.semantic_versions != SemanticVersions::current(self.project.semantic_version)
+            || self.semantic_versions != supported_versions
         {
             return Err(RenderError::UnsupportedFeature(
                 "snapshot semantic versions".into(),
@@ -371,6 +431,14 @@ fn content<T>(
     }
     Ok(None)
 }
+fn content_asset(project: &Project, id: AssetId) -> Result<&Asset, RenderError> {
+    content(&project.assets, id.as_uuid(), |a| a.id.as_uuid())?.ok_or_else(|| {
+        RenderError::Backend {
+            code: "ASSET_MISSING",
+            message: id.to_string(),
+        }
+    })
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SceneContent {
@@ -381,6 +449,12 @@ pub enum SceneContent {
         resolved: ResolvedShape,
     },
     Text(LayoutResult),
+    Video {
+        asset: Asset,
+        stream_index: u32,
+        time: Time,
+        extent: [f64; 2],
+    },
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct SceneNodeIr {
@@ -388,11 +462,14 @@ pub struct SceneNodeIr {
     pub parent: Option<SceneKey>,
     pub world_transform: kronello_eval::Affine2,
     pub opacity: f64,
+    pub post_effect_opacity: f64,
     pub effects: Vec<ResolvedEffect>,
     /// Final node values, including template and layout inputs.
     pub properties: BTreeMap<PropertyId, Value>,
     pub text: Option<String>,
     pub content: SceneContent,
+    /// All three envelopes in root Composition design_px, before matte clipping.
+    pub bounds: crate::LayoutValue,
     pub layout_content_hash: Option<String>,
 }
 /// Resolution-independent text layout and shape values, in local design_px.
@@ -450,10 +527,49 @@ pub fn build_scene_ir_with_cache(
             }
         }
     }
+    let mut expressions = vec![];
+    let mut used_expressions = BTreeSet::new();
+    for c in &definitions {
+        for source in c
+            .properties
+            .iter()
+            .chain(c.nodes.iter().flat_map(|n| &n.properties))
+            .map(|p| p.source())
+            .chain(
+                c.nodes
+                    .iter()
+                    .filter_map(|n| match &n.kind {
+                        NodeKind::CompositionInstance(i) => Some(i.input_bindings.values()),
+                        _ => None,
+                    })
+                    .flatten(),
+            )
+        {
+            if let PropertySource::Expression(id) = source {
+                used_expressions.insert(*id);
+            }
+        }
+    }
+    for id in used_expressions {
+        let Some(e) = content(&snapshot.project.expressions, id.as_uuid(), |e| {
+            e.id.as_uuid()
+        })?
+        else {
+            continue;
+        };
+        for n in &e.nodes {
+            if let ExpressionNode::CurveSample { curve, .. } = n {
+                used_curves.insert(*curve);
+            }
+        }
+        expressions.push(e.clone());
+    }
     let mut curves = vec![];
     for id in used_curves {
-        let curve = content(&snapshot.project.curves, id.as_uuid(), |c| c.id().as_uuid())?
-            .ok_or_else(|| RenderError::InvalidInput(format!("missing curve {id}")))?;
+        let Some(curve) = content(&snapshot.project.curves, id.as_uuid(), |c| c.id().as_uuid())?
+        else {
+            continue;
+        };
         if curve.ensure_supported_version().is_err() {
             return Err(RenderError::UnsupportedFeature(format!(
                 "curve {id} interpolation version"
@@ -470,6 +586,7 @@ pub fn build_scene_ir_with_cache(
     let deps = templates.dependencies.clone();
     let graph = DependencyGraph::compile(
         EvaluationSnapshot {
+            expressions: &expressions,
             compositions: &definitions,
             curves: &curves,
             registry: &registry,
@@ -502,6 +619,11 @@ pub fn build_scene_ir_with_cache(
     let mut nodes = vec![];
     let mut used_fonts = BTreeSet::new();
     for n in evaluated.nodes {
+        if let Some(asset) = templates.media_slots.get(&n.key) {
+            return Err(RenderError::UnsupportedFeature(format!(
+                "Composition MediaSlot drawing for asset {asset}"
+            )));
+        }
         let values: BTreeMap<_, _> = n
             .properties
             .iter()
@@ -527,6 +649,16 @@ pub fn build_scene_ir_with_cache(
             .iter()
             .map(|e| {
                 let d = e.definition()?;
+                if snapshot
+                    .semantic_versions
+                    .effects
+                    .get(&d.effect_id)
+                    .is_none_or(|v| d.version > *v)
+                {
+                    return Err(RenderError::UnsupportedFeature(
+                        "effect exceeds pinned snapshot version".into(),
+                    ));
+                }
                 d.validate(&authored.properties, &registry)?;
                 Ok(d.resolve(&values)?)
             })
@@ -534,13 +666,20 @@ pub fn build_scene_ir_with_cache(
         let mut layout_content_hash = None;
         let properties = values.clone();
         let mut evaluated_text = None;
-        let content = match n.kind {
+        let mut content = match n.kind {
             NodeKind::Shape { content_ref } => {
                 let shape = content(&snapshot.project.shapes, content_ref.as_uuid(), |s| {
                     s.id.as_uuid()
                 })?
                 .ok_or(ShapeError::MissingContent { id: content_ref })?;
                 shape.validate(&authored.properties, &registry)?;
+                if shape.stroke.as_ref().is_some_and(|s| s.options.is_some())
+                    && snapshot.semantic_versions.stroke_geometry == LEGACY_STROKE_VERSION
+                {
+                    return Err(RenderError::UnsupportedFeature(
+                        "stroke exceeds pinned snapshot version".into(),
+                    ));
+                }
                 SceneContent::Shape {
                     definition: shape.clone(),
                     resolved: shape.resolve(&values)?,
@@ -559,19 +698,93 @@ pub fn build_scene_ir_with_cache(
                 layout_content_hash = Some(crate::layout_content_hash(&resolved)?);
                 used_fonts.extend(resolved.styles.iter().map(|s| s.font.clone()));
                 let layout = cache.layout(&resolved, fonts)?;
+                crate::bounds::check_overflow(&n.key, &layout)?;
                 SceneContent::Text(layout)
+            }
+            NodeKind::Media(media) => {
+                let asset = content(&snapshot.project.assets, media.asset.as_uuid(), |a| {
+                    a.id.as_uuid()
+                })?
+                .ok_or_else(|| RenderError::UnsupportedFeature("missing media asset".into()))?;
+                if asset.kind != kronello_model::AssetKind::Audio {
+                    return Err(RenderError::UnsupportedFeature(
+                        "Media video/image drawing requires COMP-002".into(),
+                    ));
+                }
+                SceneContent::Empty
             }
             _ => SceneContent::Empty,
         };
+        let mut post_effect_opacity = 1.0;
+        if let Some(sequence) = snapshot
+            .sequence
+            .filter(|_| n.composition == snapshot.composition)
+        {
+            let sequence = snapshot
+                .project
+                .sequences
+                .iter()
+                .find_map(|s| match s {
+                    DocumentObject::Known(s) if s.id == sequence => Some(s),
+                    _ => None,
+                })
+                .expect("validated sequence");
+            let clip = sequence
+                .tracks
+                .iter()
+                .flat_map(|t| &t.clips)
+                .find(|c| c.id.as_uuid() == n.key.node.as_uuid())
+                .expect("lowered clip");
+            content = match &clip.source_ref {
+                SourceRef::Asset {
+                    asset,
+                    stream_index,
+                } => {
+                    let asset = content_asset(&snapshot.project, *asset)?;
+                    let stream = asset
+                        .streams
+                        .iter()
+                        .find(|s| s.index == *stream_index)
+                        .expect("validated stream");
+                    let extent = [stream.width, stream.height].map(|x| x.map(f64::from));
+                    let [Some(w), Some(h)] = extent else {
+                        return Err(RenderError::UnsupportedFeature(
+                            "video dimensions unavailable".into(),
+                        ));
+                    };
+                    SceneContent::Video {
+                        asset: asset.clone(),
+                        stream_index: *stream_index,
+                        time: clip.local_time(time)?,
+                        extent: [w, h],
+                    }
+                }
+                SourceRef::Generator { color, .. } => {
+                    crate::sequence::solid_content(*color, sequence.extent)?
+                }
+                _ => content,
+            };
+            for tr in &sequence.transitions {
+                if tr.incoming == clip.id && tr.range.contains(time) {
+                    let progress = time
+                        .checked_sub(tr.range.start())?
+                        .checked_div(tr.range.duration()?.as_time())?;
+                    post_effect_opacity *=
+                        progress.numerator() as f64 / progress.denominator() as f64;
+                }
+            }
+        }
         nodes.push(SceneNodeIr {
             key: (&n.key).into(),
             parent: n.containment_parent.as_ref().map(Into::into),
             world_transform: n.world_transform,
             opacity: n.transform.opacity,
+            post_effect_opacity,
             effects,
             properties,
             text: evaluated_text,
             content,
+            bounds: crate::LayoutValue::default(),
             layout_content_hash,
         });
     }
@@ -581,6 +794,7 @@ pub fn build_scene_ir_with_cache(
             "snapshot missing required font lock".into(),
         ));
     }
+    crate::bounds::derive_scene_bounds(&mut nodes)?;
     Ok(SceneIr {
         composition: snapshot.composition,
         time,

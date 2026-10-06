@@ -1,0 +1,34 @@
+[package]
+name = "kronello-ffi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+# Cargo cannot inherit and partially override forbid. Mirror workspace lints,
+# relaxing only this audited native boundary (same as kronello-framebridge).
+[lints.rust]
+unsafe_code = "allow"
+
+[lints.clippy]
+all = "warn"
+
+[dependencies]
+kronello-service = { path = "../kronello-service" }
+kronello-gpu = { path = "../kronello-gpu" }
+kronello-render = { path = "../kronello-render" }
+serde_json = "1"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+wgpu = "30.0.1"
+pollster = "1.0.1"
+objc2 = "0.6.4"
+
+[dev-dependencies]
+tempfile = "3"
+naga = { version = "30.0.1", features = ["wgsl-in"] }

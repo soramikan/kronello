@@ -32,16 +32,38 @@ pub struct RoundStroke {
     pub paint: Paint,
     pub width: f32,
 }
-pub use kronello_model::{StrokeCap, StrokeJoin};
+pub use kronello_model::{GradientInterpolation, GradientSpread, StrokeCap, StrokeJoin};
 #[derive(Debug, Clone)]
 pub struct GradientPaint {
+    pub spread: GradientSpread,
+    pub interpolation: GradientInterpolation,
+    pub interpolation_version: u32,
+    /// Local paint coordinates to gradient coordinates, already inverted.
+    pub transform: [[f32; 3]; 2],
     pub geometry: GradientGeometry,
     pub stops: Vec<GradientStop>,
 }
 #[derive(Debug, Clone, Copy)]
 pub enum GradientGeometry {
-    Linear { start: [f32; 2], end: [f32; 2] },
-    Radial { center: [f32; 2], radius: f32 },
+    Linear {
+        start: [f32; 2],
+        end: [f32; 2],
+    },
+    Radial {
+        center: [f32; 2],
+        radius: f32,
+    },
+    FocalRadial {
+        center: [f32; 2],
+        radius: f32,
+        focal: [f32; 2],
+        focal_radius: f32,
+    },
+    Conic {
+        center: [f32; 2],
+        start_angle: f32,
+        sweep_angle: f32,
+    },
 }
 #[derive(Debug, Clone, Copy)]
 pub struct GradientStop {
@@ -52,13 +74,25 @@ pub struct GradientStop {
 /// stroke closes only contours marked closed. Fill is drawn before stroke.
 #[derive(Debug, Clone)]
 pub struct PathDraw {
-    pub fill_gradient: Option<GradientPaint>,
-    pub stroke_gradient: Option<GradientPaint>,
+    /// VEC-005 local stroke polygons and inverse affine. Fill stays in output space.
+    pub stroke_geometry: Option<LocalStrokeGeometry>,
+    pub fill_gradient: Option<Box<GradientPaint>>,
+    pub stroke_gradient: Option<Box<GradientPaint>>,
     /// Output design coordinates to local paint coordinates.
     pub paint_transform: [[f32; 3]; 2],
     pub contours: Vec<Contour>,
     pub fill: Option<Fill>,
     pub stroke: Option<RoundStroke>,
+}
+#[derive(Debug, Clone)]
+pub struct LocalStrokeGeometry {
+    pub version: String,
+    pub contours: Vec<Contour>,
+    pub output_to_local: [[f32; 3]; 2],
+    pub alignment: kronello_model::StrokeAlignment,
+    pub fill_rule: FillRule,
+    pub dash_array: Vec<f64>,
+    pub dash_offset: f64,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MaskKind {
@@ -67,6 +101,9 @@ pub enum MaskKind {
 }
 #[derive(Debug, Clone)]
 pub enum DrawNode {
+    /// CPU-prepared premultiplied working-space image. GPU execution uploads it
+    /// explicitly; this is never reported as a GPU-resident decode path.
+    Raster(Vec<[f32; 4]>),
     Path(PathDraw),
     Group {
         children: Vec<usize>,
@@ -110,7 +147,55 @@ impl DrawScene {
         let mut edges = 0;
         for node in &self.nodes {
             match node {
+                DrawNode::Raster(pixels) => {
+                    if pixels.iter().any(|p| {
+                        p.iter().any(|v| !v.is_finite() || v.abs() > 65504.0)
+                            || !(0.0..=1.0).contains(&p[3])
+                            || (p[3] == 0.0 && p[..3].iter().any(|v| *v != 0.0))
+                    }) {
+                        return Err(GpuError::InvalidInput("invalid raster input"));
+                    }
+                }
                 DrawNode::Path(path) => {
+                    if let Some(g) = &path.stroke_geometry {
+                        if g.version != kronello_model::EXTENDED_STROKE_VERSION {
+                            return Err(GpuError::UnsupportedFeature("stroke geometry version"));
+                        }
+                        let m = g.output_to_local;
+                        let scale = m
+                            .iter()
+                            .flat_map(|r| r[..2].iter())
+                            .fold(0.0f32, |a, b| a.max(b.abs()));
+                        let det = (m[0][0] / scale) * (m[1][1] / scale)
+                            - (m[0][1] / scale) * (m[1][0] / scale);
+                        if m.iter().flatten().any(|x| !x.is_finite())
+                            || !det.is_finite()
+                            || det.abs() <= 1e-6
+                        {
+                            return Err(GpuError::InvalidInput("invalid local stroke mapping"));
+                        }
+                        if g.contours.len() > 16_384
+                            || g.contours.iter().map(|c| c.points.len()).sum::<usize>() > 65_536
+                        {
+                            return Err(GpuError::UnsupportedFeature(
+                                "stroke segment budget exceeded",
+                            ));
+                        }
+                        if g.contours.iter().any(|c| {
+                            c.points.is_empty()
+                                || c.points
+                                    .iter()
+                                    .flatten()
+                                    .any(|x| !x.is_finite() || x.abs() > 1_000_000.0)
+                        }) {
+                            return Err(GpuError::InvalidInput("invalid local stroke contour"));
+                        }
+                        if g.alignment != kronello_model::StrokeAlignment::Center
+                            && path.contours.iter().any(|c| !c.closed)
+                        {
+                            return Err(GpuError::InvalidInput("open stroke alignment"));
+                        }
+                    }
                     for g in path.fill_gradient.iter().chain(&path.stroke_gradient) {
                         g.validate()?;
                     }
@@ -162,9 +247,12 @@ impl DrawScene {
                         return Err(GpuError::InvalidInput("invalid group opacity"));
                     }
                 }
-                DrawNode::Effect { effect, .. } => effect
-                    .validate()
-                    .map_err(|_| GpuError::InvalidInput("invalid effect parameters"))?,
+                DrawNode::Effect { effect, .. } => effect.validate().map_err(|e| match e {
+                    kronello_render::RenderError::UnsupportedFeature(_) => {
+                        GpuError::UnsupportedFeature("effect transform or kernel budget")
+                    }
+                    _ => GpuError::InvalidInput("invalid effect parameters"),
+                })?,
                 DrawNode::Masked { .. } => {}
             }
         }
@@ -220,7 +308,7 @@ impl DrawScene {
 }
 pub(crate) fn inputs(node: &DrawNode) -> Vec<usize> {
     match node {
-        DrawNode::Path(_) => vec![],
+        DrawNode::Path(_) | DrawNode::Raster(_) => vec![],
         DrawNode::Group { children, .. } => children.clone(),
         DrawNode::Effect { source, .. } => vec![*source],
         DrawNode::Masked { source, matte, .. } => vec![*source, *matte],
@@ -263,11 +351,24 @@ fn unit(a: [f32; 2]) -> [f32; 2] {
 pub(crate) fn stroke_primitives(path: &PathDraw) -> Vec<StrokePrimitive> {
     let mut out = Vec::new();
     let Some(s) = path.stroke else { return out };
-    let r = s.width / 2.0;
+    let r = s.width
+        / if path
+            .stroke_geometry
+            .as_ref()
+            .is_some_and(|g| g.alignment != kronello_model::StrokeAlignment::Center)
+        {
+            1.0
+        } else {
+            2.0
+        };
     if r == 0.0 {
         return out;
     }
-    for contour in &path.contours {
+    for contour in path
+        .stroke_geometry
+        .as_ref()
+        .map_or(&path.contours, |g| &g.contours)
+    {
         // Consecutive coincident points have no direction and do not create joins.
         let mut points = Vec::new();
         for &p in &contour.points {
@@ -282,6 +383,23 @@ pub(crate) fn stroke_primitives(path: &PathDraw) -> Vec<StrokePrimitive> {
         if n < 2 {
             if s.cap == StrokeCap::Round && !contour.closed && n == 1 {
                 out.push(StrokePrimitive::Circle(points[0], r));
+            }
+            if path.stroke_geometry.is_some()
+                && s.cap == StrokeCap::Square
+                && !contour.closed
+                && n == 1
+            {
+                let [x, y] = points[0];
+                out.push(StrokePrimitive::Triangle([
+                    [x - r, y - r],
+                    [x + r, y - r],
+                    [x + r, y + r],
+                ]));
+                out.push(StrokePrimitive::Triangle([
+                    [x - r, y - r],
+                    [x + r, y + r],
+                    [x - r, y + r],
+                ]));
             }
             continue;
         }
@@ -372,6 +490,22 @@ fn fill_hit(point: [f32; 2], edges: &[([f32; 2], [f32; 2], bool)], rule: FillRul
 }
 impl GradientPaint {
     pub fn validate(&self) -> Result<(), GpuError> {
+        if self.interpolation_version != 1 {
+            return Err(GpuError::UnsupportedFeature(
+                "gradient interpolation version",
+            ));
+        }
+        let m = self.transform;
+        let determinant = m[0][0] * m[1][1] - m[0][1] * m[1][0];
+        if m.iter()
+            .flatten()
+            .any(|v| !v.is_finite() || v.abs() > 1_000_000.0)
+            || !determinant.is_finite()
+            || determinant == 0.0
+        {
+            return Err(GpuError::InvalidInput("invalid gradient transform"));
+        }
+        let point_valid = |p: [f32; 2]| p.iter().all(|v| v.is_finite() && v.abs() <= 1_000_000.0);
         let valid = match self.geometry {
             GradientGeometry::Linear { start, end } => {
                 start != end
@@ -387,6 +521,33 @@ impl GradientPaint {
                     .all(|v| v.is_finite() && v.abs() <= 1_000_000.0)
                     && radius.is_finite()
                     && radius > 0.0
+            }
+            GradientGeometry::FocalRadial {
+                center,
+                radius,
+                focal,
+                focal_radius,
+            } => {
+                point_valid(center)
+                    && point_valid(focal)
+                    && radius.is_finite()
+                    && radius <= 1_000_000.0
+                    && focal_radius.is_finite()
+                    && focal_radius >= 0.0
+                    && dot(sub(center, focal), sub(center, focal)).sqrt() + focal_radius < radius
+                    && (radius - focal_radius) * (radius - focal_radius)
+                        > dot(sub(center, focal), sub(center, focal))
+            }
+            GradientGeometry::Conic {
+                center,
+                start_angle,
+                sweep_angle,
+            } => {
+                point_valid(center)
+                    && start_angle.is_finite()
+                    && sweep_angle.is_finite()
+                    && sweep_angle > 0.0
+                    && sweep_angle <= 360.0
             }
         };
         if !valid || !(2..=256).contains(&self.stops.len()) {
@@ -404,8 +565,14 @@ impl GradientPaint {
         }
         Ok(())
     }
-    /// Pad and right-continuous equal offsets: last stop at that offset wins.
+    /// Right-continuous equal offsets: last stop at that offset wins.
     pub fn sample(&self, p: [f32; 2], working: WorkingSpace) -> [f32; 4] {
+        let p = self.transform.map(|r| r[0] * p[0] + r[1] * p[1] + r[2]);
+        // Propagate arithmetic failure to the checked raster surface boundary.
+        // NaN parameters must never fall through stop comparisons to a color.
+        if p.iter().any(|v| !v.is_finite()) {
+            return [f32::NAN; 4];
+        }
         let t = match self.geometry {
             GradientGeometry::Linear { start, end } => {
                 let d = sub(end, start);
@@ -414,24 +581,137 @@ impl GradientPaint {
             GradientGeometry::Radial { center, radius } => {
                 dot(sub(p, center), sub(p, center)).sqrt() / radius
             }
+            GradientGeometry::FocalRadial {
+                center,
+                radius,
+                focal,
+                focal_radius,
+            } => {
+                let q = sub(p, focal);
+                let d = sub(center, focal);
+                let dr = radius - focal_radius;
+                let a = dr * dr - dot(d, d);
+                let b = dot(q, d) + focal_radius * dr;
+                let c = dot(q, q) - focal_radius * focal_radius;
+                if c <= 0.0 {
+                    0.0
+                } else {
+                    let root = (b * b + a * c).sqrt();
+                    if !root.is_finite() {
+                        return [f32::NAN; 4];
+                    }
+                    if b >= 0.0 {
+                        c / (root + b)
+                    } else {
+                        (root - b) / a
+                    }
+                }
+            }
+            GradientGeometry::Conic {
+                center,
+                start_angle,
+                sweep_angle,
+            } => {
+                let q = sub(p, center);
+                if q == [0.0; 2] {
+                    0.0
+                } else {
+                    let angle = q[1].atan2(q[0]) - start_angle.to_radians();
+                    (angle - std::f32::consts::TAU * (angle / std::f32::consts::TAU).floor())
+                        / sweep_angle.to_radians()
+                }
+            }
         };
-        let convert = |s: &GradientStop| color::to_working(s.paint.rgba, s.paint.space, working);
+        // Infinite pad parameters still identify the appropriate endpoint, as
+        // in VEC-003. Periodic spread cannot recover a phase from infinity.
+        if t.is_nan() || (!t.is_finite() && self.spread != GradientSpread::Pad) {
+            return [f32::NAN; 4];
+        }
+        let t = match self.spread {
+            GradientSpread::Pad => t,
+            GradientSpread::Repeat => t - t.floor(),
+            GradientSpread::Reflect => {
+                let u = t - 2.0 * (t / 2.0).floor();
+                if u > 1.0 { 2.0 - u } else { u }
+            }
+        };
         let mut previous = &self.stops[0];
         if t < previous.offset {
-            return convert(previous);
+            return self.finish(self.prepare(previous, working), working);
         }
         for stop in &self.stops[1..] {
             if t < stop.offset {
                 let f = (t - previous.offset) / (stop.offset - previous.offset);
-                let a = convert(previous);
-                let b = convert(stop);
-                return std::array::from_fn(|i| a[i] + (b[i] - a[i]) * f);
+                let a = self.prepare(previous, working);
+                let b = self.prepare(stop, working);
+                return self.finish(std::array::from_fn(|i| a[i] + (b[i] - a[i]) * f), working);
             }
             previous = stop;
         }
-        convert(previous)
+        self.finish(self.prepare(previous, working), working)
+    }
+    fn prepare(&self, stop: &GradientStop, working: WorkingSpace) -> [f32; 4] {
+        let srgb = matches!(
+            self.interpolation,
+            GradientInterpolation::SrgbStraight | GradientInterpolation::SrgbPremultiplied
+        );
+        let mut rgb = [stop.paint.rgba[0], stop.paint.rgba[1], stop.paint.rgba[2]];
+        if stop.paint.space == InputSpace::Srgb {
+            rgb = rgb.map(color::srgb_decode);
+        }
+        let from = if stop.paint.space == InputSpace::LinearRec2020 {
+            WorkingSpace::LinearRec2020
+        } else {
+            WorkingSpace::LinearRec709
+        };
+        rgb = color::convert_primaries(
+            rgb,
+            from,
+            if srgb {
+                WorkingSpace::LinearRec709
+            } else {
+                working
+            },
+        );
+        if srgb {
+            rgb = rgb.map(color::srgb_encode);
+        }
+        let p = [rgb[0], rgb[1], rgb[2], stop.paint.rgba[3]];
+        if matches!(
+            self.interpolation,
+            GradientInterpolation::WorkingLinearPremultiplied
+                | GradientInterpolation::SrgbPremultiplied
+        ) {
+            color::premultiply(p)
+        } else {
+            p
+        }
+    }
+    fn finish(&self, mut p: [f32; 4], working: WorkingSpace) -> [f32; 4] {
+        match self.interpolation {
+            GradientInterpolation::WorkingLinearPremultiplied => p,
+            GradientInterpolation::WorkingLinearStraight => color::premultiply(p),
+            GradientInterpolation::SrgbStraight | GradientInterpolation::SrgbPremultiplied => {
+                if self.interpolation == GradientInterpolation::SrgbPremultiplied {
+                    if p[3] == 0.0 {
+                        return [0.0; 4];
+                    }
+                    let alpha = p[3];
+                    for component in &mut p[..3] {
+                        *component /= alpha;
+                    }
+                }
+                let rgb = color::convert_primaries(
+                    [p[0], p[1], p[2]].map(color::srgb_decode),
+                    WorkingSpace::LinearRec709,
+                    working,
+                );
+                color::premultiply([rgb[0], rgb[1], rgb[2], p[3]])
+            }
+        }
     }
 }
+
 pub(crate) fn luma_weights(working: WorkingSpace) -> [f32; 3] {
     match working {
         WorkingSpace::LinearRec709 => [0.2126, 0.7152, 0.0722],
@@ -463,6 +743,23 @@ pub(crate) fn check_scene_budget(
         return Err(GpuError::UnsupportedFeature(
             "scene surface budget exceeds 512 MiB",
         ));
+    }
+    // Bound every inverse-map intermediate over the complete sampling domain.
+    // Finite coefficients alone do not prevent f32 multiplication overflow.
+    for node in &scene.nodes {
+        if let DrawNode::Path(path) = node
+            && let Some(g) = &path.stroke_geometry
+            && g.output_to_local.iter().any(|r| {
+                f64::from(r[0]).abs() * f64::from(size.design_extent[0])
+                    + f64::from(r[1]).abs() * f64::from(size.design_extent[1])
+                    + f64::from(r[2]).abs()
+                    > 1e12
+            })
+        {
+            return Err(GpuError::InvalidInput(
+                "local stroke sample mapping exceeds numeric range",
+            ));
+        }
     }
     Ok(())
 }
@@ -498,7 +795,7 @@ pub(crate) fn raster_path_reference(
         .stroke
         .map(|s| color::to_working(s.paint.rgba, s.paint.space, working))
         .unwrap_or([0.0; 4]);
-    let paint = |solid: [f32; 4], g: &Option<GradientPaint>, p: [f32; 2]| {
+    let paint = |solid: [f32; 4], g: &Option<Box<GradientPaint>>, p: [f32; 2]| {
         g.as_ref().map_or(solid, |g| {
             let local = path
                 .paint_transform
@@ -524,7 +821,21 @@ pub(crate) fn raster_path_reference(
                             fill[i] += c[i] / 16.0;
                         }
                     }
-                    if path.stroke.is_some() && primitives.iter().any(|v| primitive_hit(p, v)) {
+                    let local = path.stroke_geometry.as_ref().map_or(p, |g| {
+                        g.output_to_local.map(|r| r[0] * p[0] + r[1] * p[1] + r[2])
+                    });
+                    let aligned = path.stroke_geometry.as_ref().is_none_or(|g| {
+                        let inside = fill_hit(p, &e, g.fill_rule);
+                        match g.alignment {
+                            kronello_model::StrokeAlignment::Center => true,
+                            kronello_model::StrokeAlignment::Inside => inside,
+                            kronello_model::StrokeAlignment::Outside => !inside,
+                        }
+                    });
+                    if path.stroke.is_some()
+                        && aligned
+                        && primitives.iter().any(|v| primitive_hit(local, v))
+                    {
                         let c = paint(stroke_solid, &path.stroke_gradient, p);
                         for i in 0..4 {
                             stroke[i] += c[i] / 16.0;
@@ -590,6 +901,14 @@ pub(crate) fn render_scene_reference_with_resolvers(
         let [w, h] = size.output_resolution;
         let mut pixels = vec![[0.0; 4]; (w as usize) * (h as usize)];
         match &scene.nodes[id] {
+            DrawNode::Raster(pixels) => {
+                if pixels.len()
+                    != pixel_count(size.output_resolution[0], size.output_resolution[1])?
+                {
+                    return Err(GpuError::InvalidInput("raster input dimensions"));
+                }
+                return Ok(pixels.clone());
+            }
             DrawNode::Path(path) => {
                 pixels = raster(id, path)?;
             }
@@ -682,6 +1001,7 @@ mod stroke_tests {
     use super::*;
     fn path(points: Vec<[f32; 2]>, join: StrokeJoin, cap: StrokeCap, limit: f32) -> PathDraw {
         PathDraw {
+            stroke_geometry: None,
             fill_gradient: None,
             stroke_gradient: None,
             paint_transform: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
@@ -765,5 +1085,124 @@ mod stroke_tests {
         assert!(!hit(&p, [2.0, 2.0]));
         p.stroke.as_mut().unwrap().width = 0.0;
         assert!(stroke_primitives(&p).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod vec005_tests {
+    use super::*;
+    use kronello_model::StrokeAlignment;
+    fn ring(rule: FillRule, alignment: StrokeAlignment) -> PathDraw {
+        let contours = vec![
+            Contour {
+                points: vec![[2.0, 2.0], [12.0, 2.0], [12.0, 12.0], [2.0, 12.0]],
+                closed: true,
+            },
+            Contour {
+                points: vec![[5.0, 5.0], [9.0, 5.0], [9.0, 9.0], [5.0, 9.0]],
+                closed: true,
+            },
+        ];
+        PathDraw {
+            stroke_geometry: Some(LocalStrokeGeometry {
+                version: kronello_model::EXTENDED_STROKE_VERSION.into(),
+                contours: contours.clone(),
+                output_to_local: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+                alignment,
+                fill_rule: rule,
+                dash_array: vec![],
+                dash_offset: 0.0,
+            }),
+            contours,
+            fill: None,
+            stroke: Some(RoundStroke {
+                join: StrokeJoin::Round,
+                cap: StrokeCap::Round,
+                miter_limit: 4.0,
+                width: 1.0,
+                paint: Paint {
+                    rgba: [1.0; 4],
+                    space: InputSpace::LinearRec709,
+                },
+            }),
+            fill_gradient: None,
+            stroke_gradient: None,
+            paint_transform: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+        }
+    }
+    fn hit(p: &PathDraw, at: [f32; 2]) -> bool {
+        let g = p.stroke_geometry.as_ref().unwrap();
+        let inside = fill_hit(at, &edges(p), g.fill_rule);
+        let local = g
+            .output_to_local
+            .map(|r| r[0] * at[0] + r[1] * at[1] + r[2]);
+        let aligned = match g.alignment {
+            StrokeAlignment::Center => true,
+            StrokeAlignment::Inside => inside,
+            StrokeAlignment::Outside => !inside,
+        };
+        aligned && stroke_primitives(p).iter().any(|v| primitive_hit(local, v))
+    }
+    #[test]
+    fn vec005_alignment_uses_fill_rule_holes_and_reversed_winding() {
+        for alignment in [StrokeAlignment::Inside, StrokeAlignment::Outside] {
+            let p = ring(FillRule::Evenodd, alignment);
+            assert_eq!(hit(&p, [1.5, 7.0]), alignment == StrokeAlignment::Outside);
+            assert_eq!(hit(&p, [2.75, 7.0]), alignment == StrokeAlignment::Inside);
+            assert_eq!(hit(&p, [5.75, 7.0]), alignment == StrokeAlignment::Outside);
+            assert_eq!(hit(&p, [4.25, 7.0]), alignment == StrokeAlignment::Inside);
+            let mut reverse = p.clone();
+            reverse.contours.iter_mut().for_each(|c| c.points.reverse());
+            reverse
+                .stroke_geometry
+                .as_mut()
+                .unwrap()
+                .contours
+                .iter_mut()
+                .for_each(|c| c.points.reverse());
+            for at in [[1.5, 7.0], [2.75, 7.0], [5.75, 7.0], [4.25, 7.0]] {
+                assert_eq!(hit(&p, at), hit(&reverse, at));
+            }
+        }
+        let mut p = ring(FillRule::Nonzero, StrokeAlignment::Inside);
+        assert!(hit(&p, [5.75, 7.0]));
+        p.contours[1].points.reverse();
+        assert!(!hit(&p, [5.75, 7.0]));
+    }
+    #[test]
+    fn vec005_zero_dash_caps_and_affine_width_have_analytic_support() {
+        let mut p = ring(FillRule::Nonzero, StrokeAlignment::Center);
+        p.stroke_geometry.as_mut().unwrap().contours = vec![Contour {
+            points: vec![[4.0, 4.0]],
+            closed: false,
+        }];
+        for cap in [StrokeCap::Butt, StrokeCap::Round, StrokeCap::Square] {
+            p.stroke.as_mut().unwrap().cap = cap;
+            assert_eq!(hit(&p, [4.0, 4.0]), cap != StrokeCap::Butt);
+            assert_eq!(hit(&p, [4.4, 4.4]), cap == StrokeCap::Square);
+        }
+        p.stroke.as_mut().unwrap().cap = StrokeCap::Round;
+        // Local disk becomes an ellipse/shear; map output samples back to it.
+        p.stroke_geometry.as_mut().unwrap().output_to_local = [[-0.5, 0.25, 10.0], [0.0, 1.0, 0.0]];
+        assert!(hit(&p, [14.8, 4.0])); // local [3.6,4], within radius 0.5
+        assert!(!hit(&p, [15.2, 4.0])); // local [3.4,4], outside radius 0.5
+    }
+    #[test]
+    fn vec005_inverse_mapping_overflow_is_typed_before_sampling() {
+        let mut p = ring(FillRule::Nonzero, StrokeAlignment::Center);
+        p.stroke_geometry.as_mut().unwrap().output_to_local = [[1e30, 0.0, 0.0], [0.0, 1e30, 0.0]];
+        let scene = DrawScene {
+            nodes: vec![DrawNode::Path(p)],
+            roots: vec![0],
+        };
+        scene.validate().unwrap();
+        assert!(matches!(
+            render_scene_reference(
+                RenderSize::pixels(16, 16),
+                &scene,
+                WorkingSpace::LinearRec709
+            ),
+            Err(GpuError::InvalidInput(_))
+        ));
     }
 }

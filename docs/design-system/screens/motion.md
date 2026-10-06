@@ -37,6 +37,7 @@ TS = ToolStrip（Viewer の左端、40px）
 
 - 見出しの下に選択中のレイヤーの種類アイコン・名前・種類と親（`Text · Title group`）。
 - セクション（開閉できる）: Transform（Position / Scale / Rotation / Opacity）、Text（書体・太さ・サイズ・文字揃え）、Layout（Wrap width / 表示する bounds）。
+- アニメーションしない設定（Text 本文・書体・太さ・文字揃え・表示する bounds）は [InspectorRow](../components/InspectorRow.md) の設定行に置き、ラベルを Property の行と同じ列に揃える。値の欄は 2 成分なら単位なし 64px を 2 つ、1 成分なら単位付き 88px、設定の control は 144px。
 - Property の行は [InspectorRow](../components/InspectorRow.md)。主値源（Constant / Curve / Expression）をキーフレームナビゲータの形で示す。
 
 ## Dope sheet
@@ -45,6 +46,8 @@ TS = ToolStrip（Viewer の左端、40px）
 - 左列: レイヤーを開くと Property の行が並び、各行にキーフレームナビゲータ・Property 名・値（NumberField）を置く。値は Inspector と同じものを編集する。
 - 左列の幅は値の列を開いた状態で 376px、畳んだ状態で 216px。左列の上端の検索欄の右にあるボタン（`chevrons-left` / `chevrons-right`）で切り替える。開閉はワークスペースに保存する。
 - 右側: 時間ルーラー（24px）、各行のキーフレーム（[Keyframe](../components/Keyframe.md)）、再生ヘッド。レイヤーの行には子の Property のキーを小さい記号でまとめて出す。
+- 再生ヘッドはルーラーとレーンを貫く 1 本で、つまみはルーラーにだけ置く（行ごとに描かない）。レーンの左右に `space-2` の余白を取り、先頭・末尾のキーを欠けさせない。末尾の目盛りにはラベルを付けない。
+- Property 名と値の表示は Inspector と同じ（表示名・単位・倍率を共有する）。内部キー（`kronello.opacity` など）や丸めた生の値を出さない。
 
 ## Curve editor
 

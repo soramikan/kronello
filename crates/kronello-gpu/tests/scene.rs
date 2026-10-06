@@ -1,4 +1,34 @@
 mod common;
+
+#[test]
+fn gpu_native_preview_texture_matches_export_color_conversion() {
+    let size = RenderSize::pixels(8, 8);
+    let scene = DrawScene {
+        nodes: vec![rectangle(
+            [0.0; 2],
+            [8.0; 2],
+            paint([0.8, 0.4, 0.2, 0.5], InputSpace::Srgb),
+        )],
+        roots: vec![0],
+    };
+    let transform = OutputTransform {
+        space: InputSpace::LinearRec709,
+        alpha: OutputAlpha::Premultiplied,
+    };
+    let texture = gpu()
+        .render_scene_texture(size, &scene, WorkingSpace::LinearRec709, transform)
+        .unwrap();
+    let mut readback = TransferStats::default();
+    let bytes = gpu().read_texture(&texture, 8, &mut readback).unwrap();
+    let actual = decode_rgba16f(&bytes).unwrap();
+    let expected = gpu()
+        .render_scene_output(size, &scene, WorkingSpace::LinearRec709, transform)
+        .unwrap();
+    assert_eq!(actual, expected.pixels);
+    assert_eq!(texture.size().width, 8);
+    assert_eq!(texture.size().height, 8);
+}
+
 use common::*;
 use kronello_gpu::*;
 use kronello_testkit::{FrameDescriptor, LinearFrame, PixelTolerance, compare_pixels};
@@ -408,6 +438,7 @@ fn cpu_all_catalog_scenes_are_finite_with_zero_transparent_rgb() {
 fn gpu_round_stroke_open_contour_and_design_scale_match_analytic_values() {
     let scene = DrawScene {
         nodes: vec![DrawNode::Path(PathDraw {
+            stroke_geometry: None,
             fill_gradient: None,
             stroke_gradient: None,
             paint_transform: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
@@ -624,6 +655,10 @@ fn gpu_surface_overflow_status_is_sticky_and_output_association_is_checked() {
 #[test]
 fn cpu_gradient_pad_premultiplied_equal_offsets_and_working_conversion() {
     let mut g = GradientPaint {
+        spread: Default::default(),
+        interpolation: Default::default(),
+        interpolation_version: 1,
+        transform: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
         geometry: GradientGeometry::Linear {
             start: [0.0, 0.0],
             end: [2.0, 0.0],
@@ -758,6 +793,21 @@ fn gpu_stroke_styles_and_gradients_match_cpu_in_both_working_spaces() {
 }
 
 #[test]
+fn gpu_vec004_gradients_match_cpu_in_both_working_spaces() {
+    for (id, n, _, scene) in vec004_scenes() {
+        for working in [WorkingSpace::LinearRec709, WorkingSpace::LinearRec2020] {
+            eprintln!("VEC-004 {id}: {working:?}");
+            let expected =
+                render_scene_reference(RenderSize::pixels(n, n), &scene, working).unwrap();
+            let actual = gpu()
+                .render_scene(RenderSize::pixels(n, n), &scene, working)
+                .unwrap();
+            compare(n, working, &expected, &actual.pixels);
+        }
+    }
+}
+
+#[test]
 fn cpu_fx_shader_parses_and_validates() {
     let module = naga::front::wgsl::parse_str(EFFECT_SHADER).unwrap();
     naga::valid::Validator::new(
@@ -859,6 +909,146 @@ fn gpu_fx_blur_shadow_match_cpu_reference_in_both_working_spaces() {
                 .unwrap();
             compare(16, working, &expected, &actual.pixels);
             assert_eq!(actual.transfers.cpu_upload_pixel_operations, 0);
+        }
+    }
+}
+
+#[test]
+fn gpu_fx002_transformed_kernels_and_offsets_match_cpu_in_both_spaces() {
+    for (_, size, _, scene) in fx002_scenes() {
+        for working in [WorkingSpace::LinearRec709, WorkingSpace::LinearRec2020] {
+            let expected =
+                render_scene_reference(RenderSize::pixels(size, size), &scene, working).unwrap();
+            let actual = gpu()
+                .render_scene(RenderSize::pixels(size, size), &scene, working)
+                .unwrap();
+            compare(size, working, &expected, &actual.pixels);
+            assert_eq!(actual.transfers.cpu_upload_pixel_operations, 0);
+        }
+    }
+}
+#[test]
+fn cpu_fx002_affine_impulse_matches_independent_elliptical_gaussian() {
+    let covariance = [5.0, 1.0, 1.0];
+    let mut source = vec![[0.0; 4]; 31 * 31];
+    source[15 * 31 + 15] = [0.25, 0.0, 0.0, 0.5];
+    let scene = DrawScene {
+        nodes: vec![
+            DrawNode::Raster(source),
+            DrawNode::Effect {
+                source: 0,
+                effect: PixelEffect::AffineGaussianBlur { covariance },
+            },
+        ],
+        roots: vec![1],
+    };
+    let pixels = render_scene_reference(
+        RenderSize::pixels(31, 31),
+        &scene,
+        WorkingSpace::LinearRec709,
+    )
+    .unwrap();
+    let mut weights = vec![];
+    for y in -3..=3 {
+        for x in -7..=7 {
+            let q = f64::from(x * x - 2 * x * y + 5 * y * y) / 4.0;
+            if q <= 9.0 {
+                weights.push((x, y, (-0.5 * q).exp()));
+            }
+        }
+    }
+    let sum: f64 = weights.iter().map(|(_, _, w)| w).sum();
+    let norm: f32 = weights.iter().map(|(_, _, w)| (w / sum) as f32).sum();
+    let half = |v| half::f16::from_f32(v).to_f32();
+    let mut expected = vec![[0.0; 4]; 31 * 31];
+    for (x, y, w) in weights {
+        let w = (w / sum) as f32;
+        expected[((15 + y) * 31 + 15 + x) as usize] =
+            [half(0.25 * w / norm), 0.0, 0.0, half(0.5 * w / norm)];
+    }
+    for (i, (actual, expected)) in pixels.iter().zip(expected).enumerate() {
+        assert_eq!(*actual, expected, "affine impulse pixel {i}");
+    }
+    let invalid = DrawScene {
+        nodes: vec![
+            DrawNode::Raster(vec![[0.0; 4]; 1]),
+            DrawNode::Effect {
+                source: 0,
+                effect: PixelEffect::AffineGaussianBlur {
+                    covariance: [1.0, 1.0, 1.0],
+                },
+            },
+        ],
+        roots: vec![1],
+    };
+    assert!(matches!(
+        render_scene_reference(
+            RenderSize::pixels(1, 1),
+            &invalid,
+            WorkingSpace::LinearRec709
+        ),
+        Err(GpuError::UnsupportedFeature(_))
+    ));
+}
+
+#[test]
+fn cpu_vec005_catalog_rasterizes_local_affine_and_alignment() {
+    for (_, n, _, scene) in vec005_scenes() {
+        scene.validate().unwrap();
+        for working in [WorkingSpace::LinearRec709, WorkingSpace::LinearRec2020] {
+            let pixels = render_scene_reference(RenderSize::pixels(n, n), &scene, working).unwrap();
+            assert!(pixels.iter().any(|p| p[3] > 0.0));
+            assert!(pixels.iter().any(|p| p[3] == 0.0));
+        }
+    }
+}
+#[test]
+fn gpu_vec005_strokes_match_cpu_in_both_working_spaces() {
+    for (id, n, _, scene) in vec005_scenes() {
+        for working in [WorkingSpace::LinearRec709, WorkingSpace::LinearRec2020] {
+            eprintln!("VEC-005 {id}: {working:?}");
+            let expected =
+                render_scene_reference(RenderSize::pixels(n, n), &scene, working).unwrap();
+            let actual = gpu()
+                .render_scene(RenderSize::pixels(n, n), &scene, working)
+                .unwrap();
+            compare(n, working, &expected, &actual.pixels);
+        }
+    }
+}
+
+#[test]
+fn cpu_vec005_golden_samples_avoid_discontinuity_ties() {
+    for (id, n, _, scene) in vec005_scenes() {
+        let baseline =
+            render_scene_reference(RenderSize::pixels(n, n), &scene, WorkingSpace::LinearRec709)
+                .unwrap();
+        for dx in [-0.00001, 0.00001] {
+            for dy in [-0.00001, 0.00001] {
+                let mut perturbed = scene.clone();
+                let DrawNode::Path(path) = &mut perturbed.nodes[0] else {
+                    panic!()
+                };
+                let g = path.stroke_geometry.as_mut().unwrap();
+                g.output_to_local[0][2] += dx;
+                g.output_to_local[1][2] += dy;
+                for c in &mut path.contours {
+                    for p in &mut c.points {
+                        p[0] += dx;
+                        p[1] += dy;
+                    }
+                }
+                let pixels = render_scene_reference(
+                    RenderSize::pixels(n, n),
+                    &perturbed,
+                    WorkingSpace::LinearRec709,
+                )
+                .unwrap();
+                assert_eq!(
+                    pixels, baseline,
+                    "{id}: sample too close to stroke/fill discontinuity at perturbation {dx}/{dy}"
+                );
+            }
         }
     }
 }

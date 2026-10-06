@@ -128,8 +128,14 @@ impl ScenePass<'_> {
         params.extend(
             [
                 u32::from(output_transform.is_some_and(|t| t.alpha == OutputAlpha::Premultiplied)),
-                0,
-                0,
+                path.and_then(|p| p.stroke_geometry.as_ref())
+                    .map_or(0, |g| match g.alignment {
+                        kronello_model::StrokeAlignment::Center => 0,
+                        kronello_model::StrokeAlignment::Inside => 1,
+                        kronello_model::StrokeAlignment::Outside => 2,
+                    }),
+                path.and_then(|p| p.stroke_geometry.as_ref())
+                    .map_or(0, |g| u32::from(g.fill_rule == FillRule::Evenodd)),
                 0,
             ]
             .into_iter()
@@ -141,22 +147,68 @@ impl ScenePass<'_> {
             path.and_then(|p| p.fill_gradient.as_ref()),
             path.and_then(|p| p.stroke_gradient.as_ref()),
         ] {
-            let (kind, geometry) = match g.map(|g| g.geometry) {
+            let (kind, geometry, extra) = match g.map(|g| g.geometry) {
                 Some(crate::GradientGeometry::Linear { start, end }) => {
-                    (1u32, [start[0], start[1], end[0], end[1]])
+                    (1u32, [start[0], start[1], end[0], end[1]], [0.0; 4])
                 }
                 Some(crate::GradientGeometry::Radial { center, radius }) => {
-                    (2u32, [center[0], center[1], radius, 0.0])
+                    (2u32, [center[0], center[1], radius, 0.0], [0.0; 4])
                 }
-                None => (0u32, [0.0; 4]),
+                Some(crate::GradientGeometry::FocalRadial {
+                    center,
+                    radius,
+                    focal,
+                    focal_radius,
+                }) => (
+                    3u32,
+                    [center[0], center[1], radius, 0.0],
+                    [focal[0], focal[1], focal_radius, 0.0],
+                ),
+                Some(crate::GradientGeometry::Conic {
+                    center,
+                    start_angle,
+                    sweep_angle,
+                }) => (
+                    4u32,
+                    [
+                        center[0],
+                        center[1],
+                        start_angle.to_radians(),
+                        sweep_angle.to_radians(),
+                    ],
+                    [0.0; 4],
+                ),
+                None => (0u32, [0.0; 4], [0.0; 4]),
             };
             let stops = g.map_or(&[][..], |g| g.stops.as_slice());
+            let mode = g.map_or(0, |g| {
+                let spread = match g.spread {
+                    crate::GradientSpread::Pad => 0,
+                    crate::GradientSpread::Repeat => 1,
+                    crate::GradientSpread::Reflect => 2,
+                };
+                let interpolation = match g.interpolation {
+                    crate::GradientInterpolation::WorkingLinearPremultiplied => 0,
+                    crate::GradientInterpolation::WorkingLinearStraight => 1,
+                    crate::GradientInterpolation::SrgbStraight => 2,
+                    crate::GradientInterpolation::SrgbPremultiplied => 3,
+                };
+                spread | (interpolation << 2)
+            });
             params.extend(
-                [kind, stop_count, stops.len() as u32, 0]
+                [kind, stop_count, stops.len() as u32, mode]
                     .into_iter()
                     .flat_map(u32::to_le_bytes),
             );
             params.extend(geometry.into_iter().flat_map(f32::to_le_bytes));
+            params.extend(extra.into_iter().flat_map(f32::to_le_bytes));
+            for row in g.map_or([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], |g| g.transform) {
+                params.extend(
+                    [row[0], row[1], row[2], 0.0]
+                        .into_iter()
+                        .flat_map(f32::to_le_bytes),
+                );
+            }
             for stop in stops {
                 stop_bytes.extend(stop.paint.rgba.into_iter().flat_map(f32::to_le_bytes));
                 stop_bytes.extend(
@@ -181,6 +233,12 @@ impl ScenePass<'_> {
         }
         if stop_bytes.is_empty() {
             stop_bytes.resize(48, 0);
+        }
+        let mapping = path
+            .and_then(|p| p.stroke_geometry.as_ref())
+            .map_or([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], |g| g.output_to_local);
+        for row in mapping {
+            params.extend(row.into_iter().chain([0.0]).flat_map(f32::to_le_bytes));
         }
         let stop_buffer = self
             .gpu
@@ -277,8 +335,18 @@ impl ScenePass<'_> {
         let mut params = Vec::new();
         params.extend(
             [
-                u32::from(shadow.is_some()),
-                (weights.len() / 2) as u32,
+                if shadow.is_some() {
+                    if axis == 3 { 3 } else { 1 }
+                } else if axis == 2 {
+                    2
+                } else {
+                    0
+                },
+                if axis == 2 {
+                    (weights.len() / 3) as u32
+                } else {
+                    (weights.len() / 2) as u32
+                },
                 axis,
                 0,
             ]
@@ -368,19 +436,31 @@ impl ScenePass<'_> {
         source: &wgpu::Texture,
         effect: &PixelEffect,
     ) -> Result<wgpu::Texture, GpuError> {
-        let [sx, sy] = effect.sigma();
-        let horizontal = self.effect_pass(source, source, &crate::effect::kernel(sx)?, 0, None)?;
-        let blurred =
-            self.effect_pass(&horizontal, source, &crate::effect::kernel(sy)?, 1, None)?;
-        match effect {
-            PixelEffect::GaussianBlur { .. } => Ok(blurred),
-            PixelEffect::DropShadow { offset, .. } => self.effect_pass(
+        let blurred = if let Some(covariance) = effect.covariance() {
+            let taps = kronello_render::affine_gaussian_kernel(covariance).map_err(|_| {
+                GpuError::UnsupportedFeature("affine Gaussian covariance or kernel budget")
+            })?;
+            let weights: Vec<f32> = taps
+                .iter()
+                .flat_map(|t| [t.offset[0] as f32, t.offset[1] as f32, t.weight])
+                .collect();
+            self.effect_pass(source, source, &weights, 2, None)?
+        } else {
+            let [sx, sy] = effect.sigma();
+            let horizontal =
+                self.effect_pass(source, source, &crate::effect::kernel(sx)?, 0, None)?;
+            self.effect_pass(&horizontal, source, &crate::effect::kernel(sy)?, 1, None)?
+        };
+        if let Some((offset, _, _)) = effect.shadow() {
+            self.effect_pass(
                 &blurred,
                 source,
                 &[1.0],
-                0,
-                Some((*offset, crate::effect::shadow_color(effect, self.working))),
-            ),
+                if effect.covariance().is_some() { 3 } else { 0 },
+                Some((offset, crate::effect::shadow_color(effect, self.working))),
+            )
+        } else {
+            Ok(blurred)
         }
     }
     fn validate(&mut self) -> Result<(), GpuError> {
@@ -431,6 +511,54 @@ impl ScenePass<'_> {
         }
         let blank = self.blank.clone();
         let t = match &scene.nodes[id] {
+            DrawNode::Raster(pixels) => {
+                if pixels.len()
+                    != pixel_count(
+                        self.size.output_resolution[0],
+                        self.size.output_resolution[1],
+                    )?
+                {
+                    return Err(GpuError::InvalidInput("raster input dimensions"));
+                }
+                let texture = self.gpu.texture(
+                    self.size.output_resolution[0],
+                    self.size.output_resolution[1],
+                    wgpu::TextureFormat::Rgba16Float,
+                    wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                )?;
+                let bytes: Vec<_> = pixels
+                    .iter()
+                    .flat_map(|p| {
+                        let mut p = p.map(half::f16::from_f32);
+                        if p[3] == half::f16::ZERO {
+                            p[..3].fill(half::f16::ZERO);
+                        }
+                        p.into_iter().flat_map(|v| v.to_bits().to_le_bytes())
+                    })
+                    .collect();
+                self.gpu.queue.write_texture(
+                    wgpu::TexelCopyTextureInfo {
+                        texture: &texture,
+                        mip_level: 0,
+                        origin: wgpu::Origin3d::ZERO,
+                        aspect: wgpu::TextureAspect::All,
+                    },
+                    &bytes,
+                    wgpu::TexelCopyBufferLayout {
+                        offset: 0,
+                        bytes_per_row: Some(self.size.output_resolution[0] * 8),
+                        rows_per_image: Some(self.size.output_resolution[1]),
+                    },
+                    wgpu::Extent3d {
+                        width: self.size.output_resolution[0],
+                        height: self.size.output_resolution[1],
+                        depth_or_array_layers: 1,
+                    },
+                );
+                self.stats.cpu_upload_pixel_bytes += bytes.len() as u64;
+                self.stats.cpu_upload_pixel_operations += 1;
+                texture
+            }
             DrawNode::Path(path) => {
                 self.pass(0, (&blank, &blank), Some(path), 1.0, MaskKind::Alpha, None)?
             }
@@ -588,5 +716,29 @@ impl GpuContext {
             rgba16f,
             transfers: pass.stats,
         })
+    }
+    /// GPU-resident display output for native surfaces. Only the four-byte
+    /// shader validation status is read back; image pixels stay on the device.
+    pub fn render_scene_texture(
+        &self,
+        size: RenderSize,
+        scene: &DrawScene,
+        working: WorkingSpace,
+        transform: OutputTransform,
+    ) -> Result<wgpu::Texture, GpuError> {
+        let mut pass = self.scene_pass(size, scene, working)?;
+        let mut cache = vec![None; scene.nodes.len()];
+        let texture = pass.composite(scene, &scene.roots, &mut cache)?;
+        let blank = pass.blank.clone();
+        let output = pass.pass(
+            4,
+            (&texture, &blank),
+            None,
+            1.0,
+            MaskKind::Alpha,
+            Some(transform),
+        )?;
+        pass.validate()?;
+        Ok(output)
     }
 }

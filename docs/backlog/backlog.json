@@ -1,11 +1,11 @@
 {
   "schema_version": "0.5",
   "created": "2026-10-01",
-  "updated": "2026-10-04",
+  "updated": "2026-10-06",
   "status": "implementation_started",
   "description": "設計と実装の計画・進捗。このファイルがバックログの正本であり、GitHub等へ登録したIssueではない。",
   "specification": "docs/architecture/",
-  "task_count": 71,
+  "task_count": 77,
   "items": [
     {
       "id": "ARC-001",
@@ -543,7 +543,7 @@
       "priority": "P1",
       "area": "expression",
       "title": "型付きASTと有界式評価",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "EVAL-001",
         "API-001"
@@ -561,7 +561,7 @@
       "priority": "P1",
       "area": "layout",
       "title": "responsive layoutとbounds段階",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "TEXT-001",
         "VEC-001",
@@ -579,7 +579,7 @@
       "priority": "P1",
       "area": "template",
       "title": "長さ・縦横比variant・data入力・版移行",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "TEMPLATE-001",
         "LAYOUT-001"
@@ -597,7 +597,7 @@
       "priority": "P1",
       "area": "gui",
       "title": "macOSネイティブGUI: Canvas・階層・変換操作",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "FFI-001",
         "RENDER-001"
@@ -616,7 +616,7 @@
       "priority": "P1",
       "area": "gui",
       "title": "Dope sheetとCurve editor",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "GUI-001",
         "ANIM-001"
@@ -632,7 +632,7 @@
       "priority": "P1",
       "area": "audio",
       "title": "リアルタイム音声再生とA/V同期",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "AUDIO-000",
         "GUI-001"
@@ -649,7 +649,7 @@
       "priority": "P1",
       "area": "inspection",
       "title": "非表示原因・依存・レンダー経路のexplain",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "API-001",
         "LAYOUT-001",
@@ -666,7 +666,7 @@
       "priority": "P1",
       "area": "ffi",
       "title": "kronello-ffi: ネイティブGUI向けCommand/Query境界",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "API-001"
       ],
@@ -685,7 +685,7 @@
       "priority": "P1",
       "area": "test",
       "title": "GUI/CLI/MCP同等性と日本語IME",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "GUI-002",
         "MCP-001",
@@ -702,7 +702,7 @@
       "priority": "P1",
       "area": "integration",
       "title": "縦断デモ第2段階: GUI閲覧と縦型variant",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "INTEGRATION-001",
         "TEMPLATE-002",
@@ -714,12 +714,46 @@
       ]
     },
     {
+      "id": "GUI-003",
+      "milestone": "M3",
+      "priority": "P2",
+      "area": "gui",
+      "title": "macOS GUI: 編集ページ（Sequence のトラック・素材一覧・クリップの Inspector）",
+      "status": "done",
+      "dependencies": [
+        "GUI-001",
+        "NLE-002"
+      ],
+      "acceptance_criteria": [
+        "docs/design-system/screens/edit.md の配置で Project の素材一覧・Sequence の Viewer・クリップの Inspector・トラックを表示し、種類の色・選択・ASSET_MISSING を仕様どおりに示す",
+        "クリップの配置・トリム・ブレードを共通 command/event で行い、ドラッグ中は候補表示、確定時に 1 コマンドを発行する。Undo・外部変更・競合は GUI-001 と同じ扱いにする",
+        "Composition クリップからモーションページへ移り、その Composition を開ける"
+      ]
+    },
+    {
+      "id": "GUI-004",
+      "milestone": "M3",
+      "priority": "P2",
+      "area": "gui",
+      "title": "macOS GUI: テンプレートページと書き出しページ",
+      "status": "done",
+      "dependencies": [
+        "GUI-001",
+        "TEMPLATE-002",
+        "INSPECT-001"
+      ],
+      "acceptance_criteria": [
+        "docs/design-system/screens/template.md の配置で variant を並べて layout/ink/visual bounds と TEMPLATE_OVERFLOW 等の診断を表示し、公開入力・版の差分計画・尺のポリシーを共通 API で扱う。既存配置を暗黙に更新しない",
+        "docs/design-system/screens/export.md の配置で書き出し設定・書き出し前の確認・ジョブ一覧を表示し、型付きエラーがある間は書き出しを開始できない。投入した job は固定 snapshot の独立 worker で実行し、進捗・失敗を JobRow で示す"
+      ]
+    },
+    {
       "id": "VEC-004",
       "milestone": "M3",
       "priority": "P2",
       "area": "vector",
       "title": "グラデーションの拡張",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "VEC-003"
       ],
@@ -738,7 +772,7 @@
       "priority": "P2",
       "area": "vector",
       "title": "線の拡張: 破線・線の位置・非一様変換",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "VEC-003"
       ],
@@ -754,7 +788,7 @@
       "priority": "P1",
       "area": "timeline",
       "title": "動画Asset/Generator ClipとTimeline編集の拡張",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "NLE-001",
         "MEDIA-001",
@@ -773,7 +807,7 @@
       "priority": "P1",
       "area": "audio",
       "title": "Sequence音声trackのA/V muxとclip音量",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "NLE-001",
         "AUDIO-000",
@@ -793,7 +827,7 @@
       "priority": "P1",
       "area": "audio",
       "title": "リタイム音声・audio effects・Generator音声",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "AUDIO-003",
         "ANIM-001"
@@ -801,6 +835,7 @@
       "acceptance_criteria": [
         "retimed audioのTimeMap・補間・pitchの扱いを設計して意味版を固定し、線形/区分線形map、trim/stretch、非整数sample境界で同期とsource範囲を検証する",
         "audio effectsとGenerator音声の純粋評価・資源予算・固定入力の契約を定義し、同じsnapshotを任意順のbatchで評価して一致することを検証する",
+        "Sequenceのcrossfadeに含まれる音声clipの音声crossfade（曲線・意味版・sample境界）を定義して検証し、現行のUNSUPPORTED_FEATUREを対応範囲内で解消する",
         "未対応map・effect・Generator、予算超過や非有限値を型付きエラーにし、暗黙の速度1・無音・clampで続行しない"
       ]
     },
@@ -810,7 +845,7 @@
       "priority": "P1",
       "area": "media",
       "title": "追加movie job profileと圧縮音声",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "MEDIA-001",
         "AUDIO-000",
@@ -829,7 +864,7 @@
       "priority": "P1",
       "area": "render",
       "title": "長尺・大解像度exportのstreaming",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "JOB-001",
         "AUDIO-000",
@@ -848,7 +883,7 @@
       "priority": "P1",
       "area": "mcp",
       "title": "MCP HTTP・resources/prompts・進捗とキャンセル",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "MCP-001",
         "JOB-001"
@@ -867,7 +902,7 @@
       "priority": "P1",
       "area": "jobs",
       "title": "Windows workerのdetachと各OSの実プロセス検証",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "JOB-001",
         "MCP-001"
@@ -875,7 +910,9 @@
       "acceptance_criteria": [
         "WindowsでCLI/MCPの終了から独立するworker起動・stdio/log・回収の契約を実装し、親終了後も固定入力のジョブが継続することを実機またはCIで検証する",
         "Windowsの上書き禁止publicationを設計し、同一volume・既存file/空directoryの拒否・cancel/lease競合を実プロセスで検証する",
-        "Linux/WindowsでFIFO slot・queued/running heartbeat・強制終了後のinterrupted・pruneを検証し、OS/版/コマンド/exitを記録する。未検証OSを保証経路に昇格しない"
+        "Linux/WindowsでFIFO slot・queued/running heartbeat・強制終了後のinterrupted・pruneを検証し、OS/版/コマンド/exitを記録する。未検証OSを保証経路に昇格しない",
+        "高負荷時（load average 50 前後）に CLI の job テスト（例: sequence_target_job_preserves_placements_after_trim_and_project_removal）が Queued のまま 60 秒で timeout する事象を再現・原因調査し、状態 DB の lock 競合下でも job が開始されることを検証する",
+        "テストが失敗・時間切れになっても、起動した detached worker（`kronello worker --job`）を必ず回収し、テスト後に孤立 process を残さないことを検証する（2026-10-05 に最長14時間残った worker を6件確認）"
       ]
     },
     {
@@ -884,7 +921,7 @@
       "priority": "P2",
       "area": "effects",
       "title": "非一様affine下のblur/shadow",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "FX-001"
       ],
@@ -899,7 +936,7 @@
       "priority": "P2",
       "area": "api",
       "title": "scene検索・paging・固定履歴cursorとevent stream",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "API-001",
         "INTEGRATION-001"
@@ -917,7 +954,7 @@
       "priority": "P2",
       "area": "service",
       "title": "project作成/importの計画・冪等性とModifier編集",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "SERVICE-001",
         "API-001"
@@ -934,7 +971,7 @@
       "priority": "P1",
       "area": "release",
       "title": "同梱FFmpegを含む配布packageの再配置・署名検証",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "MEDIA-001",
         "AUDIO-000",
@@ -1250,6 +1287,70 @@
       "acceptance_criteria": [
         "素材/フォント/engine versionsをworker間で照合する",
         "未ベイクstateful区間を任意frameへ自由分割しない"
+      ]
+    },
+    {
+      "id": "COMP-002",
+      "milestone": "M4",
+      "priority": "P1",
+      "area": "render",
+      "title": "Composition の Media ノード（画像・映像）と MediaSlot の描画",
+      "status": "planned",
+      "dependencies": [
+        "TEMPLATE-002",
+        "NLE-002"
+      ],
+      "acceptance_criteria": [
+        "Composition の Media ノードを素材参照・source time・色契約つきで描画し、CPU 参照と明示 GPU 実行で検証する",
+        "TEMPLATE-002 の MediaSlot 入力を最終レンダーへ接続し、素材不足・hash 不一致は型付き失敗にする"
+      ]
+    },
+    {
+      "id": "MCP-003",
+      "milestone": "M4",
+      "priority": "P2",
+      "area": "api",
+      "title": "MCP 2026-07-28 版（server/discover・要求ごとの版指定）への対応",
+      "status": "planned",
+      "dependencies": [
+        "MCP-002"
+      ],
+      "acceptance_criteria": [
+        "2026-07-28 版の server/discover と要求ごとの版指定を、2025-11-25 版の initialize と併存させて実装し、同じ Command/Query registry・schema・型付き結果へ到達することを外部 client SDK で検証する",
+        "未対応の版や機能を対応済みとして広告しない"
+      ]
+    },
+    {
+      "id": "FFI-002",
+      "milestone": "M4",
+      "priority": "P2",
+      "area": "gui",
+      "title": "GUI セッション中の安全モード排他の保持",
+      "status": "planned",
+      "dependencies": [
+        "GUI-001"
+      ],
+      "acceptance_criteria": [
+        "安全モードで開いたプロジェクトについて、GUI を開いている間は他プロセス（CLI / MCP）が PROJECT_LOCKED になるよう、FFI / service の store の寿命を GUI セッションに合わせる",
+        "GUI を閉じたとき・異常終了したときに lock が解放され、再 open できることを実プロセスで検証する"
+      ]
+    },
+    {
+      "id": "MEDIA-003",
+      "milestone": "M4",
+      "priority": "P1",
+      "area": "media",
+      "title": "Windows の FFmpeg 実行時読み込みと CLI/MCP の Windows ビルド",
+      "status": "planned",
+      "dependencies": [
+        "MEDIA-001",
+        "JOB-002",
+        "RELEASE-001"
+      ],
+      "acceptance_criteria": [
+        "kronello-media の native 読み込み（dlfcn / pkg-config 前提）を Windows の LGPL FFmpeg 共有 library に対応させ、CLI / MCP を Windows でビルドする",
+        "Windows で ProRes / PCM24 と AV1 の書き出し・roundtrip、capabilities を実行し、OS / 版 / コマンド / exit を記録する",
+        "JOB-002 で jobs / platform 層だけを検証した Windows の detached worker を、実際の `kronello worker --job` で親終了後も継続することを CI で検証する"
       ]
     }
   ]

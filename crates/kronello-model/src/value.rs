@@ -44,6 +44,7 @@ pub enum ValueType {
     Enum,
     String,
     AssetRef,
+    DataTable,
     Path,
 }
 
@@ -175,7 +176,7 @@ pub struct Path {
     pub segments: Vec<PathSegment>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, schemars::JsonSchema)]
 #[serde(
     tag = "kind",
     content = "value",
@@ -197,7 +198,47 @@ pub enum PathSegment {
     Close,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+impl<'de> Deserialize<'de> for PathSegment {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let wire = crate::wire::Adjacent::deserialize(d)?;
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Quad {
+            control: [FiniteF64; 2],
+            end: [FiniteF64; 2],
+        }
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Cubic {
+            control1: [FiniteF64; 2],
+            control2: [FiniteF64; 2],
+            end: [FiniteF64; 2],
+        }
+        match wire.kind.as_str() {
+            "move_to" => wire.value().map(Self::MoveTo),
+            "line_to" => wire.value().map(Self::LineTo),
+            "quad_to" => {
+                let p: Quad = wire.value()?;
+                Ok(Self::QuadTo {
+                    control: p.control,
+                    end: p.end,
+                })
+            }
+            "cubic_to" => {
+                let p: Cubic = wire.value()?;
+                Ok(Self::CubicTo {
+                    control1: p.control1,
+                    control2: p.control2,
+                    end: p.end,
+                })
+            }
+            "close" => wire.unit(Self::Close),
+            _ => Err(wire.unknown(&["move_to", "line_to", "quad_to", "cubic_to", "close"])),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, schemars::JsonSchema)]
 #[serde(
     tag = "kind",
     content = "value",
@@ -215,7 +256,40 @@ pub enum Value {
     Enum(String),
     String(String),
     AssetRef(AssetId),
+    DataTable(DataTable),
     Path(Path),
+}
+
+impl<'de> Deserialize<'de> for Value {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let wire = crate::wire::Adjacent::deserialize(d)?;
+        match wire.kind.as_str() {
+            "scalar" => wire.value().map(Self::Scalar),
+            "vec2" => wire.value().map(Self::Vec2),
+            "vec3" => wire.value().map(Self::Vec3),
+            "angle" => wire.value().map(Self::Angle),
+            "color" => wire.value().map(Self::Color),
+            "bool" => wire.value().map(Self::Bool),
+            "enum" => wire.value().map(Self::Enum),
+            "string" => wire.value().map(Self::String),
+            "asset_ref" => wire.value().map(Self::AssetRef),
+            "data_table" => wire.value().map(Self::DataTable),
+            "path" => wire.value().map(Self::Path),
+            _ => Err(wire.unknown(&[
+                "scalar",
+                "vec2",
+                "vec3",
+                "angle",
+                "color",
+                "bool",
+                "enum",
+                "string",
+                "asset_ref",
+                "data_table",
+                "path",
+            ])),
+        }
+    }
 }
 impl Value {
     pub const fn value_type(&self) -> ValueType {
@@ -229,7 +303,16 @@ impl Value {
             Self::Enum(_) => ValueType::Enum,
             Self::String(_) => ValueType::String,
             Self::AssetRef(_) => ValueType::AssetRef,
+            Self::DataTable(_) => ValueType::DataTable,
             Self::Path(_) => ValueType::Path,
         }
     }
+}
+
+/// Inline material data; columns are explicit and every row has the same shape.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DataTable {
+    pub columns: std::collections::BTreeMap<String, ValueType>,
+    pub rows: Vec<std::collections::BTreeMap<String, Value>>,
 }

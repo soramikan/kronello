@@ -146,6 +146,38 @@
       "bytes": 2048,
       "sha256": "05b1bec7de126e01a74a919ba497675fa9493838a43905e2fc639b73dbad272c"
     },
+    "fx002-nonuniform-rotation/frame-0.png": {
+      "bytes": 397,
+      "sha256": "e1b671df6eb8d47f045d61b96a92e116dc809df1664fe68db2728041c5d039d3"
+    },
+    "fx002-nonuniform-rotation/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "0ee6ce2d1c33ae928a03c2641c3ad8f5eb06240582316a5ac5bc094dfbf4e9b0"
+    },
+    "fx002-reflected-shear-shadow-rec2020/frame-0.png": {
+      "bytes": 404,
+      "sha256": "006259492451449344d76dcdc6cfd1ddf044de9129c6155b7ca17ae6e62353f2"
+    },
+    "fx002-reflected-shear-shadow-rec2020/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "ef09a6bdfa3a6dcf077ad87016f6d543e14dd8f7549c4684e7fc474d32dd07c3"
+    },
+    "fx002-rotation/frame-0.png": {
+      "bytes": 322,
+      "sha256": "6922c4f252aabfd8f0b7eedd6513f9bef1280d71e49e6cf7bd431f7afdbdc26e"
+    },
+    "fx002-rotation/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "f78c72448ac7d82b76acdd6f3554dd8153c68f128c14aa09a2537c93e92ed87e"
+    },
+    "fx002-shear-shadow/frame-0.png": {
+      "bytes": 442,
+      "sha256": "7e1df999d79b5436cf695f3aad1100f00fd1c103b8caa0893ae1165f95e3692f"
+    },
+    "fx002-shear-shadow/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "0790baf7f984629bdca613c217cd4e49ab7cfb628d818b0c393cd3d0863921a9"
+    },
     "glyph-outline-edges/frame-0.png": {
       "bytes": 576,
       "sha256": "8a940ae2fd380ab13c67ab9b9195789973b7d1d6a4ba22edaa642c1c5ef348e8"
@@ -154,13 +186,37 @@
       "bytes": 8192,
       "sha256": "73f23877c510f06ba9825ebb08c74ee70237e3eb816aa76bd8ab4581a02dfae6"
     },
+    "gradient-conic/frame-0.png": {
+      "bytes": 1615,
+      "sha256": "2ae7642d2b732b3b02b57f057ba4aab74dc409e84cd15e5bf8ff7a09c1b0e518"
+    },
+    "gradient-conic/frame-0.rgba16f": {
+      "bytes": 8192,
+      "sha256": "bf2d55615296cdc24fe60c6a3d23fa1a0b5b135bbe6481dd5520337c0e0c21be"
+    },
+    "gradient-focal-radial/frame-0.png": {
+      "bytes": 2940,
+      "sha256": "92d1c95a0190ae8866f4953914a84fac7a87cb13bc8a12f409c7bb20a1ef2d13"
+    },
+    "gradient-focal-radial/frame-0.rgba16f": {
+      "bytes": 8192,
+      "sha256": "f0d66599119fa0d20c05a121dc15ddb3efd0fd6f9b9a7f457c9cccd4033cbd9b"
+    },
     "gradient-linear-fill-stroke/frame-0.png": {
       "bytes": 877,
       "sha256": "226e0a42b3c2822d838b77936f3aefa53983adc537da2b5f848752ee8fc82665"
     },
     "gradient-linear-fill-stroke/frame-0.rgba16f": {
       "bytes": 8192,
-      "sha256": "1cc98b5be14eb08af55a2978b1d2acfd0b14570f1b84d146ab3469ace12eb402"
+      "sha256": "91f8218e345d1bd2f04304fafae378cb50b8157aa2f8879439e7a5d3de204de7"
+    },
+    "gradient-linear-straight/frame-0.png": {
+      "bytes": 1272,
+      "sha256": "c4eb92a71b03cf32d818adbb0f315a3fcd0f42134623c9e866956293fcd510bb"
+    },
+    "gradient-linear-straight/frame-0.rgba16f": {
+      "bytes": 8192,
+      "sha256": "7a68025155c74911d28e4cc06fa0e014c488f781c095a136bd86a180ebf0c009"
     },
     "gradient-radial-fill-stroke/frame-0.png": {
       "bytes": 1029,
@@ -169,6 +225,46 @@
     "gradient-radial-fill-stroke/frame-0.rgba16f": {
       "bytes": 8192,
       "sha256": "0ec00cc63de68c87d18f3515cd5383fa24a3ed972543f58a2c5abe61a7601d20"
+    },
+    "gradient-reflect/frame-0.png": {
+      "bytes": 2065,
+      "sha256": "f51f27e5e28c3855db9c324ddf0478ebf8b04018e908fd9f958fdf36be182c18"
+    },
+    "gradient-reflect/frame-0.rgba16f": {
+      "bytes": 8192,
+      "sha256": "71b05d41782208b4fc7519c49cbee706a3834562c9d953232721b7d69cc99b04"
+    },
+    "gradient-repeat/frame-0.png": {
+      "bytes": 2085,
+      "sha256": "98e4bebd177cf7f2194e70d38e0eb613a990481158c78e253620baf2fb420983"
+    },
+    "gradient-repeat/frame-0.rgba16f": {
+      "bytes": 8192,
+      "sha256": "f9330637b41eea711df6470864807492d4ad7f6dcf2a312626d7d28e254c2f25"
+    },
+    "gradient-srgb-premultiplied/frame-0.png": {
+      "bytes": 1018,
+      "sha256": "b075da13bf5ff327165166543a5d9553c5c570811c95261db5c2edd7859952d8"
+    },
+    "gradient-srgb-premultiplied/frame-0.rgba16f": {
+      "bytes": 8192,
+      "sha256": "9151bc427ab5e87d3502708efeacc735bbad1b0494b6dd32f797f8b11a8bcede"
+    },
+    "gradient-srgb-straight/frame-0.png": {
+      "bytes": 1137,
+      "sha256": "54b35f77003adc22f324487371282d043babf39c2d8baaf7286384a492dc14dd"
+    },
+    "gradient-srgb-straight/frame-0.rgba16f": {
+      "bytes": 8192,
+      "sha256": "5c626d9c5a1d4367ae495dd3118e3d4bcf29975d29bd5bd60ee79914fb75dda9"
+    },
+    "gradient-text-fill/frame-0.png": {
+      "bytes": 1092,
+      "sha256": "298c87c73ba0bbcc50e1af7baafbe1692718bbf61aebc845e0c94e20d739b638"
+    },
+    "gradient-text-fill/frame-0.rgba16f": {
+      "bytes": 8192,
+      "sha256": "4c1a77ddc9b4797d2999c32cdd7271b2a84bf5772baf3d0946956a4795309a8a"
     },
     "hdr-no-clamp/frame-0.png": {
       "bytes": 70,
@@ -203,12 +299,12 @@
       "sha256": "a8a5e6d38abbaff24c17fbd6eac7ad7059ae7b1fb0b722c194be078c516e559a"
     },
     "manifest.json": {
-      "bytes": 81243,
-      "sha256": "caf4df15b26a6bf15f351dae27960df47fdff1ae971de26534db39bcaa70ab46"
+      "bytes": 176618,
+      "sha256": "a96f5f37447451583f88cfaa4ee930a3654ff8f4fe57b229ff9a76fd8e5e362a"
     },
     "provenance.json": {
       "bytes": 1405,
-      "sha256": "7884dad2a2c4d6200cc2c2acadad1921b3a5578ed260c7451f7f5631a61c1c44"
+      "sha256": "6d3fd9684a76ab1b679da25cfd0993fc6775e6cff1c4146ba348480617e9f74e"
     },
     "rec2020-conversion/frame-0.png": {
       "bytes": 91,
@@ -246,6 +342,14 @@
       "bytes": 32,
       "sha256": "3350080c8c88204204ca18d5713dca70a32197d080e86a376e70ba172b341082"
     },
+    "stroke-affine-reflected/frame-0.png": {
+      "bytes": 391,
+      "sha256": "3f033263040b19642487724d5d5852a745fbcf0f0cd591b4255d06e091a76d98"
+    },
+    "stroke-affine-reflected/frame-0.rgba16f": {
+      "bytes": 8192,
+      "sha256": "69a1248c34d079c2b3c6e2d49290a83faaa0e21de5fae3278fe56703a627dc28"
+    },
     "stroke-caps/frame-0.png": {
       "bytes": 196,
       "sha256": "4ead1a67e082afd3a892c6c0e83d4e41958fd632b1bf0c0351f89c46c1ff54e0"
@@ -253,6 +357,22 @@
     "stroke-caps/frame-0.rgba16f": {
       "bytes": 8192,
       "sha256": "e32edc33a1f1af2b7fce1425df32ff5c44d13d677a7bafa117fd89a22bd1df6a"
+    },
+    "stroke-dashes/frame-0.png": {
+      "bytes": 395,
+      "sha256": "6db396aac3e3dbee9261140238a14435762d45dd08d544cd0245441ae287f618"
+    },
+    "stroke-dashes/frame-0.rgba16f": {
+      "bytes": 8192,
+      "sha256": "ffcada3fa74dd3fc012555bfd5542f164a110327a6081696a21abdf27b638fdb"
+    },
+    "stroke-inside-evenodd/frame-0.png": {
+      "bytes": 370,
+      "sha256": "21f59210b97f817311ed63b055a3aaf01e14d0fce99744f06b4b1407ffa215c1"
+    },
+    "stroke-inside-evenodd/frame-0.rgba16f": {
+      "bytes": 8192,
+      "sha256": "e3299ba6891ffdc71c694a9d3de278540065b4f1d9724b3990593bf6ec8dd2a1"
     },
     "stroke-joins/frame-0.png": {
       "bytes": 188,
@@ -270,6 +390,14 @@
       "bytes": 8192,
       "sha256": "df92af6ce09c4ead78cd91f9036e06c617b80744ade77ace4ec94984ce966d4d"
     },
+    "stroke-outside-nonzero/frame-0.png": {
+      "bytes": 447,
+      "sha256": "b3a4bacc1ee504d3b478b931a4b949d7f54378f449d6372763269e523ef4121a"
+    },
+    "stroke-outside-nonzero/frame-0.rgba16f": {
+      "bytes": 8192,
+      "sha256": "1845e8236ea855d6df6ff9c8a8f0c333204b83b76dc95142c8d0b3622308d925"
+    },
     "translated-rotation/frame-0.png": {
       "bytes": 106,
       "sha256": "6689291a3cfcbb4f639301f417f141e267d3eb50ed6019e805db33c82caf099b"
@@ -280,20 +408,20 @@
     }
   },
   "provenance": {
-    "cargo_lock_sha256": "e01846f40a2a5a42f88a73ce349e6a47aaa7f3c9d11d42e7c18e535b243ef1d5",
+    "cargo_lock_sha256": "08d36befc4a4d928cbb89d068036222f4a23c873730df39d94d10d3a7b5cd129",
     "color_code_sha256": "bd0c5e95f8be0f9bcf0bc78010d1b82dbbf4907d51a549c0086513223968a66f",
     "comparison_code_sha256": "0f09357830b18b3abd193030880e442a65171954f5774e399a4bb0d17f7b2112",
-    "draw_fixture_code_sha256": "40783b790c665b926719608b5f522368779f52c363c0700dcc68a98fc9c2b009",
-    "effect_kernel_code_sha256": "3655056ada69aeb8c45d264dc9e10daabd8033fe977bb834724422cf45499b10",
-    "effect_reference_code_sha256": "16d0b181ceb0b553d615312cdeb90a6530bd5580f410a90209fa7d0f46163557",
-    "effect_shader_sha256": "7ae56f997884dcf79d585b16840e60fecd7ff249448a7971be5d573fa51b8450",
-    "fixture_manifest_sha256": "23b6aa0470bc2500a6995e31f64918b1fceed158bde7e12a4557941fcf1d4dd3",
-    "renderer_code_sha256": "3e401aebbb2fc48b17fb4dd0a624e5d862ddaace22b8c055324055ea4cc9b1cb",
-    "revision": "f5748b3ec9032a3b19782d89b7f350269788269a",
-    "scene_code_sha256": "eae3c3e2dc16172810badbdc209d9575a08ce02e0889c168d14d0fe30e4dc486",
-    "scene_gpu_code_sha256": "2fae7af6f6828141d807c90d9ca8ac0e17056e233f81fa31e5a8a259ab2d11ef",
-    "scene_reference_code_sha256": "9574f50c7a4f458676371b617376cdfc615d4bd35fe33b8aeff66b4c057a75a6",
-    "scene_shader_sha256": "bca46978684f4aab0b6f41db5ce74964bf221e26e13d64b00df10e5a2ded1b09",
+    "draw_fixture_code_sha256": "6d517fc60ede21eea9abfa338bc1720b1bcf064bf5cc1c449696372ebcec96b8",
+    "effect_kernel_code_sha256": "410950ce1720fd8da961fa257a959311e402110ab792d0800f9cc6aa0edd2e0e",
+    "effect_reference_code_sha256": "ac4bd1ba138e663a0a9b21106d935849dac385e963584d87df6586a68e397fde",
+    "effect_shader_sha256": "8a985ae2a71f0b1b802f18a406bb7cd77cef96c7b0c963e29b6f06b4ed8bc292",
+    "fixture_manifest_sha256": "13060d35e1ed680a0666197b3d0a6de2606933030f43fda63c169923377aec22",
+    "renderer_code_sha256": "77ea8d93a4f758b74747b553aa2edb2eac8cfded0cc75d214feafdb8fffa06b2",
+    "revision": "2ce3d81fe776b4c8d67f90610025d3d0e671401f",
+    "scene_code_sha256": "5c27cfa51225e6f0ee2d829d68673b3c767745114d7d3e92459d10052576ddc7",
+    "scene_gpu_code_sha256": "5b15fcaec1b082b6a6f55bef6da4295551f2bafd97adb07f72ab750791af5e5e",
+    "scene_reference_code_sha256": "91002bf4b7335ebd7c0f33e7d34d24132c84e725dcdb818f49dbba450b5deb31",
+    "scene_shader_sha256": "d2f84a4b8ecdc71e27e428deeee9bd6d129b71bdbb3de4ed7470416e3bae2738",
     "shader_sha256": "f78694ed5b0dbc653a28601fb6f2d319e9b8d9ed0e02cb60cc8dfad6b5b8c069",
     "status": ""
   },
@@ -644,6 +772,246 @@
         "num": "0"
       },
       "working_space": "LinearRec2020"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "gradient-repeat",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "gradient-reflect",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec2020"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "gradient-focal-radial",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "gradient-conic",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec2020"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "gradient-linear-straight",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "gradient-srgb-straight",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec2020"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "gradient-srgb-premultiplied",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "gradient-text-fill",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec2020"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx002-rotation",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx002-nonuniform-rotation",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx002-shear-shadow",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx002-reflected-shear-shadow-rec2020",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec2020"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "stroke-dashes",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "stroke-inside-evenodd",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "stroke-outside-nonzero",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "stroke-affine-reflected",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        32,
+        32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
     },
     {
       "alpha": "premultiplied",

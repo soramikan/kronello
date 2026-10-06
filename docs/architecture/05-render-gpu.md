@@ -1,5 +1,13 @@
 # 05 レンダラーと GPU
 
+## NLE-002 の動画 / Generator / clip effects
+
+Sequence compiler は Composition の独立 instance に加え、動画 Asset の明示 stream / rational PTS 要求と `kronello.solid` version 1 を同じ Scene IR / Render DAG へ lowering する。Clip.properties は配置 transform / effects を Sequence time で評価する。動画は native dimensions、Generator は Sequence extent を local rectangle とする。track 順は下→上、transition の同一 track 内は開始時刻順。effects の後に crossfade incoming の opacity を掛ける。
+
+`VideoRenderBackend` は固定 DAG に入った Asset hash / locator だけを解決する。元 Project を再読込しない。software seek / decode、明示 SDR RGBA8 color conversion / inverse transfer / premultiply、CPU nearest sampling、選択 GPU への明示 RGBA16F upload を通す。未知 format / HDR / 色 tag、asset 欠落 / hash mismatch は typed error。タグ欠落時の明示 default（YUV: BT.709 limited、RGB: sRGB full）は sequence.query に assumptions として見える。native plane decode API の HDR 保持をこの SDR renderer の対応と同一視しない。
+
+clip effects は FX-001 / FX-002 の版付き ordered DAG、affine 契約、halo / backward ROI、raster identity を共有する。`FrameMetadata.input_path` は active video の CPU decode / color / sampling と selected backend の経路を表し、GPU の低層 TransferStats は upload bytes / operations を数える。GPU-resident decode、frame interpolation、tile 間の decode cache は追加していない。CPU / GPU 比較の実行範囲は [NLE-002 の検証](../testing/nle-002.md)、時間・色・Generator と transition の意味版は [ADR-0062](../adr/0062-video-generator-and-timeline-edits.md) を参照する。
+
 ## レンダー要求
 
 ```text
@@ -19,7 +27,7 @@ RenderRequest:
 ノードは要求に応じて必要な入力時刻・領域を返す。出力ポートは Color / Mask を初期実装し、Depth / MotionVector / Normal は将来の型として境界を確保する。
 値の評価と GPU コマンド発行を分離する。純粋モデル層は `wgpu::Texture` や `AVFrame` を保持しない。
 
-NLE-001 の `RenderTarget::Composition / Sequence` は `render.frame` / `render.sequence` の両方で使う。Sequence を ClipId による独立 instance と active_range を持つ実行用 Composition に lower し、既存 Scene IR / DAG で track の下→上に合成する。空白区間は透明。保存文書の Composition を追加・変更せず、snapshot の owned Project に元の Sequence と全配置を固定する。Sequence の working_space が profile の正本で、復元 snapshot の不一致は拒否する。CPU-reference は明示指定し、GPU の暗黙 fallback はない。画像連番には音声を含めず、音声 Bus は service の `mix_sequence_audio` へ明示入力する。Asset / Generator 動画 Clip、clip effects、Sequence A/V mux は後続範囲。[ADR-0051](../adr/0051-nle-placement-and-retime.md)、[検証記録](../testing/nle-001.md) を参照。
+NLE-001 の `RenderTarget::Composition / Sequence` は `render.frame` / `render.sequence` の両方で使う。Sequence を ClipId による独立 instance と active_range を持つ実行用 Composition に lower し、既存 Scene IR / DAG で track の下→上に合成する。空白区間は透明。保存文書の Composition を追加・変更せず、snapshot の owned Project に元の Sequence と全配置を固定する。Sequence の working_space が profile の正本で、復元 snapshot の不一致は拒否する。CPU-reference は明示指定し、GPU の暗黙 fallback はない。画像連番には音声を含めず、音声 Bus は service の `mix_sequence_audio` へ明示入力する。NLE-001 時点では Asset / Generator 動画 Clip と clip effects を延期し、NLE-002 が追加した（冒頭の節を参照）。Sequence A/V mux は後続範囲。[ADR-0051](../adr/0051-nle-placement-and-retime.md)、[検証記録](../testing/nle-001.md) を参照。
 
 render は Scene IR と評価値を受け取り、具象 backend の実装を上位から渡された契約越しに呼ぶ。コード依存の向きは [ADR-0043](../adr/0043-semantic-dependencies-and-units.md) に従う。出力領域は左上原点の画素単位で、画素 `(i, j)` の中心は `(i+0.5, j+0.5)`。設計単位 `design_px` と区別する。
 
@@ -36,6 +44,38 @@ OpenFX の入力領域 / 必要フレームの問い合わせに似た契約を�
 - opacity / coverage は premultiplied RGB と alpha の両方に掛け、画像の補間・blur・蓄積も premultiplied 値で行う。alpha / coverage は有限の `[0, 1]`、alpha = 0 の内部 RGB はゼロとする。HDR RGB の負値・1 超を alpha の範囲に clamp しない。
 - 外部アダプターは `straight / premultiplied / opaque` と関連付け空間を明示する。非線形色変換は straight RGB に行い、外部入出力の unpremultiply 時は `a > 2^-16` で除算、それ以下は RGB をゼロとし alpha は保持する。内部 effect の unpremultiply はゼロだけを特別扱いし、内部画像に閾値を適用しない。
 - alpha を持たない出力は明示した背景へ合成する。外部 alpha 変換、閾値の境界、マット境界を検証する。詳細と新規に固定した契約は [ADR-0044](../adr/0044-color-and-alpha-contracts.md) を参照。
+
+### VEC-005 の版付き stroke coverage
+
+`vec003-centered-stroke-v1` は従来の output-space 展開を維持する。
+明示 `Stroke.options` の `vec005-local-stroke-v2` は bounded dash subdivision 後、
+局所矩形・三角形・円を CPU / WGSL で共有し、AA sample の逆 affine で被覆を判定する。
+inside / outside の fill-rule clip は paint の有無に依存しない。
+非一様 scale / skew / reflection の線幅は局所線に変換を適用した幅になる。
+semantic bounds は局所 support を変換し、pixel bounds / backward ROI は row の絶対値和で halo を包含する。
+snapshot は旧 stroke 版も認識するが、旧版に固定した snapshot で新 options を実行しない。
+cache / golden draw manifest は実際の版と dash / phase / alignment / local primitive 入力を固定する。
+[ADR-0073](../adr/0073-local-stroke-extensions.md)、[VEC-005 検証](../testing/vec-005.md) を参照。
+Metal parity / baseline 採用は host run 待ちであり、CPU・Naga 合格とは区別する。
+
+### VEC-004 の gradient paint
+
+[ADR-0066](../adr/0066-explicit-gradient-semantics.md) の版 1 options を各 gradient に保持する。
+coverage サンプルの座標を node / ROI の逆写像、各 gradient の bbox / affine 逆写像で gradient 空間へ移す。
+parameter → pad / repeat / reflect → stop の補間 → 作業用線形 premultiplied paint の順。
+補間空間と alpha association は独立の意味で、sRGB straight / premultiplied 補間も合成前に decode する。
+text も同じ shader / CPU reference の paint 経路を使い、shaping cluster を作り直さない。
+sampling の座標・焦点円の判別式・NaN parameter・周期 spread の無限 parameter は、
+CPU の面検証と GPU の sticky validation flag で型付きエラーにし、stop 色へ置換しない。
+旧 pad の無限 parameter は VEC-003 と同じ端点色を維持する。
+
+`SemanticVersions.gradient_interpolation` は `vec004-explicit-interpolation-v1`。
+個々の `interpolation_version` と全 options / stop / transform を raster identity に含める。
+旧固定 snapshot は意味版の不一致を拒否し、旧 Project の省略 options は従来値へ正規化する。
+16bit PNG / RGBA16F は従来の出力規約を維持し、VEC-004 では dither を追加しない。
+native preview の Bgra8Unorm は banding の可能性を残す。8bit 出力 / preview の対策は将来の量子化境界で検討する。
+Metal 実機の一致・32 シーンの新 golden 候補生成 / 明示採用 / 比較は host run 待ち。
+[検証記録](../testing/vec-004.md) の残件を完了するまで GPU の受け入れ成功と扱わない。
 
 ## 色
 
@@ -75,9 +115,13 @@ OpenFX の入力領域 / 必要フレームの問い合わせに似た契約を�
 
 ## 基本エフェクト
 
-FX-001 は `SceneNode.effects` の順序付き stack と `DagNode::Effect` を実装する。sigma / offset / color / opacity はノード所有 Property で、評価済み `ResolvedEffect` を Scene IR に保持する。blur はローカル `design_px` の sigma を変換・出力倍率で画素へ写し、`radius = ceil(3σ)` の正規化 Gaussian を水平・垂直に畳み込む。透明 edge mode、内部線形 premultiplied RGBA16F と明示した binary16 RNE 面境界（CPU oracle も同じ丸め）を使い、shadow は blurred source alpha にタグ付き straight 色・opacity を掛けて source の下へ合成する。等方変換に対応し、正の sigma に対する非一様変換は型付き未対応。
+FX-001 は `SceneNode.effects` の順序付き stack と `DagNode::Effect` を実装する。sigma / offset / color / opacity はノード所有 Property で、評価済み `ResolvedEffect` を Scene IR に保持する。blur はローカル `design_px` の sigma を変換・出力倍率で画素へ写し、`radius = ceil(3σ)` の正規化 Gaussian を水平・垂直に畳み込む。透明 edge mode、内部線形 premultiplied RGBA16F と明示した binary16 RNE 面境界（CPU oracle も同じ丸め）を使い、shadow は blurred source alpha にタグ付き straight 色・opacity を掛けて source の下へ合成する。version 1 は等方変換に対応し、正の sigma に対する非一様変換は型付き未対応。この旧版の画素・制限は維持する。
 
-`PixelEffect::required_input` が output → input ROI を宣言し、DAG の逆順で Group / mask / 共有入力へ union を伝播する。初期 executor は必要領域の union を元の画素格子で描画し、要求画素へ crop する。`RenderDag::bounds()` の ink / visual は変換と離散 halo を含む output pixel bounds。effect params・意味版・upstream identities・ROI・色・backend namespace を cache key に含める。metadata は effect id ごとの意味版を固定する。GPU / golden の採用検証は [FX-001 の検証記録](../testing/fx-001.md) に分けて記録する。
+FX-002 は同じ effect id / parameters の明示した **version 2** を追加する（[ADR-0067](../adr/0067-affine-gaussian-effects.md)）。局所 Gaussian の covariance を `C = sigma² (S A)(S A)ᵀ` として出力格子へ写す。rotation / reflection / 非一様 scale / shear の cross term を保持する。整数 offset の `q = dᵀ C⁻¹ d <= 9` に `exp(-q/2)` の重みを与え、正規化した同じ f32 tap 列を CPU / GPU が一段で畳み込む。kernel 版は `fx002-affine-ellipse-lattice-rne16-v2`。sigma 0 は中心 tap、shadow offset は `S A offset`。shadow sampling は `floor(-offset)` の整数移動と offset だけから求めた fractional taps を分け、tile 原点で fraction が変わらない。面境界の binary16 RNE と transparent edge は共通。旧 version 1 から自動移行しない。
+
+semantic visual halo は軸別 `3 sigma hypot(A[i][0], A[i][1])`、pixel halo は `ceil(3 sqrt(Cii))`。shadow の bilinear floor / ceil と source union を含めて逆 ROI を要求する。有限非退化行列だけを扱い、normalized determinant `> 1e-6`、normalized covariance determinant `> 1e-12`、距離計算に使う直接 covariance determinant は正の normal f64、各 radius `<= 1024`、探索矩形 `<= 65,536 candidates` を要求する。超過・特異・近退化・covariance underflow は `UNSUPPORTED_FEATURE`。近似や clamp はしない。既存 surface memory 予算も適用する。CPU / GPU 比較と golden の実測状態は [FX-002](../testing/fx-002.md) に記録する。
+
+`PixelEffect::required_input` が output → input ROI を宣言し、DAG の逆順で Group / mask / 共有入力へ union を伝播する。初期 executor は必要領域の union を元の画素格子で描画し、要求画素へ crop する。`RenderDag::bounds()` の ink / visual は変換と離散 halo を含む output pixel bounds。effect params・意味版・upstream identities・ROI・色・backend namespace を cache key に含める。metadata は effect id ごとの対応版上限（新規 2 / 旧 1）を固定する。各 authored effect の版が algorithm を選び、上限 1 の snapshot に版 2 は入れない。GPU / golden の採用検証は [FX-001 の検証記録](../testing/fx-001.md) に分けて記録する。
 
 ## 高解像度
 
@@ -105,6 +149,16 @@ M1 / M2 は互換経路でも実装を進め、転送コストを明示する。
 - 動画内の被写体の真のサブフレーム像が復元されるわけではない。オプティカルフローは別モジュール。
 
 ## キャッシュ
+
+### INSPECT-001 の実行前説明
+
+共通 Query `render.explain` は Composition / Sequence の snapshot、Scene IR、tile ごとの Render DAG を組立て、stage code / inputs / SceneKey、要求・halo 実行領域、面数・メモリ・転送の推定を返す。frame executor と同じ `frame_tiles` を使う。`executed:false` であり、GPU の可用性や転送時間の実測ではない。失敗時は `plan:null` と型付き diagnostics を返し、代替 backend を選ばない。
+
+control upload / image upload / GPU image copy / image・status readback を分ける。組込 GPU の frame export は tile ごとに linear / display の二回描画を行い、二つの RGBA16F image（256-byte row padding）と二つの4-byte statusを readback する。control upload の bytes / operations は未推定の null。CPU の GPU 転送は0。注入 backend の未知使用量も null とする。
+
+RGBA16F 面は8 bytes/pixel、CPU 参照面は16 bytes/pixel、最終 host の linear / display は合計32 bytes/pixel。中間面は既存 backend の保守的な安全予算式による `_estimate` で、allocator / driver / geometry / font / RSS / 実測 peak を含まない。`DUPLICATE_LINEAR_DISPLAY_RENDER`、`ZERO_OPACITY_STILL_PROCESSED`、`EFFECT_HALO_EXPANSION`、`SURFACE_BUDGET_EXCEEDED` は処理・安全予算上の notice。OQ-14 の性能合否を決めない。
+
+Query ごとの隔離 `RenderCache` の実 compilation counters を `compilation_cache` に載せ、renderer の cache / LRU / counters を変更しない。scope は `isolated_query_compilation`、raster 未実行を `raster_cache_observed:false` で明示する。runtime の warm hit/miss と混同しない。非表示原因は `node.explain` が containment・transform parent・opacity・active range・transient matte・content / font / unsupported の別に返す。画素の occlusion・coverage は測定しない。詳細は [ADR-0060](../adr/0060-structured-read-only-inspection.md)、[INSPECT-001 検証](../testing/inspect-001.md)。
 
 ```text
 cache_key = hash(
@@ -163,7 +217,7 @@ scene は参照欠落・循環・不正 opacity / 色 / 幾何を型付きエラ
 ### 固定 snapshot と公開 API
 
 - `RenderSnapshot::new(&Project, CompositionId, revision, RenderProfile)` は文書を複製し、選択した Composition、revision、profile、必要な `FontRef` と意味の版を固定する。`RenderProfile` は作業用線形 Rec.709 / Rec.2020 と flatten tolerance（既定 0.02 output px）。元の Project を編集しても snapshot は変わらない。
-- `RenderSnapshot::with_contract` は `SemanticVersions` と `MatteBinding` も明示入力する。公開 snapshot schema は **1**。Serde の strict な envelope を使い、復元時に欠けた版・lock を最新値で補わない。文書意味版・補間版・TimeMap 版・組版版は **1**、vector は `render001-kurbo-flatten-v1`、色は `gpu002-color-v1`、coverage は `vec003-grid4-v2`、stroke geometry は `vec003-centered-stroke-v1`、gradient interpolation は `vec003-linear-premultiplied-pad-v1`。実行時は対応する版と文書の意味版との一致を検証する。
+- `RenderSnapshot::with_contract` は `SemanticVersions` と `MatteBinding` も明示入力する。公開 snapshot schema は **1**。Serde の strict な envelope を使い、復元時に欠けた版・lock を最新値で補わない。文書意味版・補間版・TimeMap 版・組版版は **1**、vector は `render001-kurbo-flatten-v1`、色は `gpu002-color-v1`、coverage は `vec003-grid4-v2`。現在の stroke 対応上限は `vec005-local-stroke-v2`、旧 `vec003-centered-stroke-v1` の pin も旧 stroke に限り認識する。gradient interpolation は `vec004-explicit-interpolation-v1`。実行時は対応する版と文書の意味版との一致を検証する。
 - `content_hash()` は snapshot 全体を `serde_json::Value` の sorted object keys → compact UTF-8 → SHA-256 にする。STORE-001 の正規化規約を再利用し、独立した opaque 内容も hash に含める。schema、文書、revision、lock、profile、matte、意味の版を除外しない。time / region は個別の要求と metadata に保持する。CACHE-001 の values key は下記の rendering content identity と Time を使い、layout / geometry / raster はそれぞれ必要な内容だけで区別する。
 - `build_scene_ir(&snapshot, Time, &[FontData])` と `build_render_dag(&SceneIr, RenderProfile, OutputRegion)` は GPU・ファイル I/O を使わない。
 - `render_frame(&snapshot, &[FontData], &dyn RenderBackend, FrameRequest)` は `RenderedFrame`（作業用線形 premultiplied と外部 straight sRGB の画素、`FrameMetadata`）を返す。
@@ -188,11 +242,11 @@ DAG は topological なノード列と明示 input index を持つ。index は�
 
 `OutputRegion { origin, extent, pixels }` は設計座標の矩形を出力画素へ写す。`p = diag(pixels / extent) × (design_position - origin)`、左上原点・+Y 下向き。ROI / 解像度を変えても文書・組版は変えない。異なるアスペクト比を要求したときは、この明示写像で伸縮し、responsive variant の再組版を暗黙に行わない。flatten の最大拡大率は node world transform と ROI 写像を合成した行列の Frobenius norm で保守的に求める。
 
-Shape の単色 / 線形・放射 gradient fill / stroke と miter / bevel / round join、butt / square / round cap を接続する。stroke の非一様 scale / shear は `UNSUPPORTED_FEATURE`。fill / text の非一様変換は対応する。後続 paint / stroke 機能は opaque で保持し、必要な最終出力は拒否する。glyph ごとに coverage を作り、text の opacity は glyph 全体の合成に一度掛ける。Group / Null / 配置の containment 枠も局所 opacity と順序を保持する。
+Shape の単色 / linear・radial・focal_radial・conic gradient fill / stroke と miter / bevel / round join、butt / square / round cap を接続する。stroke の非一様 scale / shear は `UNSUPPORTED_FEATURE`。fill / text の非一様変換は対応する。未知 paint / 後続 stroke 機能は opaque で保持し、必要な最終出力は拒否する。glyph ごとに coverage を作り、text の opacity は glyph 全体の合成に一度掛ける。Group / Null / 配置の containment 枠も局所 opacity と順序を保持する。
 
 現行文書型には matte 欄がないため `MatteBinding` を snapshot の明示レンダー入力とする。source / matte とも stable SceneKey。matte は表示 root / children から除外し、`visible = true` の場合だけ表示する。source ごとの binding は一つ、共有 matte の DAG は再利用する。欠落・非アクティブ参照・containment / matte を合わせた循環は失敗する。
 
-scene 1,024 node、DAG 4,096 node、containment / matte recursion 24、出力 16,777,216 pixel の保守的上限を設ける。backend は GPU-002 の 1,024 draw node・32 depth・65,536 edge・512 MiB 面予算をさらに適用し、限界を超えた要求はエラーにする。INTEGRATION-001 / [ADR-0053](../adr/0053-integration-evaluated-queries-and-render-tiles.md) で幅または高さが512 pixelsを超える出力を最大512×512のtileへ分け、元画素格子と既存effect ROI haloを保って同じbackendで実行する。metadataは元のregion、最終linear / display面は全画面のまま。tile / haloの予算は維持し、巨大halo・streaming export・GPU texture cache・資源pool・性能保証は未実装。CACHE-001 のインメモリ cache は下記の範囲で実装した。
+scene 1,024 node、DAG 4,096 node、containment / matte recursion 24、出力 16,777,216 pixel の保守的上限を設ける。backend は GPU-002 の 1,024 draw node・32 depth・65,536 edge・512 MiB 面予算をさらに適用し、限界を超えた要求はエラーにする。INTEGRATION-001 / [ADR-0053](../adr/0053-integration-evaluated-queries-and-render-tiles.md) で幅または高さが512 pixelsを超える出力を最大512×512のtileへ分け、元画素格子と既存effect ROI haloを保って同じbackendで実行する。metadataは元のregion、最終linear / display面は全画面のまま。movie export は RENDER-003 の tile sink から1枚の RGBA8 buffer に組み立てて即 encode し、全画面 linear / display と全 frames payload を保持しない。巨大 cumulative halo は node 別の保守的 allocation 総額512 MiBで backend allocation 前に拒否する。GPU texture cache・資源pool・性能保証は未実装。CACHE-001 のインメモリ cache は下記の範囲で実装した。
 
 GPU adapter は同じ lowering 済み DrawScene について `render_scene` と `render_scene_output` を各一回呼ぶ。両経路とも合成・mask・色変換を GPU 上で行い、それぞれ image と validation status を readback する。CPU へ持ち帰った線形画素を出力変換する GPU 名義の経路ではない。二回の描画を統合する最適化と renderer API での転送統計の集約は後続課題。
 
@@ -212,11 +266,11 @@ RGBA16F の各 component は有限、alpha は `[0,1]`、RGB の絶対値は 65,
 `FrameMetadata` の必須項目は次のとおり。
 
 - `schema_version` / `snapshot_schema_version` / `project_schema_version`、`snapshot_content_hash`、元の `revision`（10進文字列）、選択 `target`。互換フィールド `composition` は Sequence の場合、lower した実行用 root の ID。
-- `semantic_versions`（document / interpolation / time_map / layout / vector / color / coverage / stroke_geometry / gradient_interpolation）、`font_locks`（family / PostScript 名 / hash / face index）。
+- `semantic_versions`（document / interpolation / time_map / layout / vector / color / coverage / stroke_geometry / gradient_interpolation、effects / generators の version map、video_input）、`font_locks`（family / PostScript 名 / hash / face index）。
 - 正規化有理数 `time`（num / den は10進文字列）、連番時の `frame_index`（10進文字列）と `sequence_number`。任意時刻の still では後二項目は null。
 - `design_extent`、`region`（origin / extent / pixels）、2×3 の `design_to_pixel`、`working_space`、`flatten_tolerance_px`。
 - `numeric` / `display` の各 `ImageFormat`（color_space、transfer_function、alpha、association_space、pixel_format、channel_order、row_order、byte_order、clipping）。
-- `backend`（`cpu_reference_float32` または `wgpu_rgba16f`）。厳密 cache の GPU / driver fingerprint 固定は CACHE / QA の後続範囲。
+- `backend`（`cpu_reference_float32` または `wgpu_rgba16f`）、`input_path`（通常の `semantic_scene`、または動画 CPU decode / color / sample と selected backend の明示経路）。厳密 cache の GPU / driver fingerprint 固定は CACHE / QA の後続範囲。
 
 出力先は新しい directory を排他的に作り、既存 directory は拒否する。全 frame を内部 staging へ生成・検証・sync してから確定名に rename し、最後に `sequence.json` を確定する。通常エラーでは今回作った directory を rollback する。既存成果物は上書きしない。プロセス強制終了時の orphan 回収・resume・directory 全体の crash durability は JOB / RECOVERY の未実装範囲。
 
@@ -253,3 +307,16 @@ layout の取得後に、その時刻の各 style の fill を `style_index` で
 - `kronello-eval::DependencyGraph::evaluate_scene_with_properties` は値の取得を純粋な callback として受け、render cache へ逆依存しない。`kronello-text::validate_fonts` は導出 layout 再利用時の明示 byte 照合を提供する。
 
 受け入れ条件の per-level counter、CPU の cached / disabled / direct 実行、cold / warm / 逆順 / eviction / clear、連番ファイル一致の検証は [CACHE-001 の検証](../testing/cache-001.md) を参照。GPU 実機での画素 cache、ディスク永続化、性能目標の実測は今回の保証範囲に含めない。
+
+## RENDER-003 の movie export
+
+[ADR-0079](../adr/0079-bounded-streaming-movie-export.md) の `render_frame_tiles` は
+512×512 tile を同期 sink に渡し、sink の処理完了まで次の tile を作らない。
+ROI / halo は従来の backwards compiler と絶対画素格子を共有する。
+`RenderDag::tile_surface_bytes(16)` は全 image stage の output、Group の children / accumulator、
+effect の3 temporaryと root reserveを execution ROI union で数える。
+512 MiB超過は `UNSUPPORTED_FEATURE`。backend 固有の安全予算も適用する。
+一般 frame / image sequence の最終2面と render.explain の host 面推定は従来のまま。
+movie は RGBA8 1面だけを全画面保持し、1 frame ごとに native encoderへ渡す。
+音声の spool / bounded Bus、I/O report、実測 RSS と検証範囲は
+[RENDER-003](../testing/render-003.md) を参照する。

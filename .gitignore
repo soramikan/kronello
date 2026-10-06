@@ -3,3 +3,9 @@
 __pycache__/
 *.kronello-wal
 *.kronello-shm
+/apps/macos/.build/
+/apps/macos/.swiftpm/
+/apps/macos/Libraries/
+
+# UI fonts fetched by scripts/fetch_ui_fonts.py (licenses are in third_party/fonts)
+apps/macos/Sources/KronelloDesign/Resources/Fonts/*.ttf

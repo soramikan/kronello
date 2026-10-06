@@ -1,0 +1,153 @@
+{
+  "id": "d4ea0241-6d62-5d60-b4d1-381288f9e707",
+  "template_id": "ee59340e-627a-5af0-bf14-509095e689b6",
+  "version": "1.0.0",
+  "composition_ref": "e706c050-13fa-4654-9350-dcef30f1d792",
+  "public_inputs": {
+    "data": {
+      "value_type": "data_table",
+      "default": {
+        "kind": "data_table",
+        "value": {
+          "columns": {
+            "headline": "string",
+            "accent": "color"
+          },
+          "rows": [
+            {
+              "headline": {
+                "kind": "string",
+                "value": "日本語"
+              },
+              "accent": {
+                "kind": "color",
+                "value": {
+                  "space": "srgb",
+                  "components": {
+                    "r": 0.7843137254901961,
+                    "g": 0.1568627450980392,
+                    "b": 0.0392156862745098,
+                    "alpha": 1.0
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "target": {
+        "data_table": {
+          "bindings": [
+            {
+              "row": 0,
+              "column": "headline",
+              "target": {
+                "text": {
+                  "node": "955f3ce9-88f6-4025-978a-6d42e5c08d31"
+                }
+              }
+            },
+            {
+              "row": 0,
+              "column": "accent",
+              "target": {
+                "property": {
+                  "node": "adcfcd01-95a0-4292-ba82-61369bf4ac8c",
+                  "property": "4e4837d7-b8f7-47e6-a455-cc35e5b00cdd"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "minimum": null,
+      "maximum": null,
+      "choices": []
+    }
+  },
+  "duration_policy": {
+    "intro": {
+      "num": "2",
+      "den": "5"
+    },
+    "outro": {
+      "num": "3",
+      "den": "10"
+    },
+    "minimum_middle": {
+      "num": "1",
+      "den": "2"
+    },
+    "middle_mode": "loop"
+  },
+  "constraints": {
+    "bands": [
+      {
+        "text_node": "955f3ce9-88f6-4025-978a-6d42e5c08d31",
+        "band_node": "adcfcd01-95a0-4292-ba82-61369bf4ac8c",
+        "size_property": "1d77434e-64ef-4de4-9e38-98bb71bb03fe",
+        "position_property": "cecd9404-ac4e-4245-9d6a-84aa26590fc6",
+        "padding": [
+          4.0,
+          2.0
+        ],
+        "bounds": "ink"
+      }
+    ],
+    "max_lines": {
+      "955f3ce9-88f6-4025-978a-6d42e5c08d31": 2
+    }
+  },
+  "content_hash": "",
+  "variants": {
+    "portrait": {
+      "composition_ref": "5f87e71a-c55d-5473-8848-cfc66c281240",
+      "targets": {
+        "data": {
+          "data_table": {
+            "bindings": [
+              {
+                "row": 0,
+                "column": "headline",
+                "target": {
+                  "text": {
+                    "node": "96cb5d61-02be-5394-9d17-b069cd520c7c"
+                  }
+                }
+              },
+              {
+                "row": 0,
+                "column": "accent",
+                "target": {
+                  "property": {
+                    "node": "90a4dfb8-d665-5a1b-a37f-edf43d092da7",
+                    "property": "6359657e-de64-576e-9026-a84ddfb5d460"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "constraints": {
+        "bands": [
+          {
+            "text_node": "96cb5d61-02be-5394-9d17-b069cd520c7c",
+            "band_node": "90a4dfb8-d665-5a1b-a37f-edf43d092da7",
+            "size_property": "34e2ee40-b96e-590f-ab2f-0e41c0c6a92e",
+            "position_property": "892b82e8-3cb6-5305-b964-0f53e4b23b71",
+            "padding": [
+              4.0,
+              2.0
+            ],
+            "bounds": "ink"
+          }
+        ],
+        "max_lines": {
+          "96cb5d61-02be-5394-9d17-b069cd520c7c": 2
+        }
+      },
+      "content_hash": ""
+    }
+  }
+}

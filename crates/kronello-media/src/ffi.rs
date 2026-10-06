@@ -39,6 +39,17 @@ unsafe extern "C" {
     ) -> *const c_char;
     fn km_hw(k: *mut c_void, kind: *mut c_int) -> *const c_char;
     fn km_decoder_open(k: *mut c_void, path: *const c_char) -> *mut c_void;
+    fn km_decoder_open_stream(k: *mut c_void, path: *const c_char, stream: c_int) -> *mut c_void;
+    fn km_video_rgba(
+        k: *mut c_void,
+        input: *const u8,
+        input_size: c_int,
+        format: *const c_char,
+        width: c_int,
+        height: c_int,
+        full_range: c_int,
+        output: *mut u8,
+    ) -> c_int;
     fn km_decoder_close(d: *mut c_void);
     fn km_decoder_name(d: *mut c_void) -> *const c_char;
     fn km_decoder_time_base(d: *mut c_void, num: *mut c_int, den: *mut c_int);
@@ -192,9 +203,23 @@ pub(crate) struct NativeDecoder<'a> {
 }
 impl<'a> NativeDecoder<'a> {
     pub(crate) fn open(runtime: &'a NativeRuntime, path: &Path) -> Result<Self, MediaError> {
+        Self::open_stream(runtime, path, None)
+    }
+    pub(crate) fn open_stream(
+        runtime: &'a NativeRuntime,
+        path: &Path,
+        stream: Option<u32>,
+    ) -> Result<Self, MediaError> {
         let path = path_string(path)?;
-        let ptr = NonNull::new(unsafe { km_decoder_open(runtime.0.as_ptr(), path.as_ptr()) })
-            .ok_or_else(|| MediaError::Decode(runtime.error()))?;
+        let ptr = NonNull::new(match stream {
+            Some(stream) => {
+                let stream = c_int::try_from(stream)
+                    .map_err(|_| MediaError::InvalidInput("stream index overflow".into()))?;
+                unsafe { km_decoder_open_stream(runtime.0.as_ptr(), path.as_ptr(), stream) }
+            }
+            None => unsafe { km_decoder_open(runtime.0.as_ptr(), path.as_ptr()) },
+        })
+        .ok_or_else(|| MediaError::Decode(runtime.error()))?;
         let (mut num, mut den) = (0, 0);
         unsafe { km_decoder_time_base(ptr.as_ptr(), &mut num, &mut den) };
         let time_base = match Rational::new(i64::from(num), i64::from(den)) {
@@ -249,9 +274,19 @@ impl<'a> NativeDecoder<'a> {
                 "missing PTS or invalid frame metadata".into(),
             ));
         }
+        if i64::from(info.width) * i64::from(info.height) > 16_777_216 {
+            return Err(MediaError::UnsupportedFeature(
+                "decoded video pixel budget".into(),
+            ));
+        }
         let size = unsafe { km_frame_copy(self.ptr.as_ptr(), std::ptr::null_mut(), 0) };
         if size < 0 {
             return Err(MediaError::Decode("unsupported native pixel layout".into()));
+        }
+        if size > 134_217_728 {
+            return Err(MediaError::UnsupportedFeature(
+                "decoded video byte budget".into(),
+            ));
         }
         let mut pixels = vec![0; size as usize];
         // SAFETY: buffer has exactly the size queried for the unchanged native frame.
@@ -269,6 +304,43 @@ impl<'a> NativeDecoder<'a> {
             pixels,
         }))
     }
+}
+pub(crate) fn video_rgba(
+    runtime: &NativeRuntime,
+    frame: &kronello_render::DecodedVideoFrame,
+    full_range: bool,
+) -> Result<Vec<u8>, MediaError> {
+    if frame.width == 0
+        || frame.height == 0
+        || u64::from(frame.width) * u64::from(frame.height) > 16_777_216
+    {
+        return Err(MediaError::InvalidInput(
+            "video frame dimensions/budget".into(),
+        ));
+    }
+    let format = CString::new(frame.pixel_format.as_str())
+        .map_err(|_| MediaError::InvalidInput("video pixel format".into()))?;
+    let size = c_int::try_from(frame.pixels.len())
+        .map_err(|_| MediaError::InvalidInput("video pixel budget".into()))?;
+    let mut output = vec![0; frame.width as usize * frame.height as usize * 4];
+    // SAFETY: dimensions and exact packed input size are verified by the shim;
+    // the RGBA output allocation covers width*height*4 and lives through the call.
+    if unsafe {
+        km_video_rgba(
+            runtime.0.as_ptr(),
+            frame.pixels.as_ptr(),
+            size,
+            format.as_ptr(),
+            frame.width as c_int,
+            frame.height as c_int,
+            c_int::from(full_range),
+            output.as_mut_ptr(),
+        )
+    } < 0
+    {
+        return Err(MediaError::Decode(runtime.error()));
+    }
+    Ok(output)
 }
 impl Drop for NativeDecoder<'_> {
     fn drop(&mut self) {
@@ -351,6 +423,23 @@ impl Drop for NativeEncoder<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hevc_delivery_mux_configuration_requires_hvc1() {
+        for profile in [
+            MovieProfile::ProResPcm24,
+            MovieProfile::Av1Mp4AlacV1,
+            MovieProfile::H264AlacV1,
+        ] {
+            // SAFETY: the same pure tag selector is used by km_mux_av before writing its header.
+            assert_eq!(unsafe { km_mux_video_tag(profile.native_id()) }, 0);
+        }
+        // SAFETY: a closed profile ID is accepted without opening a codec or device.
+        assert_eq!(
+            unsafe { km_mux_video_tag(MovieProfile::HevcAlacV1.native_id()) },
+            u32::from_le_bytes(*b"hvc1")
+        );
+    }
 
     #[test]
     fn native_probe_recognizes_hardware_and_hybrid_capability_bits() {
@@ -441,17 +530,26 @@ unsafe extern "C" {
     fn km_audio_count(a: *mut c_void) -> c_int;
     fn km_audio_copy(a: *mut c_void, out: *mut f32, capacity: c_int) -> c_int;
     fn km_audio_next(a: *mut c_void) -> c_int;
+    fn km_audio_encoder_open(k: *mut c_void, path: *const c_char, alac: c_int) -> *mut c_void;
+    fn km_audio_encoder_close(e: *mut c_void);
+    fn km_audio_encoder_block(e: *mut c_void) -> c_int;
+    fn km_audio_encoder_frame(e: *mut c_void, samples: *const i32, count: c_int) -> c_int;
+    fn km_audio_encoder_finish(e: *mut c_void) -> c_int;
     fn km_audio_encode(
         k: *mut c_void,
         path: *const c_char,
         samples: *const i32,
         count: i64,
+        alac: c_int,
     ) -> c_int;
     fn km_probe_open(k: *mut c_void, path: *const c_char) -> *mut c_void;
     fn km_probe_close(k: *mut c_void, format: *mut c_void);
     fn km_probe_count(format: *mut c_void) -> c_int;
     fn km_probe_stream(format: *mut c_void, index: c_int, out: *mut NativeStreamInfo);
     fn km_probe_codec(k: *mut c_void, format: *mut c_void, index: c_int) -> *const c_char;
+    fn km_probe_codec_tag(format: *mut c_void, index: c_int) -> u32;
+    #[cfg(test)]
+    fn km_mux_video_tag(profile: c_int) -> u32;
     fn km_probe_tag(k: *mut c_void, format: *mut c_void, key: *const c_char) -> *const c_char;
     fn km_mux_av(
         k: *mut c_void,
@@ -460,6 +558,7 @@ unsafe extern "C" {
         path: *const c_char,
         render_hash: *const c_char,
         export_hash: *const c_char,
+        profile: c_int,
     ) -> c_int;
 }
 
@@ -557,6 +656,65 @@ impl Drop for NativeAudioDecoder<'_> {
         unsafe { km_audio_close(self.ptr.as_ptr()) }
     }
 }
+pub(crate) struct NativeAudioEncoder<'a> {
+    ptr: NonNull<c_void>,
+    runtime: &'a NativeRuntime,
+    pub block: usize,
+}
+impl<'a> NativeAudioEncoder<'a> {
+    pub(crate) fn open(
+        runtime: &'a NativeRuntime,
+        path: &Path,
+        alac: bool,
+    ) -> Result<Self, MediaError> {
+        let path = path_string(path)?;
+        // SAFETY: the runtime and path remain live; returned context is owned.
+        let ptr = NonNull::new(unsafe {
+            km_audio_encoder_open(runtime.0.as_ptr(), path.as_ptr(), i32::from(alac))
+        })
+        .ok_or_else(|| MediaError::Encode(runtime.error()))?;
+        let block = unsafe { km_audio_encoder_block(ptr.as_ptr()) } as usize;
+        Ok(Self {
+            ptr,
+            runtime,
+            block,
+        })
+    }
+    pub(crate) fn frame(&mut self, samples: &[i32]) -> Result<(), MediaError> {
+        if samples.is_empty() || !samples.len().is_multiple_of(2) || samples.len() / 2 > self.block
+        {
+            return Err(MediaError::InvalidInput(
+                "audio encoder block length".into(),
+            ));
+        }
+        // SAFETY: exactly two samples per frame, bounded by the owned codec block.
+        if unsafe {
+            km_audio_encoder_frame(
+                self.ptr.as_ptr(),
+                samples.as_ptr(),
+                (samples.len() / 2) as c_int,
+            )
+        } < 0
+        {
+            return Err(MediaError::Encode(self.runtime.error()));
+        }
+        Ok(())
+    }
+    pub(crate) fn finish(&mut self) -> Result<(), MediaError> {
+        // SAFETY: the unique live encoder has accepted all its input.
+        if unsafe { km_audio_encoder_finish(self.ptr.as_ptr()) } < 0 {
+            return Err(MediaError::Encode(self.runtime.error()));
+        }
+        Ok(())
+    }
+}
+impl Drop for NativeAudioEncoder<'_> {
+    fn drop(&mut self) {
+        // SAFETY: uniquely owned handle, destroyed before its borrowed runtime.
+        unsafe { km_audio_encoder_close(self.ptr.as_ptr()) }
+    }
+}
+
 struct NativeProbe<'a> {
     ptr: NonNull<c_void>,
     runtime: &'a NativeRuntime,
@@ -567,12 +725,49 @@ impl Drop for NativeProbe<'_> {
     }
 }
 impl NativeRuntime {
-    pub(crate) fn encode_audio(&self, output: &Path, samples: &[i32]) -> Result<(), MediaError> {
+    pub(crate) fn probe_codec_tag(
+        &self,
+        path: &Path,
+        stream_index: u32,
+    ) -> Result<u32, MediaError> {
+        let path = path_string(path)?;
+        // SAFETY: the stream index is checked against the live probe's stream count.
+        unsafe {
+            let ptr = NonNull::new(km_probe_open(self.0.as_ptr(), path.as_ptr()))
+                .ok_or_else(|| MediaError::Decode(self.error()))?;
+            let probe = NativeProbe { ptr, runtime: self };
+            let count = km_probe_count(probe.ptr.as_ptr());
+            if !(0..=1024).contains(&count) || i64::from(stream_index) >= i64::from(count) {
+                return Err(MediaError::InvalidInput(
+                    "probe stream index out of range".into(),
+                ));
+            }
+            Ok(km_probe_codec_tag(
+                probe.ptr.as_ptr(),
+                stream_index as c_int,
+            ))
+        }
+    }
+    pub(crate) fn encode_audio(
+        &self,
+        output: &Path,
+        samples: &[i32],
+        alac: bool,
+    ) -> Result<(), MediaError> {
         let path = path_string(output)?;
         let count = i64::try_from(samples.len() / 2)
             .map_err(|_| MediaError::InvalidInput("PCM size overflow".into()))?;
         // SAFETY: exactly two S32 samples per frame, live for the entire synchronous call.
-        if unsafe { km_audio_encode(self.0.as_ptr(), path.as_ptr(), samples.as_ptr(), count) } < 0 {
+        if unsafe {
+            km_audio_encode(
+                self.0.as_ptr(),
+                path.as_ptr(),
+                samples.as_ptr(),
+                count,
+                i32::from(alac),
+            )
+        } < 0
+        {
             return Err(MediaError::Encode(self.error()));
         }
         Ok(())
@@ -641,6 +836,7 @@ impl NativeRuntime {
         output: &Path,
         render_hash: &str,
         export_hash: &str,
+        profile: MovieProfile,
     ) -> Result<(), MediaError> {
         let video = path_string(video)?;
         let audio = path_string(audio)?;
@@ -658,6 +854,7 @@ impl NativeRuntime {
                 output.as_ptr(),
                 render_hash.as_ptr(),
                 export_hash.as_ptr(),
+                profile.native_id(),
             )
         } < 0
         {

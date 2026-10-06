@@ -1,0 +1,185 @@
+#!/usr/bin/env python3
+"""Generate Swift design tokens from docs/design-system/tokens.json.
+
+Writes apps/macos/Sources/KronelloDesign/Generated/Tokens.swift. The theme is
+an explicit value (Dark by default, never following the system appearance;
+ADR-0054), so colors are resolved per theme rather than through NSAppearance.
+
+Usage: gen_design_tokens.py [--check]
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+TOKENS = ROOT / "docs" / "design-system" / "tokens.json"
+OUT = ROOT / "apps" / "macos" / "Sources" / "KronelloDesign" / "Generated" / "Tokens.swift"
+
+
+def ident(name: str) -> str:
+    parts = re.split(r"[-_.]", name)
+    out = parts[0] + "".join(p[:1].upper() + p[1:] for p in parts[1:])
+    if out[0].isdigit():
+        out = "_" + out
+    return out
+
+
+def rgba(hexv: str) -> tuple[float, float, float, float]:
+    h = hexv.lstrip("#")
+    if len(h) in (3, 4):
+        h = "".join(c * 2 for c in h)
+    if len(h) == 6:
+        h += "ff"
+    if len(h) != 8:
+        raise ValueError(f"unsupported color {hexv!r}")
+    return tuple(int(h[i : i + 2], 16) / 255 for i in (0, 2, 4, 6))  # type: ignore[return-value]
+
+
+def swift_color(hexv: str) -> str:
+    r, g, b, a = rgba(hexv)
+    return f"KRRGBA({r:.4f}, {g:.4f}, {b:.4f}, {a:.4f})"
+
+
+def px(v: str) -> float:
+    m = re.fullmatch(r"(-?\d+(?:\.\d+)?)(px)?", str(v).strip())
+    if not m:
+        raise ValueError(f"unsupported length {v!r}")
+    return float(m.group(1))
+
+
+def num(v: float) -> str:
+    return f"{v:g}"
+
+
+def doc(text: str) -> str:
+    return "    /// " + text.replace("\n", " ")
+
+
+def shadow_layers(spec: str) -> list[str]:
+    layers = []
+    for part in [p.strip() for p in spec.split(",")]:
+        m = re.fullmatch(r"(-?\d+)(?:px)? (-?\d+)(?:px)? (\d+)(?:px)?(?: (\d+)(?:px)?)? (#[0-9a-fA-F]+)", part)
+        if not m:
+            raise ValueError(f"unsupported shadow {part!r}")
+        x, y, blur, spread, color = m.groups()
+        layers.append(
+            f"KRShadowLayer(x: {x}, y: {y}, blur: {blur}, spread: {spread or 0}, color: {swift_color(color)})"
+        )
+    return layers
+
+
+def generate() -> str:
+    t = json.loads(TOKENS.read_text())
+    themes = [th["id"] for th in t["color"]["themes"]]
+    if themes[:2] != ["dark", "light"]:
+        raise SystemExit(f"expected themes dark, light; got {themes}")
+
+    colors = t["color"]["tokens"]
+    fields, inits = [], {th: [] for th in themes}
+    for c in colors:
+        v = c["value"]
+        fields.append(doc(c["usage"]))
+        fields.append(f"    public let {ident(c['name'])}: Color")
+        for th in themes:
+            hexv = v if isinstance(v, str) else v.get(th, v[themes[0]])
+            inits[th].append(f"        {ident(c['name'])}: {swift_color(hexv)}.color")
+
+    shadows = t.get("shadow", {}).get("tokens", [])
+    sh_fields, sh_inits = [], {th: [] for th in themes}
+    for s in shadows:
+        sh_fields.append(doc(s["usage"]))
+        sh_fields.append(f"    public let {ident(s['name'])}: KRShadow")
+        for th in themes:
+            v = s["value"] if isinstance(s["value"], str) else s["value"].get(th, s["value"][themes[0]])
+            sh_inits[th].append(f"        {ident(s['name'])}: KRShadow([{', '.join(shadow_layers(v))}])")
+
+    def palette(th: str) -> str:
+        args = ",\n".join(inits[th] + sh_inits[th])
+        return f"    public static let {th} = KRPalette(\n{args}\n    )"
+
+    lengths = []
+    for fam, enum in (("spacing", "KRSpace"), ("size", "KRSize"), ("radius", "KRRadius")):
+        lines = []
+        for x in t[fam]["tokens"]:
+            lines.append(doc(x["usage"]))
+            lines.append(f"    public static let {ident(x['name'])}: CGFloat = {num(px(x['value']))}")
+        lengths.append(f"public enum {enum} {{\n" + "\n".join(lines) + "\n}")
+
+    fams = t["type"]["families"]
+
+    def family_names(stack: str) -> list[str]:
+        return [f.strip().strip('"') for f in stack.split(",") if f.strip().strip('"') not in ("sans-serif", "monospace", "serif")]
+
+    fam_lines = [f'    public static let {k}: [String] = {json.dumps(family_names(v), ensure_ascii=False)}' for k, v in fams.items()]
+    styles = []
+    for g in t["type"]["groups"]:
+        for s in g["styles"]:
+            fam = s.get("family", g["family"])
+            ls = s.get("letterSpacing", "0")
+            tracking = float(ls[:-2]) * px(s["fontSize"]) if str(ls).endswith("em") else px(ls)
+            styles.append(doc(s["usage"]))
+            styles.append(
+                f"    public static let {ident(s['name'])} = KRTextStyle(name: \"{s['name']}\", family: KRFontFamily.{fam}, "
+                f"size: {num(px(s['fontSize']))}, lineHeight: {num(px(s['lineHeight']))}, weight: {int(s['fontWeight'])}, tracking: {tracking:g})"
+            )
+
+    return f'''// Generated by scripts/gen_design_tokens.py from docs/design-system/tokens.json. Do not edit.
+
+import CoreGraphics
+import SwiftUI
+
+/// Colors and shadows for one theme. Read it from the environment (`@Environment(\\.krPalette)`).
+public struct KRPalette: Sendable {{
+{chr(10).join(fields)}
+{chr(10).join(sh_fields)}
+}}
+
+extension KRPalette {{
+{palette("dark")}
+
+{palette("light")}
+
+    public static func of(_ theme: KRTheme) -> KRPalette {{
+        switch theme {{
+        case .dark: return .dark
+        case .light: return .light
+        }}
+    }}
+}}
+
+{chr(10).join(lengths[:1])}
+
+{lengths[1]}
+
+{lengths[2]}
+
+/// Font family fallbacks, most preferred first.
+public enum KRFontFamily {{
+{chr(10).join(fam_lines)}
+}}
+
+public enum KRType {{
+{chr(10).join(styles)}
+}}
+'''
+
+
+def main() -> int:
+    out = generate()
+    if "--check" in sys.argv:
+        if not OUT.exists() or OUT.read_text() != out:
+            print(f"{OUT.relative_to(ROOT)} is out of date; run scripts/gen_design_tokens.py", file=sys.stderr)
+            return 1
+        return 0
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    OUT.write_text(out)
+    print(f"wrote {OUT.relative_to(ROOT)}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

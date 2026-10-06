@@ -12,7 +12,9 @@ mod rational;
 
 pub use error::TimeError;
 pub use interval::{Duration, TimeRange};
-pub use mapping::{LinearTimeMap, PiecewiseTimeMap, TimeMap, TimeMapPoint};
+pub use mapping::{
+    LinearTimeMap, PiecewiseTimeMap, ProtectedMiddleMode, ProtectedTimeMap, TimeMap, TimeMapPoint,
+};
 pub use rate::{FrameRate, SampleRate};
 pub use rational::Rational;
 

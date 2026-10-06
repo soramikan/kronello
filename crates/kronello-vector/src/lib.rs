@@ -4,6 +4,8 @@ use kronello_model::{PathSegment, PropertyId, ResolvedGeometry, Shape, ShapeErro
 use kurbo::{BezPath, Ellipse, PathEl, Point, RoundedRect, Shape as KurboShape};
 use std::collections::BTreeMap;
 use thiserror::Error;
+mod dash;
+pub use dash::{MAX_DASH_SEGMENTS, dash_path};
 
 /// Uniform magnification (including the node scale) and error in output pixels.
 /// For nonuniform/affine transforms pass a conservative maximum magnification.
@@ -205,4 +207,44 @@ fn check_work_budget(geometry: &ResolvedGeometry, tolerance: f64) -> Result<(), 
         return Err(VectorError::GeometryBudgetExceeded);
     }
     Ok(())
+}
+
+/// Analytic centerline/fill envelope in local design_px, independent of raster
+/// tolerance. Stroke expansion belongs to the consumer's paint contract.
+pub type GeometryBounds = ([f64; 2], [f64; 2]);
+
+pub fn geometry_bounds(geometry: &ResolvedGeometry) -> Result<Option<GeometryBounds>, VectorError> {
+    check_work_budget(geometry, 0.02)?;
+    let result = match geometry {
+        ResolvedGeometry::Rectangle { size, .. } | ResolvedGeometry::Ellipse { size } => {
+            Some(([0.0; 2], size.map(kronello_model::FiniteF64::get)))
+        }
+        ResolvedGeometry::BezierPath(path) => {
+            let mut bez = BezPath::new();
+            let p = |v: [kronello_model::FiniteF64; 2]| Point::new(v[0].get(), v[1].get());
+            for segment in &path.segments {
+                bez.push(match *segment {
+                    PathSegment::MoveTo(v) => PathEl::MoveTo(p(v)),
+                    PathSegment::LineTo(v) => PathEl::LineTo(p(v)),
+                    PathSegment::QuadTo { control, end } => PathEl::QuadTo(p(control), p(end)),
+                    PathSegment::CubicTo {
+                        control1,
+                        control2,
+                        end,
+                    } => PathEl::CurveTo(p(control1), p(control2), p(end)),
+                    PathSegment::Close => PathEl::ClosePath,
+                });
+            }
+            if bez.segments().next().is_none() {
+                None
+            } else {
+                let r = bez.bounding_box();
+                Some(([r.x0, r.y0], [r.x1, r.y1]))
+            }
+        }
+    };
+    if result.is_some_and(|(min, max)| !min.into_iter().chain(max).all(f64::is_finite)) {
+        return Err(VectorError::NonFiniteGeometry);
+    }
+    Ok(result)
 }

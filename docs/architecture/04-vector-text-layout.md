@@ -14,7 +14,8 @@ Path、Fill、Stroke、Gradient、ClipPath を意味的 IR に保持する。最
 SVG 読み込みは対応表を持つ。外部 URL、script、外部フォント等は自動取得・実行せず、明示インポートする。
 
 初期から矩形、角丸矩形、楕円、ベジェパス、単色塗り・線・基本グラデーションを扱う。
-Trim path、線端・破線のアニメーション、Path boolean、morph は段階実装する。
+破線 offset のアニメーションは VEC-005 の明示 stroke options で扱う。
+Trim path、線端のアニメーション、Path boolean、morph は段階実装する。
 
 ### VEC-001 の実装規約
 
@@ -28,21 +29,21 @@ Trim path、線端・破線のアニメーション、Path boolean、morph は�
 
 ### 線とグラデーションの実装範囲
 
-M1 で実装する範囲（VEC-003）と後続タスクの境界を固定する。後続の機能を含む文書は保存時に失わないが、最終レンダーは `UNSUPPORTED_FEATURE` で拒否する（[ADR-0010](../adr/0010-unsupported-features-fail-final-render.md)）。
+M1 の VEC-003 と M3 の VEC-004 / VEC-005 の範囲、後続タスクの境界を固定する。未対応の機能を含む文書は保存時に失わないが、最終レンダーは `UNSUPPORTED_FEATURE` で拒否する（[ADR-0010](../adr/0010-unsupported-features-fail-final-render.md)）。
 
-| 項目 | M1（VEC-003） | 後続 |
+| 項目 | M1（VEC-003） | M3（VEC-004 / VEC-005）/ 後続 |
 |---|---|---|
 | 線の join / cap | miter（miter limit 既定 4）/ bevel / round、butt / square / round | — |
-| 破線 | なし | dash 配列・offset とそのアニメーション（VEC-005） |
-| 線の位置 | 中央のみ | 内側・外側（VEC-005） |
-| 非一様 scale / skew 下の線幅 | `UNSUPPORTED_FEATURE` | 意味を定義して解消（VEC-005） |
-| グラデーションの種類 | 線形、放射（中心と半径） | 焦点付き放射（焦点位置・焦点半径）、円錐 / sweep（VEC-004） |
+| 破線 | なし | 明示 options の dash 配列・offset Property（VEC-005、Metal 検証待ち） |
+| 線の位置 | 中央のみ | center / inside / outside、closed contour の fill-rule clip（VEC-005） |
+| 非一様 scale / skew 下の線幅 | `UNSUPPORTED_FEATURE` | version 2 はローカル線を affine で写す（VEC-005） |
+| グラデーションの種類 | 線形、放射（中心と半径） | 焦点付き放射（焦点位置・焦点半径）、円錐 / sweep（VEC-004、Metal 検証待ち） |
 | 範囲外の扱い（spread） | pad のみ | repeat / reflect（VEC-004） |
 | 色の補間空間 | 作業用線形空間の premultiplied に固定 | グラデーションごとの明示指定（sRGB・straight 等）と補間空間の意味の版（VEC-004） |
 | 座標系 | 図形のローカル `design_px` | bounding box 基準の座標、gradient transform（VEC-004） |
 | 適用先 | Shape の fill / stroke | Text の fill（組版クラスタを壊さない、VEC-004） |
 | stop のアニメーション | 色と位置 | — |
-| SDR 8bit 出力の banding | 対策なし | dither の要否判断。採用時は固定 seed で決定的にする（VEC-004） |
+| SDR 8bit 出力の banding | 対策なし | VEC-004 では dither を採用しない。8bit exporter の量子化境界で再検討（ADR-0066） |
 | Trim path、morph、SVG 対応表 | なし | VEC-002（M5） |
 
 ### VEC-003 の実装規約
@@ -52,9 +53,42 @@ M1 で実装する範囲（VEC-003）と後続タスクの境界を固定する�
 - `GradientStop` の color / offset はノード所有の `PropertyId`。再利用可能な `kronello.shape.gradient_color` / `kronello.shape.gradient_offset` descriptor を登録する。stop descriptor は一つのノードに複数配置でき、評価は PropertyId ごとに行う。transform / opacity 等の singleton descriptor 重複は引き続き拒否する。offset は有限の `[0,1]`、stop 数は 2〜256、保存順は offset の非減少順。評価後にも検証し、アニメーションで順序が逆転したら `ShapeError::InvalidGradient` とする。並べ替え・clamp で修正しない。同位置ではその位置の最後の stop が勝つ右連続の段差とし、直前の区間は最初の同位置 stop に向かう。
 - stop の色を個別に sRGB decode / 原色変換 → 作業用線形空間 → premultiply し、その値を補間する。各 4×4 AA サンプルで paint を評価・被覆に応じて蓄積し、fill / stroke を別々に平均して stroke を fill へ source-over する。内部補間を unpremultiply しない。透明 stop の RGB を持ち込まず、HDR の負値・1 超も clamp しない。
 - CPU / GPU は同じ float32 の展開済み三角形・円を使う。curve の flatten は既存の画素 tolerance（既定 0.02 px）。snapshot の coverage は `vec003-grid4-v2`、stroke geometry は `vec003-centered-stroke-v1`、gradient interpolation は `vec003-linear-premultiplied-pad-v1`。vector flatten / color の既存意味版は変更しない。raster key は stop 値・gradient geometry・逆写像・線幅 / join / cap / limit・追加意味版を含む。paint 変更ではローカル輪郭の geometry cache を再利用する。
-- 表の VEC-004 / VEC-005 のフィールド・variant は strict な既知 Shape / Text として解釈せず、`DocumentObject::Opaque` で値と所属を保持する。選択出力が必要とする opaque content は最終レンダーで `UNSUPPORTED_FEATURE`。非一様変換の線も同じエラー。機能を既定値へ置換しない。
+- options を伴わない未知の stroke 拡張と未知の gradient フィールド・variant は strict な既知 Shape / Text として解釈せず、`DocumentObject::Opaque` で値と所属を保持する。選択出力が必要とする opaque content は最終レンダーで `UNSUPPORTED_FEATURE`。旧 stroke 幾何版の非一様変換の線も同じエラー。機能を既定値へ置換しない。
 
 受け入れ条件のテスト対応と検証範囲は [VEC-003 の検証](../testing/vec-003.md) を参照。
+
+### VEC-004 の実装規約
+
+[ADR-0066](../adr/0066-explicit-gradient-semantics.md) で gradient ごとの `GradientOptions`
+（spread / interpolation / interpolation_version / units / transform）を固定する。
+省略値は VEC-003 の pad / working_linear_premultiplied / version 1 / local_design / 単位行列。
+repeat / reflect は負 parameter にも floor の周期規約を適用する。
+焦点円を外円の内部に厳密に含む `focal_radial`、時計回りの `conic`（正の sweep、360 度以下）を追加する。
+補間は working_linear_premultiplied / working_linear_straight / srgb_straight / srgb_premultiplied。
+透明 stop の RGB は straight モードでは保存・補間し、画像 paint への変換時に premultiply する。
+
+bbox は Shape の unstroked 解析的 geometry bounds、Text 全体の positioned ink_bounds。
+`node * bbox * gradient_transform` の順に写し、fill / stroke は独立した transform を持つ。
+空 / 退化 bbox、特異行列、不正な円・sweep・stop は型付きエラー。
+`TextStyleSpan.gradient` の stop も node の Property を評価し、shaping 後に style_index で glyph に付ける。
+paint の変更で cluster / AnimationUnit / outline / layout key を変えず、raster key だけへ全 paint 入力を含める。
+意味版は `vec004-explicit-interpolation-v1`、未知の補間版は最終レンダーで `UNSUPPORTED_FEATURE`。
+SDR dither は採用せず、現行の RGBA16F / 16bit PNG にノイズを追加しない。
+CPU / 静的検証と Metal / golden の残件は [VEC-004 の検証](../testing/vec-004.md) を参照。
+
+### VEC-005 の実装規約
+
+[ADR-0073](../adr/0073-local-stroke-extensions.md) に従い `Stroke.options` を明示選択する。
+省略した作品は `vec003-centered-stroke-v1` の演算順・非一様変換拒否を維持する。
+新 `vec005-local-stroke-v2` は局所の線幅・cap / join を affine で写す。
+破線は flattened path のローカル弧長、奇数配列は複製、負 offset は周期 wrap、閉 contour の seam は結合する。
+zero dash は butt 無被覆 / round 円 / square 局所軸の正方形。非空全 zero・負長・非有限長は拒否する。
+16,384 subdivision steps / fragments の上限超過は `STROKE_BUDGET_EXCEEDED`。
+`kronello.shape.dash_offset` は Scalar / DesignPx の通常 animatable Property。
+inside / outside は幅 2w の中央線と fill-rule interior / 補集合の交差。
+開 contour は `STROKE_OPEN_ALIGNMENT`。layout envelope は維持し、ink / visual と pixel ROI に affine support を反映する。
+共通 `ShapeSet` / Property / Curve 編集、snapshot の対応版、raster cache と golden manifest に入力を記録する。
+[VEC-005 検証](../testing/vec-005.md) に CPU 証拠と pending host run を分けて記録する。
 
 ### 設計寸法と出力解像度
 
@@ -118,7 +152,7 @@ Position / Opacity の変更では原則組版を再実行しない。本文、�
 ### 実装段階
 
 - M2: テキストの layout_bounds への単方向参照による背景帯追従と、`max_lines` 超過の overflow 検出（TEMPLATE-001）。
-- M3: 3 種の bounds の区別、循環診断、responsive variant による再レイアウト（LAYOUT-001、TEMPLATE-002）。
+- M3: LAYOUT-001 で 3 種の bounds、明示した帯の stage 選択、静的循環と幅 overflow の診断を実装。responsive variant による再レイアウトは TEMPLATE-002 の後続範囲。
 
 ## 描画バックエンドの制約
 
@@ -138,3 +172,34 @@ text / template の実装への evaluator の逆依存はない。
 text の wrap_width を背景帯から読む循環は拒否する。公開 text 置換は水平・単一 style・ruby なしを対象とする。
 max_lines 超過は node・実際の行数・最大行数を持つ `TemplateError::Overflow`、最終レンダーでは `TEMPLATE_OVERFLOW`。
 検証手順は [TEMPLATE-001](../testing/template-001.md) を参照。
+
+
+### LAYOUT-001 の実装規約（M3）
+
+[ADR-0057](../adr/0057-layout-bounds-stages.md) により、`kronello-render::LayoutValue` は
+`layout_bounds` / `ink_bounds` / `visual_bounds` を同じ座標空間の `DesignBounds {min, max}` または `None` として保持する。
+Scene IR と `scene.query` の `evaluated.bounds` は、active node ごとの三段階を root Composition の `design_px` で同時に返す。
+既存の `evaluated.layout_bounds` は text-local のまま。非アクティブな node に evaluated を付けない。
+
+text の layout は wrap_width × 行数 × line_height、ink は組版 outline の union。
+Shape は解析した幾何 envelope と中央線 support を区別し、一般の Bezier 線は miter / cap の保守的な包含矩形を使う。
+各段階を world transform で写し、visual に renderer と同じ変換規約の blur / shadow を順に加える。
+Group / Null / placement は子の三段階を union し、自身の effect は visual だけへ適用する。
+mask、穴、透明 paint / opacity による tight な alpha 被覆の縮小は行わない。
+semantic な blur support は連続の `3 * sigma`、pixel DAG は出力格子へ外向きに丸めるので、その丸めを保存値や再組版に混ぜない。
+
+`TemplateBandBinding.bounds` は `layout`（既定・省略可）/ `ink` / `visual`。
+layout / ink は text の bounds を共通親空間へ写し、visual は Composition 空間の AABB を親へ逆変換する。
+親の特異変換は `LAYOUT_SINGULAR_TRANSFORM`。空 ink / visual は text 原点に padding だけの帯となる。
+`DependencyDeclarations` に text Property → `RuntimePropertyKey::LayoutValue` → band Property を静的宣言し、visual では変換親・placement の Property も含める。
+`DependencyGraph::dependency_order` で projection を供給し、帯の定義順へ依存させない。
+逆向きの text wrap → band size の宣言は閉経路付き `PROPERTY_DEPENDENCY_CYCLE`。
+公開 API に任意式や逆依存の authoring 入口を追加したものではなく、依存宣言は後続 compiler の接続点である。
+
+`LayoutLine.overflow` の幅超過を compiler が `LAYOUT_OVERFLOW` とし、template 以外の text も最終出力を拒否する。
+既存 max_lines の `TEMPLATE_OVERFLOW` と診断は維持する。幅超過は node / instance_path / line / advance / wrap_width を返す。
+`SemanticVersions.bounds = 1` を固定し、未知版を拒否する。
+正の Gaussian の非一様変換と glow は既存の未対応境界を維持する。
+検証範囲と host の残件は [LAYOUT-001 検証](../testing/layout-001.md) を参照。
+
+帯の対象 text は leaf node に限る。子の合成結果を組版時の字形 bounds へ混ぜず、子を持つ対象は `UNSUPPORTED_FEATURE` で拒否する。帯の対象でない text の子は通常の scene 合成と bounds 集約で扱う。

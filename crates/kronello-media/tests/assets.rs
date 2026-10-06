@@ -47,6 +47,24 @@ fn relative_first_absolute_fallback_mismatch_missing_and_reverify() {
         "INVALID_MEDIA_INPUT"
     );
 }
+
+#[test]
+fn locate_uses_the_same_candidates_but_does_not_verify_content() {
+    let temp = tempfile::tempdir().unwrap();
+    let original = temp.path().join("original.bin");
+    std::fs::write(&original, b"original").unwrap();
+    let a = asset(&original);
+    let relative = temp.path().join("media.bin");
+    std::fs::write(&relative, b"different content").unwrap();
+    let project = temp.path().join("project.kronello");
+    let located = locate_asset(&a, &project).unwrap();
+    assert_eq!(located.path, relative.canonicalize().unwrap());
+    assert_eq!(located.size_bytes, 17);
+    assert_eq!(
+        resolve_asset(&a, &project).unwrap_err().code(),
+        "ASSET_HASH_MISMATCH"
+    );
+}
 #[test]
 fn relink_matches_hash_and_never_changes_original_on_failure() {
     let temp = tempfile::tempdir().unwrap();

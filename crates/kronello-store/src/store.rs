@@ -115,7 +115,12 @@ impl Mutation {
                     if depth == 0
                         && matches!(
                             part.as_str(),
-                            "shapes" | "texts" | "templates" | "template_instances" | "sequences"
+                            "expressions"
+                                | "shapes"
+                                | "texts"
+                                | "templates"
+                                | "template_instances"
+                                | "sequences"
                         )
                         && !object.contains_key(part)
                     {
@@ -238,6 +243,15 @@ pub struct IdempotencyRecord {
     pub result: Event,
     /// Canonical service command envelope, absent for legacy storage callers.
     pub service_payload: Option<Value>,
+    /// Original shared-API result, stored atomically with the event.
+    pub service_result: Option<Value>,
+}
+
+/// Trusted service-generated receipt; never decoded from an entry point.
+pub struct ServiceReceipt {
+    pub key: String,
+    pub payload: Value,
+    pub result: Value,
 }
 
 pub struct ProjectStore {
@@ -460,13 +474,25 @@ impl ProjectStore {
         session_id: Uuid,
         input: &str,
     ) -> Result<Event, StoreError> {
-        let project: Project = serde_json::from_str(input)?;
-        project.validate_storage()?;
+        self.import_json_with_receipt_checked(base_revision, session_id, input, None, |_| Ok(()))
+    }
+    /// Full-document import preserves unsupported content. Validation and the
+    /// original service response are committed under the same writer lock.
+    pub fn import_json_with_receipt_checked<E: From<StoreError>>(
+        &mut self,
+        base_revision: Revision,
+        session_id: Uuid,
+        input: &str,
+        receipt: Option<ServiceReceipt>,
+        check: impl FnOnce(&Snapshot) -> Result<(), E>,
+    ) -> Result<Event, E> {
+        let project: Project = serde_json::from_str(input).map_err(StoreError::from)?;
+        project.validate_storage().map_err(StoreError::from)?;
         let previous = self.snapshot()?.document;
         let mut changed_keys = BTreeSet::new();
         for value in [
-            serde_json::to_value(&previous)?,
-            serde_json::to_value(&project)?,
+            serde_json::to_value(&previous).map_err(StoreError::from)?,
+            serde_json::to_value(&project).map_err(StoreError::from)?,
         ] {
             collect_object_keys(&value, previous.id, &mut changed_keys);
         }
@@ -475,13 +501,19 @@ impl ProjectStore {
             session_id,
             mutations: vec![Mutation::Set {
                 path: vec![],
-                value: serde_json::to_value(project)?,
+                value: serde_json::to_value(project).map_err(StoreError::from)?,
             }],
             changed_keys,
-            idempotency_key: None,
+            idempotency_key: receipt.as_ref().map(|r| r.key.clone()),
             undo_of: None,
         };
-        self.apply_inner(request, true, None)
+        self.apply_inner_checked(
+            request,
+            true,
+            receipt.as_ref().map(|r| r.payload.clone()),
+            receipt.map(|r| r.result),
+            |_, snapshot| check(snapshot),
+        )
     }
     pub fn restore_snapshot(
         &mut self,
@@ -517,10 +549,16 @@ impl ProjectStore {
         payload: Value,
         check: impl FnOnce(&Snapshot, &[Event]) -> Result<(), E>,
     ) -> Result<Event, E> {
-        self.apply_inner_checked(request, false, Some(payload), |connection, snapshot| {
-            let events = read_events_since(connection, 0)?;
-            check(snapshot, &events)
-        })
+        self.apply_inner_checked(
+            request,
+            false,
+            Some(payload),
+            None,
+            |connection, snapshot| {
+                let events = read_events_since(connection, 0)?;
+                check(snapshot, &events)
+            },
+        )
     }
     fn apply_inner(
         &mut self,
@@ -528,13 +566,14 @@ impl ProjectStore {
         import: bool,
         service_payload: Option<Value>,
     ) -> Result<Event, StoreError> {
-        self.apply_inner_checked(request, import, service_payload, |_, _| Ok(()))
+        self.apply_inner_checked(request, import, service_payload, None, |_, _| Ok(()))
     }
     fn apply_inner_checked<E: From<StoreError>>(
         &mut self,
         request: ApplyRequest,
         import: bool,
         service_payload: Option<Value>,
+        service_result: Option<Value>,
         check: impl FnOnce(&Connection, &Snapshot) -> Result<(), E>,
     ) -> Result<Event, E> {
         let tx = self
@@ -640,6 +679,12 @@ impl ProjectStore {
                         .unwrap()
                         .insert("service_payload".into(), service_payload);
                 }
+                if let Some(result) = service_result {
+                    payload
+                        .as_object_mut()
+                        .unwrap()
+                        .insert("service_result".into(), result);
+                }
                 tx.execute(
                     "INSERT INTO idempotency VALUES(?1,?2,?3,?4,?5)",
                     params![
@@ -658,26 +703,22 @@ impl ProjectStore {
     }
     /// Receipt lookup supplies material for SERVICE-001 payload/result policy.
     pub fn idempotency_record(&self, key: &str) -> Result<Option<IdempotencyRecord>, StoreError> {
-        let record: Option<(String, String)> = self
-            .connection
-            .query_row(
-                "SELECT payload,result FROM idempotency WHERE key=?1",
-                [key],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .optional()?;
-        record
-            .map(|(payload, result)| {
-                Ok(IdempotencyRecord {
-                    key: key.to_owned(),
-                    payload: serde_json::from_str(&payload)?,
-                    result: serde_json::from_str(&result)?,
-                    service_payload: serde_json::from_str::<Value>(&payload)?
-                        .get("service_payload")
-                        .cloned(),
-                })
-            })
-            .transpose()
+        read_receipt(&self.connection, key)
+    }
+    /// Receipt replay never opens a writer or changes journal settings.
+    pub fn read_idempotency_record(
+        path: impl AsRef<Path>,
+        key: &str,
+    ) -> Result<Option<IdempotencyRecord>, StoreError> {
+        let connection =
+            Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        connection.busy_timeout(Duration::from_secs(5))?;
+        connection.execute_batch("PRAGMA query_only=ON;")?;
+        let version: u32 = connection.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+        if version != INTERNAL_SCHEMA_VERSION {
+            return Err(StoreError::UnsupportedSchemaVersion(version));
+        }
+        read_receipt(&connection, key)
     }
     pub fn events_since(&self, revision: Revision) -> Result<Vec<Event>, StoreError> {
         read_events_since(&self.connection, revision)
@@ -947,6 +988,31 @@ fn read_events_since(
         });
     }
     Ok(result)
+}
+
+fn read_receipt(
+    connection: &Connection,
+    key: &str,
+) -> Result<Option<IdempotencyRecord>, StoreError> {
+    let record: Option<(String, String)> = connection
+        .query_row(
+            "SELECT payload,result FROM idempotency WHERE key=?1",
+            [key],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?;
+    record
+        .map(|(payload, result)| {
+            let value: Value = serde_json::from_str(&payload)?;
+            Ok(IdempotencyRecord {
+                key: key.to_owned(),
+                payload: serde_json::from_str(&payload)?,
+                result: serde_json::from_str(&result)?,
+                service_payload: value.get("service_payload").cloned(),
+                service_result: value.get("service_result").cloned(),
+            })
+        })
+        .transpose()
 }
 
 #[cfg(test)]

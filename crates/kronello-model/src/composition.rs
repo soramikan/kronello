@@ -71,6 +71,16 @@ pub struct Composition {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SceneNode {
+    /// Search metadata only; never runtime identity.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    #[schemars(length(max = 32))]
+    pub tags: BTreeSet<String>,
+    /// Display only; never used as identity.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Disabled containment subtrees do not enter the evaluated scene.
+    #[serde(default = "node_enabled", skip_serializing_if = "is_enabled")]
+    pub enabled: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<crate::Effect>,
     pub id: NodeId,
@@ -84,7 +94,7 @@ pub struct SceneNode {
 }
 
 /// Content hooks only; geometry, text layout, and rendering are later layers.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, schemars::JsonSchema)]
 #[serde(
     tag = "kind",
     content = "value",
@@ -97,6 +107,57 @@ pub enum NodeKind {
     Shape { content_ref: ContentId },
     Text { content_ref: ContentId },
     CompositionInstance(CompositionInstance),
+    Media(MediaNode),
+}
+
+impl<'de> Deserialize<'de> for NodeKind {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let wire = crate::wire::Adjacent::deserialize(d)?;
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Content {
+            content_ref: ContentId,
+        }
+        match wire.kind.as_str() {
+            "group" => wire.unit(Self::Group),
+            "null" => wire.unit(Self::Null),
+            "shape" => {
+                let p: Content = wire.value()?;
+                Ok(Self::Shape {
+                    content_ref: p.content_ref,
+                })
+            }
+            "text" => {
+                let p: Content = wire.value()?;
+                Ok(Self::Text {
+                    content_ref: p.content_ref,
+                })
+            }
+            "composition_instance" => wire.value().map(Self::CompositionInstance),
+            "media" => wire.value().map(Self::Media),
+            _ => Err(wire.unknown(&[
+                "group",
+                "null",
+                "shape",
+                "text",
+                "composition_instance",
+                "media",
+            ])),
+        }
+    }
+}
+
+/// Explicit media stream; AUDIO-003 executes audio only.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MediaNode {
+    pub asset: crate::AssetId,
+    pub stream_index: u32,
+    pub source_in: kronello_time::Time,
+    /// Maps time relative to the owning node's active_range.start.
+    pub time_map: TimeMap,
+    /// A kronello.audio.volume Property owned by the same SceneNode.
+    pub volume: PropertyId,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
@@ -238,6 +299,8 @@ pub struct CompositionReference {
 
 #[derive(Debug, Clone, PartialEq, Error)]
 pub enum CompositionError {
+    #[error("invalid Media node {node}: {message}")]
+    InvalidMedia { node: NodeId, message: String },
     #[error("design extent must have positive finite dimensions")]
     InvalidDesignExtent,
     #[error("duplicate Composition ID: {id}")]
@@ -310,6 +373,8 @@ pub enum CompositionError {
         instance: CompositionInstanceId,
         depth: usize,
     },
+    #[error("invalid tags on node {node}")]
+    InvalidTags { node: NodeId },
     #[error(transparent)]
     Value(#[from] ModelError),
 }
@@ -347,6 +412,9 @@ pub fn validate_compositions(
             if !node_ids.insert(node.id) {
                 errors.push(CompositionError::DuplicateNodeId { id: node.id });
             }
+            if !valid_node_tags(&node.tags) {
+                errors.push(CompositionError::InvalidTags { node: node.id });
+            }
             nodes.insert(node.id, node);
             validate_properties(
                 composition,
@@ -356,6 +424,20 @@ pub fn validate_compositions(
                 &mut property_ids,
                 &mut errors,
             );
+            if let NodeKind::Media(media) = &node.kind {
+                let valid = media.source_in >= kronello_time::Time::ZERO
+                    && node
+                        .properties
+                        .iter()
+                        .find(|p| p.id() == media.volume)
+                        .is_some_and(|p| crate::validate_volume(p).is_ok());
+                if !valid {
+                    errors.push(CompositionError::InvalidMedia {
+                        node: node.id,
+                        message: "source_in or volume Property".into(),
+                    });
+                }
+            }
             if let NodeKind::CompositionInstance(instance) = &node.kind {
                 if !instance_ids.insert(instance.id) {
                     errors.push(CompositionError::DuplicateInstanceId { id: instance.id });
@@ -562,4 +644,28 @@ fn graph_cycles<K: Copy + Ord, E: Clone>(graph: &BTreeMap<K, Vec<(K, E)>>) -> Ve
         }
     }
     cycles
+}
+
+fn node_enabled() -> bool {
+    true
+}
+fn is_enabled(enabled: &bool) -> bool {
+    *enabled
+}
+
+/// Authored tags must already be NFC; search normalizes its input separately.
+pub fn valid_node_tags(tags: &BTreeSet<String>) -> bool {
+    use unicode_normalization::UnicodeNormalization;
+    tags.len() <= 32
+        && tags.iter().all(|tag| {
+            !tag.is_empty()
+                && tag.len() <= 64
+                && tag.trim() == tag
+                && !tag.chars().any(char::is_control)
+                && tag.nfc().eq(tag.chars())
+        })
+}
+pub fn normalize_search_tags(tags: &BTreeSet<String>) -> BTreeSet<String> {
+    use unicode_normalization::UnicodeNormalization;
+    tags.iter().map(|tag| tag.nfc().collect()).collect()
 }

@@ -4,6 +4,7 @@
 //! keyed by placement identity, and maps rational time without frame snapping.
 //! This is a semantic scene, not a renderer or the persisted RenderSnapshot.
 
+mod expression;
 mod graph;
 mod scene;
 
@@ -52,10 +53,17 @@ impl From<PropertyKey> for RuntimePropertyKey {
 
 #[derive(Debug, Clone, PartialEq, Error)]
 pub enum EvaluationError {
+    #[error("expression on {key:?}: {source}")]
+    Expression {
+        key: RuntimePropertyKey,
+        source: kronello_model::ExpressionError,
+    },
     #[error("invalid composition definitions: {0:?}")]
     InvalidCompositions(Vec<CompositionError>),
     #[error("composition not found: {0}")]
     CompositionNotFound(CompositionId),
+    #[error("duplicate expression ID")]
+    DuplicateExpressionId,
     #[error("duplicate curve ID: {0}")]
     DuplicateCurveId(kronello_model::CurveId),
     #[error("declared layout dependency input is missing: {0:?}")]
@@ -100,6 +108,7 @@ pub enum EvaluationError {
 impl EvaluationError {
     pub const fn code(&self) -> &'static str {
         match self {
+            Self::Expression { source, .. } => source.code(),
             Self::UnsupportedFeature { .. } => "UNSUPPORTED_FEATURE",
             Self::DependencyCycle { .. } => "PROPERTY_DEPENDENCY_CYCLE",
             _ => "EVALUATION_ERROR",

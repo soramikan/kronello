@@ -18,11 +18,115 @@ fn setup() -> (tempfile::TempDir, PathBuf, Project) {
     let p = fixture();
     service()
         .dispatch(Request::ProjectCreate(CreateRequest {
+            plan_hash: None,
+            idempotency_key: None,
             project: path.clone(),
             document: p.clone(),
         }))
         .unwrap();
     (dir, path, p)
+}
+
+#[test]
+fn node_name_visibility_share_idempotency_and_selective_undo() {
+    let (_dir, path, project) = setup();
+    let c = comp(&project);
+    let id = c.nodes[0].id;
+    let commands = vec![
+        EditCommand::NodeRename {
+            composition: c.id,
+            node: id,
+            name: Some("Renamed".into()),
+        },
+        EditCommand::NodeEnabledSet {
+            composition: c.id,
+            node: id,
+            enabled: false,
+        },
+    ];
+    let p = plan(&path, "1", commands);
+    let r = request(&path, &p, "node-name-visibility");
+    let event = apply_request(r.clone()).unwrap();
+    assert_eq!(apply_request(r).unwrap(), event);
+    let saved = export(&path);
+    assert_eq!(saved.revision, "2");
+    assert_eq!(comp(&saved.document).nodes[0].id, id);
+    assert_eq!(
+        comp(&saved.document).nodes[0].name.as_deref(),
+        Some("Renamed")
+    );
+    assert!(!comp(&saved.document).nodes[0].enabled);
+    undo(&path, &event, "undo-node-name-visibility");
+    let restored = export(&path);
+    assert_eq!(restored.revision, "3");
+    assert_eq!(comp(&restored.document).nodes[0].name, None);
+    assert!(comp(&restored.document).nodes[0].enabled);
+}
+#[test]
+fn node_property_insert_validates_identity_key_and_supports_receipt_undo() {
+    let (_dir, path, project) = setup();
+    let c = comp(&project);
+    let node = c.nodes[0].id;
+    let property: Property = serde_json::from_value(json!({
+        "id": PropertyId::new(), "descriptor": {"key": "kronello.transform.rotation", "version": 1},
+        "source": {"kind": "constant", "value": {"kind": "angle", "value": 15.0}}, "modifiers": []
+    }))
+    .unwrap();
+    let command = EditCommand::NodePropertyInsert {
+        composition: c.id,
+        node,
+        property: property.clone(),
+    };
+    let p = plan(&path, "1", vec![command.clone()]);
+    let r = request(&path, &p, "insert-default-transform");
+    // Exercise the same JSON decoder used by CLI, MCP, and FFI.
+    let decoded: Request =
+        serde_json::from_value(serde_json::to_value(Request::EditApply(r.clone())).unwrap())
+            .unwrap();
+    let ResultData::Edit(event) = service().dispatch(decoded).unwrap() else {
+        panic!()
+    };
+    assert_eq!(apply_request(r).unwrap(), event);
+    assert_eq!(
+        comp(&export(&path).document).nodes[0].properties.last(),
+        Some(&property)
+    );
+    let invalid_plan = |command| {
+        service()
+            .dispatch(Request::EditPlan(PlanRequest {
+                project: path.clone(),
+                base_revision: "2".into(),
+                commands: vec![command],
+            }))
+            .unwrap_err()
+            .code
+    };
+    assert_eq!(invalid_plan(command), "INVALID_EDIT");
+    let mut new_id = serde_json::to_value(&property).unwrap();
+    new_id["id"] = json!(PropertyId::new());
+    assert_eq!(
+        invalid_plan(EditCommand::NodePropertyInsert {
+            composition: c.id,
+            node,
+            property: serde_json::from_value(new_id).unwrap()
+        }),
+        "INVALID_EDIT"
+    );
+    assert_eq!(
+        invalid_plan(EditCommand::NodePropertyInsert {
+            composition: c.id,
+            node: c.nodes[1].id,
+            property: property.clone()
+        }),
+        "INVALID_EDIT"
+    );
+    let undone = undo(&path, &event, "undo-default-transform");
+    assert_eq!(export(&path).document, project);
+    undo(&path, &undone, "redo-default-transform");
+    assert_eq!(
+        comp(&export(&path).document).nodes[0].properties.last(),
+        Some(&property)
+    );
 }
 fn export(path: &Path) -> ExportResult {
     let ResultData::Export(r) = service()
@@ -109,6 +213,7 @@ fn undo(path: &Path, event: &Event, key: &str) -> Event {
 fn history(path: &Path, since: &str) -> HistoryResult {
     let ResultData::History(h) = service()
         .dispatch(Request::HistoryList(HistoryRequest {
+            cursor: None,
             project: path.into(),
             since_revision: since.into(),
             limit: 100,
@@ -122,6 +227,9 @@ fn history(path: &Path, since: &str) -> HistoryResult {
 }
 fn node(kind: NodeKind, p: &Project, parent: Option<NodeId>) -> SceneNode {
     SceneNode {
+        tags: Default::default(),
+        name: None,
+        enabled: true,
         id: NodeId::new(),
         kind,
         containment_parent: parent,
@@ -641,6 +749,8 @@ fn optional_content_collection_inverse_preserves_independent_insertions() {
     p.texts.clear();
     service()
         .dispatch(Request::ProjectCreate(CreateRequest {
+            plan_hash: None,
+            idempotency_key: None,
             project: path.clone(),
             document: p.clone(),
         }))
@@ -1103,4 +1213,139 @@ fn ordered_modifiers_replacement_undo_redo_and_periodic_replay() {
     );
     store.close().unwrap();
     assert_eq!(export(&path).document, at_66);
+}
+
+#[test]
+fn vec005_shared_shape_and_offset_curve_edits_roundtrip_undo_and_typed_errors() {
+    let (_dir, path, p) = setup();
+    let DocumentObject::Known(original) = &p.shapes[0] else {
+        panic!()
+    };
+    let c = comp(&p);
+    let n = c
+        .nodes
+        .iter()
+        .find(|n| matches!(n.kind,NodeKind::Shape {content_ref} if content_ref==original.id))
+        .unwrap();
+    let property = |key: &str, kind: &str, value: Json| -> Property {
+        serde_json::from_value(
+            json!({"id":PropertyId::new(),"descriptor":{"key":key,"version":1},
+            "source":{"kind":"constant","value":{"kind":kind,"value":value}},"modifiers":[]}),
+        )
+        .unwrap()
+    };
+    let color = property(
+        "kronello.shape.stroke_color",
+        "color",
+        serde_json::to_value(Color::from_srgb8([0, 0, 255], None)).unwrap(),
+    );
+    let width = property("kronello.stroke_width", "scalar", json!(2.0));
+    let join = property("kronello.shape.stroke_join", "enum", json!("round"));
+    let cap = property("kronello.shape.stroke_cap", "enum", json!("round"));
+    let limit = property("kronello.shape.miter_limit", "scalar", json!(4.0));
+    let offset = property("kronello.shape.dash_offset", "scalar", json!(-1.0));
+    let mut shape = original.clone();
+    shape.stroke = Some(Stroke {
+        options: Some(Box::new(StrokeOptions {
+            geometry_version: EXTENDED_STROKE_VERSION.into(),
+            alignment: StrokeAlignment::Outside,
+            fill_rule: FillRule::Nonzero,
+            dash_array: vec![FiniteF64::new(3.0).unwrap(), FiniteF64::new(2.0).unwrap()],
+            dash_offset: offset.id(),
+        })),
+        gradient: None,
+        color: color.id(),
+        width: width.id(),
+        join: join.id(),
+        cap: cap.id(),
+        miter_limit: limit.id(),
+    });
+    let mut commands: Vec<_> = [color, width, join, cap, limit, offset.clone()]
+        .into_iter()
+        .map(|property| EditCommand::NodePropertyInsert {
+            composition: c.id,
+            node: n.id,
+            property,
+        })
+        .collect();
+    commands.push(EditCommand::ShapeSet {
+        shape: shape.clone(),
+    });
+    let decoded: Vec<EditCommand> =
+        serde_json::from_value(serde_json::to_value(commands).unwrap()).unwrap();
+    let event = apply(&path, decoded.clone(), "vec005-author");
+    assert_eq!(
+        export(&path).document.shapes[0],
+        DocumentObject::Known(shape.clone())
+    );
+    undo(&path, &event, "vec005-undo-authoring");
+    assert_eq!(export(&path).document, p);
+    apply(&path, decoded, "vec005-reauthor");
+    let authored = export(&path).document;
+    let curve = AnimationCurve::new(
+        CurveId::new(),
+        ValueType::Scalar,
+        vec![
+            Keyframe {
+                time: Time::ZERO,
+                value: scalar(-1.0),
+                interpolation: CurveInterpolation::Linear,
+            },
+            Keyframe {
+                time: Time::new(1, 1).unwrap(),
+                value: scalar(3.0),
+                interpolation: CurveInterpolation::Linear,
+            },
+        ],
+    )
+    .unwrap();
+    let animate = apply(
+        &path,
+        vec![EditCommand::PropertySourceSet {
+            object: n.id.as_uuid(),
+            property: offset.id(),
+            source: PropertySource::Curve(curve.id()),
+            curve: Some(curve.clone()),
+        }],
+        "vec005-animate",
+    );
+    let saved = export(&path);
+    assert!(
+        saved
+            .document
+            .curves
+            .contains(&DocumentObject::Known(curve))
+    );
+    for (version, array, expected) in [
+        ("future", vec![1.0, 2.0], "UNSUPPORTED_FEATURE"),
+        (
+            EXTENDED_STROKE_VERSION,
+            vec![0.0, 0.0],
+            "STROKE_INVALID_DASH",
+        ),
+        (
+            EXTENDED_STROKE_VERSION,
+            vec![-1.0, 2.0],
+            "STROKE_INVALID_DASH",
+        ),
+    ] {
+        let mut bad = shape.clone();
+        let o = bad.stroke.as_mut().unwrap().options.as_mut().unwrap();
+        o.geometry_version = version.into();
+        o.dash_array = array
+            .into_iter()
+            .map(|x| FiniteF64::new(x).unwrap())
+            .collect();
+        let error = service()
+            .dispatch(Request::EditPlan(PlanRequest {
+                project: path.clone(),
+                base_revision: saved.revision.clone(),
+                commands: vec![EditCommand::ShapeSet { shape: bad }],
+            }))
+            .unwrap_err();
+        assert_eq!(error.code, expected);
+        assert_eq!(export(&path).revision, saved.revision);
+    }
+    undo(&path, &animate, "vec005-undo-animation");
+    assert_eq!(export(&path).document, authored);
 }

@@ -6,6 +6,28 @@ use std::collections::BTreeMap;
 fn f(x: f64) -> FiniteF64 {
     FiniteF64::new(x).unwrap()
 }
+
+#[test]
+fn analytic_bounds_use_curve_extrema_instead_of_control_polygon_or_output_resolution() {
+    let geometry = ResolvedGeometry::BezierPath(Path {
+        segments: vec![
+            PathSegment::MoveTo([f(0.0), f(0.0)]),
+            PathSegment::QuadTo {
+                control: [f(10.0), f(20.0)],
+                end: [f(20.0), f(0.0)],
+            },
+        ],
+    });
+    assert_eq!(
+        kronello_vector::geometry_bounds(&geometry).unwrap(),
+        Some(([0.0, 0.0], [20.0, 10.0]))
+    );
+    assert_eq!(
+        kronello_vector::geometry_bounds(&ResolvedGeometry::BezierPath(Path { segments: vec![] }))
+            .unwrap(),
+        None
+    );
+}
 fn fixture() -> (Project, BTreeMap<PropertyId, Value>, SchemaRegistry) {
     let mut registry = SchemaRegistry::with_builtin();
     for descriptor in shape_descriptors() {
@@ -41,6 +63,9 @@ fn fixture() -> (Project, BTreeMap<PropertyId, Value>, SchemaRegistry) {
         })
         .collect();
     let node = SceneNode {
+        tags: Default::default(),
+        name: None,
+        enabled: true,
         effects: vec![],
         id: NodeId::new(),
         kind: NodeKind::Shape {
@@ -302,6 +327,7 @@ fn existing_evaluator_animates_shape_size_and_radius_without_editing_ir() {
     let dependencies = BTreeMap::new();
     let graph = DependencyGraph::compile(
         EvaluationSnapshot {
+            expressions: &[],
             compositions: &compositions,
             curves: &curves,
             registry: &registry,

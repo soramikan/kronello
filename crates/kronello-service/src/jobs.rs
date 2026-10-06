@@ -1,9 +1,10 @@
 //! Fixed-input job orchestration shared by CLI and MCP.
 use std::path::{Path, PathBuf};
-use std::sync::mpsc;
 
 use kronello_jobs::{JobConfig, JobError, JobRecord, JobStore, Submission};
-use kronello_media::{AvExportRequest, AvExportSnapshot, MediaRuntime};
+use kronello_media::{
+    AvExportRequest, AvExportSnapshot, DeliveryAudioCodec, MediaRuntime, MovieProfile,
+};
 use kronello_model::{AssetId, DocumentObject};
 use kronello_render::{RenderSnapshot, SequenceRequest, frame_samples};
 use kronello_time::{Time, TimeRange};
@@ -39,13 +40,149 @@ pub enum JobOutput {
     #[default]
     ImageSequence,
     ProResMov {
+        #[serde(default)]
+        audio: kronello_audio::AudioSourceMode,
+        #[serde(default = "movie_profile_v1")]
+        profile_version: u32,
+        clips: Vec<JobAudioClip>,
+        background: [f32; 3],
+    },
+    Av1Mp4 {
+        profile_version: u32,
+        #[serde(default)]
+        audio: kronello_audio::AudioSourceMode,
+        #[serde(default)]
+        audio_codec: DeliveryAudioCodec,
+        clips: Vec<JobAudioClip>,
+        background: [f32; 3],
+    },
+    H264Mov {
+        profile_version: u32,
+        #[serde(default)]
+        audio: kronello_audio::AudioSourceMode,
+        #[serde(default)]
+        audio_codec: DeliveryAudioCodec,
+        clips: Vec<JobAudioClip>,
+        background: [f32; 3],
+    },
+    HevcMov {
+        profile_version: u32,
+        #[serde(default)]
+        audio: kronello_audio::AudioSourceMode,
+        #[serde(default)]
+        audio_codec: DeliveryAudioCodec,
         clips: Vec<JobAudioClip>,
         background: [f32; 3],
     },
 }
+pub(crate) struct MovieSettings<'a> {
+    pub profile: MovieProfile,
+    pub audio_version: u32,
+    pub audio: kronello_audio::AudioSourceMode,
+    pub clips: &'a [JobAudioClip],
+    pub background: [f32; 3],
+}
+impl JobOutput {
+    pub(crate) fn supported_profile_versions(&self) -> &'static [u32] {
+        match self {
+            Self::ProResMov { .. } => &[1, 2, 3],
+            Self::ImageSequence
+            | Self::Av1Mp4 { .. }
+            | Self::H264Mov { .. }
+            | Self::HevcMov { .. } => &[1],
+        }
+    }
+    pub(crate) fn movie_settings(&self) -> Result<MovieSettings<'_>, ServiceError> {
+        let (profile, version, audio, audio_codec, clips, background) = match self {
+            Self::ImageSequence => {
+                return Err(ServiceError::invalid(
+                    "render.export requires a movie profile",
+                ));
+            }
+            Self::ProResMov {
+                profile_version,
+                audio,
+                clips,
+                background,
+            } => (
+                MovieProfile::ProResPcm24,
+                *profile_version,
+                *audio,
+                DeliveryAudioCodec::Alac,
+                clips,
+                *background,
+            ),
+            Self::Av1Mp4 {
+                profile_version,
+                audio,
+                audio_codec,
+                clips,
+                background,
+            } => (
+                MovieProfile::Av1Mp4AlacV1,
+                *profile_version,
+                *audio,
+                *audio_codec,
+                clips,
+                *background,
+            ),
+            Self::H264Mov {
+                profile_version,
+                audio,
+                audio_codec,
+                clips,
+                background,
+            } => (
+                MovieProfile::H264AlacV1,
+                *profile_version,
+                *audio,
+                *audio_codec,
+                clips,
+                *background,
+            ),
+            Self::HevcMov {
+                profile_version,
+                audio,
+                audio_codec,
+                clips,
+                background,
+            } => (
+                MovieProfile::HevcAlacV1,
+                *profile_version,
+                *audio,
+                *audio_codec,
+                clips,
+                *background,
+            ),
+        };
+        let legacy = profile == MovieProfile::ProResPcm24;
+        if (legacy
+            && (!self.supported_profile_versions().contains(&version)
+                || (version == 1 && audio != kronello_audio::AudioSourceMode::Explicit)))
+            || (!legacy
+                && (!self.supported_profile_versions().contains(&version)
+                    || audio_codec != DeliveryAudioCodec::Alac))
+        {
+            return Err(ServiceError::new(
+                "UNSUPPORTED_FEATURE",
+                "unsupported movie version/audio codec or legacy audio mode; AAC adoption is deferred",
+            ));
+        }
+        Ok(MovieSettings {
+            profile,
+            audio_version: if legacy { version } else { 3 },
+            audio,
+            clips,
+            background,
+        })
+    }
+}
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RenderSubmitRequest {
+    /// Optional fence against changes since the caller inspected the project.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected_revision: Option<String>,
     /// Reuses the synchronous target and time/region request without a job-only
     /// target model. output_directory is the MOV filename for ProResMov.
     pub render: SequenceRenderRequest,
@@ -94,7 +231,7 @@ fn absolute(path: &Path) -> Result<PathBuf, ServiceError> {
         std::env::current_dir()?.join(path)
     })
 }
-fn features(required: &[String]) -> Result<(), ServiceError> {
+pub(crate) fn features(required: &[String]) -> Result<(), ServiceError> {
     let supported = crate::CapabilitiesResult::current(None).features;
     if let Some(missing) = required.iter().find(|f| !supported.contains(f)) {
         return Err(ServiceError::new(
@@ -158,6 +295,7 @@ impl Service<'_> {
             font.path = absolute(&font.path)?;
         }
         let stored = kronello_store::ProjectStore::read_snapshot(&project_path)?;
+        check_expected_revision(request.expected_revision.as_deref(), stored.revision)?;
         crate::document_asset_locators(&stored.document)?;
         let snapshot = crate::freeze_render_input(&stored, &request.render.input)?;
         let total_frames =
@@ -167,22 +305,9 @@ impl Service<'_> {
                 "job range must contain at least one frame",
             ));
         }
-        if let JobOutput::ProResMov { clips, .. } = &request.output {
-            if request
-                .render
-                .output_directory
-                .extension()
-                .is_none_or(|e| e != "mov")
-            {
-                return Err(ServiceError::invalid("ProResMov requires .mov destination"));
-            }
-            AvExportSnapshot::new(
-                &snapshot,
-                clips
-                    .iter()
-                    .map(JobAudioClip::compile)
-                    .collect::<Result<_, _>>()?,
-            )?;
+        if !matches!(request.output, JobOutput::ImageSequence) {
+            validate_movie_destination(&request.render.output_directory, &request.output)?;
+            movie_snapshot(&snapshot, &request.output)?;
         }
         let store = self.jobs()?;
         let submission = Submission {
@@ -288,6 +413,11 @@ impl Service<'_> {
             })
         };
         let rendered = self.with_selected_backend(|backend| {
+            let video_backend = kronello_media::VideoRenderBackend {
+                backend,
+                project_path: &fixed.request.render.input.project,
+            };
+            let backend = &video_backend;
             let request = &fixed.request.render;
             let result = match &fixed.request.output {
                 JobOutput::ImageSequence => {
@@ -320,15 +450,10 @@ impl Service<'_> {
                     )?;
                     serde_json::to_value(metadata)?
                 }
-                JobOutput::ProResMov { clips, background } => {
+                output => {
+                    let settings = output.movie_settings()?;
                     let runtime = MediaRuntime::load()?;
-                    let av = AvExportSnapshot::new(
-                        &fixed.snapshot,
-                        clips
-                            .iter()
-                            .map(JobAudioClip::compile)
-                            .collect::<Result<_, _>>()?,
-                    )?;
+                    let av = movie_snapshot(&fixed.snapshot, &fixed.request.output)?;
                     let report = runtime.export_av_with_checkpoint(
                         &av,
                         &request.input.project,
@@ -339,7 +464,7 @@ impl Service<'_> {
                             range: request.range,
                             frame_rate: request.frame_rate,
                             region: request.input.region,
-                            background: *background,
+                            background: settings.background,
                             clipping: kronello_audio::ClippingPolicy::Reject,
                         },
                         &mut |n| checkpoint(n).map_err(kronello_media::MediaError::InvalidInput),
@@ -353,7 +478,7 @@ impl Service<'_> {
                     let probe = runtime.probe(&stage_path).map_err(|e| {
                         ServiceError::new("OUTPUT_VALIDATION_FAILED", e.to_string())
                     })?;
-                    probe.verify_av()?;
+                    probe.verify_movie(settings.profile)?;
                     if report.frames.len() as u64 != record.total_frames
                         || probe.render_snapshot_hash != record.snapshot_hash
                     {
@@ -438,71 +563,29 @@ pub fn worker_entry() -> Option<std::process::ExitCode> {
     if args.first().map(String::as_str) != Some("worker") {
         return None;
     }
-    eprintln!(
-        "worker startup pid={} at_ms={} args={args:?}",
-        std::process::id(),
-        kronello_jobs::now_ms()
-    );
     let result = (|| {
         kronello_jobs::detach_worker()?;
+        eprintln!(
+            "worker startup pid={} at_ms={} args={args:?}",
+            std::process::id(),
+            kronello_jobs::now_ms()
+        );
         if args.len() != 3 || args[1] != "--job" {
             return Err(JobError::new("INVALID_REQUEST", "worker --job <id>"));
         }
         let store = JobStore::open(JobConfig::from_env()?)?;
         let id = &args[2];
         store.get(id)?;
-        let (stop, receive) = mpsc::channel();
-        let pulse_store = store.clone();
-        let pulse_id = id.clone();
-        let heartbeat = std::thread::spawn(move || {
-            eprintln!(
-                "worker heartbeat started job={pulse_id} at_ms={}",
-                kronello_jobs::now_ms()
-            );
-            let mut missed = false;
-            while receive.recv_timeout(pulse_store.config().heartbeat_interval)
-                == Err(mpsc::RecvTimeoutError::Timeout)
-            {
-                match pulse_store.heartbeat(&pulse_id) {
-                    Ok(()) => {
-                        if missed {
-                            eprintln!(
-                                "worker heartbeat recovered job={pulse_id} at_ms={}",
-                                kronello_jobs::now_ms()
-                            );
-                            missed = false;
-                        }
-                    }
-                    Err(error) => {
-                        eprintln!(
-                            "worker heartbeat failed job={pulse_id} at_ms={}: {error}",
-                            kronello_jobs::now_ms()
-                        );
-                        if !error.is_retryable_heartbeat() {
-                            break;
-                        }
-                        missed = true;
-                    }
-                }
-            }
-        });
+        let heartbeat = kronello_jobs::WorkerHeartbeat::start(store.clone(), id.clone());
         let result = (|| {
-            loop {
-                if store.claim(id)? {
-                    break;
-                }
-                std::thread::sleep(std::time::Duration::from_millis(50));
-            }
+            store.wait_for_slot(id)?;
             let record = store.get(id)?;
             let fixed: FixedInput = serde_json::from_slice(&store.input(&record)?)?;
             Service::new(fixed.backend)
                 .render_fixed_job(&store, &record, &fixed)
                 .map_err(job_error)
         })();
-        let _ = stop.send(());
-        if heartbeat.join().is_err() {
-            eprintln!("worker heartbeat thread panicked job={id}");
-        }
+        drop(heartbeat);
         if let Err(error) = &result {
             store.finish_error(id, error)?;
         }
@@ -515,4 +598,70 @@ pub fn worker_entry() -> Option<std::process::ExitCode> {
             std::process::ExitCode::FAILURE
         }
     })
+}
+
+pub(crate) fn movie_profile_v1() -> u32 {
+    1
+}
+pub(crate) fn movie_snapshot(
+    snapshot: &RenderSnapshot,
+    output: &JobOutput,
+) -> Result<AvExportSnapshot, ServiceError> {
+    let settings = output.movie_settings()?;
+    let clips = settings
+        .clips
+        .iter()
+        .map(JobAudioClip::compile)
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(if settings.profile != MovieProfile::ProResPcm24 {
+        AvExportSnapshot::with_movie_profile(snapshot, settings.audio, clips, settings.profile)?
+    } else if settings.audio_version == 1 {
+        AvExportSnapshot::new(snapshot, clips)?
+    } else {
+        AvExportSnapshot::with_audio_profile(
+            snapshot,
+            settings.audio,
+            clips,
+            settings.audio_version,
+        )?
+    })
+}
+
+pub(crate) fn validate_movie_destination(
+    path: &Path,
+    output: &JobOutput,
+) -> Result<(), ServiceError> {
+    let settings = output.movie_settings()?;
+    let extension = if settings.profile == MovieProfile::Av1Mp4AlacV1 {
+        "mp4"
+    } else {
+        "mov"
+    };
+    if path.extension().is_none_or(|e| e != extension) {
+        if settings.profile == MovieProfile::ProResPcm24 {
+            return Err(ServiceError::invalid("ProResMov requires .mov destination"));
+        }
+        return Err(ServiceError::new(
+            "INVALID_MEDIA_INPUT",
+            format!("movie profile requires .{extension} destination"),
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn check_expected_revision(
+    expected: Option<&str>,
+    revision: u64,
+) -> Result<(), ServiceError> {
+    if let Some(expected) = expected {
+        let base = crate::parse_revision(expected)?;
+        if base != revision {
+            return Err(kronello_store::StoreError::RevisionConflict {
+                base,
+                current: revision,
+            }
+            .into());
+        }
+    }
+    Ok(())
 }

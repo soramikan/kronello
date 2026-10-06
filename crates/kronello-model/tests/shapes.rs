@@ -76,6 +76,7 @@ fn fixture() -> (Project, SchemaRegistry) {
             rule: FillRule::Evenodd,
         }),
         stroke: Some(Stroke {
+            options: None,
             gradient: None,
             color: ids[7],
             width: ids[3],
@@ -85,6 +86,9 @@ fn fixture() -> (Project, SchemaRegistry) {
         }),
     };
     let node = SceneNode {
+        tags: Default::default(),
+        name: None,
+        enabled: true,
         effects: vec![],
         id: NodeId::new(),
         kind: NodeKind::Shape {

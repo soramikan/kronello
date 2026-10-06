@@ -6,7 +6,7 @@ use kronello_model::{Color, ColorSpace, ResolvedGeometry, ResolvedText, Value};
 use kronello_text::{FontData, LayoutResult};
 use kronello_time::Time;
 use kronello_vector::{FlattenRequest, FlattenedPath};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
@@ -50,7 +50,10 @@ impl CacheConfig {
         }
     }
 }
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(deny_unknown_fields)]
 pub struct CacheStats {
     pub hits: u64,
     pub misses: u64,
@@ -60,7 +63,10 @@ pub struct CacheStats {
     /// Retained payload weight, excluding allocator overhead. Values use JSON byte size.
     pub bytes: usize,
 }
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(deny_unknown_fields)]
 pub struct RenderCacheStats {
     pub values: CacheStats,
     pub layout: CacheStats,
@@ -219,6 +225,7 @@ impl RenderCache {
             let mut canonical = text.clone();
             for style in &mut canonical.styles {
                 style.fill = Color::from_srgb8([0, 0, 0], None);
+                style.gradient = None;
             }
             let result = kronello_text::layout(&canonical, fonts)?;
             // Accounts for outlines and all source/cluster/line metadata.
@@ -238,6 +245,7 @@ impl RenderCache {
         };
         for glyph in &mut layout.glyphs {
             glyph.fill = text.styles[glyph.style_index].fill;
+            glyph.gradient = text.styles[glyph.style_index].gradient.clone();
         }
         Ok(layout)
     }
@@ -303,6 +311,20 @@ impl RasterCacheKey {
         let mut keys: Vec<Option<Self>> = vec![];
         for node in dag.nodes() {
             let value = match node {
+                crate::DagNode::VideoDraw { .. } => {
+                    return Err(RenderError::UnsupportedFeature(
+                        "unresolved video input".into(),
+                    ));
+                }
+                crate::DagNode::RasterInput { pixels } => Some(Self(key(
+                    "video-raster",
+                    (
+                        pixels,
+                        dag.execution_region(),
+                        dag.working_space(),
+                        backend_namespace,
+                    ),
+                )?)),
                 crate::DagNode::Geometry { .. } | crate::DagNode::TextLayout { .. } => None,
                 crate::DagNode::CoverageDraw { path, .. } => Some(Self::new(
                     path,
@@ -335,8 +357,8 @@ impl RasterCacheKey {
                 crate::DagNode::Effect { source, effect } => Some(Self(key(
                     "effect",
                     (
-                        crate::EFFECT_KERNEL_VERSION,
-                        kronello_model::EFFECT_VERSION,
+                        effect.kernel_version(),
+                        effect.semantic_version(),
                         keys[*source].map(|k| hex(k.0)),
                         effect,
                         dag.execution_region(),
@@ -376,7 +398,13 @@ impl RasterCacheKey {
                 &path.fill_gradient,
                 &path.stroke_gradient,
                 path.paint_transform,
-                crate::STROKE_GEOMETRY_VERSION,
+                path.stroke_geometry.as_ref().map_or_else(
+                    || json!(kronello_model::LEGACY_STROKE_VERSION),
+                    |g| json!({"version":g.version,"alignment":g.alignment,"fill_rule":g.fill_rule,
+                        "inverse":g.output_to_local,"forward":g.local_to_output,
+                        "dash_array":g.dash_array,"dash_offset":g.dash_offset,
+                        "contours":g.contours.subpaths.iter().map(|p| (&p.points,p.closed)).collect::<Vec<_>>()}),
+                ),
                 crate::GRADIENT_INTERPOLATION_VERSION,
                 region,
                 working,
@@ -453,6 +481,7 @@ mod tests {
     #[test]
     fn failed_raster_computations_are_not_cached_and_namespaces_are_distinct() {
         let path = CoveragePath {
+            stroke_geometry: None,
             geometry_content_hash: "shape-v1".into(),
             fill_gradient: None,
             stroke_gradient: None,

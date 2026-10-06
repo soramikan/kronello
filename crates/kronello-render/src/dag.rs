@@ -49,6 +49,7 @@ impl OutputRegion {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CoveragePath {
+    pub stroke_geometry: Option<LocalStrokeGeometry>,
     /// Semantic local geometry identity before output mapping or paint.
     pub geometry_content_hash: String,
     /// Coordinates mapped to output pixels; +Y is down. Paint remains explicitly
@@ -62,12 +63,36 @@ pub struct CoveragePath {
         kronello_model::StrokeCap,
         f64,
     )>,
-    pub fill_gradient: Option<ResolvedGradient>,
-    pub stroke_gradient: Option<ResolvedGradient>,
+    pub fill_gradient: Option<Box<ResolvedGradient>>,
+    pub stroke_gradient: Option<Box<ResolvedGradient>>,
     pub paint_transform: [[f64; 3]; 2],
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LocalStrokeGeometry {
+    pub version: String,
+    pub contours: FlattenedPath,
+    pub output_to_local: [[f64; 3]; 2],
+    pub local_to_output: [[f64; 3]; 2],
+    pub alignment: kronello_model::StrokeAlignment,
+    pub fill_rule: FillRule,
+    pub dash_array: Vec<f64>,
+    pub dash_offset: f64,
 }
 #[derive(Debug, Clone, PartialEq)]
 pub enum DagNode {
+    VideoDraw {
+        asset: kronello_model::Asset,
+        stream_index: u32,
+        time: kronello_time::Time,
+        extent: [f64; 2],
+        output_to_local: [[f64; 3]; 2],
+        bounds: crate::PixelBounds,
+    },
+    /// Explicit CPU-prepared working-space premultiplied image input.
+    RasterInput {
+        pixels: Vec<[f32; 4]>,
+    },
     Geometry {
         key: SceneKey,
         resolved: ResolvedShape,
@@ -102,7 +127,10 @@ pub enum DagNode {
 impl DagNode {
     pub fn inputs(&self) -> Vec<usize> {
         match self {
-            Self::Geometry { .. } | Self::TextLayout { .. } => vec![],
+            Self::Geometry { .. }
+            | Self::TextLayout { .. }
+            | Self::VideoDraw { .. }
+            | Self::RasterInput { .. } => vec![],
             Self::CoverageDraw { geometry, .. } => vec![*geometry],
             Self::IsolatedComposite { children, .. } => children.clone(),
             Self::Mask { source, matte, .. } => vec![*source, *matte],
@@ -122,6 +150,80 @@ pub struct RenderDag {
     bounds: Vec<crate::NodeBounds>,
 }
 impl RenderDag {
+    /// Resolve external video only through a caller-selected media backend.
+    /// Sampling is nearest, at the output pixel center, without frame interpolation.
+    pub fn resolve_video(
+        &self,
+        mut decode: impl FnMut(
+            &kronello_model::Asset,
+            u32,
+            kronello_time::Time,
+            ColorSpace,
+        ) -> Result<crate::VideoImage, RenderError>,
+    ) -> Result<Self, RenderError> {
+        let mut dag = self.clone();
+        for node in &mut dag.nodes {
+            if let DagNode::VideoDraw {
+                asset,
+                stream_index,
+                time,
+                extent,
+                output_to_local,
+                ..
+            } = node
+            {
+                let image = decode(asset, *stream_index, *time, dag.working_space)?;
+                if image.size.contains(&0)
+                    || image.size[0] as usize * image.size[1] as usize != image.pixels.len()
+                {
+                    return Err(RenderError::InvalidInput("invalid video image size".into()));
+                }
+                let [w, h] = dag.execution_region.pixels;
+                let mapping = kronello_eval::Affine2(*output_to_local);
+                let mut pixels = Vec::with_capacity(w as usize * h as usize);
+                for y in 0..h {
+                    for x in 0..w {
+                        let p = mapping.transform_point([f64::from(x) + 0.5, f64::from(y) + 0.5]);
+                        pixels.push(
+                            if p[0] >= 0.0 && p[1] >= 0.0 && p[0] < extent[0] && p[1] < extent[1] {
+                                let sx =
+                                    (p[0] * f64::from(image.size[0]) / extent[0]).floor() as usize;
+                                let sy =
+                                    (p[1] * f64::from(image.size[1]) / extent[1]).floor() as usize;
+                                image.pixels[sy * image.size[0] as usize + sx]
+                            } else {
+                                [0.0; 4]
+                            },
+                        );
+                    }
+                }
+                *node = DagNode::RasterInput { pixels };
+            }
+        }
+        Ok(dag)
+    }
+    /// Conservative tile allocation including one surface per image stage,
+    /// Group child/accumulator surfaces, three effect temporaries and reserves.
+    /// Every stage currently uses the union execution ROI, including its halo.
+    pub fn tile_surface_bytes(&self, pixel_bytes: u64) -> Result<u64, RenderError> {
+        let mut surfaces = 4_u64;
+        for node in &self.nodes {
+            surfaces += match node {
+                DagNode::IsolatedComposite { children, .. } => children.len() as u64 + 2,
+                DagNode::Effect { .. } => 4,
+                DagNode::CoverageDraw { .. }
+                | DagNode::Mask { .. }
+                | DagNode::VideoDraw { .. }
+                | DagNode::RasterInput { .. } => 1,
+                _ => 0,
+            };
+        }
+        u64::from(self.execution_region.pixels[0])
+            .checked_mul(u64::from(self.execution_region.pixels[1]))
+            .and_then(|v| v.checked_mul(pixel_bytes))
+            .and_then(|v| v.checked_mul(surfaces))
+            .ok_or_else(|| RenderError::UnsupportedFeature("tile surface budget overflow".into()))
+    }
     pub fn nodes(&self) -> &[DagNode] {
         &self.nodes
     }
@@ -207,6 +309,25 @@ impl Builder<'_> {
         let mut children = vec![];
         match &n.content {
             SceneContent::Empty => (),
+            SceneContent::Video {
+                asset,
+                stream_index,
+                time,
+                extent,
+            } => {
+                let b = crate::DesignBounds::checked([0.0; 2], *extent)?.transform(transform)?;
+                children.push(self.push(DagNode::VideoDraw {
+                    asset: asset.clone(),
+                    stream_index: *stream_index,
+                    time: *time,
+                    extent: *extent,
+                    output_to_local: inverse(transform)?,
+                    bounds: crate::PixelBounds {
+                        min: b.min,
+                        max: b.max,
+                    },
+                })?);
+            }
             SceneContent::Shape {
                 definition,
                 values,
@@ -226,13 +347,49 @@ impl Builder<'_> {
                         .geometry(&resolved.geometry, None, flatten, || {
                             Ok(kronello_vector::flatten(definition, values, flatten)?)
                         })?;
+                let bounds = kronello_vector::geometry_bounds(&resolved.geometry)?;
+                let fill_gradient = prepare_gradient(
+                    resolved.fill.as_ref().and_then(|f| f.gradient.as_deref()),
+                    bounds,
+                )?;
+                let stroke_gradient = prepare_gradient(
+                    resolved.stroke.as_ref().and_then(|f| f.gradient.as_deref()),
+                    bounds,
+                )?;
+                let stroke_geometry = resolved
+                    .stroke
+                    .as_ref()
+                    .and_then(|s| s.options.as_ref())
+                    .map(|o| -> Result<LocalStrokeGeometry, RenderError> {
+                        if o.alignment != kronello_model::StrokeAlignment::Center
+                            && contours.subpaths.iter().any(|c| !c.closed)
+                        {
+                            return Err(kronello_model::ShapeError::OpenStrokeAlignment.into());
+                        }
+                        Ok(LocalStrokeGeometry {
+                            version: o.geometry_version.clone(),
+                            contours: kronello_vector::dash_path(
+                                &contours,
+                                &o.dash_array,
+                                o.dash_offset,
+                            )?,
+                            output_to_local: inverse(transform)?,
+                            local_to_output: transform.0,
+                            alignment: o.alignment,
+                            fill_rule: o.fill_rule,
+                            dash_array: o.dash_array.clone(),
+                            dash_offset: o.dash_offset,
+                        })
+                    })
+                    .transpose()?;
                 let contours = map_contours(contours, transform)?;
                 let stroke = if let Some(stroke) = &resolved.stroke {
                     let x = a[0].hypot(b[0]);
                     let y = a[1].hypot(b[1]);
                     let dot = a[0] * a[1] + b[0] * b[1];
-                    if (x - y).abs() > 1e-10 * x.max(y).max(1.0)
-                        || dot.abs() > 1e-10 * (x * y).max(1.0)
+                    if stroke_geometry.is_none()
+                        && ((x - y).abs() > 1e-10 * x.max(y).max(1.0)
+                            || dot.abs() > 1e-10 * (x * y).max(1.0))
                     {
                         return Err(RenderError::UnsupportedFeature(format!(
                             "nonuniform transformed stroke on {:?}",
@@ -241,7 +398,7 @@ impl Builder<'_> {
                     }
                     Some((
                         stroke.color,
-                        stroke.width.get() * x,
+                        stroke.width.get() * if stroke_geometry.is_some() { 1.0 } else { x },
                         stroke.join,
                         stroke.cap,
                         stroke.miter_limit.get(),
@@ -253,17 +410,12 @@ impl Builder<'_> {
                     self.push(DagNode::CoverageDraw {
                         geometry,
                         path: CoveragePath {
+                            stroke_geometry,
                             geometry_content_hash,
                             contours,
                             fill: resolved.fill.as_ref().map(|f| (f.color, f.rule)),
-                            fill_gradient: resolved
-                                .fill
-                                .as_ref()
-                                .and_then(|f| f.gradient.as_deref().cloned()),
-                            stroke_gradient: resolved
-                                .stroke
-                                .as_ref()
-                                .and_then(|s| s.gradient.as_deref().cloned()),
+                            fill_gradient,
+                            stroke_gradient,
                             paint_transform: if resolved
                                 .fill
                                 .as_ref()
@@ -288,6 +440,10 @@ impl Builder<'_> {
                     layout: layout.clone(),
                 })?;
                 for glyph in &layout.glyphs {
+                    let gradient = prepare_gradient(
+                        glyph.gradient.as_deref(),
+                        layout.ink_bounds.map(|b| (b.min, b.max)),
+                    )?;
                     let (geometry_content_hash, contours) = self.semantic_cache.geometry(
                         &kronello_model::ResolvedGeometry::BezierPath(glyph.outline.clone()),
                         n.layout_content_hash.as_deref(),
@@ -298,12 +454,17 @@ impl Builder<'_> {
                     children.push(self.push(DagNode::CoverageDraw {
                         geometry,
                         path: CoveragePath {
+                            stroke_geometry: None,
                             geometry_content_hash,
                             contours,
                             fill: Some((glyph.fill, FillRule::Nonzero)),
-                            fill_gradient: None,
+                            paint_transform: if gradient.is_some() {
+                                inverse(transform)?
+                            } else {
+                                Affine2::IDENTITY.0
+                            },
+                            fill_gradient: gradient,
                             stroke_gradient: None,
-                            paint_transform: Affine2::IDENTITY.0,
                             stroke: None,
                         },
                     })?);
@@ -330,6 +491,17 @@ impl Builder<'_> {
                     &map_effect(effect, n.world_transform)?,
                     scale,
                 )?,
+            })?;
+        }
+        if !n.post_effect_opacity.is_finite() || !(0.0..=1.0).contains(&n.post_effect_opacity) {
+            return Err(RenderError::InvalidInput(
+                "invalid transition opacity".into(),
+            ));
+        }
+        if n.post_effect_opacity != 1.0 {
+            id = self.push(DagNode::IsolatedComposite {
+                children: vec![id],
+                opacity: n.post_effect_opacity,
             })?;
         }
         if let Some(binding) = self.scene.mattes.iter().find(|m| m.source == n.key) {
@@ -575,6 +747,10 @@ fn derive_bounds(nodes: &[DagNode]) -> Vec<crate::NodeBounds> {
     };
     for node in nodes {
         let value = match node {
+            DagNode::VideoDraw { bounds, .. } => NodeBounds {
+                ink_bounds: Some(*bounds),
+                visual_bounds: Some(*bounds),
+            },
             DagNode::CoverageDraw { path, .. } => {
                 let points: Vec<_> = path
                     .contours
@@ -596,16 +772,19 @@ fn derive_bounds(nodes: &[DagNode]) -> Vec<crate::NodeBounds> {
                                 .fold(f64::NEG_INFINITY, f64::max)
                         }),
                     };
-                    Some(b.expand(
-                        [path.stroke.map_or(0.0, |(_, w, join, _, m)| {
-                            w * 0.5
-                                * if join == kronello_model::StrokeJoin::Miter {
-                                    m
-                                } else {
-                                    1.0
-                                }
-                        }); 2],
-                    ))
+                    let halo = path.stroke.map_or(0.0, |(_, w, join, cap, m)| {
+                        crate::bounds::stroke_halo(w, join, cap, m)
+                    });
+                    let halo = path.stroke_geometry.as_ref().map_or([halo; 2], |g| {
+                        let factor = match g.alignment {
+                            kronello_model::StrokeAlignment::Center => 1.0,
+                            kronello_model::StrokeAlignment::Inside => 0.0,
+                            kronello_model::StrokeAlignment::Outside => 2.0,
+                        };
+                        g.local_to_output
+                            .map(|r| halo * factor * (r[0].abs() + r[1].abs()))
+                    });
+                    Some(b.expand(halo))
                 };
                 NodeBounds {
                     ink_bounds: ink,
@@ -636,17 +815,47 @@ fn derive_bounds(nodes: &[DagNode]) -> Vec<crate::NodeBounds> {
     bounds
 }
 
-fn map_effect(
+pub(crate) fn map_effect(
     effect: &kronello_model::ResolvedEffect,
     transform: Affine2,
 ) -> Result<kronello_model::ResolvedEffect, RenderError> {
     use kronello_model::ResolvedEffect;
     let [a, b] = transform.0;
+    if let ResolvedEffect::AffineGaussianBlur { sigma, linear }
+    | ResolvedEffect::AffineDropShadow { sigma, linear, .. } = effect
+    {
+        let mapped =
+            [a, b].map(|row| [0, 1].map(|j| row[0] * linear[0][j] + row[1] * linear[1][j]));
+        crate::validate_affine_linear(mapped)?;
+        return Ok(match effect {
+            ResolvedEffect::AffineGaussianBlur { .. } => ResolvedEffect::AffineGaussianBlur {
+                sigma: *sigma,
+                linear: mapped,
+            },
+            ResolvedEffect::AffineDropShadow {
+                offset,
+                color,
+                opacity,
+                ..
+            } => ResolvedEffect::AffineDropShadow {
+                sigma: *sigma,
+                linear: mapped,
+                offset: [
+                    a[0] * offset[0] + a[1] * offset[1],
+                    b[0] * offset[0] + b[1] * offset[1],
+                ],
+                color: *color,
+                opacity: *opacity,
+            },
+            _ => unreachable!(),
+        });
+    }
     let x = a[0].hypot(b[0]);
     let y = a[1].hypot(b[1]);
     let dot = a[0] * a[1] + b[0] * b[1];
     let sigma = match effect {
         ResolvedEffect::GaussianBlur { sigma } | ResolvedEffect::DropShadow { sigma, .. } => *sigma,
+        _ => unreachable!(),
     };
     if sigma > 0.0
         && ((x - y).abs() > 1e-10 * x.max(y).max(1.0) || dot.abs() > 1e-10 * (x * y).max(1.0))
@@ -671,5 +880,49 @@ fn map_effect(
             color: *color,
             opacity: *opacity,
         },
+        _ => unreachable!(),
     })
+}
+
+// The object box is unstroked local geometry (text: complete positioned ink).
+// Normalize the unit mapping before lowering; each fill/stroke keeps its own map.
+fn prepare_gradient(
+    g: Option<&ResolvedGradient>,
+    bounds: Option<([f64; 2], [f64; 2])>,
+) -> Result<Option<Box<ResolvedGradient>>, RenderError> {
+    let Some(g) = g else {
+        return Ok(None);
+    };
+    if g.options.interpolation_version != 1 {
+        return Err(RenderError::UnsupportedFeature(
+            "gradient interpolation version".into(),
+        ));
+    }
+    let mut g = g.clone();
+    let mut transform = Affine2(
+        g.options
+            .transform
+            .map(|r| r.map(kronello_model::FiniteF64::get)),
+    );
+    if g.options.units == kronello_model::GradientUnits::ObjectBoundingBox {
+        let (min, max) = bounds.ok_or_else(|| {
+            RenderError::InvalidInput("empty gradient object bounding box".into())
+        })?;
+        if max[0] <= min[0] || max[1] <= min[1] {
+            return Err(RenderError::InvalidInput(
+                "degenerate gradient object bounding box".into(),
+            ));
+        }
+        transform = Affine2([
+            [max[0] - min[0], 0.0, min[0]],
+            [0.0, max[1] - min[1], min[1]],
+        ])
+        .compose(transform);
+    }
+    inverse(transform)?;
+    g.options.transform = transform
+        .0
+        .map(|r| r.map(|v| kronello_model::FiniteF64::new(v).expect("validated finite transform")));
+    g.options.units = kronello_model::GradientUnits::LocalDesign;
+    Ok(Some(Box::new(g)))
 }
