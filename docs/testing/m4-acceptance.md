@@ -1,10 +1,9 @@
 # M4 統合受け入れ
 
-正本は [backlog.json](../backlog/backlog.json)。12 タスク中 11 タスクを受け入れ済みであり、M4 全体の完了宣言ではない。
-MEDIA-003 の Windows native 実行と、再開した最終全 OS 検証の失敗修正が残る。QA-004 の両環境通常比較は完了した。
+正本は [backlog.json](../backlog/backlog.json)。12 タスクすべての受け入れ条件と最終全 OS CI を確認し、2026-10-06にM4を完了した。
 変更は [PR #8](https://github.com/soramikan/kronello/pull/8) に統合する。
 
-## 基準機と最終ローカル検証
+## 基準機でのローカル検証
 
 2026-10-06、Apple M4 / Mac mini Mac16,10 / 32 GB、macOS 27.0.1 (26A434)、Rust 1.95.0。
 生ログは target/m4-acceptance/ に保存する。途中のテスト件数を足し合わせて最終 gate の件数として扱わない。
@@ -13,7 +12,7 @@ MEDIA-003 の Windows native 実行と、再開した最終全 OS 検証の失�
 |---|---|
 | fmt / workspace all-targets clippy | 成功。final-coverage-fmt.log / final-coverage-clippy.log |
 | workspace test | 754 passed / 0 failed / 38 ignored。final-coverage-workspace.log |
-| SwiftPM、統合 evidence 指定 | 48 tests / 0 failures / 0 skipped。final-coverage-swift.log。8つの landscape / portrait と時刻の組で Inspector / Viewer の共有 FFI parity も含む |
+| SwiftPM、統合 evidence 指定 | 71 tests（Design 19 / Core 4 / AppModel 48）/ 0 failures / 0 skipped。final-coverage-swift.log。8つの landscape / portrait と時刻の組で Inspector / Viewer の共有 FFI parity も含む |
 | Metal golden | 40 scenes 全件成功。target/golden/run.m4-coverage-20261006/report.json。M1 基準と許容誤差は変更していない |
 | VideoToolbox / Metal 常駐経路 | 4 tests / 0 failures / 0 skipped。final-coverage-resident.log |
 | 8K HDR 明示実行 | 1 passed。final-coverage-hdr.log。33,177,600 pixels、linear 265,420,800 bytes、最大 linear/display tile payload 8,388,608 bytes |
@@ -55,27 +54,25 @@ complex lower-third の whole-graph preview は 1080p / 4K とも既存512MiBの
 
 1080pの共有render.frameで4つの異なる時刻を合成し、独立したf64平均・平均後のdisplay変換・fresh再描画と全画素が一致した。10ms OS samplingの最大RSS181,698,560bytes / footprint354,828,984bytes、GPU所有payload peak77,416,824bytesを記録した。CPU accumulatorの要求payload66,355,200bytesは計算値であり、OS観測やallocator peakとは区別する。whole4K temporalの既存budget拒否も維持する。詳細と全測定値は[PERF-001](perf-001.md)に保存し、PERF-001を受け入れ済みとする。
 
-## CI と外部実行制限
+## 最終 CI と受け入れ
 
-Linux full workspace / native / SDK / process と Vulkan golden 通常比較は
-[run 37401385847](https://github.com/soramikan/kronello/actions/runs/37401385847) で成功した。
-Windows DX12 も同 run で CPU oracle 40 scenes を通過し、root の画像確認と clean revision baseline 採用を完了した（[QA-004](qa-004.md)）。
-これらは後続の HDR / recovery / cache / performance 変更を含む最終全 OS gate の代用ではない。
+[run 37418631507](https://github.com/soramikan/kronello/actions/runs/37418631507) は全5jobsが成功した。検証対象の実装headは `fde889e002287903564fe8e267b93225156cdbe8`、実checkoutはmainとのmerge `275380d2eb41b15f3b7c94a0d2115c252a9a5c26`。後続の完了記録変更は文書のみであり、検証した実装を変更していない。[CI記録](m4-ci-acceptance.json)にjobs・steps・ログhashを保存する。
 
-Windows FFmpeg configure が WSL の bare bash を拾った問題は、23dde7a で検証済み absolute MSYS2 bash に修正した（[MEDIA-003](media-003.md)）。
-その後の23dde7a、4b75d40、6384858の CI は全 job が step 開始前に終了した。
-[run 37412738412](https://github.com/soramikan/kronello/actions/runs/37412738412) の annotation は account payment failure または spending limit の引き上げが必要と報告している。
-利用者へ Actions 再開の確認を依頼し、有料設定は変更していない。
-Windows native 修正の再検証、Windows baseline 通常比較、最終全 OS gate は未完了である。利用者のリセット連絡後に同runを一度再実行したが、attempt 2のWindows annotationも同じ請求・利用上限理由でstep開始前に停止した。
+| 環境 | 最終結果 |
+|---|---|
+| macOS Apple Silicon | Rust 755 passed / 0 failed / 38 ignored。Swift 71 tests / 0 failures / 1 skipped。fmt・clippy・実process・CPU integration・公式MCP SDK・FFI終了検証も成功 |
+| Linux Mesa lavapipe | Rust 753 passed / 0 failed / 30 ignored。fmt・clippy・実process・CPU integration・公式MCP SDK・FFI終了検証も成功 |
+| Windows MSVC / MinGW LGPL runtime | MEDIA-003の全6commands exit 0、必須CLI/MCP testsは各1 passed / 0 skipped。後続のstorage / operational testsは63 passed / 0 failed / 2 optional ignored |
+| Linux software Vulkan | 採用済み基準との通常比較40 scenes成功。許容誤差 `2^-10` は変更していない |
+| Windows software DX12 | 採用済み基準との通常比較40 scenes成功。hardware GPUの保証には置き換えない |
 
-性能受け入れ済みの25dc305をpushした[run 37414848745](https://github.com/soramikan/kronello/actions/runs/37414848745)も、全5jobsがsteps=[]のまま停止した。Windowsのannotationは同じaccount payment failure / spending limit理由だった。未検証の2タスクはin_progressを維持し、外部のActions実行再開を待つ。
+CI Swiftの1 skipは実機stage-2 evidenceを要求する `testStage2FFIPresentationParity`。基準機ではそのevidenceを指定して成功しており、上記ローカル71 testsにはskipがない。Windowsのoptional ignoredは追加storage fixtureと別volumeを要する項目であり、MEDIA-003の必須受け入れはすべて実行した。
 
-## public 変更後の検証再開
+利用者の指示でrepositoryをpublicに変更した後、請求制限による実行前停止は解消した。再開した実検証で次を修正し、上記の最終CIで確認した。
 
-利用者の明示的な指示によりrepositoryをpublicへ変更し、run 37414923914 attempt 2の全5jobsが実際に開始した。請求制限による実行前停止は解消した。Linux Vulkan / Windows DX12は採用済み基準の通常比較で各40scenes / 20,950pixels、mismatched pixels=0。全actual PNGも基準とbyte一致し、QA-004を受け入れ済みとする（[証拠](qa-004.md)）。
+- Linuxのworker失敗状態保存と実process終了の間の競合: testで実際の終了とreapを待つ。生存workerの再開拒否とattempt fenceは維持する。
+- FFmpeg 6.1.1のProRes stream rangeがunknownになる差: 他の形式・色・寸法が一致するnative frameのlimited rangeだけを採用する。明示的なfull rangeや不一致を許容しない（[COLOR-001](color-001.md)）。
+- Windowsの拡張絶対パスとDLL名のseparator: Unicode loaderへ渡す前にWindows用separatorへ統一する。DLL検索範囲は広げない（[MEDIA-003](media-003.md)）。
+- macOSの全体30分予算不足: workspace 1,018秒、実process 127秒、CPU integration 238秒を要した実測に基づきjobだけ60分へ変更した。全testsと個別timeoutは維持した。最終Swiftは408.744秒で完走し、失敗はなかった。
 
-同runのLinux全体検証でHDRメタデータ確認とworker失敗直後のresumeテスト2件が失敗した。23960feでテストに実workerの終了待ち・reapを追加し、HDRの期待値/実測値を型付きエラーに含めた。生存workerの再開拒否とHDRの検証基準は維持する。後続CIで修正を確認する。
-
-67a0b50の[run 37417246467](https://github.com/soramikan/kronello/actions/runs/37417246467)でLinux全体検証・実process・公式MCP SDK・FFI終了検証が成功し、HDRとresumeテストの修正を実環境で確認した。Windows実行では拡張絶対パスとDLL名の間にforward slashが入ることによるloader error 126を確認し、b98af22でWindows用separatorに統一した。DLL検索範囲は維持し、実Windowsの再検証を進める。
-
-macOSの初回再開jobは全体30分上限でFFIテスト中にcancelされた。先行Rust検証に失敗はなく、workspace 1,018秒、実process 127秒、CPU integration 238秒を要し、FFI step開始がjob開始約25分後だった。Rust/Swiftビルド後には約112秒しか残らなかった。全test・個別timeoutを維持し、macOS jobだけ60分へ変更する。Linuxは15分22秒で完了しており30分を維持する。
+M4全12タスクを `done` とする。M2のSTORE-003の実環境残件は別範囲であり、ここでは完了に変更しない。

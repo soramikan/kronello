@@ -3,7 +3,7 @@
 カット編集（NLE）とモーショングラフィックスを、同じ時間・プロパティ・組版・合成・レンダー基盤の上で扱う動画編集ソフトウェア。
 人間が使う GUI と、スクリプトや AI エージェントが使う CLI / MCP を同格の入口とし、どこから操作しても同じ Command / Query API・同じ revision・同じレンダー結果に到達することを設計の中心に置く。
 
-> **状態: M0・M1・M2のP0とM3の正式受け入れを完了。M4は受け入れ検証中。** Rustコア、共有CLI / MCP、macOSのEdit / Motion / Template / Exportページ、実時間音声とstreaming書き出しを実装した。M4のHDR、復旧、キャッシュ、性能・OS別検証の状態は[統合受け入れ記録](docs/testing/m4-acceptance.md)と[バックログ](docs/backlog/BACKLOG.md)を参照。M2のSTORE-003の実環境残件は別範囲。
+> **状態: M0・M1・M2のP0・M3・M4の正式受け入れを完了。** Rustコア、共有CLI / MCP、macOSのEdit / Motion / Template / Exportページ、実時間音声とstreaming書き出しを実装した。M4のHDR、復旧、キャッシュ、性能・OS別検証の状態は[統合受け入れ記録](docs/testing/m4-acceptance.md)と[バックログ](docs/backlog/BACKLOG.md)を参照。M2のSTORE-003の実環境残件は別範囲。
 > 実装と保証範囲の正本は [backlog](docs/backlog/BACKLOG.md) と [M3の検証記録](docs/testing/m3-acceptance.md)。設計文書中の提案APIを、そのまま実装済み仕様と扱わない。
 
 ## 何を作るか

@@ -1342,7 +1342,7 @@
       "priority": "P1",
       "area": "media",
       "title": "Windows の FFmpeg 実行時読み込みと CLI/MCP の Windows ビルド",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "MEDIA-001",
         "JOB-002",

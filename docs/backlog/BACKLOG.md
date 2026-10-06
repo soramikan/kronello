@@ -14,7 +14,7 @@
 | M1 | 0 | 0 | 14 | 0 | 14 |
 | M2 | 0 | 1 | 10 | 0 | 11 |
 | M3 | 0 | 0 | 25 | 0 | 25 |
-| M4 | 0 | 1 | 11 | 0 | 12 |
+| M4 | 0 | 0 | 12 | 0 | 12 |
 | M5 | 5 | 0 | 0 | 0 | 5 |
 | M6 | 4 | 0 | 0 | 0 | 4 |
 
@@ -663,7 +663,7 @@
 
 ### MEDIA-003 Windows の FFmpeg 実行時読み込みと CLI/MCP の Windows ビルド
 
-- 優先度: P1 / 領域: media / 状態: in_progress
+- 優先度: P1 / 領域: media / 状態: done
 - 依存: MEDIA-001, JOB-002, RELEASE-001
 - 受け入れ条件:
   - kronello-media の native 読み込み（dlfcn / pkg-config 前提）を Windows の LGPL FFmpeg 共有 library に対応させ、CLI / MCP を Windows でビルドする
