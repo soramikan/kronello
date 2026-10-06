@@ -1,7 +1,7 @@
 # M4 統合受け入れ
 
-正本は [backlog.json](../backlog/backlog.json)。12 タスク中 10 タスクを受け入れ済みであり、M4 全体の完了宣言ではない。
-MEDIA-003 の Windows native 実行、QA-004 の Windows 通常比較と最終全 OS 検証が残る。
+正本は [backlog.json](../backlog/backlog.json)。12 タスク中 11 タスクを受け入れ済みであり、M4 全体の完了宣言ではない。
+MEDIA-003 の Windows native 実行と、再開した最終全 OS 検証の失敗修正が残る。QA-004 の両環境通常比較は完了した。
 変更は [PR #8](https://github.com/soramikan/kronello/pull/8) に統合する。
 
 ## 基準機と最終ローカル検証
@@ -69,3 +69,9 @@ Windows FFmpeg configure が WSL の bare bash を拾った問題は、23dde7a �
 Windows native 修正の再検証、Windows baseline 通常比較、最終全 OS gate は未完了である。利用者のリセット連絡後に同runを一度再実行したが、attempt 2のWindows annotationも同じ請求・利用上限理由でstep開始前に停止した。
 
 性能受け入れ済みの25dc305をpushした[run 37414848745](https://github.com/soramikan/kronello/actions/runs/37414848745)も、全5jobsがsteps=[]のまま停止した。Windowsのannotationは同じaccount payment failure / spending limit理由だった。未検証の2タスクはin_progressを維持し、外部のActions実行再開を待つ。
+
+## public 変更後の検証再開
+
+利用者の明示的な指示によりrepositoryをpublicへ変更し、run 37414923914 attempt 2の全5jobsが実際に開始した。請求制限による実行前停止は解消した。Linux Vulkan / Windows DX12は採用済み基準の通常比較で各40scenes / 20,950pixels、mismatched pixels=0。全actual PNGも基準とbyte一致し、QA-004を受け入れ済みとする（[証拠](qa-004.md)）。
+
+同runのLinux全体検証でHDRメタデータ確認とworker失敗直後のresumeテスト2件が失敗した。23960feでテストに実workerの終了待ち・reapを追加し、HDRの期待値/実測値を型付きエラーに含めた。生存workerの再開拒否とHDRの検証基準は維持する。後続CIで修正を確認する。

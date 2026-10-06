@@ -207,6 +207,75 @@ pub(crate) struct RawFrame {
     pub labels: [String; 5],
     pub pixels: Vec<u8>,
 }
+fn needs_prores_range_verification(stream: &MediaStream) -> bool {
+    stream.kind == StreamKind::Video
+        && stream.codec == "prores"
+        && matches!(stream.color_range.as_deref(), None | Some("unknown"))
+}
+fn verify_prores_range(stream: &mut MediaStream, frame: &RawFrame) -> bool {
+    if !needs_prores_range_verification(stream)
+        || stream.width != Some(frame.width)
+        || stream.height != Some(frame.height)
+        || [
+            stream.pixel_format.as_deref(),
+            stream.color_primaries.as_deref(),
+            stream.color_transfer.as_deref(),
+            stream.color_matrix.as_deref(),
+        ] != std::array::from_fn(|i| Some(frame.labels[i].as_str()))
+        || frame.labels[4] != "tv"
+    {
+        return false;
+    }
+    stream.color_range = Some(frame.labels[4].clone());
+    true
+}
+#[cfg(test)]
+mod prores_probe_tests {
+    use super::*;
+    #[test]
+    fn unspecified_prores_range_requires_matching_native_frame_evidence() {
+        let stream: MediaStream = serde_json::from_value(serde_json::json!({
+            "index":0,"kind":"video","codec":"prores",
+            "time_base":{"num":"1","den":"24"},"start":null,"duration":null,
+            "sample_rate":null,"channels":null,"width":16,"height":16,
+            "pixel_format":"yuv422p10le","color_primaries":"bt2020",
+            "color_transfer":"smpte2084","color_matrix":"bt2020nc","color_range":"unknown"
+        }))
+        .unwrap();
+        let mut frame = RawFrame {
+            pts: Rational::ZERO,
+            duration: Rational::ZERO,
+            width: 16,
+            height: 16,
+            labels: ["yuv422p10le", "bt2020", "smpte2084", "bt2020nc", "tv"].map(str::to_owned),
+            pixels: vec![],
+        };
+        let mut verified = stream.clone();
+        assert!(verify_prores_range(&mut verified, &frame));
+        assert_eq!(verified.color_range.as_deref(), Some("tv"));
+        for i in 0..5 {
+            let original = frame.labels[i].clone();
+            frame.labels[i] = "mismatch".into();
+            let mut unchanged = stream.clone();
+            assert!(!verify_prores_range(&mut unchanged, &frame));
+            assert_eq!(unchanged, stream);
+            frame.labels[i] = original;
+        }
+        frame.width = 32;
+        let mut unchanged = stream.clone();
+        assert!(!verify_prores_range(&mut unchanged, &frame));
+        assert_eq!(unchanged, stream);
+        frame.width = 16;
+        for (codec, range) in [("prores", "pc"), ("prores", "tv"), ("h264", "unknown")] {
+            let mut explicit = stream.clone();
+            explicit.codec = codec.into();
+            explicit.color_range = Some(range.into());
+            let before = explicit.clone();
+            assert!(!verify_prores_range(&mut explicit, &frame));
+            assert_eq!(explicit, before);
+        }
+    }
+}
 pub(crate) struct NativeDecoder<'a> {
     path: std::path::PathBuf,
     ptr: NonNull<c_void>,
@@ -851,6 +920,7 @@ impl NativeRuntime {
         Ok(())
     }
     pub(crate) fn probe(&self, path: &Path) -> Result<MediaProbe, MediaError> {
+        let source_path = path;
         let path = path_string(path)?;
         // SAFETY: all native stream accesses are bounded by the queried count;
         // strings are copied while the probe is live. RAII frees on every error.
@@ -908,12 +978,24 @@ impl NativeRuntime {
                 let key = CString::new(name).expect("constant tag without NUL");
                 string(km_probe_tag(self.0.as_ptr(), ptr.as_ptr(), key.as_ptr()))
             };
-            let result = MediaProbe {
+            let mut result = MediaProbe {
                 streams,
                 render_snapshot_hash: tag("kronello_render_snapshot_hash"),
                 export_snapshot_hash: tag("kronello_export_snapshot_hash"),
             };
             drop(probe);
+            // MOV nclc does not carry a range flag. Older FFmpeg versions leave
+            // the ProRes stream range unspecified, while its native decoder
+            // reports the bitstream's limited range on the decoded frame.
+            for stream in &mut result.streams {
+                if needs_prores_range_verification(stream)
+                    && let Ok(mut decoder) =
+                        NativeDecoder::open_stream(self, source_path, Some(stream.index))
+                    && let Ok(Some(frame)) = decoder.next()
+                {
+                    verify_prores_range(stream, &frame);
+                }
+            }
             Ok(result)
         }
     }

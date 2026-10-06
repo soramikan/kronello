@@ -1108,7 +1108,7 @@
       "priority": "P1",
       "area": "qa",
       "title": "Vulkan/Windowsのgolden基準と許容誤差の校正",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "QA-003",
         "GPU-003"

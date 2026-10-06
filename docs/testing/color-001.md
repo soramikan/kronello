@@ -28,3 +28,11 @@ CPU oracle は (150,40) と (375,40) の各 64×64 pixels。前者は glyph の 
 ## 最終 gate
 
 `cargo clippy -p kronello-render -p kronello-media -p kronello-service --all-targets --locked -- -D warnings` は成功。schema/Swift は root が共通 API から再生成した。HLG inverse OOTF 後に code が [0,1] を超える場合は quantizer へ進まず `UNSUPPORTED_FEATURE` とし、実 movie export の出力未公開も確認した。f64 endpoint の 1e-12 以下の丸めだけを補正し、gamut の clamp としない。
+
+### Linux FFmpeg 6 の ProRes range 検証（2026-10-06）
+
+実 Linux CI の FFmpeg 6.1.1 では、固定 HDR MOV の probe が `yuv422p10le/bt2020/smpte2084/bt2020nc` を正しく返す一方、stream の range は `unknown` だった（run `37416652175`、job `112116633871`。手元ログ `target/m4-acceptance/actions-linux-diagnostic.log`）。[FFmpeg 6 MOV muxer](https://github.com/FFmpeg/FFmpeg/blob/n6.1.1/libavformat/movenc.c) は MOV の `colr` を range flag のない `nclc` として書き、[native ProRes decoder](https://github.com/FFmpeg/FFmpeg/blob/n6.1.1/libavcodec/proresdec2.c) は復号 frame の range を `AVCOL_RANGE_MPEG` として報告する。
+
+共通 probe は `prores` video stream の range が未指定の場合に限り、既存の local-file decoder の pixel/byte budget 内で最初の native frame を復号する。stream と frame の dimensions・pixel format・primaries・transfer・matrix がすべて一致し、frame が `tv` の場合だけ、検証済みの range を返す。明示した `pc`、他 codec、不一致、復号できない場合は生の stream range を保持する。したがって既存 SDR probe に新しいエラーを加えず、HDR movie の厳格な `tv` 必須条件は維持する。固定値の推測や資産 lock の上書きではない。decoder は RAII で解放され、ファイルへ書き込まない。
+
+純粋な guard 回帰は全色タグの不一致、dimensions 不一致、明示 `pc/tv`、非 ProRes を補完しないことを確認した。host の native PQ/HLG 精度・lock 検証と CLI sync/fixed worker roundtrip も成功。Linux の変更後の実 runtime 検証は CI の後続結果を正本とし、この host の成功をその代用にしない。
