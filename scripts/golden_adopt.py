@@ -23,7 +23,7 @@ def require(condition, message):
 
 
 def git(root, *args):
-    return subprocess.check_output(["git", *args], cwd=root, text=True).strip()
+    return subprocess.check_output(["git", *args], cwd=root, text=True, encoding="utf-8").strip()
 
 
 def load(path):
