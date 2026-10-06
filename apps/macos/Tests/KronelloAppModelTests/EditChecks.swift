@@ -193,9 +193,10 @@ import KronelloDesign
         let f = try await fixture(), e = f.editor
         try require(e.editClips[0].speedLabel == "100.0%" && !e.editClips[0].reversed, "String rational 1x displays 100.0%")
         var clip = e.editClips[0].authored
-        clip["time_map"] = ["kind": "linear", "offset": ["num": "0", "den": "1"], "speed": ["num": "-3", "den": "2"]]
+        clip["time_map"] = ["kind": "linear", "offset": ["num": "0", "den": "1"], "speed": ["num": "3", "den": "2"]]
+        clip["reverse_sampling"] = "reverse_grid_v1"
         let reverse = EditClip(query: ["clip": clip])
-        try require(reverse.speedLabel == "-150.0%" && reverse.reversed, "Reverse derives from exact signed rational rate")
+        try require(reverse.speedLabel == "150.0%" && reverse.reversed, "Reverse flag shows the exact rational magnitude")
         try require(EditPresentation.rateLabel(num: 24, den: 1) == "24 fps" && EditPresentation.rateLabel(num: 24000, den: 1001) == "23.976 fps", "Integer and NTSC header format")
         try require(EditPresentation.rulerLabel(frame: 12, fps: 24) == "0s12f" && EditPresentation.rulerLabel(frame: 24, fps: 24) == "1s0f", "Ruler keeps subsecond frame units")
         let old = e.previewIdentity

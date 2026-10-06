@@ -89,12 +89,12 @@ public struct TemplateVariantPreview: Identifiable {
     /// One query per variant per committed preview change; never driven by a frame timer.
     public func refresh() async {
         guard !definition.isEmpty else { previews = []; return }
-        let fields: [String:Any] = ["revision":editor.revision,"definition":editionID,"placement":placementID,"inputs":previewInputs,"duration":time(durationFrames),"time":time(compareFrame),"fonts":editor.fonts]
+        let fields: [String:Any] = ["revision":editor.revision,"definition":editionID,"placement":placementID,"inputs":previewInputs,"duration":time(durationFrames),"time":time(compareFrame),"fonts":editor.snapshotFonts]
         let key = (try? JSONSerialization.data(withJSONObject: fields,options:[.sortedKeys])).flatMap { String(data:$0,encoding:.utf8) } ?? UUID().uuidString
         if previewKey == key { return }
         previewKey = key
         generation += 1; let ticket = generation, revision = editor.revision
-        let inputs = variants.map { ($0, instance($0)) }, sample = time(compareFrame), fonts = editor.fonts
+        let inputs = variants.map { ($0, instance($0)) }, sample = time(compareFrame), fonts = editor.snapshotFonts
         loading = true; migration = nil
         defer { if ticket == generation { loading = false } }
         var results: [TemplateVariantPreview] = []
@@ -163,7 +163,7 @@ public struct TemplateVariantPreview: Identifiable {
         guard !placement.isEmpty else { return }
         let base = editor.revision, key = planKey
         do {
-            var fields: [String: Any] = ["base_revision": base, "instance": placementID, "definition": nextEdition, "time": time(compareFrame), "fonts": editor.fonts]
+            var fields: [String: Any] = ["base_revision": base, "instance": placementID, "definition": nextEdition, "time": time(compareFrame), "fonts": editor.snapshotFonts]
             if !nextVariant.isEmpty { fields["variant"] = nextVariant }
             let plan = try await editor.request("template.migration_plan", fields)
             guard key == planKey else { return }

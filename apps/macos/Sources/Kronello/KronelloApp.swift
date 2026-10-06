@@ -55,7 +55,11 @@ struct AppRoot: View {
     @ObservedObject var controller: AppController
     var body: some View {
         Group {
-            if let editor = controller.editor { EditorWindow(model: editor) }
+            if let editor = controller.editor {
+                // Native preview coordinators and page StateObjects belong to
+                // this project session, even when a second file reuses the window.
+                EditorWindow(model: editor).id(ObjectIdentifier(editor))
+            }
             else {
                 KRWelcome(recent: controller.recent, showAtLaunch: $controller.preferences.showWelcome,
                     onNew: controller.newPanel, onOpen: controller.openPanel,

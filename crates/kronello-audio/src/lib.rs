@@ -8,6 +8,8 @@ use kronello_time::{SampleRate, Time, TimeRange};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+mod analysis;
+pub use analysis::analyze_audio;
 mod advanced;
 mod document;
 pub use advanced::{AUDIO_EVALUATION_VERSION, AUDIO_GENERATOR_SILENCE, AUDIO_GENERATOR_TONE};

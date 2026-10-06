@@ -3,6 +3,47 @@ import KronelloAppModel
 import KronelloCore
 
 @MainActor struct PlaybackChecks {
+    func verifyEndStopSeekReplayAndPlayingSeek() async throws {
+        let checks = EditChecks(), fixture = try await checks.fixture(), model = fixture.editor
+        defer { Task { await checks.finish(fixture) } }
+        model.playbackMuted = true
+        let revision = model.revision
+        func started(after epoch: UInt64) async throws {
+            for _ in 0..<400 {
+                if model.playback.master == .hostClock && model.playback.clockEpoch > epoch { return }
+                if let failure = model.failure { throw failure }
+                try await Task.sleep(for: .milliseconds(5))
+            }
+            throw GUICheckError(message: "Playback restart did not reach the new host clock")
+        }
+        model.seek(model.durationFrames - 1)
+        var epoch = model.playback.clockEpoch
+        model.playing = true
+        try await started(after: epoch)
+        for _ in 0..<100 {
+            if !model.playing { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        try require(!model.playing, "Final frame reaches the sequence end and stops")
+        // Do not wait for the asynchronous stop: seek owns the newer intent.
+        model.seek(0)
+        epoch = model.playback.clockEpoch
+        model.playing = true
+        try await started(after: epoch)
+        try require(model.playing && model.playback.position < 12000, "Seek after end stop replays from the beginning")
+        epoch = model.playback.clockEpoch
+        model.seek(24)
+        try await started(after: epoch)
+        try require(model.playing && model.playback.position >= 48000 && model.playback.position < 60000, "Playing seek restarts at the requested integer sample")
+        model.playing = false
+        model.seek(0)
+        try await Task.sleep(for: .milliseconds(20))
+        epoch = model.playback.clockEpoch
+        model.playing = true
+        try await started(after: epoch)
+        try require(model.playback.position < 12000, "Pending stop cannot overwrite a paused seek")
+        try require(model.revision == revision, "Playback and seek never author project events")
+    }
     func verifyBinaryProducerAndHostFallback() async throws {
         let folder = try GUIChecks().temporary()
         defer { try? FileManager.default.removeItem(at: folder) }

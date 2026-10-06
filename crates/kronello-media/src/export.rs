@@ -32,6 +32,10 @@ pub enum MovieProfile {
     ProResPqPcm24V1,
     ProResHlgPcm24V1,
     ProResSdrFromHdrPcm24V1,
+    H264AacV1,
+    HevcAacV1,
+    Av1Mp4AacV1,
+    Av1WebmOpusV1,
 }
 impl MovieProfile {
     pub fn hdr_transfer(self) -> Option<kronello_render::HdrTransfer> {
@@ -50,9 +54,42 @@ impl MovieProfile {
             | Self::ProResPqPcm24V1
             | Self::ProResHlgPcm24V1
             | Self::ProResSdrFromHdrPcm24V1 => EncodeCodec::ProRes,
-            Self::Av1Mp4AlacV1 => EncodeCodec::Av1,
-            Self::H264AlacV1 => EncodeCodec::H264,
-            Self::HevcAlacV1 => EncodeCodec::Hevc,
+            Self::Av1Mp4AlacV1 | Self::Av1Mp4AacV1 | Self::Av1WebmOpusV1 => EncodeCodec::Av1,
+            Self::H264AlacV1 | Self::H264AacV1 => EncodeCodec::H264,
+            Self::HevcAlacV1 | Self::HevcAacV1 => EncodeCodec::Hevc,
+        }
+    }
+    /// Closed delivery audio codec for this profile's intermediate stage.
+    pub(crate) fn audio_kind(self) -> crate::ffi::AudioEncoderKind {
+        match self {
+            Self::ProResPcm24
+            | Self::ProResPqPcm24V1
+            | Self::ProResHlgPcm24V1
+            | Self::ProResSdrFromHdrPcm24V1 => crate::ffi::AudioEncoderKind::Pcm24,
+            Self::Av1Mp4AlacV1 | Self::H264AlacV1 | Self::HevcAlacV1 => {
+                crate::ffi::AudioEncoderKind::Alac
+            }
+            Self::H264AacV1 | Self::HevcAacV1 | Self::Av1Mp4AacV1 => {
+                crate::ffi::AudioEncoderKind::Aac
+            }
+            Self::Av1WebmOpusV1 => crate::ffi::AudioEncoderKind::Opus,
+        }
+    }
+    /// Container suffix the destination path must use.
+    pub fn container(self) -> &'static str {
+        match self {
+            Self::Av1Mp4AlacV1 | Self::Av1Mp4AacV1 => "mp4",
+            Self::Av1WebmOpusV1 => "webm",
+            _ => "mov",
+        }
+    }
+    /// Lossy codecs signal encoder delay/padding in container metadata; the
+    /// stream duration may exceed the input by up to one codec frame.
+    fn audio_frame_slack(self) -> i64 {
+        match self {
+            Self::H264AacV1 | Self::HevcAacV1 | Self::Av1Mp4AacV1 => 1024,
+            Self::Av1WebmOpusV1 => 960,
+            _ => 0,
         }
     }
     pub(crate) fn native_id(self) -> i32 {
@@ -64,6 +101,10 @@ impl MovieProfile {
             Self::Av1Mp4AlacV1 => 1,
             Self::H264AlacV1 => 2,
             Self::HevcAlacV1 => 3,
+            Self::H264AacV1 => 4,
+            Self::HevcAacV1 => 5,
+            Self::Av1Mp4AacV1 => 6,
+            Self::Av1WebmOpusV1 => 7,
         }
     }
     fn codecs(self) -> (&'static str, &'static str) {
@@ -75,6 +116,10 @@ impl MovieProfile {
             Self::Av1Mp4AlacV1 => ("av1", "alac"),
             Self::H264AlacV1 => ("h264", "alac"),
             Self::HevcAlacV1 => ("hevc", "alac"),
+            Self::H264AacV1 => ("h264", "aac"),
+            Self::HevcAacV1 => ("hevc", "aac"),
+            Self::Av1Mp4AacV1 => ("av1", "aac"),
+            Self::Av1WebmOpusV1 => ("av1", "opus"),
         }
     }
 }
@@ -287,6 +332,9 @@ pub struct MediaStream {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct MediaProbe {
     pub streams: Vec<MediaStream>,
+    /// Container-level duration; the only duration WebM publishes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration: Option<Rational>,
     pub render_snapshot_hash: String,
     pub export_snapshot_hash: String,
 }
@@ -340,21 +388,29 @@ impl MediaProbe {
                 video.color_range,
             )));
         }
+        let slack = profile.audio_frame_slack();
         let video_duration = video
             .duration
+            // WebM publishes only the container duration; lossy profiles accept it.
+            .or_else(|| (slack > 0).then_some(self.duration).flatten())
             .ok_or_else(|| MediaError::Encode("missing video duration".into()))?;
-        let audio_duration = audio
-            .duration
-            .ok_or_else(|| MediaError::Encode("missing audio duration".into()))?;
+        if video_duration <= Rational::ZERO {
+            return Err(MediaError::Encode("non-positive video duration".into()));
+        }
+        let audio_duration = match audio.duration {
+            // WebM does not always publish a stream duration for lossy audio;
+            // exact decode length is verified separately on the lossy path.
+            None if slack > 0 => video_duration,
+            other => other.ok_or_else(|| MediaError::Encode("missing audio duration".into()))?,
+        };
         let difference = video_duration.checked_sub(audio_duration)?;
-        let tolerance = Rational::new(1, 48_000)?;
-        if video_duration <= Rational::ZERO
-            || audio_duration <= Rational::ZERO
+        let tolerance = Rational::new(1 + slack, 48_000)?;
+        if audio_duration <= Rational::ZERO
             || difference >= tolerance
             || difference <= tolerance.checked_neg()?
         {
             return Err(MediaError::Encode(
-                "A/V durations differ by at least one sample".into(),
+                "A/V durations differ beyond the profile audio frame".into(),
             ));
         }
         Ok(())
@@ -470,6 +526,7 @@ impl MediaRuntime {
             .ok_or_else(|| MediaError::InvalidInput("mux input has no audio".into()))?;
         MediaProbe {
             streams: vec![video_stream.clone(), audio_stream.clone()],
+            duration: None,
             render_snapshot_hash: String::new(),
             export_snapshot_hash: String::new(),
         }
@@ -497,13 +554,42 @@ impl MediaRuntime {
                 ));
             }
         }
+        let frame_slack = Rational::new(profile.audio_frame_slack(), 48_000)?;
         for input in [video_stream, audio_stream] {
             let output_stream = probe
                 .streams
                 .iter()
                 .find(|s| s.kind == input.kind)
                 .ok_or_else(|| MediaError::Encode("mux lost stream".into()))?;
-            if output_stream.duration != input.duration || output_stream.start != input.start {
+            let duration_ok = match (output_stream.duration, input.duration) {
+                (Some(out), Some(want)) if out == want => true,
+                _ if frame_slack > Rational::ZERO => match output_stream.duration {
+                    // Lossy containers may omit the stream duration or pad by
+                    // up to one codec frame; decoded length is checked exactly.
+                    None => true,
+                    Some(out) => {
+                        let lo = input
+                            .duration
+                            .map(|d| {
+                                d.checked_sub(frame_slack)
+                                    .map(|lo| out >= lo)
+                                    .unwrap_or(false)
+                            })
+                            .unwrap_or(true);
+                        let hi = input
+                            .duration
+                            .map(|d| {
+                                d.checked_add(frame_slack)
+                                    .map(|hi| out <= hi)
+                                    .unwrap_or(false)
+                            })
+                            .unwrap_or(true);
+                        lo && hi
+                    }
+                },
+                _ => false,
+            };
+            if !duration_ok || output_stream.start != input.start {
                 return Err(MediaError::Encode("mux changed exact stream timing".into()));
             }
         }
@@ -619,7 +705,6 @@ impl MediaRuntime {
         // Every intermediate is on the destination volume and owned by RAII.
         let stage = tempfile::tempdir_in(parent)?;
         let video_file = stage.path().join("video.mov");
-        let audio_file = stage.path().join("audio.mov");
         let mut sources = crate::streaming::SpoolSources::new();
         for clip in &snapshot.clips {
             if !sources.contains(&(clip.asset, clip.stream_index)) {
@@ -652,8 +737,13 @@ impl MediaRuntime {
         if samples.is_empty() {
             return Err(MediaError::InvalidInput("empty audio output".into()));
         }
+        let audio_kind = profile.audio_kind();
+        let audio_file = stage.path().join(match audio_kind {
+            crate::ffi::AudioEncoderKind::Opus => "audio.webm",
+            _ => "audio.mov",
+        });
         let mut audio_encoder =
-            crate::ffi::NativeAudioEncoder::open(&self.native, &audio_file, !profile.is_prores())?;
+            crate::ffi::NativeAudioEncoder::open(&self.native, &audio_file, audio_kind)?;
         let mut clipped_samples = 0_usize;
         let mut start = samples.start;
         while start < samples.end {
@@ -684,12 +774,7 @@ impl MediaRuntime {
         let audio_window_read_bytes = sources.read_bytes();
         drop(sources);
         let audio = AudioEncodeReport {
-            codec: if profile.is_prores() {
-                "pcm_s24le"
-            } else {
-                "alac"
-            }
-            .into(),
+            codec: profile.codecs().1.into(),
             sample_rate: 48_000,
             channels: 2,
             frames: usize::try_from(samples.end - samples.start)
@@ -785,14 +870,25 @@ impl MediaRuntime {
         let audio_probe = self.probe(&audio_file)?;
         let expected_video = request.range.end().checked_sub(request.range.start())?;
         let expected_audio = SAMPLE_RATE.sample_to_time(audio.frames as i64)?;
+        let audio_slack = Rational::new(profile.audio_frame_slack(), 48_000)?;
         if !video_probe
             .streams
             .iter()
             .any(|s| s.kind == StreamKind::Video && s.duration == Some(expected_video))
-            || !audio_probe
-                .streams
-                .iter()
-                .any(|s| s.kind == StreamKind::Audio && s.duration == Some(expected_audio))
+            || !audio_probe.streams.iter().any(|s| {
+                s.kind == StreamKind::Audio
+                    && match s.duration {
+                        // WebM lossy intermediates may publish no stream duration.
+                        None => profile.audio_frame_slack() > 0,
+                        Some(d) => {
+                            d >= expected_audio
+                                && expected_audio
+                                    .checked_add(audio_slack)
+                                    .map(|max| d <= max)
+                                    .unwrap_or(false)
+                        }
+                    }
+            })
         {
             return Err(MediaError::Encode(format!(
                 "encoded streams differ from requested duration: video {:?} expected {expected_video:?}, audio {:?} expected {expected_audio:?}",

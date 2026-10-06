@@ -12,6 +12,7 @@ pub use inspect::*;
 mod output;
 mod temporal;
 pub use temporal::*;
+mod simulation;
 mod snapshot;
 mod template;
 pub use effect::*;
@@ -84,6 +85,8 @@ impl RenderError {
             | Self::Effect(kronello_model::EffectError::UnsupportedFeature)
             | Self::UnsupportedFeature(_) => "UNSUPPORTED_FEATURE",
             Self::UnsupportedSchema(_) => "UNSUPPORTED_SCHEMA",
+            Self::Shape(ShapeError::MorphCorrespondence { .. }) => "PATH_MORPH_CORRESPONDENCE",
+            Self::Shape(ShapeError::InvalidTrimRange) => "PATH_TRIM_RANGE",
             Self::Shape(ShapeError::InvalidDashArray) => "STROKE_INVALID_DASH",
             Self::Shape(ShapeError::StrokeBudgetExceeded) => "STROKE_BUDGET_EXCEEDED",
             Self::Shape(ShapeError::OpenStrokeAlignment) => "STROKE_OPEN_ALIGNMENT",

@@ -1147,6 +1147,7 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror",
  "unicode-normalization",
  "unicode-segmentation",
@@ -1169,6 +1170,7 @@ dependencies = [
  "kronello-eval",
  "kronello-gpu",
  "kronello-model",
+ "kronello-simulation",
  "kronello-template",
  "kronello-testkit",
  "kronello-text",
@@ -1201,12 +1203,24 @@ dependencies = [
  "kronello-template",
  "kronello-text",
  "kronello-time",
+ "kronello-vector",
  "png",
  "schemars",
  "serde",
  "serde_json",
  "sha2",
  "tempfile",
+ "uuid",
+]
+
+[[package]]
+name = "kronello-simulation"
+version = "0.0.0"
+dependencies = [
+ "kronello-model",
+ "kronello-time",
+ "sha2",
+ "thiserror",
  "uuid",
 ]
 
@@ -1286,6 +1300,8 @@ dependencies = [
  "kronello-model",
  "kronello-time",
  "kurbo",
+ "schemars",
+ "serde",
  "serde_json",
  "thiserror",
 ]

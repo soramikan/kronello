@@ -78,3 +78,25 @@ pub fn to_working(p: [f32; 4], space: InputSpace, working: WorkingSpace) -> [f32
     let rgb = convert_primaries(rgb, from, working);
     premultiply([rgb[0], rgb[1], rgb[2], p[3]])
 }
+
+/// Source-over with a separable linear working-space blend function. RGB remains
+/// extended range; transparent inputs never require division by zero alpha.
+pub fn blend(src: [f32; 4], dst: [f32; 4], mode: kronello_model::BlendMode) -> [f32; 4] {
+    use kronello_model::BlendMode;
+    if mode == BlendMode::Normal {
+        return source_over(src, dst);
+    }
+    let [sa, da] = [src[3], dst[3]];
+    let mut out = [0.; 4];
+    for i in 0..3 {
+        // Algebraically eliminate unpremultiplication. This remains defined at
+        // zero alpha and avoids overflow from dividing HDR RGB by tiny alpha.
+        out[i] = match mode {
+            BlendMode::Multiply => src[i] * (1. - da) + dst[i] * (1. - sa) + src[i] * dst[i],
+            BlendMode::Screen => src[i] + dst[i] - src[i] * dst[i],
+            BlendMode::Normal => unreachable!(),
+        };
+    }
+    out[3] = sa + da * (1. - sa);
+    out
+}

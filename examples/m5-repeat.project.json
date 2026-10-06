@@ -1,0 +1,530 @@
+{
+  "id": "d5808faa-5b6f-4921-9797-8bbc0dcf5416",
+  "schema_version": 1,
+  "semantic_version": 1,
+  "name": "FFI preview",
+  "compositions": [
+    {
+      "id": "e706c050-13fa-4654-9350-dcef30f1d792",
+      "duration": {
+        "num": "3",
+        "den": "1"
+      },
+      "design_extent": {
+        "width": 64.0,
+        "height": 32.0
+      },
+      "edit_rate": {
+        "num": "24",
+        "den": "1"
+      },
+      "root_nodes": [
+        "adcfcd01-95a0-4292-ba82-61369bf4ac8c"
+      ],
+      "nodes": [
+        {
+          "id": "adcfcd01-95a0-4292-ba82-61369bf4ac8c",
+          "kind": {
+            "kind": "shape",
+            "value": {
+              "content_ref": "36bbe1b1-f5c0-46ba-90f3-3b4cb000e200"
+            }
+          },
+          "containment_parent": null,
+          "transform_parent": null,
+          "child_order": [],
+          "active_range": {
+            "start": {
+              "num": "-2",
+              "den": "1"
+            },
+            "end": {
+              "num": "3",
+              "den": "1"
+            }
+          },
+          "properties": [
+            {
+              "id": "1d77434e-64ef-4de4-9e38-98bb71bb03fe",
+              "descriptor": {
+                "key": "kronello.shape.size",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "vec2",
+                  "value": [
+                    16.0,
+                    12.0
+                  ]
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "561797a3-732d-406d-8755-57fd074c0050",
+              "descriptor": {
+                "key": "kronello.shape.corner_radius",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 0.0
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "4e4837d7-b8f7-47e6-a455-cc35e5b00cdd",
+              "descriptor": {
+                "key": "kronello.fill_color",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "color",
+                  "value": {
+                    "space": "srgb",
+                    "components": {
+                      "r": 0.7843137254901961,
+                      "g": 0.1568627450980392,
+                      "b": 0.0392156862745098,
+                      "alpha": 1.0
+                    }
+                  }
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "cecd9404-ac4e-4245-9d6a-84aa26590fc6",
+              "descriptor": {
+                "key": "kronello.transform.position",
+                "version": 1
+              },
+              "source": {
+                "kind": "curve",
+                "value": "a06bc70e-d4cd-48d2-87f3-c7b5d8984c93"
+              },
+              "modifiers": []
+            },
+            {
+              "id": "bd26f86f-0e75-4078-9ef5-3185085093a0",
+              "descriptor": {
+                "key": "kronello.opacity",
+                "version": 1
+              },
+              "source": {
+                "kind": "expression",
+                "value": "7b2d85f2-e63e-4d54-90f1-e9aa5b6252e9"
+              },
+              "modifiers": []
+            }
+          ]
+        }
+      ],
+      "properties": []
+    },
+    {
+      "id": "bdd6ad5b-0681-4454-ba2a-990f55640f91",
+      "duration": {
+        "num": "3",
+        "den": "1"
+      },
+      "design_extent": {
+        "width": 64.0,
+        "height": 32.0
+      },
+      "edit_rate": {
+        "num": "24",
+        "den": "1"
+      },
+      "root_nodes": [
+        "7079a3b3-b6f8-4752-9ef6-1630691ba430"
+      ],
+      "nodes": [
+        {
+          "id": "7079a3b3-b6f8-4752-9ef6-1630691ba430",
+          "kind": {
+            "kind": "composition_instance",
+            "value": {
+              "id": "f75fd86d-ee64-4f83-bcd5-41c31ee16003",
+              "definition_ref": "e706c050-13fa-4654-9350-dcef30f1d792",
+              "input_bindings": {},
+              "local_time_map": {
+                "kind": "linear",
+                "offset": {
+                  "num": "0",
+                  "den": "1"
+                },
+                "speed": {
+                  "num": "1",
+                  "den": "1"
+                }
+              },
+              "seed": 123
+            }
+          },
+          "containment_parent": null,
+          "transform_parent": null,
+          "child_order": [],
+          "active_range": {
+            "start": {
+              "num": "-2",
+              "den": "1"
+            },
+            "end": {
+              "num": "3",
+              "den": "1"
+            }
+          },
+          "properties": []
+        }
+      ],
+      "properties": []
+    },
+    {
+      "id": "669f064b-2996-4e5c-b97d-9e057984495e",
+      "duration": {
+        "num": "3",
+        "den": "1"
+      },
+      "design_extent": {
+        "width": 64.0,
+        "height": 32.0
+      },
+      "edit_rate": {
+        "num": "24",
+        "den": "1"
+      },
+      "root_nodes": [
+        "06931a94-3a20-496a-8eff-c2af46a00c98"
+      ],
+      "nodes": [
+        {
+          "name": "Authored repeater",
+          "id": "06931a94-3a20-496a-8eff-c2af46a00c98",
+          "kind": {
+            "kind": "repeater",
+            "value": {
+              "content_ref": "b894418a-3508-485e-8587-4c0112f1ca50"
+            }
+          },
+          "containment_parent": null,
+          "transform_parent": null,
+          "child_order": [],
+          "active_range": {
+            "start": {
+              "num": "-2",
+              "den": "1"
+            },
+            "end": {
+              "num": "3",
+              "den": "1"
+            }
+          },
+          "properties": []
+        }
+      ],
+      "properties": []
+    }
+  ],
+  "curves": [
+    {
+      "id": "a06bc70e-d4cd-48d2-87f3-c7b5d8984c93",
+      "value_type": "vec2",
+      "keys": [
+        {
+          "time": {
+            "num": "0",
+            "den": "1"
+          },
+          "value": {
+            "kind": "vec2",
+            "value": [
+              1.0,
+              1.0
+            ]
+          },
+          "interpolation": {
+            "kind": "linear"
+          }
+        },
+        {
+          "time": {
+            "num": "1",
+            "den": "1"
+          },
+          "value": {
+            "kind": "vec2",
+            "value": [
+              9.0,
+              1.0
+            ]
+          },
+          "interpolation": {
+            "kind": "linear"
+          }
+        }
+      ],
+      "interpolation_version": 1
+    }
+  ],
+  "expressions": [
+    {
+      "id": "7b2d85f2-e63e-4d54-90f1-e9aa5b6252e9",
+      "version": 1,
+      "value_type": "scalar",
+      "budget": {
+        "instructions": 4096,
+        "memory_bytes": 1048576,
+        "samples": 64,
+        "nodes": 1024,
+        "dependencies": 64
+      },
+      "nodes": [
+        "time",
+        {
+          "noise": {
+            "seed": 7,
+            "element": 9,
+            "input": 0
+          }
+        },
+        {
+          "literal": {
+            "kind": "scalar",
+            "value": 1.0
+          }
+        },
+        {
+          "add": {
+            "left": 1,
+            "right": 2
+          }
+        },
+        {
+          "literal": {
+            "kind": "scalar",
+            "value": 2.0
+          }
+        },
+        {
+          "divide": {
+            "left": 3,
+            "right": 4
+          }
+        }
+      ]
+    }
+  ],
+  "shapes": [
+    {
+      "id": "36bbe1b1-f5c0-46ba-90f3-3b4cb000e200",
+      "geometry": {
+        "kind": "rectangle",
+        "value": {
+          "size": "1d77434e-64ef-4de4-9e38-98bb71bb03fe",
+          "corner_radius": "561797a3-732d-406d-8755-57fd074c0050"
+        }
+      },
+      "fill": {
+        "color": "4e4837d7-b8f7-47e6-a455-cc35e5b00cdd",
+        "rule": "nonzero"
+      },
+      "stroke": null
+    }
+  ],
+  "templates": [
+    {
+      "id": "0a2119d4-23ee-490d-b75e-91adfccbf345",
+      "template_id": "a5775cf4-5756-413e-a4a5-f429a453baf6",
+      "version": "1.0.0",
+      "composition_ref": "bdd6ad5b-0681-4454-ba2a-990f55640f91",
+      "public_inputs": {},
+      "duration_policy": {
+        "intro": {
+          "num": "0",
+          "den": "1"
+        },
+        "outro": {
+          "num": "0",
+          "den": "1"
+        },
+        "minimum_middle": {
+          "num": "0",
+          "den": "1"
+        },
+        "middle_mode": "stretch"
+      },
+      "constraints": {
+        "bands": [],
+        "max_lines": {}
+      },
+      "content_hash": "4348026235cf363ae3e8525ae50089cf30a843d0f499d542e149646862959666"
+    }
+  ],
+  "repeaters": [
+    {
+      "id": "b894418a-3508-485e-8587-4c0112f1ca50",
+      "version": 1,
+      "source": {
+        "composition": "bdd6ad5b-0681-4454-ba2a-990f55640f91",
+        "root": "7079a3b3-b6f8-4752-9ef6-1630691ba430"
+      },
+      "instances": [
+        {
+          "id": "c51c3c8e-5567-4cae-9eee-8e24ce3c3b44",
+          "placement": "59b16113-8f2f-4cfa-9eef-801cefb4dc3f",
+          "seed": 100,
+          "enabled": true,
+          "active_range": {
+            "start": {
+              "num": "-2",
+              "den": "1"
+            },
+            "end": {
+              "num": "3",
+              "den": "1"
+            }
+          },
+          "local_time_map": {
+            "kind": "linear",
+            "offset": {
+              "num": "0",
+              "den": "1"
+            },
+            "speed": {
+              "num": "1",
+              "den": "1"
+            }
+          },
+          "properties": [
+            {
+              "id": "b88ca479-de41-4c90-8502-a76c9ddce8f2",
+              "descriptor": {
+                "key": "kronello.transform.position",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "vec2",
+                  "value": [
+                    0.0,
+                    0.0
+                  ]
+                }
+              },
+              "modifiers": []
+            }
+          ],
+          "effects": [],
+          "input_bindings": {}
+        },
+        {
+          "id": "db1fd30e-0356-48ed-8ef0-8bd2411d038c",
+          "placement": "7ad2866f-b3d5-49f1-86a7-01bd2f9a1182",
+          "seed": 101,
+          "enabled": true,
+          "active_range": {
+            "start": {
+              "num": "-2",
+              "den": "1"
+            },
+            "end": {
+              "num": "3",
+              "den": "1"
+            }
+          },
+          "local_time_map": {
+            "kind": "linear",
+            "offset": {
+              "num": "0",
+              "den": "1"
+            },
+            "speed": {
+              "num": "1",
+              "den": "1"
+            }
+          },
+          "properties": [
+            {
+              "id": "a802c7d1-3b39-439a-8b20-8999e17580da",
+              "descriptor": {
+                "key": "kronello.transform.position",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "vec2",
+                  "value": [
+                    20.0,
+                    0.0
+                  ]
+                }
+              },
+              "modifiers": []
+            }
+          ],
+          "effects": [],
+          "input_bindings": {}
+        },
+        {
+          "id": "c6039ee9-878f-4cf7-ac59-f40aa9678aac",
+          "placement": "0063e5e7-0ed1-471a-ae9f-b8b9198edbc9",
+          "seed": 102,
+          "enabled": true,
+          "active_range": {
+            "start": {
+              "num": "-2",
+              "den": "1"
+            },
+            "end": {
+              "num": "3",
+              "den": "1"
+            }
+          },
+          "local_time_map": {
+            "kind": "linear",
+            "offset": {
+              "num": "0",
+              "den": "1"
+            },
+            "speed": {
+              "num": "1",
+              "den": "1"
+            }
+          },
+          "properties": [
+            {
+              "id": "e8d59dde-5f53-4323-b188-7730122b77e8",
+              "descriptor": {
+                "key": "kronello.transform.position",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "vec2",
+                  "value": [
+                    40.0,
+                    0.0
+                  ]
+                }
+              },
+              "modifiers": []
+            }
+          ],
+          "effects": [],
+          "input_bindings": {}
+        }
+      ]
+    }
+  ]
+}

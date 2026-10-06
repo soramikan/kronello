@@ -44,17 +44,20 @@ extension EditorModel {
         let id = layer.authored.object("kind").object("value").string("content_ref")
         return document.objects("texts").first { $0.string("id") == id }
     }
-    public func setText(_ layer: Layer, to value: String) {
+    public func setText(_ layer: Layer, to value: String, base: String? = nil) {
         guard !ui.locked.contains(layer.id), var text = textDocument(layer) else { return }
-        var styles = text.objects("styles")
-        guard styles.count <= 1 else { mapFailure(ServiceFailure(code: "UNSUPPORTED_FEATURE", message: "複数の Text style span の編集は後続タスクです")); return }
-        if !value.isEmpty, styles.isEmpty { mapFailure(ServiceFailure(code: "FONT_MISSING", message: "Text style の font lock が必要です")); return }
-        text["text"] = value
-        if !styles.isEmpty { styles[0]["range"] = ["start": 0, "end": value.utf8.count] }
-        text["styles"] = value.isEmpty ? [] : styles
-        submit([["text_set": ["text": text]]], label: "Text の変更")
+        do {
+            text = try TextSpanEditing.replaced(text, value: value)
+            submit([["text_set": ["text": text]]], label: "Text の変更", base: base)
+        } catch { mapFailure(error) }
     }
-    public func setEnum(_ layer: Layer, property: [String: Any], to value: String) {
+    public func setBool(_ layer: Layer, property: [String: Any], to value: Bool, base: String? = nil) {
+        guard !ui.locked.contains(layer.id), property.object("source").string("kind") == "constant",
+              layer.value(property).string("kind") == "bool" else { return }
+        submit([["property_source_set": ["object": layer.id, "property": property.string("id"),
+            "source": ["kind": "constant", "value": ["kind": "bool", "value": value]]]]], label: "Bool の変更", base: base)
+    }
+    public func setEnum(_ layer: Layer, property: [String: Any], to value: String, base: String? = nil) {
         guard !ui.locked.contains(layer.id), property.object("source").string("kind") == "constant" else { return }
         submit([["property_source_set": ["object": layer.id, "property": property.string("id"),
             "source": ["kind": "constant", "value": ["kind": "enum", "value": value]]]]], label: "Alignment の変更")

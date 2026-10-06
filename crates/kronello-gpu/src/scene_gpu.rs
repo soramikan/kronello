@@ -174,7 +174,12 @@ impl ScenePass<'_> {
             [
                 fill.map_or(1, |f| space(f.paint.space)),
                 stroke.map_or(1, |s| space(s.paint.space)),
-                u32::from(kind == MaskKind::Luminance),
+                match kind {
+                    MaskKind::Alpha => 0,
+                    MaskKind::Luminance => 1,
+                    MaskKind::AlphaInverted => 2,
+                    MaskKind::LuminanceInverted => 3,
+                },
                 output_transform.map_or(1, |t| space(t.space)),
             ]
             .into_iter()
@@ -676,6 +681,27 @@ impl ScenePass<'_> {
             DrawNode::Group { children, opacity } => {
                 let texture = self.composite(scene, children, cache)?;
                 self.pass(2, (&texture, &blank), None, *opacity, MaskKind::Alpha, None)?
+            }
+            DrawNode::Blend {
+                source,
+                backdrop,
+                mode,
+            } => {
+                let source = self.node(scene, *source, cache)?;
+                let backdrop = self.node(scene, *backdrop, cache)?;
+                let operation = match mode {
+                    kronello_model::BlendMode::Normal => 1,
+                    kronello_model::BlendMode::Multiply => 5,
+                    kronello_model::BlendMode::Screen => 6,
+                };
+                self.pass(
+                    operation,
+                    (&source, &backdrop),
+                    None,
+                    1.0,
+                    MaskKind::Alpha,
+                    None,
+                )?
             }
             DrawNode::Effect { source, effect } => {
                 let source = self.node(scene, *source, cache)?;

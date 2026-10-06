@@ -95,6 +95,43 @@ impl TimeMap {
     }
 
     /// Evaluate without frame snapping, mutable state, or implicit clamping.
+    /// Simulation inputs use the forward authored clock; protected playback
+    /// chooses displayed state but never changes its dynamics history.
+    pub fn canonical_source_clock(&self) -> Result<Self, TimeError> {
+        match self {
+            Self::Protected(_) => Self::linear(Time::ZERO, Rational::ONE),
+            _ => Ok(self.clone()),
+        }
+    }
+    /// Exact inverse of the canonical monotone clock, including endpoints.
+    pub fn inverse_canonical(&self, local: Time) -> Result<Time, TimeError> {
+        match self {
+            Self::Protected(_) => Ok(local),
+            Self::Linear(map) => local.checked_sub(map.offset)?.checked_div(map.speed),
+            Self::PiecewiseLinear(map) => {
+                let points = &map.points;
+                if local < points[0].local || local > points[points.len() - 1].local {
+                    return Err(TimeError::OutsideMapDomain);
+                }
+                let index = points.partition_point(|point| point.local < local);
+                let right = points[index];
+                if local == right.local {
+                    return Ok(right.parent);
+                }
+                let left = points[index - 1];
+                let fraction = local
+                    .checked_sub(left.local)?
+                    .checked_div(right.local.checked_sub(left.local)?)?;
+                left.parent.checked_add(
+                    right
+                        .parent
+                        .checked_sub(left.parent)?
+                        .checked_mul(fraction)?,
+                )
+            }
+        }
+    }
+
     /// Each arithmetic step must be representable by the rational contract.
     pub fn map(&self, parent: Time) -> Result<Time, TimeError> {
         match self {

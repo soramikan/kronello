@@ -189,7 +189,10 @@ pub(crate) fn derive_scene_bounds(nodes: &mut [SceneNodeIr]) -> Result<(), Rende
                             * stroke_halo(s.width.get(), s.join, s.cap, s.miter_limit.get());
                     }
                     // Rectangles/ellipses stay in their size box with half-width support.
-                    if matches!(resolved.geometry, ResolvedGeometry::BezierPath(_)) {
+                    if matches!(
+                        resolved.geometry,
+                        ResolvedGeometry::BezierPath(_) | ResolvedGeometry::TrimmedPath { .. }
+                    ) {
                         stroke_halo(s.width.get(), s.join, s.cap, s.miter_limit.get())
                     } else {
                         s.width.get() * 0.5

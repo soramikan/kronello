@@ -3,8 +3,8 @@ use std::path::PathBuf;
 
 use kronello_eval::{DependencyGraph, EvaluationSnapshot, RuntimePropertyKey};
 use kronello_model::{
-    ColorSpace, Composition, CompositionId, DesignExtent, DocumentObject, InstancePath, NodeId,
-    NodeKind, PropertyId, PropertyKey, Unit, Value, ValueType,
+    ColorSpace, Composition, CompositionId, DesignExtent, DocumentObject, ExpressionId,
+    InstancePath, NodeId, NodeKind, PropertyId, PropertyKey, Unit, Value, ValueType,
 };
 use kronello_time::{Duration, Time, TimeRange};
 use serde::{Deserialize, Serialize};
@@ -49,6 +49,8 @@ pub enum SceneKind {
     Shape,
     Text,
     CompositionInstance,
+    Repeater,
+    Simulation,
     Media,
 }
 impl SceneKind {
@@ -60,6 +62,8 @@ impl SceneKind {
             NodeKind::Text { .. } => Self::Text,
             NodeKind::CompositionInstance(_) => Self::CompositionInstance,
             NodeKind::Media(_) => Self::Media,
+            NodeKind::Repeater { .. } => Self::Repeater,
+            NodeKind::Simulation { .. } => Self::Simulation,
         }
     }
 }
@@ -197,6 +201,66 @@ pub struct PropertySampleResult {
 fn evaluation(e: kronello_eval::EvaluationError) -> ServiceError {
     ServiceError::new(e.code(), e.to_string())
 }
+/// Canonical surface text for one canonical expression AST (ADR-0105). The
+/// stored AST is formatted read-only; metadata is never derived from text.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ExpressionFormatRequest {
+    pub project: PathBuf,
+    /// Format this stored expression; required when `expression` is omitted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expression_id: Option<ExpressionId>,
+    /// Format this supplied AST instead of reading a stored expression.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expression: Option<Box<kronello_model::Expression>>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ExpressionFormatResult {
+    /// Snapshot revision the stored expression was read from, when retrieved.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revision: Option<String>,
+    pub expression_id: ExpressionId,
+    /// Canonical surface text. Reparsing it with the same editing-envelope
+    /// metadata reproduces the identical AST for every in-syntax expression.
+    pub text: String,
+}
+pub(crate) fn expression_format(
+    r: ExpressionFormatRequest,
+) -> Result<ExpressionFormatResult, ServiceError> {
+    let (expression, revision) = match (r.expression, r.expression_id) {
+        (Some(expression), None) => (*expression, None),
+        (None, Some(expression_id)) => {
+            let store = open_existing(&r.project)?;
+            let snapshot = store.snapshot()?;
+            store.close()?;
+            let expression = snapshot
+                .document
+                .expressions
+                .iter()
+                .find_map(|object| match object {
+                    DocumentObject::Known(expression) if expression.id == expression_id => {
+                        Some(expression.clone())
+                    }
+                    _ => None,
+                })
+                .ok_or_else(|| ServiceError::new("EXPRESSION_NOT_FOUND", "expression not found"))?;
+            (expression, Some(snapshot.revision.to_string()))
+        }
+        _ => {
+            return Err(ServiceError::invalid(
+                "specify exactly one of expression or expression_id",
+            ));
+        }
+    };
+    let text = kronello_model::format_expression(&expression)
+        .map_err(|e| ServiceError::new(e.code(), e.to_string()))?;
+    Ok(ExpressionFormatResult {
+        revision,
+        expression_id: expression.id,
+        text,
+    })
+}
 fn definitions(project: &kronello_model::Project) -> Result<Vec<Composition>, ServiceError> {
     project
         .ensure_editable()
@@ -205,7 +269,9 @@ fn definitions(project: &kronello_model::Project) -> Result<Vec<Composition>, Se
         .compositions
         .iter()
         .map(|c| match c {
-            DocumentObject::Known(c) => Ok(c.clone()),
+            DocumentObject::Known(c) => project
+                .lower_repeater_composition(c)
+                .map_err(|e| ServiceError::new(e.code(), e.to_string())),
             _ => Err(ServiceError::new(
                 "UNSUPPORTED_FEATURE",
                 "opaque composition",
@@ -348,7 +414,19 @@ pub(crate) fn scene(mut r: SceneQueryRequest) -> Result<SceneQueryResult, Servic
                 }),
             key: node_key,
             composition: c.id,
-            kind: n.kind.clone(),
+            kind: snapshot
+                .document
+                .compositions
+                .iter()
+                .find_map(|object| match object {
+                    DocumentObject::Known(authored) if authored.id == c.id => authored
+                        .nodes
+                        .iter()
+                        .find(|a| a.id == n.id)
+                        .map(|a| a.kind.clone()),
+                    _ => None,
+                })
+                .unwrap_or_else(|| n.kind.clone()),
             containment_parent,
             transform_parent,
             children,
@@ -470,7 +548,15 @@ pub(crate) fn sample(r: PropertySampleRequest) -> Result<PropertySampleResult, S
     let registry = edit::registry();
     let references = Default::default();
     let dependencies = Default::default();
-    let graph = DependencyGraph::compile(
+    let audio_analyses = snapshot
+        .document
+        .audio_analysis_inputs()
+        .map_err(|e| ServiceError::invalid(e.to_string()))?;
+    let data_assets = snapshot
+        .document
+        .expression_data_inputs()
+        .map_err(|e| ServiceError::invalid(e.to_string()))?;
+    let graph = DependencyGraph::compile_with_data(
         EvaluationSnapshot {
             expressions: &expressions,
             compositions: &compositions,
@@ -481,8 +567,12 @@ pub(crate) fn sample(r: PropertySampleRequest) -> Result<PropertySampleResult, S
             working_space: ColorSpace::LinearRec709,
         },
         r.composition,
+        &audio_analyses,
+        &data_assets,
     )
     .map_err(evaluation)?;
+    let (seeds, aliases) = snapshot.document.repeater_context();
+    let graph = graph.with_repeater_context(seeds, aliases);
     let mut samples = Vec::new();
     for key in &r.keys {
         let runtime = key.runtime();

@@ -1,6 +1,6 @@
 # Kronello ドキュメント
 
-状態: 2026-10-06、M0・M1・M2のP0・M3・M4を受け入れ済み。STORE-003の実環境残件とM5/M6の計画が残る。実装・未実装・未検証・保証外の区別は [現在の実装範囲と残件](roadmap/implementation-status.md)、完了判定は [backlog.json](backlog/backlog.json) と各検証文書を参照する。
+状態: 2026-10-06、M0・M1・M2のP0・M3・M4を受け入れ済み。STORE-003の実環境残件、M5の実装・受け入れ検証、未着手のM6が残る。実装・未実装・未検証・保証外の区別は [現在の実装範囲と残件](roadmap/implementation-status.md)、完了判定は [backlog.json](backlog/backlog.json) と各検証文書を参照する。
 
 ## 読む順番
 
@@ -31,6 +31,14 @@
 | [14 ジョブ](architecture/14-jobs.md) | レンダージョブ、worker、状態 DB |
 | [デザインシステム](design-system/README.md) | GUI の色・書体・アイコン・寸法のトークンと部品の仕様 |
 | [参考資料](architecture/references.md) | 一次資料 |
+
+## 受け入れ記録
+
+- [現在の実装範囲と残件](roadmap/implementation-status.md) — mainと作業ブランチの区別、未割当範囲の追跡先
+- [M3](testing/m3-acceptance.md) / [M4](testing/m4-acceptance.md) — 完了した受け入れの条件と証拠
+- [M5中断・再開の引き継ぎ](roadmap/m5-handoff-2026-10-06.md) — 未コミット変更、最新検証、未解決の懸念と再開手順
+- [M5進捗](testing/m5-acceptance.md) — 作業ブランチで受け入れた9件と残る4件
+- [STORE-003](testing/store-003.md) — 確認済みOS試験とDropbox・network FSの残件
 
 ## その他
 

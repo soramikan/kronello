@@ -17,6 +17,11 @@ fn builtin_registry_has_fixed_uuid_v4_key_mappings() {
     let registry = SchemaRegistry::with_builtin();
     let mappings = [
         (
+            BLEND_MODE_ID,
+            BLEND_KEY,
+            "7ba7fae2-3e1d-4bd9-9b84-2e6a6a9fe101",
+        ),
+        (
             AUDIO_VOLUME_ID,
             "kronello.audio.volume",
             "e9cf4a80-2b64-4b8e-9e29-dfe6bc119a63",
@@ -85,6 +90,7 @@ fn builtin_registries_have_identical_ids_keys_and_contents() {
 fn builtin_registry_enumeration_is_lexical_and_repeatable() {
     let expected = [
         "kronello.audio.volume",
+        "kronello.blend_mode",
         "kronello.fill_color",
         "kronello.opacity",
         "kronello.stroke_width",

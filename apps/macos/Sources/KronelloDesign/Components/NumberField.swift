@@ -65,6 +65,7 @@ public struct KRNumberField: View {
     private let precision: Int
     private let error: Bool
     private let appearance: KRNumberFieldState
+    private let onEditingStart: () -> Void
     private let onPreview: (Double) -> Void
     private let onCommit: (Double, Double) -> Void
     @State private var transaction: KRNumberEdit?
@@ -79,11 +80,11 @@ public struct KRNumberField: View {
 
     public init(value: Binding<Double>, unit: String = "", step: Double = 1, range: ClosedRange<Double>? = nil,
                 precision: Int = 1, error: Bool = false, state: KRNumberFieldState = .resting,
-                accessibilityLabel: String, onPreview: @escaping (Double) -> Void = { _ in },
+                accessibilityLabel: String, onEditingStart: @escaping () -> Void = {}, onPreview: @escaping (Double) -> Void = { _ in },
                 onCommit: @escaping (Double, Double) -> Void) {
         _value = value; self.unit = unit; self.step = step; self.range = range
         self.precision = max(0, min(precision, 12)); self.error = error; appearance = state
-        label = accessibilityLabel; self.onPreview = onPreview; self.onCommit = onCommit
+        label = accessibilityLabel; self.onEditingStart = onEditingStart; self.onPreview = onPreview; self.onCommit = onCommit
     }
     private var scrubbing: Bool { transaction?.phase == .scrubbing || appearance == .scrubbing }
     private var failed: Bool { error || invalid || appearance == .error }
@@ -113,6 +114,7 @@ public struct KRNumberField: View {
             .gesture(DragGesture(minimumDistance: 0).onChanged { drag in
                 guard enabled && !failed && !editing && !dragCancelled else { return }
                 if transaction == nil {
+                    onEditingStart()
                     transaction = KRNumberEdit(value: value, step: step, range: range); transaction?.beginDrag(); focused = true
                 }
                 let keys = NSEvent.modifierFlags
@@ -129,7 +131,7 @@ public struct KRNumberField: View {
                 let model = KRNumberEdit(value: value, step: step, range: range)
                 let next = model.stepped(press.key == .upArrow || press.key == .rightArrow ? 1 : -1,
                                          shift: press.modifiers.contains(.shift), option: press.modifiers.contains(.option))
-                if next != value { let previous = value; value = next; onCommit(previous, next) }
+                if next != value { onEditingStart(); let previous = value; value = next; onCommit(previous, next) }
                 return .handled
             }
             .onKeyPress(.return) { guard !editing && enabled && !failed else { return .ignored }; beginEditing(); return .handled }
@@ -151,10 +153,11 @@ public struct KRNumberField: View {
             .accessibilityAdjustableAction { direction in
                 guard enabled && !failed else { return }
                 let next = KRNumberEdit(value: value, step: step, range: range).stepped(direction == .increment ? 1 : -1)
-                if next != value { let previous = value; value = next; onCommit(previous, next) }
+                if next != value { onEditingStart(); let previous = value; value = next; onCommit(previous, next) }
             }
     }
     private func beginEditing() {
+        if transaction == nil { onEditingStart() }
         transaction = KRNumberEdit(value: value, step: step, range: range); transaction?.beginEditing()
         text = format(value); focused = false; editing = true
     }

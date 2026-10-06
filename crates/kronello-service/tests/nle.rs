@@ -42,6 +42,7 @@ fn clip(composition: CompositionId, start: Time, end: Time, speed: Rational) -> 
         source_in: Time::ZERO,
         time_map: TimeMap::linear(Time::ZERO, speed).unwrap(),
         audio_retime: AudioRetimePolicy::Reject,
+        reverse_sampling: None,
         volume: None,
         links: vec![],
         effects: vec![],
@@ -58,11 +59,13 @@ fn sequence(p: &Project) -> Sequence {
         working_space: ColorSpace::LinearRec709,
         tracks: vec![
             Track {
+                state: None,
                 id: TrackId::new(),
                 kind: TrackKind::Video,
                 clips: vec![clip(composition(p).id, t(2, 1), t(3, 1), Rational::ONE)],
             },
             Track {
+                state: None,
                 id: TrackId::new(),
                 kind: TrackKind::Video,
                 clips: vec![clip(composition(p).id, t(5, 2), t(9, 2), t(1, 2))],
@@ -821,17 +824,20 @@ fn asset_audio_tracks_mix_on_absolute_grid_and_reject_retime() {
         source_in: t(1, 100),
         time_map: TimeMap::linear(Time::ZERO, Rational::ONE).unwrap(),
         audio_retime: AudioRetimePolicy::Reject,
+        reverse_sampling: None,
         volume: None,
         links: vec![],
         effects: vec![],
         properties: vec![],
     };
     s.tracks.push(Track {
+        state: None,
         id: TrackId::new(),
         kind: TrackKind::Audio,
         clips: vec![c.clone()],
     });
     s.tracks.push(Track {
+        state: None,
         id: TrackId::new(),
         kind: TrackKind::Audio,
         clips: vec![Clip {

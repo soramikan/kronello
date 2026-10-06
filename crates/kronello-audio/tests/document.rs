@@ -110,6 +110,7 @@ fn sequence(p: &mut Project, root: CompositionId, start: Time, end: Time) -> Seq
         source_in: t(1, 100),
         time_map: TimeMap::linear(Time::ZERO, Time::ONE).unwrap(),
         audio_retime: AudioRetimePolicy::Reject,
+        reverse_sampling: None,
         volume: Some(Box::new(volume(PropertySource::Constant(scalar(0.5))))),
         links: vec![],
         properties: vec![],
@@ -122,6 +123,7 @@ fn sequence(p: &mut Project, root: CompositionId, start: Time, end: Time) -> Seq
         audio_rate: SampleRate::HZ_48000,
         working_space: ColorSpace::LinearRec709,
         tracks: vec![Track {
+            state: None,
             id: TrackId::new(),
             kind: TrackKind::Video,
             clips: vec![clip],

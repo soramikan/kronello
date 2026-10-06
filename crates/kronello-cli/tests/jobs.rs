@@ -1077,7 +1077,10 @@ fn expression_job_pins_ast_and_renders_after_source_project_removal() {
         input["snapshot"]["project"]["expressions"][0]["nodes"][0]["literal"]["value"],
         0.4
     );
-    assert_eq!(input["snapshot"]["semantic_versions"]["expression"], 1);
+    assert_eq!(
+        input["snapshot"]["semantic_versions"]["expression"],
+        kronello_model::EXPRESSION_SUPPORTED_VERSION
+    );
     let snapshot: kronello_render::RenderSnapshot =
         serde_json::from_str(&input["snapshot"].to_string()).unwrap();
     let time = serde_json::from_value(json!({"num":"0","den":"1"})).unwrap();

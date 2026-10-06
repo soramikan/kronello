@@ -5,8 +5,8 @@ Kronello は Rust / FFmpeg / wgpu を基盤とする動画編集・モーショ�
 
 ## 現在の状態
 
-- M0・M1 と M2 の P0 全 10 タスクを実装済み（M0: `kronello-time` / `kronello-model` / `kronello-testkit` / `kronello-gpu` / `kronello-framebridge`、CI。M1: `kronello-store` / `kronello-animation` / `kronello-eval` / `kronello-vector` / `kronello-text` / `kronello-render` / `kronello-service` / `kronello-cli`。M2 の追加 crate: `kronello-media` / `kronello-audio` / `kronello-template` / `kronello-mcp` / `kronello-jobs`）。M2 は共有編集・検査 API、CompositionClip のマルチトラック配置、日本語テンプレート、基本音声と ProRes / PCM24 書き出し、blur / shadow、MCP stdio、固定 snapshot の独立 worker と 4K 縦断デモを実装した。M1・M2 で見送った範囲は[後続タスク](docs/roadmap/milestones.md#m2-の延期範囲と後続タスク)に記録済み。M2 の STORE-003（P2）は実環境検証の残件により `in_progress`。M3 は主要コアと `apps/macos` の4ページ・実時間音声・横断検証を統合済み。残タスクの受け入れ状態は `docs/backlog/backlog.json` と `docs/testing/` を正本とし、実装統合だけで完了と扱わない。M3 の全 25 タスクとM4 の全 12 タスクは受け入れを完了した。M5 以降は未着手。
-- 文書中の API・CLI・スキーマは提案であり、実装済みと書かない・扱わない。
+- M0・M1 と M2 の P0 全 10 タスクを実装済み（M0: `kronello-time` / `kronello-model` / `kronello-testkit` / `kronello-gpu` / `kronello-framebridge`、CI。M1: `kronello-store` / `kronello-animation` / `kronello-eval` / `kronello-vector` / `kronello-text` / `kronello-render` / `kronello-service` / `kronello-cli`。M2 の追加 crate: `kronello-media` / `kronello-audio` / `kronello-template` / `kronello-mcp` / `kronello-jobs`）。M2 は共有編集・検査 API、CompositionClip のマルチトラック配置、日本語テンプレート、基本音声と ProRes / PCM24 書き出し、blur / shadow、MCP stdio、固定 snapshot の独立 worker と 4K 縦断デモを実装した。M1・M2 で見送った範囲は[後続タスク](docs/roadmap/milestones.md#m2-の延期範囲と後続タスク)に記録済み。M2 の STORE-003（P2）は実環境検証の残件により `in_progress`。M3 は主要コアと `apps/macos` の4ページ・実時間音声・横断検証を統合済み。残タスクの受け入れ状態は `docs/backlog/backlog.json` と `docs/testing/` を正本とし、実装統合だけで完了と扱わない。M3 の全 25 タスクとM4 の全 12 タスクは受け入れを完了した。M5 は SIM-001・EXPR-002・AUDIO-005 を含む12件を受け入れ済み。NAME-001 は名称確保の所有者判断が保留のため進行中のままとし、全13件の完了ではない。M6 は未着手。
+- 文書中の提案 API・CLI・スキーマは、それだけで実装済みと扱わない。実装・受け入れ済みの範囲は `docs/backlog/backlog.json` と対応する検証記録で確認する。M5の作業ブランチでの受け入れとmainへの統合は区別する。
 
 ## 最初に読むもの
 
@@ -27,7 +27,7 @@ Kronello は Rust / FFmpeg / wgpu を基盤とする動画編集・モーショ�
 - Rust 1.95.0 / edition 2024 を使い、`Cargo.lock` を管理する。
 - 新しい crate は `[workspace.package]` の設定と `[workspace.lints]` を継承する。純粋層の `unsafe_code = "forbid"` を緩めない。
 - `cargo fmt --all --check`、`cargo clippy --workspace --all-targets --locked -- -D warnings`、`cargo test --workspace --locked` を通す。
-- 意味的比較は通常のテストに含める。GPU 画素の固定環境比較は [golden 比較手順](docs/testing/golden-comparison.md)（GPU-001 / QA-001 向けの提案）に従う。
+- 意味的比較は通常のテストに含める。GPU 画素の固定環境比較は [golden 比較手順](docs/testing/golden-comparison.md)に従う。採用した比較基準と実行済みの範囲を、同手順と各受け入れ記録で区別する。
 
 ## タスクの進め方
 

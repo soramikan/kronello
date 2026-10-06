@@ -1,0 +1,420 @@
+{
+  "id": "3b6b4934-0bd0-4b93-b890-bdf781e9b0d5",
+  "schema_version": 1,
+  "semantic_version": 1,
+  "name": "M5 vector acceptance",
+  "compositions": [
+    {
+      "id": "e706c050-13fa-4654-9350-dcef30f1d792",
+      "duration": {
+        "num": "3",
+        "den": "1"
+      },
+      "design_extent": {
+        "width": 640.0,
+        "height": 320.0
+      },
+      "edit_rate": {
+        "num": "24",
+        "den": "1"
+      },
+      "root_nodes": [
+        "c79eb02e-3b02-4eb7-b1fa-a9abc84569b8",
+        "92121442-39a7-433c-a699-8c794a18bcee"
+      ],
+      "nodes": [
+        {
+          "name": "Trim closed loop",
+          "id": "92121442-39a7-433c-a699-8c794a18bcee",
+          "kind": {
+            "kind": "shape",
+            "value": {
+              "content_ref": "56938539-35de-4eb4-992e-988add002dc6"
+            }
+          },
+          "containment_parent": null,
+          "transform_parent": null,
+          "child_order": [],
+          "active_range": {
+            "start": {
+              "num": "-2",
+              "den": "1"
+            },
+            "end": {
+              "num": "3",
+              "den": "1"
+            }
+          },
+          "properties": [
+            {
+              "id": "b5b44bcf-7055-48a4-833d-3b73d6afd466",
+              "descriptor": {
+                "key": "kronello.fill_color",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "color",
+                  "value": {
+                    "space": "srgb",
+                    "components": {
+                      "r": 0.13333333333333333,
+                      "g": 0.7725490196078432,
+                      "b": 0.3686274509803922,
+                      "alpha": 1.0
+                    }
+                  }
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "49a44507-2f96-4d96-97e0-3184398cb456",
+              "descriptor": {
+                "key": "kronello.shape.path",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "path",
+                  "value": {
+                    "segments": [
+                      {
+                        "kind": "move_to",
+                        "value": [
+                          360.0,
+                          80.0
+                        ]
+                      },
+                      {
+                        "kind": "line_to",
+                        "value": [
+                          540.0,
+                          80.0
+                        ]
+                      },
+                      {
+                        "kind": "line_to",
+                        "value": [
+                          540.0,
+                          240.0
+                        ]
+                      },
+                      {
+                        "kind": "line_to",
+                        "value": [
+                          360.0,
+                          240.0
+                        ]
+                      },
+                      {
+                        "kind": "close"
+                      }
+                    ]
+                  }
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "1bd621b1-7d55-480d-b52a-f3ead147d77a",
+              "descriptor": {
+                "key": "kronello.shape.trim_end",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 0.81
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "45a3df00-d1fa-467f-8530-fcc48a296d6d",
+              "descriptor": {
+                "key": "kronello.shape.trim_start",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 0.19
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "f4efcebe-549f-4aec-9efa-a5ec5616b8c4",
+              "descriptor": {
+                "key": "kronello.shape.trim_offset",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": -0.4
+                }
+              },
+              "modifiers": []
+            }
+          ]
+        },
+        {
+          "name": "Morph curve",
+          "id": "c79eb02e-3b02-4eb7-b1fa-a9abc84569b8",
+          "kind": {
+            "kind": "shape",
+            "value": {
+              "content_ref": "3a7eefa7-8fe7-4df2-9095-ae08bdfb471a"
+            }
+          },
+          "containment_parent": null,
+          "transform_parent": null,
+          "child_order": [],
+          "active_range": {
+            "start": {
+              "num": "-2",
+              "den": "1"
+            },
+            "end": {
+              "num": "3",
+              "den": "1"
+            }
+          },
+          "properties": [
+            {
+              "id": "a1605d72-4d54-478a-a368-c70bb57036b7",
+              "descriptor": {
+                "key": "kronello.fill_color",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "color",
+                  "value": {
+                    "space": "srgb",
+                    "components": {
+                      "r": 0.9372549019607843,
+                      "g": 0.26666666666666666,
+                      "b": 0.26666666666666666,
+                      "alpha": 1.0
+                    }
+                  }
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "acb24576-7a04-4e92-92f8-24018b8e3261",
+              "descriptor": {
+                "key": "kronello.shape.path",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "path",
+                  "value": {
+                    "segments": [
+                      {
+                        "kind": "move_to",
+                        "value": [
+                          50.0,
+                          50.0
+                        ]
+                      },
+                      {
+                        "kind": "cubic_to",
+                        "value": {
+                          "control1": [
+                            80.0,
+                            30.0
+                          ],
+                          "control2": [
+                            120.0,
+                            30.0
+                          ],
+                          "end": [
+                            150.0,
+                            50.0
+                          ]
+                        }
+                      },
+                      {
+                        "kind": "line_to",
+                        "value": [
+                          150.0,
+                          150.0
+                        ]
+                      },
+                      {
+                        "kind": "line_to",
+                        "value": [
+                          50.0,
+                          150.0
+                        ]
+                      },
+                      {
+                        "kind": "close"
+                      }
+                    ]
+                  }
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "de4488f6-eab5-4b01-bd99-3d4692624d61",
+              "descriptor": {
+                "key": "kronello.shape.morph_target",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "path",
+                  "value": {
+                    "segments": [
+                      {
+                        "kind": "move_to",
+                        "value": [
+                          50.0,
+                          50.0
+                        ]
+                      },
+                      {
+                        "kind": "cubic_to",
+                        "value": {
+                          "control1": [
+                            100.0,
+                            10.0
+                          ],
+                          "control2": [
+                            200.0,
+                            10.0
+                          ],
+                          "end": [
+                            250.0,
+                            50.0
+                          ]
+                        }
+                      },
+                      {
+                        "kind": "line_to",
+                        "value": [
+                          250.0,
+                          150.0
+                        ]
+                      },
+                      {
+                        "kind": "line_to",
+                        "value": [
+                          50.0,
+                          150.0
+                        ]
+                      },
+                      {
+                        "kind": "close"
+                      }
+                    ]
+                  }
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "f01c1965-888b-4e9e-8e36-d7f613820959",
+              "descriptor": {
+                "key": "kronello.shape.morph_progress",
+                "version": 1
+              },
+              "source": {
+                "kind": "curve",
+                "value": "2c38ca93-02e2-4588-bceb-f90864e21001"
+              },
+              "modifiers": []
+            }
+          ]
+        }
+      ],
+      "properties": []
+    }
+  ],
+  "curves": [
+    {
+      "id": "2c38ca93-02e2-4588-bceb-f90864e21001",
+      "value_type": "scalar",
+      "keys": [
+        {
+          "time": {
+            "num": "0",
+            "den": "1"
+          },
+          "value": {
+            "kind": "scalar",
+            "value": 0.0
+          },
+          "interpolation": {
+            "kind": "linear"
+          }
+        },
+        {
+          "time": {
+            "num": "1",
+            "den": "1"
+          },
+          "value": {
+            "kind": "scalar",
+            "value": 1.0
+          },
+          "interpolation": {
+            "kind": "linear"
+          }
+        }
+      ],
+      "interpolation_version": 1
+    }
+  ],
+  "shapes": [
+    {
+      "id": "3a7eefa7-8fe7-4df2-9095-ae08bdfb471a",
+      "geometry": {
+        "kind": "morph_path",
+        "value": {
+          "from": "acb24576-7a04-4e92-92f8-24018b8e3261",
+          "to": "de4488f6-eab5-4b01-bd99-3d4692624d61",
+          "progress": "f01c1965-888b-4e9e-8e36-d7f613820959"
+        }
+      },
+      "fill": {
+        "color": "a1605d72-4d54-478a-a368-c70bb57036b7",
+        "rule": "nonzero"
+      },
+      "stroke": null
+    },
+    {
+      "id": "56938539-35de-4eb4-992e-988add002dc6",
+      "geometry": {
+        "kind": "trimmed_path",
+        "value": {
+          "path": "49a44507-2f96-4d96-97e0-3184398cb456",
+          "start": "45a3df00-d1fa-467f-8530-fcc48a296d6d",
+          "end": "1bd621b1-7d55-480d-b52a-f3ead147d77a",
+          "offset": "f4efcebe-549f-4aec-9efa-a5ec5616b8c4"
+        }
+      },
+      "fill": {
+        "color": "b5b44bcf-7055-48a4-833d-3b73d6afd466",
+        "rule": "nonzero"
+      },
+      "stroke": null
+    }
+  ]
+}

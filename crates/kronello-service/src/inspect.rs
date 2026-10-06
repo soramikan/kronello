@@ -226,12 +226,6 @@ pub(crate) fn render(
     backend: ExplainBackend,
 ) -> Result<RenderExplainResult, ServiceError> {
     r.input.region.validate()?;
-    if r.input.profile.temporal.is_some() {
-        return Err(kronello_render::RenderError::UnsupportedFeature(
-            "render.explain temporal multi-time plans".into(),
-        )
-        .into());
-    }
     let stored = stored(&r.input.project)?;
     let target = match (r.input.composition, r.input.target) {
         (Some(composition), None) => composition.into(),
@@ -243,16 +237,24 @@ pub(crate) fn render(
         }
     };
     let mut cache = RenderCache::default();
-    let outcome =
-        compile(&stored, &r.input, r.time, r.mattes, &mut cache).and_then(|(snapshot, scene)| {
-            Ok(kronello_render::explain_render_path(
-                &scene,
-                snapshot.profile(),
-                r.input.region,
-                backend,
-                &mut cache,
-            )?)
-        });
+    let outcome = (|| -> Result<_, ServiceError> {
+        let snapshot = crate::freeze_render_input(&stored, &r.input)?.with_mattes(r.mattes);
+        let bytes = crate::load_locked_fonts(&snapshot, &r.input)?;
+        let fonts: Vec<_> = snapshot
+            .font_locks()
+            .iter()
+            .zip(&bytes)
+            .map(|(identity, bytes)| kronello_text::FontData { identity, bytes })
+            .collect();
+        Ok(kronello_render::explain_snapshot_render_path(
+            &snapshot,
+            r.time,
+            &fonts,
+            r.input.region,
+            backend,
+            &mut cache,
+        )?)
+    })();
     let (plan, diagnostics) = match outcome {
         Ok(plan) => (Some(plan), vec![]),
         Err(error) => (None, vec![error]),
@@ -481,10 +483,11 @@ pub(crate) fn node(r: NodeExplainRequest) -> Result<NodeExplainResult, ServiceEr
         .compositions
         .iter()
         .filter_map(|c| match c {
-            DocumentObject::Known(c) => Some(c.clone()),
+            DocumentObject::Known(c) => Some(stored.document.lower_repeater_composition(c)),
             _ => None,
         })
-        .collect();
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| ServiceError::new(e.code(), e.to_string()))?;
     let mut pending = vec![r.composition];
     let mut reachable = BTreeSet::new();
     while let Some(id) = pending.pop() {
@@ -574,7 +577,15 @@ pub(crate) fn node(r: NodeExplainRequest) -> Result<NodeExplainResult, ServiceEr
             BTreeMap::new()
         }
     };
-    let graph = DependencyGraph::compile(
+    let audio_analyses = stored
+        .document
+        .audio_analysis_inputs()
+        .map_err(|e| ServiceError::invalid(e.to_string()))?;
+    let data_assets = stored
+        .document
+        .expression_data_inputs()
+        .map_err(|e| ServiceError::invalid(e.to_string()))?;
+    let graph = DependencyGraph::compile_with_data(
         EvaluationSnapshot {
             compositions: &definitions,
             curves: &curves,
@@ -585,9 +596,14 @@ pub(crate) fn node(r: NodeExplainRequest) -> Result<NodeExplainResult, ServiceEr
             working_space: kronello_model::ColorSpace::LinearRec709,
         },
         r.composition,
+        &audio_analyses,
+        &data_assets,
     );
     let graph = match graph {
-        Ok(graph) => Some(graph),
+        Ok(graph) => {
+            let (seeds, aliases) = stored.document.repeater_context();
+            Some(graph.with_repeater_context(seeds, aliases))
+        }
         Err(error) => {
             result
                 .render_diagnostics
@@ -746,7 +762,11 @@ pub(crate) fn node(r: NodeExplainRequest) -> Result<NodeExplainResult, ServiceEr
             &r.fonts,
             &mut result,
         )?;
-        for binding in &r.mattes {
+        for binding in scene
+            .as_ref()
+            .map(|s| s.mattes.as_slice())
+            .unwrap_or(&r.mattes)
+        {
             if binding.matte.node == key.node
                 && binding.matte.instance_path == key.instance_path
                 && !binding.visible
@@ -771,7 +791,12 @@ pub(crate) fn node(r: NodeExplainRequest) -> Result<NodeExplainResult, ServiceEr
                 let active = scene
                     .as_ref()
                     .and_then(|s| s.nodes.iter().find(|n| n.key == binding.matte));
-                if active.is_some_and(|n| n.opacity == 0.0) {
+                let inverted = matches!(
+                    binding.kind,
+                    kronello_render::MatteKind::AlphaInverted
+                        | kronello_render::MatteKind::LuminanceInverted
+                );
+                if !inverted && active.is_some_and(|n| n.opacity == 0.0) {
                     reason(
                         &mut result,
                         &matte,
@@ -780,10 +805,12 @@ pub(crate) fn node(r: NodeExplainRequest) -> Result<NodeExplainResult, ServiceEr
                         ExplanationImpact::Hides,
                         json!({"kind":binding.kind,"source":key}),
                     );
-                } else if active.is_some_and(|n| {
-                    leaf(scene.as_ref().expect("active scene"), n)
-                        && paints_match(n, |color| color.components().alpha.get() == 0.0)
-                }) {
+                } else if !inverted
+                    && active.is_some_and(|n| {
+                        leaf(scene.as_ref().expect("active scene"), n)
+                            && paints_match(n, |color| color.components().alpha.get() == 0.0)
+                    })
+                {
                     reason(
                         &mut result,
                         &matte,
@@ -1197,6 +1224,7 @@ mod gradient_tests {
             world_transform: kronello_eval::Affine2::IDENTITY,
             opacity: 1.0,
             post_effect_opacity: 1.0,
+            blend_mode: kronello_model::BlendMode::Normal,
             effects: vec![],
             properties: Default::default(),
             text: Some("a".into()),

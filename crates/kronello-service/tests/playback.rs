@@ -17,6 +17,7 @@ fn fixture() -> (Project, SequenceId) {
         audio_rate: SampleRate::HZ_48000,
         working_space: ColorSpace::LinearRec709,
         tracks: vec![Track {
+            state: None,
             id: TrackId::new(),
             kind: TrackKind::Audio,
             clips: vec![Clip {
@@ -30,6 +31,7 @@ fn fixture() -> (Project, SequenceId) {
                 source_in: Time::new(1, 48000).unwrap(),
                 time_map: TimeMap::linear(Time::ZERO, Time::new(3, 2).unwrap()).unwrap(),
                 audio_retime: AudioRetimePolicy::ResampleV1,
+                reverse_sampling: None,
                 volume: None,
                 links: vec![],
                 properties: vec![],

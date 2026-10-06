@@ -81,6 +81,9 @@ public struct EditCandidate {
     @Published public private(set) var externalChange: String?
     @Published public private(set) var deletedSelection: String?
     @Published public var failure: ServiceFailure?
+    /// Per-Property expression text fetch/commit failures, keyed "layer/property".
+    /// Typed syntax diagnostics ride in ServiceFailure.details["diagnostics"] (ADR-0105).
+    @Published public internal(set) var expressionFailures: [String: ServiceFailure] = [:]
     @Published public var undoConflict: ServiceFailure?
     @Published public var revisionConflict: ServiceFailure?
     @Published private var previewIssue: PreviewIssue?
@@ -127,11 +130,19 @@ public struct EditCandidate {
     private var playbackControl: Task<Void, Never>?
     private var presentationTimer: Task<Void, Never>?
     private var resumeSample: Int64?
+    private var playbackIntent: UInt64 = 0
     private var reportedUnderruns: UInt64 = 0
     @Published public private(set) var busy = false
     @Published public private(set) var refreshToken = 0
     @Published public private(set) var jobs: [[String: Any]] = []
     public var fonts: [[String: Any]] = []
+    public var snapshotFonts: [[String: Any]] { Self.fontInputs(fonts, requiredBy: document) }
+    public static func fontInputs(_ inputs: [[String: Any]], requiredBy document: [String: Any]) -> [[String: Any]] {
+        let identities = document.objects("texts").flatMap { $0.objects("styles") }.map { $0.object("font") }
+        return inputs.filter { input in
+            identities.contains { NSDictionary(dictionary: $0) == NSDictionary(dictionary: input.object("identity")) }
+        }
+    }
     private var polling: Task<Void, Never>?
     private var stateWrite: Task<Void, Never>?
     private var reloading = false
@@ -239,14 +250,17 @@ public struct EditCandidate {
             let info = try await request("project.info")
             let export = try await request("project.export")
             projectID = info.string("project_id"); name = info.string("name"); safeMode = info.string("open_mode") == "safe"
-            if !loadedUI { ui = try await stateStore.load(projectID: projectID); loadedUI = true }
+            if !loadedUI {
+                ui = try await stateStore.load(projectID: projectID); loadedUI = true
+                for source in ui.fontSources ?? [] { if !fonts.contains(where: { $0.object("identity").string("sha256") == source.sha256 && Int($0.object("identity").number("face_index")) == source.faceIndex }) { fonts.append(["identity": source.identity, "path": source.path]) } }
+            }
             let comps = export.object("document").objects("compositions")
             if !comps.contains(where: { $0.string("id") == ui.composition }) { ui.composition = comps.first?.string("id") }
             var scene: [String: Any] = [:]
             var sceneFailure: ServiceFailure?
             let sceneIdentity = PreviewIdentity(target: "composition:\(ui.composition ?? "")", revision: export.string("revision"), time: ui.time)
             if ui.page != "edit", let composition = ui.composition {
-                do { scene = try await request("scene.query", ["composition": composition, "evaluation": ["time": ui.time.wire, "fonts": fonts]]) }
+                do { scene = try await request("scene.query", ["composition": composition, "evaluation": ["time": ui.time.wire, "fonts": Self.fontInputs(fonts, requiredBy: export.object("document"))]]) }
                 catch { sceneFailure = serviceFailure(error); scene = try await request("scene.query", ["composition": composition]) }
             }
             var timeline: [String: Any] = [:]
@@ -355,7 +369,14 @@ public struct EditCandidate {
         let bounded = min(max(0, frame), max(0, durationFrames - 1))
         let product = bounded.multipliedReportingOverflow(by: activePlaybackRateDen)
         guard !product.overflow else { return }
-        ui.time = RationalTime(num: product.partialValue, den: rateNum)
+        let sample: Int64
+        do { sample = try PlaybackMath.seekSample(frame: bounded, rateNum: activePlaybackRateNum, rateDen: activePlaybackRateDen) }
+        catch { mapFailure(error); return }
+        playbackIntent &+= 1
+        playbackControl?.cancel()
+        resumeSample = sample
+        ui.time = RationalTime(num: product.partialValue, den: activePlaybackRateNum)
+        if playing { restartPlayback(at: sample) }
         if ui.page == "edit" { refreshToken += 1; return }
         Task { do { try await reload() } catch { mapFailure(error) } }
     }
@@ -394,6 +415,8 @@ public struct EditCandidate {
         playbackTarget = target; playbackRateNum = rateNum; playbackRateDen = rateDen
     }
     private func playbackRequested() {
+        playbackIntent &+= 1
+        let intent = playbackIntent
         playbackControl?.cancel(); presentationTimer?.cancel()
         if playing {
             do {
@@ -405,10 +428,10 @@ public struct EditCandidate {
             playbackControl = Task {
                 do {
                     let sample = try await playback.stop()
-                    guard !Task.isCancelled, !playing else { return }
+                    guard !Task.isCancelled, !playing, intent == playbackIntent else { return }
                     resumeSample = sample; playbackStatus = playback.status
                 }
-                catch { mapFailure(error) }
+                catch { if !Task.isCancelled, intent == playbackIntent { mapFailure(error) } }
             }
         }
     }
@@ -485,6 +508,7 @@ public struct EditCandidate {
     }
     public func propertyNumbers(_ layer: Layer, _ property: [String: Any]) -> [Double] {
         let value = layer.value(property)
+        guard value.string("kind") != "bool" else { return [] }
         if let numbers = value["value"] as? [Double] { return numbers }
         if let scalar = value["value"] as? NSNumber { return [scalar.doubleValue] }
         return []

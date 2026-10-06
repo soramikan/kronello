@@ -35,6 +35,7 @@ fn input(text: &str, width: f64) -> ResolvedText {
         },
         direction: TextDirection::Horizontal,
         ruby: vec![],
+        character_animations: vec![],
         wrap_width: f(width),
         line_height: f(30.0),
         alignment: TextAlignment::Start,
@@ -551,4 +552,140 @@ fn duplicate_font_sources_are_rejected_independent_of_source_order() {
             feature: "duplicate font source"
         }
     );
+}
+
+#[test]
+fn advanced_vertical_ruby_and_logical_selectors_survive_reflow() {
+    let mut text = input("漢字か\u{3099}葛\u{e0100}。ABC", 220.0);
+    text.layout_version = 2;
+    text.direction = TextDirection::VerticalRl;
+    text.ruby.push(RubyAssociation {
+        base: TextRange {
+            start: 0,
+            end: "漢字".len(),
+        },
+        text: "かんじ".into(),
+    });
+    let plain = run(&text).unwrap();
+    assert!(
+        plain.glyphs.len()
+            > plain
+                .shaping_clusters
+                .iter()
+                .map(|c| c.glyphs.len())
+                .sum::<usize>()
+    );
+    text.character_animations.push(ResolvedCharacterAnimation {
+        source: TextRange {
+            start: 0,
+            end: "漢".len(),
+        },
+        expected_text: "漢".into(),
+        offset: [f(7.0), f(9.0)],
+        opacity: f(0.5),
+    });
+    for width in [220.0, 100.0] {
+        text.wrap_width = f(width);
+        let animated = run(&text).unwrap();
+        let mut base = text.clone();
+        base.character_animations.clear();
+        let original = run(&base).unwrap();
+        for (before, after) in original.glyphs.iter().zip(&animated.glyphs) {
+            if before.source.start < "漢字".len() {
+                assert_eq!(
+                    after.position,
+                    [before.position[0] + 7.0, before.position[1] + 9.0]
+                );
+                assert_eq!(after.fill.components().alpha, f(0.5));
+            } else {
+                assert_eq!(before.position, after.position);
+            }
+        }
+        assert_eq!(animated.graphemes, original.graphemes);
+        assert!(animated.animation_units.iter().any(|u| u.source
+            == (TextRange {
+                start: 0,
+                end: "漢字".len()
+            })));
+    }
+    text.character_animations[0].source = TextRange {
+        start: "漢字か".len(),
+        end: "漢字か\u{3099}".len(),
+    };
+    assert!(matches!(
+        run(&text),
+        Err(LayoutError::Text(TextError::InvalidCharacterAnimation))
+    ));
+}
+
+#[test]
+fn text002_vertical_substitutes_punctuation_and_preserves_logical_graphemes() {
+    let mut text = input("「日本」、。", 200.0);
+    text.layout_version = 2;
+    let horizontal = run(&text).unwrap();
+    text.direction = TextDirection::VerticalRl;
+    let vertical = run(&text).unwrap();
+    assert_eq!(horizontal.graphemes, vertical.graphemes);
+    assert_ne!(
+        horizontal
+            .glyphs
+            .iter()
+            .map(|g| g.glyph_id)
+            .collect::<Vec<_>>(),
+        vertical
+            .glyphs
+            .iter()
+            .map(|g| g.glyph_id)
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(vertical.layout_bounds.max, [0.0, 200.0]);
+    assert!(
+        vertical
+            .glyphs
+            .windows(2)
+            .all(|g| g[1].position[1] >= g[0].position[1])
+    );
+}
+
+#[test]
+fn vertical_ruby_ink_is_right_of_parent_ink() {
+    let mut text = input("日本語の編集。ABC", 250.0);
+    text.layout_version = 2;
+    text.direction = TextDirection::VerticalRl;
+    text.styles[0].size = f(32.0);
+    text.line_height = f(52.0);
+    let parent_count = run(&text).unwrap().glyphs.len();
+    text.ruby.push(RubyAssociation {
+        base: TextRange { start: 0, end: 6 },
+        text: "にほん".into(),
+    });
+    let laid = run(&text).unwrap();
+    let x_values = |glyphs: &[PositionedGlyph]| {
+        glyphs
+            .iter()
+            .flat_map(|g| g.outline.segments.iter())
+            .flat_map(|segment| match segment {
+                PathSegment::MoveTo(p) | PathSegment::LineTo(p) => vec![p[0].get()],
+                PathSegment::QuadTo { control, end } => vec![control[0].get(), end[0].get()],
+                PathSegment::CubicTo {
+                    control1,
+                    control2,
+                    end,
+                } => vec![control1[0].get(), control2[0].get(), end[0].get()],
+                PathSegment::Close => vec![],
+            })
+            .collect::<Vec<_>>()
+    };
+    let parents: Vec<_> = laid.glyphs[..parent_count]
+        .iter()
+        .filter(|g| g.source.start < 6)
+        .cloned()
+        .collect();
+    let parent_right = x_values(&parents)
+        .into_iter()
+        .fold(f64::NEG_INFINITY, f64::max);
+    let ruby_left = x_values(&laid.glyphs[parent_count..])
+        .into_iter()
+        .fold(f64::INFINITY, f64::min);
+    assert!((ruby_left - parent_right - 3.2).abs() < 1e-9);
 }

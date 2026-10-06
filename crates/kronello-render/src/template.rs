@@ -46,6 +46,14 @@ impl TemplateRuntime {
         definitions: &[Composition],
         root: CompositionId,
     ) -> Result<Self, RenderError> {
+        Self::compile_specialized(project, definitions, root, &BTreeMap::new())
+    }
+    pub fn compile_specialized(
+        project: &Project,
+        definitions: &[Composition],
+        root: CompositionId,
+        origins: &BTreeMap<CompositionId, kronello_eval::SpecializedDefinition>,
+    ) -> Result<Self, RenderError> {
         if project
             .compositions
             .iter()
@@ -59,7 +67,12 @@ impl TemplateRuntime {
                 .ok_or_else(|| RenderError::InvalidInput("missing root".into()))?;
             for node in &lowered.nodes {
                 if let NodeKind::CompositionInstance(i) = &node.kind {
-                    kronello_template::validate_reachable(project, i.definition_ref)?;
+                    kronello_template::validate_reachable(
+                        project,
+                        origins
+                            .get(&i.definition_ref)
+                            .map_or(i.definition_ref, |info| info.authored),
+                    )?;
                 }
             }
         }
@@ -79,54 +92,83 @@ impl TemplateRuntime {
                 if let NodeKind::CompositionInstance(placement) = &n.kind {
                     let child = path.child(placement.id);
                     pending.push((child.clone(), placement.definition_ref));
-                    let Some(i) = project.template_instances.iter().find_map(|i| match i {
-                        DocumentObject::Known(i) if i.id == placement.id => Some(i),
-                        _ => None,
-                    }) else {
-                        continue;
-                    };
-                    let edition = kronello_template::definition(project, i.definition_ref)?;
-                    let selected =
-                        kronello_template::selected_definition(edition, i.variant.as_deref())?;
-                    let d = &selected;
-                    let values = kronello_template::resolved_inputs(edition, i)?;
-                    for (target, value) in kronello_template::input_bindings(d, &values)? {
-                        match target {
-                            TemplateInputTarget::Property { node, property } => {
-                                runtime.inputs.insert(key(&child, node, property), value);
-                            }
-                            TemplateInputTarget::Text { node } => {
-                                let Value::String(value) = value else {
-                                    unreachable!("validated type")
-                                };
-                                runtime.texts.insert(
-                                    NodeKey {
-                                        instance_path: child.clone(),
-                                        node,
-                                    },
-                                    value,
-                                );
-                            }
-                            TemplateInputTarget::MediaSlot { node } => {
-                                kronello_template::validate_asset(project, &value)?;
-                                let Value::AssetRef(asset) = value else {
-                                    unreachable!("validated type")
-                                };
-                                runtime.media_slots.insert(
-                                    NodeKey {
-                                        instance_path: child.clone(),
-                                        node,
-                                    },
-                                    asset,
-                                );
-                            }
-                            TemplateInputTarget::DataTable { .. } => {
-                                unreachable!("projected bindings")
+                    let constraints = if let Some(i) =
+                        project.template_instances.iter().find_map(|i| match i {
+                            DocumentObject::Known(i) if i.id == placement.id => Some(i),
+                            _ => None,
+                        }) {
+                        let edition = kronello_template::definition(project, i.definition_ref)?;
+                        let selected =
+                            kronello_template::selected_definition(edition, i.variant.as_deref())?;
+                        let d = &selected;
+                        let values = kronello_template::resolved_inputs(edition, i)?;
+                        for (target, value) in kronello_template::input_bindings(d, &values)? {
+                            match target {
+                                TemplateInputTarget::Property { node, property } => {
+                                    runtime.inputs.insert(key(&child, node, property), value);
+                                }
+                                TemplateInputTarget::Text { node } => {
+                                    let Value::String(value) = value else {
+                                        unreachable!("validated type")
+                                    };
+                                    runtime.texts.insert(
+                                        NodeKey {
+                                            instance_path: child.clone(),
+                                            node,
+                                        },
+                                        value,
+                                    );
+                                }
+                                TemplateInputTarget::MediaSlot { node } => {
+                                    kronello_template::validate_asset(project, &value)?;
+                                    let Value::AssetRef(asset) = value else {
+                                        unreachable!("validated type")
+                                    };
+                                    runtime.media_slots.insert(
+                                        NodeKey {
+                                            instance_path: child.clone(),
+                                            node,
+                                        },
+                                        asset,
+                                    );
+                                }
+                                TemplateInputTarget::DataTable { .. } => {
+                                    unreachable!("projected bindings")
+                                }
                             }
                         }
-                    }
-                    for b in &d.constraints.bands {
-                        let text = kronello_template::composition(project, d.composition_ref)?
+                        selected.constraints
+                    } else {
+                        let Some(constraints) = project
+                            .repeaters
+                            .iter()
+                            .filter_map(|r| match r {
+                                DocumentObject::Known(r) => Some(r),
+                                _ => None,
+                            })
+                            .flat_map(|r| &r.instances)
+                            .filter_map(|i| i.expanded_source.as_ref())
+                            .find_map(|s| {
+                                s.layout_constraints.get(
+                                    &origins
+                                        .get(&placement.definition_ref)
+                                        .map_or(placement.definition_ref, |info| info.authored),
+                                )
+                            })
+                        else {
+                            continue;
+                        };
+                        constraints.clone()
+                    };
+                    for b in &constraints.bands {
+                        let text = definitions
+                            .iter()
+                            .find(|c| c.id == placement.definition_ref)
+                            .ok_or_else(|| {
+                                RenderError::InvalidInput(
+                                    "missing specialized template definition".into(),
+                                )
+                            })?
                             .nodes
                             .iter()
                             .find(|n| n.id == b.text_node)
@@ -188,7 +230,7 @@ impl TemplateRuntime {
                     }
                     runtime
                         .limits
-                        .extend(d.constraints.max_lines.iter().map(|(node, limit)| {
+                        .extend(constraints.max_lines.iter().map(|(node, limit)| {
                             (
                                 NodeKey {
                                     instance_path: child.clone(),
@@ -231,6 +273,13 @@ impl TemplateRuntime {
         fonts: &[FontData<'_>],
         cache: &mut RenderCache,
     ) -> Result<(), RenderError> {
+        // Each call is a pure function of its arguments: layouts and
+        // layout-derived values from earlier calls cannot leak in, so a text
+        // that is inactive now cannot leave stale bounds behind. Node and
+        // Composition inputs are compile-time bindings and are retained.
+        self.layouts.clear();
+        self.inputs
+            .retain(|key, _| !matches!(key, RuntimePropertyKey::LayoutValue { .. }));
         let requested: std::collections::BTreeSet<_> = self
             .bands
             .iter()

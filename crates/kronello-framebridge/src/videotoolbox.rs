@@ -962,6 +962,11 @@ fn import_decoded(
         ),
     })
 }
+/// Explicit BGRA8 probe: failures remain BGRA8 failures, never NV12 success.
+pub fn probe_videotoolbox_decode_bgra8(gpu: &GpuContext) -> Result<Measurement, NativeError> {
+    let (samples, expected) = encode()?;
+    import_decoded(gpu, &samples, &expected, false)
+}
 /// Stage B. BGRA failure is reported before an explicit NV12 attempt. A successful
 /// NV12 attempt is never reported as successful BGRA color comparison.
 pub fn probe_videotoolbox_decode(

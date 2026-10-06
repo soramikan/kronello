@@ -89,6 +89,15 @@ pub enum JobOutput {
         clips: Vec<JobAudioClip>,
         background: [f32; 3],
     },
+    Av1Webm {
+        profile_version: u32,
+        #[serde(default)]
+        audio: kronello_audio::AudioSourceMode,
+        #[serde(default)]
+        audio_codec: DeliveryAudioCodec,
+        clips: Vec<JobAudioClip>,
+        background: [f32; 3],
+    },
 }
 pub(crate) struct MovieSettings<'a> {
     pub profile: MovieProfile,
@@ -106,11 +115,12 @@ impl JobOutput {
             | Self::ImageSequence
             | Self::Av1Mp4 { .. }
             | Self::H264Mov { .. }
-            | Self::HevcMov { .. } => &[1],
+            | Self::HevcMov { .. }
+            | Self::Av1Webm { .. } => &[1],
         }
     }
     pub(crate) fn movie_settings(&self) -> Result<MovieSettings<'_>, ServiceError> {
-        let (profile, version, audio, audio_codec, clips, background) = match self {
+        let (profile, version, audio, clips, background) = match self {
             Self::ImageSequence => {
                 return Err(ServiceError::invalid(
                     "render.export requires a movie profile",
@@ -125,7 +135,6 @@ impl JobOutput {
                 MovieProfile::ProResPcm24,
                 *profile_version,
                 *audio,
-                DeliveryAudioCodec::Alac,
                 clips,
                 *background,
             ),
@@ -138,7 +147,6 @@ impl JobOutput {
                 MovieProfile::ProResSdrFromHdrPcm24V1,
                 *profile_version,
                 *audio,
-                DeliveryAudioCodec::Alac,
                 clips,
                 *background,
             ),
@@ -155,7 +163,6 @@ impl JobOutput {
                 },
                 *profile_version,
                 *audio,
-                DeliveryAudioCodec::Alac,
                 clips,
                 *background,
             ),
@@ -166,10 +173,18 @@ impl JobOutput {
                 clips,
                 background,
             } => (
-                MovieProfile::Av1Mp4AlacV1,
+                match audio_codec {
+                    DeliveryAudioCodec::Alac => MovieProfile::Av1Mp4AlacV1,
+                    DeliveryAudioCodec::Aac => MovieProfile::Av1Mp4AacV1,
+                    DeliveryAudioCodec::Opus => {
+                        return Err(ServiceError::new(
+                            "UNSUPPORTED_FEATURE",
+                            "Opus in MP4 is not an AUDIO-005 profile; use av1_webm",
+                        ));
+                    }
+                },
                 *profile_version,
                 *audio,
-                *audio_codec,
                 clips,
                 *background,
             ),
@@ -180,10 +195,18 @@ impl JobOutput {
                 clips,
                 background,
             } => (
-                MovieProfile::H264AlacV1,
+                match audio_codec {
+                    DeliveryAudioCodec::Alac => MovieProfile::H264AlacV1,
+                    DeliveryAudioCodec::Aac => MovieProfile::H264AacV1,
+                    DeliveryAudioCodec::Opus => {
+                        return Err(ServiceError::new(
+                            "UNSUPPORTED_FEATURE",
+                            "Opus in MOV is not an AUDIO-005 profile; use av1_webm",
+                        ));
+                    }
+                },
                 *profile_version,
                 *audio,
-                *audio_codec,
                 clips,
                 *background,
             ),
@@ -194,10 +217,39 @@ impl JobOutput {
                 clips,
                 background,
             } => (
-                MovieProfile::HevcAlacV1,
+                match audio_codec {
+                    DeliveryAudioCodec::Alac => MovieProfile::HevcAlacV1,
+                    DeliveryAudioCodec::Aac => MovieProfile::HevcAacV1,
+                    DeliveryAudioCodec::Opus => {
+                        return Err(ServiceError::new(
+                            "UNSUPPORTED_FEATURE",
+                            "Opus in MOV is not an AUDIO-005 profile; use av1_webm",
+                        ));
+                    }
+                },
                 *profile_version,
                 *audio,
-                *audio_codec,
+                clips,
+                *background,
+            ),
+            Self::Av1Webm {
+                profile_version,
+                audio,
+                audio_codec,
+                clips,
+                background,
+            } => (
+                match audio_codec {
+                    DeliveryAudioCodec::Opus => MovieProfile::Av1WebmOpusV1,
+                    DeliveryAudioCodec::Alac | DeliveryAudioCodec::Aac => {
+                        return Err(ServiceError::new(
+                            "UNSUPPORTED_FEATURE",
+                            "av1_webm requires audio_codec \"opus\"",
+                        ));
+                    }
+                },
+                *profile_version,
+                *audio,
                 clips,
                 *background,
             ),
@@ -206,13 +258,11 @@ impl JobOutput {
         if (legacy
             && (!self.supported_profile_versions().contains(&version)
                 || (version == 1 && audio != kronello_audio::AudioSourceMode::Explicit)))
-            || (!legacy
-                && (!self.supported_profile_versions().contains(&version)
-                    || audio_codec != DeliveryAudioCodec::Alac))
+            || (!legacy && !self.supported_profile_versions().contains(&version))
         {
             return Err(ServiceError::new(
                 "UNSUPPORTED_FEATURE",
-                "unsupported movie version/audio codec or legacy audio mode; AAC adoption is deferred",
+                "unsupported movie version or legacy audio mode",
             ));
         }
         Ok(MovieSettings {
@@ -811,11 +861,7 @@ pub(crate) fn validate_movie_destination(
     output: &JobOutput,
 ) -> Result<(), ServiceError> {
     let settings = output.movie_settings()?;
-    let extension = if settings.profile == MovieProfile::Av1Mp4AlacV1 {
-        "mp4"
-    } else {
-        "mov"
-    };
+    let extension = settings.profile.container();
     if path.extension().is_none_or(|e| e != extension) {
         if settings.profile == MovieProfile::ProResPcm24 {
             return Err(ServiceError::invalid("ProResMov requires .mov destination"));

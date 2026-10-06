@@ -5,7 +5,11 @@ use kurbo::{BezPath, Ellipse, PathEl, Point, RoundedRect, Shape as KurboShape};
 use std::collections::BTreeMap;
 use thiserror::Error;
 mod dash;
+mod svg;
+mod trim;
 pub use dash::{MAX_DASH_SEGMENTS, dash_path};
+pub use svg::*;
+pub use trim::trim_path;
 
 /// Uniform magnification (including the node scale) and error in output pixels.
 /// For nonuniform/affine transforms pass a conservative maximum magnification.
@@ -90,6 +94,12 @@ pub fn flatten(
     let resolved = shape.resolve(values)?;
     let tolerance = request.tolerance_design();
     check_work_budget(&resolved.geometry, tolerance)?;
+    let trim = match &resolved.geometry {
+        ResolvedGeometry::TrimmedPath {
+            start, end, offset, ..
+        } => Some((*start, *end, *offset)),
+        _ => None,
+    };
     let path: BezPath = match resolved.geometry {
         ResolvedGeometry::Rectangle {
             size,
@@ -108,7 +118,7 @@ pub fn flatten(
             path.close_path();
             path
         }
-        ResolvedGeometry::BezierPath(path) => {
+        ResolvedGeometry::BezierPath(path) | ResolvedGeometry::TrimmedPath { path, .. } => {
             let mut bez = BezPath::new();
             let p = |v: [kronello_model::FiniteF64; 2]| Point::new(v[0].get(), v[1].get());
             for segment in path.segments {
@@ -157,7 +167,12 @@ pub fn flatten(
     if !finite {
         return Err(VectorError::NonFiniteGeometry);
     }
-    Ok(FlattenedPath { subpaths })
+    let flattened = FlattenedPath { subpaths };
+    if let Some((start, end, offset)) = trim {
+        trim_path(&flattened, start, end, offset)
+    } else {
+        Ok(flattened)
+    }
 }
 
 // Conservative preflight before kurbo allocates/subdivides. The allowance is
@@ -175,7 +190,7 @@ fn check_work_budget(geometry: &ResolvedGeometry, tolerance: f64) -> Result<(), 
             add(*size);
             10
         }
-        ResolvedGeometry::BezierPath(path) => {
+        ResolvedGeometry::BezierPath(path) | ResolvedGeometry::TrimmedPath { path, .. } => {
             for element in &path.segments {
                 match element {
                     PathSegment::MoveTo(p) | PathSegment::LineTo(p) => add(*p),
@@ -219,7 +234,7 @@ pub fn geometry_bounds(geometry: &ResolvedGeometry) -> Result<Option<GeometryBou
         ResolvedGeometry::Rectangle { size, .. } | ResolvedGeometry::Ellipse { size } => {
             Some(([0.0; 2], size.map(kronello_model::FiniteF64::get)))
         }
-        ResolvedGeometry::BezierPath(path) => {
+        ResolvedGeometry::BezierPath(path) | ResolvedGeometry::TrimmedPath { path, .. } => {
             let mut bez = BezPath::new();
             let p = |v: [kronello_model::FiniteF64; 2]| Point::new(v[0].get(), v[1].get());
             for segment in &path.segments {

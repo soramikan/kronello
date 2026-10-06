@@ -1,5 +1,9 @@
 # INSPECT-001 検証記録
 
+現在の状態（2026-10-06）: INSPECT-001はM3の受け入れ範囲で`done`。最終統合・実機検証と保証外の範囲は [M3統合受け入れ](m3-acceptance.md) と本書の後続記録を参照する。以下の初回worker記録にある「未コミット」「pending host run」は、その記録時点の状態であり、現在の未完了判定ではない。
+
+## 初回実装とその後の検証履歴
+
 基点 `6ddc568bcf33499e642ea0b77cd3ed6cd945556c`、branch `m3-inspect`。
 Darwin arm64 sandbox、Rust 1.95.0。worker は GPU / hardware codec を使用していない。
 仕様は [ADR-0060](../adr/0060-structured-read-only-inspection.md)。

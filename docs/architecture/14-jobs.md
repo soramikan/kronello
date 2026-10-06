@@ -141,11 +141,21 @@ NTSC sample count / decoded A/V の固定性と failure publication は
 `render.submit` に追加する。audio mode と clips / background は同じ要求型。
 追加 profile は AvExportSnapshot schema 3 / evaluator 2 に固定し、codec / container と
 版付き MovieProfile を export hash / job input hash に含める。元作品を再読しない。
-AV1 は .mp4、H.264 / HEVC は .mov、全て48 kHz stereo native ALAC（PCM24量子化後）。
+AV1 は .mp4、H.264 / HEVC は .mov、version 1 の音声は 48 kHz stereo native ALAC（PCM24量子化後）。
 probe は選択 profile の codec / start / duration / metadata を検証し、既存の lease / cancel
-fence と no-clobber publication を使う。AAC / 未知 version は UNSUPPORTED_FEATURE。
+fence と no-clobber publication を使う。未知 version は UNSUPPORTED_FEATURE。
 既存 ProRes profile 1/2/3 と explicit / document / silence の意味は維持する。
 [ADR-0068](../adr/0068-versioned-delivery-movie-profiles.md)、[MEDIA-002 の検証](../testing/media-002.md)。
+
+## AUDIO-005: 版付き圧縮配信音声
+
+[ADR-0106](../adr/0106-versioned-compressed-delivery-audio.md) で AAC-LC と Opus を採用した。
+`h264_aac_v1`・`hevc_aac_v1`（MOV + AAC-LC）、`av1_mp4_aac_v1`（MP4 + AAC-LC）、
+`av1_webm_opus_v1`（WebM + Opus）を version 1 の movie profile として追加した。Opus の
+MP4 / MOV 収録と、終端 trim を表現できない packet 不足の Opus 入力は型付き拒否とする。
+lossy音声では stream duration の無い container を format duration で補い、mux後の
+duration / PTS を bounded error で検証する。配布構成は LGPL manifest に opus 1.5.2 を pin した。
+実行証拠は [AUDIO-005 の検証](../testing/audio-005.md)。
 
 ## RENDER-003 の有界 movie worker
 

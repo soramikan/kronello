@@ -10,6 +10,20 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum TimelineCommand {
+    TrackStateSet {
+        sequence: SequenceId,
+        track: TrackId,
+        state: TrackState,
+    },
+    ClipTimeSet {
+        sequence: SequenceId,
+        clip: ClipId,
+        source_in: kronello_time::Time,
+        time_map: TimeMap,
+        audio_retime: AudioRetimePolicy,
+        #[serde(default)]
+        reverse_sampling: Option<ReverseSampling>,
+    },
     SequenceCreate {
         sequence: Sequence,
     },
@@ -662,6 +676,77 @@ pub(crate) fn mutate(
                 return Err(ServiceError::new("SOURCE_MISSING", "transition missing"));
             }
             timeline_keys(s, project_id, &BTreeSet::from([*outgoing, *incoming]), keys);
+        }
+        TimelineCommand::TrackStateSet {
+            sequence,
+            track,
+            state,
+        } => {
+            let project_id = project.id;
+            let s = sequence_mut(project, *sequence)?;
+            let target = s
+                .tracks
+                .iter_mut()
+                .find(|t| t.id == *track)
+                .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "track missing"))?;
+            target.state = Some(*state);
+            let clips = target.clips.iter().map(|c| c.id).collect();
+            keys.insert(changed(track.as_uuid(), sequence.as_uuid()));
+            timeline_keys(s, project_id, &clips, keys);
+        }
+        TimelineCommand::ClipTimeSet {
+            sequence,
+            clip,
+            source_in,
+            time_map,
+            audio_retime,
+            reverse_sampling,
+        } => {
+            let project_id = project.id;
+            let source = project.sequences.iter().find_map(|object| match object {
+                DocumentObject::Known(s) if s.id == *sequence => s
+                    .tracks
+                    .iter()
+                    .flat_map(|t| &t.clips)
+                    .find(|c| c.id == *clip)
+                    .map(|c| c.source_ref.clone()),
+                _ => None,
+            });
+            if let Some(SourceRef::Composition { composition }) = source
+                && protected_content(project, composition)
+            {
+                return Err(ServiceError::new(
+                    "PROTECTED_INTERVAL",
+                    "use protected clip retime for protected content",
+                ));
+            }
+            let s = sequence_mut(project, *sequence)?;
+            if s.transitions
+                .iter()
+                .any(|t| t.incoming == *clip || t.outgoing == *clip)
+            {
+                return Err(ServiceError::new(
+                    "TRANSITION_EDIT_CONFLICT",
+                    "retime requires explicit transition removal",
+                ));
+            }
+            let c = s
+                .tracks
+                .iter_mut()
+                .flat_map(|t| &mut t.clips)
+                .find(|c| c.id == *clip)
+                .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "clip missing"))?;
+            if !c.links.is_empty() {
+                return Err(ServiceError::new(
+                    "LINKED_EDIT_REQUIRED",
+                    "retime linked clips explicitly in one transaction",
+                ));
+            }
+            c.source_in = *source_in;
+            c.time_map = time_map.clone();
+            c.audio_retime = *audio_retime;
+            c.reverse_sampling = *reverse_sampling;
+            timeline_keys(s, project_id, &BTreeSet::from([*clip]), keys);
         }
         TimelineCommand::ClipSetEffects {
             sequence,

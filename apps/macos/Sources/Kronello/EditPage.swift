@@ -24,7 +24,13 @@ struct EditProjectPanel: View {
         KRPanel(header: { KRTabBar([.init("project", "Project"), .init("effects", "Effects")], selection: $tab) }, actions: {}) {
             VStack(spacing: 0) {
                 KRSearchField("素材を検索", text: $search).padding(KRSpace.space2)
-                if tab == "effects" { KREmptyState(icon: .sparkles, title: "Effects", message: "クリップの効果追加は未対応です。") }
+                if tab == "effects" {
+                    VStack(alignment: .leading, spacing: KRSpace.space3) {
+                        KRButton("Gaussian Blur", icon: .sparkles) { model.addClipEffect("blur") }
+                        KRButton("Drop Shadow", icon: .layers) { model.addClipEffect("shadow") }
+                        Text("選択中の映像クリップに追加します。").krText(KRType.caption)
+                    }.padding().disabled(model.selectedClip == nil || model.selectedClip?.kind == .audio || model.busy || model.pendingCandidate != nil)
+                }
                 else {
                     ScrollView(.vertical) {
                             VStack(spacing: 0) {
@@ -59,11 +65,12 @@ struct SequenceViewer: View {
     @Environment(\.krPalette) var p
     @ObservedObject var model: EditorModel
     @State private var safeArea = false
+    @State private var panOrigin: CGPoint?
     @State private var toolPlacement = KRToolStripPlacement()
     static let tools: [KRTool] = [
         .init("select", icon: .mousePointer2, name: "選択", shortcut: "V"),
         .init("blade", icon: .scissors, name: "ブレード", shortcut: "B"),
-        .init("hand", icon: .hand, name: "手のひら", shortcut: "H", unavailableReason: "手のひら操作は未対応です"),
+        .init("hand", icon: .hand, name: "手のひら", shortcut: "H"),
         .init("zoom", icon: .zoomIn, name: "ズーム", shortcut: "Z", unavailableReason: "表示倍率は下の欄で変更します")]
     var body: some View {
         KRPanel(header: {
@@ -84,7 +91,17 @@ struct SequenceViewer: View {
                             KRViewerFrame(aspectRatio: max(1, model.extent.width) / max(1, model.extent.height)) {
                                 MetalPreview(model: model)
                                 if safeArea { Rectangle().strokeBorder(p.inkMuted, style: .init(lineWidth: 1, dash: [4, 4])).padding(24).allowsHitTesting(false) }
-                            }.padding(KRSpace.space3)
+                            }.offset(x: model.editViewSettings.panX, y: model.editViewSettings.panY)
+                                .contentShape(Rectangle())
+                                .gesture(DragGesture().onChanged { value in
+                                    guard model.editTool == "hand" else { return }
+                                    if panOrigin == nil { panOrigin = .init(x: model.editViewSettings.panX, y: model.editViewSettings.panY) }
+                                    var settings = model.editViewSettings
+                                    settings.panX = (panOrigin?.x ?? 0) + value.translation.width
+                                    settings.panY = (panOrigin?.y ?? 0) + value.translation.height
+                                    model.editViewSettings = settings
+                                }.onEnded { _ in panOrigin = nil })
+                                .padding(KRSpace.space3).clipped()
                         }
                         if let failure = model.sequenceFailure ?? model.previewFailure {
                             VStack(spacing: KRSpace.space3) {
@@ -108,6 +125,7 @@ struct SequenceViewer: View {
 }
 
 struct ClipInspector: View {
+    @State private var draftBases: [String: String] = [:]
     @Environment(\.krPalette) var p
     @ObservedObject var model: EditorModel
     var body: some View {
@@ -126,30 +144,40 @@ struct ClipInspector: View {
                             timeRow("尺", frames: clip.end.frames(rateNum: model.rateNum, rateDen: model.rateDen) - clip.start.frames(rateNum: model.rateNum, rateDen: model.rateDen)) { value in
                                 model.beginClipGesture(clip, mode: .trimEnd); model.updateClipGesture(delta: value - (clip.end.frames(rateNum: model.rateNum, rateDen: model.rateDen) - clip.start.frames(rateNum: model.rateNum, rateDen: model.rateDen))); Task { await model.commitClipGesture() }
                             }
-                            timeRow("ソース開始", frames: RationalTime.wire(clip.authored.object("source_in")).frames(rateNum: model.rateNum, rateDen: model.rateDen), action: nil)
+                            timeRow("ソース開始", frames: RationalTime.wire(clip.authored.object("source_in")).frames(rateNum: model.rateNum, rateDen: model.rateDen), onEditingStart: { draftBases["source"] = model.revision }) { model.setClipTime(clip, sourceIn: model.frameTime($0), base: draftBases.removeValue(forKey: "source")) }
                         }
                         section("時間") {
-                            KRInspectorSettingRow("速度") { Text(clip.speedLabel).krText(KRType.timecode).foregroundStyle(p.inkMuted) }
-                            KRInspectorSettingRow("逆再生") { KRCheckbox("", isOn: .constant(clip.reversed)).accessibilityLabel("逆再生").disabled(true) }
-                            Text("速度・ソース開始の変更は未対応です。").krText(KRType.caption).foregroundStyle(p.inkMuted).padding(.horizontal, KRSpace.space3)
+                            KRInspectorSettingRow("速度") {
+                                KRNumberField(value: .constant(clip.linearRate.map { Double($0.num)! / Double($0.den)! * 100 } ?? 100), unit: "%", step: 0.1, range: 0.1...10000, accessibilityLabel: "速度", onEditingStart: { draftBases["speed"] = model.revision }, onCommit: { _, value in model.setClipTime(clip, speedPercent: value, base: draftBases.removeValue(forKey: "speed")) }).disabled(clip.linearRate == nil)
+                            }
+                            KRInspectorSettingRow("逆再生") { KRCheckbox("", isOn: Binding(get: { clip.reversed }, set: { model.setClipReverse(clip, enabled: $0) })).accessibilityLabel("逆再生").disabled(clip.linearRate == nil) }
+                            Text("速度は0.1%単位。配置の尺を維持し、逆再生は選択区間の末尾から始めます。").krText(KRType.caption).foregroundStyle(p.inkMuted).padding(.horizontal, KRSpace.space3)
                         }
                         section("合成") {
-                            KRInspectorSettingRow("不透明度") { Text(opacity(clip)).krText(KRType.timecode).foregroundStyle(p.inkMuted) }
-                            KRInspectorSettingRow("描画モード") { Text("Normal").krText(KRType.label).foregroundStyle(p.inkMuted) }
-                            Text("合成設定は表示のみです。").krText(KRType.caption).foregroundStyle(p.inkMuted).padding(.horizontal, KRSpace.space3)
-                        }
+                            KRInspectorSettingRow("不透明度") {
+                                KRNumberField(value: .constant(clip.authored.objects("properties").first { $0.object("descriptor").string("key") == "kronello.opacity" }?.object("source").object("value").number("value") ?? 1), unit: "", step: 0.01, range: 0...1, precision: 2, accessibilityLabel: "不透明度", onEditingStart: { draftBases["opacity"] = model.revision }, onCommit: { _, value in model.setClipProperty(clip, key: "kronello.opacity", kind: "scalar", value: value, base: draftBases.removeValue(forKey: "opacity")) })
+                            }
+                            KRInspectorSettingRow("描画モード") {
+                                KRPopupButton("描画モード", options: [.init("normal", "Normal"), .init("multiply", "Multiply"), .init("screen", "Screen")], selection: Binding(get: { clip.authored.objects("properties").first { $0.object("descriptor").string("key") == "kronello.blend_mode" }?.object("source").object("value").string("value") ?? "normal" }, set: { model.setClipProperty(clip, key: "kronello.blend_mode", kind: "enum", value: $0, base: draftBases.removeValue(forKey: "blend")) }), onEditingStart: { draftBases["blend"] = model.revision })
+                            }
+                        }.disabled(clip.kind == .audio)
+                        section("Effects") {
+                            ForEach(Array(clip.authored.objects("effects").enumerated()), id: \.offset) { index, effect in
+                                HStack { Text(effect.string("effect_id")); Spacer(); KRButton(icon: .trash2, accessibilityLabel: "効果を削除") { model.removeClipEffect(clip, index: index) } }.padding(.horizontal, KRSpace.space3)
+                            }
+                        }.disabled(clip.kind == .audio)
                         if clip.composition != nil { KRButton("モーションで開く", icon: .layers, variant: .secondary) { model.openClipInMotion(clip) }.padding(.horizontal, KRSpace.space3) }
                     }.padding(.vertical, KRSpace.space3)
                 }
             } else { KREmptyState(icon: .mousePointer2, title: "クリップを選択", message: "トラックでクリップを選択してください。") }
-        }
+        }.onChange(of: model.selectedClip?.id) { _, _ in draftBases.removeAll() }
     }
     func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: KRSpace.space1) { Text(title).krText(KRType.heading).padding(.horizontal, KRSpace.space3); content() }
     }
-    func timeRow(_ title: String, frames: Int64, action: ((Int64) -> Void)?) -> some View {
+    func timeRow(_ title: String, frames: Int64, onEditingStart: @escaping () -> Void = {}, action: ((Int64) -> Void)?) -> some View {
         KRInspectorSettingRow(title) {
-            KRTimecodeField(frames: .constant(max(0, frames)), fps: model.nominalFPS, currentTime: false, label: title, onSeek: { action?($0) })
+            KRTimecodeField(frames: .constant(max(0, frames)), fps: model.nominalFPS, currentTime: false, label: title, onEditingStart: onEditingStart, onSeek: { action?($0) })
                 .disabled(action == nil || model.busy || model.pendingCandidate != nil)
         }
     }
@@ -224,7 +252,7 @@ struct SequenceTracks: View {
     func lane(_ track: [String: Any], width: Double, frameWidth: Double) -> some View {
         let id = track.string("id"), locked = model.ui.locked.contains(id)
         return KRTrack(header: .init(model.trackNumber(id), track.string("kind") == "audio" ? "Audio" : "Video", kind: track.string("kind") == "audio" ? .audio : .video,
-            selected: model.selectedClip?.track == id, locked: locked, visibilityEnabled: false, onLock: { model.toggleLock(id) }), headerWidth: 200, locked: locked) {
+            selected: model.selectedClip?.track == id, hidden: track.string("kind") == "audio" ? (track.object("state")["muted"] as? Bool ?? false) : !(track.object("state")["visible"] as? Bool ?? true), locked: locked, visibilityEnabled: !locked && !model.busy && model.pendingCandidate == nil, onVisibility: { model.setTrackOutput(track) }, onLock: { model.toggleLock(id) }), headerWidth: 200, locked: locked) {
             ZStack(alignment: .leading) {
                 Color.clear.contentShape(Rectangle()).onTapGesture { tracksFocused = true; model.selectClip(nil) }
                 ForEach(model.editClips.filter { $0.track == id }) { clip in

@@ -106,6 +106,8 @@ pub enum NodeKind {
     Null,
     Shape { content_ref: ContentId },
     Text { content_ref: ContentId },
+    Repeater { content_ref: ContentId },
+    Simulation { content_ref: ContentId },
     CompositionInstance(CompositionInstance),
     Media(MediaNode),
 }
@@ -133,6 +135,18 @@ impl<'de> Deserialize<'de> for NodeKind {
                     content_ref: p.content_ref,
                 })
             }
+            "simulation" => {
+                let p: Content = wire.value()?;
+                Ok(Self::Simulation {
+                    content_ref: p.content_ref,
+                })
+            }
+            "repeater" => {
+                let p: Content = wire.value()?;
+                Ok(Self::Repeater {
+                    content_ref: p.content_ref,
+                })
+            }
             "composition_instance" => wire.value().map(Self::CompositionInstance),
             "media" => wire.value().map(Self::Media),
             _ => Err(wire.unknown(&[
@@ -141,6 +155,8 @@ impl<'de> Deserialize<'de> for NodeKind {
                 "shape",
                 "text",
                 "composition_instance",
+                "repeater",
+                "simulation",
                 "media",
             ])),
         }
@@ -547,6 +563,18 @@ fn validate_properties(
     ids: &mut BTreeSet<PropertyId>,
     errors: &mut Vec<CompositionError>,
 ) {
+    if let Err(source) = crate::BlendMode::from_properties(properties)
+        && let Some(property) = properties
+            .iter()
+            .find(|p| p.descriptor().key.as_str() == crate::BLEND_KEY)
+    {
+        errors.push(CompositionError::InvalidProperty {
+            composition: composition.id,
+            node,
+            property: property.id(),
+            source,
+        });
+    }
     for property in properties {
         if !ids.insert(property.id()) {
             errors.push(CompositionError::DuplicatePropertyId { id: property.id() });

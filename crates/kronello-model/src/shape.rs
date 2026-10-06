@@ -42,6 +42,19 @@ pub enum ShapeGeometry {
     BezierPath {
         path: PropertyId,
     },
+    /// Ordered command correspondence is explicit; no automatic remeshing.
+    MorphPath {
+        from: PropertyId,
+        to: PropertyId,
+        progress: PropertyId,
+    },
+    /// Fractions of concatenated contour arc length; offset wraps modulo one.
+    TrimmedPath {
+        path: PropertyId,
+        start: PropertyId,
+        end: PropertyId,
+        offset: PropertyId,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
@@ -502,6 +515,12 @@ pub enum ResolvedGeometry {
         size: [FiniteF64; 2],
     },
     BezierPath(Path),
+    TrimmedPath {
+        path: Path,
+        start: f64,
+        end: f64,
+        offset: f64,
+    },
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResolvedFill {
@@ -531,6 +550,10 @@ pub struct ResolvedStrokeOptions {
 
 #[derive(Debug, Clone, PartialEq, Error)]
 pub enum ShapeError {
+    #[error("morph paths have different command counts or command kinds at {index}")]
+    MorphCorrespondence { index: usize },
+    #[error("trim start must not exceed end")]
+    InvalidTrimRange,
     #[error("unsupported stroke geometry version")]
     UnsupportedStrokeVersion,
     #[error("dash lengths must be finite, nonnegative and not all zero")]
@@ -575,6 +598,7 @@ enum Parameter {
     Miter,
     Offset,
     DashOffset,
+    FreeScalar,
 }
 impl Parameter {
     fn value_type(self) -> ValueType {
@@ -600,7 +624,7 @@ impl Parameter {
             (Self::Radius | Self::Width, Value::Scalar(v)) => v.get() >= 0.0,
             (Self::Miter, Value::Scalar(v)) => v.get() >= 1.0,
             (Self::Offset, Value::Scalar(v)) => (0.0..=1.0).contains(&v.get()),
-            (Self::DashOffset, Value::Scalar(_)) => true,
+            (Self::DashOffset | Self::FreeScalar, Value::Scalar(_)) => true,
             (Self::Path, Value::Path(path)) => {
                 validate_path(path)?;
                 true
@@ -645,6 +669,22 @@ impl Shape {
             } => vec![(size, Parameter::Size), (corner_radius, Parameter::Radius)],
             ShapeGeometry::Ellipse { size } => vec![(size, Parameter::Size)],
             ShapeGeometry::BezierPath { path } => vec![(path, Parameter::Path)],
+            ShapeGeometry::MorphPath { from, to, progress } => vec![
+                (from, Parameter::Path),
+                (to, Parameter::Path),
+                (progress, Parameter::Offset),
+            ],
+            ShapeGeometry::TrimmedPath {
+                path,
+                start,
+                end,
+                offset,
+            } => vec![
+                (path, Parameter::Path),
+                (start, Parameter::Offset),
+                (end, Parameter::Offset),
+                (offset, Parameter::FreeScalar),
+            ],
         };
         if let Some(fill) = &self.fill {
             refs.push((fill.color, Parameter::Color));
@@ -738,6 +778,19 @@ impl Shape {
                 _ => None,
             })
             .collect();
+        if let ShapeGeometry::MorphPath { from, to, .. } = self.geometry
+            && let (Some(Value::Path(from)), Some(Value::Path(to))) =
+                (constants.get(&from), constants.get(&to))
+        {
+            morph_paths(from, to, 0.0)?;
+        }
+        if self
+            .property_ids()
+            .iter()
+            .all(|id| constants.contains_key(id))
+        {
+            self.resolve(&constants)?;
+        }
         for gradient in self
             .fill
             .as_ref()
@@ -783,6 +836,10 @@ impl Shape {
             Value::Color(v) => *v,
             _ => unreachable!(),
         };
+        let path_value = |id| match &values[&id] {
+            Value::Path(path) => path,
+            _ => unreachable!(),
+        };
         let geometry = match self.geometry {
             ShapeGeometry::Rectangle {
                 size: id,
@@ -796,6 +853,27 @@ impl Shape {
                 Value::Path(p) => ResolvedGeometry::BezierPath(p.clone()),
                 _ => unreachable!(),
             },
+            ShapeGeometry::MorphPath { from, to, progress } => ResolvedGeometry::BezierPath(
+                morph_paths(path_value(from), path_value(to), scalar(progress).get())?,
+            ),
+            ShapeGeometry::TrimmedPath {
+                path,
+                start,
+                end,
+                offset,
+            } => {
+                let (start, end, offset) =
+                    (scalar(start).get(), scalar(end).get(), scalar(offset).get());
+                if start > end {
+                    return Err(ShapeError::InvalidTrimRange);
+                }
+                ResolvedGeometry::TrimmedPath {
+                    path: path_value(path).clone(),
+                    start,
+                    end,
+                    offset,
+                }
+            }
         };
         let fill_gradient = self
             .fill
@@ -890,6 +968,36 @@ pub fn shape_descriptors() -> Vec<PropertyDescriptor> {
     let n = |v| FiniteF64::new(v).expect("finite descriptor default");
     let entries = [
         (
+            0x43f6e0d1_271a_4100_9871_11fc93a10005,
+            "morph_target",
+            Unit::DesignPx,
+            Value::Path(Path { segments: vec![] }),
+        ),
+        (
+            0x43f6e0d1_271a_4100_9871_11fc93a10001,
+            "morph_progress",
+            Unit::Dimensionless,
+            Value::Scalar(n(0.0)),
+        ),
+        (
+            0x43f6e0d1_271a_4100_9871_11fc93a10002,
+            "trim_start",
+            Unit::Dimensionless,
+            Value::Scalar(n(0.0)),
+        ),
+        (
+            0x43f6e0d1_271a_4100_9871_11fc93a10003,
+            "trim_end",
+            Unit::Dimensionless,
+            Value::Scalar(n(1.0)),
+        ),
+        (
+            0x43f6e0d1_271a_4100_9871_11fc93a10004,
+            "trim_offset",
+            Unit::Dimensionless,
+            Value::Scalar(n(0.0)),
+        ),
+        (
             0x9cf34ec6_523a_4c20_86cf_091c243798ab,
             "dash_offset",
             Unit::DesignPx,
@@ -971,7 +1079,7 @@ pub fn shape_descriptors() -> Vec<PropertyDescriptor> {
             match suffix {
                 "size" => definition.range = Some(crate::ValueRange::Vec2([range(0.0); 2])),
                 "corner_radius" => definition.range = Some(crate::ValueRange::Scalar(range(0.0))),
-                "gradient_offset" => {
+                "gradient_offset" | "morph_progress" | "trim_start" | "trim_end" => {
                     definition.range = Some(crate::ValueRange::Scalar(crate::NumericRange {
                         min: Some(crate::NumericBound {
                             value: n(0.0),
@@ -989,4 +1097,58 @@ pub fn shape_descriptors() -> Vec<PropertyDescriptor> {
             PropertyDescriptor::new(definition).expect("valid shape descriptor")
         })
         .collect()
+}
+
+/// Interpolate corresponding endpoints and controls without guessing topology.
+pub fn morph_paths(from: &Path, to: &Path, progress: f64) -> Result<Path, ShapeError> {
+    validate_path(from)?;
+    validate_path(to)?;
+    if from.segments.len() != to.segments.len() {
+        return Err(ShapeError::MorphCorrespondence {
+            index: from.segments.len().min(to.segments.len()),
+        });
+    }
+    if !progress.is_finite() || !(0.0..=1.0).contains(&progress) {
+        return Err(ShapeError::MorphCorrespondence { index: 0 });
+    }
+    let point = |a: [FiniteF64; 2], b: [FiniteF64; 2]| -> Result<[FiniteF64; 2], ShapeError> {
+        let coordinate = |i: usize| {
+            FiniteF64::new(a[i].get() * (1.0 - progress) + b[i].get() * progress)
+                .map_err(ShapeError::from)
+        };
+        Ok([coordinate(0)?, coordinate(1)?])
+    };
+    let mut segments = Vec::with_capacity(from.segments.len());
+    for (index, (a, b)) in from.segments.iter().zip(&to.segments).enumerate() {
+        segments.push(match (a, b) {
+            (PathSegment::MoveTo(a), PathSegment::MoveTo(b)) => PathSegment::MoveTo(point(*a, *b)?),
+            (PathSegment::LineTo(a), PathSegment::LineTo(b)) => PathSegment::LineTo(point(*a, *b)?),
+            (
+                PathSegment::QuadTo { control: a, end: c },
+                PathSegment::QuadTo { control: b, end: d },
+            ) => PathSegment::QuadTo {
+                control: point(*a, *b)?,
+                end: point(*c, *d)?,
+            },
+            (
+                PathSegment::CubicTo {
+                    control1: a,
+                    control2: c,
+                    end: e,
+                },
+                PathSegment::CubicTo {
+                    control1: b,
+                    control2: d,
+                    end: f,
+                },
+            ) => PathSegment::CubicTo {
+                control1: point(*a, *b)?,
+                control2: point(*c, *d)?,
+                end: point(*e, *f)?,
+            },
+            (PathSegment::Close, PathSegment::Close) => PathSegment::Close,
+            _ => return Err(ShapeError::MorphCorrespondence { index }),
+        });
+    }
+    Ok(Path { segments })
 }

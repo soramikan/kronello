@@ -6,6 +6,7 @@
 
 | 状態 | 意味 |
 |---|---|
+| 草案 | 実装・レビュー中の提案。採用済みの決定として扱わない |
 | 継承 | v0.2 仕様の決定表（ADR-001〜012）から引き継いだもの。採用済み。実装の受け入れ状況はバックログと検証記録で別に管理する |
 | 採用 | 2026-10-02 以降の検討で決定したもの |
 | 部分置換 | 決定の一部だけを後の ADR に置き換えたもの。置換範囲と維持する条項を明記する |
@@ -82,7 +83,7 @@
 | [0065](0065-relocatable-macos-distribution.md) | macOS 配布 runtime を再配置・署名後に全体検証する | 採用 | 2026-10-05 |
 | [0066](0066-explicit-gradient-semantics.md) | グラデーションの座標・spread・補間空間を明示する | 採用 | 2026-10-05 |
 | [0067](0067-affine-gaussian-effects.md) | 非一様 affine の Gaussian / shadow を明示した意味版 2 で扱う | 採用 | 2026-10-05 |
-| [0068](0068-versioned-delivery-movie-profiles.md) | 版付き配信映像と ALAC 音声の出力契約 | 採用 | 2026-10-05 |
+| [0068](0068-versioned-delivery-movie-profiles.md) | 版付き配信映像と ALAC 音声の出力契約 | 部分置換（0106） | 2026-10-05 |
 | [0069](0069-versioned-stateless-audio.md) | リタイム・effect・Generator・crossfade 音声を明示 profile に固定する | 採用 | 2026-10-05 |
 | [0070](0070-motion-keyframe-authoring.md) | Dope sheet と時間イージングの編集 | 採用 | 2026-10-05 |
 | [0071](0071-project-change-plans-and-modifier-edits.md) | Project 作成・import の計画と再送、Modifier の型付き編集 | 採用 | 2026-10-05 |
@@ -108,6 +109,20 @@
 | [0091](0091-exact-forward-decoder-and-bounded-render-scope.md) | 正確な順方向デコードとレンダー範囲の有限寿命 | 採用 | 2026-10-06 |
 | [0092](0092-single-graph-gpu-final-output-and-observations.md) | GPU graph の単一実行と要求単位の観測 | 採用 | 2026-10-06 |
 | [0093](0093-m4-reference-preview-performance-target.md) | M4 基準プレビューの性能目標 | 採用 | 2026-10-06 |
+| [0094](0094-explicit-path-operations-and-bounded-svg.md) | 明示的なPath操作と限定SVG adapter | 採用 | 2026-10-06 |
+| [0095](0095-logical-text-selectors-and-vertical-ruby.md) | 論理文字selectorと縦書き・ルビ | 採用 | 2026-10-06 |
+| [0096](0096-offline-audio-feature-assets.md) | 不変の事前音声特徴量を版付きDataAssetとして保存 | 採用 | 2026-10-06 |
+| [0097](0097-read-only-single-graph-render-plans.md) | 読み取り専用の単一graph実行計画 | 採用 | 2026-10-06 |
+| [0098](0098-explicit-framebridge-path-inventory.md) | FrameBridgeの具体経路一覧とgeneric VideoToolbox拒否 | 採用 | 2026-10-06 |
+| [0099](0099-authored-matte-relations.md) | 保存するMatte関係 | 採用 | 2026-10-06 |
+| [0100](0100-shared-edit-controls-and-explicit-reverse-sampling.md) | 編集コントロールと明示した逆方向source sampling | 採用（実装受け入れ中） | 2026-10-06 |
+| [0101](0101-linear-premultiplied-layer-blend.md) | 線形premultiplied layer blend | 採用（実装受け入れ中） | 2026-10-06 |
+| [0102](0102-bounded-temporal-expression-assets.md) | 固定DataAssetと有界の過去sampling・連続noise | 採用 | 2026-10-06 |
+| [0103](0103-shared-repeater-and-explicit-materialization.md) | RepeaterのSource共有、固定instance ID/seedと明示的な個別展開 | 採用 | 2026-10-06 |
+
+| [0104](0104-canonical-source-clock-simulation-checkpoints.md) | canonical source clock と固定 step simulation checkpoint | 採用 | 2026-10-06 |
+| [0105](0105-human-readable-expression-syntax.md) | 人間向け式構文とAST往復 | 採用 | 2026-10-06 |
+| [0106](0106-versioned-compressed-delivery-audio.md) | 版付き圧縮配信音声（AAC-LCとOpus） | 採用 | 2026-10-06 |
 
 ## 追加と変更の規則
 
@@ -116,3 +131,5 @@
 - 一部だけを変える場合は旧 ADR を「部分置換（ADR-NNNN）」とし、旧 ADR と新 ADR に置換範囲・維持する条項を明記する。
 - 決定を変えたら、対応する `docs/architecture/` の章を同じ変更で更新する。
 - まだ決められない論点は [未決事項](../open-questions.md) に置く。
+
+GUI-007のADR0100/0101に対応する実装は2026-10-06に受け入れ済み（[検証記録](../testing/gui-007.md)）。採用決定や未決事項の変更はない。

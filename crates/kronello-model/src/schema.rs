@@ -7,6 +7,8 @@ use std::collections::{BTreeMap, BTreeSet};
 pub enum Unit {
     Dimensionless,
     DesignPx,
+    DesignPxPerSecond,
+    DesignPxPerSecondSquared,
     Degrees,
 }
 impl Unit {
@@ -16,7 +18,13 @@ impl Unit {
             ValueType::Angle => self == Self::Degrees,
             ValueType::Path => self == Self::DesignPx,
             ValueType::Scalar | ValueType::Vec2 | ValueType::Vec3 => {
-                matches!(self, Self::Dimensionless | Self::DesignPx)
+                matches!(
+                    self,
+                    Self::Dimensionless
+                        | Self::DesignPx
+                        | Self::DesignPxPerSecond
+                        | Self::DesignPxPerSecondSquared
+                )
             }
             _ => self == Self::Dimensionless,
         };
@@ -224,6 +232,9 @@ pub struct DescriptorDefinition {
     pub range: Option<ValueRange>,
     pub default: Value,
     pub animatable: bool,
+    /// Multiple properties with this key may coexist when referenced by ID.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub repeatable: bool,
     pub capabilities: Capabilities,
     /// This descriptor structure/contract supports version 1. Global snapshot
     /// schema_version and semantic_versions belong to STORE-001.
@@ -258,6 +269,7 @@ impl DescriptorDefinition {
             range: None,
             default,
             animatable: true,
+            repeatable: false,
             capabilities: Capabilities {
                 curves: true,
                 expressions: true,
@@ -314,6 +326,9 @@ impl PropertyDescriptor {
     /// Validate the final value after all explicit modifiers, with no clamping.
     pub fn validate_value(&self, value: &Value) -> Result<(), ModelError> {
         self.validate_value_type(value)?;
+        if self.key().as_str() == crate::BLEND_KEY {
+            crate::BlendMode::from_value(value)?;
+        }
         if let Some(range) = &self.0.range {
             range.validate_value(value)?;
         }

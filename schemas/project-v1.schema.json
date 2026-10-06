@@ -9,6 +9,12 @@
         "$ref": "#/$defs/DocumentObject8"
       }
     },
+    "audio_analyses": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DocumentObject9"
+      }
+    },
     "compositions": {
       "type": "array",
       "items": {
@@ -21,6 +27,12 @@
         "$ref": "#/$defs/DocumentObject2"
       }
     },
+    "expression_data_assets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DocumentObject10"
+      }
+    },
     "expressions": {
       "type": "array",
       "items": {
@@ -31,8 +43,20 @@
       "type": "string",
       "format": "uuid"
     },
+    "mattes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DocumentObject12"
+      }
+    },
     "name": {
       "type": "string"
+    },
+    "repeaters": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DocumentObject13"
+      }
     },
     "schema_version": {
       "type": "integer",
@@ -48,13 +72,19 @@
     "sequences": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject9"
+        "$ref": "#/$defs/DocumentObject11"
       }
     },
     "shapes": {
       "type": "array",
       "items": {
         "$ref": "#/$defs/DocumentObject4"
+      }
+    },
+    "simulations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DocumentObject14"
       }
     },
     "template_instances": {
@@ -180,12 +210,260 @@
       },
       "additionalProperties": false
     },
+    "AudioAnalysisConfig": {
+      "type": "object",
+      "properties": {
+        "bands": {
+          "description": "Inclusive low / exclusive high frequencies, in Hz.",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "maxItems": 2,
+            "minItems": 2
+          }
+        },
+        "hop": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "sample_rate": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "time_map": {
+          "description": "Consumer-local time maps to the absolute analysed sample grid.",
+          "$ref": "#/$defs/TimeMap"
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "window": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "sample_rate",
+        "window",
+        "hop",
+        "bands",
+        "time_map"
+      ]
+    },
+    "AudioAnalysisDataAsset": {
+      "type": "object",
+      "properties": {
+        "config": {
+          "$ref": "#/$defs/AudioAnalysisConfig"
+        },
+        "frames": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AudioAnalysisFrame"
+          }
+        },
+        "id": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "sample_count": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "source": {
+          "$ref": "#/$defs/AudioAnalysisSource"
+        },
+        "start_sample": {
+          "type": "integer",
+          "format": "int64"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "source",
+        "config",
+        "start_sample",
+        "sample_count",
+        "frames"
+      ]
+    },
+    "AudioAnalysisFrame": {
+      "type": "object",
+      "properties": {
+        "band_energy": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "beat": {
+          "description": "Thresholded onset with a fixed 100 ms refractory interval, not tempo inference.",
+          "type": "boolean"
+        },
+        "onset": {
+          "description": "Positive RMS difference from the preceding analysis window.",
+          "type": "number",
+          "format": "double"
+        },
+        "rms": {
+          "type": "number",
+          "format": "double"
+        },
+        "time": {
+          "$ref": "#/$defs/Rational"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "time",
+        "rms",
+        "band_energy",
+        "onset",
+        "beat"
+      ]
+    },
+    "AudioAnalysisSource": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "asset": {
+              "$ref": "#/$defs/AssetId"
+            },
+            "content_hash": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "asset"
+            },
+            "stream_index": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "asset",
+            "stream_index",
+            "content_hash"
+          ]
+        },
+        {
+          "description": "Canonical fixed Project snapshot hash, target id and evaluator version.",
+          "type": "object",
+          "properties": {
+            "evaluator_version": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "kind": {
+              "type": "string",
+              "const": "bus"
+            },
+            "snapshot_hash": {
+              "type": "string"
+            },
+            "target": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "snapshot_hash",
+            "target",
+            "evaluator_version"
+          ]
+        }
+      ]
+    },
+    "AudioFeature": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "rms"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "band": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "kind": {
+              "type": "string",
+              "const": "band_energy"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "band"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "onset"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "beat"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        }
+      ]
+    },
     "AudioRetimePolicy": {
       "description": "NLE-001 never performs implicit pitch/speed conversion.",
       "type": "string",
       "enum": [
         "reject",
-        "resample_v1"
+        "resample_v1",
+        "reverse_resample_v1"
       ]
     },
     "BoundsStage": {
@@ -195,6 +473,32 @@
         "layout",
         "ink",
         "visual"
+      ]
+    },
+    "CharacterAnimation": {
+      "description": "Logical source selection. Ranges are never glyph or line indices.",
+      "type": "object",
+      "properties": {
+        "expected_text": {
+          "description": "Exact unnormalized source captured when the selector is authored.",
+          "type": "string"
+        },
+        "offset": {
+          "$ref": "#/$defs/PropertyId"
+        },
+        "opacity": {
+          "$ref": "#/$defs/PropertyId"
+        },
+        "source": {
+          "$ref": "#/$defs/TextRange"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "expected_text",
+        "offset",
+        "opacity"
       ]
     },
     "Clip": {
@@ -227,6 +531,16 @@
           "items": {
             "$ref": "#/$defs/Property"
           }
+        },
+        "reverse_sampling": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReverseSampling"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "source_in": {
           "$ref": "#/$defs/Rational"
@@ -523,11 +837,73 @@
         "height"
       ]
     },
+    "DocumentMatteKind": {
+      "type": "string",
+      "enum": [
+        "alpha",
+        "luminance"
+      ]
+    },
     "DocumentObject": {
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
           "$ref": "#/$defs/Composition"
+        },
+        {
+          "$ref": "#/$defs/OpaqueObject"
+        }
+      ]
+    },
+    "DocumentObject10": {
+      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ExpressionDataAsset"
+        },
+        {
+          "$ref": "#/$defs/OpaqueObject"
+        }
+      ]
+    },
+    "DocumentObject11": {
+      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sequence"
+        },
+        {
+          "$ref": "#/$defs/OpaqueObject"
+        }
+      ]
+    },
+    "DocumentObject12": {
+      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MatteRelation"
+        },
+        {
+          "$ref": "#/$defs/OpaqueObject"
+        }
+      ]
+    },
+    "DocumentObject13": {
+      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Repeater"
+        },
+        {
+          "$ref": "#/$defs/OpaqueObject"
+        }
+      ]
+    },
+    "DocumentObject14": {
+      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ParticleSimulation"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -615,7 +991,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/Sequence"
+          "$ref": "#/$defs/AudioAnalysisDataAsset"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -739,6 +1115,39 @@
         }
       ]
     },
+    "ExpandedRepeatSource": {
+      "type": "object",
+      "properties": {
+        "layout_constraints": {
+          "description": "Dynamic text bounds rules survive template input materialization.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/TemplateConstraints"
+          }
+        },
+        "noise_aliases": {
+          "description": "Fresh copied nested identities retain their original noise coordinate.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/CompositionInstanceId"
+          }
+        },
+        "simulation_aliases": {
+          "description": "Copied simulation emitters retain their original event identity.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ContentId"
+          }
+        },
+        "source": {
+          "$ref": "#/$defs/RepeatSource"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "source"
+      ]
+    },
     "Expression": {
       "type": "object",
       "properties": {
@@ -817,6 +1226,33 @@
         "dependencies"
       ]
     },
+    "ExpressionDataAsset": {
+      "type": "object",
+      "properties": {
+        "content_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "id": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "table": {
+          "$ref": "#/$defs/DataTable"
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "content_hash",
+        "table"
+      ]
+    },
     "ExpressionId": {
       "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
       "type": "string",
@@ -840,6 +1276,35 @@
           "description": "Seconds in the authored source scope, after its rational time mapping.",
           "type": "string",
           "const": "time"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "audio_feature": {
+              "type": "object",
+              "properties": {
+                "asset": {
+                  "$ref": "#/$defs/AssetId"
+                },
+                "feature": {
+                  "$ref": "#/$defs/AudioFeature"
+                },
+                "offset": {
+                  "$ref": "#/$defs/Rational"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "asset",
+                "feature",
+                "offset"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "audio_feature"
+          ]
         },
         {
           "description": "Stable property in the authored source scope; None means composition input.",
@@ -878,7 +1343,85 @@
           ]
         },
         {
-          "description": "Explicit rational offset; no dynamic property sampling or recursion.",
+          "description": "Integer row operand and statically typed column in immutable table data.",
+          "type": "object",
+          "properties": {
+            "data_asset_cell": {
+              "type": "object",
+              "properties": {
+                "asset": {
+                  "$ref": "#/$defs/AssetId"
+                },
+                "column": {
+                  "type": "string"
+                },
+                "row": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "value_type": {
+                  "$ref": "#/$defs/ValueType"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "asset",
+                "column",
+                "row",
+                "value_type"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "data_asset_cell"
+          ]
+        },
+        {
+          "description": "Nonnegative lookback seconds on the root timeline, quantized to 1 ns.\nStatic identity remains a dependency even when sampling the past.",
+          "type": "object",
+          "properties": {
+            "property_sample": {
+              "type": "object",
+              "properties": {
+                "lookback": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "node": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/NodeId"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "property": {
+                  "$ref": "#/$defs/PropertyId"
+                },
+                "value_type": {
+                  "$ref": "#/$defs/ValueType"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "property",
+                "value_type",
+                "lookback"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "property_sample"
+          ]
+        },
+        {
+          "description": "Explicit rational offset.",
           "type": "object",
           "properties": {
             "curve_sample": {
@@ -1202,6 +1745,42 @@
           "additionalProperties": false,
           "required": [
             "angle"
+          ]
+        },
+        {
+          "description": "Quintic interpolation between adjacent fixed lattice hashes in [-1, 1].",
+          "type": "object",
+          "properties": {
+            "continuous_noise": {
+              "type": "object",
+              "properties": {
+                "element": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "input": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "seed": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "seed",
+                "element",
+                "input"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "continuous_noise"
           ]
         },
         {
@@ -1681,6 +2260,50 @@
         "interpolation"
       ]
     },
+    "MatteRelation": {
+      "type": "object",
+      "properties": {
+        "composition": {
+          "$ref": "#/$defs/CompositionId"
+        },
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "invert": {
+          "type": "boolean"
+        },
+        "kind": {
+          "$ref": "#/$defs/DocumentMatteKind"
+        },
+        "matte": {
+          "$ref": "#/$defs/NodeId"
+        },
+        "source": {
+          "$ref": "#/$defs/NodeId"
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "visible": {
+          "description": "A consumed matte may also be shown in normal composition draw order.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "composition",
+        "source",
+        "matte",
+        "kind",
+        "invert",
+        "visible"
+      ]
+    },
     "MediaNode": {
       "description": "Explicit media stream; AUDIO-003 executes audio only.",
       "type": "object",
@@ -1844,6 +2467,58 @@
           "properties": {
             "kind": {
               "type": "string",
+              "const": "repeater"
+            },
+            "value": {
+              "type": "object",
+              "properties": {
+                "content_ref": {
+                  "$ref": "#/$defs/ContentId"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "content_ref"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "simulation"
+            },
+            "value": {
+              "type": "object",
+              "properties": {
+                "content_ref": {
+                  "$ref": "#/$defs/ContentId"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "content_ref"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
               "const": "composition_instance"
             },
             "value": {
@@ -1886,6 +2561,92 @@
       "additionalProperties": true,
       "required": [
         "id"
+      ]
+    },
+    "ParticlePropertyInputs": {
+      "type": "object",
+      "properties": {
+        "acceleration": {
+          "$ref": "#/$defs/PropertyId"
+        },
+        "birth_count": {
+          "$ref": "#/$defs/PropertyId"
+        },
+        "enabled": {
+          "$ref": "#/$defs/PropertyId"
+        },
+        "jitter": {
+          "$ref": "#/$defs/PropertyId"
+        },
+        "origin": {
+          "$ref": "#/$defs/PropertyId"
+        },
+        "velocity": {
+          "$ref": "#/$defs/PropertyId"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "origin",
+        "velocity",
+        "jitter",
+        "acceleration",
+        "enabled",
+        "birth_count"
+      ]
+    },
+    "ParticleSimulation": {
+      "type": "object",
+      "properties": {
+        "emission_interval": {
+          "$ref": "#/$defs/Duration"
+        },
+        "id": {
+          "$ref": "#/$defs/ContentId"
+        },
+        "inputs": {
+          "$ref": "#/$defs/ParticlePropertyInputs"
+        },
+        "lifetime": {
+          "$ref": "#/$defs/Duration"
+        },
+        "seed": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "source": {
+          "$ref": "#/$defs/RepeatSource"
+        },
+        "source_bindings": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/PropertySource"
+          }
+        },
+        "start": {
+          "$ref": "#/$defs/Rational"
+        },
+        "step": {
+          "$ref": "#/$defs/Duration"
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "source",
+        "start",
+        "step",
+        "lifetime",
+        "emission_interval",
+        "seed",
+        "inputs"
       ]
     },
     "Path": {
@@ -2169,6 +2930,123 @@
         "den"
       ]
     },
+    "RepeatInstance": {
+      "type": "object",
+      "properties": {
+        "active_range": {
+          "$ref": "#/$defs/TimeRange"
+        },
+        "effects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Effect"
+          }
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "expanded_source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExpandedRepeatSource"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "$ref": "#/$defs/CompositionInstanceId"
+        },
+        "input_bindings": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/PropertySource"
+          }
+        },
+        "local_time_map": {
+          "$ref": "#/$defs/TimeMap"
+        },
+        "placement": {
+          "$ref": "#/$defs/NodeId"
+        },
+        "properties": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Property"
+          }
+        },
+        "seed": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "placement",
+        "seed",
+        "enabled",
+        "active_range",
+        "local_time_map",
+        "properties",
+        "effects",
+        "input_bindings"
+      ]
+    },
+    "RepeatSource": {
+      "type": "object",
+      "properties": {
+        "composition": {
+          "$ref": "#/$defs/CompositionId"
+        },
+        "root": {
+          "$ref": "#/$defs/NodeId"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "composition",
+        "root"
+      ]
+    },
+    "Repeater": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ContentId"
+        },
+        "instances": {
+          "description": "Array order is draw order only, never identity or random state.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RepeatInstance"
+          }
+        },
+        "source": {
+          "$ref": "#/$defs/RepeatSource"
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "source",
+        "instances"
+      ]
+    },
+    "ReverseSampling": {
+      "type": "string",
+      "enum": [
+        "reverse_grid_v1"
+      ]
+    },
     "RubyAssociation": {
       "type": "object",
       "properties": {
@@ -2435,6 +3313,80 @@
               "additionalProperties": false,
               "required": [
                 "path"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        },
+        {
+          "description": "Ordered command correspondence is explicit; no automatic remeshing.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "morph_path"
+            },
+            "value": {
+              "type": "object",
+              "properties": {
+                "from": {
+                  "$ref": "#/$defs/PropertyId"
+                },
+                "progress": {
+                  "$ref": "#/$defs/PropertyId"
+                },
+                "to": {
+                  "$ref": "#/$defs/PropertyId"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "from",
+                "to",
+                "progress"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        },
+        {
+          "description": "Fractions of concatenated contour arc length; offset wraps modulo one.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "trimmed_path"
+            },
+            "value": {
+              "type": "object",
+              "properties": {
+                "end": {
+                  "$ref": "#/$defs/PropertyId"
+                },
+                "offset": {
+                  "$ref": "#/$defs/PropertyId"
+                },
+                "path": {
+                  "$ref": "#/$defs/PropertyId"
+                },
+                "start": {
+                  "$ref": "#/$defs/PropertyId"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "start",
+                "end",
+                "offset"
               ]
             }
           },
@@ -3144,6 +4096,12 @@
           "description": "Enum Property: \"start\", \"center\", or \"end\".",
           "$ref": "#/$defs/PropertyId"
         },
+        "character_animations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CharacterAnimation"
+          }
+        },
         "direction": {
           "$ref": "#/$defs/TextDirection"
         },
@@ -3402,6 +4360,16 @@
         },
         "kind": {
           "$ref": "#/$defs/TrackKind"
+        },
+        "state": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TrackState"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -3421,6 +4389,23 @@
       "enum": [
         "video",
         "audio"
+      ]
+    },
+    "TrackState": {
+      "description": "Authored output switches, independent of GUI selection or editing locks.",
+      "type": "object",
+      "properties": {
+        "muted": {
+          "type": "boolean"
+        },
+        "visible": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "visible",
+        "muted"
       ]
     },
     "Transition": {

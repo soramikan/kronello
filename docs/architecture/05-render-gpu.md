@@ -47,6 +47,14 @@ OpenFX の入力領域 / 必要フレームの問い合わせに似た契約を�
 - 外部アダプターは `straight / premultiplied / opaque` と関連付け空間を明示する。非線形色変換は straight RGB に行い、外部入出力の unpremultiply 時は `a > 2^-16` で除算、それ以下は RGB をゼロとし alpha は保持する。内部 effect の unpremultiply はゼロだけを特別扱いし、内部画像に閾値を適用しない。
 - alpha を持たない出力は明示した背景へ合成する。外部 alpha 変換、閾値の境界、マット境界を検証する。詳細と新規に固定した契約は [ADR-0044](../adr/0044-color-and-alpha-contracts.md) を参照。
 
+### GUI-007 の線形 layer blend（M5受け入れ中）
+
+`kronello.blend_mode` の版1 Enum（Normal / Multiply / Screen）をClipまたはNodeの既存Propertyとして保存する。非アニメーションのdescriptorで、重複・未知値・Curve/Expressionを拒否する。省略は従来のsource-over。sourceの隔離、opacity、effects、matteの後で兄弟backdropへ合成し、Group内部へmodeを配らない。
+
+線形premultiplied RGBをCs/Cb、alphaをas/abとすると、Multiplyは `Cs*(1-ab) + Cb*(1-as) + Cs*Cb`、Screenは `Cs + Cb - Cs*Cb`、alphaは共通で `as + ab*(1-as)`。CPU/WGSLは除算を要しない閉形式を共有し、HDRの負値・1超をclampしない。表示sRGB上の同名modeとの画素一致は約束しない。
+
+非Normalは明示 `Blend` DAGを作り、両入力のunion bounds、ROI、modeを含むcache identity、`BLEND` inspect stageへ接続する。snapshotの `semantic_versions.blend=1` を必要とし、pin省略はauthored blend Propertyがない旧文書だけに許す。共有編集・CPU/Metal個別試験と、GUI・schema・全体受け入れの残件は [ADR-0101](../adr/0101-linear-premultiplied-layer-blend.md)、[検証記録](../testing/gui-007-blend.md)を参照する。
+
 ### VEC-005 の版付き stroke coverage
 
 `vec003-centered-stroke-v1` は従来の output-space 展開を維持する。
@@ -156,11 +164,11 @@ M1 / M2 は互換経路でも実装を進め、転送コストを明示する。
 
 共通 Query `render.explain` は Composition / Sequence の snapshot、Scene IR、tile ごとの Render DAG を組立て、stage code / inputs / SceneKey、要求・halo 実行領域、面数・メモリ・転送の推定を返す。frame executor と同じ `frame_tiles` を使う。`executed:false` であり、GPU の可用性や転送時間の実測ではない。失敗時は `plan:null` と型付き diagnostics を返し、代替 backend を選ばない。
 
-control upload / image upload / GPU image copy / image・status readback を分ける。現行 `render.explain` の推定は tile ごとに linear / display の二回描画と二つの RGBA16F image（256-byte row padding）・二つの4-byte status readback を数えている。これは PERF-001 の実 executor の一回 graph / 一つの status に未追従であり、`DUPLICATE_LINEAR_DISPLAY_RENDER` notice も現在の実行回数を示さない。実際の転送は `FrameMetadata.transfer_stats` で確認する。control upload の bytes / operations は未推定の null。CPU の GPU 転送は0。注入 backend の未知使用量も null とする。
+control upload / image upload / GPU image copy / image・status readback を分ける。INSPECT-002 の推定は tile ごとに一回 graph、linear / display の二つの RGBA16F image（256-byte row padding）、一つの4-byte status readback を数える（3 operations）。native preview の代替境界は全領域一回 graph、画像 readback なし、status 4 byte / 一操作であり final tile path に加算しない。実際の転送は `FrameMetadata.transfer_stats` で確認する。control upload の bytes / operations は未推定の null。CPU の GPU 転送は0。注入 backend の未知使用量も null とする。
 
-RGBA16F 面は8 bytes/pixel、CPU 参照面は16 bytes/pixel、最終 host の linear / display は合計32 bytes/pixel。中間面は既存 backend の保守的な安全予算式による `_estimate` で、allocator / driver / geometry / font / RSS / 実測 peak を含まない。`DUPLICATE_LINEAR_DISPLAY_RENDER`、`ZERO_OPACITY_STILL_PROCESSED`、`EFFECT_HALO_EXPANSION`、`SURFACE_BUDGET_EXCEEDED` は処理・安全予算上の notice。OQ-14 の性能合否を決めない。
+RGBA16F 面は8 bytes/pixel、CPU 参照面は16 bytes/pixel、最終 host の linear / display は合計32 bytes/pixel。中間面は既存 backend の保守的な安全予算式による `_estimate` で、allocator / driver / geometry / font / RSS / 実測 peak を含まない。`SINGLE_GRAPH_LINEAR_DISPLAY_OUTPUT`、`ZERO_OPACITY_STILL_PROCESSED`、`EFFECT_HALO_EXPANSION`、`SURFACE_BUDGET_EXCEEDED` は処理・安全予算上の notice。OQ-14 の性能合否を決めない。
 
-Query ごとの隔離 `RenderCache` の実 compilation counters を `compilation_cache` に載せ、renderer の cache / LRU / counters を変更しない。scope は `isolated_query_compilation`、raster 未実行を `raster_cache_observed:false` で明示する。runtime の warm hit/miss と混同しない。非表示原因は `node.explain` が containment・transform parent・opacity・active range・transient matte・content / font / unsupported の別に返す。画素の occlusion・coverage は測定しない。詳細は [ADR-0060](../adr/0060-structured-read-only-inspection.md)、[INSPECT-001 検証](../testing/inspect-001.md)。
+Query ごとの隔離 `RenderCache` の実 compilation counters を `compilation_cache` に載せ、renderer の cache / LRU / counters を変更しない。scope は `isolated_query_compilation`、raster 未実行を `raster_cache_observed:false` で明示する。runtime の warm hit/miss と混同しない。非表示原因は `node.explain` が containment・transform parent・opacity・active range・保存済みmatteとtransient matte・content / font / unsupported の別に返す。画素の occlusion・coverage は測定しない。詳細は [ADR-0060](../adr/0060-structured-read-only-inspection.md)、[INSPECT-001 検証](../testing/inspect-001.md)。
 
 ```text
 cache_key = hash(
@@ -206,7 +214,7 @@ M1 / Metal の追加実測では、wgpu 30.0.1 の同一 MTLDevice による IOS
 
 `DrawNode::Group` は子の source-over を透明な offscreen RGBA16F へまとめ、opacity を RGB / alpha に一度だけ掛ける。ネストも同じ手順。`DrawNode::Masked` は source と matte の参照を入力とし、matte を表示順に自動挿入しない。共有入力は要求内で一度描画して再利用する。matte 自身を表示したい場合だけ root / children に明示する。
 
-`MaskKind::Alpha` は matte alpha、`MaskKind::Luminance` は作業用線形空間の premultiplied RGB から求めた Y（straight Y × alpha）を `[0,1]` に clamp して coverage にする。Rec.709 は `(0.2126, 0.7152, 0.0722)`、Rec.2020 は `(0.2627, 0.6780, 0.0593)`。alpha を二重に掛けず、encoded sRGB の明度を使わない。色入力を coverage に変える明示ノードであり、既存 coverage を再度色変換するものではない。
+`MaskKind::Alpha` は matte alpha、`MaskKind::Luminance` は作業用線形空間の premultiplied RGB から求めた Y（straight Y × alpha）を `[0,1]` に clamp して coverage にする。Rec.709 は `(0.2126, 0.7152, 0.0722)`、Rec.2020 は `(0.2627, 0.6780, 0.0593)`。alpha を二重に掛けず、encoded sRGB の明度を使わない。M5の`AlphaInverted` / `LuminanceInverted`はそれぞれのcoverageを`1 - coverage`へ反転する（[ADR-0099](../adr/0099-authored-matte-relations.md)、[作業ツリーの受け入れ記録](../testing/matte-001.md)）。色入力を coverage に変える明示ノードであり、既存 coverage を再度色変換するものではない。
 
 `GpuContext::render_scene` は作業用線形 premultiplied `RenderOutput` を返す。`render_scene_output` は `OutputTransform`（sRGB / linear Rec.709 / linear Rec.2020、straight / premultiplied）を必須とし、外部 epsilon に従う unpremultiply → 原色変換 → 必要なら sRGB encode → 指定空間で再 premultiply の順で処理する。`ExternalFrame` に関連付け空間を明示し、encoded premultiplied を内部画像と混同しない。alpha の破棄・背景の推測・HDR の PQ/HLG・tone mapping は提供しない。RGB は clamp せず、各 RGBA16F 面への書き込み前に有限・alpha 範囲・RGB の絶対値 65,504 以下を検証する。GPU は全 pass で共有する sticky status に失敗を記録し、Metal 等が範囲超過値を有限最大値へ飽和させても型付きエラーを返す。後の不透明描画や group opacity で隠れる中間 overflow も拒否する。CPU 参照も各面境界で同じ範囲を検証する。binary16 alpha がゼロへ丸められるときだけ RGB もゼロに正規化し、正の内部 alpha に外部 epsilon を適用しない。
 
@@ -220,6 +228,7 @@ scene は参照欠落・循環・不正 opacity / 色 / 幾何を型付きエラ
 
 - `RenderSnapshot::new(&Project, CompositionId, revision, RenderProfile)` は文書を複製し、選択した Composition、revision、profile、必要な `FontRef` と意味の版を固定する。`RenderProfile` は作業用線形 Rec.709 / Rec.2020 と flatten tolerance（既定 0.02 output px）。元の Project を編集しても snapshot は変わらない。
 - `RenderSnapshot::with_contract` は `SemanticVersions` と `MatteBinding` も明示入力する。公開 snapshot schema は **1**。Serde の strict な envelope を使い、復元時に欠けた版・lock を最新値で補わない。文書意味版・補間版・TimeMap 版・組版版は **1**、vector は `render001-kurbo-flatten-v1`、色は `gpu002-color-v1`、coverage は `vec003-grid4-v2`。現在の stroke 対応上限は `vec005-local-stroke-v2`、旧 `vec003-centered-stroke-v1` の pin も旧 stroke に限り認識する。gradient interpolation は `vec004-explicit-interpolation-v1`。実行時は対応する版と文書の意味版との一致を検証する。
+- M5の新規snapshotは旧`layout = 1`を維持し、`advanced_text = Some(2)`、`path_operations = Some(1)`、`document_matte = Some(1)`を能力pinとして追加する。旧snapshotで省略されたpinを最新へ補完せず、該当する新機能を含む文書では欠落・未知pinを拒否する。Expression能力上限は2、旧snapshotの省略既定と既存ASTの意味版は1を維持する。対応範囲はADR-0094〜0096・0099と各M5検証記録を参照し、受け入れ済みmainの保証へ読み替えない。
 - `content_hash()` は snapshot 全体を `serde_json::Value` の sorted object keys → compact UTF-8 → SHA-256 にする。STORE-001 の正規化規約を再利用し、独立した opaque 内容も hash に含める。schema、文書、revision、lock、profile、matte、意味の版を除外しない。time / region は個別の要求と metadata に保持する。CACHE-001 の values key は下記の rendering content identity と Time を使い、layout / geometry / raster はそれぞれ必要な内容だけで区別する。
 - `build_scene_ir(&snapshot, Time, &[FontData])` と `build_render_dag(&SceneIr, RenderProfile, OutputRegion)` は GPU・ファイル I/O を使わない。
 - `render_frame(&snapshot, &[FontData], &dyn RenderBackend, FrameRequest)` は `RenderedFrame`（作業用線形 premultiplied と外部 straight sRGB の画素、`FrameMetadata`）を返す。
@@ -246,7 +255,7 @@ DAG は topological なノード列と明示 input index を持つ。index は�
 
 Shape の単色 / linear・radial・focal_radial・conic gradient fill / stroke と miter / bevel / round join、butt / square / round cap を接続する。stroke の非一様 scale / shear は `UNSUPPORTED_FEATURE`。fill / text の非一様変換は対応する。未知 paint / 後続 stroke 機能は opaque で保持し、必要な最終出力は拒否する。glyph ごとに coverage を作り、text の opacity は glyph 全体の合成に一度掛ける。Group / Null / 配置の containment 枠も局所 opacity と順序を保持する。
 
-Project / Node の永続モデルには matte 欄がなく、共有編集 Command / GUI から保存・編集する契約は未実装（後続 MATTE-001、M5）。現在の `MatteBinding` は transient な `RenderSnapshot` 入力であり、永続モデル対応の代替ではない。source / matte とも stable SceneKey。matte は表示 root / children から除外し、`visible = true` の場合だけ表示する。source ごとの binding は一つ、共有 matte の DAG は再利用する。欠落・非アクティブ参照・containment / matte を合わせた循環は失敗する。
+M5のMATTE-001では `Project.mattes` と共有 `MatteSet` / `MatteRemove`、Undo、Inspectorを実装し、M5作業ツリーで受け入れ済みである（[ADR-0099](../adr/0099-authored-matte-relations.md)、[検証記録](../testing/matte-001.md)）。既存の `MatteBinding` は引き続き transient な `RenderSnapshot` 入力であり、保存される文書関係と区別する。同じsourceへの重複指定は拒否する。source / matte とも stable SceneKey。matte は表示 root / children から除外し、`visible = true` の場合だけ表示する。source ごとの binding は一つ、共有 matte の DAG は再利用する。欠落・非アクティブ参照・containment / matte を合わせた循環は失敗する。
 
 scene 1,024 node、DAG 4,096 node、containment / matte recursion 24、出力 16,777,216 pixel の保守的上限を設ける。backend は GPU-002 の 1,024 draw node・32 depth・65,536 edge・512 MiB 面予算をさらに適用し、限界を超えた要求はエラーにする。INTEGRATION-001 / [ADR-0053](../adr/0053-integration-evaluated-queries-and-render-tiles.md) で幅または高さが512 pixelsを超える出力を最大512×512のtileへ分け、元画素格子と既存effect ROI haloを保って同じbackendで実行する。metadataは元のregion、最終linear / display面は全画面のまま。movie export は RENDER-003 の tile sink から1枚の RGBA8 buffer に組み立てて即 encode し、全画面 linear / display と全 frames payload を保持しない。巨大 cumulative halo は node 別の保守的 allocation 総額512 MiBで backend allocation 前に拒否する。M4 CACHE-003 では GPU texture LRU・資源 pool・外部 disk cache を実装した。性能の測定範囲と制限は PERF-001 の記録に従い、一般的な性能保証にはしない。CACHE-001 の初期インメモリ cache は下記の範囲で実装した。
 
@@ -268,7 +277,7 @@ RGBA16F の各 component は有限、alpha は `[0,1]`、RGB の絶対値は 65,
 `FrameMetadata` の必須項目は次のとおり。
 
 - `schema_version` / `snapshot_schema_version` / `project_schema_version`、`snapshot_content_hash`、元の `revision`（10進文字列）、選択 `target`。互換フィールド `composition` は Sequence の場合、lower した実行用 root の ID。
-- `semantic_versions`（document / interpolation / time_map / layout / vector / color / coverage / stroke_geometry / gradient_interpolation、effects / generators の version map、video_input）、`font_locks`（family / PostScript 名 / hash / face index）。
+- `semantic_versions`（document / visibility / expression / interpolation / time_map / layout / advanced_text / bounds / vector / path_operations / document_matte / color / coverage / stroke_geometry / gradient_interpolation、effects / generatorsのversion map、video_input / temporal / composition_media / hdr）、`font_locks`（family / PostScript 名 / hash / face index）。
 - 正規化有理数 `time`（num / den は10進文字列）、連番時の `frame_index`（10進文字列）と `sequence_number`。任意時刻の still では後二項目は null。
 - `design_extent`、`region`（origin / extent / pixels）、2×3 の `design_to_pixel`、`working_space`、`flatten_tolerance_px`。
 - `numeric` / `display` の各 `ImageFormat`（color_space、transfer_function、alpha、association_space、pixel_format、channel_order、row_order、byte_order、clipping）。
@@ -380,6 +389,6 @@ GPU lowering は compiler が末尾に付加した synthetic output root（直�
 
 GPU-003 の保証は macOS Metal の H.264 / HEVC `hvc1` MOV、BT.709 limited-range 8-bit 4:2:0 を BGRA8 / NV12 に取り込む具体経路に限る。Windows / Linux の resident decode は未実装（GPU-004 / GPU-005、M6）。macOS の追加 container / pixel format、10-bit / P010 / HDR resident は未対応（GPU-006、M6）。COLOR-001 の software 高精度 HDR 対応を resident HDR 対応と読み替えない。
 
-`kronello-framebridge::PathKind::VideoToolbox` は generic な spike selector で、現在も typed `UnsupportedFeature` を返す。具体的な `VideoToolboxDecodeBgra8` / `VideoToolboxDecodeNv12Biplanar` の probe と `resident::decode_file`、共有 service の strict resident backend は別の API である。generic selector の整理は FRAMEBRIDGE-001（M5）で追跡する。
+`kronello-framebridge::PathKind::VideoToolbox` は generic な spike selector で、現在も typed `UnsupportedFeature` を返す。具体的な `VideoToolboxDecodeBgra8` / `VideoToolboxDecodeNv12Biplanar` の probe と `resident::decode_file`、共有 service の strict resident backend は別の API である。FRAMEBRIDGE-001ではgenericを互換用の拒否selectorに限定し、具体8経路の一覧から除外した。BGRA8明示probeがNV12へfallbackしないことも実機で確認した（[ADR-0098](../adr/0098-explicit-framebridge-path-inventory.md)、[検証記録](../testing/framebridge-001.md)）。最終統合検証とタスク受け入れは別に管理する。
 
-`render.explain` の旧二重実行見積もりと実行countersの不整合は INSPECT-002（M5 / P1）で追跡する。受け入れ済みの単一graph実行を元に戻す修正ではない。
+INSPECT-002 は旧二重実行見積もりを単一 graph と status 一回に整合し、固定 snapshot の rational shutter sample / tile を計画する。cold execution / raster persistence なしの見積もりと actual request counters、native decode / control upload の未知範囲を区別する。共有 Query は GPU / raster を実行せず、strict resident + temporal は実 renderer と同じ未対応を返す。[ADR-0097](../adr/0097-read-only-single-graph-render-plans.md) と [検証記録](../testing/inspect-002.md) の確認範囲を参照する。

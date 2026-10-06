@@ -51,6 +51,7 @@ fn fixture() -> (Project, SchemaRegistry) {
         }],
         direction: TextDirection::Horizontal,
         ruby: vec![],
+        character_animations: vec![],
         wrap_width: properties[2].id(),
         line_height: properties[3].id(),
         alignment: properties[4].id(),
@@ -286,4 +287,67 @@ fn text_descriptors_use_design_px_positive_ranges_and_hold_alignment() {
         descriptor.definition().interpolation_modes,
         std::collections::BTreeSet::from([InterpolationMode::Hold])
     );
+}
+
+#[test]
+fn text002_selector_captures_source_and_rejects_stale_same_length_edits() {
+    let (mut project, registry) = fixture();
+    let offset = Property::new(
+        PropertyId::new(),
+        DescriptorRef::new(
+            registry
+                .lookup(&SchemaKey::new("kronello.text.character_offset").unwrap())
+                .unwrap(),
+        ),
+        PropertySource::Constant(Value::Vec2([f(2.0), f(0.0)])),
+        vec![],
+        &registry,
+    )
+    .unwrap();
+    let opacity = Property::new(
+        PropertyId::new(),
+        DescriptorRef::new(
+            registry
+                .lookup(&SchemaKey::new("kronello.text.character_opacity").unwrap())
+                .unwrap(),
+        ),
+        PropertySource::Constant(Value::Scalar(f(0.0))),
+        vec![],
+        &registry,
+    )
+    .unwrap();
+    text_mut(&mut project).layout_version = 2;
+    text_mut(&mut project).character_animations = vec![CharacterAnimation {
+        source: TextRange { start: 0, end: 6 },
+        expected_text: "か\u{3099}".into(),
+        offset: offset.id(),
+        opacity: opacity.id(),
+    }];
+    let DocumentObject::Known(composition) = &mut project.compositions[0] else {
+        panic!()
+    };
+    composition.nodes[0].properties.extend([offset, opacity]);
+    validate_text_contents(&project, &registry).unwrap();
+    assert_eq!(
+        text(&project)
+            .resolve(&values(&project))
+            .unwrap()
+            .character_animations[0]
+            .opacity,
+        f(0.0)
+    );
+    let encoded = serde_json::to_vec(&project).unwrap();
+    let restored: Project = serde_json::from_slice(&encoded).unwrap();
+    assert_eq!(text(&restored), text(&project));
+    text_mut(&mut project)
+        .text
+        .replace_range(0..6, "き\u{3099}");
+    assert!(matches!(
+        validate_text_contents(&project, &registry),
+        Err(TextError::InvalidCharacterAnimation)
+    ));
+    assert!(matches!(
+        text(&project).resolve(&values(&project)),
+        Err(TextError::InvalidCharacterAnimation)
+    ));
 }

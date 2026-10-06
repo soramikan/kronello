@@ -1,5 +1,11 @@
 # TEMPLATE-002 検証記録
 
+現在の状態（2026-10-06）: TEMPLATE-002はM3の受け入れ範囲で`done`。最終統合・実機検証と保証外の範囲は [M3統合受け入れ](m3-acceptance.md) と本書の後続記録を参照する。以下の初回worker記録にある「未コミット」「pending host run」は、その記録時点の状態であり、現在の未完了判定ではない。
+
+MediaSlotの実視覚メディア接続はM4の [COMP-002](comp-002.md) を参照する。
+
+## 初回実装とその後の検証履歴
+
 ## 実装範囲
 
 worktree `m3-template2`、基点 `dd7a24f55f2d67129fde86ce09c42d0906c27373`。

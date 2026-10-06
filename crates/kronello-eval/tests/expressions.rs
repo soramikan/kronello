@@ -597,3 +597,362 @@ fn arithmetic_builtins_and_explicit_constructors_have_typed_results() {
         );
     }
 }
+
+#[test]
+fn immutable_audio_feature_expression_uses_mapped_rational_time() {
+    let id = AssetId::new();
+    let data = AudioAnalysisDataAsset {
+        id,
+        source: AudioAnalysisSource::Asset {
+            asset: AssetId::new(),
+            stream_index: 0,
+            content_hash: "a".repeat(64),
+        },
+        config: AudioAnalysisConfig {
+            version: 1,
+            sample_rate: 48000,
+            window: 32,
+            hop: 32,
+            bands: vec![],
+            time_map: TimeMap::linear(Time::ZERO, kronello_time::Rational::ONE).unwrap(),
+        },
+        start_sample: 0,
+        sample_count: 64,
+        frames: vec![
+            AudioAnalysisFrame {
+                time: Time::ZERO,
+                rms: 0.25,
+                band_energy: vec![],
+                onset: 0.25,
+                beat: true,
+            },
+            AudioAnalysisFrame {
+                time: Time::new(32, 48000).unwrap(),
+                rms: 0.75,
+                band_energy: vec![],
+                onset: 0.5,
+                beat: false,
+            },
+        ],
+    };
+    let mut e = expr(vec![ExpressionNode::AudioFeature {
+        asset: id,
+        feature: AudioFeature::Rms,
+        offset: Time::ZERO,
+    }]);
+    assert!(e.validate().is_err());
+    e.version = 2;
+    e.validate().unwrap();
+    assert!(
+        e.dependencies()
+            .contains(&ExpressionDependency::AudioAnalysis(id))
+    );
+    let (c, key) = fixture(&e);
+    let cs = [c];
+    let es = [e];
+    let ds = [data];
+    let registry = SchemaRegistry::with_builtin();
+    let refs = BTreeMap::new();
+    let deps = BTreeMap::new();
+    let g = DependencyGraph::compile_with_audio(
+        EvaluationSnapshot {
+            compositions: &cs,
+            expressions: &es,
+            curves: &[],
+            registry: &registry,
+            reference_bindings: &refs,
+            dependencies: &deps,
+            working_space: ColorSpace::LinearRec709,
+        },
+        cs[0].id,
+        &ds,
+    )
+    .unwrap();
+    for (time, want) in [
+        (Time::new(32, 48000).unwrap(), 0.75),
+        (Time::ZERO, 0.25),
+        (Time::new(32, 48000).unwrap(), 0.75),
+    ] {
+        assert_eq!(g.evaluate_property(&key, time).unwrap(), scalar(want));
+    }
+    assert!(
+        g.evaluate_property(&key, Time::new(64, 48000).unwrap())
+            .is_err()
+    );
+}
+
+#[test]
+fn v3_dynamic_past_property_is_rational_pure_static_and_bounded() {
+    let source = expr(vec![ExpressionNode::Time]);
+    let (mut c, _) = fixture(&source);
+    let source_node = c.nodes[0].id;
+    let source_property = c.nodes[0].properties[0].id();
+    let mut past = expr(vec![
+        ExpressionNode::Time,
+        ExpressionNode::Literal(scalar(0.5)),
+        ExpressionNode::Multiply { left: 0, right: 1 },
+        ExpressionNode::PropertySample {
+            node: Some(source_node),
+            property: source_property,
+            value_type: ValueType::Scalar,
+            lookback: 2,
+        },
+    ]);
+    past.version = 3;
+    let (mut consumer, _) = fixture(&past);
+    consumer.nodes[0].id = NodeId::new();
+    consumer.nodes[0].properties[0] = Property::new(
+        PropertyId::new(),
+        consumer.nodes[0].properties[0].descriptor().clone(),
+        PropertySource::Expression(past.id),
+        vec![],
+        &SchemaRegistry::with_builtin(),
+    )
+    .unwrap();
+    let key: RuntimePropertyKey = PropertyKey {
+        instance_path: InstancePath::root(),
+        node: consumer.nodes[0].id,
+        property: consumer.nodes[0].properties[0].id(),
+    }
+    .into();
+    c.root_nodes.push(consumer.nodes[0].id);
+    c.nodes.push(consumer.nodes.remove(0));
+    let registry = SchemaRegistry::with_builtin();
+    let cs = [c.clone()];
+    let es = [source.clone(), past.clone()];
+    let g = graph(&cs, &es, &[], &registry).unwrap();
+    for n in [4, 1, 3, 0, 2, 4, 8] {
+        assert_eq!(
+            g.evaluate_property(&key, Time::new(n, 4).unwrap()).unwrap(),
+            scalar(n as f64 / 8.0)
+        );
+    }
+    for (n, expected_ns) in [(1, 0), (2, 1), (3, 1)] {
+        assert_eq!(
+            g.evaluate_property(&key, Time::new(n, 1_000_000_000).unwrap())
+                .unwrap(),
+            scalar(expected_ns as f64 / 1_000_000_000.0)
+        );
+    }
+    let mut future = past.clone();
+    future.nodes[0] = ExpressionNode::Literal(scalar(-1.0));
+    assert!(
+        graph(&cs, &[source.clone(), future], &[], &registry)
+            .unwrap()
+            .evaluate_property(&key, Time::ZERO)
+            .is_err()
+    );
+    assert!(g.dependencies(&key).unwrap().iter().any(|k| matches!(k,
+        RuntimePropertyKey::Node(k) if k.node == source_node)));
+    // Sampling a past value does not permit a temporal self-cycle.
+    let mut cycle = past.clone();
+    if let ExpressionNode::PropertySample { node, property, .. } = &mut cycle.nodes[3] {
+        *node = Some(c.nodes[1].id);
+        *property = c.nodes[1].properties[0].id();
+    }
+    assert!(matches!(
+        graph(&cs, &[source.clone(), cycle], &[], &registry),
+        Err(EvaluationError::DependencyCycle { .. })
+    ));
+    // Root lookback then normal target mapping, rather than subtracting local times.
+    let mut root = c.clone();
+    root.id = CompositionId::new();
+    root.nodes.clear();
+    root.root_nodes.clear();
+    let instance_id = CompositionInstanceId::new();
+    let mut placement = c.nodes[0].clone();
+    placement.id = NodeId::new();
+    placement.properties.clear();
+    placement.kind = NodeKind::CompositionInstance(CompositionInstance {
+        id: instance_id,
+        definition_ref: c.id,
+        input_bindings: BTreeMap::new(),
+        local_time_map: TimeMap::linear(Time::ZERO, kronello_time::Rational::new(1, 2).unwrap())
+            .unwrap(),
+        seed: 0,
+    });
+    root.root_nodes.push(placement.id);
+    root.nodes.push(placement);
+    let RuntimePropertyKey::Node(mut mapped_key) = key.clone() else {
+        panic!()
+    };
+    mapped_key.instance_path = InstancePath::root().child(instance_id);
+    let mapped_cs = [root, c.clone()];
+    assert_eq!(
+        graph(&mapped_cs, &es, &[], &registry)
+            .unwrap()
+            .evaluate_property(&mapped_key.into(), Time::from_integer(1))
+            .unwrap(),
+        scalar(0.375)
+    );
+    // The outer sample ceiling includes inner static Property reads as actual work.
+    let input = Property::new(
+        PropertyId::new(),
+        c.nodes[0].properties[0].descriptor().clone(),
+        PropertySource::Constant(scalar(0.25)),
+        vec![],
+        &registry,
+    )
+    .unwrap();
+    let mut nested_source = source.clone();
+    nested_source.nodes = vec![ExpressionNode::Property {
+        node: None,
+        property: input.id(),
+        value_type: ValueType::Scalar,
+    }];
+    let mut nested_c = c.clone();
+    nested_c.properties.push(input);
+    let mut sample_limited = past.clone();
+    sample_limited.budget.samples = 1;
+    assert!(matches!(
+        graph(
+            &[nested_c],
+            &[nested_source, sample_limited],
+            &[],
+            &registry
+        )
+        .unwrap()
+        .evaluate_property(&key, Time::new(1, 2).unwrap()),
+        Err(EvaluationError::Expression {
+            source: ExpressionError::Budget("samples"),
+            ..
+        })
+    ));
+    let mut bounded = past.clone();
+    bounded.budget.samples = 1; // Nested source has no samples; this succeeds.
+    graph(&cs, &[source.clone(), bounded.clone()], &[], &registry)
+        .unwrap()
+        .evaluate_property(&key, Time::new(1, 2).unwrap())
+        .unwrap();
+    let mut memory_limited = bounded.clone();
+    memory_limited.budget.memory_bytes = 512;
+    memory_limited.validate().unwrap();
+    assert!(matches!(
+        graph(&cs, &[source.clone(), memory_limited], &[], &registry)
+            .unwrap()
+            .evaluate_property(&key, Time::new(1, 2).unwrap()),
+        Err(EvaluationError::Expression {
+            source: ExpressionError::Budget("memory_bytes"),
+            ..
+        })
+    ));
+    bounded.budget.instructions = 5; // Includes actual nested property/expression work.
+    assert!(
+        graph(&cs, &[source.clone(), bounded], &[], &registry)
+            .unwrap()
+            .evaluate_property(&key, Time::new(1, 2).unwrap())
+            .is_err()
+    );
+    for version in [1, 2] {
+        let mut legacy = past.clone();
+        legacy.version = version;
+        assert!(legacy.validate().is_err());
+    }
+}
+
+#[test]
+fn v3_continuous_noise_is_smooth_reproducible_and_bounded() {
+    let mut e = expr(vec![
+        ExpressionNode::Time,
+        ExpressionNode::ContinuousNoise {
+            seed: 19,
+            element: 7,
+            input: 0,
+        },
+        ExpressionNode::Literal(scalar(0.5)),
+        ExpressionNode::Multiply { left: 1, right: 2 },
+        ExpressionNode::Literal(scalar(0.5)),
+        ExpressionNode::Add { left: 3, right: 4 },
+    ]);
+    e.version = 3;
+    let (c, key) = fixture(&e);
+    let cs = [c];
+    let es = [e.clone()];
+    let registry = SchemaRegistry::with_builtin();
+    let g = graph(&cs, &es, &[], &registry).unwrap();
+    let value = |t| match g.evaluate_property(&key, t).unwrap() {
+        Value::Scalar(v) => v.get(),
+        _ => panic!(),
+    };
+    let center = value(Time::new(1, 1).unwrap());
+    for t in [
+        Time::new(999999, 1000000).unwrap(),
+        Time::new(1000001, 1000000).unwrap(),
+    ] {
+        assert!((value(t) - center).abs() < 1e-12);
+    }
+    let a = value(Time::new(1, 4).unwrap());
+    assert!((a - value(Time::new(1, 3).unwrap())).abs() > 1e-8);
+    assert_eq!(a, value(Time::new(1, 4).unwrap()));
+    assert!(
+        g.evaluate_property(&key, Time::new(1_000_000_001, 1).unwrap())
+            .is_err()
+    );
+    e.version = 2;
+    assert!(e.validate().is_err());
+}
+
+#[test]
+fn v3_data_asset_cells_are_typed_hashed_static_and_bounded() {
+    let data = ExpressionDataAsset::new(
+        AssetId::new(),
+        DataTable {
+            columns: [("v".into(), ValueType::Scalar)].into(),
+            rows: vec![
+                [("v".into(), scalar(0.2))].into(),
+                [("v".into(), scalar(0.7))].into(),
+            ],
+        },
+    )
+    .unwrap();
+    let mut e = expr(vec![
+        ExpressionNode::Time,
+        ExpressionNode::DataAssetCell {
+            asset: data.id,
+            column: "v".into(),
+            row: 0,
+            value_type: ValueType::Scalar,
+        },
+    ]);
+    e.version = 3;
+    let (c, key) = fixture(&e);
+    let cs = [c];
+    let es = [e.clone()];
+    let ds = [data.clone()];
+    let registry = SchemaRegistry::with_builtin();
+    let refs = BTreeMap::new();
+    let deps = BTreeMap::new();
+    let snapshot = || EvaluationSnapshot {
+        compositions: &cs,
+        expressions: &es,
+        curves: &[],
+        registry: &registry,
+        reference_bindings: &refs,
+        dependencies: &deps,
+        working_space: ColorSpace::LinearRec709,
+    };
+    let g = DependencyGraph::compile_with_data(snapshot(), cs[0].id, &[], &ds).unwrap();
+    for n in [1, 0, 1] {
+        assert_eq!(
+            g.evaluate_property(&key, Time::from_integer(n)).unwrap(),
+            scalar(if n == 0 { 0.2 } else { 0.7 })
+        );
+    }
+    for at in [
+        Time::new(1, 2).unwrap(),
+        Time::from_integer(-1),
+        Time::from_integer(2),
+    ] {
+        assert!(g.evaluate_property(&key, at).is_err());
+    }
+    assert!(
+        e.dependencies()
+            .contains(&ExpressionDependency::DataAsset(data.id))
+    );
+    assert!(DependencyGraph::compile_with_data(snapshot(), cs[0].id, &[], &[]).is_err());
+    let mut changed = data;
+    changed.table.rows[0].insert("v".into(), scalar(0.9));
+    assert!(DependencyGraph::compile_with_data(snapshot(), cs[0].id, &[], &[changed]).is_err());
+    e.version = 2;
+    assert!(e.validate().is_err());
+}

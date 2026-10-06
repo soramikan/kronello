@@ -104,7 +104,7 @@ public struct TemplateInspectionNode: Identifiable {
                   key == [model.revision, (model.ui.composition ?? "") + "/" + (model.ui.selection ?? ""), model.ui.time.num, model.ui.time.den].joined(separator: "/") else { return }
             let revision = model.revision, document = model.document
             let result = try await model.request("scene.query", ["composition": model.ui.composition ?? "", "expand_instances": true,
-                "evaluation": ["time": model.ui.time.wire, "fonts": model.fonts]])
+                "evaluation": ["time": model.ui.time.wire, "fonts": model.snapshotFonts]])
             try Task.checkCancellation()
             guard generation == issued, !model.playing,
                   key == [model.revision, (model.ui.composition ?? "") + "/" + (model.ui.selection ?? ""), model.ui.time.num, model.ui.time.den].joined(separator: "/") else { return }

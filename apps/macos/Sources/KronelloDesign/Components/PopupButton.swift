@@ -21,19 +21,21 @@ public struct KRPopupButton: View {
     private let options: [KRPopupOption]
     private let label: String
     private let appearance: KRControlAppearance
+    private let onEditingStart: () -> Void
     private let onSelect: (String) -> Void
     @StateObject private var presenter = KRMenuPresenter()
     @State private var anchor: CGRect = .zero
     @State private var hover = false
     @FocusState private var focused: Bool
     public init(_ label: String, options: [KRPopupOption], selection: Binding<String>, appearance: KRControlAppearance = .resting,
-                onSelect: @escaping (String) -> Void = { _ in }) {
-        self.label = label; self.options = options; _selection = selection; self.appearance = appearance; self.onSelect = onSelect
+                onEditingStart: @escaping () -> Void = {}, onSelect: @escaping (String) -> Void = { _ in }) {
+        self.label = label; self.options = options; _selection = selection; self.appearance = appearance; self.onEditingStart = onEditingStart; self.onSelect = onSelect
     }
     public var body: some View {
         Button {
             if presenter.isPresented { presenter.dismiss(); return }
             guard let window = NSApp.keyWindow ?? NSApp.mainWindow else { return }
+            onEditingStart()
             let items = options.map { option in
                 KRMenuItem(option.id, option.label, icon: option.icon, checked: option.id == selection, disabled: option.disabled) {
                     selection = option.id; onSelect(option.id)

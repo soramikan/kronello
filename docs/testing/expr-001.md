@@ -1,5 +1,9 @@
 # EXPR-001 の検証
 
+現在の状態（2026-10-06）: EXPR-001はM3の受け入れ範囲で`done`。最終統合・実機検証と保証外の範囲は [M3統合受け入れ](m3-acceptance.md) と本書の後続記録を参照する。以下の初回worker記録にある「未コミット」「pending host run」は、その記録時点の状態であり、現在の未完了判定ではない。
+
+## 初回実装とその後の検証履歴
+
 対象: `.worktrees/m3-expr`、branch `m3-expr`、基点 `ecf99f2ce4d75bff77e93b2aa1abac32bb7cf167` からの未コミット変更。2026-10-04、macOS / arm64、Rust 1.95.0、worker sandbox。Cargo は注入された共有 CARGO_HOME / CARGO_TARGET_DIR と `CARGO_BUILD_JOBS=3` を使う。GPU / hardware codec を利用できる環境としては扱わない。
 
 ## 受け入れ条件と証拠

@@ -11,24 +11,10 @@
 
 名称は Kronello に決定した（[ADR-0042](adr/0042-naming-kronello.md)、経緯は [naming.md](naming.md)）。残っているのは次の 2 点。
 
-- 商標データベース（J-PlatPat、USPTO、EUIPO）の照会。これまでの調査では一度も照会していない。
-- crates.io の `kronello` と主要な `kronello-*`、ドメイン（調査時点で `kronello.com` は未登録）の確保。いずれも先着順。
+- 商標データベース（J-PlatPat、USPTO、EUIPO）の照会。2026-10-06にJ-PlatPat・USPTO・EUIPOの指定条件による限定検索を記録した。類似名の網羅調査や所有者の採用判断は未完了（[調査記録](testing/name-001.md)）。
+- crates.io の `kronello` と主要な `kronello-*`、ドメインの確保。2026-10-06に公式APIで21 crate名とkronello.comの登録レコードを照会したが、確保・購入は実施していない。照会結果は所有権や取得時の空き状況を保証しない。
 
-決定時期: 公開前としていたが、2026-10-06 時点でリポジトリは public であり、この判断時期は経過した。商標照会・名前の確保を実施済みとは扱わず、未決のまま [NAME-001](backlog/backlog.json)（planned）で確認と採用判断を行う。新しい期限や取得の承認をここでは決めない。
-
-### OQ-17 式言語の構文
-
-方針は決定した（[ADR-0040](adr/0040-expression-language-policy.md)）: 正本は AST、人間向けには中置演算と関数呼び出しだけの式言語、JavaScript 互換にしない。構文の詳細（演算子、リテラル、Property 参照の書き方、エラー表示）は未定。
-決定時期: EXPR-001 の後、M3 としていたが、M3 の受け入れ完了後も構文の詳細は未決である。AST の評価実装を GUI の式入力・parser の実装済み根拠にしない。[EXPR-002](backlog/backlog.json)（planned）は構文の採用判断を前提とする後続タスクであり、新しい期限や構文をここでは決めない。
-
-### OQ-21 圧縮音声 AAC と配信向け音声の採用
-
-MEDIA-002 では AV1 / H.264 / HEVC の MOV profile の音声を ALAC に限り、AAC は `UNSUPPORTED_FEATURE` とした（[ADR-0068](adr/0068-versioned-delivery-movie-profiles.md)）。残っているのは次の点。
-
-- AAC-LC を採用するかどうか。配布と特許の確認、FFmpeg 内蔵 AAC encoder の品質評価、priming / padding と終端 sample の扱いの実測が済んでいない。
-- Web 配信向けの AV1 の音声（MP4 / WebM の Opus）。LGPL 構成の FFmpeg に libopus を追加する必要がある。
-
-決定時期: Web 配信向けの圧縮音声出力を保証する前。[AUDIO-005](backlog/backlog.json)（planned）は採用判断を前提とする後続タスクであり、M4 の完了だけを AAC / Opus の採用・配信互換の保証としない。新しい期限や codec の採用はここでは決めない。
+決定時期: 公開前としていたが、2026-10-06 時点でリポジトリは public であり、この判断時期は経過した。上記の限定検索・登録照会は実施済みだが、網羅的な確認・名前の確保・所有者の採用判断は未完了である。未決のまま [NAME-001](backlog/backlog.json)（in_progress）で追跡する。新しい期限や取得の承認をここでは決めない。
 
 ## タスク内で設計する事項
 
@@ -62,8 +48,10 @@ MEDIA-002 では AV1 / H.264 / HEVC の MOV profile の音声を ALAC に限り�
 | OQ-15 Rust の版と CI | [ADR-0038](adr/0038-toolchain-and-ci.md) |
 | OQ-16 テスト素材とフォントのライセンス | [ADR-0039](adr/0039-test-fixtures.md) |
 | OQ-18 HDR の基準白・表示変換・色域マッピング | [ADR-0037](adr/0037-hdr-policy.md) |
+| OQ-17 式言語の構文 | [ADR-0105](adr/0105-human-readable-expression-syntax.md) |
 | OQ-19 イベントと逆操作情報の保持期間 | [ADR-0030](adr/0030-history-retention.md) |
 | OQ-20 ジョブ記録の保持期間 | [ADR-0034](adr/0034-job-retention.md) |
+| OQ-21 圧縮音声 AAC と配信向け音声の採用 | [ADR-0106](adr/0106-versioned-compressed-delivery-audio.md) |
 | テスト素材の同梱サイズの閾値と大きい素材の取得元（QA-001 で設計） | [fixture と解析的 golden scene](testing/fixtures.md) |
 | OQ-02 のうち名称の衝突 | [ADR-0042](adr/0042-naming-kronello.md) |
 | 保存場所の判定・上書き手段（STORE-001） | [ADR-0046](adr/0046-store-format-and-location-policy.md) |

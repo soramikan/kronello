@@ -68,7 +68,7 @@ import KronelloDesign
         guard !product.overflow else { return ["num":"invalid","den":"1"] }
         return RationalTime(num: product.partialValue, den: max(1, fpsNum)).wire }
     public var input: [String: Any] { ["project": editor.path, "target": ["kind": selectedTarget.string("kind"), selectedTarget.string("kind"): targetValue.string("id")],
-        "region": ["origin": [0,0], "extent": extent, "pixels": extent.map { Int(min(16_777_216,max(1, $0.rounded()))) }], "fonts": editor.fonts] }
+        "region": ["origin": [0,0], "extent": extent, "pixels": extent.map { Int(min(16_777_216,max(1, $0.rounded()))) }], "fonts": editor.snapshotFonts] }
     public var output: [String: Any] {
         if format == "image_sequence" { return ["format": format] }
         var result: [String: Any] = ["format": format, "profile_version": Int(version) ?? 0, "audio": audio, "clips": [[String: Any]](), "background": background == "white" ? [1,1,1] : [0,0,0]]

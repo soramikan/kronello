@@ -22,7 +22,7 @@ Trim path、線端のアニメーション、Path boolean、morph は段階実�
 `kronello-model` の `Shape` / `ShapeGeometry` / `Fill` / `Stroke` を `Project.shapes` に保存し、`NodeKind::Shape.content_ref` の `ContentId` で参照する。矩形（共通の角丸半径）、楕円、複数 subpath の Move / Line / Quad / Cubic / Close を保持する。矩形・楕円はローカル原点 `(0, 0)` から size の矩形内に収める。角丸半径は非負値を正本に保持し、導出時だけ短辺の半分を上限にする。
 
 - size・corner_radius・Path・fill/stroke の Color・stroke_width・join・cap・miter_limit は描画ノードの既存 `Property` を `PropertyId` で参照する。`shape_descriptors()` を `SchemaRegistry::with_builtin()` に追加登録する。fill は `kronello.fill_color`、幅は `kronello.stroke_width`、独立した線色は `kronello.shape.stroke_color` を用いる。join / cap と Path の現段階の補間は Hold のみ。miter_limit は無次元で 1 以上、size・半径・幅は非負の `design_px`。
-- fill は単色と Nonzero / Evenodd を保持する。色は既存 `Color` のタグ付き straight RGB と独立 alpha を再利用する。M1のVEC-001当初はグラデーション、ClipPath、破線、stroke tessellation、Path morphを含めなかった。現行のfill/stroke・ClipPathは後続節とVEC-003〜005の検証記録を参照し、Trim Path / morph / SVGはVEC-002の未実装範囲とする。
+- fill は単色と Nonzero / Evenodd を保持する。色は既存 `Color` のタグ付き straight RGB と独立 alpha を再利用する。M1のVEC-001当初はグラデーション、ClipPath、破線、stroke tessellation、Path morphを含めなかった。現行のfill/stroke・ClipPathは後続節とVEC-003〜005の検証記録を参照し、Trim Path / morph / SVGはVEC-002で実装中。受け入れ未完了の範囲は[検証記録](../testing/vec-002.md)を参照する。
 - `validate_shape_contents` で参照先・ノード内 Property の型・単位・ローカル座標を照合する。`Shape::resolve` には任意時刻・instance の評価後の値を渡し、負寸法・半径・幅、不正な enum、miter_limit、不正 Path 順序を型付きエラーにする。非有限値は既存 `FiniteF64` が拒否する。Property descriptor の範囲は Modifier 適用後に評価層でも検証する。
 - `Project.shapes` は省略可能な追加フィールドとし、空集合は出力しない。旧 schema_version 1 の Shape を持たない文書は同じ値で往復する。未知フィールド・形状 variant は既存 `DocumentObject::Opaque` に保持し、編集・実行可能とは扱わない。公開 JSON Schema は共通 Rust 型から再生成する。
 - 純粋な `kronello-vector::flatten` は kurbo 0.13.1（MIT OR Apache-2.0）で評価値からローカル `design_px` の polyline を導出する。`FlattenRequest` の出力 scale と画素 tolerance は保存しない。高 scale では設計単位の tolerance を小さくする。kurbo の近似 tolerance は厳密な誤差保証ではない。極端な座標・精度・命令数は保守的な計算予算エラーで拒否する。アスペクト比変更は自動で再レイアウトしない。
@@ -34,10 +34,10 @@ M1 の VEC-003 と M3 の VEC-004 / VEC-005 の範囲、後続タスクの境界
 | 項目 | M1（VEC-003） | M3（VEC-004 / VEC-005）/ 後続 |
 |---|---|---|
 | 線の join / cap | miter（miter limit 既定 4）/ bevel / round、butt / square / round | — |
-| 破線 | なし | 明示 options の dash 配列・offset Property（VEC-005、Metal 検証待ち） |
+| 破線 | なし | 明示 options の dash 配列・offset Property（VEC-005、Metal検証済み） |
 | 線の位置 | 中央のみ | center / inside / outside、closed contour の fill-rule clip（VEC-005） |
 | 非一様 scale / skew 下の線幅 | `UNSUPPORTED_FEATURE` | version 2 はローカル線を affine で写す（VEC-005） |
-| グラデーションの種類 | 線形、放射（中心と半径） | 焦点付き放射（焦点位置・焦点半径）、円錐 / sweep（VEC-004、Metal 検証待ち） |
+| グラデーションの種類 | 線形、放射（中心と半径） | 焦点付き放射（焦点位置・焦点半径）、円錐 / sweep（VEC-004、Metal検証済み） |
 | 範囲外の扱い（spread） | pad のみ | repeat / reflect（VEC-004） |
 | 色の補間空間 | 作業用線形空間の premultiplied に固定 | グラデーションごとの明示指定（sRGB・straight 等）と補間空間の意味の版（VEC-004） |
 | 座標系 | 図形のローカル `design_px` | bounding box 基準の座標、gradient transform（VEC-004） |
@@ -88,7 +88,7 @@ zero dash は butt 無被覆 / round 円 / square 局所軸の正方形。非空
 inside / outside は幅 2w の中央線と fill-rule interior / 補集合の交差。
 開 contour は `STROKE_OPEN_ALIGNMENT`。layout envelope は維持し、ink / visual と pixel ROI に affine support を反映する。
 共通 `ShapeSet` / Property / Curve 編集、snapshot の対応版、raster cache と golden manifest に入力を記録する。
-[VEC-005 検証](../testing/vec-005.md) に CPU 証拠と pending host run を分けて記録する。
+[VEC-005 検証](../testing/vec-005.md) に 初回CPU証拠と後続のMetal / golden受け入れを分けて記録する。
 
 ### 設計寸法と出力解像度
 
@@ -130,7 +130,7 @@ TEXT-001 の横書きは下記の決定的な構成で実装した。Parley / Fo
 - `.notdef` が出た cluster は元の文字列・range・FontRef を列挙する `MissingGlyphs`。IVS / variation selector は cmap の対応も必須とし、shaper に selector が黙って捨てられる場合も拒否する。固定 Noto fixture の ZWJ emoji は欠落エラー、IVS は指定字形を選ぶ。bitmap / SVG / color glyph 表現は `UnsupportedGlyphOutline`。縦書き・ルビ・可変フォント軸・RTL / bidi・tab / control は型付き未対応とし、通常の横書きへ置換しない。
 - 意味版は `TextDocument.layout_version`、`TEXT_LAYOUT_VERSION` / `kronello-text::LAYOUT_VERSION` とも **1**。shaping・Unicode 分割・禁則・metrics・配置規約を変えると版を上げる。RenderSnapshot との対応付けは RENDER-001 の compile 境界で行う。関数は text IR の最終値・明示 bytes だけで結果を生成し、出力解像度・OS・呼出履歴を入力にしない。永続 cache は CACHE-001。本文 65,536 byte、style 4,096、glyph 131,072、導出 outline 合計 1,048,576 segment の保守的上限と非有限 geometry 検査を設ける。
 
-受け入れ条件と再現手順は [TEXT-001 の検証](../testing/text-001.md) に記録する。ルビ・縦書きの実行、単語辞書、高度な selector は TEXT-002 の未実装範囲として残す。
+受け入れ条件と再現手順は [TEXT-001 の検証](../testing/text-001.md) に記録する。版1ではルビ・縦書き・文字selectorを実行しない。M5のTEXT-002では下記の意味版2を実装し、作業ツリーで受け入れ済みである（[検証記録](../testing/text-002.md)）。単語辞書をこの実装の対応範囲に含めない。
 
 ## レイアウトと描画の分離
 
@@ -203,3 +203,9 @@ layout / ink は text の bounds を共通親空間へ写し、visual は Compos
 検証範囲と host の残件は [LAYOUT-001 検証](../testing/layout-001.md) を参照。
 
 帯の対象 text は leaf node に限る。子の合成結果を組版時の字形 bounds へ混ぜず、子を持つ対象は `UNSUPPORTED_FEATURE` で拒否する。帯の対象でない text の子は通常の scene 合成と bounds 集約で扱う。
+
+### TEXT-002 の組版意味版 2
+
+[ADR-0095](../adr/0095-logical-text-selectors-and-vertical-ruby.md) により、意味版 1 の横書きを維持し、版 2 で vertical_rl とルビ・文字演出を実行する。縦組みは OpenType の縦字形、右から左の列、日本語の正立と Latin outline の時計回り回転を使う。wrap_width は列の高さ、line_height は列間隔とする。
+
+`TextDocument.character_animations` は source range / expected_text / offset Property / opacity Property を持つ。書記素境界と元本文一致を検証し、安全な shaping unit 全体に投影する。ruby 親の範囲は soft break と animation unit の分割を禁止し、親の半分サイズで配置した ruby も親と同じ演出を受ける。本文編集後の古い selector は本文一致検査で拒否し、glyph index を持ち越さない。演出値は通常の instance / time Property 評価から解決し、組版 cache の後に適用する。範囲・再組版・実レンダーの証拠は [TEXT-002](../testing/text-002.md) を参照する。

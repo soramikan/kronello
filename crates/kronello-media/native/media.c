@@ -619,8 +619,17 @@ int km_audio_next(AudioDecoder *a) {
 typedef struct AudioEncoder {
     Km *k; AVFormatContext *format; AVCodecContext *codec;
     AVFrame *frame; AVPacket *packet; AVStream *stream;
-    int block, alac, partial; int64_t count;
+    int block, kind, partial; int64_t count;
 } AudioEncoder;
+/* Closed delivery audio kinds: PCM24 MOV, ALAC MP4, AAC-LC MP4, Opus WebM. */
+static const struct {
+    const char *encoder,*container;enum AVSampleFormat fmt;int64_t bitrate;
+} AUDIO_KINDS[4]={
+    {"pcm_s24le","mov",AV_SAMPLE_FMT_S32,0},
+    {"alac","mp4",AV_SAMPLE_FMT_S32P,0},
+    {"aac","mp4",AV_SAMPLE_FMT_FLTP,192000},
+    {"libopus","webm",AV_SAMPLE_FMT_FLT,128000},
+};
 void km_audio_encoder_close(AudioEncoder *e) {
     if(!e)return;
     Km *k=e->k;
@@ -628,37 +637,52 @@ void km_audio_encoder_close(AudioEncoder *e) {
     if(e->format){if(e->format->pb)k->avio_closep(&e->format->pb);k->avformat_free_context(e->format);}
     free(e);
 }
-AudioEncoder *km_audio_encoder_open(Km *k,const char *path,int alac) {
+AudioEncoder *km_audio_encoder_open(Km *k,const char *path,int kind) {
     AudioEncoder *e=calloc(1,sizeof(*e));
-    if(!e){fail(k,AVERROR(ENOMEM),"PCM allocation");return NULL;}
-    e->k=k;e->alac=alac;
-    const AVCodec *encoder=k->avcodec_find_encoder_by_name(alac?"alac":"pcm_s24le");
+    if(!e){fail(k,AVERROR(ENOMEM),"audio allocation");return NULL;}
+    if(kind<0 || kind>3){fail(k,AVERROR(EINVAL),"unknown audio kind");free(e);return NULL;}
+    e->k=k;e->kind=kind;
+    const AVCodec *encoder=k->avcodec_find_encoder_by_name(AUDIO_KINDS[kind].encoder);
     int ret=AVERROR_ENCODER_NOT_FOUND;
-    if(!encoder){fail(k,ret,"PCM24 encoder unavailable");goto failed;}
-    ret=k->avformat_alloc_output_context2(&e->format,NULL,alac?"mp4":"mov",path);
+    if(!encoder){fail(k,ret,"audio encoder unavailable");goto failed;}
+    ret=k->avformat_alloc_output_context2(&e->format,NULL,AUDIO_KINDS[kind].container,path);
     if(ret<0 || !e->format){fail(k,ret<0?ret:AVERROR(ENOMEM),"audio output context");goto failed;}
     e->codec=k->avcodec_alloc_context3(encoder);e->frame=k->av_frame_alloc();e->packet=k->av_packet_alloc();
     e->stream=k->avformat_new_stream(e->format,NULL);
-    if(!e->codec || !e->frame || !e->packet || !e->stream){fail(k,AVERROR(ENOMEM),"PCM allocation");goto failed;}
-    e->codec->sample_rate=48000;e->codec->sample_fmt=alac?AV_SAMPLE_FMT_S32P:AV_SAMPLE_FMT_S32;
-    e->codec->time_base=(AVRational){1,48000};if(alac)e->codec->bits_per_raw_sample=24;
+    if(!e->codec || !e->frame || !e->packet || !e->stream){fail(k,AVERROR(ENOMEM),"audio allocation");goto failed;}
+    e->codec->sample_rate=48000;e->codec->sample_fmt=AUDIO_KINDS[kind].fmt;
+    e->codec->time_base=(AVRational){1,48000};
+    if(kind==1)e->codec->bits_per_raw_sample=24;
+    if(AUDIO_KINDS[kind].bitrate)e->codec->bit_rate=AUDIO_KINDS[kind].bitrate;
     k->av_channel_layout_default(&e->codec->ch_layout,2);
     if(e->format->oformat->flags & AVFMT_GLOBALHEADER)e->codec->flags|=AV_CODEC_FLAG_GLOBAL_HEADER;
-    ret=k->avcodec_open2(e->codec,encoder,NULL);if(ret<0){fail(k,ret,"open PCM encoder");goto failed;}
-    if(alac && (e->codec->initial_padding!=0 || e->codec->frame_size<=0 ||
+    AVDictionary *codec_options=NULL;
+    if(kind==3) {
+        k->av_dict_set(&codec_options,"application","audio",0);
+        k->av_dict_set(&codec_options,"frame_duration","20",0);
+        k->av_dict_set(&codec_options,"vbr","on",0);
+    }
+    ret=k->avcodec_open2(e->codec,encoder,&codec_options);k->av_dict_free(&codec_options);
+    if(ret<0){fail(k,ret,"open audio encoder");goto failed;}
+    if(kind==1 && (e->codec->initial_padding!=0 || e->codec->frame_size<=0 ||
         !(encoder->capabilities & AV_CODEC_CAP_SMALL_LAST_FRAME))) {
         fail(k,AVERROR_INVALIDDATA,"ALAC requires zero priming and exact partial final frame");goto failed;
     }
-    e->block=alac?e->codec->frame_size:4096;
+    if(kind>=2 && (e->codec->initial_padding<=0 || e->codec->frame_size<=0 ||
+        !(encoder->capabilities & AV_CODEC_CAP_SMALL_LAST_FRAME))) {
+        fail(k,AVERROR_INVALIDDATA,"lossy audio requires signalled priming and partial final frame");goto failed;
+    }
+    e->block=kind?e->codec->frame_size:4096;
     if(e->block<=0 || e->block>65536){fail(k,AVERROR_INVALIDDATA,"audio block budget");goto failed;}
     e->stream->time_base=e->codec->time_base;
-    ret=k->avcodec_parameters_from_context(e->stream->codecpar,e->codec);if(ret<0){fail(k,ret,"PCM parameters");goto failed;}
-    ret=k->avio_open(&e->format->pb,path,AVIO_FLAG_WRITE);if(ret<0){fail(k,ret,"open PCM output");goto failed;}
-    AVDictionary *options=NULL;if(alac)k->av_dict_set(&options,"movie_timescale","48000",0);
-    ret=k->avformat_write_header(e->format,&options);k->av_dict_free(&options);if(ret<0){fail(k,ret,"PCM header");goto failed;}
+    ret=k->avcodec_parameters_from_context(e->stream->codecpar,e->codec);if(ret<0){fail(k,ret,"audio parameters");goto failed;}
+    ret=k->avio_open(&e->format->pb,path,AVIO_FLAG_WRITE);if(ret<0){fail(k,ret,"open audio output");goto failed;}
+    AVDictionary *options=NULL;
+    if(kind==1 || kind==2)k->av_dict_set(&options,"movie_timescale","48000",0);
+    ret=k->avformat_write_header(e->format,&options);k->av_dict_free(&options);if(ret<0){fail(k,ret,"audio header");goto failed;}
     e->frame->format=e->codec->sample_fmt;e->frame->sample_rate=48000;e->frame->nb_samples=e->block;
-    ret=k->av_channel_layout_copy(&e->frame->ch_layout,&e->codec->ch_layout);if(ret<0){fail(k,ret,"PCM channel layout");goto failed;}
-    ret=k->av_frame_get_buffer(e->frame,0);if(ret<0){fail(k,ret,"PCM frame buffer");goto failed;}
+    ret=k->av_channel_layout_copy(&e->frame->ch_layout,&e->codec->ch_layout);if(ret<0){fail(k,ret,"audio channel layout");goto failed;}
+    ret=k->av_frame_get_buffer(e->frame,0);if(ret<0){fail(k,ret,"audio frame buffer");goto failed;}
     return e;
 failed:km_audio_encoder_close(e);return NULL;
 }
@@ -669,36 +693,51 @@ static int audio_packets(AudioEncoder *e,int drain) {
         int ret=k->avcodec_receive_packet(e->codec,e->packet);
         if(ret==AVERROR_EOF && drain)return 0;
         if(ret==AVERROR(EAGAIN) && !drain)return 0;
-        if(ret<0)return fail(k,ret,"receive PCM packet");
+        if(ret<0)return fail(k,ret,"receive audio packet");
         k->av_packet_rescale_ts(e->packet,e->codec->time_base,e->stream->time_base);e->packet->stream_index=e->stream->index;
         ret=k->av_interleaved_write_frame(e->format,e->packet);k->av_packet_unref(e->packet);
-        if(ret<0)return fail(k,ret,"write PCM packet");
+        if(ret<0)return fail(k,ret,"write audio packet");
     }
 }
 int km_audio_encoder_frame(AudioEncoder *e,const int32_t *samples,int count) {
     Km *k=e->k;
     if(count<=0 || count>e->block || e->partial || e->count>INT64_MAX-count)
         return fail(k,AVERROR(EINVAL),"audio input block/order");
-    int ret=k->av_frame_make_writable(e->frame);if(ret<0)return fail(k,ret,"PCM writable buffer");
+    int ret=k->av_frame_make_writable(e->frame);if(ret<0)return fail(k,ret,"audio writable buffer");
     e->frame->nb_samples=count;e->frame->pts=e->count;
-    if(e->alac) {
+    enum AVSampleFormat fmt=e->codec->sample_fmt;
+    if(fmt==AV_SAMPLE_FMT_S32)memcpy(e->frame->data[0],samples,(size_t)count*2*sizeof(int32_t));
+    else if(fmt==AV_SAMPLE_FMT_FLT) {
+        float *out=(float *)e->frame->data[0];
+        for(int j=0;j<count*2;++j)out[j]=(float)(samples[j]/2147483648.0);
+    } else {
         for(int ch=0;ch<2;++ch) {
-            int32_t *plane=(int32_t *)e->frame->data[ch];
-            for(int j=0;j<count;++j)plane[j]=samples[j*2+ch];
+            if(fmt==AV_SAMPLE_FMT_S32P) {
+                int32_t *plane=(int32_t *)e->frame->data[ch];
+                for(int j=0;j<count;++j)plane[j]=samples[j*2+ch];
+            } else {
+                float *plane=(float *)e->frame->data[ch];
+                for(int j=0;j<count;++j)plane[j]=(float)(samples[j*2+ch]/2147483648.0);
+            }
         }
-    } else memcpy(e->frame->data[0],samples,(size_t)count*2*sizeof(int32_t));
-    ret=k->avcodec_send_frame(e->codec,e->frame);if(ret<0)return fail(k,ret,"send PCM frame");
+    }
+    ret=k->avcodec_send_frame(e->codec,e->frame);if(ret<0)return fail(k,ret,"send audio frame");
     e->count+=count;e->partial=count<e->block;return audio_packets(e,0);
 }
 int km_audio_encoder_finish(AudioEncoder *e) {
     Km *k=e->k;
-    int ret=k->avcodec_send_frame(e->codec,NULL);if(ret<0)return fail(k,ret,"flush PCM encoder");
+    /* Opus discard padding only applies when the stream spans more than one
+     * packet; inputs at or below the priming margin cannot round-trip their
+     * exact length and are refused rather than padded silently. */
+    if(e->kind==3 && e->count<=e->block-e->codec->initial_padding)
+        return fail(k,AVERROR_INVALIDDATA,"Opus input shorter than codec priming margin");
+    int ret=k->avcodec_send_frame(e->codec,NULL);if(ret<0)return fail(k,ret,"flush audio encoder");
     ret=audio_packets(e,1);if(ret<0)return ret;
-    ret=k->av_write_trailer(e->format);if(ret<0)return fail(k,ret,"PCM trailer");
-    ret=k->avio_closep(&e->format->pb);return ret<0?fail(k,ret,"close PCM output"):0;
+    ret=k->av_write_trailer(e->format);if(ret<0)return fail(k,ret,"audio trailer");
+    ret=k->avio_closep(&e->format->pb);return ret<0?fail(k,ret,"close audio output"):0;
 }
-int km_audio_encode(Km *k,const char *path,const int32_t *samples,int64_t count,int alac) {
-    AudioEncoder *e=km_audio_encoder_open(k,path,alac);if(!e)return -1;
+int km_audio_encode(Km *k,const char *path,const int32_t *samples,int64_t count,int kind) {
+    AudioEncoder *e=km_audio_encoder_open(k,path,kind);if(!e)return -1;
     int ret=0;
     for(int64_t i=0;i<count;i+=e->block) {
         int n=(int)((count-i)<e->block?(count-i):e->block);
@@ -721,6 +760,7 @@ failed:k->avformat_close_input(&format);return NULL;
 }
 void km_probe_close(Km *k,AVFormatContext *format) { k->avformat_close_input(&format); }
 int km_probe_count(AVFormatContext *format) { return (int)format->nb_streams; }
+int64_t km_probe_format_duration(AVFormatContext *format) { return format->duration; }
 typedef struct StreamInfo {
     int64_t start,duration;int kind,num,den,rate,channels,width,height;
 } StreamInfo;
@@ -753,29 +793,35 @@ static int read_mux_packet(Km *k,AVFormatContext *f,AVPacket *p,int stream) {
     }
 }
 /* HEVC delivery stores parameter sets in hvcC, with a fixed hvc1 sample entry. */
-uint32_t km_mux_video_tag(int profile) { return profile==3?MKTAG('h','v','c','1'):0; }
+uint32_t km_mux_video_tag(int profile) { return (profile==3 || profile==5)?MKTAG('h','v','c','1'):0; }
 int km_mux_av(Km *k,const char *video,const char *audio,const char *path,
     const char *render_hash,const char *export_hash,int profile) {
     AVFormatContext *input[2]={NULL,NULL},*out=NULL;AVPacket *packets[2]={NULL,NULL};
     AVStream *streams[2]={NULL,NULL};int index[2]={-1,-1},ready[2]={0,0};
     int ret=0;
-    const enum AVCodecID videos[4]={AV_CODEC_ID_PRORES,AV_CODEC_ID_AV1,AV_CODEC_ID_H264,AV_CODEC_ID_HEVC};
-    if(profile<0 || profile>3)return fail(k,AVERROR(EINVAL),"unknown movie profile");
+    const enum AVCodecID videos[8]={AV_CODEC_ID_PRORES,AV_CODEC_ID_AV1,AV_CODEC_ID_H264,AV_CODEC_ID_HEVC,
+        AV_CODEC_ID_H264,AV_CODEC_ID_HEVC,AV_CODEC_ID_AV1,AV_CODEC_ID_AV1};
+    const enum AVCodecID audios[8]={AV_CODEC_ID_PCM_S24LE,AV_CODEC_ID_ALAC,AV_CODEC_ID_ALAC,
+        AV_CODEC_ID_ALAC,AV_CODEC_ID_AAC,AV_CODEC_ID_AAC,AV_CODEC_ID_AAC,AV_CODEC_ID_OPUS};
+    const char *containers[8]={"mov","mp4","mov","mov","mov","mov","mp4","webm"};
+    if(profile<0 || profile>7)return fail(k,AVERROR(EINVAL),"unknown movie profile");
     const char *paths[2]={video,audio};
     for(int i=0;i<2;++i) {
         input[i]=km_probe_open(k,paths[i]);if(!input[i]){ret=-1;goto done;}
         index[i]=k->av_find_best_stream(input[i],i?AVMEDIA_TYPE_AUDIO:AVMEDIA_TYPE_VIDEO,-1,-1,NULL,0);
         if(index[i]<0){ret=fail(k,index[i],"mux stream missing");goto done;}
         AVStream *s=input[i]->streams[index[i]];
-        if(s->start_time!=0 || s->duration<=0 || s->codecpar->codec_id!=(i?(profile?AV_CODEC_ID_ALAC:AV_CODEC_ID_PCM_S24LE):videos[profile])) {
+        /* Lossy WebM intermediates may publish no stream duration; packet order is authoritative. */
+        if(s->start_time!=0 || s->duration==0 || (s->duration<0 && s->duration!=AV_NOPTS_VALUE) ||
+            s->codecpar->codec_id!=(i?audios[profile]:videos[profile])) {
             ret=fail(k,AVERROR_INVALIDDATA,"mux requires zero-origin streams matching the closed movie profile");goto done;
         }
         if(i && (s->codecpar->sample_rate!=48000 || s->codecpar->ch_layout.nb_channels!=2)) {
-            ret=fail(k,AVERROR_INVALIDDATA,"mux requires stereo 48 kHz PCM");goto done;
+            ret=fail(k,AVERROR_INVALIDDATA,"mux requires stereo 48 kHz audio");goto done;
         }
         packets[i]=k->av_packet_alloc();if(!packets[i]){ret=fail(k,AVERROR(ENOMEM),"mux packet allocation");goto done;}
     }
-    ret=k->avformat_alloc_output_context2(&out,NULL,profile==1?"mp4":"mov",path);
+    ret=k->avformat_alloc_output_context2(&out,NULL,containers[profile],path);
     if(ret<0 || !out){ret=fail(k,ret<0?ret:AVERROR(ENOMEM),"mux output context");goto done;}
     for(int i=0;i<2;++i) {
         streams[i]=k->avformat_new_stream(out,NULL);if(!streams[i]){ret=fail(k,AVERROR(ENOMEM),"mux stream allocation");goto done;}
@@ -790,10 +836,12 @@ int km_mux_av(Km *k,const char *video,const char *audio,const char *path,
     k->av_dict_set(&out->metadata,"kronello_export_snapshot_hash",export_hash,0);
     ret=k->avio_open(&out->pb,path,AVIO_FLAG_WRITE);if(ret<0){fail(k,ret,"mux output open");goto done;}
     AVDictionary *options=NULL;char timescale[32];
-    snprintf(timescale,sizeof(timescale),"%d",streams[0]->time_base.den);
-    k->av_dict_set(&options,"video_track_timescale",timescale,0);
-    k->av_dict_set(&options,"movflags","use_metadata_tags",0);
-    if(profile)k->av_dict_set(&options,"movie_timescale","48000",0);
+    if(profile!=7) {
+        snprintf(timescale,sizeof(timescale),"%d",streams[0]->time_base.den);
+        k->av_dict_set(&options,"video_track_timescale",timescale,0);
+        k->av_dict_set(&options,"movflags","use_metadata_tags",0);
+        if(profile)k->av_dict_set(&options,"movie_timescale","48000",0);
+    }
     ret=k->avformat_write_header(out,&options);k->av_dict_free(&options);if(ret<0){fail(k,ret,"mux header");goto done;}
     for(int i=0;i<2;++i){ready[i]=read_mux_packet(k,input[i],packets[i],index[i]);if(ready[i]<0){ret=ready[i];goto done;}}
     while(ready[0] || ready[1]) {

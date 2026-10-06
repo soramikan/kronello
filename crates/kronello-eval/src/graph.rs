@@ -52,10 +52,19 @@ pub struct DependencyGraph<'a> {
     pub(crate) scopes: BTreeMap<InstancePath, Scope<'a>>,
     entries: BTreeMap<RuntimePropertyKey, Entry<'a>>,
     edges: BTreeMap<RuntimePropertyKey, BTreeSet<RuntimePropertyKey>>,
+    v3_roots: BTreeSet<RuntimePropertyKey>,
+    current_edges: BTreeMap<RuntimePropertyKey, BTreeSet<RuntimePropertyKey>>,
     references: ReferenceBindings,
     pub(crate) curves: BTreeMap<CurveId, &'a AnimationCurve>,
     pub(crate) registry: &'a SchemaRegistry,
     pub(crate) working_space: ColorSpace,
+    pub(crate) audio_analyses:
+        BTreeMap<kronello_model::AssetId, &'a kronello_model::AudioAnalysisDataAsset>,
+    repeat_seeds: BTreeMap<kronello_model::CompositionInstanceId, u64>,
+    expansion_noise_aliases:
+        BTreeMap<kronello_model::CompositionInstanceId, kronello_model::CompositionInstanceId>,
+    pub(crate) data_assets:
+        BTreeMap<kronello_model::AssetId, &'a kronello_model::ExpressionDataAsset>,
     expressions: BTreeMap<kronello_model::ExpressionId, &'a kronello_model::Expression>,
 }
 
@@ -64,8 +73,98 @@ impl<'a> DependencyGraph<'a> {
         snapshot: EvaluationSnapshot<'a>,
         root: CompositionId,
     ) -> Result<Self, EvaluationError> {
-        validate_compositions(snapshot.compositions, snapshot.registry)
-            .map_err(EvaluationError::InvalidCompositions)?;
+        Self::compile_with_audio(snapshot, root, &[])
+    }
+    pub fn with_repeater_context(
+        mut self,
+        seeds: BTreeMap<kronello_model::CompositionInstanceId, u64>,
+        aliases: BTreeMap<
+            kronello_model::CompositionInstanceId,
+            kronello_model::CompositionInstanceId,
+        >,
+    ) -> Self {
+        self.repeat_seeds = seeds;
+        self.expansion_noise_aliases = aliases;
+        self
+    }
+    pub(crate) fn noise_context_len(&self, path: &InstancePath) -> usize {
+        path.ids().len().saturating_mul(16)
+            + path
+                .ids()
+                .iter()
+                .filter(|id| self.repeat_seeds.contains_key(id))
+                .count()
+                .saturating_mul(8)
+    }
+    pub(crate) fn visit_noise_context(&self, path: &InstancePath, mut byte: impl FnMut(u8)) {
+        for id in path.ids() {
+            let alias = self.expansion_noise_aliases.get(id).unwrap_or(id);
+            for b in alias.as_uuid().into_bytes() {
+                byte(b);
+            }
+            if let Some(seed) = self.repeat_seeds.get(id) {
+                for b in seed.to_le_bytes() {
+                    byte(b);
+                }
+            }
+        }
+    }
+    pub(crate) fn noise_context_bytes(&self, path: &InstancePath) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(path.ids().len().saturating_mul(24));
+        for id in path.ids() {
+            let alias = self.expansion_noise_aliases.get(id).unwrap_or(id);
+            bytes.extend_from_slice(&alias.as_uuid().into_bytes());
+            if let Some(seed) = self.repeat_seeds.get(id) {
+                bytes.extend_from_slice(&seed.to_le_bytes());
+            }
+        }
+        bytes
+    }
+    pub fn compile_with_audio(
+        snapshot: EvaluationSnapshot<'a>,
+        root: CompositionId,
+        audio_analyses: &'a [kronello_model::AudioAnalysisDataAsset],
+    ) -> Result<Self, EvaluationError> {
+        Self::compile_with_data(snapshot, root, audio_analyses, &[])
+    }
+    pub fn compile_with_data(
+        snapshot: EvaluationSnapshot<'a>,
+        root: CompositionId,
+        audio_analyses: &'a [kronello_model::AudioAnalysisDataAsset],
+        data_assets: &'a [kronello_model::ExpressionDataAsset],
+    ) -> Result<Self, EvaluationError> {
+        Self::compile_internal(snapshot, root, audio_analyses, data_assets, None)
+    }
+    /// Internal upper compiler path; persisted/API definitions use strict compile.
+    #[doc(hidden)]
+    pub fn compile_specialized_with_data(
+        snapshot: EvaluationSnapshot<'a>,
+        root: CompositionId,
+        audio_analyses: &'a [kronello_model::AudioAnalysisDataAsset],
+        data_assets: &'a [kronello_model::ExpressionDataAsset],
+        provenance: &crate::SpecializationProvenance<'_>,
+    ) -> Result<Self, EvaluationError> {
+        Self::compile_internal(
+            snapshot,
+            root,
+            audio_analyses,
+            data_assets,
+            Some(provenance),
+        )
+    }
+    fn compile_internal(
+        snapshot: EvaluationSnapshot<'a>,
+        root: CompositionId,
+        audio_analyses: &'a [kronello_model::AudioAnalysisDataAsset],
+        data_assets: &'a [kronello_model::ExpressionDataAsset],
+        provenance: Option<&crate::SpecializationProvenance<'_>>,
+    ) -> Result<Self, EvaluationError> {
+        if let Some(proof) = provenance {
+            crate::specialization::validate(snapshot.compositions, root, snapshot.registry, proof)?;
+        } else {
+            validate_compositions(snapshot.compositions, snapshot.registry)
+                .map_err(EvaluationError::InvalidCompositions)?;
+        }
         if snapshot.working_space == ColorSpace::Srgb {
             return Err(EvaluationError::InvalidWorkingColorSpace);
         }
@@ -78,12 +177,27 @@ impl<'a> DependencyGraph<'a> {
             scopes: BTreeMap::new(),
             entries: BTreeMap::new(),
             edges: BTreeMap::new(),
+            v3_roots: BTreeSet::new(),
+            current_edges: BTreeMap::new(),
             references: snapshot.reference_bindings.clone(),
             curves: BTreeMap::new(),
+            audio_analyses: audio_analyses.iter().map(|a| (a.id, a)).collect(),
+            repeat_seeds: BTreeMap::new(),
+            expansion_noise_aliases: BTreeMap::new(),
+            data_assets: data_assets.iter().map(|d| (d.id, d)).collect(),
             expressions: snapshot.expressions.iter().map(|e| (e.id, e)).collect(),
             registry: snapshot.registry,
             working_space: snapshot.working_space,
         };
+        if graph.data_assets.len() != data_assets.len()
+            || graph.audio_analyses.len() != audio_analyses.len()
+            || graph
+                .data_assets
+                .keys()
+                .any(|id| graph.audio_analyses.contains_key(id))
+        {
+            return Err(EvaluationError::DuplicateDataAssetId);
+        }
         if graph.expressions.len() != snapshot.expressions.len() {
             return Err(EvaluationError::DuplicateExpressionId);
         }
@@ -131,6 +245,10 @@ impl<'a> DependencyGraph<'a> {
                     // Gradient stops are keyed by PropertyId, not descriptor name.
                     // Singleton transform/opacity descriptors retain their ambiguity check.
                     if !descriptors.insert(property.descriptor().key.clone())
+                        && !graph
+                            .registry
+                            .lookup(&property.descriptor().key)
+                            .is_ok_and(|d| d.definition().repeatable)
                         && !matches!(
                             property.descriptor().key.as_str(),
                             "kronello.shape.gradient_color" | "kronello.shape.gradient_offset"
@@ -261,6 +379,12 @@ impl<'a> DependencyGraph<'a> {
                             node,
                             property,
                             value_type,
+                        }
+                        | kronello_model::ExpressionNode::PropertySample {
+                            node,
+                            property,
+                            value_type,
+                            ..
                         } => {
                             let source =
                                 graph.expression_key(&entry.source_scope, *node, *property);
@@ -305,12 +429,142 @@ impl<'a> DependencyGraph<'a> {
                                 ));
                             }
                         }
+                        kronello_model::ExpressionNode::DataAssetCell {
+                            asset,
+                            column,
+                            value_type,
+                            ..
+                        } => {
+                            let data = graph.data_assets.get(asset).ok_or_else(|| {
+                                crate::expression::error(
+                                    key,
+                                    kronello_model::ExpressionError::InvalidAst(
+                                        "DataAsset missing",
+                                    ),
+                                )
+                            })?;
+                            data.validate().map_err(|_| {
+                                crate::expression::error(
+                                    key,
+                                    kronello_model::ExpressionError::InvalidAst(
+                                        "invalid DataAsset hash or table",
+                                    ),
+                                )
+                            })?;
+                            if data.table.columns.get(column) != Some(value_type) {
+                                return Err(crate::expression::error(
+                                    key,
+                                    kronello_model::ExpressionError::InvalidAst(
+                                        "DataAsset column type mismatch",
+                                    ),
+                                ));
+                            }
+                        }
+                        kronello_model::ExpressionNode::AudioFeature { asset, feature, .. } => {
+                            let data = graph.audio_analyses.get(asset).ok_or_else(|| {
+                                crate::expression::error(
+                                    key,
+                                    kronello_model::ExpressionError::InvalidAst(
+                                        "audio analysis missing",
+                                    ),
+                                )
+                            })?;
+                            data.validate().map_err(|_| {
+                                crate::expression::error(
+                                    key,
+                                    kronello_model::ExpressionError::InvalidAst(
+                                        "invalid audio analysis",
+                                    ),
+                                )
+                            })?;
+                            if let kronello_model::AudioFeature::BandEnergy { band } = feature
+                                && *band as usize >= data.config.bands.len()
+                            {
+                                return Err(crate::expression::error(
+                                    key,
+                                    kronello_model::ExpressionError::InvalidAst(
+                                        "audio band missing",
+                                    ),
+                                ));
+                            }
+                        }
                         _ => (),
                     }
                 }
             }
         }
-        graph.order(graph.entries.keys().cloned())?;
+        let full_order = graph.order(graph.entries.keys().cloned())?;
+        for key in full_order {
+            let own_v3 = graph
+                .entries
+                .get(&key)
+                .is_some_and(|entry| match entry.source {
+                    PropertySource::Expression(id) => graph.expressions[id].version >= 3,
+                    _ => false,
+                });
+            if own_v3
+                || graph.edges[&key]
+                    .iter()
+                    .any(|source| graph.v3_roots.contains(source))
+            {
+                graph.v3_roots.insert(key);
+            }
+        }
+        graph.current_edges = graph.edges.clone();
+        // Past-only references are static cycle edges, not current-time reads.
+        for (key, entry) in &graph.entries {
+            if graph.references.contains_key(key) {
+                continue;
+            }
+            if let PropertySource::Expression(id) = entry.source {
+                for node in &graph.expressions[id].nodes {
+                    if let kronello_model::ExpressionNode::PropertySample {
+                        node, property, ..
+                    } = node
+                    {
+                        let source = graph.expression_key(&entry.source_scope, *node, *property);
+                        let regular = graph.expressions[id].nodes.iter().any(|n| {
+                            matches!(n,
+                            kronello_model::ExpressionNode::Property { node: n, property: p, .. }
+                            if graph.expression_key(&entry.source_scope, *n, *p) == source)
+                        });
+                        let declared = snapshot
+                            .dependencies
+                            .get(key)
+                            .is_some_and(|deps| deps.contains(&source));
+                        if !regular && !declared {
+                            graph.current_edges.get_mut(key).unwrap().remove(&source);
+                        }
+                    }
+                }
+            }
+        }
+
+        for (key, entry) in &graph.entries {
+            if let PropertySource::Expression(id) = entry.source {
+                for node in &graph.expressions[id].nodes {
+                    if let kronello_model::ExpressionNode::PropertySample {
+                        node, property, ..
+                    } = node
+                    {
+                        let source = graph.expression_key(&entry.source_scope, *node, *property);
+                        if graph
+                            .order(std::iter::once(source))?
+                            .iter()
+                            .any(|k| matches!(k, RuntimePropertyKey::LayoutValue { .. }))
+                        {
+                            return Err(crate::expression::error(
+                                key,
+                                kronello_model::ExpressionError::InvalidAst(
+                                    "past layout sampling unsupported",
+                                ),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+
         Ok(graph)
     }
 
@@ -346,6 +600,34 @@ impl<'a> DependencyGraph<'a> {
         &self,
         keys: impl IntoIterator<Item = RuntimePropertyKey>,
     ) -> Result<Vec<RuntimePropertyKey>, EvaluationError> {
+        self.order_budgeted(keys, None, false)
+    }
+    fn order_budgeted(
+        &self,
+        keys: impl IntoIterator<Item = RuntimePropertyKey>,
+        mut budget: Option<(&mut crate::expression::Usage, &RuntimePropertyKey)>,
+        current_only: bool,
+    ) -> Result<Vec<RuntimePropertyKey>, EvaluationError> {
+        let edges = if current_only {
+            &self.current_edges
+        } else {
+            &self.edges
+        };
+        let mut charge = |key: &RuntimePropertyKey| -> Result<(), EvaluationError> {
+            if let Some((usage, owner)) = &mut budget {
+                usage
+                    .charge(
+                        1,
+                        3 * std::mem::size_of::<RuntimePropertyKey>()
+                            + 192
+                            + 3 * key.instance_path().ids().len().saturating_mul(16),
+                        0,
+                        Default::default(),
+                    )
+                    .map_err(|e| crate::expression::error(owner, e))?;
+            }
+            Ok(())
+        };
         let mut finished = BTreeSet::new();
         let mut order = Vec::new();
         for key in keys {
@@ -353,7 +635,8 @@ impl<'a> DependencyGraph<'a> {
             if finished.contains(&key) {
                 continue;
             }
-            let mut stack = vec![(key.clone(), self.edges[&key].iter())];
+            charge(&key)?;
+            let mut stack = vec![(key.clone(), edges[&key].iter())];
             let mut active = BTreeMap::from([(key, 0)]);
             while let Some((_, dependencies)) = stack.last_mut() {
                 if let Some(dependency) = dependencies.next() {
@@ -364,8 +647,9 @@ impl<'a> DependencyGraph<'a> {
                         return Err(EvaluationError::DependencyCycle { path });
                     }
                     if !finished.contains(dependency) {
+                        charge(dependency)?;
                         active.insert(dependency.clone(), stack.len());
-                        stack.push((dependency.clone(), self.edges[dependency].iter()));
+                        stack.push((dependency.clone(), edges[dependency].iter()));
                     }
                 } else {
                     let (key, _) = stack.pop().unwrap();
@@ -457,6 +741,16 @@ impl<'a> DependencyGraph<'a> {
         time: Time,
         inputs: &BTreeMap<RuntimePropertyKey, Value>,
     ) -> Result<BTreeMap<RuntimePropertyKey, Value>, EvaluationError> {
+        self.evaluate_closure_shared(keys, time, inputs, &mut crate::expression::Usage::default())
+    }
+
+    pub(crate) fn evaluate_closure_shared(
+        &self,
+        keys: &[RuntimePropertyKey],
+        time: Time,
+        inputs: &BTreeMap<RuntimePropertyKey, Value>,
+        usage: &mut crate::expression::Usage,
+    ) -> Result<BTreeMap<RuntimePropertyKey, Value>, EvaluationError> {
         for (key, value) in inputs {
             self.require_key(key)?;
             if matches!(key, RuntimePropertyKey::LayoutValue { .. }) {
@@ -473,7 +767,12 @@ impl<'a> DependencyGraph<'a> {
                     source,
                 })?;
         }
-        let order = self.order(keys.iter().cloned().collect::<BTreeSet<_>>())?;
+        usage.bounded_schedule |= keys.iter().any(|key| self.v3_roots.contains(key));
+        let order = if usage.bounded_schedule && !keys.is_empty() {
+            self.order_budgeted(keys.iter().cloned(), Some((usage, &keys[0])), true)?
+        } else {
+            self.order_budgeted(keys.iter().cloned(), None, true)?
+        };
         let expression_key = order
             .iter()
             .find(|key| {
@@ -481,9 +780,13 @@ impl<'a> DependencyGraph<'a> {
                     .get(*key)
                     .is_some_and(|e| matches!(e.source, PropertySource::Expression(_)))
             })
-            .cloned();
+            .cloned()
+            .or_else(|| {
+                (!self.expressions.is_empty())
+                    .then(|| keys.first().cloned())
+                    .flatten()
+            });
         let mut values: BTreeMap<RuntimePropertyKey, Value> = BTreeMap::new();
-        let mut usage = crate::expression::Usage::default();
         for key in order {
             if let Some(expression_key) = &expression_key {
                 let payload = if let Some(value) = inputs.get(&key) {
@@ -560,10 +863,14 @@ impl<'a> DependencyGraph<'a> {
                         .run_expression(
                             self.expressions[id],
                             entry,
-                            key.instance_path(),
-                            self.local_time(&entry.source_scope, time)?,
-                            &values,
-                            &mut usage,
+                            crate::expression::ExpressionContext {
+                                instance: key.instance_path(),
+                                time: self.local_time(&entry.source_scope, time)?,
+                                root_time: time,
+                                upstream: &values,
+                                inputs,
+                            },
+                            usage,
                         )
                         .map_err(|source| crate::expression::error(&key, source))?,
                     PropertySource::Curve(id) => {

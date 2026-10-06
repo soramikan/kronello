@@ -25,10 +25,11 @@ GUI・CLI・MCP は同格の入口であり、同じ Command / Query API を通�
 - 公開入力を持つテンプレート、変更計画・トランザクション・プレビュー検査 API。
 - 基本音声（デコード、ミックス、音声付き書き出し）と基本エフェクト（drop shadow、gaussian blur）。
 
-### 後段で実装する機能
+### 後段の実装と進捗
 
-- 高度な式、Path morph、Trim path、Repeater、音声連動、ルビ・縦書きの完全な編集 UI。
-- チェックポイント付きシミュレーション。多重時間サンプルのroot合成はM4で実装済みであり、対応範囲と資源上限は [05](05-render-gpu.md) を参照する。
+- M5作業ブランチではPath morph・Trim path・限定SVG、文字selector・ルビ・縦書き、事前解析した音声特徴量の式参照を受け入れ済み（[M5進捗](../testing/m5-acceptance.md)）。mainへの統合とGUI全体の完成とは区別する。
+- Repeaterと追加の式評価（固定DataAsset・過去sample・連続noise）はM5作業ブランチで受け入れ済み（[M5進捗](../testing/m5-acceptance.md)）。人間向け式構文とGUI式入力（EXPR-002・ADR-0105）、macOSの追加編集操作GUI-007、AAC-LC/Opusの圧縮配信音声（AUDIO-005・ADR-0106）も共有API・worker・直接GUI確認を経て作業ブランチで受け入れ済み。
+- チェックポイント付きシミュレーションSIM-001は、固定刻み・checkpoint・canonical source時計・CLI/MCP/Metal比較・native GUI確認を経て作業ブランチで受け入れ済み（[記録](../testing/sim-001.md)）。多重時間サンプルのroot合成はM4で実装済みであり、対応範囲と資源上限は [05](05-render-gpu.md) を参照する。
 - 2.5D カメラ、完全な 3D、外部プラグイン互換、分散レンダー。
 
 初期から 3D 描画を実装するのではなく、出力ポート・時間・変換型・拡張バージョンの境界を確保する。

@@ -1052,3 +1052,125 @@ fn cpu_vec005_golden_samples_avoid_discontinuity_ties() {
         }
     }
 }
+
+#[test]
+fn gpu_inverted_alpha_and_luminance_mattes_match_reference_in_both_working_spaces() {
+    for working in [WorkingSpace::LinearRec709, WorkingSpace::LinearRec2020] {
+        for kind in [MaskKind::AlphaInverted, MaskKind::LuminanceInverted] {
+            let scene = matte(kind);
+            let size = RenderSize::pixels(8, 8);
+            let expected = render_scene_reference(size, &scene, working).unwrap();
+            let actual = gpu().render_scene(size, &scene, working).unwrap();
+            compare(8, working, &expected, &actual.pixels);
+            assert!(actual.pixels.iter().any(|p| p[3] > 0.0));
+        }
+    }
+}
+
+fn blend_scene(src: [f32; 4], dst: [f32; 4], mode: kronello_model::BlendMode) -> DrawScene {
+    DrawScene {
+        nodes: vec![
+            DrawNode::Raster(vec![dst; 4]),
+            DrawNode::Raster(vec![src; 4]),
+            DrawNode::Blend {
+                source: 1,
+                backdrop: 0,
+                mode,
+            },
+        ],
+        roots: vec![2],
+    }
+}
+#[test]
+fn cpu_linear_blend_transparency_hdr_and_partial_alpha_have_correct_pixels() {
+    use kronello_model::BlendMode::*;
+    for (mode, expected) in [
+        (Normal, [0.275, 0.275, 0.1375, 0.625]),
+        (Multiply, [0.195, 0.265, 0.0925, 0.625]),
+        (Screen, [0.28, 0.335, 0.145, 0.625]),
+    ] {
+        let pixels = render_scene_reference(
+            RenderSize::pixels(2, 2),
+            &blend_scene([0.2, 0.05, 0.1, 0.25], [0.1, 0.3, 0.05, 0.5], mode),
+            WorkingSpace::LinearRec709,
+        )
+        .unwrap();
+        for pixel in pixels {
+            for (a, e) in pixel.into_iter().zip(expected) {
+                assert!((a - e).abs() < 1e-6);
+            }
+        }
+        for color in [[0.2, 0.05, 0.1, 0.25], [4., -0.5, 2., 1.]] {
+            for (src, dst) in [(color, [0.; 4]), ([0.; 4], color)] {
+                let pixels = render_scene_reference(
+                    RenderSize::pixels(2, 2),
+                    &blend_scene(src, dst, mode),
+                    WorkingSpace::LinearRec2020,
+                )
+                .unwrap();
+                assert_eq!(pixels, vec![color; 4]);
+            }
+        }
+    }
+    let multiply = render_scene_reference(
+        RenderSize::pixels(2, 2),
+        &blend_scene([2., 0.5, 1., 1.], [3., 0.5, 2., 1.], Multiply),
+        WorkingSpace::LinearRec2020,
+    )
+    .unwrap();
+    assert_eq!(multiply[0], [6., 0.25, 2., 1.]);
+    let screen = render_scene_reference(
+        RenderSize::pixels(2, 2),
+        &blend_scene([2., 0.5, 1., 1.], [3., 0.5, 2., 1.], Screen),
+        WorkingSpace::LinearRec2020,
+    )
+    .unwrap();
+    assert_eq!(screen[0], [-1., 0.75, 1., 1.]);
+}
+#[test]
+fn gpu_linear_blend_matches_cpu_after_isolation_opacity_effect_and_matte() {
+    use kronello_model::BlendMode::*;
+    for working in [WorkingSpace::LinearRec709, WorkingSpace::LinearRec2020] {
+        for mode in [Normal, Multiply, Screen] {
+            for (src, dst) in [
+                ([0.4, 0.1, 0.2, 0.5], [0.1, 0.3, 0.05, 0.5]),
+                ([0.; 4], [4., -0.5, 2., 1.]),
+                ([4., -0.5, 2., 1.], [0.; 4]),
+                ([2., 0.5, 1., 1.], [3., 0.5, 2., 1.]),
+            ] {
+                let scene = DrawScene {
+                    nodes: vec![
+                        DrawNode::Raster(vec![dst; 4]),
+                        DrawNode::Raster(vec![src; 4]),
+                        DrawNode::Group {
+                            children: vec![1],
+                            opacity: 0.5,
+                        },
+                        DrawNode::Effect {
+                            source: 2,
+                            effect: kronello_render::PixelEffect::GaussianBlur {
+                                sigma: [0.5, 0.75],
+                            },
+                        },
+                        DrawNode::Raster(vec![[0., 0., 0., 0.5]; 4]),
+                        DrawNode::Masked {
+                            source: 3,
+                            matte: 4,
+                            kind: MaskKind::Alpha,
+                        },
+                        DrawNode::Blend {
+                            source: 5,
+                            backdrop: 0,
+                            mode,
+                        },
+                    ],
+                    roots: vec![6],
+                };
+                let size = RenderSize::pixels(2, 2);
+                let expected = render_scene_reference(size, &scene, working).unwrap();
+                let actual = gpu().render_scene(size, &scene, working).unwrap();
+                compare(2, working, &expected, &actual.pixels);
+            }
+        }
+    }
+}

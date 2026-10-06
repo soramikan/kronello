@@ -157,6 +157,7 @@ fn project() -> (Project, CompositionId) {
         }],
         direction: TextDirection::Horizontal,
         ruby: vec![],
+        character_animations: vec![],
         wrap_width: wrap.id(),
         line_height: line.id(),
         alignment: alignment.id(),
@@ -1462,6 +1463,7 @@ fn cache_state_order_eviction_clear_resolution_match_direct_cpu_execution() {
         geometry: tiny,
         raster: tiny,
         temporal: tiny,
+        simulation: tiny,
     });
     let mut warm = RenderCache::default();
     let mut disabled = RenderCache::new(CacheConfig::disabled());
@@ -3614,6 +3616,7 @@ fn temporal_cut_sequence() -> (Project, SequenceId) {
         source_in: Time::ZERO,
         time_map: TimeMap::linear(Time::ZERO, Time::ONE).unwrap(),
         audio_retime: Default::default(),
+        reverse_sampling: None,
         volume: None,
         links: vec![],
         effects: vec![],
@@ -3628,6 +3631,7 @@ fn temporal_cut_sequence() -> (Project, SequenceId) {
                 audio_rate: kronello_time::SampleRate::HZ_48000,
                 working_space: ColorSpace::LinearRec709,
                 tracks: vec![Track {
+                    state: None,
                     id: TrackId::new(),
                     kind: TrackKind::Video,
                     clips: clips.to_vec(),
@@ -3917,6 +3921,7 @@ fn temporal_cache_region_shutter_and_nested_time_map_invalidate_and_remain_bound
     };
     let mut bounded = RenderCache::new(CacheConfig {
         temporal: tiny,
+        simulation: tiny,
         ..CacheConfig::disabled()
     });
     for time in [Time::ZERO, t(1, 2), Time::ONE] {
@@ -4386,4 +4391,358 @@ fn color001_legacy_hdr_pin_hash_and_future_profile_rejection() {
     .metadata;
     assert_eq!(metadata.hdr.unwrap().reference_white_nits, 203);
     assert_eq!(metadata.hdr.unwrap().hlg_peak_nits, Some(1000));
+}
+
+#[test]
+fn text002_document_properties_ruby_vertical_render_and_reflow() {
+    let (mut p, c) = project();
+    let curve = AnimationCurve::new(
+        CurveId::new(),
+        ValueType::Vec2,
+        vec![
+            Keyframe {
+                time: t(0, 1),
+                value: v2(0.0, 0.0),
+                interpolation: CurveInterpolation::Linear,
+            },
+            Keyframe {
+                time: t(1, 1),
+                value: v2(5.0, 0.0),
+                interpolation: CurveInterpolation::Linear,
+            },
+        ],
+    )
+    .unwrap();
+    let offset = prop(
+        "kronello.text.character_offset",
+        PropertySource::Curve(curve.id()),
+    );
+    let opacity = constant("kronello.text.character_opacity", scalar(0.5));
+    let DocumentObject::Known(text) = &mut p.texts[0] else {
+        panic!()
+    };
+    text.layout_version = 2;
+    text.direction = TextDirection::VerticalRl;
+    text.ruby = vec![RubyAssociation {
+        base: TextRange {
+            start: 0,
+            end: "日本".len(),
+        },
+        text: "にほん".into(),
+    }];
+    text.character_animations = vec![CharacterAnimation {
+        source: TextRange {
+            start: 0,
+            end: "日".len(),
+        },
+        expected_text: "日".into(),
+        offset: offset.id(),
+        opacity: opacity.id(),
+    }];
+    comp_mut(&mut p).nodes[1]
+        .properties
+        .extend([offset, opacity]);
+    p.curves.push(DocumentObject::Known(curve));
+    let s = snapshot(&p, c);
+    let first = frame(&s, t(0, 1));
+    let last = frame(&s, t(1, 1));
+    assert_ne!(first.pixels, last.pixels);
+    assert_eq!(frame(&s, t(0, 1)).pixels, first.pixels);
+    let DocumentObject::Known(text) = &p.texts[0] else {
+        panic!()
+    };
+    let wrap = text.wrap_width;
+    let property = comp_mut(&mut p).nodes[1]
+        .properties
+        .iter_mut()
+        .find(|prop| prop.id() == wrap)
+        .unwrap();
+    property
+        .set_source(PropertySource::Constant(scalar(26.0)), &render_registry())
+        .unwrap();
+    let reflowed = frame(&snapshot(&p, c), t(1, 1));
+    assert_ne!(reflowed.pixels, last.pixels);
+}
+
+fn gui007_reverse_fixture() -> (Project, Sequence) {
+    let rate = FrameRate::new(30000, 1001).unwrap();
+    let step = rate.frame_to_time(1).unwrap();
+    let duration = rate.frame_to_time(2).unwrap();
+    let (mut red, red_shape) = rectangle([8.0, 8.0], Color::from_srgb8([255, 0, 0], None));
+    red.active_range = TimeRange::new(Time::ZERO, step).unwrap();
+    let (mut blue, blue_shape) = rectangle([8.0, 8.0], Color::from_srgb8([0, 0, 255], None));
+    blue.active_range = TimeRange::new(step, duration).unwrap();
+    let mut source = composition(vec![red, blue]);
+    source.duration = Duration::new(duration).unwrap();
+    source.edit_rate = rate;
+    let sequence = Sequence {
+        id: SequenceId::new(),
+        extent: source.design_extent,
+        frame_rate: rate,
+        audio_rate: kronello_time::SampleRate::HZ_48000,
+        working_space: ColorSpace::LinearRec709,
+        tracks: vec![Track {
+            state: None,
+            id: TrackId::new(),
+            kind: TrackKind::Video,
+            clips: vec![Clip {
+                id: ClipId::new(),
+                source_ref: SourceRef::Composition {
+                    composition: source.id,
+                },
+                timeline_range: TimeRange::new(Time::ZERO, duration).unwrap(),
+                source_in: duration,
+                time_map: TimeMap::linear(Time::ZERO, Time::ONE).unwrap(),
+                audio_retime: AudioRetimePolicy::ReverseResampleV1,
+                reverse_sampling: Some(ReverseSampling::ReverseGridV1),
+                volume: None,
+                links: vec![],
+                properties: vec![],
+                effects: vec![],
+            }],
+        }],
+        transitions: vec![],
+    };
+    let project = Project {
+        compositions: vec![DocumentObject::Known(source)],
+        shapes: vec![
+            DocumentObject::Known(red_shape),
+            DocumentObject::Known(blue_shape),
+        ],
+        sequences: vec![DocumentObject::Known(sequence.clone())],
+        ..Project::default()
+    };
+    (project, sequence)
+}
+
+#[test]
+fn gui007_reverse_composition_renders_first_and_last_ntsc_source_frames() {
+    let (project, sequence) = gui007_reverse_fixture();
+    let rate = sequence.frame_rate;
+    let step = rate.frame_to_time(1).unwrap();
+    let duration = rate.frame_to_time(2).unwrap();
+    let snapshot = RenderSnapshot::for_target(
+        &project,
+        RenderTarget::Sequence {
+            sequence: sequence.id,
+        },
+        0,
+        Default::default(),
+    )
+    .unwrap();
+    let render = |time| {
+        render_frame(
+            &snapshot,
+            &[],
+            &CpuReferenceBackend,
+            FrameRequest {
+                time,
+                region: OutputRegion {
+                    origin: [0.0; 2],
+                    extent: [64.0, 32.0],
+                    pixels: [64, 32],
+                },
+            },
+        )
+        .unwrap()
+    };
+    assert!(render(Time::ZERO).pixels.linear[65][2] > 0.99);
+    assert!(render(step).pixels.linear[65][0] > 0.99);
+    assert!(render(step.checked_div(t(2, 1)).unwrap()).pixels.linear[65][2] > 0.99);
+    assert_eq!(render(duration).pixels.linear[65], [0.0; 4]);
+    let mut wire = serde_json::to_value(&snapshot).unwrap();
+    wire["semantic_versions"]
+        .as_object_mut()
+        .unwrap()
+        .remove("reverse_sampling");
+    assert!(
+        serde_json::from_value::<RenderSnapshot>(wire)
+            .unwrap()
+            .validate()
+            .is_err()
+    );
+}
+
+#[test]
+fn gui007_reverse_temporal_boundaries_and_nested_maps_preserve_exact_source_grid() {
+    let (mut project, sequence) = gui007_reverse_fixture();
+    let rate = sequence.frame_rate;
+    let step = rate.frame_to_time(1).unwrap();
+    let duration = rate.frame_to_time(2).unwrap();
+    let source_id = match sequence.tracks[0].clips[0].source_ref {
+        SourceRef::Composition { composition } => composition,
+        _ => unreachable!(),
+    };
+    let mut outer = composition(vec![node(
+        NodeKind::CompositionInstance(CompositionInstance {
+            id: CompositionInstanceId::new(),
+            definition_ref: source_id,
+            input_bindings: BTreeMap::new(),
+            local_time_map: TimeMap::linear(step.checked_div(t(2, 1)).unwrap(), t(1, 2)).unwrap(),
+            seed: 0,
+        }),
+        vec![],
+    )]);
+    outer.edit_rate = rate;
+    outer.duration = Duration::new(duration).unwrap();
+    let outer_id = outer.id;
+    project.compositions.push(DocumentObject::Known(outer));
+    let DocumentObject::Known(seq) = &mut project.sequences[0] else {
+        unreachable!()
+    };
+    seq.tracks[0].clips[0].source_ref = SourceRef::Composition {
+        composition: outer_id,
+    };
+    let snapshot = RenderSnapshot::for_target(
+        &project,
+        RenderTarget::Sequence {
+            sequence: sequence.id,
+        },
+        7,
+        Default::default(),
+    )
+    .unwrap();
+    let region = OutputRegion {
+        origin: [0.0; 2],
+        extent: [64.0, 32.0],
+        pixels: [64, 32],
+    };
+    for cut_policy in [CutPolicy::AllowCrossing, CutPolicy::AvoidCrossing] {
+        let settings = TemporalSettings {
+            frame_rate: rate,
+            shutter_angle: t(360, 1),
+            shutter_phase: t(-1, 2),
+            samples: 8,
+            cut_policy,
+        };
+        for time in [
+            Time::ZERO,
+            step,
+            duration
+                .checked_sub(step.checked_div(t(4, 1)).unwrap())
+                .unwrap(),
+            duration,
+        ] {
+            let samples = temporal_samples(&snapshot, time, settings).unwrap();
+            let mut expected = [0.0_f32; 4];
+            for sample in &samples {
+                // Reverse outer sample selects its exact predecessor grid cell;
+                // the ordinary nested map remains offset + positive speed.
+                let color = if sample.time < Time::ZERO || sample.time >= duration {
+                    [0.0; 4]
+                } else if sample.time < step {
+                    [0.0, 0.0, 1.0, 1.0]
+                } else {
+                    [1.0, 0.0, 0.0, 1.0]
+                };
+                let weight = sample.weight.numerator() as f32 / sample.weight.denominator() as f32;
+                for channel in 0..4 {
+                    expected[channel] += weight * color[channel];
+                }
+            }
+            let mut cache = RenderCache::default();
+            let request = FrameRequest { time, region };
+            let cold = render_temporal_frame_with_cache(
+                &snapshot,
+                &[],
+                &CpuReferenceBackend,
+                request,
+                settings,
+                &mut cache,
+            )
+            .unwrap();
+            let warm = render_temporal_frame_with_cache(
+                &snapshot,
+                &[],
+                &CpuReferenceBackend,
+                request,
+                settings,
+                &mut cache,
+            )
+            .unwrap();
+            assert_eq!(cold, warm);
+            assert_eq!(cache.stats().temporal.hits, 1);
+            for (actual, expected) in cold.frame.pixels.linear[65].iter().zip(expected) {
+                assert!(
+                    (actual - expected).abs() < 1e-6,
+                    "{cut_policy:?} {time:?}: {actual} != {expected}"
+                );
+            }
+        }
+    }
+    // Reverse sampling is pure: seeking backward after the endpoint gives the
+    // same nested child result, without changing authored positive TimeMaps.
+    let render = |time| {
+        render_frame(
+            &snapshot,
+            &[],
+            &CpuReferenceBackend,
+            FrameRequest { time, region },
+        )
+        .unwrap()
+    };
+    assert!(render(step).pixels.linear[65][0] > 0.99);
+    assert!(render(Time::ZERO).pixels.linear[65][2] > 0.99);
+    assert_eq!(render(duration).pixels.linear[65], [0.0; 4]);
+    assert!(render(Time::ZERO).pixels.linear[65][2] > 0.99);
+    // A fractional upper endpoint chooses the containing source cell; it must
+    // not require a uniform-frame duration or subtract a floating epsilon.
+    let fractional = step.checked_mul(t(5, 2)).unwrap();
+    let DocumentObject::Known(seq) = &mut project.sequences[0] else {
+        unreachable!()
+    };
+    seq.tracks[0].clips[0].source_in = fractional;
+    seq.tracks[0].clips[0].timeline_range = TimeRange::new(Time::ZERO, fractional).unwrap();
+    let DocumentObject::Known(outer) = project.compositions.last_mut().unwrap() else {
+        unreachable!()
+    };
+    outer.duration = Duration::new(fractional).unwrap();
+    let fractional_snapshot = RenderSnapshot::for_target(
+        &project,
+        RenderTarget::Sequence {
+            sequence: sequence.id,
+        },
+        8,
+        Default::default(),
+    )
+    .unwrap();
+    let fractional_render = |time| {
+        render_frame(
+            &fractional_snapshot,
+            &[],
+            &CpuReferenceBackend,
+            FrameRequest { time, region },
+        )
+        .unwrap()
+    };
+    assert!(fractional_render(Time::ZERO).pixels.linear[65][2] > 0.99);
+    assert!(
+        fractional_render(step.checked_mul(t(3, 2)).unwrap())
+            .pixels
+            .linear[65][0]
+            > 0.99
+    );
+    assert!(
+        fractional_render(step.checked_mul(t(2, 1)).unwrap())
+            .pixels
+            .linear[65][0]
+            > 0.99
+    );
+    assert_eq!(fractional_render(fractional).pixels.linear[65], [0.0; 4]);
+    let wire = serde_json::to_value(&fractional_snapshot).unwrap();
+    let roundtrip: RenderSnapshot = serde_json::from_value(wire).unwrap();
+    roundtrip.validate().unwrap();
+    assert_eq!(
+        fractional_render(Time::ZERO),
+        render_frame(
+            &roundtrip,
+            &[],
+            &CpuReferenceBackend,
+            FrameRequest {
+                time: Time::ZERO,
+                region
+            }
+        )
+        .unwrap()
+    );
 }

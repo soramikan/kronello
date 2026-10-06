@@ -157,7 +157,7 @@ fn delivery_output_wire_versions_audio_and_container_contracts_are_strict() {
         assert!(serde_json::from_value::<JobOutput>(no_version).is_err());
         for (version, codec, extension, expected) in [
             (99, "alac", "mov", "UNSUPPORTED_FEATURE"),
-            (1, "aac", "mov", "UNSUPPORTED_FEATURE"),
+            (1, "opus", "mov", "UNSUPPORTED_FEATURE"),
             (
                 1,
                 "alac",

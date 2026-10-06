@@ -180,6 +180,9 @@ impl DocumentAudioPlan {
                     sequence.validate(project)?;
                 }
                 for track in &sequence.tracks {
+                    if track.muted() {
+                        continue;
+                    }
                     for clip in &track.clips {
                         if isolated.is_some_and(|selected| selected.id != clip.id) {
                             continue;

@@ -4,7 +4,7 @@
 
 ## 現在の配置
 
-以下は現行 `Cargo.toml` と各crateのmanifestに存在する構成。論理上の機能名と独立crateの有無を混同しない。
+以下はM5作業ツリーの `Cargo.toml` と各crateのmanifestに存在する構成。mainへの統合済み一覧ではない。論理上の機能名と独立crateの有無を混同しない。
 
 ```text
 crates/
@@ -12,13 +12,14 @@ crates/
   kronello-time/           # rational time, ranges, TimeMap, sampling
   kronello-animation/      # curves and interpolation
   kronello-eval/           # property evaluation, bounded expression AST
-  kronello-text/           # fonts, Japanese horizontal layout, glyph/cluster mappings
-  kronello-vector/         # paths, geometry, fill and stroke
+  kronello-text/           # fonts, horizontal/vertical layout, ruby and selectors
+  kronello-vector/         # paths, geometry, fill/stroke, trim/morph and bounded SVG
+  kronello-simulation/     # fixed-step particle kernel and disposable checkpoints
   kronello-render/         # scene compilation, layout, DAG, region/time requests, cache
   kronello-gpu/            # wgpu execution, color/alpha, texture cache and pools
   kronello-media/          # FFmpeg runtime, seek, decode/encode
   kronello-framebridge/    # native interop and resident VideoToolbox/Metal decode
-  kronello-audio/          # document audio, mixing, stateless effects
+  kronello-audio/          # document audio, mixing, effects and offline feature analysis
   kronello-store/          # SQLite, snapshots, migrations, event journal
   kronello-template/       # inputs, bindings, durations and versions
   kronello-service/        # shared commands, queries, policies and orchestration
@@ -32,7 +33,7 @@ apps/
   macos/                  # SwiftUI / AppKit application and SwiftPM tests
 ```
 
-`kronello-expr` / `kronello-scene` / `kronello-layout` は独立crateとして存在しない。式評価は主にeval、scene compilationとlayoutはrender等に実装されている。`apps/windows` / `apps/linux` は将来の配置候補であり、存在するアプリとして列挙しない。高度な音声特徴量はAUDIO-001、縦書き・ルビはTEXT-002の未実装範囲である。
+`kronello-expr` / `kronello-scene` / `kronello-layout` は独立crateとして存在しない。式評価は主にeval、scene compilationとlayoutはrender等に実装されている。`apps/windows` / `apps/linux` は将来の配置候補であり、存在するアプリとして列挙しない。音声特徴量は[AUDIO-001](../testing/audio-001.md)、組版意味版2の縦書き・ルビ・文字selectorは[TEXT-002](../testing/text-002.md)としてM5作業ツリーで受け入れ済み。`kronello-simulation`の存在はSIM-001の完了を意味せず、統合・受け入れの残件は[検証記録](../testing/sim-001.md)で追跡する。
 
 ## 依存の向き
 
@@ -41,7 +42,8 @@ apps/
 ```text
 model -> time
 animation / eval / text / vector -> model / time
-render -> eval / vector / text / template / model / time
+simulation -> model / time
+render -> eval / vector / text / template / simulation / model / time
 store / template -> model / time
 service -> store / render / media / audio / jobs / model
 cli / mcp / ffi -> service

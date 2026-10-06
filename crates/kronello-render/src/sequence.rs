@@ -47,7 +47,7 @@ pub(crate) fn solid_content(
     ]);
     Ok(crate::SceneContent::Shape {
         resolved: definition.resolve(&values)?,
-        definition,
+        definition: Box::new(definition),
         values,
     })
 }
@@ -74,7 +74,10 @@ pub fn lower_sequence(project: &Project, id: SequenceId) -> Result<Composition, 
     let mut nodes = vec![];
     let mut end = Time::ZERO;
     for track in &sequence.tracks {
-        if track.kind == TrackKind::Audio {
+        for clip in &track.clips {
+            end = end.max(clip.timeline_range.end());
+        }
+        if !track.visible() || track.kind == TrackKind::Audio {
             continue;
         }
         let mut clips: Vec<_> = track.clips.iter().collect();
@@ -155,4 +158,56 @@ pub fn lower_sequence(project: &Project, id: SequenceId) -> Result<Composition, 
         nodes,
         properties: vec![],
     })
+}
+
+/// Time-dependent lowering for explicit sampled Composition reverse. The authored
+/// envelope and legacy TimeMap remain intact in the immutable snapshot.
+pub(crate) fn lower_sequence_at(
+    project: &Project,
+    id: SequenceId,
+    time: Time,
+) -> Result<Composition, RenderError> {
+    let mut lowered = lower_sequence(project, id)?;
+    let sequence = project
+        .sequences
+        .iter()
+        .find_map(|s| match s {
+            DocumentObject::Known(s) if s.id == id => Some(s),
+            _ => None,
+        })
+        .expect("validated sequence");
+    for clip in sequence
+        .tracks
+        .iter()
+        .flat_map(|t| &t.clips)
+        .filter(|c| c.reverse_sampling.is_some() && c.timeline_range.contains(time))
+    {
+        let SourceRef::Composition { composition } = clip.source_ref else {
+            continue;
+        };
+        let definition = project
+            .compositions
+            .iter()
+            .find_map(|c| match c {
+                DocumentObject::Known(c) if c.id == composition => Some(c),
+                _ => None,
+            })
+            .expect("validated source");
+        let rate = definition.edit_rate.as_rational();
+        let sampled = reverse_grid_time(clip.local_time(time)?, rate)?;
+        if sampled < Time::ZERO || sampled >= definition.duration.as_time() {
+            return Err(RenderError::UnsupportedFeature(
+                "reverse Composition source sample outside bounds".into(),
+            ));
+        }
+        let node = lowered
+            .nodes
+            .iter_mut()
+            .find(|n| n.id.as_uuid() == clip.id.as_uuid())
+            .expect("lowered clip");
+        if let NodeKind::CompositionInstance(instance) = &mut node.kind {
+            instance.local_time_map = TimeMap::linear(sampled.checked_sub(time)?, Time::ONE)?;
+        }
+    }
+    Ok(lowered)
 }

@@ -2,8 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use kronello_eval::Affine2;
 use kronello_model::{
-    Color, ColorSpace, FillRule, PropertyId, ResolvedGradient, ResolvedShape, Shape, ShapeGeometry,
-    Value,
+    BlendMode, Color, ColorSpace, FillRule, PropertyId, ResolvedGradient, ResolvedShape, Shape,
+    ShapeGeometry, Value,
 };
 use kronello_vector::{FlattenRequest, FlattenedPath};
 use serde::{Deserialize, Serialize};
@@ -85,6 +85,7 @@ pub enum DagNode {
         asset: kronello_model::Asset,
         stream_index: u32,
         time: kronello_time::Time,
+        reverse_sampling: bool,
         extent: [f64; 2],
         output_to_local: [[f64; 3]; 2],
         bounds: crate::PixelBounds,
@@ -108,6 +109,11 @@ pub enum DagNode {
     IsolatedComposite {
         children: Vec<usize>,
         opacity: f64,
+    },
+    Blend {
+        source: usize,
+        backdrop: usize,
+        mode: BlendMode,
     },
     Effect {
         source: usize,
@@ -134,6 +140,9 @@ impl DagNode {
             Self::CoverageDraw { geometry, .. } => vec![*geometry],
             Self::IsolatedComposite { children, .. } => children.clone(),
             Self::Mask { source, matte, .. } => vec![*source, *matte],
+            Self::Blend {
+                source, backdrop, ..
+            } => vec![*source, *backdrop],
             Self::Effect { source, .. } | Self::OutputTransform { source, .. } => vec![*source],
         }
     }
@@ -160,6 +169,7 @@ impl RenderDag {
             u32,
             kronello_time::Time,
             ColorSpace,
+            bool,
         ) -> Result<crate::VideoImage, RenderError>,
     ) -> Result<Self, RenderError> {
         let mut dag = self.clone();
@@ -168,12 +178,19 @@ impl RenderDag {
                 asset,
                 stream_index,
                 time,
+                reverse_sampling,
                 extent,
                 output_to_local,
                 ..
             } = node
             {
-                let image = decode(asset, *stream_index, *time, dag.working_space)?;
+                let image = decode(
+                    asset,
+                    *stream_index,
+                    *time,
+                    dag.working_space,
+                    *reverse_sampling,
+                )?;
                 if image.size.contains(&0)
                     || image.size[0] as usize * image.size[1] as usize != image.pixels.len()
                 {
@@ -213,6 +230,7 @@ impl RenderDag {
                 DagNode::IsolatedComposite { children, .. } => children.len() as u64 + 2,
                 DagNode::Effect { .. } => 4,
                 DagNode::CoverageDraw { .. }
+                | DagNode::Blend { .. }
                 | DagNode::Mask { .. }
                 | DagNode::VideoDraw { .. }
                 | DagNode::RasterInput { .. } => 1,
@@ -281,6 +299,38 @@ impl Builder<'_> {
         self.nodes.push(node);
         Ok(id)
     }
+    fn composite(
+        &mut self,
+        children: Vec<usize>,
+        opacity: f64,
+        modes: &BTreeMap<usize, BlendMode>,
+    ) -> Result<usize, RenderError> {
+        if modes.values().all(|m| *m == BlendMode::Normal) {
+            return self.push(DagNode::IsolatedComposite { children, opacity });
+        }
+        let mut prefix = vec![];
+        for child in children {
+            let mode = modes.get(&child).copied().unwrap_or_default();
+            if mode == BlendMode::Normal {
+                prefix.push(child);
+            } else {
+                let backdrop = self.push(DagNode::IsolatedComposite {
+                    children: prefix,
+                    opacity: 1.0,
+                })?;
+                let blended = self.push(DagNode::Blend {
+                    source: child,
+                    backdrop,
+                    mode,
+                })?;
+                prefix = vec![blended];
+            }
+        }
+        self.push(DagNode::IsolatedComposite {
+            children: prefix,
+            opacity,
+        })
+    }
     fn node(&mut self, index: usize, depth: usize) -> Result<usize, RenderError> {
         if depth > 24 {
             return Err(RenderError::UnsupportedFeature(
@@ -291,9 +341,10 @@ impl Builder<'_> {
             return Ok(*id);
         }
         if !self.visiting.insert(index) {
-            return Err(RenderError::InvalidInput(
-                "cyclic containment/matte dependency".into(),
-            ));
+            return Err(RenderError::Backend {
+                code: "MATTE_CYCLE",
+                message: "cyclic containment/matte dependency".into(),
+            });
         }
         let n = &self.scene.nodes[index];
         if !n.opacity.is_finite() || !(0.0..=1.0).contains(&n.opacity) {
@@ -318,12 +369,14 @@ impl Builder<'_> {
                 stream_index,
                 time,
                 extent,
+                reverse_sampling,
             } => {
                 let b = crate::DesignBounds::checked([0.0; 2], *extent)?.transform(transform)?;
                 children.push(self.push(DagNode::VideoDraw {
                     asset: asset.clone(),
                     stream_index: *stream_index,
                     time: *time,
+                    reverse_sampling: *reverse_sampling,
                     extent: *extent,
                     output_to_local: inverse(transform)?,
                     bounds: crate::PixelBounds {
@@ -475,17 +528,18 @@ impl Builder<'_> {
                 }
             }
         }
+        let mut blend_modes = BTreeMap::new();
         for child in 0..self.scene.nodes.len() {
             let c = &self.scene.nodes[child];
             if c.parent.as_ref() == Some(&n.key) && !self.hidden.contains(&c.key) {
-                children.push(self.node(child, depth + 1)?);
+                let mode = c.blend_mode;
+                let id = self.node(child, depth + 1)?;
+                children.push(id);
+                blend_modes.insert(id, mode);
             }
         }
         // Opacity applies once after fill/stroke/glyph/child compositing.
-        let mut id = self.push(DagNode::IsolatedComposite {
-            children,
-            opacity: n.opacity,
-        })?;
+        let mut id = self.composite(children, n.opacity, &blend_modes)?;
         let scale =
             std::array::from_fn(|i| f64::from(self.region.pixels[i]) / self.region.extent[i]);
         for effect in &n.effects {
@@ -509,9 +563,13 @@ impl Builder<'_> {
             })?;
         }
         if let Some(binding) = self.scene.mattes.iter().find(|m| m.source == n.key) {
-            let matte = *self.indices.get(&binding.matte).ok_or_else(|| {
-                RenderError::InvalidInput(format!("missing active matte {:?}", binding.matte))
-            })?;
+            let matte = *self
+                .indices
+                .get(&binding.matte)
+                .ok_or_else(|| RenderError::Backend {
+                    code: "MATTE_MISSING",
+                    message: format!("missing active matte {:?}", binding.matte),
+                })?;
             let matte = self.node(matte, depth + 1)?;
             id = self.push(DagNode::Mask {
                 source: id,
@@ -617,9 +675,10 @@ fn build_unpadded_dag(
             || !indices.contains_key(&m.matte)
             || !sources.insert(m.source.clone())
         {
-            return Err(RenderError::InvalidInput(
-                "duplicate source or missing active matte binding".into(),
-            ));
+            return Err(RenderError::Backend {
+                code: "MATTE_MISSING",
+                message: "duplicate source or missing active matte binding".into(),
+            });
         }
         if !m.visible {
             hidden.insert(m.matte.clone());
@@ -637,19 +696,19 @@ fn build_unpadded_dag(
         semantic_cache,
     };
     let mut roots = vec![];
+    let mut root_modes = BTreeMap::new();
     for (i, n) in scene.nodes.iter().enumerate() {
         if n.parent.is_none() && !b.hidden.contains(&n.key) {
-            roots.push(b.node(i, 1)?);
+            let id = b.node(i, 1)?;
+            roots.push(id);
+            root_modes.insert(id, n.blend_mode);
         }
     }
     // Check all nodes, including a cycle consisting entirely of hidden mattes.
     for i in 0..scene.nodes.len() {
         b.node(i, 1)?;
     }
-    let composite = b.push(DagNode::IsolatedComposite {
-        children: roots,
-        opacity: 1.0,
-    })?;
+    let composite = b.composite(roots, 1.0, &root_modes)?;
     b.push(DagNode::OutputTransform {
         source: composite,
         display_space: ColorSpace::Srgb,
@@ -804,6 +863,15 @@ fn derive_bounds(nodes: &[DagNode]) -> Vec<crate::NodeBounds> {
                         visual_bounds: union(a.visual_bounds, bounds[*id].visual_bounds),
                     })
             }
+            DagNode::Blend {
+                source, backdrop, ..
+            } => NodeBounds {
+                ink_bounds: union(bounds[*source].ink_bounds, bounds[*backdrop].ink_bounds),
+                visual_bounds: union(
+                    bounds[*source].visual_bounds,
+                    bounds[*backdrop].visual_bounds,
+                ),
+            },
             DagNode::Effect { source, effect } => NodeBounds {
                 ink_bounds: bounds[*source].ink_bounds,
                 visual_bounds: bounds[*source]

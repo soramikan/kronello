@@ -112,6 +112,7 @@ pub fn glyph() -> DrawScene {
         }],
         direction: model::TextDirection::Horizontal,
         ruby: vec![],
+        character_animations: vec![],
         wrap_width: f(32.0),
         line_height: f(30.0),
         alignment: model::TextAlignment::Start,

@@ -18,6 +18,7 @@ func require(_ value: @autoclosure () -> Bool, _ message: String) throws {
     var history: [[String: Any]] = []
     var latency: Duration = .zero
     var sampleResponse: (([String: Any]) throws -> [String: Any])?
+    var formatResponse: (([String: Any]) throws -> [String: Any])?
     func ready() async throws {}
     func subscribe() async throws {}
     func poll() throws {}
@@ -30,6 +31,7 @@ func require(_ value: @autoclosure () -> Bool, _ message: String) throws {
         case "project.export": return ["revision": revision, "document": document]
         case "scene.query": return ["revision": revision, "nodes": []]
         case "property.sample": return try sampleResponse?(request) ?? [:]
+        case "expression.format": return try formatResponse?(request) ?? [:]
         case "history.list": return ["revision": revision, "events": history]
         case "edit.plan":
             if let error = nextError { throw error }; return ["plan_hash": "test-plan"]

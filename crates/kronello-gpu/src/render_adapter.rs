@@ -150,6 +150,15 @@ fn lower_with_resident(
                     .collect::<Result<_, _>>()?,
                 opacity: *opacity as f32,
             },
+            DagNode::Blend {
+                source,
+                backdrop,
+                mode,
+            } => DrawNode::Blend {
+                source: image(&ids, *source)?,
+                backdrop: image(&ids, *backdrop)?,
+                mode: *mode,
+            },
             DagNode::Effect { source, effect } => DrawNode::Effect {
                 source: image(&ids, *source)?,
                 effect: effect.clone(),
@@ -164,6 +173,8 @@ fn lower_with_resident(
                 kind: match kind {
                     MatteKind::Alpha => crate::MaskKind::Alpha,
                     MatteKind::Luminance => crate::MaskKind::Luminance,
+                    MatteKind::AlphaInverted => crate::MaskKind::AlphaInverted,
+                    MatteKind::LuminanceInverted => crate::MaskKind::LuminanceInverted,
                 },
             },
             DagNode::OutputTransform { source, .. } => {
