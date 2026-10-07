@@ -1940,7 +1940,7 @@
    "priority": "P1",
    "area": "audio",
    "title": "EQ/フィルタ系音声エフェクト: パラメトリックEQ・HPF/LPF",
-   "status": "planned",
+   "status": "done",
    "dependencies": [
     "AUDIO-003"
    ],
@@ -1955,7 +1955,7 @@
    "priority": "P1",
    "area": "audio",
    "title": "ダイナミクスと LUFS 計測・ノーマライズ",
-   "status": "planned",
+   "status": "done",
    "dependencies": [
     "AUDIO-007"
    ],
@@ -1970,7 +1970,7 @@
    "priority": "P2",
    "area": "audio",
    "title": "音声 UI: VU メーター・オーディオスクラブ・ミキサーパネル",
-   "status": "planned",
+   "status": "done",
    "dependencies": [
     "AUDIO-006",
     "GUI-008"

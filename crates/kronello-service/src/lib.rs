@@ -13,7 +13,8 @@ mod playback;
 pub use kronello_render::RenderTarget;
 pub use nle::*;
 pub use playback::{
-    AudioPreparationInput, AudioPrepareRequest, MAX_PLAYBACK_BLOCK_FRAMES, PreparedAudio,
+    AudioPreparationInput, AudioPrepareRequest, BlockMeters, MAX_PLAYBACK_BLOCK_FRAMES,
+    PreparedAudio, TrackMeterReading,
 };
 mod jobs;
 pub use jobs::*;
@@ -30,6 +31,11 @@ pub use proxy::{
 };
 mod tracking;
 pub use tracking::TrackAnalyzeRequest;
+mod loudness;
+pub use loudness::{
+    AudioLoudnessInput, AudioLoudnessRequest, AudioLoudnessResult, AudioNormalizeRequest,
+    AudioNormalizeResult,
+};
 mod captions;
 pub use captions::*;
 mod edit;
@@ -97,6 +103,10 @@ pub enum Request {
     ProxyStatus(ProxyStatusRequest),
     #[serde(rename = "proxy.clear")]
     ProxyClear(ProxyClearRequest),
+    #[serde(rename = "audio.loudness")]
+    AudioLoudness(AudioLoudnessRequest),
+    #[serde(rename = "audio.normalize")]
+    AudioNormalize(AudioNormalizeRequest),
     #[serde(rename = "sequence.query")]
     SequenceQuery(SequenceQueryRequest),
     #[serde(rename = "sequence.create")]
@@ -319,6 +329,8 @@ pub enum ResultData {
     Capabilities(Box<CapabilitiesResult>),
     ProjectPlan(Box<ProjectChangePlan>),
     Captions(CaptionsExportResult),
+    Loudness(AudioLoudnessResult),
+    Normalize(Box<AudioNormalizeResult>),
 }
 #[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
 #[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
@@ -567,6 +579,10 @@ impl<'a> Service<'a> {
             Request::ProxyGenerate(r) => self.generate_proxies(r).map(ResultData::Jobs),
             Request::ProxyStatus(r) => self.proxy_status(r).map(ResultData::Proxies),
             Request::ProxyClear(r) => self.proxy_clear(r).map(ResultData::Project),
+            Request::AudioLoudness(r) => self.loudness(r).map(ResultData::Loudness),
+            Request::AudioNormalize(r) => self
+                .normalize_audio(r)
+                .map(|r| ResultData::Normalize(Box::new(r))),
             Request::SequenceQuery(r) => nle::sequence_query(r).map(ResultData::Timeline),
             Request::SequenceCreate(r) => nle::sequence_create(r).map(ResultData::Edit),
             Request::ClipPlace(r) => nle::clip_place(r).map(ResultData::Edit),
@@ -1321,6 +1337,8 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
         Request::ProxyGenerate(r) => local_locator(&r.project),
         Request::ProxyStatus(r) => local_locator(&r.project),
         Request::ProxyClear(r) => local_locator(&r.project),
+        Request::AudioLoudness(r) => local_locator(&r.project),
+        Request::AudioNormalize(r) => local_locator(&r.project),
         Request::CaptionsImportPlan(r) => local_locator(&r.project),
         Request::CaptionsImport(r) => local_locator(&r.plan.project),
         Request::CaptionsExport(r) => local_locator(&r.project),

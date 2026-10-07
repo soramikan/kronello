@@ -35,6 +35,20 @@ public final class NativePreparedAudio: @unchecked Sendable {
         try Self.check(error)
         guard ok else { throw NativeError.rejected }
     }
+    /// AUDIO-009: identical render path plus evaluator-measured peak/RMS for
+    /// the same rendered block, decoded from the owned FFI JSON string.
+    public func renderMetered(start: Int64, frames: Int, into buffer: UnsafeMutablePointer<Float>) throws -> PlaybackMeters {
+        var error: UnsafeMutablePointer<CChar>?
+        var meters: UnsafeMutablePointer<CChar>?
+        let ok = kronello_audio_render_metered(resource, start, frames, buffer, &meters, &error)
+        try Self.check(error)
+        guard ok, let meters else { throw NativeError.rejected }
+        defer { kronello_free(meters) }
+        guard let decoded = try? JSONDecoder().decode(PlaybackMeters.self, from: Data(String(cString: meters).utf8)) else {
+            throw NativeError.service("INVALID_RESPONSE", "Audio meter payload could not be decoded")
+        }
+        return decoded
+    }
     private static func check(_ error: UnsafeMutablePointer<CChar>?) throws {
         guard let error else { return }
         defer { kronello_free(error) }
@@ -42,6 +56,30 @@ public final class NativePreparedAudio: @unchecked Sendable {
         let value = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         throw NativeError.service(value?["code"] as? String ?? "INVALID_RESPONSE", value?["message"] as? String ?? "Audio producer failed")
     }
+}
+
+/// AUDIO-009: per-rendered-block peak/RMS measured by the shared Rust
+/// evaluator. Track keys are the sequence's authored TrackId strings.
+public struct PlaybackTrackMeter: Decodable, Sendable {
+    public let track: String
+    public let peak: [Float]
+    public let rms: [Float]
+    public init(track: String, peak: [Float], rms: [Float]) { self.track = track; self.peak = peak; self.rms = rms }
+    public var stereoPeak: Float { peak.max() ?? 0 }
+    public var stereoRms: Float { rms.max() ?? 0 }
+}
+public struct PlaybackMeters: Decodable, Sendable {
+    public let master_peak: [Float]
+    public let master_rms: [Float]
+    public let tracks: [PlaybackTrackMeter]
+    public init(master_peak: [Float], master_rms: [Float], tracks: [PlaybackTrackMeter]) {
+        self.master_peak = master_peak; self.master_rms = master_rms; self.tracks = tracks
+    }
+    /// Published after every stop so VU meters decay to silence deterministically.
+    public static let silent = PlaybackMeters(master_peak: [0, 0], master_rms: [0, 0], tracks: [])
+    public var masterPeak: Float { master_peak.max() ?? 0 }
+    public var masterRms: Float { master_rms.max() ?? 0 }
+    public func track(_ id: String) -> PlaybackTrackMeter? { tracks.first { $0.track == id } }
 }
 
 public struct PlaybackClock: Sendable {

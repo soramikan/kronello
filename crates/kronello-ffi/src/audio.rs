@@ -107,6 +107,61 @@ pub unsafe extern "C" fn kronello_audio_render(
     .unwrap_or_else(|_| Err(panicked()));
     failure(result, error)
 }
+/// AUDIO-009: render 1..4096 stereo frames and publish the evaluator-measured
+/// per-track/master peak-RMS meters as a JSON string owned by the caller
+/// (kronello_free). Same render path as kronello_audio_render.
+/// # Safety
+/// resource is live from prepare, exclusively owned by the producer; output has
+/// frames*2 writable floats, meters/error are writable outputs.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kronello_audio_render_metered(
+    resource: *const c_void,
+    start_sample: i64,
+    frames: usize,
+    output: *mut f32,
+    meters: *mut *mut c_char,
+    error: *mut *mut c_char,
+) -> bool {
+    if error.is_null() || meters.is_null() {
+        return false;
+    }
+    // SAFETY: C contract guarantees writable outputs.
+    unsafe {
+        *error = std::ptr::null_mut();
+        *meters = std::ptr::null_mut();
+    }
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        if resource.is_null()
+            || output.is_null()
+            || !(1..=MAX_PLAYBACK_BLOCK_FRAMES).contains(&frames)
+        {
+            return Err(ServiceError::new(
+                "INVALID_AUDIO_INPUT",
+                "audio resource/buffer/block size",
+            ));
+        }
+        // SAFETY: caller guarantees the resource lifetime and buffer size, checked bounds.
+        let prepared = unsafe { &*resource.cast::<PreparedAudio>() };
+        let output = unsafe { std::slice::from_raw_parts_mut(output, frames * 2) };
+        prepared.render_block_metered(start_sample, output)
+    }))
+    .unwrap_or_else(|_| Err(panicked()));
+    match result {
+        Ok(readings) => {
+            // SAFETY: writable output; owned JSON allocation returned to caller.
+            unsafe {
+                *meters = CString::new(serde_json::to_string(&readings).expect("meters JSON"))
+                    .expect("escaped JSON")
+                    .into_raw();
+            }
+            true
+        }
+        Err(e) => {
+            failure(Err(e), error);
+            false
+        }
+    }
+}
 /// # Safety
 /// resource is null or the still-owned pointer from prepare, freed exactly once
 /// after all producer calls finish. Does not run on the realtime callback.

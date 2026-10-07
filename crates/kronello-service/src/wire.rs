@@ -189,6 +189,8 @@ impl<'de> Deserialize<'de> for Request {
             "proxy.generate" => payload(&fields).map(Self::ProxyGenerate),
             "proxy.status" => payload(&fields).map(Self::ProxyStatus),
             "proxy.clear" => payload(&fields).map(Self::ProxyClear),
+            "audio.loudness" => payload(&fields).map(Self::AudioLoudness),
+            "audio.normalize" => payload(&fields).map(Self::AudioNormalize),
             "sequence.query" => payload(&fields).map(Self::SequenceQuery),
             "sequence.create" => payload(&fields).map(Self::SequenceCreate),
             "clip.place" => payload(&fields).map(Self::ClipPlace),
@@ -269,6 +271,8 @@ impl<'de> Deserialize<'de> for ResultData {
             "proxies" => Self::Proxies(take(&mut fields, "value")?),
             "capabilities" => Self::Capabilities(take(&mut fields, "value")?),
             "captions" => Self::Captions(take(&mut fields, "value")?),
+            "loudness" => Self::Loudness(take(&mut fields, "value")?),
+            "normalize" => Self::Normalize(take(&mut fields, "value")?),
             _ => return Err(D::Error::custom("unknown result kind")),
         };
         exhausted::<D::Error>(&fields)?;

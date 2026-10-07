@@ -295,6 +295,14 @@ fn header_matches_every_exported_function_signature() {
         kronello_audio_prepare;
     let _: unsafe extern "C" fn(*const c_void, i64, usize, *mut f32, *mut *mut c_char) -> bool =
         kronello_audio_render;
+    let _: unsafe extern "C" fn(
+        *const c_void,
+        i64,
+        usize,
+        *mut f32,
+        *mut *mut c_char,
+        *mut *mut c_char,
+    ) -> bool = kronello_audio_render_metered;
     let _: unsafe extern "C" fn(*mut c_void) = kronello_audio_free;
     let header = include_str!("../../../apps/macos/Sources/CKronelloFFI/include/kronello.h");
     for declaration in [
@@ -309,6 +317,7 @@ fn header_matches_every_exported_function_signature() {
         "uint64_t kronello_surface_redraw(uint64_t handle, const uint8_t *json, size_t len);",
         "void *kronello_audio_prepare(const uint8_t *json, size_t len, bool *has_audio, char **error);",
         "bool kronello_audio_render(const void *resource, int64_t start_sample, size_t frames, float *output, char **error);",
+        "bool kronello_audio_render_metered(const void *resource, int64_t start_sample, size_t frames, float *output, char **meters, char **error);",
         "void kronello_audio_free(void *resource);",
     ] {
         assert!(
@@ -325,7 +334,7 @@ fn header_matches_every_exported_function_signature() {
                 || l.starts_with("bool kronello_")
                 || l.starts_with("char *kronello_"))
             .count(),
-        12
+        13
     );
 }
 

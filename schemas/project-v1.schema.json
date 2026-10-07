@@ -1402,6 +1402,124 @@
           ]
         },
         {
+          "description": "AUDIO-007 parametric EQ. `bands` references a data table property\nwith `kind` (peak | low_shelf | high_shelf), `freq_hz`, `gain_db`\nand `q` columns and 1..=AUDIO_EQ_MAX_BANDS rows.",
+          "type": "object",
+          "properties": {
+            "bands": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "audio_eq"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "bands"
+          ]
+        },
+        {
+          "description": "AUDIO-007 Butterworth high-pass; `order` is 1..=AUDIO_FILTER_MAX_ORDER.",
+          "type": "object",
+          "properties": {
+            "cutoff_hz": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "audio_hpf"
+            },
+            "order": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "cutoff_hz",
+            "order"
+          ]
+        },
+        {
+          "description": "AUDIO-007 Butterworth low-pass; `order` is 1..=AUDIO_FILTER_MAX_ORDER.",
+          "type": "object",
+          "properties": {
+            "cutoff_hz": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "audio_lpf"
+            },
+            "order": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "cutoff_hz",
+            "order"
+          ]
+        },
+        {
+          "description": "AUDIO-008 stereo-linked feed-forward peak compressor.",
+          "type": "object",
+          "properties": {
+            "attack_ms": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "audio_compressor"
+            },
+            "makeup_db": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "ratio": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "release_ms": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "threshold_db": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "threshold_db",
+            "ratio",
+            "attack_ms",
+            "release_ms",
+            "makeup_db"
+          ]
+        },
+        {
+          "description": "AUDIO-008 ceiling limiter with instant attack and release.",
+          "type": "object",
+          "properties": {
+            "ceiling_db": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "audio_limiter"
+            },
+            "release_ms": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "ceiling_db",
+            "release_ms"
+          ]
+        },
+        {
           "description": "COLOR-002 exposure: premultiplied working RGB is scaled by\n2^exposure and shifted by offset; alpha is preserved (ADR-0108).",
           "type": "object",
           "properties": {

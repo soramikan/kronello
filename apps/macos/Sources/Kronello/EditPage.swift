@@ -345,6 +345,7 @@ struct SequenceTracks: View {
     @Environment(\.krPalette) var p
     @ObservedObject var model: EditorModel
     @FocusState private var tracksFocused: Bool
+    @State private var showMixer = false
     var body: some View {
         KRPanel(header: { HStack(spacing: KRSpace.space2) {
             KRPanelTitle("Sequence")
@@ -361,9 +362,15 @@ struct SequenceTracks: View {
                 .disabled(model.busy || model.pendingCandidate != nil)
             KRButton(icon: .x, accessibilityLabel: "In/Out を解除") { model.clearWorkArea() }
                 .disabled(model.workArea == nil)
+            KRButton(icon: .audioLines, accessibilityLabel: "オーディオスクラブ", pressed: model.audioScrubEnabled) { model.audioScrubEnabled.toggle() }
+                .disabled(model.ui.sequence == nil || model.playbackMuted)
+            KRButton(icon: .slidersHorizontal, accessibilityLabel: "ミキサー", pressed: showMixer) { showMixer.toggle() }
+                .disabled(model.ui.sequence == nil)
             KRButton(icon: .chevronsLeft, accessibilityLabel: "時間軸を縮小") { model.editScale = max(1, model.editScale / 2) }
             KRButton(icon: .plus, accessibilityLabel: "時間軸を拡大") { model.editScale = min(16, model.editScale * 2) }
         }) {
+            VStack(spacing: 0) {
+                if showMixer { AudioMixer(model: model).krBottomLine() }
             GeometryReader { proxy in
                 let laneWidth = max(320, proxy.size.width - 200) * model.editScale
                 let frameWidth = (laneWidth - KRSpace.space2 * 2) / Double(max(model.durationFrames, Int64(model.nominalFPS * 5)))
@@ -388,6 +395,7 @@ struct SequenceTracks: View {
                             .offset(x: 200 + KRSpace.space2 + Double(model.frame) * frameWidth - 6)
                     }.frame(width: 200 + laneWidth, alignment: .topLeading).coordinateSpace(name: "sequenceTracks")
                 }
+            }
             }
         }
         .focusable().focused($tracksFocused)
@@ -505,7 +513,9 @@ struct SequenceTracks: View {
     func lane(_ track: [String: Any], width: Double, frameWidth: Double) -> some View {
         let id = track.string("id"), kind = track.string("kind"), locked = model.trackLocked(id)
         return KRTrack(header: .init(model.trackNumber(id), kind == "audio" ? "Audio" : kind == "caption" ? "Caption" : "Video", kind: kind == "audio" ? .audio : kind == "caption" ? .subtitle : .video,
-            selected: model.selectedClip?.track == id, hidden: kind == "audio" ? (track.object("state")["muted"] as? Bool ?? false) : !(track.object("state")["visible"] as? Bool ?? true), locked: locked, targeted: model.trackTargeted(track), visibilityEnabled: !locked && !model.busy && model.pendingCandidate == nil, onVisibility: { model.setTrackOutput(track) }, onLock: { model.setTrackLocked(track) }, onTarget: { model.setTrackTarget(track) }), headerWidth: 200, locked: locked) {
+            selected: model.selectedClip?.track == id, hidden: kind == "audio" ? (track.object("state")["muted"] as? Bool ?? false) : !(track.object("state")["visible"] as? Bool ?? true), locked: locked, targeted: model.trackTargeted(track), visibilityEnabled: !locked && !model.busy && model.pendingCandidate == nil,
+            meter: model.playbackMeters?.track(id).map { (peak: Double($0.stereoPeak), rms: Double($0.stereoRms)) },
+            onVisibility: { model.setTrackOutput(track) }, onLock: { model.setTrackLocked(track) }, onTarget: { model.setTrackTarget(track) }), headerWidth: 200, locked: locked) {
             ZStack(alignment: .leading) {
                 Color.clear.contentShape(Rectangle()).onTapGesture { tracksFocused = true; model.selectClip(nil) }
                 ForEach(model.editClips.filter { $0.track == id }) { clip in
@@ -650,5 +660,60 @@ struct AssetPlacementDrop: DropDelegate {
         trace("perform"); guard validateDrop(info: info) else { return false }
         guard updateCandidate(info: info) else { return false }
         Task { await receiver.commit() }; return true
+    }
+}
+
+/// AUDIO-009: one strip per audio track plus a master strip. Faders route
+/// through the shared edit API (one undoable clip_set_volume per clip); the
+/// meters show the evaluator's rendered-block peak/RMS, and mute reuses the
+/// track output / monitoring toggles instead of a UI-only path.
+struct AudioMixer: View {
+    @Environment(\.krPalette) var p
+    @ObservedObject var model: EditorModel
+    var body: some View {
+        ScrollView(.horizontal) {
+            HStack(alignment: .top, spacing: KRSpace.space2) {
+                ForEach(model.orderedTracks.filter { $0.string("kind") == "audio" }, id: \.selfID) { track in
+                    MixerStrip(model: model, track: track)
+                }
+                MixerMasterStrip(model: model)
+            }.padding(KRSpace.space2)
+        }.frame(height: 128).background(p.surface100)
+    }
+}
+
+struct MixerStrip: View {
+    @Environment(\.krPalette) var p
+    @ObservedObject var model: EditorModel
+    let track: [String: Any]
+    var body: some View {
+        let id = track.string("id"), muted = track.object("state")["muted"] as? Bool ?? false
+        let locked = model.ui.locked.contains(id), meter = model.playbackMeters?.track(id)
+        VStack(spacing: KRSpace.space1) {
+            Text(model.trackNumber(id)).krText(KRType.label).foregroundStyle(p.ink)
+            KRMeterBar(peak: Double(meter?.stereoPeak ?? 0), rms: Double(meter?.stereoRms ?? 0)).frame(width: 64)
+            KRSlider(value: .constant(model.trackVolume(track) ?? 1), range: 0...2, step: 0.05,
+                accessibilityLabel: "\(model.trackNumber(id)) フェーダー",
+                onCommit: { _, value in model.setTrackVolume(track, gain: value) }).frame(width: 64)
+            HStack(spacing: KRSpace.space1) {
+                KRButton(icon: muted ? .volumeX : .volume2, accessibilityLabel: "ミュートを切り替える", pressed: muted, iconSize: 12) { model.setTrackOutput(track) }
+                Text(String(format: "%.0f%%", (model.trackVolume(track) ?? 1) * 100)).krText(KRType.caption).foregroundStyle(p.inkMuted)
+            }
+        }.frame(width: 80).padding(.vertical, KRSpace.space1)
+            .opacity(locked ? 0.6 : 1)
+            .disabled(locked || model.busy || model.pendingCandidate != nil)
+    }
+}
+
+struct MixerMasterStrip: View {
+    @Environment(\.krPalette) var p
+    @ObservedObject var model: EditorModel
+    var body: some View {
+        VStack(spacing: KRSpace.space1) {
+            Text("Master").krText(KRType.label).foregroundStyle(p.ink)
+            KRMeterBar(peak: Double(model.playbackMeters?.masterPeak ?? 0), rms: Double(model.playbackMeters?.masterRms ?? 0)).frame(width: 64)
+            KRButton(icon: model.playbackMuted ? .volumeX : .volume2, accessibilityLabel: "モニター音量", pressed: model.playbackMuted, iconSize: 12) { model.playbackMuted.toggle() }
+        }.frame(width: 80).padding(.vertical, KRSpace.space1)
+            .padding(.leading, KRSpace.space2).overlay(alignment: .leading) { p.line.frame(width: 1) }
     }
 }

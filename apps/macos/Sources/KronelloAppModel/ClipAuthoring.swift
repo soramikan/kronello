@@ -245,6 +245,33 @@ extension EditorModel {
               property.object("source").string("kind") == "constant" else { return 1.0 }
         return property.object("source").object("value").number("value")
     }
+    /// AUDIO-009 mixer fader: one undoable edit writes the same linear gain
+    /// into every clip's `kronello.audio.volume` on the track. The authored
+    /// model has no track-level gain field, so the shared clip Property is
+    /// the gain the evaluator and export path already understand.
+    public func setTrackVolume(_ track: [String: Any], gain: Double, base: String? = nil) {
+        guard !ui.locked.contains(track.string("id")), track.string("kind") == "audio",
+              gain.isFinite, gain >= 0 else { return }
+        var commands: [[String: Any]] = []
+        for clip in track.objects("clips") {
+            let volume: [String: Any] = ["id": UUID().uuidString, "descriptor": ["key": "kronello.audio.volume", "version": 1],
+                "source": ["kind": "constant", "value": ["kind": "scalar", "value": gain]], "modifiers": []]
+            commands.append(timelineCommand("clip_set_volume", ["sequence": sequence.string("id"), "clip": clip.string("id"), "volume": volume]))
+        }
+        guard !commands.isEmpty else { return }
+        submit(commands, label: "トラックの音量", base: base)
+    }
+    /// Fader display value: the shared clip gain when every clip on the track
+    /// agrees, else nil for a mixed state.
+    public func trackVolume(_ track: [String: Any]) -> Double? {
+        let gains = track.objects("clips").map { clip -> Double in
+            guard let property = clip["volume"] as? [String: Any],
+                  property.object("source").string("kind") == "constant" else { return 1.0 }
+            return property.object("source").object("value").number("value")
+        }
+        guard let first = gains.first else { return nil }
+        return gains.allSatisfy { abs($0 - first) < 0.0001 } ? first : nil
+    }
 }
 
 extension RationalTime {

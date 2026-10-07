@@ -1,7 +1,7 @@
 //! Owned preview runtime resources. Not entries in the stateless request registry.
 use crate::ServiceError;
 use kronello_audio::{AudioSources, AudioTarget, DocumentAudioPlan, MAX_AUDIO_FRAMES};
-use kronello_model::DocumentObject;
+use kronello_model::{DocumentObject, TrackId};
 use kronello_render::RenderTarget;
 use kronello_store::{ProjectStore, Snapshot};
 use kronello_time::{Time, TimeRange};
@@ -12,6 +12,26 @@ use std::{
 };
 
 pub const MAX_PLAYBACK_BLOCK_FRAMES: usize = 4096;
+
+/// AUDIO-009: peak/RMS levels measured by the shared evaluator for one
+/// rendered block, serialized to JSON by the FFI for the playback GUI.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BlockMeters {
+    /// Per-channel peak of the summed output within the block.
+    pub master_peak: [f32; 2],
+    /// Per-channel RMS of the summed output within the block.
+    pub master_rms: [f32; 2],
+    /// Levels per track with audible contributions within the block.
+    pub tracks: Vec<TrackMeterReading>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TrackMeterReading {
+    pub track: TrackId,
+    pub peak: [f32; 2],
+    pub rms: [f32; 2],
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -182,6 +202,55 @@ impl PreparedAudio {
             out.copy_from_slice(frame);
         }
         Ok(())
+    }
+    /// AUDIO-009: identical render path plus the evaluator-measured meters.
+    /// Caller owns the binary interleaved stereo buffer. No disk/project reads.
+    pub fn render_block_metered(
+        &self,
+        start_sample: i64,
+        output: &mut [f32],
+    ) -> Result<BlockMeters, ServiceError> {
+        let frames = output.len() / 2;
+        if start_sample < 0
+            || !output.len().is_multiple_of(2)
+            || frames == 0
+            || frames > MAX_PLAYBACK_BLOCK_FRAMES
+        {
+            return Err(ServiceError::new(
+                "INVALID_AUDIO_INPUT",
+                "expected 1..4096 stereo frames and nonnegative start sample",
+            ));
+        }
+        let end = start_sample
+            .checked_add(frames as i64)
+            .ok_or_else(|| ServiceError::new("TIME_ERROR", "audio sample overflow"))?;
+        let time_error =
+            |e: kronello_time::TimeError| ServiceError::new("TIME_ERROR", e.to_string());
+        let range = TimeRange::new(
+            Time::new(start_sample, 48000).map_err(time_error)?,
+            Time::new(end, 48000).map_err(time_error)?,
+        )
+        .map_err(time_error)?;
+        let (bus, meters) = self
+            .plan
+            .mix_metered(&self.sources, range)
+            .map_err(audio_error)?;
+        for (out, frame) in output.chunks_exact_mut(2).zip(bus.buffer().frames()) {
+            out.copy_from_slice(frame);
+        }
+        Ok(BlockMeters {
+            master_peak: meters.master.peak,
+            master_rms: meters.master.rms,
+            tracks: meters
+                .tracks
+                .iter()
+                .map(|meter| TrackMeterReading {
+                    track: meter.track,
+                    peak: meter.peak,
+                    rms: meter.rms,
+                })
+                .collect(),
+        })
     }
 }
 fn audio_error(error: kronello_audio::AudioError) -> ServiceError {

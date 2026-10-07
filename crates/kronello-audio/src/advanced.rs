@@ -27,12 +27,54 @@ enum Source {
     },
     Generator,
 }
+/// AUDIO-003 gain Properties remain pointwise; AUDIO-007/008 resolved
+/// filters/dynamics carry deterministic state from the placement boundary.
+#[derive(Debug, Clone)]
+enum EntryEffect {
+    Gain(Property),
+    Dsp(ResolvedAudioEffect),
+}
 #[derive(Debug, Clone)]
 struct Entry {
     clip: Clip,
     source: Source,
-    effects: Vec<Property>,
+    effects: Vec<EntryEffect>,
     fades: Vec<(Range<i64>, bool)>,
+    track: TrackId,
+}
+impl Entry {
+    /// Stateful chains must evaluate from placement start so any request
+    /// range reproduces continuous-render samples (ADR-0117).
+    fn stateful(&self) -> bool {
+        self.effects
+            .iter()
+            .any(|effect| matches!(effect, EntryEffect::Dsp(_)))
+    }
+    /// Per-sample operation estimate: gain lookup is cheap; each DSP stage
+    /// runs a biquad/dynamics chain over two channels.
+    fn effect_cost(&self) -> u64 {
+        self.effects
+            .iter()
+            .map(|effect| match effect {
+                EntryEffect::Gain(_) => 1,
+                EntryEffect::Dsp(_) => 8,
+            })
+            .sum()
+    }
+}
+/// A live processing step inside one mix request. Gains keep evaluated
+/// values; DSP stages own the zero-initialized per-call state.
+enum ChainStep {
+    Gain(Property),
+    Dsp(crate::dsp::Processor),
+}
+impl ChainStep {
+    fn new(effect: &EntryEffect) -> Self {
+        match effect {
+            EntryEffect::Gain(property) => Self::Gain(property.clone()),
+            EntryEffect::Dsp(spec) => Self::Dsp(crate::dsp::processor(spec)),
+        }
+    }
 }
 #[derive(Debug, Clone)]
 pub(crate) struct AdvancedAudioPlan {
@@ -47,6 +89,40 @@ fn unsupported(message: &str) -> AudioError {
 }
 fn budget(message: &str) -> AudioError {
     AudioError::BudgetExceeded(message.into())
+}
+/// AUDIO-007/008 descriptor registry used to type-check effect parameter
+/// Properties against their declared keys and value types.
+fn effect_registry() -> &'static SchemaRegistry {
+    static REGISTRY: std::sync::LazyLock<SchemaRegistry> = std::sync::LazyLock::new(|| {
+        let mut registry = SchemaRegistry::with_builtin();
+        for descriptor in kronello_model::effect_descriptors() {
+            registry
+                .register(descriptor)
+                .expect("effect descriptor registration");
+        }
+        registry
+    });
+    &REGISTRY
+}
+/// Property ids referenced by the AUDIO-007/008 constant-parameter effects.
+fn audio_parameter_ids(parameters: &EffectParameters) -> Vec<PropertyId> {
+    match parameters {
+        EffectParameters::AudioEq { bands } => vec![*bands],
+        EffectParameters::AudioHpf { cutoff_hz, order }
+        | EffectParameters::AudioLpf { cutoff_hz, order } => vec![*cutoff_hz, *order],
+        EffectParameters::AudioCompressor {
+            threshold_db,
+            ratio,
+            attack_ms,
+            release_ms,
+            makeup_db,
+        } => vec![*threshold_db, *ratio, *attack_ms, *release_ms, *makeup_db],
+        EffectParameters::AudioLimiter {
+            ceiling_db,
+            release_ms,
+        } => vec![*ceiling_db, *release_ms],
+        _ => vec![],
+    }
 }
 fn number(t: Time) -> f64 {
     t.numerator() as f64 / t.denominator() as f64
@@ -146,6 +222,7 @@ impl AdvancedAudioPlan {
                     continue;
                 }
                 let mut effects = vec![];
+                let mut referenced = BTreeSet::new();
                 for effect in &clip.effects {
                     if track.kind != TrackKind::Audio {
                         return Err(unsupported("audio effects require an audio track"));
@@ -153,23 +230,61 @@ impl AdvancedAudioPlan {
                     let definition = effect
                         .definition()
                         .map_err(|_| unsupported("audio effect id / version"))?;
-                    let EffectParameters::AudioGain { gain } = definition.parameters else {
-                        return Err(unsupported("audio supports kronello.audio.gain v1 only"));
-                    };
-                    let property = clip
-                        .properties
-                        .iter()
-                        .find(|p| p.id() == gain)
-                        .ok_or_else(|| invalid("audio effect gain Property missing"))?;
-                    plan.capture_property(project, property)?;
-                    effects.push(property.clone());
+                    match &definition.parameters {
+                        EffectParameters::AudioGain { gain } => {
+                            let property = clip
+                                .properties
+                                .iter()
+                                .find(|p| p.id() == *gain)
+                                .ok_or_else(|| invalid("audio effect gain Property missing"))?;
+                            plan.capture_property(project, property)?;
+                            referenced.insert(*gain);
+                            effects.push(EntryEffect::Gain(property.clone()));
+                        }
+                        _ => {
+                            // AUDIO-007/008: constant-parameter filters and
+                            // dynamics, validated through the shared model
+                            // resolution so failures are typed parameter errors.
+                            definition
+                                .validate(&clip.properties, effect_registry())
+                                .map_err(|e| match e {
+                                    EffectError::InvalidParameter(id) => {
+                                        invalid(&format!("audio effect parameter Property {id}"))
+                                    }
+                                    _ => unsupported("audio effect id / version"),
+                                })?;
+                            let mut values = BTreeMap::new();
+                            for id in audio_parameter_ids(&definition.parameters) {
+                                let property =
+                                    clip.properties.iter().find(|p| p.id() == id).ok_or_else(
+                                        || invalid("audio effect parameter Property missing"),
+                                    )?;
+                                let PropertySource::Constant(value) = property.source() else {
+                                    return Err(unsupported(
+                                        "audio filter/dynamics parameters require Constant sources",
+                                    ));
+                                };
+                                referenced.insert(id);
+                                values.insert(id, value.clone());
+                            }
+                            let spec = definition.resolve_audio(&values).map_err(|e| match e {
+                                EffectError::InvalidParameter(id) => {
+                                    invalid(&format!("audio effect parameter {id} out of range"))
+                                }
+                                _ => {
+                                    unsupported("audio clips accept kronello.audio.* effects only")
+                                }
+                            })?;
+                            effects.push(EntryEffect::Dsp(spec));
+                        }
+                    }
                 }
                 // Every authored audio Property must belong to the closed effect contract.
                 if track.kind == TrackKind::Audio
                     && clip
                         .properties
                         .iter()
-                        .any(|p| !effects.iter().any(|e| e.id() == p.id()))
+                        .any(|p| !referenced.contains(&p.id()))
                 {
                     return Err(unsupported("unused / unsupported audio clip Property"));
                 }
@@ -292,6 +407,7 @@ impl AdvancedAudioPlan {
                     source,
                     effects,
                     fades,
+                    track: track.id,
                 });
             }
         }
@@ -372,6 +488,22 @@ impl AdvancedAudioPlan {
         sources: &dyn AudioSourceReader,
         range: TimeRange,
     ) -> Result<Bus, AudioError> {
+        Ok(self.mix_impl(sources, range, false)?.0)
+    }
+    /// AUDIO-009: identical mixing path plus per-track and master peak/RMS.
+    pub(crate) fn mix_metered(
+        &self,
+        sources: &dyn AudioSourceReader,
+        range: TimeRange,
+    ) -> Result<(Bus, crate::BusMeters), AudioError> {
+        self.mix_impl(sources, range, true)
+    }
+    fn mix_impl(
+        &self,
+        sources: &dyn AudioSourceReader,
+        range: TimeRange,
+        metered: bool,
+    ) -> Result<(Bus, crate::BusMeters), AudioError> {
         let output = sample_range(range)?;
         let length = output
             .end
@@ -382,13 +514,20 @@ impl AdvancedAudioPlan {
         let mut operations = 0_u64;
         for entry in &self.entries {
             let placement = sample_range(entry.clip.timeline_range)?;
+            // Stateful chains run from placement start even outside the
+            // request; charge the complete evaluated span.
+            let span_start = if entry.stateful() {
+                placement.start
+            } else {
+                output.start.max(placement.start)
+            };
             let samples = output
                 .end
                 .min(placement.end)
-                .saturating_sub(output.start.max(placement.start))
+                .saturating_sub(span_start)
                 .max(0) as u64;
             let cost = 1
-                + entry.effects.len() as u64
+                + entry.effect_cost()
                 + entry.fades.len() as u64
                 + match &entry.source {
                     Source::Legacy(p) => p.audio4_sample_cost()?,
@@ -409,9 +548,15 @@ impl AdvancedAudioPlan {
             if matches!(entry.source, Source::Legacy(_)) {
                 // The legacy mixer initializes and validates a full-size Bus,
                 // even when this placement is disjoint from the request.
-                // Charge that work before any output allocation.
+                // Charge that work before any output allocation; a stateful
+                // chain extends the Bus back to the placement boundary.
+                let bus_span = if entry.stateful() {
+                    samples
+                } else {
+                    length as u64
+                };
                 operations = operations
-                    .checked_add((length as u64) * 2)
+                    .checked_add(bus_span * 2)
                     .ok_or_else(|| budget("audio sample operations"))?;
             }
         }
@@ -454,18 +599,48 @@ impl AdvancedAudioPlan {
             }
         }
         let mut frames = vec![[0.0; 2]; length];
+        // Meter accumulation mirrors the output buffer per contributing track.
+        let mut track_meters: Vec<(TrackId, Vec<[f32; 2]>)> = Vec::new();
         for entry in &self.entries {
+            let placement = sample_range(entry.clip.timeline_range)?;
+            let end = output.end.min(placement.end);
+            let start = if entry.stateful() {
+                placement.start
+            } else {
+                output.start.max(placement.start)
+            };
+            if start >= end {
+                continue;
+            }
+            // A stateful legacy chain evaluates the inner plan from the
+            // placement boundary so the DSP sees continuous history.
             let legacy = match &entry.source {
-                Source::Legacy(p) => Some(p.mix_reader(sources, range)?),
+                Source::Legacy(p) => Some(p.mix_reader(
+                    sources,
+                    TimeRange::new(Time::new(start, 48_000)?, Time::new(end, 48_000)?)?,
+                )?),
                 _ => None,
             };
-            let placement = sample_range(entry.clip.timeline_range)?;
-            for sample in output.start.max(placement.start)..output.end.min(placement.end) {
-                let index =
-                    usize::try_from(sample - output.start).map_err(|_| AudioError::Overflow)?;
+            let track_index = if metered {
+                Some(
+                    match track_meters.iter().position(|(id, _)| *id == entry.track) {
+                        Some(index) => index,
+                        None => {
+                            track_meters.push((entry.track, vec![[0.0; 2]; length]));
+                            track_meters.len() - 1
+                        }
+                    },
+                )
+            } else {
+                None
+            };
+            let mut chain: Vec<ChainStep> = entry.effects.iter().map(ChainStep::new).collect();
+            for sample in start..end {
                 let time = Time::new(sample, 48_000)?;
                 let mut frame = match &entry.source {
                     Source::Legacy(_) => {
+                        let index =
+                            usize::try_from(sample - start).map_err(|_| AudioError::Overflow)?;
                         legacy.as_ref().expect("legacy Bus").buffer().frames()[index]
                     }
                     Source::Resampled => resample(&entry.clip, sources, sample)?,
@@ -503,10 +678,20 @@ impl AdvancedAudioPlan {
                     let gain = self.gain(volume, local_time(&entry.clip, sample)?)?;
                     frame = frame.map(|v| v * gain);
                 }
-                // Ordered pointwise operations have no history or mutable state.
-                for effect in &entry.effects {
-                    let gain = self.gain(effect, time)?;
-                    frame = frame.map(|v| v * gain);
+                // Effects run in authored order for every evaluated sample,
+                // including warm-up samples before the request boundary, so
+                // DSP state matches a continuous render exactly.
+                for step in &mut chain {
+                    match step {
+                        ChainStep::Gain(property) => {
+                            let gain = self.gain(property, time)?;
+                            frame = frame.map(|v| v * gain);
+                        }
+                        ChainStep::Dsp(processor) => frame = processor.process(frame),
+                    }
+                }
+                if sample < output.start {
+                    continue;
                 }
                 for (bounds, incoming) in &entry.fades {
                     if bounds.contains(&sample) {
@@ -516,6 +701,8 @@ impl AdvancedAudioPlan {
                         frame = frame.map(|v| v * gain);
                     }
                 }
+                let index =
+                    usize::try_from(sample - output.start).map_err(|_| AudioError::Overflow)?;
                 for channel in 0..2 {
                     if !frame[channel].is_finite() {
                         return Err(AudioError::Overflow);
@@ -524,13 +711,31 @@ impl AdvancedAudioPlan {
                     if !frames[index][channel].is_finite() {
                         return Err(AudioError::Overflow);
                     }
+                    if let Some(track) = track_index {
+                        track_meters[track].1[index][channel] += frame[channel];
+                    }
                 }
             }
         }
-        Ok(Bus {
+        let bus = Bus {
             start_sample: output.start,
             buffer: AudioBuffer::new(frames)?,
-        })
+        };
+        let meters = crate::BusMeters {
+            tracks: track_meters
+                .iter()
+                .map(|(track, buffer)| {
+                    let meter = crate::stereo_meter(buffer);
+                    crate::TrackMeter {
+                        track: *track,
+                        peak: meter.peak,
+                        rms: meter.rms,
+                    }
+                })
+                .collect(),
+            master: crate::stereo_meter(bus.buffer().frames()),
+        };
+        Ok((bus, meters))
     }
 }
 /// NLE-006: a piecewise hold segment has zero source-time advance; resampling
