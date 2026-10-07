@@ -20,6 +20,18 @@ pub const COLOR_HSL_ID: &str = "kronello.color.hsl";
 pub const COLOR_EFFECT_VERSION: u32 = EFFECT_VERSION;
 /// Maximum accepted COLOR-002 curves control-point count.
 pub const CURVES_MAX_POINTS: usize = 64;
+/// FX-005 keying effect ids (ADR-0115). Both are matte-producing effects:
+/// they rewrite alpha and are the only effects allowed to create or destroy
+/// coverage inside the input bounds.
+pub const KEYING_CHROMA_ID: &str = "kronello.keying.chroma";
+pub const KEYING_LUMA_ID: &str = "kronello.keying.luma";
+/// FX-006 standard effect ids (ADR-0115).
+pub const GLOW_ID: &str = "kronello.glow";
+pub const SHARPEN_ID: &str = "kronello.sharpen";
+pub const VIGNETTE_ID: &str = "kronello.vignette";
+pub const CORNER_PIN_ID: &str = "kronello.corner_pin";
+/// FX-005/FX-006 supported version is EFFECT_VERSION (1).
+pub const STANDARD_EFFECT_VERSION: u32 = EFFECT_VERSION;
 
 /// Unknown ids, parameters, fields and variants are retained verbatim.
 #[derive(Debug, Clone, PartialEq, Serialize, schemars::JsonSchema)]
@@ -82,6 +94,71 @@ pub enum EffectParameters {
         /// Additive lightness term; finite scalar.
         lightness: PropertyId,
     },
+    /// FX-005 chroma key (ADR-0115): alpha = keyed Cb/Cr matte, then edge
+    /// shrink/feather adjust the matte and `spill` suppresses the key hue.
+    ChromaKey {
+        /// Screen color being removed.
+        key_color: PropertyId,
+        /// Cb/Cr distance that maps to full transparency; 0..=1.
+        similarity: PropertyId,
+        /// Matte erosion radius in design_px.
+        edge_shrink: PropertyId,
+        /// Matte Gaussian feather sigma in design_px.
+        edge_feather: PropertyId,
+        /// Spill suppression amount; 0..=1.
+        spill: PropertyId,
+    },
+    /// FX-005 luma key (ADR-0115): working-space luminance distance drives
+    /// the alpha matte, then edge shrink/feather adjust it.
+    LumaKey {
+        /// Straight-color luminance that becomes fully transparent; 0..=1.
+        key_luma: PropertyId,
+        /// Luminance distance that maps to full opacity; 0..=1.
+        tolerance: PropertyId,
+        /// Matte erosion radius in design_px.
+        edge_shrink: PropertyId,
+        /// Matte Gaussian feather sigma in design_px.
+        edge_feather: PropertyId,
+    },
+    /// FX-006 glow (ADR-0115): straight luminance above `threshold` is
+    /// extracted, blurred by a Gaussian of sigma `radius`, and added back.
+    Glow {
+        /// Straight luminance cutoff; nonnegative scalar.
+        threshold: PropertyId,
+        /// Gaussian sigma in design_px.
+        radius: PropertyId,
+        /// Additive contribution of the blurred bloom; nonnegative scalar.
+        intensity: PropertyId,
+    },
+    /// FX-006 unsharp mask (ADR-0115): out = source + amount * (source -
+    /// blur(source)); the alpha channel participates and stays in [0,1].
+    Sharpen {
+        /// Unsharp strength; nonnegative scalar.
+        amount: PropertyId,
+        /// Gaussian sigma in design_px.
+        radius: PropertyId,
+    },
+    /// FX-006 vignette (ADR-0115): darkens RGB toward the image corners;
+    /// alpha is preserved.
+    Vignette {
+        /// Maximum darkening factor; 0..=1.
+        amount: PropertyId,
+        /// Normalized distance where darkening starts; 0..=1.
+        midpoint: PropertyId,
+        /// Smoothstep width of the falloff; nonnegative scalar.
+        feather: PropertyId,
+        /// Rectangle-to-ellipse shape blend; 0..=1.
+        roundness: PropertyId,
+    },
+    /// FX-006 corner pin (ADR-0115): the four corners of the incoming
+    /// surface's bounds are moved to these absolute Composition design_px
+    /// positions, in order top-left, top-right, bottom-right, bottom-left.
+    CornerPin {
+        top_left: PropertyId,
+        top_right: PropertyId,
+        bottom_right: PropertyId,
+        bottom_left: PropertyId,
+    },
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum ResolvedEffect {
@@ -126,6 +203,41 @@ pub enum ResolvedEffect {
         saturation: f64,
         lightness: f64,
     },
+    /// FX-005 resolved forms; lengths stay in design_px until DAG lowering.
+    ChromaKey {
+        key_color: Color,
+        similarity: f64,
+        edge_shrink: f64,
+        edge_feather: f64,
+        spill: f64,
+    },
+    LumaKey {
+        key_luma: f64,
+        tolerance: f64,
+        edge_shrink: f64,
+        edge_feather: f64,
+    },
+    /// FX-006 resolved forms. `radius` is the Gaussian sigma in design_px;
+    /// corner-pin positions are absolute Composition design_px points in
+    /// top-left, top-right, bottom-right, bottom-left order.
+    Glow {
+        threshold: f64,
+        radius: f64,
+        intensity: f64,
+    },
+    Sharpen {
+        amount: f64,
+        radius: f64,
+    },
+    Vignette {
+        amount: f64,
+        midpoint: f64,
+        feather: f64,
+        roundness: f64,
+    },
+    CornerPin {
+        corners: [[f64; 2]; 4],
+    },
 }
 #[derive(Debug, thiserror::Error)]
 pub enum EffectError {
@@ -146,6 +258,12 @@ impl EffectDefinition {
             EffectParameters::ColorLevels { .. } => (COLOR_LEVELS_ID, COLOR_EFFECT_VERSION),
             EffectParameters::ColorCurves { .. } => (COLOR_CURVES_ID, COLOR_EFFECT_VERSION),
             EffectParameters::ColorHsl { .. } => (COLOR_HSL_ID, COLOR_EFFECT_VERSION),
+            EffectParameters::ChromaKey { .. } => (KEYING_CHROMA_ID, STANDARD_EFFECT_VERSION),
+            EffectParameters::LumaKey { .. } => (KEYING_LUMA_ID, STANDARD_EFFECT_VERSION),
+            EffectParameters::Glow { .. } => (GLOW_ID, STANDARD_EFFECT_VERSION),
+            EffectParameters::Sharpen { .. } => (SHARPEN_ID, STANDARD_EFFECT_VERSION),
+            EffectParameters::Vignette { .. } => (VIGNETTE_ID, STANDARD_EFFECT_VERSION),
+            EffectParameters::CornerPin { .. } => (CORNER_PIN_ID, STANDARD_EFFECT_VERSION),
         };
         if self.effect_id != id || !(EFFECT_VERSION..=latest).contains(&self.version) {
             return Err(EffectError::UnsupportedFeature);
@@ -197,6 +315,63 @@ impl EffectDefinition {
                 (saturation, ValueType::Scalar, Unit::Dimensionless),
                 (lightness, ValueType::Scalar, Unit::Dimensionless),
             ],
+            EffectParameters::ChromaKey {
+                key_color,
+                similarity,
+                edge_shrink,
+                edge_feather,
+                spill,
+            } => vec![
+                (key_color, ValueType::Color, Unit::Dimensionless),
+                (similarity, ValueType::Scalar, Unit::Dimensionless),
+                (edge_shrink, ValueType::Scalar, Unit::DesignPx),
+                (edge_feather, ValueType::Scalar, Unit::DesignPx),
+                (spill, ValueType::Scalar, Unit::Dimensionless),
+            ],
+            EffectParameters::LumaKey {
+                key_luma,
+                tolerance,
+                edge_shrink,
+                edge_feather,
+            } => vec![
+                (key_luma, ValueType::Scalar, Unit::Dimensionless),
+                (tolerance, ValueType::Scalar, Unit::Dimensionless),
+                (edge_shrink, ValueType::Scalar, Unit::DesignPx),
+                (edge_feather, ValueType::Scalar, Unit::DesignPx),
+            ],
+            EffectParameters::Glow {
+                threshold,
+                radius,
+                intensity,
+            } => vec![
+                (threshold, ValueType::Scalar, Unit::Dimensionless),
+                (radius, ValueType::Scalar, Unit::DesignPx),
+                (intensity, ValueType::Scalar, Unit::Dimensionless),
+            ],
+            EffectParameters::Sharpen { amount, radius } => vec![
+                (amount, ValueType::Scalar, Unit::Dimensionless),
+                (radius, ValueType::Scalar, Unit::DesignPx),
+            ],
+            EffectParameters::Vignette {
+                amount,
+                midpoint,
+                feather,
+                roundness,
+            } => vec![
+                (amount, ValueType::Scalar, Unit::Dimensionless),
+                (midpoint, ValueType::Scalar, Unit::Dimensionless),
+                (feather, ValueType::Scalar, Unit::Dimensionless),
+                (roundness, ValueType::Scalar, Unit::Dimensionless),
+            ],
+            EffectParameters::CornerPin {
+                top_left,
+                top_right,
+                bottom_right,
+                bottom_left,
+            } => [top_left, top_right, bottom_right, bottom_left]
+                .into_iter()
+                .map(|id| (id, ValueType::Vec2, Unit::DesignPx))
+                .collect(),
         }
     }
     pub fn validate(
@@ -239,15 +414,24 @@ impl EffectDefinition {
         ) {
             return self.resolve_color(values);
         }
+        // FX-005/FX-006 keying and standard effects (ADR-0115).
+        if matches!(
+            self.parameters,
+            EffectParameters::ChromaKey { .. }
+                | EffectParameters::LumaKey { .. }
+                | EffectParameters::Glow { .. }
+                | EffectParameters::Sharpen { .. }
+                | EffectParameters::Vignette { .. }
+                | EffectParameters::CornerPin { .. }
+        ) {
+            return self.resolve_standard(values);
+        }
         let sigma_id = match self.parameters {
             // Audio effects are executed only by the audio evaluator.
             EffectParameters::AudioGain { .. } => return Err(EffectError::UnsupportedFeature),
             EffectParameters::GaussianBlur { sigma }
             | EffectParameters::DropShadow { sigma, .. } => sigma,
-            EffectParameters::ColorExposure { .. }
-            | EffectParameters::ColorLevels { .. }
-            | EffectParameters::ColorCurves { .. }
-            | EffectParameters::ColorHsl { .. } => unreachable!("handled above"),
+            _ => unreachable!("handled above"),
         };
         let sigma = scalar(sigma_id)?;
         if !(0.0..=1_000_000.0).contains(&sigma) {
@@ -303,11 +487,119 @@ impl EffectDefinition {
                     }
                 }
             }
-            EffectParameters::ColorExposure { .. }
-            | EffectParameters::ColorLevels { .. }
-            | EffectParameters::ColorCurves { .. }
-            | EffectParameters::ColorHsl { .. } => unreachable!("handled above"),
+            _ => unreachable!("handled above"),
         })
+    }
+    /// FX-005/FX-006 parameter validation (ADR-0115). Probability-like
+    /// parameters are range-checked; lengths and strengths share the 1e6
+    /// scalar budget; corner pins are absolute Composition design_px points.
+    fn resolve_standard(
+        &self,
+        values: &BTreeMap<PropertyId, Value>,
+    ) -> Result<ResolvedEffect, EffectError> {
+        let scalar = |id| match values.get(&id) {
+            Some(Value::Scalar(v)) => Ok(v.get()),
+            _ => Err(EffectError::InvalidParameter(id)),
+        };
+        let unit_interval = |id| -> Result<f64, EffectError> {
+            let value = scalar(id)?;
+            if (0.0..=1.0).contains(&value) {
+                Ok(value)
+            } else {
+                Err(EffectError::InvalidParameter(id))
+            }
+        };
+        let nonnegative = |id| -> Result<f64, EffectError> {
+            let value = scalar(id)?;
+            if (0.0..=1_000_000.0).contains(&value) {
+                Ok(value)
+            } else {
+                Err(EffectError::InvalidParameter(id))
+            }
+        };
+        let point = |id| -> Result<[f64; 2], EffectError> {
+            match values.get(&id) {
+                Some(Value::Vec2(v)) => {
+                    let v = v.map(FiniteF64::get);
+                    if v.iter().all(|c| c.abs() <= 1_000_000.0) {
+                        Ok(v)
+                    } else {
+                        Err(EffectError::InvalidParameter(id))
+                    }
+                }
+                _ => Err(EffectError::InvalidParameter(id)),
+            }
+        };
+        match self.parameters {
+            EffectParameters::ChromaKey {
+                key_color,
+                similarity,
+                edge_shrink,
+                edge_feather,
+                spill,
+            } => {
+                let key_color = match values.get(&key_color) {
+                    Some(Value::Color(v)) => *v,
+                    _ => return Err(EffectError::InvalidParameter(key_color)),
+                };
+                Ok(ResolvedEffect::ChromaKey {
+                    key_color,
+                    similarity: unit_interval(similarity)?,
+                    edge_shrink: nonnegative(edge_shrink)?,
+                    edge_feather: nonnegative(edge_feather)?,
+                    spill: unit_interval(spill)?,
+                })
+            }
+            EffectParameters::LumaKey {
+                key_luma,
+                tolerance,
+                edge_shrink,
+                edge_feather,
+            } => Ok(ResolvedEffect::LumaKey {
+                key_luma: unit_interval(key_luma)?,
+                tolerance: unit_interval(tolerance)?,
+                edge_shrink: nonnegative(edge_shrink)?,
+                edge_feather: nonnegative(edge_feather)?,
+            }),
+            EffectParameters::Glow {
+                threshold,
+                radius,
+                intensity,
+            } => Ok(ResolvedEffect::Glow {
+                threshold: nonnegative(threshold)?,
+                radius: nonnegative(radius)?,
+                intensity: nonnegative(intensity)?,
+            }),
+            EffectParameters::Sharpen { amount, radius } => Ok(ResolvedEffect::Sharpen {
+                amount: nonnegative(amount)?,
+                radius: nonnegative(radius)?,
+            }),
+            EffectParameters::Vignette {
+                amount,
+                midpoint,
+                feather,
+                roundness,
+            } => Ok(ResolvedEffect::Vignette {
+                amount: unit_interval(amount)?,
+                midpoint: unit_interval(midpoint)?,
+                feather: nonnegative(feather)?,
+                roundness: unit_interval(roundness)?,
+            }),
+            EffectParameters::CornerPin {
+                top_left,
+                top_right,
+                bottom_right,
+                bottom_left,
+            } => Ok(ResolvedEffect::CornerPin {
+                corners: [
+                    point(top_left)?,
+                    point(top_right)?,
+                    point(bottom_right)?,
+                    point(bottom_left)?,
+                ],
+            }),
+            _ => unreachable!("standard resolution is only invoked for FX-005/006 variants"),
+        }
     }
     /// COLOR-002 parameter validation happens here because ranges are
     /// cross-parameter (levels) or structural (curve table). Magnitude bounds
@@ -543,6 +835,116 @@ pub fn effect_descriptors() -> Vec<PropertyDescriptor> {
             Value::Scalar(f(0.0)),
             Unit::Dimensionless,
         ),
+        // FX-005 keying descriptors (ADR-0115).
+        (
+            0xf0000000_0010_4300_8000_000000000001,
+            "key_color",
+            Value::Color(Color::from_srgb8([0, 177, 64], None)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4300_8000_000000000002,
+            "key_luma",
+            Value::Scalar(f(0.0)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4300_8000_000000000003,
+            "similarity",
+            Value::Scalar(f(0.4)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4300_8000_000000000004,
+            "tolerance",
+            Value::Scalar(f(0.1)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4300_8000_000000000005,
+            "edge_shrink",
+            Value::Scalar(f(0.0)),
+            Unit::DesignPx,
+        ),
+        (
+            0xf0000000_0010_4300_8000_000000000006,
+            "edge_feather",
+            Value::Scalar(f(0.0)),
+            Unit::DesignPx,
+        ),
+        (
+            0xf0000000_0010_4300_8000_000000000007,
+            "spill",
+            Value::Scalar(f(0.5)),
+            Unit::Dimensionless,
+        ),
+        // FX-006 standard effect descriptors (ADR-0115).
+        (
+            0xf0000000_0010_4300_8000_000000000008,
+            "threshold",
+            Value::Scalar(f(0.8)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4300_8000_000000000009,
+            "radius",
+            Value::Scalar(f(8.0)),
+            Unit::DesignPx,
+        ),
+        (
+            0xf0000000_0010_4300_8000_00000000000a,
+            "intensity",
+            Value::Scalar(f(1.0)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4300_8000_00000000000b,
+            "amount",
+            Value::Scalar(f(0.5)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4300_8000_00000000000c,
+            "midpoint",
+            Value::Scalar(f(0.5)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4300_8000_00000000000d,
+            "feather",
+            Value::Scalar(f(0.5)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4300_8000_00000000000e,
+            "roundness",
+            Value::Scalar(f(0.5)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4300_8000_00000000000f,
+            "top_left",
+            Value::Vec2([f(0.0); 2]),
+            Unit::DesignPx,
+        ),
+        (
+            0xf0000000_0010_4300_8000_000000000010,
+            "top_right",
+            Value::Vec2([f(0.0); 2]),
+            Unit::DesignPx,
+        ),
+        (
+            0xf0000000_0010_4300_8000_000000000011,
+            "bottom_right",
+            Value::Vec2([f(0.0); 2]),
+            Unit::DesignPx,
+        ),
+        (
+            0xf0000000_0010_4300_8000_000000000012,
+            "bottom_left",
+            Value::Vec2([f(0.0); 2]),
+            Unit::DesignPx,
+        ),
     ]
     .into_iter()
     .map(|(id, name, value, unit)| {
@@ -558,10 +960,39 @@ pub fn effect_descriptors() -> Vec<PropertyDescriptor> {
         if name == "offset" {
             d.coordinate_space = Some(crate::CoordinateSpace::LocalDesign);
         }
+        // Corner pins are absolute Composition design_px positions.
+        if matches!(
+            name,
+            "top_left" | "top_right" | "bottom_right" | "bottom_left"
+        ) {
+            d.coordinate_space = Some(crate::CoordinateSpace::CompositionDesign);
+        }
         if name == "sigma" || name == "opacity" {
             d.range = Some(ValueRange::Scalar(
                 NumericRange::inclusive(0.0, if name == "opacity" { 1.0 } else { 1_000_000.0 })
                     .expect("effect range"),
+            ));
+        }
+        if matches!(
+            name,
+            "edge_shrink"
+                | "edge_feather"
+                | "radius"
+                | "threshold"
+                | "intensity"
+                | "amount"
+                | "feather"
+        ) {
+            d.range = Some(ValueRange::Scalar(
+                NumericRange::inclusive(0.0, 1_000_000.0).expect("effect range"),
+            ));
+        }
+        if matches!(
+            name,
+            "similarity" | "spill" | "key_luma" | "tolerance" | "midpoint" | "roundness"
+        ) {
+            d.range = Some(ValueRange::Scalar(
+                NumericRange::inclusive(0.0, 1.0).expect("effect range"),
             ));
         }
         if name == "gamma" {

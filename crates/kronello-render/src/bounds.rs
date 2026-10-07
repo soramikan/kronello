@@ -117,6 +117,24 @@ pub(crate) fn apply_effects(
             | ResolvedEffect::ColorLevels { .. }
             | ResolvedEffect::ColorCurves { .. }
             | ResolvedEffect::ColorHsl { .. } => input,
+            // FX-005/FX-006 (ADR-0115): keying mattes and vignette keep the
+            // input extent; glow/sharpen grow by the 3-sigma kernel support;
+            // corner pin replaces them with the destination quad hull.
+            ResolvedEffect::ChromaKey { .. }
+            | ResolvedEffect::LumaKey { .. }
+            | ResolvedEffect::Vignette { .. } => input,
+            ResolvedEffect::Glow { radius, .. } | ResolvedEffect::Sharpen { radius, .. } => {
+                input.expand(3.0 * radius)?
+            }
+            ResolvedEffect::CornerPin { corners } => DesignBounds::checked(
+                [0, 1].map(|i| corners.iter().map(|p| p[i]).fold(f64::INFINITY, f64::min)),
+                [0, 1].map(|i| {
+                    corners
+                        .iter()
+                        .map(|p| p[i])
+                        .fold(f64::NEG_INFINITY, f64::max)
+                }),
+            )?,
         });
     }
     Ok(bounds)

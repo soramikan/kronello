@@ -1478,6 +1478,196 @@
             "saturation",
             "lightness"
           ]
+        },
+        {
+          "description": "FX-005 chroma key (ADR-0115): alpha = keyed Cb/Cr matte, then edge\nshrink/feather adjust the matte and `spill` suppresses the key hue.",
+          "type": "object",
+          "properties": {
+            "edge_feather": {
+              "description": "Matte Gaussian feather sigma in design_px.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "edge_shrink": {
+              "description": "Matte erosion radius in design_px.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "key_color": {
+              "description": "Screen color being removed.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "chroma_key"
+            },
+            "similarity": {
+              "description": "Cb/Cr distance that maps to full transparency; 0..=1.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "spill": {
+              "description": "Spill suppression amount; 0..=1.",
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "key_color",
+            "similarity",
+            "edge_shrink",
+            "edge_feather",
+            "spill"
+          ]
+        },
+        {
+          "description": "FX-005 luma key (ADR-0115): working-space luminance distance drives\nthe alpha matte, then edge shrink/feather adjust it.",
+          "type": "object",
+          "properties": {
+            "edge_feather": {
+              "description": "Matte Gaussian feather sigma in design_px.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "edge_shrink": {
+              "description": "Matte erosion radius in design_px.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "key_luma": {
+              "description": "Straight-color luminance that becomes fully transparent; 0..=1.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "luma_key"
+            },
+            "tolerance": {
+              "description": "Luminance distance that maps to full opacity; 0..=1.",
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "key_luma",
+            "tolerance",
+            "edge_shrink",
+            "edge_feather"
+          ]
+        },
+        {
+          "description": "FX-006 glow (ADR-0115): straight luminance above `threshold` is\nextracted, blurred by a Gaussian of sigma `radius`, and added back.",
+          "type": "object",
+          "properties": {
+            "intensity": {
+              "description": "Additive contribution of the blurred bloom; nonnegative scalar.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "glow"
+            },
+            "radius": {
+              "description": "Gaussian sigma in design_px.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "threshold": {
+              "description": "Straight luminance cutoff; nonnegative scalar.",
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "threshold",
+            "radius",
+            "intensity"
+          ]
+        },
+        {
+          "description": "FX-006 unsharp mask (ADR-0115): out = source + amount * (source -\nblur(source)); the alpha channel participates and stays in [0,1].",
+          "type": "object",
+          "properties": {
+            "amount": {
+              "description": "Unsharp strength; nonnegative scalar.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "sharpen"
+            },
+            "radius": {
+              "description": "Gaussian sigma in design_px.",
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "amount",
+            "radius"
+          ]
+        },
+        {
+          "description": "FX-006 vignette (ADR-0115): darkens RGB toward the image corners;\nalpha is preserved.",
+          "type": "object",
+          "properties": {
+            "amount": {
+              "description": "Maximum darkening factor; 0..=1.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "feather": {
+              "description": "Smoothstep width of the falloff; nonnegative scalar.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "vignette"
+            },
+            "midpoint": {
+              "description": "Normalized distance where darkening starts; 0..=1.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "roundness": {
+              "description": "Rectangle-to-ellipse shape blend; 0..=1.",
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "amount",
+            "midpoint",
+            "feather",
+            "roundness"
+          ]
+        },
+        {
+          "description": "FX-006 corner pin (ADR-0115): the four corners of the incoming\nsurface's bounds are moved to these absolute Composition design_px\npositions, in order top-left, top-right, bottom-right, bottom-left.",
+          "type": "object",
+          "properties": {
+            "bottom_left": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "bottom_right": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "corner_pin"
+            },
+            "top_left": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "top_right": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "top_left",
+            "top_right",
+            "bottom_right",
+            "bottom_left"
+          ]
         }
       ]
     },

@@ -733,6 +733,60 @@ fn split_owned_objects(clip: &mut Clip) -> Result<(), ServiceError> {
                 remap(saturation)?;
                 remap(lightness)?;
             }
+            EffectParameters::ChromaKey {
+                key_color,
+                similarity,
+                edge_shrink,
+                edge_feather,
+                spill,
+            } => {
+                for id in [key_color, similarity, edge_shrink, edge_feather, spill] {
+                    remap(id)?;
+                }
+            }
+            EffectParameters::LumaKey {
+                key_luma,
+                tolerance,
+                edge_shrink,
+                edge_feather,
+            } => {
+                for id in [key_luma, tolerance, edge_shrink, edge_feather] {
+                    remap(id)?;
+                }
+            }
+            EffectParameters::Glow {
+                threshold,
+                radius,
+                intensity,
+            } => {
+                remap(threshold)?;
+                remap(radius)?;
+                remap(intensity)?;
+            }
+            EffectParameters::Sharpen { amount, radius } => {
+                remap(amount)?;
+                remap(radius)?;
+            }
+            EffectParameters::Vignette {
+                amount,
+                midpoint,
+                feather,
+                roundness,
+            } => {
+                for id in [amount, midpoint, feather, roundness] {
+                    remap(id)?;
+                }
+            }
+            EffectParameters::CornerPin {
+                top_left,
+                top_right,
+                bottom_right,
+                bottom_left,
+            } => {
+                for id in [top_left, top_right, bottom_right, bottom_left] {
+                    remap(id)?;
+                }
+            }
         }
     }
     Ok(())

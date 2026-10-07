@@ -28,6 +28,12 @@ struct EditProjectPanel: View {
                     VStack(alignment: .leading, spacing: KRSpace.space3) {
                         KRButton("Gaussian Blur", icon: .sparkles) { model.addClipEffect("blur") }
                         KRButton("Drop Shadow", icon: .layers) { model.addClipEffect("shadow") }
+                        KRButton("Chroma Key", icon: .sparkles) { model.addClipEffect("chroma_key") }
+                        KRButton("Luma Key", icon: .sparkles) { model.addClipEffect("luma_key") }
+                        KRButton("Glow", icon: .sparkles) { model.addClipEffect("glow") }
+                        KRButton("Sharpen", icon: .sparkles) { model.addClipEffect("sharpen") }
+                        KRButton("Vignette", icon: .sparkles) { model.addClipEffect("vignette") }
+                        KRButton("Corner Pin", icon: .sparkles) { model.addClipEffect("corner_pin") }
                         Text("選択中の映像クリップに追加します。").krText(KRType.caption)
                     }.padding().disabled(model.selectedClip == nil || model.selectedClip?.kind == .audio || model.busy || model.pendingCandidate != nil)
                 }
@@ -201,9 +207,14 @@ struct ClipInspector: View {
                             ForEach(Array(clip.authored.objects("effects").enumerated()), id: \.offset) { index, effect in
                                 VStack(alignment: .leading, spacing: 0) {
                                     HStack { Text(ClipColorInspector.names[effect.string("effect_id")] ?? Self.effectName(effect.string("effect_id"))).krText(KRType.label); Spacer(); KRButton(icon: .trash2, accessibilityLabel: "効果を削除") { model.removeClipEffect(clip, index: index) } }.padding(.horizontal, KRSpace.space3)
+                                    if effect.string("effect_id") == "kronello.keying.chroma" {
+                                        KRInspectorSettingRow("キー色") {
+                                            ClipEffectColorEditor(model: model, clip: clip, effect: effect, parameter: "key_color")
+                                        }
+                                    }
                                     ForEach(Array(Self.effectRows(effect.string("effect_id")).enumerated()), id: \.offset) { _, row in
                                         let (field, label, unit, range, step) = row
-                                        if field == "offset" {
+                                        if Self.vec2Fields.contains(field) {
                                             KRInspectorSettingRow(label) {
                                                 HStack(spacing: KRSpace.space1) {
                                                     ForEach(0..<2, id: \.self) { axis in
@@ -264,11 +275,19 @@ struct ClipInspector: View {
         case "kronello.gaussian_blur": return "Gaussian Blur"
         case "kronello.drop_shadow": return "Drop Shadow"
         case "kronello.audio.gain": return "Audio Gain"
+        case "kronello.keying.chroma": return "Chroma Key"
+        case "kronello.keying.luma": return "Luma Key"
+        case "kronello.glow": return "Glow"
+        case "kronello.sharpen": return "Sharpen"
+        case "kronello.vignette": return "Vignette"
+        case "kronello.corner_pin": return "Corner Pin"
         default: return id
         }
     }
+    /// Parameters that render as an X/Y vec2 pair instead of a scalar field.
+    static let vec2Fields: Set<String> = ["offset", "top_left", "top_right", "bottom_right", "bottom_left"]
     /// Editable constant parameters of a clip effect: (parameter field, row
-    /// label, unit, range, step). "offset" rows render as a vec2 pair.
+    /// label, unit, range, step). Fields in `vec2Fields` render as a pair.
     static func effectRows(_ id: String) -> [(String, String, String, ClosedRange<Double>, Double)] {
         switch id {
         case "kronello.gaussian_blur":
@@ -276,6 +295,23 @@ struct ClipInspector: View {
         case "kronello.drop_shadow":
             return [("sigma", "ぼかし", "px", 0...256, 0.1), ("offset", "オフセット", "px", -512...512, 0.5),
                     ("opacity", "不透明度", "", 0...1, 0.01)]
+        case "kronello.keying.chroma":
+            return [("similarity", "類似度", "", 0...1, 0.01), ("edge_shrink", "縮小", "px", 0...64, 0.1),
+                    ("edge_feather", "ぼかし", "px", 0...64, 0.1), ("spill", "スピル除去", "", 0...1, 0.01)]
+        case "kronello.keying.luma":
+            return [("key_luma", "キー輝度", "", 0...1, 0.01), ("tolerance", "許容度", "", 0...1, 0.01),
+                    ("edge_shrink", "縮小", "px", 0...64, 0.1), ("edge_feather", "ぼかし", "px", 0...64, 0.1)]
+        case "kronello.glow":
+            return [("threshold", "しきい値", "", 0...4, 0.01), ("radius", "半径", "px", 0...256, 0.1),
+                    ("intensity", "強度", "×", 0...8, 0.01)]
+        case "kronello.sharpen":
+            return [("amount", "量", "×", 0...8, 0.01), ("radius", "半径", "px", 0...64, 0.1)]
+        case "kronello.vignette":
+            return [("amount", "量", "", 0...1, 0.01), ("midpoint", "中間点", "", 0...1, 0.01),
+                    ("feather", "ぼかし", "", 0...4, 0.01), ("roundness", "丸み", "", 0...1, 0.01)]
+        case "kronello.corner_pin":
+            return [("top_left", "左上", "px", -8192...8192, 1), ("top_right", "右上", "px", -8192...8192, 1),
+                    ("bottom_right", "右下", "px", -8192...8192, 1), ("bottom_left", "左下", "px", -8192...8192, 1)]
         default: return []
         }
     }

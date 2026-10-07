@@ -70,6 +70,49 @@ extension EditorModel {
     public static let curveTableDefault: [String: Any] = ["columns": ["x": "scalar", "y": "scalar"],
         "rows": [["x": ["kind": "scalar", "value": 0.0], "y": ["kind": "scalar", "value": 0.0]],
                  ["x": ["kind": "scalar", "value": 1.0], "y": ["kind": "scalar", "value": 1.0]]]]
+    /// FX-005/FX-006 clip effect specs (ADR-0115). These reuse the generic
+    /// (kind, effect id, parameter defaults) shape; `corner_pin` is excluded
+    /// because its identity quad depends on the sequence extent and is built
+    /// in `addClipEffect`.
+    public static let standardEffects: [ColorEffectSpec] = [
+        .init(kind: "chroma_key", effectID: "kronello.keying.chroma", parameters: [
+            ("key_color", "key_color", "color", ["space": "srgb", "components": ["r": 0.0, "g": 177.0 / 255.0, "b": 64.0 / 255.0, "alpha": 1.0]]),
+            ("similarity", "similarity", "scalar", 0.4),
+            ("edge_shrink", "edge_shrink", "scalar", 0.0),
+            ("edge_feather", "edge_feather", "scalar", 0.0),
+            ("spill", "spill", "scalar", 0.5)]),
+        .init(kind: "luma_key", effectID: "kronello.keying.luma", parameters: [
+            ("key_luma", "key_luma", "scalar", 0.0),
+            ("tolerance", "tolerance", "scalar", 0.1),
+            ("edge_shrink", "edge_shrink", "scalar", 0.0),
+            ("edge_feather", "edge_feather", "scalar", 0.0)]),
+        .init(kind: "glow", effectID: "kronello.glow", parameters: [
+            ("threshold", "threshold", "scalar", 0.8),
+            ("radius", "radius", "scalar", 8.0),
+            ("intensity", "intensity", "scalar", 1.0)]),
+        .init(kind: "sharpen", effectID: "kronello.sharpen", parameters: [
+            ("amount", "amount", "scalar", 0.5),
+            ("radius", "radius", "scalar", 4.0)]),
+        .init(kind: "vignette", effectID: "kronello.vignette", parameters: [
+            ("amount", "amount", "scalar", 0.5),
+            ("midpoint", "midpoint", "scalar", 0.5),
+            ("feather", "feather", "scalar", 0.5),
+            ("roundness", "roundness", "scalar", 0.5)]),
+    ]
+    /// Effect definitions on a clip that belong to the FX-005/FX-006 set.
+    public static func standardEffectSpecs(on clip: EditClip) -> [(index: Int, spec: ColorEffectSpec, effect: [String: Any])] {
+        clip.authored.objects("effects").enumerated().compactMap { index, effect in
+            guard let spec = standardEffects.first(where: { $0.effectID == effect.string("effect_id") }) else { return nil }
+            return (index, spec, effect)
+        }
+    }
+    /// sRGB display components [r, g, b, a] behind a color effect parameter.
+    public static func colorParameterColor(_ clip: EditClip, effect: [String: Any], parameter: String) -> [Double]? {
+        guard let id = effect.object("parameters")[parameter] as? String,
+              let property = clip.authored.objects("properties").first(where: { $0.string("id") == id }),
+              property.object("source").string("kind") == "constant" else { return nil }
+        return srgbComponents(property.object("source").object("value"))
+    }
     /// Effect definitions on a clip that belong to the COLOR-002 set.
     public static func colorEffectSpecs(on clip: EditClip) -> [(index: Int, spec: ColorEffectSpec, effect: [String: Any])] {
         clip.authored.objects("effects").enumerated().compactMap { index, effect in
@@ -106,8 +149,18 @@ extension EditorModel {
         case "shadow":
             id = "kronello.drop_shadow"; version = 2
             parameters = ["kind": "drop_shadow", "sigma": property("kronello.effect.sigma", "scalar", 8.0), "offset": property("kronello.effect.offset", "vec2", [8.0, 8.0]), "color": property("kronello.effect.color", "color", ["space": "srgb", "components": ["r": 0.0, "g": 0.0, "b": 0.0, "alpha": 1.0]]), "opacity": property("kronello.effect.opacity", "scalar", 0.5)]
-        case let name where Self.colorEffects.contains(where: { $0.kind == name || $0.effectID == name }):
-            guard let spec = Self.colorEffects.first(where: { $0.kind == name || $0.effectID == name }) else { return }
+        case "corner_pin":
+            id = "kronello.corner_pin"; version = 1
+            // Identity quad over the sequence extent keeps the clip visually
+            // unchanged at insertion (ADR-0115).
+            let w = extent.width, h = extent.height
+            parameters = ["kind": "corner_pin",
+                "top_left": property("kronello.effect.top_left", "vec2", [0.0, 0.0]),
+                "top_right": property("kronello.effect.top_right", "vec2", [w, 0.0]),
+                "bottom_right": property("kronello.effect.bottom_right", "vec2", [w, h]),
+                "bottom_left": property("kronello.effect.bottom_left", "vec2", [0.0, h])]
+        case let name where (Self.colorEffects + Self.standardEffects).contains(where: { $0.kind == name || $0.effectID == name }):
+            guard let spec = (Self.colorEffects + Self.standardEffects).first(where: { $0.kind == name || $0.effectID == name }) else { return }
             var parameterIDs: [String: Any] = ["kind": spec.kind]
             for (field, suffix, type, value) in spec.parameters {
                 parameterIDs[field] = property("kronello.effect." + suffix, type, value)

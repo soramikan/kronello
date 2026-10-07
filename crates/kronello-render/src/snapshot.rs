@@ -111,6 +111,13 @@ impl SemanticVersions {
                 (COLOR_LEVELS_ID.into(), COLOR_EFFECT_VERSION),
                 (COLOR_CURVES_ID.into(), COLOR_EFFECT_VERSION),
                 (COLOR_HSL_ID.into(), COLOR_EFFECT_VERSION),
+                // FX-005/FX-006 versioned ids (ADR-0115).
+                (KEYING_CHROMA_ID.into(), STANDARD_EFFECT_VERSION),
+                (KEYING_LUMA_ID.into(), STANDARD_EFFECT_VERSION),
+                (GLOW_ID.into(), STANDARD_EFFECT_VERSION),
+                (SHARPEN_ID.into(), STANDARD_EFFECT_VERSION),
+                (VIGNETTE_ID.into(), STANDARD_EFFECT_VERSION),
+                (CORNER_PIN_ID.into(), STANDARD_EFFECT_VERSION),
             ]),
             generators: generator_versions(),
             video_input: initial_video_version(),

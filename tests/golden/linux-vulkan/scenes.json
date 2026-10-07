@@ -58,6 +58,13 @@
     "fx003-wipe",
     "fx003-slide",
     "fx003-dip",
+    "fx005-chroma-key",
+    "fx005-chroma-key-edges",
+    "fx005-luma-key",
+    "fx006-glow",
+    "fx006-sharpen",
+    "fx006-vignette",
+    "fx006-corner-pin",
     "srgb-output-roundtrip"
   ],
   "stroke_geometry_version": "vec005-local-stroke-v2",
@@ -65,7 +72,13 @@
   "effect_kernel_version": "fx001-separable-gaussian-transparent-rne16-v1",
   "effect_semantic_versions": {
     "kronello.gaussian_blur": 1,
-    "kronello.drop_shadow": 1
+    "kronello.drop_shadow": 1,
+    "kronello.keying.chroma": 1,
+    "kronello.keying.luma": 1,
+    "kronello.glow": 1,
+    "kronello.sharpen": 1,
+    "kronello.vignette": 1,
+    "kronello.corner_pin": 1
   },
   "affine_effect_kernel_version": "fx002-affine-ellipse-lattice-rne16-v2",
   "affine_effect_semantic_version": 2,

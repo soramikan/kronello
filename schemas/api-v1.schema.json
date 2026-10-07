@@ -3424,6 +3424,196 @@
             "lightness"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FX-005 chroma key (ADR-0115): alpha = keyed Cb/Cr matte, then edge\nshrink/feather adjust the matte and `spill` suppresses the key hue.",
+          "properties": {
+            "edge_feather": {
+              "$ref": "#/$defs/PropertyId",
+              "description": "Matte Gaussian feather sigma in design_px."
+            },
+            "edge_shrink": {
+              "$ref": "#/$defs/PropertyId",
+              "description": "Matte erosion radius in design_px."
+            },
+            "key_color": {
+              "$ref": "#/$defs/PropertyId",
+              "description": "Screen color being removed."
+            },
+            "kind": {
+              "const": "chroma_key",
+              "type": "string"
+            },
+            "similarity": {
+              "$ref": "#/$defs/PropertyId",
+              "description": "Cb/Cr distance that maps to full transparency; 0..=1."
+            },
+            "spill": {
+              "$ref": "#/$defs/PropertyId",
+              "description": "Spill suppression amount; 0..=1."
+            }
+          },
+          "required": [
+            "kind",
+            "key_color",
+            "similarity",
+            "edge_shrink",
+            "edge_feather",
+            "spill"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FX-005 luma key (ADR-0115): working-space luminance distance drives\nthe alpha matte, then edge shrink/feather adjust it.",
+          "properties": {
+            "edge_feather": {
+              "$ref": "#/$defs/PropertyId",
+              "description": "Matte Gaussian feather sigma in design_px."
+            },
+            "edge_shrink": {
+              "$ref": "#/$defs/PropertyId",
+              "description": "Matte erosion radius in design_px."
+            },
+            "key_luma": {
+              "$ref": "#/$defs/PropertyId",
+              "description": "Straight-color luminance that becomes fully transparent; 0..=1."
+            },
+            "kind": {
+              "const": "luma_key",
+              "type": "string"
+            },
+            "tolerance": {
+              "$ref": "#/$defs/PropertyId",
+              "description": "Luminance distance that maps to full opacity; 0..=1."
+            }
+          },
+          "required": [
+            "kind",
+            "key_luma",
+            "tolerance",
+            "edge_shrink",
+            "edge_feather"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FX-006 glow (ADR-0115): straight luminance above `threshold` is\nextracted, blurred by a Gaussian of sigma `radius`, and added back.",
+          "properties": {
+            "intensity": {
+              "$ref": "#/$defs/PropertyId",
+              "description": "Additive contribution of the blurred bloom; nonnegative scalar."
+            },
+            "kind": {
+              "const": "glow",
+              "type": "string"
+            },
+            "radius": {
+              "$ref": "#/$defs/PropertyId",
+              "description": "Gaussian sigma in design_px."
+            },
+            "threshold": {
+              "$ref": "#/$defs/PropertyId",
+              "description": "Straight luminance cutoff; nonnegative scalar."
+            }
+          },
+          "required": [
+            "kind",
+            "threshold",
+            "radius",
+            "intensity"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FX-006 unsharp mask (ADR-0115): out = source + amount * (source -\nblur(source)); the alpha channel participates and stays in [0,1].",
+          "properties": {
+            "amount": {
+              "$ref": "#/$defs/PropertyId",
+              "description": "Unsharp strength; nonnegative scalar."
+            },
+            "kind": {
+              "const": "sharpen",
+              "type": "string"
+            },
+            "radius": {
+              "$ref": "#/$defs/PropertyId",
+              "description": "Gaussian sigma in design_px."
+            }
+          },
+          "required": [
+            "kind",
+            "amount",
+            "radius"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FX-006 vignette (ADR-0115): darkens RGB toward the image corners;\nalpha is preserved.",
+          "properties": {
+            "amount": {
+              "$ref": "#/$defs/PropertyId",
+              "description": "Maximum darkening factor; 0..=1."
+            },
+            "feather": {
+              "$ref": "#/$defs/PropertyId",
+              "description": "Smoothstep width of the falloff; nonnegative scalar."
+            },
+            "kind": {
+              "const": "vignette",
+              "type": "string"
+            },
+            "midpoint": {
+              "$ref": "#/$defs/PropertyId",
+              "description": "Normalized distance where darkening starts; 0..=1."
+            },
+            "roundness": {
+              "$ref": "#/$defs/PropertyId",
+              "description": "Rectangle-to-ellipse shape blend; 0..=1."
+            }
+          },
+          "required": [
+            "kind",
+            "amount",
+            "midpoint",
+            "feather",
+            "roundness"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FX-006 corner pin (ADR-0115): the four corners of the incoming\nsurface's bounds are moved to these absolute Composition design_px\npositions, in order top-left, top-right, bottom-right, bottom-left.",
+          "properties": {
+            "bottom_left": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "bottom_right": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "const": "corner_pin",
+              "type": "string"
+            },
+            "top_left": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "top_right": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "required": [
+            "kind",
+            "top_left",
+            "top_right",
+            "bottom_right",
+            "bottom_left"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -10474,6 +10664,208 @@
           },
           "required": [
             "ColorHsl"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FX-005 resolved forms; lengths stay in design_px until DAG lowering.",
+          "properties": {
+            "ChromaKey": {
+              "properties": {
+                "edge_feather": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "edge_shrink": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "key_color": {
+                  "$ref": "#/$defs/Color"
+                },
+                "similarity": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "spill": {
+                  "format": "double",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "key_color",
+                "similarity",
+                "edge_shrink",
+                "edge_feather",
+                "spill"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "ChromaKey"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "LumaKey": {
+              "properties": {
+                "edge_feather": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "edge_shrink": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "key_luma": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "tolerance": {
+                  "format": "double",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "key_luma",
+                "tolerance",
+                "edge_shrink",
+                "edge_feather"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "LumaKey"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FX-006 resolved forms. `radius` is the Gaussian sigma in design_px;\ncorner-pin positions are absolute Composition design_px points in\ntop-left, top-right, bottom-right, bottom-left order.",
+          "properties": {
+            "Glow": {
+              "properties": {
+                "intensity": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "radius": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "threshold": {
+                  "format": "double",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "threshold",
+                "radius",
+                "intensity"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "Glow"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "Sharpen": {
+              "properties": {
+                "amount": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "radius": {
+                  "format": "double",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "amount",
+                "radius"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "Sharpen"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "Vignette": {
+              "properties": {
+                "amount": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "feather": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "midpoint": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "roundness": {
+                  "format": "double",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "amount",
+                "midpoint",
+                "feather",
+                "roundness"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "Vignette"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "CornerPin": {
+              "properties": {
+                "corners": {
+                  "items": {
+                    "items": {
+                      "format": "double",
+                      "type": "number"
+                    },
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "type": "array"
+                  },
+                  "maxItems": 4,
+                  "minItems": 4,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "corners"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "CornerPin"
           ],
           "type": "object"
         }
