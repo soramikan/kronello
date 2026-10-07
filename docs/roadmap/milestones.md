@@ -1,6 +1,6 @@
 # マイルストーン
 
-状態: M0 は完了。M1 は全 14 タスクが完了（2026-10-03。統合点は `scripts/demo_cli_m1.py`、[CLI-001 の検証](../testing/cli-001.md)）。M2 は P0 全 10 タスクが完了（2026-10-04。統合点は `scripts/demo_integration_m2.py`、[INTEGRATION-001 の検証](../testing/integration-001.md)）。共有編集・検査 API、CompositionClip、日本語テンプレート、基本音声と ProRes / PCM24 書き出し、blur / shadow、MCP stdio、固定 snapshot の独立 worker と 4K 画像連番を実装した。M2 の STORE-003（P2）は `in_progress` であり、M2 全 11 タスクの完了ではない。M1 で見送った範囲（VEC-004 / VEC-005 / STORE-003 / QA-004 / CACHE-003）と下記の M2 延期範囲は後続タスクに記録した。M3 は主要コアと `apps/macos` の4ページ・実時間音声・横断検証を統合済みで、全 25 タスクの受け入れを完了した。現在の完了判定は `backlog.json` と各検証文書を参照する。M4 の全 12 タスクも受け入れを完了した（2026-10-06。[統合受け入れ記録](../testing/m4-acceptance.md)）。M5 は SIM-001・EXPR-002・AUDIO-005 を含む12件を受け入れ済み。NAME-001 は名称確保の所有者判断が保留のため進行中で、全13件の完了ではない。M6 は未着手。ここで実装済みと明記した範囲以外の API・CLI・スキーマは提案として扱う。タスクの詳細は [backlog](../backlog/BACKLOG.md)。
+状態: M0 は完了。M1 は全 14 タスクが完了（2026-10-03。統合点は `scripts/demo_cli_m1.py`、[CLI-001 の検証](../testing/cli-001.md)）。M2 は P0 全 10 タスクが完了（2026-10-04。統合点は `scripts/demo_integration_m2.py`、[INTEGRATION-001 の検証](../testing/integration-001.md)）。共有編集・検査 API、CompositionClip、日本語テンプレート、基本音声と ProRes / PCM24 書き出し、blur / shadow、MCP stdio、固定 snapshot の独立 worker と 4K 画像連番を実装した。M2 の STORE-003（P2）は `in_progress` であり、M2 全 11 タスクの完了ではない。M1 で見送った範囲（VEC-004 / VEC-005 / STORE-003 / QA-004 / CACHE-003）と下記の M2 延期範囲は後続タスクに記録した。M3 は主要コアと `apps/macos` の4ページ・実時間音声・横断検証を統合済みで、全 25 タスクの受け入れを完了した。現在の完了判定は `backlog.json` と各検証文書を参照する。M4 の全 12 タスクも受け入れを完了した（2026-10-06。[統合受け入れ記録](../testing/m4-acceptance.md)）。M5 は SIM-001・EXPR-002・AUDIO-005 を含む12件を受け入れ済み。NAME-001 は名称確保の所有者判断が保留のため進行中で、全13件の完了ではない。M6 は機能拡張を優先するため M11 へ改番し、M7〜M10 を新設した。旧 M6 の 12 タスクは M11 に移動済みで、M7〜M11 はすべて未着手（planned）。ここで実装済みと明記した範囲以外の API・CLI・スキーマは提案として扱う。タスクの詳細は [backlog](../backlog/BACKLOG.md)。
 
 | 段階 | 成果物 | 主な完了条件 | タスク数 |
 |---|---|---|---:|
@@ -10,7 +10,11 @@
 | M3 | 実用的な Motion Authoring | macOS ネイティブ GUI（canvas / curve editor、編集・テンプレート・書き出しページ）、テンプレート拡張、基本式、responsive layout、リアルタイム再生、M2 の後続機能、縦断デモ第 2 段階 | 25 |
 | M4 | 高品質・高解像度 | サブフレームブラー、temporal cache、8K / HDR 品質、GPU 経路診断、Composition の Media ノード、MCP 新版・GUI の安全モード排他・Windows FFmpeg runtime | 12 |
 | M5 | 高度な 2D Motion・未割当編集機能 | Repeater、path 演出、音声連動、ルビ・縦書き、Simulation、式構文、Matte、macOS編集UI、名称・音声採否と経路整理 | 13 |
-| M6 | 拡張・他OS・製品配布 | 2.5D、互換アダプター、プラグイン、分散、Windows/Linux GUI、各OSの製品packageとresident保証の拡張 | 12 |
+| M7 | 編集体験の中核 | slip/slide/rolling・ripple、マーカー・In/Out、字幕モデルとI/O、色補正基盤、ブレンド・トランジション拡張、タイムライン/字幕/カラー UI、縦断デモ第3段階 | 11 |
+| M8 | 仕上げ品質と速度 | ロック・可変リタイム、LUT・スコープ、マスク・キーイング・標準エフェクト、アジャストメントクリップ、EQ・ダイナミクス・LUFS、音声UI、トラッキング、テキスト拡張、プロキシ、ワークフローUI | 15 |
+| M9 | AIとプロワークフロー | スタビ・オプティカルフロー、ピッチ保持・マルチch、二画面モニタ、文字起こし・シーン検出・スマートリフレーム、マルチカム、メディア管理、書き出し運用、VST/AU、縦断デモ第4段階 | 12 |
+| M10 | 仕上げと拡張 | 配信拡張、外部モニタ出力、共同編集、カメラRAW、キャプチャ、ワークスペース完成 | 7 |
+| M11 | 拡張・他OS・製品配布（旧M6） | 2.5D、互換アダプター、プラグイン、分散、Windows/Linux GUI、各OSの製品packageとresident保証の拡張、上級交換、完全3D検討 | 14 |
 
 ## 方針
 
@@ -31,7 +35,7 @@
 
 ## 2026-10-06 の未割当範囲の整理（PR #9監査時点の履歴）
 
-[現在の実装範囲と残件](implementation-status.md) に、確認済み・未実装・未検証・保証外を対応付けた。NAME-001、EXPR-002/003、AUDIO-005、MATTE-001、FRAMEBRIDGE-001、GUI-007、INSPECT-002をM5、GUI-005/006、RELEASE-002〜004、GPU-004〜006をM6のplannedへ追加した。追加時は全16件がplannedであった。その後の着手・受け入れ状況は冒頭と正本のbacklog.jsonを参照する。配置は作業計画であり、納期・未決事項の採否を確定するものではない。M3/M4の受け入れ範囲と完了は維持する。
+[現在の実装範囲と残件](implementation-status.md) に、確認済み・未実装・未検証・保証外を対応付けた。NAME-001、EXPR-002/003、AUDIO-005、MATTE-001、FRAMEBRIDGE-001、GUI-007、INSPECT-002をM5、GUI-005/006、RELEASE-002〜004、GPU-004〜006をM6のplannedへ追加した（M6 は後日 M11 へ改番）。追加時は全16件がplannedであった。その後の着手・受け入れ状況は冒頭と正本のbacklog.jsonを参照する。配置は作業計画であり、納期・未決事項の採否を確定するものではない。M3/M4の受け入れ範囲と完了は維持する。
 
 ## M2 の延期範囲と後続タスク
 
