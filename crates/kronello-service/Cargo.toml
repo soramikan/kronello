@@ -28,6 +28,7 @@ kronello-time = { path = "../kronello-time" }
 kronello-store = { path = "../kronello-store" }
 kronello-render = { path = "../kronello-render" }
 kronello-gpu = { path = "../kronello-gpu" }
+kronello-vector = { path = "../kronello-vector" }
 kronello-text = { path = "../kronello-text" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip", "raw_value"] }

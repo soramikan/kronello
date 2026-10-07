@@ -184,6 +184,32 @@ pub fn authoring_hash(project: &Project, root: CompositionId) -> Result<String, 
                         add_curve(project, source, &mut objects)?;
                     }
                 }
+                NodeKind::Simulation { content_ref } => {
+                    let simulation = project
+                        .simulation(*content_ref)
+                        .map_err(|e| TemplateError::Unsupported(e.to_string()))?;
+                    objects.insert(content_ref.as_uuid(), serde_json::to_value(simulation)?);
+                    pending.push(simulation.source.composition);
+                    for source in simulation.source_bindings.values() {
+                        add_curve(project, source, &mut objects)?;
+                    }
+                }
+                NodeKind::Repeater { content_ref } => {
+                    let r = project
+                        .repeater(*content_ref)
+                        .map_err(|e| TemplateError::Unsupported(e.to_string()))?;
+                    objects.insert(content_ref.as_uuid(), serde_json::to_value(r)?);
+                    pending.push(r.source.composition);
+                    for i in &r.instances {
+                        pending.push(i.source(r).composition);
+                        for p in &i.properties {
+                            add_curve(project, p.source(), &mut objects)?;
+                        }
+                        for source in i.input_bindings.values() {
+                            add_curve(project, source, &mut objects)?;
+                        }
+                    }
+                }
                 NodeKind::Text { content_ref } => {
                     if project.texts.iter().any(
                         |t| matches!(t, DocumentObject::Opaque(t) if t.id == content_ref.as_uuid()),
@@ -423,7 +449,11 @@ fn validate_selected_definition(
                     .find(|p| p.id() == property)
                     .ok_or_else(|| invalid("input property missing"))?;
                 let mut registry = SchemaRegistry::with_builtin();
-                for descriptor in shape_descriptors().into_iter().chain(text_descriptors()) {
+                for descriptor in shape_descriptors()
+                    .into_iter()
+                    .chain(text_descriptors())
+                    .chain(simulation_descriptors())
+                {
                     registry
                         .register(descriptor)
                         .map_err(|_| invalid("descriptor registration"))?;
@@ -625,7 +655,11 @@ pub fn validate_instance(project: &Project, i: &TemplateInstance) -> Result<(), 
     validate_definition(project, d)?;
     let values = resolved_inputs(edition, i)?;
     let mut registry = SchemaRegistry::with_builtin();
-    for descriptor in shape_descriptors().into_iter().chain(text_descriptors()) {
+    for descriptor in shape_descriptors()
+        .into_iter()
+        .chain(text_descriptors())
+        .chain(simulation_descriptors())
+    {
         registry
             .register(descriptor)
             .expect("distinct built-in descriptors");
@@ -689,7 +723,19 @@ pub fn validate_reachable(project: &Project, root: CompositionId) -> Result<(), 
         if !seen.insert(id) {
             continue;
         }
-        for node in &composition(project, id)?.nodes {
+        let lowered = project
+            .lower_repeater_composition(composition(project, id)?)
+            .map_err(|e| TemplateError::Unsupported(e.to_string()))?;
+        for node in &lowered.nodes {
+            if let NodeKind::Simulation { content_ref } = &node.kind {
+                pending.push(
+                    project
+                        .simulation(*content_ref)
+                        .map_err(|e| TemplateError::Unsupported(e.to_string()))?
+                        .source
+                        .composition,
+                );
+            }
             if let NodeKind::CompositionInstance(i) = &node.kind {
                 placements.insert(i.id.as_uuid());
                 pending.push(i.definition_ref);

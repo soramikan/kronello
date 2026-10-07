@@ -158,6 +158,27 @@ impl MediaRuntime {
         working: ColorSpace,
         hdr: Option<kronello_render::HdrSettings>,
     ) -> Result<VideoImage, MediaError> {
+        self.decode_video_image_with_sampling(
+            asset,
+            project_path,
+            stream_index,
+            time,
+            working,
+            hdr,
+            false,
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub fn decode_video_image_with_sampling(
+        &self,
+        asset: &Asset,
+        project_path: &Path,
+        stream_index: u32,
+        time: Time,
+        working: ColorSpace,
+        hdr: Option<kronello_render::HdrSettings>,
+        reverse_sampling: bool,
+    ) -> Result<VideoImage, MediaError> {
         let path = resolve_asset(asset, project_path)?;
         let mut decoder = self.open_video_stream(&path, stream_index)?;
         self.decode_video_image_from_decoder(
@@ -168,6 +189,7 @@ impl MediaRuntime {
             time,
             working,
             hdr,
+            reverse_sampling,
         )
     }
     #[allow(clippy::too_many_arguments)]
@@ -180,9 +202,14 @@ impl MediaRuntime {
         time: Time,
         working: ColorSpace,
         hdr: Option<kronello_render::HdrSettings>,
+        reverse_sampling: bool,
     ) -> Result<VideoImage, MediaError> {
         resolve_asset(asset, project_path)?;
-        let frame = decoder.decode_at(time)?;
+        let frame = if reverse_sampling {
+            decoder.decode_at_reverse(time)?
+        } else {
+            decoder.decode_at(time)?
+        };
         let metadata = StreamMetadata {
             index: stream_index,
             codec: String::new(),
@@ -411,7 +438,7 @@ impl RenderBackend for VideoRenderBackend<'_> {
         } else {
             None
         };
-        let resolved = dag.resolve_video(|asset, stream, time, working| {
+        let resolved = dag.resolve_video(|asset, stream, time, working, reverse_sampling| {
             if asset.kind == kronello_model::AssetKind::Image {
                 return crate::decode_image_asset(asset, self.project_path, stream, working)
                     .map_err(render_error);
@@ -419,13 +446,14 @@ impl RenderBackend for VideoRenderBackend<'_> {
             runtime
                 .as_ref()
                 .expect("video runtime")
-                .decode_video_image_with_hdr(
+                .decode_video_image_with_sampling(
                     asset,
                     self.project_path,
                     stream,
                     time,
                     working,
                     dag.hdr(),
+                    reverse_sampling,
                 )
                 .map_err(render_error)
         })?;
@@ -522,7 +550,7 @@ impl RenderBackend for SequentialVideoRenderBackend<'_> {
         cache: &mut RenderCache,
     ) -> Result<BackendFrame, RenderError> {
         let _scope = self.begin_observation_scope()?;
-        let resolved = dag.resolve_video(|asset, stream, time, working| {
+        let resolved = dag.resolve_video(|asset, stream, time, working, reverse_sampling| {
             if asset.kind == kronello_model::AssetKind::Image {
                 return crate::decode_image_asset(asset, self.base.project_path, stream, working)
                     .map_err(render_error);
@@ -567,6 +595,7 @@ impl RenderBackend for SequentialVideoRenderBackend<'_> {
                 time,
                 working,
                 dag.hdr(),
+                reverse_sampling,
             );
             pool.push(entry);
             while pool
@@ -714,11 +743,15 @@ impl RenderBackend for ResidentVideoRenderBackend<'_> {
                     asset,
                     stream_index,
                     time,
+                    reverse_sampling,
                     extent,
                     output_to_local,
                     ..
                 } = node
                 {
+                    if *reverse_sampling {
+                        return Err(RenderError::UnsupportedFeature("reverse_grid_v1 requires explicit software presentation-interval decode".into()));
+                    }
                     let metadata = asset
                         .streams
                         .iter()

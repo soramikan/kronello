@@ -98,6 +98,8 @@ pub struct LocalStrokeGeometry {
 pub enum MaskKind {
     Alpha,
     Luminance,
+    AlphaInverted,
+    LuminanceInverted,
 }
 #[derive(Debug, Clone)]
 pub enum DrawNode {
@@ -107,6 +109,11 @@ pub enum DrawNode {
     /// Device-bound premultiplied working-space image; never implicitly read back.
     GpuRaster(crate::ResidentImage),
     Path(PathDraw),
+    Blend {
+        source: usize,
+        backdrop: usize,
+        mode: kronello_model::BlendMode,
+    },
     Group {
         children: Vec<usize>,
         opacity: f32,
@@ -256,7 +263,7 @@ impl DrawScene {
                     }
                     _ => GpuError::InvalidInput("invalid effect parameters"),
                 })?,
-                DrawNode::Masked { .. } => {}
+                DrawNode::Masked { .. } | DrawNode::Blend { .. } => {}
             }
         }
         if edges > 65536 {
@@ -314,6 +321,9 @@ pub(crate) fn inputs(node: &DrawNode) -> Vec<usize> {
         DrawNode::Path(_) | DrawNode::Raster(_) | DrawNode::GpuRaster(_) => vec![],
         DrawNode::Group { children, .. } => children.clone(),
         DrawNode::Effect { source, .. } => vec![*source],
+        DrawNode::Blend {
+            source, backdrop, ..
+        } => vec![*source, *backdrop],
         DrawNode::Masked { source, matte, .. } => vec![*source, *matte],
     }
 }
@@ -932,6 +942,18 @@ pub(crate) fn render_scene_reference_with_resolvers(
                     *p = p.map(|v| v * opacity);
                 }
             }
+            DrawNode::Blend {
+                source,
+                backdrop,
+                mode,
+            } => {
+                let src = node(size, scene, *source, working, cache, raster, effects)?;
+                let dst = node(size, scene, *backdrop, working, cache, raster, effects)?;
+                for ((out, s), d) in pixels.iter_mut().zip(src).zip(dst) {
+                    *out = color::blend(s, d, *mode);
+                }
+                validate_surface_pixels(&pixels)?;
+            }
             DrawNode::Effect { source, effect } => {
                 let source = node(size, scene, *source, working, cache, raster, effects)?;
                 pixels = effects(id, &source, effect)?;
@@ -947,6 +969,11 @@ pub(crate) fn render_scene_reference_with_resolvers(
                 for (p, m) in pixels.iter_mut().zip(mask) {
                     let coverage = match kind {
                         MaskKind::Alpha => m[3],
+                        MaskKind::AlphaInverted => 1.0 - m[3],
+                        MaskKind::LuminanceInverted => {
+                            1.0 - (m[0] * weights[0] + m[1] * weights[1] + m[2] * weights[2])
+                                .clamp(0.0, 1.0)
+                        }
                         MaskKind::Luminance => {
                             (m[0] * weights[0] + m[1] * weights[1] + m[2] * weights[2])
                                 .clamp(0.0, 1.0)

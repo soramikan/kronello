@@ -73,7 +73,7 @@ AST node は externally tagged の一要素 object。`"time"` は unit variant�
 
 候補は AST 型と参照 / 依存 DAG を検証する。新しい `EXPRESSION_BUDGET_EXCEEDED` に加え、`EVALUATION_ERROR`、経路付き `PROPERTY_DEPENDENCY_CYCLE`、`UNSUPPORTED_FEATURE` が sample / render / 編集検証から伝播する。編集対象や source catalog の不適合には既存 `INVALID_EDIT` を使う。禁止能力や未知 field を command に含めた場合は `INVALID_REQUEST`。revision / idempotency / Undo は既存の transaction 契約を使う。式の root ごとに同じ予算を適用し、最終レンダーは式の失敗時に停止する。RenderSnapshot の `semantic_versions.expression` と Project 内の AST を固定し、現在文書へ読み替えない。
 
-詳細は [ADR-0058](../adr/0058-bounded-canonical-expression-ast.md)、検証結果は [EXPR-001](../testing/expr-001.md) を参照する。DataAsset / 動的 Property sample はEXPR-003、人間向けparserはOQ-17 / EXPR-002の未実装範囲として追跡する。
+詳細は [ADR-0058](../adr/0058-bounded-canonical-expression-ast.md)、検証結果は [EXPR-001](../testing/expr-001.md) を参照する。DataAsset / 動的 Property sample / 連続noiseは[EXPR-003](../testing/expr-003.md)で受け入れ済み（M5作業ブランチ）。人間向け式構文は [ADR-0105](../adr/0105-human-readable-expression-syntax.md) で採用し、`EditCommand::property_expression_text_set` がテキストをASTへparseして既存の edit.plan / edit.apply / Undo を通す。`expression.format` は保存済みまたは与えたASTの正規テキストを返す読み取り操作。構文診断は `error.details.diagnostics` に byte範囲・行・列・期待tokenを載せてGUIと共有する。
 
 ## M2 SERVICE-001 の実装範囲
 
@@ -158,19 +158,23 @@ Undo は対象 Event の保存 inverse を現在文書に適用した候補を�
 
 INTEGRATION-001 / [ADR-0053](../adr/0053-integration-evaluated-queries-and-render-tiles.md) で `scene.query` に任意の `evaluation: {time, fonts}` を追加した。指定時は render と同じ compiler で active node の `evaluated`（properties、text、text-local layout_bounds、world_transform、resolved effects）を返す。inactive node に evaluated は付けない。`property.sample` の任意 `fonts` 指定も同じ active node 値を times 順に返す。必要 font の欠落は `FONT_MISSING`、この mode の inactive / Composition key は `INVALID_REQUEST`。省略時の既存 evaluator mode は template の文字置換や組版由来の帯値を適用しないため、template のレンダー値確認には明示 mode を使う。capabilities の effects は `kronello.gaussian_blur` / `kronello.drop_shadow` を列挙する。
 
-scene の key は `{instance_path, node}`。expand_instances を指定すると、placement の authored children より前に参照 definition の roots を展開する。同じ definition の二配置は NodeId が同じでも InstancePath が異なる。definition root の所有親と、明示変換親のない内部 node の変換親は enclosing placement となる。active_range は各 definition の local time の値を保持し、時刻による絞り込みや祖先との区間交差はしない。展開を含む最大 node 数は100000で、超過は `INVALID_REQUEST`。範囲・タグ・種類による検索、scene ページング、評価済み transform の返却は未実装。
+scene の key は `{instance_path, node}`。expand_instances を指定すると、placement の authored children より前に参照 definition の roots を展開する。同じ definition の二配置は NodeId が同じでも InstancePath が異なる。definition root の所有親と、明示変換親のない内部 node の変換親は enclosing placement となる。active_range は各 definition の local time の値を保持し、時刻による絞り込みや祖先との区間交差はしない。展開を含む最大 node 数は100000で、超過は `INVALID_REQUEST`。検索・sceneページングは後述のAPI-002、評価済みtransformは明示evaluationを使うINTEGRATION-001の範囲で実装済み。
 
 sample key は `{ "kind":"node", "instance_path":[], "node":"UUID", "property":"UUID" }` または `{ "kind":"composition", "instance_path":[], "composition":"UUID", "property":"UUID" }`。root composition は要求に明示し、各 path はそこから解決する。time は `{ "num":"1", "den":"2" }` の有理数。keys / times は非空で、その積は100000以下。評価には `kronello-eval` を使い、時刻をフレームに丸めない。composition input は placement override と local TimeMap を含めて解決する。欠落 key・無効時刻・式の失敗・有効な Modifier 等の未対応評価を代替値で継続せず、`INVALID_REQUEST` / `EVALUATION_ERROR` / `UNSUPPORTED_FEATURE` 等を返す。units は共有 descriptor の `design_px` / `degrees` / `dimensionless`。
 
-capabilities はコンパイル済み対応範囲を示し、GPU adapter の稼働を保証しない。effects の列挙はこの実装では空。media は MEDIA-001 の `MediaRuntime::load` で実際に読み込んだ FFmpeg の情報を返す。既存の runtime_version / decoders / encoders / hwaccels に加え、schema_version、ffmpeg_version、library_directory、substituted、全 libraries の version / license / configuration、codecs の encoder / decoder / hardware、distribution_eligible、development_only を含む。`Service::with_media_capabilities(MediaCapabilities)` で明示したレポートを渡す場合は再検出しない。未指定時の FFmpeg の欠落・不正な override・ABI 不一致は `FFMPEG_UNAVAILABLE` とし、null や既定ライブラリへ暗黙に戻さない。物理 hardware の稼働保証と配布適格性は区別する（[ADR-0048](../adr/0048-media-native-build-and-asset-verification.md)）。
+capabilities はコンパイル済み対応範囲を示し、GPU adapter の稼働を保証しない。effectsは実装済みのgaussian blur / drop shadowを列挙する。media は MEDIA-001 の `MediaRuntime::load` で実際に読み込んだ FFmpeg の情報を返す。既存の runtime_version / decoders / encoders / hwaccels に加え、schema_version、ffmpeg_version、library_directory、substituted、全 libraries の version / license / configuration、codecs の encoder / decoder / hardware、distribution_eligible、development_only を含む。`Service::with_media_capabilities(MediaCapabilities)` で明示したレポートを渡す場合は再検出しない。未指定時の FFmpeg の欠落・不正な override・ABI 不一致は `FFMPEG_UNAVAILABLE` とし、null や既定ライブラリへ暗黙に戻さない。物理 hardware の稼働保証と配布適格性は区別する（[ADR-0048](../adr/0048-media-native-build-and-asset-verification.md)）。
 
 ### 公開 schema と registry
 
-[schemas/api-v1.schema.json](../../schemas/api-v1.schema.json) は Draft 2020-12。Request / Response envelope、全38操作の payload / successful result、型付き EditCommand を共有 Rust 型から生成する。`api_json_schema()` と committed schema の一致を通常テストで確認する。再生成は `cargo run -p kronello-service --example api_schema --locked > schemas/api-v1.schema.json`。版はファイル名・`$id`・`x-api-schema-version` で固定し、既存 Request に必須 version field を追加しない。Project document は従来の公開型 / schema を共有する。
+[schemas/api-v1.schema.json](../../schemas/api-v1.schema.json) は Draft 2020-12。Request / Response envelope、registry全操作の payload / successful result、型付き EditCommand を共有 Rust 型から生成する。`api_json_schema()` と committed schema の一致を通常テストで確認する。再生成は `cargo run -p kronello-service --example api_schema --locked > schemas/api-v1.schema.json`。版はファイル名・`$id`・`x-api-schema-version` で固定し、既存 Request に必須 version field を追加しない。Project document は従来の公開型 / schema を共有する。
 
-`command_registry()` の CommandDescriptor は name / read_only / request_schema / response_schema を持つ。schema refs は同ファイルの `$defs` を指す。request_schema は operation tag を除いた payload、response_schema は status / kind を除いた successful value。MCP-001 / FFI-001 は同じ registry と execute / execute_json を使用できる。registry の38操作は project.create / create_plan / import / import_plan / export / info / collect、asset.relink、render.frame / sequence / export / submit、job.get / list / cancel / prune、edit.plan / apply / undo、history.list、scene.query、property.sample、capabilities.get、template.define / instantiate / set_input / set_duration / preview / migration_plan と後述の NLE-001 の6操作、NLE-002 の sequence.query、INSPECT-001 の2操作。project.create / import / asset.relink / edit.apply / undo、template の4操作、NLE-001 の6操作が mutating。他は project に対し read-only（render.sequence と project.collect は output directory に成果物を作る）。project.collect の read_only は元プロジェクトを変更しないことを表し、複製と hash 検証済み素材を新しいフォルダに保存する。
+`command_registry()` の CommandDescriptor は name / read_only / request_schema / response_schema を持つ。schema refs は同ファイルの `$defs` を指す。request_schema は operation tag を除いた payload、response_schema は status / kind を除いた successful value。MCP-001 / FFI-001 は同じ registry と execute / execute_json を使用できる。M3時点のregistryの38操作は project.create / create_plan / import / import_plan / export / info / collect、asset.relink、render.frame / sequence / export / submit、job.get / list / cancel / prune、edit.plan / apply / undo、history.list、scene.query、property.sample、capabilities.get、template.define / instantiate / set_input / set_duration / preview / migration_plan と後述の NLE-001 の6操作、NLE-002 の sequence.query、INSPECT-001 の2操作。project.create / import / asset.relink / edit.apply / undo、template の4操作、NLE-001 の6操作が mutating。他は project に対し read-only（render.sequence と project.collect は output directory に成果物を作る）。project.collect の read_only は元プロジェクトを変更しないことを表し、複製と hash 検証済み素材を新しいフォルダに保存する。
 
 request envelope・既知 payload は未知 field と重複 field を拒否する。schema に任意 shell、外部 URL fetch、raw FFmpeg args の実行 field は設けない。project / font / output path と assets 内の locator の URI scheme は filesystem access の前に `INVALID_REQUEST` とする。Windows drive path は local path として許す。素材の name / text や未知 Project 内容は不活性なデータであり、命令として実行しない。Project の未知 field 保持と、API envelope の厳格な decode は別の契約である。
+
+M4で`job.resume`、M5作業ツリーで`audio.analyze`、`svg.inspect` / `svg.export` / `svg.import_plan`、`font.pin`を追加し、現在のregistryは44操作である。M5の追加操作は対応するVEC-002・AUDIO-001・GUI-007で作業ツリーの受け入れを確認済み（[進捗記録](../testing/m5-acceptance.md)）。`audio.analyze`は作品を更新し、SVG三操作と`font.pin`は読み取り専用。全操作の正本は`command_registry()`と生成schemaであり、過去の一覧を現行の全操作数として固定しない。
+
+GUI-007のNormal / Multiply / Screenは新しいtransport操作を増やさず、既存の `edit.plan/apply` と `TimelineCommand::ClipSetEffects` を使ってClipの `kronello.blend_mode` Propertyを編集する。共有保存・revision・再送・Undoと実画素の個別試験は成功し、GUI確認と最終統合検証は残る（[ADR-0101](../adr/0101-linear-premultiplied-layer-blend.md)、[検証記録](../testing/gui-007-blend.md)）。
 
 ### history.list のページング
 
@@ -193,7 +197,7 @@ code は `DISABLED`（node の `enabled:false`）、`ANCESTOR_DISABLED`（無効
 
 containment の opacity / active_range は祖先の原因として追跡し、transform parent の opacity / active_range は継承しない。inactive ancestor の下の別 instance scope は TimeMap を実行せず local_time を null とする。dependencies は containment / transform / matte の node 参照、content / font / curve / expression の resource 参照、Property / layout の静的 closure 辺。Property key は kind `node / composition / layout` で、layout は instance_path / text / consumer を持つ。Composition 全体の失敗は render_diagnostics に分け、別 node の欠落を対象 node の原因へ読み替えない。
 
-mattes は既存 `MatteBinding {source:SceneKey,matte:SceneKey,kind:"alpha"|"luminance",visible:bool}` の transient 入力。文書には保存しない。未測定の matte coverage は `MASK_COVERAGE_UNRESOLVED`。通常の render.frame に Query の matte 入力を暗黙に適用しない。
+Queryの`mattes`は `MatteBinding` のtransient入力であり、Queryを呼ぶだけでは文書に保存しない。kindは`alpha` / `luminance`、M5では`alpha_inverted` / `luminance_inverted`も扱う。これとは別に、M5のMATTE-001で `Project.mattes` と共有 `MatteSet` / `MatteRemove` を実装し、保存・revision・Undoを作業ツリーで受け入れ済みである（[ADR-0099](../adr/0099-authored-matte-relations.md)）。保存済み関係も通常renderへ反映し、transient入力と同じsourceに重なる指定は拒否する。未測定の matte coverage は `MASK_COVERAGE_UNRESOLVED`。通常の render.frame に Query の matte 入力を暗黙に適用しない。
 
 plan は profile、backend、`executed:false`、tile ごとの requested / execution、stages（code / inputs / node / execution / image）、面数・メモリの `_estimate`、方向別 transfers（bytes_estimate / operations_estimate）、processing notices、実 compilation_cache counters を持つ。null の推定値は未推定であり0ではない。cache_scope は `isolated_query_compilation`、`raster_cache_observed:false`。renderer の cache / LRU / counters、作品の revision を変更しない。timing / runtime warm cache / GPU 可用性は測定しない。詳細は [ADR-0060](../adr/0060-structured-read-only-inspection.md)、[INSPECT-001 検証](../testing/inspect-001.md)。
 
@@ -613,20 +617,23 @@ create / import / plan / edit の入口から受け取らない。
 {"format":"av1_mp4","profile_version":1,"audio":"document","audio_codec":"alac","clips":[],"background":[0,0,0]}
 ```
 
-format は av1_mp4 / h264_mov / hevc_mov、追加形式の profile_version は必須で1のみ。
-audio は既存 explicit（省略値）/ document / silence、audio_codec は alac（省略値）/ aac の
-閉集合だが aac は未採用で UNSUPPORTED_FEATURE。clips / background は明示。
+format は av1_mp4 / h264_mov / hevc_mov / av1_webm、追加形式の profile_version は必須で1のみ。
+audio は既存 explicit（省略値）/ document / silence、audio_codec は alac（省略値）/ aac / opus の
+閉集合。alac は version 1 の ALAC profile、aac は AAC-LC（MP4 / MOV のみ）、opus は
+Opus（`av1_webm` のみ。MP4 / MOV への収録は UNSUPPORTED_FEATURE）。clips / background は明示。
 document / silence と非空 clips は INVALID_MEDIA_INPUT。任意 codec / FFmpeg args / shellは拒否する。
-render.output_directory は av1_mp4 では新規 .mp4、他2形式では新規 .mov。拡張子不一致は
-INVALID_MEDIA_INPUT、未知 version / 未採用 codec は UNSUPPORTED_FEATURE。
+render.output_directory は av1_mp4 では新規 .mp4、av1_webm では新規 .webm、他2形式では新規 .mov。拡張子不一致は
+INVALID_MEDIA_INPUT、未知 version / 未採用 codec / 形式と codec の不整合は UNSUPPORTED_FEATURE。
 H.264 / HEVC の device / eligible encoder 不在は ENCODER_UNAVAILABLE、software fallback はしない。
 
-AvExportReport は movie_profile（av1_mp4_alac_v1 / h264_alac_v1 / hevc_alac_v1）、
-audio_profile_version:3、両 snapshot hash、probe と encoder / execution / transfer report を返す。
+AvExportReport は movie_profile（av1_mp4_alac_v1 / h264_alac_v1 / hevc_alac_v1 に加え、
+ADR-0106 の h264_aac_v1 / hevc_aac_v1 / av1_mp4_aac_v1 / av1_webm_opus_v1）、
+audio_profile_version、両 snapshot hash、probe と encoder / execution / transfer report を返す。
 追加形式は evaluator 2 に固定し、movie profile の version 1 と別物として報告する。
 旧 pro_res_mov の省略 profile 1 / explicit と version 2/3、旧 report の省略 field は維持する。
-契約と未採用 AAC / Web audio は [ADR-0068](../adr/0068-versioned-delivery-movie-profiles.md)、
-実行結果は [MEDIA-002](../testing/media-002.md)。
+契約は [ADR-0068](../adr/0068-versioned-delivery-movie-profiles.md) と
+[ADR-0106](../adr/0106-versioned-compressed-delivery-audio.md)、
+実行結果は [MEDIA-002](../testing/media-002.md) と [AUDIO-005](../testing/audio-005.md)。
 
 ## RENDER-003 の export I/O 診断
 

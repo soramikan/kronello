@@ -22,7 +22,8 @@
         "--disable-doc",
         "--disable-debug",
         "--disable-x86asm",
-        "--enable-libdav1d"
+        "--enable-libdav1d",
+        "--enable-libopus"
       ],
       "platform_configure": {
         "darwin": [
@@ -58,8 +59,8 @@
     {
       "name": "dav1d",
       "version": "1.5.4",
-      "url": "https://code.videolan.org/videolan/dav1d/-/archive/1.5.4/dav1d-1.5.4.tar.bz2",
-      "sha256": "2abfb0c89212e6e4733a54e0ae509ec00a5b845a6360946f918806e14aedb011",
+      "url": "https://downloads.videolan.org/pub/videolan/dav1d/1.5.4/dav1d-1.5.4.tar.xz",
+      "sha256": "686616b7c69eb88d44459391ab25cac13b6647a3b288835c5784e71c1514a5c5",
       "license": "BSD-2-Clause",
       "license_files": [
         "COPYING"
@@ -71,8 +72,24 @@
         "-Denable_tests=false",
         "-Denable_asm=false"
       ]
+    },
+    {
+      "name": "opus",
+      "version": "1.5.2",
+      "url": "https://downloads.xiph.org/releases/opus/opus-1.5.2.tar.gz",
+      "sha256": "65c1d2f78b9f2fb20082c38cbe47c951ad5839345876e46941612ee87f9a7ce1",
+      "license": "BSD-3-Clause",
+      "license_files": [
+        "COPYING"
+      ],
+      "configure": [
+        "--disable-static",
+        "--enable-shared",
+        "--disable-doc",
+        "--disable-extra-programs"
+      ]
     }
   ],
   "hash_provenance": "Pinned upstream release archive hashes cross-checked against locally installed Homebrew source SBOM; downloads must match before extraction.",
-  "distribution": "Shared FFmpeg, SVT-AV1 and dav1d libraries only; copy license texts, PATENTS, source URLs and this manifest. GPL/nonfree builds fail verification. System development builds are never distribution input."
+  "distribution": "Shared FFmpeg, SVT-AV1, dav1d and opus libraries only; copy license texts, PATENTS, source URLs and this manifest. GPL/nonfree builds fail verification. System development builds are never distribution input."
 }

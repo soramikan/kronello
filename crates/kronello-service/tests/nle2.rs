@@ -374,6 +374,7 @@ fn clip(color: [u8; 3], a: i64, b: i64) -> Clip {
         source_in: Time::ZERO,
         time_map: TimeMap::linear(Time::ZERO, Rational::ONE).unwrap(),
         audio_retime: AudioRetimePolicy::Reject,
+        reverse_sampling: None,
         volume: None,
         links: vec![],
         properties: vec![],
@@ -388,6 +389,7 @@ fn sequence(clips: Vec<Clip>) -> Sequence {
         audio_rate: SampleRate::HZ_48000,
         working_space: ColorSpace::LinearRec709,
         tracks: vec![Track {
+            state: None,
             id: TrackId::new(),
             kind: TrackKind::Video,
             clips,
@@ -637,6 +639,7 @@ fn video_placements_cfr_vfr_bframes_exact_seeks_retime_and_independence() {
         .unwrap();
         let mut s = sequence(vec![a.clone()]);
         s.tracks.push(Track {
+            state: None,
             id: TrackId::new(),
             kind: TrackKind::Video,
             clips: vec![b.clone()],
@@ -911,6 +914,7 @@ fn linked_move_traverses_an_imported_reciprocal_chain() {
     let mut s = sequence(vec![a.clone()]);
     for clip in [b.clone(), c.clone()] {
         s.tracks.push(Track {
+            state: None,
             id: TrackId::new(),
             kind: TrackKind::Video,
             clips: vec![clip],
@@ -1323,6 +1327,7 @@ fn effects_fixture() -> Project {
     c.properties = vec![position, scale, sigma];
     let mut s = sequence(vec![clip([0, 0, 255], 0, 5)]);
     s.tracks.push(Track {
+        state: None,
         id: TrackId::new(),
         kind: TrackKind::Video,
         clips: vec![c],
@@ -1612,7 +1617,8 @@ fn gpu_nle2_clip_effects_and_explicit_video_upload_match_cpu() {
     let scene = build_scene_ir(&snap, t(2, 1), &[]).unwrap();
     let dag = build_render_dag(&scene, snap.profile(), region())
         .unwrap()
-        .resolve_video(|a, i, t, w| {
+        .resolve_video(|a, i, t, w, reverse| {
+            assert!(!reverse);
             runtime.decode_video_image(a, &path, i, t, w).map_err(|e| {
                 kronello_render::RenderError::Backend {
                     code: e.code(),
@@ -1687,6 +1693,7 @@ fn translucent_crossfade_is_same_track_source_over_with_explicit_overlap() {
     let mut bad = s.clone();
     let outgoing = bad.tracks[0].clips.pop().unwrap();
     bad.tracks.push(Track {
+        state: None,
         id: TrackId::new(),
         kind: TrackKind::Video,
         clips: vec![outgoing],
@@ -1829,6 +1836,7 @@ fn ripple_and_transitive_linked_move_are_atomic_and_keep_source_time() {
     let c = clip([0, 255, 0], 3, 5);
     let mut s = sequence(vec![a.clone(), b.clone()]);
     s.tracks.push(Track {
+        state: None,
         id: TrackId::new(),
         kind: TrackKind::Video,
         clips: vec![c.clone()],
@@ -1970,4 +1978,208 @@ fn ripple_and_transitive_linked_move_are_atomic_and_keep_source_time() {
     );
     undo(&path, link.id).unwrap();
     assert_eq!(export(&path).document, initial);
+}
+
+#[test]
+fn gui007_track_output_is_atomic_rendered_and_undoable() {
+    let seq = sequence(vec![clip([255, 0, 0], 0, 2)]);
+    let id = seq.id;
+    let track = seq.tracks[0].id;
+    let (_dir, path) = setup(project(seq));
+    let initial = export(&path);
+    assert!(cpu(&snapshot(&initial.document), Time::ZERO).pixels.linear[0][0] > 0.99);
+    let hidden = apply(
+        &path,
+        vec![TimelineCommand::TrackStateSet {
+            sequence: id,
+            track,
+            state: TrackState {
+                visible: false,
+                muted: false,
+            },
+        }],
+        "hide-track",
+    );
+    let after = export(&path);
+    assert_eq!(
+        cpu(&snapshot(&after.document), Time::ZERO).pixels.linear[0],
+        [0.0; 4]
+    );
+    undo(&path, hidden.id).unwrap();
+    assert!(
+        cpu(&snapshot(&export(&path).document), Time::ZERO)
+            .pixels
+            .linear[0][0]
+            > 0.99
+    );
+    let pending = apply_request(
+        &path,
+        vec![TimelineCommand::TrackStateSet {
+            sequence: id,
+            track,
+            state: TrackState {
+                visible: false,
+                muted: true,
+            },
+        }],
+        "stale-track",
+    );
+    apply(
+        &path,
+        vec![TimelineCommand::TrackStateSet {
+            sequence: id,
+            track,
+            state: TrackState {
+                visible: true,
+                muted: true,
+            },
+        }],
+        "track-other",
+    );
+    assert_eq!(
+        service()
+            .dispatch(Request::EditApply(pending))
+            .unwrap_err()
+            .code,
+        "REVISION_CONFLICT"
+    );
+}
+
+#[test]
+fn gui007_time_set_preserves_rationals_and_rejects_invalid_candidate_atomically() {
+    let seq = sequence(vec![clip([0, 255, 0], 0, 2)]);
+    let id = seq.id;
+    let clip_id = seq.tracks[0].clips[0].id;
+    let (_dir, path) = setup(project(seq));
+    let initial = export(&path);
+    let event = apply(
+        &path,
+        vec![TimelineCommand::ClipTimeSet {
+            sequence: id,
+            clip: clip_id,
+            source_in: t(1001, 30000),
+            time_map: TimeMap::linear(Time::ZERO, t(1, 2)).unwrap(),
+            audio_retime: AudioRetimePolicy::ResampleV1,
+            reverse_sampling: None,
+        }],
+        "time-exact",
+    );
+    let current = export(&path);
+    let DocumentObject::Known(seq) = &current.document.sequences[0] else {
+        panic!()
+    };
+    assert_eq!(seq.tracks[0].clips[0].source_in, t(1001, 30000));
+    assert_eq!(
+        seq.tracks[0].clips[0].timeline_range,
+        TimeRange::new(Time::ZERO, t(2, 1)).unwrap()
+    );
+    reject(
+        &path,
+        vec![TimelineCommand::ClipTimeSet {
+            sequence: id,
+            clip: clip_id,
+            source_in: t(-1, 30000),
+            time_map: TimeMap::linear(Time::ZERO, Time::ONE).unwrap(),
+            audio_retime: AudioRetimePolicy::Reject,
+            reverse_sampling: None,
+        }],
+        "INVALID_CLIP",
+    );
+    undo(&path, event.id).unwrap();
+    assert_eq!(export(&path).document, initial.document);
+}
+
+#[test]
+fn gui007_reverse_video_first_last_pixels_shared_edit_undo_and_bounds() {
+    let runtime = MediaRuntime::load().unwrap();
+    for (file, upper, last_start) in [
+        ("cfr-30000-1001.nut", t(6006, 30000), t(5005, 30000)),
+        ("vfr.nut", t(16, 30), t(15, 30)),
+        ("bframes.nut", t(7, 24), t(6, 24)),
+    ] {
+        let source_path = fixtures().join(file);
+        let mut asset = asset(&runtime, &source_path, 0);
+        let origin = asset.streams[0].start_time.unwrap_or(Time::ZERO);
+        let duration = upper.checked_sub(origin).unwrap();
+        // NUT fixtures omit container duration; explicitly lock the tested decoder endpoint.
+        assert_eq!(
+            runtime
+                .open_video(&source_path)
+                .unwrap()
+                .decode_at(last_start)
+                .unwrap()
+                .end,
+            upper
+        );
+        asset.streams[0].duration = Some(duration);
+        let mut authored = clip([0; 3], 0, 1);
+        authored.source_ref = SourceRef::Asset {
+            asset: asset.id,
+            stream_index: 0,
+        };
+        authored.timeline_range = TimeRange::new(Time::ZERO, duration).unwrap();
+        authored.source_in = origin;
+        let seq = sequence(vec![authored.clone()]);
+        let id = seq.id;
+        let mut project = project(seq);
+        project.assets.push(DocumentObject::Known(asset.clone()));
+        let (_dir, path) = setup(project.clone());
+        let event = apply(
+            &path,
+            vec![TimelineCommand::ClipTimeSet {
+                sequence: id,
+                clip: authored.id,
+                source_in: upper,
+                time_map: TimeMap::linear(Time::ZERO, Time::ONE).unwrap(),
+                audio_retime: AudioRetimePolicy::ReverseResampleV1,
+                reverse_sampling: Some(ReverseSampling::ReverseGridV1),
+            }],
+            "reverse-video",
+        );
+        let snap = snapshot(&export(&path).document);
+        let backend = VideoRenderBackend {
+            backend: &CpuReferenceBackend,
+            project_path: &path,
+        };
+        for (time, source_time) in [
+            (Time::ZERO, last_start),
+            (duration.checked_sub(t(1, 30000)).unwrap(), origin),
+        ] {
+            let frame = render_frame(
+                &snap,
+                &[],
+                &backend,
+                FrameRequest {
+                    time,
+                    region: region(),
+                },
+            )
+            .unwrap();
+            let expected = runtime
+                .decode_video_image(&asset, &path, 0, source_time, ColorSpace::LinearRec709)
+                .unwrap();
+            for (actual, expected) in frame.pixels.linear.iter().zip(expected.pixels) {
+                for channel in 0..4 {
+                    assert!(
+                        (actual[channel] - expected[channel]).abs() < 1e-5,
+                        "{file} {time:?}"
+                    );
+                }
+            }
+        }
+        reject(
+            &path,
+            vec![TimelineCommand::ClipTimeSet {
+                sequence: id,
+                clip: authored.id,
+                source_in: upper.checked_add(t(1, 1)).unwrap(),
+                time_map: TimeMap::linear(Time::ZERO, Time::ONE).unwrap(),
+                audio_retime: AudioRetimePolicy::ReverseResampleV1,
+                reverse_sampling: Some(ReverseSampling::ReverseGridV1),
+            }],
+            "INVALID_CLIP",
+        );
+        undo(&path, event.id).unwrap();
+        assert_eq!(export(&path).document, project);
+    }
 }

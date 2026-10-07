@@ -110,6 +110,7 @@ fn sequence(p: &mut Project, root: CompositionId, start: Time, end: Time) -> Seq
         source_in: t(1, 100),
         time_map: TimeMap::linear(Time::ZERO, Time::ONE).unwrap(),
         audio_retime: AudioRetimePolicy::Reject,
+        reverse_sampling: None,
         volume: Some(Box::new(volume(PropertySource::Constant(scalar(0.5))))),
         links: vec![],
         properties: vec![],
@@ -122,6 +123,7 @@ fn sequence(p: &mut Project, root: CompositionId, start: Time, end: Time) -> Seq
         audio_rate: SampleRate::HZ_48000,
         working_space: ColorSpace::LinearRec709,
         tracks: vec![Track {
+            state: None,
             id: TrackId::new(),
             kind: TrackKind::Video,
             clips: vec![clip],
@@ -855,4 +857,96 @@ fn empty_sample_assets_and_extreme_crossfade_bounds_never_hide_errors_or_panic()
             .code(),
         "INVALID_AUDIO_INPUT"
     );
+}
+
+#[test]
+fn gui007_reverse_ramp_samples_and_fractional_neighbors_are_exact() {
+    let (mut p, root, asset) = fixture();
+    let id = audio_sequence(&mut p, root, asset);
+    let c = clip_mut(&mut p);
+    c.timeline_range = r(Time::ZERO, t(4, 48000));
+    c.source_in = t(4, 48000);
+    c.time_map = TimeMap::linear(Time::ZERO, Time::ONE).unwrap();
+    c.reverse_sampling = Some(ReverseSampling::ReverseGridV1);
+    c.audio_retime = AudioRetimePolicy::ReverseResampleV1;
+    let source = [(
+        (asset, 0),
+        AudioBuffer::new(vec![[0.1; 2], [0.2; 2], [0.3; 2], [0.4; 2]]).unwrap(),
+    )]
+    .into();
+    assert_eq!(
+        advanced(&p, id)
+            .mix(&source, r(Time::ZERO, t(4, 48000)))
+            .unwrap()
+            .buffer()
+            .frames(),
+        &[[0.4; 2], [0.3; 2], [0.2; 2], [0.1; 2]]
+    );
+    let full = advanced(&p, id)
+        .mix(&source, r(Time::ZERO, t(4, 48000)))
+        .unwrap();
+    let tail = advanced(&p, id)
+        .mix(&source, r(t(2, 48000), t(4, 48000)))
+        .unwrap();
+    assert_eq!(tail.buffer().frames(), &full.buffer().frames()[2..]);
+    let c = clip_mut(&mut p);
+    c.timeline_range = r(Time::ZERO, t(1, 48000));
+    c.source_in = t(5, 96000);
+    let bus = advanced(&p, id)
+        .mix(&source, r(Time::ZERO, t(1, 48000)))
+        .unwrap();
+    assert!((bus.buffer().frames()[0][0] - 0.25).abs() < 1e-7);
+    clip_mut(&mut p).source_in = t(1, 96000);
+    assert!(DocumentAudioPlan::compile_version(&p, AudioTarget::Sequence(id), 2).is_err());
+}
+
+#[test]
+fn gui007_reverse_nested_composition_audio_matches_reversed_forward_samples() {
+    let (mut p, root, asset) = fixture();
+    let id = sequence(&mut p, root, Time::ZERO, t(1, 10));
+    let c = clip_mut(&mut p);
+    c.source_in = t(1, 10);
+    c.volume = None;
+    c.reverse_sampling = Some(ReverseSampling::ReverseGridV1);
+    c.audio_retime = AudioRetimePolicy::ReverseResampleV1;
+    let sources = sources(asset);
+    let forward = DocumentAudioPlan::compile(&p, AudioTarget::Composition(root))
+        .unwrap()
+        .mix(&sources, r(Time::ZERO, t(1, 10)))
+        .unwrap();
+    let reverse = advanced(&p, id)
+        .mix(&sources, r(Time::ZERO, t(1, 10)))
+        .unwrap();
+    let expected: Vec<_> = forward.buffer().frames().iter().rev().copied().collect();
+    assert_eq!(reverse.buffer().frames(), expected);
+    let slice = advanced(&p, id)
+        .mix(&sources, r(t(1, 20), t(1, 10)))
+        .unwrap();
+    assert_eq!(slice.buffer().frames(), &expected[2400..]);
+}
+
+#[test]
+fn gui007_track_mute_changes_pcm_and_preserves_authored_clip() {
+    let (mut p, root, asset) = fixture();
+    let id = audio_sequence(&mut p, root, asset);
+    let sources = sources(asset);
+    let range = r(t(1, 100), t(1, 20));
+    let original = p.clone();
+    let before = advanced(&p, id).mix(&sources, range).unwrap();
+    assert!(before.buffer().frames().iter().any(|f| f[0] != 0.0));
+    let DocumentObject::Known(sequence) = &mut p.sequences[0] else {
+        panic!()
+    };
+    sequence.tracks[0].state = Some(TrackState {
+        visible: true,
+        muted: true,
+    });
+    let after = advanced(&p, id).mix(&sources, range).unwrap();
+    assert!(after.buffer().frames().iter().all(|f| *f == [0.0; 2]));
+    let DocumentObject::Known(sequence) = &mut p.sequences[0] else {
+        panic!()
+    };
+    sequence.tracks[0].state = None;
+    assert_eq!(p, original);
+    assert_eq!(advanced(&p, id).mix(&sources, range).unwrap(), before);
 }

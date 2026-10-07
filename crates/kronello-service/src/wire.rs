@@ -78,7 +78,7 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                     background: mov.background,
                 })
             }
-            "av1_mp4" | "h264_mov" | "hevc_mov" => {
+            "av1_mp4" | "h264_mov" | "hevc_mov" | "av1_webm" => {
                 #[derive(Deserialize)]
                 #[serde(deny_unknown_fields)]
                 struct Delivery {
@@ -106,7 +106,14 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                         clips: mov.clips,
                         background: mov.background,
                     },
-                    _ => Self::HevcMov {
+                    "hevc_mov" => Self::HevcMov {
+                        profile_version: mov.profile_version,
+                        audio: mov.audio,
+                        audio_codec: mov.audio_codec,
+                        clips: mov.clips,
+                        background: mov.background,
+                    },
+                    _ => Self::Av1Webm {
                         profile_version: mov.profile_version,
                         audio: mov.audio,
                         audio_codec: mov.audio_codec,
@@ -160,6 +167,11 @@ impl<'de> Deserialize<'de> for Request {
         let mut fields = fields(d)?;
         let tag: String = take(&mut fields, "operation")?;
         match tag.as_str() {
+            "font.pin" => payload(&fields).map(Self::FontPin),
+            "svg.inspect" => payload(&fields).map(Self::SvgInspect),
+            "svg.export" => payload(&fields).map(Self::SvgExport),
+            "svg.import_plan" => payload(&fields).map(Self::SvgImportPlan),
+            "audio.analyze" => payload(&fields).map(Self::AudioAnalyze),
             "sequence.query" => payload(&fields).map(Self::SequenceQuery),
             "sequence.create" => payload(&fields).map(Self::SequenceCreate),
             "clip.place" => payload(&fields).map(Self::ClipPlace),
@@ -194,6 +206,7 @@ impl<'de> Deserialize<'de> for Request {
             "edit.plan" => payload(&fields).map(Self::EditPlan),
             "edit.apply" => payload(&fields).map(Self::EditApply),
             "edit.undo" => payload(&fields).map(Self::EditUndo),
+            "expression.format" => payload(&fields).map(Self::ExpressionFormat),
             "history.list" => payload(&fields).map(Self::HistoryList),
             "scene.query" => payload(&fields).map(Self::SceneQuery),
             "node.explain" => payload(&fields).map(Self::NodeExplain),
@@ -209,6 +222,9 @@ impl<'de> Deserialize<'de> for ResultData {
         let mut fields = fields(d)?;
         let tag: String = take(&mut fields, "kind")?;
         let result = match tag.as_str() {
+            "font" => Self::Font(take(&mut fields, "value")?),
+            "svg_report" => Self::SvgReport(take(&mut fields, "value")?),
+            "svg_export" => Self::SvgExport(take(&mut fields, "value")?),
             "timeline" => Self::Timeline(take(&mut fields, "value")?),
             "movie" => Self::Movie(take(&mut fields, "value")?),
             "job" => Self::Job(take(&mut fields, "value")?),
@@ -221,6 +237,7 @@ impl<'de> Deserialize<'de> for ResultData {
             "frame" => Self::Frame(take(&mut fields, "value")?),
             "sequence" => Self::Sequence(take(&mut fields, "value")?),
             "plan" => Self::Plan(take(&mut fields, "value")?),
+            "expression_text" => Self::ExpressionText(take(&mut fields, "value")?),
             "template_preview" => Self::TemplatePreview(take(&mut fields, "value")?),
             "template_migration_plan" => Self::TemplateMigrationPlan(take(&mut fields, "value")?),
             "edit" => Self::Edit(take(&mut fields, "value")?),

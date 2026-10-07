@@ -2,7 +2,9 @@
 
 use kronello_framebridge::{
     PathKind,
-    videotoolbox::{probe_cvpixelbuffer_import, probe_videotoolbox_decode},
+    videotoolbox::{
+        probe_cvpixelbuffer_import, probe_videotoolbox_decode, probe_videotoolbox_decode_bgra8,
+    },
 };
 use kronello_gpu::GpuContext;
 
@@ -25,11 +27,8 @@ fn test_cvpixelbuffer_import_to_gpu() {
 fn test_videotoolbox_decode_import_to_gpu() {
     let gpu = GpuContext::new().expect("Metal adapter required for VideoToolbox import");
     eprintln!("VideoToolbox adapter: {:?}", gpu.adapter_info);
-    let report = probe_videotoolbox_decode(&gpu, false).unwrap_or_else(|error| panic!("{error}"));
-    assert!(matches!(
-        report.path,
-        PathKind::VideoToolboxDecodeBgra8 | PathKind::VideoToolboxDecodeNv12Biplanar
-    ));
+    let report = probe_videotoolbox_decode_bgra8(&gpu).unwrap_or_else(|error| panic!("{error}"));
+    assert_eq!(report.path, PathKind::VideoToolboxDecodeBgra8);
     assert_eq!(report.transfers.cpu_upload_pixel_bytes, 0);
     assert_eq!(report.transfers.cpu_upload_control_bytes, 0);
     assert_eq!(report.transfers.gpu_copy_bytes, 0);

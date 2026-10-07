@@ -248,6 +248,7 @@ pub fn effect_descriptors() -> Vec<PropertyDescriptor> {
             unit,
             value,
         );
+        d.repeatable = true;
         if name == "offset" {
             d.coordinate_space = Some(crate::CoordinateSpace::LocalDesign);
         }

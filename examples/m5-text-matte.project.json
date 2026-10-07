@@ -1,0 +1,640 @@
+{
+  "id": "d5808faa-5b6f-4921-9797-8bbc0dcf5416",
+  "schema_version": 1,
+  "semantic_version": 1,
+  "name": "M5 text and matte acceptance",
+  "compositions": [
+    {
+      "id": "e706c050-13fa-4654-9350-dcef30f1d792",
+      "duration": {
+        "num": "3",
+        "den": "1"
+      },
+      "design_extent": {
+        "width": 640.0,
+        "height": 480.0
+      },
+      "edit_rate": {
+        "num": "24",
+        "den": "1"
+      },
+      "root_nodes": [
+        "adcfcd01-95a0-4292-ba82-61369bf4ac8c",
+        "5a5b1213-2af1-47b8-b475-049b15753316",
+        "4beafec0-0559-4de6-9409-1cfd227aa69c"
+      ],
+      "nodes": [
+        {
+          "id": "adcfcd01-95a0-4292-ba82-61369bf4ac8c",
+          "kind": {
+            "kind": "shape",
+            "value": {
+              "content_ref": "36bbe1b1-f5c0-46ba-90f3-3b4cb000e200"
+            }
+          },
+          "containment_parent": null,
+          "transform_parent": null,
+          "child_order": [],
+          "active_range": {
+            "start": {
+              "num": "-2",
+              "den": "1"
+            },
+            "end": {
+              "num": "3",
+              "den": "1"
+            }
+          },
+          "properties": [
+            {
+              "id": "1d77434e-64ef-4de4-9e38-98bb71bb03fe",
+              "descriptor": {
+                "key": "kronello.shape.size",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "vec2",
+                  "value": [
+                    250.0,
+                    220.0
+                  ]
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "561797a3-732d-406d-8755-57fd074c0050",
+              "descriptor": {
+                "key": "kronello.shape.corner_radius",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 0.0
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "4e4837d7-b8f7-47e6-a455-cc35e5b00cdd",
+              "descriptor": {
+                "key": "kronello.fill_color",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "color",
+                  "value": {
+                    "space": "srgb",
+                    "components": {
+                      "r": 0.7843137254901961,
+                      "g": 0.1568627450980392,
+                      "b": 0.0392156862745098,
+                      "alpha": 1.0
+                    }
+                  }
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "cecd9404-ac4e-4245-9d6a-84aa26590fc6",
+              "descriptor": {
+                "key": "kronello.transform.position",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "vec2",
+                  "value": [
+                    0.0,
+                    0.0
+                  ]
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "04f5a966-c8a3-45b0-a1a9-ee990e09ab0e",
+              "descriptor": {
+                "key": "kronello.opacity",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 1.0
+                }
+              },
+              "modifiers": []
+            }
+          ],
+          "name": "Matte rectangle"
+        },
+        {
+          "id": "5a5b1213-2af1-47b8-b475-049b15753316",
+          "kind": {
+            "kind": "text",
+            "value": {
+              "content_ref": "dcb6520b-7f1c-4410-bc18-cbca4f23a67a"
+            }
+          },
+          "containment_parent": null,
+          "transform_parent": null,
+          "child_order": [],
+          "active_range": {
+            "start": {
+              "num": "-2",
+              "den": "1"
+            },
+            "end": {
+              "num": "3",
+              "den": "1"
+            }
+          },
+          "properties": [
+            {
+              "id": "59138f23-3ee5-42d7-9501-0d2703ed3a10",
+              "descriptor": {
+                "key": "kronello.text.font_size",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 32.0
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "a0b3dfeb-b7bd-4de2-9f16-f2398c7a75ae",
+              "descriptor": {
+                "key": "kronello.fill_color",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "color",
+                  "value": {
+                    "space": "srgb",
+                    "components": {
+                      "r": 0.8,
+                      "g": 0.9,
+                      "b": 1.0,
+                      "alpha": 1.0
+                    }
+                  }
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "c338681a-eb35-4514-a8b4-c32ecd0cb292",
+              "descriptor": {
+                "key": "kronello.text.wrap_width",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 400.0
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "5194f469-765f-4755-a22e-4fe8cffbebf1",
+              "descriptor": {
+                "key": "kronello.text.line_height",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 52.0
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "b4a9866b-1ca0-4db0-8bf2-9741999d31c3",
+              "descriptor": {
+                "key": "kronello.text.alignment",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "enum",
+                  "value": "start"
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "8bd93308-66fa-4b95-b1a1-00c20bba6836",
+              "descriptor": {
+                "key": "kronello.transform.position",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "vec2",
+                  "value": [
+                    40.0,
+                    70.0
+                  ]
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "d67d1283-bcf3-40d1-b483-a27bdb96f91f",
+              "descriptor": {
+                "key": "kronello.text.character_offset",
+                "version": 1
+              },
+              "source": {
+                "kind": "curve",
+                "value": "0c96b401-66e9-4abc-abc5-0e83a280ed3e"
+              },
+              "modifiers": []
+            },
+            {
+              "id": "3c6847c5-9a0b-461f-9da5-f69c3280b7cc",
+              "descriptor": {
+                "key": "kronello.text.character_opacity",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 0.6
+                }
+              },
+              "modifiers": []
+            }
+          ],
+          "name": "横書き・ルビ・文字演出"
+        },
+        {
+          "id": "4beafec0-0559-4de6-9409-1cfd227aa69c",
+          "kind": {
+            "kind": "text",
+            "value": {
+              "content_ref": "e5dd819e-a4aa-4e7b-aad6-22aaa74f70ea"
+            }
+          },
+          "containment_parent": null,
+          "transform_parent": null,
+          "child_order": [],
+          "active_range": {
+            "start": {
+              "num": "-2",
+              "den": "1"
+            },
+            "end": {
+              "num": "3",
+              "den": "1"
+            }
+          },
+          "properties": [
+            {
+              "id": "7b4a74ba-b379-4ccb-9999-f2c50f57c20f",
+              "descriptor": {
+                "key": "kronello.text.font_size",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 32.0
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "3846c004-ab13-47e6-b799-28eadd506c08",
+              "descriptor": {
+                "key": "kronello.fill_color",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "color",
+                  "value": {
+                    "space": "srgb",
+                    "components": {
+                      "r": 0.8,
+                      "g": 0.9,
+                      "b": 1.0,
+                      "alpha": 1.0
+                    }
+                  }
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "f21dc013-0db8-4c33-a1a8-52ec0eaa1975",
+              "descriptor": {
+                "key": "kronello.text.wrap_width",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 250.0
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "765d791c-1198-4611-a646-e25746ddde14",
+              "descriptor": {
+                "key": "kronello.text.line_height",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 52.0
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "cb900d47-f749-4b49-9fa2-9df750a289bd",
+              "descriptor": {
+                "key": "kronello.text.alignment",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "enum",
+                  "value": "start"
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "cabea1bf-2562-4c03-8b0b-b8737cd9a9b5",
+              "descriptor": {
+                "key": "kronello.transform.position",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "vec2",
+                  "value": [
+                    520.0,
+                    100.0
+                  ]
+                }
+              },
+              "modifiers": []
+            },
+            {
+              "id": "9c26654b-b912-4f88-ac0d-f0f1476dc757",
+              "descriptor": {
+                "key": "kronello.text.character_offset",
+                "version": 1
+              },
+              "source": {
+                "kind": "curve",
+                "value": "66b1eab4-8cc5-408a-8cba-feb2addd06df"
+              },
+              "modifiers": []
+            },
+            {
+              "id": "824f5438-89e5-41d5-9d6f-893879a316fb",
+              "descriptor": {
+                "key": "kronello.text.character_opacity",
+                "version": 1
+              },
+              "source": {
+                "kind": "constant",
+                "value": {
+                  "kind": "scalar",
+                  "value": 0.6
+                }
+              },
+              "modifiers": []
+            }
+          ],
+          "name": "縦書き・ルビ・文字演出"
+        }
+      ],
+      "properties": []
+    }
+  ],
+  "curves": [
+    {
+      "id": "0c96b401-66e9-4abc-abc5-0e83a280ed3e",
+      "value_type": "vec2",
+      "keys": [
+        {
+          "time": {
+            "num": "0",
+            "den": "1"
+          },
+          "value": {
+            "kind": "vec2",
+            "value": [
+              0.0,
+              0.0
+            ]
+          },
+          "interpolation": {
+            "kind": "linear"
+          }
+        },
+        {
+          "time": {
+            "num": "1",
+            "den": "1"
+          },
+          "value": {
+            "kind": "vec2",
+            "value": [
+              50.0,
+              0.0
+            ]
+          },
+          "interpolation": {
+            "kind": "linear"
+          }
+        }
+      ],
+      "interpolation_version": 1
+    },
+    {
+      "id": "66b1eab4-8cc5-408a-8cba-feb2addd06df",
+      "value_type": "vec2",
+      "keys": [
+        {
+          "time": {
+            "num": "0",
+            "den": "1"
+          },
+          "value": {
+            "kind": "vec2",
+            "value": [
+              0.0,
+              0.0
+            ]
+          },
+          "interpolation": {
+            "kind": "linear"
+          }
+        },
+        {
+          "time": {
+            "num": "1",
+            "den": "1"
+          },
+          "value": {
+            "kind": "vec2",
+            "value": [
+              50.0,
+              0.0
+            ]
+          },
+          "interpolation": {
+            "kind": "linear"
+          }
+        }
+      ],
+      "interpolation_version": 1
+    }
+  ],
+  "shapes": [
+    {
+      "id": "36bbe1b1-f5c0-46ba-90f3-3b4cb000e200",
+      "geometry": {
+        "kind": "rectangle",
+        "value": {
+          "size": "1d77434e-64ef-4de4-9e38-98bb71bb03fe",
+          "corner_radius": "561797a3-732d-406d-8755-57fd074c0050"
+        }
+      },
+      "fill": {
+        "color": "4e4837d7-b8f7-47e6-a455-cc35e5b00cdd",
+        "rule": "nonzero"
+      },
+      "stroke": null
+    }
+  ],
+  "texts": [
+    {
+      "id": "dcb6520b-7f1c-4410-bc18-cbca4f23a67a",
+      "layout_version": 2,
+      "text": "日本語の編集。ABC",
+      "styles": [
+        {
+          "range": {
+            "start": 0,
+            "end": 24
+          },
+          "font": {
+            "family": "Noto Sans CJK JP",
+            "postscript_name": "NotoSansCJKjp-Regular",
+            "sha256": "68a3fc98800b2a27b371f2fb79991daf3633bd89309d4ffaa6946fd587f375b5",
+            "face_index": 0
+          },
+          "size": "59138f23-3ee5-42d7-9501-0d2703ed3a10",
+          "fill": "a0b3dfeb-b7bd-4de2-9f16-f2398c7a75ae"
+        }
+      ],
+      "direction": "horizontal",
+      "wrap_width": "c338681a-eb35-4514-a8b4-c32ecd0cb292",
+      "line_height": "5194f469-765f-4755-a22e-4fe8cffbebf1",
+      "alignment": "b4a9866b-1ca0-4db0-8bf2-9741999d31c3",
+      "ruby": [
+        {
+          "base": {
+            "start": 0,
+            "end": 6
+          },
+          "text": "にほん"
+        }
+      ],
+      "character_animations": [
+        {
+          "source": {
+            "start": 0,
+            "end": 3
+          },
+          "expected_text": "日",
+          "offset": "d67d1283-bcf3-40d1-b483-a27bdb96f91f",
+          "opacity": "3c6847c5-9a0b-461f-9da5-f69c3280b7cc"
+        }
+      ]
+    },
+    {
+      "id": "e5dd819e-a4aa-4e7b-aad6-22aaa74f70ea",
+      "layout_version": 2,
+      "text": "日本語の編集。ABC",
+      "styles": [
+        {
+          "range": {
+            "start": 0,
+            "end": 24
+          },
+          "font": {
+            "family": "Noto Sans CJK JP",
+            "postscript_name": "NotoSansCJKjp-Regular",
+            "sha256": "68a3fc98800b2a27b371f2fb79991daf3633bd89309d4ffaa6946fd587f375b5",
+            "face_index": 0
+          },
+          "size": "7b4a74ba-b379-4ccb-9999-f2c50f57c20f",
+          "fill": "3846c004-ab13-47e6-b799-28eadd506c08"
+        }
+      ],
+      "direction": "vertical_rl",
+      "wrap_width": "f21dc013-0db8-4c33-a1a8-52ec0eaa1975",
+      "line_height": "765d791c-1198-4611-a646-e25746ddde14",
+      "alignment": "cb900d47-f749-4b49-9fa2-9df750a289bd",
+      "ruby": [
+        {
+          "base": {
+            "start": 0,
+            "end": 6
+          },
+          "text": "にほん"
+        }
+      ],
+      "character_animations": [
+        {
+          "source": {
+            "start": 0,
+            "end": 3
+          },
+          "expected_text": "日",
+          "offset": "9c26654b-b912-4f88-ac0d-f0f1476dc757",
+          "opacity": "824f5438-89e5-41d5-9d6f-893879a316fb"
+        }
+      ]
+    }
+  ]
+}

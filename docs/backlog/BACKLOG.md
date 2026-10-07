@@ -3,7 +3,7 @@
 <!-- このファイルは scripts/backlog.py render が生成する。直接編集しない。正本は backlog.json。 -->
 
 - schema_version: 0.5
-- 更新日: 2026-10-06
+- 更新日: 2026-10-07
 - タスク数: 93
 
 ## 集計
@@ -15,7 +15,7 @@
 | M2 | 0 | 1 | 10 | 0 | 11 |
 | M3 | 0 | 0 | 25 | 0 | 25 |
 | M4 | 0 | 0 | 12 | 0 | 12 |
-| M5 | 13 | 0 | 0 | 0 | 13 |
+| M5 | 0 | 1 | 12 | 0 | 13 |
 | M6 | 12 | 0 | 0 | 0 | 12 |
 
 ## M0
@@ -675,7 +675,7 @@
 
 ### VEC-002 Trim path・morph・SVG対応表
 
-- 優先度: P1 / 領域: vector / 状態: planned
+- 優先度: P1 / 領域: vector / 状態: done
 - 依存: VEC-001, ANIM-001, QA-001
 - 受け入れ条件:
   - morphは点/segment対応を検証し不整合を拒否する
@@ -683,7 +683,7 @@
 
 ### REPEAT-001 Repeaterとinstanceごとの制御
 
-- 優先度: P1 / 領域: motion / 状態: planned
+- 優先度: P1 / 領域: motion / 状態: done
 - 依存: COMP-001, EXPR-001, VEC-002
 - 受け入れ条件:
   - Source共有とinstance ID/seedを保持する
@@ -691,7 +691,7 @@
 
 ### TEXT-002 文字単位selector・ルビ・縦書き
 
-- 優先度: P1 / 領域: text / 状態: planned
+- 優先度: P1 / 領域: text / 状態: done
 - 依存: TEXT-001, ANIM-001, LAYOUT-001
 - 受け入れ条件:
   - クラスタを壊さない文字演出と親文字/ルビの結合を実装する
@@ -699,7 +699,7 @@
 
 ### AUDIO-001 音声特徴量DataAssetと連動
 
-- 優先度: P1 / 領域: audio / 状態: planned
+- 優先度: P1 / 領域: audio / 状態: done
 - 依存: AUDIO-000, MEDIA-001, EXPR-001, TIME-001
 - 受け入れ条件:
   - 分析版/窓/ホップ/時間写像と入力hashを固定する
@@ -707,7 +707,7 @@
 
 ### SIM-001 固定刻み・checkpoint・particle基盤
 
-- 優先度: P2 / 領域: simulation / 状態: planned
+- 優先度: P2 / 領域: simulation / 状態: done
 - 依存: EVAL-001, CACHE-002, REPEAT-001
 - 受け入れ条件:
   - 順次再生とcheckpointからのseekを固定環境で比較する
@@ -715,7 +715,7 @@
 
 ### NAME-001 名称の商標照会・名前確保状況の記録
 
-- 優先度: P1 / 領域: release / 状態: planned
+- 優先度: P1 / 領域: release / 状態: in_progress
 - 依存: なし
 - 受け入れ条件:
   - OQ-02に従いJ-PlatPat・USPTO・EUIPOの照会結果、対象区分・地域・照会日・未判断の点を記録し、検索結果だけで法的利用可能性を断定しない
@@ -724,7 +724,7 @@
 
 ### EXPR-002 人間向け式構文とASTの往復・入力UI
 
-- 優先度: P1 / 領域: expression / 状態: planned
+- 優先度: P1 / 領域: expression / 状態: done
 - 依存: EXPR-001, GUI-001
 - 受け入れ条件:
   - 実装着手前にOQ-17の演算子・リテラル・Property参照・診断の構文を決定記録に固定する。ASTを正本としJavaScript互換にしない方針を維持する
@@ -733,7 +733,7 @@
 
 ### AUDIO-005 圧縮音声AAC・Opusの採否と採用profileの検証
 
-- 優先度: P1 / 領域: audio / 状態: planned
+- 優先度: P1 / 領域: audio / 状態: done
 - 依存: MEDIA-002, AUDIO-003, RELEASE-001
 - 受け入れ条件:
   - OQ-21（旧重複番号OQ-19）の採否を先に決定し、AAC-LC・Opusと対応containerごとの保証範囲を明記する。未採用形式は型付き拒否を維持する
@@ -742,7 +742,7 @@
 
 ### MATTE-001 Matte関係の作品モデル・保存・共有編集
 
-- 優先度: P1 / 領域: render / 状態: planned
+- 優先度: P1 / 領域: render / 状態: done
 - 依存: RENDER-001, SERVICE-002, GUI-001
 - 受け入れ条件:
   - transientなRenderSnapshot.MatteBindingと区別して文書matte関係・ID・版・参照循環・欠落時の意味を設計記録に固定する
@@ -751,7 +751,7 @@
 
 ### FRAMEBRIDGE-001 generic VideoToolbox経路の意味と診断の整理
 
-- 優先度: P2 / 領域: gpu / 状態: planned
+- 優先度: P2 / 領域: gpu / 状態: done
 - 依存: GPU-003
 - 受け入れ条件:
   - PathKind::VideoToolboxの未実装診断と具体的なBgra8/Nv12 decode経路を区別し、generic経路の維持・廃止・具体化の判断を記録する
@@ -759,7 +759,7 @@
 
 ### GUI-007 macOS編集UIの未接続操作を共有APIへ接続
 
-- 優先度: P2 / 領域: gui / 状態: planned
+- 優先度: P2 / 領域: gui / 状態: done
 - 依存: GUI-003, GUI-004, SERVICE-002
 - 受け入れ条件:
   - EditのEffects追加、速度・ソース開始・逆再生・不透明度/合成設定、トラック表示/ミュートについて対応する共有モデル/APIの有無を先に整理し、必要なコア契約を固定する
@@ -768,7 +768,7 @@
 
 ### INSPECT-002 render.explainの見積もりを単一graph実行へ整合
 
-- 優先度: P1 / 領域: inspection / 状態: planned
+- 優先度: P1 / 領域: inspection / 状態: done
 - 依存: INSPECT-001, PERF-001
 - 受け入れ条件:
   - ADR-0092の単一graph・status readback一回に合わせ、render.explainのDUPLICATE_LINEAR_DISPLAY_RENDER診断と旧二重実行の転送見積もりを修正する
@@ -777,10 +777,10 @@
 
 ### EXPR-003 DataAsset参照・過去時刻sample・連続noiseの式拡張
 
-- 優先度: P2 / 領域: expression / 状態: planned
+- 優先度: P2 / 領域: expression / 状態: done
 - 依存: EXPR-001, AUDIO-001
 - 受け入れ条件:
-  - 未実装のDataAsset参照、動的な過去Property sample、連続補間noiseの型・時間写像・静的依存と循環拒否・意味版を設計記録に固定する
+  - AUDIO-001の音声特徴量参照を再利用しつつ、残るDataAsset参照要件、動的な過去Property sample、連続補間noiseの型・時間写像・静的依存と循環拒否・意味版を設計記録に固定する
   - 不変の入力hashと固定seedを使い、外部I/Oや時計を評価へ持ち込まず、命令・メモリ・sample予算を実際の追加処理に適用する
   - 任意時刻・逆順・再試行の決定性、時間境界・資産欠落・循環・予算超過を共有APIと最終renderで検証する。人間向け構文のEXPR-002とは独立にAST契約を検証する
 

@@ -170,15 +170,24 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
             result=over(stroke_color,fill_color);
         }
         case 1u: { result=over(textureLoad(source,position,0),textureLoad(previous,position,0)); }
+        case 5u, 6u: {
+            let s=textureLoad(source,position,0);
+            let d=textureLoad(previous,position,0);
+            // Closed premultiplied forms avoid division at zero/tiny alpha.
+            var rgb=s.rgb*(1.0-d.a)+d.rgb*(1.0-s.a)+s.rgb*d.rgb;
+            if params.config.x==6u { rgb=s.rgb+d.rgb-s.rgb*d.rgb; }
+            result=vec4<f32>(rgb,s.a+d.a*(1.0-s.a));
+        }
         case 2u: { result=textureLoad(source,position,0)*params.scale.z; }
         case 3u: {
             let matte=textureLoad(previous,position,0);
             var coverage=matte.a;
-            if params.spaces.z==1u {
+            if params.spaces.z==1u || params.spaces.z==3u {
                 var weights=vec3<f32>(0.2126,0.7152,0.0722);
                 if params.config.w==1u { weights=vec3<f32>(0.2627,0.6780,0.0593); }
                 coverage=clamp(dot(matte.rgb,weights),0.0,1.0);
             }
+            if params.spaces.z>=2u { coverage=1.0-coverage; }
             result=textureLoad(source,position,0)*coverage;
         }
         case 4u: {

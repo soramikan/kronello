@@ -1,6 +1,6 @@
 # ADR-0068: 版付き配信映像と ALAC 音声の出力契約
 
-- 状態: 採用（AAC / Opus の採用は保留）
+- 状態: 部分置換（[0106](0106-versioned-compressed-delivery-audio.md)）— AAC / Opus の保留条項のみ置換。PCM24 / ALAC の profile 契約は維持
 - 日付: 2026-10-05
 - 対象: MEDIA-002
 - 追加範囲: ADR-0035 / 0036 / 0048 / 0049 / 0050 / 0063 / 0069 の閉じた追加出力。既存 ProRes / PCM24 と movie profile 1/2/3 の意味・既定値は維持する。

@@ -4,7 +4,10 @@ use kronello_time::Time;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+/// Legacy authored expression and absent snapshot pin meaning.
 pub const EXPRESSION_VERSION: u32 = 1;
+/// Maximum explicitly supported expression semantics in newly captured snapshots.
+pub const EXPRESSION_SUPPORTED_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ExpressionDependency {
@@ -13,6 +16,8 @@ pub enum ExpressionDependency {
         property: PropertyId,
     },
     Curve(CurveId),
+    AudioAnalysis(crate::AssetId),
+    DataAsset(crate::AssetId),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
@@ -54,13 +59,33 @@ pub enum ExpressionNode {
     Literal(Value),
     /// Seconds in the authored source scope, after its rational time mapping.
     Time,
+    AudioFeature {
+        asset: crate::AssetId,
+        feature: crate::AudioFeature,
+        offset: Time,
+    },
     /// Stable property in the authored source scope; None means composition input.
     Property {
         node: Option<NodeId>,
         property: PropertyId,
         value_type: ValueType,
     },
-    /// Explicit rational offset; no dynamic property sampling or recursion.
+    /// Integer row operand and statically typed column in immutable table data.
+    DataAssetCell {
+        asset: crate::AssetId,
+        column: String,
+        row: u32,
+        value_type: ValueType,
+    },
+    /// Nonnegative lookback seconds on the root timeline, quantized to 1 ns.
+    /// Static identity remains a dependency even when sampling the past.
+    PropertySample {
+        node: Option<NodeId>,
+        property: PropertyId,
+        value_type: ValueType,
+        lookback: u32,
+    },
+    /// Explicit rational offset.
     CurveSample {
         curve: CurveId,
         offset: Time,
@@ -108,6 +133,12 @@ pub enum ExpressionNode {
     Angle {
         degrees: u32,
     },
+    /// Quintic interpolation between adjacent fixed lattice hashes in [-1, 1].
+    ContinuousNoise {
+        seed: u32,
+        element: u32,
+        input: u32,
+    },
     /// Fixed hash noise in [-1, 1], keyed by seed, instance, element and input.
     Noise {
         seed: u32,
@@ -124,7 +155,11 @@ impl ExpressionNode {
             | Self::Divide { left, right } => vec![*left, *right],
             Self::Clamp { value, min, max } => vec![*value, *min, *max],
             Self::Lerp { from, to, amount } => vec![*from, *to, *amount],
-            Self::Sin { input } | Self::Noise { input, .. } => vec![*input],
+            Self::Sin { input }
+            | Self::Noise { input, .. }
+            | Self::ContinuousNoise { input, .. } => vec![*input],
+            Self::PropertySample { lookback, .. } => vec![*lookback],
+            Self::DataAssetCell { row, .. } => vec![*row],
             Self::Vec2 { x, y } => vec![*x, *y],
             Self::Vec3 { x, y, z } => vec![*x, *y, *z],
             Self::Angle { degrees } => vec![*degrees],
@@ -174,7 +209,8 @@ impl Expression {
         self.nodes
             .iter()
             .filter_map(|node| match node {
-                ExpressionNode::Property { node, property, .. } => {
+                ExpressionNode::Property { node, property, .. }
+                | ExpressionNode::PropertySample { node, property, .. } => {
                     Some(ExpressionDependency::Property {
                         node: *node,
                         property: *property,
@@ -183,12 +219,38 @@ impl Expression {
                 ExpressionNode::CurveSample { curve, .. } => {
                     Some(ExpressionDependency::Curve(*curve))
                 }
+                ExpressionNode::DataAssetCell { asset, .. } => {
+                    Some(ExpressionDependency::DataAsset(*asset))
+                }
+                ExpressionNode::AudioFeature { asset, .. } => {
+                    Some(ExpressionDependency::AudioAnalysis(*asset))
+                }
                 _ => None,
             })
             .collect()
     }
     pub fn validate(&self) -> Result<(), ExpressionError> {
-        if self.version != EXPRESSION_VERSION {
+        if !matches!(self.version, 1..=3) {
+            return Err(ExpressionError::UnsupportedVersion(self.version));
+        }
+        if self.version == 1
+            && self
+                .nodes
+                .iter()
+                .any(|n| matches!(n, ExpressionNode::AudioFeature { .. }))
+        {
+            return Err(ExpressionError::UnsupportedVersion(self.version));
+        }
+        if self.version < 3
+            && self.nodes.iter().any(|n| {
+                matches!(
+                    n,
+                    ExpressionNode::PropertySample { .. }
+                        | ExpressionNode::ContinuousNoise { .. }
+                        | ExpressionNode::DataAssetCell { .. }
+                )
+            })
+        {
             return Err(ExpressionError::UnsupportedVersion(self.version));
         }
         let ceiling = ExpressionBudget::default();
@@ -227,6 +289,9 @@ impl Expression {
                 + std::mem::size_of::<usize>(),
         );
         for node in &self.nodes {
+            if let ExpressionNode::DataAssetCell { column, .. } = node {
+                bytes = bytes.saturating_add(column.len());
+            }
             if let ExpressionNode::Literal(v) = node {
                 bytes = bytes.saturating_add(expression_value_bytes(v));
             }
@@ -259,8 +324,10 @@ impl Expression {
             }
             let ty = match node {
                 ExpressionNode::Literal(value) => value.value_type(),
-                ExpressionNode::Property { value_type, .. } => *value_type,
-                ExpressionNode::CurveSample { value_type, .. } => *value_type,
+                ExpressionNode::Property { value_type, .. }
+                | ExpressionNode::PropertySample { value_type, .. } => *value_type,
+                ExpressionNode::CurveSample { value_type, .. }
+                | ExpressionNode::DataAssetCell { value_type, .. } => *value_type,
                 ExpressionNode::Vec2 { .. } => ValueType::Vec2,
                 ExpressionNode::Vec3 { .. } => ValueType::Vec3,
                 ExpressionNode::Angle { .. } => ValueType::Angle,

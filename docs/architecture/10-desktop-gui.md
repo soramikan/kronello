@@ -151,8 +151,7 @@ MainActor の `EditorModel` が device sample / host timestamp による present
 frame ごとの scene / project / history reload を行わない。MetalPreview は最新要求へ集約する。
 mute / 音声なし / デバイスなしは host clock と理由を status に示し、underrun と typed error も表面化する。
 GUI-003 は typed `configurePlayback(target: .sequence(id), rateNum: ..., rateDen: ...)` を使い、
-Motion は nil/default Composition。ページ側の再生 timer は不要。実 engine / Metal / listening と
-Dark / Light の status・単独 focus の確認は pending host run。
+Motion は nil/default Composition。ページ側の再生 timer は不要。実engine / Metalの後続計測は [AUDIO-002](../testing/audio-002.md)、Dark / Lightの表示・単独focusの実操作は [GUI-002](../testing/gui-002.md) と [M3統合受け入れ](../testing/m3-acceptance.md) を参照する。主観的listening・物理scanout・VoiceOverは受け入れ保証に含めない。
 
 GUI-003 の Edit は `KREditLayout` の Project280px / Viewer / Inspector296px / tracks312px。
 共有文書 export と一つの `sequence.query` を revision 照合して採用し、素材ごと・clip ごとの
@@ -166,7 +165,7 @@ Viewer error は target / revision / rational time に結ぶ。video の GPU uns
 CPU は共有 render.frame/backend と media decode を使い、native surface に current-frame pixels を upload する。
 一件ずつ最新要求へ集約し、古い completion を破棄する。再生中の CPU 要求は停止し、最後の frame と
 stale 注記を表示する。native redraw 自体の中断は未対応。blade の専用 hit area は Button の tap と競合しない。
-track mute/visibility は説明付き disabled、lock は UI state。reverse/composite/speed は表示のみと明示する。
+GUI-003の受け入れ時点ではtrack mute/visibilityは説明付きdisabled、reverse/composite/speedは表示のみだった。M5のGUI-007では共有TrackStateSet / ClipTimeSet / ClipSetEffectsへの接続と逆方向samplingを実装・検証中。lockはUI stateを維持する。実装・個別試験・実GUI受け入れの区別は [GUI-007記録](../testing/gui-007.md)、時間と出力の契約は [ADR-0100](../adr/0100-shared-edit-controls-and-explicit-reverse-sampling.md) を参照する。
 Sequence の seek は UI time / preview refresh だけで毎フレームの query を追加しない。
 AUDIO-002 が `activatePlayback(for:)` を `configurePlayback(target:.sequence(id),rateNum:,rateDen:)` に接続する。
 独自の playback timer は持たない。決定は [ADR-0075](../adr/0075-sequence-edit-page-and-clip-split.md)、
@@ -209,4 +208,4 @@ Export は320pxの設定、中央の native Viewer、304pxの確認、設定を�
 
 ## 未接続の編集操作の追跡
 
-GUI-001〜004の完了は、すべての設計上のコントロールが編集可能という意味ではない。EditのEffects追加・速度/ソース開始/逆再生・合成設定・トラック表示/ミュート、Motionのガイド/スナップ、色・書体/ウェイト・複数Text style spanなど、コード上で無効化または表示専用の操作をGUI-007（M5）で追跡する。根拠とAPI/UIの区別は [現在の実装範囲と残件](../roadmap/implementation-status.md#macos-gui-で残る明示的な制限) を参照する。
+GUI-001〜004の完了は、すべての設計上のコントロールが編集可能という意味ではない。EditのEffects追加・速度/ソース開始/逆再生・合成設定・トラック表示/ミュート、Motionのガイド/スナップ、色・書体/ウェイト・複数Text style spanなど、監査時に無効化または表示専用だった操作をGUI-007（M5）で追跡する。M5作業ツリーでは一部のUIと共有APIを追加中であり、実装済みの操作と未完の受け入れを区別する。根拠とAPI/UIの区別は [現在の実装範囲と残件](../roadmap/implementation-status.md#macos-gui-で残る明示的な制限) を参照する。

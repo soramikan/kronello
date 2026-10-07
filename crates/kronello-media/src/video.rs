@@ -290,16 +290,34 @@ impl VideoDecoder<'_> {
     /// Exact presentation intervals with bounded forward state. Backward requests
     /// restart at the indexed origin; no GOP or VFR duration approximation is used.
     pub fn decode_at(&mut self, time: Rational) -> Result<DecodedVideoFrame, MediaError> {
-        let result = self.decode_at_inner(time);
+        let result = self.decode_at_inner(time, false);
         if result.is_err() {
             self.current = None;
             self.lookahead = None;
         }
         result
     }
-    fn decode_at_inner(&mut self, time: Rational) -> Result<DecodedVideoFrame, MediaError> {
+    /// Reverse endpoint selection uses the exact presentation interval (pts, end].
+    /// No nominal frame rate or epsilon is used, including variable-rate media.
+    pub fn decode_at_reverse(&mut self, time: Rational) -> Result<DecodedVideoFrame, MediaError> {
+        let result = self.decode_at_inner(time, true);
+        if result.is_err() {
+            self.current = None;
+            self.lookahead = None;
+        }
+        result
+    }
+    fn decode_at_inner(
+        &mut self,
+        time: Rational,
+        reverse: bool,
+    ) -> Result<DecodedVideoFrame, MediaError> {
         if let Some(frame) = &self.current {
-            if time >= frame.pts && time < frame.end {
+            if if reverse {
+                time > frame.pts && time <= frame.end
+            } else {
+                time >= frame.pts && time < frame.end
+            } {
                 let cloned = frame.clone();
                 let bytes = cloned.pixels.len() as u64;
                 self.stats.interval_hits += 1;
@@ -307,7 +325,7 @@ impl VideoDecoder<'_> {
                 self.record_copy(bytes)?;
                 return Ok(cloned);
             }
-            if time < frame.pts {
+            if time < frame.pts || (reverse && time == frame.pts) {
                 self.seek_origin()?;
             }
         } else {
@@ -322,7 +340,7 @@ impl VideoDecoder<'_> {
             let Some(frame) = current else {
                 return Err(MediaError::FrameNotFound(format!("{time:?}")));
             };
-            if frame.pts > time {
+            if frame.pts > time || (reverse && frame.pts == time) {
                 return Err(MediaError::FrameNotFound(format!("{time:?}")));
             }
             let next = self.next()?;
@@ -340,7 +358,7 @@ impl VideoDecoder<'_> {
                     ));
                 }
             };
-            if time < end {
+            if time < end || (reverse && time == end) {
                 let [
                     pixel_format,
                     color_primaries,

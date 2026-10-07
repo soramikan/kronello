@@ -6,6 +6,8 @@ mod export_profiles;
 pub use export_profiles::{
     DeviceAvailability, ExportAudioCodec, ExportExecution, ExportProfileCapability,
 };
+mod font_authoring;
+pub use font_authoring::FontPinRequest;
 mod nle;
 mod playback;
 pub use kronello_render::RenderTarget;
@@ -16,6 +18,11 @@ pub use playback::{
 mod jobs;
 pub use jobs::*;
 mod api;
+mod repeater;
+mod vector;
+pub use vector::*;
+mod audio_analysis;
+pub use audio_analysis::{AudioAnalyzeInput, AudioAnalyzeRequest};
 mod edit;
 mod events;
 mod inspect;
@@ -63,6 +70,16 @@ use sha2::{Digest, Sha256};
 #[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
 #[serde(tag = "operation", deny_unknown_fields)]
 pub enum Request {
+    #[serde(rename = "font.pin")]
+    FontPin(FontPinRequest),
+    #[serde(rename = "svg.inspect")]
+    SvgInspect(SvgInspectRequest),
+    #[serde(rename = "svg.export")]
+    SvgExport(SvgExportRequest),
+    #[serde(rename = "svg.import_plan")]
+    SvgImportPlan(SvgImportPlanRequest),
+    #[serde(rename = "audio.analyze")]
+    AudioAnalyze(AudioAnalyzeRequest),
     #[serde(rename = "sequence.query")]
     SequenceQuery(SequenceQueryRequest),
     #[serde(rename = "sequence.create")]
@@ -126,6 +143,8 @@ pub enum Request {
     EditApply(EditApplyRequest),
     #[serde(rename = "edit.undo")]
     EditUndo(UndoRequest),
+    #[serde(rename = "expression.format")]
+    ExpressionFormat(ExpressionFormatRequest),
     #[serde(rename = "history.list")]
     HistoryList(HistoryRequest),
     #[serde(rename = "scene.query")]
@@ -246,6 +265,9 @@ pub struct FrameResult {
     deny_unknown_fields
 )]
 pub enum ResultData {
+    Font(FontRef),
+    SvgReport(kronello_vector::SvgReport),
+    SvgExport(SvgExportResult),
     Timeline(SequenceQueryResult),
     Movie(Box<kronello_media::AvExportReport>),
     Job(Box<kronello_jobs::JobRecord>),
@@ -257,6 +279,7 @@ pub enum ResultData {
     Frame(Box<FrameResult>),
     Sequence(SequenceMetadata),
     Plan(Box<EditPlan>),
+    ExpressionText(ExpressionFormatResult),
     TemplatePreview(Box<TemplatePreviewResult>),
     TemplateMigrationPlan(Box<TemplateMigrationPlan>),
     Edit(kronello_store::Event),
@@ -504,6 +527,13 @@ impl<'a> Service<'a> {
         }
         validate_request_locators(&request)?;
         match request {
+            Request::FontPin(r) => font_authoring::pin(r).map(ResultData::Font),
+            Request::SvgInspect(r) => vector::inspect(r).map(ResultData::SvgReport),
+            Request::SvgExport(r) => vector::export(r).map(ResultData::SvgExport),
+            Request::SvgImportPlan(r) => {
+                vector::import_plan(r).map(|r| ResultData::Plan(Box::new(r)))
+            }
+            Request::AudioAnalyze(r) => self.analyze_audio(r),
             Request::SequenceQuery(r) => nle::sequence_query(r).map(ResultData::Timeline),
             Request::SequenceCreate(r) => nle::sequence_create(r).map(ResultData::Edit),
             Request::ClipPlace(r) => nle::clip_place(r).map(ResultData::Edit),
@@ -570,6 +600,9 @@ impl<'a> Service<'a> {
             Request::EditPlan(r) => edit::plan(r).map(|p| ResultData::Plan(Box::new(p))),
             Request::EditApply(r) => edit::apply(r).map(ResultData::Edit),
             Request::EditUndo(r) => edit::undo(r).map(ResultData::Edit),
+            Request::ExpressionFormat(r) => {
+                query::expression_format(r).map(ResultData::ExpressionText)
+            }
             Request::HistoryList(r) => edit::history(r).map(ResultData::History),
             Request::AssetRelink(r) => media::relink(r).map(ResultData::Project),
             Request::ProjectCollect(r) => media::collect(r).map(ResultData::Collected),
@@ -1095,6 +1128,7 @@ fn document_asset_locators(document: &Project) -> Result<(), ServiceError> {
 }
 fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
     match request {
+        Request::FontPin(r) => local_locator(&r.path),
         Request::SequenceCreate(r) => local_locator(&r.project),
         Request::SequenceQuery(r) => local_locator(&r.project),
         Request::ClipPlace(r) => local_locator(&r.project),
@@ -1150,6 +1184,7 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
         Request::EditPlan(r) => local_locator(&r.project),
         Request::EditApply(r) => local_locator(&r.project),
         Request::EditUndo(r) => local_locator(&r.project),
+        Request::ExpressionFormat(r) => local_locator(&r.project),
         Request::HistoryList(r) => local_locator(&r.project),
         Request::SceneQuery(r) => {
             local_locator(&r.project)?;
@@ -1190,7 +1225,9 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
             local_locator(&r.project)?;
             local_locator(&r.output_directory)
         }
-        Request::CapabilitiesGet(_) => Ok(()),
+        Request::SvgInspect(_) | Request::SvgExport(_) | Request::CapabilitiesGet(_) => Ok(()),
+        Request::SvgImportPlan(r) => local_locator(&r.project),
+        Request::AudioAnalyze(r) => local_locator(&r.project),
     }
 }
 fn render_locators(input: &RenderInput) -> Result<(), ServiceError> {

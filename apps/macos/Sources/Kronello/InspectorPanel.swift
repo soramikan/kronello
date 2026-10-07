@@ -31,22 +31,7 @@ struct InspectorPanel: View {
                         }
                         if layer.kind == "text" {
                             section("Text") {
-                                if let text = model.textDocument(layer) {
-                                    let font = text.objects("styles").first?.object("font") ?? [:]
-                                    KRInspectorSettingRow("Text") {
-                                        KRTextField("", value: .constant(text.string("text")), onCommit: { model.setText(layer, to: $0) })
-                                            .frame(width: KRWindowMetrics.settingWidth)
-                                    }.disabled(model.ui.locked.contains(layer.id) || model.busy)
-                                    KRInspectorSettingRow("Font") {
-                                        KRPopupButton("書体", options: [.init("current", font.string("family"))], selection: .constant("current"))
-                                            .frame(width: KRWindowMetrics.settingWidth).disabled(true)
-                                    }.help("固定した font lock の書体です。書体の変更は後続タスクです")
-                                    KRInspectorSettingRow("Weight") {
-                                        KRPopupButton("太さ", options: [.init("current", Self.styleName(font.string("postscript_name")))], selection: .constant("current"))
-                                            .frame(width: KRWindowMetrics.settingWidth).disabled(true)
-                                    }.help(font.string("postscript_name") + "。太さの変更は後続タスクです")
-                                }
-                                property(layer, key: "kronello.text.font_size", label: "Size", unit: "px")
+                                TextStyleInspector(model: model, layer: layer)
                                 property(layer, key: "kronello.text.line_height", label: "Line height", unit: "px")
                                 if let alignment = layer.property("kronello.text.alignment") {
                                     KRInspectorSettingRow("Alignment") {
@@ -58,6 +43,24 @@ struct InspectorPanel: View {
                                 }
                             }
                         }
+                        section("Matte") {
+                            let relation = model.matteRelation(layer)
+                            KRInspectorSettingRow("Matte layer") {
+                                KRPopupButton("Matte layer", options: [.init("none", "なし")] + model.matteCandidates.filter { $0.string("id") != layer.id }.map { .init($0.string("id"), $0["name"] as? String ?? $0.string("id")) },
+                                    selection: Binding(get: { relation?.string("matte") ?? "none" }, set: { model.setMatte(layer, target: $0) })).frame(width: KRWindowMetrics.settingWidth)
+                            }
+                            if let relation {
+                                KRInspectorSettingRow("Mask") {
+                                    KRPopupButton("Mask", options: [.init("alpha", "Alpha"), .init("luminance", "Luminance")], selection: Binding(get: { relation.string("kind") }, set: { model.setMatte(layer, kind: $0) })).frame(width: KRWindowMetrics.settingWidth)
+                                }
+                                KRInspectorSettingRow("Invert") {
+                                    KRCheckbox("反転", isOn: Binding(get: { relation["invert"] as? Bool ?? false }, set: { model.setMatte(layer, invert: $0) }))
+                                }
+                                KRInspectorSettingRow("Show matte") {
+                                    KRCheckbox("Matte layer を表示", isOn: Binding(get: { relation["visible"] as? Bool ?? false }, set: { model.setMatte(layer, visible: $0) }))
+                                }
+                            }
+                        }.disabled(model.ui.locked.contains(layer.id) || model.busy)
                         section("Layout") {
                             if layer.kind == "text" { property(layer, key: "kronello.text.wrap_width", label: "Wrap width", unit: "px") }
                             KRInspectorSettingRow("Bounds") {
@@ -92,11 +95,18 @@ struct InspectorPanel: View {
         if let property = model.transformProperty(layer, key: key) {
             let source = KRPropertySource(property)
             KRInspectorRow(label, source: source,
-                onKeyframe: model.onKeyframe(property), error: model.propertyError(layer, property), keyframeEditingEnabled: !model.ui.locked.contains(layer.id) && !model.busy,
+                onKeyframe: model.onKeyframe(property), error: model.propertyError(layer, property) ?? (source == .expression ? nil : model.expressionError(layer, property)), keyframeEditingEnabled: !model.ui.locked.contains(layer.id) && !model.busy,
                 previous: source == .curve ? { model.seekAdjacent(property, forward: false) } : nil,
                 toggleKeyframe: { model.toggleKeyframe(layer, property: property) },
                 next: source == .curve ? { model.seekAdjacent(property, forward: true) } : nil) {
                 PropertyValue(model: model, layer: layer, property: property)
+            }
+            if source == .expression {
+                ExpressionField(model: model, layer: layer, property: property)
+                    .padding(.leading, 48 + KRSpace.space2 * 2)
+                    .padding(.trailing, KRSpace.space3)
+                    .padding(.bottom, KRSpace.space1)
+                    .disabled(model.ui.locked.contains(layer.id) || model.busy || model.pendingCandidate != nil)
             }
         } else {
             KRInspectorRow(label, keyframeEditingEnabled: false) { Text("—").krText(KRType.timecode).foregroundStyle(p.inkMuted) }

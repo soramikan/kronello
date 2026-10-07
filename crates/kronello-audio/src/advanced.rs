@@ -21,6 +21,10 @@ const MAX_MAP_POINTS: usize = 1024;
 enum Source {
     Legacy(DocumentAudioPlan),
     Resampled,
+    ReversedComposition {
+        plan: DocumentAudioPlan,
+        duration: Time,
+    },
     Generator,
 }
 #[derive(Debug, Clone)]
@@ -83,7 +87,11 @@ fn local_time(clip: &Clip, sample: i64) -> Result<Time, AudioError> {
     } else {
         clip.time_map.map(parent)?
     };
-    Ok(clip.source_in.checked_add(mapped)?)
+    Ok(if clip.reverse_sampling.is_some() {
+        clip.source_in.checked_sub(mapped)?
+    } else {
+        clip.source_in.checked_add(mapped)?
+    })
 }
 impl AdvancedAudioPlan {
     pub(crate) fn compile(project: &Project, target: AudioTarget) -> Result<Self, AudioError> {
@@ -119,6 +127,9 @@ impl AdvancedAudioPlan {
         let mut flattened_count = 0;
         let mut legacy_curve_keys = 0;
         for track in &sequence.tracks {
+            if track.muted() {
+                continue;
+            }
             for clip in &track.clips {
                 let audible = match clip.source_ref {
                     SourceRef::Composition { composition } => {
@@ -179,8 +190,30 @@ impl AdvancedAudioPlan {
                         }
                         Source::Generator
                     }
+                    SourceRef::Composition { composition } if clip.reverse_sampling.is_some() => {
+                        let duration = project
+                            .compositions
+                            .iter()
+                            .find_map(|c| match c {
+                                DocumentObject::Known(c) if c.id == *composition => {
+                                    Some(c.duration.as_time())
+                                }
+                                _ => None,
+                            })
+                            .ok_or_else(|| unsupported("reverse Composition missing"))?;
+                        Source::ReversedComposition {
+                            plan: DocumentAudioPlan::compile(
+                                project,
+                                AudioTarget::Composition(*composition),
+                            )?,
+                            duration,
+                        }
+                    }
                     SourceRef::Asset { .. }
-                        if clip.audio_retime == AudioRetimePolicy::ResampleV1 =>
+                        if matches!(
+                            clip.audio_retime,
+                            AudioRetimePolicy::ResampleV1 | AudioRetimePolicy::ReverseResampleV1
+                        ) =>
                     {
                         Source::Resampled
                     }
@@ -201,7 +234,9 @@ impl AdvancedAudioPlan {
                 {
                     return Err(unsupported("audio piecewise map must start at parent zero"));
                 }
-                if let Source::Legacy(legacy) = &source {
+                if let Source::Legacy(legacy) | Source::ReversedComposition { plan: legacy, .. } =
+                    &source
+                {
                     legacy.audio4_sample_cost()?;
                     legacy_curve_keys += legacy.audio4_curve_keys();
                 }
@@ -211,7 +246,9 @@ impl AdvancedAudioPlan {
                     plan.capture_property(project, property)?;
                 }
                 flattened_count += match &source {
-                    Source::Legacy(p) => p.clips().len(),
+                    Source::Legacy(p) | Source::ReversedComposition { plan: p, .. } => {
+                        p.clips().len()
+                    }
                     _ => 1,
                 };
                 if flattened_count > 1024 {
@@ -304,7 +341,7 @@ impl AdvancedAudioPlan {
         self.entries
             .iter()
             .flat_map(|entry| match &entry.source {
-                Source::Legacy(plan) => plan.clips(),
+                Source::Legacy(plan) | Source::ReversedComposition { plan, .. } => plan.clips(),
                 Source::Resampled => {
                     let SourceRef::Asset {
                         asset,
@@ -350,6 +387,11 @@ impl AdvancedAudioPlan {
                 + entry.fades.len() as u64
                 + match &entry.source {
                     Source::Legacy(p) => p.audio4_sample_cost()?,
+                    Source::ReversedComposition { plan, .. } => plan
+                        .audio4_sample_cost()?
+                        .checked_mul(2)
+                        .and_then(|v| v.checked_add(8))
+                        .ok_or_else(|| budget("reverse Composition sample cost"))?,
                     _ => 3,
                 };
             operations = operations
@@ -381,6 +423,13 @@ impl AdvancedAudioPlan {
                         || local_time(&entry.clip, placement.end - 1)? < Time::ZERO)
                 {
                     return Err(invalid("negative Generator source time"));
+                }
+            }
+            if let Source::ReversedComposition { plan, duration } = &entry.source {
+                let placement = sample_range(entry.clip.timeline_range)?;
+                if !placement.is_empty() {
+                    reversed_composition(&entry.clip, plan, *duration, sources, placement.start)?;
+                    reversed_composition(&entry.clip, plan, *duration, sources, placement.end - 1)?;
                 }
             }
             if matches!(entry.source, Source::Resampled) {
@@ -415,6 +464,9 @@ impl AdvancedAudioPlan {
                         legacy.as_ref().expect("legacy Bus").buffer().frames()[index]
                     }
                     Source::Resampled => resample(&entry.clip, sources, sample)?,
+                    Source::ReversedComposition { plan, duration } => {
+                        reversed_composition(&entry.clip, plan, *duration, sources, sample)?
+                    }
                     Source::Generator => {
                         let SourceRef::Generator { generator, .. } = &entry.clip.source_ref else {
                             unreachable!()
@@ -481,7 +533,12 @@ fn resample(
     else {
         unreachable!()
     };
-    let position = local_time(clip, sample)?.checked_mul(Time::from_integer(48_000))?;
+    let mut position = local_time(clip, sample)?.checked_mul(Time::from_integer(48_000))?;
+    if clip.audio_retime == AudioRetimePolicy::ReverseResampleV1 {
+        // Exact reverse neighbors: ceil(q)-1 and ceil(q)-2 with reverse fraction
+        // ceil(q)-q. This is algebraically the ordinary interpolation at q-1.
+        position = position.checked_sub(Time::ONE)?;
+    }
     let floor = position.floor();
     let index = usize::try_from(floor).map_err(|_| AudioError::SourceTooShort(asset))?;
     let a = sources.frame(asset, stream_index, index)?;
@@ -502,4 +559,39 @@ fn resample(
         return Err(AudioError::Overflow);
     }
     Ok(result)
+}
+
+fn reversed_composition(
+    clip: &Clip,
+    plan: &DocumentAudioPlan,
+    duration: Time,
+    sources: &dyn AudioSourceReader,
+    sample: i64,
+) -> Result<[f32; 2], AudioError> {
+    let position = local_time(clip, sample)?
+        .checked_mul(Time::from_integer(48_000))?
+        .checked_sub(Time::ONE)?;
+    let floor = position.floor();
+    let fraction = position.checked_sub(Time::from_integer(floor))?;
+    let count = if fraction == Time::ZERO { 1 } else { 2 };
+    let start = Time::new(floor, 48_000)?;
+    let end = Time::new(
+        floor.checked_add(count).ok_or(AudioError::Overflow)?,
+        48_000,
+    )?;
+    if start < Time::ZERO || end > duration {
+        return Err(invalid(
+            "reverse Composition audio source neighbor outside bounds",
+        ));
+    }
+    let bus = plan.mix_reader(sources, TimeRange::new(start, end)?)?;
+    let a = bus.buffer().frames()[0];
+    if count == 1 {
+        return Ok(a);
+    }
+    let b = bus.buffer().frames()[1];
+    let fraction = number(fraction);
+    Ok(std::array::from_fn(|channel| {
+        (f64::from(a[channel]) * (1.0 - fraction) + f64::from(b[channel]) * fraction) as f32
+    }))
 }

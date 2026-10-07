@@ -15,6 +15,16 @@ pub enum DeliveryAudioCodec {
     #[default]
     Alac,
     Aac,
+    Opus,
+}
+impl DeliveryAudioCodec {
+    pub(crate) fn encoder_kind(self) -> ffi::AudioEncoderKind {
+        match self {
+            Self::Alac => ffi::AudioEncoderKind::Alac,
+            Self::Aac => ffi::AudioEncoderKind::Aac,
+            Self::Opus => ffi::AudioEncoderKind::Opus,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -105,11 +115,25 @@ impl MediaRuntime {
                 let pts = chunk
                     .pts
                     .ok_or_else(|| MediaError::Decode("audio frame has no PTS".into()))?;
-                let origin = *start.get_or_insert(pts);
+                // A negative first PTS is codec priming (e.g. Opus pre-skip):
+                // delivered content starts at zero, so anchor the timeline
+                // there instead of at the pre-content packet timestamp.
+                let first = start.is_none();
+                let origin = *start.get_or_insert(if pts < Rational::ZERO {
+                    Rational::ZERO
+                } else {
+                    pts
+                });
                 let expected =
                     origin.checked_add(Rational::new(input_count, i64::from(chunk.rate))?)?;
                 let delta = pts.checked_sub(expected)?;
-                if delta >= decoder.time_base || delta <= decoder.time_base.checked_neg()? {
+                // WebM quantizes primed packet times to 1 ms; allow two stream
+                // ticks so codec-delay rounding never trips the check while
+                // whole-frame gaps or overlaps still fail.
+                let slack = decoder.time_base.checked_mul(Rational::from_integer(2))?;
+                if !(first && pts < Rational::ZERO)
+                    && (delta >= slack || delta <= slack.checked_neg()?)
+                {
                     return Err(MediaError::UnsupportedFeature(
                         "discontinuous audio timestamps".into(),
                     ));
@@ -171,7 +195,7 @@ impl MediaRuntime {
         policy: ClippingPolicy,
         output: &Path,
     ) -> Result<AudioEncodeReport, MediaError> {
-        self.encode_audio_codec(bus, policy, output, false)
+        self.encode_audio_kind(bus, policy, output, ffi::AudioEncoderKind::Pcm24)
     }
     /// Lossless MP4 audio stage, using exactly the existing PCM24 quantizer.
     /// Movie profiles remux these packets to their declared MOV/MP4 container.
@@ -181,16 +205,28 @@ impl MediaRuntime {
         policy: ClippingPolicy,
         output: &Path,
     ) -> Result<AudioEncodeReport, MediaError> {
-        self.encode_audio_codec(bus, policy, output, true)
+        self.encode_audio_kind(bus, policy, output, DeliveryAudioCodec::Alac.encoder_kind())
     }
-    fn encode_audio_codec(
+    /// Lossy delivery audio stage for the closed AUDIO-005 profiles. AAC-LC
+    /// writes an MP4 intermediate, Opus a WebM intermediate; movie profiles
+    /// remux these packets to their declared container.
+    pub fn encode_delivery_audio(
+        &self,
+        codec: DeliveryAudioCodec,
+        bus: &Bus,
+        policy: ClippingPolicy,
+        output: &Path,
+    ) -> Result<AudioEncodeReport, MediaError> {
+        self.encode_audio_kind(bus, policy, output, codec.encoder_kind())
+    }
+    fn encode_audio_kind(
         &self,
         bus: &Bus,
         policy: ClippingPolicy,
         output: &Path,
-        alac: bool,
+        kind: ffi::AudioEncoderKind,
     ) -> Result<AudioEncodeReport, MediaError> {
-        let name = if alac { "alac" } else { "pcm_s24le" };
+        let name = kind.encoder_name();
         if !self
             .capabilities
             .codecs
@@ -209,11 +245,11 @@ impl MediaRuntime {
         }
         let temp = stage_file(output)?;
         self.native
-            .encode_audio(temp.path(), &quantized.samples, alac)?;
+            .encode_audio(temp.path(), &quantized.samples, kind)?;
         temp.as_file().sync_all()?;
         publish_file(temp, output)?;
         Ok(AudioEncodeReport {
-            codec: name.into(),
+            codec: kind.codec_name().into(),
             sample_rate: 48_000,
             channels: 2,
             frames: bus.buffer().frames().len(),

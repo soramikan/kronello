@@ -170,6 +170,9 @@ impl Property {
         match source {
             PropertySource::Constant(value) => {
                 descriptor.validate_value_type(value)?;
+                if descriptor.key().as_str() == crate::BLEND_KEY {
+                    crate::BlendMode::from_value(value)?;
+                }
                 // ADR-0043 validates range after modifiers. A constant is the
                 // final value only when there are no enabled modifiers.
                 if !self.modifiers.iter().any(|modifier| modifier.enabled) {

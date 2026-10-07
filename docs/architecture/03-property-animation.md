@@ -16,6 +16,7 @@ Property<T> = Source + ordered Modifiers<T>
 [ADR-0043](../adr/0043-semantic-dependencies-and-units.md)「単位と座標」に従い、Property の descriptor に単位・座標空間・有効範囲を宣言する。
 
 - 位置・anchor・Path・線幅・フォントサイズ・余白・bounds は設計単位 `design_px`。Composition の左上原点、+X は右、+Y は下とし、ノード内容はローカル座標で保持する。
+- SIM-001の通常Property入力では、初速・初速jitterを `design_px_per_second`、加速度を `design_px_per_second_squared` として区別する。発生位置は `design_px`、発生数は無次元の整数で、時刻・step・lifetimeは有理数を維持する（[ADR-0104](../adr/0104-canonical-source-clock-simulation-checkpoints.md)。実装の受け入れは[SIM-001記録](../testing/sim-001.md)）。
 - rotation / skew は度、scale は無次元倍率（1 が等倍）。+rotation は画面上の時計回りで、連続角を剰余化しない。
 - opacity / alpha / coverage は有限の `[0, 1]`。非有限値・範囲違反はエラーにし、暗黙に clamp しない。範囲を制限する Modifier は明示する。
 - 保存 Color は色空間タグ付き straight RGB と独立 alpha。線形 RGB は負値・1 超を許す（[ADR-0044](../adr/0044-color-and-alpha-contracts.md)）。
@@ -89,9 +90,18 @@ AST は `id / version / value_type / budget / nodes` を保存する。nodes は
 
 既定かつ上限は 1024 nodes、64 参照先、4096 命令、1048576 bytes の保守的一時メモリ、64 sample 要求。budget は上限を下げられる。同じ要求 Property の transitive dependency closure にも既定上限を課し、batch の各 root は独立に評価する。式の失敗は `EVALUATION_ERROR`、予算超過は `EXPRESSION_BUDGET_EXCEEDED`、循環は経路付き `PROPERTY_DEPENDENCY_CYCLE`、未知版は `UNSUPPORTED_FEATURE`。Property.sample と render は同じ評価器を使い、代替値を返さない。
 
-DataAsset 参照、動的な過去 Property sample、連続補間 noise は未実装（EXPR-003、M5）。人間向け構文・parser/formatter・入力UIはOQ-17 / EXPR-002で別に追跡する。保存された未知能力は opaque に保持できるが実行しない。
-
-人間向けには、中置演算と関数呼び出しだけの小さな式言語を後から追加する（[ADR-0040](../adr/0040-expression-language-policy.md)）。文・ループ・代入は持たず、AST と一対一に往復でき、JavaScript 互換にはしない。構文の詳細は未決（[OQ-17](../open-questions.md)）。
+EXPR-001の受け入れ範囲にはDataAsset参照、動的な過去Property sample、連続補間noiseを含めなかった。
+AUDIO-001で版2 `AudioFeature` と不変音声特徴量Assetの参照を受け入れ済み
+（[ADR-0096](../adr/0096-offline-audio-feature-assets.md)、[検証記録](../testing/audio-001.md)）。
+EXPR-003は版3 ASTの固有条件と805件の統合checkpointを確認し、受け入れ済み
+（[ADR-0102](../adr/0102-bounded-temporal-expression-assets.md)、[検証記録](../testing/expr-003.md)）。
+`PropertySample` は非負Scalar秒を1ns有理数gridへ量子化しroot時刻から引いた後、対象の通常のinstance時間写像を適用する。
+過去参照も静的依存辺とし循環を拒否する。現在layout projectionの過去再使用は拒否する。
+`ContinuousNoise` は固定seed/element/instanceに対する隣接整数lattice hashのquintic補間であり、旧Noiseは維持する。
+一般 `ExpressionDataAsset` は版/hash固定inline typed table、`DataAssetCell` は静的ID/列/型と動的整数行を持ち、外部readはない。
+nested sampleは同じquery予算を共有し、schedule・hash・payload cloneの追加処理を課金する。
+旧snapshot pin1/2は能力内の文書を保持し、版3を古いpinへ渡すと拒否する。
+人間向け構文は [ADR-0105](../adr/0105-human-readable-expression-syntax.md) で採用した。中置演算 `+ - * /`（通常の乗除優先・左結合）と固定関数表だけの小さな式言語で、文・代入・ループ・JavaScript互換を持たない（[ADR-0040](../adr/0040-expression-language-policy.md)）。テキストはASTの表示・編集表現であり、式のID・型・budget・意味版は編集envelopeのmetadataとして渡す。byte範囲・行・列・期待tokenを持つ診断をGUIとAPIで共有し、未確定の入力は作品へ適用しない。入力UIはEXPR-002として実装・受け入れ済み（[記録](../testing/expr-002.md)）。保存された未知能力はopaqueに保持できるが実行しない。
 
 設計上の対象（上記に未実装範囲を明記）:
 

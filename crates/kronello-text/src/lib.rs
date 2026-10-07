@@ -84,6 +84,8 @@ pub struct ShapingCluster {
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnimationUnit {
+    /// Complete glyph membership including appended ruby glyphs.
+    pub associated_glyphs: Vec<usize>,
     pub source: TextRange,
     pub graphemes: Range<usize>,
     pub shaping_clusters: Range<usize>,
@@ -267,7 +269,13 @@ fn shape_run(
     buffer.set_script(script.short_name().parse().expect("Unicode script ISO tag"));
     buffer.set_language("ja".parse().expect("fixed BCP47 language"));
     buffer.guess_segment_properties();
-    if buffer.direction() != Direction::LeftToRight {
+    if text.direction == TextDirection::VerticalRl {
+        buffer.set_direction(Direction::TopToBottom);
+    }
+    if !matches!(
+        buffer.direction(),
+        Direction::LeftToRight | Direction::TopToBottom
+    ) {
         return Err(LayoutError::UnsupportedFeature {
             feature: "bidirectional/RTL layout",
         });
@@ -295,7 +303,11 @@ fn shape_run(
         }
         let cluster = clusters.last_mut().expect("just created shaping cluster");
         cluster.unsafe_before |= info.unsafe_to_break();
-        let advance = f64::from(position.x_advance) * scale;
+        let advance = if text.direction == TextDirection::VerticalRl {
+            -f64::from(position.y_advance) * scale
+        } else {
+            f64::from(position.x_advance) * scale
+        };
         cluster.advance += advance;
         cluster.glyphs.push(RawGlyph {
             id: info.glyph_id as u16,
@@ -462,17 +474,17 @@ pub fn layout(text: &ResolvedText, fonts: &[FontData<'_>]) -> Result<LayoutResul
         return Err(LayoutError::BudgetExceeded);
     }
     text.validate()?;
-    if text.layout_version != LAYOUT_VERSION {
+    if !matches!(text.layout_version, 1 | 2) {
         return Err(LayoutError::UnsupportedVersion {
             version: text.layout_version,
         });
     }
-    if text.direction != TextDirection::Horizontal {
+    if text.layout_version == 1 && text.direction != TextDirection::Horizontal {
         return Err(LayoutError::UnsupportedFeature {
             feature: "vertical text",
         });
     }
-    if !text.ruby.is_empty() {
+    if text.layout_version == 1 && !text.ruby.is_empty() {
         return Err(LayoutError::UnsupportedFeature { feature: "ruby" });
     }
     if text.text.chars().any(|c| {
@@ -484,9 +496,29 @@ pub fn layout(text: &ResolvedText, fonts: &[FontData<'_>]) -> Result<LayoutResul
         });
     }
     let faces = verified_faces(text, fonts)?;
-    let raw = shape_text(text, &faces)?;
+    if text.layout_version == 1 && !text.character_animations.is_empty() {
+        return Err(LayoutError::UnsupportedFeature {
+            feature: "character animation requires layout version 2",
+        });
+    }
+    let mut raw = shape_text(text, &faces)?;
+    for ruby in &text.ruby {
+        if text.text[ruby.base.start..ruby.base.end]
+            .chars()
+            .any(|c| matches!(c, '\n' | '\r' | '\u{2028}' | '\u{2029}'))
+        {
+            return Err(LayoutError::UnsupportedFeature {
+                feature: "ruby across mandatory break",
+            });
+        }
+        for c in &mut raw {
+            if c.source.start > ruby.base.start && c.source.start < ruby.base.end {
+                c.unsafe_before = true;
+            }
+        }
+    }
     let mut result = LayoutResult {
-        layout_version: LAYOUT_VERSION,
+        layout_version: text.layout_version,
         lines: vec![],
         glyphs: vec![],
         shaping_clusters: vec![],
@@ -539,10 +571,27 @@ pub fn layout(text: &ResolvedText, fonts: &[FontData<'_>]) -> Result<LayoutResul
             let graphemes = grapheme_start..grapheme_end;
             let start = result.glyphs.len();
             for glyph in &c.glyphs {
-                let position = [x + glyph.offset[0], baseline + glyph.offset[1]];
+                let position = if text.direction == TextDirection::VerticalRl {
+                    [-top + glyph.offset[0], x + glyph.offset[1]]
+                } else {
+                    [x + glyph.offset[0], baseline + glyph.offset[1]]
+                };
                 let scale =
                     text.styles[c.style].size.get() / f64::from(faces[c.style].units_per_em());
-                let (outline, bounds) = glyph_outline(&faces[c.style], glyph.id, scale, position)?;
+                let (mut outline, bounds) =
+                    glyph_outline(&faces[c.style], glyph.id, scale, position)?;
+                if text.direction == TextDirection::VerticalRl
+                    && text.text[c.source.start..c.source.end]
+                        .chars()
+                        .any(|c| c.script() == Script::Latin)
+                {
+                    map_path(&mut outline, |p| {
+                        [
+                            position[0] - (p[1] - position[1]),
+                            position[1] + (p[0] - position[0]),
+                        ]
+                    })?;
+                }
                 outline_commands += outline.segments.len();
                 if outline_commands > MAX_OUTLINE_SEGMENTS {
                     return Err(LayoutError::BudgetExceeded);
@@ -594,9 +643,16 @@ pub fn layout(text: &ResolvedText, fonts: &[FontData<'_>]) -> Result<LayoutResul
             glyphs: glyph_start..result.glyphs.len(),
             baseline,
             advance,
-            bounds: Bounds {
-                min: [x_offset, top],
-                max: [x_offset + advance, top + text.line_height.get()],
+            bounds: if text.direction == TextDirection::VerticalRl {
+                Bounds {
+                    min: [-top - text.line_height.get(), x_offset],
+                    max: [-top, x_offset + advance],
+                }
+            } else {
+                Bounds {
+                    min: [x_offset, top],
+                    max: [x_offset + advance, top + text.line_height.get()],
+                }
             },
             hard_break: !cluster_range.is_empty() && raw[cluster_range.end - 1].separator,
             overflow: advance > text.wrap_width.get(),
@@ -611,8 +667,10 @@ pub fn layout(text: &ResolvedText, fonts: &[FontData<'_>]) -> Result<LayoutResul
             previous.graphemes.end = cluster.graphemes.end;
             previous.shaping_clusters.end = index + 1;
             previous.glyphs.end = cluster.glyphs.end;
+            previous.associated_glyphs.extend(cluster.glyphs.clone());
         } else {
             result.animation_units.push(AnimationUnit {
+                associated_glyphs: cluster.glyphs.clone().collect(),
                 source: cluster.source,
                 graphemes: cluster.graphemes.clone(),
                 shaping_clusters: index..index + 1,
@@ -621,6 +679,17 @@ pub fn layout(text: &ResolvedText, fonts: &[FontData<'_>]) -> Result<LayoutResul
         }
     }
     result.layout_bounds.max[1] = result.lines.len() as f64 * text.line_height.get();
+    if text.direction == TextDirection::VerticalRl {
+        result.layout_bounds = Bounds {
+            min: [-(result.lines.len() as f64) * text.line_height.get(), 0.0],
+            max: [0.0, text.wrap_width.get()],
+        };
+    }
+    if text.layout_version == 2 {
+        append_ruby(text, fonts, &mut result)?;
+    }
+    apply_character_animations(text, &mut result)?;
+
     if !result.layout_bounds.max.iter().all(|v| v.is_finite())
         || result.lines.iter().any(|l| {
             !l.baseline.is_finite()
@@ -737,4 +806,209 @@ fn glyph_outline(
         },
         bounds,
     ))
+}
+
+fn map_path(path: &mut Path, transform: impl Fn([f64; 2]) -> [f64; 2]) -> Result<(), LayoutError> {
+    let point = |p: &mut [FiniteF64; 2]| -> Result<(), LayoutError> {
+        let v = transform(p.map(FiniteF64::get));
+        *p = [
+            FiniteF64::new(v[0]).map_err(|_| LayoutError::NonFiniteGeometry)?,
+            FiniteF64::new(v[1]).map_err(|_| LayoutError::NonFiniteGeometry)?,
+        ];
+        Ok(())
+    };
+    for segment in &mut path.segments {
+        match segment {
+            PathSegment::MoveTo(p) | PathSegment::LineTo(p) => point(p)?,
+            PathSegment::QuadTo { control, end } => {
+                point(control)?;
+                point(end)?;
+            }
+            PathSegment::CubicTo {
+                control1,
+                control2,
+                end,
+            } => {
+                point(control1)?;
+                point(control2)?;
+                point(end)?;
+            }
+            PathSegment::Close => {}
+        }
+    }
+    Ok(())
+}
+fn append_ruby(
+    text: &ResolvedText,
+    fonts: &[FontData<'_>],
+    result: &mut LayoutResult,
+) -> Result<(), LayoutError> {
+    for association in &text.ruby {
+        let parents: Vec<_> = result
+            .glyphs
+            .iter()
+            .filter(|g| {
+                g.source.start < association.base.end && g.source.end > association.base.start
+            })
+            .cloned()
+            .collect();
+        let Some(first) = parents.first() else {
+            return Err(LayoutError::UnsupportedFeature {
+                feature: "ruby without parent glyph",
+            });
+        };
+        let style = &text.styles[first.style_index];
+        if parents.iter().any(|g| g.style_index != first.style_index) {
+            return Err(LayoutError::UnsupportedFeature {
+                feature: "ruby over mixed styles",
+            });
+        }
+        let mut ruby = text.clone();
+        ruby.text = association.text.clone();
+        ruby.ruby.clear();
+        ruby.character_animations.clear();
+        ruby.wrap_width = FiniteF64::new(1_000_000.0).expect("finite ruby width");
+        ruby.alignment = TextAlignment::Start;
+        ruby.styles = vec![kronello_model::ResolvedTextStyle {
+            range: TextRange {
+                start: 0,
+                end: ruby.text.len(),
+            },
+            size: FiniteF64::new(style.size.get() * 0.5)
+                .map_err(|_| LayoutError::NonFiniteGeometry)?,
+            ..style.clone()
+        }];
+        let laid = layout(&ruby, fonts)?;
+        if laid.lines.len() != 1 {
+            return Err(LayoutError::UnsupportedFeature {
+                feature: "ruby mandatory break",
+            });
+        }
+        let advance: f64 = parents.iter().map(|g| g.advance).sum();
+        let shift = if text.direction == TextDirection::VerticalRl {
+            let parent_ink = glyph_ink_bounds(&parents);
+            let ruby_ink = glyph_ink_bounds(&laid.glyphs);
+            match (parent_ink, ruby_ink) {
+                (Some(parent), Some(annotation)) => [
+                    parent.max[0] + style.size.get() * 0.1 - annotation.min[0],
+                    (parent.min[1] + parent.max[1] - annotation.min[1] - annotation.max[1]) * 0.5,
+                ],
+                _ => [
+                    first.position[0] + style.size.get(),
+                    first.position[1] + (advance - laid.lines[0].advance) * 0.5,
+                ],
+            }
+        } else {
+            [
+                first.position[0] + (advance - laid.lines[0].advance) * 0.5,
+                first.position[1] - style.size.get() * 0.9 - laid.lines[0].baseline,
+            ]
+        };
+        for mut glyph in laid.glyphs {
+            map_path(&mut glyph.outline, |p| [p[0] + shift[0], p[1] + shift[1]])?;
+            glyph.position = [glyph.position[0] + shift[0], glyph.position[1] + shift[1]];
+            glyph.source = association.base;
+            glyph.graphemes = result
+                .graphemes
+                .partition_point(|g| g.source.end <= association.base.start)
+                ..result
+                    .graphemes
+                    .partition_point(|g| g.source.start < association.base.end);
+            glyph.shaping_cluster = first.shaping_cluster;
+            glyph.style_index = first.style_index;
+            let index = result.glyphs.len();
+            for unit in &mut result.animation_units {
+                if unit.source.start < association.base.end
+                    && unit.source.end > association.base.start
+                {
+                    unit.associated_glyphs.push(index);
+                }
+            }
+            result.glyphs.push(glyph);
+            if result.glyphs.len() > MAX_GLYPHS {
+                return Err(LayoutError::BudgetExceeded);
+            }
+        }
+    }
+    if result
+        .glyphs
+        .iter()
+        .map(|g| g.outline.segments.len())
+        .sum::<usize>()
+        > MAX_OUTLINE_SEGMENTS
+    {
+        return Err(LayoutError::BudgetExceeded);
+    }
+    recompute_ink(result);
+    Ok(())
+}
+/// Applies source selections to complete shaping units after layout. Ruby inherits
+/// its parent's unit. The caller may reuse an unanimated cached layout.
+pub fn apply_character_animations(
+    text: &ResolvedText,
+    result: &mut LayoutResult,
+) -> Result<(), LayoutError> {
+    for animation in &text.character_animations {
+        let selected: Vec<_> = result
+            .animation_units
+            .iter()
+            .filter(|unit| {
+                unit.source.start < animation.source.end && unit.source.end > animation.source.start
+            })
+            .map(|unit| unit.source)
+            .collect();
+        for glyph in &mut result.glyphs {
+            if !selected
+                .iter()
+                .any(|source| source.start < glyph.source.end && source.end > glyph.source.start)
+            {
+                continue;
+            }
+            let offset = animation.offset.map(FiniteF64::get);
+            map_path(&mut glyph.outline, |p| [p[0] + offset[0], p[1] + offset[1]])?;
+            glyph.position = [glyph.position[0] + offset[0], glyph.position[1] + offset[1]];
+            let c = glyph.fill.components();
+            glyph.fill = Color::new(
+                glyph.fill.space(),
+                [c.r.get(), c.g.get(), c.b.get()],
+                c.alpha.get() * animation.opacity.get(),
+            )
+            .map_err(|_| LayoutError::NonFiniteGeometry)?;
+            if glyph.gradient.is_some() && animation.opacity.get() != 1.0 {
+                return Err(LayoutError::UnsupportedFeature {
+                    feature: "character opacity with gradient",
+                });
+            }
+        }
+    }
+    if !text.character_animations.is_empty() {
+        recompute_ink(result);
+    }
+    Ok(())
+}
+fn glyph_ink_bounds(glyphs: &[PositionedGlyph]) -> Option<Bounds> {
+    let mut bounds = None;
+    for glyph in glyphs {
+        for segment in &glyph.outline.segments {
+            let points: Vec<_> = match segment {
+                PathSegment::MoveTo(p) | PathSegment::LineTo(p) => vec![*p],
+                PathSegment::QuadTo { control, end } => vec![*control, *end],
+                PathSegment::CubicTo {
+                    control1,
+                    control2,
+                    end,
+                } => vec![*control1, *control2, *end],
+                PathSegment::Close => vec![],
+            };
+            for p in points {
+                let p = p.map(FiniteF64::get);
+                bounds = Some(union(bounds, Bounds { min: p, max: p }));
+            }
+        }
+    }
+    bounds
+}
+
+fn recompute_ink(result: &mut LayoutResult) {
+    result.ink_bounds = glyph_ink_bounds(&result.glyphs);
 }

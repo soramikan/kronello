@@ -35,6 +35,7 @@ pub struct CacheConfig {
     pub geometry: CacheCapacity,
     pub raster: CacheCapacity,
     pub temporal: CacheCapacity,
+    pub simulation: CacheCapacity,
 }
 impl CacheConfig {
     /// Zero-capacity caches execute the same code without retaining entries.
@@ -49,6 +50,7 @@ impl CacheConfig {
             geometry: zero,
             raster: zero,
             temporal: zero,
+            simulation: zero,
         }
     }
 }
@@ -76,6 +78,20 @@ pub struct RenderCacheStats {
     pub raster: CacheStats,
     #[serde(default)]
     pub temporal: CacheStats,
+    #[serde(default)]
+    pub simulation: SimulationCacheStats,
+}
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(deny_unknown_fields)]
+pub struct SimulationCacheStats {
+    pub checkpoint_hits: u64,
+    pub replayed_steps: u64,
+    pub sampled_inputs: u64,
+    pub particle_updates: u64,
+    pub checkpoints: usize,
+    pub cached_particles: usize,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Key([u8; 32]);
@@ -137,6 +153,71 @@ impl<T: Clone> Lru<T> {
         };
     }
 }
+pub(crate) struct SimulationCachePool {
+    entries: VecDeque<(
+        (kronello_model::ContentId, kronello_model::InstancePath),
+        kronello_simulation::SimulationCache,
+    )>,
+    slots: usize,
+    limits: kronello_simulation::SimulationLimits,
+}
+impl SimulationCachePool {
+    fn new(capacity: CacheCapacity) -> Self {
+        let slots = capacity.entries.min(16).min(capacity.bytes / 256);
+        Self {
+            entries: VecDeque::new(),
+            slots,
+            limits: kronello_simulation::SimulationLimits {
+                max_checkpoints: (capacity.entries / slots.max(1))
+                    .min(capacity.bytes / 256 / slots.max(1)),
+                max_cached_particles: capacity.bytes / 256 / slots.max(1),
+                ..Default::default()
+            },
+        }
+    }
+    fn clear(&mut self) {
+        self.entries.clear();
+    }
+    fn checkpoint_count(&self) -> usize {
+        self.entries.iter().map(|(_, c)| c.checkpoint_count()).sum()
+    }
+    fn cached_particle_count(&self) -> usize {
+        self.entries
+            .iter()
+            .map(|(_, c)| c.cached_particle_count())
+            .sum()
+    }
+    pub(crate) fn state_at<E>(
+        &mut self,
+        config: &kronello_simulation::SimulationConfig,
+        hash: [u8; 32],
+        time: Time,
+        inputs: impl FnMut(Time) -> Result<kronello_simulation::ParticleInputs, E>,
+    ) -> Result<
+        (
+            kronello_simulation::SimulationState,
+            kronello_simulation::SimulationStats,
+        ),
+        kronello_simulation::SimulationError<E>,
+    > {
+        if self.slots == 0 {
+            return kronello_simulation::SimulationCache::new(self.limits)
+                .state_at(config, hash, time, inputs);
+        }
+        let key = (config.emitter, config.instance.clone());
+        let mut entry = if let Some(index) = self.entries.iter().position(|(id, _)| *id == key) {
+            self.entries.remove(index).unwrap()
+        } else {
+            (key, kronello_simulation::SimulationCache::new(self.limits))
+        };
+        let result = entry.1.state_at(config, hash, time, inputs);
+        if self.entries.len() >= self.slots {
+            self.entries.pop_front();
+        }
+        self.entries.push_back(entry);
+        result
+    }
+}
 /// Owned by the caller and reusable across snapshots, frames, and output regions.
 /// Failed computations are never retained; clearing preserves cumulative counters.
 pub struct RenderCache {
@@ -145,6 +226,8 @@ pub struct RenderCache {
     geometry: Lru<FlattenedPath>,
     raster: Lru<Vec<[f32; 4]>>,
     temporal: Lru<crate::BackendFrame>,
+    pub(crate) simulation: SimulationCachePool,
+    pub(crate) simulation_stats: SimulationCacheStats,
 }
 impl Default for RenderCache {
     fn default() -> Self {
@@ -159,6 +242,8 @@ impl RenderCache {
             geometry: Lru::new(config.geometry),
             raster: Lru::new(config.raster),
             temporal: Lru::new(config.temporal),
+            simulation_stats: SimulationCacheStats::default(),
+            simulation: SimulationCachePool::new(config.simulation),
         }
     }
     pub fn stats(&self) -> RenderCacheStats {
@@ -168,6 +253,11 @@ impl RenderCache {
             geometry: self.geometry.stats,
             raster: self.raster.stats,
             temporal: self.temporal.stats,
+            simulation: SimulationCacheStats {
+                checkpoints: self.simulation.checkpoint_count(),
+                cached_particles: self.simulation.cached_particle_count(),
+                ..self.simulation_stats
+            },
         }
     }
     pub fn clear(&mut self) {
@@ -176,6 +266,7 @@ impl RenderCache {
         self.geometry.clear();
         self.raster.clear();
         self.temporal.clear();
+        self.simulation.clear();
     }
     pub fn reset_stats(&mut self) {
         self.values.reset_stats();
@@ -183,6 +274,7 @@ impl RenderCache {
         self.geometry.reset_stats();
         self.raster.reset_stats();
         self.temporal.reset_stats();
+        self.simulation_stats = SimulationCacheStats::default();
     }
 
     pub(crate) fn temporal_get(
@@ -248,6 +340,7 @@ impl RenderCache {
             layout
         } else {
             let mut canonical = text.clone();
+            canonical.character_animations.clear();
             for style in &mut canonical.styles {
                 style.fill = Color::from_srgb8([0, 0, 0], None);
                 style.gradient = None;
@@ -272,6 +365,7 @@ impl RenderCache {
             glyph.fill = text.styles[glyph.style_index].fill;
             glyph.gradient = text.styles[glyph.style_index].gradient.clone();
         }
+        kronello_text::apply_character_animations(text, &mut layout)?;
         Ok(layout)
     }
     pub(crate) fn geometry(
@@ -288,6 +382,12 @@ impl RenderCache {
             } => json!(["rectangle", size, corner_radius]),
             ResolvedGeometry::Ellipse { size } => json!(["ellipse", size]),
             ResolvedGeometry::BezierPath(path) => json!(["path", path]),
+            ResolvedGeometry::TrimmedPath {
+                path,
+                start,
+                end,
+                offset,
+            } => json!(["vec002-trim-v1", path, start, end, offset]),
         };
         // Exact tolerance/scale is the scale bucket: no quantization changes output.
         let cache_key = key(
@@ -353,6 +453,7 @@ impl RasterCacheKey {
                 crate::DagNode::VideoDraw {
                     stream_index,
                     time,
+                    reverse_sampling,
                     extent,
                     output_to_local,
                     bounds,
@@ -367,6 +468,7 @@ impl RasterCacheKey {
                             input.digest(),
                             stream_index,
                             time,
+                            reverse_sampling,
                             extent,
                             output_to_local,
                             bounds,
@@ -400,6 +502,21 @@ impl RasterCacheKey {
                             .map(|id| keys[*id].map(|k| hex(k.0)))
                             .collect::<Vec<_>>(),
                         opacity,
+                        dag.execution_region(),
+                        dag.working_space(),
+                        backend_namespace,
+                    ),
+                )?)),
+                crate::DagNode::Blend {
+                    source,
+                    backdrop,
+                    mode,
+                } => Some(Self(key(
+                    "blend",
+                    (
+                        keys[*source].map(|k| hex(k.0)),
+                        keys[*backdrop].map(|k| hex(k.0)),
+                        mode,
                         dag.execution_region(),
                         dag.working_space(),
                         backend_namespace,

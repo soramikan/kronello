@@ -13,6 +13,7 @@ use crate::{
 };
 
 pub const TEXT_LAYOUT_VERSION: u32 = 1;
+pub const TEXT_ADVANCED_LAYOUT_VERSION: u32 = 2;
 
 /// Half-open UTF-8 byte range in the original, unnormalized text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
@@ -82,6 +83,24 @@ pub struct RubyAssociation {
     pub text: String,
 }
 
+/// Logical source selection. Ranges are never glyph or line indices.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CharacterAnimation {
+    pub source: TextRange,
+    /// Exact unnormalized source captured when the selector is authored.
+    pub expected_text: String,
+    pub offset: PropertyId,
+    pub opacity: PropertyId,
+}
+#[derive(Debug, Clone, PartialEq)]
+pub struct ResolvedCharacterAnimation {
+    pub source: TextRange,
+    pub expected_text: String,
+    pub offset: [FiniteF64; 2],
+    pub opacity: FiniteF64,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct TextDocument {
@@ -93,6 +112,8 @@ pub struct TextDocument {
     pub direction: TextDirection,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ruby: Vec<RubyAssociation>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub character_animations: Vec<CharacterAnimation>,
     pub wrap_width: PropertyId,
     /// Absolute baseline spacing in design_px, not a font-size multiplier.
     pub line_height: PropertyId,
@@ -114,6 +135,7 @@ pub struct ResolvedText {
     pub styles: Vec<ResolvedTextStyle>,
     pub direction: TextDirection,
     pub ruby: Vec<RubyAssociation>,
+    pub character_animations: Vec<ResolvedCharacterAnimation>,
     pub wrap_width: FiniteF64,
     pub line_height: FiniteF64,
     pub alignment: TextAlignment,
@@ -129,6 +151,8 @@ pub enum TextError {
     InvalidSpans,
     #[error("invalid ruby source range")]
     InvalidRubyRange,
+    #[error("invalid character selector range or parameters")]
+    InvalidCharacterAnimation,
     #[error("missing text property {id}")]
     MissingProperty { id: PropertyId },
     #[error("duplicate text property {id}")]
@@ -170,14 +194,18 @@ fn validate_ranges<'a>(
     if end != text.len() {
         return Err(TextError::InvalidSpans);
     }
+    let mut ruby_end = 0;
     for association in ruby {
         let range = association.base;
-        if range.start >= range.end
+        if range.start < ruby_end
+            || association.text.is_empty()
+            || range.start >= range.end
             || !boundaries.contains(&range.start)
             || !boundaries.contains(&range.end)
         {
             return Err(TextError::InvalidRubyRange);
         }
+        ruby_end = range.end;
     }
     Ok(())
 }
@@ -189,6 +217,24 @@ impl ResolvedText {
             self.styles.iter().map(|s| (s.range, &s.font)),
             &self.ruby,
         )?;
+        validate_selectors(
+            &self.text,
+            self.character_animations.iter().map(|a| a.source),
+        )?;
+        if self
+            .character_animations
+            .iter()
+            .any(|a| self.text[a.source.start..a.source.end] != a.expected_text)
+        {
+            return Err(TextError::InvalidCharacterAnimation);
+        }
+        if self
+            .character_animations
+            .iter()
+            .any(|a| !(0.0..=1.0).contains(&a.opacity.get()))
+        {
+            return Err(TextError::InvalidCharacterAnimation);
+        }
         if self.wrap_width.get() <= 0.0
             || self.line_height.get() <= 0.0
             || self.styles.iter().any(|s| s.size.get() <= 0.0)
@@ -209,6 +255,12 @@ impl TextDocument {
             parameters.extend([
                 (span.size, ValueType::Scalar, Unit::DesignPx),
                 (span.fill, ValueType::Color, Unit::Dimensionless),
+            ]);
+        }
+        for animation in &self.character_animations {
+            parameters.extend([
+                (animation.offset, ValueType::Vec2, Unit::DesignPx),
+                (animation.opacity, ValueType::Scalar, Unit::Dimensionless),
             ]);
         }
         parameters
@@ -237,6 +289,17 @@ impl TextDocument {
             self.styles.iter().map(|s| (s.range, &s.font)),
             &self.ruby,
         )?;
+        validate_selectors(
+            &self.text,
+            self.character_animations.iter().map(|a| a.source),
+        )?;
+        if self
+            .character_animations
+            .iter()
+            .any(|a| self.text[a.source.start..a.source.end] != a.expected_text)
+        {
+            return Err(TextError::InvalidCharacterAnimation);
+        }
         let mut by_id = BTreeMap::new();
         for property in properties {
             if by_id.insert(property.id(), property).is_some() {
@@ -253,7 +316,13 @@ impl TextDocument {
             if !property.modifiers().iter().any(|m| m.enabled)
                 && let PropertySource::Constant(value) = property.source()
             {
-                validate_parameter(id, ty, value)?;
+                if self.character_animations.iter().any(|a| a.opacity == id) {
+                    if !matches!(value, Value::Scalar(v) if (0.0..=1.0).contains(&v.get())) {
+                        return Err(TextError::InvalidCharacterAnimation);
+                    }
+                } else {
+                    validate_parameter(id, ty, value)?;
+                }
             }
         }
         for gradient in self.styles.iter().filter_map(|s| s.gradient.as_ref()) {
@@ -263,6 +332,13 @@ impl TextDocument {
     }
     pub fn resolve(&self, values: &BTreeMap<PropertyId, Value>) -> Result<ResolvedText, TextError> {
         for (id, ty, _) in self.parameters() {
+            if self.character_animations.iter().any(|a| a.opacity == id) {
+                if !matches!(values.get(&id), Some(Value::Scalar(v)) if (0.0..=1.0).contains(&v.get()))
+                {
+                    return Err(TextError::InvalidCharacterAnimation);
+                }
+                continue;
+            }
             validate_parameter(
                 id,
                 ty,
@@ -298,6 +374,22 @@ impl TextDocument {
                 .collect::<Result<Vec<_>, TextError>>()?,
             direction: self.direction,
             ruby: self.ruby.clone(),
+            character_animations: self
+                .character_animations
+                .iter()
+                .map(|a| {
+                    let offset = match values[&a.offset] {
+                        Value::Vec2(v) => v,
+                        _ => unreachable!(),
+                    };
+                    ResolvedCharacterAnimation {
+                        source: a.source,
+                        expected_text: a.expected_text.clone(),
+                        offset,
+                        opacity: scalar(a.opacity),
+                    }
+                })
+                .collect(),
             wrap_width: scalar(self.wrap_width),
             line_height: scalar(self.line_height),
             alignment: match &values[&self.alignment] {
@@ -314,6 +406,7 @@ fn validate_parameter(id: PropertyId, ty: ValueType, value: &Value) -> Result<()
     let valid = match (ty, value) {
         (ValueType::Scalar, Value::Scalar(v)) => v.get() > 0.0,
         (ValueType::Color, Value::Color(_)) => true,
+        (ValueType::Vec2, Value::Vec2(_)) => true,
         (ValueType::Enum, Value::Enum(v)) => matches!(v.as_str(), "start" | "center" | "end"),
         _ => false,
     };
@@ -362,6 +455,26 @@ pub fn text_descriptors() -> Vec<PropertyDescriptor> {
     let n = |v| FiniteF64::new(v).expect("finite text default");
     [
         (
+            0x2c308a48_b4d3_4c52_a2b0_aa9dd167bbef,
+            "style_color",
+            Value::Color(Color::from_srgb8([0; 3], None)),
+        ),
+        (
+            0x3c308a48_b4d3_4c52_a2b0_aa9dd167bbef,
+            "style_size",
+            Value::Scalar(n(32.0)),
+        ),
+        (
+            0x1c308a48_b4d3_4c52_a2b0_aa9dd167bbef,
+            "character_offset",
+            Value::Vec2([n(0.0), n(0.0)]),
+        ),
+        (
+            0x0c308a48_b4d3_4c52_a2b0_aa9dd167bbef,
+            "character_opacity",
+            Value::Scalar(n(1.0)),
+        ),
+        (
             0xa132814b_f79c_4c5f_a59d_b9f0dd9a66dd,
             "font_size",
             Value::Scalar(n(32.0)),
@@ -385,19 +498,24 @@ pub fn text_descriptors() -> Vec<PropertyDescriptor> {
     .into_iter()
     .map(|(id, name, default)| {
         let scalar = default.value_type() == ValueType::Scalar;
+        let opacity = name == "character_opacity";
         let mut definition = DescriptorDefinition::new(
             DescriptorId::from_uuid(Uuid::from_u128(id)),
             SchemaKey::new(format!("kronello.text.{name}")).expect("valid text key"),
             name,
             default.value_type(),
-            if scalar {
+            if !opacity && (scalar || default.value_type() == ValueType::Vec2) {
                 Unit::DesignPx
             } else {
                 Unit::Dimensionless
             },
             default,
         );
-        if scalar {
+        definition.repeatable = matches!(
+            name,
+            "style_color" | "style_size" | "character_offset" | "character_opacity"
+        );
+        if scalar && !opacity {
             definition.range = Some(crate::ValueRange::Scalar(crate::NumericRange {
                 min: Some(crate::NumericBound {
                     value: n(0.0),
@@ -409,4 +527,24 @@ pub fn text_descriptors() -> Vec<PropertyDescriptor> {
         PropertyDescriptor::new(definition).expect("valid text descriptor")
     })
     .collect()
+}
+
+fn validate_selectors(
+    text: &str,
+    ranges: impl Iterator<Item = TextRange>,
+) -> Result<(), TextError> {
+    let boundaries: BTreeSet<_> = text
+        .grapheme_indices(true)
+        .map(|(i, _)| i)
+        .chain([text.len()])
+        .collect();
+    for range in ranges {
+        if range.start >= range.end
+            || !boundaries.contains(&range.start)
+            || !boundaries.contains(&range.end)
+        {
+            return Err(TextError::InvalidCharacterAnimation);
+        }
+    }
+    Ok(())
 }

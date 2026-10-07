@@ -7,9 +7,12 @@
 mod expression;
 mod graph;
 mod scene;
+mod specialization;
 
 pub use graph::{DependencyDeclarations, DependencyGraph, EvaluationSnapshot, ReferenceBindings};
 pub use scene::{Affine2, EvaluatedNode, EvaluatedScene, NodeKey, TransformValues};
+#[doc(hidden)]
+pub use specialization::{SimulationLowering, SpecializationProvenance, SpecializedDefinition};
 
 use kronello_animation::AnimationError;
 use kronello_model::{
@@ -60,10 +63,14 @@ pub enum EvaluationError {
     },
     #[error("invalid composition definitions: {0:?}")]
     InvalidCompositions(Vec<CompositionError>),
+    #[error("invalid internal specialization provenance: {0}")]
+    InvalidSpecialization(&'static str),
     #[error("composition not found: {0}")]
     CompositionNotFound(CompositionId),
     #[error("duplicate expression ID")]
     DuplicateExpressionId,
+    #[error("duplicate DataAsset ID")]
+    DuplicateDataAssetId,
     #[error("duplicate curve ID: {0}")]
     DuplicateCurveId(kronello_model::CurveId),
     #[error("declared layout dependency input is missing: {0:?}")]

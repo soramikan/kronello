@@ -39,6 +39,8 @@ pub struct RenderStage {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RenderTilePlan {
+    /// Exact root sample time; absent for the scene-only planning entry.
+    pub sample_time: Option<kronello_time::Time>,
     pub requested: OutputRegion,
     pub execution: OutputRegion,
     pub stages: Vec<RenderStage>,
@@ -72,7 +74,16 @@ pub struct RenderPathPlan {
     /// Always false: compilation does not initialize or execute a backend.
     pub executed: bool,
     pub tiles: Vec<RenderTilePlan>,
+    /// Final linear/display CPU output boundary, excluding cache persistence.
     pub transfers: Vec<TransferEstimate>,
+    pub output_boundary: String,
+    /// Alternative native texture boundary; not added to final transfers.
+    pub native_preview_transfers: Vec<TransferEstimate>,
+    pub native_preview_supported: bool,
+    pub temporal_samples: Vec<crate::TemporalSample>,
+    /// Maximum executions without backend or temporal raster-cache hits.
+    pub graph_executions_estimate: Option<u64>,
+    pub estimate_scope: String,
     /// Two retained full-frame float32 RGBA host outputs, excluding allocator overhead.
     pub output_host_bytes_estimate: u64,
     pub peak_intermediate_bytes_estimate: Option<u64>,
@@ -99,6 +110,17 @@ pub fn explain_render_path(
         executed: false,
         tiles: vec![],
         transfers: vec![],
+        output_boundary: "final_linear_display_cpu_readback".into(),
+        native_preview_transfers: vec![],
+        native_preview_supported: matches!(
+            backend,
+            ExplainBackend::Gpu
+                | ExplainBackend::GpuResidentBgra8
+                | ExplainBackend::GpuResidentNv12
+        ) && profile.temporal.is_none(),
+        temporal_samples: vec![],
+        graph_executions_estimate: None,
+        estimate_scope: "cold_execution_without_raster_cache_persistence_or_hits".into(),
         output_host_bytes_estimate: u64::from(region.pixels[0]) * u64::from(region.pixels[1]) * 32,
         peak_intermediate_bytes_estimate: match backend {
             ExplainBackend::Unknown => None,
@@ -113,42 +135,49 @@ pub fn explain_render_path(
     // CPU-decoded video frames and CPU-prepared rasters are uploaded explicitly on GPU (ADR-0008).
     let mut image_upload_bytes: u64 = 0;
     let mut image_uploads: u64 = 0;
+    let mut decoded_upload_unknown = false;
     for (tile_id, (_, tile)) in crate::frame_tiles(region).into_iter().enumerate() {
         let dag = crate::build_render_dag_with_cache(scene, profile, tile, cache)?;
         let mut stages = Vec::new();
         let mut surfaces = 4; // one root + backend reserve
+        let elided_root = if backend != ExplainBackend::CpuReference {
+            dag.nodes().len().checked_sub(2).filter(|root| matches!((&dag.nodes()[*root], dag.nodes().last()), (DagNode::IsolatedComposite { children, opacity }, Some(DagNode::OutputTransform { source, .. })) if *source == *root && children.len() == 1 && *opacity == 1.0))
+        } else {
+            None
+        };
         for (index, node) in dag.nodes().iter().enumerate() {
             let (code, key, image) = match node {
                 DagNode::Geometry { key, .. } => ("GEOMETRY", Some(key.clone()), false),
                 DagNode::TextLayout { key, .. } => ("TEXT_LAYOUT", Some(key.clone()), false),
                 DagNode::CoverageDraw { .. } => ("COVERAGE_DRAW", None, true),
                 DagNode::IsolatedComposite { children, .. } => {
-                    surfaces += children.len() as u64 + 1;
+                    if Some(index) != elided_root {
+                        surfaces += children.len() as u64 + 1;
+                    }
                     ("ISOLATED_COMPOSITE", None, true)
                 }
                 DagNode::Effect { .. } => {
                     surfaces += 3;
                     ("EFFECT", None, true)
                 }
+                DagNode::Blend { .. } => ("BLEND", None, true),
                 DagNode::Mask { .. } => ("MASK", None, true),
                 DagNode::OutputTransform { .. } => ("OUTPUT_TRANSFORM", None, false),
-                DagNode::VideoDraw { bounds, .. } => {
-                    // Estimate: one RGBA f32 upload of the drawn pixel bounds per frame.
-                    let w = (bounds.max[0] - bounds.min[0]).max(0.0).ceil() as u64;
-                    let h = (bounds.max[1] - bounds.min[1]).max(0.0).ceil() as u64;
+                DagNode::VideoDraw { .. } => {
+                    // Decoded source dimensions, adapter conversion, and media-cache
+                    // reuse are not known from the output-space draw rectangle.
                     if backend == ExplainBackend::Gpu {
-                        image_upload_bytes += w * h * 16;
-                        image_uploads += 1;
+                        decoded_upload_unknown = true;
                     }
                     ("VIDEO_DRAW", None, true)
                 }
                 DagNode::RasterInput { pixels } => {
-                    image_upload_bytes += pixels.len() as u64 * 16;
+                    image_upload_bytes += pixels.len() as u64 * 8;
                     image_uploads += 1;
                     ("RASTER_INPUT", None, true)
                 }
             };
-            if image {
+            if image && Some(index) != elided_root {
                 surfaces += 1;
             }
             let execution = if !image && code != "OUTPUT_TRANSFORM" {
@@ -205,11 +234,12 @@ pub fn explain_render_path(
                 limit: None,
             });
         }
-        // Built-in frame export renders twice, with one padded image and one
-        // four-byte shader validation status readback per execution.
+        // A single graph generates linear/display outputs. Each padded image
+        // crosses its final boundary, then sticky status crosses once.
         readback_bytes +=
-            (u64::from(pixels[0]) * 8).div_ceil(256) * 256 * u64::from(pixels[1]) * 2 + 8;
+            (u64::from(pixels[0]) * 8).div_ceil(256) * 256 * u64::from(pixels[1]) * 2 + 4;
         result.tiles.push(RenderTilePlan {
+            sample_time: None,
             requested: tile,
             execution: dag.execution_region(),
             stages,
@@ -237,9 +267,9 @@ pub fn explain_render_path(
         ExplainBackend::Gpu | ExplainBackend::GpuResidentBgra8 | ExplainBackend::GpuResidentNv12
     ) {
         result.notices.push(ProcessingNotice {
-            code: "DUPLICATE_LINEAR_DISPLAY_RENDER".into(),
+            code: "SINGLE_GRAPH_LINEAR_DISPLAY_OUTPUT".into(),
             tile: None,
-            actual_estimate: Some(2),
+            actual_estimate: Some(1),
             limit: None,
         });
     }
@@ -294,12 +324,12 @@ pub fn explain_render_path(
         "IMAGE_UPLOAD",
         "cpu_to_gpu",
         if gpu {
-            Some(image_upload_bytes)
+            (!decoded_upload_unknown).then_some(image_upload_bytes)
         } else {
             known.then_some(0)
         },
         if gpu {
-            Some(image_uploads)
+            (!decoded_upload_unknown).then_some(image_uploads)
         } else {
             known.then_some(0)
         },
@@ -315,11 +345,158 @@ pub fn explain_render_path(
         "gpu_to_cpu",
         known.then_some(if gpu { readback_bytes } else { 0 }),
         known.then_some(if gpu {
-            result.tiles.len() as u64 * 4
+            result.tiles.len() as u64 * 3
         } else {
             0
         }),
     );
+    if result.native_preview_supported {
+        // Native preview lowers one full-region DAG, independently of the
+        // final CPU frame path's 512px tile traversal. Its input uploads are
+        // not obtained by adding the final path's per-tile conversions.
+        result.native_preview_transfers = vec![
+            TransferEstimate {
+                code: "CONTROL_UPLOAD".into(),
+                direction: "cpu_to_gpu".into(),
+                bytes_estimate: None,
+                operations_estimate: None,
+            },
+            TransferEstimate {
+                code: "IMAGE_UPLOAD".into(),
+                direction: "cpu_to_gpu".into(),
+                bytes_estimate: None,
+                operations_estimate: None,
+            },
+            TransferEstimate {
+                code: "GPU_IMAGE_COPY".into(),
+                direction: "gpu_to_gpu".into(),
+                bytes_estimate: Some(0),
+                operations_estimate: Some(0),
+            },
+            TransferEstimate {
+                code: "STATUS_ONLY_READBACK".into(),
+                direction: "gpu_to_cpu".into(),
+                bytes_estimate: Some(4),
+                operations_estimate: Some(1),
+            },
+        ];
+        result.notices.push(ProcessingNotice {
+            code: "NATIVE_PREVIEW_ONE_FULL_REGION_GRAPH_NO_IMAGE_READBACK".into(),
+            tile: None,
+            actual_estimate: Some(1),
+            limit: None,
+        });
+    }
+    result.graph_executions_estimate = known.then_some(result.tiles.len() as u64);
+    result.notices.push(ProcessingNotice {
+        code: "COLD_ESTIMATE_CACHE_HITS_MAY_REDUCE_EXECUTION_TO_ZERO".into(),
+        tile: None,
+        actual_estimate: None,
+        limit: None,
+    });
+    result.notices.push(ProcessingNotice {
+        code: "CONTROL_UPLOAD_AND_CACHE_PERSISTENCE_NOT_ESTIMATED".into(),
+        tile: None,
+        actual_estimate: None,
+        limit: None,
+    });
+    if profile.temporal.is_some() {
+        result.notices.push(ProcessingNotice {
+            code: "SCENE_ONLY_PLAN_SINGLE_SAMPLE_USE_SNAPSHOT_PLAN_FOR_TEMPORAL".into(),
+            tile: None,
+            actual_estimate: None,
+            limit: None,
+        });
+    }
+    result.compilation_cache = cache.stats();
+    Ok(result)
+}
+
+/// Plans every actual rational shutter sample and tile without backend creation,
+/// decode, raster-cache lookup, upload, dispatch, or readback.
+pub fn explain_snapshot_render_path(
+    snapshot: &crate::RenderSnapshot,
+    time: kronello_time::Time,
+    fonts: &[kronello_text::FontData<'_>],
+    region: OutputRegion,
+    backend: ExplainBackend,
+    cache: &mut RenderCache,
+) -> Result<RenderPathPlan, RenderError> {
+    let profile = snapshot.profile();
+    let samples = if let Some(settings) = profile.temporal {
+        if matches!(
+            backend,
+            ExplainBackend::GpuResidentBgra8 | ExplainBackend::GpuResidentNv12
+        ) {
+            return Err(RenderError::UnsupportedFeature(
+                "require_gpu_resident rejects CPU temporal accumulation".into(),
+            ));
+        }
+        crate::temporal_samples(snapshot, time, settings)?
+    } else {
+        vec![crate::TemporalSample {
+            time,
+            weight: kronello_time::Rational::ONE,
+        }]
+    };
+    let mut result: Option<RenderPathPlan> = None;
+    for sample in &samples {
+        let scene = crate::build_scene_ir_with_cache(snapshot, sample.time, fonts, cache)?;
+        let mut plan = explain_render_path(&scene, profile, region, backend, cache)?;
+        for tile in &mut plan.tiles {
+            tile.sample_time = Some(sample.time);
+        }
+        plan.notices
+            .retain(|n| n.code != "SCENE_ONLY_PLAN_SINGLE_SAMPLE_USE_SNAPSHOT_PLAN_FOR_TEMPORAL");
+        if let Some(total) = &mut result {
+            let offset = total.tiles.len();
+            total.tiles.extend(plan.tiles);
+            for notice in &mut plan.notices {
+                if let Some(tile) = &mut notice.tile {
+                    *tile += offset;
+                }
+            }
+            total
+                .notices
+                .extend(plan.notices.into_iter().filter(|n| n.tile.is_some()));
+            for (transfer, next) in total.transfers.iter_mut().zip(plan.transfers) {
+                transfer.bytes_estimate = transfer
+                    .bytes_estimate
+                    .zip(next.bytes_estimate)
+                    .and_then(|(a, b)| a.checked_add(b));
+                transfer.operations_estimate = transfer
+                    .operations_estimate
+                    .zip(next.operations_estimate)
+                    .and_then(|(a, b)| a.checked_add(b));
+            }
+            total.graph_executions_estimate = total
+                .graph_executions_estimate
+                .zip(plan.graph_executions_estimate)
+                .and_then(|(a, b)| a.checked_add(b));
+            total.peak_intermediate_bytes_estimate = total
+                .peak_intermediate_bytes_estimate
+                .zip(plan.peak_intermediate_bytes_estimate)
+                .map(|(a, b)| a.max(b));
+        } else {
+            result = Some(plan);
+        }
+    }
+    let mut result = result.expect("temporal samples always nonempty");
+    if profile.temporal.is_some() {
+        result.temporal_samples = samples;
+        result.notices.push(ProcessingNotice {
+            code: "TEMPORAL_ROOT_CPU_ACCUMULATION_AFTER_SAMPLE_READBACKS".into(),
+            tile: None,
+            actual_estimate: Some(u64::from(region.pixels[0]) * u64::from(region.pixels[1]) * 64),
+            limit: None,
+        });
+        result.notices.push(ProcessingNotice {
+            code: "TEMPORAL_WHOLE_FRAME_OR_TILE_STREAMING_HOST_MEMORY_DIFFERS".into(),
+            tile: None,
+            actual_estimate: Some(u64::from(region.pixels[0]) * u64::from(region.pixels[1]) * 96),
+            limit: Some(512 * 1024 * 1024),
+        });
+    }
     result.compilation_cache = cache.stats();
     Ok(result)
 }

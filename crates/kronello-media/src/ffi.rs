@@ -671,7 +671,7 @@ unsafe extern "C" {
     fn km_audio_count(a: *mut c_void) -> c_int;
     fn km_audio_copy(a: *mut c_void, out: *mut f32, capacity: c_int) -> c_int;
     fn km_audio_next(a: *mut c_void) -> c_int;
-    fn km_audio_encoder_open(k: *mut c_void, path: *const c_char, alac: c_int) -> *mut c_void;
+    fn km_audio_encoder_open(k: *mut c_void, path: *const c_char, kind: c_int) -> *mut c_void;
     fn km_audio_encoder_close(e: *mut c_void);
     fn km_audio_encoder_block(e: *mut c_void) -> c_int;
     fn km_audio_encoder_frame(e: *mut c_void, samples: *const i32, count: c_int) -> c_int;
@@ -681,11 +681,12 @@ unsafe extern "C" {
         path: *const c_char,
         samples: *const i32,
         count: i64,
-        alac: c_int,
+        kind: c_int,
     ) -> c_int;
     fn km_probe_open(k: *mut c_void, path: *const c_char) -> *mut c_void;
     fn km_probe_close(k: *mut c_void, format: *mut c_void);
     fn km_probe_count(format: *mut c_void) -> c_int;
+    fn km_probe_format_duration(format: *mut c_void) -> i64;
     fn km_probe_stream(format: *mut c_void, index: c_int, out: *mut NativeStreamInfo);
     fn km_probe_codec(k: *mut c_void, format: *mut c_void, index: c_int) -> *const c_char;
     fn km_probe_color(
@@ -803,6 +804,35 @@ impl Drop for NativeAudioDecoder<'_> {
         unsafe { km_audio_close(self.ptr.as_ptr()) }
     }
 }
+/// Closed set of delivery audio encoders; indexes the C `AUDIO_KINDS` table.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(i32)]
+pub(crate) enum AudioEncoderKind {
+    Pcm24 = 0,
+    Alac = 1,
+    Aac = 2,
+    Opus = 3,
+}
+impl AudioEncoderKind {
+    /// Registered FFmpeg encoder name, used for capability discovery.
+    pub(crate) fn encoder_name(self) -> &'static str {
+        match self {
+            Self::Pcm24 => "pcm_s24le",
+            Self::Alac => "alac",
+            Self::Aac => "aac",
+            Self::Opus => "libopus",
+        }
+    }
+    /// Codec name as reported by stream probes.
+    pub(crate) fn codec_name(self) -> &'static str {
+        match self {
+            Self::Pcm24 => "pcm_s24le",
+            Self::Alac => "alac",
+            Self::Aac => "aac",
+            Self::Opus => "opus",
+        }
+    }
+}
 pub(crate) struct NativeAudioEncoder<'a> {
     ptr: NonNull<c_void>,
     runtime: &'a NativeRuntime,
@@ -812,12 +842,12 @@ impl<'a> NativeAudioEncoder<'a> {
     pub(crate) fn open(
         runtime: &'a NativeRuntime,
         path: &Path,
-        alac: bool,
+        kind: AudioEncoderKind,
     ) -> Result<Self, MediaError> {
         let path = path_string(path)?;
         // SAFETY: the runtime and path remain live; returned context is owned.
         let ptr = NonNull::new(unsafe {
-            km_audio_encoder_open(runtime.0.as_ptr(), path.as_ptr(), i32::from(alac))
+            km_audio_encoder_open(runtime.0.as_ptr(), path.as_ptr(), kind as c_int)
         })
         .ok_or_else(|| MediaError::Encode(runtime.error()))?;
         let block = unsafe { km_audio_encoder_block(ptr.as_ptr()) } as usize;
@@ -899,7 +929,7 @@ impl NativeRuntime {
         &self,
         output: &Path,
         samples: &[i32],
-        alac: bool,
+        kind: AudioEncoderKind,
     ) -> Result<(), MediaError> {
         let path = path_string(output)?;
         let count = i64::try_from(samples.len() / 2)
@@ -911,7 +941,7 @@ impl NativeRuntime {
                 path.as_ptr(),
                 samples.as_ptr(),
                 count,
-                i32::from(alac),
+                kind as c_int,
             )
         } < 0
         {
@@ -978,8 +1008,14 @@ impl NativeRuntime {
                 let key = CString::new(name).expect("constant tag without NUL");
                 string(km_probe_tag(self.0.as_ptr(), ptr.as_ptr(), key.as_ptr()))
             };
+            let format_duration = km_probe_format_duration(ptr.as_ptr());
             let mut result = MediaProbe {
                 streams,
+                // Container duration is in AV_TIME_BASE (microseconds); WebM
+                // streams carry no per-stream duration, only this segment total.
+                duration: (format_duration != i64::MIN && format_duration > 0)
+                    .then(|| Rational::new(format_duration, 1_000_000))
+                    .transpose()?,
                 render_snapshot_hash: tag("kronello_render_snapshot_hash"),
                 export_snapshot_hash: tag("kronello_export_snapshot_hash"),
             };

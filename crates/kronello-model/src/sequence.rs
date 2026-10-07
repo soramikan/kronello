@@ -20,9 +20,26 @@ pub struct Sequence {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Track {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state: Option<TrackState>,
     pub id: TrackId,
     pub kind: TrackKind,
     pub clips: Vec<Clip>,
+}
+/// Authored output switches, independent of GUI selection or editing locks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TrackState {
+    pub visible: bool,
+    pub muted: bool,
+}
+impl Track {
+    pub fn visible(&self) -> bool {
+        self.state.is_none_or(|state| state.visible)
+    }
+    pub fn muted(&self) -> bool {
+        self.state.is_some_and(|state| state.muted)
+    }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -40,6 +57,8 @@ pub struct Clip {
     pub time_map: TimeMap,
     #[serde(default)]
     pub audio_retime: AudioRetimePolicy,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reverse_sampling: Option<ReverseSampling>,
     /// Absent in M2 documents means unity. Evaluated in source-local time.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub volume: Option<Box<Property>>,
@@ -61,6 +80,25 @@ pub enum AudioRetimePolicy {
     Reject,
     // AUDIO-004 v1: linear sample interpolation, with pitch following speed.
     ResampleV1,
+    ReverseResampleV1,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ReverseSampling {
+    ReverseGridV1,
+}
+/// The previous exact source-grid cell, including at integral source endpoints.
+pub fn reverse_grid_time(source: Time, rate: Time) -> Result<Time, kronello_time::TimeError> {
+    let position = source.checked_mul(rate)?;
+    let floor = position.floor();
+    let predecessor = if position == Time::from_integer(floor) {
+        floor
+            .checked_sub(1)
+            .ok_or(kronello_time::TimeError::Overflow)?
+    } else {
+        floor
+    };
+    Time::from_integer(predecessor).checked_div(rate)
 }
 #[derive(Debug, Clone, PartialEq, Serialize, schemars::JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -209,10 +247,14 @@ impl SequenceError {
 }
 impl Clip {
     pub fn local_time(&self, parent: Time) -> Result<Time, SequenceError> {
-        Ok(self.source_in.checked_add(
-            self.time_map
-                .map(parent.checked_sub(self.timeline_range.start())?)?,
-        )?)
+        let mapped = self
+            .time_map
+            .map(parent.checked_sub(self.timeline_range.start())?)?;
+        Ok(if self.reverse_sampling.is_some() {
+            self.source_in.checked_sub(mapped)?
+        } else {
+            self.source_in.checked_add(mapped)?
+        })
     }
     /// Cut only within the existing placement; preserve the speed at every point.
     pub fn trimmed(&self, range: TimeRange) -> Result<Self, SequenceError> {
@@ -229,7 +271,11 @@ impl Clip {
         let duration = range.duration()?.as_time();
         let mut clip = self.clone();
         clip.timeline_range = range;
-        clip.source_in = self.source_in.checked_add(origin)?;
+        clip.source_in = if self.reverse_sampling.is_some() {
+            self.source_in.checked_sub(origin)?
+        } else {
+            self.source_in.checked_add(origin)?
+        };
         clip.time_map = match &self.time_map {
             TimeMap::Linear(m) => TimeMap::linear(Time::ZERO, m.speed())?,
             TimeMap::PiecewiseLinear(m) => {
@@ -362,6 +408,8 @@ impl Sequence {
                         "links must be unique and reciprocal".into(),
                     ));
                 }
+                crate::BlendMode::from_properties(&clip.properties)
+                    .map_err(|e| SequenceError::Invalid(e.to_string()))?;
                 let mut properties = std::collections::BTreeSet::new();
                 for p in &clip.properties {
                     if !properties.insert(p.id()) {
@@ -390,6 +438,23 @@ impl Sequence {
                 if start < Time::ZERO {
                     return Err(SequenceError::Invalid("negative source time".into()));
                 }
+                if clip.reverse_sampling.is_some() {
+                    if !matches!(&clip.time_map, TimeMap::Linear(m) if m.speed() > Time::ZERO)
+                        || start <= end
+                        || end < Time::ZERO
+                    {
+                        return Err(SequenceError::Invalid("reverse_grid_v1 requires a positive Linear magnitude map and nonnegative source envelope".into()));
+                    }
+                    if clip.audio_retime != AudioRetimePolicy::ReverseResampleV1 {
+                        return Err(SequenceError::Unsupported(
+                            "reverse_grid_v1 requires explicit reverse_resample_v1".into(),
+                        ));
+                    }
+                } else if clip.audio_retime == AudioRetimePolicy::ReverseResampleV1 {
+                    return Err(SequenceError::Unsupported(
+                        "reverse_resample_v1 requires reverse_grid_v1".into(),
+                    ));
+                }
                 match &clip.source_ref {
                     SourceRef::Composition { composition } => {
                         if project.compositions.iter().any(|c| matches!(c, DocumentObject::Opaque(c) if c.id == composition.as_uuid())) { continue; }
@@ -401,7 +466,10 @@ impl Sequence {
                                 _ => None,
                             })
                             .ok_or_else(|| SequenceError::MissingSource(composition.to_string()))?;
-                        if end > source.duration.as_time() {
+                        if end > source.duration.as_time()
+                            || (clip.reverse_sampling.is_some()
+                                && start > source.duration.as_time())
+                        {
                             return Err(SequenceError::Invalid(
                                 "composition track or source bounds".into(),
                             ));
@@ -444,13 +512,61 @@ impl Sequence {
                             Time::ZERO
                         };
                         if start < origin
+                            || (clip.reverse_sampling.is_some() && end < origin)
                             || stream
                                 .duration
                                 .map(|duration| origin.checked_add(duration))
                                 .transpose()?
-                                .is_some_and(|limit| end > limit)
+                                .is_some_and(|limit| {
+                                    end > limit
+                                        || (clip.reverse_sampling.is_some() && start > limit)
+                                })
                         {
                             return Err(SequenceError::Invalid("asset source bounds".into()));
+                        }
+                        if clip.reverse_sampling.is_some() {
+                            let limit = stream.duration.ok_or_else(|| {
+                                SequenceError::Unsupported(
+                                    "reverse requires locked source duration".into(),
+                                )
+                            })?;
+                            if track.kind == TrackKind::Audio {
+                                let first = clip
+                                    .timeline_range
+                                    .start()
+                                    .checked_mul(Time::from_integer(48_000))?
+                                    .floor();
+                                let end = clip
+                                    .timeline_range
+                                    .end()
+                                    .checked_mul(Time::from_integer(48_000))?
+                                    .floor();
+                                if first < end {
+                                    for sample in [first, end - 1] {
+                                        let position = clip
+                                            .local_time(Time::new(sample, 48_000)?)?
+                                            .checked_mul(Time::from_integer(48_000))?
+                                            .checked_sub(Time::ONE)?;
+                                        let floor = position.floor();
+                                        let last = if position == Time::from_integer(floor) {
+                                            floor
+                                        } else {
+                                            floor
+                                                .checked_add(1)
+                                                .ok_or(kronello_time::TimeError::Overflow)?
+                                        };
+                                        if floor < 0 || Time::new(last, 48_000)? >= limit {
+                                            return Err(SequenceError::Invalid("reverse audio interpolation neighbor outside source bounds".into()));
+                                        }
+                                    }
+                                }
+                            } else if source.kind == AssetKind::Video
+                                && (stream.width.is_none() || stream.height.is_none())
+                            {
+                                return Err(SequenceError::Unsupported(
+                                    "reverse requires locked video dimensions".into(),
+                                ));
+                            }
                         }
                         if (track.kind == TrackKind::Audio
                             && !matches!(source.kind, AssetKind::Audio | AssetKind::Video))

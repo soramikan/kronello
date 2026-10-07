@@ -49,6 +49,7 @@ fn create_project_as(
         source_in,
         time_map: TimeMap::linear(Time::ZERO, Rational::ONE).unwrap(),
         audio_retime: AudioRetimePolicy::Reject,
+        reverse_sampling: None,
         volume: None,
         links: vec![],
         properties: vec![],
@@ -61,6 +62,7 @@ fn create_project_as(
         audio_rate: SampleRate::HZ_48000,
         working_space: ColorSpace::LinearRec709,
         tracks: vec![Track {
+            state: None,
             id: TrackId::new(),
             kind: TrackKind::Video,
             clips: vec![clip],

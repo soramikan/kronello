@@ -256,6 +256,15 @@ pub(crate) fn import(r: ImportRequest) -> Result<ProjectInfo, ServiceError> {
     let path = target(&r.project)?;
     let base = parse_revision(&r.base_revision)?;
     let payload = json!({"operation":"project.import", "project":path, "base_revision":base.to_string(), "document":r.document, "plan_hash":r.plan_hash});
+    import_with_payload(r, payload)
+}
+pub(crate) fn import_with_payload(
+    r: ImportRequest,
+    payload: Value,
+) -> Result<ProjectInfo, ServiceError> {
+    key(r.idempotency_key.as_deref())?;
+    let path = target(&r.project)?;
+    let base = parse_revision(&r.base_revision)?;
     if path.is_file()
         && let Some(result) = retry(&path, r.idempotency_key.as_deref(), &payload)?
     {

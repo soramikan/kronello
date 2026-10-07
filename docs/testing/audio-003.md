@@ -1,5 +1,9 @@
 # AUDIO-003: Sequence / Composition 音声・clip volume の検証
 
+現在の状態（2026-10-06）: AUDIO-003はM3の受け入れ範囲で`done`。最終統合・実機検証と保証外の範囲は [M3統合受け入れ](m3-acceptance.md) と本書の後続記録を参照する。以下の初回worker記録にある「未コミット」「pending host run」は、その記録時点の状態であり、現在の未完了判定ではない。
+
+## 初回実装とその後の検証履歴
+
 設計: [ADR-0063](../adr/0063-document-audio-and-clip-volume.md)。
 2026-10-05、branch `m3-audio3`、base HEAD `38f205058bcf7786c276de3d0e67b73d0869e969` に対する
 本 worktree の変更。Codex は GPU / hardware codec capability を持たない。CPU reference と

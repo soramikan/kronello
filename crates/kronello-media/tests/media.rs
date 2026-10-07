@@ -414,3 +414,57 @@ fn negative_origin_bframes_exact_forward_backward_and_repeated() {
         "FRAME_NOT_FOUND"
     );
 }
+
+#[test]
+fn gui007_reverse_uses_exact_cfr_vfr_and_bframe_presentation_intervals() {
+    let runtime = MediaRuntime::load().unwrap();
+    for (name, starts) in [
+        (
+            "cfr-30000-1001.nut",
+            (0..6).map(|i| r(i * 1001, 30000)).collect::<Vec<_>>(),
+        ),
+        (
+            "vfr.nut",
+            [0, 1, 3, 6, 10, 15].into_iter().map(|i| r(i, 30)).collect(),
+        ),
+        ("bframes.nut", (1..7).map(|i| r(i, 24)).collect()),
+    ] {
+        let mut decoder = runtime.open_video(&fixtures().join(name)).unwrap();
+        for index in [5, 4, 0, 3, 1, 5, 2] {
+            let end = starts.get(index + 1).copied().unwrap_or_else(|| {
+                starts[index]
+                    .checked_add(if name == "vfr.nut" {
+                        r(1, 30)
+                    } else {
+                        starts[1].checked_sub(starts[0]).unwrap()
+                    })
+                    .unwrap()
+            });
+            let expected = decoder.decode_at(starts[index]).unwrap();
+            let reverse = decoder.decode_at_reverse(end).unwrap();
+            assert_eq!(reverse.pts, starts[index], "{name} index {index}");
+            assert_eq!(reverse.end, end);
+            assert_eq!(reverse.pixels, expected.pixels);
+            let middle = starts[index]
+                .checked_add(end)
+                .unwrap()
+                .checked_div(r(2, 1))
+                .unwrap();
+            assert_eq!(
+                decoder.decode_at_reverse(middle).unwrap().pts,
+                starts[index]
+            );
+        }
+        assert_eq!(
+            decoder.decode_at_reverse(starts[0]).unwrap_err().code(),
+            "FRAME_NOT_FOUND"
+        );
+        assert_eq!(
+            decoder
+                .decode_at_reverse(starts[0].checked_sub(r(1, 30)).unwrap())
+                .unwrap_err()
+                .code(),
+            "FRAME_NOT_FOUND"
+        );
+    }
+}

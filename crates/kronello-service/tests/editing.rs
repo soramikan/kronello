@@ -1349,3 +1349,173 @@ fn vec005_shared_shape_and_offset_curve_edits_roundtrip_undo_and_typed_errors() 
     undo(&path, &animate, "vec005-undo-animation");
     assert_eq!(export(&path).document, authored);
 }
+
+#[test]
+fn text002_shared_textset_selector_roundtrip_undo_and_stale_edit_rejection() {
+    let (_dir, path, project) = setup();
+    let c = comp(&project);
+    let DocumentObject::Known(original) = &project.texts[0] else {
+        panic!()
+    };
+    let text_node = c
+        .nodes
+        .iter()
+        .find(|n| matches!(n.kind, NodeKind::Text { content_ref } if content_ref == original.id))
+        .unwrap();
+    let registry = kronello_render::render_registry();
+    let property = |key: &str, value| {
+        Property::new(
+            PropertyId::new(),
+            DescriptorRef::new(registry.lookup(&SchemaKey::new(key).unwrap()).unwrap()),
+            PropertySource::Constant(value),
+            vec![],
+            &registry,
+        )
+        .unwrap()
+    };
+    let offset = property(
+        "kronello.text.character_offset",
+        Value::Vec2([FiniteF64::new(2.0).unwrap(), FiniteF64::new(0.0).unwrap()]),
+    );
+    let opacity = property(
+        "kronello.text.character_opacity",
+        Value::Scalar(FiniteF64::new(0.5).unwrap()),
+    );
+    let mut text = original.clone();
+    text.layout_version = 2;
+    text.direction = TextDirection::VerticalRl;
+    text.character_animations = vec![CharacterAnimation {
+        source: TextRange {
+            start: 0,
+            end: text.text.len(),
+        },
+        expected_text: text.text.clone(),
+        offset: offset.id(),
+        opacity: opacity.id(),
+    }];
+    text.ruby = vec![RubyAssociation {
+        base: TextRange {
+            start: 0,
+            end: text.text.len(),
+        },
+        text: "じまく".into(),
+    }];
+    let event = apply(
+        &path,
+        vec![
+            EditCommand::NodePropertyInsert {
+                composition: c.id,
+                node: text_node.id,
+                property: offset,
+            },
+            EditCommand::NodePropertyInsert {
+                composition: c.id,
+                node: text_node.id,
+                property: opacity,
+            },
+            EditCommand::TextSet { text: text.clone() },
+        ],
+        "text002",
+    );
+    assert_eq!(
+        export(&path).document.texts[0],
+        DocumentObject::Known(text.clone())
+    );
+    text.text = "字".repeat(text.text.chars().count());
+    let before = export(&path);
+    let error = service()
+        .dispatch(Request::EditPlan(PlanRequest {
+            project: path.clone(),
+            base_revision: before.revision.clone(),
+            commands: vec![EditCommand::TextSet { text }],
+        }))
+        .unwrap_err();
+    assert_eq!(error.code, "INVALID_EDIT");
+    assert_eq!(export(&path).document, before.document);
+    undo(&path, &event, "undo-text002");
+    assert_eq!(export(&path).document, project);
+}
+
+#[test]
+fn gui007_repeatable_subset_text_color_and_size_preserve_other_spans_and_undo() {
+    let (_dir, path, project) = setup();
+    let c = comp(&project);
+    let DocumentObject::Known(original) = &project.texts[0] else {
+        panic!()
+    };
+    let node = c
+        .nodes
+        .iter()
+        .find(|n| matches!(n.kind, NodeKind::Text { content_ref } if content_ref == original.id))
+        .unwrap();
+    let registry = kronello_render::render_registry();
+    let property = |key: &str, value| {
+        Property::new(
+            PropertyId::new(),
+            DescriptorRef::new(registry.lookup(&SchemaKey::new(key).unwrap()).unwrap()),
+            PropertySource::Constant(value),
+            vec![],
+            &registry,
+        )
+        .unwrap()
+    };
+    let mut text = original.clone();
+    text.text = "日本語".into();
+    text.styles[0].range = TextRange { start: 0, end: 9 };
+    apply(
+        &path,
+        vec![EditCommand::TextSet { text: text.clone() }],
+        "span-fixture",
+    );
+    let original_style = text.styles[0].clone();
+    let mut first_text = None;
+    for (index, rgb, size) in [(0, [68, 204, 136], 32.0), (1, [204, 68, 136], 48.0)] {
+        let color = property(
+            "kronello.text.style_color",
+            Value::Color(Color::from_srgb8(rgb, None)),
+        );
+        let size = property(
+            "kronello.text.style_size",
+            Value::Scalar(FiniteF64::new(size).unwrap()),
+        );
+        let mut first = original_style.clone();
+        first.range = TextRange { start: 0, end: 3 };
+        first.fill = color.id();
+        first.size = size.id();
+        let mut rest = original_style.clone();
+        rest.range = TextRange { start: 3, end: 9 };
+        text.styles = vec![first, rest.clone()];
+        let event = apply(
+            &path,
+            vec![
+                EditCommand::NodePropertyInsert {
+                    composition: c.id,
+                    node: node.id,
+                    property: color,
+                },
+                EditCommand::NodePropertyInsert {
+                    composition: c.id,
+                    node: node.id,
+                    property: size,
+                },
+                EditCommand::TextSet { text: text.clone() },
+            ],
+            &format!("span-{index}"),
+        );
+        let exported = export(&path);
+        let DocumentObject::Known(updated) = &exported.document.texts[0] else {
+            panic!()
+        };
+        assert_eq!(updated.styles[1], rest);
+        if index == 0 {
+            first_text = Some(text.clone());
+        } else {
+            undo(&path, &event, "undo-span-last");
+            let exported = export(&path);
+            let DocumentObject::Known(restored) = &exported.document.texts[0] else {
+                panic!()
+            };
+            assert_eq!(restored, first_text.as_ref().unwrap());
+        }
+    }
+}

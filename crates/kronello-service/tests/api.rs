@@ -260,6 +260,7 @@ fn capabilities_registry_media_extension_without_device_initialization() {
     assert_eq!(
         mutating,
         [
+            "audio.analyze",
             "sequence.create",
             "clip.place",
             "clip.trim",
@@ -578,6 +579,13 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
     let sequence = json!({"id":Uuid::new_v4(), "extent":{"width":64.0,"height":32.0}, "frame_rate":{"num":"24","den":"1"}, "audio_rate":48000, "working_space":"linear_rec709", "tracks":[]});
     let clip = json!({"id":Uuid::new_v4(), "source_ref":{"kind":"composition","composition":composition}, "timeline_range":{"start":{"num":"0","den":"1"},"end":time}, "source_in":{"num":"0","den":"1"}, "time_map":{"kind":"linear","offset":{"num":"0","den":"1"},"speed":{"num":"1","den":"1"}}, "links":[],"effects":[]});
     let requests = vec![
+        json!({"operation":"font.pin","path":"local.otf","face_index":0}),
+        json!({"operation":"svg.inspect","svg":"<svg><path d='M0 0L1 1' fill='#abc'/></svg>"}),
+        json!({"operation":"svg.export","paths":[]}),
+        json!({"operation":"svg.import_plan","project":path,"base_revision":"1","composition":composition,"svg":"<svg/>","targets":[]}),
+        json!({"operation":"audio.analyze", "project":path, "base_revision":"1", "id":uuid,
+            "input":{"kind":"bus","target":{"kind":"composition","composition":composition},"range":clip["timeline_range"]},
+            "config":{"version":1,"sample_rate":48000,"window":32,"hop":32,"bands":[],"time_map":clip["time_map"]}}),
         json!({"operation":"project.create_plan", "project":path, "document":p}),
         json!({"operation":"project.import_plan", "project":path, "base_revision":"1", "document":p}),
         json!({"operation":"sequence.query", "project":path,"sequence":uuid}),
@@ -606,6 +614,7 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
         json!({"operation":"edit.apply", "project":path, "base_revision":"1", "commands":[], "plan_hash":"hash",
             "idempotency_key":"key", "session_id":uuid}),
         json!({"operation":"edit.undo", "project":path, "base_revision":"1", "session_id":uuid, "idempotency_key":"key", "event_id":uuid}),
+        json!({"operation":"expression.format", "project":path, "expression_id":uuid}),
         json!({"operation":"history.list", "project":path}),
         json!({"operation":"scene.query", "project":path, "composition":composition}),
         json!({"operation":"node.explain", "project":path, "composition":composition,"key":{"instance_path":[],"node":uuid},"time":time}),
@@ -922,6 +931,9 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
         "session_id":session, "idempotency_key":"contract-undo"}),
     );
     execute(json!({"operation":"history.list", "project":path}));
+    execute(json!({"operation":"expression.format", "project":path,
+        "expression":{"id":Uuid::new_v4(), "version":1, "value_type":"scalar",
+        "nodes":[{"literal":{"kind":"scalar","value":0.5}}]}}));
     execute(json!({"operation":"scene.query", "project":path, "composition":composition}));
     execute(
         json!({"operation":"property.sample", "project":path, "composition":composition,
@@ -1005,6 +1017,9 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
     execute(
         json!({"operation":"template_instance.retime","project":template_path,"base_revision":"5","session_id":session,"idempotency_key":"retime-template","instance":instance,"duration":{"num":"6","den":"1"}}),
     );
+    execute(
+        json!({"operation":"font.pin","path":std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/fixtures/external/NotoSansCJKjp-Regular.otf"),"face_index":0}),
+    );
     let template_fonts = json!([{"identity":template_document["texts"][0]["styles"][0]["font"],
         "path":std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/fixtures/external/NotoSansCJKjp-Regular.otf")}]);
     execute(
@@ -1034,6 +1049,42 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
     );
     execute(
         json!({"operation":"instance.retime","project":path,"base_revision":"8","session_id":session,"idempotency_key":"retime-instance","composition":retime_composition,"node":retime_node,"time_map":{"kind":"linear","offset":{"num":"0","den":"1"},"speed":{"num":"1","den":"2"}}}),
+    );
+    execute(
+        json!({"operation":"audio.analyze", "project":path, "base_revision":"9", "id":Uuid::new_v4(),
+        "input":{"kind":"bus","target":{"kind":"composition","composition":composition},"range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"100"}}},
+        "config":{"version":1,"sample_rate":48000,"window":32,"hop":32,"bands":[],"time_map":{"kind":"linear","offset":{"num":"0","den":"1"},"speed":{"num":"1","den":"1"}}}}),
+    );
+    let report = execute(
+        json!({"operation":"svg.inspect","svg":"<svg><path d='M0 0L10 0L10 10Z' fill='#abc'/></svg>"}),
+    );
+    execute(json!({"operation":"svg.export","paths":report["paths"]}));
+    let svg_path = dir.path().join("svg-contracts.kronello");
+    let mut svg_document = fixture();
+    let DocumentObject::Known(svg_composition) = &mut svg_document.compositions[0] else {
+        panic!()
+    };
+    let mut svg_node = svg_composition.nodes[0].clone();
+    svg_node.id = NodeId::new();
+    svg_node.properties.clear();
+    svg_node.containment_parent = None;
+    svg_node.transform_parent = None;
+    svg_node.child_order.clear();
+    let svg_shape = ContentId::new();
+    svg_node.kind = NodeKind::Shape {
+        content_ref: svg_shape,
+    };
+    let svg_composition_id = svg_composition.id;
+    svg_composition.nodes.clear();
+    svg_composition.root_nodes.clear();
+    svg_document.shapes.clear();
+    svg_document.texts.clear();
+    let created =
+        execute(json!({"operation":"project.create","project":svg_path,"document":svg_document}));
+    execute(
+        json!({"operation":"svg.import_plan","project":svg_path,"base_revision":created["revision"],"composition":svg_composition_id,
+        "svg":"<svg><path d='M0 0L10 0L10 10Z' fill='#abc'/></svg>",
+        "targets":[{"shape":svg_shape,"path_property":PropertyId::new(),"fill_property":PropertyId::new(),"node":svg_node,"index":0}]}),
     );
     let media_path = dir.path().join("media-contracts.kronello");
     let source = dir.path().join("asset.bin");

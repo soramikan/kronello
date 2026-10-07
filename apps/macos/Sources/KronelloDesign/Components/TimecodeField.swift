@@ -35,17 +35,19 @@ public struct KRTimecodeField: View {
     @Environment(\.isEnabled) private var enabled
     @Binding private var frames: Int64
     public let fps: Int
+    private let onEditingStart: () -> Void
     private let onSeek: (Int64) -> Void
     private let appearance: KRControlAppearance
     private let forcedInvalid: Bool
     private let currentTime: Bool
     private let label: String
     @State private var text: String
+    @State private var draftStarted = false
     @State private var invalid = false
     @FocusState private var focused: Bool
     public init(frames: Binding<Int64>, fps: Int, invalid: Bool = false, appearance: KRControlAppearance = .resting,
-                currentTime: Bool = true, label: String = "現在時刻", onSeek: @escaping (Int64) -> Void = { _ in }) {
-        _frames = frames; self.fps = fps; self.onSeek = onSeek; self.appearance = appearance; forcedInvalid = invalid
+                currentTime: Bool = true, label: String = "現在時刻", onEditingStart: @escaping () -> Void = {}, onSeek: @escaping (Int64) -> Void = { _ in }) {
+        _frames = frames; self.fps = fps; self.onSeek = onSeek; self.onEditingStart = onEditingStart; self.appearance = appearance; forcedInvalid = invalid
         _text = State(initialValue: KRTimecode.format(frames: frames.wrappedValue, fps: fps))
         self.currentTime = currentTime; self.label = label
     }
@@ -60,13 +62,16 @@ public struct KRTimecodeField: View {
             .overlay { RoundedRectangle(cornerRadius: KRRadius.radiusSm).strokeBorder(invalid || forcedInvalid ? p.danger : p.lineStrong, lineWidth: 1) }
             .krFocusRing(focused || appearance == .focused).opacity(enabled ? 1 : 0.45)
             .onSubmit {
-                do { let next = try KRTimecode.parse(text, fps: fps); frames = next; invalid = false; text = KRTimecode.format(frames: next, fps: fps); onSeek(next) }
+                do { let next = try KRTimecode.parse(text, fps: fps); frames = next; invalid = false; text = KRTimecode.format(frames: next, fps: fps); onSeek(next); draftStarted = false }
                 catch { invalid = true }
             }
             .onKeyPress(.escape) { text = KRTimecode.format(frames: frames, fps: fps); invalid = false; focused = false; return .handled }
             .onChange(of: frames) { _, new in if !focused { text = KRTimecode.format(frames: new, fps: fps) } }
+            .onChange(of: text) { _, value in
+                if focused && !draftStarted && value != KRTimecode.format(frames: frames, fps: fps) { onEditingStart(); draftStarted = true }
+            }
             .onChange(of: focused) { _, new in
-                if new { DispatchQueue.main.async { (NSApp.keyWindow?.firstResponder as? NSTextView)?.selectAll(nil) } }
+                if new { if !draftStarted { onEditingStart(); draftStarted = true }; DispatchQueue.main.async { (NSApp.keyWindow?.firstResponder as? NSTextView)?.selectAll(nil) } }
             }
             .accessibilityLabel(label).accessibilityValue(text)
     }

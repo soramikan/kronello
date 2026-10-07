@@ -251,12 +251,59 @@ fn mattes_report_consumption_zero_opacity_inactivity_and_unobserved_coverage() {
     let inactive = Fixture::new(doc);
     let mut request = inactive.node(&source, 0);
     request["mattes"] = bindings.clone();
-    assert!(has(&ok(request), "MASK_INACTIVE"));
+    let explanation = ok(request);
+    assert!(
+        explanation["reasons"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|reason| reason["code"] == "MASK_INACTIVE"
+                && reason["subject"]["node"] == matte
+                && reason["details"]["source"]["node"] == source
+                && reason["impact"] == "blocks")
+    );
+    let before = inactive.export();
     let mut request = inactive.render([8, 4]);
-    request["mattes"] = bindings;
+    request["mattes"] = bindings.clone();
     let result = ok(request);
     assert!(result["plan"].is_null());
-    assert_eq!(result["diagnostics"][0]["code"], "RENDER_ERROR");
+    assert_eq!(result["diagnostics"].as_array().unwrap().len(), 1);
+    assert_eq!(result["diagnostics"][0]["code"], "MATTE_MISSING");
+    assert_eq!(
+        result["diagnostics"][0]["message"],
+        "MATTE_MISSING: duplicate source or missing active matte binding"
+    );
+    // The read-only plan preserves the same failure as the final render DAG.
+    let project = serde_json::from_value(inactive.document.clone()).unwrap();
+    let composition =
+        serde_json::from_value(inactive.document["compositions"][0]["id"].clone()).unwrap();
+    let snapshot =
+        kronello_render::RenderSnapshot::new(&project, composition, 0, Default::default())
+            .unwrap()
+            .with_mattes(serde_json::from_value(bindings).unwrap());
+    let scene = kronello_render::build_scene_ir(&snapshot, kronello_time::Time::ZERO, &[]).unwrap();
+    let error = kronello_render::build_render_dag(
+        &scene,
+        Default::default(),
+        kronello_render::OutputRegion {
+            origin: [0.; 2],
+            extent: [64., 32.],
+            pixels: [8, 4],
+        },
+    )
+    .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        result["diagnostics"][0]["message"].as_str().unwrap()
+    );
+    assert!(matches!(
+        error,
+        kronello_render::RenderError::Backend {
+            code: "MATTE_MISSING",
+            ..
+        }
+    ));
+    assert_eq!(inactive.export(), before);
 }
 
 #[test]
@@ -358,7 +405,7 @@ fn render_plan_uses_tiling_real_compile_counters_and_labeled_transfer_estimates(
             .as_array()
             .unwrap()
             .iter()
-            .any(|n| n["code"] == "DUPLICATE_LINEAR_DISPLAY_RENDER")
+            .any(|n| n["code"] == "SINGLE_GRAPH_LINEAR_DISPLAY_OUTPUT")
     );
     assert!(
         plan["notices"]
@@ -373,8 +420,8 @@ fn render_plan_uses_tiling_real_compile_counters_and_labeled_transfer_estimates(
         .iter()
         .find(|t| t["direction"] == "gpu_to_cpu")
         .unwrap();
-    assert_eq!(readback["bytes_estimate"], 512u64 * 512 * 8 * 4 + 16);
-    assert_eq!(readback["operations_estimate"], 8);
+    assert_eq!(readback["bytes_estimate"], 512u64 * 512 * 8 * 4 + 8);
+    assert_eq!(readback["operations_estimate"], 6);
     let cpu = serde_json::to_value(
         Service::new(BackendSelection::CpuReference).execute_json(&request.to_string()),
     )
@@ -461,4 +508,35 @@ fn disabled_node_and_disabled_containment_parent_are_explained() {
     assert!(has(&result, "ANCESTOR_DISABLED"), "{result}");
     assert!(!has(&result, "DISABLED"), "{result}");
     assert_eq!(result["assessment"], "hidden", "{result}");
+}
+
+#[test]
+fn inspect002_temporal_explain_plans_actual_samples_without_executing_or_mutating() {
+    let f = Fixture::new(document());
+    let before = f.export();
+    let mut request = f.render([1024, 512]);
+    let settings = kronello_render::TemporalSettings {
+        frame_rate: kronello_time::FrameRate::new(24, 1).unwrap(),
+        shutter_angle: kronello_time::Rational::from_integer(180),
+        shutter_phase: kronello_time::Rational::ZERO,
+        samples: 3,
+        cut_policy: kronello_render::CutPolicy::AllowCrossing,
+    };
+    request["input"]["profile"] = serde_json::to_value(kronello_render::RenderProfile {
+        temporal: Some(settings),
+        ..Default::default()
+    })
+    .unwrap();
+    let result = ok(request.clone());
+    assert_eq!(result["plan"]["executed"], false);
+    assert_eq!(
+        result["plan"]["temporal_samples"].as_array().unwrap().len(),
+        3
+    );
+    assert_eq!(result["plan"]["tiles"].as_array().unwrap().len(), 6);
+    assert_eq!(result["plan"]["graph_executions_estimate"], 6);
+    assert_eq!(result["plan"]["native_preview_supported"], false);
+    assert_eq!(result["plan"]["compilation_cache"]["raster"]["misses"], 0);
+    assert_eq!(ok(request), result);
+    assert_eq!(f.export(), before);
 }

@@ -243,7 +243,7 @@ pub(super) fn measure(gpu: &GpuContext, path: PathKind) -> Result<Measurement, G
         elapsed: start.elapsed(),
         transfers,
         detail: format!(
-            "2x2 BGRA8 single plane; IOSurfaceCreate={allocation_elapsed:?}; same-device MTLTexture+HAL import={import_elapsed:?}; CPU seed=16 bytes excluded from transfer counters; import/output adds no CPU copy; validation readback/lock explicitly separate; VideoToolbox unmeasured"
+            "2x2 BGRA8 single plane; IOSurfaceCreate={allocation_elapsed:?}; same-device MTLTexture+HAL import={import_elapsed:?}; CPU seed=16 bytes excluded from transfer counters; import/output adds no CPU copy; validation readback/lock explicitly separate; IOSurface transfer probe only; codec decode/encode is outside this measurement"
         ),
     })
 }

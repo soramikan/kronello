@@ -17,8 +17,9 @@ struct KRTextFieldChrome: ViewModifier {
     @Environment(\.isEnabled) var enabled
     let invalid: Bool
     let focused: Bool
+    var height: CGFloat = KRSize.controlHeight
     func body(content: Content) -> some View {
-        content.padding(.horizontal, KRSpace.space2).frame(height: KRSize.controlHeight)
+        content.padding(.horizontal, KRSpace.space2).frame(minHeight: height)
             .background(p.surface200, in: RoundedRectangle(cornerRadius: KRRadius.radiusSm))
             .overlay { RoundedRectangle(cornerRadius: KRRadius.radiusSm).strokeBorder(invalid ? p.danger : p.lineStrong, lineWidth: 1) }
             .krFocusRing(focused).opacity(enabled ? 1 : 0.45)
@@ -47,15 +48,17 @@ public struct KRTextField: View {
     private let help: String?
     private let error: KRDiagnostic?
     private let appearance: KRControlAppearance
+    private let onEditingStart: () -> Void
     private let onCommit: (String) -> Void
+    @State private var draftStarted = false
     @State private var submitted = false
     @State private var focused = false
     @Environment(\.isEnabled) private var enabled
     public init(_ label: String, value: Binding<String>, placeholder: String = "", help: String? = nil,
                 error: KRDiagnostic? = nil, appearance: KRControlAppearance = .resting,
-                onCommit: @escaping (String) -> Void = { _ in }) {
+                onEditingStart: @escaping () -> Void = {}, onCommit: @escaping (String) -> Void = { _ in }) {
         self.label = label; _value = value; self.placeholder = placeholder; self.help = help
-        self.error = error; self.appearance = appearance; self.onCommit = onCommit
+        self.error = error; self.appearance = appearance; self.onEditingStart = onEditingStart; self.onCommit = onCommit
     }
     public var body: some View {
         VStack(alignment: .leading, spacing: KRSpace.space1) {
@@ -68,8 +71,8 @@ public struct KRTextField: View {
                     .accessibilityLabel(label)
             } else {
                 KRCommittedTextInput(value: value, label: label, placeholder: placeholder, muted: NSColor(p.inkMuted), ink: NSColor(p.ink), selection: NSColor(p.selection), enabled: enabled,
-                    onCommit: { value = $0; submitted = true; onCommit($0) },
-                    onFocus: { focused = $0; if $0 { submitted = false } }, onDraftChange: { submitted = false })
+                    onCommit: { value = $0; submitted = true; onCommit($0); draftStarted = false },
+                    onFocus: { focused = $0; if $0 { submitted = false; if !draftStarted { onEditingStart(); draftStarted = true } } }, onCancel: { draftStarted = false }, onDraftChange: { submitted = false; if !draftStarted { onEditingStart(); draftStarted = true } })
                     .frame(height: KRSize.controlHeight - 8)
                     .modifier(KRTextFieldChrome(invalid: error != nil && (!focused || submitted), focused: focused || appearance == .focused))
             }

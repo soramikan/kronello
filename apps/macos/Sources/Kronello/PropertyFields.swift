@@ -17,6 +17,7 @@ extension KRPropertySource {
 struct PropertyValue: View {
     @Environment(\.krPalette) var p
     @ObservedObject var model: EditorModel
+    @FocusState private var attachFocused: Bool
     let layer: Layer
     let property: [String: Any]
 
@@ -24,25 +25,44 @@ struct PropertyValue: View {
         let presentation = PropertyPresentation.of(property)
         let value = layer.value(property)
         let numbers = model.propertyNumbers(layer, property)
-        Group {
-            if value.string("kind") == "color" {
-                swatch(value.object("value").object("components"))
-            } else if value.string("kind") == "enum" {
-                Text(value.string("value")).krText(KRType.label).foregroundStyle(p.inkMuted)
-            } else if numbers.count > 1 {
-                HStack(spacing: KRSpace.space1) {
-                    ForEach(Array(numbers.enumerated()), id: \.offset) { axis, number in
-                        KRInspectorAxis(axis == 0 ? "X" : "Y") {
-                            field(axis: axis, number: number, unit: "", presentation: presentation).frame(width: KRWindowMetrics.numberWidth)
+        let disabled = model.ui.locked.contains(layer.id) || model.busy || model.pendingCandidate != nil
+        HStack(spacing: KRSpace.space1) {
+            Group {
+                if value.string("kind") == "color" {
+                    PropertyColorEditor(model: model, layer: layer, property: property)
+                } else if value.string("kind") == "bool" {
+                    Toggle("", isOn: Binding(get: { (layer.value(property)["value"] as? Bool) ?? false },
+                        set: { model.setBool(layer, property: property, to: $0, base: model.revision) }))
+                        .toggleStyle(.checkbox)
+                        .accessibilityLabel(presentation.label)
+                        .disabled(property.object("source").string("kind") != "constant")
+                } else if value.string("kind") == "enum" {
+                    Text(value.string("value")).krText(KRType.label).foregroundStyle(p.inkMuted)
+                } else if numbers.count > 1 {
+                    HStack(spacing: KRSpace.space1) {
+                        ForEach(Array(numbers.enumerated()), id: \.offset) { axis, number in
+                            KRInspectorAxis(axis == 0 ? "X" : "Y") {
+                                field(axis: axis, number: number, unit: "", presentation: presentation).frame(width: KRWindowMetrics.numberWidth)
+                            }
                         }
                     }
+                } else if let number = numbers.first {
+                    field(axis: 0, number: number, unit: presentation.unit, presentation: presentation).frame(width: KRWindowMetrics.scalarWidth)
+                } else {
+                    Text("—").krText(KRType.timecode).foregroundStyle(p.inkMuted)
                 }
-            } else if let number = numbers.first {
-                field(axis: 0, number: number, unit: presentation.unit, presentation: presentation).frame(width: KRWindowMetrics.scalarWidth)
-            } else {
-                Text("—").krText(KRType.timecode).foregroundStyle(p.inkMuted)
             }
-        }.disabled(model.ui.locked.contains(layer.id) || model.busy || model.pendingCandidate != nil)
+            // Attach an expression seeded by the current value (ADR-0105); the
+            // service rejects properties whose descriptor disallows expressions.
+            if KRPropertySource(property) != .expression {
+                Button { model.attachExpression(layer, property: property) } label: {
+                    Text("fx").krText(KRType.caption).foregroundStyle(p.inkMuted)
+                        .padding(.horizontal, 3).padding(.vertical, 1)
+                        .overlay { RoundedRectangle(cornerRadius: 2).strokeBorder(p.lineStrong, lineWidth: 1) }
+                }.buttonStyle(.plain).focused($attachFocused).krFocusRing(attachFocused, cornerRadius: 2)
+                    .accessibilityLabel("式を追加").help("式で値を駆動します")
+            }
+        }.disabled(disabled)
     }
     func field(axis: Int, number: Double, unit: String, presentation: PropertyPresentation) -> some View {
         KRNumberField(value: .constant(number * presentation.multiplier), unit: unit,

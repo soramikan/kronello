@@ -22,9 +22,44 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum EditCommand {
+    MatteSet {
+        matte: kronello_model::MatteRelation,
+    },
+    MatteRemove {
+        id: Uuid,
+    },
+    SimulationSet {
+        simulation: kronello_model::ParticleSimulation,
+    },
+    SimulationRemove {
+        id: kronello_model::ContentId,
+    },
+    RepeaterSet {
+        repeater: kronello_model::Repeater,
+    },
+    RepeaterRemove {
+        id: kronello_model::ContentId,
+    },
+    RepeaterExpand {
+        repeater: kronello_model::ContentId,
+        instance: kronello_model::CompositionInstanceId,
+        expansion_id: Uuid,
+    },
     Timeline(Box<crate::TimelineCommand>),
     ExpressionSet {
         expression: kronello_model::Expression,
+    },
+    /// Commit the complete expression text as the property's expression source.
+    /// `metadata` is the editing envelope (id / semantic version / value_type /
+    /// budget); it is never re-derived from text. Only complete committed text
+    /// may be submitted — uncommitted IME-style input is never parsed or
+    /// applied, and malformed input fails planning with typed diagnostics and
+    /// preserves the previously stored expression.
+    PropertyExpressionTextSet {
+        object: Uuid,
+        property: PropertyId,
+        text: String,
+        metadata: kronello_model::ExpressionMetadata,
     },
     Template(Box<crate::TemplateCommand>),
     PropertySourceSet {
@@ -214,6 +249,15 @@ pub struct UndoConflict {
 fn invalid(e: impl std::fmt::Debug) -> ServiceError {
     ServiceError::new("INVALID_EDIT", format!("{e:?}"))
 }
+/// Syntax and AST validation failures share their typed diagnostics payload
+/// with every transport; the GUI reads the same byte ranges and expectations.
+fn expression_text_error(error: kronello_model::ExpressionTextError) -> ServiceError {
+    let mut service = ServiceError::new(error.code(), error.to_string());
+    if let Some(diagnostics) = error.diagnostics() {
+        service.details = Some(json!({ "diagnostics": diagnostics }));
+    }
+    service
+}
 fn revision(base: u64, current: u64) -> Result<(), ServiceError> {
     if base != current {
         return Err(StoreError::RevisionConflict { base, current }.into());
@@ -225,6 +269,7 @@ pub(crate) fn registry() -> SchemaRegistry {
     for d in kronello_model::shape_descriptors()
         .into_iter()
         .chain(kronello_model::text_descriptors())
+        .chain(kronello_model::simulation_descriptors())
         .chain(kronello_model::effect_descriptors())
     {
         r.register(d).expect("built-in descriptors are distinct");
@@ -253,16 +298,23 @@ pub(crate) fn validate(project: &Project) -> Result<(), ServiceError> {
         }
     }
     project.ensure_editable().map_err(StoreError::from)?;
+    project
+        .validate_repeaters()
+        .map_err(|e| ServiceError::new(e.code(), e.to_string()))?;
+    project
+        .validate_simulations()
+        .map_err(|e| ServiceError::new(e.code(), e.to_string()))?;
     kronello_template::validate_project(project)?;
     let r = registry();
     let mut compositions: Vec<_> = project
         .compositions
         .iter()
         .map(|c| match c {
-            DocumentObject::Known(c) => c.clone(),
+            DocumentObject::Known(c) => project.lower_repeater_composition(c),
             _ => unreachable!(),
         })
-        .collect();
+        .collect::<Result<_, _>>()
+        .map_err(|e: kronello_model::RepeaterError| ServiceError::new(e.code(), e.to_string()))?;
     for s in &project.sequences {
         if let DocumentObject::Known(s) = s {
             compositions.push(kronello_render::lower_sequence(project, s.id)?);
@@ -288,6 +340,23 @@ pub(crate) fn validate(project: &Project) -> Result<(), ServiceError> {
         DocumentObject::Known(t) => Some(t.id.as_uuid()),
         DocumentObject::Opaque(_) => None,
     }));
+    object_ids.extend(project.simulations.iter().filter_map(|s| match s {
+        DocumentObject::Known(s) => Some(s.id.as_uuid()),
+        _ => None,
+    }));
+    object_ids.extend(project.repeaters.iter().filter_map(|r| match r {
+        DocumentObject::Known(r) => Some(r.id.as_uuid()),
+        _ => None,
+    }));
+    object_ids.extend(
+        project
+            .expression_data_assets
+            .iter()
+            .filter_map(|a| match a {
+                DocumentObject::Known(a) => Some(a.id.as_uuid()),
+                _ => None,
+            }),
+    );
     object_ids.extend(project.templates.iter().filter_map(|d| match d {
         DocumentObject::Known(d) => Some(d.id),
         _ => None,
@@ -318,8 +387,13 @@ pub(crate) fn validate(project: &Project) -> Result<(), ServiceError> {
         }
     }
     kronello_model::validate_compositions(&compositions, &r).map_err(invalid)?;
+    project
+        .validate_mattes()
+        .map_err(|e| ServiceError::new(e.code(), e.to_string()))?;
     kronello_model::validate_shape_contents(project, &r).map_err(|e| match e {
-        kronello_model::ShapeError::UnsupportedStrokeVersion
+        kronello_model::ShapeError::MorphCorrespondence { .. }
+        | kronello_model::ShapeError::InvalidTrimRange
+        | kronello_model::ShapeError::UnsupportedStrokeVersion
         | kronello_model::ShapeError::InvalidDashArray
         | kronello_model::ShapeError::StrokeBudgetExceeded
         | kronello_model::ShapeError::OpenStrokeAlignment => {
@@ -384,8 +458,10 @@ pub(crate) fn validate(project: &Project) -> Result<(), ServiceError> {
         .collect();
     let refs = Default::default();
     let deps = Default::default();
+    let audio_analyses = project.audio_analysis_inputs().map_err(invalid)?;
     for c in &compositions {
-        kronello_eval::DependencyGraph::compile(
+        let data_assets = project.expression_data_inputs().map_err(invalid)?;
+        kronello_eval::DependencyGraph::compile_with_data(
             kronello_eval::EvaluationSnapshot {
                 compositions: &compositions,
                 curves: &curves,
@@ -396,6 +472,8 @@ pub(crate) fn validate(project: &Project) -> Result<(), ServiceError> {
                 working_space: kronello_model::ColorSpace::LinearRec709,
             },
             c.id,
+            &audio_analyses,
+            &data_assets,
         )
         .map_err(|e| ServiceError::new(e.code(), e.to_string()))?;
     }
@@ -418,6 +496,13 @@ fn properties(project: &Project) -> Vec<(Uuid, &Property)> {
             result.extend(c.properties.iter().map(|p| (c.id.as_uuid(), p)));
             for n in &c.nodes {
                 result.extend(n.properties.iter().map(|p| (n.id.as_uuid(), p)));
+            }
+        }
+    }
+    for r in &project.repeaters {
+        if let DocumentObject::Known(r) = r {
+            for i in &r.instances {
+                result.extend(i.properties.iter().map(|p| (i.placement.as_uuid(), p)));
             }
         }
     }
@@ -457,6 +542,19 @@ fn property_mut(
                         .iter_mut()
                         .find(|p| p.id() == id)
                         .ok_or_else(|| invalid("property not found"));
+                }
+            }
+        }
+    }
+    for r in &mut project.repeaters {
+        if let DocumentObject::Known(r) = r {
+            for i in &mut r.instances {
+                if i.placement.as_uuid() == object {
+                    return i
+                        .properties
+                        .iter_mut()
+                        .find(|p| p.id() == id)
+                        .ok_or_else(|| invalid("repeater instance property not found"));
                 }
             }
         }
@@ -539,6 +637,101 @@ fn apply_command(
     keys: &mut BTreeSet<ChangedKey>,
 ) -> Result<(), ServiceError> {
     match command {
+        EditCommand::SimulationSet { simulation } => {
+            structure(
+                keys,
+                simulation.id.as_uuid(),
+                simulation.source.composition.as_uuid(),
+            );
+            if let Some(old) = project
+                .simulations
+                .iter_mut()
+                .find(|s| matches!(s, DocumentObject::Known(s) if s.id == simulation.id))
+            {
+                *old = DocumentObject::Known(simulation.clone());
+            } else {
+                project
+                    .simulations
+                    .push(DocumentObject::Known(simulation.clone()));
+            }
+        }
+        EditCommand::SimulationRemove { id } => {
+            structure(keys, id.as_uuid(), id.as_uuid());
+            let index = project
+                .simulations
+                .iter()
+                .position(|s| matches!(s, DocumentObject::Known(s) if s.id == *id))
+                .ok_or_else(|| invalid("simulation not found"))?;
+            project.simulations.remove(index);
+        }
+        EditCommand::RepeaterSet { repeater } => {
+            structure(
+                keys,
+                repeater.id.as_uuid(),
+                repeater.source.composition.as_uuid(),
+            );
+            if let Ok(old) = project.repeater(repeater.id) {
+                for i in &old.instances {
+                    structure(keys, i.placement.as_uuid(), repeater.id.as_uuid());
+                }
+            }
+            for i in &repeater.instances {
+                structure(keys, i.placement.as_uuid(), repeater.id.as_uuid());
+            }
+            if let Some(existing) = project
+                .repeaters
+                .iter_mut()
+                .find(|r| matches!(r, DocumentObject::Known(r) if r.id == repeater.id))
+            {
+                *existing = DocumentObject::Known(repeater.clone());
+            } else {
+                project
+                    .repeaters
+                    .push(DocumentObject::Known(repeater.clone()));
+            }
+        }
+        EditCommand::RepeaterRemove { id } => {
+            structure(keys, id.as_uuid(), id.as_uuid());
+            let index = project
+                .repeaters
+                .iter()
+                .position(|r| matches!(r, DocumentObject::Known(r) if r.id == *id))
+                .ok_or_else(|| invalid("repeater not found"))?;
+            project.repeaters.remove(index);
+        }
+        EditCommand::RepeaterExpand {
+            repeater,
+            instance,
+            expansion_id,
+        } => {
+            crate::repeater::expand(project, *repeater, *instance, *expansion_id, keys)?;
+        }
+        EditCommand::MatteSet { matte } => {
+            structure(keys, matte.composition.as_uuid(), matte.id);
+            structure(keys, matte.source.as_uuid(), matte.matte.as_uuid());
+            if let Some(existing) = project
+                .mattes
+                .iter_mut()
+                .find(|m| matches!(m,DocumentObject::Known(m) if m.id==matte.id))
+            {
+                *existing = DocumentObject::Known(matte.clone());
+            } else {
+                project.mattes.push(DocumentObject::Known(matte.clone()));
+            }
+        }
+        EditCommand::MatteRemove { id } => {
+            let index = project
+                .mattes
+                .iter()
+                .position(|m| matches!(m,DocumentObject::Known(m) if m.id==*id))
+                .ok_or_else(|| invalid("matte relation not found"))?;
+            let DocumentObject::Known(matte) = &project.mattes[index] else {
+                unreachable!()
+            };
+            structure(keys, matte.composition.as_uuid(), *id);
+            structure(keys, matte.source.as_uuid(), matte.matte.as_uuid());
+            project.mattes.remove(index);
+        }
         EditCommand::ModifierInsert {
             object,
             property,
@@ -653,6 +846,29 @@ fn apply_command(
                     .expressions
                     .push(DocumentObject::Known(expression.clone()));
             }
+        }
+        EditCommand::PropertyExpressionTextSet {
+            object,
+            property,
+            text,
+            metadata,
+        } => {
+            // The parse runs inside planning/applying so a rejected text never
+            // mutates the candidate project. Metadata stays envelope-owned.
+            let expression =
+                kronello_model::parse_expression(text, metadata).map_err(expression_text_error)?;
+            let id = expression.id;
+            apply_command(project, &EditCommand::ExpressionSet { expression }, keys)?;
+            apply_command(
+                project,
+                &EditCommand::PropertySourceSet {
+                    object: *object,
+                    property: *property,
+                    source: PropertySource::Expression(id),
+                    curve: None,
+                },
+                keys,
+            )?;
         }
         EditCommand::Timeline(command) => crate::nle::mutate(project, command, keys)?,
         EditCommand::Template(command) => crate::template::mutate(project, command, keys)?,
@@ -772,6 +988,11 @@ fn apply_command(
             if n.properties
                 .iter()
                 .any(|p| p.descriptor().key == property.descriptor().key)
+                && !registry()
+                    .lookup(&property.descriptor().key)
+                    .map_err(invalid)?
+                    .definition()
+                    .repeatable
             {
                 return Err(invalid("property key already exists on node"));
             }
@@ -939,7 +1160,10 @@ fn node_references(node: &SceneNode, keys: &mut BTreeSet<ChangedKey>) {
         }
     }
     match &node.kind {
-        NodeKind::Shape { content_ref } | NodeKind::Text { content_ref } => {
+        NodeKind::Shape { content_ref }
+        | NodeKind::Text { content_ref }
+        | NodeKind::Simulation { content_ref }
+        | NodeKind::Repeater { content_ref } => {
             structure(keys, content_ref.as_uuid(), content_ref.as_uuid())
         }
         NodeKind::CompositionInstance(i) => {
@@ -979,7 +1203,7 @@ fn unordered_collection(path: &[String]) -> bool {
     match path {
         [collection] => matches!(
             collection.as_str(),
-            "compositions" | "curves" | "expressions" | "shapes" | "texts" | "sequences"
+            "compositions" | "curves" | "expressions" | "shapes" | "texts" | "sequences" | "mattes"
         ),
         [compositions, _, collection] if compositions == "compositions" => {
             matches!(collection.as_str(), "nodes" | "properties")

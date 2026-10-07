@@ -3,9 +3,9 @@
 調査日: 2026-10-02。結論は [ADR-0042](adr/0042-naming-kronello.md)（名称を Kronello に変更）。`koma`、Cinewright の順に採用と撤回を経ている。
 
 調べた範囲は crates.io、npm、PyPI、Homebrew（formula / cask）、GitHub のリポジトリ検索、Web 検索。
-**商標データベース（J-PlatPat、USPTO、EUIPO）は照会していない。** public にする前に確認する（[OQ-02](open-questions.md)）。
+2026-10-02時点では商標データベース（J-PlatPat、USPTO、EUIPO）は未照会だった。以下は当時の記録である。
 
-2026-10-06追記: 以下の名称調査は当時の記録であり、現在の商標・domain/crateの利用可否を保証しない。repo公開後も商標照会と確保状況は未確認で、[OQ-02](open-questions.md#oq-02-商標の確認と名前の確保) / NAME-001で追跡する。
+2026-10-06追記: 以下の名称調査は当時の記録であり、現在の商標・domain/crateの利用可否を保証しない。J-PlatPat・USPTO・EUIPOの限定検索と公式APIによるcrate/domain登録照会を[調査記録](testing/name-001.md)へ追記した。所有者の採用・確保判断と取得は未完了で、[OQ-02](open-questions.md#oq-02-商標の確認と名前の確保) / NAME-001で追跡する。
 
 ## `koma`（撤回）
 

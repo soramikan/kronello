@@ -39,7 +39,7 @@ public struct EditClip: Identifiable {
         guard let rate = linearRate else { return "非線形" }
         return String(format: "%.1f%%", Double(rate.num)! / Double(rate.den)! * 100)
     }
-    public var reversed: Bool { linearRate.map { Int64($0.num)! < 0 } ?? false }
+    public var reversed: Bool { authored.string("reverse_sampling") == "reverse_grid_v1" }
 }
 
 public enum EditPresentation {

@@ -22,6 +22,10 @@ import KronelloAppModel
                 self.changed?(true)
             }
         }
+        // A pre-attachment redraw can be skipped as occluded. Joining an
+        // already visible window emits no occlusion change, so request the
+        // first presentation even when geometry and frame identity match.
+        changed?(true)
     }
     override func layout() {
         super.layout()
@@ -51,6 +55,10 @@ struct MetalPreview: NSViewRepresentable {
         var needsRender = false
         var task: Task<Void, Never>?
         var scheduledKey = ""
+        func trace(_ message: String) {
+            guard ProcessInfo.processInfo.environment["KRONELLO_PREVIEW_TRACE"] != nil else { return }
+            FileHandle.standardError.write(Data(("preview " + URL(fileURLWithPath: model.path).lastPathComponent + " " + message + "\n").utf8))
+        }
                 init(_ model: EditorModel) {
             self.model = model
             model.waitForVideoPresentation = { [weak self] in
@@ -59,15 +67,18 @@ struct MetalPreview: NSViewRepresentable {
         }
         func schedule(force: Bool = false) {
             guard let surface = view else { return }
+            guard surface.window != nil, surface.bounds.width > 0, surface.bounds.height > 0 else { trace("defer unattached/empty view"); return }
             if model.usesCPUReference && model.playing { needsRender = false; scheduledKey = ""; return }
             let key = [model.ui.page, model.revision, "\(model.refreshToken)", model.ui.sequence ?? "", model.ui.composition ?? "", model.ui.time.num, model.ui.time.den,
                        model.ui.resolution, model.ui.zoom, model.usesCPUReference ? "cpu_reference" : "gpu", "\(surface.bounds.size)", "\(surface.window?.backingScaleFactor ?? 1)"].joined(separator: ":")
             guard force || key != scheduledKey else { return }
             scheduledKey = key
+            trace("schedule force=\(force) revision=\(model.revision) time=\(model.ui.time.num)/\(model.ui.time.den)")
             needsRender = true
             guard task == nil else { return }
             task = Task {
                 defer { task = nil; model.previewRendering = false }
+                trace("task start")
                 while needsRender && !Task.isCancelled {
                     let identity = model.previewIdentity
                     let cpuReference = model.usesCPUReference
@@ -100,13 +111,14 @@ struct MetalPreview: NSViewRepresentable {
                             try await native.session.resize(width: width, height: height); configuredSize = [width, height]
                         }
                         model.previewRendering = true
-                        var input: [String: Any] = ["project": model.path, "fonts": model.fonts,
+                        var input: [String: Any] = ["project": model.path, "fonts": model.snapshotFonts,
                             "region": ["origin": [0, 0], "extent": [extent.width, extent.height], "pixels": [width, height]]]
                         input.merge(target) { _, value in value }
                         var request: [String: Any] = ["operation": "render.frame", "input": input, "time": time.wire]
                         if cpuReference { request["backend"] = "cpu_reference" }
                         guard !Task.isCancelled, requestedKey == scheduledKey, identity == model.previewIdentity else { continue }
                         let frame = model.frame, epoch = model.playback.clockEpoch
+                        trace("redraw pixels=\(width)x\(height) visible=\(view.window?.occlusionState.contains(.visible) == true)")
                         let response = try await native.session.redraw(NativeProjectTransport.request(request))
                         guard !Task.isCancelled, requestedKey == scheduledKey, identity == model.previewIdentity else { continue }
                         if cpuReference, case .object(let object) = response, case .object(let preview) = object["preview"], preview["backend"] != .string("cpu_reference_float32") {
@@ -114,6 +126,9 @@ struct MetalPreview: NSViewRepresentable {
                         }
                         if case .object(let object) = response, case .object(let preview) = object["preview"], preview["presented"] == .bool(true) {
                             model.previewPresented = identity
+                            trace("presented revision=\(model.revision)")
+                        } else if case .object(let object) = response, case .object(let preview) = object["preview"], preview["presented"] == .bool(false) {
+                            trace("skipped \(preview["skipped"] ?? .null)")
                         }
                         if model.playing, model.playback.master == .audioDevice, epoch == model.playback.clockEpoch,
                            ProcessInfo.processInfo.environment["KRONELLO_AUDIO_TRACE"] != nil {
@@ -121,6 +136,7 @@ struct MetalPreview: NSViewRepresentable {
                         }
                         model.reportPreviewFailure(nil, for: identity)
                     } catch is CancellationError { return } catch {
+                        trace("failed \(error)")
                         if requestedKey == scheduledKey { model.reportPreviewFailure(model.serviceFailure(error), for: identity) }
                     }
                 }

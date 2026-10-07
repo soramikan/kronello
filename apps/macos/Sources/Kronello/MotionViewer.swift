@@ -7,6 +7,7 @@ struct MotionViewer: View {
     @Environment(\.krPalette) var p
     @ObservedObject var model: EditorModel
     @State private var canvasEdit: CanvasEdit?
+    @State private var guidesOpen = false
     @State private var panOrigin: CGPoint?
     @State private var penPoints: [CGPoint] = []
     @State private var floatingPreview = CGSize.zero
@@ -20,12 +21,12 @@ struct MotionViewer: View {
         KRPanel(header: {
             KRTabBar(model.compositions.map { .init($0.string("id"), "Composition") }, selection: Binding(get: { model.ui.composition ?? "" }, set: model.setComposition))
         }, actions: {
-            KRButton(icon: .magnet, accessibilityLabel: "スナップ") {}.disabled(true).help("ガイドへのスナップは後続タスクです")
-            KRButton(icon: .grid3x3, accessibilityLabel: "ガイド") {}.disabled(true).help("ガイド編集は後続タスクです")
+            KRButton(icon: .magnet, accessibilityLabel: "スナップ", pressed: model.canvasSettings.snap) { var settings = model.canvasSettings; settings.snap.toggle(); model.canvasSettings = settings }.help("端・中心・ガイドにスナップ。Option で一時解除")
+            KRButton(icon: .grid3x3, accessibilityLabel: "ガイド") { guidesOpen.toggle() }.popover(isPresented: $guidesOpen) { CanvasGuideEditor(model: model) }
         }) {
             VStack(spacing: 0) {
                 if let error = model.revisionConflict {
-                    KRConflictBanner(.init(error.code, "移動を適用できませんでした。" + error.message), discard: model.discardCandidate, reapply: model.reapply)
+                    KRConflictBanner(.init(error.code, "編集を適用できませんでした。" + error.message), discard: model.discardCandidate, reapply: model.reapply)
                 }
                 GeometryReader { proxy in
                     ZStack(alignment: .topLeading) {
@@ -113,6 +114,14 @@ struct MotionViewer: View {
                     TemplateInstanceInspectionOverlay(model: model)
                     Canvas { context, canvas in
                         func screen(_ point: CGPoint) -> CGPoint { .init(x: point.x / extent.width * canvas.width, y: point.y / extent.height * canvas.height) }
+                        if model.canvasSettings.guidesVisible {
+                            for guide in model.canvasSettings.guides {
+                                var line = Path()
+                                if guide.axis == "x" { let x = guide.position / extent.width * canvas.width; line.move(to: .init(x: x, y: 0)); line.addLine(to: .init(x: x, y: canvas.height)) }
+                                else { let y = guide.position / extent.height * canvas.height; line.move(to: .init(x: 0, y: y)); line.addLine(to: .init(x: canvas.width, y: y)) }
+                                context.stroke(line, with: .color(p.selection.opacity(0.65)), style: .init(lineWidth: 1 / max(0.01, zoom), dash: [4, 4]))
+                            }
+                        }
                         var path = Path()
                         for (i, point) in spatialPath.points.enumerated() { if i == 0 { path.move(to: screen(point)) } else { path.addLine(to: screen(point)) } }
                         context.stroke(path, with: .color(p.selection), lineWidth: 1 / max(0.01, zoom))
@@ -125,9 +134,9 @@ struct MotionViewer: View {
                             width: bounds.width / extent.width, height: bounds.height / extent.height), label: "\(model.ui.bounds) \(Int(bounds.width.rounded())) × \(Int(bounds.height.rounded()))")
                         KRManipulationOverlay(selection, onPreview: { translation, handle, rotate in
                             if canvasEdit == nil { canvasEdit = model.beginCanvasEdit() }
-                            if let edit = canvasEdit { model.previewCanvas(edit, translation: translation, handle: handle, rotate: rotate) }
+                            if let edit = canvasEdit { model.previewCanvas(edit, translation: handle == nil && !rotate ? model.snappedCanvasTranslation(edit, translation: translation, snap: !NSEvent.modifierFlags.contains(.option)) : translation, handle: handle, rotate: rotate) }
                         }, onCommit: { translation, handle, rotate in
-                            if let edit = canvasEdit { model.commitCanvas(edit, translation: translation, handle: handle, rotate: rotate) }
+                            if let edit = canvasEdit { model.commitCanvas(edit, translation: handle == nil && !rotate ? model.snappedCanvasTranslation(edit, translation: translation, snap: !NSEvent.modifierFlags.contains(.option)) : translation, handle: handle, rotate: rotate) }
                             canvasEdit = nil
                         })
                     }
@@ -170,5 +179,21 @@ struct MotionViewer: View {
     }
     func designPoint(_ point: CGPoint, size: CGSize) -> CGPoint {
         CGPoint(x: point.x / max(1, size.width) * model.compositionExtent.width, y: point.y / max(1, size.height) * model.compositionExtent.height)
+    }
+}
+
+private struct CanvasGuideEditor: View {
+    @ObservedObject var model: EditorModel
+    @State private var axis = "x"
+    @State private var position = 0.0
+    var body: some View {
+        VStack(alignment: .leading, spacing: KRSpace.space3) {
+            Toggle("ガイドを表示", isOn: Binding(get: { model.canvasSettings.guidesVisible }, set: { value in var settings = model.canvasSettings; settings.guidesVisible = value; model.canvasSettings = settings }))
+            Picker("方向", selection: $axis) { Text("垂直 X").tag("x"); Text("水平 Y").tag("y") }.pickerStyle(.segmented)
+            KRNumberField(value: $position, unit: "px", accessibilityLabel: "ガイド位置", onCommit: { _, value in position = value })
+            Button("追加") { model.addGuide(axis: axis, position: position) }
+            ForEach(model.canvasSettings.guides) { guide in HStack { Text("\(guide.axis.uppercased()) \(guide.position.formatted()) px"); Spacer(); Button("削除") { model.removeGuide(guide.id) } } }
+            Text("ガイドは表示設定として保存されます。").font(.caption)
+        }.padding().frame(width: 280)
     }
 }

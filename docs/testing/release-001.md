@@ -21,11 +21,13 @@ package/
   lib/libswresample.7.dylib
   lib/libSvtAv1Enc.4.dylib
   lib/libdav1d.7.dylib
+  lib/libopus.0.dylib
   licenses/LICENSE-MIT
   licenses/LICENSE-APACHE
   licenses/ffmpeg/COPYING.LGPLv2.1
   licenses/svt-av1/{LICENSE.md,LICENSE-BSD2.md,PATENTS.md}
   licenses/dav1d/COPYING
+  licenses/opus/COPYING
   tools/release_roundtrip
   tools/build_ffmpeg_lgpl.py
   tools/macos_release.entitlements.plist
@@ -35,7 +37,7 @@ package/
   package-manifest.json
 ```
 
-FFmpeg 9.0.2 / SVT-AV1 4.2.0 / dav1d 1.5.4 と source URL / archive SHA-256 / configure は `scripts/native-dependencies.json` が正本。パッケージ作成は native prefix の manifest と receipt、元 shared library hashes、SVT / dav1d の実版、license hashes を照合する。さらに `--sources` directory の source archives を pinned hash で検証し、license と PATENTS の byte 内容を archive 原文と比較する。development system FFmpeg、不要な libavdevice / libavfilter、FFmpeg executable、headers、pkg-config、static archive は同梱しない。コピー済み native prefix は configuration に記録された元 build prefix からの参照も閉じた `lib/` 内へ書き換える。
+FFmpeg 9.0.2 / SVT-AV1 4.2.0 / dav1d 1.5.4 / opus 1.5.2 と source URL / archive SHA-256 / configure は `scripts/native-dependencies.json` が正本。パッケージ作成は native prefix の manifest と receipt、元 shared library hashes、SVT / dav1d / opus の実版、license hashes を照合する。さらに `--sources` directory の source archives を pinned hash で検証し、license と PATENTS の byte 内容を archive 原文と比較する。development system FFmpeg、不要な libavdevice / libavfilter、FFmpeg executable、headers、pkg-config、static archive は同梱しない。コピー済み native prefix は configuration に記録された元 build prefix からの参照も閉じた `lib/` 内へ書き換える。
 
 FFmpeg 本体を Rust に静的リンクしない。library の ID は `@rpath/<name>`、内部依存 / rpath は `@loader_path`、executable の依存 / rpath は `@executable_path/../lib`。すべての Mach-O に `lipo -archs` と `otool -L/-l`、全7 library に `otool -D` を実行する。Apple `/usr/lib/` と `/System/Library/Frameworks/` 以外の absolute dependency、外部 rpath、期待しない Mach-O、欠落 library、host architecture 不一致は失敗にする。
 

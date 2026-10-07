@@ -11,7 +11,39 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
     public init() {}
 }
 
+public struct CanvasGuide: Codable, Equatable, Identifiable, Sendable {
+    public var id: String
+    public var axis: String
+    public var position: Double
+    public init(axis: String, position: Double) { self.id = UUID().uuidString; self.axis = axis; self.position = position }
+}
+public struct CanvasSettings: Codable, Equatable, Sendable {
+    public var snap = true
+    public var guidesVisible = true
+    public var guides: [CanvasGuide] = []
+    public init() {}
+}
+public struct EditViewSettings: Codable, Equatable, Sendable {
+    public var panX = 0.0
+    public var panY = 0.0
+    public init() {}
+}
+public struct LockedFontSource: Codable, Equatable, Sendable {
+    public var family: String
+    public var postscriptName: String
+    public var sha256: String
+    public var faceIndex: Int
+    public var path: String
+    public init(identity: [String: Any], path: String) {
+        family = identity.string("family"); postscriptName = identity.string("postscript_name"); sha256 = identity.string("sha256"); faceIndex = Int(identity.number("face_index")); self.path = path
+    }
+    public var identity: [String: Any] { ["family": family, "postscript_name": postscriptName, "sha256": sha256, "face_index": faceIndex] }
+}
+
 public struct ProjectUIState: Codable, Equatable, Sendable {
+    public var canvas: CanvasSettings?
+    public var editView: EditViewSettings?
+    public var fontSources: [LockedFontSource]?
     public var page = "motion"
     public var workspace = "standard"
     public var layouts: [String: WorkspaceState] = ["standard": .init()]

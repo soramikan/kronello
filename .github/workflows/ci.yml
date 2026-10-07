@@ -39,6 +39,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "KRONELLO_FFMPEG_PREFIX=$env:GITHUB_WORKSPACE/target/native/ffmpeg-lgpl" >> $env:GITHUB_ENV
           "KRONELLO_FFMPEG_LIB_DIR=$env:GITHUB_WORKSPACE/target/native/ffmpeg-lgpl/bin" >> $env:GITHUB_ENV
+      - name: Fetch hash-pinned M5 text and vector fixtures
+        run: python scripts/fetch_fixtures.py
+      - name: Test portable M5 model and evaluation kernels
+        run: cargo test -p kronello-time -p kronello-model -p kronello-animation -p kronello-eval -p kronello-vector -p kronello-text -p kronello-simulation --locked
+      - name: Test M5 shared edits and CPU compositing
+        run: cargo test -p kronello-service --test vec002 --test matte --test blend --test repeater --test sim001 --locked
       - name: Build full CLI and MCP with the pinned runtime headers
         run: cargo build -p kronello-cli -p kronello-mcp --all-targets --locked
       - name: Execute real media roundtrip and CLI/MCP parent-exit evidence

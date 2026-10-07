@@ -1,5 +1,9 @@
 # AUDIO-004: 版付きリタイム・effect・Generator・crossfade 音声の検証
 
+現在の状態（2026-10-06）: AUDIO-004はM3の受け入れ範囲で`done`。最終統合・実機検証と保証外の範囲は [M3統合受け入れ](m3-acceptance.md) と本書の後続記録を参照する。以下の初回worker記録にある「未コミット」「pending host run」は、その記録時点の状態であり、現在の未完了判定ではない。
+
+## 初回実装とその後の検証履歴
+
 設計: [ADR-0069](../adr/0069-versioned-stateless-audio.md)。2026-10-05、branch `m3-audio4`、
 開始 HEAD `43a36927e2d0e740ff34da74a24a9791d245afd8` に対する未 commit の変更。
 初回 job は clean worktree から実装し、中断後の再開 job は26ファイルの変更を引き継いだ。

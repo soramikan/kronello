@@ -33,6 +33,10 @@ pub const STROKE_WIDTH_ID: DescriptorId =
 pub const AUDIO_VOLUME_ID: DescriptorId =
     DescriptorId::from_uuid(Uuid::from_u128(0xe9cf4a80_2b64_4b8e_9e29_dfe6bc119a63));
 
+/// Fixed identity for authored layer blending.
+pub const BLEND_MODE_ID: DescriptorId =
+    DescriptorId::from_uuid(Uuid::from_u128(0x7ba7fae2_3e1d_4bd9_9b84_2e6a6a9fe101));
+
 pub(crate) fn registry() -> SchemaRegistry {
     let zero = FiniteF64::new(0.0).expect("finite built-in zero");
     let one = FiniteF64::new(1.0).expect("finite built-in one");
@@ -133,8 +137,21 @@ pub(crate) fn registry() -> SchemaRegistry {
     }));
     volume.capabilities.expressions = false;
     volume.capabilities.modifiers = false;
+    let mut blend = definition(
+        BLEND_MODE_ID,
+        crate::BLEND_KEY,
+        "Blend mode",
+        Unit::Dimensionless,
+        Value::Enum("normal".into()),
+    );
+    blend.animatable = false;
+    blend.interpolation_modes.clear();
+    blend.capabilities.curves = false;
+    blend.capabilities.expressions = false;
+    blend.capabilities.modifiers = false;
     let mut registry = SchemaRegistry::new();
     for definition in [
+        blend,
         volume,
         position,
         anchor,

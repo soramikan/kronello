@@ -24,8 +24,9 @@ def check_prefix(prefix, sources):
         raise ValueError("pinned macOS build receipt required")
     if receipt["ffmpeg_version"] != "9.0.2":
         raise ValueError("pinned FFmpeg 9.0.2 version required")
-    if receipt["external_versions"] != {"svt-av1": "4.2.0", "dav1d": "1.5.4"}:
-        raise ValueError("pinned SVT-AV1/dav1d versions required")
+    external = {d["name"]: d["version"] for d in manifest["dependencies"] if d["name"] != "ffmpeg"}
+    if receipt["external_versions"] != external:
+        raise ValueError("pinned external dependency versions required")
     libs = {entry["name"]: entry for entry in receipt["libraries"]}
     if set(libs) != set(FFMPEG):
         raise ValueError("five-library receipt required; rerun build_ffmpeg_lgpl.py --verify-only on a writable prefix")

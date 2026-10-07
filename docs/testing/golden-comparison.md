@@ -1,8 +1,8 @@
 # GPU 画素の golden 比較
 
-VEC-005 は `stroke-dashes` / `stroke-inside-evenodd` / `stroke-outside-nonzero` / `stroke-affine-reflected` を追加し、現在は **40 シーン・40 comparison frames**。新しい stroke の候補生成・採用・比較は pending host run（[VEC-005](vec-005.md)）。baseline は worker が変更しない。
+VEC-005 は `stroke-dashes` / `stroke-inside-evenodd` / `stroke-outside-nonzero` / `stroke-affine-reflected` を追加し、現在は **40 シーン・40 comparison frames**。新しいstrokeの候補生成・画像レビュー・明示採用・通常比較は2026-10-05のrevision `2ce3d81`で成功した（[VEC-005](vec-005.md)）。M3最終40シーン比較とM4の環境別基準は [M3受け入れ](m3-acceptance.md) / [QA-004](qa-004.md) を参照する。
 
-VEC-004 は gradient の 8 シーン、FX-002 は version 2 の `fx002-rotation` / `fx002-nonuniform-rotation` / `fx002-shear-shadow` / `fx002-reflected-shear-shadow-rec2020` の 4 シーンを追加し、VEC-005 追加前のカタログは **36 シーン・36 comparison frames**。新規 12 シーンの候補生成・採用・比較は統合ブランチで一度だけ行う（[VEC-004](vec-004.md)、[FX-002](fx-002.md)）。
+VEC-004 は gradient の 8 シーン、FX-002 は version 2 の `fx002-rotation` / `fx002-nonuniform-rotation` / `fx002-shear-shadow` / `fx002-reflected-shear-shadow-rec2020` の 4 シーンを追加し、VEC-005 追加前のカタログは **36 シーン・36 comparison frames**。新規12シーンの候補生成・採用・比較は下記の統合ブランチで実施した（[VEC-004](vec-004.md)、[FX-002](fx-002.md)）。
 
 2026-10-05 に統合ブランチ（revision `2baa1ad`）で 36 シーンの候補を生成し、CPU oracle 一致・画像レビューの後に明示採用した。通常比較は `status=pass`。採用で既存シーン `gradient-linear-fill-stroke` の RGBA16F が 5 チャンネルだけ変わった（最大差 3.05e-5、binary16 の 1 ulp）。VEC-004 で WGSL の gradient sampling を組み替えたことによる丸めの差で、旧 baseline との差も許容誤差 `2^-10` の範囲内。意味の変更ではないため再採用した。
 
@@ -10,15 +10,15 @@ FX-001 は blur / shadow の 3 シーンを追加し、FX-001 時点のカタロ
 
 QA-003 は [ADR-0047](../adr/0047-apple-silicon-metal-golden.md) に従い、GPU-001 / GPU-002 / VEC-003 の **21 シーン・21 comparison frames** を共通の基準へ比較する。初回の M1 基準登録・全シーン比較は成功した（[QA-003 の検証記録](qa-003.md)）。許容誤差は QA-001 の `compare_pixels` 既定値 `2^-10` を維持する。
 
-値・レイアウトの意味的比較は通常テストで行う。GPU golden は `#[ignore]` とし、明示実行する。GitHub Actions の必須ジョブではない。UPDATE の成功は候補生成と CPU oracle 検証の成功であり、基準画像との比較結果ではない。
+値・レイアウトの意味的比較は通常テストで行う。GPU golden は `#[ignore]` とし、明示実行する。M4ではLinux Vulkan / Windows DX12の環境別通常比較をCIで明示実行する。通常のworkspace testだけではignored goldenを実行したことにならない。UPDATE の成功は候補生成と CPU oracle 検証の成功であり、基準画像との比較結果ではない。
 
-## 比較環境と provenance
+## Apple Silicon Metalの比較環境と provenance
 
 - 対象は **Apple Silicon ネイティブ `aarch64-apple-darwin` + Metal**。harness はコンパイル対象の macOS / aarch64、`WGPU_BACKEND=metal`、実際に選択した adapter の backend を検査する。Rosetta、Intel Mac、Vulkan は拒否する。
 - 一つの共有 baseline を使う。adapter 名、機種、メモリ、macOS の版 / build、driver、Rust / wgpu・native dependency の版は **provenance のみ**。基準環境との不一致で比較を拒否しない。`environment-diff.json` に差分を記録する。
 - Rust は `rust-toolchain.toml` の 1.95.0、依存は `Cargo.lock`。OFL フォントと fixture の版・hash は [fixture 手順](fixtures.md) に従う。code revision、shader / renderer / CPU oracle / fixture / lockfile の hash と dirty 状態を基準・実測の両方に保存する。
 - 解像度、設計寸法、正規化した有理数時刻、作業色空間、alpha 表現、サンプル数・seed、全 draw-list、stroke / gradient / coverage の意味版はシーン manifest で固定する。壁時計や非固定乱数を入力にしない。
-- 性能計測の第一基準機は **M4 Mac mini 32GB** のまま（[13 章](../architecture/13-quality-performance.md)）。Vulkan / Windows の基準と世代間の許容誤差校正は QA-004 の範囲。
+- 性能計測の第一基準機は **M4 Mac mini 32GB** のまま（[13 章](../architecture/13-quality-performance.md)）。Vulkan / Windowsのsoftware adapter基準と既存M1基準に対するM4実測はQA-004で受け入れ済み。hardware residentや全世代の保証へ広げない。
 
 ## 保存場所
 

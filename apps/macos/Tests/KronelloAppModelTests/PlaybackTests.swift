@@ -5,4 +5,5 @@ import XCTest
     func testPresentationTickDoesNotQueryService() async throws { try await PlaybackChecks().verifyPresentationTickDoesNotQueryService() }
     func testSequenceConfiguration() throws { try PlaybackChecks().verifySequenceConfiguration() }
     func testCompositionGeometrySurvivesPageTransitions() throws { try PlaybackChecks().verifyCompositionGeometrySurvivesPageTransitions() }
+    func testEndStopSeekReplayAndPlayingSeekUseNewSample() async throws { try await PlaybackChecks().verifyEndStopSeekReplayAndPlayingSeek() }
 }

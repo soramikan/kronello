@@ -19,6 +19,8 @@ pub enum DeviceAvailability {
 pub enum ExportAudioCodec {
     PcmS24le,
     Alac,
+    Aac,
+    Opus,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -26,7 +28,7 @@ pub struct ExportProfileCapability {
     pub format: String,
     pub profile_versions: Vec<u32>,
     pub audio_modes: Vec<kronello_audio::AudioSourceMode>,
-    /// AAC is omitted until its export contract is adopted.
+    /// All delivery audio codecs accepted by this output's closed profiles.
     pub audio_codecs: Vec<ExportAudioCodec>,
     pub container_extension: String,
     pub execution: ExportExecution,
@@ -39,7 +41,7 @@ impl JobOutput {
     /// the schema of the actual exporter enum, including image sequences.
     pub(crate) fn discovery_outputs() -> Vec<Self> {
         use kronello_audio::AudioSourceMode::Explicit;
-        use kronello_media::DeliveryAudioCodec::Alac;
+        use kronello_media::DeliveryAudioCodec::{Alac, Opus};
         vec![
             Self::ImageSequence,
             Self::ProResMov {
@@ -82,6 +84,13 @@ impl JobOutput {
                 clips: vec![],
                 background: [0.0; 3],
             },
+            Self::Av1Webm {
+                audio: Explicit,
+                audio_codec: Opus,
+                profile_version: 1,
+                clips: vec![],
+                background: [0.0; 3],
+            },
         ]
     }
     fn discovery(&self, media: Option<&MediaCapabilities>) -> ExportProfileCapability {
@@ -99,24 +108,31 @@ impl JobOutput {
             ),
             Self::Av1Mp4 { .. } => (
                 vec![Explicit, Document, Silence],
-                vec!["alac"],
+                vec!["alac", "aac"],
                 "mp4",
                 "libsvtav1",
                 false,
             ),
             Self::H264Mov { .. } => (
                 vec![Explicit, Document, Silence],
-                vec!["alac"],
+                vec!["alac", "aac"],
                 "mov",
                 "h264_videotoolbox",
                 true,
             ),
             Self::HevcMov { .. } => (
                 vec![Explicit, Document, Silence],
-                vec!["alac"],
+                vec!["alac", "aac"],
                 "mov",
                 "hevc_videotoolbox",
                 true,
+            ),
+            Self::Av1Webm { .. } => (
+                vec![Explicit, Document, Silence],
+                vec!["libopus"],
+                "webm",
+                "libsvtav1",
+                false,
             ),
         };
         let registered = encoder.is_empty()
@@ -141,6 +157,8 @@ impl JobOutput {
                 .map(|codec| match codec {
                     "pcm_s24le" => ExportAudioCodec::PcmS24le,
                     "alac" => ExportAudioCodec::Alac,
+                    "aac" => ExportAudioCodec::Aac,
+                    "libopus" => ExportAudioCodec::Opus,
                     _ => unreachable!("closed audio codec"),
                 })
                 .collect(),
@@ -214,12 +232,7 @@ mod tests {
                     );
                 }
             }
-            assert!(
-                profile
-                    .audio_codecs
-                    .iter()
-                    .all(|c| matches!(c, ExportAudioCodec::Alac | ExportAudioCodec::PcmS24le))
-            );
+            assert!(!matches!(output, JobOutput::ImageSequence) || profile.audio_codecs.is_empty());
             if matches!(profile.execution, ExportExecution::Hardware) {
                 assert!(matches!(
                     profile.device_availability,
@@ -232,7 +245,7 @@ mod tests {
     fn absent_hardware_registration_is_typed_unavailable() {
         let mut media: MediaCapabilities = serde_json::from_value(serde_json::json!({"runtime_version":"test","decoders":[],"encoders":[],"hwaccels":[],"schema_version":1,"ffmpeg_version":"test","library_directory":"/test","substituted":false,"libraries":[],"distribution_eligible":false,"development_only":true,"codecs":[]})).unwrap();
         for hardware in [false, true] {
-            media.encoders = vec!["h264_videotoolbox".into(), "alac".into()];
+            media.encoders = vec!["h264_videotoolbox".into(), "alac".into(), "aac".into()];
             media.codecs = vec![kronello_media::CodecCapability {
                 name: "h264_videotoolbox".into(),
                 encoder: true,

@@ -1,4 +1,4 @@
-//! Explicit M0 transfer paths. Native APIs and unsafe code are confined to macOS.
+//! Explicit transfer probes and resident decode paths. Native APIs stay on macOS.
 use kronello_gpu::{GpuContext, GpuError, TransferStats};
 use std::time::{Duration, Instant};
 #[cfg(target_os = "macos")]
@@ -14,20 +14,36 @@ pub enum PathKind {
     GpuReadback,
     IoSurfaceImport,
     IoSurfaceOutput,
+    /// Compatibility-only rejected selector. Never aliases a concrete decode path
+    /// and never selects encoding. Omitted from [`CONCRETE_PATHS`].
     VideoToolbox,
     CvPixelBufferImport,
     VideoToolboxDecodeBgra8,
     VideoToolboxDecodeNv12Biplanar,
 }
+/// Explicit probe selectors, not a promise that native runtime capabilities exist.
+/// Call `require_gpu_resident` for platform/policy admission, then execute the path
+/// to establish actual availability. Generic VideoToolbox is never advertised.
+pub const CONCRETE_PATHS: &[PathKind] = &[
+    PathKind::CpuUpload,
+    PathKind::GpuCopy,
+    PathKind::GpuReadback,
+    PathKind::IoSurfaceImport,
+    PathKind::IoSurfaceOutput,
+    PathKind::CvPixelBufferImport,
+    PathKind::VideoToolboxDecodeBgra8,
+    PathKind::VideoToolboxDecodeNv12Biplanar,
+];
+const GENERIC_VIDEOTOOLBOX_REJECTION: &str = "generic VideoToolbox selector is unsupported; explicitly select VideoToolboxDecodeBgra8 or VideoToolboxDecodeNv12Biplanar for decode; this selector provides no encode path";
 impl PathKind {
+    /// Admit a transfer policy on this platform. Native hardware/format support
+    /// must still be verified by executing the concrete path; no implicit fallback.
     pub fn require_gpu_resident(self) -> Result<(), GpuError> {
         match self {
             Self::CpuUpload | Self::GpuReadback => Err(GpuError::UnsupportedFeature(
                 "require_gpu_resident rejects CPU transfer",
             )),
-            Self::VideoToolbox => Err(GpuError::UnsupportedFeature(
-                "VideoToolbox decode/encode unimplemented",
-            )),
+            Self::VideoToolbox => Err(GpuError::UnsupportedFeature(GENERIC_VIDEOTOOLBOX_REJECTION)),
             Self::GpuCopy => Ok(()),
             Self::IoSurfaceImport
             | Self::IoSurfaceOutput
@@ -73,7 +89,7 @@ impl TransferPath for SpikePath {
                 let result = match self.0 {
                     PathKind::CvPixelBufferImport => videotoolbox::probe_cvpixelbuffer_import(gpu),
                     PathKind::VideoToolboxDecodeBgra8 => {
-                        videotoolbox::probe_videotoolbox_decode(gpu, false)
+                        videotoolbox::probe_videotoolbox_decode_bgra8(gpu)
                     }
                     _ => videotoolbox::probe_videotoolbox_decode(gpu, true),
                 };
@@ -97,9 +113,7 @@ impl TransferPath for SpikePath {
             return Err(GpuError::UnsupportedFeature("IOSurface requires macOS"));
         }
         if self.0 == PathKind::VideoToolbox {
-            return Err(GpuError::UnsupportedFeature(
-                "VTDecompressionSession not measured in M0",
-            ));
+            return Err(GpuError::UnsupportedFeature(GENERIC_VIDEOTOOLBOX_REJECTION));
         }
         let texture = gpu.texture(
             64,

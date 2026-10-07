@@ -37,6 +37,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             working_space: ColorSpace::LinearRec709,
             transitions: vec![],
             tracks: vec![Track {
+                state: None,
                 id: TrackId::new(),
                 kind: TrackKind::Audio,
                 clips: vec![Clip {
@@ -50,6 +51,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     source_in: Rational::ZERO,
                     time_map: TimeMap::linear(Rational::ZERO, Rational::ONE)?,
                     audio_retime: Default::default(),
+                    reverse_sampling: None,
                     volume: None,
                     links: vec![],
                     effects: vec![],

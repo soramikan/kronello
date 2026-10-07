@@ -42,7 +42,7 @@ cargo test -p kronello-store --locked --test snapshot_policy snapshot_policy_eva
 example は**既存ディレクトリ**と期待する判定 `local` / `sync` / `network` を受け取る。実際の同期クライアントが管理するフォルダ、または実マウントを指定する。名前だけ似せたローカルフォルダを実サービスの検証として扱わない。
 
 ```sh
-cd /Users/sora/Repositories/soramikan/kronello/.worktrees/store3
+# リポジトリのルートで実行する。
 cargo run -p kronello-store --locked --example sync_folder_check -- "$HOME/Library/Mobile Documents/com~apple~CloudDocs" sync
 ```
 
@@ -114,7 +114,7 @@ CI はローカル filesystem の競合・回復証拠であり、実同期サ�
 
 | 実行 OS | 状態 | 証拠または未確認の理由 |
 |---|---|---|
-| macOS arm64 | ローカル確認済み | unit 2 + storage 33 + threshold 1 + example 2 = 38 passed、測定 1 ignored。測定は別途明示実行して passed |
+| macOS arm64 | 初回ローカル確認済み（2026-10-04） | unit 2 + storage 33 + threshold 1 + example 2 = 38 passed、測定 1 ignored。測定は別途明示実行して passed。下の2026-10-06 CIと同一revision・件数の再試験ではない |
 | Linux | CI確認済み（2026-10-06） | storage 35 passed / 0 failed / 0 ignored。実二writer・初期化競合、安全モード排他、WAL / DELETE journal kill回復成功 |
 | Windows | CI確認済み（2026-10-06） | storage 35 passed / 0 failed / 0 ignored。実二writer・初期化競合、安全モード排他、WAL / DELETE journal kill回復成功 |
 

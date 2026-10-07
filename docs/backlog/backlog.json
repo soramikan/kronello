@@ -1,7 +1,7 @@
 {
   "schema_version": "0.5",
   "created": "2026-10-01",
-  "updated": "2026-10-06",
+  "updated": "2026-10-07",
   "status": "implementation_started",
   "description": "設計と実装の計画・進捗。このファイルがバックログの正本であり、GitHub等へ登録したIssueではない。",
   "specification": "docs/architecture/",
@@ -1142,7 +1142,7 @@
       "priority": "P1",
       "area": "vector",
       "title": "Trim path・morph・SVG対応表",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "VEC-001",
         "ANIM-001",
@@ -1159,7 +1159,7 @@
       "priority": "P1",
       "area": "motion",
       "title": "Repeaterとinstanceごとの制御",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "COMP-001",
         "EXPR-001",
@@ -1176,7 +1176,7 @@
       "priority": "P1",
       "area": "text",
       "title": "文字単位selector・ルビ・縦書き",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "TEXT-001",
         "ANIM-001",
@@ -1193,7 +1193,7 @@
       "priority": "P1",
       "area": "audio",
       "title": "音声特徴量DataAssetと連動",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "AUDIO-000",
         "MEDIA-001",
@@ -1211,7 +1211,7 @@
       "priority": "P2",
       "area": "simulation",
       "title": "固定刻み・checkpoint・particle基盤",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "EVAL-001",
         "CACHE-002",
@@ -1360,7 +1360,7 @@
       "priority": "P1",
       "area": "release",
       "title": "名称の商標照会・名前確保状況の記録",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [],
       "acceptance_criteria": [
         "OQ-02に従いJ-PlatPat・USPTO・EUIPOの照会結果、対象区分・地域・照会日・未判断の点を記録し、検索結果だけで法的利用可能性を断定しない",
@@ -1374,7 +1374,7 @@
       "priority": "P1",
       "area": "expression",
       "title": "人間向け式構文とASTの往復・入力UI",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "EXPR-001",
         "GUI-001"
@@ -1391,7 +1391,7 @@
       "priority": "P1",
       "area": "audio",
       "title": "圧縮音声AAC・Opusの採否と採用profileの検証",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "MEDIA-002",
         "AUDIO-003",
@@ -1409,7 +1409,7 @@
       "priority": "P1",
       "area": "render",
       "title": "Matte関係の作品モデル・保存・共有編集",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "RENDER-001",
         "SERVICE-002",
@@ -1427,7 +1427,7 @@
       "priority": "P2",
       "area": "gpu",
       "title": "generic VideoToolbox経路の意味と診断の整理",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "GPU-003"
       ],
@@ -1442,7 +1442,7 @@
       "priority": "P2",
       "area": "gui",
       "title": "macOS編集UIの未接続操作を共有APIへ接続",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "GUI-003",
         "GUI-004",
@@ -1599,7 +1599,7 @@
       "priority": "P1",
       "area": "inspection",
       "title": "render.explainの見積もりを単一graph実行へ整合",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "INSPECT-001",
         "PERF-001"
@@ -1616,13 +1616,13 @@
       "priority": "P2",
       "area": "expression",
       "title": "DataAsset参照・過去時刻sample・連続noiseの式拡張",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "EXPR-001",
         "AUDIO-001"
       ],
       "acceptance_criteria": [
-        "未実装のDataAsset参照、動的な過去Property sample、連続補間noiseの型・時間写像・静的依存と循環拒否・意味版を設計記録に固定する",
+        "AUDIO-001の音声特徴量参照を再利用しつつ、残るDataAsset参照要件、動的な過去Property sample、連続補間noiseの型・時間写像・静的依存と循環拒否・意味版を設計記録に固定する",
         "不変の入力hashと固定seedを使い、外部I/Oや時計を評価へ持ち込まず、命令・メモリ・sample予算を実際の追加処理に適用する",
         "任意時刻・逆順・再試行の決定性、時間境界・資産欠落・循環・予算超過を共有APIと最終renderで検証する。人間向け構文のEXPR-002とは独立にAST契約を検証する"
       ]

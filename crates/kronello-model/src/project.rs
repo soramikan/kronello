@@ -8,8 +8,8 @@ use thiserror::Error;
 use uuid::Uuid;
 
 use crate::{
-    AnimationCurve, Asset, Composition, Expression, Sequence, Shape, TemplateDefinition,
-    TemplateInstance, TextDocument,
+    AnimationCurve, Asset, AudioAnalysisDataAsset, Composition, Expression, Sequence, Shape,
+    TemplateDefinition, TemplateInstance, TextDocument,
 };
 
 pub const PROJECT_SCHEMA_VERSION: u32 = 1;
@@ -53,7 +53,17 @@ pub struct Project {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub assets: Vec<DocumentObject<Asset>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub audio_analyses: Vec<DocumentObject<AudioAnalysisDataAsset>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub expression_data_assets: Vec<DocumentObject<crate::ExpressionDataAsset>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sequences: Vec<DocumentObject<Sequence>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mattes: Vec<DocumentObject<crate::MatteRelation>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub repeaters: Vec<DocumentObject<crate::Repeater>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub simulations: Vec<DocumentObject<crate::ParticleSimulation>>,
     #[serde(flatten)]
     pub unknown_fields: BTreeMap<String, Value>,
 }
@@ -83,7 +93,12 @@ impl Default for Project {
             templates: Vec::new(),
             template_instances: Vec::new(),
             assets: Vec::new(),
+            audio_analyses: Vec::new(),
+            expression_data_assets: Vec::new(),
             sequences: Vec::new(),
+            mattes: Vec::new(),
+            repeaters: Vec::new(),
+            simulations: Vec::new(),
             unknown_fields: BTreeMap::new(),
         }
     }
@@ -109,7 +124,12 @@ impl Project {
                     | "templates"
                     | "template_instances"
                     | "assets"
+                    | "audio_analyses"
+                    | "expression_data_assets"
                     | "sequences"
+                    | "mattes"
+                    | "repeaters"
+                    | "simulations"
             )
         }) {
             return Err(ProjectError::InvalidDocument(
@@ -176,6 +196,44 @@ impl Project {
                 ));
             }
         }
+        for object in &self.simulations {
+            let id = match object {
+                DocumentObject::Known(s) => s.id.as_uuid(),
+                DocumentObject::Opaque(s) => {
+                    if s.fields.contains_key("id") {
+                        return Err(ProjectError::InvalidDocument(
+                            "shadowed simulation id".into(),
+                        ));
+                    }
+                    s.id
+                }
+            };
+            if !ids.insert(id) {
+                return Err(ProjectError::InvalidDocument(
+                    "duplicate simulation id".into(),
+                ));
+            }
+        }
+        for object in &self.repeaters {
+            let (id, fields) = match object {
+                DocumentObject::Known(value) => (value.id.as_uuid(), None),
+                DocumentObject::Opaque(value) => (value.id, Some(&value.fields)),
+            };
+            if !ids.insert(id) || fields.is_some_and(|f| f.contains_key("id")) {
+                return Err(ProjectError::InvalidDocument(
+                    "duplicate or shadowed repeater id".into(),
+                ));
+            }
+        }
+        for object in &self.mattes {
+            let id = match object {
+                DocumentObject::Known(value) => value.id,
+                DocumentObject::Opaque(value) => value.id,
+            };
+            if !ids.insert(id) {
+                return Err(ProjectError::InvalidDocument("duplicate matte id".into()));
+            }
+        }
         for object in &self.shapes {
             let id = match object {
                 DocumentObject::Known(value) => value.id.as_uuid(),
@@ -233,6 +291,38 @@ impl Project {
             };
             if !ids.insert(id) {
                 return Err(ProjectError::InvalidDocument("duplicate object id".into()));
+            }
+        }
+        for object in &self.expression_data_assets {
+            let (id, fields) = match object {
+                DocumentObject::Known(value) => {
+                    if value.version == crate::EXPRESSION_DATA_VERSION {
+                        value.validate()?;
+                    }
+                    (value.id.as_uuid(), None)
+                }
+                DocumentObject::Opaque(value) => (value.id, Some(&value.fields)),
+            };
+            if !ids.insert(id) || fields.is_some_and(|f| f.contains_key("id")) {
+                return Err(ProjectError::InvalidDocument(
+                    "duplicate or shadowed expression data asset id".into(),
+                ));
+            }
+        }
+        for object in &self.audio_analyses {
+            let (id, fields) = match object {
+                DocumentObject::Known(value) => {
+                    if value.config.version == crate::AUDIO_ANALYSIS_VERSION {
+                        value.validate()?;
+                    }
+                    (value.id.as_uuid(), None)
+                }
+                DocumentObject::Opaque(value) => (value.id, Some(&value.fields)),
+            };
+            if !ids.insert(id) || fields.is_some_and(|f| f.contains_key("id")) {
+                return Err(ProjectError::InvalidDocument(
+                    "duplicate or shadowed audio analysis id".into(),
+                ));
             }
         }
         for object in &self.sequences {
@@ -315,7 +405,7 @@ impl Project {
                 .curves
                 .iter()
                 .any(|v| matches!(v, DocumentObject::Opaque(_)))
-            || self.expressions.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(e) if e.version != crate::EXPRESSION_VERSION))
+            || self.expressions.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(e) if !matches!(e.version, 1..=crate::EXPRESSION_SUPPORTED_VERSION)))
             || self
                 .shapes
                 .iter()
@@ -325,8 +415,13 @@ impl Project {
             || self.assets.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
             || self.templates.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
             || self.template_instances.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
+            || self.audio_analyses.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(a) if a.config.version != crate::AUDIO_ANALYSIS_VERSION))
+            || self.expression_data_assets.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(a) if a.version != crate::EXPRESSION_DATA_VERSION))
+            || self.simulations.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(s) if s.version != crate::SIMULATION_VERSION))
+            || self.repeaters.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(r) if r.version != crate::REPEATER_VERSION))
+            || self.mattes.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(m) if m.version != crate::DOCUMENT_MATTE_VERSION))
             || self.texts.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
-            || self.texts.iter().any(|v| matches!(v, DocumentObject::Known(t) if t.layout_version != crate::TEXT_LAYOUT_VERSION))
+            || self.texts.iter().any(|v| matches!(v, DocumentObject::Known(t) if !matches!(t.layout_version, 1 | 2)))
             || self.curves.iter().any(
                 |v| matches!(v, DocumentObject::Known(c) if c.ensure_supported_version().is_err()),
             )
@@ -401,6 +496,16 @@ impl<'de> Deserialize<'de> for Project {
             } else {
                 Vec::new()
             },
+            expression_data_assets: if fields.contains_key("expression_data_assets") {
+                take_field::<_, D::Error>(&mut fields, "expression_data_assets")?
+            } else {
+                Vec::new()
+            },
+            audio_analyses: if fields.contains_key("audio_analyses") {
+                take_field::<_, D::Error>(&mut fields, "audio_analyses")?
+            } else {
+                Vec::new()
+            },
             assets: if fields.contains_key("assets") {
                 take_field::<_, D::Error>(&mut fields, "assets")?
             } else {
@@ -408,6 +513,21 @@ impl<'de> Deserialize<'de> for Project {
             },
             sequences: if fields.contains_key("sequences") {
                 take_field::<_, D::Error>(&mut fields, "sequences")?
+            } else {
+                Vec::new()
+            },
+            simulations: if fields.contains_key("simulations") {
+                take_field::<_, D::Error>(&mut fields, "simulations")?
+            } else {
+                Vec::new()
+            },
+            repeaters: if fields.contains_key("repeaters") {
+                take_field::<_, D::Error>(&mut fields, "repeaters")?
+            } else {
+                Vec::new()
+            },
+            mattes: if fields.contains_key("mattes") {
+                take_field::<_, D::Error>(&mut fields, "mattes")?
             } else {
                 Vec::new()
             },

@@ -35,6 +35,13 @@ def msys2_bash():
     return executable
 
 
+def msys2_posix(bash, path):
+    """Translate a Windows path for MSYS2 argv (D:/a/b -> /d/a/b)."""
+    output = subprocess.run([str(bash), "-c", 'cygpath -u "$1"', "-", str(path)],
+                            check=True, capture_output=True, text=True)
+    return output.stdout.strip()
+
+
 def sha256(path):
     with path.open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
@@ -47,14 +54,24 @@ def source(entry, cache, offline):
             raise ValueError(f"missing/hash-mismatched offline source: {path}")
         temporary = path.with_suffix(path.suffix + ".part")
         try:
-            with urllib.request.urlopen(entry["url"], timeout=60) as response:
-                if not response.geturl().startswith("https://"):
-                    raise ValueError("HTTPS redirect required")
-                with temporary.open("wb") as out:
-                    shutil.copyfileobj(response, out)
-            if sha256(temporary) != entry["sha256"]:
-                raise ValueError(f"source hash mismatch: {entry['name']}")
-            temporary.replace(path)
+            error = None
+            for _ in range(3):
+                try:
+                    with urllib.request.urlopen(entry["url"], timeout=60) as response:
+                        if not response.geturl().startswith("https://"):
+                            raise ValueError("HTTPS redirect required")
+                        with temporary.open("wb") as out:
+                            shutil.copyfileobj(response, out)
+                except (OSError, ValueError) as attempt:
+                    error = attempt
+                    continue
+                if sha256(temporary) != entry["sha256"]:
+                    error = ValueError(f"source hash mismatch: {entry['name']}")
+                    continue
+                temporary.replace(path)
+                break
+            else:
+                raise error
         finally:
             temporary.unlink(missing_ok=True)
     return path
@@ -110,8 +127,8 @@ def verify(prefix, manifest):
                 raise ValueError(f"pinned FFmpeg version mismatch: {ffmpeg_version}")
         libraries.append({"name": name, "version": version_fn(), "license": license_text, "configuration": configuration})
     probe = subprocess.check_output([str(prefix / "bin/ffmpeg"), "-hide_banner", "-encoders"], text=True, stderr=subprocess.STDOUT)
-    if any(name not in probe for name in ["libsvtav1", "prores_ks", "pcm_s24le"]):
-        raise ValueError("required AV1, ProRes and PCM24 encoders missing")
+    if any(name not in probe for name in ["libsvtav1", "prores_ks", "pcm_s24le", "alac", "aac", "libopus"]):
+        raise ValueError("required AV1, ProRes and audio encoders missing")
     decoders = subprocess.check_output([str(prefix / "bin/ffmpeg"), "-hide_banner", "-decoders"], text=True, stderr=subprocess.STDOUT)
     if "libdav1d" not in decoders:
         raise ValueError("required AV1 software decoder missing")
@@ -119,16 +136,17 @@ def verify(prefix, manifest):
     for dependency, filename, symbol in [
         ("svt-av1", "libSvtAv1Enc.4.dylib" if sys.platform == "darwin" else "libSvtAv1Enc.so.4", "svt_av1_get_version"),
         ("dav1d", "libdav1d.7.dylib" if sys.platform == "darwin" else "libdav1d.so.7", "dav1d_version"),
+        ("opus", "libopus.0.dylib" if sys.platform == "darwin" else "libopus.so.0", "opus_get_version_string"),
     ]:
         if sys.platform == "win32":
-            matches = list(runtime_dir.glob("*SvtAv1Enc*.dll" if dependency == "svt-av1" else "*dav1d*.dll"))
+            matches = list(runtime_dir.glob(f"*{dependency}*.dll" if dependency != "svt-av1" else "*SvtAv1Enc*.dll"))
             if len(matches) != 1:
                 raise ValueError(f"one pinned dependency DLL required: {dependency}")
             filename = matches[0].name
         library = ctypes.CDLL(str(runtime_dir / filename))
         version = getattr(library, symbol)
         version.restype = ctypes.c_char_p
-        actual = version().decode().removeprefix("v")
+        actual = version().decode().removeprefix("v").split()[-1]
         expected = next(d["version"] for d in manifest["dependencies"] if d["name"] == dependency)
         if actual != expected:
             raise ValueError(f"pinned dependency version mismatch: {dependency}: {actual}")
@@ -146,7 +164,7 @@ def verify(prefix, manifest):
     (prefix / "build-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
     if dll_cookie is not None:
         dll_cookie.close()
-    print(f"verified five LGPL shared libraries, AV1, ProRes and PCM24: {prefix}")
+    print(f"verified five LGPL shared libraries, AV1, ProRes and delivery audio: {prefix}")
 
 
 def main():
@@ -172,14 +190,25 @@ def main():
         shutil.rmtree(work)
     work.mkdir()
     entries = {entry["name"]: entry for entry in manifest["dependencies"]}
-    svt, ffmpeg, dav1d = entries["svt-av1"], entries["ffmpeg"], entries["dav1d"]
+    svt, ffmpeg, dav1d, opus = entries["svt-av1"], entries["ffmpeg"], entries["dav1d"], entries["opus"]
     svt_source = extract(sources["svt-av1"], work / "svt-source")
     ffmpeg_source = extract(sources["ffmpeg"], work / "ffmpeg-source")
     dav1d_source = extract(sources["dav1d"], work / "dav1d-source")
+    opus_source = extract(sources["opus"], work / "opus-source")
     dav1d_build = work / "dav1d-build"
     run(["meson", "setup", dav1d_build, dav1d_source, *dav1d["meson"], f"--prefix={prefix}", "--libdir=lib"])
     run(["meson", "compile", "-C", dav1d_build, "-j", args.jobs])
     run(["meson", "install", "-C", dav1d_build])
+    opus_build = work / "opus-build"
+    opus_build.mkdir()
+    # Autoconf splits its auxiliary-file candidates on ':' — a DOS-style
+    # argv[0] (D:/...) makes every candidate unreadable, so pass the MSYS path.
+    configure = msys2_posix(bash, opus_source / "configure") if bash else (opus_source / "configure").as_posix()
+    run([*([bash] if bash else []), configure,
+         *opus["configure"], *opus.get("platform_configure", {}).get(sys.platform, []),
+         f"--prefix={prefix}", "--libdir=" + str(prefix / "lib")], cwd=opus_build)
+    run(["make", f"-j{args.jobs}"], cwd=opus_build)
+    run(["make", "install"], cwd=opus_build)
     svt_build = work / "svt-build"
     run(["cmake", *(["-G", "Ninja"] if sys.platform == "win32" else []), "-S", svt_source, "-B", svt_build, *svt["cmake"], *svt.get("platform_cmake", {}).get(sys.platform, []), f"-DCMAKE_INSTALL_PREFIX={prefix}", "-DCMAKE_INSTALL_LIBDIR=lib"])
     run(["cmake", "--build", svt_build, "--parallel", args.jobs])
@@ -207,7 +236,7 @@ def main():
             shutil.copy2(dependency, prefix / "bin" / name)
     licenses = prefix / "licenses"
     licenses.mkdir()
-    for entry, source_dir in [(ffmpeg, ffmpeg_source), (svt, svt_source), (dav1d, dav1d_source)]:
+    for entry, source_dir in [(ffmpeg, ffmpeg_source), (svt, svt_source), (dav1d, dav1d_source), (opus, opus_source)]:
         destination = licenses / entry["name"]
         destination.mkdir()
         for name in entry["license_files"]:

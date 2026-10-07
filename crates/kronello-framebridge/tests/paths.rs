@@ -1,4 +1,4 @@
-use kronello_framebridge::{PathKind, SpikePath, TransferPath};
+use kronello_framebridge::{CONCRETE_PATHS, PathKind, SpikePath, TransferPath};
 use kronello_gpu::{GpuContext, GpuError};
 #[test]
 fn gpu_residency_is_explicit() {
@@ -106,4 +106,36 @@ fn native_paths_are_typed_unsupported() {
             Err(GpuError::UnsupportedFeature(_))
         ));
     }
+}
+
+#[test]
+fn advertised_paths_have_explicit_transfer_or_decode_meaning() {
+    assert_eq!(CONCRETE_PATHS.len(), 8);
+    assert!(!CONCRETE_PATHS.contains(&PathKind::VideoToolbox));
+    assert!(CONCRETE_PATHS.contains(&PathKind::VideoToolboxDecodeBgra8));
+    assert!(CONCRETE_PATHS.contains(&PathKind::VideoToolboxDecodeNv12Biplanar));
+    for (i, path) in CONCRETE_PATHS.iter().enumerate() {
+        assert!(!CONCRETE_PATHS[..i].contains(path));
+    }
+    let Err(GpuError::UnsupportedFeature(message)) = PathKind::VideoToolbox.require_gpu_resident()
+    else {
+        panic!("generic selector must fail");
+    };
+    assert!(message.contains("VideoToolboxDecodeBgra8"));
+    assert!(message.contains("VideoToolboxDecodeNv12Biplanar"));
+    assert!(message.contains("no encode path"));
+}
+#[test]
+fn generic_measurement_matches_policy_rejection() {
+    let gpu = GpuContext::new().expect("GPU adapter required");
+    let Err(GpuError::UnsupportedFeature(policy)) = PathKind::VideoToolbox.require_gpu_resident()
+    else {
+        panic!()
+    };
+    let Err(GpuError::UnsupportedFeature(execution)) =
+        SpikePath(PathKind::VideoToolbox).measure(&gpu)
+    else {
+        panic!()
+    };
+    assert_eq!(policy, execution);
 }
