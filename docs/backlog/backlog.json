@@ -1633,7 +1633,7 @@
       "priority": "P0",
       "area": "timeline",
       "title": "精密編集操作: slip/slide/rolling edit・ripple delete・ギャップ処理",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "NLE-002"
       ],
@@ -1650,7 +1650,7 @@
       "priority": "P0",
       "area": "timeline",
       "title": "シーケンス/クリップマーカー・In/Out・ワークエリア書き出し範囲",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "NLE-002"
       ],
@@ -1700,7 +1700,7 @@
       "priority": "P0",
       "area": "color",
       "title": "色補正エフェクト基盤: exposure/levels/curves/HSL の versioned effect",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "COLOR-001",
         "FX-001"
@@ -1717,7 +1717,7 @@
       "priority": "P1",
       "area": "effects",
       "title": "ブレンドモード全種とトランジション拡張（wipe/slide/dip 等）",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "GPU-002",
         "FX-001"

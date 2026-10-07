@@ -16,7 +16,7 @@
 | M3 | 0 | 0 | 25 | 0 | 25 |
 | M4 | 0 | 0 | 12 | 0 | 12 |
 | M5 | 0 | 1 | 12 | 0 | 13 |
-| M7 | 9 | 0 | 2 | 0 | 11 |
+| M7 | 5 | 0 | 6 | 0 | 11 |
 | M8 | 15 | 0 | 0 | 0 | 15 |
 | M9 | 12 | 0 | 0 | 0 | 12 |
 | M10 | 7 | 0 | 0 | 0 | 7 |
@@ -793,7 +793,7 @@
 
 ### NLE-003 精密編集操作: slip/slide/rolling edit・ripple delete・ギャップ処理
 
-- 優先度: P0 / 領域: timeline / 状態: planned
+- 優先度: P0 / 領域: timeline / 状態: done
 - 依存: NLE-002
 - 受け入れ条件:
   - slip・slide・rolling edit・ripple delete を sequence モデルと共有 Command/Query API に実装する
@@ -803,7 +803,7 @@
 
 ### NLE-004 シーケンス/クリップマーカー・In/Out・ワークエリア書き出し範囲
 
-- 優先度: P0 / 領域: timeline / 状態: planned
+- 優先度: P0 / 領域: timeline / 状態: done
 - 依存: NLE-002
 - 受け入れ条件:
   - sequence/clip マーカーの追加・削除・移動・色・コメントをモデル化する
@@ -830,7 +830,7 @@
 
 ### COLOR-002 色補正エフェクト基盤: exposure/levels/curves/HSL の versioned effect
 
-- 優先度: P0 / 領域: color / 状態: planned
+- 優先度: P0 / 領域: color / 状態: done
 - 依存: COLOR-001, FX-001
 - 受け入れ条件:
   - exposure・levels・curves・HSL 補正を versioned effect としてモデルと schema に追加する
@@ -839,7 +839,7 @@
 
 ### FX-003 ブレンドモード全種とトランジション拡張（wipe/slide/dip 等）
 
-- 優先度: P1 / 領域: effects / 状態: planned
+- 優先度: P1 / 領域: effects / 状態: done
 - 依存: GPU-002, FX-001
 - 受け入れ条件:
   - 標準的なブレンドモード一式を BlendMode に追加し CPU/GPU 両経路で合成する
