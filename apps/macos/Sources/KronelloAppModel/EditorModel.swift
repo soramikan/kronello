@@ -138,7 +138,22 @@ public struct EditCandidate {
     public var fonts: [[String: Any]] = []
     public var snapshotFonts: [[String: Any]] { Self.fontInputs(fonts, requiredBy: document) }
     public static func fontInputs(_ inputs: [[String: Any]], requiredBy document: [String: Any]) -> [[String: Any]] {
-        let identities = document.objects("texts").flatMap { $0.objects("styles") }.map { $0.object("font") }
+        var identities = document.objects("texts").flatMap { $0.objects("styles") }.map { $0.object("font") }
+        // Caption cues lock their base and span faces the same way text does.
+        for caption in document.objects("captions") {
+            identities.append(caption.object("style").object("font"))
+            identities += caption.objects("spans").compactMap { $0["font"] as? [String: Any] }
+        }
+        // Clip-level `kronello.caption.font` overrides encode the FontRef as
+        // canonical JSON inside a String value.
+        let overrides = document.objects("sequences")
+            .flatMap { $0.objects("tracks") }
+            .flatMap { $0.objects("clips") }
+            .flatMap { $0.objects("properties") }
+            .filter { $0.object("descriptor").string("key") == "kronello.caption.font" }
+            .compactMap { $0.object("source").object("value")["value"] as? String }
+            .compactMap { try? JSONSerialization.jsonObject(with: Data($0.utf8)) as? [String: Any] }
+        identities += overrides
         return inputs.filter { input in
             identities.contains { NSDictionary(dictionary: $0) == NSDictionary(dictionary: input.object("identity")) }
         }
