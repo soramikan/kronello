@@ -56,8 +56,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     links: vec![],
                     effects: vec![],
                     properties: vec![],
+                    markers: vec![],
                 }],
             }],
+            markers: vec![],
+            work_area: None,
         })],
         ..Project::default()
     };

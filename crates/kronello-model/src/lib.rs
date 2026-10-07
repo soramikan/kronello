@@ -46,7 +46,7 @@ pub use expression::{
 };
 pub use id::{
     AssetId, ClipId, CompositionId, CompositionInstanceId, ContentId, CurveId, DescriptorId,
-    ExpressionId, ModifierId, NodeId, PropertyId, SchemaKey, SequenceId, TrackId,
+    ExpressionId, MarkerId, ModifierId, NodeId, PropertyId, SchemaKey, SequenceId, TrackId,
 };
 pub use property::{DescriptorRef, Modifier, Property, PropertySource, SourceResolver};
 pub use schema::{

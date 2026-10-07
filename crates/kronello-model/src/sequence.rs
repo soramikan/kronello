@@ -16,6 +16,12 @@ pub struct Sequence {
     pub tracks: Vec<Track>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub transitions: Vec<Transition>,
+    /// Sequence-time annotations; bounded by the content extent end.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub markers: Vec<Marker>,
+    /// In/Out share this range's start/end; absent means the whole sequence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub work_area: Option<TimeRange>,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -69,6 +75,37 @@ pub struct Clip {
     /// Placement transform and effect parameters, evaluated in sequence time.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub properties: Vec<Property>,
+    /// Sequence-time annotations, confined to this placement's range.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub markers: Vec<Marker>,
+}
+/// A single authored annotation in sequence time. Clip markers reference
+/// sequence time (not clip-local source time) and stay inside the clip's
+/// `timeline_range`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Marker {
+    pub id: MarkerId,
+    pub time: Time,
+    pub color: MarkerColor,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comment: Option<String>,
+}
+/// Closed set; transports never guess a color from a label.
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum MarkerColor {
+    #[default]
+    Red,
+    Green,
+    Blue,
+    Yellow,
+    Purple,
+    Cyan,
+    Orange,
+    White,
 }
 /// NLE-001 never performs implicit pitch/speed conversion.
 #[derive(
@@ -302,6 +339,8 @@ impl Clip {
             }
             _ => return Err(SequenceError::Unsupported("time map".into())),
         };
+        // Markers cut away from the placement go away with the content.
+        clip.markers.retain(|m| range.contains(m.time));
         Ok(clip)
     }
     /// Preserve source interval and local control values; rescale parent time.
@@ -330,6 +369,16 @@ impl Clip {
             )?,
             _ => return Err(SequenceError::Unsupported("time map".into())),
         };
+        // Sequence-time markers keep their position inside the rescaled range.
+        for marker in &mut clip.markers {
+            marker.time = range.start().checked_add(
+                marker
+                    .time
+                    .checked_sub(self.timeline_range.start())?
+                    .checked_mul(new.checked_div(old)?)?,
+            )?;
+        }
+        clip.markers.retain(|m| range.contains(m.time));
         Ok(clip)
     }
 }
@@ -418,6 +467,19 @@ impl Sequence {
                 }
                 if clip.effects.len() > 16 {
                     return Err(SequenceError::Invalid("clip effect budget".into()));
+                }
+                let mut clip_markers = std::collections::BTreeSet::new();
+                for marker in &clip.markers {
+                    if !clip_markers.insert(marker.id) {
+                        return Err(SequenceError::Invalid(
+                            "duplicate marker id in a clip".into(),
+                        ));
+                    }
+                    if !clip.timeline_range.contains(marker.time) {
+                        return Err(SequenceError::Invalid(
+                            "clip marker outside its timeline range".into(),
+                        ));
+                    }
                 }
                 // Unknown effects remain storable and fail when the selected target executes.
                 if track.clips[..index].iter().any(|c| {
@@ -581,6 +643,34 @@ impl Sequence {
                     SourceRef::Generator { .. } => (),
                 }
             }
+        }
+        // The authored extent is content-derived: sequence markers and the
+        // In/Out work area may not point beyond the last clip end. An empty
+        // work area is not a valid In/Out pair.
+        let content_end = self
+            .tracks
+            .iter()
+            .flat_map(|t| &t.clips)
+            .map(|c| c.timeline_range.end())
+            .max()
+            .unwrap_or(Time::ZERO);
+        let mut sequence_markers = std::collections::BTreeSet::new();
+        for marker in &self.markers {
+            if !sequence_markers.insert(marker.id) {
+                return Err(SequenceError::Invalid(
+                    "duplicate marker id in a sequence".into(),
+                ));
+            }
+            if marker.time < Time::ZERO || marker.time > content_end {
+                return Err(SequenceError::Invalid(
+                    "sequence marker outside the content extent".into(),
+                ));
+            }
+        }
+        if let Some(area) = &self.work_area
+            && (area.is_empty() || area.end() > content_end)
+        {
+            return Err(SequenceError::Invalid("invalid work area".into()));
         }
         Ok(())
     }

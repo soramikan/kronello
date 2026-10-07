@@ -3621,6 +3621,7 @@ fn temporal_cut_sequence() -> (Project, SequenceId) {
         links: vec![],
         effects: vec![],
         properties: vec![],
+        markers: vec![],
     });
     (
         Project {
@@ -3637,6 +3638,8 @@ fn temporal_cut_sequence() -> (Project, SequenceId) {
                     clips: clips.to_vec(),
                 }],
                 transitions: vec![],
+                markers: vec![],
+                work_area: None,
             })],
             ..Project::default()
         },
@@ -4499,9 +4502,12 @@ fn gui007_reverse_fixture() -> (Project, Sequence) {
                 links: vec![],
                 properties: vec![],
                 effects: vec![],
+                markers: vec![],
             }],
         }],
         transitions: vec![],
+        markers: vec![],
+        work_area: None,
     };
     let project = Project {
         compositions: vec![DocumentObject::Known(source)],

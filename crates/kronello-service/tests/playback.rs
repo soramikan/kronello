@@ -36,9 +36,12 @@ fn fixture() -> (Project, SequenceId) {
                 links: vec![],
                 properties: vec![],
                 effects: vec![],
+                markers: vec![],
             }],
         }],
         transitions: vec![],
+        markers: vec![],
+        work_area: None,
     }));
     (project, sequence)
 }

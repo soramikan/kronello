@@ -217,7 +217,8 @@ impl CapabilitiesResult {
 #[allow(dead_code)]
 enum ApiEnvelope {
     Request(Box<Request>),
-    Response(Response),
+    // Boxed for size; schemars treats `Box<T>` identically to `T`.
+    Response(Box<Response>),
 }
 
 /// Draft 2020-12 generated from the same types used by every transport. Every

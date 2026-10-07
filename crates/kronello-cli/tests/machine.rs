@@ -1397,3 +1397,118 @@ fn json_order_cli_machine_process() {
         "INVALID_REQUEST"
     );
 }
+
+#[test]
+fn nle3_nle4_commands_apply_through_cli_and_match_direct_service_results() {
+    let mut doc: Value =
+        serde_json::from_str(include_str!("../../../examples/nle-001.project.json")).unwrap();
+    doc["sequences"][0]["tracks"][0]["clips"][0]["source_ref"] = json!({"kind":"generator","generator":"kronello.solid","version":1,"color":{"space":"srgb","components":{"r":1.0,"g":0.0,"b":0.0,"alpha":1.0}}});
+    let sequence = doc["sequences"][0]["id"].clone();
+    let track = doc["sequences"][0]["tracks"][0]["id"].clone();
+    let clip = doc["sequences"][0]["tracks"][0]["clips"][0]["id"].clone();
+    // The exact payload set is applied through the CLI process and through the
+    // in-process service; both must produce identical documents.
+    let mut inserted = doc["sequences"][0]["tracks"][0]["clips"][0].clone();
+    inserted["id"] = json!("11111111-2222-4333-8444-555566667777");
+    inserted["timeline_range"] = json!({"start":{"num":"3","den":"1"},"end":{"num":"4","den":"1"}});
+    let commands = json!([
+        {"timeline":{"marker_set":{"sequence":sequence,"marker":{"id":"22222222-2222-4333-8444-555566667777","time":{"num":"1","den":"4"},"color":"green","comment":"note"}}}},
+        {"timeline":{"marker_set":{"sequence":sequence,"clip":clip,"marker":{"id":"33333333-2222-4333-8444-555566667777","time":{"num":"5","den":"2"},"color":"cyan"}}}},
+        {"timeline":{"work_area_set":{"sequence":sequence,"work_area":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"2"}}}}},
+        {"timeline":{"clip_insert":{"sequence":sequence,"track":track,"clip":inserted,"linked":false}}},
+        {"timeline":{"marker_move":{"sequence":sequence,"marker":"22222222-2222-4333-8444-555566667777","time":{"num":"3","den":"1"}}}}
+    ]);
+    let dir = tempfile::tempdir().unwrap();
+    let cli_path = dir.path().join("cli.kronello");
+    call(
+        &["project", "create"],
+        json!({"project":cli_path,"document":doc}),
+        true,
+    );
+    let plan = call(
+        &["edit", "plan"],
+        json!({"project":cli_path,"base_revision":"1","commands":commands}),
+        true,
+    );
+    call(
+        &["edit", "apply"],
+        json!({"project":cli_path,"base_revision":"1","commands":commands,
+            "plan_hash":plan["result"]["value"]["plan_hash"],
+            "session_id":"ab12cd34-0000-4000-8000-00000000e003","idempotency_key":"nle34-cli"}),
+        true,
+    );
+    let query = call(
+        &["sequence", "query"],
+        json!({"project":cli_path,"sequence":sequence}),
+        true,
+    );
+    assert_eq!(
+        query["result"]["value"]["sequence"]["markers"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        query["result"]["value"]["sequence"]["markers"][0]["time"],
+        json!({"num":"3","den":"1"})
+    );
+    assert_eq!(
+        query["result"]["value"]["sequence"]["work_area"],
+        json!({"start":{"num":"0","den":"1"},"end":{"num":"1","den":"2"}})
+    );
+    let clips: Vec<_> = query["result"]["value"]["clips"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|c| c["track"] == track)
+        .collect();
+    assert_eq!(clips.len(), 2);
+    assert_eq!(
+        clips[1]["clip"]["timeline_range"],
+        json!({"start":{"num":"3","den":"1"},"end":{"num":"4","den":"1"}})
+    );
+    assert_eq!(
+        clips[0]["clip"]["markers"][0]["id"],
+        json!("33333333-2222-4333-8444-555566667777")
+    );
+    let via_cli = call(&["project", "export"], json!({"project":cli_path}), true);
+
+    // Direct service dispatch of the identical payloads.
+    let service_path = dir.path().join("service.kronello");
+    let service = Service::new(kronello_service::BackendSelection::CpuReference);
+    let execute = |payload: Value| -> Value {
+        let response = service.execute_json(&payload.to_string());
+        let value = serde_json::to_value(&response).unwrap();
+        assert_eq!(value["status"], "success", "{value}");
+        value["result"].clone()
+    };
+    execute(json!({"operation":"project.create","project":service_path,"document":doc}));
+    let plan = execute(
+        json!({"operation":"edit.plan","project":service_path,"base_revision":"1","commands":commands}),
+    );
+    execute(
+        json!({"operation":"edit.apply","project":service_path,"base_revision":"1",
+            "commands":commands,"plan_hash":plan["value"]["plan_hash"],
+            "session_id":"ab12cd34-0000-4000-8000-00000000e003","idempotency_key":"nle34-cli"}),
+    );
+    let via_service = execute(json!({"operation":"project.export","project":service_path}));
+    assert_eq!(
+        via_cli["result"]["value"]["document"],
+        via_service["value"]["document"]
+    );
+    // Typed errors are identical across both transports.
+    let bad = json!([{"timeline":{"marker_move":{"sequence":sequence,"marker":"99999999-2222-4333-8444-555566667777","time":{"num":"1","den":"1"}}}}]);
+    let cli_error = call(
+        &["edit", "plan"],
+        json!({"project":cli_path,"base_revision":"2","commands":bad}),
+        false,
+    );
+    let service_error = service.execute_json(
+        &json!({"operation":"edit.plan","project":service_path,"base_revision":"2","commands":bad})
+            .to_string(),
+    );
+    let service_error = serde_json::to_value(&service_error).unwrap();
+    assert_eq!(cli_error["error"]["code"], service_error["error"]["code"]);
+    assert_eq!(cli_error["error"]["code"], "SOURCE_MISSING");
+}

@@ -379,6 +379,7 @@ fn clip(color: [u8; 3], a: i64, b: i64) -> Clip {
         links: vec![],
         properties: vec![],
         effects: vec![],
+        markers: vec![],
     }
 }
 fn sequence(clips: Vec<Clip>) -> Sequence {
@@ -395,6 +396,8 @@ fn sequence(clips: Vec<Clip>) -> Sequence {
             clips,
         }],
         transitions: vec![],
+        markers: vec![],
+        work_area: None,
     }
 }
 fn project(sequence: Sequence) -> Project {

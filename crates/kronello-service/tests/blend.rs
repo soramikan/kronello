@@ -47,6 +47,7 @@ fn fixture() -> (Project, SequenceId, ClipId) {
         links: vec![],
         effects: vec![],
         properties: vec![],
+        markers: vec![],
     };
     let bottom = make_clip([0.2, 0.6, 0.1]);
     let mut top = make_clip([0.8, 0.2, 0.4]);
@@ -76,6 +77,8 @@ fn fixture() -> (Project, SequenceId, ClipId) {
             },
         ],
         transitions: vec![],
+        markers: vec![],
+        work_area: None,
     };
     let id = sequence.id;
     p.sequences.push(DocumentObject::Known(sequence));

@@ -578,6 +578,7 @@ fn actual_reverse_sequence_references_forward_source_states() {
         links: vec![],
         effects: vec![],
         properties: vec![],
+        markers: vec![],
     };
     let id = SequenceId::new();
     p.sequences.push(DocumentObject::Known(Sequence {
@@ -593,6 +594,8 @@ fn actual_reverse_sequence_references_forward_source_states() {
             clips: vec![clip],
         }],
         transitions: vec![],
+        markers: vec![],
+        work_area: None,
     }));
     let reverse = RenderSnapshot::for_target(
         &p,

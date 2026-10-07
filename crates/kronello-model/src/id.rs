@@ -63,6 +63,7 @@ stable_id!(ContentId);
 stable_id!(SequenceId);
 stable_id!(TrackId);
 stable_id!(ClipId);
+stable_id!(MarkerId);
 
 /// Immutable namespaced schema identity, such as `kronello.transform.opacity`.
 /// It is supplied by the schema author, independently of a localized label.

@@ -525,6 +525,13 @@
             "$ref": "#/$defs/ClipId"
           }
         },
+        "markers": {
+          "description": "Sequence-time annotations, confined to this placement's range.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Marker"
+          }
+        },
         "properties": {
           "description": "Placement transform and effect parameters, evaluated in sequence time.",
           "type": "array",
@@ -2260,6 +2267,52 @@
         "interpolation"
       ]
     },
+    "Marker": {
+      "description": "A single authored annotation in sequence time. Clip markers reference\nsequence time (not clip-local source time) and stay inside the clip's\n`timeline_range`.",
+      "type": "object",
+      "properties": {
+        "color": {
+          "$ref": "#/$defs/MarkerColor"
+        },
+        "comment": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "$ref": "#/$defs/MarkerId"
+        },
+        "time": {
+          "$ref": "#/$defs/Rational"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "time",
+        "color"
+      ]
+    },
+    "MarkerColor": {
+      "description": "Closed set; transports never guess a color from a label.",
+      "type": "string",
+      "enum": [
+        "red",
+        "green",
+        "blue",
+        "yellow",
+        "purple",
+        "cyan",
+        "orange",
+        "white"
+      ]
+    },
+    "MarkerId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "type": "string",
+      "format": "uuid"
+    },
     "MatteRelation": {
       "type": "object",
       "properties": {
@@ -3169,6 +3222,13 @@
         "id": {
           "$ref": "#/$defs/SequenceId"
         },
+        "markers": {
+          "description": "Sequence-time annotations; bounded by the content extent end.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Marker"
+          }
+        },
         "tracks": {
           "description": "Authored bottom-to-top compositing order.",
           "type": "array",
@@ -3181,6 +3241,17 @@
           "items": {
             "$ref": "#/$defs/Transition"
           }
+        },
+        "work_area": {
+          "description": "In/Out share this range's start/end; absent means the whole sequence.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimeRange"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "working_space": {
           "$ref": "#/$defs/ColorSpace"

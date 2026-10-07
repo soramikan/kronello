@@ -975,6 +975,13 @@
           },
           "type": "array"
         },
+        "markers": {
+          "description": "Sequence-time annotations, confined to this placement's range.",
+          "items": {
+            "$ref": "#/$defs/Marker"
+          },
+          "type": "array"
+        },
         "properties": {
           "description": "Placement transform and effect parameters, evaluated in sequence time.",
           "items": {
@@ -5580,6 +5587,52 @@
         "configuration"
       ],
       "type": "object"
+    },
+    "Marker": {
+      "additionalProperties": false,
+      "description": "A single authored annotation in sequence time. Clip markers reference\nsequence time (not clip-local source time) and stay inside the clip's\n`timeline_range`.",
+      "properties": {
+        "color": {
+          "$ref": "#/$defs/MarkerColor"
+        },
+        "comment": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "$ref": "#/$defs/MarkerId"
+        },
+        "time": {
+          "$ref": "#/$defs/Rational"
+        }
+      },
+      "required": [
+        "id",
+        "time",
+        "color"
+      ],
+      "type": "object"
+    },
+    "MarkerColor": {
+      "description": "Closed set; transports never guess a color from a label.",
+      "enum": [
+        "red",
+        "green",
+        "blue",
+        "yellow",
+        "purple",
+        "cyan",
+        "orange",
+        "white"
+      ],
+      "type": "string"
+    },
+    "MarkerId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "format": "uuid",
+      "type": "string"
     },
     "MatteBinding": {
       "additionalProperties": false,
@@ -10794,6 +10847,13 @@
         "id": {
           "$ref": "#/$defs/SequenceId"
         },
+        "markers": {
+          "description": "Sequence-time annotations; bounded by the content extent end.",
+          "items": {
+            "$ref": "#/$defs/Marker"
+          },
+          "type": "array"
+        },
         "tracks": {
           "description": "Authored bottom-to-top compositing order.",
           "items": {
@@ -10806,6 +10866,17 @@
             "$ref": "#/$defs/Transition"
           },
           "type": "array"
+        },
+        "work_area": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimeRange"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "In/Out share this range's start/end; absent means the whole sequence."
         },
         "working_space": {
           "$ref": "#/$defs/ColorSpace"
@@ -13277,6 +13348,386 @@
           },
           "required": [
             "clip_move"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Slide the source window inside an unchanged placement. `linked` slips\nthe complete reciprocal component so linked audio follows video.",
+          "properties": {
+            "clip_slip": {
+              "additionalProperties": false,
+              "properties": {
+                "clip": {
+                  "$ref": "#/$defs/ClipId"
+                },
+                "delta": {
+                  "$ref": "#/$defs/Rational"
+                },
+                "linked": {
+                  "type": "boolean"
+                },
+                "sequence": {
+                  "$ref": "#/$defs/SequenceId"
+                }
+              },
+              "required": [
+                "sequence",
+                "clip",
+                "delta",
+                "linked"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "clip_slip"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Move the selected placement(s) by delta while the adjacent clips on the\nsame tracks absorb the shift through their source handles. Every\nselected run requires an adjacent clip on both sides.",
+          "properties": {
+            "clip_slide": {
+              "additionalProperties": false,
+              "properties": {
+                "clip": {
+                  "$ref": "#/$defs/ClipId"
+                },
+                "delta": {
+                  "$ref": "#/$defs/Rational"
+                },
+                "linked": {
+                  "type": "boolean"
+                },
+                "sequence": {
+                  "$ref": "#/$defs/SequenceId"
+                }
+              },
+              "required": [
+                "sequence",
+                "clip",
+                "delta",
+                "linked"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "clip_slide"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Move the shared edit point after `clip`; each selected placement's\ndirectly adjacent successor trims or extends symmetrically.",
+          "properties": {
+            "clip_roll": {
+              "additionalProperties": false,
+              "properties": {
+                "clip": {
+                  "$ref": "#/$defs/ClipId"
+                },
+                "delta": {
+                  "$ref": "#/$defs/Rational"
+                },
+                "linked": {
+                  "type": "boolean"
+                },
+                "sequence": {
+                  "$ref": "#/$defs/SequenceId"
+                }
+              },
+              "required": [
+                "sequence",
+                "clip",
+                "delta",
+                "linked"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "clip_roll"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Remove one placement or its complete reciprocal link component and keep\nthe resulting gap. Incident transitions must be removed explicitly.",
+          "properties": {
+            "clip_delete": {
+              "additionalProperties": false,
+              "properties": {
+                "clip": {
+                  "$ref": "#/$defs/ClipId"
+                },
+                "linked": {
+                  "type": "boolean"
+                },
+                "sequence": {
+                  "$ref": "#/$defs/SequenceId"
+                }
+              },
+              "required": [
+                "sequence",
+                "clip",
+                "linked"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "clip_delete"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Delete `range` on the listed tracks and close the gap by shifting all\nlater content by the range's duration. A clip straddling both range\nedges is rejected; a partially covered clip trims the covered side.\n`linked` expands affected clips to complete reciprocal components,\nwhich are evaluated by their own overlap with `range` on any track.",
+          "properties": {
+            "ripple_delete": {
+              "additionalProperties": false,
+              "properties": {
+                "linked": {
+                  "type": "boolean"
+                },
+                "range": {
+                  "$ref": "#/$defs/TimeRange"
+                },
+                "sequence": {
+                  "$ref": "#/$defs/SequenceId"
+                },
+                "tracks": {
+                  "items": {
+                    "$ref": "#/$defs/TrackId"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "sequence",
+                "tracks",
+                "range",
+                "linked"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "ripple_delete"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Place `clip` at its `timeline_range.start()`, shifting every clip at or\nafter that point on the target track right by the clip's duration. The\ntyped gap-opening counterpart of `ClipOverwrite`; a clip straddling the\ninsertion point makes the whole operation fail. `linked` expands the\nshifted set to complete reciprocal components across tracks.",
+          "properties": {
+            "clip_insert": {
+              "additionalProperties": false,
+              "properties": {
+                "clip": {
+                  "$ref": "#/$defs/Clip"
+                },
+                "linked": {
+                  "type": "boolean"
+                },
+                "sequence": {
+                  "$ref": "#/$defs/SequenceId"
+                },
+                "track": {
+                  "$ref": "#/$defs/TrackId"
+                }
+              },
+              "required": [
+                "sequence",
+                "track",
+                "clip",
+                "linked"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "clip_insert"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Place `clip` over its `timeline_range`, replacing covered placements or\ncovered split segments without moving neighbours. The typed overwrite\ncounterpart of `ClipInsert`; transitions sharing the range conflict.",
+          "properties": {
+            "clip_overwrite": {
+              "additionalProperties": false,
+              "properties": {
+                "clip": {
+                  "$ref": "#/$defs/Clip"
+                },
+                "sequence": {
+                  "$ref": "#/$defs/SequenceId"
+                },
+                "track": {
+                  "$ref": "#/$defs/TrackId"
+                }
+              },
+              "required": [
+                "sequence",
+                "track",
+                "clip"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "clip_overwrite"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Upsert a sequence marker (`clip` absent) or a marker scoped to that\nclip's timeline range. Marker times are always sequence times.",
+          "properties": {
+            "marker_set": {
+              "additionalProperties": false,
+              "properties": {
+                "clip": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/ClipId"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "marker": {
+                  "$ref": "#/$defs/Marker"
+                },
+                "sequence": {
+                  "$ref": "#/$defs/SequenceId"
+                }
+              },
+              "required": [
+                "sequence",
+                "marker"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "marker_set"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "marker_remove": {
+              "additionalProperties": false,
+              "properties": {
+                "clip": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/ClipId"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "marker": {
+                  "$ref": "#/$defs/MarkerId"
+                },
+                "sequence": {
+                  "$ref": "#/$defs/SequenceId"
+                }
+              },
+              "required": [
+                "sequence",
+                "marker"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "marker_remove"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Move a marker within its owning list; recolor or recomment through\n`MarkerSet` with the same marker id.",
+          "properties": {
+            "marker_move": {
+              "additionalProperties": false,
+              "properties": {
+                "clip": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/ClipId"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "marker": {
+                  "$ref": "#/$defs/MarkerId"
+                },
+                "sequence": {
+                  "$ref": "#/$defs/SequenceId"
+                },
+                "time": {
+                  "$ref": "#/$defs/Rational"
+                }
+              },
+              "required": [
+                "sequence",
+                "marker",
+                "time"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "marker_move"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Set or clear the In/Out work area. Rendering only observes the explicit\n`SequenceRenderRequest.range`; the service never reads this field.",
+          "properties": {
+            "work_area_set": {
+              "additionalProperties": false,
+              "properties": {
+                "sequence": {
+                  "$ref": "#/$defs/SequenceId"
+                },
+                "work_area": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/TimeRange"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                }
+              },
+              "required": [
+                "sequence"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "work_area_set"
           ],
           "type": "object"
         },

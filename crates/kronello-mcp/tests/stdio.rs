@@ -1076,3 +1076,83 @@ fn json_order_mcp_tool_call() {
     );
     client.finish();
 }
+
+#[test]
+fn nle3_nle4_commands_apply_through_mcp_with_the_same_semantics() {
+    let mut client = Client::spawn(&[], false);
+    client.ready(SUPPORTED_PROTOCOL_VERSIONS[0]);
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("nle34.kronello");
+    let mut doc: Value =
+        serde_json::from_str(include_str!("../../../examples/nle-001.project.json")).unwrap();
+    doc["sequences"][0]["tracks"][0]["clips"][0]["source_ref"] = json!({"kind":"generator","generator":"kronello.solid","version":1,"color":{"space":"srgb","components":{"r":1.0,"g":0.0,"b":0.0,"alpha":1.0}}});
+    assert_eq!(
+        client.call("project.create", json!({"project":path,"document":doc}))["isError"],
+        false
+    );
+    let sequence = doc["sequences"][0]["id"].clone();
+    let track = doc["sequences"][0]["tracks"][0]["id"].clone();
+    let clip = doc["sequences"][0]["tracks"][0]["clips"][0]["id"].clone();
+    let mut inserted = doc["sequences"][0]["tracks"][0]["clips"][0].clone();
+    inserted["id"] = json!("11111111-2222-4333-8444-555566667777");
+    inserted["timeline_range"] = json!({"start":{"num":"3","den":"1"},"end":{"num":"4","den":"1"}});
+    let commands = json!([
+        {"timeline":{"marker_set":{"sequence":sequence,"marker":{"id":"22222222-2222-4333-8444-555566667777","time":{"num":"1","den":"4"},"color":"green","comment":"note"}}}},
+        {"timeline":{"marker_set":{"sequence":sequence,"clip":clip,"marker":{"id":"33333333-2222-4333-8444-555566667777","time":{"num":"5","den":"2"},"color":"cyan"}}}},
+        {"timeline":{"work_area_set":{"sequence":sequence,"work_area":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"2"}}}}},
+        {"timeline":{"clip_insert":{"sequence":sequence,"track":track,"clip":inserted,"linked":false}}},
+        {"timeline":{"marker_move":{"sequence":sequence,"marker":"22222222-2222-4333-8444-555566667777","time":{"num":"3","den":"1"}}}}
+    ]);
+    let plan = client.call(
+        "edit.plan",
+        json!({"project":path,"base_revision":"1","commands":commands}),
+    );
+    assert_eq!(plan["isError"], false, "{plan}");
+    let event = client.call(
+        "edit.apply",
+        json!({"project":path,"base_revision":"1","commands":commands,
+            "plan_hash":plan["structuredContent"]["plan_hash"],
+            "session_id":"ab12cd34-0000-4000-8000-00000000e004","idempotency_key":"nle34-mcp"}),
+    );
+    assert_eq!(event["isError"], false, "{event}");
+    let query = client.call(
+        "sequence.query",
+        json!({"project":path,"sequence":sequence}),
+    );
+    assert_eq!(query["isError"], false, "{query}");
+    let s = &query["structuredContent"]["sequence"];
+    assert_eq!(s["markers"].as_array().unwrap().len(), 1);
+    assert_eq!(s["markers"][0]["time"], json!({"num":"3","den":"1"}));
+    assert_eq!(
+        s["work_area"],
+        json!({"start":{"num":"0","den":"1"},"end":{"num":"1","den":"2"}})
+    );
+    let clips: Vec<_> = query["structuredContent"]["clips"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|c| c["track"] == track)
+        .collect();
+    assert_eq!(clips.len(), 2);
+    assert_eq!(
+        clips[1]["clip"]["timeline_range"],
+        json!({"start":{"num":"3","den":"1"},"end":{"num":"4","den":"1"}})
+    );
+    assert_eq!(
+        clips[0]["clip"]["markers"][0]["id"],
+        json!("33333333-2222-4333-8444-555566667777")
+    );
+    // Typed failures reach MCP unchanged.
+    let bad = json!([{"timeline":{"marker_move":{"sequence":sequence,"marker":"99999999-2222-4333-8444-555566667777","time":{"num":"1","den":"1"}}}}]);
+    let error = client.call(
+        "edit.plan",
+        json!({"project":path,"base_revision":"2","commands":bad}),
+    );
+    assert_eq!(
+        error["structuredContent"]["error"]["code"],
+        "SOURCE_MISSING"
+    );
+    // finish() still asserts a clean exit and no unsolicited stdout; stderr
+    // may log the intentionally rejected request.
+    let _stderr = client.finish();
+}

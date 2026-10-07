@@ -1804,3 +1804,72 @@ fn color001_hdr_sync_and_fixed_worker_pq_hlg_roundtrip() {
         }
     }
 }
+
+#[test]
+fn work_area_and_markers_snapshot_but_range_stays_explicit() {
+    let f = Fixture::new();
+    let sequence = kronello_model::SequenceId::new();
+    let track = kronello_model::TrackId::new();
+    let clip = kronello_model::ClipId::new();
+    let marker = kronello_model::MarkerId::new();
+    let session = track.as_uuid();
+    // The caller-visible work area and markers persist in the job snapshot.
+    let work_area = json!({"start":{"num":"1","den":"4"},"end":{"num":"1","den":"2"}});
+    let explicit_range = json!({"start":{"num":"0","den":"1"},"end":{"num":"1","den":"8"}});
+    let definition = json!({"id":sequence,"extent":{"width":64.0,"height":32.0},
+        "frame_rate":{"num":"24","den":"1"},"audio_rate":48000,"working_space":"linear_rec709",
+        "work_area":work_area,
+        "markers":[{"id":marker,"time":{"num":"1","den":"4"},"color":"yellow","comment":"in"}],
+        "tracks":[{"id":track,"kind":"video","clips":[{"id":clip,
+            "source_ref":{"kind":"composition","composition":f.document["compositions"][0]["id"]},
+            "timeline_range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"2"}},
+            "source_in":{"num":"0","den":"1"},
+            "time_map":{"kind":"linear","offset":{"num":"0","den":"1"},"speed":{"num":"1","den":"1"}},
+            "audio_retime":"reject","links":[],"effects":[]}]}]});
+    f.cli(
+        json!({"operation":"sequence.create","project":f.project,"base_revision":"1",
+        "session_id":session,"idempotency_key":"work-area-sequence","sequence":definition}),
+        None,
+        false,
+    );
+    // `SequenceRenderRequest.range` is caller-supplied; the service never
+    // substitutes `work_area`. The submitted range differs on purpose.
+    let mut render = f.render(&f.temp.path().join("work-area-out"));
+    render["input"]
+        .as_object_mut()
+        .unwrap()
+        .remove("composition");
+    render["input"]["target"] = json!({"kind":"sequence","sequence":sequence});
+    render["range"] = explicit_range.clone();
+    assert_ne!(explicit_range, work_area);
+    let gate = f.temp.path().join("work-area-release");
+    let submitted = f.submit_request(
+        json!({"operation":"render.submit","render":render,
+        "output":{"format":"image_sequence"}}),
+        Some(&gate),
+        false,
+    );
+    f.wait(&submitted.id, JobStatus::Running);
+    let fixed: Value = serde_json::from_slice(
+        &std::fs::read(
+            f.store()
+                .directory(&submitted.id)
+                .unwrap()
+                .join("input.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(fixed["request"]["render"]["range"], explicit_range);
+    assert_eq!(
+        fixed["snapshot"]["project"]["sequences"][0]["work_area"],
+        work_area
+    );
+    assert_eq!(
+        fixed["snapshot"]["project"]["sequences"][0]["markers"][0]["id"],
+        json!(marker)
+    );
+    std::fs::write(&gate, b"release").unwrap();
+    let done = f.wait(&submitted.id, JobStatus::Succeeded);
+    assert_eq!(done.completed_frames, 3);
+}
