@@ -26,7 +26,12 @@ public struct EditClip: Identifiable {
     public var authored: [String: Any] { query.object("clip") }
     public var id: String { authored.string("id") }
     public var track: String { query.string("track") }
-    public var kind: KRMediaKind { KRMediaKind(rawValue: query.string("kind")) ?? .generator }
+    /// The shared ClipKind `caption` presents as the design `subtitle` kind.
+    public var kind: KRMediaKind {
+        query.string("kind") == "caption" ? .subtitle : (KRMediaKind(rawValue: query.string("kind")) ?? .generator)
+    }
+    /// Caption cue identity for `source_ref.caption` clips; nil otherwise.
+    public var caption: String? { authored.object("source_ref")["caption"] as? String }
     public var start: RationalTime { .wire(authored.object("timeline_range").object("start")) }
     public var end: RationalTime { .wire(authored.object("timeline_range").object("end")) }
     public var composition: String? { authored.object("source_ref")["composition"] as? String }
@@ -105,6 +110,10 @@ extension EditorModel {
     }
     public func clipName(_ clip: EditClip) -> String {
         let source = clip.authored.object("source_ref")
+        if clip.kind == .subtitle {
+            let text = clip.caption.flatMap { captionDocument(id: $0) }?.string("text").components(separatedBy: "\n").first ?? ""
+            return text.isEmpty ? "字幕" : text
+        }
         return editAssets.first { NSDictionary(dictionary: $0.source) == NSDictionary(dictionary: source) }?.name ?? source.string("generator")
     }
     public func clipMissing(_ clip: EditClip) -> String? {
@@ -142,7 +151,9 @@ extension EditorModel {
     public func beginAssetGesture(_ asset: EditAsset, track: String, at frame: Int64) {
         guard !busy, pendingCandidate == nil, timelineCandidate == nil, !ui.locked.contains(track) else { return }
         let length = asset.duration.frames(rateNum: rateNum, rateDen: rateDen)
+        // Caption lanes accept no asset placements; cues come from caption editing.
         guard length > 0, let target = sequence.objects("tracks").first(where: { $0.string("id") == track }),
+              ["video", "audio"].contains(target.string("kind")),
               (target.string("kind") == "audio") == (asset.kind == .audio) else { return }
         let start = max(0, frame)
         let clip: [String: Any] = ["id": UUID().uuidString.lowercased(), "source_ref": asset.source,
@@ -197,5 +208,18 @@ extension EditorModel {
             command = timelineCommand("clip_split", fields)
         }
         return await apply(.init(base: c.base, commands: [command], label: c.mode == .blade ? "クリップの分割" : c.mode == .place ? "クリップの配置" : "クリップの配置・尺の変更"))
+    }
+    /// Lane order mirrors render order: caption cues composite above every
+    /// video track, newest track topmost; audio lanes stay at the bottom.
+    public var orderedTracks: [[String: Any]] {
+        let tracks = sequence.objects("tracks")
+        return tracks.filter { $0.string("kind") == "caption" }.reversed()
+            + tracks.filter { $0.string("kind") == "video" }.reversed()
+            + tracks.filter { $0.string("kind") == "audio" }
+    }
+    public func trackNumber(_ id: String) -> String {
+        let tracks = sequence.objects("tracks"), kind = tracks.first { $0.string("id") == id }?.string("kind") ?? "video"
+        let prefix = kind == "audio" ? "A" : kind == "caption" ? "C" : "V"
+        return prefix + String((tracks.filter { $0.string("kind") == kind }.firstIndex { $0.string("id") == id } ?? 0) + 1)
     }
 }

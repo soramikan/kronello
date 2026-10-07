@@ -1752,7 +1752,7 @@
       "priority": "P1",
       "area": "gui",
       "title": "macOS 字幕編集 UI: caption lane と編集パネル",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "SUB-001",
         "GUI-003"
@@ -1768,7 +1768,7 @@
       "priority": "P1",
       "area": "gui",
       "title": "macOS カラー Inspector: 色補正パラメータ編集",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "COLOR-002",
         "GUI-003"

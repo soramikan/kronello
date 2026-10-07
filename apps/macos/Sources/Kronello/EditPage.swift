@@ -144,15 +144,18 @@ struct ClipInspector: View {
                             timeRow("尺", frames: clip.end.frames(rateNum: model.rateNum, rateDen: model.rateDen) - clip.start.frames(rateNum: model.rateNum, rateDen: model.rateDen)) { value in
                                 model.beginClipGesture(clip, mode: .trimEnd); model.updateClipGesture(delta: value - (clip.end.frames(rateNum: model.rateNum, rateDen: model.rateDen) - clip.start.frames(rateNum: model.rateNum, rateDen: model.rateDen))); Task { await model.commitClipGesture() }
                             }
-                            timeRow("ソース開始", frames: RationalTime.wire(clip.authored.object("source_in")).frames(rateNum: model.rateNum, rateDen: model.rateDen), onEditingStart: { draftBases["source"] = model.revision }) { model.setClipTime(clip, sourceIn: model.frameTime($0), base: draftBases.removeValue(forKey: "source")) }
+                            if clip.kind != .subtitle {
+                                timeRow("ソース開始", frames: RationalTime.wire(clip.authored.object("source_in")).frames(rateNum: model.rateNum, rateDen: model.rateDen), onEditingStart: { draftBases["source"] = model.revision }) { model.setClipTime(clip, sourceIn: model.frameTime($0), base: draftBases.removeValue(forKey: "source")) }
+                            }
                         }
-                        section("時間") {
+                        if clip.kind == .subtitle { section("字幕") { CaptionInspector(model: model, clip: clip) } }
+                        if clip.kind != .subtitle { section("時間") {
                             KRInspectorSettingRow("速度") {
                                 KRNumberField(value: .constant(clip.linearRate.map { Double($0.num)! / Double($0.den)! * 100 } ?? 100), unit: "%", step: 0.1, range: 0.1...10000, accessibilityLabel: "速度", onEditingStart: { draftBases["speed"] = model.revision }, onCommit: { _, value in model.setClipTime(clip, speedPercent: value, base: draftBases.removeValue(forKey: "speed")) }).disabled(clip.linearRate == nil)
                             }
                             KRInspectorSettingRow("逆再生") { KRCheckbox("", isOn: Binding(get: { clip.reversed }, set: { model.setClipReverse(clip, enabled: $0) })).accessibilityLabel("逆再生").disabled(clip.linearRate == nil) }
                             Text("速度は0.1%単位。配置の尺を維持し、逆再生は選択区間の末尾から始めます。").krText(KRType.caption).foregroundStyle(p.inkMuted).padding(.horizontal, KRSpace.space3)
-                        }
+                        } }
                         section("合成") {
                             KRInspectorSettingRow("不透明度") {
                                 KRNumberField(value: .constant(clip.authored.objects("properties").first { $0.object("descriptor").string("key") == "kronello.opacity" }?.object("source").object("value").number("value") ?? 1), unit: "", step: 0.01, range: 0...1, precision: 2, accessibilityLabel: "不透明度", onEditingStart: { draftBases["opacity"] = model.revision }, onCommit: { _, value in model.setClipProperty(clip, key: "kronello.opacity", kind: "scalar", value: value, base: draftBases.removeValue(forKey: "opacity")) })
@@ -166,6 +169,7 @@ struct ClipInspector: View {
                                 HStack { Text(effect.string("effect_id")); Spacer(); KRButton(icon: .trash2, accessibilityLabel: "効果を削除") { model.removeClipEffect(clip, index: index) } }.padding(.horizontal, KRSpace.space3)
                             }
                         }.disabled(clip.kind == .audio)
+                        if clip.kind != .audio { section("カラー") { ClipColorInspector(model: model, clip: clip) } }
                         if clip.composition != nil { KRButton("モーションで開く", icon: .layers, variant: .secondary) { model.openClipInMotion(clip) }.padding(.horizontal, KRSpace.space3) }
                     }.padding(.vertical, KRSpace.space3)
                 }
@@ -199,6 +203,8 @@ struct SequenceTracks: View {
             Text("\(Int(model.extent.width))×\(Int(model.extent.height)) · \(EditPresentation.rateLabel(num: model.rateNum, den: model.rateDen)) · \(Int(model.sequence.number("audio_rate")) / 1000) kHz").krText(KRType.caption).foregroundStyle(p.inkMuted)
             Text(model.timecode).krText(KRType.timecode).foregroundStyle(p.accentInk)
         } }, actions: {
+            KRButton(icon: .captions, accessibilityLabel: "字幕を追加") { model.addCaption() }
+                .disabled(model.busy || model.pendingCandidate != nil || model.ui.sequence == nil)
             KRButton(icon: .magnet, accessibilityLabel: "スナップ", pressed: model.editSnap) { model.editSnap.toggle() }
             KRButton(icon: .chevronsLeft, accessibilityLabel: "時間軸を縮小") { model.editScale = max(1, model.editScale / 2) }
             KRButton(icon: .plus, accessibilityLabel: "時間軸を拡大") { model.editScale = min(16, model.editScale * 2) }
@@ -250,9 +256,9 @@ struct SequenceTracks: View {
         }
     }
     func lane(_ track: [String: Any], width: Double, frameWidth: Double) -> some View {
-        let id = track.string("id"), locked = model.ui.locked.contains(id)
-        return KRTrack(header: .init(model.trackNumber(id), track.string("kind") == "audio" ? "Audio" : "Video", kind: track.string("kind") == "audio" ? .audio : .video,
-            selected: model.selectedClip?.track == id, hidden: track.string("kind") == "audio" ? (track.object("state")["muted"] as? Bool ?? false) : !(track.object("state")["visible"] as? Bool ?? true), locked: locked, visibilityEnabled: !locked && !model.busy && model.pendingCandidate == nil, onVisibility: { model.setTrackOutput(track) }, onLock: { model.toggleLock(id) }), headerWidth: 200, locked: locked) {
+        let id = track.string("id"), kind = track.string("kind"), locked = model.ui.locked.contains(id)
+        return KRTrack(header: .init(model.trackNumber(id), kind == "audio" ? "Audio" : kind == "caption" ? "Caption" : "Video", kind: kind == "audio" ? .audio : kind == "caption" ? .subtitle : .video,
+            selected: model.selectedClip?.track == id, hidden: kind == "audio" ? (track.object("state")["muted"] as? Bool ?? false) : !(track.object("state")["visible"] as? Bool ?? true), locked: locked, visibilityEnabled: !locked && !model.busy && model.pendingCandidate != nil, onVisibility: { model.setTrackOutput(track) }, onLock: { model.toggleLock(id) }), headerWidth: 200, locked: locked) {
             ZStack(alignment: .leading) {
                 Color.clear.contentShape(Rectangle()).onTapGesture { tracksFocused = true; model.selectClip(nil) }
                 ForEach(model.editClips.filter { $0.track == id }) { clip in
@@ -274,7 +280,8 @@ struct SequenceTracks: View {
         return KRClip(model.clipName(clip), kind: clip.kind, state: missing.map { .missing($0) } ?? (model.ui.clipSelection == clip.id ? .selected : .resting), onSelect: { model.selectClip(clip.id) })
             .allowsHitTesting(false)
             .accessibilityHidden(true)
-            .overlay { if model.editTool == "blade" {
+            // A cue has no source window: splitting is not a caption operation.
+            .overlay { if model.editTool == "blade" && clip.kind != .subtitle {
                 KRBladeHitArea("\(model.clipName(clip)) を分割", begin: { fraction in
                     model.beginClipGesture(clip, mode: .blade); model.updateClipGesture(at: model.bladeFrame(clip, fraction: fraction))
                 }, update: { model.updateClipGesture(at: model.bladeFrame(clip, fraction: $0)) }, release: { Task { await model.commitClipGesture() } })
@@ -319,16 +326,5 @@ struct AssetPlacementDrop: DropDelegate {
         trace("perform"); guard validateDrop(info: info) else { return false }
         guard updateCandidate(info: info) else { return false }
         Task { await receiver.commit() }; return true
-    }
-}
-
-extension EditorModel {
-    var orderedTracks: [[String: Any]] {
-        let tracks = sequence.objects("tracks")
-        return tracks.filter { $0.string("kind") == "video" }.reversed() + tracks.filter { $0.string("kind") == "audio" }
-    }
-    func trackNumber(_ id: String) -> String {
-        let tracks = sequence.objects("tracks"), kind = tracks.first { $0.string("id") == id }?.string("kind") ?? "video"
-        return (kind == "audio" ? "A" : "V") + String((tracks.filter { $0.string("kind") == kind }.firstIndex { $0.string("id") == id } ?? 0) + 1)
     }
 }
