@@ -29,7 +29,7 @@ class NativeBuildTests(unittest.TestCase):
     def test_manifest_pins_license_versions_and_no_gpl(self):
         manifest = json.loads(build.MANIFEST.read_text())
         self.assertEqual(manifest["ffmpeg_major"], 9)
-        self.assertEqual([d["version"] for d in manifest["dependencies"]], ["9.0.2", "4.2.0", "1.5.4"])
+        self.assertEqual([d["version"] for d in manifest["dependencies"]], ["9.0.2", "4.2.0", "1.5.4", "1.5.2"])
         for dependency in manifest["dependencies"]:
             self.assertTrue(dependency["url"].startswith("https://"))
             self.assertEqual(len(bytes.fromhex(dependency["sha256"])), 32)

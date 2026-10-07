@@ -47,14 +47,24 @@ def source(entry, cache, offline):
             raise ValueError(f"missing/hash-mismatched offline source: {path}")
         temporary = path.with_suffix(path.suffix + ".part")
         try:
-            with urllib.request.urlopen(entry["url"], timeout=60) as response:
-                if not response.geturl().startswith("https://"):
-                    raise ValueError("HTTPS redirect required")
-                with temporary.open("wb") as out:
-                    shutil.copyfileobj(response, out)
-            if sha256(temporary) != entry["sha256"]:
-                raise ValueError(f"source hash mismatch: {entry['name']}")
-            temporary.replace(path)
+            error = None
+            for _ in range(3):
+                try:
+                    with urllib.request.urlopen(entry["url"], timeout=60) as response:
+                        if not response.geturl().startswith("https://"):
+                            raise ValueError("HTTPS redirect required")
+                        with temporary.open("wb") as out:
+                            shutil.copyfileobj(response, out)
+                except (OSError, ValueError) as attempt:
+                    error = attempt
+                    continue
+                if sha256(temporary) != entry["sha256"]:
+                    error = ValueError(f"source hash mismatch: {entry['name']}")
+                    continue
+                temporary.replace(path)
+                break
+            else:
+                raise error
         finally:
             temporary.unlink(missing_ok=True)
     return path

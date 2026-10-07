@@ -22,8 +22,9 @@ def verify_inventory(package):
         raise ValueError("package inventory/hash/platform mismatch")
     native = json.loads((package / "native-dependencies.json").read_text())
     receipt = json.loads((package / "native-build-receipt.json").read_text())
+    external = {d["name"]: d["version"] for d in native["dependencies"] if d["name"] != "ffmpeg"}
     if (native != receipt["manifest"] or native != json.loads((ROOT / "scripts/native-dependencies.json").read_text())
-            or receipt["ffmpeg_version"] != "9.0.2" or receipt["external_versions"] != {"svt-av1": "4.2.0", "dav1d": "1.5.4"}):
+            or receipt["ffmpeg_version"] != "9.0.2" or receipt["external_versions"] != external):
         raise ValueError("pinned source manifest mismatch")
     expected = set(EXECUTABLES + [f"lib/{name}" for name in LIBRARIES] + [
         "native-dependencies.json", "native-build-receipt.json", "build-provenance.json",
