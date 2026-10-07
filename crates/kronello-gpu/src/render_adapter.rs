@@ -143,6 +143,31 @@ fn lower_with_resident(
                         width: width as f32,
                     }),
             }),
+            // Transition solid rectangles execute through the existing
+            // supersampled path coverage stage (wipe matte, dip underlay).
+            DagNode::SolidRect { color, rect } => DrawNode::Path(PathDraw {
+                stroke_geometry: None,
+                fill_gradient: None,
+                stroke_gradient: None,
+                paint_transform: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+                contours: vec![Contour {
+                    points: [
+                        [rect[0], rect[1]],
+                        [rect[2], rect[1]],
+                        [rect[2], rect[3]],
+                        [rect[0], rect[3]],
+                    ]
+                    .iter()
+                    .map(|p| p.map(|v| v as f32))
+                    .collect(),
+                    closed: true,
+                }],
+                fill: Some(Fill {
+                    paint: paint(*color),
+                    rule: FillRule::Nonzero,
+                }),
+                stroke: None,
+            }),
             DagNode::IsolatedComposite { children, opacity } => DrawNode::Group {
                 children: children
                     .iter()

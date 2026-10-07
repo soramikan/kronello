@@ -243,19 +243,71 @@ fn generator_color() -> Color {
     Color::from_srgb8([0; 3], None)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Transition {
     pub outgoing: ClipId,
     pub incoming: ClipId,
     pub range: TimeRange,
     pub kind: TransitionKind,
+    /// FX-003 per-kind payload. Absent in pre-FX-003 documents and required
+    /// for all non-crossfade kinds; crossfade must not carry one (ADR-0109).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub params: Option<TransitionParams>,
     pub version: u32,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum TransitionKind {
     Crossfade,
+    Wipe,
+    Slide,
+    Dip,
+}
+/// FX-003 transition payloads; the variant must match Transition::kind.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TransitionParams {
+    Wipe(WipeParams),
+    Slide(SlideParams),
+    Dip(DipParams),
+}
+/// Closed direction set shared by the wipe and slide v1 transitions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TransitionDirection {
+    Left,
+    Right,
+    Up,
+    Down,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WipeParams {
+    pub direction: TransitionDirection,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SlideParams {
+    pub direction: TransitionDirection,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DipParams {
+    /// Straight authoring color composited at the transition midpoint.
+    pub color: Color,
+}
+impl TransitionKind {
+    /// FX-003: every kind except crossfade requires its matching payload.
+    pub fn accepts(self, params: Option<TransitionParams>) -> bool {
+        matches!(
+            (self, params),
+            (Self::Crossfade, None)
+                | (Self::Wipe, Some(TransitionParams::Wipe(_)))
+                | (Self::Slide, Some(TransitionParams::Slide(_)))
+                | (Self::Dip, Some(TransitionParams::Dip(_)))
+        )
+    }
 }
 #[derive(Debug, Error)]
 pub enum SequenceError {
@@ -420,7 +472,14 @@ impl Sequence {
                         && c.timeline_range.intersection(transition.range).is_some()
                 })
             {
-                return Err(SequenceError::Invalid("invalid crossfade overlap".into()));
+                return Err(SequenceError::Invalid("invalid transition overlap".into()));
+            }
+            // Kind/params pairing is structural: mismatches are invalid
+            // regardless of which evaluator executes the transition.
+            if !transition.kind.accepts(transition.params) {
+                return Err(SequenceError::Invalid(
+                    "transition kind and params mismatch".into(),
+                ));
             }
         }
         for track in &self.tracks {

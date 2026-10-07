@@ -629,7 +629,7 @@ fn cpu_catalog_and_vec003_manifest_match_harness() {
         catalog["scene_ids"],
         json!(scenes.iter().map(|s| s.id).collect::<Vec<_>>())
     );
-    assert_eq!(scenes.len(), 40);
+    assert_eq!(scenes.len(), 49);
     let m = manifest(&scenes, "fixture-test", "font-test");
     assert_eq!(
         m["stroke_geometry_version"],

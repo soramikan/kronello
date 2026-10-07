@@ -191,11 +191,74 @@ fn analytical_scene_expectations_are_consistent() {
                     .collect();
                 compare_semantic(id, &expected["samples"], &json!(actual)).unwrap();
             }
+            // COLOR-002 (ADR-0108): premultiplied rgb = rgb * 2^exposure +
+            // offset; alpha is returned unchanged, HDR is not clamped.
+            "color-exposure" => {
+                let p = floats(&input["rgba"]);
+                let exposure = input["exposure"].as_f64().unwrap();
+                let offset = input["offset"].as_f64().unwrap();
+                let gain = 2.0_f64.powf(exposure);
+                let actual: Vec<f64> = p[..3]
+                    .iter()
+                    .map(|v| v * gain + offset)
+                    .chain([p[3]])
+                    .collect();
+                compare_finite_values(id, &floats(&expected["rgba"]), &actual).unwrap();
+            }
+            // FX-003 (ADR-0109): the wipe reveal rectangle grows from the
+            // requested edge over the sequence extent.
+            "wipe-reveal" => {
+                let extent = floats(&input["extent"]);
+                let progress = input["progress"].as_f64().unwrap();
+                let actual: Vec<Vec<f64>> = input["directions"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|d| match d.as_str().unwrap() {
+                        "left" => vec![0.0, 0.0, extent[0] * progress, extent[1]],
+                        "right" => {
+                            vec![extent[0] * (1.0 - progress), 0.0, extent[0], extent[1]]
+                        }
+                        "up" => vec![0.0, 0.0, extent[0], extent[1] * progress],
+                        "down" => {
+                            vec![0.0, extent[1] * (1.0 - progress), extent[0], extent[1]]
+                        }
+                        other => panic!("unknown direction: {other}"),
+                    })
+                    .collect();
+                for (actual, expected) in actual.iter().zip(expected["rects"].as_array().unwrap()) {
+                    compare_finite_values(id, &floats(expected), actual).unwrap();
+                }
+            }
+            // FX-003 (ADR-0109): the first half fades the outgoing composite
+            // to the dip color; the second half fades the incoming clip in
+            // over the opaque dip color.
+            "dip-opacity" => {
+                let actual: Vec<Vec<f64>> = input["progresses"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|p| {
+                        let p = p.as_f64().unwrap();
+                        if p < 0.5 {
+                            vec![2.0 * p, 0.0]
+                        } else {
+                            vec![1.0, 2.0 * p - 1.0]
+                        }
+                    })
+                    .collect();
+                for (actual, expected) in actual
+                    .iter()
+                    .zip(expected["under_over"].as_array().unwrap())
+                {
+                    compare_finite_values(id, &floats(expected), actual).unwrap();
+                }
+            }
             other => panic!("unverified scene operation: {other}"),
         }
         tested += 1;
     }
-    assert_eq!(tested, 9);
+    assert_eq!(tested, 12);
 }
 
 #[test]

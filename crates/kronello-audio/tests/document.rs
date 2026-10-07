@@ -389,6 +389,7 @@ fn crossfade_between_audible_composition_clips_fails_typed() {
         incoming: incoming.id,
         range: r(t(1, 20), t(1, 10)),
         kind: TransitionKind::Crossfade,
+        params: None,
         version: 1,
     });
     s.tracks[0].clips.push(incoming);

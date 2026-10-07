@@ -122,6 +122,8 @@ fn shared_clip_blend_real_render_revision_retry_undo_and_snapshot_pins() {
     for (mode, expected) in [
         ("multiply", [0.195, 0.265, 0.0925, 0.625]),
         ("screen", [0.28, 0.335, 0.145, 0.625]),
+        ("difference", [0.25, 0.3, 0.125, 0.625]),
+        ("luminosity", [0.197125, 0.322125, 0.097125, 0.625]),
     ] {
         let previous = export(&path);
         let DocumentObject::Known(s) = &previous.document.sequences[0] else {
@@ -206,7 +208,7 @@ fn blend_validation_rejects_unknown_duplicate_and_animated_modes() {
         Property::new(
             PropertyId::new(),
             DescriptorRef::new(descriptor),
-            PropertySource::Constant(Value::Enum("overlay".into())),
+            PropertySource::Constant(Value::Enum("phoenix".into())),
             vec![],
             &registry
         )

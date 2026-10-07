@@ -5,7 +5,7 @@ use thiserror::Error;
 /// Domain errors retain machine-readable categories and offending values.
 #[derive(Debug, Clone, PartialEq, Error)]
 pub enum ModelError {
-    #[error("blend mode must be one constant normal, multiply, or screen property")]
+    #[error("blend mode must be one constant property with a supported mode name")]
     InvalidBlendMode,
     #[error("numeric values must be finite: {value}")]
     NonFinite { value: f64 },

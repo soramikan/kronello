@@ -5,11 +5,12 @@
     "device_type": "IntegratedGpu",
     "driver": "",
     "driver_info": "",
-    "driver_version": "Metal driver separately unavailable; macOS build in os",
-    "name": "Apple M1",
+    "name": "Apple M4",
+    "software_adapter": false,
     "vendor": 0
   },
   "architecture": "arm64",
+  "baseline_profile": "apple-silicon-metal",
   "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
   "dependencies": {
     "naga": "30.0.1",
@@ -21,45 +22,43 @@
     "wgpu-hal": "30.0.1"
   },
   "hardware": {
-    "cpu": "Apple M1",
-    "memory": "17179869184",
-    "model": "MacBookPro17,1"
+    "cpu": "Apple M4",
+    "memory": "34359738368",
+    "model": "Mac16,10"
   },
-  "metal": {
+  "os": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0.1\nBuildVersion:\t\t26A434",
+  "platform_details": {
     "SPDisplaysDataType": [
       {
-        "_name": "kHW_AppleM1Item",
+        "_name": "Apple M4",
         "spdisplays_mtlgpufamilysupport": "spdisplays_metal4",
         "spdisplays_ndrvs": [
           {
-            "_name": "Color LCD",
-            "_spdisplays_display-product-id": "a049",
-            "_spdisplays_display-serial-number": "fd626d62",
-            "_spdisplays_display-vendor-id": "610",
-            "_spdisplays_display-week": "0",
-            "_spdisplays_display-year": "0",
+            "_name": "PHL 288E2",
+            "_spdisplays_display-product-id": "c231",
+            "_spdisplays_display-serial-number": "97",
+            "_spdisplays_display-vendor-id": "410c",
+            "_spdisplays_display-week": "49",
+            "_spdisplays_display-year": "2023",
             "_spdisplays_displayID": "1",
-            "_spdisplays_pixels": "3360 x 2100",
-            "_spdisplays_resolution": "1680 x 1050 @ 60.00Hz",
-            "spdisplays_ambient_brightness": "spdisplays_yes",
-            "spdisplays_asleep": "spdisplays_yes",
-            "spdisplays_connection_type": "spdisplays_internal",
-            "spdisplays_display_type": "spdisplays_built-in_retinaLCD",
+            "_spdisplays_pixels": "5120 x 2880",
+            "_spdisplays_resolution": "2560 x 1440 @ 60.00Hz",
             "spdisplays_main": "spdisplays_yes",
             "spdisplays_mirror": "spdisplays_off",
             "spdisplays_online": "spdisplays_yes",
-            "spdisplays_pixelresolution": "spdisplays_2560x1600Retina"
+            "spdisplays_pixelresolution": "spdisplays_5k-uhgplus",
+            "spdisplays_resolution": "2560 x 1440 @ 60.00Hz",
+            "spdisplays_rotation": "spdisplays_supported"
           }
         ],
         "spdisplays_vendor": "sppci_vendor_Apple",
         "sppci_bus": "spdisplays_builtin",
-        "sppci_cores": "8",
+        "sppci_cores": "10",
         "sppci_device_type": "spdisplays_gpu",
-        "sppci_model": "Apple M1"
+        "sppci_model": "Apple M4"
       }
     ]
   },
-  "os": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0\nBuildVersion:\t\t26A428",
   "required_features": "Features { features_wgpu: FeaturesWGPU(0x0), features_webgpu: FeaturesWebGPU(0x0) }",
   "required_limits": "Limits { max_texture_dimension_1d: 8192, max_texture_dimension_2d: 8192, max_texture_dimension_3d: 2048, max_texture_array_layers: 256, max_bind_groups: 4, max_bind_groups_plus_vertex_buffers: 24, max_bindings_per_bind_group: 1000, max_dynamic_uniform_buffers_per_pipeline_layout: 8, max_dynamic_storage_buffers_per_pipeline_layout: 4, max_sampled_textures_per_shader_stage: 16, max_samplers_per_shader_stage: 16, max_storage_buffers_per_shader_stage: 8, max_storage_textures_per_shader_stage: 4, max_uniform_buffers_per_shader_stage: 12, max_binding_array_elements_per_shader_stage: 0, max_binding_array_acceleration_structure_elements_per_shader_stage: 0, max_binding_array_sampler_elements_per_shader_stage: 0, max_uniform_buffer_binding_size: 65536, max_storage_buffer_binding_size: 134217728, max_vertex_buffers: 8, max_buffer_size: 268435456, max_vertex_attributes: 16, max_vertex_buffer_array_stride: 2048, max_inter_stage_shader_variables: 16, min_uniform_buffer_offset_alignment: 256, min_storage_buffer_offset_alignment: 256, max_color_attachments: 8, max_color_attachment_bytes_per_sample: 32, max_compute_workgroup_storage_size: 16384, max_compute_invocations_per_workgroup: 256, max_compute_workgroup_size_x: 256, max_compute_workgroup_size_y: 256, max_compute_workgroup_size_z: 64, max_compute_workgroups_per_dimension: 65535, max_immediate_size: 0, max_non_sampler_bindings: 1000000, max_task_workgroup_total_count: 0, max_task_workgroups_per_dimension: 0, max_mesh_workgroup_total_count: 0, max_mesh_workgroups_per_dimension: 0, max_task_invocations_per_workgroup: 0, max_task_invocations_per_dimension: 0, max_mesh_invocations_per_workgroup: 0, max_mesh_invocations_per_dimension: 0, max_task_payload_size: 0, max_mesh_output_vertices: 0, max_mesh_output_primitives: 0, max_mesh_output_layers: 0, max_mesh_multiview_view_count: 0, max_blas_primitive_count: 0, max_blas_geometry_count: 0, max_tlas_instance_count: 0, max_acceleration_structures_per_shader_stage: 0, max_buffers_and_acceleration_structures_per_shader_stage: 28, max_multiview_view_count: 0, max_ray_dispatch_count: 0, max_ray_recursion_depth: 0 }",
   "rust": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: aarch64-apple-darwin\nrelease: 1.95.0\nLLVM version: 22.1.2",

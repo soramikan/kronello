@@ -111,6 +111,14 @@ pub(crate) fn apply_reference(
         _ => GpuError::InvalidInput("invalid effect parameters"),
     })?;
     let source = surface_pixels(source)?;
+    // COLOR-002 pointwise pass: identical f32 math on CPU and in WGSL.
+    if effect.is_pointwise_color() {
+        let output: Vec<[f32; 4]> = source
+            .iter()
+            .map(|&p| color::apply_color(p, effect))
+            .collect();
+        return surface_pixels(&output);
+    }
     let blurred = if let Some(c) = effect.covariance() {
         let taps = kronello_render::affine_gaussian_kernel(c).map_err(|_| {
             GpuError::UnsupportedFeature("affine Gaussian covariance or kernel budget")

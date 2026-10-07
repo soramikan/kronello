@@ -8,11 +8,12 @@
       "device_type": "IntegratedGpu",
       "driver": "",
       "driver_info": "",
-      "driver_version": "Metal driver separately unavailable; macOS build in os",
-      "name": "Apple M1",
+      "name": "Apple M4",
+      "software_adapter": false,
       "vendor": 0
     },
     "architecture": "arm64",
+    "baseline_profile": "apple-silicon-metal",
     "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
     "dependencies": {
       "naga": "30.0.1",
@@ -24,45 +25,43 @@
       "wgpu-hal": "30.0.1"
     },
     "hardware": {
-      "cpu": "Apple M1",
-      "memory": "17179869184",
-      "model": "MacBookPro17,1"
+      "cpu": "Apple M4",
+      "memory": "34359738368",
+      "model": "Mac16,10"
     },
-    "metal": {
+    "os": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0.1\nBuildVersion:\t\t26A434",
+    "platform_details": {
       "SPDisplaysDataType": [
         {
-          "_name": "kHW_AppleM1Item",
+          "_name": "Apple M4",
           "spdisplays_mtlgpufamilysupport": "spdisplays_metal4",
           "spdisplays_ndrvs": [
             {
-              "_name": "Color LCD",
-              "_spdisplays_display-product-id": "a049",
-              "_spdisplays_display-serial-number": "fd626d62",
-              "_spdisplays_display-vendor-id": "610",
-              "_spdisplays_display-week": "0",
-              "_spdisplays_display-year": "0",
+              "_name": "PHL 288E2",
+              "_spdisplays_display-product-id": "c231",
+              "_spdisplays_display-serial-number": "97",
+              "_spdisplays_display-vendor-id": "410c",
+              "_spdisplays_display-week": "49",
+              "_spdisplays_display-year": "2023",
               "_spdisplays_displayID": "1",
-              "_spdisplays_pixels": "3360 x 2100",
-              "_spdisplays_resolution": "1680 x 1050 @ 60.00Hz",
-              "spdisplays_ambient_brightness": "spdisplays_yes",
-              "spdisplays_asleep": "spdisplays_yes",
-              "spdisplays_connection_type": "spdisplays_internal",
-              "spdisplays_display_type": "spdisplays_built-in_retinaLCD",
+              "_spdisplays_pixels": "5120 x 2880",
+              "_spdisplays_resolution": "2560 x 1440 @ 60.00Hz",
               "spdisplays_main": "spdisplays_yes",
               "spdisplays_mirror": "spdisplays_off",
               "spdisplays_online": "spdisplays_yes",
-              "spdisplays_pixelresolution": "spdisplays_2560x1600Retina"
+              "spdisplays_pixelresolution": "spdisplays_5k-uhgplus",
+              "spdisplays_resolution": "2560 x 1440 @ 60.00Hz",
+              "spdisplays_rotation": "spdisplays_supported"
             }
           ],
           "spdisplays_vendor": "sppci_vendor_Apple",
           "sppci_bus": "spdisplays_builtin",
-          "sppci_cores": "8",
+          "sppci_cores": "10",
           "sppci_device_type": "spdisplays_gpu",
-          "sppci_model": "Apple M1"
+          "sppci_model": "Apple M4"
         }
       ]
     },
-    "os": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0\nBuildVersion:\t\t26A428",
     "required_features": "Features { features_wgpu: FeaturesWGPU(0x0), features_webgpu: FeaturesWebGPU(0x0) }",
     "required_limits": "Limits { max_texture_dimension_1d: 8192, max_texture_dimension_2d: 8192, max_texture_dimension_3d: 2048, max_texture_array_layers: 256, max_bind_groups: 4, max_bind_groups_plus_vertex_buffers: 24, max_bindings_per_bind_group: 1000, max_dynamic_uniform_buffers_per_pipeline_layout: 8, max_dynamic_storage_buffers_per_pipeline_layout: 4, max_sampled_textures_per_shader_stage: 16, max_samplers_per_shader_stage: 16, max_storage_buffers_per_shader_stage: 8, max_storage_textures_per_shader_stage: 4, max_uniform_buffers_per_shader_stage: 12, max_binding_array_elements_per_shader_stage: 0, max_binding_array_acceleration_structure_elements_per_shader_stage: 0, max_binding_array_sampler_elements_per_shader_stage: 0, max_uniform_buffer_binding_size: 65536, max_storage_buffer_binding_size: 134217728, max_vertex_buffers: 8, max_buffer_size: 268435456, max_vertex_attributes: 16, max_vertex_buffer_array_stride: 2048, max_inter_stage_shader_variables: 16, min_uniform_buffer_offset_alignment: 256, min_storage_buffer_offset_alignment: 256, max_color_attachments: 8, max_color_attachment_bytes_per_sample: 32, max_compute_workgroup_storage_size: 16384, max_compute_invocations_per_workgroup: 256, max_compute_workgroup_size_x: 256, max_compute_workgroup_size_y: 256, max_compute_workgroup_size_z: 64, max_compute_workgroups_per_dimension: 65535, max_immediate_size: 0, max_non_sampler_bindings: 1000000, max_task_workgroup_total_count: 0, max_task_workgroups_per_dimension: 0, max_mesh_workgroup_total_count: 0, max_mesh_workgroups_per_dimension: 0, max_task_invocations_per_workgroup: 0, max_task_invocations_per_dimension: 0, max_mesh_invocations_per_workgroup: 0, max_mesh_invocations_per_dimension: 0, max_task_payload_size: 0, max_mesh_output_vertices: 0, max_mesh_output_primitives: 0, max_mesh_output_layers: 0, max_mesh_multiview_view_count: 0, max_blas_primitive_count: 0, max_blas_geometry_count: 0, max_tlas_instance_count: 0, max_acceleration_structures_per_shader_stage: 0, max_buffers_and_acceleration_structures_per_shader_stage: 28, max_multiview_view_count: 0, max_ray_dispatch_count: 0, max_ray_recursion_depth: 0 }",
     "rust": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: aarch64-apple-darwin\nrelease: 1.95.0\nLLVM version: 22.1.2",
@@ -86,13 +85,45 @@
       "bytes": 512,
       "sha256": "f69d7733e97fa225bf9c39551bb7e5f844cd51f6ae3de5f025bfddc810f8357a"
     },
+    "color002-curves-rec709/frame-0.png": {
+      "bytes": 111,
+      "sha256": "f6f44cc313f1e36d5c119606a4c633a19bd37b7617471fbdbc4ba324d1f2a033"
+    },
+    "color002-curves-rec709/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "0026c2451c15e12c7cafc421c0ab5f107514658ca2a845ae9a913b0fbb0d2e56"
+    },
+    "color002-exposure-rec709/frame-0.png": {
+      "bytes": 112,
+      "sha256": "41a4b6790b76cc401d18478896ccfca808c2527760a7d8500d99116f24baa0c5"
+    },
+    "color002-exposure-rec709/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "af14252e1955f19a884c7625eca0155c9be4083ce7b6851a4e1efd3f6d7566a1"
+    },
+    "color002-hsl-rec709/frame-0.png": {
+      "bytes": 112,
+      "sha256": "0d75e3db2ea7dd8ba9bf937ce37b0e6bfff834c325e8e9bb10cfb2b16e61ab85"
+    },
+    "color002-hsl-rec709/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "d681c15ca3e465626669fd7db45c1adf252f66b5843c5a5b6f919c8a45835086"
+    },
+    "color002-levels-rec2020/frame-0.png": {
+      "bytes": 108,
+      "sha256": "6d4c940e113d2174157f58c20dcfca8ccbb1dcb05f8583ef1bf739afe818c823"
+    },
+    "color002-levels-rec2020/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "dbc0e9102d940a12849e2ba8ec426185def0fc171e14f3b029cbd16511a951a2"
+    },
     "coverage-fill-stroke/frame-0.png": {
       "bytes": 254,
       "sha256": "3f06868da76314844aa8cb3ed65a791a5fae5cf5be6f9505dd589d8fe0d941dd"
     },
     "coverage-fill-stroke/frame-0.rgba16f": {
       "bytes": 512,
-      "sha256": "67e6c66838ec24c36148b16ce65310a5f95a63ae5c347ad4c5501e47cfd4799a"
+      "sha256": "0c1332957f12222569fe7b75c4dd66155eec8399410fed0fa2237124d8d01b9d"
     },
     "coverage-srgb-rec2020/frame-0.png": {
       "bytes": 255,
@@ -103,8 +134,8 @@
       "sha256": "ac30749b89208e1e97ab17df812603b32a6e9a4bcfce1fc25a8e89197575d2a4"
     },
     "environment.json": {
-      "bytes": 4629,
-      "sha256": "e9f93d4768aad69d514109029d8ead313116604db14d2db797b593f360679866"
+      "bytes": 4490,
+      "sha256": "1796bddf983b331d5b675cd39b406d74da6ec5d4c44057af190c9a00aaf026ca"
     },
     "fill-evenodd-hole/frame-0.png": {
       "bytes": 133,
@@ -177,6 +208,46 @@
     "fx002-shear-shadow/frame-0.rgba16f": {
       "bytes": 2048,
       "sha256": "0790baf7f984629bdca613c217cd4e49ab7cfb628d818b0c393cd3d0863921a9"
+    },
+    "fx003-blend-nonseparable/frame-0.png": {
+      "bytes": 233,
+      "sha256": "fbe55db3cda59609ca3db72723b3edcc1e339737c629820922e7d4876f7b751d"
+    },
+    "fx003-blend-nonseparable/frame-0.rgba16f": {
+      "bytes": 18432,
+      "sha256": "04467feadf3088a404adcc9c8c3c8f20dd83866e60c0f77849b19c050a8c2305"
+    },
+    "fx003-blend-separable/frame-0.png": {
+      "bytes": 328,
+      "sha256": "9edfca9a47b3857dd32a3597579855f947ee768de9abdd6eb0a3144cb5db800d"
+    },
+    "fx003-blend-separable/frame-0.rgba16f": {
+      "bytes": 18432,
+      "sha256": "dc634c573ed405d5745b6eb7421e696d50840ab2f044d3c8fd04998ef48c18d1"
+    },
+    "fx003-dip/frame-0.png": {
+      "bytes": 94,
+      "sha256": "a66ac9d4aba39173cc7904cf24b977b331747bdb3d345d09ac567eea566b9aa1"
+    },
+    "fx003-dip/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "d75ae6c022b9ba8a0989eb6848d5be38a23e2ded676b05072e53ba4352b2ff84"
+    },
+    "fx003-slide/frame-0.png": {
+      "bytes": 98,
+      "sha256": "49d4c50e8195d11fc68d2dcdd85939b1833a6e351a5ec1b200dffdde1f7bb42c"
+    },
+    "fx003-slide/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "f43649bc9fa542ccfa445e3f27afd65f48920b177ea45420060f178ef2d2c33a"
+    },
+    "fx003-wipe/frame-0.png": {
+      "bytes": 97,
+      "sha256": "d483c6a4f1da740ee08c8d0754f337add5075a13956239983be43c4a8bd0bdae"
+    },
+    "fx003-wipe/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "c05bf8031e3c0ff902a1af682e9d533305b252783b44156930e6f6771d4d83a6"
     },
     "glyph-outline-edges/frame-0.png": {
       "bytes": 576,
@@ -299,12 +370,12 @@
       "sha256": "a8a5e6d38abbaff24c17fbd6eac7ad7059ae7b1fb0b722c194be078c516e559a"
     },
     "manifest.json": {
-      "bytes": 176618,
-      "sha256": "a96f5f37447451583f88cfaa4ee930a3654ff8f4fe57b229ff9a76fd8e5e362a"
+      "bytes": 251123,
+      "sha256": "f5e90953794f75a88adbe0815b979f3048353e36990ef24148143d59464aa149"
     },
     "provenance.json": {
       "bytes": 1405,
-      "sha256": "6d3fd9684a76ab1b679da25cfd0993fc6775e6cff1c4146ba348480617e9f74e"
+      "sha256": "88a365a1e0bd6eb3ee1f9b0972bbebd396579cb8c222b818ae4d925d540eccfc"
     },
     "rec2020-conversion/frame-0.png": {
       "bytes": 91,
@@ -408,20 +479,20 @@
     }
   },
   "provenance": {
-    "cargo_lock_sha256": "08d36befc4a4d928cbb89d068036222f4a23c873730df39d94d10d3a7b5cd129",
-    "color_code_sha256": "bd0c5e95f8be0f9bcf0bc78010d1b82dbbf4907d51a549c0086513223968a66f",
+    "cargo_lock_sha256": "ff7a62be2b09943650f90c6bdee04fd151ecaa641cc5a86322b297d3c4639c71",
+    "color_code_sha256": "8939a54f089fbfeccdf84abc341a063da92d994f76dfc3ea0b6a49ca13964b1d",
     "comparison_code_sha256": "0f09357830b18b3abd193030880e442a65171954f5774e399a4bb0d17f7b2112",
-    "draw_fixture_code_sha256": "6d517fc60ede21eea9abfa338bc1720b1bcf064bf5cc1c449696372ebcec96b8",
-    "effect_kernel_code_sha256": "410950ce1720fd8da961fa257a959311e402110ab792d0800f9cc6aa0edd2e0e",
-    "effect_reference_code_sha256": "ac4bd1ba138e663a0a9b21106d935849dac385e963584d87df6586a68e397fde",
-    "effect_shader_sha256": "8a985ae2a71f0b1b802f18a406bb7cd77cef96c7b0c963e29b6f06b4ed8bc292",
+    "draw_fixture_code_sha256": "e85456ae0943a845d2dd2003a6a80bcc1cdaf7bdea7c68e80908299709238382",
+    "effect_kernel_code_sha256": "b69d16ede96862d6f2a40d858f95c14af51a67b0b867df694e3dc5cb843631a4",
+    "effect_reference_code_sha256": "d320730321b85df34cae66aa8951afe305ca2db8eb9873b4eeed0e768d491657",
+    "effect_shader_sha256": "f303f79f45d7050803d4c909fe05ccede282373a3f1beadfdf2f9d8e3e69dd6a",
     "fixture_manifest_sha256": "13060d35e1ed680a0666197b3d0a6de2606933030f43fda63c169923377aec22",
-    "renderer_code_sha256": "77ea8d93a4f758b74747b553aa2edb2eac8cfded0cc75d214feafdb8fffa06b2",
-    "revision": "2ce3d81fe776b4c8d67f90610025d3d0e671401f",
-    "scene_code_sha256": "5c27cfa51225e6f0ee2d829d68673b3c767745114d7d3e92459d10052576ddc7",
-    "scene_gpu_code_sha256": "5b15fcaec1b082b6a6f55bef6da4295551f2bafd97adb07f72ab750791af5e5e",
-    "scene_reference_code_sha256": "91002bf4b7335ebd7c0f33e7d34d24132c84e725dcdb818f49dbba450b5deb31",
-    "scene_shader_sha256": "d2f84a4b8ecdc71e27e428deeee9bd6d129b71bdbb3de4ed7470416e3bae2738",
+    "renderer_code_sha256": "a62722615806f110f12a268c5195f4daaf5157674058b0e604f2b54e5fd2b3b4",
+    "revision": "ba4f429e6b5793d0a40f6775b9bb283065b2d7a9",
+    "scene_code_sha256": "6187f686c0c92cb53ff83f82e59a8eda3c5f0aad07eb9b558fe9759b35c3ce39",
+    "scene_gpu_code_sha256": "0a0c50a0623e5410a56c06979b5a3847805d7baffb1442b8fe9644acfc64019c",
+    "scene_reference_code_sha256": "38a4f531513259b74394fe592fc1a4c2e9e1ce883de59ceb1e5950b578d74a9d",
+    "scene_shader_sha256": "0ce85e871ba31c5d1f2bf56ddbcf8d1997cee44bcc19963d28e11ce66b9ea13d",
     "shader_sha256": "f78694ed5b0dbc653a28601fb6f2d319e9b8d9ed0e02cb60cc8dfad6b5b8c069",
     "status": ""
   },
@@ -1006,6 +1077,141 @@
       "size": [
         32,
         32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "color002-exposure-rec709",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "color002-levels-rec2020",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec2020"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "color002-curves-rec709",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "color002-hsl-rec709",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx003-blend-separable",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        48,
+        48
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx003-blend-nonseparable",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        48,
+        48
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx003-wipe",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx003-slide",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx003-dip",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
       ],
       "time": {
         "den": "1",

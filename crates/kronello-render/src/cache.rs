@@ -549,6 +549,16 @@ impl RasterCacheKey {
                         backend_namespace,
                     ),
                 )?)),
+                crate::DagNode::SolidRect { color, rect } => Some(Self(key(
+                    "solid-rect",
+                    (
+                        color,
+                        rect,
+                        dag.execution_region(),
+                        dag.working_space(),
+                        backend_namespace,
+                    ),
+                )?)),
                 crate::DagNode::OutputTransform { source, .. } => keys[*source],
             };
             keys.push(value);

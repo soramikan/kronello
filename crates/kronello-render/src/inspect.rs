@@ -162,6 +162,7 @@ pub fn explain_render_path(
                 }
                 DagNode::Blend { .. } => ("BLEND", None, true),
                 DagNode::Mask { .. } => ("MASK", None, true),
+                DagNode::SolidRect { .. } => ("SOLID_RECT", None, true),
                 DagNode::OutputTransform { .. } => ("OUTPUT_TRANSFORM", None, false),
                 DagNode::VideoDraw { .. } => {
                     // Decoded source dimensions, adapter conversion, and media-cache

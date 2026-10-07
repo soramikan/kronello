@@ -1,6 +1,8 @@
 # GPU 画素の golden 比較
 
-VEC-005 は `stroke-dashes` / `stroke-inside-evenodd` / `stroke-outside-nonzero` / `stroke-affine-reflected` を追加し、現在は **40 シーン・40 comparison frames**。新しいstrokeの候補生成・画像レビュー・明示採用・通常比較は2026-10-05のrevision `2ce3d81`で成功した（[VEC-005](vec-005.md)）。M3最終40シーン比較とM4の環境別基準は [M3受け入れ](m3-acceptance.md) / [QA-004](qa-004.md) を参照する。
+COLOR-002 / FX-003 は 9 シーン（`color002-exposure-rec709` / `color002-levels-rec2020` / `color002-curves-rec709` / `color002-hsl-rec709` / `fx003-blend-separable` / `fx003-blend-nonseparable` / `fx003-wipe` / `fx003-slide` / `fx003-dip`）を追加し、現在は **49 シーン・49 comparison frames**。候補生成・CPU oracle 検証・明示採用・通常比較は 2026-10-07 の revision `ba4f429` で成功した（[COLOR-002](color-002.md) / [FX-003](fx-003.md)）。採用で既存シーン `coverage-fill-stroke` の RGBA16F が 1 チャンネルだけ変わった（最大差 2^-11、binary16 の 1 ulp、許容誤差内）。
+
+VEC-005 は `stroke-dashes` / `stroke-inside-evenodd` / `stroke-outside-nonzero` / `stroke-affine-reflected` を追加し、M7 前のカタログは **40 シーン・40 comparison frames**。新しいstrokeの候補生成・画像レビュー・明示採用・通常比較は2026-10-05のrevision `2ce3d81`で成功した（[VEC-005](vec-005.md)）。M3最終40シーン比較とM4の環境別基準は [M3受け入れ](m3-acceptance.md) / [QA-004](qa-004.md) を参照する。
 
 VEC-004 は gradient の 8 シーン、FX-002 は version 2 の `fx002-rotation` / `fx002-nonuniform-rotation` / `fx002-shear-shadow` / `fx002-reflected-shear-shadow-rec2020` の 4 シーンを追加し、VEC-005 追加前のカタログは **36 シーン・36 comparison frames**。新規12シーンの候補生成・採用・比較は下記の統合ブランチで実施した（[VEC-004](vec-004.md)、[FX-002](fx-002.md)）。
 

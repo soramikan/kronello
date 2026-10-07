@@ -341,7 +341,207 @@ pub fn scenes() -> Vec<(&'static str, u32, WorkingSpace, DrawScene)> {
     scenes.extend(vec004_scenes());
     scenes.extend(fx002_scenes());
     scenes.extend(vec005_scenes());
+    scenes.extend(color002_scenes());
+    scenes.extend(fx003_scenes());
     scenes
+}
+
+/// COLOR-002 scenes (ADR-0108): one pointwise correction per scene over a
+/// mid-alpha solid so alpha preservation and extended range stay observable.
+pub fn color002_scenes() -> Vec<(&'static str, u32, WorkingSpace, DrawScene)> {
+    let scene = |effect: PixelEffect| DrawScene {
+        nodes: vec![
+            rectangle(
+                [1.0; 2],
+                [15.0; 2],
+                paint([0.72, 0.45, 0.18, 0.875], InputSpace::Srgb),
+            ),
+            DrawNode::Effect { source: 0, effect },
+        ],
+        roots: vec![1],
+    };
+    vec![
+        (
+            "color002-exposure-rec709",
+            16,
+            WorkingSpace::LinearRec709,
+            scene(PixelEffect::ColorExposure {
+                exposure: -0.75,
+                offset: 0.04,
+            }),
+        ),
+        (
+            "color002-levels-rec2020",
+            16,
+            WorkingSpace::LinearRec2020,
+            scene(PixelEffect::ColorLevels {
+                in_black: 0.1,
+                in_white: 0.9,
+                gamma: 1.8,
+                out_black: -0.05,
+                out_white: 1.1,
+            }),
+        ),
+        (
+            "color002-curves-rec709",
+            16,
+            WorkingSpace::LinearRec709,
+            scene(PixelEffect::ColorCurves {
+                points: vec![[0.0, 0.0], [0.3, 0.6], [0.7, 0.75], [1.0, 1.0]],
+            }),
+        ),
+        (
+            "color002-hsl-rec709",
+            16,
+            WorkingSpace::LinearRec709,
+            scene(PixelEffect::ColorHsl {
+                hue_shift: 72.0,
+                saturation: 0.6,
+                lightness: 0.04,
+            }),
+        ),
+    ]
+}
+
+/// FX-003 scenes (ADR-0109): the W3C blend-mode set tiled per mode, then one
+/// parameterized scene per transition kind. Inputs avoid the dodge/burn
+/// denominator ties where binary16 rounding would diverge between backends.
+fn blend_tiles(modes: &[model::BlendMode]) -> DrawScene {
+    // 4 columns of 8px tiles with 4px gutters inside a 48px canvas. The
+    // source tile is shifted right/down so each tile shows the backdrop, the
+    // blend overlap, and the partial-alpha source edge at once.
+    let mut nodes = Vec::new();
+    let mut roots = Vec::new();
+    for (index, mode) in modes.iter().enumerate() {
+        let (column, row) = (index % 4, index / 4);
+        let (x, y) = (2.0 + column as f32 * 12.0, 2.0 + row as f32 * 12.0);
+        nodes.push(rectangle(
+            [x, y],
+            [x + 8.0, y + 8.0],
+            paint([0.55, 0.35, 0.2, 1.0], InputSpace::LinearRec709),
+        ));
+        nodes.push(rectangle(
+            [x + 2.0, y + 2.0],
+            [x + 10.0, y + 10.0],
+            paint([0.3, 0.6, 0.45, 0.85], InputSpace::LinearRec709),
+        ));
+        let blend = nodes.len();
+        nodes.push(DrawNode::Blend {
+            source: blend - 1,
+            backdrop: blend - 2,
+            mode: *mode,
+        });
+        roots.push(blend);
+    }
+    DrawScene { nodes, roots }
+}
+
+pub fn fx003_scenes() -> Vec<(&'static str, u32, WorkingSpace, DrawScene)> {
+    use model::BlendMode::*;
+    let separable = [
+        Multiply,
+        Screen,
+        Darken,
+        Lighten,
+        ColorDodge,
+        ColorBurn,
+        HardLight,
+        SoftLight,
+        Difference,
+        Exclusion,
+        Overlay,
+        LinearDodge,
+        LinearBurn,
+        VividLight,
+        LinearLight,
+    ];
+    let nonseparable = [Hue, Saturation, Color, Luminosity];
+    let wipe = DrawScene {
+        nodes: vec![
+            rectangle(
+                [0.0; 2],
+                [16.0; 2],
+                paint([1.0, 0.0, 0.0, 1.0], InputSpace::LinearRec709),
+            ),
+            rectangle(
+                [0.0; 2],
+                [16.0; 2],
+                paint([0.0, 0.0, 1.0, 1.0], InputSpace::LinearRec709),
+            ),
+            // Wipe midpoint reveal: hard-edged left-half matte (ADR-0109).
+            rectangle(
+                [0.0; 2],
+                [8.0, 16.0],
+                paint([1.0; 4], InputSpace::LinearRec709),
+            ),
+            DrawNode::Masked {
+                source: 1,
+                matte: 2,
+                kind: MaskKind::Alpha,
+            },
+        ],
+        roots: vec![0, 3],
+    };
+    let slide = DrawScene {
+        nodes: vec![
+            rectangle(
+                [0.0; 2],
+                [16.0; 2],
+                paint([1.0, 0.0, 0.0, 1.0], InputSpace::LinearRec709),
+            ),
+            // Slide-from-right midpoint: the incoming clip is translated and
+            // covers the right half; the outgoing clip stays put.
+            rectangle(
+                [8.0, 0.0],
+                [24.0, 16.0],
+                paint([0.0, 0.0, 1.0, 1.0], InputSpace::LinearRec709),
+            ),
+        ],
+        roots: vec![0, 1],
+    };
+    let dip = DrawScene {
+        nodes: vec![
+            rectangle(
+                [0.0; 2],
+                [16.0; 2],
+                paint([1.0, 0.0, 0.0, 1.0], InputSpace::LinearRec709),
+            ),
+            // Dip past midpoint: the dip color is fully opaque underneath and
+            // the incoming clip fades in over it.
+            rectangle(
+                [0.0; 2],
+                [16.0; 2],
+                paint([0.0, 0.0, 0.0, 1.0], InputSpace::LinearRec709),
+            ),
+            rectangle(
+                [0.0; 2],
+                [16.0; 2],
+                paint([0.0, 0.0, 1.0, 1.0], InputSpace::LinearRec709),
+            ),
+            DrawNode::Group {
+                children: vec![2],
+                opacity: 0.5,
+            },
+        ],
+        roots: vec![0, 1, 3],
+    };
+    vec![
+        (
+            "fx003-blend-separable",
+            48,
+            WorkingSpace::LinearRec709,
+            blend_tiles(&separable),
+        ),
+        (
+            "fx003-blend-nonseparable",
+            48,
+            WorkingSpace::LinearRec709,
+            blend_tiles(&nonseparable),
+        ),
+        ("fx003-wipe", 16, WorkingSpace::LinearRec709, wipe),
+        ("fx003-slide", 16, WorkingSpace::LinearRec709, slide),
+        ("fx003-dip", 16, WorkingSpace::LinearRec709, dip),
+    ]
 }
 
 pub fn stroke_styles(caps: bool, fallback: bool) -> DrawScene {

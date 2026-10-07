@@ -107,6 +107,10 @@ impl SemanticVersions {
             effects: BTreeMap::from([
                 (GAUSSIAN_BLUR_ID.into(), AFFINE_EFFECT_VERSION),
                 (DROP_SHADOW_ID.into(), AFFINE_EFFECT_VERSION),
+                (COLOR_EXPOSURE_ID.into(), COLOR_EFFECT_VERSION),
+                (COLOR_LEVELS_ID.into(), COLOR_EFFECT_VERSION),
+                (COLOR_CURVES_ID.into(), COLOR_EFFECT_VERSION),
+                (COLOR_HSL_ID.into(), COLOR_EFFECT_VERSION),
             ]),
             generators: generator_versions(),
             video_input: initial_video_version(),
@@ -608,6 +612,16 @@ pub enum SceneContent {
         extent: [f64; 2],
     },
 }
+/// Resolved FX-003 transition operation on one incoming clip node
+/// (ADR-0109). Crossfade and dip use post_effect_opacity for the incoming
+/// ramp; wipe attaches a reveal rectangle; dip also lowers a color underlay.
+#[derive(Debug, Clone, PartialEq)]
+pub enum SceneTransition {
+    /// Hard-edge reveal rectangle in root design_px (wipe; no feathering).
+    Reveal { min: [f64; 2], max: [f64; 2] },
+    /// Dip color composited beneath the node at the given opacity.
+    Dip { color: Color, opacity: f64 },
+}
 #[derive(Debug, Clone, PartialEq)]
 pub struct SceneNodeIr {
     pub key: SceneKey,
@@ -615,6 +629,7 @@ pub struct SceneNodeIr {
     pub world_transform: kronello_eval::Affine2,
     pub opacity: f64,
     pub post_effect_opacity: f64,
+    pub transitions: Vec<SceneTransition>,
     pub blend_mode: BlendMode,
     pub effects: Vec<ResolvedEffect>,
     /// Final node values, including template and layout inputs.
@@ -953,6 +968,8 @@ pub fn build_scene_ir_with_cache(
             content = media_content(asset, stream.index, source)?;
         }
         let mut post_effect_opacity = 1.0;
+        let mut transitions = Vec::new();
+        let mut transition_offset = [0.0; 2];
         if let Some(sequence) = snapshot
             .sequence
             .filter(|_| n.composition == snapshot.composition)
@@ -1004,11 +1021,68 @@ pub fn build_scene_ir_with_cache(
             };
             for tr in &sequence.transitions {
                 if tr.incoming == clip.id && tr.range.contains(time) {
+                    if tr.version != 1 {
+                        return Err(RenderError::UnsupportedFeature("transition version".into()));
+                    }
                     let progress = time
                         .checked_sub(tr.range.start())?
                         .checked_div(tr.range.duration()?.as_time())?;
-                    post_effect_opacity *=
-                        progress.numerator() as f64 / progress.denominator() as f64;
+                    let p = progress.numerator() as f64 / progress.denominator() as f64;
+                    let extent = [sequence.extent.width(), sequence.extent.height()];
+                    match tr.kind {
+                        TransitionKind::Crossfade => post_effect_opacity *= p,
+                        TransitionKind::Wipe => {
+                            let Some(TransitionParams::Wipe(wipe)) = tr.params else {
+                                return Err(RenderError::InvalidInput(
+                                    "wipe transition params".into(),
+                                ));
+                            };
+                            let (min, max) = match wipe.direction {
+                                TransitionDirection::Left => {
+                                    ([0.0, 0.0], [p * extent[0], extent[1]])
+                                }
+                                TransitionDirection::Right => {
+                                    ([(1.0 - p) * extent[0], 0.0], extent)
+                                }
+                                TransitionDirection::Up => ([0.0, 0.0], [extent[0], p * extent[1]]),
+                                TransitionDirection::Down => ([0.0, (1.0 - p) * extent[1]], extent),
+                            };
+                            transitions.push(SceneTransition::Reveal { min, max });
+                        }
+                        TransitionKind::Slide => {
+                            let Some(TransitionParams::Slide(slide)) = tr.params else {
+                                return Err(RenderError::InvalidInput(
+                                    "slide transition params".into(),
+                                ));
+                            };
+                            transition_offset = match slide.direction {
+                                TransitionDirection::Left => [-(1.0 - p) * extent[0], 0.0],
+                                TransitionDirection::Right => [(1.0 - p) * extent[0], 0.0],
+                                TransitionDirection::Up => [0.0, -(1.0 - p) * extent[1]],
+                                TransitionDirection::Down => [0.0, (1.0 - p) * extent[1]],
+                            };
+                        }
+                        TransitionKind::Dip => {
+                            let Some(TransitionParams::Dip(dip)) = tr.params else {
+                                return Err(RenderError::InvalidInput(
+                                    "dip transition params".into(),
+                                ));
+                            };
+                            // First half: dip color fades in over the outgoing
+                            // clip; second half: the incoming clip fades in
+                            // over the fully opaque dip color (ADR-0109).
+                            let (under, over) = if p < 0.5 {
+                                (2.0 * p, 0.0)
+                            } else {
+                                (1.0, 2.0 * p - 1.0)
+                            };
+                            post_effect_opacity *= over;
+                            transitions.push(SceneTransition::Dip {
+                                color: dip.color,
+                                opacity: under,
+                            });
+                        }
+                    }
                 }
             }
         }
@@ -1057,12 +1131,17 @@ pub fn build_scene_ir_with_cache(
         } else {
             BlendMode::Normal
         };
+        // Slide translates the whole lowered clip node in root design_px.
+        let mut world_transform = n.world_transform;
+        world_transform.0[0][2] += transition_offset[0];
+        world_transform.0[1][2] += transition_offset[1];
         nodes.push(SceneNodeIr {
             key: (&n.key).into(),
             parent: n.containment_parent.as_ref().map(Into::into),
-            world_transform: n.world_transform,
+            world_transform,
             opacity: n.transform.opacity,
             post_effect_opacity,
+            transitions,
             blend_mode,
             effects,
             properties,
