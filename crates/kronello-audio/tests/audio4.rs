@@ -115,6 +115,7 @@ fn sequence(p: &mut Project, root: CompositionId, start: Time, end: Time) -> Seq
         links: vec![],
         properties: vec![],
         effects: vec![],
+        markers: vec![],
     };
     let s = Sequence {
         id: SequenceId::new(),
@@ -129,6 +130,8 @@ fn sequence(p: &mut Project, root: CompositionId, start: Time, end: Time) -> Seq
             clips: vec![clip],
         }],
         transitions: vec![],
+        markers: vec![],
+        work_area: None,
     };
     let id = s.id;
     p.sequences.push(DocumentObject::Known(s));
@@ -383,6 +386,7 @@ fn audio_and_inherited_composition_crossfade_use_linear_half_open_sample_weights
             incoming: incoming.id,
             range: r(incoming.timeline_range.start(), t(1, 10)),
             kind: TransitionKind::Crossfade,
+            params: None,
             version: 1,
         }];
         s.tracks[0].clips.push(incoming);
@@ -836,6 +840,7 @@ fn empty_sample_assets_and_extreme_crossfade_bounds_never_hide_errors_or_panic()
             s.tracks[0].clips[0].timeline_range.end(),
         ),
         kind: TransitionKind::Crossfade,
+        params: None,
         version: 1,
     }];
     s.tracks[0].clips.push(incoming);

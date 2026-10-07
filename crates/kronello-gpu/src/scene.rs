@@ -731,12 +731,10 @@ pub(crate) fn luma_weights(working: WorkingSpace) -> [f32; 3] {
         WorkingSpace::LinearRec2020 => [0.2627, 0.6780, 0.0593],
     }
 }
-pub(crate) fn check_scene_budget(
-    size: RenderSize,
-    scene: &DrawScene,
-    pixel_bytes: u64,
-) -> Result<(), GpuError> {
-    let surfaces = scene.nodes.len()
+/// Conservative upper bound on full-resolution surfaces a scene pass may hold
+/// at once. Shared by the budget check and the native preview's fit estimate.
+pub(crate) fn scene_surface_count(scene: &DrawScene) -> usize {
+    scene.nodes.len()
         + scene.roots.len()
         + scene
             .nodes
@@ -747,7 +745,14 @@ pub(crate) fn check_scene_budget(
                 _ => 0,
             })
             .sum::<usize>()
-        + 3;
+        + 3
+}
+pub(crate) fn check_scene_budget(
+    size: RenderSize,
+    scene: &DrawScene,
+    pixel_bytes: u64,
+) -> Result<(), GpuError> {
+    let surfaces = scene_surface_count(scene);
     let bytes = u64::from(size.output_resolution[0])
         .checked_mul(u64::from(size.output_resolution[1]))
         .and_then(|b| b.checked_mul(pixel_bytes))

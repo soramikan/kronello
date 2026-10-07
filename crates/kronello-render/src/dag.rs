@@ -124,6 +124,13 @@ pub enum DagNode {
         matte: usize,
         kind: MatteKind,
     },
+    /// FX-003 transition primitive: a filled output-pixel rectangle in the
+    /// working space. Used as the wipe reveal matte and the dip underlay.
+    SolidRect {
+        color: Color,
+        /// Half-open [min_x, min_y, max_x, max_y] in output pixels.
+        rect: [f64; 4],
+    },
     /// Produces both linear premultiplied truth and straight sRGB display.
     OutputTransform {
         source: usize,
@@ -136,7 +143,8 @@ impl DagNode {
             Self::Geometry { .. }
             | Self::TextLayout { .. }
             | Self::VideoDraw { .. }
-            | Self::RasterInput { .. } => vec![],
+            | Self::RasterInput { .. }
+            | Self::SolidRect { .. } => vec![],
             Self::CoverageDraw { geometry, .. } => vec![*geometry],
             Self::IsolatedComposite { children, .. } => children.clone(),
             Self::Mask { source, matte, .. } => vec![*source, *matte],
@@ -233,7 +241,8 @@ impl RenderDag {
                 | DagNode::Blend { .. }
                 | DagNode::Mask { .. }
                 | DagNode::VideoDraw { .. }
-                | DagNode::RasterInput { .. } => 1,
+                | DagNode::RasterInput { .. }
+                | DagNode::SolidRect { .. } => 1,
                 _ => 0,
             };
         }
@@ -527,6 +536,131 @@ impl Builder<'_> {
                     })?);
                 }
             }
+            SceneContent::Caption(caption) => {
+                let geometry = self.push(DagNode::TextLayout {
+                    key: n.key.clone(),
+                    layout: caption.layout.clone(),
+                })?;
+                // Caption glyphs anchor inside the sequence safe area: the
+                // placement translation composes inside the node transform.
+                let caption_transform = transform.compose(Affine2([
+                    [1.0, 0.0, caption.origin[0]],
+                    [0.0, 1.0, caption.origin[1]],
+                ]));
+                let italic_shear = Affine2([
+                    [1.0, -kronello_model::CAPTION_ITALIC_SHEAR, 0.0],
+                    [0.0, 1.0, 0.0],
+                ]);
+                let [a, b] = caption_transform.0;
+                // Stroke widths are authored in design_px; scale them like
+                // shape strokes by the output transform's x-axis norm.
+                let stroke_scale = a[0].hypot(b[0]);
+                if let Some(background) = caption.background {
+                    let bounds = caption.layout.layout_bounds;
+                    let contours = map_contours(
+                        FlattenedPath {
+                            subpaths: vec![kronello_vector::Polyline {
+                                points: vec![
+                                    bounds.min,
+                                    [bounds.max[0], bounds.min[1]],
+                                    bounds.max,
+                                    [bounds.min[0], bounds.max[1]],
+                                ],
+                                closed: true,
+                            }],
+                        },
+                        caption_transform,
+                    )?;
+                    children.push(self.push(DagNode::CoverageDraw {
+                        geometry,
+                        path: CoveragePath {
+                            stroke_geometry: None,
+                            geometry_content_hash:
+                                n.layout_content_hash.clone().unwrap_or_default(),
+                            contours,
+                            fill: Some((background, FillRule::Nonzero)),
+                            stroke: None,
+                            fill_gradient: None,
+                            stroke_gradient: None,
+                            paint_transform: Affine2::IDENTITY.0,
+                        },
+                    })?);
+                }
+                for glyph in &caption.layout.glyphs {
+                    let flags = caption
+                        .span_flags
+                        .get(glyph.style_index)
+                        .copied()
+                        .unwrap_or_default();
+                    // Synthesized italic is an oblique shear in text-local
+                    // space, applied before the placement translation.
+                    let glyph_transform = if flags.italic {
+                        caption_transform.compose(italic_shear)
+                    } else {
+                        caption_transform
+                    };
+                    let (geometry_content_hash, contours) = self.semantic_cache.geometry(
+                        &kronello_model::ResolvedGeometry::BezierPath(glyph.outline.clone()),
+                        n.layout_content_hash.as_deref(),
+                        flatten,
+                        || flatten_outline(&glyph.outline, flatten),
+                    )?;
+                    let contours = map_contours(contours, glyph_transform)?;
+                    // Order: outline ring behind the fill, then the bold ring,
+                    // then the glyph fill. A centered stroke at twice the
+                    // authored width leaves exactly that width visible.
+                    let mut draw = |stroke: Option<(
+                        Color,
+                        f64,
+                        kronello_model::StrokeJoin,
+                        kronello_model::StrokeCap,
+                        f64,
+                    )>,
+                                    fill: Option<(Color, FillRule)>|
+                     -> Result<usize, RenderError> {
+                        self.push(DagNode::CoverageDraw {
+                            geometry,
+                            path: CoveragePath {
+                                stroke_geometry: None,
+                                geometry_content_hash: geometry_content_hash.clone(),
+                                contours: contours.clone(),
+                                fill,
+                                stroke,
+                                fill_gradient: None,
+                                stroke_gradient: None,
+                                paint_transform: Affine2::IDENTITY.0,
+                            },
+                        })
+                    };
+                    if let Some(outline) = &caption.outline
+                        && outline.width.get() > 0.0
+                    {
+                        children.push(draw(
+                            Some((
+                                outline.color,
+                                outline.width.get() * 2.0 * stroke_scale,
+                                kronello_model::StrokeJoin::Round,
+                                kronello_model::StrokeCap::Round,
+                                4.0,
+                            )),
+                            None,
+                        )?);
+                    }
+                    if flags.bold && caption.bold_width > 0.0 {
+                        children.push(draw(
+                            Some((
+                                glyph.fill,
+                                caption.bold_width * 2.0 * stroke_scale,
+                                kronello_model::StrokeJoin::Round,
+                                kronello_model::StrokeCap::Round,
+                                4.0,
+                            )),
+                            None,
+                        )?);
+                    }
+                    children.push(draw(None, Some((glyph.fill, FillRule::Nonzero)))?);
+                }
+            }
         }
         let mut blend_modes = BTreeMap::new();
         for child in 0..self.scene.nodes.len() {
@@ -561,6 +695,57 @@ impl Builder<'_> {
                 children: vec![id],
                 opacity: n.post_effect_opacity,
             })?;
+        }
+        // FX-003: wipe reveals through an opaque-rect alpha matte; dip inserts
+        // a solid-color underlay below the faded incoming result (ADR-0109).
+        for transition in &n.transitions {
+            match transition {
+                crate::SceneTransition::Reveal { min, max } => {
+                    let to_pixel = self.region.design_to_pixel();
+                    let lo = to_pixel.transform_point(*min);
+                    let hi = to_pixel.transform_point(*max);
+                    let rect = [
+                        lo[0].min(hi[0]),
+                        lo[1].min(hi[1]),
+                        lo[0].max(hi[0]),
+                        lo[1].max(hi[1]),
+                    ];
+                    if !rect.iter().all(|v| v.is_finite()) {
+                        return Err(RenderError::InvalidInput(
+                            "invalid wipe reveal bounds".into(),
+                        ));
+                    }
+                    let matte = self.push(DagNode::SolidRect {
+                        color: Color::from_srgb8([255; 3], None),
+                        rect,
+                    })?;
+                    id = self.push(DagNode::Mask {
+                        source: id,
+                        matte,
+                        kind: MatteKind::Alpha,
+                    })?;
+                }
+                crate::SceneTransition::Dip { color, opacity } => {
+                    let rect = [
+                        0.0,
+                        0.0,
+                        f64::from(self.region.pixels[0]),
+                        f64::from(self.region.pixels[1]),
+                    ];
+                    let underlay = self.push(DagNode::SolidRect {
+                        color: *color,
+                        rect,
+                    })?;
+                    let underlay = self.push(DagNode::IsolatedComposite {
+                        children: vec![underlay],
+                        opacity: *opacity,
+                    })?;
+                    id = self.push(DagNode::IsolatedComposite {
+                        children: vec![underlay, id],
+                        opacity: 1.0,
+                    })?;
+                }
+            }
         }
         if let Some(binding) = self.scene.mattes.iter().find(|m| m.source == n.key) {
             let matte = *self
@@ -881,6 +1066,16 @@ fn derive_bounds(nodes: &[DagNode]) -> Vec<crate::NodeBounds> {
             DagNode::Mask { source, .. } | DagNode::OutputTransform { source, .. } => {
                 bounds[*source]
             }
+            DagNode::SolidRect { rect, .. } => {
+                let ink = Some(PixelBounds {
+                    min: [rect[0], rect[1]],
+                    max: [rect[2], rect[3]],
+                });
+                NodeBounds {
+                    ink_bounds: ink,
+                    visual_bounds: ink,
+                }
+            }
             _ => NodeBounds::default(),
         };
         bounds.push(value);
@@ -893,6 +1088,16 @@ pub(crate) fn map_effect(
     transform: Affine2,
 ) -> Result<kronello_model::ResolvedEffect, RenderError> {
     use kronello_model::ResolvedEffect;
+    // COLOR-002 pointwise operations commute with any placement transform.
+    if matches!(
+        effect,
+        ResolvedEffect::ColorExposure { .. }
+            | ResolvedEffect::ColorLevels { .. }
+            | ResolvedEffect::ColorCurves { .. }
+            | ResolvedEffect::ColorHsl { .. }
+    ) {
+        return Ok(effect.clone());
+    }
     let [a, b] = transform.0;
     if let ResolvedEffect::AffineGaussianBlur { sigma, linear }
     | ResolvedEffect::AffineDropShadow { sigma, linear, .. } = effect

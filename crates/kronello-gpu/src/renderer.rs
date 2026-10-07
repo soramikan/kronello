@@ -16,6 +16,11 @@ pub struct GpuContext {
     pub(crate) total_transfers: std::sync::Mutex<TransferStats>,
     pub(crate) observation: std::sync::Arc<crate::observation::ObservationState>,
     pub(crate) allocations: std::sync::Arc<std::sync::Mutex<crate::allocation::AllocationTracker>>,
+    // Pipelines are device-wide and immutable once compiled; FXC/DXIL
+    // translation is expensive on software adapters, so each entry is built
+    // once and shared across every render call.
+    pub(crate) scene_pipelines: std::sync::OnceLock<crate::scene_gpu::ScenePipelines>,
+    pub(crate) opacity_pipeline: std::sync::OnceLock<wgpu::ComputePipeline>,
 }
 #[derive(Debug)]
 pub struct RenderOutput {
@@ -141,6 +146,8 @@ impl GpuContext {
             queue,
             adapter_info,
             pipeline,
+            scene_pipelines: Default::default(),
+            opacity_pipeline: Default::default(),
             identity: std::sync::Arc::new(()),
         })
     }
@@ -341,22 +348,23 @@ impl GpuContext {
             wgpu::TextureFormat::Rgba16Float,
             wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,
         )?;
-        let shader = self
-            .device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some("isolated opacity"),
-                source: wgpu::ShaderSource::Wgsl(include_str!("opacity.wgsl").into()),
-            });
-        let pipeline = self
-            .device
-            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some("isolated opacity"),
-                layout: None,
-                module: &shader,
-                entry_point: Some("main"),
-                compilation_options: Default::default(),
-                cache: None,
-            });
+        let pipeline = self.opacity_pipeline.get_or_init(|| {
+            let shader = self
+                .device
+                .create_shader_module(wgpu::ShaderModuleDescriptor {
+                    label: Some("isolated opacity"),
+                    source: wgpu::ShaderSource::Wgsl(include_str!("opacity.wgsl").into()),
+                });
+            self.device
+                .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                    label: Some("isolated opacity"),
+                    layout: None,
+                    module: &shader,
+                    entry_point: Some("main"),
+                    compilation_options: Default::default(),
+                    cache: None,
+                })
+        });
         let mut uniform = opacity.to_le_bytes().to_vec();
         uniform.extend([0u8; 12]);
         let buffer = self
@@ -391,7 +399,7 @@ impl GpuContext {
         let mut encoder = self.device.create_command_encoder(&Default::default());
         {
             let mut pass = encoder.begin_compute_pass(&Default::default());
-            pass.set_pipeline(&pipeline);
+            pass.set_pipeline(pipeline);
             pass.set_bind_group(0, &group, &[]);
             pass.dispatch_workgroups(width.div_ceil(8), height.div_ceil(8), 1);
             stats.gpu_compute_dispatches += 1;
@@ -435,11 +443,13 @@ impl GpuContext {
         })
     }
     /// Synchronous completion fence for native interop. Bounded wait, no busy polling.
+    /// Software adapters (WARP / llvmpipe) compile shaders inside the first
+    /// submission, so the bound must cover cold JIT on loaded CI runners.
     pub fn wait(&self) -> Result<(), GpuError> {
         self.device
             .poll(wgpu::PollType::Wait {
                 submission_index: None,
-                timeout: Some(Duration::from_secs(30)),
+                timeout: Some(Duration::from_secs(300)),
             })
             .map_err(|e| GpuError::Readback(e.to_string()))?;
         Ok(())

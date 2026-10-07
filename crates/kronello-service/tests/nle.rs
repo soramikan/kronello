@@ -47,12 +47,15 @@ fn clip(composition: CompositionId, start: Time, end: Time, speed: Rational) -> 
         links: vec![],
         effects: vec![],
         properties: vec![],
+        markers: vec![],
     }
 }
 fn sequence(p: &Project) -> Sequence {
     Sequence {
         id: SequenceId::new(),
         transitions: vec![],
+        markers: vec![],
+        work_area: None,
         extent: composition(p).design_extent,
         frame_rate: FrameRate::new(24, 1).unwrap(),
         audio_rate: SampleRate::HZ_48000,
@@ -829,6 +832,7 @@ fn asset_audio_tracks_mix_on_absolute_grid_and_reject_retime() {
         links: vec![],
         effects: vec![],
         properties: vec![],
+        markers: vec![],
     };
     s.tracks.push(Track {
         state: None,

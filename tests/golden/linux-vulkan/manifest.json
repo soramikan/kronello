@@ -60,6 +60,15 @@
       "stroke-inside-evenodd",
       "stroke-outside-nonzero",
       "stroke-affine-reflected",
+      "color002-exposure-rec709",
+      "color002-levels-rec2020",
+      "color002-curves-rec709",
+      "color002-hsl-rec709",
+      "fx003-blend-separable",
+      "fx003-blend-nonseparable",
+      "fx003-wipe",
+      "fx003-slide",
+      "fx003-dip",
       "srgb-output-roundtrip"
     ],
     "schema_version": 1,
@@ -7208,6 +7217,3196 @@
       "size": [
         32,
         32
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "color_pipeline_id": "vec003-grid4-v2",
+      "comparison_space": "linear working-space premultiplied; external output decoded back before comparison",
+      "design_extent": [
+        16,
+        16
+      ],
+      "display_transform": "external-unpremultiply-then-srgb-clamp; visualization only",
+      "draw": {
+        "nodes": [
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    15.0,
+                    1.0
+                  ],
+                  [
+                    15.0,
+                    15.0
+                  ],
+                  [
+                    1.0,
+                    15.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.72,
+                0.45,
+                0.18,
+                0.875
+              ],
+              "rule": "Nonzero",
+              "space": "Srgb"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "effect": {
+              "ColorExposure": {
+                "exposure": -0.75,
+                "offset": 0.04
+              }
+            },
+            "kernel_version": "color002-pointwise-f16-v1",
+            "kind": "effect",
+            "semantic_version": 1,
+            "source": 0
+          }
+        ],
+        "roots": [
+          1
+        ]
+      },
+      "id": "color002-exposure-rec709",
+      "layers": [],
+      "origin": [
+        0,
+        0
+      ],
+      "output_transform": null,
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "seed": 0,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "color_pipeline_id": "vec003-grid4-v2",
+      "comparison_space": "linear working-space premultiplied; external output decoded back before comparison",
+      "design_extent": [
+        16,
+        16
+      ],
+      "display_transform": "external-unpremultiply-then-srgb-clamp; visualization only",
+      "draw": {
+        "nodes": [
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    15.0,
+                    1.0
+                  ],
+                  [
+                    15.0,
+                    15.0
+                  ],
+                  [
+                    1.0,
+                    15.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.72,
+                0.45,
+                0.18,
+                0.875
+              ],
+              "rule": "Nonzero",
+              "space": "Srgb"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "effect": {
+              "ColorLevels": {
+                "gamma": 1.8,
+                "in_black": 0.1,
+                "in_white": 0.9,
+                "out_black": -0.05,
+                "out_white": 1.1
+              }
+            },
+            "kernel_version": "color002-pointwise-f16-v1",
+            "kind": "effect",
+            "semantic_version": 1,
+            "source": 0
+          }
+        ],
+        "roots": [
+          1
+        ]
+      },
+      "id": "color002-levels-rec2020",
+      "layers": [],
+      "origin": [
+        0,
+        0
+      ],
+      "output_transform": null,
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "seed": 0,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec2020"
+    },
+    {
+      "alpha": "premultiplied",
+      "color_pipeline_id": "vec003-grid4-v2",
+      "comparison_space": "linear working-space premultiplied; external output decoded back before comparison",
+      "design_extent": [
+        16,
+        16
+      ],
+      "display_transform": "external-unpremultiply-then-srgb-clamp; visualization only",
+      "draw": {
+        "nodes": [
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    15.0,
+                    1.0
+                  ],
+                  [
+                    15.0,
+                    15.0
+                  ],
+                  [
+                    1.0,
+                    15.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.72,
+                0.45,
+                0.18,
+                0.875
+              ],
+              "rule": "Nonzero",
+              "space": "Srgb"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "effect": {
+              "ColorCurves": {
+                "points": [
+                  [
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.3,
+                    0.6
+                  ],
+                  [
+                    0.7,
+                    0.75
+                  ],
+                  [
+                    1.0,
+                    1.0
+                  ]
+                ]
+              }
+            },
+            "kernel_version": "color002-pointwise-f16-v1",
+            "kind": "effect",
+            "semantic_version": 1,
+            "source": 0
+          }
+        ],
+        "roots": [
+          1
+        ]
+      },
+      "id": "color002-curves-rec709",
+      "layers": [],
+      "origin": [
+        0,
+        0
+      ],
+      "output_transform": null,
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "seed": 0,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "color_pipeline_id": "vec003-grid4-v2",
+      "comparison_space": "linear working-space premultiplied; external output decoded back before comparison",
+      "design_extent": [
+        16,
+        16
+      ],
+      "display_transform": "external-unpremultiply-then-srgb-clamp; visualization only",
+      "draw": {
+        "nodes": [
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    15.0,
+                    1.0
+                  ],
+                  [
+                    15.0,
+                    15.0
+                  ],
+                  [
+                    1.0,
+                    15.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.72,
+                0.45,
+                0.18,
+                0.875
+              ],
+              "rule": "Nonzero",
+              "space": "Srgb"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "effect": {
+              "ColorHsl": {
+                "hue_shift": 72.0,
+                "lightness": 0.04,
+                "saturation": 0.6
+              }
+            },
+            "kernel_version": "color002-pointwise-f16-v1",
+            "kind": "effect",
+            "semantic_version": 1,
+            "source": 0
+          }
+        ],
+        "roots": [
+          1
+        ]
+      },
+      "id": "color002-hsl-rec709",
+      "layers": [],
+      "origin": [
+        0,
+        0
+      ],
+      "output_transform": null,
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "seed": 0,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "color_pipeline_id": "vec003-grid4-v2",
+      "comparison_space": "linear working-space premultiplied; external output decoded back before comparison",
+      "design_extent": [
+        48,
+        48
+      ],
+      "display_transform": "external-unpremultiply-then-srgb-clamp; visualization only",
+      "draw": {
+        "nodes": [
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    2.0,
+                    2.0
+                  ],
+                  [
+                    10.0,
+                    2.0
+                  ],
+                  [
+                    10.0,
+                    10.0
+                  ],
+                  [
+                    2.0,
+                    10.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.55,
+                0.35,
+                0.2,
+                1.0
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    4.0,
+                    4.0
+                  ],
+                  [
+                    12.0,
+                    4.0
+                  ],
+                  [
+                    12.0,
+                    12.0
+                  ],
+                  [
+                    4.0,
+                    12.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.3,
+                0.6,
+                0.45,
+                0.85
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "backdrop": 0,
+            "kind": "blend",
+            "mode": "multiply",
+            "source": 1
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    14.0,
+                    2.0
+                  ],
+                  [
+                    22.0,
+                    2.0
+                  ],
+                  [
+                    22.0,
+                    10.0
+                  ],
+                  [
+                    14.0,
+                    10.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.55,
+                0.35,
+                0.2,
+                1.0
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    16.0,
+                    4.0
+                  ],
+                  [
+                    24.0,
+                    4.0
+                  ],
+                  [
+                    24.0,
+                    12.0
+                  ],
+                  [
+                    16.0,
+                    12.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.3,
+                0.6,
+                0.45,
+                0.85
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "backdrop": 3,
+            "kind": "blend",
+            "mode": "screen",
+            "source": 4
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    26.0,
+                    2.0
+                  ],
+                  [
+                    34.0,
+                    2.0
+                  ],
+                  [
+                    34.0,
+                    10.0
+                  ],
+                  [
+                    26.0,
+                    10.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.55,
+                0.35,
+                0.2,
+                1.0
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    28.0,
+                    4.0
+                  ],
+                  [
+                    36.0,
+                    4.0
+                  ],
+                  [
+                    36.0,
+                    12.0
+                  ],
+                  [
+                    28.0,
+                    12.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.3,
+                0.6,
+                0.45,
+                0.85
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "backdrop": 6,
+            "kind": "blend",
+            "mode": "darken",
+            "source": 7
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    38.0,
+                    2.0
+                  ],
+                  [
+                    46.0,
+                    2.0
+                  ],
+                  [
+                    46.0,
+                    10.0
+                  ],
+                  [
+                    38.0,
+                    10.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.55,
+                0.35,
+                0.2,
+                1.0
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    40.0,
+                    4.0
+                  ],
+                  [
+                    48.0,
+                    4.0
+                  ],
+                  [
+                    48.0,
+                    12.0
+                  ],
+                  [
+                    40.0,
+                    12.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.3,
+                0.6,
+                0.45,
+                0.85
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "backdrop": 9,
+            "kind": "blend",
+            "mode": "lighten",
+            "source": 10
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    2.0,
+                    14.0
+                  ],
+                  [
+                    10.0,
+                    14.0
+                  ],
+                  [
+                    10.0,
+                    22.0
+                  ],
+                  [
+                    2.0,
+                    22.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.55,
+                0.35,
+                0.2,
+                1.0
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    4.0,
+                    16.0
+                  ],
+                  [
+                    12.0,
+                    16.0
+                  ],
+                  [
+                    12.0,
+                    24.0
+                  ],
+                  [
+                    4.0,
+                    24.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.3,
+                0.6,
+                0.45,
+                0.85
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "backdrop": 12,
+            "kind": "blend",
+            "mode": "color_dodge",
+            "source": 13
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    14.0,
+                    14.0
+                  ],
+                  [
+                    22.0,
+                    14.0
+                  ],
+                  [
+                    22.0,
+                    22.0
+                  ],
+                  [
+                    14.0,
+                    22.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.55,
+                0.35,
+                0.2,
+                1.0
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    16.0,
+                    16.0
+                  ],
+                  [
+                    24.0,
+                    16.0
+                  ],
+                  [
+                    24.0,
+                    24.0
+                  ],
+                  [
+                    16.0,
+                    24.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.3,
+                0.6,
+                0.45,
+                0.85
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "backdrop": 15,
+            "kind": "blend",
+            "mode": "color_burn",
+            "source": 16
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    26.0,
+                    14.0
+                  ],
+                  [
+                    34.0,
+                    14.0
+                  ],
+                  [
+                    34.0,
+                    22.0
+                  ],
+                  [
+                    26.0,
+                    22.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.55,
+                0.35,
+                0.2,
+                1.0
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    28.0,
+                    16.0
+                  ],
+                  [
+                    36.0,
+                    16.0
+                  ],
+                  [
+                    36.0,
+                    24.0
+                  ],
+                  [
+                    28.0,
+                    24.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.3,
+                0.6,
+                0.45,
+                0.85
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "backdrop": 18,
+            "kind": "blend",
+            "mode": "hard_light",
+            "source": 19
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    38.0,
+                    14.0
+                  ],
+                  [
+                    46.0,
+                    14.0
+                  ],
+                  [
+                    46.0,
+                    22.0
+                  ],
+                  [
+                    38.0,
+                    22.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.55,
+                0.35,
+                0.2,
+                1.0
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    40.0,
+                    16.0
+                  ],
+                  [
+                    48.0,
+                    16.0
+                  ],
+                  [
+                    48.0,
+                    24.0
+                  ],
+                  [
+                    40.0,
+                    24.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.3,
+                0.6,
+                0.45,
+                0.85
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "backdrop": 21,
+            "kind": "blend",
+            "mode": "soft_light",
+            "source": 22
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    2.0,
+                    26.0
+                  ],
+                  [
+                    10.0,
+                    26.0
+                  ],
+                  [
+                    10.0,
+                    34.0
+                  ],
+                  [
+                    2.0,
+                    34.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.55,
+                0.35,
+                0.2,
+                1.0
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    4.0,
+                    28.0
+                  ],
+                  [
+                    12.0,
+                    28.0
+                  ],
+                  [
+                    12.0,
+                    36.0
+                  ],
+                  [
+                    4.0,
+                    36.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.3,
+                0.6,
+                0.45,
+                0.85
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "backdrop": 24,
+            "kind": "blend",
+            "mode": "difference",
+            "source": 25
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    14.0,
+                    26.0
+                  ],
+                  [
+                    22.0,
+                    26.0
+                  ],
+                  [
+                    22.0,
+                    34.0
+                  ],
+                  [
+                    14.0,
+                    34.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.55,
+                0.35,
+                0.2,
+                1.0
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    16.0,
+                    28.0
+                  ],
+                  [
+                    24.0,
+                    28.0
+                  ],
+                  [
+                    24.0,
+                    36.0
+                  ],
+                  [
+                    16.0,
+                    36.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.3,
+                0.6,
+                0.45,
+                0.85
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "backdrop": 27,
+            "kind": "blend",
+            "mode": "exclusion",
+            "source": 28
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    26.0,
+                    26.0
+                  ],
+                  [
+                    34.0,
+                    26.0
+                  ],
+                  [
+                    34.0,
+                    34.0
+                  ],
+                  [
+                    26.0,
+                    34.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.55,
+                0.35,
+                0.2,
+                1.0
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    28.0,
+                    28.0
+                  ],
+                  [
+                    36.0,
+                    28.0
+                  ],
+                  [
+                    36.0,
+                    36.0
+                  ],
+                  [
+                    28.0,
+                    36.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.3,
+                0.6,
+                0.45,
+                0.85
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "backdrop": 30,
+            "kind": "blend",
+            "mode": "overlay",
+            "source": 31
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    38.0,
+                    26.0
+                  ],
+                  [
+                    46.0,
+                    26.0
+                  ],
+                  [
+                    46.0,
+                    34.0
+                  ],
+                  [
+                    38.0,
+                    34.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.55,
+                0.35,
+                0.2,
+                1.0
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    40.0,
+                    28.0
+                  ],
+                  [
+                    48.0,
+                    28.0
+                  ],
+                  [
+                    48.0,
+                    36.0
+                  ],
+                  [
+                    40.0,
+                    36.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.3,
+                0.6,
+                0.45,
+                0.85
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "backdrop": 33,
+            "kind": "blend",
+            "mode": "linear_dodge",
+            "source": 34
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    2.0,
+                    38.0
+                  ],
+                  [
+                    10.0,
+                    38.0
+                  ],
+                  [
+                    10.0,
+                    46.0
+                  ],
+                  [
+                    2.0,
+                    46.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.55,
+                0.35,
+                0.2,
+                1.0
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    4.0,
+                    40.0
+                  ],
+                  [
+                    12.0,
+                    40.0
+                  ],
+                  [
+                    12.0,
+                    48.0
+                  ],
+                  [
+                    4.0,
+                    48.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.3,
+                0.6,
+                0.45,
+                0.85
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "backdrop": 36,
+            "kind": "blend",
+            "mode": "linear_burn",
+            "source": 37
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    14.0,
+                    38.0
+                  ],
+                  [
+                    22.0,
+                    38.0
+                  ],
+                  [
+                    22.0,
+                    46.0
+                  ],
+                  [
+                    14.0,
+                    46.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.55,
+                0.35,
+                0.2,
+                1.0
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    16.0,
+                    40.0
+                  ],
+                  [
+                    24.0,
+                    40.0
+                  ],
+                  [
+                    24.0,
+                    48.0
+                  ],
+                  [
+                    16.0,
+                    48.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.3,
+                0.6,
+                0.45,
+                0.85
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "backdrop": 39,
+            "kind": "blend",
+            "mode": "vivid_light",
+            "source": 40
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    26.0,
+                    38.0
+                  ],
+                  [
+                    34.0,
+                    38.0
+                  ],
+                  [
+                    34.0,
+                    46.0
+                  ],
+                  [
+                    26.0,
+                    46.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.55,
+                0.35,
+                0.2,
+                1.0
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    28.0,
+                    40.0
+                  ],
+                  [
+                    36.0,
+                    40.0
+                  ],
+                  [
+                    36.0,
+                    48.0
+                  ],
+                  [
+                    28.0,
+                    48.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.3,
+                0.6,
+                0.45,
+                0.85
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "backdrop": 42,
+            "kind": "blend",
+            "mode": "linear_light",
+            "source": 43
+          }
+        ],
+        "roots": [
+          2,
+          5,
+          8,
+          11,
+          14,
+          17,
+          20,
+          23,
+          26,
+          29,
+          32,
+          35,
+          38,
+          41,
+          44
+        ]
+      },
+      "id": "fx003-blend-separable",
+      "layers": [],
+      "origin": [
+        0,
+        0
+      ],
+      "output_transform": null,
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "seed": 0,
+      "size": [
+        48,
+        48
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "color_pipeline_id": "vec003-grid4-v2",
+      "comparison_space": "linear working-space premultiplied; external output decoded back before comparison",
+      "design_extent": [
+        48,
+        48
+      ],
+      "display_transform": "external-unpremultiply-then-srgb-clamp; visualization only",
+      "draw": {
+        "nodes": [
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    2.0,
+                    2.0
+                  ],
+                  [
+                    10.0,
+                    2.0
+                  ],
+                  [
+                    10.0,
+                    10.0
+                  ],
+                  [
+                    2.0,
+                    10.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.55,
+                0.35,
+                0.2,
+                1.0
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    4.0,
+                    4.0
+                  ],
+                  [
+                    12.0,
+                    4.0
+                  ],
+                  [
+                    12.0,
+                    12.0
+                  ],
+                  [
+                    4.0,
+                    12.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.3,
+                0.6,
+                0.45,
+                0.85
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "backdrop": 0,
+            "kind": "blend",
+            "mode": "hue",
+            "source": 1
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    14.0,
+                    2.0
+                  ],
+                  [
+                    22.0,
+                    2.0
+                  ],
+                  [
+                    22.0,
+                    10.0
+                  ],
+                  [
+                    14.0,
+                    10.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.55,
+                0.35,
+                0.2,
+                1.0
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    16.0,
+                    4.0
+                  ],
+                  [
+                    24.0,
+                    4.0
+                  ],
+                  [
+                    24.0,
+                    12.0
+                  ],
+                  [
+                    16.0,
+                    12.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.3,
+                0.6,
+                0.45,
+                0.85
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "backdrop": 3,
+            "kind": "blend",
+            "mode": "saturation",
+            "source": 4
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    26.0,
+                    2.0
+                  ],
+                  [
+                    34.0,
+                    2.0
+                  ],
+                  [
+                    34.0,
+                    10.0
+                  ],
+                  [
+                    26.0,
+                    10.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.55,
+                0.35,
+                0.2,
+                1.0
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    28.0,
+                    4.0
+                  ],
+                  [
+                    36.0,
+                    4.0
+                  ],
+                  [
+                    36.0,
+                    12.0
+                  ],
+                  [
+                    28.0,
+                    12.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.3,
+                0.6,
+                0.45,
+                0.85
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "backdrop": 6,
+            "kind": "blend",
+            "mode": "color",
+            "source": 7
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    38.0,
+                    2.0
+                  ],
+                  [
+                    46.0,
+                    2.0
+                  ],
+                  [
+                    46.0,
+                    10.0
+                  ],
+                  [
+                    38.0,
+                    10.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.55,
+                0.35,
+                0.2,
+                1.0
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    40.0,
+                    4.0
+                  ],
+                  [
+                    48.0,
+                    4.0
+                  ],
+                  [
+                    48.0,
+                    12.0
+                  ],
+                  [
+                    40.0,
+                    12.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.3,
+                0.6,
+                0.45,
+                0.85
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "backdrop": 9,
+            "kind": "blend",
+            "mode": "luminosity",
+            "source": 10
+          }
+        ],
+        "roots": [
+          2,
+          5,
+          8,
+          11
+        ]
+      },
+      "id": "fx003-blend-nonseparable",
+      "layers": [],
+      "origin": [
+        0,
+        0
+      ],
+      "output_transform": null,
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "seed": 0,
+      "size": [
+        48,
+        48
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "color_pipeline_id": "vec003-grid4-v2",
+      "comparison_space": "linear working-space premultiplied; external output decoded back before comparison",
+      "design_extent": [
+        16,
+        16
+      ],
+      "display_transform": "external-unpremultiply-then-srgb-clamp; visualization only",
+      "draw": {
+        "nodes": [
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    16.0,
+                    0.0
+                  ],
+                  [
+                    16.0,
+                    16.0
+                  ],
+                  [
+                    0.0,
+                    16.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                1.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    16.0,
+                    0.0
+                  ],
+                  [
+                    16.0,
+                    16.0
+                  ],
+                  [
+                    0.0,
+                    16.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.0,
+                0.0,
+                1.0,
+                1.0
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    8.0,
+                    0.0
+                  ],
+                  [
+                    8.0,
+                    16.0
+                  ],
+                  [
+                    0.0,
+                    16.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "kind": "masked",
+            "matte": 2,
+            "mode": "Alpha",
+            "source": 1
+          }
+        ],
+        "roots": [
+          0,
+          3
+        ]
+      },
+      "id": "fx003-wipe",
+      "layers": [],
+      "origin": [
+        0,
+        0
+      ],
+      "output_transform": null,
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "seed": 0,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "color_pipeline_id": "vec003-grid4-v2",
+      "comparison_space": "linear working-space premultiplied; external output decoded back before comparison",
+      "design_extent": [
+        16,
+        16
+      ],
+      "display_transform": "external-unpremultiply-then-srgb-clamp; visualization only",
+      "draw": {
+        "nodes": [
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    16.0,
+                    0.0
+                  ],
+                  [
+                    16.0,
+                    16.0
+                  ],
+                  [
+                    0.0,
+                    16.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                1.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    8.0,
+                    0.0
+                  ],
+                  [
+                    24.0,
+                    0.0
+                  ],
+                  [
+                    24.0,
+                    16.0
+                  ],
+                  [
+                    8.0,
+                    16.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.0,
+                0.0,
+                1.0,
+                1.0
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          }
+        ],
+        "roots": [
+          0,
+          1
+        ]
+      },
+      "id": "fx003-slide",
+      "layers": [],
+      "origin": [
+        0,
+        0
+      ],
+      "output_transform": null,
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "seed": 0,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "color_pipeline_id": "vec003-grid4-v2",
+      "comparison_space": "linear working-space premultiplied; external output decoded back before comparison",
+      "design_extent": [
+        16,
+        16
+      ],
+      "display_transform": "external-unpremultiply-then-srgb-clamp; visualization only",
+      "draw": {
+        "nodes": [
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    16.0,
+                    0.0
+                  ],
+                  [
+                    16.0,
+                    16.0
+                  ],
+                  [
+                    0.0,
+                    16.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                1.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    16.0,
+                    0.0
+                  ],
+                  [
+                    16.0,
+                    16.0
+                  ],
+                  [
+                    0.0,
+                    16.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "contours": [
+              {
+                "closed": true,
+                "points": [
+                  [
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    16.0,
+                    0.0
+                  ],
+                  [
+                    16.0,
+                    16.0
+                  ],
+                  [
+                    0.0,
+                    16.0
+                  ]
+                ]
+              }
+            ],
+            "fill": {
+              "rgba": [
+                0.0,
+                0.0,
+                1.0,
+                1.0
+              ],
+              "rule": "Nonzero",
+              "space": "LinearRec709"
+            },
+            "fill_gradient": null,
+            "kind": "path",
+            "local_stroke": null,
+            "paint_transform": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0
+              ]
+            ],
+            "stroke": null,
+            "stroke_geometry_version": "vec003-centered-stroke-v1",
+            "stroke_gradient": null
+          },
+          {
+            "children": [
+              2
+            ],
+            "kind": "isolated-group",
+            "opacity": 0.5
+          }
+        ],
+        "roots": [
+          0,
+          1,
+          3
+        ]
+      },
+      "id": "fx003-dip",
+      "layers": [],
+      "origin": [
+        0,
+        0
+      ],
+      "output_transform": null,
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "seed": 0,
+      "size": [
+        16,
+        16
       ],
       "time": {
         "den": "1",

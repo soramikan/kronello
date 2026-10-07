@@ -123,6 +123,10 @@
 | [0104](0104-canonical-source-clock-simulation-checkpoints.md) | canonical source clock と固定 step simulation checkpoint | 採用 | 2026-10-06 |
 | [0105](0105-human-readable-expression-syntax.md) | 人間向け式構文とAST往復 | 採用 | 2026-10-06 |
 | [0106](0106-versioned-compressed-delivery-audio.md) | 版付き圧縮配信音声（AAC-LCとOpus） | 採用 | 2026-10-06 |
+| [0107](0107-caption-track-and-cue-model.md) | 専用caption trackと版付き字幕キューモデル | 採用（実装受け入れ中） | 2026-10-07 |
+| [0108](0108-versioned-color-correction-effects.md) | 版付き色補正エフェクト（exposure/levels/curves/HSL） | 採用（実装受け入れ中） | 2026-10-07 |
+| [0109](0109-blend-modes-and-parameterized-transitions.md) | ブレンドモード一式とパラメータ付きトランジション | 採用（実装受け入れ中） | 2026-10-07 |
+| [0110](0110-sequence-markers-and-work-area.md) | シーケンス/クリップマーカーとIn/Out・ワークエリア | 採用（実装受け入れ中） | 2026-10-07 |
 
 ## 追加と変更の規則
 

@@ -23,6 +23,8 @@ mod vector;
 pub use vector::*;
 mod audio_analysis;
 pub use audio_analysis::{AudioAnalyzeInput, AudioAnalyzeRequest};
+mod captions;
+pub use captions::*;
 mod edit;
 mod events;
 mod inspect;
@@ -161,6 +163,12 @@ pub enum Request {
     ProjectImportPlan(ImportPlanRequest),
     #[serde(rename = "project.create_plan")]
     ProjectCreatePlan(CreatePlanRequest),
+    #[serde(rename = "captions.import_plan")]
+    CaptionsImportPlan(CaptionsImportPlanRequest),
+    #[serde(rename = "captions.import")]
+    CaptionsImport(CaptionsImportRequest),
+    #[serde(rename = "captions.export")]
+    CaptionsExport(CaptionsExportRequest),
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -290,6 +298,7 @@ pub enum ResultData {
     Samples(PropertySampleResult),
     Capabilities(Box<CapabilitiesResult>),
     ProjectPlan(Box<ProjectChangePlan>),
+    Captions(CaptionsExportResult),
 }
 #[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
 #[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
@@ -614,6 +623,11 @@ impl<'a> Service<'a> {
             }
             Request::ProjectCreate(r) => project::create(r).map(ResultData::Project),
             Request::ProjectImport(r) => project::import(r).map(ResultData::Project),
+            Request::CaptionsImportPlan(r) => {
+                captions::import_plan(r).map(|p| ResultData::Plan(Box::new(p)))
+            }
+            Request::CaptionsImport(r) => captions::import(r).map(ResultData::Edit),
+            Request::CaptionsExport(r) => captions::export(r).map(ResultData::Captions),
             Request::ProjectInfo(r) => {
                 if self.read_only_inspection {
                     Ok(ResultData::Project(snapshot_info(
@@ -1228,6 +1242,9 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
         Request::SvgInspect(_) | Request::SvgExport(_) | Request::CapabilitiesGet(_) => Ok(()),
         Request::SvgImportPlan(r) => local_locator(&r.project),
         Request::AudioAnalyze(r) => local_locator(&r.project),
+        Request::CaptionsImportPlan(r) => local_locator(&r.project),
+        Request::CaptionsImport(r) => local_locator(&r.plan.project),
+        Request::CaptionsExport(r) => local_locator(&r.project),
     }
 }
 fn render_locators(input: &RenderInput) -> Result<(), ServiceError> {

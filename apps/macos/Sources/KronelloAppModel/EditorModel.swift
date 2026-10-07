@@ -68,6 +68,16 @@ public struct EditCandidate {
     @Published public var sequenceLoading = false
     @Published public var sequenceFailure: ServiceFailure?
     @Published public var assetSelection: String?
+    /// Marker selection is session state, separate from the persisted clip selection.
+    @Published public var markerSelection: String?
+    /// Live ruler marker drag: marker id and its current preview frame.
+    @Published public var markerDrag: (id: String, frame: Int64)?
+    /// Decoded per-asset audio analyses keyed "assetID:streamIndex" (AUDIO-006).
+    @Published public internal(set) var waveforms: [String: ClipWaveform] = [:]
+    /// Permanent per-source analysis failures (typed error code) to avoid retry loops.
+    @Published public internal(set) var waveformFailures: [String: String] = [:]
+    /// In-flight `audio.analyze` keys; empty means waveform work has settled.
+    @Published public internal(set) var waveformPending: Set<String> = []
     @Published public var editTool = "select"
     @Published public var editSnap = true
     @Published public var editScale: Double = 1
@@ -138,7 +148,22 @@ public struct EditCandidate {
     public var fonts: [[String: Any]] = []
     public var snapshotFonts: [[String: Any]] { Self.fontInputs(fonts, requiredBy: document) }
     public static func fontInputs(_ inputs: [[String: Any]], requiredBy document: [String: Any]) -> [[String: Any]] {
-        let identities = document.objects("texts").flatMap { $0.objects("styles") }.map { $0.object("font") }
+        var identities = document.objects("texts").flatMap { $0.objects("styles") }.map { $0.object("font") }
+        // Caption cues lock their base and span faces the same way text does.
+        for caption in document.objects("captions") {
+            identities.append(caption.object("style").object("font"))
+            identities += caption.objects("spans").compactMap { $0["font"] as? [String: Any] }
+        }
+        // Clip-level `kronello.caption.font` overrides encode the FontRef as
+        // canonical JSON inside a String value.
+        let overrides = document.objects("sequences")
+            .flatMap { $0.objects("tracks") }
+            .flatMap { $0.objects("clips") }
+            .flatMap { $0.objects("properties") }
+            .filter { $0.object("descriptor").string("key") == "kronello.caption.font" }
+            .compactMap { $0.object("source").object("value")["value"] as? String }
+            .compactMap { try? JSONSerialization.jsonObject(with: Data($0.utf8)) as? [String: Any] }
+        identities += overrides
         return inputs.filter { input in
             identities.contains { NSDictionary(dictionary: $0) == NSDictionary(dictionary: input.object("identity")) }
         }
@@ -340,6 +365,9 @@ public struct EditCandidate {
             externalChange = "別のセッション（\(actor.prefix(8))）の変更を読み込みました（rev \(previous) → \(revision)）"
         }
         validateClipSelection(actor: actor)
+        if let id = markerSelection, !allMarkers.contains(where: { $0.id == id }) { markerSelection = nil; markerDrag = nil }
+        refreshWaveformCache()
+        ensureAudioWaveforms()
         refreshToken += 1
         if previous != revision && playing, let target = activePlaybackTarget {
             Task { do { try await playback.updateSnapshot(path: path, target: target, revision: revision) } catch { mapFailure(error); playing = false } }

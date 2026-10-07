@@ -1032,6 +1032,7 @@ dependencies = [
 name = "kronello-ffi"
 version = "0.0.0"
 dependencies = [
+ "half",
  "kronello-gpu",
  "kronello-render",
  "kronello-service",
@@ -1201,6 +1202,7 @@ dependencies = [
  "kronello-render",
  "kronello-store",
  "kronello-template",
+ "kronello-testkit",
  "kronello-text",
  "kronello-time",
  "kronello-vector",
@@ -1211,6 +1213,7 @@ dependencies = [
  "sha2",
  "tempfile",
  "uuid",
+ "xml-rs",
 ]
 
 [[package]]

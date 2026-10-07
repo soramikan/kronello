@@ -2,7 +2,7 @@
 use crate::*;
 use kronello_model::*;
 use kronello_store::ChangedKey;
-use kronello_time::{TimeMap, TimeRange};
+use kronello_time::{Time, TimeMap, TimeMapPoint, TimeRange};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, path::PathBuf};
 use uuid::Uuid;
@@ -26,6 +26,12 @@ pub enum TimelineCommand {
     },
     SequenceCreate {
         sequence: Sequence,
+    },
+    /// Append one authored track. Track kind is part of the value; validation
+    /// enforces per-kind clip rules.
+    TrackAppend {
+        sequence: SequenceId,
+        track: Track,
     },
     ClipPlace {
         sequence: SequenceId,
@@ -55,6 +61,98 @@ pub enum TimelineCommand {
         clip: ClipId,
         delta: kronello_time::Time,
         linked: bool,
+    },
+    /// Slide the source window inside an unchanged placement. `linked` slips
+    /// the complete reciprocal component so linked audio follows video.
+    ClipSlip {
+        sequence: SequenceId,
+        clip: ClipId,
+        delta: kronello_time::Time,
+        linked: bool,
+    },
+    /// Move the selected placement(s) by delta while the adjacent clips on the
+    /// same tracks absorb the shift through their source handles. Every
+    /// selected run requires an adjacent clip on both sides.
+    ClipSlide {
+        sequence: SequenceId,
+        clip: ClipId,
+        delta: kronello_time::Time,
+        linked: bool,
+    },
+    /// Move the shared edit point after `clip`; each selected placement's
+    /// directly adjacent successor trims or extends symmetrically.
+    ClipRoll {
+        sequence: SequenceId,
+        clip: ClipId,
+        delta: kronello_time::Time,
+        linked: bool,
+    },
+    /// Remove one placement or its complete reciprocal link component and keep
+    /// the resulting gap. Incident transitions must be removed explicitly.
+    ClipDelete {
+        sequence: SequenceId,
+        clip: ClipId,
+        linked: bool,
+    },
+    /// Delete `range` on the listed tracks and close the gap by shifting all
+    /// later content by the range's duration. A clip straddling both range
+    /// edges is rejected; a partially covered clip trims the covered side.
+    /// `linked` expands affected clips to complete reciprocal components,
+    /// which are evaluated by their own overlap with `range` on any track.
+    RippleDelete {
+        sequence: SequenceId,
+        tracks: Vec<TrackId>,
+        range: TimeRange,
+        linked: bool,
+    },
+    /// Place `clip` at its `timeline_range.start()`, shifting every clip at or
+    /// after that point on the target track right by the clip's duration. The
+    /// typed gap-opening counterpart of `ClipOverwrite`; a clip straddling the
+    /// insertion point makes the whole operation fail. `linked` expands the
+    /// shifted set to complete reciprocal components across tracks.
+    ClipInsert {
+        sequence: SequenceId,
+        track: TrackId,
+        clip: Box<Clip>,
+        linked: bool,
+    },
+    /// Place `clip` over its `timeline_range`, replacing covered placements or
+    /// covered split segments without moving neighbours. The typed overwrite
+    /// counterpart of `ClipInsert`; transitions sharing the range conflict.
+    ClipOverwrite {
+        sequence: SequenceId,
+        track: TrackId,
+        clip: Box<Clip>,
+    },
+    /// Upsert a sequence marker (`clip` absent) or a marker scoped to that
+    /// clip's timeline range. Marker times are always sequence times.
+    MarkerSet {
+        sequence: SequenceId,
+        #[serde(default)]
+        clip: Option<ClipId>,
+        marker: Marker,
+    },
+    MarkerRemove {
+        sequence: SequenceId,
+        #[serde(default)]
+        clip: Option<ClipId>,
+        marker: MarkerId,
+    },
+    /// Move a marker within its owning list; recolor or recomment through
+    /// `MarkerSet` with the same marker id.
+    MarkerMove {
+        sequence: SequenceId,
+        #[serde(default)]
+        clip: Option<ClipId>,
+        marker: MarkerId,
+        time: Time,
+    },
+    /// Set or clear the In/Out work area. Rendering only observes the explicit
+    /// `SequenceRenderRequest.range`; the service never reads this field.
+    WorkAreaSet {
+        sequence: SequenceId,
+        #[serde(default)]
+        work_area: Option<TimeRange>,
     },
     /// Replace the selected clips' links with one reciprocal group. Old edges
     /// incident to the group are removed at both endpoints.
@@ -115,6 +213,7 @@ pub enum ClipKind {
     Audio,
     Composition,
     Generator,
+    Caption,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -191,6 +290,7 @@ pub(crate) fn sequence_query(
             let mut unsupported_reason = None;
             let kind = match &clip.source_ref {
                 SourceRef::Composition { .. } => ClipKind::Composition,
+                SourceRef::Caption { .. } => ClipKind::Caption,
                 SourceRef::Generator {
                     generator,
                     version,
@@ -293,6 +393,15 @@ fn sequence_mut(project: &mut Project, id: SequenceId) -> Result<&mut Sequence, 
         })
         .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "sequence missing"))
 }
+/// Track clip lists stay sorted by timeline start so placement order is
+/// canonical across plan / apply / persistence round-trips.
+fn insert_sorted(clips: &mut Vec<Clip>, clip: Clip) {
+    let at = clips
+        .iter()
+        .position(|c| c.timeline_range.start() >= clip.timeline_range.start())
+        .unwrap_or(clips.len());
+    clips.insert(at, clip);
+}
 fn expand_links(
     sequence: &Sequence,
     selected: &mut BTreeSet<ClipId>,
@@ -359,19 +468,131 @@ fn shift(
         .flat_map(|t| &mut t.clips)
         .filter(|c| selected.contains(&c.id))
     {
-        c.timeline_range = TimeRange::new(
-            c.timeline_range
-                .start()
-                .checked_add(delta)
-                .map_err(SequenceError::from)?,
-            c.timeline_range
-                .end()
-                .checked_add(delta)
-                .map_err(SequenceError::from)?,
-        )
-        .map_err(SequenceError::from)?;
+        *c = moved(c, delta)?;
     }
     Ok(())
+}
+/// Translate a placement in sequence time; its markers ride with it.
+fn moved(clip: &Clip, delta: Time) -> Result<Clip, ServiceError> {
+    let mut next = clip.clone();
+    next.timeline_range = TimeRange::new(
+        next.timeline_range
+            .start()
+            .checked_add(delta)
+            .map_err(SequenceError::from)?,
+        next.timeline_range
+            .end()
+            .checked_add(delta)
+            .map_err(SequenceError::from)?,
+    )
+    .map_err(SequenceError::from)?;
+    for marker in &mut next.markers {
+        marker.time = marker
+            .time
+            .checked_add(delta)
+            .map_err(SequenceError::from)?;
+    }
+    Ok(next)
+}
+/// Move the clip's start edge. Shrinking delegates to `trimmed`; growing
+/// shifts the time map domain so already placed content stays put and earlier
+/// source content fills the head. Candidate validation enforces source bounds.
+fn left_edge(clip: &Clip, start: Time) -> Result<Clip, ServiceError> {
+    if start >= clip.timeline_range.start() {
+        return clip
+            .trimmed(TimeRange::new(start, clip.timeline_range.end()).map_err(SequenceError::from)?)
+            .map_err(Into::into);
+    }
+    let head = clip
+        .timeline_range
+        .start()
+        .checked_sub(start)
+        .map_err(SequenceError::from)?;
+    let mut next = clip.clone();
+    next.timeline_range =
+        TimeRange::new(start, clip.timeline_range.end()).map_err(SequenceError::from)?;
+    next.time_map = match &clip.time_map {
+        // local(u - head) keeps existing content fixed while extending the
+        // parent domain left: linear maps shift the offset, piecewise maps
+        // shift every control point. Protected maps cannot express a domain
+        // shift and fail explicitly.
+        TimeMap::Linear(m) => TimeMap::linear(
+            m.offset()
+                .checked_sub(head.checked_mul(m.speed()).map_err(SequenceError::from)?)
+                .map_err(SequenceError::from)?,
+            m.speed(),
+        )
+        .map_err(SequenceError::from)?,
+        TimeMap::PiecewiseLinear(m) => TimeMap::piecewise_linear(
+            m.points()
+                .iter()
+                .map(|p| {
+                    Ok(TimeMapPoint {
+                        parent: p.parent.checked_add(head)?,
+                        local: p.local,
+                    })
+                })
+                .collect::<Result<Vec<_>, kronello_time::TimeError>>()
+                .map_err(SequenceError::from)?,
+        )
+        .map_err(SequenceError::from)?,
+        _ => {
+            return Err(ServiceError::new(
+                "UNSUPPORTED_FEATURE",
+                "head extension requires a linear or piecewise map",
+            ));
+        }
+    };
+    Ok(next)
+}
+/// Move the clip's end edge. Shrinking delegates to `trimmed`; growing keeps
+/// the authored map and must land inside its domain and the source bounds,
+/// which candidate validation enforces uniformly.
+fn right_edge(clip: &Clip, end: Time) -> Result<Clip, ServiceError> {
+    if end <= clip.timeline_range.end() {
+        return clip
+            .trimmed(TimeRange::new(clip.timeline_range.start(), end).map_err(SequenceError::from)?)
+            .map_err(Into::into);
+    }
+    let mut next = clip.clone();
+    next.timeline_range =
+        TimeRange::new(clip.timeline_range.start(), end).map_err(SequenceError::from)?;
+    Ok(next)
+}
+/// Apply an edge edit to `clip`; when an earlier step already replaced it, the
+/// new edge applies to that replacement so one clip can absorb two run edges.
+fn edit_edge(
+    edits: &mut std::collections::BTreeMap<ClipId, Clip>,
+    clip: &Clip,
+    edit: impl FnOnce(&Clip) -> Result<Clip, ServiceError>,
+) -> Result<(), ServiceError> {
+    let base = edits.get(&clip.id).cloned().unwrap_or_else(|| clip.clone());
+    edits.insert(clip.id, edit(&base)?);
+    Ok(())
+}
+fn sequence_ref(project: &Project, id: SequenceId) -> Result<&Sequence, ServiceError> {
+    if project
+        .sequences
+        .iter()
+        .any(|s| matches!(s, DocumentObject::Opaque(s) if s.id == id.as_uuid()))
+    {
+        return Err(ServiceError::new("UNSUPPORTED_FEATURE", "opaque sequence"));
+    }
+    project
+        .sequences
+        .iter()
+        .find_map(|s| match s {
+            DocumentObject::Known(s) if s.id == id => Some(s),
+            _ => None,
+        })
+        .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "sequence missing"))
+}
+fn has_clip(sequence: &Sequence, id: ClipId) -> bool {
+    sequence
+        .tracks
+        .iter()
+        .flat_map(|t| &t.clips)
+        .any(|c| c.id == id)
 }
 fn timeline_keys(
     sequence: &Sequence,
@@ -487,6 +708,31 @@ fn split_owned_objects(clip: &mut Clip) -> Result<(), ServiceError> {
                 remap(opacity)?;
             }
             EffectParameters::AudioGain { gain } => remap(gain)?,
+            EffectParameters::ColorExposure { exposure, offset } => {
+                remap(exposure)?;
+                remap(offset)?;
+            }
+            EffectParameters::ColorLevels {
+                in_black,
+                in_white,
+                gamma,
+                out_black,
+                out_white,
+            } => {
+                for id in [in_black, in_white, gamma, out_black, out_white] {
+                    remap(id)?;
+                }
+            }
+            EffectParameters::ColorCurves { curve } => remap(curve)?,
+            EffectParameters::ColorHsl {
+                hue_shift,
+                saturation,
+                lightness,
+            } => {
+                remap(hue_shift)?;
+                remap(saturation)?;
+                remap(lightness)?;
+            }
         }
     }
     Ok(())
@@ -618,6 +864,591 @@ pub(crate) fn mutate(
             expand_links(s, &mut selected, *linked)?;
             shift(s, &selected, *delta)?;
             timeline_keys(s, project_id, &selected, keys);
+        }
+        TimelineCommand::ClipSlip {
+            sequence,
+            clip,
+            delta,
+            linked,
+        } => {
+            // Read-phase on the stored document so link expansion and the
+            // protected-content check plan against one snapshot.
+            let source = sequence_ref(project, *sequence)?;
+            if !has_clip(source, *clip) {
+                return Err(ServiceError::new("SOURCE_MISSING", "clip missing"));
+            }
+            let mut selected = BTreeSet::from([*clip]);
+            expand_links(source, &mut selected, *linked)?;
+            for c in source
+                .tracks
+                .iter()
+                .flat_map(|t| &t.clips)
+                .filter(|c| selected.contains(&c.id))
+            {
+                if let SourceRef::Composition { composition } = &c.source_ref
+                    && protected_content(project, *composition)
+                {
+                    return Err(ServiceError::new(
+                        "PROTECTED_INTERVAL",
+                        "use protected clip retime for protected content",
+                    ));
+                }
+            }
+            let project_id = project.id;
+            let s = sequence_mut(project, *sequence)?;
+            // The placement stays fixed; only the source window origin moves.
+            // Validation rejects a window that leaves the source bounds.
+            for c in s
+                .tracks
+                .iter_mut()
+                .flat_map(|t| &mut t.clips)
+                .filter(|c| selected.contains(&c.id))
+            {
+                c.source_in = c
+                    .source_in
+                    .checked_add(*delta)
+                    .map_err(SequenceError::from)?;
+            }
+            timeline_keys(s, project_id, &selected, keys);
+        }
+        TimelineCommand::ClipSlide {
+            sequence,
+            clip,
+            delta,
+            linked,
+        } => {
+            let source = sequence_ref(project, *sequence)?;
+            if !has_clip(source, *clip) {
+                return Err(ServiceError::new("SOURCE_MISSING", "clip missing"));
+            }
+            let mut selected = BTreeSet::from([*clip]);
+            expand_links(source, &mut selected, *linked)?;
+            if source
+                .transitions
+                .iter()
+                .any(|t| selected.contains(&t.outgoing) || selected.contains(&t.incoming))
+            {
+                return Err(ServiceError::new(
+                    "TRANSITION_EDIT_CONFLICT",
+                    "slide requires explicit transition removal",
+                ));
+            }
+            // Plan every replacement against the original document; failure at
+            // any edge rejects the whole command before mutation.
+            let mut edits = std::collections::BTreeMap::new();
+            for track in &source.tracks {
+                let mut members: Vec<&Clip> = track
+                    .clips
+                    .iter()
+                    .filter(|c| selected.contains(&c.id))
+                    .collect();
+                members.sort_by_key(|c| c.timeline_range.start());
+                let mut index = 0;
+                while index < members.len() {
+                    let run_start = members[index].timeline_range.start();
+                    let mut run_end = members[index].timeline_range.end();
+                    let mut run = vec![members[index]];
+                    index += 1;
+                    while index < members.len() && members[index].timeline_range.start() == run_end
+                    {
+                        run_end = members[index].timeline_range.end();
+                        run.push(members[index]);
+                        index += 1;
+                    }
+                    let previous = track
+                        .clips
+                        .iter()
+                        .find(|c| !selected.contains(&c.id) && c.timeline_range.end() == run_start)
+                        .ok_or_else(|| {
+                            ServiceError::new(
+                                "INVALID_CLIP",
+                                "slide requires an adjacent leading clip",
+                            )
+                        })?;
+                    let next = track
+                        .clips
+                        .iter()
+                        .find(|c| !selected.contains(&c.id) && c.timeline_range.start() == run_end)
+                        .ok_or_else(|| {
+                            ServiceError::new(
+                                "INVALID_CLIP",
+                                "slide requires an adjacent trailing clip",
+                            )
+                        })?;
+                    let start_edge = run_start.checked_add(*delta).map_err(SequenceError::from)?;
+                    let end_edge = run_end.checked_add(*delta).map_err(SequenceError::from)?;
+                    edit_edge(&mut edits, previous, |c| right_edge(c, start_edge))?;
+                    edit_edge(&mut edits, next, |c| left_edge(c, end_edge))?;
+                    for member in run {
+                        edit_edge(&mut edits, member, |c| moved(c, *delta))?;
+                    }
+                }
+            }
+            let edited: BTreeSet<_> = edits.keys().copied().collect();
+            let project_id = project.id;
+            let s = sequence_mut(project, *sequence)?;
+            for c in s.tracks.iter_mut().flat_map(|t| &mut t.clips) {
+                if let Some(next) = edits.remove(&c.id) {
+                    *c = next;
+                }
+            }
+            timeline_keys(s, project_id, &edited, keys);
+        }
+        TimelineCommand::ClipRoll {
+            sequence,
+            clip,
+            delta,
+            linked,
+        } => {
+            let source = sequence_ref(project, *sequence)?;
+            if !has_clip(source, *clip) {
+                return Err(ServiceError::new("SOURCE_MISSING", "clip missing"));
+            }
+            let mut selected = BTreeSet::from([*clip]);
+            expand_links(source, &mut selected, *linked)?;
+            let mut edits = std::collections::BTreeMap::new();
+            for track in &source.tracks {
+                for member in track.clips.iter().filter(|c| selected.contains(&c.id)) {
+                    let next = track
+                        .clips
+                        .iter()
+                        .find(|c| {
+                            !selected.contains(&c.id)
+                                && c.timeline_range.start() == member.timeline_range.end()
+                        })
+                        .ok_or_else(|| {
+                            ServiceError::new(
+                                "INVALID_CLIP",
+                                "roll requires an adjacent following clip",
+                            )
+                        })?;
+                    let boundary = member
+                        .timeline_range
+                        .end()
+                        .checked_add(*delta)
+                        .map_err(SequenceError::from)?;
+                    edit_edge(&mut edits, member, |c| right_edge(c, boundary))?;
+                    edit_edge(&mut edits, next, |c| left_edge(c, boundary))?;
+                }
+            }
+            // A transition sharing a rolled edit point has no defined result;
+            // the caller removes it explicitly first.
+            if source
+                .transitions
+                .iter()
+                .any(|t| edits.contains_key(&t.outgoing) || edits.contains_key(&t.incoming))
+            {
+                return Err(ServiceError::new(
+                    "TRANSITION_EDIT_CONFLICT",
+                    "roll requires explicit transition removal",
+                ));
+            }
+            let edited: BTreeSet<_> = edits.keys().copied().collect();
+            let project_id = project.id;
+            let s = sequence_mut(project, *sequence)?;
+            for c in s.tracks.iter_mut().flat_map(|t| &mut t.clips) {
+                if let Some(next) = edits.remove(&c.id) {
+                    *c = next;
+                }
+            }
+            timeline_keys(s, project_id, &edited, keys);
+        }
+        TimelineCommand::ClipDelete {
+            sequence,
+            clip,
+            linked,
+        } => {
+            let source = sequence_ref(project, *sequence)?;
+            if !has_clip(source, *clip) {
+                return Err(ServiceError::new("SOURCE_MISSING", "clip missing"));
+            }
+            let mut selected = BTreeSet::from([*clip]);
+            expand_links(source, &mut selected, *linked)?;
+            if source
+                .transitions
+                .iter()
+                .any(|t| selected.contains(&t.outgoing) || selected.contains(&t.incoming))
+            {
+                return Err(ServiceError::new(
+                    "TRANSITION_EDIT_CONFLICT",
+                    "remove incident transitions before deleting",
+                ));
+            }
+            let project_id = project.id;
+            let s = sequence_mut(project, *sequence)?;
+            for track in &mut s.tracks {
+                track.clips.retain(|c| !selected.contains(&c.id));
+            }
+            // The gap stays; surviving links already exclude the component.
+            timeline_keys(s, project_id, &BTreeSet::new(), keys);
+            for id in &selected {
+                keys.insert(changed(id.as_uuid(), sequence.as_uuid()));
+            }
+        }
+        TimelineCommand::RippleDelete {
+            sequence,
+            tracks,
+            range,
+            linked,
+        } => {
+            let source = sequence_ref(project, *sequence)?;
+            if range.is_empty() || range.start() < Time::ZERO {
+                return Err(ServiceError::new("INVALID_CLIP", "empty ripple range"));
+            }
+            let listed: BTreeSet<_> = tracks.iter().copied().collect();
+            if listed.len() != tracks.len()
+                || listed.is_empty()
+                || listed
+                    .iter()
+                    .any(|id| !source.tracks.iter().any(|t| t.id == *id))
+            {
+                return Err(ServiceError::new(
+                    "INVALID_CLIP",
+                    "explicit ripple tracks required",
+                ));
+            }
+            let length = range
+                .end()
+                .checked_sub(range.start())
+                .map_err(SequenceError::from)?;
+            // Classify every clip on a listed track by its overlap with range.
+            let mut doomed = BTreeSet::new();
+            let mut shifted = BTreeSet::new();
+            let mut hit = BTreeSet::new();
+            let classify = |clip: &Clip,
+                            doomed: &mut BTreeSet<ClipId>,
+                            shifted: &mut BTreeSet<ClipId>|
+             -> Result<Option<TimeRange>, ServiceError> {
+                let Some(overlap) = clip.timeline_range.intersection(*range) else {
+                    if clip.timeline_range.start() >= range.end() {
+                        shifted.insert(clip.id);
+                    }
+                    return Ok(None);
+                };
+                if clip.timeline_range.start() < range.start()
+                    && clip.timeline_range.end() > range.end()
+                {
+                    return Err(ServiceError::new(
+                        "INVALID_CLIP",
+                        "ripple delete cannot split a clip straddling the range",
+                    ));
+                }
+                if overlap == clip.timeline_range {
+                    doomed.insert(clip.id);
+                } else if clip.timeline_range.start() < range.start() {
+                    // Keep the head before the range.
+                    return Ok(Some(
+                        TimeRange::new(clip.timeline_range.start(), range.start())
+                            .map_err(SequenceError::from)?,
+                    ));
+                } else {
+                    // Keep the tail after the range, moved into the gap.
+                    return Ok(Some(
+                        TimeRange::new(range.end(), clip.timeline_range.end())
+                            .map_err(SequenceError::from)?,
+                    ));
+                }
+                Ok(None)
+            };
+            let mut trims = std::collections::BTreeMap::new();
+            for track in source.tracks.iter().filter(|t| listed.contains(&t.id)) {
+                for clip in &track.clips {
+                    if let Some(keep) = classify(clip, &mut doomed, &mut shifted)? {
+                        trims.insert(clip.id, keep);
+                    }
+                }
+            }
+            hit.extend(doomed.iter().chain(trims.keys()).copied());
+            hit.extend(shifted.iter().copied());
+            expand_links(source, &mut hit, *linked)?;
+            // Linked partners pulled in from unlisted tracks are evaluated by
+            // their own overlap; never by the triggering clip's fate.
+            for track in &source.tracks {
+                for clip in &track.clips {
+                    if hit.contains(&clip.id)
+                        && !doomed.contains(&clip.id)
+                        && !trims.contains_key(&clip.id)
+                        && !shifted.contains(&clip.id)
+                        && let Some(keep) = classify(clip, &mut doomed, &mut shifted)?
+                    {
+                        trims.insert(clip.id, keep);
+                    }
+                }
+            }
+            // Transitions die only with both endpoints; a partially covered or
+            // shifted endpoint conflicts explicitly.
+            for transition in &source.transitions {
+                let touched = doomed.contains(&transition.outgoing)
+                    || doomed.contains(&transition.incoming)
+                    || trims.contains_key(&transition.outgoing)
+                    || trims.contains_key(&transition.incoming);
+                if touched
+                    && !(doomed.contains(&transition.outgoing)
+                        && doomed.contains(&transition.incoming))
+                {
+                    return Err(ServiceError::new(
+                        "TRANSITION_EDIT_CONFLICT",
+                        "ripple delete requires explicit transition removal",
+                    ));
+                }
+            }
+            let backward = Time::ZERO
+                .checked_sub(length)
+                .map_err(SequenceError::from)?;
+            let mut edits = std::collections::BTreeMap::new();
+            for (id, keep) in &trims {
+                let clip = source
+                    .tracks
+                    .iter()
+                    .flat_map(|t| &t.clips)
+                    .find(|c| c.id == *id)
+                    .expect("classified clip");
+                let trimmed = clip.trimmed(*keep)?;
+                edits.insert(
+                    *id,
+                    if keep.start() == range.end() {
+                        moved(&trimmed, backward)?
+                    } else {
+                        trimmed
+                    },
+                );
+            }
+            let project_id = project.id;
+            let s = sequence_mut(project, *sequence)?;
+            for track in &mut s.tracks {
+                track.clips.retain(|c| !doomed.contains(&c.id));
+                for c in &mut track.clips {
+                    c.links.retain(|id| !doomed.contains(id));
+                }
+            }
+            for c in s.tracks.iter_mut().flat_map(|t| &mut t.clips) {
+                if let Some(next) = edits.remove(&c.id) {
+                    *c = next;
+                }
+            }
+            s.transitions
+                .retain(|t| !(doomed.contains(&t.outgoing) && doomed.contains(&t.incoming)));
+            shift(s, &shifted, backward)?;
+            let mut affected: BTreeSet<_> = doomed.iter().chain(shifted.iter()).copied().collect();
+            affected.extend(trims.keys().copied());
+            timeline_keys(s, project_id, &affected, keys);
+            for id in &doomed {
+                keys.insert(changed(id.as_uuid(), sequence.as_uuid()));
+            }
+        }
+        TimelineCommand::ClipInsert {
+            sequence,
+            track,
+            clip,
+            linked,
+        } => {
+            let source = sequence_ref(project, *sequence)?;
+            let at = clip.timeline_range.start();
+            let duration = clip
+                .timeline_range
+                .duration()
+                .map_err(SequenceError::from)?
+                .as_time();
+            if duration <= Time::ZERO {
+                return Err(ServiceError::new("INVALID_CLIP", "empty insert range"));
+            }
+            let target = source
+                .tracks
+                .iter()
+                .find(|t| t.id == *track)
+                .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "track missing"))?;
+            let mut shifted = BTreeSet::new();
+            for c in &target.clips {
+                if c.timeline_range.start() < at && c.timeline_range.end() > at {
+                    return Err(ServiceError::new(
+                        "INVALID_CLIP",
+                        "insert point straddles a clip; split first or overwrite",
+                    ));
+                }
+                if c.timeline_range.start() >= at {
+                    shifted.insert(c.id);
+                }
+            }
+            if has_clip(source, clip.id) {
+                return Err(ServiceError::new("INVALID_CLIP", "clip id already placed"));
+            }
+            expand_links(source, &mut shifted, *linked)?;
+            let project_id = project.id;
+            let s = sequence_mut(project, *sequence)?;
+            let target = s
+                .tracks
+                .iter_mut()
+                .find(|t| t.id == *track)
+                .expect("track checked");
+            insert_sorted(&mut target.clips, (**clip).clone());
+            shift(s, &shifted, duration)?;
+            timeline_keys(s, project_id, &shifted, keys);
+            keys.insert(changed(clip.id.as_uuid(), track.as_uuid()));
+        }
+        TimelineCommand::ClipOverwrite {
+            sequence,
+            track,
+            clip,
+        } => {
+            let source = sequence_ref(project, *sequence)?;
+            let range = clip.timeline_range;
+            if range.is_empty() {
+                return Err(ServiceError::new("INVALID_CLIP", "empty overwrite range"));
+            }
+            let target = source
+                .tracks
+                .iter()
+                .find(|t| t.id == *track)
+                .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "track missing"))?;
+            if has_clip(source, clip.id) {
+                return Err(ServiceError::new("INVALID_CLIP", "clip id already placed"));
+            }
+            // Overwrite never separates linked placements; covered or trimmed
+            // linked clips must be removed through a linked operation first.
+            let mut doomed = BTreeSet::new();
+            let mut edits = std::collections::BTreeMap::new();
+            for c in &target.clips {
+                let Some(overlap) = c.timeline_range.intersection(range) else {
+                    continue;
+                };
+                if !c.links.is_empty() {
+                    return Err(ServiceError::new(
+                        "LINKED_EDIT_REQUIRED",
+                        "overwrite would separate linked placements",
+                    ));
+                }
+                if overlap == c.timeline_range {
+                    doomed.insert(c.id);
+                    continue;
+                }
+                if c.timeline_range.start() < range.start() {
+                    edit_edge(&mut edits, c, |c| right_edge(c, range.start()))?;
+                }
+                if c.timeline_range.end() > range.end() {
+                    edit_edge(&mut edits, c, |c| left_edge(c, range.end()))?;
+                }
+            }
+            if source.transitions.iter().any(|t| {
+                doomed.contains(&t.outgoing)
+                    || doomed.contains(&t.incoming)
+                    || edits.contains_key(&t.outgoing)
+                    || edits.contains_key(&t.incoming)
+            }) {
+                return Err(ServiceError::new(
+                    "TRANSITION_EDIT_CONFLICT",
+                    "overwrite requires explicit transition removal",
+                ));
+            }
+            let affected: BTreeSet<_> = doomed.iter().chain(edits.keys()).copied().collect();
+            let project_id = project.id;
+            let s = sequence_mut(project, *sequence)?;
+            let target = s
+                .tracks
+                .iter_mut()
+                .find(|t| t.id == *track)
+                .expect("track checked");
+            target.clips.retain(|c| !doomed.contains(&c.id));
+            for c in target.clips.iter_mut() {
+                if let Some(next) = edits.remove(&c.id) {
+                    *c = next;
+                }
+            }
+            insert_sorted(&mut target.clips, (**clip).clone());
+            timeline_keys(s, project_id, &affected, keys);
+            keys.insert(changed(clip.id.as_uuid(), track.as_uuid()));
+        }
+        TimelineCommand::MarkerSet {
+            sequence,
+            clip,
+            marker,
+        } => {
+            let project_id = project.id;
+            let s = sequence_mut(project, *sequence)?;
+            let mut clips = BTreeSet::new();
+            let list = match clip {
+                Some(id) => {
+                    clips.insert(*id);
+                    &mut s
+                        .tracks
+                        .iter_mut()
+                        .flat_map(|t| &mut t.clips)
+                        .find(|c| c.id == *id)
+                        .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "clip missing"))?
+                        .markers
+                }
+                None => &mut s.markers,
+            };
+            match list.iter_mut().find(|m| m.id == marker.id) {
+                Some(existing) => *existing = marker.clone(),
+                None => list.push(marker.clone()),
+            }
+            timeline_keys(s, project_id, &clips, keys);
+        }
+        TimelineCommand::MarkerRemove {
+            sequence,
+            clip,
+            marker,
+        } => {
+            let project_id = project.id;
+            let s = sequence_mut(project, *sequence)?;
+            let mut clips = BTreeSet::new();
+            let list = match clip {
+                Some(id) => {
+                    clips.insert(*id);
+                    &mut s
+                        .tracks
+                        .iter_mut()
+                        .flat_map(|t| &mut t.clips)
+                        .find(|c| c.id == *id)
+                        .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "clip missing"))?
+                        .markers
+                }
+                None => &mut s.markers,
+            };
+            let before = list.len();
+            list.retain(|m| m.id != *marker);
+            if list.len() == before {
+                return Err(ServiceError::new("SOURCE_MISSING", "marker missing"));
+            }
+            timeline_keys(s, project_id, &clips, keys);
+        }
+        TimelineCommand::MarkerMove {
+            sequence,
+            clip,
+            marker,
+            time,
+        } => {
+            let project_id = project.id;
+            let s = sequence_mut(project, *sequence)?;
+            let mut clips = BTreeSet::new();
+            let list = match clip {
+                Some(id) => {
+                    clips.insert(*id);
+                    &mut s
+                        .tracks
+                        .iter_mut()
+                        .flat_map(|t| &mut t.clips)
+                        .find(|c| c.id == *id)
+                        .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "clip missing"))?
+                        .markers
+                }
+                None => &mut s.markers,
+            };
+            let target = list
+                .iter_mut()
+                .find(|m| m.id == *marker)
+                .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "marker missing"))?;
+            target.time = *time;
+            timeline_keys(s, project_id, &clips, keys);
+        }
+        TimelineCommand::WorkAreaSet {
+            sequence,
+            work_area,
+        } => {
+            let project_id = project.id;
+            let s = sequence_mut(project, *sequence)?;
+            s.work_area = *work_area;
+            timeline_keys(s, project_id, &BTreeSet::new(), keys);
         }
         TimelineCommand::ClipLink { sequence, clips } => {
             let project_id = project.id;
@@ -772,6 +1603,15 @@ pub(crate) fn mutate(
                 .sequences
                 .push(DocumentObject::Known(sequence.clone()));
         }
+        TimelineCommand::TrackAppend { sequence, track } => {
+            let s = sequence_mut(project, *sequence)?;
+            if s.tracks.iter().any(|t| t.id == track.id) {
+                return Err(ServiceError::new("INVALID_EDIT", "track id already exists"));
+            }
+            s.tracks.push(track.clone());
+            keys.insert(changed(sequence.as_uuid(), sequence.as_uuid()));
+            keys.insert(changed(track.id.as_uuid(), sequence.as_uuid()));
+        }
         TimelineCommand::ClipPlace {
             sequence,
             track,
@@ -823,7 +1663,22 @@ pub(crate) fn mutate(
                 .flat_map(|t| &mut t.clips)
                 .find(|c| c.id == *clip)
                 .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "clip missing"))?;
-            *c = if matches!(command, TimelineCommand::ClipTrim { .. }) {
+            *c = if matches!(c.source_ref, SourceRef::Caption { .. }) {
+                // A cue's display interval is the placement itself; there is no
+                // source-relative window to re-anchor. Trim stays a subset.
+                if range.is_empty()
+                    || (matches!(command, TimelineCommand::ClipTrim { .. })
+                        && (range.start() < c.timeline_range.start()
+                            || range.end() > c.timeline_range.end()))
+                {
+                    return Err(
+                        SequenceError::Invalid("trim must be a nonempty subset".into()).into(),
+                    );
+                }
+                let mut updated = c.clone();
+                updated.timeline_range = *range;
+                updated
+            } else if matches!(command, TimelineCommand::ClipTrim { .. }) {
                 c.trimmed(*range)?
             } else {
                 c.stretched(*range)?

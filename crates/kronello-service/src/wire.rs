@@ -122,6 +122,19 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                     },
                 })
             }
+            "caption_sidecar" => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct Sidecar {
+                    sequence: kronello_model::SequenceId,
+                    caption_format: kronello_model::CaptionFormat,
+                }
+                let sidecar: Sidecar = payload(&fields)?;
+                Ok(Self::CaptionSidecar {
+                    sequence: sidecar.sequence,
+                    caption_format: sidecar.caption_format,
+                })
+            }
             _ => Err(D::Error::custom("unknown job output format")),
         }
     }
@@ -179,6 +192,9 @@ impl<'de> Deserialize<'de> for Request {
             "clip.stretch" => payload(&fields).map(Self::ClipStretch),
             "instance.retime" => payload(&fields).map(Self::InstanceRetime),
             "template_instance.retime" => payload(&fields).map(Self::TemplateInstanceRetime),
+            "captions.import_plan" => payload(&fields).map(Self::CaptionsImportPlan),
+            "captions.import" => payload(&fields).map(Self::CaptionsImport),
+            "captions.export" => payload(&fields).map(Self::CaptionsExport),
 
             "render.export" => payload(&fields).map(Self::RenderExport),
             "render.submit" => payload(&fields).map(Self::RenderSubmit),
@@ -247,6 +263,7 @@ impl<'de> Deserialize<'de> for ResultData {
             "render_explanation" => Self::RenderExplanation(take(&mut fields, "value")?),
             "samples" => Self::Samples(take(&mut fields, "value")?),
             "capabilities" => Self::Capabilities(take(&mut fields, "value")?),
+            "captions" => Self::Captions(take(&mut fields, "value")?),
             _ => return Err(D::Error::custom("unknown result kind")),
         };
         exhausted::<D::Error>(&fields)?;

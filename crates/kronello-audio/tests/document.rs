@@ -115,6 +115,7 @@ fn sequence(p: &mut Project, root: CompositionId, start: Time, end: Time) -> Seq
         links: vec![],
         properties: vec![],
         effects: vec![],
+        markers: vec![],
     };
     let s = Sequence {
         id: SequenceId::new(),
@@ -129,6 +130,8 @@ fn sequence(p: &mut Project, root: CompositionId, start: Time, end: Time) -> Seq
             clips: vec![clip],
         }],
         transitions: vec![],
+        markers: vec![],
+        work_area: None,
     };
     let id = s.id;
     p.sequences.push(DocumentObject::Known(s));
@@ -386,6 +389,7 @@ fn crossfade_between_audible_composition_clips_fails_typed() {
         incoming: incoming.id,
         range: r(t(1, 20), t(1, 10)),
         kind: TransitionKind::Crossfade,
+        params: None,
         version: 1,
     });
     s.tracks[0].clips.push(incoming);

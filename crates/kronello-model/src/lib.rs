@@ -45,8 +45,9 @@ pub use expression::{
     ExpressionDependency, ExpressionError, ExpressionNode, expression_value_bytes,
 };
 pub use id::{
-    AssetId, ClipId, CompositionId, CompositionInstanceId, ContentId, CurveId, DescriptorId,
-    ExpressionId, ModifierId, NodeId, PropertyId, SchemaKey, SequenceId, TrackId,
+    AssetId, CaptionId, ClipId, CompositionId, CompositionInstanceId, ContentId, CurveId,
+    DescriptorId, ExpressionId, MarkerId, ModifierId, NodeId, PropertyId, SchemaKey, SequenceId,
+    TrackId,
 };
 pub use property::{DescriptorRef, Modifier, Property, PropertySource, SourceResolver};
 pub use schema::{
@@ -89,6 +90,16 @@ pub use text::{
     RubyAssociation, TEXT_ADVANCED_LAYOUT_VERSION, TEXT_LAYOUT_VERSION, TextAlignment,
     TextDirection, TextDocument, TextError, TextRange, TextStyleSpan, text_descriptors,
     validate_text_contents,
+};
+
+mod caption;
+pub use caption::{
+    CAPTION_ANCHOR_ID, CAPTION_BACKGROUND_ID, CAPTION_BOLD_WIDTH_RATIO, CAPTION_COLOR_ID,
+    CAPTION_FONT_ID, CAPTION_FONT_SIZE_ID, CAPTION_ITALIC_SHEAR, CAPTION_LINE_HEIGHT_RATIO,
+    CAPTION_OFFSET_ID, CAPTION_OUTLINE_COLOR_ID, CAPTION_OUTLINE_WIDTH_ID,
+    CAPTION_SAFE_AREA_INSET_ID, CAPTION_VERSION, CaptionAnchor, CaptionDocument, CaptionError,
+    CaptionFormat, CaptionOutline, CaptionPlacement, CaptionSpan, CaptionSpanFlags, CaptionStyle,
+    ResolvedCaption, ResolvedCaptionPlacement, caption_descriptors, validate_caption_contents,
 };
 
 mod effect;

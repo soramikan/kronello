@@ -130,7 +130,10 @@ macro_rules! commands {
             ("template.define", false, TemplateDefineRequest, kronello_store::Event),
             ("template.instantiate", false, TemplateInstantiateRequest, kronello_store::Event),
             ("template.set_input", false, TemplateSetInputRequest, kronello_store::Event),
-            ("template.set_duration", false, TemplateSetDurationRequest, kronello_store::Event)
+            ("template.set_duration", false, TemplateSetDurationRequest, kronello_store::Event),
+            ("captions.import_plan", true, CaptionsImportPlanRequest, EditPlan),
+            ("captions.import", false, CaptionsImportRequest, kronello_store::Event),
+            ("captions.export", true, CaptionsExportRequest, CaptionsExportResult)
         }
     };
 }
@@ -196,6 +199,8 @@ impl CapabilitiesResult {
                 "project_change_plans",
                 "modifier_editing",
                 "template",
+                "captions_v1",
+                "caption_sidecar_v1",
             ]
             .map(String::from)
             .to_vec(),
@@ -217,7 +222,8 @@ impl CapabilitiesResult {
 #[allow(dead_code)]
 enum ApiEnvelope {
     Request(Box<Request>),
-    Response(Response),
+    // Boxed for size; schemars treats `Box<T>` identically to `T`.
+    Response(Box<Response>),
 }
 
 /// Draft 2020-12 generated from the same types used by every transport. Every

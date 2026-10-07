@@ -54,6 +54,7 @@ fn create_project_as(
         links: vec![],
         properties: vec![],
         effects: vec![],
+        markers: vec![],
     };
     let sequence = Sequence {
         id: SequenceId::new(),
@@ -68,6 +69,8 @@ fn create_project_as(
             clips: vec![clip],
         }],
         transitions: vec![],
+        markers: vec![],
+        work_area: None,
     };
     let id = sequence.id;
     let mut project = Project::default();

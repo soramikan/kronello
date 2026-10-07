@@ -16,6 +16,12 @@ pub struct Sequence {
     pub tracks: Vec<Track>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub transitions: Vec<Transition>,
+    /// Sequence-time annotations; bounded by the content extent end.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub markers: Vec<Marker>,
+    /// In/Out share this range's start/end; absent means the whole sequence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub work_area: Option<TimeRange>,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -46,6 +52,8 @@ impl Track {
 pub enum TrackKind {
     Video,
     Audio,
+    /// Text cues rendered above every video track; never enters audio mixing.
+    Caption,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -69,6 +77,37 @@ pub struct Clip {
     /// Placement transform and effect parameters, evaluated in sequence time.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub properties: Vec<Property>,
+    /// Sequence-time annotations, confined to this placement's range.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub markers: Vec<Marker>,
+}
+/// A single authored annotation in sequence time. Clip markers reference
+/// sequence time (not clip-local source time) and stay inside the clip's
+/// `timeline_range`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Marker {
+    pub id: MarkerId,
+    pub time: Time,
+    pub color: MarkerColor,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comment: Option<String>,
+}
+/// Closed set; transports never guess a color from a label.
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum MarkerColor {
+    #[default]
+    Red,
+    Green,
+    Blue,
+    Yellow,
+    Purple,
+    Cyan,
+    Orange,
+    White,
 }
 /// NLE-001 never performs implicit pitch/speed conversion.
 #[derive(
@@ -116,6 +155,9 @@ pub enum SourceRef {
         version: u32,
         #[serde(default = "generator_color")]
         color: Color,
+    },
+    Caption {
+        caption: CaptionId,
     },
 }
 // Decode variant payloads directly from JSON. Serde's internally-tagged Content
@@ -170,6 +212,11 @@ impl<'de> Deserialize<'de> for SourceRef {
             #[serde(default = "generator_color")]
             color: Color,
         }
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct CaptionSource {
+            caption: CaptionId,
+        }
         let json = serde_json::to_string(&fields).map_err(D::Error::custom)?;
         match kind.as_str() {
             "composition" => {
@@ -193,6 +240,10 @@ impl<'de> Deserialize<'de> for SourceRef {
                     color: p.color,
                 })
             }
+            "caption" => {
+                let p: CaptionSource = serde_json::from_str(&json).map_err(D::Error::custom)?;
+                Ok(Self::Caption { caption: p.caption })
+            }
             _ => Err(D::Error::custom("unknown source kind")),
         }
     }
@@ -206,19 +257,71 @@ fn generator_color() -> Color {
     Color::from_srgb8([0; 3], None)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Transition {
     pub outgoing: ClipId,
     pub incoming: ClipId,
     pub range: TimeRange,
     pub kind: TransitionKind,
+    /// FX-003 per-kind payload. Absent in pre-FX-003 documents and required
+    /// for all non-crossfade kinds; crossfade must not carry one (ADR-0109).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub params: Option<TransitionParams>,
     pub version: u32,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum TransitionKind {
     Crossfade,
+    Wipe,
+    Slide,
+    Dip,
+}
+/// FX-003 transition payloads; the variant must match Transition::kind.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TransitionParams {
+    Wipe(WipeParams),
+    Slide(SlideParams),
+    Dip(DipParams),
+}
+/// Closed direction set shared by the wipe and slide v1 transitions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TransitionDirection {
+    Left,
+    Right,
+    Up,
+    Down,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WipeParams {
+    pub direction: TransitionDirection,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SlideParams {
+    pub direction: TransitionDirection,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DipParams {
+    /// Straight authoring color composited at the transition midpoint.
+    pub color: Color,
+}
+impl TransitionKind {
+    /// FX-003: every kind except crossfade requires its matching payload.
+    pub fn accepts(self, params: Option<TransitionParams>) -> bool {
+        matches!(
+            (self, params),
+            (Self::Crossfade, None)
+                | (Self::Wipe, Some(TransitionParams::Wipe(_)))
+                | (Self::Slide, Some(TransitionParams::Slide(_)))
+                | (Self::Dip, Some(TransitionParams::Dip(_)))
+        )
+    }
 }
 #[derive(Debug, Error)]
 pub enum SequenceError {
@@ -302,6 +405,8 @@ impl Clip {
             }
             _ => return Err(SequenceError::Unsupported("time map".into())),
         };
+        // Markers cut away from the placement go away with the content.
+        clip.markers.retain(|m| range.contains(m.time));
         Ok(clip)
     }
     /// Preserve source interval and local control values; rescale parent time.
@@ -330,6 +435,16 @@ impl Clip {
             )?,
             _ => return Err(SequenceError::Unsupported("time map".into())),
         };
+        // Sequence-time markers keep their position inside the rescaled range.
+        for marker in &mut clip.markers {
+            marker.time = range.start().checked_add(
+                marker
+                    .time
+                    .checked_sub(self.timeline_range.start())?
+                    .checked_mul(new.checked_div(old)?)?,
+            )?;
+        }
+        clip.markers.retain(|m| range.contains(m.time));
         Ok(clip)
     }
 }
@@ -359,6 +474,12 @@ impl Sequence {
                     SequenceError::Invalid("transition requires clips on one track".into())
                 })?;
             let (track, a, b) = pair;
+            // Caption cues never overlap; crossfades are a video-only transition.
+            if track.kind == TrackKind::Caption {
+                return Err(SequenceError::Invalid(
+                    "transitions require a non-caption track".into(),
+                ));
+            }
             if a.timeline_range.start() >= b.timeline_range.start()
                 || a.timeline_range.end() >= b.timeline_range.end()
                 || a.timeline_range.intersection(b.timeline_range) != Some(transition.range)
@@ -371,7 +492,14 @@ impl Sequence {
                         && c.timeline_range.intersection(transition.range).is_some()
                 })
             {
-                return Err(SequenceError::Invalid("invalid crossfade overlap".into()));
+                return Err(SequenceError::Invalid("invalid transition overlap".into()));
+            }
+            // Kind/params pairing is structural: mismatches are invalid
+            // regardless of which evaluator executes the transition.
+            if !transition.kind.accepts(transition.params) {
+                return Err(SequenceError::Invalid(
+                    "transition kind and params mismatch".into(),
+                ));
             }
         }
         for track in &self.tracks {
@@ -419,6 +547,19 @@ impl Sequence {
                 if clip.effects.len() > 16 {
                     return Err(SequenceError::Invalid("clip effect budget".into()));
                 }
+                let mut clip_markers = std::collections::BTreeSet::new();
+                for marker in &clip.markers {
+                    if !clip_markers.insert(marker.id) {
+                        return Err(SequenceError::Invalid(
+                            "duplicate marker id in a clip".into(),
+                        ));
+                    }
+                    if !clip.timeline_range.contains(marker.time) {
+                        return Err(SequenceError::Invalid(
+                            "clip marker outside its timeline range".into(),
+                        ));
+                    }
+                }
                 // Unknown effects remain storable and fail when the selected target executes.
                 if track.clips[..index].iter().any(|c| {
                     c.timeline_range
@@ -455,7 +596,41 @@ impl Sequence {
                         "reverse_resample_v1 requires reverse_grid_v1".into(),
                     ));
                 }
+                // Caption clips live only on caption tracks, and caption tracks
+                // accept nothing else (ADR-0107). Generic overlap rejection
+                // above keeps cues nonoverlapping since transitions are banned.
+                if (track.kind == TrackKind::Caption)
+                    != matches!(&clip.source_ref, SourceRef::Caption { .. })
+                {
+                    return Err(SequenceError::Invalid(
+                        "caption clips require a caption track".into(),
+                    ));
+                }
                 match &clip.source_ref {
+                    SourceRef::Caption { caption } => {
+                        if clip.source_in != Time::ZERO
+                            || !matches!(&clip.time_map, TimeMap::Linear(m) if m.offset() == Time::ZERO && m.speed() == kronello_time::Rational::ONE)
+                            || clip.reverse_sampling.is_some()
+                            || clip.audio_retime != AudioRetimePolicy::Reject
+                            || clip.volume.is_some()
+                        {
+                            return Err(SequenceError::Invalid(
+                                "caption clip requires zero source_in and an identity time map without retime, reverse or gain".into(),
+                            ));
+                        }
+                        if project.captions.iter().any(
+                            |c| matches!(c, DocumentObject::Opaque(c) if c.id == caption.as_uuid()),
+                        ) {
+                            continue;
+                        }
+                        if !project
+                            .captions
+                            .iter()
+                            .any(|c| matches!(c, DocumentObject::Known(c) if c.id == *caption))
+                        {
+                            return Err(SequenceError::MissingSource(caption.to_string()));
+                        }
+                    }
                     SourceRef::Composition { composition } => {
                         if project.compositions.iter().any(|c| matches!(c, DocumentObject::Opaque(c) if c.id == composition.as_uuid())) { continue; }
                         let source = project
@@ -581,6 +756,34 @@ impl Sequence {
                     SourceRef::Generator { .. } => (),
                 }
             }
+        }
+        // The authored extent is content-derived: sequence markers and the
+        // In/Out work area may not point beyond the last clip end. An empty
+        // work area is not a valid In/Out pair.
+        let content_end = self
+            .tracks
+            .iter()
+            .flat_map(|t| &t.clips)
+            .map(|c| c.timeline_range.end())
+            .max()
+            .unwrap_or(Time::ZERO);
+        let mut sequence_markers = std::collections::BTreeSet::new();
+        for marker in &self.markers {
+            if !sequence_markers.insert(marker.id) {
+                return Err(SequenceError::Invalid(
+                    "duplicate marker id in a sequence".into(),
+                ));
+            }
+            if marker.time < Time::ZERO || marker.time > content_end {
+                return Err(SequenceError::Invalid(
+                    "sequence marker outside the content extent".into(),
+                ));
+            }
+        }
+        if let Some(area) = &self.work_area
+            && (area.is_empty() || area.end() > content_end)
+        {
+            return Err(SequenceError::Invalid("invalid work area".into()));
         }
         Ok(())
     }

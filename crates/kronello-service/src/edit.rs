@@ -136,6 +136,15 @@ pub enum EditCommand {
     TextSet {
         text: TextDocument,
     },
+    /// Upsert one validated caption cue document.
+    CaptionSet {
+        caption: kronello_model::CaptionDocument,
+    },
+    /// Remove a cue document. Planning rejects a removal that would leave a
+    /// caption clip referencing a missing document.
+    CaptionRemove {
+        id: kronello_model::CaptionId,
+    },
     CompositionCreate {
         composition: Composition,
     },
@@ -271,6 +280,7 @@ pub(crate) fn registry() -> SchemaRegistry {
         .chain(kronello_model::text_descriptors())
         .chain(kronello_model::simulation_descriptors())
         .chain(kronello_model::effect_descriptors())
+        .chain(kronello_model::caption_descriptors())
     {
         r.register(d).expect("built-in descriptors are distinct");
     }
@@ -340,6 +350,10 @@ pub(crate) fn validate(project: &Project) -> Result<(), ServiceError> {
         DocumentObject::Known(t) => Some(t.id.as_uuid()),
         DocumentObject::Opaque(_) => None,
     }));
+    object_ids.extend(project.captions.iter().filter_map(|c| match c {
+        DocumentObject::Known(c) => Some(c.id.as_uuid()),
+        DocumentObject::Opaque(_) => None,
+    }));
     object_ids.extend(project.simulations.iter().filter_map(|s| match s {
         DocumentObject::Known(s) => Some(s.id.as_uuid()),
         _ => None,
@@ -402,6 +416,8 @@ pub(crate) fn validate(project: &Project) -> Result<(), ServiceError> {
         _ => invalid(e),
     })?;
     kronello_model::validate_text_contents(project, &r).map_err(invalid)?;
+    kronello_model::validate_caption_contents(project)
+        .map_err(|e| ServiceError::new(e.code(), e.to_string()))?;
     for (_, p) in properties(project) {
         p.validate_sources(&r, &Catalog(project)).map_err(invalid)?;
     }
@@ -1147,6 +1163,33 @@ fn apply_command(
                 project.texts.push(DocumentObject::Known(text.clone()));
             }
         }
+        EditCommand::CaptionSet { caption } => {
+            caption
+                .validate()
+                .map_err(|e| ServiceError::new(e.code(), e.to_string()))?;
+            caption_keys(project, caption.id, keys);
+            if let Some(c) = project
+                .captions
+                .iter_mut()
+                .find(|c| matches!(c, DocumentObject::Known(c) if c.id == caption.id))
+            {
+                *c = DocumentObject::Known(caption.clone());
+            } else {
+                project
+                    .captions
+                    .push(DocumentObject::Known(caption.clone()));
+            }
+        }
+        EditCommand::CaptionRemove { id } => {
+            let before = project.captions.len();
+            project
+                .captions
+                .retain(|c| !matches!(c, DocumentObject::Known(c) if c.id == *id));
+            if project.captions.len() == before {
+                return Err(ServiceError::new("SOURCE_MISSING", "caption missing"));
+            }
+            caption_keys(project, *id, keys);
+        }
     }
     Ok(())
 }
@@ -1183,6 +1226,23 @@ fn node_references(node: &SceneNode, keys: &mut BTreeSet<ChangedKey>) {
         structure(keys, parent.as_uuid(), parent.as_uuid());
     }
 }
+/// Caption cue edits invalidate the cue and every clip placement that
+/// displays it, so selective Undo scopes to the dependent placements too.
+fn caption_keys(project: &Project, id: kronello_model::CaptionId, keys: &mut BTreeSet<ChangedKey>) {
+    structure(keys, id.as_uuid(), id.as_uuid());
+    for s in &project.sequences {
+        if let DocumentObject::Known(s) = s {
+            for t in &s.tracks {
+                for c in &t.clips {
+                    if matches!(c.source_ref, kronello_model::SourceRef::Caption { caption } if caption == id)
+                    {
+                        structure(keys, c.id.as_uuid(), t.id.as_uuid());
+                    }
+                }
+            }
+        }
+    }
+}
 fn content_keys(project: &Project, id: Uuid, keys: &mut BTreeSet<ChangedKey>) {
     structure(keys, id, id);
     for c in &project.compositions {
@@ -1203,7 +1263,14 @@ fn unordered_collection(path: &[String]) -> bool {
     match path {
         [collection] => matches!(
             collection.as_str(),
-            "compositions" | "curves" | "expressions" | "shapes" | "texts" | "sequences" | "mattes"
+            "compositions"
+                | "curves"
+                | "expressions"
+                | "shapes"
+                | "texts"
+                | "captions"
+                | "sequences"
+                | "mattes"
         ),
         [compositions, _, collection] if compositions == "compositions" => {
             matches!(collection.as_str(), "nodes" | "properties")
@@ -1232,6 +1299,7 @@ fn diff(old: &Json, new: &Json, path: &mut Vec<String>, out: &mut Vec<Mutation>)
                             "expressions"
                                 | "shapes"
                                 | "texts"
+                                | "captions"
                                 | "templates"
                                 | "template_instances"
                                 | "sequences"
@@ -1253,6 +1321,7 @@ fn diff(old: &Json, new: &Json, path: &mut Vec<String>, out: &mut Vec<Mutation>)
                             "expressions"
                                 | "shapes"
                                 | "texts"
+                                | "captions"
                                 | "templates"
                                 | "template_instances"
                                 | "sequences"

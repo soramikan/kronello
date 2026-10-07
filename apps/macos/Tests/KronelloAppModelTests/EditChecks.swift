@@ -184,9 +184,16 @@ import KronelloDesign
         let cli = try checks.cli(cliRequest, arguments: ["--backend", "cpu-reference"])
         try require(native.object("metadata").string("backend") == "cpu_reference_float32" && native.object("metadata").string("input_path").contains("software_video_decode"), "Explicit CPU request uses the shared video decode path")
         try require(NSDictionary(dictionary: native) == NSDictionary(dictionary: cli), "Native FFI and CLI render.frame CPU pixels and metadata match exactly")
+        // Waveform analysis mutates the project in the background: let it settle
+        // (the analyze task's follow-up reload finishes when pending drains)
+        // before measuring the batched query.
+        for _ in 0 ..< 400 where !e.waveformPending.isEmpty
+            || (e.waveforms.isEmpty && e.waveformFailures.isEmpty) {
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
         let before = transport.callCounts["sequence.query", default: 0]
         try await e.reload()
-        try require(transport.callCounts["sequence.query", default: 0] == before + 1, "One batched query refreshes all inventory and clips")
+        try require(transport.callCounts["sequence.query", default: 0] == before + 1, "One batched query refreshes all inventory and clips — before=\(before) after=\(transport.callCounts["sequence.query", default: 0]) waveforms=\(e.waveforms.keys) failures=\(e.waveformFailures)")
         await e.close()
     }
     func verifyReviewPresentation() async throws {

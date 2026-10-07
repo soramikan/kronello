@@ -34,6 +34,14 @@ Mask / Matte は入力参照として表現でき、見えるレイヤーとし�
 
 NLE-002 は動画 Asset / `kronello.solid` version 1 Generator の描画、`Clip.properties` による配置 transform / effect parameters、既存 DAG の clip effects、明示 crossfade transition、move / ripple / reciprocal link group を追加した。同一 track の重複は `Sequence.transitions` が intersection 全体を明示する二 clip だけ許す。動画の source_in / TimeMap は絶対 presentation PTS、`StreamMetadata.start_time` は最初の decoded PTS を保存する。audio の source_in は decoded sample 原点のまま。Generator は version と straight Color を snapshot に固定し、未知 id / version を画像で代替しない。`sequence.query` が ClipKind と動画色の effective tags / assumptions を返す。image 描画・字幕・adjustment は追加していない。詳細は [ADR-0062](../adr/0062-video-generator-and-timeline-edits.md) と [NLE-002 の検証](../testing/nle-002.md)。
 
+M7 は専用 `TrackKind::Caption` と版付き `CaptionDocument`（[ADR-0107](../adr/0107-caption-track-and-cue-model.md)）、`EffectParameters` の版付き色補正（exposure / levels / curves / HSL、[ADR-0108](../adr/0108-versioned-color-correction-effects.md)）、`BlendMode` 18 種と `Transition` の `params`（wipe / slide / dip、[ADR-0109](../adr/0109-blend-modes-and-parameterized-transitions.md)）を後続レーンで追加する計画である。NLE-003 / NLE-004 のマーカー・ワークエリアと編集コマンドは先行して実装済みである（下記）。
+
+## NLE-003 / NLE-004 の編集コマンドとマーカー
+
+NLE-003 は `TimelineCommand` に slip（`clip_slip`、配置を固定して source window を移動）、slide（`clip_slide`、隣接 clip が source handle で delta を吸収）、rolling edit（`clip_roll`、共有 edit point を移動して合計占有区間を維持）、`clip_delete` / `ripple_delete`、型付き `clip_insert` / `clip_overwrite` を追加した。いずれも `EditCommand::Timeline` 経由の plan / apply / 選択的 Undo で動き、`linked` 指定は相互リンク成分全体に原子的に拡大する。リンクを分離する削除・上書きは `LINKED_EDIT_REQUIRED` 等の型付き拒否とし、失敗した編集は文書を部分変更しない。track 内の clip 配列は timeline start 順を正準形とする。
+
+NLE-004 は `Marker { id: MarkerId, time, color: MarkerColor, comment: Option<String> }` を `Sequence.markers` と `Clip.markers` に、In/Out を `Sequence.work_area: Option<TimeRange>` に追加した（[ADR-0110](../adr/0110-sequence-markers-and-work-area.md)）。clip marker は sequence 時刻で、その clip の `timeline_range` 内に制約される。trim は範囲外 marker を落とし、stretch は marker を範囲に比例変換する。sequence marker は非負で内容 extent 内、work_area は非空かつ extent 内を validate する。操作は `marker_set`（同一 ID の upsert で色・コメント更新）/ `marker_remove` / `marker_move` / `work_area_set`。書き出し範囲は引き続き `SequenceRenderRequest.range` のみが決め、service は `work_area` を暗黙に読まない。検証は [NLE-003](../testing/nle-003.md) / [NLE-004](../testing/nle-004.md) を参照。
+
 ## ID とインスタンス
 
 NodeId や PropertyId を配列番号や名前から導出しない。表示名の変更で参照は変わらない。

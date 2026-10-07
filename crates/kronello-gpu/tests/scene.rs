@@ -1174,3 +1174,315 @@ fn gpu_linear_blend_matches_cpu_after_isolation_opacity_effect_and_matte() {
         }
     }
 }
+
+#[test]
+fn cpu_fx003_blend_oracle_matches_w3c_channel_functions() {
+    use kronello_model::BlendMode::*;
+    // Opaque operands isolate the per-channel blend function B(cb, cs).
+    let b = [0.3, 0.7, 0.2, 1.0];
+    let s = [0.6, 0.2, 0.9, 1.0];
+    let near = |actual: [f32; 4], rgb: [f32; 3]| {
+        for (a, e) in actual.into_iter().zip([rgb[0], rgb[1], rgb[2], 1.0]) {
+            assert!((a - e).abs() < 1e-6, "{actual:?} != {e}");
+        }
+    };
+    let blend = |mode| {
+        render_scene_reference(
+            RenderSize::pixels(2, 2),
+            &blend_scene(s, b, mode),
+            WorkingSpace::LinearRec709,
+        )
+        .unwrap()[0]
+    };
+    let sqrt_03 = 0.3_f32.sqrt();
+    near(blend(Multiply), [0.18, 0.14, 0.18]);
+    near(blend(Screen), [0.72, 0.76, 0.92]);
+    near(blend(Darken), [0.3, 0.2, 0.2]);
+    near(blend(Lighten), [0.6, 0.7, 0.9]);
+    near(blend(ColorDodge), [0.75, 0.875, 1.0]);
+    near(blend(ColorBurn), [0.0, 0.0, 1.0 - 0.8 / 0.9]);
+    near(
+        blend(HardLight),
+        [
+            1.0 - 2.0 * 0.7 * 0.4,
+            2.0 * 0.7 * 0.2,
+            1.0 - 2.0 * 0.8 * 0.1,
+        ],
+    );
+    near(
+        blend(SoftLight),
+        [
+            0.3 + 0.2 * (sqrt_03 - 0.3),
+            0.7 - 0.6 * 0.7 * 0.3,
+            0.2 + 0.8 * ((((16.0 * 0.2 - 12.0) * 0.2 + 4.0) * 0.2) - 0.2),
+        ],
+    );
+    near(blend(Difference), [0.3, 0.5, 0.7]);
+    near(blend(Exclusion), [0.54, 0.62, 0.74]);
+    near(blend(Overlay), [0.36, 1.0 - 2.0 * 0.3 * 0.8, 0.36]);
+    near(blend(LinearDodge), [0.9, 0.9, 1.1]);
+    near(blend(LinearBurn), [-0.1, -0.1, 0.1]);
+    near(blend(VividLight), [0.375, 0.25, 1.0]);
+    near(blend(LinearLight), [0.5, 0.1, 1.0]);
+    // Non-separable modes pin the Rec.601 luma and no-gamut-clip contract.
+    let lum = |c: [f32; 3]| c[0] * 0.3 + c[1] * 0.59 + c[2] * 0.11;
+    let cb = [0.3, 0.7, 0.2];
+    let cs = [0.6, 0.2, 0.9];
+    let dl = lum(cs) - lum(cb);
+    // Luminosity keeps the backdrop hue/saturation at the source luma; Color
+    // keeps the source hue/saturation at the backdrop luma (no gamut clip).
+    near(blend(Luminosity), [cb[0] + dl, cb[1] + dl, cb[2] + dl]);
+    near(blend(Color), [cs[0] - dl, cs[1] - dl, cs[2] - dl]);
+    // Partial alpha still composites through the W3C α terms and keeps the
+    // output alpha equal to source-over.
+    let partial = render_scene_reference(
+        RenderSize::pixels(2, 2),
+        &blend_scene([0.2, 0.05, 0.1, 0.25], [0.1, 0.3, 0.05, 0.5], HardLight),
+        WorkingSpace::LinearRec709,
+    )
+    .unwrap()[0];
+    let cs = [0.8, 0.2, 0.4];
+    let cb = [0.2, 0.6, 0.1];
+    // HardLight applies overlay_branch(s, b): channel 0 branches high
+    // (s=0.8 > 0.5) while channels 1 and 2 take the 2*b*s branch.
+    let b = [
+        1.0 - 2.0 * (1.0 - cb[0]) * (1.0 - cs[0]),
+        2.0 * cb[1] * cs[1],
+        2.0 * cb[2] * cs[2],
+    ];
+    let (sa, da) = (0.25f32, 0.5f32);
+    let expected: [f32; 4] = [
+        sa * cs[0] * (1.0 - da) + da * cb[0] * (1.0 - sa) + sa * da * b[0],
+        sa * cs[1] * (1.0 - da) + da * cb[1] * (1.0 - sa) + sa * da * b[1],
+        sa * cs[2] * (1.0 - da) + da * cb[2] * (1.0 - sa) + sa * da * b[2],
+        sa + da * (1.0 - sa),
+    ];
+    for (a, e) in partial.into_iter().zip(expected) {
+        assert!((a - e).abs() < 1e-6, "{partial:?} != {expected:?}");
+    }
+}
+
+#[test]
+fn gpu_fx003_all_blend_modes_match_cpu_reference_in_both_spaces() {
+    use kronello_model::BlendMode::*;
+    let modes = [
+        Normal,
+        Multiply,
+        Screen,
+        Overlay,
+        Darken,
+        Lighten,
+        ColorDodge,
+        ColorBurn,
+        HardLight,
+        SoftLight,
+        Difference,
+        Exclusion,
+        LinearDodge,
+        LinearBurn,
+        VividLight,
+        LinearLight,
+        Hue,
+        Saturation,
+        Color,
+        Luminosity,
+    ];
+    for working in [WorkingSpace::LinearRec709, WorkingSpace::LinearRec2020] {
+        for mode in modes {
+            for (src, dst) in [
+                ([0.4, 0.1, 0.2, 0.5], [0.1, 0.3, 0.05, 0.5]),
+                // Dodge/burn divisions amplify the f16 surface quantization
+                // near the saturation cusp; these inputs stay interior, per
+                // the golden rule of avoiding exact ties.
+                ([0.6, 0.4, 0.5, 1.0], [0.3, 0.7, 0.1, 1.0]),
+                ([0.05, 0.02, 0.08, 0.25], [0.4, 0.5, 0.1, 0.75]),
+            ] {
+                let scene = blend_scene(src, dst, mode);
+                let size = RenderSize::pixels(2, 2);
+                let expected = render_scene_reference(size, &scene, working).unwrap();
+                let actual = gpu().render_scene(size, &scene, working).unwrap();
+                let d = FrameDescriptor {
+                    width: 2,
+                    height: 2,
+                    origin: [0; 2],
+                    time: [0, 1],
+                    working_space: if working == WorkingSpace::LinearRec709 {
+                        kronello_testkit::WorkingSpace::LinearRec709
+                    } else {
+                        kronello_testkit::WorkingSpace::LinearRec2020
+                    },
+                    color_pipeline_id: "vec003-grid4-v2".into(),
+                    samples_per_frame: 16,
+                    seed: 0,
+                };
+                compare_pixels(
+                    LinearFrame {
+                        descriptor: &d,
+                        pixels: &expected,
+                    },
+                    LinearFrame {
+                        descriptor: &d,
+                        pixels: &actual.pixels,
+                    },
+                    PixelTolerance::default(),
+                )
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "{mode:?} {src:?} over {dst:?}: {e}\nexpected {expected:?}\nactual {:?}",
+                        actual.pixels
+                    )
+                });
+            }
+        }
+    }
+}
+
+fn color_effect_scene(effect: kronello_render::PixelEffect, input: [f32; 4]) -> DrawScene {
+    DrawScene {
+        nodes: vec![
+            DrawNode::Raster(vec![input; 4]),
+            DrawNode::Effect { source: 0, effect },
+        ],
+        roots: vec![1],
+    }
+}
+
+#[test]
+fn cpu_color002_pointwise_effects_preserve_alpha_and_extended_range() {
+    use kronello_render::PixelEffect::*;
+    let run = |effect, input| {
+        render_scene_reference(
+            RenderSize::pixels(2, 2),
+            &color_effect_scene(effect, input),
+            WorkingSpace::LinearRec709,
+        )
+        .unwrap()[0]
+    };
+    // Effect stages round-trip through RGBA16F surfaces.
+    let h = |v: f32| half::f16::from_f32(v).to_f32();
+    // Exposure: premultiplied RGB is scaled by 2^e and offset; alpha is kept.
+    let p = run(
+        ColorExposure {
+            exposure: 1.0,
+            offset: 0.1,
+        },
+        [0.25, 0.5, 1.0, 0.5],
+    );
+    for (a, e) in p.into_iter().zip([0.6, 1.1, 2.1, 0.5].map(h)) {
+        assert_eq!(a, e, "{p:?}");
+    }
+    // HDR and negative premultiplied values pass through unclamped.
+    let hdr = run(
+        ColorExposure {
+            exposure: -1.0,
+            offset: 0.0,
+        },
+        [4.0, -0.5, 2.0, 1.0],
+    );
+    for (a, e) in hdr.into_iter().zip([2.0, -0.25, 1.0, 1.0].map(h)) {
+        assert_eq!(a, e, "{hdr:?}");
+    }
+    // Levels: linear remap with gamma; extrapolation stays linear-domain.
+    let levels = ColorLevels {
+        in_black: 0.0,
+        in_white: 0.5,
+        gamma: 1.0,
+        out_black: 0.25,
+        out_white: 0.75,
+    };
+    for (a, e) in run(levels, [0.25, 0.5, 0.125, 1.0])
+        .into_iter()
+        .zip([0.5, 0.75, 0.375, 1.0])
+    {
+        assert!((a - e).abs() < 1e-6);
+    }
+    // Curves: control points are interpolated exactly; identity is stable.
+    let identity = run(
+        ColorCurves {
+            points: vec![[0.0, 0.0], [1.0, 1.0]],
+        },
+        [0.3, 0.6, 0.9, 0.75],
+    );
+    for (a, e) in identity.into_iter().zip([0.3, 0.6, 0.9, 0.75].map(h)) {
+        assert!((a - e).abs() < 1e-6);
+    }
+    let curved = run(
+        ColorCurves {
+            points: vec![[0.0, 0.0], [0.5, 0.75], [1.0, 1.0]],
+        },
+        [0.5, 0.25, 0.75, 1.0],
+    );
+    assert!((curved[0] - 0.75).abs() < 1e-6, "{curved:?}");
+    // HSL: hue shift of +120 degrees maps pure red onto pure green exactly.
+    let shifted = run(
+        ColorHsl {
+            hue_shift: 120.0,
+            saturation: 1.0,
+            lightness: 0.0,
+        },
+        [1.0, 0.0, 0.0, 0.4],
+    );
+    for (a, e) in shifted.into_iter().zip([0.0, 1.0, 0.0, 0.4].map(h)) {
+        assert!((a - e).abs() < 1e-6, "{shifted:?}");
+    }
+    // Saturation zero removes chroma at constant lightness.
+    let gray = run(
+        ColorHsl {
+            hue_shift: 0.0,
+            saturation: 0.0,
+            lightness: 0.0,
+        },
+        [0.5, 0.0, 1.0, 1.0],
+    );
+    assert!((gray[0] - gray[1]).abs() < 1e-6 && (gray[1] - gray[2]).abs() < 1e-6);
+    assert!((gray[0] - 0.5).abs() < 1e-6, "{gray:?}");
+}
+
+#[test]
+fn gpu_color002_pointwise_effects_match_cpu_reference_in_both_spaces() {
+    use kronello_render::PixelEffect::*;
+    let effects = [
+        ColorExposure {
+            exposure: 1.25,
+            offset: -0.05,
+        },
+        ColorLevels {
+            in_black: 0.1,
+            in_white: 0.9,
+            gamma: 2.2,
+            out_black: -0.05,
+            out_white: 1.05,
+        },
+        ColorCurves {
+            points: vec![
+                [0.0, 0.0],
+                [0.25, 0.4],
+                [0.5, 0.55],
+                [0.75, 0.7],
+                [1.0, 1.0],
+            ],
+        },
+        ColorHsl {
+            hue_shift: 30.0,
+            saturation: 1.25,
+            lightness: -0.05,
+        },
+    ];
+    for working in [WorkingSpace::LinearRec709, WorkingSpace::LinearRec2020] {
+        for effect in &effects {
+            // Partial alpha, HDR and negative premultiplied channels exercise
+            // the unclamped contract on both paths.
+            for input in [
+                [0.25, 0.5, 1.0, 0.5],
+                [4.0, -0.5, 2.0, 1.0],
+                [0.05, 0.1, 0.02, 0.25],
+            ] {
+                let scene = color_effect_scene(effect.clone(), input);
+                let size = RenderSize::pixels(2, 2);
+                let expected = render_scene_reference(size, &scene, working).unwrap();
+                let actual = gpu().render_scene(size, &scene, working).unwrap();
+                compare(2, working, &expected, &actual.pixels);
+            }
+        }
+    }
+}

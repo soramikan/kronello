@@ -16,7 +16,7 @@
 | M3 | 0 | 0 | 25 | 0 | 25 |
 | M4 | 0 | 0 | 12 | 0 | 12 |
 | M5 | 0 | 1 | 12 | 0 | 13 |
-| M7 | 11 | 0 | 0 | 0 | 11 |
+| M7 | 0 | 0 | 11 | 0 | 11 |
 | M8 | 15 | 0 | 0 | 0 | 15 |
 | M9 | 12 | 0 | 0 | 0 | 12 |
 | M10 | 7 | 0 | 0 | 0 | 7 |
@@ -793,7 +793,7 @@
 
 ### NLE-003 精密編集操作: slip/slide/rolling edit・ripple delete・ギャップ処理
 
-- 優先度: P0 / 領域: timeline / 状態: planned
+- 優先度: P0 / 領域: timeline / 状態: done
 - 依存: NLE-002
 - 受け入れ条件:
   - slip・slide・rolling edit・ripple delete を sequence モデルと共有 Command/Query API に実装する
@@ -803,7 +803,7 @@
 
 ### NLE-004 シーケンス/クリップマーカー・In/Out・ワークエリア書き出し範囲
 
-- 優先度: P0 / 領域: timeline / 状態: planned
+- 優先度: P0 / 領域: timeline / 状態: done
 - 依存: NLE-002
 - 受け入れ条件:
   - sequence/clip マーカーの追加・削除・移動・色・コメントをモデル化する
@@ -812,7 +812,7 @@
 
 ### SUB-001 字幕モデル: caption track・字幕 clip kind・スタイルと版管理
 
-- 優先度: P0 / 領域: captions / 状態: planned
+- 優先度: P0 / 領域: captions / 状態: done
 - 依存: NLE-002, TEXT-002
 - 受け入れ条件:
   - caption track と字幕 clip kind を sequence モデルと schema に追加する
@@ -821,7 +821,7 @@
 
 ### SUB-002 字幕 I/O: SRT/VTT/ITT 入出力と焼き付け・サイドカー書き出し
 
-- 優先度: P0 / 領域: captions / 状態: planned
+- 優先度: P0 / 領域: captions / 状態: done
 - 依存: SUB-001, MEDIA-002
 - 受け入れ条件:
   - SRT/VTT/ITT のインポート・エクスポートを計画/適用の編集として実装する
@@ -830,7 +830,7 @@
 
 ### COLOR-002 色補正エフェクト基盤: exposure/levels/curves/HSL の versioned effect
 
-- 優先度: P0 / 領域: color / 状態: planned
+- 優先度: P0 / 領域: color / 状態: done
 - 依存: COLOR-001, FX-001
 - 受け入れ条件:
   - exposure・levels・curves・HSL 補正を versioned effect としてモデルと schema に追加する
@@ -839,7 +839,7 @@
 
 ### FX-003 ブレンドモード全種とトランジション拡張（wipe/slide/dip 等）
 
-- 優先度: P1 / 領域: effects / 状態: planned
+- 優先度: P1 / 領域: effects / 状態: done
 - 依存: GPU-002, FX-001
 - 受け入れ条件:
   - 標準的なブレンドモード一式を BlendMode に追加し CPU/GPU 両経路で合成する
@@ -848,7 +848,7 @@
 
 ### GUI-008 macOS タイムライン編集 UI: trim ツール・マーカー・In/Out・スナップ
 
-- 優先度: P0 / 領域: gui / 状態: planned
+- 優先度: P0 / 領域: gui / 状態: done
 - 依存: NLE-003, NLE-004, GUI-007
 - 受け入れ条件:
   - slip/slide/rolling の trim ツールと ripple delete を GUI 操作から共有 API に接続する
@@ -857,7 +857,7 @@
 
 ### GUI-009 macOS 字幕編集 UI: caption lane と編集パネル
 
-- 優先度: P1 / 領域: gui / 状態: planned
+- 優先度: P1 / 領域: gui / 状態: done
 - 依存: SUB-001, GUI-003
 - 受け入れ条件:
   - caption lane の表示と字幕クリップの編集パネルを実装する
@@ -865,7 +865,7 @@
 
 ### GUI-010 macOS カラー Inspector: 色補正パラメータ編集
 
-- 優先度: P1 / 領域: gui / 状態: planned
+- 優先度: P1 / 領域: gui / 状態: done
 - 依存: COLOR-002, GUI-003
 - 受け入れ条件:
   - 色補正 effect の Inspector 編集 UI を実装する
@@ -873,7 +873,7 @@
 
 ### AUDIO-006 クリップ波形の生成・キャッシュとタイムライン描画
 
-- 優先度: P1 / 領域: audio / 状態: planned
+- 優先度: P1 / 領域: audio / 状態: done
 - 依存: AUDIO-001, GUI-003
 - 受け入れ条件:
   - audio.analyze を用いたクリップ波形の生成とキャッシュを実装する
@@ -881,7 +881,7 @@
 
 ### INTEGRATION-003 縦断デモ第3段階: カット編集+字幕+簡易グレーディング作品
 
-- 優先度: P1 / 領域: integration / 状態: planned
+- 優先度: P1 / 領域: integration / 状態: done
 - 依存: NLE-003, SUB-002, COLOR-002, GUI-008
 - 受け入れ条件:
   - カット編集・字幕・色補正を含む作品を GUI と CLI の両経路で生成する

@@ -6,13 +6,19 @@
     "assets": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject8"
+        "$ref": "#/$defs/DocumentObject9"
       }
     },
     "audio_analyses": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject9"
+        "$ref": "#/$defs/DocumentObject10"
+      }
+    },
+    "captions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DocumentObject6"
       }
     },
     "compositions": {
@@ -30,7 +36,7 @@
     "expression_data_assets": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject10"
+        "$ref": "#/$defs/DocumentObject11"
       }
     },
     "expressions": {
@@ -46,7 +52,7 @@
     "mattes": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject12"
+        "$ref": "#/$defs/DocumentObject13"
       }
     },
     "name": {
@@ -55,7 +61,7 @@
     "repeaters": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject13"
+        "$ref": "#/$defs/DocumentObject14"
       }
     },
     "schema_version": {
@@ -72,7 +78,7 @@
     "sequences": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject11"
+        "$ref": "#/$defs/DocumentObject12"
       }
     },
     "shapes": {
@@ -84,19 +90,19 @@
     "simulations": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject14"
+        "$ref": "#/$defs/DocumentObject15"
       }
     },
     "template_instances": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject7"
+        "$ref": "#/$defs/DocumentObject8"
       }
     },
     "templates": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject6"
+        "$ref": "#/$defs/DocumentObject7"
       }
     },
     "texts": {
@@ -475,6 +481,229 @@
         "visual"
       ]
     },
+    "CaptionAnchor": {
+      "description": "Nine-direction anchor inside the caption safe area.",
+      "type": "string",
+      "enum": [
+        "top_left",
+        "top_center",
+        "top_right",
+        "center_left",
+        "center",
+        "center_right",
+        "bottom_left",
+        "bottom_center",
+        "bottom_right"
+      ]
+    },
+    "CaptionDocument": {
+      "description": "Versioned cue document. One `CaptionDocument` describes exactly one cue's\ntext, style and placement; its timeline interval lives on the caption clip.",
+      "type": "object",
+      "properties": {
+        "format": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CaptionFormat"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "$ref": "#/$defs/CaptionId"
+        },
+        "placement": {
+          "$ref": "#/$defs/CaptionPlacement"
+        },
+        "spans": {
+          "description": "Ordered, nonoverlapping span overrides at grapheme boundaries.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CaptionSpan"
+          }
+        },
+        "style": {
+          "$ref": "#/$defs/CaptionStyle"
+        },
+        "text": {
+          "description": "Cue payload text. `\\n` is the only line separator and the content is\ndata: import decoders strip markup, and nothing here is executed.",
+          "type": "string"
+        },
+        "version": {
+          "description": "Supported document version; this implementation accepts only 1.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "text",
+        "style",
+        "placement"
+      ]
+    },
+    "CaptionFormat": {
+      "description": "Import provenance of a cue document. Export always reserializes the stored\ndocument; this metadata never drives rendering.",
+      "type": "string",
+      "enum": [
+        "srt",
+        "vtt",
+        "itt"
+      ]
+    },
+    "CaptionId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "CaptionOutline": {
+      "description": "Stroke drawn outside the glyph fill, in the sequence working color space.",
+      "type": "object",
+      "properties": {
+        "color": {
+          "$ref": "#/$defs/Color"
+        },
+        "width": {
+          "description": "Visible outline ring width in design_px; zero is allowed but draws\nnothing. Rendering strokes the glyph path centered at twice this width.",
+          "$ref": "#/$defs/FiniteF64"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "color",
+        "width"
+      ]
+    },
+    "CaptionPlacement": {
+      "description": "Nine-direction caption placement relative to the sequence safe area.\nRatios are stored exactly as rationals, never as floating point.",
+      "type": "object",
+      "properties": {
+        "anchor": {
+          "$ref": "#/$defs/CaptionAnchor"
+        },
+        "offset": {
+          "description": "Additional offset from the anchor point, as a ratio of the sequence\nextent. +x moves right, +y moves down.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Rational"
+          },
+          "maxItems": 2,
+          "minItems": 2
+        },
+        "safe_area_inset": {
+          "description": "Inset applied to both sides of the sequence extent per axis, as a ratio\nof that extent. Each component must be in `0..=1/2`.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Rational"
+          },
+          "maxItems": 2,
+          "minItems": 2
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "anchor",
+        "safe_area_inset",
+        "offset"
+      ]
+    },
+    "CaptionSpan": {
+      "description": "Span-level style override. Unknown attributes are rejected by strict\ndecoding instead of being silently dropped.",
+      "type": "object",
+      "properties": {
+        "bold": {
+          "description": "Drawn as a synthesized stroke when no replacement span font is given.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "color": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Color"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "font": {
+          "description": "Explicit replacement face; its bytes remain hash-locked.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FontRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "italic": {
+          "description": "Drawn as a synthesized oblique shear when no replacement span font is\ngiven. Both flags are draw-time attributes of the span, not markup.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "range": {
+          "$ref": "#/$defs/TextRange"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "range"
+      ]
+    },
+    "CaptionStyle": {
+      "description": "Cue-wide base style. Span attributes override these values inside their\ntext range only.",
+      "type": "object",
+      "properties": {
+        "background": {
+          "description": "Optional rectangle behind the laid-out cue block.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Color"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fill": {
+          "description": "Straight tagged color evaluated in the sequence working space.",
+          "$ref": "#/$defs/Color"
+        },
+        "font": {
+          "description": "Hash-locked face; rendering never substitutes family/system fonts.",
+          "$ref": "#/$defs/FontRef"
+        },
+        "outline": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CaptionOutline"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "size": {
+          "description": "Positive glyph size in design_px.",
+          "$ref": "#/$defs/FiniteF64"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "font",
+        "size",
+        "fill"
+      ]
+    },
     "CharacterAnimation": {
       "description": "Logical source selection. Ranges are never glyph or line indices.",
       "type": "object",
@@ -523,6 +752,13 @@
           "default": [],
           "items": {
             "$ref": "#/$defs/ClipId"
+          }
+        },
+        "markers": {
+          "description": "Sequence-time annotations, confined to this placement's range.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Marker"
           }
         },
         "properties": {
@@ -837,6 +1073,19 @@
         "height"
       ]
     },
+    "DipParams": {
+      "type": "object",
+      "properties": {
+        "color": {
+          "description": "Straight authoring color composited at the transition midpoint.",
+          "$ref": "#/$defs/Color"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "color"
+      ]
+    },
     "DocumentMatteKind": {
       "type": "string",
       "enum": [
@@ -859,7 +1108,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/ExpressionDataAsset"
+          "$ref": "#/$defs/AudioAnalysisDataAsset"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -870,7 +1119,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/Sequence"
+          "$ref": "#/$defs/ExpressionDataAsset"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -881,7 +1130,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/MatteRelation"
+          "$ref": "#/$defs/Sequence"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -892,7 +1141,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/Repeater"
+          "$ref": "#/$defs/MatteRelation"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -900,6 +1149,17 @@
       ]
     },
     "DocumentObject14": {
+      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Repeater"
+        },
+        {
+          "$ref": "#/$defs/OpaqueObject"
+        }
+      ]
+    },
+    "DocumentObject15": {
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
@@ -958,7 +1218,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/TemplateDefinition"
+          "$ref": "#/$defs/CaptionDocument"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -969,7 +1229,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/TemplateInstance"
+          "$ref": "#/$defs/TemplateDefinition"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -980,7 +1240,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/Asset"
+          "$ref": "#/$defs/TemplateInstance"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -991,7 +1251,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/AudioAnalysisDataAsset"
+          "$ref": "#/$defs/Asset"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -1111,6 +1371,112 @@
           "required": [
             "kind",
             "gain"
+          ]
+        },
+        {
+          "description": "COLOR-002 exposure: premultiplied working RGB is scaled by\n2^exposure and shifted by offset; alpha is preserved (ADR-0108).",
+          "type": "object",
+          "properties": {
+            "exposure": {
+              "description": "EV stops; finite scalar.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "color_exposure"
+            },
+            "offset": {
+              "description": "Additive premultiplied-space offset; finite scalar.",
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "exposure",
+            "offset"
+          ]
+        },
+        {
+          "description": "COLOR-002 levels with gamma, applied per premultiplied RGB channel.",
+          "type": "object",
+          "properties": {
+            "gamma": {
+              "description": "Positive finite scalar; 1.0 is linear.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "in_black": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "in_white": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "color_levels"
+            },
+            "out_black": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "out_white": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "in_black",
+            "in_white",
+            "gamma",
+            "out_black",
+            "out_white"
+          ]
+        },
+        {
+          "description": "COLOR-002 monotone-cubic RGB channel curve. The property is a data\ntable with scalar `x` and `y` columns, `x` strictly increasing, both\nin [0,1], and at most CURVES_MAX_POINTS rows.",
+          "type": "object",
+          "properties": {
+            "curve": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "color_curves"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "curve"
+          ]
+        },
+        {
+          "description": "COLOR-002 hue/saturation/lightness in working HSL; alpha preserved.",
+          "type": "object",
+          "properties": {
+            "hue_shift": {
+              "description": "Shift in degrees; finite angle.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "color_hsl"
+            },
+            "lightness": {
+              "description": "Additive lightness term; finite scalar.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "saturation": {
+              "description": "Multiplier where 1.0 leaves saturation unchanged; finite scalar.",
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "hue_shift",
+            "saturation",
+            "lightness"
           ]
         }
       ]
@@ -2260,6 +2626,52 @@
         "interpolation"
       ]
     },
+    "Marker": {
+      "description": "A single authored annotation in sequence time. Clip markers reference\nsequence time (not clip-local source time) and stay inside the clip's\n`timeline_range`.",
+      "type": "object",
+      "properties": {
+        "color": {
+          "$ref": "#/$defs/MarkerColor"
+        },
+        "comment": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "$ref": "#/$defs/MarkerId"
+        },
+        "time": {
+          "$ref": "#/$defs/Rational"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "time",
+        "color"
+      ]
+    },
+    "MarkerColor": {
+      "description": "Closed set; transports never guess a color from a label.",
+      "type": "string",
+      "enum": [
+        "red",
+        "green",
+        "blue",
+        "yellow",
+        "purple",
+        "cyan",
+        "orange",
+        "white"
+      ]
+    },
+    "MarkerId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "type": "string",
+      "format": "uuid"
+    },
     "MatteRelation": {
       "type": "object",
       "properties": {
@@ -3169,6 +3581,13 @@
         "id": {
           "$ref": "#/$defs/SequenceId"
         },
+        "markers": {
+          "description": "Sequence-time annotations; bounded by the content extent end.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Marker"
+          }
+        },
         "tracks": {
           "description": "Authored bottom-to-top compositing order.",
           "type": "array",
@@ -3181,6 +3600,17 @@
           "items": {
             "$ref": "#/$defs/Transition"
           }
+        },
+        "work_area": {
+          "description": "In/Out share this range's start/end; absent means the whole sequence.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimeRange"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "working_space": {
           "$ref": "#/$defs/ColorSpace"
@@ -3398,6 +3828,18 @@
         }
       ]
     },
+    "SlideParams": {
+      "type": "object",
+      "properties": {
+        "direction": {
+          "$ref": "#/$defs/TransitionDirection"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "direction"
+      ]
+    },
     "SourceRef": {
       "oneOf": [
         {
@@ -3473,6 +3915,23 @@
           "required": [
             "kind",
             "generator"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "caption": {
+              "$ref": "#/$defs/CaptionId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "caption"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "caption"
           ]
         }
       ]
@@ -4385,10 +4844,19 @@
       "format": "uuid"
     },
     "TrackKind": {
-      "type": "string",
-      "enum": [
-        "video",
-        "audio"
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "video",
+            "audio"
+          ]
+        },
+        {
+          "description": "Text cues rendered above every video track; never enters audio mixing.",
+          "type": "string",
+          "const": "caption"
+        }
       ]
     },
     "TrackState": {
@@ -4420,6 +4888,17 @@
         "outgoing": {
           "$ref": "#/$defs/ClipId"
         },
+        "params": {
+          "description": "FX-003 per-kind payload. Absent in pre-FX-003 documents and required\nfor all non-crossfade kinds; crossfade must not carry one (ADR-0109).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TransitionParams"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "range": {
           "$ref": "#/$defs/TimeRange"
         },
@@ -4438,10 +4917,64 @@
         "version"
       ]
     },
+    "TransitionDirection": {
+      "description": "Closed direction set shared by the wipe and slide v1 transitions.",
+      "type": "string",
+      "enum": [
+        "left",
+        "right",
+        "up",
+        "down"
+      ]
+    },
     "TransitionKind": {
       "type": "string",
       "enum": [
-        "crossfade"
+        "crossfade",
+        "wipe",
+        "slide",
+        "dip"
+      ]
+    },
+    "TransitionParams": {
+      "description": "FX-003 transition payloads; the variant must match Transition::kind.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "wipe": {
+              "$ref": "#/$defs/WipeParams"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "wipe"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "slide": {
+              "$ref": "#/$defs/SlideParams"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "slide"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "dip": {
+              "$ref": "#/$defs/DipParams"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "dip"
+          ]
+        }
       ]
     },
     "Value": {
@@ -4660,6 +5193,18 @@
         "asset_ref",
         "data_table",
         "path"
+      ]
+    },
+    "WipeParams": {
+      "type": "object",
+      "properties": {
+        "direction": {
+          "$ref": "#/$defs/TransitionDirection"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "direction"
       ]
     }
   }

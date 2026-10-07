@@ -422,6 +422,8 @@ linked は `LINKED_EDIT_REQUIRED`、transition endpoint は `TRANSITION_EDIT_CON
 
 公開 project / API schema 1 に Clip.properties、Sequence.transitions、Generator version / Color、StreamMetadata.start_time、SemanticVersions.generators / video_input、FrameMetadata.input_path、SequenceQuery の transport 型を追加した。Rust generator と generated Swift が正本に同期する。契約は [ADR-0062](../adr/0062-video-generator-and-timeline-edits.md)、検証と host の残件は [NLE-002](../testing/nle-002.md)。
 
+M7 Lane A（NLE-003 / NLE-004）は同じ TimelineCommand に `clip_slip` / `clip_slide` / `clip_roll` / `clip_delete` / `ripple_delete` / `clip_insert` / `clip_overwrite` / `marker_set` / `marker_remove` / `marker_move` / `work_area_set` を追加した。新しい top-level operation は追加せず、GUI / CLI / MCP は同一 JSON の `edit.plan` / `edit.apply` を通す。`sequence.query` の応答は `sequence.markers` / `sequence.work_area` と clip ごとの `markers` を含む。marker / work_area の変更も `Structure(sequence_id, sequence_id)` 等の既存 ChangedKey で選択的 Undo の対象になる。書き出し range は caller 指定の `SequenceRenderRequest.range` のみで、service が `work_area` を暗黙参照しない。契約は [ADR-0110](../adr/0110-sequence-markers-and-work-area.md)、検証は [NLE-003](../testing/nle-003.md) / [NLE-004](../testing/nle-004.md) を参照。
+
 ### NLE-001 の既存 API
 
 六つの操作を service registry、CLI の二語 subcommand、MCP stdio に共通登録した。すべて `project`、`base_revision`、`session_id`、`idempotency_key` を持ち、成功時は `kind: edit` の Event を返す。`EditCommand::Timeline` でも同じ plan / apply を呼べる。

@@ -58,6 +58,8 @@ pub enum RenderError {
     #[error(transparent)]
     Text(#[from] TextError),
     #[error(transparent)]
+    Caption(#[from] kronello_model::CaptionError),
+    #[error(transparent)]
     Layout(#[from] LayoutError),
     #[error(transparent)]
     Vector(#[from] kronello_vector::VectorError),
@@ -96,6 +98,7 @@ impl RenderError {
                 LayoutError::FontHashMismatch { .. } | LayoutError::FontIdentityMismatch { .. },
             ) => "ASSET_HASH_MISMATCH",
             Self::Layout(LayoutError::MissingGlyphs { .. }) => "GLYPH_MISSING",
+            Self::Caption(e) => e.code(),
             Self::Layout(
                 LayoutError::UnsupportedFeature { .. }
                 | LayoutError::UnsupportedVersion { .. }
