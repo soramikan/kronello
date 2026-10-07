@@ -68,6 +68,15 @@ public struct EditCandidate {
     @Published public var sequenceLoading = false
     @Published public var sequenceFailure: ServiceFailure?
     @Published public var assetSelection: String?
+    /// Marker selection is session state, separate from the persisted clip selection.
+    @Published public var markerSelection: String?
+    /// Live ruler marker drag: marker id and its current preview frame.
+    @Published public var markerDrag: (id: String, frame: Int64)?
+    /// Decoded per-asset audio analyses keyed "assetID:streamIndex" (AUDIO-006).
+    @Published public internal(set) var waveforms: [String: ClipWaveform] = [:]
+    /// Permanent per-source analysis failures (typed error code) to avoid retry loops.
+    @Published public internal(set) var waveformFailures: [String: String] = [:]
+    var waveformPending: Set<String> = []
     @Published public var editTool = "select"
     @Published public var editSnap = true
     @Published public var editScale: Double = 1
@@ -355,6 +364,9 @@ public struct EditCandidate {
             externalChange = "別のセッション（\(actor.prefix(8))）の変更を読み込みました（rev \(previous) → \(revision)）"
         }
         validateClipSelection(actor: actor)
+        if let id = markerSelection, !allMarkers.contains(where: { $0.id == id }) { markerSelection = nil; markerDrag = nil }
+        refreshWaveformCache()
+        ensureAudioWaveforms()
         refreshToken += 1
         if previous != revision && playing, let target = activePlaybackTarget {
             Task { do { try await playback.updateSnapshot(path: path, target: target, revision: revision) } catch { mapFailure(error); playing = false } }
