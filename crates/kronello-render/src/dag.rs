@@ -674,14 +674,13 @@ impl Builder<'_> {
         }
         // Opacity applies once after fill/stroke/glyph/child compositing.
         let mut id = self.composite(children, n.opacity, &blend_modes)?;
-        let scale =
-            std::array::from_fn(|i| f64::from(self.region.pixels[i]) / self.region.extent[i]);
+        let design_to_pixel = self.region.design_to_pixel();
         for effect in &n.effects {
             id = self.push(DagNode::Effect {
                 source: id,
-                effect: crate::PixelEffect::from_design(
+                effect: crate::PixelEffect::from_design_mapped(
                     &map_effect(effect, n.world_transform)?,
-                    scale,
+                    design_to_pixel,
                 )?,
             })?;
         }
@@ -939,6 +938,10 @@ pub fn build_render_dag_with_cache(
 ) -> Result<RenderDag, RenderError> {
     use crate::PixelBounds;
     let mut dag = build_unpadded_dag(scene, profile, region, cache)?;
+    // FX-006: a corner pin warps the incoming surface's own corner rectangle
+    // into the authored quad, so the backward ROI walk needs the source quad
+    // on each pin before it runs.
+    patch_corner_pin_sources(&mut dag);
     let bounds = derive_bounds(&dag.nodes);
     let requested = PixelBounds {
         min: [0.0; 2],
@@ -982,10 +985,24 @@ pub fn build_render_dag_with_cache(
         dag = build_unpadded_dag(scene, profile, execution, cache)?;
         dag.region = region;
         dag.execution_region = execution;
+        patch_corner_pin_sources(&mut dag);
     }
     dag.requests = requests;
     dag.bounds = bounds;
     Ok(dag)
+}
+/// FX-006 corner pin: record the input node's visual bounds as the warp
+/// source quad, on the DAG's current pixel lattice (ADR-0115).
+fn patch_corner_pin_sources(dag: &mut RenderDag) {
+    let bounds = derive_bounds(&dag.nodes);
+    for node in &mut dag.nodes {
+        let DagNode::Effect { source, effect } = node else {
+            continue;
+        };
+        if let crate::PixelEffect::CornerPin { source: quad, .. } = effect {
+            *quad = bounds[*source].visual_bounds;
+        }
+    }
 }
 fn derive_bounds(nodes: &[DagNode]) -> Vec<crate::NodeBounds> {
     use crate::{NodeBounds, PixelBounds};
@@ -1131,26 +1148,30 @@ pub(crate) fn map_effect(
     let x = a[0].hypot(b[0]);
     let y = a[1].hypot(b[1]);
     let dot = a[0] * a[1] + b[0] * b[1];
-    let sigma = match effect {
-        ResolvedEffect::GaussianBlur { sigma } | ResolvedEffect::DropShadow { sigma, .. } => *sigma,
-        _ => unreachable!(),
+    // Design-px lengths scale by the x-axis norm; a nonuniform or sheared
+    // transform rejects positive widths exactly like the Gaussian effects.
+    let length = |v: f64| -> Result<f64, RenderError> {
+        if v > 0.0
+            && ((x - y).abs() > 1e-10 * x.max(y).max(1.0) || dot.abs() > 1e-10 * (x * y).max(1.0))
+        {
+            return Err(RenderError::UnsupportedFeature(
+                "nonuniform transformed Gaussian effect".into(),
+            ));
+        }
+        Ok(v * x)
     };
-    if sigma > 0.0
-        && ((x - y).abs() > 1e-10 * x.max(y).max(1.0) || dot.abs() > 1e-10 * (x * y).max(1.0))
-    {
-        return Err(RenderError::UnsupportedFeature(
-            "nonuniform transformed Gaussian effect".into(),
-        ));
-    }
     Ok(match effect {
-        ResolvedEffect::GaussianBlur { .. } => ResolvedEffect::GaussianBlur { sigma: sigma * x },
+        ResolvedEffect::GaussianBlur { sigma } => ResolvedEffect::GaussianBlur {
+            sigma: length(*sigma)?,
+        },
         ResolvedEffect::DropShadow {
+            sigma,
             offset,
             color,
             opacity,
             ..
         } => ResolvedEffect::DropShadow {
-            sigma: sigma * x,
+            sigma: length(*sigma)?,
             offset: [
                 a[0] * offset[0] + a[1] * offset[1],
                 b[0] * offset[0] + b[1] * offset[1],
@@ -1158,7 +1179,47 @@ pub(crate) fn map_effect(
             color: *color,
             opacity: *opacity,
         },
-        _ => unreachable!(),
+        // Vignette is normalized-position pointwise and corner pins are
+        // already absolute Composition design_px positions; both commute.
+        ResolvedEffect::Vignette { .. } | ResolvedEffect::CornerPin { .. } => effect.clone(),
+        ResolvedEffect::ChromaKey {
+            key_color,
+            similarity,
+            edge_shrink,
+            edge_feather,
+            spill,
+        } => ResolvedEffect::ChromaKey {
+            key_color: *key_color,
+            similarity: *similarity,
+            edge_shrink: length(*edge_shrink)?,
+            edge_feather: length(*edge_feather)?,
+            spill: *spill,
+        },
+        ResolvedEffect::LumaKey {
+            key_luma,
+            tolerance,
+            edge_shrink,
+            edge_feather,
+        } => ResolvedEffect::LumaKey {
+            key_luma: *key_luma,
+            tolerance: *tolerance,
+            edge_shrink: length(*edge_shrink)?,
+            edge_feather: length(*edge_feather)?,
+        },
+        ResolvedEffect::Glow {
+            threshold,
+            radius,
+            intensity,
+        } => ResolvedEffect::Glow {
+            threshold: *threshold,
+            radius: length(*radius)?,
+            intensity: *intensity,
+        },
+        ResolvedEffect::Sharpen { amount, radius } => ResolvedEffect::Sharpen {
+            amount: *amount,
+            radius: length(*radius)?,
+        },
+        _ => unreachable!("color and affine variants handled above"),
     })
 }
 

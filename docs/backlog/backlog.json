@@ -1895,7 +1895,7 @@
    "priority": "P1",
    "area": "effects",
    "title": "キーイング: chroma key/luma key とスピル抑制",
-   "status": "planned",
+   "status": "done",
    "dependencies": [
     "COLOR-002"
    ],
@@ -1910,7 +1910,7 @@
    "priority": "P1",
    "area": "effects",
    "title": "標準エフェクト拡張: glow/sharpen/vignette/warp 等",
-   "status": "planned",
+   "status": "done",
    "dependencies": [
     "FX-003"
    ],

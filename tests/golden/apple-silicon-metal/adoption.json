@@ -249,6 +249,62 @@
       "bytes": 2048,
       "sha256": "c05bf8031e3c0ff902a1af682e9d533305b252783b44156930e6f6771d4d83a6"
     },
+    "fx005-chroma-key-edges/frame-0.png": {
+      "bytes": 187,
+      "sha256": "5395e8913a0abe6bfbb6aa04f7e6ee0912ffdc9f74fe2e2fc763e9fe9ba99f3f"
+    },
+    "fx005-chroma-key-edges/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "9d9e215265978323c27d906d69c386f9c7a474739a8babc57673061cdf8ee6a0"
+    },
+    "fx005-chroma-key/frame-0.png": {
+      "bytes": 102,
+      "sha256": "5ff6f750ff64c7473bd09682b92adfaa8b9d4cbaebfcc47ec27e67de95c901b2"
+    },
+    "fx005-chroma-key/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "1b610de5e79a7a44b343dca089b7e946258a3e86d89621d2b5492f4f900e00e6"
+    },
+    "fx005-luma-key/frame-0.png": {
+      "bytes": 168,
+      "sha256": "74ca45fae340503188fcc446db291ba30ed2ac100bb4b50de46d0cbbca964ea1"
+    },
+    "fx005-luma-key/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "12fa4c80ad5154eff7cfc52f05a3782dd16763a2d5ad7236b8441776c06e395b"
+    },
+    "fx006-corner-pin/frame-0.png": {
+      "bytes": 255,
+      "sha256": "6125eb6699e3336170423aa217fbb843d5194771c41d732a0f334535c4878770"
+    },
+    "fx006-corner-pin/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "cfb06a7bf10c568f9987cdb41badf1301e032aaf405f9e746cb28eed30015c4f"
+    },
+    "fx006-glow/frame-0.png": {
+      "bytes": 220,
+      "sha256": "9eaa62a49c5cf21674724b0c2a2d627949afaeda6e704a0f97dbd887f18213df"
+    },
+    "fx006-glow/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "1400e6e68587564b371bec62d16e0b9c20c13e9167c1bb0aebd915d4a8f18512"
+    },
+    "fx006-sharpen/frame-0.png": {
+      "bytes": 280,
+      "sha256": "aef987f30580f9288c18b45977876460acb20442dbe017d100bec075a5a0f9bd"
+    },
+    "fx006-sharpen/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "7b3bdadaa36923206ec0261ea61b1337b1026563b6bffd8493b65379f5d96195"
+    },
+    "fx006-vignette/frame-0.png": {
+      "bytes": 496,
+      "sha256": "ef2e9837a16034a7b7366aa038dd5d63bf6aee1ef27eb80c0e372a4c7f8ca00d"
+    },
+    "fx006-vignette/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "e5cea02120528e5b7d1ec9d1e9886a9231aa18a3effba5ee25f25537f1cca613"
+    },
     "glyph-outline-edges/frame-0.png": {
       "bytes": 576,
       "sha256": "8a940ae2fd380ab13c67ab9b9195789973b7d1d6a4ba22edaa642c1c5ef348e8"
@@ -370,12 +426,12 @@
       "sha256": "a8a5e6d38abbaff24c17fbd6eac7ad7059ae7b1fb0b722c194be078c516e559a"
     },
     "manifest.json": {
-      "bytes": 251123,
-      "sha256": "f5e90953794f75a88adbe0815b979f3048353e36990ef24148143d59464aa149"
+      "bytes": 95887,
+      "sha256": "f87e057e479b1f783a9a4c28ef09fc27a6eb6dc85d0c7d8e0041a610f030c802"
     },
     "provenance.json": {
       "bytes": 1405,
-      "sha256": "88a365a1e0bd6eb3ee1f9b0972bbebd396579cb8c222b818ae4d925d540eccfc"
+      "sha256": "697e2676e38f63647f2a61bb0d2ba6486cbf83a40f174955b7cd4c2ae2582018"
     },
     "rec2020-conversion/frame-0.png": {
       "bytes": 91,
@@ -479,20 +535,20 @@
     }
   },
   "provenance": {
-    "cargo_lock_sha256": "ff7a62be2b09943650f90c6bdee04fd151ecaa641cc5a86322b297d3c4639c71",
+    "cargo_lock_sha256": "ea5ea174b5b4700fdf7ebe4333a59191586b49913aea27e9fc36364900208885",
     "color_code_sha256": "8939a54f089fbfeccdf84abc341a063da92d994f76dfc3ea0b6a49ca13964b1d",
     "comparison_code_sha256": "0f09357830b18b3abd193030880e442a65171954f5774e399a4bb0d17f7b2112",
-    "draw_fixture_code_sha256": "e85456ae0943a845d2dd2003a6a80bcc1cdaf7bdea7c68e80908299709238382",
-    "effect_kernel_code_sha256": "b69d16ede96862d6f2a40d858f95c14af51a67b0b867df694e3dc5cb843631a4",
-    "effect_reference_code_sha256": "d320730321b85df34cae66aa8951afe305ca2db8eb9873b4eeed0e768d491657",
-    "effect_shader_sha256": "f303f79f45d7050803d4c909fe05ccede282373a3f1beadfdf2f9d8e3e69dd6a",
+    "draw_fixture_code_sha256": "8c6b173b8630b8e50720377b87c75e87cdcdb11857828d933cd2cdff5f85d612",
+    "effect_kernel_code_sha256": "8d0abc211270755289517412e2f98950f6dd72380cecaf1c07a6de259295a637",
+    "effect_reference_code_sha256": "648fd932a2bc1441a94f7fa6e2937aae18c64445d47b09fe4587d1d5bac81318",
+    "effect_shader_sha256": "70ba525a4feff8b812cf3c7064696767a0e762d6ef0ac4cb20c87c2437f35637",
     "fixture_manifest_sha256": "13060d35e1ed680a0666197b3d0a6de2606933030f43fda63c169923377aec22",
-    "renderer_code_sha256": "a62722615806f110f12a268c5195f4daaf5157674058b0e604f2b54e5fd2b3b4",
-    "revision": "ba4f429e6b5793d0a40f6775b9bb283065b2d7a9",
-    "scene_code_sha256": "6187f686c0c92cb53ff83f82e59a8eda3c5f0aad07eb9b558fe9759b35c3ce39",
-    "scene_gpu_code_sha256": "0a0c50a0623e5410a56c06979b5a3847805d7baffb1442b8fe9644acfc64019c",
-    "scene_reference_code_sha256": "38a4f531513259b74394fe592fc1a4c2e9e1ce883de59ceb1e5950b578d74a9d",
-    "scene_shader_sha256": "0ce85e871ba31c5d1f2bf56ddbcf8d1997cee44bcc19963d28e11ce66b9ea13d",
+    "renderer_code_sha256": "6ffae1420062f5c6393a78d2ec042db90e678a4a956e42f3633f6f1e3f7f1f4d",
+    "revision": "c3cc15306085e9a59d38eafbdbdda2cbad3bcbec",
+    "scene_code_sha256": "6344db79eed855388197161b596a31d32a6bfc679c56c215691ecd2a9062cb15",
+    "scene_gpu_code_sha256": "049dfa0d14021955a9dd567656bcbee68176bcc48a472dc4c56a0bec3896dd97",
+    "scene_reference_code_sha256": "220f9f1868334ef163f710171c5244716d420f2893afa2c1e40b34d98cbde95e",
+    "scene_shader_sha256": "81a10f9859ece9c4a4af3e523279ff0ba3e5e42ec4376562c504874501715d39",
     "shader_sha256": "f78694ed5b0dbc653a28601fb6f2d319e9b8d9ed0e02cb60cc8dfad6b5b8c069",
     "status": ""
   },
@@ -1207,6 +1263,111 @@
     {
       "alpha": "premultiplied",
       "id": "fx003-dip",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx005-chroma-key",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx005-chroma-key-edges",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx005-luma-key",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec2020"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx006-glow",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx006-sharpen",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec2020"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx006-vignette",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx006-corner-pin",
       "sample_id": "frame-0",
       "samples_per_frame": 16,
       "size": [

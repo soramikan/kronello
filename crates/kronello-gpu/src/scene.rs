@@ -741,6 +741,9 @@ pub(crate) fn scene_surface_count(scene: &DrawScene) -> usize {
             .iter()
             .map(|n| match n {
                 DrawNode::Group { children, .. } => children.len() + 1,
+                // FX-005/FX-006 chains hold matte/extract + shaped + composite
+                // intermediates beyond the blur pair (ADR-0115).
+                DrawNode::Effect { effect, .. } if effect.is_standard() => 6,
                 DrawNode::Effect { .. } => 3,
                 _ => 0,
             })

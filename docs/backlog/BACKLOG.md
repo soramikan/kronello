@@ -17,7 +17,7 @@
 | M4 | 0 | 0 | 12 | 0 | 12 |
 | M5 | 0 | 1 | 12 | 0 | 13 |
 | M7 | 0 | 0 | 11 | 0 | 11 |
-| M8 | 12 | 1 | 3 | 0 | 16 |
+| M8 | 10 | 1 | 5 | 0 | 16 |
 | M9 | 12 | 0 | 0 | 0 | 12 |
 | M10 | 7 | 0 | 0 | 0 | 7 |
 | M11 | 14 | 0 | 0 | 0 | 14 |
@@ -932,7 +932,7 @@
 
 ### FX-005 キーイング: chroma key/luma key とスピル抑制
 
-- 優先度: P1 / 領域: effects / 状態: planned
+- 優先度: P1 / 領域: effects / 状態: done
 - 依存: COLOR-002
 - 受け入れ条件:
   - chroma key・luma key を versioned effect として実装する
@@ -940,7 +940,7 @@
 
 ### FX-006 標準エフェクト拡張: glow/sharpen/vignette/warp 等
 
-- 優先度: P1 / 領域: effects / 状態: planned
+- 優先度: P1 / 領域: effects / 状態: done
 - 依存: FX-003
 - 受け入れ条件:
   - glow・sharpen・vignette・warp 等の標準エフェクトを versioned effect として追加する
