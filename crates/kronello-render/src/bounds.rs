@@ -268,6 +268,9 @@ pub(crate) fn derive_scene_bounds(nodes: &mut [SceneNodeIr]) -> Result<(), Rende
                     visual_bounds: bounds,
                 }
             }
+            // FX-007: the node itself draws nothing; a post-pass below unions
+            // the lower-track composite and applies its effect halo.
+            SceneContent::Adjustment => LayoutValue::default(),
             SceneContent::Empty => LayoutValue::default(),
         };
         for child in nodes
@@ -289,6 +292,28 @@ pub(crate) fn derive_scene_bounds(nodes: &mut [SceneNodeIr]) -> Result<(), Rende
                 "invalid bounds containment order".into(),
             ));
         }
+    }
+    // FX-007: an adjustment node's coverage is the composited visual bounds of
+    // every root sibling below it, expanded by its own effect stack. Scene
+    // nodes retain authored order, so the running union tracks "lower" roots.
+    let mut lower = LayoutValue::default();
+    for n in nodes.iter_mut() {
+        if n.parent.is_some() {
+            continue;
+        }
+        if matches!(n.content, SceneContent::Adjustment) {
+            let effects = n
+                .effects
+                .iter()
+                .map(|e| crate::dag::map_effect(e, n.world_transform))
+                .collect::<Result<Vec<_>, _>>()?;
+            n.bounds = LayoutValue {
+                layout_bounds: lower.layout_bounds,
+                ink_bounds: lower.ink_bounds,
+                visual_bounds: apply_effects(lower.visual_bounds, &effects)?,
+            };
+        }
+        lower = lower.union(n.bounds);
     }
     Ok(())
 }

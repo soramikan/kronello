@@ -576,6 +576,7 @@ fn captions_trim_and_export_timing_precision() {
         volume: None,
         links: vec![],
         effects: vec![],
+        masks: vec![],
         markers: vec![],
         properties: vec![],
     };
@@ -765,6 +766,7 @@ fn captions_lower_above_video_in_scene_ir() {
                 volume: None,
                 links: vec![],
                 effects: vec![],
+                masks: vec![],
                 markers: vec![],
                 properties: vec![],
             }],

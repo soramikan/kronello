@@ -3627,6 +3627,7 @@ fn temporal_cut_sequence() -> (Project, SequenceId) {
         volume: None,
         links: vec![],
         effects: vec![],
+        masks: vec![],
         properties: vec![],
         markers: vec![],
     });
@@ -4510,6 +4511,7 @@ fn gui007_reverse_fixture() -> (Project, Sequence) {
                 links: vec![],
                 properties: vec![],
                 effects: vec![],
+                masks: vec![],
                 markers: vec![],
             }],
         }],

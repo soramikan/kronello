@@ -30,6 +30,7 @@ fn clip(a: Time, b: Time) -> Clip {
         links: vec![],
         properties: vec![],
         effects: vec![],
+        masks: vec![],
         markers: vec![],
     }
 }

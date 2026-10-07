@@ -35,6 +35,7 @@ fn clip(start: i64, end: i64) -> Clip {
         volume: None,
         links: vec![],
         effects: vec![],
+        masks: vec![],
         markers: vec![],
         properties: vec![],
     }

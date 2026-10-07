@@ -41,6 +41,7 @@ fn comp_clip(composition: CompositionId, source_in: Time, a: Time, b: Time) -> C
         links: vec![],
         properties: vec![],
         effects: vec![],
+        masks: vec![],
         markers: vec![],
     }
 }
@@ -62,6 +63,7 @@ fn gen_clip(a: Time, b: Time) -> Clip {
         links: vec![],
         properties: vec![],
         effects: vec![],
+        masks: vec![],
         markers: vec![],
     }
 }

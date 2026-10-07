@@ -55,6 +55,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     volume: None,
                     links: vec![],
                     effects: vec![],
+                    masks: vec![],
                     properties: vec![],
                     markers: vec![],
                 }],

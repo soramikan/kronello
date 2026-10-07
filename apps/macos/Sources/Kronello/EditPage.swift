@@ -26,10 +26,17 @@ struct EditProjectPanel: View {
                 KRSearchField("素材を検索", text: $search).padding(KRSpace.space2)
                 if tab == "effects" {
                     VStack(alignment: .leading, spacing: KRSpace.space3) {
-                        KRButton("Gaussian Blur", icon: .sparkles) { model.addClipEffect("blur") }
-                        KRButton("Drop Shadow", icon: .layers) { model.addClipEffect("shadow") }
-                        Text("選択中の映像クリップに追加します。").krText(KRType.caption)
-                    }.padding().disabled(model.selectedClip == nil || model.selectedClip?.kind == .audio || model.busy || model.pendingCandidate != nil)
+                        VStack(alignment: .leading, spacing: KRSpace.space3) {
+                            KRButton("Gaussian Blur", icon: .sparkles) { model.addClipEffect("blur") }
+                            KRButton("Drop Shadow", icon: .layers) { model.addClipEffect("shadow") }
+                            Text("選択中の映像クリップに追加します。").krText(KRType.caption)
+                        }.disabled(model.selectedClip == nil || model.selectedClip?.kind == .audio || model.busy || model.pendingCandidate != nil)
+                        Divider()
+                        VStack(alignment: .leading, spacing: KRSpace.space3) {
+                            KRButton("アジャストメントクリップを追加", icon: .sparkles) { model.addAdjustmentClip() }
+                            Text("再生ヘッドに新規映像トラックへ追加し、下の映像全体へ効果をかけます。").krText(KRType.caption)
+                        }.disabled(model.sequence.isEmpty || model.busy || model.pendingCandidate != nil)
+                    }.padding()
                 }
                 else {
                     ScrollView(.vertical) {
@@ -96,6 +103,9 @@ struct SequenceViewer: View {
                         else {
                             KRViewerFrame(aspectRatio: max(1, model.extent.width) / max(1, model.extent.height)) {
                                 MetalPreview(model: model)
+                                if let clip = model.selectedClip, !EditorModel.clipMasks(clip).isEmpty {
+                                    MaskOverlay(model: model, clip: clip)
+                                }
                                 if safeArea { Rectangle().strokeBorder(p.inkMuted, style: .init(lineWidth: 1, dash: [4, 4])).padding(24).allowsHitTesting(false) }
                             }.offset(x: model.editViewSettings.panX, y: model.editViewSettings.panY)
                                 .contentShape(Rectangle())
@@ -197,6 +207,7 @@ struct ClipInspector: View {
                                 KRPopupButton("描画モード", options: EditPresentation.blendModes.map { .init($0.wire, $0.label) }, selection: Binding(get: { clip.authored.objects("properties").first { $0.object("descriptor").string("key") == "kronello.blend_mode" }?.object("source").object("value").string("value") ?? "normal" }, set: { model.setClipProperty(clip, key: "kronello.blend_mode", kind: "enum", value: $0, base: draftBases.removeValue(forKey: "blend")) }), onEditingStart: { draftBases["blend"] = model.revision })
                             }
                         }.disabled(clip.kind == .audio)
+                        if clip.kind != .audio && clip.kind != .subtitle { section("マスク") { ClipMaskInspector(model: model, clip: clip) } }
                         section("Effects") {
                             ForEach(Array(clip.authored.objects("effects").enumerated()), id: \.offset) { index, effect in
                                 VStack(alignment: .leading, spacing: 0) {

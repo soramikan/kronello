@@ -66,6 +66,26 @@ fn builtin_registry_has_fixed_uuid_v4_key_mappings() {
             "kronello.stroke_width",
             "98c01340-51f5-4b72-a039-722ba5b3a3b0",
         ),
+        (
+            MASK_PATH_ID,
+            "kronello.mask.path",
+            "f0000000-0010-4400-8000-000000000001",
+        ),
+        (
+            MASK_FEATHER_ID,
+            "kronello.mask.feather",
+            "f0000000-0010-4400-8000-000000000002",
+        ),
+        (
+            MASK_EXPANSION_ID,
+            "kronello.mask.expansion",
+            "f0000000-0010-4400-8000-000000000003",
+        ),
+        (
+            MASK_OPACITY_ID,
+            "kronello.mask.opacity",
+            "f0000000-0010-4400-8000-000000000004",
+        ),
     ];
     assert_eq!(registry.len(), mappings.len());
     for (id, name, uuid) in mappings {
@@ -92,6 +112,10 @@ fn builtin_registry_enumeration_is_lexical_and_repeatable() {
         "kronello.audio.volume",
         "kronello.blend_mode",
         "kronello.fill_color",
+        "kronello.mask.expansion",
+        "kronello.mask.feather",
+        "kronello.mask.opacity",
+        "kronello.mask.path",
         "kronello.opacity",
         "kronello.stroke_width",
         "kronello.transform.anchor",
@@ -206,8 +230,18 @@ fn builtin_position_and_anchor_use_parent_and_local_design_spaces() {
         d.validate_value(&Value::Vec2([number(-100.0), number(100_000.0)]))
             .unwrap();
     }
+    assert_eq!(
+        descriptor(&registry, "kronello.mask.path")
+            .definition()
+            .coordinate_space,
+        Some(CoordinateSpace::LocalDesign)
+    );
     for (_, d) in registry.iter() {
-        if d.definition().value_type != ValueType::Vec2 || d.definition().unit != Unit::DesignPx {
+        let spatial = matches!(
+            d.definition().value_type,
+            ValueType::Vec2 | ValueType::Vec3 | ValueType::Path
+        ) && d.definition().unit == Unit::DesignPx;
+        if !spatial {
             assert_eq!(d.definition().coordinate_space, None);
         }
     }

@@ -42,6 +42,12 @@ NLE-003 は `TimelineCommand` に slip（`clip_slip`、配置を固定して sou
 
 NLE-004 は `Marker { id: MarkerId, time, color: MarkerColor, comment: Option<String> }` を `Sequence.markers` と `Clip.markers` に、In/Out を `Sequence.work_area: Option<TimeRange>` に追加した（[ADR-0110](../adr/0110-sequence-markers-and-work-area.md)）。clip marker は sequence 時刻で、その clip の `timeline_range` 内に制約される。trim は範囲外 marker を落とし、stretch は marker を範囲に比例変換する。sequence marker は非負で内容 extent 内、work_area は非空かつ extent 内を validate する。操作は `marker_set`（同一 ID の upsert で色・コメント更新）/ `marker_remove` / `marker_move` / `work_area_set`。書き出し範囲は引き続き `SequenceRenderRequest.range` のみが決め、service は `work_area` を暗黙に読まない。検証は [NLE-003](../testing/nle-003.md) / [NLE-004](../testing/nle-004.md) を参照。
 
+## FX-004 / FX-007 のマスクとアジャストメントクリップ
+
+FX-004 は `Clip.masks: Vec<Mask>` を追加した（[ADR-0114](../adr/0114-bezier-masks.md)）。`Mask` は `id: MaskId`・`mode: MaskMode`（add / subtract / intersect / difference）・`invert`・`closed` と、`path`（`ValueType::Path`）・`feather`・`expansion`・`opacity` の 4 つのクリップ所有 `PropertyId` 参照からなる。マスクはクリップ描画後・clip effects 前にカバレッジをアルファ乗算し、feather は境界ぼかし、expansion はパスオフセットで、スタックは authored 順に結合する。点数・枚数の予算と型付きエラー（`MASK_*`）を持ち、編集は `clip_masks_set` がスタックと参照プロパティを原子置換する。matte（ノード間関係）とは別物で、video track のクリップのみ有効。検証は [FX-004](../testing/fx-004.md) を参照。
+
+FX-007 は `SourceRef::Adjustment`（payload なし、wire は `{"kind":"adjustment"}`）を追加した（[ADR-0116](../adr/0116-adjustment-clips.md)）。adjustment clip は自身の `timeline_range` で下位 video track の合成結果をグループ化し `clip.effects` を適用する。video track 限定・恒等 `time_map`・`source_in = 0`・`audio_retime = Reject` を型付きで強制し、trim / split / stretch は配置範囲のみを変える。専用コマンドはなく `clip_place` がそのまま受け付け、`sequence.query` は `ClipKind::Adjustment` を返す。`clip.masks` は適用範囲の限定として機能する。検証は [FX-007](../testing/fx-007.md) を参照。
+
 ## ID とインスタンス
 
 NodeId や PropertyId を配列番号や名前から導出しない。表示名の変更で参照は変わらない。

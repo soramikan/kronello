@@ -466,7 +466,9 @@ fn paints_match(
                 && caption.outline.as_ref().is_none_or(|o| predicate(o.color))
                 && caption.background.is_none_or(predicate)
         }
-        kronello_render::SceneContent::Empty => true,
+        // Adjustment nodes carry no paint of their own; they rewrite the
+        // lower composite through effects only (FX-007).
+        kronello_render::SceneContent::Empty | kronello_render::SceneContent::Adjustment => true,
         // Decoded video pixels are not known here, so a video paint is never proven to match.
         kronello_render::SceneContent::Video { .. } => false,
     }
@@ -1232,6 +1234,7 @@ mod gradient_tests {
             transitions: vec![],
             blend_mode: kronello_model::BlendMode::Normal,
             effects: vec![],
+            masks: vec![],
             properties: Default::default(),
             text: Some("a".into()),
             bounds: Default::default(),

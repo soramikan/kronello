@@ -46,6 +46,7 @@ fn fixture() -> (Project, SequenceId, ClipId) {
         volume: None,
         links: vec![],
         effects: vec![],
+        masks: vec![],
         properties: vec![],
         markers: vec![],
     };

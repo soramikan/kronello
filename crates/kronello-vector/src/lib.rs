@@ -5,9 +5,11 @@ use kurbo::{BezPath, Ellipse, PathEl, Point, RoundedRect, Shape as KurboShape};
 use std::collections::BTreeMap;
 use thiserror::Error;
 mod dash;
+mod offset;
 mod svg;
 mod trim;
 pub use dash::{MAX_DASH_SEGMENTS, dash_path};
+pub use offset::offset_path;
 pub use svg::*;
 pub use trim::trim_path;
 
