@@ -206,6 +206,15 @@ pub enum TimelineCommand {
         properties: Vec<Property>,
         effects: Vec<Effect>,
     },
+    /// FX-004 (ADR-0114): atomically replace a clip's mask stack and the clip
+    /// properties the masks reference — the same full-list contract as
+    /// ClipSetEffects so undo/idempotency need no special casing.
+    ClipMasksSet {
+        sequence: SequenceId,
+        clip: ClipId,
+        masks: Vec<Mask>,
+        properties: Vec<Property>,
+    },
     ClipSetVolume {
         sequence: SequenceId,
         clip: ClipId,
@@ -236,6 +245,9 @@ pub enum ClipKind {
     Composition,
     Generator,
     Caption,
+    /// FX-007 adjustment clip (ADR-0116): applies `clip.effects` to the
+    /// composited lower video tracks over its timeline range.
+    Adjustment,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -313,6 +325,7 @@ pub(crate) fn sequence_query(
             let kind = match &clip.source_ref {
                 SourceRef::Composition { .. } => ClipKind::Composition,
                 SourceRef::Caption { .. } => ClipKind::Caption,
+                SourceRef::Adjustment => ClipKind::Adjustment,
                 SourceRef::Generator {
                     generator,
                     version,
@@ -878,6 +891,21 @@ fn split_owned_objects(clip: &mut Clip) -> Result<(), ServiceError> {
             }
         }
     }
+    // FX-004: mask rows are owned by the placement like properties — the
+    // right clip gets fresh mask ids and remapped property references.
+    for mask in &mut clip.masks {
+        mask.id = MaskId::from_uuid(split_owned_uuid(right, mask.id.as_uuid()));
+        for reference in [
+            &mut mask.path,
+            &mut mask.feather,
+            &mut mask.expansion,
+            &mut mask.opacity,
+        ] {
+            *reference = *ids
+                .get(reference)
+                .ok_or_else(|| ServiceError::new("INVALID_EDIT", "split mask property missing"))?;
+        }
+    }
     Ok(())
 }
 pub(crate) fn mutate(
@@ -943,6 +971,13 @@ pub(crate) fn mutate(
             let mut right = original.trimmed(right_range)?;
             right.id = *right_clip;
             split_owned_objects(&mut right)?;
+            if matches!(right.source_ref, SourceRef::Adjustment) {
+                // FX-007: an adjustment has no source window; the right piece
+                // re-anchors to the identity map like the left piece does.
+                right.source_in = Time::ZERO;
+                right.time_map = TimeMap::linear(Time::ZERO, kronello_time::Rational::ONE)
+                    .map_err(SequenceError::from)?;
+            }
             track.clips[index] = left;
             track.clips.insert(index + 1, right);
             timeline_keys(s, project_id, &BTreeSet::from([*clip, *right_clip]), keys);
@@ -1939,6 +1974,39 @@ pub(crate) fn mutate(
             track.clips.insert(index + 1, right);
             timeline_keys(s, project_id, &BTreeSet::from([*clip, right_clip]), keys);
         }
+        TimelineCommand::ClipMasksSet {
+            sequence,
+            clip,
+            masks,
+            properties,
+        } => {
+            // Surface the precise mask error code before mutating; the
+            // transaction's candidate validation re-checks it anyway.
+            validate_clip_masks(masks, properties, &SchemaRegistry::with_builtin())
+                .map_err(|e| ServiceError::new(e.code(), e.to_string()))?;
+            let project_id = project.id;
+            let s = sequence_mut(project, *sequence)?;
+            ensure_unlocked(s, &BTreeSet::from([*clip]))?;
+            let track = s
+                .tracks
+                .iter_mut()
+                .find(|t| t.clips.iter().any(|c| c.id == *clip))
+                .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "clip missing"))?;
+            if track.kind != TrackKind::Video && !masks.is_empty() {
+                return Err(ServiceError::new(
+                    "INVALID_EDIT",
+                    "clip masks require a video track",
+                ));
+            }
+            let c = track
+                .clips
+                .iter_mut()
+                .find(|c| c.id == *clip)
+                .expect("located clip");
+            c.masks = masks.clone();
+            c.properties = properties.clone();
+            timeline_keys(s, project_id, &BTreeSet::from([*clip]), keys);
+        }
         TimelineCommand::SequenceCreate { sequence } => {
             keys.insert(changed(sequence.id.as_uuid(), project.id));
             project
@@ -2007,9 +2075,14 @@ pub(crate) fn mutate(
                 .flat_map(|t| &mut t.clips)
                 .find(|c| c.id == *clip)
                 .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "clip missing"))?;
-            *c = if matches!(c.source_ref, SourceRef::Caption { .. }) {
+            *c = if matches!(
+                c.source_ref,
+                SourceRef::Caption { .. } | SourceRef::Adjustment
+            ) {
                 // A cue's display interval is the placement itself; there is no
                 // source-relative window to re-anchor. Trim stays a subset.
+                // Adjustment clips likewise carry no source window: both
+                // trim and stretch are placement-only range edits (FX-007).
                 if range.is_empty()
                     || (matches!(command, TimelineCommand::ClipTrim { .. })
                         && (range.start() < c.timeline_range.start()

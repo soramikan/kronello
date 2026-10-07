@@ -47,6 +47,7 @@ fn clip(composition: CompositionId, start: Time, end: Time, speed: Rational) -> 
         volume: None,
         links: vec![],
         effects: vec![],
+        masks: vec![],
         properties: vec![],
         markers: vec![],
     }
@@ -836,6 +837,7 @@ fn asset_audio_tracks_mix_on_absolute_grid_and_reject_retime() {
         volume: None,
         links: vec![],
         effects: vec![],
+        masks: vec![],
         properties: vec![],
         markers: vec![],
     };

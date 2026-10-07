@@ -578,6 +578,7 @@ fn actual_reverse_sequence_references_forward_source_states() {
         volume: None,
         links: vec![],
         effects: vec![],
+        masks: vec![],
         properties: vec![],
         markers: vec![],
     };

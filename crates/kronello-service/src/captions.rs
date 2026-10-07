@@ -1337,6 +1337,7 @@ fn plan_commands(request: &CaptionsImportPlanRequest) -> Result<Vec<EditCommand>
             volume: None,
             links: vec![],
             effects: vec![],
+            masks: vec![],
             markers: vec![],
             properties: vec![],
         };

@@ -102,6 +102,10 @@ pub struct Clip {
     pub links: Vec<ClipId>,
     #[serde(default)]
     pub effects: Vec<Effect>,
+    /// FX-004 clip-local Bezier mask stack (ADR-0114). Masks multiply clip
+    /// alpha after content drawing and before `effects`; empty on old documents.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub masks: Vec<Mask>,
     /// Placement transform and effect parameters, evaluated in sequence time.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub properties: Vec<Property>,
@@ -187,6 +191,9 @@ pub enum SourceRef {
     Caption {
         caption: CaptionId,
     },
+    /// FX-007 (ADR-0116): no payload; the clip applies `effects` to the
+    /// composited lower video tracks across its timeline range.
+    Adjustment,
 }
 // Decode variant payloads directly from JSON. Serde's internally-tagged Content
 // buffer cannot preserve arbitrary-precision float values inside Color.
@@ -245,6 +252,9 @@ impl<'de> Deserialize<'de> for SourceRef {
         struct CaptionSource {
             caption: CaptionId,
         }
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct AdjustmentSource {}
         let json = serde_json::to_string(&fields).map_err(D::Error::custom)?;
         match kind.as_str() {
             "composition" => {
@@ -272,10 +282,16 @@ impl<'de> Deserialize<'de> for SourceRef {
                 let p: CaptionSource = serde_json::from_str(&json).map_err(D::Error::custom)?;
                 Ok(Self::Caption { caption: p.caption })
             }
+            "adjustment" => {
+                serde_json::from_str::<AdjustmentSource>(&json).map_err(D::Error::custom)?;
+                Ok(Self::Adjustment)
+            }
             _ => Err(D::Error::custom("unknown source kind")),
         }
     }
 }
+/// FX-007 adjustment clip semantic version pin (ADR-0116).
+pub const ADJUSTMENT_VERSION: u32 = 1;
 pub const SOLID_GENERATOR_ID: &str = "kronello.solid";
 pub const GENERATOR_VERSION: u32 = 1;
 fn generator_version() -> u32 {
@@ -514,6 +530,7 @@ impl Sequence {
                 }
             }
         }
+        let mask_registry = SchemaRegistry::with_builtin();
         for (index, transition) in self.transitions.iter().enumerate() {
             let pair = self
                 .tracks
@@ -600,6 +617,12 @@ impl Sequence {
                 if clip.effects.len() > 16 {
                     return Err(SequenceError::Invalid("clip effect budget".into()));
                 }
+                // FX-004: masks are a clip-local alpha stack on the video
+                // pipeline only; audio and caption placements reject them.
+                if track.kind != TrackKind::Video && !clip.masks.is_empty() {
+                    return Err(SequenceError::Invalid("non-video clip masks".into()));
+                }
+                validate_clip_masks(&clip.masks, &clip.properties, &mask_registry)?;
                 let mut clip_markers = std::collections::BTreeSet::new();
                 for marker in &clip.markers {
                     if !clip_markers.insert(marker.id) {
@@ -807,6 +830,22 @@ impl Sequence {
                         }
                     }
                     SourceRef::Generator { .. } => (),
+                    SourceRef::Adjustment => {
+                        // FX-007 (ADR-0116): video-track-only, no source window,
+                        // no retime/reverse/audio gain; the clip's timeline
+                        // range alone scopes the effect pass over lower video.
+                        if track.kind != TrackKind::Video
+                            || clip.source_in != Time::ZERO
+                            || !matches!(&clip.time_map, TimeMap::Linear(m) if m.offset() == Time::ZERO && m.speed() == kronello_time::Rational::ONE)
+                            || clip.reverse_sampling.is_some()
+                            || clip.audio_retime != AudioRetimePolicy::Reject
+                            || clip.volume.is_some()
+                        {
+                            return Err(SequenceError::Invalid(
+                                "adjustment clip requires a video track, zero source_in and an identity time map without retime, reverse or gain".into(),
+                            ));
+                        }
+                    }
                 }
             }
         }

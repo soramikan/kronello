@@ -46,8 +46,8 @@ pub use expression::{
 };
 pub use id::{
     AssetId, CaptionId, ClipId, CompositionId, CompositionInstanceId, ContentId, CurveId,
-    DescriptorId, ExpressionId, MarkerId, ModifierId, NodeId, PropertyId, SchemaKey, SequenceId,
-    TrackId,
+    DescriptorId, ExpressionId, MarkerId, MaskId, ModifierId, NodeId, PropertyId, SchemaKey,
+    SequenceId, TrackId,
 };
 pub use property::{DescriptorRef, Modifier, Property, PropertySource, SourceResolver};
 pub use schema::{
@@ -123,3 +123,5 @@ pub use tracking::*;
 
 mod matte;
 pub use matte::*;
+mod mask;
+pub use mask::*;

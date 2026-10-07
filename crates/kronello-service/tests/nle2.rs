@@ -504,6 +504,7 @@ fn clip(color: [u8; 3], a: i64, b: i64) -> Clip {
         links: vec![],
         properties: vec![],
         effects: vec![],
+        masks: vec![],
         markers: vec![],
     }
 }

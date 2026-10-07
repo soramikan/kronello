@@ -87,6 +87,7 @@ fn project(
         volume: None,
         links: vec![],
         effects,
+        masks: vec![],
         markers: vec![],
         properties: properties.into_iter().flatten().collect(),
     };

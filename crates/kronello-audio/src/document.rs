@@ -270,6 +270,11 @@ impl DocumentAudioPlan {
                                     "caption clips are excluded from audio mixing",
                                 ));
                             }
+                            SourceRef::Adjustment => {
+                                // FX-007: adjustment clips scope a video effect
+                                // pass only and never emit audio.
+                                return Err(unsupported("adjustment clips produce no audio"));
+                            }
                         }
                     }
                 }

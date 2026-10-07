@@ -54,6 +54,7 @@ fn caption_clip(caption: CaptionId, start: i64, end: i64) -> Clip {
         volume: None,
         links: vec![],
         effects: vec![],
+        masks: vec![],
         markers: vec![],
         properties: vec![],
     }
@@ -352,6 +353,7 @@ fn caption_tracks_reject_other_sources_and_transitions() {
         volume: None,
         links: vec![],
         effects: vec![],
+        masks: vec![],
         markers: vec![],
         properties: vec![],
     };

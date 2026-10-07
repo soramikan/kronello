@@ -52,6 +52,12 @@ NLE-004 は `Marker { id: MarkerId, time, color: MarkerColor, comment: Option<St
 
 NLE-006 の `clip_freeze` と piecewise hold map は [ADR-0112](../adr/0112-variable-retime-and-freeze-hold.md) と [02 時刻](02-time.md#nle-006-のホールドfreeze区間と速度ランプ) を参照。検証は [NLE-005](../testing/nle-005.md) / [NLE-006](../testing/nle-006.md)。
 
+## FX-004 / FX-007 のマスクとアジャストメントクリップ
+
+FX-004 は `Clip.masks: Vec<Mask>` を追加した（[ADR-0114](../adr/0114-bezier-masks.md)）。`Mask` は `id: MaskId`・`mode: MaskMode`（add / subtract / intersect / difference）・`invert`・`closed` と、`path`（`ValueType::Path`）・`feather`・`expansion`・`opacity` の 4 つのクリップ所有 `PropertyId` 参照からなる。マスクはクリップ描画後・clip effects 前にカバレッジをアルファ乗算し、feather は境界ぼかし、expansion はパスオフセットで、スタックは authored 順に結合する。点数・枚数の予算と型付きエラー（`MASK_*`）を持ち、編集は `clip_masks_set` がスタックと参照プロパティを原子置換する。matte（ノード間関係）とは別物で、video track のクリップのみ有効。検証は [FX-004](../testing/fx-004.md) を参照。
+
+FX-007 は `SourceRef::Adjustment`（payload なし、wire は `{"kind":"adjustment"}`）を追加した（[ADR-0116](../adr/0116-adjustment-clips.md)）。adjustment clip は自身の `timeline_range` で下位 video track の合成結果をグループ化し `clip.effects` を適用する。video track 限定・恒等 `time_map`・`source_in = 0`・`audio_retime = Reject` を型付きで強制し、trim / split / stretch は配置範囲のみを変える。専用コマンドはなく `clip_place` がそのまま受け付け、`sequence.query` は `ClipKind::Adjustment` を返す。`clip.masks` は適用範囲の限定として機能する。検証は [FX-007](../testing/fx-007.md) を参照。
+
 ## ID とインスタンス
 
 NodeId や PropertyId を配列番号や名前から導出しない。表示名の変更で参照は変わらない。

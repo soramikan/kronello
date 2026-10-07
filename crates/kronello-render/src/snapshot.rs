@@ -74,6 +74,12 @@ pub struct SemanticVersions {
     pub composition_media: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hdr: Option<u32>,
+    /// FX-004 clip mask coverage semantics (ADR-0114).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clip_mask: Option<u32>,
+    /// FX-007 adjustment clip semantics (ADR-0116).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adjustment_clip: Option<u32>,
 }
 fn generator_versions() -> BTreeMap<String, u32> {
     BTreeMap::from([(SOLID_GENERATOR_ID.into(), 1)])
@@ -124,6 +130,8 @@ impl SemanticVersions {
             temporal: Some(TEMPORAL_VERSION),
             composition_media: Some(COMPOSITION_MEDIA_VERSION),
             hdr: Some(crate::HDR_VERSION),
+            clip_mask: Some(kronello_model::MASK_VERSION),
+            adjustment_clip: Some(kronello_model::ADJUSTMENT_VERSION),
         }
     }
 }
@@ -487,6 +495,20 @@ impl RenderSnapshot {
         if self.semantic_versions.hdr.is_none() && self.profile.hdr.is_none() {
             supported_versions.hdr = None;
         }
+        // FX-004/FX-007: snapshots without mask/adjustment semantics may still
+        // target documents that never use them.
+        let has_clip_masks = self.project.sequences.iter().any(|s| {
+            matches!(s, DocumentObject::Known(s) if s.tracks.iter().flat_map(|t| &t.clips).any(|c| !c.masks.is_empty()))
+        });
+        if self.semantic_versions.clip_mask.is_none() && !has_clip_masks {
+            supported_versions.clip_mask = None;
+        }
+        let has_adjustments = self.project.sequences.iter().any(|s| {
+            matches!(s, DocumentObject::Known(s) if s.tracks.iter().flat_map(|t| &t.clips).any(|c| matches!(c.source_ref, SourceRef::Adjustment)))
+        });
+        if self.semantic_versions.adjustment_clip.is_none() && !has_adjustments {
+            supported_versions.adjustment_clip = None;
+        }
         if self.semantic_versions.composition_media.is_none() {
             supported_versions.composition_media = None;
         }
@@ -706,6 +728,10 @@ pub enum SceneContent {
         reverse_sampling: bool,
         extent: [f64; 2],
     },
+    /// FX-007 (ADR-0116): an adjustment clip node. It draws nothing itself;
+    /// DAG lowering rewrites the accumulated lower-track composite through
+    /// the node's masks and effects at its root position.
+    Adjustment,
 }
 /// Resolved FX-003 transition operation on one incoming clip node
 /// (ADR-0109). Crossfade and dip use post_effect_opacity for the incoming
@@ -727,6 +753,9 @@ pub struct SceneNodeIr {
     pub transitions: Vec<SceneTransition>,
     pub blend_mode: BlendMode,
     pub effects: Vec<ResolvedEffect>,
+    /// FX-004 clip-local mask stack resolved at this instant (ADR-0114).
+    /// Empty for composition-authored nodes and maskless clips.
+    pub masks: Vec<ResolvedMask>,
     /// Final node values, including template and layout inputs.
     pub properties: BTreeMap<PropertyId, Value>,
     pub text: Option<String>,
@@ -1065,6 +1094,7 @@ pub fn build_scene_ir_with_cache(
         let mut post_effect_opacity = 1.0;
         let mut transitions = Vec::new();
         let mut transition_offset = [0.0; 2];
+        let mut masks = Vec::new();
         if let Some(sequence) = snapshot
             .sequence
             .filter(|_| n.composition == snapshot.composition)
@@ -1114,6 +1144,7 @@ pub fn build_scene_ir_with_cache(
                 SourceRef::Generator { color, .. } => {
                     crate::sequence::solid_content(*color, sequence.extent)?
                 }
+                SourceRef::Adjustment => SceneContent::Adjustment,
                 SourceRef::Caption { caption } => {
                     let document =
                         self::content(&snapshot.project.captions, caption.as_uuid(), |c| {
@@ -1150,6 +1181,19 @@ pub fn build_scene_ir_with_cache(
                 }
                 _ => content,
             };
+            // FX-004: mask parameters are clip properties evaluated in
+            // sequence time on the lowered node, so the resolved values map
+            // already carries this instant's path/feather/expansion/opacity.
+            masks = clip
+                .masks
+                .iter()
+                .map(|mask| {
+                    mask.resolve(&properties).map_err(|e| RenderError::Backend {
+                        code: e.code(),
+                        message: e.to_string(),
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
             for tr in &sequence.transitions {
                 // The transition contributes only when both endpoints are
                 // enabled; a disabled clip leaves a hole rather than a
@@ -1284,6 +1328,7 @@ pub fn build_scene_ir_with_cache(
             transitions,
             blend_mode,
             effects,
+            masks,
             properties,
             text: evaluated_text,
             content,

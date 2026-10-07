@@ -778,6 +778,13 @@
             "$ref": "#/$defs/Marker"
           }
         },
+        "masks": {
+          "description": "FX-004 clip-local Bezier mask stack (ADR-0114). Masks multiply clip\nalpha after content drawing and before `effects`; empty on old documents.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Mask"
+          }
+        },
         "properties": {
           "description": "Placement transform and effect parameters, evaluated in sequence time.",
           "type": "array",
@@ -3008,6 +3015,68 @@
       "type": "string",
       "format": "uuid"
     },
+    "Mask": {
+      "description": "One authored mask row. Every parameter is a Property reference so paths and\nscalars share the existing constant/curve/expression evaluation, evaluated\nin sequence time on the clip's lowered node.",
+      "type": "object",
+      "properties": {
+        "closed": {
+          "description": "Authored path closure. `closed` masks offset as rings; open masks offset\nas open chains. Fill coverage itself always closes subpaths.",
+          "type": "boolean",
+          "default": true
+        },
+        "expansion": {
+          "description": "Outward (positive) or inward (negative) path offset in clip-local\ndesign_px.",
+          "$ref": "#/$defs/PropertyId"
+        },
+        "feather": {
+          "description": "Edge blur sigma in clip-local design_px; nonnegative scalar.",
+          "$ref": "#/$defs/PropertyId"
+        },
+        "id": {
+          "$ref": "#/$defs/MaskId"
+        },
+        "invert": {
+          "description": "Inverts this mask's own coverage before the mode combine.",
+          "type": "boolean",
+          "default": false
+        },
+        "mode": {
+          "$ref": "#/$defs/MaskMode"
+        },
+        "opacity": {
+          "description": "Coverage multiplier in [0,1].",
+          "$ref": "#/$defs/PropertyId"
+        },
+        "path": {
+          "description": "Bezier path in clip-local design_px; `ValueType::Path` property.",
+          "$ref": "#/$defs/PropertyId"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "path",
+        "mode",
+        "feather",
+        "expansion",
+        "opacity"
+      ]
+    },
+    "MaskId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "MaskMode": {
+      "description": "Stack combine order is authored order; coverage composes over the clip's\naccumulated alpha. `Add` unions coverage, `Subtract` removes it, `Intersect`\nkeeps the overlap, and `Difference` keeps the symmetric difference.",
+      "type": "string",
+      "enum": [
+        "add",
+        "subtract",
+        "intersect",
+        "difference"
+      ]
+    },
     "MatteRelation": {
       "type": "object",
       "properties": {
@@ -4353,6 +4422,20 @@
           "required": [
             "kind",
             "caption"
+          ]
+        },
+        {
+          "description": "FX-007 (ADR-0116): no payload; the clip applies `effects` to the\ncomposited lower video tracks across its timeline range.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "adjustment"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
           ]
         }
       ]

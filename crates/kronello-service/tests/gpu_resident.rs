@@ -55,6 +55,7 @@ fn create_project_as(
         links: vec![],
         properties: vec![],
         effects: vec![],
+        masks: vec![],
         markers: vec![],
     };
     let sequence = Sequence {
