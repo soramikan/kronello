@@ -634,6 +634,7 @@ public struct EditCandidate {
     public func serviceFailure(_ error: Error) -> ServiceFailure {
         if let failure = error as? ServiceFailure { return failure }
         if case NativeError.service(let code, let message) = error { return .init(code: code, message: message) }
+        if case NativeError.detailed(let code, let message, let details) = error { return .init(code: code, message: message, details: details) }
         return .init(code: "GUI_IO_ERROR", message: String(describing: error))
     }
     private func persistState() {

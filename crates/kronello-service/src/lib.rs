@@ -972,9 +972,17 @@ fn load_locked_fonts(
         if matches.len() > 1 {
             return Err(ServiceError::invalid("duplicate font input"));
         }
-        let font = matches
-            .first()
-            .ok_or_else(|| ServiceError::new("FONT_MISSING", "missing locked font locator"))?;
+        let font = matches.first().ok_or_else(|| {
+            let mut error = ServiceError::new(
+                "FONT_MISSING",
+                format!(
+                    "missing locked font locator: {} ({})",
+                    identity.family, identity.postscript_name
+                ),
+            );
+            error.details = Some(serde_json::json!({"font": identity}));
+            error
+        })?;
         bytes.push(std::fs::read(&font.path).map_err(|e| {
             ServiceError::new(
                 if e.kind() == std::io::ErrorKind::NotFound {

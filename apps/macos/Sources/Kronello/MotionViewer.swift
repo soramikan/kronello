@@ -99,7 +99,7 @@ struct MotionViewer: View {
             EmptyView()
         } else if let error = model.previewFailure {
             KRViewerError(.init(error.code, error.message), copy: {
-                NSPasteboard.general.clearContents(); NSPasteboard.general.setString(error.code + "\n" + error.message, forType: .string)
+                NSPasteboard.general.clearContents(); NSPasteboard.general.setString(error.copyText, forType: .string)
             }, retry: { model.previewFailure = nil; Task { do { try await model.reload() } catch { model.mapFailure(error) } } }).padding(KRSpace.space4)
         } else if model.current.isEmpty {
             KREmptyState(icon: .layers, title: "Composition がありません", message: "Composition を含むプロジェクトを開いてください。")

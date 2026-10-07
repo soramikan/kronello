@@ -2,13 +2,13 @@ import Foundation
 import CKronelloFFI
 
 public enum NativeError: Error, CustomStringConvertible {
-    case rejected, closed, timeout, service(String, String)
+    case rejected, closed, timeout, service(String, String), detailed(String, String, [String: Any])
     public var description: String {
         switch self {
         case .rejected: return "FFI input rejected or queue full"
         case .closed: return "FFI session closed"
         case .timeout: return "FFI response timed out"
-        case .service(let code, let message): return "\(code): \(message)"
+        case .service(let code, let message), .detailed(let code, let message, _): return "\(code): \(message)"
         }
     }
 }
@@ -123,6 +123,11 @@ private struct Message: Decodable {
         if case .object(let object) = value, object["status"] == .string("success") { return }
         if case .object(let object) = value, case .object(let error) = object["error"],
            case .string(let code) = error["code"], case .string(let message) = error["message"] {
+            if let raw = error["details"],
+               let data = try? JSONEncoder().encode(raw),
+               let details = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                throw NativeError.detailed(code, message, details)
+            }
             throw NativeError.service(code, message)
         }
         throw NativeError.rejected

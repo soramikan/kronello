@@ -33,12 +33,12 @@ struct EditorWindow: View {
             .background(p.surface100).foregroundStyle(p.ink)
             .sheet(item: $model.undoConflict) { error in
                 KRDialog("『" + model.undoConflictLabel + "』を取り消せません", body: error.message + "。部分的には取り消しません。", code: error.code,
-                    detail: error.detailText + "\n" + historyText,
+                    detail: error.detailText.isEmpty ? historyText : error.detailText + "\n" + historyText,
                     actions: [.init("history", "履歴を開く…") { model.undoConflict = nil; historyOpen = true },
                               .init("ok", "OK", variant: .primary) { model.undoConflict = nil }]).krTheme(theme)
             }
             .sheet(item: $model.failure) { error in
-                KRDialog("操作を完了できません", body: error.message, code: error.code, detail: error.detailText,
+                KRDialog("操作を完了できません", body: error.message, code: error.code, detail: error.detailText.isEmpty ? nil : error.detailText,
                     actions: [.init("ok", "OK", variant: .primary) { model.failure = nil }]).krTheme(theme)
             }
             .sheet(isPresented: $historyOpen) {

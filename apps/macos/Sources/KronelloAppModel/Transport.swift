@@ -10,8 +10,19 @@ public struct ServiceFailure: Error, Identifiable {
         self.code = code; self.message = message; self.details = details
     }
     public var detailText: String {
-        guard let data = try? JSONSerialization.data(withJSONObject: details, options: [.prettyPrinted, .sortedKeys]) else { return message }
-        return String(data: data, encoding: .utf8) ?? message
+        guard !details.isEmpty,
+              let data = try? JSONSerialization.data(withJSONObject: details, options: [.prettyPrinted, .sortedKeys]),
+              let text = String(data: data, encoding: .utf8) else { return "" }
+        return text
+    }
+    /// Pasteboard text for the whole failure. Always carries the code and
+    /// message so an error without `details` never copies as a bare `{}`.
+    public var copyText: String {
+        var object: [String: Any] = ["code": code, "message": message]
+        if !details.isEmpty { object["details"] = details }
+        guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys]),
+              let text = String(data: data, encoding: .utf8) else { return code + "\n" + message }
+        return text
     }
 }
 

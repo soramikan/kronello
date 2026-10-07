@@ -68,7 +68,7 @@ struct AppRoot: View {
                     .onChange(of: controller.preferences.showWelcome) { _, _ in controller.savePreferences() }
             }
         }.sheet(item: $controller.error) { error in
-            KRDialog("プロジェクトを開けません", body: error.message, code: error.code, detail: error.detailText,
+            KRDialog("プロジェクトを開けません", body: error.message, code: error.code, detail: error.detailText.isEmpty ? nil : error.detailText,
                 actions: [.init("ok", "OK", variant: .primary) { controller.error = nil }]).krTheme(controller.theme)
         }
     }

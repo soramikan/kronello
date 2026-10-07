@@ -74,7 +74,7 @@ struct ExportPage: View {
         KRPanel("プレビュー") {
             VStack(spacing: KRSpace.space2) {
                 if let error = model.previewFailure {
-                    KRViewerError(.init(error.code,error.message), copy: { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(error.detailText,forType:.string) }, retry: { model.previewFailure = nil }).padding(KRSpace.space3)
+                    KRViewerError(.init(error.code,error.message), copy: { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(error.copyText,forType:.string) }, retry: { model.previewFailure = nil }).padding(KRSpace.space3)
                 } else { KRViewerFrame(aspectRatio: max(1,model.extent[0]) / max(1,model.extent[1])) {
                     ExportMetalPreview(editor: editor, input: model.input, time: model.time(previewFrame), onFailure: { model.previewFailure = $0 })
                 }.padding(KRSpace.space3) }

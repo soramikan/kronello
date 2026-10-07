@@ -111,7 +111,7 @@ struct SequenceViewer: View {
                         }
                         if let failure = model.sequenceFailure ?? model.previewFailure {
                             VStack(spacing: KRSpace.space3) {
-                                KRViewerError(.init(failure.code, failure.message), copy: { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(failure.detailText, forType: .string) },
+                                KRViewerError(.init(failure.code, failure.message), copy: { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(failure.copyText, forType: .string) },
                                               retry: { model.previewFailure = nil; Task { do { try await model.reload() } catch { model.mapFailure(error) } } })
                                 if model.offersCPUReference { KRButton("CPU 参照で表示", variant: .secondary) { model.chooseCPUReference() } }
                             }

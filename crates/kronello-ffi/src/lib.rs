@@ -50,11 +50,8 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 fn guard<T: Default>(f: impl FnOnce() -> T) -> T {
     catch_unwind(AssertUnwindSafe(f)).unwrap_or_default()
 }
-fn error(code: &str, message: impl Into<String>) -> Value {
-    serde_json::to_value(Response::Error {
-        error: ServiceError::new(code, message),
-    })
-    .expect("response JSON")
+fn error(e: &ServiceError) -> Value {
+    serde_json::to_value(Response::Error { error: e.clone() }).expect("response JSON")
 }
 // SAFETY: caller supplies readable bytes. Copy before returning; the worker
 // never borrows foreign memory. Null and oversized buffers are rejected.
@@ -146,7 +143,7 @@ fn worker(
     match ProjectSession::open(std::path::Path::new(&path)) {
         Ok(value) => session = Some(value),
         Err(e) if e.code == "PROJECT_NOT_FOUND" => (),
-        Err(e) => open_error = Some(error(&e.code, e.message)),
+        Err(e) => open_error = Some(error(&e)),
     }
     let mut previous = open_error
         .clone()
@@ -190,7 +187,7 @@ fn worker(
                 {
                     match ProjectSession::open(std::path::Path::new(&path)) {
                         Ok(value) => session = Some(value),
-                        Err(e) => open_error = Some(error(&e.code, e.message)),
+                        Err(e) => open_error = Some(error(&e)),
                     }
                 }
                 let result = open_error.clone().unwrap_or_else(|| {
@@ -222,23 +219,23 @@ fn worker(
                             preview = Some(p);
                             json!({"status":"success"})
                         }
-                        Err(e) => error(&e.code, e.message),
+                        Err(e) => error(&e),
                     },
                     Work::Resize(w, h) => match &mut preview {
                         Some(p) => p
                             .resize(w, h)
                             .map(|()| json!({"status":"success"}))
-                            .unwrap_or_else(|e| error(&e.code, e.message)),
-                        None => error("SURFACE_NOT_ATTACHED", "attach a surface first"),
+                            .unwrap_or_else(|e| error(&e)),
+                        None => error(&ServiceError::new("SURFACE_NOT_ATTACHED", "attach a surface first")),
                     },
                     Work::Redraw(json) => match &mut preview {
                         Some(p) => p
                             .redraw(&service, &json)
-                            .unwrap_or_else(|e| error(&e.code, e.message)),
-                        None => error("SURFACE_NOT_ATTACHED", "attach a surface first"),
+                            .unwrap_or_else(|e| error(&e)),
+                        None => error(&ServiceError::new("SURFACE_NOT_ATTACHED", "attach a surface first")),
                     },
                 }))
-                .unwrap_or_else(|_| error("FFI_PANIC", "native worker panicked; request failed"))
+                .unwrap_or_else(|_| error(&ServiceError::new("FFI_PANIC", "native worker panicked; request failed")))
                     })
                 });
                 publish(
