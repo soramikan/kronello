@@ -72,6 +72,7 @@ fn project(
         reverse_sampling: None,
         volume: None,
         links: vec![],
+        enabled: true,
         effects,
         markers: vec![],
         properties: properties.into_iter().flatten().collect(),
@@ -95,6 +96,7 @@ fn project(
                 transitions: vec![],
                 markers: vec![],
                 work_area: None,
+                targets: None,
             })],
             ..Project::default()
         },
