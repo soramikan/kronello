@@ -21,6 +21,13 @@ pub struct SceneFramePair {
     pub display: Vec<[f32; 4]>,
     pub transfers: TransferStats,
 }
+/// Device-wide scene pipelines shared across passes. FXC/DXIL translation on
+/// software adapters is expensive, so each pass clones these handles instead
+/// of recompiling the shaders.
+pub(crate) struct ScenePipelines {
+    pipeline: wgpu::ComputePipeline,
+    effect_pipeline: wgpu::ComputePipeline,
+}
 struct ScenePass<'a> {
     gpu: &'a GpuContext,
     size: RenderSize,
@@ -843,38 +850,44 @@ impl GpuContext {
             size.output_resolution,
             wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_SRC,
         )?;
-        let shader = self
-            .device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some("GPU-002 coverage and compositing"),
-                source: wgpu::ShaderSource::Wgsl(SCENE_SHADER.into()),
-            });
-        let pipeline = self
-            .device
-            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some("GPU-002"),
-                layout: None,
-                module: &shader,
-                entry_point: Some("main"),
-                compilation_options: Default::default(),
-                cache: None,
-            });
-        let effect_shader = self
-            .device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some("FX-001"),
-                source: wgpu::ShaderSource::Wgsl(EFFECT_SHADER.into()),
-            });
-        let effect_pipeline =
-            self.device
+        let pipelines = self.scene_pipelines.get_or_init(|| {
+            let shader = self
+                .device
+                .create_shader_module(wgpu::ShaderModuleDescriptor {
+                    label: Some("GPU-002 coverage and compositing"),
+                    source: wgpu::ShaderSource::Wgsl(SCENE_SHADER.into()),
+                });
+            let pipeline = self
+                .device
                 .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                    label: Some("FX-001"),
+                    label: Some("GPU-002"),
                     layout: None,
-                    module: &effect_shader,
+                    module: &shader,
                     entry_point: Some("main"),
                     compilation_options: Default::default(),
                     cache: None,
                 });
+            let effect_shader = self
+                .device
+                .create_shader_module(wgpu::ShaderModuleDescriptor {
+                    label: Some("FX-001"),
+                    source: wgpu::ShaderSource::Wgsl(EFFECT_SHADER.into()),
+                });
+            let effect_pipeline =
+                self.device
+                    .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                        label: Some("FX-001"),
+                        layout: None,
+                        module: &effect_shader,
+                        entry_point: Some("main"),
+                        compilation_options: Default::default(),
+                        cache: None,
+                    });
+            ScenePipelines {
+                pipeline,
+                effect_pipeline,
+            }
+        });
         Ok(ScenePass {
             _scope: scope,
             gpu: self,
@@ -885,8 +898,8 @@ impl GpuContext {
             size,
             working,
             coverage_bounds_enabled: true,
-            pipeline,
-            effect_pipeline,
+            pipeline: pipelines.pipeline.clone(),
+            effect_pipeline: pipelines.effect_pipeline.clone(),
             blank,
             stats: TransferStats {
                 cpu_upload_control_bytes: 4,
