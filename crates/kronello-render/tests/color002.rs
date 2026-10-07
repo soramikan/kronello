@@ -86,6 +86,7 @@ fn project(
         volume: None,
         links: vec![],
         effects,
+        markers: vec![],
         properties: properties.into_iter().flatten().collect(),
     };
     Project {
@@ -102,6 +103,8 @@ fn project(
                 clips: vec![clip],
             }],
             transitions: vec![],
+            markers: vec![],
+            work_area: None,
         })],
         ..Project::default()
     }

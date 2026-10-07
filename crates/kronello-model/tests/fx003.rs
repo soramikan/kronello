@@ -35,6 +35,7 @@ fn clip(start: i64, end: i64) -> Clip {
         volume: None,
         links: vec![],
         effects: vec![],
+        markers: vec![],
         properties: vec![],
     }
 }
@@ -56,6 +57,8 @@ fn overlapping_sequence() -> (Sequence, Project, ClipId, ClipId) {
             clips: vec![outgoing.clone(), incoming.clone()],
         }],
         transitions: vec![],
+        markers: vec![],
+        work_area: None,
     };
     (sequence, Project::default(), outgoing.id, incoming.id)
 }

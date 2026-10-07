@@ -53,6 +53,7 @@ fn caption_clip(caption: CaptionId, start: i64, end: i64) -> Clip {
         volume: None,
         links: vec![],
         effects: vec![],
+        markers: vec![],
         properties: vec![],
     }
 }
@@ -65,6 +66,8 @@ fn sequence_with(tracks: Vec<Track>) -> Sequence {
         working_space: ColorSpace::LinearRec709,
         tracks,
         transitions: vec![],
+        markers: vec![],
+        work_area: None,
     }
 }
 fn project_with(caption: CaptionDocument, sequence: Sequence) -> Project {
@@ -346,6 +349,7 @@ fn caption_tracks_reject_other_sources_and_transitions() {
         volume: None,
         links: vec![],
         effects: vec![],
+        markers: vec![],
         properties: vec![],
     };
     let sequence = sequence_with(vec![Track {

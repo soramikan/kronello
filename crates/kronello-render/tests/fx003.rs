@@ -25,6 +25,7 @@ fn clip(start_num: i64, start_den: i64, end_num: i64, end_den: i64, rgb: [f64; 3
         volume: None,
         links: vec![],
         effects: vec![],
+        markers: vec![],
         properties: vec![],
     }
 }
@@ -60,6 +61,8 @@ fn project(
                     params,
                     version,
                 }],
+                markers: vec![],
+                work_area: None,
             })],
             ..Project::default()
         },

@@ -58,6 +58,8 @@ fn setup() -> (tempfile::TempDir, PathBuf, SequenceId) {
                 working_space: ColorSpace::LinearRec709,
                 tracks: vec![],
                 transitions: vec![],
+                markers: vec![],
+                work_area: None,
             },
         }))
         .unwrap()
@@ -574,6 +576,7 @@ fn captions_trim_and_export_timing_precision() {
         volume: None,
         links: vec![],
         effects: vec![],
+        markers: vec![],
         properties: vec![],
     };
     // Place the cue at a non-overlapping position: [10s, 10s+1/24s).
@@ -762,6 +765,7 @@ fn captions_lower_above_video_in_scene_ir() {
                 volume: None,
                 links: vec![],
                 effects: vec![],
+                markers: vec![],
                 properties: vec![],
             }],
         },
