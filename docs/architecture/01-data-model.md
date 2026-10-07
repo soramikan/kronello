@@ -34,6 +34,8 @@ Mask / Matte は入力参照として表現でき、見えるレイヤーとし�
 
 NLE-002 は動画 Asset / `kronello.solid` version 1 Generator の描画、`Clip.properties` による配置 transform / effect parameters、既存 DAG の clip effects、明示 crossfade transition、move / ripple / reciprocal link group を追加した。同一 track の重複は `Sequence.transitions` が intersection 全体を明示する二 clip だけ許す。動画の source_in / TimeMap は絶対 presentation PTS、`StreamMetadata.start_time` は最初の decoded PTS を保存する。audio の source_in は decoded sample 原点のまま。Generator は version と straight Color を snapshot に固定し、未知 id / version を画像で代替しない。`sequence.query` が ClipKind と動画色の effective tags / assumptions を返す。image 描画・字幕・adjustment は追加していない。詳細は [ADR-0062](../adr/0062-video-generator-and-timeline-edits.md) と [NLE-002 の検証](../testing/nle-002.md)。
 
+M7 は専用 `TrackKind::Caption` と版付き `CaptionDocument`（[ADR-0107](../adr/0107-caption-track-and-cue-model.md)）、`EffectParameters` の版付き色補正（exposure / levels / curves / HSL、[ADR-0108](../adr/0108-versioned-color-correction-effects.md)）、`BlendMode` 18 種と `Transition` の `params`（wipe / slide / dip、[ADR-0109](../adr/0109-blend-modes-and-parameterized-transitions.md)）、`Sequence.markers` / `Clip.markers` / `Sequence.work_area`（[ADR-0110](../adr/0110-sequence-markers-and-work-area.md)）を追加する。
+
 ## ID とインスタンス
 
 NodeId や PropertyId を配列番号や名前から導出しない。表示名の変更で参照は変わらない。
