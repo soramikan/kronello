@@ -25,11 +25,25 @@ mod metal {
         config: wgpu::SurfaceConfiguration,
         pipeline: wgpu::RenderPipeline,
         layout: wgpu::BindGroupLayout,
+        pipeline_scaled: wgpu::RenderPipeline,
+        layout_scaled: wgpu::BindGroupLayout,
+        sampler: wgpu::Sampler,
         // Drop after surface and GPU objects.
         _layer: Layer,
     }
     fn failure(code: &str, e: impl std::fmt::Display) -> ServiceError {
         ServiceError::new(code, e.to_string())
+    }
+    /// Shared intermediate-surface bound from check_scene_budget. A preview
+    /// scene whose estimate does not fit is re-rendered smaller and scaled up
+    /// at presentation instead of failing the frame.
+    const SURFACE_BUDGET: u64 = 512 * 1024 * 1024;
+    const MAX_FIT_ATTEMPTS: u32 = 8;
+    fn is_surface_budget(e: &ServiceError) -> bool {
+        e.code == "UNSUPPORTED_FEATURE" && e.message.contains("surface budget")
+    }
+    fn halve(pixels: [u32; 2]) -> [u32; 2] {
+        [(pixels[0] / 2).max(1), (pixels[1] / 2).max(1)]
     }
     impl Preview {
         pub fn attach(layer: Layer, width: u32, height: u32) -> Result<Self, ServiceError> {
@@ -137,12 +151,96 @@ mod metal {
                     multiview_mask: None,
                     cache: None,
                 });
+            let layout_scaled =
+                gpu.device
+                    .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                        label: Some("preview scaled"),
+                        entries: &[
+                            wgpu::BindGroupLayoutEntry {
+                                binding: 0,
+                                visibility: wgpu::ShaderStages::FRAGMENT,
+                                ty: wgpu::BindingType::Texture {
+                                    sample_type: wgpu::TextureSampleType::Float {
+                                        filterable: true,
+                                    },
+                                    view_dimension: wgpu::TextureViewDimension::D2,
+                                    multisampled: false,
+                                },
+                                count: None,
+                            },
+                            wgpu::BindGroupLayoutEntry {
+                                binding: 1,
+                                visibility: wgpu::ShaderStages::FRAGMENT,
+                                ty: wgpu::BindingType::Buffer {
+                                    ty: wgpu::BufferBindingType::Uniform,
+                                    has_dynamic_offset: false,
+                                    min_binding_size: None,
+                                },
+                                count: None,
+                            },
+                            wgpu::BindGroupLayoutEntry {
+                                binding: 2,
+                                visibility: wgpu::ShaderStages::FRAGMENT,
+                                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                                count: None,
+                            },
+                        ],
+                    });
+            let shader_scaled = gpu
+                .device
+                .create_shader_module(wgpu::ShaderModuleDescriptor {
+                    label: Some("preview scaled"),
+                    source: wgpu::ShaderSource::Wgsl(include_str!("preview_scaled.wgsl").into()),
+                });
+            let pipeline_layout_scaled =
+                gpu.device
+                    .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                        label: Some("preview scaled"),
+                        bind_group_layouts: &[Some(&layout_scaled)],
+                        immediate_size: 0,
+                    });
+            let pipeline_scaled =
+                gpu.device
+                    .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                        label: Some("preview scaled"),
+                        layout: Some(&pipeline_layout_scaled),
+                        vertex: wgpu::VertexState {
+                            module: &shader_scaled,
+                            entry_point: Some("vs"),
+                            compilation_options: Default::default(),
+                            buffers: &[],
+                        },
+                        fragment: Some(wgpu::FragmentState {
+                            module: &shader_scaled,
+                            entry_point: Some("fs"),
+                            compilation_options: Default::default(),
+                            targets: &[Some(wgpu::ColorTargetState {
+                                format,
+                                blend: None,
+                                write_mask: wgpu::ColorWrites::ALL,
+                            })],
+                        }),
+                        primitive: Default::default(),
+                        depth_stencil: None,
+                        multisample: Default::default(),
+                        multiview_mask: None,
+                        cache: None,
+                    });
+            let sampler = gpu.device.create_sampler(&wgpu::SamplerDescriptor {
+                label: Some("preview"),
+                mag_filter: wgpu::FilterMode::Linear,
+                min_filter: wgpu::FilterMode::Linear,
+                ..Default::default()
+            });
             let mut preview = Self {
                 surface,
                 gpu,
                 config,
                 pipeline,
                 layout,
+                pipeline_scaled,
+                layout_scaled,
+                sampler,
                 _layer: layer,
             };
             preview.resize(width, height)?;
@@ -168,52 +266,122 @@ mod metal {
                 ));
             }
             let cpu = request.backend == Some(BackendSelection::CpuReference);
-            let (revision, texture, crop_origin, backend) = if cpu {
-                let rendered = service.render_requested_frame(&request)?;
-                let pixels = &rendered.pixels.linear;
-                let texture = self.gpu.device.create_texture(&wgpu::TextureDescriptor {
-                    label: Some("explicit CPU reference preview"),
-                    size: wgpu::Extent3d {
-                        width: self.config.width,
-                        height: self.config.height,
-                        depth_or_array_layers: 1,
-                    },
-                    mip_level_count: 1,
-                    sample_count: 1,
-                    dimension: wgpu::TextureDimension::D2,
-                    format: wgpu::TextureFormat::Rgba32Float,
-                    usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
-                    view_formats: &[],
-                });
-                let bytes: Vec<u8> = pixels
-                    .iter()
-                    .flatten()
-                    .flat_map(|v| v.to_ne_bytes())
-                    .collect();
-                self.gpu.queue.write_texture(
-                    texture.as_image_copy(),
-                    &bytes,
-                    wgpu::TexelCopyBufferLayout {
-                        offset: 0,
-                        bytes_per_row: Some(self.config.width * 16),
-                        rows_per_image: Some(self.config.height),
-                    },
-                    wgpu::Extent3d {
-                        width: self.config.width,
-                        height: self.config.height,
-                        depth_or_array_layers: 1,
-                    },
-                );
-                (
-                    rendered.metadata.revision,
-                    texture,
-                    [0, 0],
-                    rendered.metadata.backend,
-                )
+            // Preview is a proxy: when a scene's intermediate-surface estimate
+            // exceeds the shared budget the frame is rendered smaller and
+            // scaled up at presentation instead of failing with
+            // UNSUPPORTED_FEATURE. `scale` converts surface pixels into
+            // rendered-region pixels and `crop_origin` stays in texture pixels.
+            let (revision, texture, scale, crop_origin, backend): (
+                String,
+                wgpu::Texture,
+                [f32; 2],
+                [usize; 2],
+                String,
+            ) = if cpu {
+                let mut request = request;
+                let mut attempts = 0;
+                loop {
+                    let pixels = request.input.region.pixels;
+                    match service.render_requested_frame(&request) {
+                        Ok(rendered) => {
+                            let scale = [
+                                pixels[0] as f32 / self.config.width as f32,
+                                pixels[1] as f32 / self.config.height as f32,
+                            ];
+                            let scaled = scale != [1.0, 1.0];
+                            let bytes: Vec<u8> = if scaled {
+                                rendered
+                                    .pixels
+                                    .linear
+                                    .iter()
+                                    .flatten()
+                                    .flat_map(|v| half::f16::from_f32(*v).to_bits().to_le_bytes())
+                                    .collect()
+                            } else {
+                                rendered
+                                    .pixels
+                                    .linear
+                                    .iter()
+                                    .flatten()
+                                    .flat_map(|v| v.to_ne_bytes())
+                                    .collect()
+                            };
+                            let bytes_per_row = pixels[0] * if scaled { 8 } else { 16 };
+                            let texture =
+                                self.gpu.device.create_texture(&wgpu::TextureDescriptor {
+                                    label: Some("explicit CPU reference preview"),
+                                    size: wgpu::Extent3d {
+                                        width: pixels[0],
+                                        height: pixels[1],
+                                        depth_or_array_layers: 1,
+                                    },
+                                    mip_level_count: 1,
+                                    sample_count: 1,
+                                    dimension: wgpu::TextureDimension::D2,
+                                    format: if scaled {
+                                        wgpu::TextureFormat::Rgba16Float
+                                    } else {
+                                        wgpu::TextureFormat::Rgba32Float
+                                    },
+                                    usage: wgpu::TextureUsages::COPY_DST
+                                        | wgpu::TextureUsages::TEXTURE_BINDING,
+                                    view_formats: &[],
+                                });
+                            self.gpu.queue.write_texture(
+                                texture.as_image_copy(),
+                                &bytes,
+                                wgpu::TexelCopyBufferLayout {
+                                    offset: 0,
+                                    bytes_per_row: Some(bytes_per_row),
+                                    rows_per_image: Some(pixels[1]),
+                                },
+                                wgpu::Extent3d {
+                                    width: pixels[0],
+                                    height: pixels[1],
+                                    depth_or_array_layers: 1,
+                                },
+                            );
+                            break (
+                                rendered.metadata.revision,
+                                texture,
+                                scale,
+                                [0, 0],
+                                rendered.metadata.backend,
+                            );
+                        }
+                        Err(error)
+                            if attempts < MAX_FIT_ATTEMPTS
+                                && is_surface_budget(&error)
+                                && pixels != [1, 1] =>
+                        {
+                            request.input.region.pixels = halve(pixels);
+                            attempts += 1;
+                        }
+                        Err(error) => return Err(error),
+                    }
+                }
             } else {
-                let (revision, dag) = service.preview_dag(&request)?;
+                let mut request = request;
+                let mut attempts = 0;
+                let (revision, dag) = loop {
+                    let (revision, dag) = service.preview_dag(&request)?;
+                    let (rendered, surfaces) = self.gpu.preview_surface_estimate(&dag)?;
+                    let budget = u64::from(rendered[0]) * u64::from(rendered[1]) * 8 * surfaces;
+                    if budget <= SURFACE_BUDGET
+                        || attempts >= MAX_FIT_ATTEMPTS
+                        || request.input.region.pixels == [1, 1]
+                    {
+                        break (revision, dag);
+                    }
+                    request.input.region.pixels = halve(request.input.region.pixels);
+                    attempts += 1;
+                };
+                let scale = [
+                    request.input.region.pixels[0] as f32 / self.config.width as f32,
+                    request.input.region.pixels[1] as f32 / self.config.height as f32,
+                ];
                 let texture = self.gpu.preview_texture(&dag)?;
-                (revision, texture, dag.crop_origin(), "metal".into())
+                (revision, texture, scale, dag.crop_origin(), "metal".into())
             };
             let mut frame = self.surface.get_current_texture();
             if matches!(frame, wgpu::CurrentSurfaceTexture::Outdated) {
@@ -238,38 +406,81 @@ mod metal {
                 }
                 other => return Err(failure("SURFACE_ACQUIRE_FAILED", format!("{other:?}"))),
             };
+            let scaled = scale != [1.0, 1.0];
             let source = texture.create_view(&Default::default());
             let target = frame.texture.create_view(&Default::default());
             use wgpu::util::DeviceExt;
-            let [x, y] = crop_origin;
-            let bytes = [x as u32, y as u32, 0, 0]
+            let uniform;
+            let (layout, entries): (&wgpu::BindGroupLayout, Vec<wgpu::BindGroupEntry>) = if scaled {
+                let bytes = [
+                    scale[0],
+                    scale[1],
+                    crop_origin[0] as f32,
+                    crop_origin[1] as f32,
+                ]
                 .into_iter()
-                .flat_map(u32::to_ne_bytes)
+                .flat_map(f32::to_ne_bytes)
                 .collect::<Vec<_>>();
-            let crop = self
-                .gpu
-                .device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("preview crop"),
-                    contents: &bytes,
-                    usage: wgpu::BufferUsages::UNIFORM,
-                });
-            let bindings = self
-                .gpu
-                .device
-                .create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("preview"),
-                    layout: &self.layout,
-                    entries: &[
+                uniform = self
+                    .gpu
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("preview transform"),
+                        contents: &bytes,
+                        usage: wgpu::BufferUsages::UNIFORM,
+                    });
+                (
+                    &self.layout_scaled,
+                    vec![
                         wgpu::BindGroupEntry {
                             binding: 0,
                             resource: wgpu::BindingResource::TextureView(&source),
                         },
                         wgpu::BindGroupEntry {
                             binding: 1,
-                            resource: crop.as_entire_binding(),
+                            resource: uniform.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: wgpu::BindingResource::Sampler(&self.sampler),
                         },
                     ],
+                )
+            } else {
+                let [x, y] = crop_origin;
+                let bytes = [x as u32, y as u32, 0, 0]
+                    .into_iter()
+                    .flat_map(u32::to_ne_bytes)
+                    .collect::<Vec<_>>();
+                uniform = self
+                    .gpu
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("preview crop"),
+                        contents: &bytes,
+                        usage: wgpu::BufferUsages::UNIFORM,
+                    });
+                (
+                    &self.layout,
+                    vec![
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(&source),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: uniform.as_entire_binding(),
+                        },
+                    ],
+                )
+            };
+            let bindings = self
+                .gpu
+                .device
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("preview"),
+                    layout,
+                    entries: &entries,
                 });
             let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
             {
@@ -286,7 +497,11 @@ mod metal {
                     })],
                     ..Default::default()
                 });
-                pass.set_pipeline(&self.pipeline);
+                pass.set_pipeline(if scaled {
+                    &self.pipeline_scaled
+                } else {
+                    &self.pipeline
+                });
                 pass.set_bind_group(0, &bindings, &[]);
                 pass.draw(0..3, 0..1);
             }

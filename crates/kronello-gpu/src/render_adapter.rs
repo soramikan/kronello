@@ -290,6 +290,19 @@ impl GpuContext {
             pair.transfers,
         ))
     }
+    /// Conservative full-resolution surface count for a native preview DAG,
+    /// before any texture is allocated. Native adapters shrink the requested
+    /// region and rebuild when the estimate exceeds the surface budget.
+    pub fn preview_surface_estimate(
+        &self,
+        dag: &RenderDag,
+    ) -> Result<([u32; 2], u64), RenderError> {
+        let (size, scene, _) = lower(dag)?;
+        Ok((
+            size.output_resolution,
+            crate::scene::scene_surface_count(&scene) as u64,
+        ))
+    }
     /// Uses the same DAG lowering as export without image readback.
     pub fn preview_texture(&self, dag: &RenderDag) -> Result<wgpu::Texture, RenderError> {
         let (size, scene, working) = lower(dag)?;

@@ -74,13 +74,18 @@ fn detached_submit_requires_explicit_cli_worker_before_creating_job_state() {
 
 #[test]
 fn preview_shader_validates_without_gpu() {
-    let module = naga::front::wgsl::parse_str(include_str!("../src/preview.wgsl")).unwrap();
-    naga::valid::Validator::new(
-        naga::valid::ValidationFlags::all(),
-        naga::valid::Capabilities::empty(),
-    )
-    .validate(&module)
-    .unwrap();
+    for source in [
+        include_str!("../src/preview.wgsl"),
+        include_str!("../src/preview_scaled.wgsl"),
+    ] {
+        let module = naga::front::wgsl::parse_str(source).unwrap();
+        naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::empty(),
+        )
+        .validate(&module)
+        .unwrap();
+    }
 }
 
 #[test]

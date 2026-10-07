@@ -1032,6 +1032,7 @@ dependencies = [
 name = "kronello-ffi"
 version = "0.0.0"
 dependencies = [
+ "half",
  "kronello-gpu",
  "kronello-render",
  "kronello-service",
