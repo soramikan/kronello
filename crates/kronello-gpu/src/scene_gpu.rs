@@ -598,10 +598,28 @@ impl ScenePass<'_> {
                 [*hue_shift, *saturation, *lightness, 0.0, 0.0, 0.0, 0.0, 0.0],
                 vec![],
             ),
+            // COLOR-003: offset.xyz is domain_min, offset.w is intensity,
+            // color.xyz is domain_max; the lattice is a read-only storage
+            // buffer and config.z carries the edge size (ADR-0113).
+            PixelEffect::ColorLut { lut, intensity } => (
+                5,
+                [
+                    lut.domain_min[0],
+                    lut.domain_min[1],
+                    lut.domain_min[2],
+                    *intensity,
+                    lut.domain_max[0],
+                    lut.domain_max[1],
+                    lut.domain_max[2],
+                    0.0,
+                ],
+                lut.data.clone(),
+            ),
             _ => unreachable!("not a pointwise color effect"),
         };
         let count = match effect {
             PixelEffect::ColorCurves { points } => points.len() as u32,
+            PixelEffect::ColorLut { lut, .. } => lut.size,
             _ => 0,
         };
         self.effect_pass_raw(source, source, [4, op, count, 0], floats, &weights)

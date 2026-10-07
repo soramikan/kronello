@@ -164,6 +164,7 @@ fn property_samples_use_rational_times_typed_values_units_and_failures() {
     ];
     let request = PropertySampleRequest {
         fonts: None,
+        luts: None,
         project: path.clone(),
         composition,
         keys: vec![key],
@@ -252,7 +253,12 @@ fn capabilities_registry_media_extension_without_device_initialization() {
             "kronello.audio.hpf",
             "kronello.audio.lpf",
             "kronello.audio.compressor",
-            "kronello.audio.limiter"
+            "kronello.audio.limiter",
+            "kronello.color.exposure",
+            "kronello.color.levels",
+            "kronello.color.curves",
+            "kronello.color.hsl",
+            "kronello.color.lut",
         ]
     );
     assert!(c.backends.contains(&"cpu_reference_float32".into()));
@@ -284,7 +290,8 @@ fn capabilities_registry_media_extension_without_device_initialization() {
             "template.instantiate",
             "template.set_input",
             "template.set_duration",
-            "captions.import"
+            "captions.import",
+            "lut.import"
         ]
     );
     let ResultData::Capabilities(c) =
@@ -660,6 +667,8 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
             "input":{"kind":"sequence","sequence":uuid}}),
         json!({"operation":"audio.normalize","project":path,"base_revision":"1",
             "session_id":uuid,"idempotency_key":"normalize","sequence":uuid,"clip":uuid,"target_lufs":-16.0}),
+        json!({"operation":"lut.import","project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"lut","path":"a.cube","asset":uuid}),
+        json!({"operation":"inspect.scopes","input":input,"time":time}),
     ];
     assert_eq!(requests.len(), command_registry().len());
     for request in requests {
@@ -776,6 +785,7 @@ fn sampling_resolves_composition_inputs_placement_bindings_and_local_time() {
     let ResultData::Samples(result) = service()
         .dispatch(Request::PropertySample(PropertySampleRequest {
             fonts: None,
+            luts: None,
             project: path.clone(),
             composition: root_id,
             times: vec![Time::ZERO],
@@ -803,6 +813,7 @@ fn sampling_resolves_composition_inputs_placement_bindings_and_local_time() {
     let ResultData::Samples(direct) = service()
         .dispatch(Request::PropertySample(PropertySampleRequest {
             fonts: None,
+            luts: None,
             project: path.clone(),
             composition: definition.id,
             times: vec![Time::new(1, 2).unwrap()],
@@ -820,6 +831,7 @@ fn sampling_resolves_composition_inputs_placement_bindings_and_local_time() {
     let error = service()
         .dispatch(Request::PropertySample(PropertySampleRequest {
             fonts: None,
+            luts: None,
             project: path,
             composition: root_id,
             times: vec![Time::ZERO],
@@ -857,6 +869,7 @@ fn missing_expression_and_enabled_modifier_fail_without_partial_samples() {
         let error = service()
             .dispatch(Request::PropertySample(PropertySampleRequest {
                 fonts: None,
+                luts: None,
                 project: path,
                 composition,
                 times: vec![Time::ZERO, Time::new(1, 2).unwrap()],
@@ -1288,6 +1301,21 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
         json!({"operation":"proxy.clear", "project":video_path, "base_revision":"2",
             "asset":video_id}),
     );
+    // COLOR-003/004: import a `.cube` as a hash-pinned Data asset, then query
+    // deterministic scope bins over the composited frame.
+    let cube = dir.path().join("contract.cube");
+    std::fs::write(
+        &cube,
+        "LUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n",
+    )
+    .unwrap();
+    let revision =
+        execute(json!({"operation":"project.export","project":path}))["revision"].clone();
+    execute(
+        json!({"operation":"lut.import","project":path,"base_revision":revision,
+        "session_id":session,"idempotency_key":"lut","path":cube,"asset":Uuid::new_v4()}),
+    );
+    execute(json!({"operation":"inspect.scopes","input":input,"time":{"num":"0","den":"1"}}));
     assert_eq!(
         checked,
         command_registry().into_iter().map(|c| c.name).collect()

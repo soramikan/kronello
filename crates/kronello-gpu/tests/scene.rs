@@ -1486,3 +1486,88 @@ fn gpu_color002_pointwise_effects_match_cpu_reference_in_both_spaces() {
         }
     }
 }
+
+/// COLOR-003 fixture lattice (ADR-0113): a 5^3 channel-rotating `.cube` with a
+/// non-default domain so normalization, tetrahedral interpolation and endpoint
+/// clamping are all exercised on both backends.
+fn color003_lut() -> kronello_model::CubeLut {
+    let size = 5u32;
+    let mut text =
+        String::from("LUT_3D_SIZE 5\nDOMAIN_MIN -0.1 -0.1 -0.1\nDOMAIN_MAX 1.1 1.1 1.1\n");
+    for b in 0..size {
+        for g in 0..size {
+            for r in 0..size {
+                let (r, g, b) = (
+                    f32::from(r as u8) / (size - 1) as f32,
+                    f32::from(g as u8) / (size - 1) as f32,
+                    f32::from(b as u8) / (size - 1) as f32,
+                );
+                // Output = channel rotation with a small deterministic bias.
+                text.push_str(&format!("{g} {} {r}\n", (b * 0.8 + 0.1).min(1.0)));
+            }
+        }
+    }
+    kronello_model::CubeLut::parse(text.as_bytes()).unwrap()
+}
+
+#[test]
+fn cpu_color003_lut_samples_straight_rgb_preserves_alpha_and_clamps_domain() {
+    let lut = color003_lut();
+    let run = |intensity, input| {
+        render_scene_reference(
+            RenderSize::pixels(2, 2),
+            &color_effect_scene(
+                kronello_render::PixelEffect::ColorLut {
+                    lut: lut.clone(),
+                    intensity,
+                },
+                input,
+            ),
+            WorkingSpace::LinearRec709,
+        )
+        .unwrap()[0]
+    };
+    let h = |v: f32| half::f16::from_f32(v).to_f32();
+    // intensity 0 is the identity even through premultiplied storage.
+    let input = [0.25, 0.5, 1.0, 0.5];
+    let identity = run(0.0, input);
+    for (a, e) in identity.into_iter().zip(input.map(h)) {
+        assert_eq!(a, e, "{identity:?}");
+    }
+    // Full intensity samples the rotated lattice; alpha is exactly preserved.
+    let mapped = run(1.0, input);
+    assert_eq!(mapped[3], h(0.5));
+    assert_ne!(mapped[0], h(0.25));
+    // HDR premultiplied input unpremultiplies to a domain-external straight
+    // value and clamps to the lattice endpoint color instead of failing.
+    let hdr = run(1.0, [8.0, 4.0, 2.0, 1.0]);
+    assert!(hdr.iter().all(|v| v.is_finite()));
+}
+
+#[test]
+fn gpu_color003_lut_matches_cpu_reference_in_both_spaces() {
+    let lut = color003_lut();
+    for working in [WorkingSpace::LinearRec709, WorkingSpace::LinearRec2020] {
+        for intensity in [0.35, 1.0] {
+            // Partial alpha, HDR and domain-external premultiplied channels
+            // cover the straight-sample clamp on both backends.
+            for input in [
+                [0.25, 0.5, 1.0, 0.5],
+                [4.0, -0.5, 2.0, 1.0],
+                [0.05, 0.1, 0.02, 0.25],
+            ] {
+                let scene = color_effect_scene(
+                    kronello_render::PixelEffect::ColorLut {
+                        lut: lut.clone(),
+                        intensity,
+                    },
+                    input,
+                );
+                let size = RenderSize::pixels(2, 2);
+                let expected = render_scene_reference(size, &scene, working).unwrap();
+                let actual = gpu().render_scene(size, &scene, working).unwrap();
+                compare(2, working, &expected, &actual.pixels);
+            }
+        }
+    }
+}

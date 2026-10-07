@@ -112,11 +112,13 @@ pub(crate) fn apply_effects(
                     [0, 1].map(|i| shadow.max[i] + offset[i]),
                 )?)
             }
-            // COLOR-002 pointwise operations never change geometry bounds.
+            // COLOR-002/COLOR-003 pointwise operations never change geometry
+            // bounds.
             ResolvedEffect::ColorExposure { .. }
             | ResolvedEffect::ColorLevels { .. }
             | ResolvedEffect::ColorCurves { .. }
-            | ResolvedEffect::ColorHsl { .. } => input,
+            | ResolvedEffect::ColorHsl { .. }
+            | ResolvedEffect::ColorLut { .. } => input,
             // FX-005/FX-006 (ADR-0115): keying mattes and vignette keep the
             // input extent; glow/sharpen grow by the 3-sigma kernel support;
             // corner pin replaces them with the destination quad hull.

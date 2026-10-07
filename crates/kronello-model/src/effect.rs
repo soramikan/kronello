@@ -1,6 +1,6 @@
 //! Ordered, versioned effects. Parameters reference the owning node's Properties.
 use crate::{
-    Color, DescriptorDefinition, DescriptorId, FiniteF64, NumericRange, Property,
+    AssetId, Color, DescriptorDefinition, DescriptorId, FiniteF64, NumericRange, Property,
     PropertyDescriptor, PropertyId, SchemaKey, SchemaRegistry, Unit, Value, ValueRange, ValueType,
 };
 use serde::{Deserialize, Serialize};
@@ -44,6 +44,10 @@ pub const COLOR_CURVES_ID: &str = "kronello.color.curves";
 pub const COLOR_HSL_ID: &str = "kronello.color.hsl";
 /// COLOR-002 supported version is EFFECT_VERSION (1).
 pub const COLOR_EFFECT_VERSION: u32 = EFFECT_VERSION;
+/// COLOR-003 pointwise `.cube` LUT application effect id (ADR-0113).
+pub const COLOR_LUT_ID: &str = "kronello.color.lut";
+/// COLOR-003 supported version; shares the COLOR-002 semantic version family.
+pub const COLOR_LUT_VERSION: u32 = COLOR_EFFECT_VERSION;
 /// Maximum accepted COLOR-002 curves control-point count.
 pub const CURVES_MAX_POINTS: usize = 64;
 /// FX-005 keying effect ids (ADR-0115). Both are matte-producing effects:
@@ -214,6 +218,15 @@ pub enum EffectParameters {
         bottom_right: PropertyId,
         bottom_left: PropertyId,
     },
+    /// COLOR-003 3D `.cube` LUT (ADR-0113). `lut` references an
+    /// `AssetKind::Data` asset whose content bytes parse as a normalized
+    /// `CubeLut`; the document stores the reference, never expanded bytes.
+    /// `intensity` blends identity into the sampled output on 0..=1. Alpha is
+    /// preserved and the authored stack order is honored.
+    ColorLut {
+        lut: PropertyId,
+        intensity: PropertyId,
+    },
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum ResolvedEffect {
@@ -293,6 +306,13 @@ pub enum ResolvedEffect {
     CornerPin {
         corners: [[f64; 2]; 4],
     },
+    /// COLOR-003 resolved effect. The asset id is content-verified against
+    /// the snapshot `luts` input before a `PixelEffect` is built; the lattice
+    /// itself never enters the resolved value so snapshots stay hash-stable.
+    ColorLut {
+        lut: AssetId,
+        intensity: f64,
+    },
 }
 /// AUDIO-007/008: one validated parametric EQ band (ADR-0117).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -366,6 +386,7 @@ impl EffectDefinition {
             EffectParameters::Sharpen { .. } => (SHARPEN_ID, STANDARD_EFFECT_VERSION),
             EffectParameters::Vignette { .. } => (VIGNETTE_ID, STANDARD_EFFECT_VERSION),
             EffectParameters::CornerPin { .. } => (CORNER_PIN_ID, STANDARD_EFFECT_VERSION),
+            EffectParameters::ColorLut { .. } => (COLOR_LUT_ID, COLOR_LUT_VERSION),
         };
         if self.effect_id != id || !(EFFECT_VERSION..=latest).contains(&self.version) {
             return Err(EffectError::UnsupportedFeature);
@@ -499,6 +520,10 @@ impl EffectDefinition {
                 .into_iter()
                 .map(|id| (id, ValueType::Vec2, Unit::DesignPx))
                 .collect(),
+            EffectParameters::ColorLut { lut, intensity } => vec![
+                (lut, ValueType::AssetRef, Unit::Dimensionless),
+                (intensity, ValueType::Scalar, Unit::Dimensionless),
+            ],
         }
     }
     pub fn validate(
@@ -538,6 +563,7 @@ impl EffectDefinition {
                 | EffectParameters::ColorLevels { .. }
                 | EffectParameters::ColorCurves { .. }
                 | EffectParameters::ColorHsl { .. }
+                | EffectParameters::ColorLut { .. }
         ) {
             return self.resolve_color(values);
         }
@@ -586,7 +612,8 @@ impl EffectDefinition {
             | EffectParameters::Glow { .. }
             | EffectParameters::Sharpen { .. }
             | EffectParameters::Vignette { .. }
-            | EffectParameters::CornerPin { .. } => unreachable!("handled above"),
+            | EffectParameters::CornerPin { .. }
+            | EffectParameters::ColorLut { .. } => unreachable!("handled above"),
         };
         let sigma = scalar(sigma_id)?;
         if !(0.0..=1_000_000.0).contains(&sigma) {
@@ -835,6 +862,22 @@ impl EffectDefinition {
                     hue_shift: hue,
                     saturation: bounded(saturation, 1_000_000.0)?,
                     lightness: bounded(lightness, 1_000_000.0)?,
+                })
+            }
+            EffectParameters::ColorLut { lut, intensity } => {
+                // The asset id resolves only the authored reference; lattice
+                // bytes come from the snapshot luts input (ADR-0113).
+                let asset = match values.get(&lut) {
+                    Some(Value::AssetRef(id)) => *id,
+                    _ => return Err(EffectError::InvalidParameter(lut)),
+                };
+                let intensity_value = scalar(intensity)?;
+                if !(0.0..=1.0).contains(&intensity_value) {
+                    return Err(EffectError::InvalidParameter(intensity));
+                }
+                Ok(ResolvedEffect::ColorLut {
+                    lut: asset,
+                    intensity: intensity_value,
                 })
             }
             _ => unreachable!("color resolution is only invoked for color variants"),
@@ -1211,6 +1254,12 @@ pub fn effect_descriptors() -> Vec<PropertyDescriptor> {
             Unit::Dimensionless,
         ),
         (
+            0xf0000000_0010_4200_8000_000000000001,
+            "lut",
+            Value::AssetRef(AssetId::from_uuid(uuid::Uuid::nil())),
+            Unit::Dimensionless,
+        ),
+        (
             0xf0000000_0010_4300_8000_00000000000b,
             "amount",
             Value::Scalar(f(0.5)),
@@ -1335,9 +1384,9 @@ pub fn effect_descriptors() -> Vec<PropertyDescriptor> {
         ) {
             d.coordinate_space = Some(crate::CoordinateSpace::CompositionDesign);
         }
-        if name == "sigma" || name == "opacity" {
+        if name == "sigma" || name == "opacity" || name == "intensity" {
             d.range = Some(ValueRange::Scalar(
-                NumericRange::inclusive(0.0, if name == "opacity" { 1.0 } else { 1_000_000.0 })
+                NumericRange::inclusive(0.0, if name == "sigma" { 1_000_000.0 } else { 1.0 })
                     .expect("effect range"),
             ));
         }

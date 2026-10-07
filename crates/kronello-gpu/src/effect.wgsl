@@ -32,9 +32,12 @@ fn half_rne(value:f32)->f32 {
     let rounded=f32(base+increment)/16777216.0;
     return select(rounded,-rounded,sign!=0u);
 }
-// COLOR-002 pointwise corrections (ADR-0108). config.x==4u selects the pass,
-// config.y the op (1 exposure, 2 levels, 3 curves, 4 HSL), config.z the curve
-// point count. Alpha is preserved; HDR and negative values are never clamped.
+// COLOR-002/COLOR-003 pointwise corrections (ADR-0108/ADR-0113).
+// config.x==4u selects the pass, config.y the op (1 exposure, 2 levels,
+// 3 curves, 4 HSL, 5 LUT), config.z the curve point count or LUT edge size.
+// Alpha is preserved; HDR and negative values are never clamped for ops 1-4.
+// Op 5 samples straight working RGB through tetrahedral interpolation with
+// domain normalization and endpoint clamping, mirroring CubeLut::sample.
 fn color_levels(v:f32)->f32 {
     let n=(v-params.offset.x)/(params.offset.y-params.offset.x);
     var g=n;
@@ -123,6 +126,51 @@ fn main(@builtin(global_invocation_id) id:vec3<u32>) {
         else if op==4u {
             let hsl=rgb_to_hsl(v.rgb);
             rgb=hsl_to_rgb(vec3<f32>(hsl.x+params.offset.x,hsl.y*params.offset.y,hsl.z+params.offset.z));
+        }
+        else if op==5u {
+            let n=params.config.z;
+            var straight=vec3<f32>(0.0);
+            if v.a>0.0000152587890625 { straight=v.rgb/v.a; }
+            let pos=clamp((straight-params.offset.rgb)/(params.color.rgb-params.offset.rgb),vec3<f32>(0.0),vec3<f32>(1.0))*f32(n-1u);
+            let base=min(vec3<u32>(floor(pos)),vec3<u32>(n-2u));
+            let f=pos-vec3<f32>(base);
+            // .cube lattice index, red fastest: ((b*n+g)*n+r)*3.
+            let base_index=((base.z*n+base.y)*n+base.x)*3u;
+            let stride_g=3u*n;
+            let stride_b=3u*n*n;
+            var off0=0u; var off1=0u; var off2=0u; var off3=0u;
+            var w=vec4<f32>(0.0);
+            // Tetrahedral branch order mirrors CubeLut::sample exactly so CPU
+            // and GPU select the same sub-tetrahedron on boundary ties.
+            if f.x>=f.y {
+                if f.y>=f.z {
+                    off1=3u; off2=3u+stride_g; off3=3u+stride_g+stride_b;
+                    w=vec4<f32>(1.0-f.x,f.x-f.y,f.y-f.z,f.z);
+                } else if f.x>=f.z {
+                    off1=3u; off2=3u+stride_b; off3=3u+stride_g+stride_b;
+                    w=vec4<f32>(1.0-f.x,f.x-f.z,f.z-f.y,f.y);
+                } else {
+                    off1=stride_b; off2=stride_b+3u; off3=stride_b+3u+stride_g;
+                    w=vec4<f32>(1.0-f.z,f.z-f.x,f.x-f.y,f.y);
+                }
+            } else if f.z>=f.y {
+                off1=stride_b; off2=stride_b+stride_g; off3=stride_b+stride_g+3u;
+                w=vec4<f32>(1.0-f.z,f.z-f.y,f.y-f.x,f.x);
+            } else if f.x>=f.z {
+                off1=stride_g; off2=stride_g+3u; off3=stride_g+3u+stride_b;
+                w=vec4<f32>(1.0-f.y,f.y-f.x,f.x-f.z,f.z);
+            } else {
+                off1=stride_g; off2=stride_g+stride_b; off3=stride_g+stride_b+3u;
+                w=vec4<f32>(1.0-f.y,f.y-f.z,f.z-f.x,f.x);
+            }
+            let c0=vec3<f32>(weights[base_index+off0],weights[base_index+off0+1u],weights[base_index+off0+2u]);
+            let c1=vec3<f32>(weights[base_index+off1],weights[base_index+off1+1u],weights[base_index+off1+2u]);
+            let c2=vec3<f32>(weights[base_index+off2],weights[base_index+off2+1u],weights[base_index+off2+2u]);
+            let c3=vec3<f32>(weights[base_index+off3],weights[base_index+off3+1u],weights[base_index+off3+2u]);
+            let mapped=c0*w.x+c1*w.y+c2*w.z+c3*w.w;
+            // straight + (mapped - straight) * intensity mirrors the CPU
+            // arithmetic exactly; mix() would evaluate x*(1-a)+y*a instead.
+            rgb=(straight+(mapped-straight)*params.offset.w)*v.a;
         }
         result=vec4<f32>(rgb,v.a);
     }

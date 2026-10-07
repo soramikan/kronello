@@ -63,7 +63,7 @@ pub use template::{
     TemplateSetInputRequest,
 };
 mod media;
-pub use media::{CollectRequest, RelinkRequest};
+pub use media::{CollectRequest, LutImportRequest, RelinkRequest};
 mod control;
 pub use control::ExecutionControl;
 
@@ -194,6 +194,10 @@ pub enum Request {
     CaptionsImport(CaptionsImportRequest),
     #[serde(rename = "captions.export")]
     CaptionsExport(CaptionsExportRequest),
+    #[serde(rename = "lut.import")]
+    LutImport(LutImportRequest),
+    #[serde(rename = "inspect.scopes")]
+    InspectScopes(InspectScopesRequest),
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -228,6 +232,16 @@ pub struct FontInput {
     pub identity: FontRef,
     pub path: PathBuf,
 }
+/// COLOR-003 explicit `.cube` render input (ADR-0113): `hash` is the
+/// lowercase hex SHA-256 of the document bytes an asset records as
+/// `content_hash`; `path` is a local locator read, parsed and verified when
+/// the snapshot is frozen, then carried inside the snapshot for replay.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct LutInput {
+    pub hash: String,
+    pub path: PathBuf,
+}
 #[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(transform = render_input_schema)]
@@ -246,6 +260,11 @@ pub struct RenderInput {
     /// non-file-writing preview paths; export and fixed jobs reject it.
     #[serde(default)]
     pub media_proxies: kronello_render::MediaProxyMode,
+    /// COLOR-003 explicit `.cube` locators keyed by content hash, like
+    /// `fonts`. Supplied lattices are verified; unreferenced ones are not
+    /// bound into the scene.
+    #[serde(default)]
+    pub luts: Vec<LutInput>,
 }
 fn render_input_schema(schema: &mut schemars::Schema) {
     schema.insert("oneOf".into(), serde_json::json!([
@@ -331,6 +350,8 @@ pub enum ResultData {
     Captions(CaptionsExportResult),
     Loudness(AudioLoudnessResult),
     Normalize(Box<AudioNormalizeResult>),
+    /// COLOR-004 scope bins over one fixed working-space frame (ADR-0113).
+    Scopes(Box<InspectScopesResult>),
 }
 #[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
 #[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
@@ -668,6 +689,10 @@ impl<'a> Service<'a> {
             }
             Request::CaptionsImport(r) => captions::import(r).map(ResultData::Edit),
             Request::CaptionsExport(r) => captions::export(r).map(ResultData::Captions),
+            Request::LutImport(r) => media::lut_import(r).map(ResultData::Edit),
+            Request::InspectScopes(r) => {
+                inspect::scopes(r, self).map(|result| ResultData::Scopes(Box::new(result)))
+            }
             Request::ProjectInfo(r) => {
                 if self.read_only_inspection {
                     Ok(ResultData::Project(snapshot_info(
@@ -822,7 +847,7 @@ impl<'a> Service<'a> {
         let stored = store.snapshot()?;
         store.close()?;
         jobs::check_expected_revision(expected_revision, stored.revision)?;
-        let snapshot = freeze_render_input(&stored, input)?;
+        let snapshot = freeze_render_input(&stored, input)?.with_luts(load_locked_luts(input)?);
         let bytes = load_locked_fonts(&snapshot, input)?;
         let fonts: Vec<_> = snapshot
             .font_locks()
@@ -1095,6 +1120,54 @@ fn load_locked_fonts(
     }
     Ok(bytes)
 }
+/// COLOR-003 locked-lattice loading (ADR-0113). Each supplied locator is a
+/// local path whose bytes must hash to `LutInput.hash`, parse as a supported
+/// `.cube` document, and respect the document lattice ceiling. Verification
+/// happens once here; the normalized data then travels inside the snapshot
+/// so replayed fixed input never re-reads a locator.
+pub(crate) fn load_locked_luts(
+    input: &RenderInput,
+) -> Result<std::collections::BTreeMap<String, kronello_model::CubeLut>, ServiceError> {
+    let mut luts = std::collections::BTreeMap::new();
+    for lut in &input.luts {
+        if lut.hash.len() != 64
+            || !lut
+                .hash
+                .chars()
+                .all(|c| c.is_ascii_hexdigit() && !c.is_uppercase())
+        {
+            return Err(ServiceError::invalid(
+                "lut input hash must be a lowercase hex sha256",
+            ));
+        }
+        if luts.contains_key(&lut.hash) {
+            return Err(ServiceError::invalid("duplicate lut input"));
+        }
+        let bytes = std::fs::read(&lut.path).map_err(|e| {
+            ServiceError::new(
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    "LUT_MISSING"
+                } else {
+                    "IO_ERROR"
+                },
+                e.to_string(),
+            )
+        })?;
+        if format!("{:x}", Sha256::digest(&bytes)) != lut.hash {
+            return Err(ServiceError::new(
+                "ASSET_HASH_MISMATCH",
+                "lut input hash differs",
+            ));
+        }
+        let parsed = kronello_model::CubeLut::parse(&bytes)
+            .map_err(|e| ServiceError::new(e.code(), e.to_string()))?;
+        parsed
+            .validate_document_size()
+            .map_err(|e| ServiceError::new(e.code(), e.to_string()))?;
+        luts.insert(lut.hash.clone(), parsed);
+    }
+    Ok(luts)
+}
 fn create_gpu_context() -> Result<GpuContext, GpuError> {
     // Never honor fault injection in a release-profile build, even if a
     // dependency enables the test feature through Cargo feature unification.
@@ -1297,6 +1370,9 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
                 for font in &evaluation.fonts {
                     local_locator(&font.path)?;
                 }
+                for lut in &evaluation.luts {
+                    local_locator(&lut.path)?;
+                }
             }
             Ok(())
         }
@@ -1304,6 +1380,9 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
             local_locator(&r.project)?;
             for font in &r.fonts {
                 local_locator(&font.path)?;
+            }
+            for lut in &r.luts {
+                local_locator(&lut.path)?;
             }
             Ok(())
         }
@@ -1313,6 +1392,11 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
             if let Some(fonts) = &r.fonts {
                 for font in fonts {
                     local_locator(&font.path)?;
+                }
+            }
+            if let Some(luts) = &r.luts {
+                for lut in luts {
+                    local_locator(&lut.path)?;
                 }
             }
             Ok(())
@@ -1342,12 +1426,20 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
         Request::CaptionsImportPlan(r) => local_locator(&r.project),
         Request::CaptionsImport(r) => local_locator(&r.plan.project),
         Request::CaptionsExport(r) => local_locator(&r.project),
+        Request::LutImport(r) => {
+            local_locator(&r.project)?;
+            local_locator(&r.path)
+        }
+        Request::InspectScopes(r) => render_locators(&r.input),
     }
 }
 fn render_locators(input: &RenderInput) -> Result<(), ServiceError> {
     local_locator(&input.project)?;
     for font in &input.fonts {
         local_locator(&font.path)?;
+    }
+    for lut in &input.luts {
+        local_locator(&lut.path)?;
     }
     Ok(())
 }
@@ -1418,6 +1510,7 @@ mod tests {
                 profile: RenderProfile::default(),
                 fonts: Vec::new(),
                 media_proxies: kronello_render::MediaProxyMode::Off,
+                luts: Vec::new(),
             },
             range: TimeRange::new(Time::ZERO, Time::new(1, 1).unwrap()).unwrap(),
             frame_rate: FrameRate::new(1, 1).unwrap(),

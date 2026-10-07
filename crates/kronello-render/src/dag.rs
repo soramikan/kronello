@@ -948,14 +948,35 @@ impl Builder<'_> {
         // FX-004 (ADR-0114): the mask stack multiplies drawn alpha after the
         // clip's own content and before its effect chain.
         id = self.apply_mask_stack(id, n, transform, flatten, scale)?;
-        let design_to_pixel = self.region.design_to_pixel();
         for effect in &n.effects {
+            let mapped = map_effect(effect, n.world_transform)?;
+            let pixel = if let kronello_model::ResolvedEffect::ColorLut {
+                lut: asset_id,
+                intensity,
+            } = &mapped
+            {
+                // COLOR-003: the lattice was bound to this asset during scene
+                // IR construction; absence here is a typed render failure.
+                let lattice =
+                    self.scene
+                        .luts
+                        .get(asset_id)
+                        .ok_or_else(|| RenderError::Backend {
+                            code: "LUT_INPUT_MISSING",
+                            message: format!("lut data for asset {asset_id} was not resolved"),
+                        })?;
+                let effect = crate::PixelEffect::ColorLut {
+                    lut: lattice.clone(),
+                    intensity: *intensity as f32,
+                };
+                effect.validate()?;
+                effect
+            } else {
+                crate::PixelEffect::from_design(&mapped, scale)?
+            };
             id = self.push(DagNode::Effect {
                 source: id,
-                effect: crate::PixelEffect::from_design_mapped(
-                    &map_effect(effect, n.world_transform)?,
-                    design_to_pixel,
-                )?,
+                effect: pixel,
             })?;
         }
         if !n.post_effect_opacity.is_finite() || !(0.0..=1.0).contains(&n.post_effect_opacity) {
@@ -1393,13 +1414,15 @@ pub(crate) fn map_effect(
     transform: Affine2,
 ) -> Result<kronello_model::ResolvedEffect, RenderError> {
     use kronello_model::ResolvedEffect;
-    // COLOR-002 pointwise operations commute with any placement transform.
+    // COLOR-002/COLOR-003 pointwise operations commute with any placement
+    // transform.
     if matches!(
         effect,
         ResolvedEffect::ColorExposure { .. }
             | ResolvedEffect::ColorLevels { .. }
             | ResolvedEffect::ColorCurves { .. }
             | ResolvedEffect::ColorHsl { .. }
+            | ResolvedEffect::ColorLut { .. }
     ) {
         return Ok(effect.clone());
     }

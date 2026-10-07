@@ -177,6 +177,7 @@ fn frame(path: &Path, target: RenderTarget, time: Time) -> FrameResult {
                 profile: Default::default(),
                 fonts: vec![],
                 media_proxies: kronello_render::MediaProxyMode::Off,
+                luts: Vec::new(),
             },
             time,
         }))
@@ -289,6 +290,7 @@ fn shared_composition_placements_evaluate_independently_and_render_cpu_pixels() 
                 profile: Default::default(),
                 fonts: vec![],
                 media_proxies: kronello_render::MediaProxyMode::Off,
+                luts: Vec::new(),
             },
             range: range(t(2, 1), t(4, 1)),
             frame_rate: FrameRate::new(2, 1).unwrap(),

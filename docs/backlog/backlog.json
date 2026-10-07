@@ -1848,7 +1848,7 @@
    "priority": "P1",
    "area": "color",
    "title": "LUT (.cube) の取り込み・検証・適用",
-   "status": "planned",
+   "status": "done",
    "dependencies": [
     "COLOR-002"
    ],
@@ -1863,7 +1863,7 @@
    "priority": "P1",
    "area": "color",
    "title": "スコープ: waveform/vectorscope/histogram/RGB parade と GUI パネル",
-   "status": "planned",
+   "status": "done",
    "dependencies": [
     "COLOR-002",
     "GUI-010"

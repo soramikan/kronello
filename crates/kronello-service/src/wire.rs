@@ -235,6 +235,8 @@ impl<'de> Deserialize<'de> for Request {
             "render.explain" => payload(&fields).map(Self::RenderExplain),
             "property.sample" => payload(&fields).map(Self::PropertySample),
             "capabilities.get" => payload(&fields).map(Self::CapabilitiesGet),
+            "lut.import" => payload(&fields).map(Self::LutImport),
+            "inspect.scopes" => payload(&fields).map(Self::InspectScopes),
             _ => Err(D::Error::custom("unknown operation")),
         }
     }
@@ -273,6 +275,7 @@ impl<'de> Deserialize<'de> for ResultData {
             "captions" => Self::Captions(take(&mut fields, "value")?),
             "loudness" => Self::Loudness(take(&mut fields, "value")?),
             "normalize" => Self::Normalize(take(&mut fields, "value")?),
+            "scopes" => Self::Scopes(take(&mut fields, "value")?),
             _ => return Err(D::Error::custom("unknown result kind")),
         };
         exhausted::<D::Error>(&fields)?;
@@ -332,6 +335,11 @@ impl<'de> Deserialize<'de> for crate::RenderInput {
         } else {
             kronello_render::MediaProxyMode::Off
         };
+        let luts = if fields.contains_key("luts") {
+            take(&mut fields, "luts")?
+        } else {
+            vec![]
+        };
         exhausted::<D::Error>(&fields)?;
         Ok(Self {
             project,
@@ -341,6 +349,7 @@ impl<'de> Deserialize<'de> for crate::RenderInput {
             profile,
             fonts,
             media_proxies,
+            luts,
         })
     }
 }

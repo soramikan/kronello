@@ -826,6 +826,10 @@ fn split_owned_objects(clip: &mut Clip) -> Result<(), ServiceError> {
                 }
             }
             EffectParameters::ColorCurves { curve } => remap(curve)?,
+            EffectParameters::ColorLut { lut, intensity } => {
+                remap(lut)?;
+                remap(intensity)?;
+            }
             EffectParameters::ColorHsl {
                 hue_shift,
                 saturation,

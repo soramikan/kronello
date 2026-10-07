@@ -231,6 +231,7 @@ fn clip_place_accepts_adjustment_and_query_classifies_it() {
                 profile: Default::default(),
                 fonts: vec![],
                 media_proxies: kronello_render::MediaProxyMode::Off,
+                luts: vec![],
             },
             time: t(1, 1),
         }))

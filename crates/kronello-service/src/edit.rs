@@ -145,6 +145,13 @@ pub enum EditCommand {
     CaptionRemove {
         id: kronello_model::CaptionId,
     },
+    /// Upsert one validated external asset record. COLOR-003 registers `.cube`
+    /// documents as `AssetKind::Data`; the locator stays external and the
+    /// content hash is caller-independent only through the import operation
+    /// that verifies it.
+    AssetSet {
+        asset: kronello_model::Asset,
+    },
     CompositionCreate {
         composition: Composition,
     },
@@ -1193,6 +1200,21 @@ fn apply_command(
                 project
                     .captions
                     .push(DocumentObject::Known(caption.clone()));
+            }
+        }
+        EditCommand::AssetSet { asset } => {
+            asset
+                .validate()
+                .map_err(|e| ServiceError::new("INVALID_DOCUMENT", e.to_string()))?;
+            structure(keys, asset.id.as_uuid(), project.id);
+            if let Some(a) = project
+                .assets
+                .iter_mut()
+                .find(|a| matches!(a, DocumentObject::Known(a) if a.id == asset.id))
+            {
+                *a = DocumentObject::Known(asset.clone());
+            } else {
+                project.assets.push(DocumentObject::Known(asset.clone()));
             }
         }
         EditCommand::CaptionRemove { id } => {

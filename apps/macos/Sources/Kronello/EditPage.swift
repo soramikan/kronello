@@ -138,6 +138,8 @@ struct SequenceViewer: View {
                         }; Spacer() }.padding(KRSpace.space3).allowsHitTesting(false) }
                     }.background(p.surface0)
                 }
+                // COLOR-004: deterministic scopes observe the composited frame.
+                if model.ui.sequence != nil { ScopesPanel(model: model) }
                 KRTransportBar(frames: Binding(get: { model.frame }, set: { model.seek($0) }), fps: model.nominalFPS, duration: model.durationCode,
                     playing: $model.playing, looping: $model.ui.looping, zoom: $model.ui.zoom, resolution: $model.ui.resolution,
                     onStep: { model.seek(model.frame + Int64($0)) }, onBoundary: { model.seek($0 ? model.durationFrames - 1 : 0) })

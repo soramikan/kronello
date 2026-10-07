@@ -72,6 +72,9 @@ impl SceneKind {
 pub struct SceneEvaluationRequest {
     pub time: Time,
     pub fonts: Vec<crate::FontInput>,
+    /// COLOR-003 explicit `.cube` locators for render-consistent evaluation.
+    #[serde(default)]
+    pub luts: Vec<crate::LutInput>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -180,6 +183,10 @@ pub struct PropertySampleRequest {
     /// Explicitly selects render-consistent active node values with font locks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fonts: Option<Vec<crate::FontInput>>,
+    /// COLOR-003 explicit `.cube` locators used only when `fonts` selects
+    /// render-consistent evaluation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub luts: Option<Vec<crate::LutInput>>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -323,6 +330,7 @@ pub(crate) fn scene(mut r: SceneQueryRequest) -> Result<SceneQueryResult, Servic
                 r.composition,
                 request.time,
                 &request.fonts,
+                &request.luts,
             )
         })
         .transpose()?;
@@ -521,9 +529,12 @@ pub(crate) fn sample(r: PropertySampleRequest) -> Result<PropertySampleResult, S
         .fonts
         .as_ref()
         .map(|fonts| {
+            let luts = r.luts.as_deref().unwrap_or_default();
             r.times
                 .iter()
-                .map(|time| evaluated_scene(&snapshot, &r.project, r.composition, *time, fonts))
+                .map(|time| {
+                    evaluated_scene(&snapshot, &r.project, r.composition, *time, fonts, luts)
+                })
                 .collect::<Result<Vec<_>, _>>()
         })
         .transpose()?;
@@ -661,6 +672,7 @@ pub(crate) fn evaluated_scene(
     composition: CompositionId,
     time: Time,
     fonts: &[crate::FontInput],
+    luts: &[crate::LutInput],
 ) -> Result<kronello_render::SceneIr, ServiceError> {
     let input = crate::RenderInput {
         project: project.into(),
@@ -674,8 +686,10 @@ pub(crate) fn evaluated_scene(
         profile: Default::default(),
         fonts: fonts.to_vec(),
         media_proxies: kronello_render::MediaProxyMode::Off,
+        luts: luts.to_vec(),
     };
-    let snapshot = crate::freeze_render_input(stored, &input)?;
+    let snapshot =
+        crate::freeze_render_input(stored, &input)?.with_luts(crate::load_locked_luts(&input)?);
     let bytes = crate::load_locked_fonts(&snapshot, &input)?;
     let fonts: Vec<_> = snapshot
         .font_locks()

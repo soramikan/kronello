@@ -459,10 +459,16 @@ impl Service<'_> {
         for font in &mut request.render.input.fonts {
             font.path = absolute(&font.path)?;
         }
+        for lut in &mut request.render.input.luts {
+            lut.path = absolute(&lut.path)?;
+        }
         let stored = crate::session::read_snapshot(&project_path)?;
         check_expected_revision(request.expected_revision.as_deref(), stored.revision)?;
         crate::document_asset_locators(&stored.document)?;
-        let snapshot = crate::freeze_render_input(&stored, &request.render.input)?;
+        // COLOR-003 lattices are embedded in the fixed snapshot at submit so
+        // worker replay never re-reads a mutable locator (ADR-0113).
+        let snapshot = crate::freeze_render_input(&stored, &request.render.input)?
+            .with_luts(crate::load_locked_luts(&request.render.input)?);
         // Every fixed job decodes authored originals (ADR-0119), including
         // image-sequence and sidecar outputs that never build a movie snapshot.
         if snapshot.media_proxies() != kronello_render::MediaProxyMode::Off {

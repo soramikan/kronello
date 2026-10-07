@@ -17,7 +17,7 @@
 | M4 | 0 | 0 | 12 | 0 | 12 |
 | M5 | 0 | 1 | 12 | 0 | 13 |
 | M7 | 0 | 0 | 11 | 0 | 11 |
-| M8 | 5 | 1 | 10 | 0 | 16 |
+| M8 | 3 | 1 | 12 | 0 | 16 |
 | M9 | 12 | 0 | 0 | 0 | 12 |
 | M10 | 7 | 0 | 0 | 0 | 7 |
 | M11 | 14 | 0 | 0 | 0 | 14 |
@@ -908,7 +908,7 @@
 
 ### COLOR-003 LUT (.cube) の取り込み・検証・適用
 
-- 優先度: P1 / 領域: color / 状態: planned
+- 優先度: P1 / 領域: color / 状態: done
 - 依存: COLOR-002
 - 受け入れ条件:
   - .cube 3D LUT の取り込み・検証・作品内参照を実装する
@@ -916,7 +916,7 @@
 
 ### COLOR-004 スコープ: waveform/vectorscope/histogram/RGB parade と GUI パネル
 
-- 優先度: P1 / 領域: color / 状態: planned
+- 優先度: P1 / 領域: color / 状態: done
 - 依存: COLOR-002, GUI-010
 - 受け入れ条件:
   - waveform・vectorscope・histogram・RGB parade の生成を実装する

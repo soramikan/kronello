@@ -139,7 +139,9 @@ macro_rules! commands {
             ("template.set_duration", false, TemplateSetDurationRequest, kronello_store::Event),
             ("captions.import_plan", true, CaptionsImportPlanRequest, EditPlan),
             ("captions.import", false, CaptionsImportRequest, kronello_store::Event),
-            ("captions.export", true, CaptionsExportRequest, CaptionsExportResult)
+            ("captions.export", true, CaptionsExportRequest, CaptionsExportResult),
+            ("lut.import", false, LutImportRequest, kronello_store::Event),
+            ("inspect.scopes", true, InspectScopesRequest, InspectScopesResult)
         }
     };
 }
@@ -224,6 +226,11 @@ impl CapabilitiesResult {
                 kronello_model::AUDIO_LPF_ID.into(),
                 kronello_model::AUDIO_COMPRESSOR_ID.into(),
                 kronello_model::AUDIO_LIMITER_ID.into(),
+                kronello_model::COLOR_EXPOSURE_ID.into(),
+                kronello_model::COLOR_LEVELS_ID.into(),
+                kronello_model::COLOR_CURVES_ID.into(),
+                kronello_model::COLOR_HSL_ID.into(),
+                kronello_model::COLOR_LUT_ID.into(),
             ],
             backends: ["wgpu_rgba16f", "cpu_reference_float32"]
                 .map(String::from)
