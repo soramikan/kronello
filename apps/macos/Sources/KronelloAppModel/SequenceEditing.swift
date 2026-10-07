@@ -40,6 +40,8 @@ public struct EditClip: Identifiable {
         return String(format: "%.1f%%", Double(rate.num)! / Double(rate.den)! * 100)
     }
     public var reversed: Bool { authored.string("reverse_sampling") == "reverse_grid_v1" }
+    /// Clip-local markers authored inside the clip's timeline range.
+    public var markers: [EditMarker] { authored.objects("markers").map { EditorModel.marker($0, clip: id, track: track) } }
 }
 
 public enum EditPresentation {
@@ -50,7 +52,7 @@ public enum EditPresentation {
 }
 
 public struct TimelineCandidate {
-    public enum Mode { case place, move, trimStart, trimEnd, blade }
+    public enum Mode { case place, move, trimStart, trimEnd, blade, slip, slide, roll }
     public let base: String
     public let sequence: String
     public let track: String
@@ -64,6 +66,8 @@ public struct TimelineCandidate {
     public var start: Int64
     public var end: Int64
     public var cut: Int64
+    /// Frame delta for source-window (slip), placement (slide) and edit-point (roll) gestures.
+    public var delta: Int64 = 0
     public let rightID: String
 }
 
@@ -118,7 +122,7 @@ extension EditorModel {
             setDeletedSelection("選択していたクリップは削除されました。\(actor) · rev \(revision)")
         }
     }
-    public func selectClip(_ id: String?) { ui.clipSelection = id; setDeletedSelection(nil) }
+    public func selectClip(_ id: String?) { ui.clipSelection = id; markerSelection = nil; markerDrag = nil; setDeletedSelection(nil) }
     public func openClipInMotion(_ clip: EditClip) {
         guard let composition = clip.composition else { return }
         playing = false; timelineCandidate = nil; ui.page = "motion"; ui.time = .init(num: 0, den: 1)
@@ -132,7 +136,35 @@ extension EditorModel {
         guard !sequence.string("id").isEmpty else { return }
         configurePlayback(target: .sequence(sequence.string("id")), rateNum: rateNum, rateDen: rateDen)
     }
+    /// The clip sharing the exact edit point, or nil when the edge borders a gap or the extent.
+    public func adjacentClip(_ clip: EditClip, atEnd: Bool) -> EditClip? {
+        let edge = atEnd ? clip.end : clip.start
+        return editClips.first { $0.track == clip.track && (atEnd ? $0.start == edge : $0.end == edge) }
+    }
     public func beginClipGesture(_ clip: EditClip, mode: TimelineCandidate.Mode) {
+        switch mode {
+        case .slide:
+            guard adjacentClip(clip, atEnd: false) != nil, adjacentClip(clip, atEnd: true) != nil else {
+                mapFailure(ServiceFailure(code: "INVALID_CLIP", message: "スライドにはクリップの両側に隣接するクリップが必要です")); return
+            }
+        case .roll:
+            beginRollGesture(clip, atStartEdge: false); return
+        default: break
+        }
+        startCandidate(clip, mode: mode)
+    }
+    /// Roll moves the shared edit point after a clip; a press on a clip's start
+    /// edge retargets the gesture to the directly adjacent previous clip.
+    public func beginRollGesture(_ clip: EditClip, atStartEdge: Bool) {
+        guard let target = atStartEdge ? adjacentClip(clip, atEnd: false) : clip,
+              adjacentClip(target, atEnd: true) != nil else {
+            mapFailure(ServiceFailure(code: "INVALID_CLIP", message: "ロールには編集点の両側に隣接するクリップが必要です")); return
+        }
+        startCandidate(target, mode: .roll)
+        if var c = timelineCandidate { c.cut = c.originalEnd; c.delta = 0; timelineCandidate = c }
+        selectClip(clip.id)
+    }
+    private func startCandidate(_ clip: EditClip, mode: TimelineCandidate.Mode) {
         guard !busy, pendingCandidate == nil, !ui.locked.contains(clip.track), timelineCandidate == nil else { return }
         selectClip(clip.id)
         let start = clip.start.frames(rateNum: rateNum, rateDen: rateDen), end = clip.end.frames(rateNum: rateNum, rateDen: rateDen)
@@ -160,14 +192,59 @@ extension EditorModel {
         case .trimStart: c.start = min(c.originalEnd - 1, max(c.originalStart, c.originalStart + delta))
         case .trimEnd: c.end = max(c.originalStart + 1, min(c.originalEnd, c.originalEnd + delta))
         case .blade: c.cut = at ?? c.originalStart + delta
+        case .slip: c.delta = at.map { $0 - c.originalStart } ?? delta
+        case .slide:
+            c.start = max(0, at ?? (c.originalStart + delta)); c.end = c.start + c.originalEnd - c.originalStart
+            c.delta = c.start - c.originalStart
+        case .roll:
+            c.cut = max(0, at ?? (c.originalEnd + delta)); c.delta = c.cut - c.originalEnd
         }
-        if editSnap, c.mode == .place || c.mode == .move {
-            let targets = [frame] + editClips.filter { $0.id != c.clip.string("id") }.flatMap { [$0.start.frames(rateNum: rateNum, rateDen: rateDen), $0.end.frames(rateNum: rateNum, rateDen: rateDen)] }
-            if let snap = targets.min(by: { abs($0 - c.start) < abs($1 - c.start) }), abs(snap - c.start) <= 2 {
-                c.end += snap - c.start; c.start = snap
+        if editSnap {
+            let id = c.clip.string("id")
+            switch c.mode {
+            case .place, .move, .slide:
+                let snappedStart = snappedFrame(c.start, excludingClip: id)
+                if snappedStart != c.start {
+                    c.end += snappedStart - c.start; c.start = snappedStart
+                } else {
+                    let snappedEnd = snappedFrame(c.end, excludingClip: id)
+                    if snappedEnd != c.end { c.start += snappedEnd - c.end; c.end = snappedEnd }
+                }
+                c.start = max(0, c.start); c.end = max(c.start + 1, c.end)
+                if c.mode == .slide { c.delta = c.start - c.originalStart }
+            case .trimStart:
+                c.start = min(c.originalEnd - 1, max(0, snappedFrame(c.start, excludingClip: id)))
+            case .trimEnd:
+                c.end = max(c.originalStart + 1, snappedFrame(c.end, excludingClip: id))
+            case .blade:
+                c.cut = snappedFrame(c.cut, excludingClip: id)
+            case .roll:
+                c.cut = max(0, snappedFrame(c.cut, excludingClip: id, excludingFrames: [c.originalEnd]))
+                c.delta = c.cut - c.originalEnd
+            case .slip: break
             }
         }
         timelineCandidate = c
+    }
+    /// Nearest snap position in frames. Targets are clip edges, sequence and clip
+    /// markers, the work-area bounds and the playhead; the edited clip's own
+    /// edges are excluded so the gesture does not stick to itself.
+    public static let snapRangeFrames: Int64 = 2
+    public func snappedFrame(_ target: Int64, excludingClip: String? = nil, excludingFrames: Set<Int64> = []) -> Int64 {
+        guard editSnap else { return target }
+        var targets = [frame]
+        for clip in editClips where clip.id != excludingClip {
+            targets.append(clip.start.frames(rateNum: rateNum, rateDen: rateDen))
+            targets.append(clip.end.frames(rateNum: rateNum, rateDen: rateDen))
+        }
+        for marker in allMarkers { targets.append(marker.time.frames(rateNum: rateNum, rateDen: rateDen)) }
+        if let area = workArea {
+            targets.append(area.start.frames(rateNum: rateNum, rateDen: rateDen))
+            targets.append(area.end.frames(rateNum: rateNum, rateDen: rateDen))
+        }
+        guard let snap = targets.filter({ !excludingFrames.contains($0) }).min(by: { abs($0 - target) < abs($1 - target) }),
+              abs(snap - target) <= Self.snapRangeFrames else { return target }
+        return snap
     }
     public func cancelClipGesture() { timelineCandidate = nil }
     public func bladeFrame(_ clip: EditClip, fraction: Double) -> Int64 {
@@ -195,7 +272,47 @@ extension EditorModel {
         case .blade:
             fields["time"] = frameTime(c.cut).wire; fields["right_clip"] = c.rightID
             command = timelineCommand("clip_split", fields)
+        case .slip, .slide, .roll:
+            guard c.delta != 0 else { return nil }
+            fields["delta"] = frameTime(c.delta).wire; fields["linked"] = true
+            command = timelineCommand(c.mode == .slip ? "clip_slip" : c.mode == .slide ? "clip_slide" : "clip_roll", fields)
         }
-        return await apply(.init(base: c.base, commands: [command], label: c.mode == .blade ? "クリップの分割" : c.mode == .place ? "クリップの配置" : "クリップの配置・尺の変更"))
+        let label: String
+        switch c.mode {
+        case .place: label = "クリップの配置"
+        case .blade: label = "クリップの分割"
+        case .slip: label = "クリップのスリップ"
+        case .slide: label = "クリップのスライド"
+        case .roll: label = "編集点のロール"
+        default: label = "クリップの配置・尺の変更"
+        }
+        return await apply(.init(base: c.base, commands: [command], label: label))
+    }
+    /// Delete the selected clip, keeping the gap. `ripple` removes the clip's
+    /// timeline range and closes the gap on its track instead.
+    public func deleteSelectedClip(ripple: Bool = false) {
+        guard let clip = selectedClip, !busy, pendingCandidate == nil, timelineCandidate == nil, !ui.locked.contains(clip.track) else { return }
+        if ripple {
+            submit([timelineCommand("ripple_delete", ["sequence": sequence.string("id"), "tracks": [clip.track],
+                "range": clip.authored.object("timeline_range"), "linked": true])], label: "リップル削除")
+        } else {
+            submit([timelineCommand("clip_delete", ["sequence": sequence.string("id"), "clip": clip.id, "linked": true])], label: "クリップの削除")
+        }
+    }
+    /// Previous/next clip edge, marker, or work-area boundary from the playhead.
+    public func jumpToTimelineBoundary(forward: Bool) {
+        var targets = Set<Int64>()
+        for clip in editClips {
+            targets.insert(clip.start.frames(rateNum: rateNum, rateDen: rateDen))
+            targets.insert(clip.end.frames(rateNum: rateNum, rateDen: rateDen))
+        }
+        for marker in allMarkers { targets.insert(marker.time.frames(rateNum: rateNum, rateDen: rateDen)) }
+        if let area = workArea {
+            targets.insert(area.start.frames(rateNum: rateNum, rateDen: rateDen))
+            targets.insert(area.end.frames(rateNum: rateNum, rateDen: rateDen))
+        }
+        targets.insert(0)
+        let next = forward ? targets.filter { $0 > frame }.min() : targets.filter { $0 < frame }.max()
+        if let next { seek(next) }
     }
 }

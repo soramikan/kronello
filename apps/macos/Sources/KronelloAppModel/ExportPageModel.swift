@@ -64,6 +64,21 @@ import KronelloDesign
     }
     public var firstFrame: Int64 { rangeMode == "all" ? 0 : startFrame }
     public var exclusiveFrame: Int64 { rangeMode == "all" ? totalFrames : endFrame }
+    /// The sequence work_area converted into target frames, when present.
+    public var targetWorkArea: (start: Int64, end: Int64)? {
+        guard selectedTarget.string("kind") == "sequence" else { return nil }
+        let area = targetValue.object("work_area")
+        guard !area.isEmpty else { return nil }
+        let start = RationalTime.wire(area.object("start")).frames(rateNum: fpsNum, rateDen: fpsDen)
+        let end = RationalTime.wire(area.object("end")).frames(rateNum: fpsNum, rateDen: fpsDen)
+        guard end > start else { return nil }
+        return (start, end)
+    }
+    /// Default the range fields to the sequence work area when the target has one.
+    public func applyWorkAreaDefault() {
+        guard let area = targetWorkArea else { return }
+        rangeMode = "inout"; startFrame = area.start; endFrame = area.end
+    }
     public func time(_ frame: Int64) -> [String: Any] { let product = frame.multipliedReportingOverflow(by: fpsDen)
         guard !product.overflow else { return ["num":"invalid","den":"1"] }
         return RationalTime(num: product.partialValue, den: max(1, fpsNum)).wire }
@@ -101,7 +116,7 @@ import KronelloDesign
         return try await editor.transport.call(request)
     }
     public func load() async {
-        if target.isEmpty { target = targets.first?.string("id") ?? ""; endFrame = totalFrames }
+        if target.isEmpty { target = targets.first?.string("id") ?? ""; endFrame = totalFrames; applyWorkAreaDefault() }
         do {
             profiles = try await sharedRequest("capabilities.get").objects("export_profiles")
             if format.isEmpty, let profile = profiles.first(where: { $0.string("format") == "pro_res_mov" }) ?? profiles.first { format = profile.string("format"); selectProfile() }

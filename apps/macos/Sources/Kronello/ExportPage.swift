@@ -15,7 +15,7 @@ struct ExportPage: View {
         KRExportPageLayout(settings: { settings }, preview: { preview }, check: { check }, jobs: { jobs })
             .task { await model.load(); await model.check() }
             .onDisappear { playing = false; model.stopPolling() }
-            .onChange(of: model.target) { _, _ in playing = false; previewFrame = model.firstFrame; model.previewFailure = nil }
+            .onChange(of: model.target) { _, _ in playing = false; model.applyWorkAreaDefault(); previewFrame = model.firstFrame; model.previewFailure = nil }
             .onChange(of: model.firstFrame) { _, value in previewFrame = value }
             .onChange(of: model.exclusiveFrame) { _, _ in previewFrame = min(max(model.firstFrame,previewFrame),max(model.firstFrame,model.exclusiveFrame-1)) }
             .task(id: playing) {
