@@ -90,11 +90,12 @@ import Darwin
     }
 }
 '''.replace("__CHECKS__", "try await IntegrationChecks().runAll()" if args.integration_only else "try await QAChecks().runAll()" if args.qa_only else
-            "try await GUIChecks().runAll(); try await MotionChecks().runAll(); try await PlaybackChecks().runAll(); try await EditChecks().runAll(); try await WorkflowChecks().runAll(); try await IntegrationChecks().runAll(); try await QAChecks().runAll()")
+            "try await GUIChecks().runAll(); try await MotionChecks().runAll(); try await PlaybackChecks().runAll(); try await AudioMixerChecks().runAll(); try await EditChecks().runAll(); try await WorkflowChecks().runAll(); try await IntegrationChecks().runAll(); try await QAChecks().runAll()")
         runner.write_text(runner_source)
         subprocess.run(common + ["-parse-as-library", "-lKronelloAppModel", "-lKronelloCore", "-lKronelloDesign", "-o", str(output / "GUIRunner"),
                                 str(PACKAGE / "Tests/KronelloAppModelTests/GUIChecks.swift"), str(PACKAGE / "Tests/KronelloAppModelTests/MotionChecks.swift"),
-                                str(PACKAGE / "Tests/KronelloAppModelTests/PlaybackChecks.swift"), str(PACKAGE / "Tests/KronelloAppModelTests/EditChecks.swift"), str(PACKAGE / "Tests/KronelloAppModelTests/WorkflowChecks.swift"), str(PACKAGE / "Tests/KronelloAppModelTests/IntegrationChecks.swift"), str(PACKAGE / "Tests/KronelloAppModelTests/QAChecks.swift"), str(runner)], check=True)
+                                str(PACKAGE / "Tests/KronelloAppModelTests/WaveformChecks.swift"), str(PACKAGE / "Tests/KronelloAppModelTests/PlaybackChecks.swift"), str(PACKAGE / "Tests/KronelloAppModelTests/AudioMixerChecks.swift"),
+                                str(PACKAGE / "Tests/KronelloAppModelTests/EditChecks.swift"), str(PACKAGE / "Tests/KronelloAppModelTests/WorkflowChecks.swift"), str(PACKAGE / "Tests/KronelloAppModelTests/IntegrationChecks.swift"), str(PACKAGE / "Tests/KronelloAppModelTests/QAChecks.swift"), str(runner)], check=True)
         subprocess.run([str(output / "GUIRunner")], cwd=ROOT, check=True)
 
 

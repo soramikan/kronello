@@ -13,7 +13,8 @@ mod playback;
 pub use kronello_render::RenderTarget;
 pub use nle::*;
 pub use playback::{
-    AudioPreparationInput, AudioPrepareRequest, MAX_PLAYBACK_BLOCK_FRAMES, PreparedAudio,
+    AudioPreparationInput, AudioPrepareRequest, BlockMeters, MAX_PLAYBACK_BLOCK_FRAMES,
+    PreparedAudio, TrackMeterReading,
 };
 mod jobs;
 pub use jobs::*;
@@ -23,6 +24,11 @@ mod vector;
 pub use vector::*;
 mod audio_analysis;
 pub use audio_analysis::{AudioAnalyzeInput, AudioAnalyzeRequest};
+mod loudness;
+pub use loudness::{
+    AudioLoudnessInput, AudioLoudnessRequest, AudioLoudnessResult, AudioNormalizeRequest,
+    AudioNormalizeResult,
+};
 mod captions;
 pub use captions::*;
 mod edit;
@@ -82,6 +88,10 @@ pub enum Request {
     SvgImportPlan(SvgImportPlanRequest),
     #[serde(rename = "audio.analyze")]
     AudioAnalyze(AudioAnalyzeRequest),
+    #[serde(rename = "audio.loudness")]
+    AudioLoudness(AudioLoudnessRequest),
+    #[serde(rename = "audio.normalize")]
+    AudioNormalize(AudioNormalizeRequest),
     #[serde(rename = "sequence.query")]
     SequenceQuery(SequenceQueryRequest),
     #[serde(rename = "sequence.create")]
@@ -299,6 +309,8 @@ pub enum ResultData {
     Capabilities(Box<CapabilitiesResult>),
     ProjectPlan(Box<ProjectChangePlan>),
     Captions(CaptionsExportResult),
+    Loudness(AudioLoudnessResult),
+    Normalize(Box<AudioNormalizeResult>),
 }
 #[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
 #[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
@@ -543,6 +555,10 @@ impl<'a> Service<'a> {
                 vector::import_plan(r).map(|r| ResultData::Plan(Box::new(r)))
             }
             Request::AudioAnalyze(r) => self.analyze_audio(r),
+            Request::AudioLoudness(r) => self.loudness(r).map(ResultData::Loudness),
+            Request::AudioNormalize(r) => self
+                .normalize_audio(r)
+                .map(|r| ResultData::Normalize(Box::new(r))),
             Request::SequenceQuery(r) => nle::sequence_query(r).map(ResultData::Timeline),
             Request::SequenceCreate(r) => nle::sequence_create(r).map(ResultData::Edit),
             Request::ClipPlace(r) => nle::clip_place(r).map(ResultData::Edit),
@@ -1250,6 +1266,8 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
         Request::SvgInspect(_) | Request::SvgExport(_) | Request::CapabilitiesGet(_) => Ok(()),
         Request::SvgImportPlan(r) => local_locator(&r.project),
         Request::AudioAnalyze(r) => local_locator(&r.project),
+        Request::AudioLoudness(r) => local_locator(&r.project),
+        Request::AudioNormalize(r) => local_locator(&r.project),
         Request::CaptionsImportPlan(r) => local_locator(&r.project),
         Request::CaptionsImport(r) => local_locator(&r.plan.project),
         Request::CaptionsExport(r) => local_locator(&r.project),

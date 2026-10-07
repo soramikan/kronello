@@ -12,8 +12,11 @@ mod analysis;
 pub use analysis::analyze_audio;
 mod advanced;
 mod document;
+mod dsp;
+mod loudness;
 pub use advanced::{AUDIO_EVALUATION_VERSION, AUDIO_GENERATOR_SILENCE, AUDIO_GENERATOR_TONE};
 pub use document::{AudioSourceMode, AudioTarget, DocumentAudioPlan};
+pub use loudness::{LoudnessReport, loudness};
 
 pub const SAMPLE_RATE: SampleRate = SampleRate::HZ_48000;
 /// Conservative offline memory limit: ten minutes of stereo frames.
@@ -206,6 +209,52 @@ pub enum ClippingPolicy {
 pub struct QuantizedAudio {
     pub samples: Vec<i32>,
     pub clipped_samples: usize,
+}
+
+/// AUDIO-009: per-rendered-range peak/RMS levels produced by the shared
+/// evaluator, so meters describe exactly the samples that were rendered.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct StereoMeter {
+    /// Maximum absolute per-channel sample within the rendered range.
+    pub peak: [f32; 2],
+    /// Root-mean-square per-channel level within the rendered range.
+    pub rms: [f32; 2],
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TrackMeter {
+    pub track: kronello_model::TrackId,
+    /// Maximum absolute per-channel sample contributed by this track.
+    pub peak: [f32; 2],
+    /// Root-mean-square per-channel level contributed by this track.
+    pub rms: [f32; 2],
+}
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct BusMeters {
+    /// Tracks with audible contributions in the rendered range.
+    pub tracks: Vec<TrackMeter>,
+    /// Summed output levels in the rendered range.
+    pub master: StereoMeter,
+}
+/// Compute peak/RMS over one finite interleaved stereo range.
+pub fn stereo_meter(frames: &[[f32; 2]]) -> StereoMeter {
+    let mut peak = [0.0_f32; 2];
+    let mut energy = [0.0_f64; 2];
+    for frame in frames {
+        for channel in 0..2 {
+            peak[channel] = peak[channel].max(frame[channel].abs());
+            energy[channel] += f64::from(frame[channel]) * f64::from(frame[channel]);
+        }
+    }
+    let count = frames.len().max(1) as f64;
+    StereoMeter {
+        peak,
+        rms: [
+            (energy[0] / count).sqrt() as f32,
+            (energy[1] / count).sqrt() as f32,
+        ],
+    }
 }
 
 /// Each source key selects the exact authored stream of a verified asset.

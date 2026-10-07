@@ -122,6 +122,10 @@ public struct EditCandidate {
     @Published public var candidateBounds: CGRect?
     @Published public var keySelection: Set<KeyReference> = []
     @Published public var playing = false { didSet { if playing != oldValue { playbackRequested() } } }
+    /// AUDIO-009: last rendered-block peak/RMS from the shared evaluator.
+    @Published public private(set) var playbackMeters: PlaybackMeters?
+    /// AUDIO-009: seek plays a short audio run through the playback pipeline.
+    @Published public var audioScrubEnabled = true
     @Published public private(set) var playbackStatus = "停止"
     @Published public private(set) var playbackFailure: ServiceFailure?
     @Published public var playbackMuted = false {
@@ -221,6 +225,9 @@ public struct EditCandidate {
         self.path = path; self.transport = transport; self.stateStore = stateStore
         playback.onFailure = { [weak self] error in
             self?.mapFailure(error); self?.playing = false
+        }
+        playback.onMeters = { [weak self] meters in
+            self?.playbackMeters = meters
         }
     }
     public func start(newDocument: [String: Any]? = nil) async throws {
@@ -409,7 +416,7 @@ public struct EditCandidate {
         playbackControl?.cancel()
         resumeSample = sample
         ui.time = RationalTime(num: product.partialValue, den: activePlaybackRateNum)
-        if playing { restartPlayback(at: sample) }
+        if playing { restartPlayback(at: sample) } else { scrubAudio(at: sample) }
         if ui.page == "edit" { refreshToken += 1; return }
         Task { do { try await reload() } catch { mapFailure(error) } }
     }
@@ -467,6 +474,15 @@ public struct EditCandidate {
                 catch { if !Task.isCancelled, intent == playbackIntent { mapFailure(error) } }
             }
         }
+    }
+    /// AUDIO-009: scrubbing reuses the realtime start/stop pipeline as a
+    /// bounded run instead of a dedicated evaluator. Real playback, edits in
+    /// flight, muted monitoring, and missing targets keep seeks silent.
+    private func scrubAudio(at sample: Int64) {
+        guard audioScrubEnabled, !playing, !playbackMuted, !busy, pendingCandidate == nil,
+              ui.page == "edit", !sequenceLoading, sequenceFailure == nil,
+              let target = activePlaybackTarget else { return }
+        playback.scrub(path: path, target: target, revision: revision, at: sample)
     }
     private func restartPlayback(at sample: Int64) {
         playbackControl?.cancel(); presentationTimer?.cancel()

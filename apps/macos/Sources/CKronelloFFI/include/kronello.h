@@ -38,6 +38,10 @@ void kronello_free(char *ptr);
  * Output is caller-owned native f32 interleaved left/right, unchanged on failure. */
 void *kronello_audio_prepare(const uint8_t *json, size_t len, bool *has_audio, char **error);
 bool kronello_audio_render(const void *resource, int64_t start_sample, size_t frames, float *output, char **error);
+/* Same render path as kronello_audio_render; meters receives an owned JSON
+ * string of {master_peak:[l,r],master_rms:[l,r],tracks:[{track,peak:[l,r],rms:[l,r]}]}
+ * evaluated over the rendered block, freed with kronello_free. */
+bool kronello_audio_render_metered(const void *resource, int64_t start_sample, size_t frames, float *output, char **meters, char **error);
 void kronello_audio_free(void *resource);
 /* Main thread: install a live CAMetalLayer on an NSView before attach.
  * Rust retains the layer before returning. Do not change device/pixelFormat

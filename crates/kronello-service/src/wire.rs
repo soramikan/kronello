@@ -185,6 +185,8 @@ impl<'de> Deserialize<'de> for Request {
             "svg.export" => payload(&fields).map(Self::SvgExport),
             "svg.import_plan" => payload(&fields).map(Self::SvgImportPlan),
             "audio.analyze" => payload(&fields).map(Self::AudioAnalyze),
+            "audio.loudness" => payload(&fields).map(Self::AudioLoudness),
+            "audio.normalize" => payload(&fields).map(Self::AudioNormalize),
             "sequence.query" => payload(&fields).map(Self::SequenceQuery),
             "sequence.create" => payload(&fields).map(Self::SequenceCreate),
             "clip.place" => payload(&fields).map(Self::ClipPlace),
@@ -264,6 +266,8 @@ impl<'de> Deserialize<'de> for ResultData {
             "samples" => Self::Samples(take(&mut fields, "value")?),
             "capabilities" => Self::Capabilities(take(&mut fields, "value")?),
             "captions" => Self::Captions(take(&mut fields, "value")?),
+            "loudness" => Self::Loudness(take(&mut fields, "value")?),
+            "normalize" => Self::Normalize(take(&mut fields, "value")?),
             _ => return Err(D::Error::custom("unknown result kind")),
         };
         exhausted::<D::Error>(&fields)?;

@@ -500,6 +500,228 @@
         }
       ]
     },
+    "AudioLoudnessInput": {
+      "description": "AUDIO-008 measurement target. Clip and Sequence render the shared\nDocumentAudioPlan; Asset decodes the verified stream directly.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "One clip on an audio track, measured through its authored chain.",
+          "properties": {
+            "clip": {
+              "$ref": "#/$defs/ClipId"
+            },
+            "kind": {
+              "const": "clip",
+              "type": "string"
+            },
+            "sequence": {
+              "$ref": "#/$defs/SequenceId"
+            }
+          },
+          "required": [
+            "kind",
+            "sequence",
+            "clip"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Whole sequence extent or an explicit range within it.",
+          "properties": {
+            "kind": {
+              "const": "sequence",
+              "type": "string"
+            },
+            "range": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TimeRange"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sequence": {
+              "$ref": "#/$defs/SequenceId"
+            }
+          },
+          "required": [
+            "kind",
+            "sequence"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A verified asset stream, optionally limited to a source range.",
+          "properties": {
+            "asset": {
+              "$ref": "#/$defs/AssetId"
+            },
+            "kind": {
+              "const": "asset",
+              "type": "string"
+            },
+            "range": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TimeRange"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "stream_index": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "asset",
+            "stream_index"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "AudioLoudnessRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision": {
+          "type": "string"
+        },
+        "input": {
+          "$ref": "#/$defs/AudioLoudnessInput"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "base_revision",
+        "input"
+      ],
+      "type": "object"
+    },
+    "AudioLoudnessResult": {
+      "additionalProperties": false,
+      "properties": {
+        "frames": {
+          "description": "Measured 48 kHz frame count.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "integrated_lufs": {
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "momentary_lufs": {
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "revision": {
+          "type": "string"
+        },
+        "short_term_lufs": {
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "true_peak_dbtp": {
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "revision",
+        "frames"
+      ],
+      "type": "object"
+    },
+    "AudioNormalizeRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision": {
+          "type": "string"
+        },
+        "clip": {
+          "$ref": "#/$defs/ClipId"
+        },
+        "idempotency_key": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "sequence": {
+          "$ref": "#/$defs/SequenceId"
+        },
+        "session_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "target_lufs": {
+          "description": "Integrated LUFS target, within (-70, 0].",
+          "format": "double",
+          "type": "number"
+        }
+      },
+      "required": [
+        "project",
+        "base_revision",
+        "session_id",
+        "idempotency_key",
+        "sequence",
+        "clip",
+        "target_lufs"
+      ],
+      "type": "object"
+    },
+    "AudioNormalizeResult": {
+      "additionalProperties": false,
+      "properties": {
+        "event": {
+          "$ref": "#/$defs/Event"
+        },
+        "gain_db": {
+          "format": "double",
+          "type": "number"
+        },
+        "gain_linear": {
+          "format": "double",
+          "type": "number"
+        },
+        "measured_lufs": {
+          "format": "double",
+          "type": "number"
+        }
+      },
+      "required": [
+        "event",
+        "measured_lufs",
+        "gain_db",
+        "gain_linear"
+      ],
+      "type": "object"
+    },
     "AudioRetimePolicy": {
       "description": "NLE-001 never performs implicit pitch/speed conversion.",
       "enum": [
@@ -3316,6 +3538,124 @@
           "required": [
             "kind",
             "gain"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "AUDIO-007 parametric EQ. `bands` references a data table property\nwith `kind` (peak | low_shelf | high_shelf), `freq_hz`, `gain_db`\nand `q` columns and 1..=AUDIO_EQ_MAX_BANDS rows.",
+          "properties": {
+            "bands": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "const": "audio_eq",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "bands"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "AUDIO-007 Butterworth high-pass; `order` is 1..=AUDIO_FILTER_MAX_ORDER.",
+          "properties": {
+            "cutoff_hz": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "const": "audio_hpf",
+              "type": "string"
+            },
+            "order": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "required": [
+            "kind",
+            "cutoff_hz",
+            "order"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "AUDIO-007 Butterworth low-pass; `order` is 1..=AUDIO_FILTER_MAX_ORDER.",
+          "properties": {
+            "cutoff_hz": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "const": "audio_lpf",
+              "type": "string"
+            },
+            "order": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "required": [
+            "kind",
+            "cutoff_hz",
+            "order"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "AUDIO-008 stereo-linked feed-forward peak compressor.",
+          "properties": {
+            "attack_ms": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "const": "audio_compressor",
+              "type": "string"
+            },
+            "makeup_db": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "ratio": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "release_ms": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "threshold_db": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "required": [
+            "kind",
+            "threshold_db",
+            "ratio",
+            "attack_ms",
+            "release_ms",
+            "makeup_db"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "AUDIO-008 ceiling limiter with instant attack and release.",
+          "properties": {
+            "ceiling_db": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "const": "audio_limiter",
+              "type": "string"
+            },
+            "release_ms": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "required": [
+            "kind",
+            "ceiling_db",
+            "release_ms"
           ],
           "type": "object"
         },
@@ -8763,6 +9103,75 @@
         {
           "additionalProperties": false,
           "properties": {
+            "base_revision": {
+              "type": "string"
+            },
+            "input": {
+              "$ref": "#/$defs/AudioLoudnessInput"
+            },
+            "operation": {
+              "const": "audio.loudness",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "base_revision",
+            "input"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "base_revision": {
+              "type": "string"
+            },
+            "clip": {
+              "$ref": "#/$defs/ClipId"
+            },
+            "idempotency_key": {
+              "type": "string"
+            },
+            "operation": {
+              "const": "audio.normalize",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "sequence": {
+              "$ref": "#/$defs/SequenceId"
+            },
+            "session_id": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "target_lufs": {
+              "description": "Integrated LUFS target, within (-70, 0].",
+              "format": "double",
+              "type": "number"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "base_revision",
+            "session_id",
+            "idempotency_key",
+            "sequence",
+            "clip",
+            "target_lufs"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
             "operation": {
               "const": "sequence.query",
               "type": "string"
@@ -10953,6 +11362,40 @@
             },
             "value": {
               "$ref": "#/$defs/CaptionsExportResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "loudness",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/AudioLoudnessResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "normalize",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/AudioNormalizeResult"
             }
           },
           "required": [

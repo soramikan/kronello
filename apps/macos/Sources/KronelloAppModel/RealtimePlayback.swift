@@ -17,6 +17,9 @@ private final class AudioProducer: @unchecked Sendable {
     private var epoch: UInt64 = 0
     private var timer: DispatchSourceTimer?
     var failure: (@Sendable (Error, UInt64) -> Void)?
+    /// AUDIO-009: one publication per fill pass carries the last rendered
+    /// block's evaluator meters; the callback is tagged with its epoch.
+    var meters: (@Sendable (PlaybackMeters, UInt64) -> Void)?
     init(ring: NativeAudioRing) { self.ring = ring }
     deinit { timer?.cancel(); buffer.deallocate() }
     func prepare(path: String, target: PlaybackTarget, revision: String) async throws -> NativePreparedAudio {
@@ -61,14 +64,16 @@ private final class AudioProducer: @unchecked Sendable {
         let clock = ring.clock
         if clock.valid { nextSample = max(nextSample, clock.sample + Int64(clock.callbackFrames)) }
         // Bounded work per timer firing. Publication is once per complete block.
+        var last: PlaybackMeters?
         for _ in 0..<8 {
             guard ring.available >= 4096 else { break }
-            try snapshot.render(start: nextSample, frames: 4096, into: buffer)
+            last = try snapshot.renderMetered(start: nextSample, frames: 4096, into: buffer)
             guard ring.push(buffer, frames: 4096, start: nextSample, revision: snapshot.revision) else {
                 throw NativeError.service("AUDIO_RING_INVARIANT", "Single producer block publication failed")
             }
             nextSample += 4096
         }
+        if let last { meters?(last, epoch) }
     }
 }
 
@@ -80,6 +85,9 @@ private final class AudioProducer: @unchecked Sendable {
     public private(set) var position: Int64 = 0
     public private(set) var pinnedRevision: UInt64 = 0
     public var onFailure: ((Error) -> Void)?
+    /// AUDIO-009: latest rendered-block peak/RMS on the main actor, or
+    /// `.silent` whenever playback stops.
+    public var onMeters: ((PlaybackMeters) -> Void)?
     private var ring: NativeAudioRing?
     private var producer: AudioProducer?
     private var snapshot: NativePreparedAudio?
@@ -89,6 +97,8 @@ private final class AudioProducer: @unchecked Sendable {
     private var origin: Int64 = 0
     private var hostOrigin: UInt64 = 0
     private var generation: UInt64 = 0
+    private var scrubTask: Task<Void, Never>?
+    private var scrubSerial: UInt64 = 0
     private var updateInFlight = false
     private var requestedRevision: String?
     private var muted = false
@@ -115,9 +125,19 @@ private final class AudioProducer: @unchecked Sendable {
                 self.onFailure?(error)
             }
         }
+        producer.meters = { [weak self] meters, epoch in
+            Task { @MainActor in
+                guard let self, self.clockEpoch == epoch else { return }
+                self.onMeters?(meters)
+            }
+        }
         return producer
     }
     public func start(path: String, target: PlaybackTarget, revision: String, at sample: Int64, muted: Bool = false) async throws {
+        try await start(path: path, target: target, revision: revision, at: sample, muted: muted, scrub: false)
+    }
+    private func start(path: String, target: PlaybackTarget, revision: String, at sample: Int64, muted: Bool, scrub: Bool) async throws {
+        if !scrub { scrubSerial &+= 1; scrubTask?.cancel(); scrubTask = nil }
         guard sample >= 0 else { throw NativeError.service("INVALID_AUDIO_INPUT", "Negative playback sample") }
         let token = generation + 1 // stop() invalidates older requests before its first suspension.
         _ = try await stop()
@@ -178,6 +198,27 @@ private final class AudioProducer: @unchecked Sendable {
     private func beginHostClock(_ reason: String) {
         latencySamples = 0; fallbackReason = reason; hostOrigin = mach_absolute_time(); master = .hostClock
     }
+    /// AUDIO-009: audio scrub is a bounded run of the same prepare / render /
+    /// ring / device pipeline — never a separate evaluator. A short delay
+    /// coalesces rapid seeks into one start; every run stops itself after a
+    /// fixed window, and ordinary playback cancels any pending run.
+    public func scrub(path: String, target: PlaybackTarget, revision: String, at sample: Int64) {
+        guard sample >= 0 else { return }
+        scrubSerial &+= 1
+        let serial = scrubSerial
+        scrubTask?.cancel()
+        scrubTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await Task.sleep(for: .milliseconds(30))
+                guard !Task.isCancelled, self.scrubSerial == serial, self.master != .preparing else { return }
+                try await self.start(path: path, target: target, revision: revision, at: sample, muted: false, scrub: true)
+                try await Task.sleep(for: .milliseconds(160))
+                guard !Task.isCancelled, self.scrubSerial == serial else { return }
+                _ = try await self.stop()
+            } catch is CancellationError { } catch { self.onFailure?(error) }
+        }
+    }
     public func samplePosition(hostTime: UInt64 = mach_absolute_time()) throws -> Int64 {
         switch master {
         case .audioDevice:
@@ -220,6 +261,7 @@ private final class AudioProducer: @unchecked Sendable {
         if let producer { try await producer.reset(nil, at: sample, epoch: token) }
         guard token == generation else { return sample }
         origin = sample; position = sample
+        onMeters?(.silent)
         if let clockError { throw clockError }
         return sample
     }

@@ -247,7 +247,12 @@ fn capabilities_registry_media_extension_without_device_initialization() {
         [
             "kronello.gaussian_blur",
             "kronello.drop_shadow",
-            "kronello.audio.gain"
+            "kronello.audio.gain",
+            "kronello.audio.eq",
+            "kronello.audio.hpf",
+            "kronello.audio.lpf",
+            "kronello.audio.compressor",
+            "kronello.audio.limiter"
         ]
     );
     assert!(c.backends.contains(&"cpu_reference_float32".into()));
@@ -261,6 +266,7 @@ fn capabilities_registry_media_extension_without_device_initialization() {
         mutating,
         [
             "audio.analyze",
+            "audio.normalize",
             "sequence.create",
             "clip.place",
             "clip.trim",
@@ -641,6 +647,10 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
             "style":{"font":{"family":"TestSans","postscript_name":"TestSans-Regular","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","face_index":0},"size":24.0,"fill":{"space":"srgb","components":{"r":1.0,"g":1.0,"b":1.0,"alpha":1.0}}},
             "cue_ids":[{"caption":uuid,"clip":uuid}]}}),
         json!({"operation":"captions.export","project":path,"sequence":uuid,"format":"vtt"}),
+        json!({"operation":"audio.loudness","project":path,"base_revision":"1",
+            "input":{"kind":"sequence","sequence":uuid}}),
+        json!({"operation":"audio.normalize","project":path,"base_revision":"1",
+            "session_id":uuid,"idempotency_key":"normalize","sequence":uuid,"clip":uuid,"target_lufs":-16.0}),
     ];
     assert_eq!(requests.len(), command_registry().len());
     for request in requests {
@@ -1086,6 +1096,30 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
     );
     execute(
         json!({"operation":"captions.export","project":path,"sequence":sequence_id,"format":"srt"}),
+    );
+    // AUDIO-008: a Generator clip exercises loudness and normalization through
+    // the shared audio plan and edit pipeline without media files.
+    let audio_sequence = Uuid::new_v4();
+    let audio_track = Uuid::new_v4();
+    let audio_clip = Uuid::new_v4();
+    execute(
+        json!({"operation":"sequence.create","project":path,"base_revision":"11","session_id":session,"idempotency_key":"create-audio-seq","sequence":{"id":audio_sequence,"extent":{"width":64.0,"height":32.0},"frame_rate":{"num":"24","den":"1"},"audio_rate":48000,"working_space":"linear_rec709","tracks":[{"id":audio_track,"kind":"audio","clips":[]}]}}),
+    );
+    execute(
+        json!({"operation":"clip.place","project":path,"base_revision":"12","session_id":session,"idempotency_key":"place-audio-clip","sequence":audio_sequence,"track":audio_track,"clip":{"id":audio_clip,"source_ref":{"kind":"generator","generator":"kronello.audio.tone440"},"timeline_range":{"start":{"num":"0","den":"1"},"end":{"num":"2","den":"1"}},"source_in":{"num":"0","den":"1"},"time_map":{"kind":"linear","offset":{"num":"0","den":"1"},"speed":{"num":"1","den":"1"}},"links":[],"effects":[]}}),
+    );
+    execute(
+        json!({"operation":"audio.loudness","project":path,"base_revision":"13",
+            "input":{"kind":"sequence","sequence":audio_sequence}}),
+    );
+    execute(
+        json!({"operation":"audio.loudness","project":path,"base_revision":"13",
+            "input":{"kind":"clip","sequence":audio_sequence,"clip":audio_clip}}),
+    );
+    execute(
+        json!({"operation":"audio.normalize","project":path,"base_revision":"13",
+            "session_id":session,"idempotency_key":"normalize","sequence":audio_sequence,
+            "clip":audio_clip,"target_lufs":-20.0}),
     );
     let report = execute(
         json!({"operation":"svg.inspect","svg":"<svg><path d='M0 0L10 0L10 10Z' fill='#abc'/></svg>"}),

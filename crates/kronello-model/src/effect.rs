@@ -10,6 +10,32 @@ pub const GAUSSIAN_BLUR_ID: &str = "kronello.gaussian_blur";
 pub const DROP_SHADOW_ID: &str = "kronello.drop_shadow";
 pub const EFFECT_VERSION: u32 = 1;
 pub const AUDIO_GAIN_ID: &str = "kronello.audio.gain";
+/// AUDIO-007 (ADR-0117): parametric EQ driven by a band data table.
+pub const AUDIO_EQ_ID: &str = "kronello.audio.eq";
+/// AUDIO-007: first-to-fourth order Butterworth high-pass filter.
+pub const AUDIO_HPF_ID: &str = "kronello.audio.hpf";
+/// AUDIO-007: first-to-fourth order Butterworth low-pass filter.
+pub const AUDIO_LPF_ID: &str = "kronello.audio.lpf";
+/// AUDIO-008: stereo-linked feed-forward peak compressor.
+pub const AUDIO_COMPRESSOR_ID: &str = "kronello.audio.compressor";
+/// AUDIO-008: peak ceiling limiter with instant attack and release.
+pub const AUDIO_LIMITER_ID: &str = "kronello.audio.limiter";
+/// AUDIO-007: maximum parametric EQ band count.
+pub const AUDIO_EQ_MAX_BANDS: usize = 8;
+/// AUDIO-007: supported Butterworth HPF/LPF orders.
+pub const AUDIO_FILTER_MAX_ORDER: u32 = 4;
+/// AUDIO-007: frequency parameters stay strictly below 48 kHz Nyquist.
+pub const AUDIO_FILTER_MAX_FREQ_HZ: f64 = 24_000.0;
+/// AUDIO-007: peak/shelf Q bound keeps the biquads well conditioned.
+pub const AUDIO_EQ_MAX_Q: f64 = 100.0;
+/// AUDIO-007/008: bound for decibel-valued effect parameters.
+pub const AUDIO_MAX_DB: f64 = 120.0;
+/// AUDIO-008: compressor ratio upper bound.
+pub const AUDIO_MAX_RATIO: f64 = 100.0;
+/// AUDIO-008: envelope time constant range in milliseconds.
+pub const AUDIO_MIN_TIME_MS: f64 = 0.01;
+/// AUDIO-008: envelope time constant range in milliseconds.
+pub const AUDIO_MAX_TIME_MS: f64 = 10_000.0;
 pub const AFFINE_EFFECT_VERSION: u32 = 2;
 /// COLOR-002 pointwise color correction effect ids (ADR-0108).
 pub const COLOR_EXPOSURE_ID: &str = "kronello.color.exposure";
@@ -49,6 +75,35 @@ pub enum EffectParameters {
     },
     AudioGain {
         gain: PropertyId,
+    },
+    /// AUDIO-007 parametric EQ. `bands` references a data table property
+    /// with `kind` (peak | low_shelf | high_shelf), `freq_hz`, `gain_db`
+    /// and `q` columns and 1..=AUDIO_EQ_MAX_BANDS rows.
+    AudioEq {
+        bands: PropertyId,
+    },
+    /// AUDIO-007 Butterworth high-pass; `order` is 1..=AUDIO_FILTER_MAX_ORDER.
+    AudioHpf {
+        cutoff_hz: PropertyId,
+        order: PropertyId,
+    },
+    /// AUDIO-007 Butterworth low-pass; `order` is 1..=AUDIO_FILTER_MAX_ORDER.
+    AudioLpf {
+        cutoff_hz: PropertyId,
+        order: PropertyId,
+    },
+    /// AUDIO-008 stereo-linked feed-forward peak compressor.
+    AudioCompressor {
+        threshold_db: PropertyId,
+        ratio: PropertyId,
+        attack_ms: PropertyId,
+        release_ms: PropertyId,
+        makeup_db: PropertyId,
+    },
+    /// AUDIO-008 ceiling limiter with instant attack and release.
+    AudioLimiter {
+        ceiling_db: PropertyId,
+        release_ms: PropertyId,
     },
     /// COLOR-002 exposure: premultiplied working RGB is scaled by
     /// 2^exposure and shifted by offset; alpha is preserved (ADR-0108).
@@ -127,6 +182,48 @@ pub enum ResolvedEffect {
         lightness: f64,
     },
 }
+/// AUDIO-007/008: one validated parametric EQ band (ADR-0117).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AudioEqBand {
+    pub kind: AudioEqBandKind,
+    pub freq_hz: f64,
+    pub gain_db: f64,
+    pub q: f64,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AudioEqBandKind {
+    Peak,
+    LowShelf,
+    HighShelf,
+}
+/// AUDIO-007/008: constant, range-validated audio effect parameters. The
+/// audio evaluator turns this into the deterministic DSP chain shared by
+/// realtime playback and export (ADR-0117).
+#[derive(Debug, Clone, PartialEq)]
+pub enum ResolvedAudioEffect {
+    Eq {
+        bands: Vec<AudioEqBand>,
+    },
+    Hpf {
+        cutoff_hz: f64,
+        order: u32,
+    },
+    Lpf {
+        cutoff_hz: f64,
+        order: u32,
+    },
+    Compressor {
+        threshold_db: f64,
+        ratio: f64,
+        attack_ms: f64,
+        release_ms: f64,
+        makeup_db: f64,
+    },
+    Limiter {
+        ceiling_db: f64,
+        release_ms: f64,
+    },
+}
 #[derive(Debug, thiserror::Error)]
 pub enum EffectError {
     #[error("UNSUPPORTED_FEATURE: unknown effect or semantic version")]
@@ -140,6 +237,11 @@ impl EffectDefinition {
     pub fn ensure_supported(&self) -> Result<(), EffectError> {
         let (id, latest) = match self.parameters {
             EffectParameters::AudioGain { .. } => (AUDIO_GAIN_ID, EFFECT_VERSION),
+            EffectParameters::AudioEq { .. } => (AUDIO_EQ_ID, EFFECT_VERSION),
+            EffectParameters::AudioHpf { .. } => (AUDIO_HPF_ID, EFFECT_VERSION),
+            EffectParameters::AudioLpf { .. } => (AUDIO_LPF_ID, EFFECT_VERSION),
+            EffectParameters::AudioCompressor { .. } => (AUDIO_COMPRESSOR_ID, EFFECT_VERSION),
+            EffectParameters::AudioLimiter { .. } => (AUDIO_LIMITER_ID, EFFECT_VERSION),
             EffectParameters::GaussianBlur { .. } => (GAUSSIAN_BLUR_ID, AFFINE_EFFECT_VERSION),
             EffectParameters::DropShadow { .. } => (DROP_SHADOW_ID, AFFINE_EFFECT_VERSION),
             EffectParameters::ColorExposure { .. } => (COLOR_EXPOSURE_ID, COLOR_EFFECT_VERSION),
@@ -157,6 +259,31 @@ impl EffectDefinition {
             EffectParameters::AudioGain { gain } => {
                 vec![(gain, ValueType::Scalar, Unit::Dimensionless)]
             }
+            EffectParameters::AudioEq { bands } => {
+                vec![(bands, ValueType::DataTable, Unit::Dimensionless)]
+            }
+            EffectParameters::AudioHpf { cutoff_hz, order }
+            | EffectParameters::AudioLpf { cutoff_hz, order } => vec![
+                (cutoff_hz, ValueType::Scalar, Unit::Dimensionless),
+                (order, ValueType::Scalar, Unit::Dimensionless),
+            ],
+            EffectParameters::AudioCompressor {
+                threshold_db,
+                ratio,
+                attack_ms,
+                release_ms,
+                makeup_db,
+            } => [threshold_db, ratio, attack_ms, release_ms, makeup_db]
+                .into_iter()
+                .map(|id| (id, ValueType::Scalar, Unit::Dimensionless))
+                .collect(),
+            EffectParameters::AudioLimiter {
+                ceiling_db,
+                release_ms,
+            } => [ceiling_db, release_ms]
+                .into_iter()
+                .map(|id| (id, ValueType::Scalar, Unit::Dimensionless))
+                .collect(),
             EffectParameters::GaussianBlur { sigma } => {
                 vec![(sigma, ValueType::Scalar, Unit::DesignPx)]
             }
@@ -239,12 +366,31 @@ impl EffectDefinition {
         ) {
             return self.resolve_color(values);
         }
+        // AUDIO-007/008: filters and dynamics are executed only by the audio
+        // evaluator. The generic resolve still validates parameters so that
+        // failures surface as typed errors before the domain rejection.
+        if matches!(
+            self.parameters,
+            EffectParameters::AudioEq { .. }
+                | EffectParameters::AudioHpf { .. }
+                | EffectParameters::AudioLpf { .. }
+                | EffectParameters::AudioCompressor { .. }
+                | EffectParameters::AudioLimiter { .. }
+        ) {
+            self.resolve_audio(values)?;
+            return Err(EffectError::UnsupportedFeature);
+        }
         let sigma_id = match self.parameters {
             // Audio effects are executed only by the audio evaluator.
             EffectParameters::AudioGain { .. } => return Err(EffectError::UnsupportedFeature),
             EffectParameters::GaussianBlur { sigma }
             | EffectParameters::DropShadow { sigma, .. } => sigma,
-            EffectParameters::ColorExposure { .. }
+            EffectParameters::AudioEq { .. }
+            | EffectParameters::AudioHpf { .. }
+            | EffectParameters::AudioLpf { .. }
+            | EffectParameters::AudioCompressor { .. }
+            | EffectParameters::AudioLimiter { .. }
+            | EffectParameters::ColorExposure { .. }
             | EffectParameters::ColorLevels { .. }
             | EffectParameters::ColorCurves { .. }
             | EffectParameters::ColorHsl { .. } => unreachable!("handled above"),
@@ -255,6 +401,11 @@ impl EffectDefinition {
         }
         Ok(match self.parameters {
             EffectParameters::AudioGain { .. } => return Err(EffectError::UnsupportedFeature),
+            EffectParameters::AudioEq { .. }
+            | EffectParameters::AudioHpf { .. }
+            | EffectParameters::AudioLpf { .. }
+            | EffectParameters::AudioCompressor { .. }
+            | EffectParameters::AudioLimiter { .. } => unreachable!("handled above"),
             EffectParameters::GaussianBlur { .. } => {
                 if self.version == AFFINE_EFFECT_VERSION {
                     ResolvedEffect::AffineGaussianBlur {
@@ -388,6 +539,140 @@ impl EffectDefinition {
             _ => unreachable!("color resolution is only invoked for color variants"),
         }
     }
+    /// AUDIO-007/008: resolve constant audio filter/dynamics parameters into
+    /// the deterministic DSP specification shared by playback and export
+    /// (ADR-0117). Every failure is a typed parameter error.
+    pub fn resolve_audio(
+        &self,
+        values: &BTreeMap<PropertyId, Value>,
+    ) -> Result<ResolvedAudioEffect, EffectError> {
+        self.ensure_supported()?;
+        let scalar = |id| match values.get(&id) {
+            Some(Value::Scalar(v)) => Ok(v.get()),
+            _ => Err(EffectError::InvalidParameter(id)),
+        };
+        let bounded = |id, min: f64, max: f64| -> Result<f64, EffectError> {
+            let value = scalar(id)?;
+            if (min..=max).contains(&value) {
+                Ok(value)
+            } else {
+                Err(EffectError::InvalidParameter(id))
+            }
+        };
+        let frequency = |id| {
+            let value = scalar(id)?;
+            if value > 0.0 && value < AUDIO_FILTER_MAX_FREQ_HZ {
+                Ok(value)
+            } else {
+                Err(EffectError::InvalidParameter(id))
+            }
+        };
+        let milliseconds = |id| bounded(id, AUDIO_MIN_TIME_MS, AUDIO_MAX_TIME_MS);
+        let decibels = |id| bounded(id, -AUDIO_MAX_DB, AUDIO_MAX_DB);
+        let order = |id| {
+            let value = scalar(id)?;
+            if value.fract() == 0.0
+                && (1..=i64::from(AUDIO_FILTER_MAX_ORDER)).contains(&(value as i64))
+            {
+                Ok(value as u32)
+            } else {
+                Err(EffectError::InvalidParameter(id))
+            }
+        };
+        match self.parameters {
+            EffectParameters::AudioEq { bands } => {
+                let table = match values.get(&bands) {
+                    Some(Value::DataTable(t)) => t,
+                    _ => return Err(EffectError::InvalidParameter(bands)),
+                };
+                let rows = eq_bands(table).ok_or(EffectError::InvalidParameter(bands))?;
+                Ok(ResolvedAudioEffect::Eq { bands: rows })
+            }
+            EffectParameters::AudioHpf {
+                cutoff_hz,
+                order: o,
+            } => Ok(ResolvedAudioEffect::Hpf {
+                cutoff_hz: frequency(cutoff_hz)?,
+                order: order(o)?,
+            }),
+            EffectParameters::AudioLpf {
+                cutoff_hz,
+                order: o,
+            } => Ok(ResolvedAudioEffect::Lpf {
+                cutoff_hz: frequency(cutoff_hz)?,
+                order: order(o)?,
+            }),
+            EffectParameters::AudioCompressor {
+                threshold_db,
+                ratio,
+                attack_ms,
+                release_ms,
+                makeup_db,
+            } => Ok(ResolvedAudioEffect::Compressor {
+                threshold_db: decibels(threshold_db)?,
+                ratio: bounded(ratio, 1.0, AUDIO_MAX_RATIO)?,
+                attack_ms: milliseconds(attack_ms)?,
+                release_ms: milliseconds(release_ms)?,
+                makeup_db: decibels(makeup_db)?,
+            }),
+            EffectParameters::AudioLimiter {
+                ceiling_db,
+                release_ms,
+            } => Ok(ResolvedAudioEffect::Limiter {
+                ceiling_db: bounded(ceiling_db, -AUDIO_MAX_DB, 0.0)?,
+                release_ms: milliseconds(release_ms)?,
+            }),
+            _ => Err(EffectError::UnsupportedFeature),
+        }
+    }
+}
+/// Validate and extract the AUDIO-007 EQ band table: exactly four columns
+/// `kind` (enum: peak | low_shelf | high_shelf), `freq_hz`, `gain_db` and `q`
+/// (scalars), 1..=AUDIO_EQ_MAX_BANDS rows (ADR-0117).
+fn eq_bands(table: &crate::DataTable) -> Option<Vec<AudioEqBand>> {
+    if table.columns.len() != 4
+        || table.columns.get("kind") != Some(&ValueType::Enum)
+        || table.columns.get("freq_hz") != Some(&ValueType::Scalar)
+        || table.columns.get("gain_db") != Some(&ValueType::Scalar)
+        || table.columns.get("q") != Some(&ValueType::Scalar)
+        || table.rows.is_empty()
+        || table.rows.len() > AUDIO_EQ_MAX_BANDS
+    {
+        return None;
+    }
+    let mut bands = Vec::with_capacity(table.rows.len());
+    for row in &table.rows {
+        if row.len() != 4 {
+            return None;
+        }
+        let kind = match row.get("kind") {
+            Some(Value::Enum(v)) if v == "peak" => AudioEqBandKind::Peak,
+            Some(Value::Enum(v)) if v == "low_shelf" => AudioEqBandKind::LowShelf,
+            Some(Value::Enum(v)) if v == "high_shelf" => AudioEqBandKind::HighShelf,
+            _ => return None,
+        };
+        let (Some(Value::Scalar(freq)), Some(Value::Scalar(gain)), Some(Value::Scalar(q))) =
+            (row.get("freq_hz"), row.get("gain_db"), row.get("q"))
+        else {
+            return None;
+        };
+        let (freq_hz, gain_db, q) = (freq.get(), gain.get(), q.get());
+        if !(freq_hz > 0.0
+            && freq_hz < AUDIO_FILTER_MAX_FREQ_HZ
+            && gain_db.abs() <= AUDIO_MAX_DB
+            && q > 0.0
+            && q <= AUDIO_EQ_MAX_Q)
+        {
+            return None;
+        }
+        bands.push(AudioEqBand {
+            kind,
+            freq_hz,
+            gain_db,
+            q,
+        });
+    }
+    Some(bands)
 }
 /// Validate and extract the COLOR-002 curve table: exactly two scalar columns
 /// named `x` and `y`, 2..=CURVES_MAX_POINTS rows, strictly increasing `x`,
@@ -448,6 +733,25 @@ fn curve_default() -> Value {
     Value::DataTable(crate::DataTable {
         columns,
         rows: vec![row(0.0, 0.0), row(1.0, 1.0)],
+    })
+}
+/// Identity single-band EQ table used as the AUDIO-007 `eq_bands` default.
+fn eq_bands_default() -> Value {
+    let f = |v| FiniteF64::new(v).expect("finite eq default");
+    let columns = BTreeMap::from([
+        ("kind".to_string(), ValueType::Enum),
+        ("freq_hz".to_string(), ValueType::Scalar),
+        ("gain_db".to_string(), ValueType::Scalar),
+        ("q".to_string(), ValueType::Scalar),
+    ]);
+    Value::DataTable(crate::DataTable {
+        columns,
+        rows: vec![BTreeMap::from([
+            ("kind".to_string(), Value::Enum("peak".to_string())),
+            ("freq_hz".to_string(), Value::Scalar(f(1_000.0))),
+            ("gain_db".to_string(), Value::Scalar(f(0.0))),
+            ("q".to_string(), Value::Scalar(f(1.0))),
+        ])],
     })
 }
 pub fn effect_descriptors() -> Vec<PropertyDescriptor> {
@@ -541,6 +845,61 @@ pub fn effect_descriptors() -> Vec<PropertyDescriptor> {
             0xf0000000_0010_4100_8000_00000000000f,
             "lightness",
             Value::Scalar(f(0.0)),
+            Unit::Dimensionless,
+        ),
+        // AUDIO-007/008 parameter descriptors (ADR-0117).
+        (
+            0xf0000000_0010_4500_8000_000000000001,
+            "eq_bands",
+            eq_bands_default(),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4500_8000_000000000002,
+            "cutoff_hz",
+            Value::Scalar(f(1_000.0)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4500_8000_000000000003,
+            "order",
+            Value::Scalar(f(1.0)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4500_8000_000000000004,
+            "threshold_db",
+            Value::Scalar(f(-18.0)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4500_8000_000000000005,
+            "ratio",
+            Value::Scalar(f(4.0)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4500_8000_000000000006,
+            "attack_ms",
+            Value::Scalar(f(10.0)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4500_8000_000000000007,
+            "release_ms",
+            Value::Scalar(f(100.0)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4500_8000_000000000008,
+            "makeup_db",
+            Value::Scalar(f(0.0)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4500_8000_000000000009,
+            "ceiling_db",
+            Value::Scalar(f(-1.0)),
             Unit::Dimensionless,
         ),
     ]

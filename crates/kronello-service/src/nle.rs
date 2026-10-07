@@ -708,6 +708,30 @@ fn split_owned_objects(clip: &mut Clip) -> Result<(), ServiceError> {
                 remap(opacity)?;
             }
             EffectParameters::AudioGain { gain } => remap(gain)?,
+            EffectParameters::AudioEq { bands } => remap(bands)?,
+            EffectParameters::AudioHpf { cutoff_hz, order }
+            | EffectParameters::AudioLpf { cutoff_hz, order } => {
+                remap(cutoff_hz)?;
+                remap(order)?;
+            }
+            EffectParameters::AudioCompressor {
+                threshold_db,
+                ratio,
+                attack_ms,
+                release_ms,
+                makeup_db,
+            } => {
+                for id in [threshold_db, ratio, attack_ms, release_ms, makeup_db] {
+                    remap(id)?;
+                }
+            }
+            EffectParameters::AudioLimiter {
+                ceiling_db,
+                release_ms,
+            } => {
+                remap(ceiling_db)?;
+                remap(release_ms)?;
+            }
             EffectParameters::ColorExposure { exposure, offset } => {
                 remap(exposure)?;
                 remap(offset)?;
