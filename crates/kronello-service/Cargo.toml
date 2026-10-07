@@ -30,6 +30,7 @@ kronello-render = { path = "../kronello-render" }
 kronello-gpu = { path = "../kronello-gpu" }
 kronello-vector = { path = "../kronello-vector" }
 kronello-text = { path = "../kronello-text" }
+xml-rs = "=0.8.29"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip", "raw_value"] }
 uuid = { version = "1", features = ["v4"] }
@@ -38,5 +39,6 @@ tempfile = "3"
 
 [dev-dependencies]
 png = "0.18"
+kronello-testkit = { path = "../kronello-testkit" }
 kronello-framebridge = { path = "../kronello-framebridge" }
 jsonschema = { version = "0.46", default-features = false }

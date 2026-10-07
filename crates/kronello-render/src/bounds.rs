@@ -178,6 +178,45 @@ pub(crate) fn derive_scene_bounds(nodes: &mut [SceneNodeIr]) -> Result<(), Rende
     for i in (0..nodes.len()).rev() {
         let n = &nodes[i];
         let mut value = match &n.content {
+            SceneContent::Caption(caption) => {
+                // Text-local glyphs plus the placement translation into root
+                // space. Background fills the whole block; the outline ring and
+                // synthesized bold/italic expand the ink conservatively.
+                let to_root =
+                    Affine2([[1.0, 0.0, caption.origin[0]], [0.0, 1.0, caption.origin[1]]]);
+                let transform = n.world_transform.compose(to_root);
+                let map = |b: kronello_text::Bounds| DesignBounds::checked(b.min, b.max);
+                let layout = map(caption.layout.layout_bounds)?;
+                let mut ink = caption.layout.ink_bounds.map(map).transpose()?;
+                let mut halo = caption.outline.as_ref().map_or(0.0, |o| o.width.get());
+                if caption.span_flags.iter().any(|f| f.bold) {
+                    halo += caption.bold_width;
+                }
+                if let Some(bounds) = ink {
+                    let mut bounds = bounds.expand(halo)?;
+                    if caption.span_flags.iter().any(|f| f.italic) {
+                        let lean = kronello_model::CAPTION_ITALIC_SHEAR
+                            * (bounds.max[1] - bounds.min[1]).max(0.0);
+                        bounds = DesignBounds::checked(
+                            bounds.min,
+                            [bounds.max[0] + lean, bounds.max[1]],
+                        )?;
+                    }
+                    ink = Some(bounds);
+                }
+                if caption.background.is_some() {
+                    ink = Some(match ink {
+                        Some(b) => b.union(layout),
+                        None => layout,
+                    });
+                }
+                let map_t = |b: Option<DesignBounds>| b.map(|b| b.transform(transform)).transpose();
+                LayoutValue {
+                    layout_bounds: map_t(Some(layout))?,
+                    ink_bounds: map_t(ink)?,
+                    visual_bounds: map_t(ink)?,
+                }
+            }
             SceneContent::Text(layout) => text_bounds(layout, n.world_transform, &[])?,
             SceneContent::Shape { resolved, .. } => {
                 let geometry = kronello_vector::geometry_bounds(&resolved.geometry)?

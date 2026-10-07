@@ -16,7 +16,7 @@
 | M3 | 0 | 0 | 25 | 0 | 25 |
 | M4 | 0 | 0 | 12 | 0 | 12 |
 | M5 | 0 | 1 | 12 | 0 | 13 |
-| M7 | 11 | 0 | 0 | 0 | 11 |
+| M7 | 9 | 0 | 2 | 0 | 11 |
 | M8 | 15 | 0 | 0 | 0 | 15 |
 | M9 | 12 | 0 | 0 | 0 | 12 |
 | M10 | 7 | 0 | 0 | 0 | 7 |
@@ -812,7 +812,7 @@
 
 ### SUB-001 字幕モデル: caption track・字幕 clip kind・スタイルと版管理
 
-- 優先度: P0 / 領域: captions / 状態: planned
+- 優先度: P0 / 領域: captions / 状態: done
 - 依存: NLE-002, TEXT-002
 - 受け入れ条件:
   - caption track と字幕 clip kind を sequence モデルと schema に追加する
@@ -821,7 +821,7 @@
 
 ### SUB-002 字幕 I/O: SRT/VTT/ITT 入出力と焼き付け・サイドカー書き出し
 
-- 優先度: P0 / 領域: captions / 状態: planned
+- 優先度: P0 / 領域: captions / 状態: done
 - 依存: SUB-001, MEDIA-002
 - 受け入れ条件:
   - SRT/VTT/ITT のインポート・エクスポートを計画/適用の編集として実装する

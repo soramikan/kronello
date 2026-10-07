@@ -121,6 +121,7 @@ impl Mutation {
                                 | "templates"
                                 | "template_instances"
                                 | "sequences"
+                                | "captions"
                         )
                         && !object.contains_key(part)
                     {

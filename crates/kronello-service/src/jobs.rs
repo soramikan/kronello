@@ -5,7 +5,7 @@ use kronello_jobs::{JobConfig, JobError, JobRecord, JobStore, Submission};
 use kronello_media::{
     AvExportRequest, AvExportSnapshot, DeliveryAudioCodec, MediaRuntime, MovieProfile,
 };
-use kronello_model::{AssetId, DocumentObject};
+use kronello_model::{AssetId, CaptionFormat, DocumentObject, SequenceId};
 use kronello_render::{RenderSnapshot, SequenceRequest, frame_samples};
 use kronello_time::{Time, TimeRange};
 use serde::{Deserialize, Serialize};
@@ -98,6 +98,12 @@ pub enum JobOutput {
         clips: Vec<JobAudioClip>,
         background: [f32; 3],
     },
+    /// Subtitle sidecar file (`caption_format` selects srt/vtt/itt). The job
+    /// serializes cue documents from the fixed snapshot; no frames render.
+    CaptionSidecar {
+        sequence: SequenceId,
+        caption_format: CaptionFormat,
+    },
 }
 pub(crate) struct MovieSettings<'a> {
     pub profile: MovieProfile,
@@ -116,12 +122,13 @@ impl JobOutput {
             | Self::Av1Mp4 { .. }
             | Self::H264Mov { .. }
             | Self::HevcMov { .. }
-            | Self::Av1Webm { .. } => &[1],
+            | Self::Av1Webm { .. }
+            | Self::CaptionSidecar { .. } => &[1],
         }
     }
     pub(crate) fn movie_settings(&self) -> Result<MovieSettings<'_>, ServiceError> {
         let (profile, version, audio, clips, background) = match self {
-            Self::ImageSequence => {
+            Self::ImageSequence | Self::CaptionSidecar { .. } => {
                 return Err(ServiceError::invalid(
                     "render.export requires a movie profile",
                 ));
@@ -402,9 +409,19 @@ impl Service<'_> {
                 "job range must contain at least one frame",
             ));
         }
-        if !matches!(request.output, JobOutput::ImageSequence) {
-            validate_movie_destination(&request.render.output_directory, &request.output)?;
-            movie_snapshot(&snapshot, &request.output)?;
+        match &request.output {
+            JobOutput::ImageSequence => (),
+            JobOutput::CaptionSidecar {
+                sequence,
+                caption_format,
+            } => {
+                validate_sidecar_destination(&request.render.output_directory, *caption_format)?;
+                sidecar_content(&snapshot, *sequence, *caption_format)?;
+            }
+            _ => {
+                validate_movie_destination(&request.render.output_directory, &request.output)?;
+                movie_snapshot(&snapshot, &request.output)?;
+            }
         }
         let store = self.jobs()?;
         let submission = Submission {
@@ -470,6 +487,23 @@ impl Service<'_> {
                         ServiceError::new("OUTPUT_VALIDATION_FAILED", error.to_string())
                     })?;
                 }
+                JobOutput::CaptionSidecar { .. } => {
+                    let bytes = std::fs::read(&record.destination).map_err(|error| {
+                        ServiceError::new("OUTPUT_VALIDATION_FAILED", error.to_string())
+                    })?;
+                    let report = &result["report"];
+                    if bytes.len() as u64 != report["bytes"].as_u64().unwrap_or_default()
+                        || format!("{:x}", Sha256::digest(&bytes))
+                            != report["sha256"].as_str().unwrap_or_default()
+                        || report["render_snapshot_hash"].as_str()
+                            != Some(record.snapshot_hash.as_str())
+                    {
+                        return Err(ServiceError::new(
+                            "OUTPUT_VALIDATION_FAILED",
+                            "published caption sidecar differs",
+                        ));
+                    }
+                }
                 output => {
                     let settings = output.movie_settings()?;
                     let probe =
@@ -533,8 +567,21 @@ impl Service<'_> {
         }
         fixed.snapshot.validate()?;
         fixed.request.render.input.region.validate()?;
-        if !matches!(fixed.request.output, JobOutput::ImageSequence) {
-            movie_snapshot(&fixed.snapshot, &fixed.request.output)?;
+        match &fixed.request.output {
+            JobOutput::ImageSequence => (),
+            JobOutput::CaptionSidecar {
+                sequence,
+                caption_format,
+            } => {
+                validate_sidecar_destination(
+                    &fixed.request.render.output_directory,
+                    *caption_format,
+                )?;
+                sidecar_content(&fixed.snapshot, *sequence, *caption_format)?;
+            }
+            output => {
+                movie_snapshot(&fixed.snapshot, output)?;
+            }
         }
         features(&fixed.request.required_features)?;
         if fixed.snapshot.content_hash()? != record.snapshot_hash {
@@ -557,8 +604,12 @@ impl Service<'_> {
                 }
             }
         }
-        let font_bytes = crate::load_locked_fonts(&fixed.snapshot, &fixed.request.render.input)?;
-        let _ = font_bytes;
+        // Sidecar serialization reads cue documents only; no fonts are loaded.
+        if !matches!(fixed.request.output, JobOutput::CaptionSidecar { .. }) {
+            let font_bytes =
+                crate::load_locked_fonts(&fixed.snapshot, &fixed.request.render.input)?;
+            let _ = font_bytes;
+        }
         if fixed.request.render.output_directory != record.destination
             || serde_json::to_value(&fixed.request)? != record.output_profile
             || fixed.snapshot.project().id.to_string() != record.project_id
@@ -580,7 +631,14 @@ impl Service<'_> {
         record: &JobRecord,
         fixed: &FixedInput,
     ) -> Result<(), ServiceError> {
-        let font_bytes = crate::load_locked_fonts(&fixed.snapshot, &fixed.request.render.input)?;
+        let sidecar = matches!(fixed.request.output, JobOutput::CaptionSidecar { .. });
+        // Sidecar jobs serialize stored cue documents and never rasterize;
+        // they do not require locked font inputs.
+        let font_bytes = if sidecar {
+            Vec::new()
+        } else {
+            crate::load_locked_fonts(&fixed.snapshot, &fixed.request.render.input)?
+        };
         let fonts: Vec<_> = fixed
             .snapshot
             .font_locks()
@@ -638,81 +696,100 @@ impl Service<'_> {
                 message
             })
         };
-        let rendered = self.with_video_backend(&fixed.request.render.input.project, |backend| {
-            let request = &fixed.request.render;
-            let result = match &fixed.request.output {
-                JobOutput::ImageSequence => {
-                    let metadata = kronello_render::render_sequence_with_checkpoint(
-                        &fixed.snapshot,
-                        &fonts,
-                        backend,
-                        SequenceRequest {
-                            range: request.range,
-                            frame_rate: request.frame_rate,
-                            region: request.input.region,
-                        },
-                        &stage_path,
-                        &mut |n| checkpoint(n).map_err(kronello_render::RenderError::InvalidInput),
-                    )?;
-                    #[cfg(all(feature = "test-job-control", debug_assertions))]
-                    if std::env::var_os("KRONELLO_TEST_JOB_CORRUPT_OUTPUT").as_deref()
-                        == Some(std::ffi::OsStr::new("1"))
-                    {
-                        std::fs::write(
-                            stage_path.join(&metadata.frames[0].display.name),
-                            b"corrupt",
+        let rendered = if let JobOutput::CaptionSidecar {
+            sequence,
+            caption_format,
+        } = &fixed.request.output
+        {
+            let content = sidecar_content(&fixed.snapshot, *sequence, *caption_format)?;
+            std::fs::write(&stage_path, content.as_bytes())?;
+            Ok(serde_json::json!({
+                "caption_format": caption_format,
+                "bytes": content.len() as u64,
+                "sha256": format!("{:x}", Sha256::digest(content.as_bytes())),
+                "render_snapshot_hash": record.snapshot_hash,
+            }))
+        } else {
+            self.with_video_backend(&fixed.request.render.input.project, |backend| {
+                let request = &fixed.request.render;
+                let result = match &fixed.request.output {
+                    JobOutput::ImageSequence => {
+                        let metadata = kronello_render::render_sequence_with_checkpoint(
+                            &fixed.snapshot,
+                            &fonts,
+                            backend,
+                            SequenceRequest {
+                                range: request.range,
+                                frame_rate: request.frame_rate,
+                                region: request.input.region,
+                            },
+                            &stage_path,
+                            &mut |n| {
+                                checkpoint(n).map_err(kronello_render::RenderError::InvalidInput)
+                            },
                         )?;
+                        #[cfg(all(feature = "test-job-control", debug_assertions))]
+                        if std::env::var_os("KRONELLO_TEST_JOB_CORRUPT_OUTPUT").as_deref()
+                            == Some(std::ffi::OsStr::new("1"))
+                        {
+                            std::fs::write(
+                                stage_path.join(&metadata.frames[0].display.name),
+                                b"corrupt",
+                            )?;
+                        }
+                        validate_sequence(
+                            &stage_path,
+                            &metadata,
+                            record.total_frames,
+                            &record.snapshot_hash,
+                        )?;
+                        serde_json::to_value(metadata)?
                     }
-                    validate_sequence(
-                        &stage_path,
-                        &metadata,
-                        record.total_frames,
-                        &record.snapshot_hash,
-                    )?;
-                    serde_json::to_value(metadata)?
-                }
-                output => {
-                    let settings = output.movie_settings()?;
-                    let runtime = MediaRuntime::load()?;
-                    let av = movie_snapshot(&fixed.snapshot, &fixed.request.output)?;
-                    let report = runtime.export_av_with_checkpoint(
-                        &av,
-                        &request.input.project,
-                        &fonts,
-                        backend,
-                        &AvExportRequest {
-                            output: stage_path.clone(),
-                            range: request.range,
-                            frame_rate: request.frame_rate,
-                            region: request.input.region,
-                            background: settings.background,
-                            clipping: kronello_audio::ClippingPolicy::Reject,
-                        },
-                        &mut |n| checkpoint(n).map_err(kronello_media::MediaError::InvalidInput),
-                    )?;
-                    #[cfg(all(feature = "test-job-control", debug_assertions))]
-                    if std::env::var_os("KRONELLO_TEST_JOB_CORRUPT_OUTPUT").as_deref()
-                        == Some(std::ffi::OsStr::new("1"))
-                    {
-                        std::fs::write(&stage_path, b"corrupt")?;
+                    output => {
+                        let settings = output.movie_settings()?;
+                        let runtime = MediaRuntime::load()?;
+                        let av = movie_snapshot(&fixed.snapshot, &fixed.request.output)?;
+                        let report = runtime.export_av_with_checkpoint(
+                            &av,
+                            &request.input.project,
+                            &fonts,
+                            backend,
+                            &AvExportRequest {
+                                output: stage_path.clone(),
+                                range: request.range,
+                                frame_rate: request.frame_rate,
+                                region: request.input.region,
+                                background: settings.background,
+                                clipping: kronello_audio::ClippingPolicy::Reject,
+                            },
+                            &mut |n| {
+                                checkpoint(n).map_err(kronello_media::MediaError::InvalidInput)
+                            },
+                        )?;
+                        #[cfg(all(feature = "test-job-control", debug_assertions))]
+                        if std::env::var_os("KRONELLO_TEST_JOB_CORRUPT_OUTPUT").as_deref()
+                            == Some(std::ffi::OsStr::new("1"))
+                        {
+                            std::fs::write(&stage_path, b"corrupt")?;
+                        }
+                        let probe = runtime.probe(&stage_path).map_err(|e| {
+                            ServiceError::new("OUTPUT_VALIDATION_FAILED", e.to_string())
+                        })?;
+                        probe.verify_movie(settings.profile)?;
+                        if report.frames.len() as u64 != record.total_frames
+                            || probe.render_snapshot_hash != record.snapshot_hash
+                        {
+                            return Err(ServiceError::new(
+                                "OUTPUT_VALIDATION_FAILED",
+                                "MOV frame count or snapshot identity differs",
+                            ));
+                        }
+                        serde_json::to_value(report)?
                     }
-                    let probe = runtime.probe(&stage_path).map_err(|e| {
-                        ServiceError::new("OUTPUT_VALIDATION_FAILED", e.to_string())
-                    })?;
-                    probe.verify_movie(settings.profile)?;
-                    if report.frames.len() as u64 != record.total_frames
-                        || probe.render_snapshot_hash != record.snapshot_hash
-                    {
-                        return Err(ServiceError::new(
-                            "OUTPUT_VALIDATION_FAILED",
-                            "MOV frame count or snapshot identity differs",
-                        ));
-                    }
-                    serde_json::to_value(report)?
-                }
-            };
-            Ok(result)
-        });
+                };
+                Ok(result)
+            })
+        };
         if let Some(error) = failure {
             return Err(error.into());
         }
@@ -854,6 +931,41 @@ pub(crate) fn movie_snapshot(
             settings.audio_version,
         )?
     })
+}
+
+/// Serialize one sequence's caption cues from a fixed snapshot for a sidecar
+/// job. The same validation runs at submit, worker validation and execution.
+pub(crate) fn sidecar_content(
+    snapshot: &RenderSnapshot,
+    sequence: SequenceId,
+    format: CaptionFormat,
+) -> Result<String, ServiceError> {
+    let sequence = snapshot
+        .project()
+        .sequences
+        .iter()
+        .find_map(|s| match s {
+            DocumentObject::Known(s) if s.id == sequence => Some(s),
+            _ => None,
+        })
+        .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "sequence missing"))?;
+    crate::captions::serialize(snapshot.project(), sequence, format)
+}
+
+pub(crate) fn validate_sidecar_destination(
+    path: &Path,
+    format: CaptionFormat,
+) -> Result<(), ServiceError> {
+    if path.extension().is_none_or(|e| e != format.extension()) {
+        return Err(ServiceError::new(
+            "INVALID_MEDIA_INPUT",
+            format!(
+                "caption sidecar requires .{} destination",
+                format.extension()
+            ),
+        ));
+    }
+    Ok(())
 }
 
 pub(crate) fn validate_movie_destination(

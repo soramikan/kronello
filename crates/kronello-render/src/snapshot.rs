@@ -258,6 +258,18 @@ impl RenderSnapshot {
                         }
                     }
                 }
+                // Caption cue fonts, including clip-level overrides and span
+                // faces, are locked by hash exactly like text node fonts.
+                let registry = render_registry();
+                for clip in source.tracks.iter().flat_map(|t| &t.clips) {
+                    let SourceRef::Caption { caption } = &clip.source_ref else {
+                        continue;
+                    };
+                    let document =
+                        content(&project.captions, caption.as_uuid(), |c| c.id.as_uuid())?
+                            .ok_or(CaptionError::MissingContent { id: *caption })?;
+                    locks.extend(document.resolve(&clip.properties, &registry)?.fonts());
+                }
                 value.font_locks = locks.into_iter().collect();
                 Ok(value)
             }
@@ -595,6 +607,22 @@ fn content_asset(project: &Project, id: AssetId) -> Result<&Asset, RenderError> 
     })
 }
 
+/// Resolved caption draw input: laid-out glyphs plus cue-level attributes that
+/// are not part of `TextDocument` (outline ring, block background, synthesized
+/// bold/italic flags). Glyph coordinates are text-local; `origin` is the
+/// text-local origin in root Composition design_px after anchor/safe-area
+/// placement, so node transforms still compose normally.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CaptionDraw {
+    pub layout: LayoutResult,
+    /// Draw-time flags indexed by each glyph's `style_index`.
+    pub span_flags: Vec<kronello_model::CaptionSpanFlags>,
+    /// Outer ring width added to synthesized-bold spans, design_px.
+    pub bold_width: f64,
+    pub outline: Option<kronello_model::CaptionOutline>,
+    pub background: Option<kronello_model::Color>,
+    pub origin: [f64; 2],
+}
 #[derive(Debug, Clone, PartialEq)]
 pub enum SceneContent {
     Empty,
@@ -604,6 +632,7 @@ pub enum SceneContent {
         resolved: ResolvedShape,
     },
     Text(LayoutResult),
+    Caption(CaptionDraw),
     Video {
         asset: Asset,
         stream_index: u32,
@@ -1017,6 +1046,40 @@ pub fn build_scene_ir_with_cache(
                 SourceRef::Generator { color, .. } => {
                     crate::sequence::solid_content(*color, sequence.extent)?
                 }
+                SourceRef::Caption { caption } => {
+                    let document =
+                        self::content(&snapshot.project.captions, caption.as_uuid(), |c| {
+                            c.id.as_uuid()
+                        })?
+                        .ok_or(CaptionError::MissingContent { id: *caption })?;
+                    let resolved = document.resolve(&clip.properties, &registry)?;
+                    let wrap_width = resolved.placement.wrap_width(sequence.extent);
+                    let text = resolved.resolved_text(wrap_width)?;
+                    let layout = cache.layout(&text, fonts)?;
+                    crate::bounds::check_overflow(&n.key, &layout)?;
+                    layout_content_hash = Some(crate::layout_content_hash(&text)?);
+                    used_fonts.extend(resolved.fonts());
+                    let block = [
+                        wrap_width,
+                        layout.layout_bounds.max[1] - layout.layout_bounds.min[1],
+                    ];
+                    let top_left = resolved.placement.origin(sequence.extent, block);
+                    // Text-local origin: the layout bounds box is anchored
+                    // inside the safe area, so translate by the inverse of the
+                    // bounds' own offset.
+                    let origin = [
+                        top_left[0] - layout.layout_bounds.min[0],
+                        top_left[1] - layout.layout_bounds.min[1],
+                    ];
+                    SceneContent::Caption(CaptionDraw {
+                        layout,
+                        span_flags: resolved.span_flags,
+                        bold_width: resolved.font_size * kronello_model::CAPTION_BOLD_WIDTH_RATIO,
+                        outline: resolved.outline,
+                        background: resolved.background,
+                        origin,
+                    })
+                }
                 _ => content,
             };
             for tr in &sequence.transitions {
@@ -1174,6 +1237,7 @@ pub fn render_registry() -> SchemaRegistry {
         .chain(text_descriptors())
         .chain(effect_descriptors())
         .chain(kronello_model::simulation_descriptors())
+        .chain(kronello_model::caption_descriptors())
     {
         registry
             .register(descriptor)

@@ -27,6 +27,12 @@ pub enum TimelineCommand {
     SequenceCreate {
         sequence: Sequence,
     },
+    /// Append one authored track. Track kind is part of the value; validation
+    /// enforces per-kind clip rules.
+    TrackAppend {
+        sequence: SequenceId,
+        track: Track,
+    },
     ClipPlace {
         sequence: SequenceId,
         track: TrackId,
@@ -207,6 +213,7 @@ pub enum ClipKind {
     Audio,
     Composition,
     Generator,
+    Caption,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -283,6 +290,7 @@ pub(crate) fn sequence_query(
             let mut unsupported_reason = None;
             let kind = match &clip.source_ref {
                 SourceRef::Composition { .. } => ClipKind::Composition,
+                SourceRef::Caption { .. } => ClipKind::Caption,
                 SourceRef::Generator {
                     generator,
                     version,
@@ -1595,6 +1603,15 @@ pub(crate) fn mutate(
                 .sequences
                 .push(DocumentObject::Known(sequence.clone()));
         }
+        TimelineCommand::TrackAppend { sequence, track } => {
+            let s = sequence_mut(project, *sequence)?;
+            if s.tracks.iter().any(|t| t.id == track.id) {
+                return Err(ServiceError::new("INVALID_EDIT", "track id already exists"));
+            }
+            s.tracks.push(track.clone());
+            keys.insert(changed(sequence.as_uuid(), sequence.as_uuid()));
+            keys.insert(changed(track.id.as_uuid(), sequence.as_uuid()));
+        }
         TimelineCommand::ClipPlace {
             sequence,
             track,
@@ -1646,7 +1663,22 @@ pub(crate) fn mutate(
                 .flat_map(|t| &mut t.clips)
                 .find(|c| c.id == *clip)
                 .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "clip missing"))?;
-            *c = if matches!(command, TimelineCommand::ClipTrim { .. }) {
+            *c = if matches!(c.source_ref, SourceRef::Caption { .. }) {
+                // A cue's display interval is the placement itself; there is no
+                // source-relative window to re-anchor. Trim stays a subset.
+                if range.is_empty()
+                    || (matches!(command, TimelineCommand::ClipTrim { .. })
+                        && (range.start() < c.timeline_range.start()
+                            || range.end() > c.timeline_range.end()))
+                {
+                    return Err(
+                        SequenceError::Invalid("trim must be a nonempty subset".into()).into(),
+                    );
+                }
+                let mut updated = c.clone();
+                updated.timeline_range = *range;
+                updated
+            } else if matches!(command, TimelineCommand::ClipTrim { .. }) {
                 c.trimmed(*range)?
             } else {
                 c.stretched(*range)?

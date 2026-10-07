@@ -275,7 +275,8 @@ fn capabilities_registry_media_extension_without_device_initialization() {
             "template.define",
             "template.instantiate",
             "template.set_input",
-            "template.set_duration"
+            "template.set_duration",
+            "captions.import"
         ]
     );
     let ResultData::Capabilities(c) =
@@ -630,6 +631,16 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
         json!({"operation":"template.set_duration", "project":path, "base_revision":"1", "session_id":uuid, "idempotency_key":"duration", "instance":uuid, "duration":time}),
         json!({"operation":"template.preview","project":path,"instance":instance,"time":time,"fonts":[]}),
         json!({"operation":"template.migration_plan","project":path,"base_revision":"1","instance":uuid,"definition":definition["id"],"time":time,"fonts":[]}),
+        json!({"operation":"captions.import_plan","project":path,"base_revision":"1","sequence":uuid,"track":uuid,"format":"srt",
+            "content":"1\n00:00:01,000 --> 00:00:02,000\ncue\n",
+            "style":{"font":{"family":"TestSans","postscript_name":"TestSans-Regular","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","face_index":0},"size":24.0,"fill":{"space":"srgb","components":{"r":1.0,"g":1.0,"b":1.0,"alpha":1.0}}},
+            "cue_ids":[{"caption":uuid,"clip":uuid}]}),
+        json!({"operation":"captions.import","session_id":uuid,"idempotency_key":"captions",
+            "plan":{"project":path,"base_revision":"1","sequence":uuid,"track":uuid,"format":"srt",
+            "content":"1\n00:00:01,000 --> 00:00:02,000\ncue\n",
+            "style":{"font":{"family":"TestSans","postscript_name":"TestSans-Regular","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","face_index":0},"size":24.0,"fill":{"space":"srgb","components":{"r":1.0,"g":1.0,"b":1.0,"alpha":1.0}}},
+            "cue_ids":[{"caption":uuid,"clip":uuid}]}}),
+        json!({"operation":"captions.export","project":path,"sequence":uuid,"format":"vtt"}),
     ];
     assert_eq!(requests.len(), command_registry().len());
     for request in requests {
@@ -1054,6 +1065,27 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
         json!({"operation":"audio.analyze", "project":path, "base_revision":"9", "id":Uuid::new_v4(),
         "input":{"kind":"bus","target":{"kind":"composition","composition":composition},"range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"100"}}},
         "config":{"version":1,"sample_rate":48000,"window":32,"hop":32,"bands":[],"time_map":{"kind":"linear","offset":{"num":"0","den":"1"},"speed":{"num":"1","den":"1"}}}}),
+    );
+    // Captions share the same plan/apply path: plan is read-only, import
+    // applies an ordinary edit, export reserializes stored cue documents.
+    let caption_style = json!({"font":{"family":"TestSans","postscript_name":"TestSans-Regular",
+        "sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","face_index":0},
+        "size":24.0,"fill":{"space":"srgb","components":{"r":1.0,"g":1.0,"b":1.0,"alpha":1.0}}});
+    let srt = "1\n00:00:01,000 --> 00:00:02,000\nこんにちは\n";
+    let caption_ids = json!([{"caption":Uuid::new_v4(),"clip":Uuid::new_v4()}]);
+    execute(
+        json!({"operation":"captions.import_plan","project":path,"base_revision":"10",
+            "sequence":sequence_id,"track":Uuid::new_v4(),"format":"srt","content":srt,
+            "style":caption_style,"cue_ids":caption_ids}),
+    );
+    execute(
+        json!({"operation":"captions.import","session_id":session,"idempotency_key":"captions",
+            "plan":{"project":path,"base_revision":"10","sequence":sequence_id,
+            "track":Uuid::new_v4(),"format":"srt","content":srt,
+            "style":caption_style,"cue_ids":caption_ids}}),
+    );
+    execute(
+        json!({"operation":"captions.export","project":path,"sequence":sequence_id,"format":"srt"}),
     );
     let report = execute(
         json!({"operation":"svg.inspect","svg":"<svg><path d='M0 0L10 0L10 10Z' fill='#abc'/></svg>"}),

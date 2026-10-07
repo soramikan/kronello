@@ -52,6 +52,8 @@ impl Track {
 pub enum TrackKind {
     Video,
     Audio,
+    /// Text cues rendered above every video track; never enters audio mixing.
+    Caption,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -154,6 +156,9 @@ pub enum SourceRef {
         #[serde(default = "generator_color")]
         color: Color,
     },
+    Caption {
+        caption: CaptionId,
+    },
 }
 // Decode variant payloads directly from JSON. Serde's internally-tagged Content
 // buffer cannot preserve arbitrary-precision float values inside Color.
@@ -207,6 +212,11 @@ impl<'de> Deserialize<'de> for SourceRef {
             #[serde(default = "generator_color")]
             color: Color,
         }
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct CaptionSource {
+            caption: CaptionId,
+        }
         let json = serde_json::to_string(&fields).map_err(D::Error::custom)?;
         match kind.as_str() {
             "composition" => {
@@ -229,6 +239,10 @@ impl<'de> Deserialize<'de> for SourceRef {
                     version: p.version,
                     color: p.color,
                 })
+            }
+            "caption" => {
+                let p: CaptionSource = serde_json::from_str(&json).map_err(D::Error::custom)?;
+                Ok(Self::Caption { caption: p.caption })
             }
             _ => Err(D::Error::custom("unknown source kind")),
         }
@@ -460,6 +474,12 @@ impl Sequence {
                     SequenceError::Invalid("transition requires clips on one track".into())
                 })?;
             let (track, a, b) = pair;
+            // Caption cues never overlap; crossfades are a video-only transition.
+            if track.kind == TrackKind::Caption {
+                return Err(SequenceError::Invalid(
+                    "transitions require a non-caption track".into(),
+                ));
+            }
             if a.timeline_range.start() >= b.timeline_range.start()
                 || a.timeline_range.end() >= b.timeline_range.end()
                 || a.timeline_range.intersection(b.timeline_range) != Some(transition.range)
@@ -576,7 +596,41 @@ impl Sequence {
                         "reverse_resample_v1 requires reverse_grid_v1".into(),
                     ));
                 }
+                // Caption clips live only on caption tracks, and caption tracks
+                // accept nothing else (ADR-0107). Generic overlap rejection
+                // above keeps cues nonoverlapping since transitions are banned.
+                if (track.kind == TrackKind::Caption)
+                    != matches!(&clip.source_ref, SourceRef::Caption { .. })
+                {
+                    return Err(SequenceError::Invalid(
+                        "caption clips require a caption track".into(),
+                    ));
+                }
                 match &clip.source_ref {
+                    SourceRef::Caption { caption } => {
+                        if clip.source_in != Time::ZERO
+                            || !matches!(&clip.time_map, TimeMap::Linear(m) if m.offset() == Time::ZERO && m.speed() == kronello_time::Rational::ONE)
+                            || clip.reverse_sampling.is_some()
+                            || clip.audio_retime != AudioRetimePolicy::Reject
+                            || clip.volume.is_some()
+                        {
+                            return Err(SequenceError::Invalid(
+                                "caption clip requires zero source_in and an identity time map without retime, reverse or gain".into(),
+                            ));
+                        }
+                        if project.captions.iter().any(
+                            |c| matches!(c, DocumentObject::Opaque(c) if c.id == caption.as_uuid()),
+                        ) {
+                            continue;
+                        }
+                        if !project
+                            .captions
+                            .iter()
+                            .any(|c| matches!(c, DocumentObject::Known(c) if c.id == *caption))
+                        {
+                            return Err(SequenceError::MissingSource(caption.to_string()));
+                        }
+                    }
                     SourceRef::Composition { composition } => {
                         if project.compositions.iter().any(|c| matches!(c, DocumentObject::Opaque(c) if c.id == composition.as_uuid())) { continue; }
                         let source = project
