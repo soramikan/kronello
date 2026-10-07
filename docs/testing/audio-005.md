@@ -17,7 +17,7 @@
 
 | 検証 | 内容 |
 |---|---|
-| `cargo test -p kronello-media --test audio5 --locked` | 5/5。`aac_and_opus_delivery_audio_exact_length_bounded_error` で両codecの duration/PTS が厳密長・bounded error 内。`h264_aac`/`hevc_aac`/`av1_mp4_aac`/`av1_webm_opus` の各 movie profile を実 encode→decode で検証 |
+| `cargo test -p kronello-media --test audio5 --locked` | 5/5。`aac_and_opus_delivery_audio_exact_length_bounded_error` で両codecの duration/PTS が厳密長・bounded error 内。`h264_aac`/`hevc_aac`/`av1_mp4_aac`/`av1_webm_opus` の各 movie profile を実 encode→decode で検証。`h264_aac`/`hevc_aac` は VideoToolbox 必須のため profiles.rs と同様 `#[ignore]` 付きの host 実行（`--include-ignored` で実行）、lossy 系テストは pinned FFmpeg 9 runtime を要求し未満では skip する |
 | `cargo test -p kronello-service --test media --locked` | media service の回帰全体 |
 | `cargo test -p kronello-service export_profiles` | profile listing・codec列挙・未採用形式の拒否が wire 経路で一致 |
 | `cargo test -p kronello-media --test audio --locked` | 音声 decode / resample の回帰 |

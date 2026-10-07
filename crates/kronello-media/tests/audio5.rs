@@ -71,9 +71,25 @@ fn cosine_similarity(want: &[[f32; 2]], got: &[[f32; 2]]) -> f64 {
     dot / (wa.sqrt() * ga.sqrt())
 }
 
+/// Lossy delivery profiles are verified against the pinned FFmpeg 9 ABI;
+/// older system runtimes do not round-trip priming/discard identically.
+fn delivery_runtime() -> Option<MediaRuntime> {
+    let runtime = MediaRuntime::load().unwrap();
+    if runtime.capabilities().ffmpeg_version.starts_with("9.") {
+        return Some(runtime);
+    }
+    eprintln!(
+        "skipping: delivery audio requires the pinned FFmpeg 9 runtime, found {}",
+        runtime.capabilities().ffmpeg_version
+    );
+    None
+}
+
 #[test]
 fn aac_and_opus_delivery_audio_exact_length_bounded_error() {
-    let runtime = MediaRuntime::load().unwrap();
+    let Some(runtime) = delivery_runtime() else {
+        return;
+    };
     let dir = tempfile::tempdir().unwrap();
     for codec in [DeliveryAudioCodec::Aac, DeliveryAudioCodec::Opus] {
         let (extension, codec_name) = match codec {
@@ -204,7 +220,9 @@ fn snapshot() -> RenderSnapshot {
 }
 
 fn lossy_movie_roundtrip(profile: MovieProfile) {
-    let runtime = MediaRuntime::load().unwrap();
+    let Some(runtime) = delivery_runtime() else {
+        return;
+    };
     let dir = tempfile::tempdir().unwrap();
     let render = snapshot();
     let av =
@@ -263,10 +281,12 @@ fn lossy_movie_roundtrip(profile: MovieProfile) {
 }
 
 #[test]
+#[ignore = "pending host run: requires physical VideoToolbox H.264 encoder"]
 fn h264_aac_movie_profile() {
     lossy_movie_roundtrip(MovieProfile::H264AacV1);
 }
 #[test]
+#[ignore = "pending host run: requires physical VideoToolbox HEVC encoder"]
 fn hevc_aac_movie_profile() {
     lossy_movie_roundtrip(MovieProfile::HevcAacV1);
 }

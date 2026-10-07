@@ -35,6 +35,13 @@ def msys2_bash():
     return executable
 
 
+def msys2_posix(bash, path):
+    """Translate a Windows path for MSYS2 argv (D:/a/b -> /d/a/b)."""
+    output = subprocess.run([str(bash), "-c", 'cygpath -u "$1"', "-", str(path)],
+                            check=True, capture_output=True, text=True)
+    return output.stdout.strip()
+
+
 def sha256(path):
     with path.open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
@@ -194,7 +201,10 @@ def main():
     run(["meson", "install", "-C", dav1d_build])
     opus_build = work / "opus-build"
     opus_build.mkdir()
-    run([*([bash] if bash else []), (opus_source / "configure").as_posix(),
+    # Autoconf splits its auxiliary-file candidates on ':' — a DOS-style
+    # argv[0] (D:/...) makes every candidate unreadable, so pass the MSYS path.
+    configure = msys2_posix(bash, opus_source / "configure") if bash else (opus_source / "configure").as_posix()
+    run([*([bash] if bash else []), configure,
          *opus["configure"], *opus.get("platform_configure", {}).get(sys.platform, []),
          f"--prefix={prefix}", "--libdir=" + str(prefix / "lib")], cwd=opus_build)
     run(["make", f"-j{args.jobs}"], cwd=opus_build)
