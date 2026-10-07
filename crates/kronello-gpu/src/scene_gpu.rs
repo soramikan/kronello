@@ -45,6 +45,33 @@ fn space(space: InputSpace) -> u32 {
         InputSpace::LinearRec2020 => 2,
     }
 }
+/// Fixed FX-003 scene-pass operation ids (ADR-0109). Ids are stable protocol;
+/// operations 2..=4 are the existing opacity/mask/output paths.
+fn blend_operation(mode: kronello_model::BlendMode) -> u32 {
+    use kronello_model::BlendMode;
+    match mode {
+        BlendMode::Normal => 1,
+        BlendMode::Multiply => 5,
+        BlendMode::Screen => 6,
+        BlendMode::Darken => 7,
+        BlendMode::Lighten => 8,
+        BlendMode::ColorDodge => 9,
+        BlendMode::ColorBurn => 10,
+        BlendMode::HardLight => 11,
+        BlendMode::SoftLight => 12,
+        BlendMode::Difference => 13,
+        BlendMode::Exclusion => 14,
+        BlendMode::Overlay => 15,
+        BlendMode::LinearDodge => 16,
+        BlendMode::LinearBurn => 17,
+        BlendMode::VividLight => 18,
+        BlendMode::LinearLight => 19,
+        BlendMode::Hue => 20,
+        BlendMode::Saturation => 21,
+        BlendMode::Color => 22,
+        BlendMode::Luminosity => 23,
+    }
+}
 // Restrict the fast path to fill-only outlines with a trustworthy finite AABB.
 // Strokes and numerically extreme inputs retain the original sample loop.
 fn coverage_bounds(path: &PathDraw, scale: [f32; 2]) -> Option<[f32; 4]> {
@@ -407,36 +434,47 @@ impl ScenePass<'_> {
         axis: u32,
         shadow: Option<([f32; 2], [f32; 4])>,
     ) -> Result<SurfaceLease, GpuError> {
+        let config = [
+            if shadow.is_some() {
+                if axis == 3 { 3 } else { 1 }
+            } else if axis == 2 {
+                2
+            } else {
+                0
+            },
+            if axis == 2 {
+                (weights.len() / 3) as u32
+            } else {
+                (weights.len() / 2) as u32
+            },
+            axis,
+            0,
+        ];
+        let (offset, color) = shadow.unwrap_or(([0.0; 2], [0.0; 4]));
+        let floats = [
+            offset[0], offset[1], 0.0, 0.0, color[0], color[1], color[2], color[3],
+        ];
+        self.effect_pass_raw(source, original, config, floats, weights)
+    }
+    /// Uniform layout: config vec4<u32> then offset/color as two vec4<f32>.
+    fn effect_pass_raw(
+        &mut self,
+        source: &SurfaceLease,
+        original: &SurfaceLease,
+        config: [u32; 4],
+        floats: [f32; 8],
+        weights: &[f32],
+    ) -> Result<SurfaceLease, GpuError> {
         let output = self.texture()?;
         let mut params = Vec::new();
-        params.extend(
-            [
-                if shadow.is_some() {
-                    if axis == 3 { 3 } else { 1 }
-                } else if axis == 2 {
-                    2
-                } else {
-                    0
-                },
-                if axis == 2 {
-                    (weights.len() / 3) as u32
-                } else {
-                    (weights.len() / 2) as u32
-                },
-                axis,
-                0,
-            ]
-            .into_iter()
-            .flat_map(u32::to_le_bytes),
-        );
-        let (offset, color) = shadow.unwrap_or(([0.0; 2], [0.0; 4]));
-        params.extend(
-            [offset[0], offset[1], 0.0, 0.0]
-                .into_iter()
-                .chain(color)
-                .flat_map(f32::to_le_bytes),
-        );
-        let weights: Vec<u8> = weights.iter().flat_map(|w| w.to_le_bytes()).collect();
+        params.extend(config.into_iter().flat_map(u32::to_le_bytes));
+        params.extend(floats.into_iter().flat_map(f32::to_le_bytes));
+        let weights: Vec<u8> = if weights.is_empty() {
+            // The binding requires a nonempty storage buffer.
+            vec![0; 4]
+        } else {
+            weights.iter().flat_map(|w| w.to_le_bytes()).collect()
+        };
         let uniform = self
             .gpu
             .device
@@ -515,11 +553,60 @@ impl ScenePass<'_> {
         self.stats.gpu_compute_dispatches += 1;
         Ok(output)
     }
+    /// COLOR-002 pointwise pass: config.y selects the op and the floats/weights
+    /// carry parameters; the source doubles as the original input.
+    fn color_effect(
+        &mut self,
+        source: &SurfaceLease,
+        effect: &PixelEffect,
+    ) -> Result<SurfaceLease, GpuError> {
+        let (op, floats, weights): (u32, [f32; 8], Vec<f32>) = match effect {
+            PixelEffect::ColorExposure { exposure, offset } => (
+                1,
+                [*exposure, *offset, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                vec![],
+            ),
+            PixelEffect::ColorLevels {
+                in_black,
+                in_white,
+                gamma,
+                out_black,
+                out_white,
+            } => (
+                2,
+                [
+                    *in_black, *in_white, *gamma, *out_black, *out_white, 0.0, 0.0, 0.0,
+                ],
+                vec![],
+            ),
+            PixelEffect::ColorCurves { points } => {
+                (3, [0.0; 8], points.iter().flatten().copied().collect())
+            }
+            PixelEffect::ColorHsl {
+                hue_shift,
+                saturation,
+                lightness,
+            } => (
+                4,
+                [*hue_shift, *saturation, *lightness, 0.0, 0.0, 0.0, 0.0, 0.0],
+                vec![],
+            ),
+            _ => unreachable!("not a pointwise color effect"),
+        };
+        let count = match effect {
+            PixelEffect::ColorCurves { points } => points.len() as u32,
+            _ => 0,
+        };
+        self.effect_pass_raw(source, source, [4, op, count, 0], floats, &weights)
+    }
     fn effect(
         &mut self,
         source: &SurfaceLease,
         effect: &PixelEffect,
     ) -> Result<SurfaceLease, GpuError> {
+        if effect.is_pointwise_color() {
+            return self.color_effect(source, effect);
+        }
         let blurred = if let Some(covariance) = effect.covariance() {
             let taps = kronello_render::affine_gaussian_kernel(covariance).map_err(|_| {
                 GpuError::UnsupportedFeature("affine Gaussian covariance or kernel budget")
@@ -689,11 +776,7 @@ impl ScenePass<'_> {
             } => {
                 let source = self.node(scene, *source, cache)?;
                 let backdrop = self.node(scene, *backdrop, cache)?;
-                let operation = match mode {
-                    kronello_model::BlendMode::Normal => 1,
-                    kronello_model::BlendMode::Multiply => 5,
-                    kronello_model::BlendMode::Screen => 6,
-                };
+                let operation = blend_operation(*mode);
                 self.pass(
                     operation,
                     (&source, &backdrop),

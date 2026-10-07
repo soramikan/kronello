@@ -2793,7 +2793,14 @@ fn fx_effect_animation_versions_and_cache_identity() {
     let snapshot = RenderSnapshot::new(&p, id, 0, RenderProfile::default()).unwrap();
     assert_eq!(
         snapshot.semantic_versions().effects,
-        BTreeMap::from([(GAUSSIAN_BLUR_ID.into(), 2), (DROP_SHADOW_ID.into(), 2)])
+        BTreeMap::from([
+            (GAUSSIAN_BLUR_ID.into(), 2),
+            (DROP_SHADOW_ID.into(), 2),
+            (kronello_model::COLOR_EXPOSURE_ID.into(), 1),
+            (kronello_model::COLOR_LEVELS_ID.into(), 1),
+            (kronello_model::COLOR_CURVES_ID.into(), 1),
+            (kronello_model::COLOR_HSL_ID.into(), 1),
+        ])
     );
     let mut cache = RenderCache::new(CacheConfig::default());
     let mut identities = vec![];
@@ -3789,6 +3796,7 @@ fn temporal_crossfade_endpoints_are_not_hard_cuts() {
         incoming,
         range: TimeRange::new(Time::ONE, t(3, 2)).unwrap(),
         kind: TransitionKind::Crossfade,
+        params: None,
         version: 1,
     });
     let s = RenderSnapshot::for_target(

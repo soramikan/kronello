@@ -1224,6 +1224,7 @@ mod gradient_tests {
             world_transform: kronello_eval::Affine2::IDENTITY,
             opacity: 1.0,
             post_effect_opacity: 1.0,
+            transitions: vec![],
             blend_mode: kronello_model::BlendMode::Normal,
             effects: vec![],
             properties: Default::default(),

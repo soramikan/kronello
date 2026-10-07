@@ -59,9 +59,86 @@ pub enum PixelEffect {
         color: Color,
         opacity: f32,
     },
+    /// COLOR-002 pointwise correction in premultiplied working space:
+    /// rgb = rgb * 2^exposure + offset. Alpha is preserved; HDR and
+    /// negative values are never clamped (ADR-0108).
+    ColorExposure {
+        exposure: f32,
+        offset: f32,
+    },
+    /// in_white > in_black and gamma > 0 are enforced at resolution and
+    /// re-checked in validate.
+    ColorLevels {
+        in_black: f32,
+        in_white: f32,
+        gamma: f32,
+        out_black: f32,
+        out_white: f32,
+    },
+    /// Monotone-cubic control points, x strictly increasing within [0,1].
+    ColorCurves {
+        points: Vec<[f32; 2]>,
+    },
+    /// Working-space HSL: hue_shift in degrees, saturation multiplier,
+    /// additive lightness.
+    ColorHsl {
+        hue_shift: f32,
+        saturation: f32,
+        lightness: f32,
+    },
 }
+/// Kernel tag shared by all COLOR-002 v1 pointwise passes.
+pub const COLOR002_KERNEL_VERSION: &str = "color002-pointwise-f16-v1";
 impl PixelEffect {
+    /// COLOR-002 corrections are pointwise: no kernel, no neighborhood input.
+    pub fn is_pointwise_color(&self) -> bool {
+        matches!(
+            self,
+            Self::ColorExposure { .. }
+                | Self::ColorLevels { .. }
+                | Self::ColorCurves { .. }
+                | Self::ColorHsl { .. }
+        )
+    }
     pub fn from_design(effect: &ResolvedEffect, scale: [f64; 2]) -> Result<Self, RenderError> {
+        // COLOR-002 parameters are resolution-checked in the model crate; the
+        // pixel-space form only converts precision since nothing is spatial.
+        let pointwise = match effect {
+            ResolvedEffect::ColorExposure { exposure, offset } => Some(Self::ColorExposure {
+                exposure: *exposure as f32,
+                offset: *offset as f32,
+            }),
+            ResolvedEffect::ColorLevels {
+                in_black,
+                in_white,
+                gamma,
+                out_black,
+                out_white,
+            } => Some(Self::ColorLevels {
+                in_black: *in_black as f32,
+                in_white: *in_white as f32,
+                gamma: *gamma as f32,
+                out_black: *out_black as f32,
+                out_white: *out_white as f32,
+            }),
+            ResolvedEffect::ColorCurves { curve } => Some(Self::ColorCurves {
+                points: curve.iter().map(|p| p.map(|v| v as f32)).collect(),
+            }),
+            ResolvedEffect::ColorHsl {
+                hue_shift,
+                saturation,
+                lightness,
+            } => Some(Self::ColorHsl {
+                hue_shift: *hue_shift as f32,
+                saturation: *saturation as f32,
+                lightness: *lightness as f32,
+            }),
+            _ => None,
+        };
+        if let Some(result) = pointwise {
+            result.validate()?;
+            return Ok(result);
+        }
         if let ResolvedEffect::AffineGaussianBlur { sigma, linear }
         | ResolvedEffect::AffineDropShadow { sigma, linear, .. } = effect
         {
@@ -141,6 +218,7 @@ impl PixelEffect {
             Self::AffineGaussianBlur { covariance } | Self::AffineDropShadow { covariance, .. } => {
                 [covariance[0].sqrt() as f32, covariance[2].sqrt() as f32]
             }
+            _ => [0.0; 2],
         }
     }
     pub fn covariance(&self) -> Option<[f64; 3]> {
@@ -152,14 +230,18 @@ impl PixelEffect {
         }
     }
     pub fn kernel_version(&self) -> &'static str {
-        if self.covariance().is_some() {
+        if self.is_pointwise_color() {
+            COLOR002_KERNEL_VERSION
+        } else if self.covariance().is_some() {
             AFFINE_EFFECT_KERNEL_VERSION
         } else {
             EFFECT_KERNEL_VERSION
         }
     }
     pub fn semantic_version(&self) -> u32 {
-        if self.covariance().is_some() {
+        if self.is_pointwise_color() {
+            kronello_model::COLOR_EFFECT_VERSION
+        } else if self.covariance().is_some() {
             kronello_model::AFFINE_EFFECT_VERSION
         } else {
             kronello_model::EFFECT_VERSION
@@ -190,6 +272,9 @@ impl PixelEffect {
         }
     }
     pub fn validate(&self) -> Result<(), RenderError> {
+        if self.is_pointwise_color() {
+            return self.validate_color();
+        }
         if let Some(covariance) = self.covariance() {
             affine_gaussian_kernel(covariance)?;
         } else {
@@ -210,6 +295,58 @@ impl PixelEffect {
         }
         Ok(())
     }
+    /// COLOR-002 parameter contract mirrors the model-side checks.
+    fn validate_color(&self) -> Result<(), RenderError> {
+        let invalid = || RenderError::InvalidInput("invalid color effect parameters".into());
+        match self {
+            Self::ColorExposure { exposure, offset } => {
+                if !exposure.is_finite() || !offset.is_finite() {
+                    return Err(invalid());
+                }
+            }
+            Self::ColorLevels {
+                in_black,
+                in_white,
+                gamma,
+                out_black,
+                out_white,
+            } => {
+                if ![in_black, in_white, gamma, out_black, out_white]
+                    .into_iter()
+                    .all(|v| v.is_finite())
+                    || in_white <= in_black
+                    || *gamma <= 0.0
+                {
+                    return Err(invalid());
+                }
+            }
+            Self::ColorCurves { points } => {
+                if !(2..=kronello_model::CURVES_MAX_POINTS).contains(&points.len())
+                    || !points
+                        .iter()
+                        .flatten()
+                        .all(|v| v.is_finite() && (0.0..=1.0).contains(v))
+                    || !points.windows(2).all(|w| w[0][0] < w[1][0])
+                {
+                    return Err(invalid());
+                }
+            }
+            Self::ColorHsl {
+                hue_shift,
+                saturation,
+                lightness,
+            } => {
+                if ![hue_shift, saturation, lightness]
+                    .into_iter()
+                    .all(|v| v.is_finite())
+                {
+                    return Err(invalid());
+                }
+            }
+            _ => unreachable!(),
+        }
+        Ok(())
+    }
     /// Bilinear translation requires floor/ceil source taps in addition to blur.
     pub fn required_input(&self, output: PixelBounds) -> PixelBounds {
         let halo = self.halo();
@@ -223,6 +360,7 @@ impl PixelEffect {
                 };
                 output.union(shifted.expand(halo))
             }
+            _ => output,
         }
     }
     pub fn output_bounds(&self, input: PixelBounds) -> PixelBounds {
@@ -236,6 +374,7 @@ impl PixelEffect {
                     max: shifted.max.map(f64::ceil),
                 })
             }
+            _ => input,
         }
     }
 }

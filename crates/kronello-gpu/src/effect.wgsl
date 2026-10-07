@@ -32,11 +32,101 @@ fn half_rne(value:f32)->f32 {
     let rounded=f32(base+increment)/16777216.0;
     return select(rounded,-rounded,sign!=0u);
 }
+// COLOR-002 pointwise corrections (ADR-0108). config.x==4u selects the pass,
+// config.y the op (1 exposure, 2 levels, 3 curves, 4 HSL), config.z the curve
+// point count. Alpha is preserved; HDR and negative values are never clamped.
+fn color_levels(v:f32)->f32 {
+    let n=(v-params.offset.x)/(params.offset.y-params.offset.x);
+    var g=n;
+    if n<0.0 { g=-pow(-n,1.0/params.offset.z); } else { g=pow(n,1.0/params.offset.z); }
+    return params.offset.w+g*(params.color.x-params.offset.w);
+}
+fn curve_eval(x:f32)->f32 {
+    let n=params.config.z;
+    var xs:array<f32,64>; var ys:array<f32,64>; var d:array<f32,64>;
+    var h:array<f32,63>; var s:array<f32,63>;
+    for (var i=0u;i<n;i++) { xs[i]=weights[2u*i]; ys[i]=weights[2u*i+1u]; }
+    for (var i=0u;i+1u<n;i++) { h[i]=xs[i+1u]-xs[i]; s[i]=(ys[i+1u]-ys[i])/h[i]; }
+    if n==2u {
+        d[0]=s[0]; d[1]=s[0];
+    } else {
+        // Fritsch-Carlson endpoints; mirrors color::monotone_cubic_tangents.
+        var de=((2.0*h[0]+h[1])*s[0]-h[0]*s[1])/(h[0]+h[1]);
+        if sign(de)!=sign(s[0]) { de=0.0; }
+        else if sign(s[0])!=sign(s[1]) && abs(de)>3.0*abs(s[0]) { de=3.0*s[0]; }
+        d[0]=de;
+        de=((2.0*h[n-2u]+h[n-3u])*s[n-2u]-h[n-2u]*s[n-3u])/(h[n-2u]+h[n-3u]);
+        if sign(de)!=sign(s[n-2u]) { de=0.0; }
+        else if sign(s[n-2u])!=sign(s[n-3u]) && abs(de)>3.0*abs(s[n-2u]) { de=3.0*s[n-2u]; }
+        d[n-1u]=de;
+        for (var i=1u;i+1u<n;i++) {
+            if s[i-1u]*s[i]<=0.0 { d[i]=0.0; }
+            else {
+                let w1=2.0*h[i]+h[i-1u]; let w2=h[i]+2.0*h[i-1u];
+                d[i]=(w1+w2)/(w1/s[i-1u]+w2/s[i]);
+            }
+        }
+    }
+    if x<=xs[0] { return ys[0]+d[0]*(x-xs[0]); }
+    if x>=xs[n-1u] { return ys[n-1u]+d[n-1u]*(x-xs[n-1u]); }
+    // Segment i satisfies xs[i] <= x < xs[i+1].
+    var i=0u;
+    for (var k=1u;k+1u<n;k++) { if x>=xs[k] { i=k; } }
+    let t=(x-xs[i])/h[i];
+    let t2=t*t; let t3=t2*t;
+    let a=2.0*t3-3.0*t2+1.0; let b=t3-2.0*t2+t; let c=-2.0*t3+3.0*t2; let e=t3-t2;
+    return a*ys[i]+b*h[i]*d[i]+c*ys[i+1u]+e*h[i]*d[i+1u];
+}
+fn rgb_to_hsl(rgb:vec3<f32>)->vec3<f32> {
+    let lo=min(rgb.r,min(rgb.g,rgb.b)); let hi=max(rgb.r,max(rgb.g,rgb.b));
+    let l=0.5*(lo+hi);
+    if hi==lo { return vec3<f32>(0.0,0.0,l); }
+    let delta=hi-lo;
+    let denom=1.0-abs(2.0*l-1.0);
+    var s=0.0; if denom!=0.0 { s=delta/denom; }
+    var h=0.0;
+    if hi==rgb.r { h=(rgb.g-rgb.b)/delta; }
+    else if hi==rgb.g { h=(rgb.b-rgb.r)/delta+2.0; }
+    else { h=(rgb.r-rgb.g)/delta+4.0; }
+    return vec3<f32>((h-6.0*floor(h/6.0))*60.0,s,l);
+}
+fn hsl_to_rgb(hsl:vec3<f32>)->vec3<f32> {
+    let c=hsl.y*(1.0-abs(2.0*hsl.z-1.0));
+    let m=hsl.z-0.5*c;
+    if c==0.0 { return vec3<f32>(hsl.z); }
+    let h=(hsl.x/60.0)-6.0*floor(hsl.x/360.0);
+    let x=c*(1.0-abs(h-2.0*floor(h/2.0)-1.0));
+    var rgb:vec3<f32>;
+    if h<1.0 { rgb=vec3<f32>(c,x,0.0); }
+    else if h<2.0 { rgb=vec3<f32>(x,c,0.0); }
+    else if h<3.0 { rgb=vec3<f32>(0.0,c,x); }
+    else if h<4.0 { rgb=vec3<f32>(0.0,x,c); }
+    else if h<5.0 { rgb=vec3<f32>(x,0.0,c); }
+    else { rgb=vec3<f32>(c,0.0,x); }
+    return rgb+vec3<f32>(m);
+}
 @compute @workgroup_size(8,8)
 fn main(@builtin(global_invocation_id) id:vec3<u32>) {
     if any(id.xy>=textureDimensions(output)) {return;}
     let p=vec2<i32>(id.xy); var result=vec4<f32>(0.0);
-    if params.config.x==0u {
+    if params.config.x==4u {
+        let v=textureLoad(source,p,0);
+        var rgb=v.rgb;
+        let op=params.config.y;
+        if op==1u { rgb=v.rgb*exp2(params.offset.x)+vec3<f32>(params.offset.y); }
+        else if op==2u {
+            rgb=vec3<f32>(color_levels(v.r),color_levels(v.g),color_levels(v.b));
+        }
+        else if op==3u {
+            rgb=vec3<f32>(curve_eval(v.r),curve_eval(v.g),curve_eval(v.b));
+        }
+        else if op==4u {
+            let hsl=rgb_to_hsl(v.rgb);
+            rgb=hsl_to_rgb(vec3<f32>(hsl.x+params.offset.x,hsl.y*params.offset.y,hsl.z+params.offset.z));
+        }
+        result=vec4<f32>(rgb,v.a);
+    }
+    else if params.config.x==0u {
         let radius=i32(params.config.y); var norm=0.0;
         for (var i=-radius; i<=radius; i++) {
             var delta=vec2<i32>(i,0); if params.config.z==1u {delta=vec2<i32>(0,i);}

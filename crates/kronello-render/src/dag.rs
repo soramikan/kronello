@@ -124,6 +124,13 @@ pub enum DagNode {
         matte: usize,
         kind: MatteKind,
     },
+    /// FX-003 transition primitive: a filled output-pixel rectangle in the
+    /// working space. Used as the wipe reveal matte and the dip underlay.
+    SolidRect {
+        color: Color,
+        /// Half-open [min_x, min_y, max_x, max_y] in output pixels.
+        rect: [f64; 4],
+    },
     /// Produces both linear premultiplied truth and straight sRGB display.
     OutputTransform {
         source: usize,
@@ -136,7 +143,8 @@ impl DagNode {
             Self::Geometry { .. }
             | Self::TextLayout { .. }
             | Self::VideoDraw { .. }
-            | Self::RasterInput { .. } => vec![],
+            | Self::RasterInput { .. }
+            | Self::SolidRect { .. } => vec![],
             Self::CoverageDraw { geometry, .. } => vec![*geometry],
             Self::IsolatedComposite { children, .. } => children.clone(),
             Self::Mask { source, matte, .. } => vec![*source, *matte],
@@ -233,7 +241,8 @@ impl RenderDag {
                 | DagNode::Blend { .. }
                 | DagNode::Mask { .. }
                 | DagNode::VideoDraw { .. }
-                | DagNode::RasterInput { .. } => 1,
+                | DagNode::RasterInput { .. }
+                | DagNode::SolidRect { .. } => 1,
                 _ => 0,
             };
         }
@@ -562,6 +571,57 @@ impl Builder<'_> {
                 opacity: n.post_effect_opacity,
             })?;
         }
+        // FX-003: wipe reveals through an opaque-rect alpha matte; dip inserts
+        // a solid-color underlay below the faded incoming result (ADR-0109).
+        for transition in &n.transitions {
+            match transition {
+                crate::SceneTransition::Reveal { min, max } => {
+                    let to_pixel = self.region.design_to_pixel();
+                    let lo = to_pixel.transform_point(*min);
+                    let hi = to_pixel.transform_point(*max);
+                    let rect = [
+                        lo[0].min(hi[0]),
+                        lo[1].min(hi[1]),
+                        lo[0].max(hi[0]),
+                        lo[1].max(hi[1]),
+                    ];
+                    if !rect.iter().all(|v| v.is_finite()) {
+                        return Err(RenderError::InvalidInput(
+                            "invalid wipe reveal bounds".into(),
+                        ));
+                    }
+                    let matte = self.push(DagNode::SolidRect {
+                        color: Color::from_srgb8([255; 3], None),
+                        rect,
+                    })?;
+                    id = self.push(DagNode::Mask {
+                        source: id,
+                        matte,
+                        kind: MatteKind::Alpha,
+                    })?;
+                }
+                crate::SceneTransition::Dip { color, opacity } => {
+                    let rect = [
+                        0.0,
+                        0.0,
+                        f64::from(self.region.pixels[0]),
+                        f64::from(self.region.pixels[1]),
+                    ];
+                    let underlay = self.push(DagNode::SolidRect {
+                        color: *color,
+                        rect,
+                    })?;
+                    let underlay = self.push(DagNode::IsolatedComposite {
+                        children: vec![underlay],
+                        opacity: *opacity,
+                    })?;
+                    id = self.push(DagNode::IsolatedComposite {
+                        children: vec![underlay, id],
+                        opacity: 1.0,
+                    })?;
+                }
+            }
+        }
         if let Some(binding) = self.scene.mattes.iter().find(|m| m.source == n.key) {
             let matte = *self
                 .indices
@@ -881,6 +941,16 @@ fn derive_bounds(nodes: &[DagNode]) -> Vec<crate::NodeBounds> {
             DagNode::Mask { source, .. } | DagNode::OutputTransform { source, .. } => {
                 bounds[*source]
             }
+            DagNode::SolidRect { rect, .. } => {
+                let ink = Some(PixelBounds {
+                    min: [rect[0], rect[1]],
+                    max: [rect[2], rect[3]],
+                });
+                NodeBounds {
+                    ink_bounds: ink,
+                    visual_bounds: ink,
+                }
+            }
             _ => NodeBounds::default(),
         };
         bounds.push(value);
@@ -893,6 +963,16 @@ pub(crate) fn map_effect(
     transform: Affine2,
 ) -> Result<kronello_model::ResolvedEffect, RenderError> {
     use kronello_model::ResolvedEffect;
+    // COLOR-002 pointwise operations commute with any placement transform.
+    if matches!(
+        effect,
+        ResolvedEffect::ColorExposure { .. }
+            | ResolvedEffect::ColorLevels { .. }
+            | ResolvedEffect::ColorCurves { .. }
+            | ResolvedEffect::ColorHsl { .. }
+    ) {
+        return Ok(effect.clone());
+    }
     let [a, b] = transform.0;
     if let ResolvedEffect::AffineGaussianBlur { sigma, linear }
     | ResolvedEffect::AffineDropShadow { sigma, linear, .. } = effect

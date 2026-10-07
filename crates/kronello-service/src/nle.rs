@@ -487,6 +487,31 @@ fn split_owned_objects(clip: &mut Clip) -> Result<(), ServiceError> {
                 remap(opacity)?;
             }
             EffectParameters::AudioGain { gain } => remap(gain)?,
+            EffectParameters::ColorExposure { exposure, offset } => {
+                remap(exposure)?;
+                remap(offset)?;
+            }
+            EffectParameters::ColorLevels {
+                in_black,
+                in_white,
+                gamma,
+                out_black,
+                out_white,
+            } => {
+                for id in [in_black, in_white, gamma, out_black, out_white] {
+                    remap(id)?;
+                }
+            }
+            EffectParameters::ColorCurves { curve } => remap(curve)?,
+            EffectParameters::ColorHsl {
+                hue_shift,
+                saturation,
+                lightness,
+            } => {
+                remap(hue_shift)?;
+                remap(saturation)?;
+                remap(lightness)?;
+            }
         }
     }
     Ok(())

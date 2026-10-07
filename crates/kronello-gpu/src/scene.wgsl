@@ -53,6 +53,67 @@ fn paint(p: vec4<f32>, space: u32) -> vec4<f32> {
     return vec4<f32>(primaries(rgb,space==2u,params.config.w==1u)*p.a,p.a);
 }
 fn over(s: vec4<f32>, d: vec4<f32>) -> vec4<f32> { return s+d*(1.0-s.a); }
+// FX-003 W3C separable/non-separable blend functions on straight channels
+// (ADR-0109). HDR and negative values are never clamped. Operation ids are the
+// fixed table: separable 5..=19, non-separable 20..=23.
+fn blend_dodge(b:f32,s:f32)->f32 { if s>=1.0 {return 1.0;} return min(b/(1.0-s),1.0); }
+fn blend_burn(b:f32,s:f32)->f32 { if s<=0.0 {return 0.0;} return 1.0-min(1.0-b,s)/s; }
+fn blend_soft(b:f32,s:f32)->f32 {
+    if s<=0.5 { return b-(1.0-2.0*s)*b*(1.0-b); }
+    var d=b;
+    if b<=0.25 { d=((16.0*b-12.0)*b+4.0)*b; } else { d=sqrt(b); }
+    return b+(2.0*s-1.0)*(d-b);
+}
+fn blend_overlay(b:f32,s:f32)->f32 {
+    if b<=0.5 { return 2.0*b*s; }
+    return 1.0-2.0*(1.0-b)*(1.0-s);
+}
+fn blend_channel(b:f32,s:f32,op:u32)->f32 {
+    switch op {
+        case 5u: { return b*s; }
+        case 6u: { return b+s-b*s; }
+        case 7u: { return min(b,s); }
+        case 8u: { return max(b,s); }
+        case 9u: { return blend_dodge(b,s); }
+        case 10u: { return blend_burn(b,s); }
+        case 11u: { return blend_overlay(s,b); }
+        case 12u: { return blend_soft(b,s); }
+        case 13u: { return abs(b-s); }
+        case 14u: { return b+s-2.0*b*s; }
+        case 15u: { return blend_overlay(b,s); }
+        case 16u: { return b+s; }
+        case 17u: { return b+s-1.0; }
+        case 18u: { if s<=0.5 { return blend_burn(b,2.0*s); } return blend_dodge(b,2.0*(s-0.5)); }
+        default: { return b+2.0*s-1.0; }
+    }
+}
+fn blend_lum(c:vec3<f32>)->f32 { return c.r*0.3+c.g*0.59+c.b*0.11; }
+fn blend_set_lum(c:vec3<f32>,l:f32)->vec3<f32> { return c+vec3<f32>(l-blend_lum(c)); }
+fn blend_sat(c:vec3<f32>)->f32 { return max(c.r,max(c.g,c.b))-min(c.r,min(c.g,c.b)); }
+fn blend_set_sat(c:vec3<f32>,s:f32)->vec3<f32> {
+    // First minimum, last maximum: identical index selection to color.rs.
+    var lo=0; var hi=0;
+    for (var i=1;i<3;i++) {
+        if c[i]<c[lo] { lo=i; }
+        if c[i]>=c[hi] { hi=i; }
+    }
+    let mid=3-lo-hi;
+    var out=vec3<f32>(0.0);
+    if c[hi]>c[lo] {
+        out[mid]=(c[mid]-c[lo])*s/(c[hi]-c[lo]);
+        out[hi]=s;
+    }
+    return out;
+}
+fn blend_rgb(cb:vec3<f32>,cs:vec3<f32>,op:u32)->vec3<f32> {
+    switch op {
+        case 20u: { return blend_set_lum(blend_set_sat(cs,blend_sat(cb)),blend_lum(cb)); }
+        case 21u: { return blend_set_lum(blend_set_sat(cb,blend_sat(cs)),blend_lum(cb)); }
+        case 22u: { return blend_set_lum(cs,blend_lum(cb)); }
+        case 23u: { return blend_set_lum(cb,blend_lum(cs)); }
+        default: { return vec3<f32>(blend_channel(cb.r,cs.r,op),blend_channel(cb.g,cs.g,op),blend_channel(cb.b,cs.b,op)); }
+    }
+}
 fn cross2(a:vec2<f32>,b:vec2<f32>)->f32 { return a.x*b.y-a.y*b.x; }
 fn primitive_hit(p:vec2<f32>,e:Edge)->bool {
     let a=e.points.xy; let b=e.points.zw; let c=e.extra.xy;
@@ -170,13 +231,16 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
             result=over(stroke_color,fill_color);
         }
         case 1u: { result=over(textureLoad(source,position,0),textureLoad(previous,position,0)); }
-        case 5u, 6u: {
+        case 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u, 14u, 15u, 16u, 17u, 18u, 19u, 20u, 21u, 22u, 23u: {
             let s=textureLoad(source,position,0);
             let d=textureLoad(previous,position,0);
-            // Closed premultiplied forms avoid division at zero/tiny alpha.
-            var rgb=s.rgb*(1.0-d.a)+d.rgb*(1.0-s.a)+s.rgb*d.rgb;
-            if params.config.x==6u { rgb=s.rgb+d.rgb-s.rgb*d.rgb; }
-            result=vec4<f32>(rgb,s.a+d.a*(1.0-s.a));
+            // Straight operands; zero alpha defines its color as zero.
+            var cb=vec3<f32>(0.0);
+            var cs=vec3<f32>(0.0);
+            if d.a>0.0 { cb=d.rgb/d.a; }
+            if s.a>0.0 { cs=s.rgb/s.a; }
+            let b=blend_rgb(cb,cs,params.config.x);
+            result=vec4<f32>(s.rgb*(1.0-d.a)+d.rgb*(1.0-s.a)+s.a*d.a*b,s.a+d.a*(1.0-s.a));
         }
         case 2u: { result=textureLoad(source,position,0)*params.scale.z; }
         case 3u: {

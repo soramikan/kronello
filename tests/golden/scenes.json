@@ -519,6 +519,173 @@
           ]
         ]
       }
+    },
+    {
+      "id": "color002-exposure-alpha",
+      "operation": "color-exposure",
+      "fixtures": [],
+      "descriptor": {
+        "size": [
+          1,
+          1
+        ],
+        "origin": [
+          0,
+          0
+        ],
+        "time": {
+          "num": "0",
+          "den": "1"
+        },
+        "working_space": "linear-rec709",
+        "alpha": "premultiplied",
+        "color_pipeline_id": "qa001-linear-v1",
+        "output_transform": "none",
+        "samples_per_frame": 1,
+        "seed": 0
+      },
+      "input": {
+        "rgba": [
+          0.4,
+          0.2,
+          0.1,
+          0.5
+        ],
+        "exposure": 1.5,
+        "offset": -0.05
+      },
+      "expected": {
+        "rgba": [
+          1.0813708498984762,
+          0.5156854249492381,
+          0.23284271247461907,
+          0.5
+        ]
+      }
+    },
+    {
+      "id": "fx003-wipe-reveal",
+      "operation": "wipe-reveal",
+      "fixtures": [],
+      "descriptor": {
+        "size": [
+          1,
+          1
+        ],
+        "origin": [
+          0,
+          0
+        ],
+        "time": {
+          "num": "0",
+          "den": "1"
+        },
+        "working_space": "linear-rec709",
+        "alpha": "premultiplied",
+        "color_pipeline_id": "qa001-linear-v1",
+        "output_transform": "none",
+        "samples_per_frame": 1,
+        "seed": 0
+      },
+      "input": {
+        "extent": [
+          16,
+          8
+        ],
+        "progress": 0.25,
+        "directions": [
+          "left",
+          "right",
+          "up",
+          "down"
+        ]
+      },
+      "expected": {
+        "rects": [
+          [
+            0,
+            0,
+            4,
+            8
+          ],
+          [
+            12,
+            0,
+            16,
+            8
+          ],
+          [
+            0,
+            0,
+            16,
+            2
+          ],
+          [
+            0,
+            6,
+            16,
+            8
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fx003-dip-opacity",
+      "operation": "dip-opacity",
+      "fixtures": [],
+      "descriptor": {
+        "size": [
+          1,
+          1
+        ],
+        "origin": [
+          0,
+          0
+        ],
+        "time": {
+          "num": "0",
+          "den": "1"
+        },
+        "working_space": "linear-rec709",
+        "alpha": "premultiplied",
+        "color_pipeline_id": "qa001-linear-v1",
+        "output_transform": "none",
+        "samples_per_frame": 1,
+        "seed": 0
+      },
+      "input": {
+        "progresses": [
+          0,
+          0.25,
+          0.5,
+          0.75,
+          1
+        ]
+      },
+      "expected": {
+        "under_over": [
+          [
+            0,
+            0
+          ],
+          [
+            0.5,
+            0
+          ],
+          [
+            1,
+            0
+          ],
+          [
+            1,
+            0.5
+          ],
+          [
+            1,
+            1
+          ]
+        ]
+      }
     }
   ]
 }

@@ -112,6 +112,11 @@ pub(crate) fn apply_effects(
                     [0, 1].map(|i| shadow.max[i] + offset[i]),
                 )?)
             }
+            // COLOR-002 pointwise operations never change geometry bounds.
+            ResolvedEffect::ColorExposure { .. }
+            | ResolvedEffect::ColorLevels { .. }
+            | ResolvedEffect::ColorCurves { .. }
+            | ResolvedEffect::ColorHsl { .. } => input,
         });
     }
     Ok(bounds)

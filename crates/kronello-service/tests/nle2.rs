@@ -199,6 +199,7 @@ fn split_rejects_boundaries_duplicate_links_and_transition_atomically() {
     let mut s = sequence(vec![c.clone(), incoming.clone()]);
     let id = s.id;
     s.transitions = vec![Transition {
+        params: None,
         version: 1,
         kind: TransitionKind::Crossfade,
         outgoing: c.id,
@@ -774,6 +775,7 @@ fn transition_set_and_clip_effect_authoring_use_atomic_plans_and_undo() {
         incoming: b.id,
         range: range(t(2, 1), t(3, 1)),
         kind: TransitionKind::Crossfade,
+        params: None,
         version: 1,
     };
     let e = apply(
@@ -1677,6 +1679,7 @@ fn translucent_crossfade_is_same_track_source_over_with_explicit_overlap() {
         incoming: b.id,
         range: range(t(2, 1), t(3, 1)),
         kind: TransitionKind::Crossfade,
+        params: None,
         version: 1,
     });
     let p = project(s.clone());
@@ -1714,6 +1717,7 @@ fn transitions_plan_apply_idempotency_selective_undo_and_reload() {
         incoming: b.id,
         range: range(t(2, 1), t(3, 1)),
         kind: TransitionKind::Crossfade,
+        params: None,
         version: 1,
     };
     s.transitions.push(tr.clone());
@@ -2182,4 +2186,110 @@ fn gui007_reverse_video_first_last_pixels_shared_edit_undo_and_bounds() {
         undo(&path, event.id).unwrap();
         assert_eq!(export(&path).document, project);
     }
+}
+
+#[test]
+fn transition_set_round_trips_wipe_slide_dip_and_rejects_param_mismatch() {
+    let outgoing = clip([255, 0, 0], 0, 3);
+    let incoming = clip([0, 0, 255], 1, 5);
+    let mut s = sequence(vec![outgoing.clone(), incoming.clone()]);
+    // Overlapping clips are only valid when a transition covers the overlap.
+    let overlap = range(t(1, 1), t(3, 1));
+    s.transitions = vec![Transition {
+        outgoing: outgoing.id,
+        incoming: incoming.id,
+        range: overlap,
+        kind: TransitionKind::Crossfade,
+        params: None,
+        version: 1,
+    }];
+    let id = s.id;
+    let (_dir, path) = setup(project(s));
+    let set =
+        |kind: TransitionKind, params: Option<TransitionParams>| TimelineCommand::TransitionSet {
+            sequence: id,
+            transition: Transition {
+                outgoing: outgoing.id,
+                incoming: incoming.id,
+                range: overlap,
+                kind,
+                params,
+                version: 1,
+            },
+        };
+    for (key, kind, params) in [
+        (
+            "wipe-left",
+            TransitionKind::Wipe,
+            Some(TransitionParams::Wipe(WipeParams {
+                direction: TransitionDirection::Left,
+            })),
+        ),
+        (
+            "slide-up",
+            TransitionKind::Slide,
+            Some(TransitionParams::Slide(SlideParams {
+                direction: TransitionDirection::Up,
+            })),
+        ),
+        (
+            "dip-black",
+            TransitionKind::Dip,
+            Some(TransitionParams::Dip(DipParams {
+                color: Color::from_srgb8([0, 0, 0], None),
+            })),
+        ),
+    ] {
+        apply(&path, vec![set(kind, params)], key);
+        let exported = export(&path);
+        let DocumentObject::Known(s) = &exported.document.sequences[0] else {
+            panic!()
+        };
+        assert_eq!(s.transitions.len(), 1);
+        assert_eq!(s.transitions[0].kind, kind);
+        assert_eq!(s.transitions[0].params, params);
+    }
+    // Kind/params mismatch and a foreign payload are INVALID_CLIP failures.
+    reject(&path, vec![set(TransitionKind::Wipe, None)], "INVALID_CLIP");
+    reject(
+        &path,
+        vec![set(
+            TransitionKind::Crossfade,
+            Some(TransitionParams::Dip(DipParams {
+                color: Color::from_srgb8([0, 0, 0], None),
+            })),
+        )],
+        "INVALID_CLIP",
+    );
+    // An unsupported transition version is a typed rejection, not a fallback.
+    let mut unsupported = set(TransitionKind::Crossfade, None);
+    let TimelineCommand::TransitionSet { transition, .. } = &mut unsupported else {
+        panic!()
+    };
+    transition.version = 2;
+    reject(&path, vec![unsupported], "UNSUPPORTED_FEATURE");
+    // Re-set a wipe and confirm the rendered midpoint has a spatially split
+    // frame: left columns show the incoming clip, right columns the outgoing.
+    apply(
+        &path,
+        vec![set(
+            TransitionKind::Wipe,
+            Some(TransitionParams::Wipe(WipeParams {
+                direction: TransitionDirection::Left,
+            })),
+        )],
+        "wipe-final",
+    );
+    let exported = export(&path);
+    let snapshot = snapshot(&exported.document);
+    let frame = cpu(&snapshot, t(2, 1)).pixels.linear;
+    let (left, right) = (frame[0], frame[15]);
+    assert!(
+        left[2] > 0.9 && left[0] < 0.1,
+        "left column is incoming: {left:?}"
+    );
+    assert!(
+        right[0] > 0.9 && right[2] < 0.1,
+        "right column is outgoing: {right:?}"
+    );
 }

@@ -1634,6 +1634,19 @@
       ],
       "type": "string"
     },
+    "DipParams": {
+      "additionalProperties": false,
+      "properties": {
+        "color": {
+          "$ref": "#/$defs/Color",
+          "description": "Straight authoring color composited at the transition midpoint."
+        }
+      },
+      "required": [
+        "color"
+      ],
+      "type": "object"
+    },
     "DocumentMatteKind": {
       "enum": [
         "alpha",
@@ -2895,6 +2908,112 @@
           "required": [
             "kind",
             "gain"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "COLOR-002 exposure: premultiplied working RGB is scaled by\n2^exposure and shifted by offset; alpha is preserved (ADR-0108).",
+          "properties": {
+            "exposure": {
+              "$ref": "#/$defs/PropertyId",
+              "description": "EV stops; finite scalar."
+            },
+            "kind": {
+              "const": "color_exposure",
+              "type": "string"
+            },
+            "offset": {
+              "$ref": "#/$defs/PropertyId",
+              "description": "Additive premultiplied-space offset; finite scalar."
+            }
+          },
+          "required": [
+            "kind",
+            "exposure",
+            "offset"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "COLOR-002 levels with gamma, applied per premultiplied RGB channel.",
+          "properties": {
+            "gamma": {
+              "$ref": "#/$defs/PropertyId",
+              "description": "Positive finite scalar; 1.0 is linear."
+            },
+            "in_black": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "in_white": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "const": "color_levels",
+              "type": "string"
+            },
+            "out_black": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "out_white": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "required": [
+            "kind",
+            "in_black",
+            "in_white",
+            "gamma",
+            "out_black",
+            "out_white"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "COLOR-002 monotone-cubic RGB channel curve. The property is a data\ntable with scalar `x` and `y` columns, `x` strictly increasing, both\nin [0,1], and at most CURVES_MAX_POINTS rows.",
+          "properties": {
+            "curve": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "const": "color_curves",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "curve"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "COLOR-002 hue/saturation/lightness in working HSL; alpha preserved.",
+          "properties": {
+            "hue_shift": {
+              "$ref": "#/$defs/PropertyId",
+              "description": "Shift in degrees; finite angle."
+            },
+            "kind": {
+              "const": "color_hsl",
+              "type": "string"
+            },
+            "lightness": {
+              "$ref": "#/$defs/PropertyId",
+              "description": "Additive lightness term; finite scalar."
+            },
+            "saturation": {
+              "$ref": "#/$defs/PropertyId",
+              "description": "Multiplier where 1.0 leaves saturation unchanged; finite scalar."
+            }
+          },
+          "required": [
+            "kind",
+            "hue_shift",
+            "saturation",
+            "lightness"
           ],
           "type": "object"
         }
@@ -9643,6 +9762,135 @@
             "DropShadow"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "COLOR-002 resolved pointwise operations keep f64 authoring precision.",
+          "properties": {
+            "ColorExposure": {
+              "properties": {
+                "exposure": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "offset": {
+                  "format": "double",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "exposure",
+                "offset"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "ColorExposure"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "ColorLevels": {
+              "properties": {
+                "gamma": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "in_black": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "in_white": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "out_black": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "out_white": {
+                  "format": "double",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "in_black",
+                "in_white",
+                "gamma",
+                "out_black",
+                "out_white"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "ColorLevels"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Monotonically increasing `(x, y)` control points, already validated.",
+          "properties": {
+            "ColorCurves": {
+              "properties": {
+                "curve": {
+                  "items": {
+                    "items": {
+                      "format": "double",
+                      "type": "number"
+                    },
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "type": "array"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "curve"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "ColorCurves"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "ColorHsl": {
+              "properties": {
+                "hue_shift": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "lightness": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "saturation": {
+                  "format": "double",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "hue_shift",
+                "saturation",
+                "lightness"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "ColorHsl"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -11237,6 +11485,18 @@
         "particle_updates",
         "checkpoints",
         "cached_particles"
+      ],
+      "type": "object"
+    },
+    "SlideParams": {
+      "additionalProperties": false,
+      "properties": {
+        "direction": {
+          "$ref": "#/$defs/TransitionDirection"
+        }
+      },
+      "required": [
+        "direction"
       ],
       "type": "object"
     },
@@ -13641,6 +13901,17 @@
         "outgoing": {
           "$ref": "#/$defs/ClipId"
         },
+        "params": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TransitionParams"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "FX-003 per-kind payload. Absent in pre-FX-003 documents and required\nfor all non-crossfade kinds; crossfade must not carry one (ADR-0109)."
+        },
         "range": {
           "$ref": "#/$defs/TimeRange"
         },
@@ -13659,11 +13930,65 @@
       ],
       "type": "object"
     },
-    "TransitionKind": {
+    "TransitionDirection": {
+      "description": "Closed direction set shared by the wipe and slide v1 transitions.",
       "enum": [
-        "crossfade"
+        "left",
+        "right",
+        "up",
+        "down"
       ],
       "type": "string"
+    },
+    "TransitionKind": {
+      "enum": [
+        "crossfade",
+        "wipe",
+        "slide",
+        "dip"
+      ],
+      "type": "string"
+    },
+    "TransitionParams": {
+      "description": "FX-003 transition payloads; the variant must match Transition::kind.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "wipe": {
+              "$ref": "#/$defs/WipeParams"
+            }
+          },
+          "required": [
+            "wipe"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "slide": {
+              "$ref": "#/$defs/SlideParams"
+            }
+          },
+          "required": [
+            "slide"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "dip": {
+              "$ref": "#/$defs/DipParams"
+            }
+          },
+          "required": [
+            "dip"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "UndoRequest": {
       "additionalProperties": false,
@@ -14042,6 +14367,18 @@
         "subject",
         "details",
         "message"
+      ],
+      "type": "object"
+    },
+    "WipeParams": {
+      "additionalProperties": false,
+      "properties": {
+        "direction": {
+          "$ref": "#/$defs/TransitionDirection"
+        }
+      },
+      "required": [
+        "direction"
       ],
       "type": "object"
     }

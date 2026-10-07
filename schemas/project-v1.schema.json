@@ -837,6 +837,19 @@
         "height"
       ]
     },
+    "DipParams": {
+      "type": "object",
+      "properties": {
+        "color": {
+          "description": "Straight authoring color composited at the transition midpoint.",
+          "$ref": "#/$defs/Color"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "color"
+      ]
+    },
     "DocumentMatteKind": {
       "type": "string",
       "enum": [
@@ -1111,6 +1124,112 @@
           "required": [
             "kind",
             "gain"
+          ]
+        },
+        {
+          "description": "COLOR-002 exposure: premultiplied working RGB is scaled by\n2^exposure and shifted by offset; alpha is preserved (ADR-0108).",
+          "type": "object",
+          "properties": {
+            "exposure": {
+              "description": "EV stops; finite scalar.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "color_exposure"
+            },
+            "offset": {
+              "description": "Additive premultiplied-space offset; finite scalar.",
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "exposure",
+            "offset"
+          ]
+        },
+        {
+          "description": "COLOR-002 levels with gamma, applied per premultiplied RGB channel.",
+          "type": "object",
+          "properties": {
+            "gamma": {
+              "description": "Positive finite scalar; 1.0 is linear.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "in_black": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "in_white": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "color_levels"
+            },
+            "out_black": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "out_white": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "in_black",
+            "in_white",
+            "gamma",
+            "out_black",
+            "out_white"
+          ]
+        },
+        {
+          "description": "COLOR-002 monotone-cubic RGB channel curve. The property is a data\ntable with scalar `x` and `y` columns, `x` strictly increasing, both\nin [0,1], and at most CURVES_MAX_POINTS rows.",
+          "type": "object",
+          "properties": {
+            "curve": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "color_curves"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "curve"
+          ]
+        },
+        {
+          "description": "COLOR-002 hue/saturation/lightness in working HSL; alpha preserved.",
+          "type": "object",
+          "properties": {
+            "hue_shift": {
+              "description": "Shift in degrees; finite angle.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "color_hsl"
+            },
+            "lightness": {
+              "description": "Additive lightness term; finite scalar.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "saturation": {
+              "description": "Multiplier where 1.0 leaves saturation unchanged; finite scalar.",
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "hue_shift",
+            "saturation",
+            "lightness"
           ]
         }
       ]
@@ -3398,6 +3517,18 @@
         }
       ]
     },
+    "SlideParams": {
+      "type": "object",
+      "properties": {
+        "direction": {
+          "$ref": "#/$defs/TransitionDirection"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "direction"
+      ]
+    },
     "SourceRef": {
       "oneOf": [
         {
@@ -4420,6 +4551,17 @@
         "outgoing": {
           "$ref": "#/$defs/ClipId"
         },
+        "params": {
+          "description": "FX-003 per-kind payload. Absent in pre-FX-003 documents and required\nfor all non-crossfade kinds; crossfade must not carry one (ADR-0109).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TransitionParams"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "range": {
           "$ref": "#/$defs/TimeRange"
         },
@@ -4438,10 +4580,64 @@
         "version"
       ]
     },
+    "TransitionDirection": {
+      "description": "Closed direction set shared by the wipe and slide v1 transitions.",
+      "type": "string",
+      "enum": [
+        "left",
+        "right",
+        "up",
+        "down"
+      ]
+    },
     "TransitionKind": {
       "type": "string",
       "enum": [
-        "crossfade"
+        "crossfade",
+        "wipe",
+        "slide",
+        "dip"
+      ]
+    },
+    "TransitionParams": {
+      "description": "FX-003 transition payloads; the variant must match Transition::kind.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "wipe": {
+              "$ref": "#/$defs/WipeParams"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "wipe"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "slide": {
+              "$ref": "#/$defs/SlideParams"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "slide"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "dip": {
+              "$ref": "#/$defs/DipParams"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "dip"
+          ]
+        }
       ]
     },
     "Value": {
@@ -4660,6 +4856,18 @@
         "asset_ref",
         "data_table",
         "path"
+      ]
+    },
+    "WipeParams": {
+      "type": "object",
+      "properties": {
+        "direction": {
+          "$ref": "#/$defs/TransitionDirection"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "direction"
       ]
     }
   }
