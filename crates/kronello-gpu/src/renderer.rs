@@ -435,11 +435,13 @@ impl GpuContext {
         })
     }
     /// Synchronous completion fence for native interop. Bounded wait, no busy polling.
+    /// Software adapters (WARP / llvmpipe) compile shaders inside the first
+    /// submission, so the bound must cover cold JIT on loaded CI runners.
     pub fn wait(&self) -> Result<(), GpuError> {
         self.device
             .poll(wgpu::PollType::Wait {
                 submission_index: None,
-                timeout: Some(Duration::from_secs(30)),
+                timeout: Some(Duration::from_secs(300)),
             })
             .map_err(|e| GpuError::Readback(e.to_string()))?;
         Ok(())
