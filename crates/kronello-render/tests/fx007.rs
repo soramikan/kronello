@@ -42,6 +42,7 @@ fn solid(rgb: [f64; 3], start: Time, end: Time) -> Clip {
         reverse_sampling: None,
         volume: None,
         links: vec![],
+        enabled: true,
         effects: vec![],
         masks: vec![],
         markers: vec![],
@@ -68,6 +69,7 @@ fn adjustment(range: TimeRange, ev: f64) -> Clip {
         reverse_sampling: None,
         volume: None,
         links: vec![],
+        enabled: true,
         effects: vec![Effect::Known(EffectDefinition {
             effect_id: COLOR_EXPOSURE_ID.into(),
             version: 1,
@@ -93,6 +95,7 @@ fn sequence(tracks: Vec<Track>) -> Project {
             transitions: vec![],
             markers: vec![],
             work_area: None,
+            targets: None,
         })],
         ..Project::default()
     }
@@ -284,6 +287,7 @@ fn adjustment_clips_on_invalid_tracks_or_with_retime_fail_typed() {
             transitions: vec![],
             markers: vec![],
             work_area: None,
+            targets: None,
         })],
         ..Project::default()
     };

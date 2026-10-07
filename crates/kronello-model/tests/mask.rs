@@ -71,6 +71,7 @@ fn clip(start: i64, end: i64) -> Clip {
         reverse_sampling: None,
         volume: None,
         links: vec![],
+        enabled: true,
         effects: vec![],
         masks: vec![],
         markers: vec![],
@@ -93,6 +94,7 @@ fn sequence_with(kind: TrackKind, clips: Vec<Clip>) -> (Sequence, Project) {
         transitions: vec![],
         markers: vec![],
         work_area: None,
+        targets: None,
     };
     (sequence, Project::default())
 }

@@ -43,6 +43,7 @@ fn solid(rgb: [u8; 3]) -> Clip {
         reverse_sampling: None,
         volume: None,
         links: vec![],
+        enabled: true,
         effects: vec![],
         masks: vec![],
         markers: vec![],
@@ -62,6 +63,7 @@ fn adjustment(exposure_ev: f64) -> Clip {
         reverse_sampling: None,
         volume: None,
         links: vec![],
+        enabled: true,
         effects: vec![Effect::Known(EffectDefinition {
             effect_id: COLOR_EXPOSURE_ID.into(),
             version: 1,
@@ -86,6 +88,7 @@ fn sequence(tracks: Vec<Track>) -> Sequence {
         transitions: vec![],
         markers: vec![],
         work_area: None,
+        targets: None,
     }
 }
 fn track(kind: TrackKind, clips: Vec<Clip>) -> Track {
@@ -227,6 +230,7 @@ fn clip_place_accepts_adjustment_and_query_classifies_it() {
                 },
                 profile: Default::default(),
                 fonts: vec![],
+                media_proxies: kronello_render::MediaProxyMode::Off,
             },
             time: t(1, 1),
         }))

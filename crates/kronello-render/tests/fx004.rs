@@ -100,6 +100,7 @@ fn project(parts: Vec<MaskParts>) -> (Project, ClipId) {
         reverse_sampling: None,
         volume: None,
         links: vec![],
+        enabled: true,
         effects: vec![],
         masks,
         markers: vec![],
@@ -123,6 +124,7 @@ fn project(parts: Vec<MaskParts>) -> (Project, ClipId) {
                 transitions: vec![],
                 markers: vec![],
                 work_area: None,
+                targets: None,
             })],
             ..Project::default()
         },

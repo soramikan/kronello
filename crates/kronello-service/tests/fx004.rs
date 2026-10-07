@@ -74,6 +74,7 @@ fn clip() -> Clip {
         reverse_sampling: None,
         volume: None,
         links: vec![],
+        enabled: true,
         effects: vec![],
         masks: vec![],
         markers: vec![],
@@ -91,6 +92,7 @@ fn sequence(track: Track) -> Sequence {
         transitions: vec![],
         markers: vec![],
         work_area: None,
+        targets: None,
     }
 }
 fn video(clips: Vec<Clip>) -> Track {

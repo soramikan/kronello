@@ -74,6 +74,7 @@ fn project(
         links: vec![],
         enabled: true,
         effects,
+        masks: vec![],
         markers: vec![],
         properties: properties.into_iter().flatten().collect(),
     };

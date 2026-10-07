@@ -78,6 +78,7 @@ fn generator_clip() -> Clip {
         properties: vec![],
         effects: vec![],
         markers: vec![],
+        masks: vec![],
     }
 }
 fn fixture(kind: TrackKind, clip: Clip) -> (Project, SequenceId) {
