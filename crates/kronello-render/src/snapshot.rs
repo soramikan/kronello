@@ -145,6 +145,21 @@ impl Default for RenderProfile {
 /// No device handles, latest-document lookup, implicit fonts, or mutable state.
 /// The complete Project (including independent opaque data) participates in the
 /// identity even though only the selected dependency closure is executable.
+/// Transient render-input choice for preview proxy substitution (ADR-0119).
+/// `Off` is the only legal mode for file-writing outputs; `Prefer` substitutes
+/// a registered proxy for decode while keeping authored extent and identity.
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum MediaProxyMode {
+    /// Always decode the authored original asset (exports and fixed jobs).
+    #[default]
+    Off,
+    /// Decode the registered proxy when the link is valid, otherwise fall back
+    /// to the original at full quality. Preview-only.
+    Prefer,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RenderSnapshot {
@@ -158,6 +173,8 @@ pub struct RenderSnapshot {
     profile: RenderProfile,
     mattes: Vec<MatteBinding>,
     font_locks: Vec<FontRef>,
+    #[serde(default)]
+    media_proxies: MediaProxyMode,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
@@ -244,6 +261,7 @@ impl RenderSnapshot {
                     profile,
                     mattes: vec![],
                     font_locks: vec![],
+                    media_proxies: MediaProxyMode::Off,
                 };
                 value.validate()?;
                 let definitions = value.definitions()?;
@@ -306,6 +324,7 @@ impl RenderSnapshot {
             profile,
             mattes,
             font_locks: vec![],
+            media_proxies: MediaProxyMode::Off,
         };
         snapshot.validate()?;
         let definitions = snapshot.definitions()?;
@@ -333,6 +352,14 @@ impl RenderSnapshot {
     pub fn with_mattes(mut self, mattes: Vec<MatteBinding>) -> Self {
         self.mattes = mattes;
         self
+    }
+    /// Transient preview proxy mode; does not alter the saved Project.
+    pub fn with_media_proxies(mut self, mode: MediaProxyMode) -> Self {
+        self.media_proxies = mode;
+        self
+    }
+    pub fn media_proxies(&self) -> MediaProxyMode {
+        self.media_proxies
     }
     pub fn composition(&self) -> CompositionId {
         self.composition
@@ -612,6 +639,31 @@ fn content_asset(project: &Project, id: AssetId) -> Result<&Asset, RenderError> 
             message: id.to_string(),
         }
     })
+}
+/// Transient preview substitution (ADR-0119): in `Prefer` mode a valid
+/// `ProxyLink` retargets decode to the proxy asset/stream. Any absent, stale
+/// or inconsistent link falls back to the authored stream at full quality —
+/// substitution never errors and never changes authored media identity.
+fn render_media<'a>(
+    snapshot: &'a RenderSnapshot,
+    asset: &'a Asset,
+    stream_index: u32,
+) -> (&'a Asset, u32) {
+    if snapshot.media_proxies != MediaProxyMode::Prefer || asset.kind != AssetKind::Video {
+        return (asset, stream_index);
+    }
+    let Some(link) = snapshot.project.proxy_link(asset.id) else {
+        return (asset, stream_index);
+    };
+    if link.original_stream_index != stream_index
+        || snapshot.project.proxy_link_state(link).is_err()
+    {
+        return (asset, stream_index);
+    }
+    match content_asset(&snapshot.project, link.proxy) {
+        Ok(proxy) => (proxy, link.proxy_stream_index),
+        Err(_) => (asset, stream_index),
+    }
 }
 
 /// Resolved caption draw input: laid-out glyphs plus cue-level attributes that
@@ -974,7 +1026,7 @@ pub fn build_scene_ir_with_cache(
                                 n.local_time.checked_sub(authored.active_range.start())?;
                             let source =
                                 media.source_in.checked_add(media.time_map.map(relative)?)?;
-                            media_content(asset, media.stream_index, source)?
+                            media_content(snapshot, asset, media.stream_index, source)?
                         }
                     }
                     AssetKind::Data => {
@@ -1001,7 +1053,7 @@ pub fn build_scene_ir_with_cache(
                 .start_time
                 .unwrap_or(Time::ZERO)
                 .checked_add(relative)?;
-            content = media_content(asset, stream.index, source)?;
+            content = media_content(snapshot, asset, stream.index, source)?;
         }
         let mut post_effect_opacity = 1.0;
         let mut transitions = Vec::new();
@@ -1042,9 +1094,11 @@ pub fn build_scene_ir_with_cache(
                             "video dimensions unavailable".into(),
                         ));
                     };
+                    let (decode_asset, decode_stream) =
+                        render_media(snapshot, asset, *stream_index);
                     SceneContent::Video {
-                        asset: asset.clone(),
-                        stream_index: *stream_index,
+                        asset: decode_asset.clone(),
+                        stream_index: decode_stream,
                         time: clip.local_time(time)?,
                         reverse_sampling: clip.reverse_sampling.is_some(),
                         extent: [w, h],
@@ -1269,6 +1323,7 @@ fn require_composition_media(snapshot: &RenderSnapshot) -> Result<(), RenderErro
     Ok(())
 }
 fn media_content(
+    snapshot: &RenderSnapshot,
     asset: &Asset,
     stream_index: u32,
     source: Time,
@@ -1309,10 +1364,12 @@ fn media_content(
         }
         source
     };
+    // Authored extent and bounds are validated above; only decode swaps.
+    let (decode_asset, decode_stream) = render_media(snapshot, asset, stream_index);
     Ok(SceneContent::Video {
         reverse_sampling: false,
-        asset: asset.clone(),
-        stream_index,
+        asset: decode_asset.clone(),
+        stream_index: decode_stream,
         time,
         extent: [f64::from(width), f64::from(height)],
     })

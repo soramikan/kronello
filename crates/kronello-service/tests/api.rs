@@ -261,6 +261,8 @@ fn capabilities_registry_media_extension_without_device_initialization() {
         mutating,
         [
             "audio.analyze",
+            "track.analyze",
+            "proxy.clear",
             "sequence.create",
             "clip.place",
             "clip.trim",
@@ -641,6 +643,13 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
             "style":{"font":{"family":"TestSans","postscript_name":"TestSans-Regular","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","face_index":0},"size":24.0,"fill":{"space":"srgb","components":{"r":1.0,"g":1.0,"b":1.0,"alpha":1.0}}},
             "cue_ids":[{"caption":uuid,"clip":uuid}]}}),
         json!({"operation":"captions.export","project":path,"sequence":uuid,"format":"vtt"}),
+        json!({"operation":"track.analyze","project":path,"base_revision":"1","id":uuid,
+            "asset":uuid,"stream_index":0,"mode":"points",
+            "seeds":[{"x":0.5,"y":0.5,"template_radius":8,"search_radius":16}],
+            "range":{"start":{"num":"0","den":"1"},"end":time}}),
+        json!({"operation":"proxy.generate","project":path,"assets":[uuid],"scale":0.5}),
+        json!({"operation":"proxy.status","project":path}),
+        json!({"operation":"proxy.clear","project":path,"base_revision":"1","asset":uuid}),
     ];
     assert_eq!(requests.len(), command_registry().len());
     for request in requests {
@@ -1144,6 +1153,106 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
     );
     execute(
         json!({"operation":"project.collect", "project":media_path, "output_directory":dir.path().join("collected")}),
+    );
+    // A real tiny clip backs the tracking and proxy command contracts. The
+    // proxy link is registered directly in the authored document; generation
+    // itself is exercised through `proxy.generate` against the stub worker.
+    let clip_path = dir.path().join("clip.mov");
+    let runtime = kronello_media::MediaRuntime::load().unwrap();
+    runtime
+        .encode_video_stream(
+            &kronello_media::EncodeRequest {
+                output: clip_path.clone(),
+                codec: kronello_media::EncodeCodec::ProRes,
+                width: 16,
+                height: 16,
+                time_base: kronello_time::Rational::new(1, 24).unwrap(),
+            },
+            2,
+            &mut |index| {
+                let mut rgba = Vec::with_capacity(16 * 16 * 4);
+                for p in 0..256u32 {
+                    let (x, y) = (p % 16, p / 16);
+                    rgba.extend_from_slice(&[
+                        ((x * 36 + y * 11 + index as u32 * 3) % 256) as u8,
+                        ((x * 5 + y * 29) % 256) as u8,
+                        ((x * 17 + y * 7) % 256) as u8,
+                        255,
+                    ]);
+                }
+                Ok(kronello_media::EncodeFrame {
+                    pts: kronello_time::Rational::new(index as i64, 24).unwrap(),
+                    rgba,
+                })
+            },
+        )
+        .unwrap();
+    let clip_stream = runtime
+        .open_video_stream(&clip_path, 0)
+        .unwrap()
+        .stream_metadata()
+        .unwrap();
+    let video_id = AssetId::new();
+    let proxy_id = AssetId::new();
+    let clip_hash = kronello_media::content_hash(&clip_path).unwrap();
+    let mut proxy_stream = clip_stream.clone();
+    proxy_stream.index = 0;
+    proxy_stream.width = Some(8);
+    proxy_stream.height = Some(8);
+    let video_document = Project {
+        assets: vec![
+            DocumentObject::Known(Asset {
+                id: video_id,
+                content_hash: clip_hash.clone(),
+                kind: AssetKind::Video,
+                streams: vec![clip_stream],
+                locator: AssetLocator {
+                    relative: Some("clip.mov".into()),
+                    absolute: None,
+                },
+            }),
+            DocumentObject::Known(Asset {
+                id: proxy_id,
+                content_hash: "0000000000000000000000000000000000000000000000000000000000000000"
+                    .into(),
+                kind: AssetKind::Video,
+                streams: vec![proxy_stream],
+                locator: AssetLocator {
+                    relative: Some("clip.proxies/proxy.mov".into()),
+                    absolute: None,
+                },
+            }),
+        ],
+        proxies: vec![ProxyLink {
+            original: video_id,
+            proxy: proxy_id,
+            original_stream_index: 0,
+            proxy_stream_index: 0,
+            scale: FiniteF64::new(0.5).unwrap(),
+            width: 8,
+            height: 8,
+            source_content_hash: clip_hash,
+            source_duration: None,
+            job: None,
+        }],
+        ..Project::default()
+    };
+    let video_path = dir.path().join("video-contracts.kronello");
+    execute(json!({"operation":"project.create", "project":video_path, "document":video_document}));
+    execute(
+        json!({"operation":"track.analyze", "project":video_path, "base_revision":"1",
+            "id":Uuid::new_v4(), "asset":video_id, "stream_index":0, "mode":"points",
+            "seeds":[{"x":0.5,"y":0.5,"template_radius":4,"search_radius":4}],
+            "range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"12"}}}),
+    );
+    // The injected stub worker never runs; submission still returns a record.
+    execute(
+        json!({"operation":"proxy.generate", "project":video_path, "assets":[video_id], "scale":0.5}),
+    );
+    execute(json!({"operation":"proxy.status", "project":video_path}));
+    execute(
+        json!({"operation":"proxy.clear", "project":video_path, "base_revision":"2",
+            "asset":video_id}),
     );
     assert_eq!(
         checked,

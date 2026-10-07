@@ -673,6 +673,7 @@ pub(crate) fn evaluated_scene(
         },
         profile: Default::default(),
         fonts: fonts.to_vec(),
+        media_proxies: kronello_render::MediaProxyMode::Off,
     };
     let snapshot = crate::freeze_render_input(stored, &input)?;
     let bytes = crate::load_locked_fonts(&snapshot, &input)?;

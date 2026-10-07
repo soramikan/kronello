@@ -185,6 +185,10 @@ impl<'de> Deserialize<'de> for Request {
             "svg.export" => payload(&fields).map(Self::SvgExport),
             "svg.import_plan" => payload(&fields).map(Self::SvgImportPlan),
             "audio.analyze" => payload(&fields).map(Self::AudioAnalyze),
+            "track.analyze" => payload(&fields).map(Self::TrackAnalyze),
+            "proxy.generate" => payload(&fields).map(Self::ProxyGenerate),
+            "proxy.status" => payload(&fields).map(Self::ProxyStatus),
+            "proxy.clear" => payload(&fields).map(Self::ProxyClear),
             "sequence.query" => payload(&fields).map(Self::SequenceQuery),
             "sequence.create" => payload(&fields).map(Self::SequenceCreate),
             "clip.place" => payload(&fields).map(Self::ClipPlace),
@@ -262,6 +266,7 @@ impl<'de> Deserialize<'de> for ResultData {
             "node_explanation" => Self::NodeExplanation(take(&mut fields, "value")?),
             "render_explanation" => Self::RenderExplanation(take(&mut fields, "value")?),
             "samples" => Self::Samples(take(&mut fields, "value")?),
+            "proxies" => Self::Proxies(take(&mut fields, "value")?),
             "capabilities" => Self::Capabilities(take(&mut fields, "value")?),
             "captions" => Self::Captions(take(&mut fields, "value")?),
             _ => return Err(D::Error::custom("unknown result kind")),
@@ -318,6 +323,11 @@ impl<'de> Deserialize<'de> for crate::RenderInput {
         } else {
             vec![]
         };
+        let media_proxies = if fields.contains_key("media_proxies") {
+            take(&mut fields, "media_proxies")?
+        } else {
+            kronello_render::MediaProxyMode::Off
+        };
         exhausted::<D::Error>(&fields)?;
         Ok(Self {
             project,
@@ -326,6 +336,7 @@ impl<'de> Deserialize<'de> for crate::RenderInput {
             region,
             profile,
             fonts,
+            media_proxies,
         })
     }
 }

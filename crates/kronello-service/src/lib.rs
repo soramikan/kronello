@@ -23,6 +23,13 @@ mod vector;
 pub use vector::*;
 mod audio_analysis;
 pub use audio_analysis::{AudioAnalyzeInput, AudioAnalyzeRequest};
+mod proxy;
+pub use proxy::{
+    ProxyClearRequest, ProxyGenerateRequest, ProxyJobInput, ProxyState, ProxyStatusEntry,
+    ProxyStatusRequest, ProxyStatusResult,
+};
+mod tracking;
+pub use tracking::TrackAnalyzeRequest;
 mod captions;
 pub use captions::*;
 mod edit;
@@ -82,6 +89,14 @@ pub enum Request {
     SvgImportPlan(SvgImportPlanRequest),
     #[serde(rename = "audio.analyze")]
     AudioAnalyze(AudioAnalyzeRequest),
+    #[serde(rename = "track.analyze")]
+    TrackAnalyze(TrackAnalyzeRequest),
+    #[serde(rename = "proxy.generate")]
+    ProxyGenerate(ProxyGenerateRequest),
+    #[serde(rename = "proxy.status")]
+    ProxyStatus(ProxyStatusRequest),
+    #[serde(rename = "proxy.clear")]
+    ProxyClear(ProxyClearRequest),
     #[serde(rename = "sequence.query")]
     SequenceQuery(SequenceQueryRequest),
     #[serde(rename = "sequence.create")]
@@ -217,6 +232,10 @@ pub struct RenderInput {
     pub profile: RenderProfile,
     #[serde(default)]
     pub fonts: Vec<FontInput>,
+    /// Preview proxy substitution (ADR-0119). `prefer` is legal only on
+    /// non-file-writing preview paths; export and fixed jobs reject it.
+    #[serde(default)]
+    pub media_proxies: kronello_render::MediaProxyMode,
 }
 fn render_input_schema(schema: &mut schemars::Schema) {
     schema.insert("oneOf".into(), serde_json::json!([
@@ -296,6 +315,7 @@ pub enum ResultData {
     NodeExplanation(Box<NodeExplainResult>),
     RenderExplanation(Box<RenderExplainResult>),
     Samples(PropertySampleResult),
+    Proxies(ProxyStatusResult),
     Capabilities(Box<CapabilitiesResult>),
     ProjectPlan(Box<ProjectChangePlan>),
     Captions(CaptionsExportResult),
@@ -543,6 +563,10 @@ impl<'a> Service<'a> {
                 vector::import_plan(r).map(|r| ResultData::Plan(Box::new(r)))
             }
             Request::AudioAnalyze(r) => self.analyze_audio(r),
+            Request::TrackAnalyze(r) => self.analyze_tracking(r),
+            Request::ProxyGenerate(r) => self.generate_proxies(r).map(ResultData::Jobs),
+            Request::ProxyStatus(r) => self.proxy_status(r).map(ResultData::Proxies),
+            Request::ProxyClear(r) => self.proxy_clear(r).map(ResultData::Project),
             Request::SequenceQuery(r) => nle::sequence_query(r).map(ResultData::Timeline),
             Request::SequenceCreate(r) => nle::sequence_create(r).map(ResultData::Edit),
             Request::ClipPlace(r) => nle::clip_place(r).map(ResultData::Edit),
@@ -696,30 +720,39 @@ impl<'a> Service<'a> {
                     },
                 )
             }
-            Request::RenderSequence(r) => self.render(&r.input, |snapshot, fonts, backend| {
-                let total = kronello_render::frame_samples(r.range, r.frame_rate)?.len() as u64;
-                Ok(ResultData::Sequence(render_sequence_with_checkpoint(
-                    snapshot,
-                    fonts,
-                    backend,
-                    SequenceRequest {
-                        range: r.range,
-                        frame_rate: r.frame_rate,
-                        region: r.input.region,
-                    },
-                    &r.output_directory,
-                    &mut |completed| {
-                        if control.is_cancelled() {
-                            return Err(RenderError::Backend {
-                                code: "REQUEST_CANCELLED",
-                                message: "Request cancelled at frame boundary".into(),
-                            });
-                        }
-                        control.progress(completed, total);
-                        Ok(())
-                    },
-                )?))
-            }),
+            Request::RenderSequence(r) => {
+                // File outputs decode authored originals only (ADR-0119).
+                if r.input.media_proxies != kronello_render::MediaProxyMode::Off {
+                    return Err(ServiceError::new(
+                        "UNSUPPORTED_FEATURE",
+                        "media_proxies is a preview-only switch; file outputs use originals",
+                    ));
+                }
+                self.render(&r.input, |snapshot, fonts, backend| {
+                    let total = kronello_render::frame_samples(r.range, r.frame_rate)?.len() as u64;
+                    Ok(ResultData::Sequence(render_sequence_with_checkpoint(
+                        snapshot,
+                        fonts,
+                        backend,
+                        SequenceRequest {
+                            range: r.range,
+                            frame_rate: r.frame_rate,
+                            region: r.input.region,
+                        },
+                        &r.output_directory,
+                        &mut |completed| {
+                            if control.is_cancelled() {
+                                return Err(RenderError::Backend {
+                                    code: "REQUEST_CANCELLED",
+                                    message: "Request cancelled at frame boundary".into(),
+                                });
+                            }
+                            control.progress(completed, total);
+                            Ok(())
+                        },
+                    )?))
+                })
+            }
         }
     }
     fn render<T>(
@@ -929,6 +962,32 @@ fn configure_external_raster_cache(gpu: &GpuContext, project: &Path) -> Result<(
     })
     .map_err(|e| ServiceError::new("CACHE_CONFIGURATION", e.to_string()))
 }
+/// Drop preview-proxy links whose file no longer verifies. Preview-only:
+/// substitution falls back to the authored original when a proxy is missing
+/// or corrupted instead of failing the render (ADR-0119). The authored
+/// document is untouched; pruning affects only this transient snapshot.
+fn prune_unresolvable_proxy_links(document: &mut kronello_model::Project, project_path: &Path) {
+    let unresolvable: Vec<kronello_model::AssetId> = document
+        .proxies
+        .iter()
+        .filter(|link| {
+            document.proxy_link_state(link).is_ok()
+                && match document.assets.iter().find_map(|a| match a {
+                    kronello_model::DocumentObject::Known(a) if a.id == link.proxy => Some(a),
+                    _ => None,
+                }) {
+                    // A stale link already falls back at substitution; dropping
+                    // it here only skips the unverifiable decode attempt.
+                    Some(asset) => kronello_media::resolve_asset(asset, project_path).is_err(),
+                    None => true,
+                }
+        })
+        .map(|link| link.proxy)
+        .collect();
+    document
+        .proxies
+        .retain(|link| !unresolvable.contains(&link.proxy));
+}
 /// One target compiler for synchronous rendering and fixed asynchronous input.
 /// New render target variants belong here, never in a separate job target model.
 fn freeze_render_input(
@@ -944,12 +1003,20 @@ fn freeze_render_input(
             ));
         }
     };
-    Ok(RenderSnapshot::for_target(
-        &stored.document,
-        target,
-        stored.revision,
-        input.profile,
-    )?)
+    if input.media_proxies == kronello_render::MediaProxyMode::Prefer
+        && !stored.document.proxies.is_empty()
+    {
+        let mut document = stored.document.clone();
+        prune_unresolvable_proxy_links(&mut document, &input.project);
+        return Ok(
+            RenderSnapshot::for_target(&document, target, stored.revision, input.profile)?
+                .with_media_proxies(input.media_proxies),
+        );
+    }
+    Ok(
+        RenderSnapshot::for_target(&stored.document, target, stored.revision, input.profile)?
+            .with_media_proxies(input.media_proxies),
+    )
 }
 fn load_locked_fonts(
     snapshot: &RenderSnapshot,
@@ -1250,6 +1317,10 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
         Request::SvgInspect(_) | Request::SvgExport(_) | Request::CapabilitiesGet(_) => Ok(()),
         Request::SvgImportPlan(r) => local_locator(&r.project),
         Request::AudioAnalyze(r) => local_locator(&r.project),
+        Request::TrackAnalyze(r) => local_locator(&r.project),
+        Request::ProxyGenerate(r) => local_locator(&r.project),
+        Request::ProxyStatus(r) => local_locator(&r.project),
+        Request::ProxyClear(r) => local_locator(&r.project),
         Request::CaptionsImportPlan(r) => local_locator(&r.project),
         Request::CaptionsImport(r) => local_locator(&r.plan.project),
         Request::CaptionsExport(r) => local_locator(&r.project),
@@ -1328,6 +1399,7 @@ mod tests {
                 },
                 profile: RenderProfile::default(),
                 fonts: Vec::new(),
+                media_proxies: kronello_render::MediaProxyMode::Off,
             },
             range: TimeRange::new(Time::ZERO, Time::new(1, 1).unwrap()).unwrap(),
             frame_rate: FrameRate::new(1, 1).unwrap(),

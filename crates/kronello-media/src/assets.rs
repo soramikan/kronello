@@ -28,7 +28,8 @@ pub fn content_hash(path: &Path) -> Result<String, MediaError> {
 /// exists with wrong content, do not silently substitute the absolute candidate.
 pub fn resolve_asset(asset: &Asset, project_path: &Path) -> Result<PathBuf, MediaError> {
     let located = locate_asset(asset, project_path)?;
-    if content_hash(&located.path)? != asset.content_hash {
+    let actual = content_hash(&located.path)?;
+    if actual != asset.content_hash {
         return Err(MediaError::AssetHashMismatch(
             located.path.display().to_string(),
         ));

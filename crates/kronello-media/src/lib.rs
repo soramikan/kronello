@@ -9,10 +9,12 @@ mod audio;
 mod export;
 #[allow(unsafe_code)]
 mod ffi;
+mod proxy;
 mod video;
 pub use assets::*;
 pub use audio::*;
 pub use export::*;
+pub use proxy::*;
 pub use video::*;
 
 use serde::{Deserialize, Serialize};

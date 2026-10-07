@@ -36,7 +36,7 @@
     "expression_data_assets": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject11"
+        "$ref": "#/$defs/DocumentObject12"
       }
     },
     "expressions": {
@@ -52,16 +52,23 @@
     "mattes": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject13"
+        "$ref": "#/$defs/DocumentObject14"
       }
     },
     "name": {
       "type": "string"
     },
+    "proxies": {
+      "description": "Original → preview-proxy linkage (ADR-0119); never affects authored\nmedia identity or export resolution.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ProxyLink"
+      }
+    },
     "repeaters": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject14"
+        "$ref": "#/$defs/DocumentObject15"
       }
     },
     "schema_version": {
@@ -78,7 +85,7 @@
     "sequences": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject12"
+        "$ref": "#/$defs/DocumentObject13"
       }
     },
     "shapes": {
@@ -90,7 +97,7 @@
     "simulations": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject15"
+        "$ref": "#/$defs/DocumentObject16"
       }
     },
     "template_instances": {
@@ -109,6 +116,12 @@
       "type": "array",
       "items": {
         "$ref": "#/$defs/DocumentObject5"
+      }
+    },
+    "tracking_data_assets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DocumentObject11"
       }
     }
   },
@@ -1123,7 +1136,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/ExpressionDataAsset"
+          "$ref": "#/$defs/TrackingDataAsset"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -1134,7 +1147,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/Sequence"
+          "$ref": "#/$defs/ExpressionDataAsset"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -1145,7 +1158,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/MatteRelation"
+          "$ref": "#/$defs/Sequence"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -1156,7 +1169,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/Repeater"
+          "$ref": "#/$defs/MatteRelation"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -1164,6 +1177,17 @@
       ]
     },
     "DocumentObject15": {
+      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Repeater"
+        },
+        {
+          "$ref": "#/$defs/OpaqueObject"
+        }
+      ]
+    },
+    "DocumentObject16": {
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
@@ -3328,6 +3352,80 @@
         "loop"
       ]
     },
+    "ProxyLink": {
+      "type": "object",
+      "properties": {
+        "height": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "job": {
+          "description": "Originating `proxy.generate` job id, when produced by a job.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "original": {
+          "description": "Authored media identity; unique across `Project::proxies`.",
+          "$ref": "#/$defs/AssetId"
+        },
+        "original_stream_index": {
+          "description": "Source stream that was transcoded.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "proxy": {
+          "description": "The proxy asset; unique across `Project::proxies` and `assets` entries\nare still independent (a proxy asset may serve exactly one original).",
+          "$ref": "#/$defs/AssetId"
+        },
+        "proxy_stream_index": {
+          "description": "Video stream index inside the proxy asset.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "scale": {
+          "description": "Linear scale applied to source dimensions.",
+          "$ref": "#/$defs/FiniteF64"
+        },
+        "source_content_hash": {
+          "description": "Locked `Asset::content_hash` of the original at registration time.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "source_duration": {
+          "description": "Locked duration of the original stream, used for duration checks.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rational"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "width": {
+          "description": "Proxy pixel dimensions (rounded to the encoder's even constraint).",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "original",
+        "proxy",
+        "original_stream_index",
+        "proxy_stream_index",
+        "scale",
+        "width",
+        "height",
+        "source_content_hash"
+      ]
+    },
     "Rational": {
       "type": "object",
       "properties": {
@@ -4921,6 +5019,187 @@
       "required": [
         "visible",
         "muted"
+      ]
+    },
+    "TrackedFrame": {
+      "type": "object",
+      "properties": {
+        "homography": {
+          "description": "Plane mode: row-major homography from first-frame normalized\ncoordinates onto this frame's normalized coordinates.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/FiniteF64"
+          },
+          "maxItems": 9,
+          "minItems": 9
+        },
+        "points": {
+          "description": "One entry per seed (points) or per corner (plane).",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TrackedPoint"
+          }
+        },
+        "time": {
+          "description": "Exact rational source presentation time of the sampled frame.",
+          "$ref": "#/$defs/Rational"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "time",
+        "points"
+      ]
+    },
+    "TrackedPoint": {
+      "type": "object",
+      "properties": {
+        "confidence": {
+          "description": "Normalized cross-correlation score in `[-1, 1]`.",
+          "$ref": "#/$defs/FiniteF64"
+        },
+        "x": {
+          "description": "Normalized source-space match center in `[0, 1]` on both axes.",
+          "$ref": "#/$defs/FiniteF64"
+        },
+        "y": {
+          "$ref": "#/$defs/FiniteF64"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y",
+        "confidence"
+      ]
+    },
+    "TrackingDataAsset": {
+      "type": "object",
+      "properties": {
+        "content_hash": {
+          "description": "SHA-256 over the versioned payload; recomputed on validation.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "frames": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TrackedFrame"
+          }
+        },
+        "id": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "mode": {
+          "$ref": "#/$defs/TrackingMode"
+        },
+        "range": {
+          "description": "Analyzed source-time interval `[start, end)`.",
+          "$ref": "#/$defs/TimeRange"
+        },
+        "sample_rate": {
+          "description": "Nominal sample cadence of `frames` rows in source seconds^-1.",
+          "$ref": "#/$defs/Rational"
+        },
+        "seeds": {
+          "description": "Seeds in stable order; plane mode stores the four corners.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TrackingSeed"
+          }
+        },
+        "source": {
+          "$ref": "#/$defs/TrackingSource"
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "source",
+        "mode",
+        "seeds",
+        "range",
+        "sample_rate",
+        "frames",
+        "content_hash"
+      ]
+    },
+    "TrackingMode": {
+      "oneOf": [
+        {
+          "description": "One or more independent template-match points.",
+          "type": "string",
+          "const": "points"
+        },
+        {
+          "description": "Four tracked corners reduced to a per-frame homography.",
+          "type": "string",
+          "const": "plane"
+        }
+      ]
+    },
+    "TrackingSeed": {
+      "type": "object",
+      "properties": {
+        "search_radius": {
+          "description": "Per-frame search half extent around the previous position.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "template_radius": {
+          "description": "Match-template half extent in source pixels.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "x": {
+          "description": "Normalized source-space seed center in `[0, 1]` on both axes.",
+          "$ref": "#/$defs/FiniteF64"
+        },
+        "y": {
+          "$ref": "#/$defs/FiniteF64"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y",
+        "template_radius",
+        "search_radius"
+      ]
+    },
+    "TrackingSource": {
+      "type": "object",
+      "properties": {
+        "asset": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "content_hash": {
+          "description": "Locked `Asset::content_hash`; mismatches mark the result stale.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "stream_index": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "asset",
+        "stream_index",
+        "content_hash"
       ]
     },
     "Transition": {

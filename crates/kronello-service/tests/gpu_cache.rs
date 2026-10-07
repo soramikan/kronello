@@ -34,6 +34,7 @@ fn cache003_service_child() {
                 },
                 profile: Default::default(),
                 fonts: vec![],
+                media_proxies: kronello_render::MediaProxyMode::Off,
             },
             time: Time::ZERO,
             backend: Some(BackendSelection::Gpu),

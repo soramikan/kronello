@@ -312,13 +312,74 @@ pub struct JobListResult {
     pub jobs: Vec<JobRecord>,
 }
 
+/// Immutable job input. Exactly one payload kind is legal: render jobs carry
+/// `snapshot` + `request`; `proxy.generate` jobs carry `proxy`. Optional
+/// fields keep the render shape byte-compatible with schema_version 1.
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct FixedInput {
+pub(crate) struct FixedInput {
     schema_version: u32,
-    snapshot: RenderSnapshot,
-    request: RenderSubmitRequest,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    snapshot: Option<RenderSnapshot>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    request: Option<RenderSubmitRequest>,
     backend: BackendSelection,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    proxy: Option<crate::proxy::ProxyJobInput>,
+}
+impl FixedInput {
+    fn render(
+        snapshot: RenderSnapshot,
+        request: RenderSubmitRequest,
+        backend: BackendSelection,
+    ) -> Self {
+        Self {
+            schema_version: 1,
+            snapshot: Some(snapshot),
+            request: Some(request),
+            backend,
+            proxy: None,
+        }
+    }
+    pub(crate) fn proxy(input: crate::proxy::ProxyJobInput) -> Self {
+        Self {
+            schema_version: 1,
+            snapshot: None,
+            request: None,
+            // Proxy transcode never touches a render backend.
+            backend: BackendSelection::CpuReference,
+            proxy: Some(input),
+        }
+    }
+    /// The render payload pair; mutually exclusive with `proxy` by validation.
+    fn render_parts(&self) -> Result<(&RenderSnapshot, &RenderSubmitRequest), ServiceError> {
+        match (&self.snapshot, &self.request, &self.proxy) {
+            (Some(snapshot), Some(request), None) => Ok((snapshot, request)),
+            _ => Err(ServiceError::new(
+                "JOB_INPUT_HASH_MISMATCH",
+                "fixed input is not a render job",
+            )),
+        }
+    }
+    pub(crate) fn proxy_parts(&self) -> Result<&crate::proxy::ProxyJobInput, ServiceError> {
+        match (&self.snapshot, &self.request, &self.proxy) {
+            (None, None, Some(proxy)) => Ok(proxy),
+            _ => Err(ServiceError::new(
+                "JOB_INPUT_HASH_MISMATCH",
+                "fixed input is not a proxy job",
+            )),
+        }
+    }
+    /// A worker never executes input whose kind disagrees with the job record:
+    /// render records carry a content-hashed snapshot; proxy records carry a
+    /// `proxy` payload validated against `record.output_profile`.
+    fn kind_matches_record(&self, record: &JobRecord) -> bool {
+        match (&self.snapshot, &self.request, &self.proxy) {
+            (Some(_), Some(_), None) => record.output_profile.get("render").is_some(),
+            (None, None, Some(_)) => record.output_profile.get("proxy_asset_id").is_some(),
+            _ => false,
+        }
+    }
 }
 impl From<JobError> for ServiceError {
     fn from(e: JobError) -> Self {
@@ -402,6 +463,14 @@ impl Service<'_> {
         check_expected_revision(request.expected_revision.as_deref(), stored.revision)?;
         crate::document_asset_locators(&stored.document)?;
         let snapshot = crate::freeze_render_input(&stored, &request.render.input)?;
+        // Every fixed job decodes authored originals (ADR-0119), including
+        // image-sequence and sidecar outputs that never build a movie snapshot.
+        if snapshot.media_proxies() != kronello_render::MediaProxyMode::Off {
+            return Err(ServiceError::new(
+                "UNSUPPORTED_FEATURE",
+                "media_proxies is a preview-only switch; jobs use originals",
+            ));
+        }
         let total_frames =
             frame_samples(request.render.range, request.render.frame_rate)?.len() as u64;
         if total_frames == 0 {
@@ -433,12 +502,7 @@ impl Service<'_> {
             destination: request.render.output_directory.clone(),
             total_frames,
         };
-        let fixed = FixedInput {
-            schema_version: 1,
-            snapshot,
-            request,
-            backend,
-        };
+        let fixed = FixedInput::render(snapshot, request, backend);
         let executable = match &self.worker_executable {
             Some(path) => path.clone(),
             None => std::env::current_exe()?,
@@ -456,8 +520,18 @@ impl Service<'_> {
         record: &JobRecord,
         fixed: &FixedInput,
     ) -> Result<(), ServiceError> {
+        if !fixed.kind_matches_record(record) {
+            return Err(ServiceError::new(
+                "JOB_INPUT_HASH_MISMATCH",
+                "fixed input kind differs from the job record",
+            ));
+        }
+        if let Some(proxy) = &fixed.proxy {
+            return crate::proxy::execute_proxy_job(store, record, proxy);
+        }
+        let (snapshot, request) = fixed.render_parts()?;
         self.validate_fixed_job(record, fixed)?;
-        self.execute_fixed_job(store, record, fixed)
+        self.execute_fixed_job(store, record, snapshot, request)
     }
     pub(crate) fn resume_job(&self, request: JobRequest) -> Result<JobRecord, ServiceError> {
         let store = self.jobs()?;
@@ -470,10 +544,41 @@ impl Service<'_> {
         }
         let fixed: FixedInput = serde_json::from_slice(&store.input(&record)?)?;
         self.validate_fixed_job(&record, &fixed)?;
-        if record.destination.exists()
+        if let Ok(proxy) = fixed.proxy_parts() {
+            // A published proxy must hash to the receipt bytes exactly.
+            if record.destination.exists()
+                && let Some(result) = store.publication_result(&record)?
+            {
+                let report = &result["report"];
+                let expected = report["content_hash"].as_str().unwrap_or_default();
+                let width = report["width"].as_u64();
+                let height = report["height"].as_u64();
+                let actual = kronello_media::content_hash(&record.destination)
+                    .map_err(|e| ServiceError::new("OUTPUT_VALIDATION_FAILED", e.to_string()))?;
+                let probe = MediaRuntime::load()?
+                    .probe(&record.destination)
+                    .map_err(|e| ServiceError::new("OUTPUT_VALIDATION_FAILED", e.to_string()))?;
+                let video = probe
+                    .streams
+                    .iter()
+                    .find(|s| s.kind == kronello_media::StreamKind::Video);
+                if actual != expected
+                    || video.map(|v| (v.width.map(u64::from), v.height.map(u64::from)))
+                        != Some((width, height))
+                    || report["proxy_asset_id"].as_str()
+                        != Some(proxy.proxy_asset_id.to_string().as_str())
+                {
+                    return Err(ServiceError::new(
+                        "OUTPUT_VALIDATION_FAILED",
+                        "published proxy differs from the validated receipt",
+                    ));
+                }
+            }
+        } else if record.destination.exists()
             && let Some(result) = store.publication_result(&record)?
         {
-            match &fixed.request.output {
+            let (_, request) = fixed.render_parts()?;
+            match &request.output {
                 JobOutput::ImageSequence => {
                     let metadata: kronello_render::SequenceMetadata =
                         serde_json::from_value(result["report"].clone())?;
@@ -515,7 +620,8 @@ impl Service<'_> {
                     probe.verify_movie(settings.profile).map_err(|error| {
                         ServiceError::new("OUTPUT_VALIDATION_FAILED", error.to_string())
                     })?;
-                    let expected = movie_snapshot(&fixed.snapshot, output)?;
+                    let (snapshot, _) = fixed.render_parts()?;
+                    let expected = movie_snapshot(snapshot, output)?;
                     let report: kronello_media::AvExportReport =
                         serde_json::from_value(result["report"].clone())?;
                     if probe.render_snapshot_hash != record.snapshot_hash
@@ -565,36 +671,45 @@ impl Service<'_> {
                 "job engine version differs",
             ));
         }
-        fixed.snapshot.validate()?;
-        fixed.request.render.input.region.validate()?;
-        match &fixed.request.output {
+        if let Ok(proxy) = fixed.proxy_parts() {
+            return self.validate_proxy_job(record, proxy);
+        }
+        let (snapshot, request) = fixed.render_parts()?;
+        snapshot.validate()?;
+        // Fixed-input file outputs decode authored originals only (ADR-0119);
+        // preview proxy mode is legal input but must never reach a worker.
+        if snapshot.media_proxies() != kronello_render::MediaProxyMode::Off {
+            return Err(ServiceError::new(
+                "UNSUPPORTED_FEATURE",
+                "fixed jobs cannot substitute preview proxies",
+            ));
+        }
+        request.render.input.region.validate()?;
+        match &request.output {
             JobOutput::ImageSequence => (),
             JobOutput::CaptionSidecar {
                 sequence,
                 caption_format,
             } => {
-                validate_sidecar_destination(
-                    &fixed.request.render.output_directory,
-                    *caption_format,
-                )?;
-                sidecar_content(&fixed.snapshot, *sequence, *caption_format)?;
+                validate_sidecar_destination(&request.render.output_directory, *caption_format)?;
+                sidecar_content(snapshot, *sequence, *caption_format)?;
             }
             output => {
-                movie_snapshot(&fixed.snapshot, output)?;
+                movie_snapshot(snapshot, output)?;
             }
         }
-        features(&fixed.request.required_features)?;
-        if fixed.snapshot.content_hash()? != record.snapshot_hash {
+        features(&request.required_features)?;
+        if snapshot.content_hash()? != record.snapshot_hash {
             return Err(ServiceError::new(
                 "JOB_INPUT_HASH_MISMATCH",
                 "snapshot identity differs",
             ));
         }
         // External assets remain references, verified by the worker every time.
-        for asset in &fixed.snapshot.project().assets {
+        for asset in &snapshot.project().assets {
             match asset {
                 DocumentObject::Known(asset) => {
-                    kronello_media::resolve_asset(asset, &fixed.request.render.input.project)?;
+                    kronello_media::resolve_asset(asset, &request.render.input.project)?;
                 }
                 DocumentObject::Opaque(_) => {
                     return Err(ServiceError::new(
@@ -605,17 +720,15 @@ impl Service<'_> {
             }
         }
         // Sidecar serialization reads cue documents only; no fonts are loaded.
-        if !matches!(fixed.request.output, JobOutput::CaptionSidecar { .. }) {
-            let font_bytes =
-                crate::load_locked_fonts(&fixed.snapshot, &fixed.request.render.input)?;
+        if !matches!(request.output, JobOutput::CaptionSidecar { .. }) {
+            let font_bytes = crate::load_locked_fonts(snapshot, &request.render.input)?;
             let _ = font_bytes;
         }
-        if fixed.request.render.output_directory != record.destination
-            || serde_json::to_value(&fixed.request)? != record.output_profile
-            || fixed.snapshot.project().id.to_string() != record.project_id
-            || fixed.snapshot.revision().to_string() != record.revision
-            || frame_samples(fixed.request.render.range, fixed.request.render.frame_rate)?.len()
-                as u64
+        if request.render.output_directory != record.destination
+            || serde_json::to_value(request)? != record.output_profile
+            || snapshot.project().id.to_string() != record.project_id
+            || snapshot.revision().to_string() != record.revision
+            || frame_samples(request.render.range, request.render.frame_rate)?.len() as u64
                 != record.total_frames
         {
             return Err(ServiceError::new(
@@ -625,28 +738,53 @@ impl Service<'_> {
         }
         Ok(())
     }
+    /// `proxy.generate` identity checks shared by the worker and `job.resume`:
+    /// the fixed payload is the whole contract (asset object, dimensions,
+    /// destination) and must equal the recorded submission exactly.
+    fn validate_proxy_job(
+        &self,
+        record: &JobRecord,
+        input: &crate::proxy::ProxyJobInput,
+    ) -> Result<(), ServiceError> {
+        if input.document_hash != record.snapshot_hash
+            || input.destination != record.destination
+            || serde_json::to_value(input)? != record.output_profile
+        {
+            return Err(ServiceError::new(
+                "JOB_INPUT_HASH_MISMATCH",
+                "fixed proxy input identity differs",
+            ));
+        }
+        input
+            .asset
+            .validate()
+            .map_err(|e| ServiceError::invalid(e.to_string()))?;
+        // The source asset is an external reference; content verify is live.
+        kronello_media::resolve_asset(&input.asset, &input.project)?;
+        Ok(())
+    }
     fn execute_fixed_job(
         &self,
         store: &JobStore,
         record: &JobRecord,
-        fixed: &FixedInput,
+        snapshot: &RenderSnapshot,
+        request: &RenderSubmitRequest,
     ) -> Result<(), ServiceError> {
-        let sidecar = matches!(fixed.request.output, JobOutput::CaptionSidecar { .. });
+        let sidecar = matches!(request.output, JobOutput::CaptionSidecar { .. });
         // Sidecar jobs serialize stored cue documents and never rasterize;
         // they do not require locked font inputs.
         let font_bytes = if sidecar {
             Vec::new()
         } else {
-            crate::load_locked_fonts(&fixed.snapshot, &fixed.request.render.input)?
+            crate::load_locked_fonts(snapshot, &request.render.input)?
         };
-        let fonts: Vec<_> = fixed
-            .snapshot
+        let fonts: Vec<_> = snapshot
             .font_locks()
             .iter()
             .zip(&font_bytes)
             .map(|(identity, bytes)| kronello_text::FontData { identity, bytes })
             .collect();
-        let destination = &fixed.request.render.output_directory;
+        let destination = &request.render.output_directory;
         let staging = store.staging(record)?;
         let stage_path = staging.output();
         let mut failure = None;
@@ -699,9 +837,9 @@ impl Service<'_> {
         let rendered = if let JobOutput::CaptionSidecar {
             sequence,
             caption_format,
-        } = &fixed.request.output
+        } = &request.output
         {
-            let content = sidecar_content(&fixed.snapshot, *sequence, *caption_format)?;
+            let content = sidecar_content(snapshot, *sequence, *caption_format)?;
             std::fs::write(&stage_path, content.as_bytes())?;
             Ok(serde_json::json!({
                 "caption_format": caption_format,
@@ -710,18 +848,18 @@ impl Service<'_> {
                 "render_snapshot_hash": record.snapshot_hash,
             }))
         } else {
-            self.with_video_backend(&fixed.request.render.input.project, |backend| {
-                let request = &fixed.request.render;
-                let result = match &fixed.request.output {
+            self.with_video_backend(&request.render.input.project, |backend| {
+                let render = &request.render;
+                let result = match &request.output {
                     JobOutput::ImageSequence => {
                         let metadata = kronello_render::render_sequence_with_checkpoint(
-                            &fixed.snapshot,
+                            snapshot,
                             &fonts,
                             backend,
                             SequenceRequest {
-                                range: request.range,
-                                frame_rate: request.frame_rate,
-                                region: request.input.region,
+                                range: render.range,
+                                frame_rate: render.frame_rate,
+                                region: render.input.region,
                             },
                             &stage_path,
                             &mut |n| {
@@ -748,17 +886,17 @@ impl Service<'_> {
                     output => {
                         let settings = output.movie_settings()?;
                         let runtime = MediaRuntime::load()?;
-                        let av = movie_snapshot(&fixed.snapshot, &fixed.request.output)?;
+                        let av = movie_snapshot(snapshot, &request.output)?;
                         let report = runtime.export_av_with_checkpoint(
                             &av,
-                            &request.input.project,
+                            &render.input.project,
                             &fonts,
                             backend,
                             &AvExportRequest {
                                 output: stage_path.clone(),
-                                range: request.range,
-                                frame_rate: request.frame_rate,
-                                region: request.input.region,
+                                range: render.range,
+                                frame_rate: render.frame_rate,
+                                region: render.input.region,
                                 background: settings.background,
                                 clipping: kronello_audio::ClippingPolicy::Reject,
                             },
