@@ -41,15 +41,23 @@ struct ExportPage: View {
                         ForEach(model.profiles.filter { $0.string("device_availability") == "unavailable" }, id: \.formatID) { profile in
                             KRErrorLine(.init(profile.object("reason").string("code"), profileLabel(profile) + " は利用できません"))
                         }
-                        KRInspectorSettingRow("Profile version") { KRPopupButton("Profile version", options: (model.selectedProfile["profile_versions"] as? [Int] ?? []).map { .init(String($0), String($0)) }, selection: $model.version).frame(width: 96) }
-                        Text("\(String(format:"%.0f",model.extent[0]))×\(String(format:"%.0f",model.extent[1])) · \(model.fpsNum)/\(model.fpsDen) fps · 対象に従う").krText(KRType.ruler).foregroundStyle(p.inkMuted)
-                        Text("SDR · Rec.709").krText(KRType.body)
-                        if model.format != "image_sequence" {
+                        if model.format == "caption_sidecar" {
+                            KRInspectorSettingRow("字幕形式") { KRPopupButton("字幕形式", options: [.init("srt", "SRT"), .init("vtt", "VTT"), .init("itt", "ITT")], selection: $model.captionFormat).frame(width: 144) }
+                            Text("対象 sequence のキューをサイドカー化します。フレームは描画しません。").krText(KRType.caption).foregroundStyle(p.inkMuted)
+                        } else {
+                            KRInspectorSettingRow("Profile version") { KRPopupButton("Profile version", options: (model.selectedProfile["profile_versions"] as? [Int] ?? []).map { .init(String($0), String($0)) }, selection: $model.version).frame(width: 96) }
+                            Text("\(String(format:"%.0f",model.extent[0]))×\(String(format:"%.0f",model.extent[1])) · \(model.fpsNum)/\(model.fpsDen) fps · 対象に従う").krText(KRType.ruler).foregroundStyle(p.inkMuted)
+                            Text(model.format == "pro_res_hdr_mov" ? "HDR · Rec.2100" : "SDR · Rec.709").krText(KRType.body)
+                        }
+                        if model.format == "pro_res_hdr_mov" {
+                            KRInspectorSettingRow("Transfer") { KRPopupButton("Transfer", options: [.init("pq", "PQ (SMPTE 2084)"), .init("hlg", "HLG")], selection: $model.transfer).frame(width: 160) }
+                        }
+                        if model.format != "image_sequence" && model.format != "caption_sidecar" {
                             KRInspectorSettingRow("Background") { KRPopupButton("Background", options: [.init("black", "黒（明示）"), .init("white", "白（明示）")], selection: $model.background).frame(width: 144) }
                             KRInspectorSettingRow("Audio") { KRPopupButton("Audio", options: (model.selectedProfile["audio_modes"] as? [String] ?? []).map { .init($0, $0 == "document" ? "作品のミックス" : $0 == "silence" ? "無音" : "明示 clips（空）", disabled: model.format == "pro_res_mov" && model.version == "1" && $0 != "explicit") }, selection: $model.audio).frame(width: 160) }
                             Text((model.selectedProfile["audio_codecs"] as? [String] ?? []).joined(separator: " · ") + " · 48 kHz · stereo\nクリッピングは worker が型付きエラーで停止します。")
                                 .krText(KRType.caption).foregroundStyle(p.inkMuted)
-                        } else { Text("PNG + RGBA16F + JSON · 音声なし").krText(KRType.caption).foregroundStyle(p.inkMuted) }
+                        } else if model.format == "image_sequence" { Text("PNG + RGBA16F + JSON · 音声なし").krText(KRType.caption).foregroundStyle(p.inkMuted) }
                         if model.selectedProfile.string("execution") == "hardware" { Text("hardware 必須 · device の利用可否は投入時に確認します。software へ自動代替しません。").krText(KRType.caption).foregroundStyle(p.inkMuted) }
                         KRTextField("出力先", value: $model.destination)
                         KRButton("選択…", variant: .secondary) { chooseDestination() }
@@ -141,10 +149,12 @@ struct ExportPage: View {
         }
     }
     func profileLabel(_ profile: [String: Any]) -> String {
-        switch profile.string("format") { case "pro_res_mov": return "ProRes 422 HQ · MOV · PCM24"; case "av1_mp4": return "AV1 · MP4 · ALAC"; case "h264_mov": return "H.264 · MOV · ALAC · hardware"; case "hevc_mov": return "HEVC · MOV · ALAC · hardware"; case "image_sequence": return "画像連番 · PNG + JSON"; default: return profile.string("format") }
+        switch profile.string("format") { case "pro_res_mov": return "ProRes 422 HQ · MOV · PCM24"; case "pro_res_sdr_from_hdr_mov": return "ProRes 422 HQ · MOV · HDR→SDR"; case "pro_res_hdr_mov": return "ProRes 422 HQ · MOV · HDR"; case "av1_mp4": return "AV1 · MP4 · ALAC/AAC"; case "av1_webm": return "AV1 · WebM · Opus"; case "h264_mov": return "H.264 · MOV · ALAC/AAC · hardware"; case "hevc_mov": return "HEVC · MOV · ALAC/AAC · hardware"; case "image_sequence": return "画像連番 · PNG + JSON"; case "caption_sidecar": return "字幕サイドカー · SRT/VTT/ITT"; default: return profile.string("format") }
     }
     func chooseDestination() {
-        let panel = NSSavePanel(); panel.title = "書き出し先を選択"; panel.nameFieldStringValue = "export" + (model.selectedProfile.string("container_extension").isEmpty ? "" : "." + model.selectedProfile.string("container_extension"))
+        let panel = NSSavePanel(); panel.title = "書き出し先を選択"
+        let ext = model.format == "caption_sidecar" ? model.captionFormat : model.selectedProfile.string("container_extension")
+        panel.nameFieldStringValue = "export" + (ext.isEmpty ? "" : "." + ext)
         if panel.runModal() == .OK, let url = panel.url { model.destination = url.path }
     }
 }

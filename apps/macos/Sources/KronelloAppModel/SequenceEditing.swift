@@ -50,6 +50,15 @@ public struct EditClip: Identifiable {
 }
 
 public enum EditPresentation {
+    /// All BlendMode wire names accepted by `kronello.blend_mode` (ADR-0109).
+    public static let blendModes: [(wire: String, label: String)] = [
+        ("normal", "Normal"), ("multiply", "Multiply"), ("screen", "Screen"),
+        ("darken", "Darken"), ("lighten", "Lighten"), ("color_dodge", "Color Dodge"),
+        ("color_burn", "Color Burn"), ("hard_light", "Hard Light"), ("soft_light", "Soft Light"),
+        ("difference", "Difference"), ("exclusion", "Exclusion"), ("overlay", "Overlay"),
+        ("linear_dodge", "Linear Dodge"), ("linear_burn", "Linear Burn"), ("vivid_light", "Vivid Light"),
+        ("linear_light", "Linear Light"), ("hue", "Hue"), ("saturation", "Saturation"),
+        ("color", "Color"), ("luminosity", "Luminosity")]
     public static func rateLabel(num: Int64, den: Int64) -> String {
         num % den == 0 ? "\(num / den) fps" : String(format: "%.3f fps", Double(num) / Double(den))
     }
@@ -140,6 +149,25 @@ extension EditorModel {
     public func setSequence(_ id: String) {
         playing = false; timelineCandidate = nil; ui.sequence = id; ui.clipSelection = nil; ui.time = .init(num: 0, den: 1)
         Task { do { try await reload() } catch { mapFailure(error) } }
+    }
+    /// Creates a minimal empty sequence (one video and one audio track)
+    /// inheriting the first composition's extent and edit rate.
+    public func createSequence() {
+        guard !busy, pendingCandidate == nil else { return }
+        let composition = document.objects("compositions").first ?? [:]
+        let extent = composition.object("design_extent")
+        let id = UUID().uuidString.lowercased()
+        let sequence: [String: Any] = [
+            "id": id,
+            "extent": ["width": extent.number("width") > 0 ? extent.number("width") : 1920.0,
+                       "height": extent.number("height") > 0 ? extent.number("height") : 1080.0],
+            "frame_rate": composition["edit_rate"] as? [String: Any] ?? ["num": "24", "den": "1"],
+            "audio_rate": 48000,
+            "working_space": "linear_rec709",
+            "tracks": [["id": UUID().uuidString.lowercased(), "kind": "video", "clips": [[String: Any]]()],
+                       ["id": UUID().uuidString.lowercased(), "kind": "audio", "clips": [[String: Any]]()]]]
+        ui.sequence = id
+        submit([timelineCommand("sequence_create", ["sequence": sequence])], label: "シーケンスの作成")
     }
     public func activatePlayback(for sequence: [String: Any]) {
         guard !sequence.string("id").isEmpty else { return }

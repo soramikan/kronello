@@ -393,6 +393,11 @@ public struct EditCandidate {
         guard !ui.locked.contains(layer.id) else { return }
         submit([["node_rename": ["composition": current.string("id"), "node": layer.id, "name": name]]], label: "Name の変更")
     }
+    public func removeLayer(_ layer: Layer) {
+        guard !ui.locked.contains(layer.id) else { return }
+        ui.selection = nil
+        submit([["node_remove": ["composition": current.string("id"), "node": layer.id]]], label: "レイヤーの削除")
+    }
     public func seek(_ frame: Int64) {
         let bounded = min(max(0, frame), max(0, durationFrames - 1))
         let product = bounded.multipliedReportingOverflow(by: activePlaybackRateDen)

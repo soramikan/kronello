@@ -164,6 +164,31 @@ extension EditorModel {
         // Referenced properties stay authored, preserving possible animation and future reuse.
         replaceClipEffects(clip, properties: clip.authored.objects("properties"), effects: effects, label: "クリップ効果の削除")
     }
+    /// Constant [x, y] behind a vec2 effect parameter reference.
+    public static func vec2ParameterValue(_ clip: EditClip, effect: [String: Any], parameter: String) -> [Double]? {
+        guard let id = effect.object("parameters")[parameter] as? String,
+              let property = clip.authored.objects("properties").first(where: { $0.string("id") == id }),
+              property.object("source").string("kind") == "constant",
+              let pair = property.object("source").object("value")["value"] as? [Double],
+              pair.count == 2 else { return nil }
+        return pair
+    }
+    /// Clip gain Property (`kronello.audio.volume`, nonnegative linear
+    /// scalar). Passing nil clears the authored volume back to unity.
+    public func setClipVolume(_ clip: EditClip, value: Double?, base: String? = nil) {
+        guard !ui.locked.contains(clip.track), clip.kind == .audio else { return }
+        let volume: Any = value.map { v -> [String: Any] in
+            ["id": UUID().uuidString, "descriptor": ["key": "kronello.audio.volume", "version": 1],
+             "source": ["kind": "constant", "value": ["kind": "scalar", "value": v]], "modifiers": []]
+        } ?? NSNull()
+        submit([timelineCommand("clip_set_volume", ["sequence": sequence.string("id"), "clip": clip.id, "volume": volume])], label: "クリップの音量", base: base)
+    }
+    /// Authored constant clip gain, or unity (1.0) when no volume Property is set.
+    public static func clipVolume(_ clip: EditClip) -> Double {
+        guard let property = clip.authored["volume"] as? [String: Any],
+              property.object("source").string("kind") == "constant" else { return 1.0 }
+        return property.object("source").object("value").number("value")
+    }
 }
 
 extension RationalTime {

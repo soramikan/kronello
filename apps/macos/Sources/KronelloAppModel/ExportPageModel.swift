@@ -12,6 +12,8 @@ import KronelloDesign
     @Published public var destination = ""
     @Published public var background = "black"
     @Published public var rangeMode = "all"
+    @Published public var captionFormat = "srt"
+    @Published public var transfer = "pq"
     @Published public var startFrame: Int64 = 0
     @Published public var endFrame: Int64 = 1
     @Published public var filter = "all"
@@ -86,9 +88,24 @@ import KronelloDesign
         "region": ["origin": [0,0], "extent": extent, "pixels": extent.map { Int(min(16_777_216,max(1, $0.rounded()))) }], "fonts": editor.snapshotFonts] }
     public var output: [String: Any] {
         if format == "image_sequence" { return ["format": format] }
+        // Sidecar jobs serialize cues from the snapshot; no frames render.
+        if format == "caption_sidecar" {
+            return ["format": format, "sequence": targetValue.string("id"), "caption_format": captionFormat]
+        }
         var result: [String: Any] = ["format": format, "profile_version": Int(version) ?? 0, "audio": audio, "clips": [[String: Any]](), "background": background == "white" ? [1,1,1] : [0,0,0]]
-        if format != "pro_res_mov" { result["audio_codec"] = "alac" }
+        if format == "pro_res_hdr_mov" { result["transfer"] = transfer }
+        if ["av1_mp4", "h264_mov", "hevc_mov", "av1_webm"].contains(format), let codec = audioCodec {
+            result["audio_codec"] = codec
+        }
         return result
+    }
+    /// The delivery codec wire name chosen from the profile's closed
+    /// `audio_codecs` list. ALAC stays the default for MOV/MP4; WebM carries
+    /// Opus only, so its single entry is used verbatim.
+    public var audioCodec: String? {
+        let codecs = (selectedProfile["audio_codecs"] as? [String]) ?? []
+        let delivery = codecs.filter { $0 != "pcm_s24le" }
+        return delivery.contains("alac") ? "alac" : delivery.first
     }
     public var configurationKey: String {
         let fields: [String: Any] = ["revision": editor.revision, "input": input, "output": output, "range": ["start": time(firstFrame), "end": time(exclusiveFrame)], "destination": destination]
@@ -102,7 +119,10 @@ import KronelloDesign
         if profiles.isEmpty || selectedProfile.isEmpty { errors.append(.init(code: "UNSUPPORTED_FEATURE", message: "利用できる出力プロファイルを読み込んでください")) }
         if firstFrame < 0 || exclusiveFrame <= firstFrame || exclusiveFrame > totalFrames { errors.append(.init(code: "INVALID_MEDIA_INPUT", message: "範囲は対象の有効なフレーム内で指定してください")) }
         if destination.isEmpty { errors.append(.init(code: "INVALID_MEDIA_INPUT", message: "出力先を選択してください")) }
-        let ext = selectedProfile.string("container_extension")
+        if format == "caption_sidecar" && selectedTarget.string("kind") != "sequence" {
+            errors.append(.init(code: "UNSUPPORTED_FEATURE", message: "字幕サイドカーは sequence を対象にしてください"))
+        }
+        let ext = format == "caption_sidecar" ? captionFormat : selectedProfile.string("container_extension")
         if !ext.isEmpty && URL(fileURLWithPath: destination).pathExtension.lowercased() != ext { errors.append(.init(code: "INVALID_MEDIA_INPUT", message: "出力先の拡張子は ." + ext + " にしてください")) }
         if FileManager.default.fileExists(atPath: destination) { errors.append(.init(code: "OUTPUT_EXISTS", message: "既存の出力先は上書きできません")) }
         if format == "pro_res_mov" && version == "1" && audio != "explicit" { errors.append(.init(code: "UNSUPPORTED_FEATURE", message: "profile 1 は explicit 音声だけを扱います")) }

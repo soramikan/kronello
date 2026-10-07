@@ -70,6 +70,11 @@ struct InspectorPanel: View {
                         if TemplateInstanceInspection.instance(layer, document: model.document) != nil {
                             TemplateInstanceInspectionPanel(model: model)
                         }
+                        section("編集") {
+                            KRButton("レイヤーを削除", icon: .trash2, variant: .destructive) { model.removeLayer(layer) }
+                                .disabled(model.ui.locked.contains(layer.id) || model.busy || model.pendingCandidate != nil)
+                                .padding(.horizontal, KRSpace.space3)
+                        }
                     } else {
                         KREmptyState(icon: .mousePointer2, title: "レイヤーを選択", message: "Layers または Viewer でレイヤーを選択してください。")
                     }
