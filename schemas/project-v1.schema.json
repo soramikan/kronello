@@ -744,6 +744,10 @@
             "$ref": "#/$defs/Effect"
           }
         },
+        "enabled": {
+          "description": "Authored contribution switch. Disabled clips keep their timeline\noccupancy, links and metadata but are excluded from evaluation, video\ncompositing, audio mixing, captions and transitions. Serialized only\nwhen off so documents written before NLE-005 roundtrip unchanged.",
+          "type": "boolean"
+        },
         "id": {
           "$ref": "#/$defs/ClipId"
         },
@@ -3588,6 +3592,17 @@
             "$ref": "#/$defs/Marker"
           }
         },
+        "targets": {
+          "description": "Implicit destination tracks for edits that take no explicit track, one\nper kind. Referenced tracks must exist and match the entry's kind.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TargetTracks"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "tracks": {
           "description": "Authored bottom-to-top compositing order.",
           "type": "array",
@@ -4117,6 +4132,33 @@
         "dash_array",
         "dash_offset"
       ]
+    },
+    "TargetTracks": {
+      "description": "Per-kind implicit edit destinations. A present entry must reference an\nexisting track of the matching kind; absent means untargeted.",
+      "type": "object",
+      "properties": {
+        "audio": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TrackId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "video": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TrackId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
     },
     "TemplateBandBinding": {
       "type": "object",
@@ -4693,7 +4735,7 @@
       ]
     },
     "TimeMap": {
-      "description": "Exact, stateless mappings. Protected middle segments support hold and loop.\nReverse and general nonlinear playback remain unsupported.",
+      "description": "Exact, stateless mappings. Protected middle segments support hold and loop;\npiecewise linear segments with equal `local` endpoints express authored\nhold (freeze) intervals. Reverse playback remains unsupported.",
       "oneOf": [
         {
           "type": "object",
@@ -4860,9 +4902,14 @@
       ]
     },
     "TrackState": {
-      "description": "Authored output switches, independent of GUI selection or editing locks.",
+      "description": "Authored output switches plus the editing lock; `locked` defaults to off so\ndocuments written before NLE-005 stay unlocked.",
       "type": "object",
       "properties": {
+        "locked": {
+          "description": "Editing lock: mutations that would change this track or its clips are\nrejected during planning with `TRACK_LOCKED`.",
+          "type": "boolean",
+          "default": false
+        },
         "muted": {
           "type": "boolean"
         },

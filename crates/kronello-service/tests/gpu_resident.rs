@@ -48,6 +48,7 @@ fn create_project_as(
         timeline_range: TimeRange::new(Time::ZERO, duration).unwrap(),
         source_in,
         time_map: TimeMap::linear(Time::ZERO, Rational::ONE).unwrap(),
+        enabled: true,
         audio_retime: AudioRetimePolicy::Reject,
         reverse_sampling: None,
         volume: None,
@@ -71,6 +72,7 @@ fn create_project_as(
         transitions: vec![],
         markers: vec![],
         work_area: None,
+        targets: None,
     };
     let id = sequence.id;
     let mut project = Project::default();

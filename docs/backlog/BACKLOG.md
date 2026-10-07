@@ -17,7 +17,7 @@
 | M4 | 0 | 0 | 12 | 0 | 12 |
 | M5 | 0 | 1 | 12 | 0 | 13 |
 | M7 | 0 | 0 | 11 | 0 | 11 |
-| M8 | 16 | 0 | 0 | 0 | 16 |
+| M8 | 14 | 1 | 1 | 0 | 16 |
 | M9 | 12 | 0 | 0 | 0 | 12 |
 | M10 | 7 | 0 | 0 | 0 | 7 |
 | M11 | 14 | 0 | 0 | 0 | 14 |
@@ -892,7 +892,7 @@
 
 ### NLE-005 トラックロック・クリップ有効/無効・トラックターゲティング
 
-- 優先度: P1 / 領域: timeline / 状態: planned
+- 優先度: P1 / 領域: timeline / 状態: in_progress
 - 依存: NLE-003
 - 受け入れ条件:
   - track lock・clip enable/disable・track targeting をモデルと共有 API に追加する
@@ -900,7 +900,7 @@
 
 ### NLE-006 可変リタイム（スピードランプ）と freeze frame/hold
 
-- 優先度: P1 / 領域: timeline / 状態: planned
+- 優先度: P1 / 領域: timeline / 状態: done
 - 依存: NLE-003
 - 受け入れ条件:
   - TimeMap の曲線化によるスピードランプと freeze frame/hold を実装する

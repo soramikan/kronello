@@ -94,6 +94,28 @@ pub enum TimelineCommand {
         clip: ClipId,
         linked: bool,
     },
+    /// NLE-005 authored contribution switch. A disabled clip keeps its
+    /// timeline occupancy, links and metadata but renders and mixes nothing.
+    ClipEnableSet {
+        sequence: SequenceId,
+        clip: ClipId,
+        enabled: bool,
+    },
+    /// NLE-005 implicit edit destinations, one per track kind. `None` clears
+    /// targeting; a present entry must reference an existing matching track.
+    SequenceTargetsSet {
+        sequence: SequenceId,
+        targets: Option<TargetTracks>,
+    },
+    /// NLE-006: split `clip` at `at` and pin the right part's source time with
+    /// a piecewise hold map. The right clip identity is deterministic, the
+    /// operation requires an unlinked, transition-free forward clip, and undo
+    /// restores the original placement exactly.
+    ClipFreeze {
+        sequence: SequenceId,
+        clip: ClipId,
+        at: kronello_time::Time,
+    },
     /// Delete `range` on the listed tracks and close the gap by shifting all
     /// later content by the range's duration. A clip straddling both range
     /// edges is rejected; a partially covered clip trims the covered side.
@@ -594,6 +616,32 @@ fn has_clip(sequence: &Sequence, id: ClipId) -> bool {
         .flat_map(|t| &t.clips)
         .any(|c| c.id == id)
 }
+/// NLE-005 planning-time track lock: any clip mutation touching a clip that
+/// lives on a locked track fails the whole command atomically. Callers pass
+/// the complete affected set (after link expansion) so linked partners on
+/// locked tracks also reject. `track_state_set` deliberately bypasses this
+/// guard so the lock itself stays editable.
+fn ensure_unlocked(sequence: &Sequence, clips: &BTreeSet<ClipId>) -> Result<(), ServiceError> {
+    if clips.is_empty() {
+        return Ok(());
+    }
+    for track in &sequence.tracks {
+        if track.locked() && track.clips.iter().any(|c| clips.contains(&c.id)) {
+            return Err(ServiceError::new(
+                "TRACK_LOCKED",
+                "clip is on a locked track",
+            ));
+        }
+    }
+    Ok(())
+}
+/// Structural edits that target or change a locked track itself reject too.
+fn ensure_track_unlocked(sequence: &Sequence, track: TrackId) -> Result<(), ServiceError> {
+    if sequence.tracks.iter().any(|t| t.id == track && t.locked()) {
+        return Err(ServiceError::new("TRACK_LOCKED", "track is locked"));
+    }
+    Ok(())
+}
 fn timeline_keys(
     sequence: &Sequence,
     _project: Uuid,
@@ -657,6 +705,23 @@ fn split_owned_uuid(right: ClipId, original: Uuid) -> Uuid {
     bytes[6] = (bytes[6] & 0x0f) | 0x80;
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
     Uuid::from_bytes(bytes)
+}
+
+/// NLE-006 freeze derives the held right placement's identity from the source
+/// clip and the cut point so `edit.plan` and `edit.apply` agree on the ID.
+fn freeze_right_id(clip: ClipId, at: Time) -> ClipId {
+    use sha2::{Digest, Sha256};
+    let mut digest = Sha256::new();
+    digest.update(b"kronello.clip-freeze-right-v1");
+    digest.update(clip.as_uuid().as_bytes());
+    digest.update(at.numerator().to_be_bytes());
+    digest.update(at.denominator().to_be_bytes());
+    let hash = digest.finalize();
+    let mut bytes = [0_u8; 16];
+    bytes.copy_from_slice(&hash[..16]);
+    bytes[6] = (bytes[6] & 0x0f) | 0x80;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    ClipId::from_uuid(Uuid::from_bytes(bytes))
 }
 
 fn split_owned_objects(clip: &mut Clip) -> Result<(), ServiceError> {
@@ -759,6 +824,7 @@ pub(crate) fn mutate(
             }
             let project_id = project.id;
             let s = sequence_mut(project, *sequence)?;
+            ensure_unlocked(s, &BTreeSet::from([*clip]))?;
             if s.transitions
                 .iter()
                 .any(|t| t.outgoing == *clip || t.incoming == *clip)
@@ -821,6 +887,7 @@ pub(crate) fn mutate(
                 return Err(ServiceError::new("SOURCE_MISSING", "clip missing"));
             }
             expand_links(s, &mut selected, *linked)?;
+            ensure_unlocked(s, &selected)?;
             shift(s, &selected, *delta)?;
             timeline_keys(s, project_id, &selected, keys);
         }
@@ -862,6 +929,7 @@ pub(crate) fn mutate(
                 return Err(ServiceError::new("INVALID_CLIP", "ripple selects no clips"));
             }
             expand_links(s, &mut selected, *linked)?;
+            ensure_unlocked(s, &selected)?;
             shift(s, &selected, *delta)?;
             timeline_keys(s, project_id, &selected, keys);
         }
@@ -879,6 +947,7 @@ pub(crate) fn mutate(
             }
             let mut selected = BTreeSet::from([*clip]);
             expand_links(source, &mut selected, *linked)?;
+            ensure_unlocked(source, &selected)?;
             for c in source
                 .tracks
                 .iter()
@@ -985,6 +1054,9 @@ pub(crate) fn mutate(
                 }
             }
             let edited: BTreeSet<_> = edits.keys().copied().collect();
+            // Slide also trims the adjacent absorbing clips, so the lock
+            // covers the complete edited set, not only the selection.
+            ensure_unlocked(source, &edited)?;
             let project_id = project.id;
             let s = sequence_mut(project, *sequence)?;
             for c in s.tracks.iter_mut().flat_map(|t| &mut t.clips) {
@@ -1044,6 +1116,7 @@ pub(crate) fn mutate(
                 ));
             }
             let edited: BTreeSet<_> = edits.keys().copied().collect();
+            ensure_unlocked(source, &edited)?;
             let project_id = project.id;
             let s = sequence_mut(project, *sequence)?;
             for c in s.tracks.iter_mut().flat_map(|t| &mut t.clips) {
@@ -1064,6 +1137,7 @@ pub(crate) fn mutate(
             }
             let mut selected = BTreeSet::from([*clip]);
             expand_links(source, &mut selected, *linked)?;
+            ensure_unlocked(source, &selected)?;
             if source
                 .transitions
                 .iter()
@@ -1192,6 +1266,11 @@ pub(crate) fn mutate(
                     ));
                 }
             }
+            // Every clip the command deletes, trims or shifts must sit on an
+            // unlocked track; check the complete affected set before mutation.
+            let mut affected: BTreeSet<_> = doomed.iter().chain(shifted.iter()).copied().collect();
+            affected.extend(trims.keys().copied());
+            ensure_unlocked(source, &affected)?;
             let backward = Time::ZERO
                 .checked_sub(length)
                 .map_err(SequenceError::from)?;
@@ -1229,8 +1308,6 @@ pub(crate) fn mutate(
             s.transitions
                 .retain(|t| !(doomed.contains(&t.outgoing) && doomed.contains(&t.incoming)));
             shift(s, &shifted, backward)?;
-            let mut affected: BTreeSet<_> = doomed.iter().chain(shifted.iter()).copied().collect();
-            affected.extend(trims.keys().copied());
             timeline_keys(s, project_id, &affected, keys);
             for id in &doomed {
                 keys.insert(changed(id.as_uuid(), sequence.as_uuid()));
@@ -1273,6 +1350,10 @@ pub(crate) fn mutate(
                 return Err(ServiceError::new("INVALID_CLIP", "clip id already placed"));
             }
             expand_links(source, &mut shifted, *linked)?;
+            // An insert writes the target track and shifts its later clips;
+            // link expansion can pull clips from other tracks into the shift.
+            ensure_track_unlocked(source, *track)?;
+            ensure_unlocked(source, &shifted)?;
             let project_id = project.id;
             let s = sequence_mut(project, *sequence)?;
             let target = s
@@ -1340,6 +1421,10 @@ pub(crate) fn mutate(
                 ));
             }
             let affected: BTreeSet<_> = doomed.iter().chain(edits.keys()).copied().collect();
+            // Overwrite replaces or trims covered clips on the target track,
+            // so both the track and its affected clips must be unlocked.
+            ensure_track_unlocked(source, *track)?;
+            ensure_unlocked(source, &affected)?;
             let project_id = project.id;
             let s = sequence_mut(project, *sequence)?;
             let target = s
@@ -1364,6 +1449,11 @@ pub(crate) fn mutate(
         } => {
             let project_id = project.id;
             let s = sequence_mut(project, *sequence)?;
+            // Clip-scoped marker writes are clip mutations; sequence-level
+            // markers stay editable under every lock.
+            if let Some(id) = clip {
+                ensure_unlocked(s, &BTreeSet::from([*id]))?;
+            }
             let mut clips = BTreeSet::new();
             let list = match clip {
                 Some(id) => {
@@ -1391,6 +1481,11 @@ pub(crate) fn mutate(
         } => {
             let project_id = project.id;
             let s = sequence_mut(project, *sequence)?;
+            // Clip-scoped marker writes are clip mutations; sequence-level
+            // markers stay editable under every lock.
+            if let Some(id) = clip {
+                ensure_unlocked(s, &BTreeSet::from([*id]))?;
+            }
             let mut clips = BTreeSet::new();
             let list = match clip {
                 Some(id) => {
@@ -1420,6 +1515,11 @@ pub(crate) fn mutate(
         } => {
             let project_id = project.id;
             let s = sequence_mut(project, *sequence)?;
+            // Clip-scoped marker writes are clip mutations; sequence-level
+            // markers stay editable under every lock.
+            if let Some(id) = clip {
+                ensure_unlocked(s, &BTreeSet::from([*id]))?;
+            }
             let mut clips = BTreeSet::new();
             let list = match clip {
                 Some(id) => {
@@ -1465,6 +1565,15 @@ pub(crate) fn mutate(
                     "link clips missing/duplicated",
                 ));
             }
+            // Relinking also strips stale edges off unselected clips; include
+            // them so a locked partner cannot be silently relinked.
+            let mut touched = selected.clone();
+            for c in s.tracks.iter().flat_map(|t| &t.clips) {
+                if c.links.iter().any(|id| selected.contains(id)) {
+                    touched.insert(c.id);
+                }
+            }
+            ensure_unlocked(s, &touched)?;
             let mut affected = selected.clone();
             for c in s.tracks.iter_mut().flat_map(|t| &mut t.clips) {
                 if selected.contains(&c.id) {
@@ -1483,6 +1592,10 @@ pub(crate) fn mutate(
         } => {
             let project_id = project.id;
             let s = sequence_mut(project, *sequence)?;
+            ensure_unlocked(
+                s,
+                &BTreeSet::from([transition.outgoing, transition.incoming]),
+            )?;
             s.transitions
                 .retain(|t| t.outgoing != transition.outgoing || t.incoming != transition.incoming);
             s.transitions.push(transition.clone());
@@ -1500,6 +1613,7 @@ pub(crate) fn mutate(
         } => {
             let project_id = project.id;
             let s = sequence_mut(project, *sequence)?;
+            ensure_unlocked(s, &BTreeSet::from([*outgoing, *incoming]))?;
             let count = s.transitions.len();
             s.transitions
                 .retain(|t| t.outgoing != *outgoing || t.incoming != *incoming);
@@ -1552,6 +1666,7 @@ pub(crate) fn mutate(
                 ));
             }
             let s = sequence_mut(project, *sequence)?;
+            ensure_unlocked(s, &BTreeSet::from([*clip]))?;
             if s.transitions
                 .iter()
                 .any(|t| t.incoming == *clip || t.outgoing == *clip)
@@ -1587,6 +1702,7 @@ pub(crate) fn mutate(
         } => {
             let project_id = project.id;
             let s = sequence_mut(project, *sequence)?;
+            ensure_unlocked(s, &BTreeSet::from([*clip]))?;
             let c = s
                 .tracks
                 .iter_mut()
@@ -1596,6 +1712,154 @@ pub(crate) fn mutate(
             c.properties = properties.clone();
             c.effects = effects.clone();
             timeline_keys(s, project_id, &BTreeSet::from([*clip]), keys);
+        }
+        TimelineCommand::ClipEnableSet {
+            sequence,
+            clip,
+            enabled,
+        } => {
+            let project_id = project.id;
+            let s = sequence_mut(project, *sequence)?;
+            ensure_unlocked(s, &BTreeSet::from([*clip]))?;
+            let c = s
+                .tracks
+                .iter_mut()
+                .flat_map(|t| &mut t.clips)
+                .find(|c| c.id == *clip)
+                .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "clip missing"))?;
+            c.enabled = *enabled;
+            timeline_keys(s, project_id, &BTreeSet::from([*clip]), keys);
+        }
+        TimelineCommand::SequenceTargetsSet { sequence, targets } => {
+            let project_id = project.id;
+            let s = sequence_mut(project, *sequence)?;
+            // Normalize an all-absent TargetTracks to None so the serialized
+            // form stays omitted rather than storing an empty object.
+            let targets = (*targets).filter(|t| t.video.is_some() || t.audio.is_some());
+            for (target, kind) in [
+                (targets.and_then(|t| t.video), TrackKind::Video),
+                (targets.and_then(|t| t.audio), TrackKind::Audio),
+            ] {
+                let Some(target) = target else { continue };
+                let track =
+                    s.tracks.iter().find(|t| t.id == target).ok_or_else(|| {
+                        ServiceError::new("SOURCE_MISSING", "target track missing")
+                    })?;
+                if track.kind != kind {
+                    return Err(ServiceError::new(
+                        "INVALID_CLIP",
+                        "target track kind mismatch",
+                    ));
+                }
+            }
+            s.targets = targets;
+            keys.insert(changed(sequence.as_uuid(), sequence.as_uuid()));
+            timeline_keys(s, project_id, &BTreeSet::new(), keys);
+        }
+        TimelineCommand::ClipFreeze { sequence, clip, at } => {
+            // Read-phase on the stored document; the mutation applies only
+            // after every precondition holds.
+            let source = sequence_ref(project, *sequence)?;
+            let right_clip = freeze_right_id(*clip, *at);
+            if has_clip(source, right_clip) {
+                return Err(ServiceError::new(
+                    "INVALID_EDIT",
+                    "freeze clip id collision",
+                ));
+            }
+            let Some(original) = source
+                .tracks
+                .iter()
+                .flat_map(|t| &t.clips)
+                .find(|c| c.id == *clip)
+            else {
+                return Err(ServiceError::new("SOURCE_MISSING", "clip missing"));
+            };
+            ensure_unlocked(source, &BTreeSet::from([*clip]))?;
+            if source
+                .transitions
+                .iter()
+                .any(|t| t.outgoing == *clip || t.incoming == *clip)
+            {
+                return Err(ServiceError::new(
+                    "TRANSITION_EDIT_CONFLICT",
+                    "freeze requires explicit transition removal",
+                ));
+            }
+            if !original.links.is_empty() {
+                return Err(ServiceError::new(
+                    "LINKED_EDIT_REQUIRED",
+                    "freeze requires an unlinked clip",
+                ));
+            }
+            if *at <= original.timeline_range.start() || *at >= original.timeline_range.end() {
+                return Err(ServiceError::new(
+                    "INVALID_EDIT",
+                    "freeze must be strictly inside the clip",
+                ));
+            }
+            if original.reverse_sampling.is_some() {
+                return Err(ServiceError::new(
+                    "UNSUPPORTED_FEATURE",
+                    "freeze requires forward playback",
+                ));
+            }
+            if matches!(original.source_ref, SourceRef::Caption { .. }) {
+                return Err(ServiceError::new(
+                    "UNSUPPORTED_FEATURE",
+                    "freeze requires a media or composition source",
+                ));
+            }
+            if let SourceRef::Composition { composition } = &original.source_ref
+                && protected_content(project, *composition)
+            {
+                return Err(ServiceError::new(
+                    "PROTECTED_INTERVAL",
+                    "use protected clip retime for protected content",
+                ));
+            }
+            let left = original.trimmed(
+                TimeRange::new(original.timeline_range.start(), *at)
+                    .map_err(SequenceError::from)?,
+            )?;
+            let right_range =
+                TimeRange::new(*at, original.timeline_range.end()).map_err(SequenceError::from)?;
+            let mut right = original.trimmed(right_range)?;
+            right.id = right_clip;
+            // The right part's trimmed source_in is the source time at `at`;
+            // pinning the piecewise local at zero freezes that frame for the
+            // placement's whole duration.
+            let duration = right_range
+                .duration()
+                .map_err(SequenceError::from)?
+                .as_time();
+            right.time_map = TimeMap::piecewise_linear(vec![
+                TimeMapPoint {
+                    parent: Time::ZERO,
+                    local: Time::ZERO,
+                },
+                TimeMapPoint {
+                    parent: duration,
+                    local: Time::ZERO,
+                },
+            ])
+            .map_err(SequenceError::from)?;
+            split_owned_objects(&mut right)?;
+            let project_id = project.id;
+            let s = sequence_mut(project, *sequence)?;
+            let track = s
+                .tracks
+                .iter_mut()
+                .find(|t| t.clips.iter().any(|c| c.id == *clip))
+                .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "clip missing"))?;
+            let index = track
+                .clips
+                .iter()
+                .position(|c| c.id == *clip)
+                .expect("located clip");
+            track.clips[index] = left;
+            track.clips.insert(index + 1, right);
+            timeline_keys(s, project_id, &BTreeSet::from([*clip, right_clip]), keys);
         }
         TimelineCommand::SequenceCreate { sequence } => {
             keys.insert(changed(sequence.id.as_uuid(), project.id));
@@ -1618,6 +1882,7 @@ pub(crate) fn mutate(
             clip,
         } => {
             let s = sequence_mut(project, *sequence)?;
+            ensure_track_unlocked(s, *track)?;
             let t = s
                 .tracks
                 .iter_mut()
@@ -1657,6 +1922,7 @@ pub(crate) fn mutate(
                 }
             }
             let s = sequence_mut(project, *sequence)?;
+            ensure_unlocked(s, &BTreeSet::from([*clip]))?;
             let c = s
                 .tracks
                 .iter_mut()
@@ -1697,6 +1963,7 @@ pub(crate) fn mutate(
                     .map_err(|e| ServiceError::new("INVALID_AUDIO_INPUT", e.to_string()))?;
             }
             let s = sequence_mut(project, *sequence)?;
+            ensure_unlocked(s, &BTreeSet::from([*clip]))?;
             let c = s
                 .tracks
                 .iter_mut()

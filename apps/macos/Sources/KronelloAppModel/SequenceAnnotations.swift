@@ -44,7 +44,7 @@ extension EditorModel {
     }
     /// Clip markers stay inside the placement's timeline range; the frame is clamped into it.
     public func addClipMarker(_ clip: EditClip, at frame: Int64? = nil, color: String = "blue") {
-        guard !ui.locked.contains(clip.track) else { return }
+        guard !trackLocked(clip.track) else { return }
         let start = clip.start.frames(rateNum: rateNum, rateDen: rateDen)
         let end = clip.end.frames(rateNum: rateNum, rateDen: rateDen)
         guard end > start else { return }

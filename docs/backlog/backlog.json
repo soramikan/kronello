@@ -1818,7 +1818,7 @@
    "priority": "P1",
    "area": "timeline",
    "title": "トラックロック・クリップ有効/無効・トラックターゲティング",
-   "status": "planned",
+   "status": "in_progress",
    "dependencies": [
     "NLE-003"
    ],
@@ -1833,7 +1833,7 @@
    "priority": "P1",
    "area": "timeline",
    "title": "可変リタイム（スピードランプ）と freeze frame/hold",
-   "status": "planned",
+   "status": "done",
    "dependencies": [
     "NLE-003"
    ],

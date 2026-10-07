@@ -3622,6 +3622,7 @@ fn temporal_cut_sequence() -> (Project, SequenceId) {
         timeline_range: TimeRange::new(t(start, 1), t(end, 1)).unwrap(),
         source_in: Time::ZERO,
         time_map: TimeMap::linear(Time::ZERO, Time::ONE).unwrap(),
+        enabled: true,
         audio_retime: Default::default(),
         reverse_sampling: None,
         volume: None,
@@ -3647,6 +3648,7 @@ fn temporal_cut_sequence() -> (Project, SequenceId) {
                 transitions: vec![],
                 markers: vec![],
                 work_area: None,
+                targets: None,
             })],
             ..Project::default()
         },
@@ -4504,6 +4506,7 @@ fn gui007_reverse_fixture() -> (Project, Sequence) {
                 timeline_range: TimeRange::new(Time::ZERO, duration).unwrap(),
                 source_in: duration,
                 time_map: TimeMap::linear(Time::ZERO, Time::ONE).unwrap(),
+                enabled: true,
                 audio_retime: AudioRetimePolicy::ReverseResampleV1,
                 reverse_sampling: Some(ReverseSampling::ReverseGridV1),
                 volume: None,
@@ -4516,6 +4519,7 @@ fn gui007_reverse_fixture() -> (Project, Sequence) {
         transitions: vec![],
         markers: vec![],
         work_area: None,
+        targets: None,
     };
     let project = Project {
         compositions: vec![DocumentObject::Known(source)],

@@ -131,6 +131,11 @@ impl AdvancedAudioPlan {
                 continue;
             }
             for clip in &track.clips {
+                // NLE-005: a disabled placement keeps its timeline occupancy
+                // but is inaudible and never enters the mix plan.
+                if !clip.enabled {
+                    continue;
+                }
                 let audible = match clip.source_ref {
                     SourceRef::Composition { composition } => {
                         super::document::has_audio(project, composition, &mut BTreeSet::new())?
@@ -471,18 +476,25 @@ impl AdvancedAudioPlan {
                         let SourceRef::Generator { generator, .. } = &entry.clip.source_ref else {
                             unreachable!()
                         };
-                        let source_time = local_time(&entry.clip, sample)?;
-                        if source_time < Time::ZERO {
-                            return Err(invalid("negative Generator source time"));
-                        }
-                        let value = if generator == AUDIO_GENERATOR_SILENCE {
-                            0.0
+                        if hold_silent(&entry.clip, sample)? {
+                            // NLE-006: a hold segment freezes the source clock;
+                            // the mix emits silence instead of repeated frames.
+                            [0.0; 2]
                         } else {
-                            let cycles = source_time.checked_mul(Time::from_integer(440))?;
-                            let phase = cycles.checked_sub(Time::from_integer(cycles.floor()))?;
-                            (number(phase) * std::f64::consts::TAU).sin() as f32 * 0.25
-                        };
-                        [value; 2]
+                            let source_time = local_time(&entry.clip, sample)?;
+                            if source_time < Time::ZERO {
+                                return Err(invalid("negative Generator source time"));
+                            }
+                            let value = if generator == AUDIO_GENERATOR_SILENCE {
+                                0.0
+                            } else {
+                                let cycles = source_time.checked_mul(Time::from_integer(440))?;
+                                let phase =
+                                    cycles.checked_sub(Time::from_integer(cycles.floor()))?;
+                                (number(phase) * std::f64::consts::TAU).sin() as f32 * 0.25
+                            };
+                            [value; 2]
+                        }
                     }
                 };
                 if !matches!(entry.source, Source::Legacy(_))
@@ -521,6 +533,18 @@ impl AdvancedAudioPlan {
         })
     }
 }
+/// NLE-006: a piecewise hold segment has zero source-time advance; resampling
+/// emits silence there rather than reading the pinned source frame as audio.
+/// Negative parents follow the same first-segment extension `local_time`
+/// uses, so a hold leading the placement is silent too.
+fn hold_silent(clip: &Clip, sample: i64) -> Result<bool, AudioError> {
+    let TimeMap::PiecewiseLinear(map) = &clip.time_map else {
+        return Ok(false);
+    };
+    let parent = Time::new(sample, 48_000)?.checked_sub(clip.timeline_range.start())?;
+    Ok(map.is_hold(parent))
+}
+
 fn resample(
     clip: &Clip,
     sources: &dyn AudioSourceReader,
@@ -533,6 +557,9 @@ fn resample(
     else {
         unreachable!()
     };
+    if hold_silent(clip, sample)? {
+        return Ok([0.0; 2]);
+    }
     let mut position = local_time(clip, sample)?.checked_mul(Time::from_integer(48_000))?;
     if clip.audio_retime == AudioRetimePolicy::ReverseResampleV1 {
         // Exact reverse neighbors: ceil(q)-1 and ceil(q)-2 with reverse fraction

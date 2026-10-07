@@ -39,7 +39,7 @@ extension EditorModel {
         }
     }
     private func updateCaption(_ clip: EditClip, label: String, base: String?, mutate: (inout [String: Any]) throws -> Void) {
-        guard !ui.locked.contains(clip.track), var caption = captionDocument(for: clip) else { return }
+        guard !trackLocked(clip.track), var caption = captionDocument(for: clip) else { return }
         do {
             try mutate(&caption)
             submit([["caption_set": ["caption": caption]]], label: label, base: base)

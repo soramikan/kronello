@@ -22,6 +22,10 @@ pub struct Sequence {
     /// In/Out share this range's start/end; absent means the whole sequence.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub work_area: Option<TimeRange>,
+    /// Implicit destination tracks for edits that take no explicit track, one
+    /// per kind. Referenced tracks must exist and match the entry's kind.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub targets: Option<TargetTracks>,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -32,12 +36,17 @@ pub struct Track {
     pub kind: TrackKind,
     pub clips: Vec<Clip>,
 }
-/// Authored output switches, independent of GUI selection or editing locks.
+/// Authored output switches plus the editing lock; `locked` defaults to off so
+/// documents written before NLE-005 stay unlocked.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct TrackState {
     pub visible: bool,
     pub muted: bool,
+    /// Editing lock: mutations that would change this track or its clips are
+    /// rejected during planning with `TRACK_LOCKED`.
+    #[serde(default)]
+    pub locked: bool,
 }
 impl Track {
     pub fn visible(&self) -> bool {
@@ -46,6 +55,19 @@ impl Track {
     pub fn muted(&self) -> bool {
         self.state.is_some_and(|state| state.muted)
     }
+    pub fn locked(&self) -> bool {
+        self.state.is_some_and(|state| state.locked)
+    }
+}
+/// Per-kind implicit edit destinations. A present entry must reference an
+/// existing track of the matching kind; absent means untargeted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TargetTracks {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub video: Option<TrackId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio: Option<TrackId>,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -63,6 +85,12 @@ pub struct Clip {
     pub timeline_range: TimeRange,
     pub source_in: Time,
     pub time_map: TimeMap,
+    /// Authored contribution switch. Disabled clips keep their timeline
+    /// occupancy, links and metadata but are excluded from evaluation, video
+    /// compositing, audio mixing, captions and transitions. Serialized only
+    /// when off so documents written before NLE-005 roundtrip unchanged.
+    #[serde(default = "clip_enabled", skip_serializing_if = "is_clip_enabled")]
+    pub enabled: bool,
     #[serde(default)]
     pub audio_retime: AudioRetimePolicy,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -255,6 +283,12 @@ fn generator_version() -> u32 {
 }
 fn generator_color() -> Color {
     Color::from_srgb8([0; 3], None)
+}
+fn clip_enabled() -> bool {
+    true
+}
+fn is_clip_enabled(enabled: &bool) -> bool {
+    *enabled
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
@@ -461,6 +495,25 @@ impl Sequence {
             .flat_map(|t| &t.clips)
             .map(|c| c.id)
             .collect();
+        // Targeting references must resolve to an existing track of the
+        // matching kind; a dangling or cross-kind target would silently steer
+        // edits onto the wrong destination.
+        if let Some(targets) = &self.targets {
+            for (target, kind) in [
+                (targets.video, TrackKind::Video),
+                (targets.audio, TrackKind::Audio),
+            ] {
+                let Some(target) = target else { continue };
+                let track = self
+                    .tracks
+                    .iter()
+                    .find(|track| track.id == target)
+                    .ok_or_else(|| SequenceError::MissingSource(target.to_string()))?;
+                if track.kind != kind {
+                    return Err(SequenceError::Invalid("target track kind mismatch".into()));
+                }
+            }
+        }
         for (index, transition) in self.transitions.iter().enumerate() {
             let pair = self
                 .tracks

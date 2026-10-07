@@ -2,16 +2,19 @@ import Foundation
 
 extension EditorModel {
     public func setTrackOutput(_ track: [String: Any]) {
-        guard !ui.locked.contains(track.string("id")) else { return }
-        var state = track.object("state")
+        guard !trackLocked(track.string("id")) else { return }
+        let state = track.object("state")
         let visible = state["visible"] as? Bool ?? true
         let muted = state["muted"] as? Bool ?? false
-        state = ["visible": track.string("kind") == "audio" ? visible : !visible,
-                 "muted": track.string("kind") == "audio" ? !muted : muted]
-        submit([timelineCommand("track_state_set", ["sequence": sequence.string("id"), "track": track.string("id"), "state": state])], label: "トラックの出力変更")
+        // TrackStateSet replaces the whole state, so the persisted lock flag
+        // must be re-emitted or toggling visibility would silently unlock.
+        submit([timelineCommand("track_state_set", ["sequence": sequence.string("id"), "track": track.string("id"), "state": [
+            "visible": track.string("kind") == "audio" ? visible : !visible,
+            "muted": track.string("kind") == "audio" ? !muted : muted,
+            "locked": state["locked"] as? Bool ?? false]])], label: "トラックの出力変更")
     }
     public func setClipTime(_ clip: EditClip, sourceIn: RationalTime? = nil, speedPercent: Double? = nil, base: String? = nil) {
-        guard !ui.locked.contains(clip.track) else { return }
+        guard !trackLocked(clip.track) else { return }
         var map = clip.authored.object("time_map")
         if let percent = speedPercent {
             guard percent.isFinite, percent > 0, percent <= 10000, map.string("kind") == "linear" else {
@@ -26,7 +29,7 @@ extension EditorModel {
             "audio_retime": clip.reversed ? "reverse_resample_v1" : "resample_v1", "reverse_sampling": clip.authored["reverse_sampling"] ?? NSNull()])], label: "クリップの時間設定", base: base)
     }
     public func replaceClipEffects(_ clip: EditClip, properties: [[String: Any]], effects: [[String: Any]], label: String, base: String? = nil) {
-        guard !ui.locked.contains(clip.track) else { return }
+        guard !trackLocked(clip.track) else { return }
         submit([timelineCommand("clip_set_effects", ["sequence": sequence.string("id"), "clip": clip.id, "properties": properties, "effects": effects])], label: label, base: base)
     }
     public func setClipProperty(_ clip: EditClip, key: String, kind: String, value: Any, base: String? = nil) {
@@ -123,7 +126,7 @@ extension EditorModel {
     /// effect parameter. Animated or expression-backed parameters keep their
     /// authored source and reject the edit with a typed error.
     public func setClipEffectParameter(_ clip: EditClip, effect: [String: Any], parameter: String, kind: String, value: Any, base: String? = nil) {
-        guard !ui.locked.contains(clip.track), clip.kind != .audio,
+        guard !trackLocked(clip.track), clip.kind != .audio,
               let propertyID = effect.object("parameters")[parameter] as? String else { return }
         var properties = clip.authored.objects("properties")
         guard let index = properties.firstIndex(where: { $0.string("id") == propertyID }) else { return }
@@ -176,7 +179,7 @@ extension EditorModel {
     /// Clip gain Property (`kronello.audio.volume`, nonnegative linear
     /// scalar). Passing nil clears the authored volume back to unity.
     public func setClipVolume(_ clip: EditClip, value: Double?, base: String? = nil) {
-        guard !ui.locked.contains(clip.track), clip.kind == .audio else { return }
+        guard !trackLocked(clip.track), clip.kind == .audio else { return }
         let volume: Any = value.map { v -> [String: Any] in
             ["id": UUID().uuidString, "descriptor": ["key": "kronello.audio.volume", "version": 1],
              "source": ["kind": "constant", "value": ["kind": "scalar", "value": v]], "modifiers": []]
@@ -212,7 +215,7 @@ extension RationalTime {
 
 extension EditorModel {
     public func setClipReverse(_ clip: EditClip, enabled: Bool) {
-        guard !ui.locked.contains(clip.track), let speed = clip.linearRate else { return }
+        guard !trackLocked(clip.track), let speed = clip.linearRate else { return }
         do {
             let duration = try clip.end.checkedSubtracting(clip.start)
             let travel = try duration.checkedMultiplying(speed).checkedAdding(.wire(clip.authored.object("time_map").object("offset")))

@@ -131,10 +131,14 @@ pub fn lower_sequence(project: &Project, id: SequenceId) -> Result<Composition, 
                     )?,
                     _ => return Err(RenderError::UnsupportedFeature("time map".into())),
                 };
+                // Disabled clips keep their node and active_range so the
+                // placement still exists for inspection, but the scene walker
+                // skips the node and snapshot never attaches its content or
+                // transitions to the render.
                 nodes.push(SceneNode {
                     tags: Default::default(),
                     name: None,
-                    enabled: true,
+                    enabled: clip.enabled,
                     id: NodeId::from_uuid(clip.id.as_uuid()),
                     kind: if let SourceRef::Composition { composition } = clip.source_ref {
                         NodeKind::CompositionInstance(CompositionInstance {

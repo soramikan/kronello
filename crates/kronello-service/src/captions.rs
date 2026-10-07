@@ -1171,7 +1171,8 @@ fn export_cues<'a>(
         .iter()
         .filter(|t| t.kind == TrackKind::Caption)
         .flat_map(|t| t.clips.iter())
-        .filter(|c| matches!(c.source_ref, SourceRef::Caption { .. }))
+        // NLE-005: disabled cues keep their occupancy but export nothing.
+        .filter(|c| c.enabled && matches!(c.source_ref, SourceRef::Caption { .. }))
         .collect();
     clips.sort_by_key(|c| (c.timeline_range.start(), c.id));
     let mut cues = vec![];
@@ -1330,6 +1331,7 @@ fn plan_commands(request: &CaptionsImportPlanRequest) -> Result<Vec<EditCommand>
             source_in: Time::ZERO,
             time_map: TimeMap::linear(Time::ZERO, Rational::ONE)
                 .map_err(|e| invalid(e.to_string()))?,
+            enabled: true,
             audio_retime: AudioRetimePolicy::Reject,
             reverse_sampling: None,
             volume: None,

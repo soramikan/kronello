@@ -48,6 +48,7 @@ fn caption_clip(caption: CaptionId, start: i64, end: i64) -> Clip {
             .unwrap(),
         source_in: Time::ZERO,
         time_map: TimeMap::linear(Time::ZERO, Rational::ONE).unwrap(),
+        enabled: true,
         audio_retime: AudioRetimePolicy::Reject,
         reverse_sampling: None,
         volume: None,
@@ -68,6 +69,7 @@ fn sequence_with(tracks: Vec<Track>) -> Sequence {
         transitions: vec![],
         markers: vec![],
         work_area: None,
+        targets: None,
     }
 }
 fn project_with(caption: CaptionDocument, sequence: Sequence) -> Project {
@@ -344,6 +346,7 @@ fn caption_tracks_reject_other_sources_and_transitions() {
         timeline_range: TimeRange::new(Time::ZERO, Time::new(1, 1).unwrap()).unwrap(),
         source_in: Time::ZERO,
         time_map: TimeMap::linear(Time::ZERO, Rational::ONE).unwrap(),
+        enabled: true,
         audio_retime: AudioRetimePolicy::Reject,
         reverse_sampling: None,
         volume: None,

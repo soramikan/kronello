@@ -109,6 +109,7 @@ fn sequence(p: &mut Project, root: CompositionId, start: Time, end: Time) -> Seq
         timeline_range: r(start, end),
         source_in: t(1, 100),
         time_map: TimeMap::linear(Time::ZERO, Time::ONE).unwrap(),
+        enabled: true,
         audio_retime: AudioRetimePolicy::Reject,
         reverse_sampling: None,
         volume: Some(Box::new(volume(PropertySource::Constant(scalar(0.5))))),
@@ -132,6 +133,7 @@ fn sequence(p: &mut Project, root: CompositionId, start: Time, end: Time) -> Seq
         transitions: vec![],
         markers: vec![],
         work_area: None,
+        targets: None,
     };
     let id = s.id;
     p.sequences.push(DocumentObject::Known(s));
@@ -945,6 +947,7 @@ fn gui007_track_mute_changes_pcm_and_preserves_authored_clip() {
     sequence.tracks[0].state = Some(TrackState {
         visible: true,
         muted: true,
+        locked: false,
     });
     let after = advanced(&p, id).mix(&sources, range).unwrap();
     assert!(after.buffer().frames().iter().all(|f| *f == [0.0; 2]));
@@ -954,4 +957,81 @@ fn gui007_track_mute_changes_pcm_and_preserves_authored_clip() {
     sequence.tracks[0].state = None;
     assert_eq!(p, original);
     assert_eq!(advanced(&p, id).mix(&sources, range).unwrap(), before);
+}
+
+#[test]
+fn disabled_clip_mixes_silence_while_keeping_timeline_occupancy() {
+    let (mut p, root, asset) = fixture();
+    let id = audio_sequence(&mut p, root, asset);
+    let sources = sources(asset);
+    let range = r(t(1, 100), t(1, 20));
+    let before = advanced(&p, id).mix(&sources, range).unwrap();
+    assert!(before.buffer().frames().iter().any(|f| f[0] != 0.0));
+    // NLE-005: the placement still occupies its range but contributes nothing.
+    clip_mut(&mut p).enabled = false;
+    assert_eq!(clip_mut(&mut p).timeline_range, r(t(1, 30000), t(1, 10)));
+    assert_eq!(
+        advanced(&p, id)
+            .mix(&sources, range)
+            .unwrap()
+            .buffer()
+            .frames()
+            .iter()
+            .filter(|f| **f != [0.0; 2])
+            .count(),
+        0
+    );
+    clip_mut(&mut p).enabled = true;
+    assert_eq!(advanced(&p, id).mix(&sources, range).unwrap(), before);
+}
+
+#[test]
+fn piecewise_hold_mixes_silence_and_ramps_resample_at_segment_speed() {
+    use kronello_time::TimeMapPoint;
+    let (mut p, root, asset) = fixture();
+    let id = audio_sequence(&mut p, root, asset);
+    let clip = clip_mut(&mut p);
+    // Half-speed ramp for 10 ms, a 10 ms hold, then a double-speed ramp.
+    clip.time_map = TimeMap::piecewise_linear(vec![
+        TimeMapPoint {
+            parent: Time::ZERO,
+            local: Time::ZERO,
+        },
+        TimeMapPoint {
+            parent: t(1, 100),
+            local: t(1, 200),
+        },
+        TimeMapPoint {
+            parent: t(1, 50),
+            local: t(1, 200),
+        },
+        TimeMapPoint {
+            parent: t(1, 10),
+            local: t(41, 200),
+        },
+    ])
+    .unwrap();
+    let authored = clip.clone();
+    let sources = sources(asset);
+    // The placement starts at 1/30000 s, so the hold covers absolute samples
+    // 482..=960 and each sloped neighbor resamples at its own local rate.
+    let mix = advanced(&p, id)
+        .mix(&sources, authored.timeline_range)
+        .unwrap();
+    let frames = mix.buffer().frames();
+    let start = mix.start_sample();
+    for sample in [483, 700, 959] {
+        assert_eq!(
+            frames[(sample - start) as usize],
+            [0.0; 2],
+            "hold sample {sample} must be silent"
+        );
+    }
+    for sample in [2, 240, 481, 962, 1200, 2000, 4799] {
+        let source = authored.local_time(t(sample, 48000)).unwrap();
+        assert!(
+            (frames[(sample - start) as usize][0] - ramp_expected(source)).abs() < 2e-8,
+            "sloped sample {sample}"
+        );
+    }
 }

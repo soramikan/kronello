@@ -50,6 +50,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     timeline_range: range,
                     source_in: Rational::ZERO,
                     time_map: TimeMap::linear(Rational::ZERO, Rational::ONE)?,
+                    enabled: true,
                     audio_retime: Default::default(),
                     reverse_sampling: None,
                     volume: None,
@@ -61,6 +62,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }],
             markers: vec![],
             work_area: None,
+            targets: None,
         })],
         ..Project::default()
     };

@@ -1310,6 +1310,10 @@
           },
           "type": "array"
         },
+        "enabled": {
+          "description": "Authored contribution switch. Disabled clips keep their timeline\noccupancy, links and metadata but are excluded from evaluation, video\ncompositing, audio mixing, captions and transitions. Serialized only\nwhen off so documents written before NLE-005 roundtrip unchanged.",
+          "type": "boolean"
+        },
         "id": {
           "$ref": "#/$defs/ClipId"
         },
@@ -11651,6 +11655,17 @@
           },
           "type": "array"
         },
+        "targets": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TargetTracks"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Implicit destination tracks for edits that take no explicit track, one\nper kind. Referenced tracks must exist and match the entry's kind."
+        },
         "tracks": {
           "description": "Authored bottom-to-top compositing order.",
           "items": {
@@ -12600,6 +12615,33 @@
         "unsupported",
         "external_references"
       ],
+      "type": "object"
+    },
+    "TargetTracks": {
+      "additionalProperties": false,
+      "description": "Per-kind implicit edit destinations. A present entry must reference an\nexisting track of the matching kind; absent means untargeted.",
+      "properties": {
+        "audio": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TrackId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "video": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TrackId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
       "type": "object"
     },
     "TemplateBandBinding": {
@@ -13810,7 +13852,7 @@
       "type": "object"
     },
     "TimeMap": {
-      "description": "Exact, stateless mappings. Protected middle segments support hold and loop.\nReverse and general nonlinear playback remain unsupported.",
+      "description": "Exact, stateless mappings. Protected middle segments support hold and loop;\npiecewise linear segments with equal `local` endpoints express authored\nhold (freeze) intervals. Reverse playback remains unsupported.",
       "oneOf": [
         {
           "additionalProperties": false,
@@ -14332,6 +14374,98 @@
           },
           "required": [
             "clip_delete"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "NLE-005 authored contribution switch. A disabled clip keeps its\ntimeline occupancy, links and metadata but renders and mixes nothing.",
+          "properties": {
+            "clip_enable_set": {
+              "additionalProperties": false,
+              "properties": {
+                "clip": {
+                  "$ref": "#/$defs/ClipId"
+                },
+                "enabled": {
+                  "type": "boolean"
+                },
+                "sequence": {
+                  "$ref": "#/$defs/SequenceId"
+                }
+              },
+              "required": [
+                "sequence",
+                "clip",
+                "enabled"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "clip_enable_set"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "NLE-005 implicit edit destinations, one per track kind. `None` clears\ntargeting; a present entry must reference an existing matching track.",
+          "properties": {
+            "sequence_targets_set": {
+              "additionalProperties": false,
+              "properties": {
+                "sequence": {
+                  "$ref": "#/$defs/SequenceId"
+                },
+                "targets": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/TargetTracks"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "sequence"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "sequence_targets_set"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "NLE-006: split `clip` at `at` and pin the right part's source time with\na piecewise hold map. The right clip identity is deterministic, the\noperation requires an unlinked, transition-free forward clip, and undo\nrestores the original placement exactly.",
+          "properties": {
+            "clip_freeze": {
+              "additionalProperties": false,
+              "properties": {
+                "at": {
+                  "$ref": "#/$defs/Rational"
+                },
+                "clip": {
+                  "$ref": "#/$defs/ClipId"
+                },
+                "sequence": {
+                  "$ref": "#/$defs/SequenceId"
+                }
+              },
+              "required": [
+                "sequence",
+                "clip",
+                "at"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "clip_freeze"
           ],
           "type": "object"
         },
@@ -14893,8 +15027,13 @@
     },
     "TrackState": {
       "additionalProperties": false,
-      "description": "Authored output switches, independent of GUI selection or editing locks.",
+      "description": "Authored output switches plus the editing lock; `locked` defaults to off so\ndocuments written before NLE-005 stay unlocked.",
       "properties": {
+        "locked": {
+          "default": false,
+          "description": "Editing lock: mutations that would change this track or its clips are\nrejected during planning with `TRACK_LOCKED`.",
+          "type": "boolean"
+        },
         "muted": {
           "type": "boolean"
         },

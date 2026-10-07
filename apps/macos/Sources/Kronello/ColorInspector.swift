@@ -31,7 +31,7 @@ struct ClipColorInspector: View {
         default: return []
         }
     }
-    var disabled: Bool { model.ui.locked.contains(clip.track) || model.busy || model.pendingCandidate != nil }
+    var disabled: Bool { model.trackLocked(clip.track) || model.busy || model.pendingCandidate != nil }
     var body: some View {
         let specs = EditorModel.colorEffectSpecs(on: clip)
         let missing = EditorModel.colorEffects.filter { spec in !specs.contains { $0.spec.effectID == spec.effectID } }

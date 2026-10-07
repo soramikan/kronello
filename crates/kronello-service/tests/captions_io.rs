@@ -60,6 +60,7 @@ fn setup() -> (tempfile::TempDir, PathBuf, SequenceId) {
                 transitions: vec![],
                 markers: vec![],
                 work_area: None,
+                targets: None,
             },
         }))
         .unwrap()
@@ -571,6 +572,7 @@ fn captions_trim_and_export_timing_precision() {
         timeline_range: TimeRange::new(Time::ZERO, Time::new(1, 24).unwrap()).unwrap(),
         source_in: Time::ZERO,
         time_map: TimeMap::linear(Time::ZERO, Rational::ONE).unwrap(),
+        enabled: true,
         audio_retime: AudioRetimePolicy::Reject,
         reverse_sampling: None,
         volume: None,
@@ -760,6 +762,7 @@ fn captions_lower_above_video_in_scene_ir() {
                 timeline_range: TimeRange::new(Time::ZERO, Time::new(4, 1).unwrap()).unwrap(),
                 source_in: Time::ZERO,
                 time_map: TimeMap::linear(Time::ZERO, Rational::ONE).unwrap(),
+                enabled: true,
                 audio_retime: AudioRetimePolicy::Reject,
                 reverse_sampling: None,
                 volume: None,

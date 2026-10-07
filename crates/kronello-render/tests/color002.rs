@@ -81,6 +81,7 @@ fn project(
         timeline_range: TimeRange::new(Time::ZERO, t(1, 1)).unwrap(),
         source_in: Time::ZERO,
         time_map: TimeMap::linear(Time::ZERO, Rational::ONE).unwrap(),
+        enabled: true,
         audio_retime: Default::default(),
         reverse_sampling: None,
         volume: None,
@@ -105,6 +106,7 @@ fn project(
             transitions: vec![],
             markers: vec![],
             work_area: None,
+            targets: None,
         })],
         ..Project::default()
     }

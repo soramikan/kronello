@@ -181,6 +181,11 @@ struct ClipInspector: View {
                                 KRNumberField(value: .constant(clip.linearRate.map { Double($0.num)! / Double($0.den)! * 100 } ?? 100), unit: "%", step: 0.1, range: 0.1...10000, accessibilityLabel: "速度", onEditingStart: { draftBases["speed"] = model.revision }, onCommit: { _, value in model.setClipTime(clip, speedPercent: value, base: draftBases.removeValue(forKey: "speed")) }).disabled(clip.linearRate == nil)
                             }
                             KRInspectorSettingRow("逆再生") { KRCheckbox("", isOn: Binding(get: { clip.reversed }, set: { model.setClipReverse(clip, enabled: $0) })).accessibilityLabel("逆再生").disabled(clip.linearRate == nil) }
+                            if clip.linearRate == nil {
+                                // NLE-006: piecewise maps (speed ramps and freeze holds) are
+                                // shown read-only; percent/reverse edits need a Linear map.
+                                Text("\(clip.speedLabel)：非線形タイムマップです。").krText(KRType.caption).foregroundStyle(p.accentInk).padding(.horizontal, KRSpace.space3)
+                            }
                             Text("速度は0.1%単位。配置の尺を維持し、逆再生は選択区間の末尾から始めます。").krText(KRType.caption).foregroundStyle(p.inkMuted).padding(.horizontal, KRSpace.space3)
                         } }
                         if clip.kind == .audio { section("音量") {
@@ -233,6 +238,19 @@ struct ClipInspector: View {
                         if clip.kind != .audio { section("カラー") { ClipColorInspector(model: model, clip: clip) } }
                         if clip.composition != nil { KRButton("モーションで開く", icon: .layers, variant: .secondary) { model.openClipInMotion(clip) }.padding(.horizontal, KRSpace.space3) }
                         section("編集") {
+                            KRInspectorSettingRow("有効") {
+                                KRCheckbox("", isOn: Binding(get: { clip.enabled }, set: { model.setClipEnabled(clip, enabled: $0) }))
+                                    .accessibilityLabel("クリップの有効")
+                                    .disabled(model.trackLocked(clip.track) || model.busy || model.pendingCandidate != nil)
+                            }
+                            Text("無効なクリップは区間を保ったまま映像・音声・字幕・トランジションに寄与しません。").krText(KRType.caption).foregroundStyle(p.inkMuted).padding(.horizontal, KRSpace.space3)
+                            if clip.kind != .subtitle {
+                                KRButton("再生ヘッドでフリーズ", icon: .pause, variant: .secondary) { model.freezeClipAtPlayhead(clip) }
+                                    .disabled(model.busy || model.pendingCandidate != nil || model.trackLocked(clip.track)
+                                        || !(model.frame > clip.start.frames(rateNum: model.rateNum, rateDen: model.rateDen)
+                                            && model.frame < clip.end.frames(rateNum: model.rateNum, rateDen: model.rateDen)))
+                                    .padding(.horizontal, KRSpace.space3)
+                            }
                             KRButton("再生ヘッドにクリップマーカー", icon: .circle, variant: .secondary) { model.addClipMarker(clip) }
                                 .disabled(model.busy || model.pendingCandidate != nil)
                                 .padding(.horizontal, KRSpace.space3)
@@ -449,9 +467,9 @@ struct SequenceTracks: View {
         }
     }
     func lane(_ track: [String: Any], width: Double, frameWidth: Double) -> some View {
-        let id = track.string("id"), kind = track.string("kind"), locked = model.ui.locked.contains(id)
+        let id = track.string("id"), kind = track.string("kind"), locked = model.trackLocked(id)
         return KRTrack(header: .init(model.trackNumber(id), kind == "audio" ? "Audio" : kind == "caption" ? "Caption" : "Video", kind: kind == "audio" ? .audio : kind == "caption" ? .subtitle : .video,
-            selected: model.selectedClip?.track == id, hidden: kind == "audio" ? (track.object("state")["muted"] as? Bool ?? false) : !(track.object("state")["visible"] as? Bool ?? true), locked: locked, visibilityEnabled: !locked && !model.busy && model.pendingCandidate == nil, onVisibility: { model.setTrackOutput(track) }, onLock: { model.toggleLock(id) }), headerWidth: 200, locked: locked) {
+            selected: model.selectedClip?.track == id, hidden: kind == "audio" ? (track.object("state")["muted"] as? Bool ?? false) : !(track.object("state")["visible"] as? Bool ?? true), locked: locked, targeted: model.trackTargeted(track), visibilityEnabled: !locked && !model.busy && model.pendingCandidate == nil, onVisibility: { model.setTrackOutput(track) }, onLock: { model.setTrackLocked(track) }, onTarget: { model.setTrackTarget(track) }), headerWidth: 200, locked: locked) {
             ZStack(alignment: .leading) {
                 Color.clear.contentShape(Rectangle()).onTapGesture { tracksFocused = true; model.selectClip(nil) }
                 ForEach(model.editClips.filter { $0.track == id }) { clip in
@@ -509,8 +527,13 @@ struct SequenceTracks: View {
         return KRClip(model.clipName(clip), kind: clip.kind, state: missing.map { .missing($0) } ?? (model.ui.clipSelection == clip.id ? .selected : .resting), onSelect: { model.selectClip(clip.id) })
             .allowsHitTesting(false)
             .accessibilityHidden(true)
+            .opacity(clip.enabled ? 1 : 0.4)
             .overlay(alignment: .bottom) { clipWaveform(clip, frameWidth: frameWidth) }
             .overlay(alignment: .topLeading) { clipMarkers(clip, start: start, frameWidth: frameWidth) }
+            // NLE-006: a piecewise map carries a speed ramp or freeze hold; mark it on the lane.
+            .overlay(alignment: .topTrailing) { if clip.timeMapKind == "piecewise_linear" {
+                KRIconView(.slidersHorizontal).foregroundStyle(p.accentInk).padding(2)
+            } }
             // A cue has no source window: splitting is not a caption operation.
             .overlay { if model.editTool == "blade" && clip.kind != .subtitle {
                 KRBladeHitArea("\(model.clipName(clip)) を分割", begin: { fraction in

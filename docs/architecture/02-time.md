@@ -44,8 +44,8 @@ Composition は既定で親の連続時刻で評価する。編集レートが 2
 - 空区間 `[t, t)` は許し、どの時刻も含まない。接触する区間・空区間の intersection は `None`。adjacency は両区間が非空で端点が一致する場合とする。区間を表現できても差の duration が表現範囲を超える場合は overflow を返す。
 - `frame_floor` と `sample_floor` は負時刻にも数学的 floor を適用する。フレーム・サンプルの原点は時刻ゼロ。フレームから時刻への変換は整数フレーム境界を返し、時刻からフレームへの厳密変換はサブフレーム位置を保持する。
 - 音声バッチは絶対時刻に対する `floor(start * sample_rate)..floor(end * sample_rate)` とする。隣接フレームは同じ境界を共有し、丸め済みのフレーム長を積算しない。これはバッチ境界の規約であり、各サンプルの時刻が量子化前の区間に含まれるという規約ではない。
-- 線形 TimeMap は `local = offset + parent * speed`、`speed > 0` とする。区分線形は親時刻・ローカル時刻とも厳密増加する 2 点以上の制御点を必要とし、隣接点の間を有理数で厳密補間する。制御点を含む閉区間を評価 domain とし、端点そのものは保存した値を返す。内部の各有理数演算が表現できなければ overflow、domain 外は型付きエラーとし、外挿・clamp・フレームへの量子化をしない。この domain は配置の半開区間とは区別する。
-- TimeMap の JSON は `kind` に `linear` / `piecewise_linear` を持つ。前者は `offset` / `speed`、後者は `points` 配列の `parent` / `local` を保存する。TIME-001 時点の enum は将来の拡張を許し、逆再生・loop・停止・非線形を表す variant は提供しなかった。ゼロ・負の傾きは拒否する。非線形の量子化精度・丸め・評価アルゴリズムの版は未設計で、対応を追加する前に契約を固定する。浮動小数点時刻で代替しない。
+- 線形 TimeMap は `local = offset + parent * speed`、`speed > 0` とする。区分線形は厳密増加する親時刻と非減少のローカル時刻を持つ 2 点以上の制御点を必要とし、隣接点の間を有理数で厳密補間する。制御点を含む閉区間を評価 domain とし、端点そのものは保存した値を返す。内部の各有理数演算が表現できなければ overflow、domain 外は型付きエラーとし、外挿・clamp・フレームへの量子化をしない。この domain は配置の半開区間とは区別する。
+- TimeMap の JSON は `kind` に `linear` / `piecewise_linear` / `protected` を持つ。`linear` は `offset` / `speed`、`piecewise_linear` は `points` 配列の `parent` / `local` を保存する。TIME-001 時点の enum は将来の拡張を許し、逆再生・loop・停止・非線形を表す variant は提供しなかった。負の傾きは拒否する。浮動小数点時刻で代替しない。
 
 ### TEMPLATE-002 の保護中間 map
 
@@ -59,6 +59,24 @@ PiecewiseLinear の正傾斜と既存 stretch の保存・意味は変更しな�
 template_instance.retime は選択 variant の authoring 尺と公開 duration policy を使う。
 詳細は [ADR-0059](../adr/0059-template-duration-variants-and-migration.md) と
 [07 テンプレート](07-templates.md)。
+
+### NLE-006 のホールド（freeze）区間と速度ランプ
+
+[ADR-0112](../adr/0112-variable-retime-and-freeze-hold.md) で
+`PiecewiseTimeMap` の local 制約を非減少に緩和した。`local[i] == local[i+1]`
+の区間は hold（freeze）区間で、`map` はその区間で `local[i]` を返す。
+逆単調は引き続き `UnsupportedMapSlope` で拒否するため、既存の厳密単調な
+ドキュメントはそのまま読める。`PiecewiseTimeMap::is_hold` が parent の所属
+区間を、`slope_at` が区間の有理数速度を返す。
+`inverse_canonical` は非単射となるため、hold 区間の local 値にはその区間を
+開始する parent（その local に写る最も早い parent）を返す決定的規則とする。
+音声はソース時刻が進まない hold 区間を `ResampleV1` /
+`ReverseResampleV1` でも無音として処理し、ランプ区間は各区間の線形速度で
+逐次リサンプルする。`Reject` ポリシは非単位リタイムを計画時に拒否する。
+速度ランプは `clip_time_set` が piecewise map 全体を受け取り、
+`clip_freeze { sequence, clip, at }` がクリップを `at` で分割して右側に
+hold map を持つクリップを生成する。検証は [NLE-006](../testing/nle-006.md)
+を参照。
 
 ## 純粋評価
 

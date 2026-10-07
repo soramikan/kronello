@@ -30,6 +30,7 @@ fn fixture() -> (Project, SequenceId) {
                 timeline_range: TimeRange::new(Time::ZERO, Time::new(60, 1).unwrap()).unwrap(),
                 source_in: Time::new(1, 48000).unwrap(),
                 time_map: TimeMap::linear(Time::ZERO, Time::new(3, 2).unwrap()).unwrap(),
+                enabled: true,
                 audio_retime: AudioRetimePolicy::ResampleV1,
                 reverse_sampling: None,
                 volume: None,
@@ -42,6 +43,7 @@ fn fixture() -> (Project, SequenceId) {
         transitions: vec![],
         markers: vec![],
         work_area: None,
+        targets: None,
     }));
     (project, sequence)
 }

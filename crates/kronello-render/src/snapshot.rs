@@ -260,8 +260,15 @@ impl RenderSnapshot {
                 }
                 // Caption cue fonts, including clip-level overrides and span
                 // faces, are locked by hash exactly like text node fonts.
+                // Disabled cues render nothing, so they need no font locks
+                // and a missing caption behind one must not fail the render.
                 let registry = render_registry();
-                for clip in source.tracks.iter().flat_map(|t| &t.clips) {
+                for clip in source
+                    .tracks
+                    .iter()
+                    .flat_map(|t| &t.clips)
+                    .filter(|c| c.enabled)
+                {
                     let SourceRef::Caption { caption } = &clip.source_ref else {
                         continue;
                     };
@@ -1083,7 +1090,16 @@ pub fn build_scene_ir_with_cache(
                 _ => content,
             };
             for tr in &sequence.transitions {
-                if tr.incoming == clip.id && tr.range.contains(time) {
+                // The transition contributes only when both endpoints are
+                // enabled; a disabled clip leaves a hole rather than a
+                // partially rendered transition (NLE-005).
+                let outgoing_enabled = sequence
+                    .tracks
+                    .iter()
+                    .flat_map(|t| &t.clips)
+                    .find(|c| c.id == tr.outgoing)
+                    .is_some_and(|c| c.enabled);
+                if tr.incoming == clip.id && tr.range.contains(time) && outgoing_enabled {
                     if tr.version != 1 {
                         return Err(RenderError::UnsupportedFeature("transition version".into()));
                     }

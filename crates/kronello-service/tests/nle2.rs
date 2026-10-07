@@ -374,6 +374,7 @@ fn clip(color: [u8; 3], a: i64, b: i64) -> Clip {
         timeline_range: range(t(a, 1), t(b, 1)),
         source_in: Time::ZERO,
         time_map: TimeMap::linear(Time::ZERO, Rational::ONE).unwrap(),
+        enabled: true,
         audio_retime: AudioRetimePolicy::Reject,
         reverse_sampling: None,
         volume: None,
@@ -399,6 +400,7 @@ fn sequence(clips: Vec<Clip>) -> Sequence {
         transitions: vec![],
         markers: vec![],
         work_area: None,
+        targets: None,
     }
 }
 fn project(sequence: Sequence) -> Project {
@@ -2003,6 +2005,7 @@ fn gui007_track_output_is_atomic_rendered_and_undoable() {
             state: TrackState {
                 visible: false,
                 muted: false,
+                locked: false,
             },
         }],
         "hide-track",
@@ -2027,6 +2030,7 @@ fn gui007_track_output_is_atomic_rendered_and_undoable() {
             state: TrackState {
                 visible: false,
                 muted: true,
+                locked: false,
             },
         }],
         "stale-track",
@@ -2039,6 +2043,7 @@ fn gui007_track_output_is_atomic_rendered_and_undoable() {
             state: TrackState {
                 visible: true,
                 muted: true,
+                locked: false,
             },
         }],
         "track-other",

@@ -188,6 +188,11 @@ impl DocumentAudioPlan {
                             continue;
                         }
                         let clip = isolated.unwrap_or(clip);
+                        // NLE-005: a disabled placement keeps its timeline
+                        // occupancy but is inaudible.
+                        if !clip.enabled {
+                            continue;
+                        }
                         let audible = match clip.source_ref {
                             SourceRef::Composition { composition } => {
                                 has_audio(project, composition, &mut BTreeSet::new())?

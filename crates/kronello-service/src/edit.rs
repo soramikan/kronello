@@ -529,6 +529,21 @@ fn property_mut(
     object: Uuid,
     id: PropertyId,
 ) -> Result<&mut Property, ServiceError> {
+    // NLE-005: a clip property edit is a clip mutation. Generic property
+    // commands funnel through here, so the locked-track guard lives at the
+    // shared resolution point and applies to every caller at once.
+    for s in &project.sequences {
+        if let DocumentObject::Known(s) = s {
+            for track in &s.tracks {
+                if track.locked() && track.clips.iter().any(|c| c.id.as_uuid() == object) {
+                    return Err(ServiceError::new(
+                        "TRACK_LOCKED",
+                        "clip is on a locked track",
+                    ));
+                }
+            }
+        }
+    }
     for s in &mut project.sequences {
         if let DocumentObject::Known(s) = s {
             for c in s.tracks.iter_mut().flat_map(|t| &mut t.clips) {

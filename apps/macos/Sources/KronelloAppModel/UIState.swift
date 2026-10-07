@@ -51,6 +51,8 @@ public struct ProjectUIState: Codable, Equatable, Sendable {
     public var sequence: String?
     public var clipSelection: String?
     public var selection: String?
+    /// Motion-page layer locks only (NLE-005 moved track locks into the
+    /// document's TrackState; use `trackLocked`/`setTrackLocked` for lanes).
     public var locked: Set<String> = []
     public var collapsed: Set<String> = []
     public var zoom = "fit"
