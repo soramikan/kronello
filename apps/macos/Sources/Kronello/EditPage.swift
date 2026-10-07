@@ -8,9 +8,13 @@ private let projectAssetType = UTType(exportedAs: "com.kronello.project-asset", 
 
 struct EditPage: View {
     @ObservedObject var model: EditorModel
+    @ObservedObject var workflow: WorkflowSettings
     var body: some View {
-        KREditLayout(project: { EditProjectPanel(model: model) }, viewer: { SequenceViewer(model: model) },
-                     inspector: { ClipInspector(model: model) }, tracks: { SequenceTracks(model: model) })
+        let layout = workflow.layout(for: "edit")
+        KREditLayout(projectPanel: layout.leadingPanel, inspectorPanel: layout.trailingPanel, tracksPanel: layout.bottomPanel,
+                     projectWidth: layout.leadingWidth, inspectorWidth: layout.trailingWidth, tracksHeight: layout.bottomHeight,
+                     project: { EditProjectPanel(model: model) }, viewer: { SequenceViewer(model: model) },
+                     inspector: { ClipInspector(model: model) }, tracks: { SequenceTracks(model: model, workflow: workflow) })
             .onAppear { model.activatePlayback(for: model.sequence) }
             .onChange(of: model.sequence.string("id") + model.activeRate.string("num") + "/" + model.activeRate.string("den")) { _, _ in model.activatePlayback(for: model.sequence) }
     }
@@ -357,6 +361,7 @@ struct ClipInspector: View {
 struct SequenceTracks: View {
     @Environment(\.krPalette) var p
     @ObservedObject var model: EditorModel
+    let workflow: WorkflowSettings
     @FocusState private var tracksFocused: Bool
     @State private var showMixer = false
     var body: some View {
@@ -415,31 +420,34 @@ struct SequenceTracks: View {
         .overlay { if tracksFocused { Rectangle().strokeBorder(p.selection, lineWidth: 2).allowsHitTesting(false) } }
         .onKeyPress { key in
             guard tracksFocused else { return .ignored }
-            switch key.key {
-            case .escape: model.cancelClipGesture(); model.selectMarker(nil)
-            case .space: model.playing.toggle()
-            case .leftArrow: model.seek(model.frame - 1)
-            case .rightArrow: model.seek(model.frame + 1)
-            case .upArrow: model.jumpToTimelineBoundary(forward: false)
-            case .downArrow: model.jumpToTimelineBoundary(forward: true)
-            case .delete, .deleteForward:
-                if let marker = model.selectedMarker { model.removeMarker(marker) }
-                else if key.modifiers.contains(.option) { model.deleteSelectedClip(ripple: true) }
-                else { model.deleteSelectedClip() }
-            case "v": model.editTool = "select"
-            case "b": model.editTool = "blade"
-            case "y": model.editTool = "slip"
-            case "u": model.editTool = "slide"
-            case "n": model.editTool = "roll"
-            case "h": model.editTool = "hand"
-            case "m":
-                if key.modifiers.contains(.shift), let clip = model.selectedClip { model.addClipMarker(clip) }
-                else { model.addSequenceMarker() }
-            case "i": model.setInPoint()
-            case "o": model.setOutPoint()
-            case "x": if key.modifiers.contains(.option) { model.clearWorkArea() } else { return .ignored }
-            default: return .ignored
+            func hit(_ action: ShortcutAction) -> Bool { workflow.binding(for: action).matches(key) }
+            if hit(.commonCancel) { model.cancelClipGesture(); model.selectMarker(nil) }
+            else if hit(.transportPlay) { model.playing.toggle() }
+            else if hit(.transportStepBack) { model.seek(model.frame - 1) }
+            else if hit(.transportStepForward) { model.seek(model.frame + 1) }
+            else if hit(.editJumpPrevious) { model.jumpToTimelineBoundary(forward: false) }
+            else if hit(.editJumpNext) { model.jumpToTimelineBoundary(forward: true) }
+            else if hit(.editDeleteRipple) {
+                if let marker = model.selectedMarker { model.removeMarker(marker) } else { model.deleteSelectedClip(ripple: true) }
             }
+            else if hit(.editDelete) || key.key == .deleteForward {
+                if let marker = model.selectedMarker { model.removeMarker(marker) } else { model.deleteSelectedClip() }
+            }
+            else if hit(.editToolSelect) { model.editTool = "select" }
+            else if hit(.editToolBlade) { model.editTool = "blade" }
+            else if hit(.editToolSlip) { model.editTool = "slip" }
+            else if hit(.editToolSlide) { model.editTool = "slide" }
+            else if hit(.editToolRoll) { model.editTool = "roll" }
+            else if hit(.editToolHand) { model.editTool = "hand" }
+            else if hit(.editClipMarker) {
+                guard let clip = model.selectedClip else { return .ignored }
+                model.addClipMarker(clip)
+            }
+            else if hit(.editMarker) { model.addSequenceMarker() }
+            else if hit(.editSetIn) { model.setInPoint() }
+            else if hit(.editSetOut) { model.setOutPoint() }
+            else if hit(.editClearWorkArea) { model.clearWorkArea() }
+            else { return .ignored }
             return .handled
         }
     }

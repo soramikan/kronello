@@ -165,6 +165,16 @@
         "interpolation_version"
       ]
     },
+    "AnimatorMode": {
+      "description": "Per-animation-unit value distribution. `step` applies the evaluated value\nunchanged, `ramp` blends linearly over the selected units in reading order,\n`follow` keeps the first selected unit at full effect and trails later units\nby `follow_smoothing`, and `random` draws a stable seeded factor per unit.",
+      "type": "string",
+      "enum": [
+        "step",
+        "ramp",
+        "follow",
+        "random"
+      ]
+    },
     "Asset": {
       "type": "object",
       "properties": {
@@ -725,11 +735,67 @@
           "description": "Exact unnormalized source captured when the selector is authored.",
           "type": "string"
         },
+        "fill": {
+          "description": "Straight Color per-unit fill override.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PropertyId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "follow_smoothing": {
+          "description": "Scalar in [0, 1], dimensionless; required when `mode` is `follow`.\n0.0 delegates to `step`; larger values trail later units more.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PropertyId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mode": {
+          "$ref": "#/$defs/AnimatorMode"
+        },
         "offset": {
           "$ref": "#/$defs/PropertyId"
         },
         "opacity": {
           "$ref": "#/$defs/PropertyId"
+        },
+        "rotation": {
+          "description": "Angle per-unit rotation in degrees about the glyph anchor.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PropertyId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scale": {
+          "description": "Vec2 per-unit scale factors, dimensionless; 1.0 is neutral.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PropertyId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "seed": {
+          "description": "Fixed seed for `random`; absent seeds still hash to stable factors.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
         },
         "source": {
           "$ref": "#/$defs/TextRange"
@@ -5128,6 +5194,17 @@
         "line_height": {
           "description": "Absolute baseline spacing in design_px, not a font-size multiplier.",
           "$ref": "#/$defs/PropertyId"
+        },
+        "path": {
+          "description": "Optional `ValueType::Path` Property whose bezier guides glyph baselines.\nWith a path, `alignment` anchors along path arc length instead of the\nwrap box; glyphs past the path end are dropped, not errors.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PropertyId"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "ruby": {
           "type": "array",

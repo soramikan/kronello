@@ -649,6 +649,7 @@ fn layout_key(text: &ResolvedText) -> Result<Key, RenderError> {
             text.wrap_width,
             text.line_height,
             alignment,
+            &text.path,
         ),
     )
 }

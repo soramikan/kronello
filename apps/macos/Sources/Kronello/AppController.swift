@@ -15,6 +15,9 @@ import UniformTypeIdentifiers
     private var editorChanges: AnyCancellable?
     private var launched = false
     let store = UIStateStore()
+    /// User-environment workflow settings (shortcuts + workspace layout) shared
+    /// by every project window. Stored in UserDefaults, never in the document.
+    let workflow = WorkflowSettings()
     var theme: KRTheme { preferences.light ? .light : .dark }
     var worker: String? {
         let bundled = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/kronello")

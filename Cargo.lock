@@ -1276,6 +1276,7 @@ version = "0.0.0"
 dependencies = [
  "kronello-model",
  "kronello-testkit",
+ "kronello-vector",
  "rustybuzz",
  "serde_json",
  "sha2",
