@@ -68,51 +68,54 @@ fn blend_overlay(b:f32,s:f32)->f32 {
     if b<=0.5 { return 2.0*b*s; }
     return 1.0-2.0*(1.0-b)*(1.0-s);
 }
+// FXC (DX12) cannot compile switch statements nested inside the main
+// dispatch switch, so the channel dispatch stays an if/else chain.
 fn blend_channel(b:f32,s:f32,op:u32)->f32 {
-    switch op {
-        case 5u: { return b*s; }
-        case 6u: { return b+s-b*s; }
-        case 7u: { return min(b,s); }
-        case 8u: { return max(b,s); }
-        case 9u: { return blend_dodge(b,s); }
-        case 10u: { return blend_burn(b,s); }
-        case 11u: { return blend_overlay(s,b); }
-        case 12u: { return blend_soft(b,s); }
-        case 13u: { return abs(b-s); }
-        case 14u: { return b+s-2.0*b*s; }
-        case 15u: { return blend_overlay(b,s); }
-        case 16u: { return b+s; }
-        case 17u: { return b+s-1.0; }
-        case 18u: { if s<=0.5 { return blend_burn(b,2.0*s); } return blend_dodge(b,2.0*(s-0.5)); }
-        default: { return b+2.0*s-1.0; }
-    }
+    if op==5u { return b*s; }
+    if op==6u { return b+s-b*s; }
+    if op==7u { return min(b,s); }
+    if op==8u { return max(b,s); }
+    if op==9u { return blend_dodge(b,s); }
+    if op==10u { return blend_burn(b,s); }
+    if op==11u { return blend_overlay(s,b); }
+    if op==12u { return blend_soft(b,s); }
+    if op==13u { return abs(b-s); }
+    if op==14u { return b+s-2.0*b*s; }
+    if op==15u { return blend_overlay(b,s); }
+    if op==16u { return b+s; }
+    if op==17u { return b+s-1.0; }
+    if op==18u { if s<=0.5 { return blend_burn(b,2.0*s); } return blend_dodge(b,2.0*(s-0.5)); }
+    return b+2.0*s-1.0;
 }
 fn blend_lum(c:vec3<f32>)->f32 { return c.r*0.3+c.g*0.59+c.b*0.11; }
 fn blend_set_lum(c:vec3<f32>,l:f32)->vec3<f32> { return c+vec3<f32>(l-blend_lum(c)); }
 fn blend_sat(c:vec3<f32>)->f32 { return max(c.r,max(c.g,c.b))-min(c.r,min(c.g,c.b)); }
 fn blend_set_sat(c:vec3<f32>,s:f32)->vec3<f32> {
     // First minimum, last maximum: identical index selection to color.rs.
-    var lo=0; var hi=0;
-    for (var i=1;i<3;i++) {
-        if c[i]<c[lo] { lo=i; }
-        if c[i]>=c[hi] { hi=i; }
-    }
-    let mid=3-lo-hi;
+    // Dynamic vector indexing is avoided for FXC (DX12) compatibility.
+    var lo_v=c.r; var lo=0u;
+    if c.g<lo_v { lo=1u; lo_v=c.g; }
+    if c.b<lo_v { lo=2u; lo_v=c.b; }
+    var hi_v=c.r; var hi=0u;
+    if c.g>=hi_v { hi=1u; hi_v=c.g; }
+    if c.b>=hi_v { hi=2u; hi_v=c.b; }
+    let mid=3u-lo-hi;
     var out=vec3<f32>(0.0);
-    if c[hi]>c[lo] {
-        out[mid]=(c[mid]-c[lo])*s/(c[hi]-c[lo]);
-        out[hi]=s;
+    if hi_v>lo_v {
+        let mid_v=select(select(c.r,c.g,mid==1u),c.b,mid==2u);
+        let out_mid=(mid_v-lo_v)*s/(hi_v-lo_v);
+        if mid==0u { out.r=out_mid; } else if mid==1u { out.g=out_mid; } else { out.b=out_mid; }
+        if hi==0u { out.r=s; } else if hi==1u { out.g=s; } else { out.b=s; }
     }
     return out;
 }
 fn blend_rgb(cb:vec3<f32>,cs:vec3<f32>,op:u32)->vec3<f32> {
-    switch op {
-        case 20u: { return blend_set_lum(blend_set_sat(cs,blend_sat(cb)),blend_lum(cb)); }
-        case 21u: { return blend_set_lum(blend_set_sat(cb,blend_sat(cs)),blend_lum(cb)); }
-        case 22u: { return blend_set_lum(cs,blend_lum(cb)); }
-        case 23u: { return blend_set_lum(cb,blend_lum(cs)); }
-        default: { return vec3<f32>(blend_channel(cb.r,cs.r,op),blend_channel(cb.g,cs.g,op),blend_channel(cb.b,cs.b,op)); }
-    }
+    // If/else chain instead of switch: see blend_channel.
+    if op==20u { return blend_set_lum(blend_set_sat(cs,blend_sat(cb)),blend_lum(cb)); }
+    if op==21u { return blend_set_lum(blend_set_sat(cb,blend_sat(cs)),blend_lum(cb)); }
+    if op==22u { return blend_set_lum(cs,blend_lum(cb)); }
+    if op==23u { return blend_set_lum(cb,blend_lum(cs)); }
+    return vec3<f32>(blend_channel(cb.r,cs.r,op),blend_channel(cb.g,cs.g,op),blend_channel(cb.b,cs.b,op));
 }
 fn cross2(a:vec2<f32>,b:vec2<f32>)->f32 { return a.x*b.y-a.y*b.x; }
 fn primitive_hit(p:vec2<f32>,e:Edge)->bool {
