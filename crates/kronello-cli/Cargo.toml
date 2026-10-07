@@ -32,6 +32,7 @@ rusqlite = { version = "0.38", features = ["bundled"] }
 nix = { version = "0.31", features = ["process", "signal"] }
 kronello-model = { path = "../kronello-model" }
 kronello-render = { path = "../kronello-render" }
+kronello-time = { path = "../kronello-time" }
 kronello-testkit = { path = "../kronello-testkit" }
 tempfile = "3"
 sha2 = "0.10"

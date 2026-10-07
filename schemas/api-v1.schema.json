@@ -2032,7 +2032,7 @@
     "DocumentObject11": {
       "anyOf": [
         {
-          "$ref": "#/$defs/ExpressionDataAsset"
+          "$ref": "#/$defs/TrackingDataAsset"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -2043,7 +2043,7 @@
     "DocumentObject12": {
       "anyOf": [
         {
-          "$ref": "#/$defs/Sequence"
+          "$ref": "#/$defs/ExpressionDataAsset"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -2054,7 +2054,7 @@
     "DocumentObject13": {
       "anyOf": [
         {
-          "$ref": "#/$defs/MatteRelation"
+          "$ref": "#/$defs/Sequence"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -2065,7 +2065,7 @@
     "DocumentObject14": {
       "anyOf": [
         {
-          "$ref": "#/$defs/Repeater"
+          "$ref": "#/$defs/MatteRelation"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -2074,6 +2074,17 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
     },
     "DocumentObject15": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Repeater"
+        },
+        {
+          "$ref": "#/$defs/OpaqueObject"
+        }
+      ],
+      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
+    },
+    "DocumentObject16": {
       "anyOf": [
         {
           "$ref": "#/$defs/ParticleSimulation"
@@ -6432,6 +6443,21 @@
       ],
       "type": "object"
     },
+    "MediaProxyMode": {
+      "description": "No device handles, latest-document lookup, implicit fonts, or mutable state.\nThe complete Project (including independent opaque data) participates in the\nidentity even though only the selected dependency closure is executable.\nTransient render-input choice for preview proxy substitution (ADR-0119).\n`Off` is the only legal mode for file-writing outputs; `Prefer` substitutes\na registered proxy for decode while keeping authored extent and identity.",
+      "oneOf": [
+        {
+          "const": "off",
+          "description": "Always decode the authored original asset (exports and fixed jobs).",
+          "type": "string"
+        },
+        {
+          "const": "prefer",
+          "description": "Decode the registered proxy when the link is valid, otherwise fall back\nto the original at full quality. Preview-only.",
+          "type": "string"
+        }
+      ]
+    },
     "MediaStream": {
       "properties": {
         "channels": {
@@ -7398,7 +7424,7 @@
         },
         "expression_data_assets": {
           "items": {
-            "$ref": "#/$defs/DocumentObject11"
+            "$ref": "#/$defs/DocumentObject12"
           },
           "type": "array"
         },
@@ -7414,16 +7440,23 @@
         },
         "mattes": {
           "items": {
-            "$ref": "#/$defs/DocumentObject13"
+            "$ref": "#/$defs/DocumentObject14"
           },
           "type": "array"
         },
         "name": {
           "type": "string"
         },
+        "proxies": {
+          "description": "Original → preview-proxy linkage (ADR-0119); never affects authored\nmedia identity or export resolution.",
+          "items": {
+            "$ref": "#/$defs/ProxyLink"
+          },
+          "type": "array"
+        },
         "repeaters": {
           "items": {
-            "$ref": "#/$defs/DocumentObject14"
+            "$ref": "#/$defs/DocumentObject15"
           },
           "type": "array"
         },
@@ -7440,7 +7473,7 @@
         },
         "sequences": {
           "items": {
-            "$ref": "#/$defs/DocumentObject12"
+            "$ref": "#/$defs/DocumentObject13"
           },
           "type": "array"
         },
@@ -7452,7 +7485,7 @@
         },
         "simulations": {
           "items": {
-            "$ref": "#/$defs/DocumentObject15"
+            "$ref": "#/$defs/DocumentObject16"
           },
           "type": "array"
         },
@@ -7471,6 +7504,12 @@
         "texts": {
           "items": {
             "$ref": "#/$defs/DocumentObject5"
+          },
+          "type": "array"
+        },
+        "tracking_data_assets": {
+          "items": {
+            "$ref": "#/$defs/DocumentObject11"
           },
           "type": "array"
         }
@@ -7806,6 +7845,225 @@
       ],
       "type": "string"
     },
+    "ProxyClearRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "asset": {
+          "$ref": "#/$defs/AssetId",
+          "description": "Either end of the link (original or proxy asset id)."
+        },
+        "base_revision": {
+          "description": "Decimal revision, independent of JSON number precision.",
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "base_revision",
+        "asset"
+      ],
+      "type": "object"
+    },
+    "ProxyGenerateRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "assets": {
+          "description": "One fixed-input job per authored video asset.",
+          "items": {
+            "$ref": "#/$defs/AssetId"
+          },
+          "type": "array"
+        },
+        "expected_revision": {
+          "description": "Optional fence against changes since the caller inspected the project.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "project": {
+          "type": "string"
+        },
+        "scale": {
+          "description": "Linear scale for proxy dimensions; defaults to 0.5.",
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "stream_index": {
+          "description": "Source stream per asset; defaults to the first locked video stream.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "project",
+        "assets"
+      ],
+      "type": "object"
+    },
+    "ProxyLink": {
+      "additionalProperties": false,
+      "properties": {
+        "height": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "job": {
+          "description": "Originating `proxy.generate` job id, when produced by a job.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "original": {
+          "$ref": "#/$defs/AssetId",
+          "description": "Authored media identity; unique across `Project::proxies`."
+        },
+        "original_stream_index": {
+          "description": "Source stream that was transcoded.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "proxy": {
+          "$ref": "#/$defs/AssetId",
+          "description": "The proxy asset; unique across `Project::proxies` and `assets` entries\nare still independent (a proxy asset may serve exactly one original)."
+        },
+        "proxy_stream_index": {
+          "description": "Video stream index inside the proxy asset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "scale": {
+          "$ref": "#/$defs/FiniteF64",
+          "description": "Linear scale applied to source dimensions."
+        },
+        "source_content_hash": {
+          "description": "Locked `Asset::content_hash` of the original at registration time.",
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "source_duration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rational"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Locked duration of the original stream, used for duration checks."
+        },
+        "width": {
+          "description": "Proxy pixel dimensions (rounded to the encoder's even constraint).",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "original",
+        "proxy",
+        "original_stream_index",
+        "proxy_stream_index",
+        "scale",
+        "width",
+        "height",
+        "source_content_hash"
+      ],
+      "type": "object"
+    },
+    "ProxyState": {
+      "oneOf": [
+        {
+          "const": "ready",
+          "description": "Link metadata is consistent and the proxy file resolves.",
+          "type": "string"
+        },
+        {
+          "const": "stale",
+          "description": "Link identity no longer matches the document (hash, streams, dims).",
+          "type": "string"
+        },
+        {
+          "const": "missing",
+          "description": "Link is consistent but the proxy file cannot be located.",
+          "type": "string"
+        }
+      ]
+    },
+    "ProxyStatusEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "detail": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "link": {
+          "$ref": "#/$defs/ProxyLink"
+        },
+        "state": {
+          "$ref": "#/$defs/ProxyState"
+        }
+      },
+      "required": [
+        "link",
+        "state"
+      ],
+      "type": "object"
+    },
+    "ProxyStatusRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "asset": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AssetId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Restrict the report to links for this original asset."
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "type": "object"
+    },
+    "ProxyStatusResult": {
+      "additionalProperties": false,
+      "properties": {
+        "proxies": {
+          "items": {
+            "$ref": "#/$defs/ProxyStatusEntry"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "proxies"
+      ],
+      "type": "object"
+    },
     "PruneResult": {
       "additionalProperties": false,
       "properties": {
@@ -8066,6 +8324,11 @@
             "$ref": "#/$defs/FontInput"
           },
           "type": "array"
+        },
+        "media_proxies": {
+          "$ref": "#/$defs/MediaProxyMode",
+          "default": "off",
+          "description": "Preview proxy substitution (ADR-0119). `prefer` is legal only on\nnon-file-writing preview paths; export and fixed jobs reject it."
         },
         "profile": {
           "$ref": "#/$defs/RenderProfile",
@@ -8757,6 +9020,170 @@
             "id",
             "input",
             "config"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "asset": {
+              "$ref": "#/$defs/AssetId"
+            },
+            "base_revision": {
+              "description": "Decimal revision, independent of JSON number precision.",
+              "type": "string"
+            },
+            "id": {
+              "$ref": "#/$defs/AssetId",
+              "description": "New `TrackingDataAsset` id; also the `DataAssetCell` lookup key."
+            },
+            "idempotency_key": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "mode": {
+              "$ref": "#/$defs/TrackingMode"
+            },
+            "operation": {
+              "const": "track.analyze",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "range": {
+              "$ref": "#/$defs/TimeRange",
+              "description": "Source-time interval `[start, end)` to sample."
+            },
+            "seeds": {
+              "description": "`points`: 1..=8 seeds; `plane`: exactly the four corners.",
+              "items": {
+                "$ref": "#/$defs/TrackingSeed"
+              },
+              "type": "array"
+            },
+            "stream_index": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "base_revision",
+            "id",
+            "asset",
+            "stream_index",
+            "mode",
+            "seeds",
+            "range"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "assets": {
+              "description": "One fixed-input job per authored video asset.",
+              "items": {
+                "$ref": "#/$defs/AssetId"
+              },
+              "type": "array"
+            },
+            "expected_revision": {
+              "description": "Optional fence against changes since the caller inspected the project.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "operation": {
+              "const": "proxy.generate",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "scale": {
+              "description": "Linear scale for proxy dimensions; defaults to 0.5.",
+              "format": "double",
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "stream_index": {
+              "description": "Source stream per asset; defaults to the first locked video stream.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "assets"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "asset": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AssetId"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict the report to links for this original asset."
+            },
+            "operation": {
+              "const": "proxy.status",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "asset": {
+              "$ref": "#/$defs/AssetId",
+              "description": "Either end of the link (original or proxy asset id)."
+            },
+            "base_revision": {
+              "description": "Decimal revision, independent of JSON number precision.",
+              "type": "string"
+            },
+            "operation": {
+              "const": "proxy.clear",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "base_revision",
+            "asset"
           ],
           "type": "object"
         },
@@ -10902,6 +11329,23 @@
             },
             "value": {
               "$ref": "#/$defs/PropertySampleResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "proxies",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/ProxyStatusResult"
             }
           },
           "required": [
@@ -14870,6 +15314,61 @@
       ],
       "type": "object"
     },
+    "TrackAnalyzeRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "asset": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "base_revision": {
+          "description": "Decimal revision, independent of JSON number precision.",
+          "type": "string"
+        },
+        "id": {
+          "$ref": "#/$defs/AssetId",
+          "description": "New `TrackingDataAsset` id; also the `DataAssetCell` lookup key."
+        },
+        "idempotency_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mode": {
+          "$ref": "#/$defs/TrackingMode"
+        },
+        "project": {
+          "type": "string"
+        },
+        "range": {
+          "$ref": "#/$defs/TimeRange",
+          "description": "Source-time interval `[start, end)` to sample."
+        },
+        "seeds": {
+          "description": "`points`: 1..=8 seeds; `plane`: exactly the four corners.",
+          "items": {
+            "$ref": "#/$defs/TrackingSeed"
+          },
+          "type": "array"
+        },
+        "stream_index": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "project",
+        "base_revision",
+        "id",
+        "asset",
+        "stream_index",
+        "mode",
+        "seeds",
+        "range"
+      ],
+      "type": "object"
+    },
     "TrackId": {
       "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
       "format": "uuid",
@@ -14905,6 +15404,187 @@
       "required": [
         "visible",
         "muted"
+      ],
+      "type": "object"
+    },
+    "TrackedFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "homography": {
+          "description": "Plane mode: row-major homography from first-frame normalized\ncoordinates onto this frame's normalized coordinates.",
+          "items": {
+            "$ref": "#/$defs/FiniteF64"
+          },
+          "maxItems": 9,
+          "minItems": 9,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "points": {
+          "description": "One entry per seed (points) or per corner (plane).",
+          "items": {
+            "$ref": "#/$defs/TrackedPoint"
+          },
+          "type": "array"
+        },
+        "time": {
+          "$ref": "#/$defs/Rational",
+          "description": "Exact rational source presentation time of the sampled frame."
+        }
+      },
+      "required": [
+        "time",
+        "points"
+      ],
+      "type": "object"
+    },
+    "TrackedPoint": {
+      "additionalProperties": false,
+      "properties": {
+        "confidence": {
+          "$ref": "#/$defs/FiniteF64",
+          "description": "Normalized cross-correlation score in `[-1, 1]`."
+        },
+        "x": {
+          "$ref": "#/$defs/FiniteF64",
+          "description": "Normalized source-space match center in `[0, 1]` on both axes."
+        },
+        "y": {
+          "$ref": "#/$defs/FiniteF64"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "confidence"
+      ],
+      "type": "object"
+    },
+    "TrackingDataAsset": {
+      "additionalProperties": false,
+      "properties": {
+        "content_hash": {
+          "description": "SHA-256 over the versioned payload; recomputed on validation.",
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "frames": {
+          "items": {
+            "$ref": "#/$defs/TrackedFrame"
+          },
+          "type": "array"
+        },
+        "id": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "mode": {
+          "$ref": "#/$defs/TrackingMode"
+        },
+        "range": {
+          "$ref": "#/$defs/TimeRange",
+          "description": "Analyzed source-time interval `[start, end)`."
+        },
+        "sample_rate": {
+          "$ref": "#/$defs/Rational",
+          "description": "Nominal sample cadence of `frames` rows in source seconds^-1."
+        },
+        "seeds": {
+          "description": "Seeds in stable order; plane mode stores the four corners.",
+          "items": {
+            "$ref": "#/$defs/TrackingSeed"
+          },
+          "type": "array"
+        },
+        "source": {
+          "$ref": "#/$defs/TrackingSource"
+        },
+        "version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "source",
+        "mode",
+        "seeds",
+        "range",
+        "sample_rate",
+        "frames",
+        "content_hash"
+      ],
+      "type": "object"
+    },
+    "TrackingMode": {
+      "oneOf": [
+        {
+          "const": "points",
+          "description": "One or more independent template-match points.",
+          "type": "string"
+        },
+        {
+          "const": "plane",
+          "description": "Four tracked corners reduced to a per-frame homography.",
+          "type": "string"
+        }
+      ]
+    },
+    "TrackingSeed": {
+      "additionalProperties": false,
+      "properties": {
+        "search_radius": {
+          "description": "Per-frame search half extent around the previous position.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "template_radius": {
+          "description": "Match-template half extent in source pixels.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "x": {
+          "$ref": "#/$defs/FiniteF64",
+          "description": "Normalized source-space seed center in `[0, 1]` on both axes."
+        },
+        "y": {
+          "$ref": "#/$defs/FiniteF64"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "template_radius",
+        "search_radius"
+      ],
+      "type": "object"
+    },
+    "TrackingSource": {
+      "additionalProperties": false,
+      "properties": {
+        "asset": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "content_hash": {
+          "description": "Locked `Asset::content_hash`; mismatches mark the result stale.",
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "stream_index": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "asset",
+        "stream_index",
+        "content_hash"
       ],
       "type": "object"
     },

@@ -336,6 +336,9 @@ impl<'a> NativeDecoder<'a> {
             ))
         }
     }
+    pub(crate) fn runtime(&self) -> &'a NativeRuntime {
+        self.runtime
+    }
     pub(crate) fn restart_origin(&mut self) -> Result<(), MediaError> {
         if self.origin() < 0 {
             // Timestamp seeking cannot reliably rewind negative-origin TS.

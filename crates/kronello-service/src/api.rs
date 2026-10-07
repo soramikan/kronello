@@ -90,6 +90,10 @@ macro_rules! commands {
             ("svg.export", true, SvgExportRequest, SvgExportResult),
             ("svg.import_plan", true, SvgImportPlanRequest, EditPlan),
             ("audio.analyze", false, AudioAnalyzeRequest, ProjectInfo),
+            ("track.analyze", false, TrackAnalyzeRequest, ProjectInfo),
+            ("proxy.generate", true, ProxyGenerateRequest, JobListResult),
+            ("proxy.status", true, ProxyStatusRequest, ProxyStatusResult),
+            ("proxy.clear", false, ProxyClearRequest, ProjectInfo),
             ("sequence.query", true, SequenceQueryRequest, SequenceQueryResult),
             ("sequence.create", false, SequenceCreateRequest, kronello_store::Event),
             ("clip.place", false, ClipPlaceRequest, kronello_store::Event),
@@ -201,6 +205,8 @@ impl CapabilitiesResult {
                 "template",
                 "captions_v1",
                 "caption_sidecar_v1",
+                "motion_tracking_v1",
+                "media_proxies_v1",
             ]
             .map(String::from)
             .to_vec(),

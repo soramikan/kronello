@@ -692,6 +692,7 @@ fn caption_sidecar_output_wire_shape_and_validation() {
                 },
                 profile: RenderProfile::default(),
                 fonts: vec![],
+                media_proxies: kronello_render::MediaProxyMode::Off,
             },
             range: TimeRange::new(Time::ZERO, Time::new(1, 24).unwrap()).unwrap(),
             frame_rate: FrameRate::new(24, 1).unwrap(),

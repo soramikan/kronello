@@ -1,0 +1,19 @@
+[package]
+name = "kronello-tracking"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+kronello-model = { path = "../kronello-model" }
+kronello-time = { path = "../kronello-time" }
+thiserror = "2"
+
+[dev-dependencies]
+serde_json = "1"

@@ -1985,7 +1985,7 @@
    "priority": "P2",
    "area": "tracking",
    "title": "モーショントラッキング: 点/平面トラッキングと結果の DataAsset 化",
-   "status": "planned",
+   "status": "done",
    "dependencies": [
     "COMP-002"
    ],
@@ -2015,7 +2015,7 @@
    "priority": "P1",
    "area": "media",
    "title": "プロキシワークフロー: プロキシ生成 job・編集時切替・relink",
-   "status": "planned",
+   "status": "done",
    "dependencies": [
     "MEDIA-002",
     "JOB-001"

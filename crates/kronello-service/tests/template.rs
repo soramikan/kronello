@@ -966,6 +966,7 @@ fn media_slots_validate_refs_and_draw_final_instance_overrides() {
                 },
                 profile: Default::default(),
                 fonts: fonts.clone(),
+                media_proxies: kronello_render::MediaProxyMode::Off,
             },
             time: Time::ONE,
         }))

@@ -1371,6 +1371,7 @@ fn explicit_frame_cpu_backend_matches_session_cpu_video_pixels_and_is_strict() {
             region: crop_region(),
             profile: Default::default(),
             fonts: vec![],
+            media_proxies: kronello_render::MediaProxyMode::Off,
         },
         time: t(2, 1),
     };

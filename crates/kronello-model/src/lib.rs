@@ -115,5 +115,11 @@ pub use sequence::*;
 mod audio_analysis;
 pub use audio_analysis::*;
 
+mod proxy;
+pub use proxy::*;
+
+mod tracking;
+pub use tracking::*;
+
 mod matte;
 pub use matte::*;

@@ -457,6 +457,7 @@ fn work_area_maps_explicitly_into_the_render_job_range() {
                     },
                     profile: Default::default(),
                     fonts: vec![],
+                    media_proxies: kronello_render::MediaProxyMode::Off,
                 },
                 range: work_area,
                 frame_rate: FrameRate::new(24, 1).unwrap(),

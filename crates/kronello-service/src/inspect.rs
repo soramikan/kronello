@@ -542,6 +542,7 @@ pub(crate) fn node(r: NodeExplainRequest) -> Result<NodeExplainResult, ServiceEr
         },
         profile: Default::default(),
         fonts: r.fonts.clone(),
+        media_proxies: kronello_render::MediaProxyMode::Off,
     };
     let mut cache = RenderCache::default();
     let scene = match compile(&stored, &input, r.time, r.mattes.clone(), &mut cache) {
