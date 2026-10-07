@@ -30,6 +30,16 @@
       ],
       "type": "object"
     },
+    "AnimatorMode": {
+      "description": "Per-animation-unit value distribution. `step` applies the evaluated value\nunchanged, `ramp` blends linearly over the selected units in reading order,\n`follow` keeps the first selected unit at full effect and trails later units\nby `follow_smoothing`, and `random` draws a stable seeded factor per unit.",
+      "enum": [
+        "step",
+        "ramp",
+        "follow",
+        "random"
+      ],
+      "type": "string"
+    },
     "Asset": {
       "additionalProperties": false,
       "properties": {
@@ -1183,11 +1193,67 @@
           "description": "Exact unnormalized source captured when the selector is authored.",
           "type": "string"
         },
+        "fill": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PropertyId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Straight Color per-unit fill override."
+        },
+        "follow_smoothing": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PropertyId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Scalar in [0, 1], dimensionless; required when `mode` is `follow`.\n0.0 delegates to `step`; larger values trail later units more."
+        },
+        "mode": {
+          "$ref": "#/$defs/AnimatorMode"
+        },
         "offset": {
           "$ref": "#/$defs/PropertyId"
         },
         "opacity": {
           "$ref": "#/$defs/PropertyId"
+        },
+        "rotation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PropertyId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Angle per-unit rotation in degrees about the glyph anchor."
+        },
+        "scale": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PropertyId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Vec2 per-unit scale factors, dimensionless; 1.0 is neutral."
+        },
+        "seed": {
+          "description": "Fixed seed for `random`; absent seeds still hash to stable factors.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "source": {
           "$ref": "#/$defs/TextRange"
@@ -13693,6 +13759,17 @@
           "$ref": "#/$defs/PropertyId",
           "description": "Absolute baseline spacing in design_px, not a font-size multiplier."
         },
+        "path": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PropertyId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional `ValueType::Path` Property whose bezier guides glyph baselines.\nWith a path, `alignment` anchors along path arc length instead of the\nwrap box; glyphs past the path end are dropped, not errors."
+        },
         "ruby": {
           "items": {
             "$ref": "#/$defs/RubyAssociation"
@@ -15351,33 +15428,42 @@
     },
     "VisibilityCode": {
       "description": "Stable semantic causes, extensible without adding state to the inspector.",
-      "enum": [
-        "DISABLED",
-        "ANCESTOR_DISABLED",
-        "OPACITY_ZERO",
-        "OUTSIDE_ACTIVE_RANGE",
-        "ANCESTOR_OPACITY_ZERO",
-        "ANCESTOR_OUTSIDE_ACTIVE_RANGE",
-        "TRANSFORM_COLLAPSED",
-        "MATTE_ONLY",
-        "MASK_ZERO_OPACITY",
-        "MASK_ZERO_COVERAGE",
-        "MASK_ZERO_LUMINANCE",
-        "MASK_INACTIVE",
-        "MASK_COVERAGE_UNRESOLVED",
-        "NO_DRAWABLE_CONTENT",
-        "PAINT_ALPHA_ZERO",
-        "ASSET_MISSING",
-        "FONT_MISSING",
-        "ASSET_HASH_MISMATCH",
-        "UNSUPPORTED_FEATURE",
-        "UNSUPPORTED_SCHEMA",
-        "GLYPH_MISSING",
-        "INVALID_REQUEST",
-        "ASSET_IO_ERROR",
-        "EVALUATION_FAILED"
-      ],
-      "type": "string"
+      "oneOf": [
+        {
+          "enum": [
+            "DISABLED",
+            "ANCESTOR_DISABLED",
+            "OPACITY_ZERO",
+            "OUTSIDE_ACTIVE_RANGE",
+            "ANCESTOR_OPACITY_ZERO",
+            "ANCESTOR_OUTSIDE_ACTIVE_RANGE",
+            "TRANSFORM_COLLAPSED",
+            "MATTE_ONLY",
+            "MASK_ZERO_OPACITY",
+            "MASK_ZERO_COVERAGE",
+            "MASK_ZERO_LUMINANCE",
+            "MASK_INACTIVE",
+            "MASK_COVERAGE_UNRESOLVED",
+            "NO_DRAWABLE_CONTENT",
+            "PAINT_ALPHA_ZERO",
+            "ASSET_MISSING",
+            "FONT_MISSING",
+            "ASSET_HASH_MISMATCH",
+            "UNSUPPORTED_FEATURE",
+            "UNSUPPORTED_SCHEMA",
+            "GLYPH_MISSING",
+            "INVALID_REQUEST",
+            "ASSET_IO_ERROR",
+            "EVALUATION_FAILED"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "TEXT_PATH_TRUNCATED",
+          "description": "A text path ended before all glyphs were placed; the rest are dropped.",
+          "type": "string"
+        }
+      ]
     },
     "VisibilityReason": {
       "additionalProperties": false,

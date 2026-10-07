@@ -7,6 +7,7 @@ struct EditorWindow: View {
     @Environment(\.krPalette) var p
     @Environment(\.krTheme) var theme
     @ObservedObject var model: EditorModel
+    @ObservedObject var workflow: WorkflowSettings
     @State private var historyOpen = false
     @State private var jobsOpen = false
     @State private var safeDetailsOpen = false
@@ -14,8 +15,8 @@ struct EditorWindow: View {
         VStack(spacing: 0) {
             toolbar
             if model.safeMode { KRStateBand("安全モード：このプロジェクトは編集セッション中、排他で開いています。CLI / MCP の open は PROJECT_LOCKED になります", details: { safeDetailsOpen = true }) }
-            if model.ui.page == "motion" { MotionPage(model: model, historyOpen: $historyOpen) }
-            else if model.ui.page == "edit" { EditPage(model: model) }
+            if model.ui.page == "motion" { MotionPage(model: model, workflow: workflow, historyOpen: $historyOpen) }
+            else if model.ui.page == "edit" { EditPage(model: model, workflow: workflow) }
             else if model.ui.page == "template" { TemplatePage(model: model) }
             else if model.ui.page == "export" { ExportPage(model: model) }
             else { KREmptyState(icon: model.ui.page == "export" ? .clapperboard : .layers,
@@ -42,9 +43,7 @@ struct EditorWindow: View {
                     actions: [.init("ok", "OK", variant: .primary) { model.failure = nil }]).krTheme(theme)
             }
             .sheet(isPresented: $historyOpen) {
-                KRDialog("History", body: "共有 history.list のイベントです。", detail: historyText,
-                    actions: [.init("ok", "閉じる", variant: .primary) { historyOpen = false }]).krTheme(theme)
-                    .task { do { try await model.loadHistory() } catch { model.mapFailure(error) } }
+                HistoryPanel(model: model).krTheme(theme)
             }
             .sheet(isPresented: $jobsOpen) {
                 KRDialog("Jobs", body: "共有 job_progress の最新通知です。", detail: jsonText(model.jobs),
@@ -92,15 +91,19 @@ struct EditorWindow: View {
 
 struct MotionPage: View {
     @ObservedObject var model: EditorModel
+    @ObservedObject var workflow: WorkflowSettings
     @Binding var historyOpen: Bool
     var body: some View {
+        // Panel visibility and sizes live in UserDefaults (FLOW-001); the
+        // per-project workspace state only keeps tool strip and column flags.
+        let layout = workflow.layout(for: "motion")
         VStack(spacing: 0) {
             HStack(spacing: 0) {
-                LayersPanel(model: model).frame(width: model.ui.layout.leftWidth)
-                MotionViewer(model: model)
-                InspectorPanel(model: model, historyOpen: $historyOpen).frame(width: model.ui.layout.rightWidth)
+                if layout.leadingPanel { LayersPanel(model: model).frame(width: layout.leadingWidth) }
+                MotionViewer(model: model, workflow: workflow)
+                if layout.trailingPanel { InspectorPanel(model: model, historyOpen: $historyOpen).frame(width: layout.trailingWidth) }
             }.frame(maxHeight: .infinity)
-            DopeSheet(model: model).frame(height: model.ui.layout.bottomHeight)
+            if layout.bottomPanel { DopeSheet(model: model).frame(height: layout.bottomHeight) }
         }
     }
 }

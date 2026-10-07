@@ -161,6 +161,7 @@ fn project() -> (Project, CompositionId) {
         wrap_width: wrap.id(),
         line_height: line.id(),
         alignment: alignment.id(),
+        path: None,
     };
     let text_node = node(
         NodeKind::Text {
@@ -4449,6 +4450,12 @@ fn text002_document_properties_ruby_vertical_render_and_reflow() {
         expected_text: "日".into(),
         offset: offset.id(),
         opacity: opacity.id(),
+        scale: None,
+        rotation: None,
+        fill: None,
+        mode: AnimatorMode::Step,
+        seed: None,
+        follow_smoothing: None,
     }];
     comp_mut(&mut p).nodes[1]
         .properties
@@ -4473,6 +4480,49 @@ fn text002_document_properties_ruby_vertical_render_and_reflow() {
         .unwrap();
     let reflowed = frame(&snapshot(&p, c), t(1, 1));
     assert_ne!(reflowed.pixels, last.pixels);
+}
+
+#[test]
+fn vec006_text_path_property_rasterizes_along_the_guide() {
+    let (mut p, c) = project();
+    let flat = frame(&snapshot(&p, c), t(0, 1));
+    let path = constant(
+        "kronello.text.path",
+        Value::Path(Path {
+            segments: vec![
+                PathSegment::MoveTo([f(0.0), f(24.0)]),
+                PathSegment::CubicTo {
+                    control1: [f(20.0), f(4.0)],
+                    control2: [f(44.0), f(4.0)],
+                    end: [f(64.0), f(24.0)],
+                },
+            ],
+        }),
+    );
+    let DocumentObject::Known(text) = &mut p.texts[0] else {
+        panic!()
+    };
+    text.layout_version = 2;
+    text.path = Some(path.id());
+    comp_mut(&mut p).nodes[1].properties.push(path);
+    let guided = frame(&snapshot(&p, c), t(0, 1));
+    assert_ne!(guided.pixels, flat.pixels);
+    assert_eq!(frame(&snapshot(&p, c), t(0, 1)).pixels, guided.pixels);
+    // A vertical or ruby guide combination is a typed rejection, not pixels.
+    let DocumentObject::Known(text) = &mut p.texts[0] else {
+        panic!()
+    };
+    text.direction = TextDirection::VerticalRl;
+    let rejected = render_frame(
+        &snapshot(&p, c),
+        &fonts(),
+        &CpuReferenceBackend,
+        FrameRequest {
+            time: t(0, 1),
+            region: region(),
+        },
+    );
+    assert_eq!(rejected.unwrap_err().code(), "UNSUPPORTED_FEATURE");
 }
 
 fn gui007_reverse_fixture() -> (Project, Sequence) {

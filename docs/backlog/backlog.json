@@ -2000,7 +2000,7 @@
    "priority": "P1",
    "area": "text",
    "title": "テキスト拡張: テキストオンパスと文字単位アニメーター",
-   "status": "planned",
+   "status": "done",
    "dependencies": [
     "TEXT-002"
    ],
@@ -2031,7 +2031,7 @@
    "priority": "P2",
    "area": "gui",
    "title": "ワークフロー UI: ショートカット設定・レイアウト・Undo 履歴パネル",
-   "status": "planned",
+   "status": "done",
    "dependencies": [
     "GUI-008"
    ],

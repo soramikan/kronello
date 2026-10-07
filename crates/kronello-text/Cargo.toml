@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dependencies]
 kronello-model = { path = "../kronello-model" }
+kronello-vector = { path = "../kronello-vector" }
 rustybuzz = "=0.20.1"
 ttf-parser = "=0.25.1"
 unicode-segmentation = "=1.12.0"

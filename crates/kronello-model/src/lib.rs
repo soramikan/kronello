@@ -86,10 +86,10 @@ pub use shape::{
 
 mod text;
 pub use text::{
-    CharacterAnimation, FontRef, ResolvedCharacterAnimation, ResolvedText, ResolvedTextStyle,
-    RubyAssociation, TEXT_ADVANCED_LAYOUT_VERSION, TEXT_LAYOUT_VERSION, TextAlignment,
-    TextDirection, TextDocument, TextError, TextRange, TextStyleSpan, text_descriptors,
-    validate_text_contents,
+    AnimatorMode, CharacterAnimation, FontRef, ResolvedCharacterAnimation, ResolvedText,
+    ResolvedTextStyle, RubyAssociation, TEXT_ADVANCED_LAYOUT_VERSION, TEXT_LAYOUT_VERSION,
+    TextAlignment, TextDirection, TextDocument, TextError, TextRange, TextStyleSpan,
+    text_descriptors, validate_text_contents,
 };
 
 mod caption;

@@ -37,6 +37,12 @@ public struct SessionUndo {
     public mutating func issued(_ event: String) { undo.append(event); redo.removeAll() }
     public mutating func didUndo(_ inverse: String) { guard !undo.isEmpty else { return }; undo.removeLast(); redo.append(inverse) }
     public mutating func didRedo(_ inverse: String) { guard !redo.isEmpty else { return }; redo.removeLast(); undo.append(inverse) }
+    /// Selective undo (FLOW-001): the target leaves the undo stack and the new
+    /// inverse event joins redo, so Redo re-applies the target's change.
+    public mutating func didSelectiveUndo(of event: String, inverse: String) {
+        undo.removeAll { $0 == event }
+        redo.append(inverse)
+    }
 }
 
 public struct EditCandidate {
@@ -84,7 +90,15 @@ public struct EditCandidate {
     @Published public private(set) var layers: [Layer] = []
     @Published public private(set) var document: [String: Any] = [:]
     @Published public private(set) var scene: [String: Any] = [:]
-    @Published public private(set) var history: [[String: Any]] = []
+    @Published public private(set) var history: [[String: Any]] = [] { didSet { stampHistory() } }
+    /// Rows for the undo history panel (FLOW-001), newest first. `history`
+    /// itself only carries the latest delta after a reload, so the panel keeps
+    /// its own list once `loadHistory()` has run; deltas merge into it.
+    @Published public private(set) var historyPanel: [HistoryEntry] = []
+    /// First time this session observed each event id. `history.list` carries
+    /// no wall-clock field, so the panel shows observation time (display only).
+    @Published public private(set) var historyRecordedAt: [String: Date] = [:]
+    private var historyPanelLoaded = false
     @Published public private(set) var undoState = SessionUndo()
     @Published public private(set) var undoConflictLabel = "操作の変更"
     private var eventLabels: [String: String] = [:]
@@ -532,6 +546,27 @@ public struct EditCandidate {
             if redo { undoState.didRedo(inverse.string("id")) } else { undoState.didUndo(inverse.string("id")) }
             eventLabels[inverse.string("id")] = undoConflictLabel
             try await reload()
+            await refreshHistoryPanel()
+        } catch {
+            mapFailure(error)
+            if undoConflict != nil {
+                do { history = try await request("history.list", ["limit": 1000]).objects("events") } catch { mapFailure(error) }
+            }
+        }
+    }
+    /// Selective undo from the history panel (FLOW-001). Shared `edit.undo`
+    /// applies the target event's inverse as a new event; nothing is rewritten.
+    public func undoEvent(_ eventID: String) async {
+        guard !busy else { return }
+        busy = true; defer { busy = false }
+        undoConflictLabel = eventLabels[eventID] ?? "選択した変更"
+        do {
+            let inverse = try await request("edit.undo", ["base_revision": revision, "event_id": eventID,
+                "session_id": sessionID, "idempotency_key": UUID().uuidString])
+            undoState.didSelectiveUndo(of: eventID, inverse: inverse.string("id"))
+            eventLabels[inverse.string("id")] = undoConflictLabel
+            try await reload()
+            await refreshHistoryPanel()
         } catch {
             mapFailure(error)
             if undoConflict != nil {
@@ -624,7 +659,47 @@ public struct EditCandidate {
         }
         return result
     }
-    public func loadHistory() async throws { history = try await historySince("0") }
+    public func loadHistory() async throws {
+        history = try await historySince("0")
+        historyPanel = panelEntries(history)
+        historyPanelLoaded = true
+    }
+    /// Re-reads the panel after an undo: an entry's `undone` flag changes in
+    /// place, which incremental history deltas never report.
+    private func refreshHistoryPanel() async {
+        guard historyPanelLoaded else { return }
+        do { historyPanel = panelEntries(try await historySince("0")) } catch { mapFailure(error) }
+    }
+    private func panelEntries(_ events: [[String: Any]]) -> [HistoryEntry] {
+        events.compactMap { entry in
+            HistoryEntry(entry: entry, labels: eventLabels, ownSession: sessionID,
+                         recordedAt: historyRecordedAt[entry.object("event").string("id")] ?? .distantPast)
+        }.reversed()
+    }
+    /// Stamps newly observed event ids and merges delta events into the panel.
+    private func stampHistory() {
+        let now = Date()
+        for entry in history {
+            let id = entry.object("event").string("id")
+            if !id.isEmpty && historyRecordedAt[id] == nil { historyRecordedAt[id] = now }
+        }
+        guard historyPanelLoaded else { return }
+        var rows = historyPanel
+        for entry in history {
+            let event = entry.object("event"), id = event.string("id")
+            guard !id.isEmpty else { continue }
+            if let index = rows.firstIndex(where: { $0.id == id }) {
+                if let updated = HistoryEntry(entry: entry, labels: eventLabels, ownSession: sessionID, recordedAt: rows[index].recordedAt) {
+                    rows[index] = updated
+                }
+            } else if let row = HistoryEntry(entry: entry, labels: eventLabels, ownSession: sessionID,
+                                           recordedAt: historyRecordedAt[id] ?? now) {
+                // Deltas arrive oldest-first; insert at the top to keep newest-first.
+                rows.insert(row, at: 0)
+            }
+        }
+        historyPanel = rows
+    }
     public func mapFailure(_ error: Error) {
         let failure = serviceFailure(error)
         if failure.code == "UNDO_CONFLICT" { undoConflict = failure }

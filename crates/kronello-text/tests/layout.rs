@@ -39,6 +39,7 @@ fn input(text: &str, width: f64) -> ResolvedText {
         wrap_width: f(width),
         line_height: f(30.0),
         alignment: TextAlignment::Start,
+        path: None,
     }
 }
 fn run(text: &ResolvedText) -> Result<LayoutResult, LayoutError> {
@@ -583,6 +584,12 @@ fn advanced_vertical_ruby_and_logical_selectors_survive_reflow() {
         expected_text: "漢".into(),
         offset: [f(7.0), f(9.0)],
         opacity: f(0.5),
+        scale: None,
+        rotation: None,
+        fill: None,
+        mode: AnimatorMode::Step,
+        seed: None,
+        follow_smoothing: None,
     });
     for width in [220.0, 100.0] {
         text.wrap_width = f(width);
@@ -688,4 +695,250 @@ fn vertical_ruby_ink_is_right_of_parent_ink() {
         .into_iter()
         .fold(f64::INFINITY, f64::min);
     assert!((ruby_left - parent_right - 3.2).abs() < 1e-9);
+}
+
+fn guided(text: &str, path: Path) -> ResolvedText {
+    let mut input = input(text, 640.0);
+    input.layout_version = 2;
+    input.path = Some(path);
+    input
+}
+fn line_path(from: [f64; 2], to: [f64; 2]) -> Path {
+    Path {
+        segments: vec![
+            PathSegment::MoveTo([f(from[0]), f(from[1])]),
+            PathSegment::LineTo([f(to[0]), f(to[1])]),
+        ],
+    }
+}
+
+#[test]
+fn vec006_text_follows_path_arc_length_with_baseline_tangent_rotation() {
+    let flat = run(&input("日本語", 640.0)).unwrap();
+    // A straight horizontal guide places the baseline on the path itself.
+    let horizontal = run(&guided("日本語", line_path([0.0, 40.0], [400.0, 40.0]))).unwrap();
+    assert_mapping("日本語", &horizontal);
+    assert!(horizontal.dropped_on_path.is_empty());
+    assert_eq!(horizontal.glyphs.len(), flat.glyphs.len());
+    for (guided_glyph, flat_glyph) in horizontal.glyphs.iter().zip(&flat.glyphs) {
+        assert_eq!(guided_glyph.position[0], flat_glyph.position[0]);
+        assert_eq!(guided_glyph.position[1], 40.0);
+    }
+    assert_eq!(horizontal.lines.len(), 1);
+    assert!(!horizontal.lines[0].overflow);
+    // Layout bounds union the guide's extent with the painted ink.
+    assert_eq!(horizontal.layout_bounds.min[0], 0.0);
+    assert_eq!(horizontal.layout_bounds.max[0], 400.0);
+    assert!(horizontal.layout_bounds.min[1] < 40.0 && horizontal.layout_bounds.max[1] >= 40.0);
+    // Center alignment anchors the advance at the path midpoint.
+    let mut centered = guided("日", line_path([0.0, 0.0], [400.0, 0.0]));
+    centered.alignment = TextAlignment::Center;
+    let advance = flat.glyphs[0].advance;
+    let centered = run(&centered).unwrap();
+    assert_eq!(centered.glyphs[0].position[0], (400.0 - advance) / 2.0);
+    let mut ended = guided("日", line_path([0.0, 0.0], [400.0, 0.0]));
+    ended.alignment = TextAlignment::End;
+    assert_eq!(run(&ended).unwrap().glyphs[0].position[0], 400.0 - advance);
+    // A vertical guide rotates each baseline 90 degrees: layout X becomes path Y.
+    let flat_two = run(&input("日本", 640.0)).unwrap();
+    let vertical = run(&guided("日本", line_path([8.0, 0.0], [8.0, 400.0]))).unwrap();
+    assert_eq!(vertical.glyphs.len(), flat_two.glyphs.len());
+    for (guided_glyph, flat_glyph) in vertical.glyphs.iter().zip(&flat_two.glyphs) {
+        assert!((guided_glyph.position[0] - 8.0).abs() < 1e-9);
+        assert!((guided_glyph.position[1] - flat_glyph.position[0]).abs() < 1e-9);
+    }
+    // Rotated outlines stay valid and differ from the untransformed ink.
+    for glyph in &vertical.glyphs {
+        validate_path(&glyph.outline).unwrap();
+        assert!(!glyph.outline.segments.is_empty());
+    }
+    assert_ne!(vertical.ink_bounds, flat_two.ink_bounds);
+    let ink = vertical.ink_bounds.unwrap();
+    assert!(ink.max[0] - ink.min[0] < ink.max[1] - ink.min[1]);
+}
+
+#[test]
+fn vec006_path_overflow_drops_glyphs_and_reports_source_ranges() {
+    let flat = run(&input("日本語学校", 640.0)).unwrap();
+    let advance: f64 = flat.glyphs.iter().map(|g| g.advance).sum();
+    // Half the advance still fits through the station midpoint rule: each
+    // glyph anchors at the midpoint of its own advance on the baseline.
+    let short = advance / 2.0;
+    let laid = run(&guided("日本語学校", line_path([0.0, 0.0], [short, 0.0]))).unwrap();
+    assert_mapping("日本語学校", &laid);
+    assert!(laid.glyphs.len() < flat.glyphs.len());
+    assert!(!laid.dropped_on_path.is_empty());
+    let dropped_end = laid.dropped_on_path.last().unwrap().end;
+    assert_eq!(dropped_end, "日本語学校".len());
+    for glyph in &laid.glyphs {
+        assert!(glyph.source.end <= laid.dropped_on_path[0].start);
+    }
+    // An empty path drops every glyph without producing ink.
+    let empty = run(&guided("日本", Path { segments: vec![] })).unwrap();
+    assert!(empty.glyphs.is_empty());
+    assert_eq!(empty.dropped_on_path.len(), 2);
+    assert!(empty.ink_bounds.is_none());
+}
+
+#[test]
+fn vec006_path_rejects_vertical_ruby_and_layout_version_one() {
+    let guide = || line_path([0.0, 0.0], [300.0, 0.0]);
+    let mut version_one = input("日本", 640.0);
+    version_one.path = Some(guide());
+    assert!(matches!(
+        run(&version_one),
+        Err(LayoutError::UnsupportedFeature { .. })
+    ));
+    let mut vertical = guided("日本", guide());
+    vertical.direction = TextDirection::VerticalRl;
+    assert!(matches!(
+        run(&vertical),
+        Err(LayoutError::UnsupportedFeature { .. })
+    ));
+    let mut ruby = guided("日本語", guide());
+    ruby.ruby.push(RubyAssociation {
+        base: TextRange { start: 0, end: 6 },
+        text: "にほん".into(),
+    });
+    assert!(matches!(
+        run(&ruby),
+        Err(LayoutError::UnsupportedFeature { .. })
+    ));
+    // Rejections stay typed after the font lock: corrupt bytes still fail
+    // font validation before the path is even considered.
+    let mut corrupt = font().0.clone();
+    corrupt[100] ^= 1;
+    assert!(matches!(
+        layout(
+            &guided("日本", guide()),
+            &[FontData {
+                identity: &font().1,
+                bytes: &corrupt
+            }]
+        ),
+        Err(LayoutError::FontHashMismatch { .. })
+    ));
+}
+
+fn animator(mode: AnimatorMode) -> ResolvedCharacterAnimation {
+    ResolvedCharacterAnimation {
+        source: TextRange {
+            start: 0,
+            end: "日本語".len(),
+        },
+        expected_text: "日本語".into(),
+        offset: [f(10.0), f(0.0)],
+        opacity: f(0.5),
+        scale: Some([f(2.0), f(1.0)]),
+        rotation: Some(f(90.0)),
+        fill: Some(Color::from_srgb8([255, 0, 0], None)),
+        mode,
+        seed: None,
+        follow_smoothing: Some(f(0.6)),
+    }
+}
+
+#[test]
+fn vec006_animator_modes_distribute_step_ramp_follow_and_random() {
+    let mut text = input("日本語", 640.0);
+    text.layout_version = 2;
+    let plain = run(&text).unwrap();
+    assert_eq!(plain.animation_units.len(), 3);
+    let red = Color::from_srgb8([255, 0, 0], None);
+    let apply = |animation: ResolvedCharacterAnimation| {
+        let mut animated = text.clone();
+        animated.character_animations = vec![animation];
+        run(&animated).unwrap()
+    };
+    // Step applies the full evaluated effect to every selected unit.
+    let step = apply(ResolvedCharacterAnimation {
+        mode: AnimatorMode::Step,
+        follow_smoothing: None,
+        ..animator(AnimatorMode::Step)
+    });
+    for (glyph, before) in step.glyphs.iter().zip(&plain.glyphs) {
+        assert_eq!(glyph.position[0], before.position[0] + 10.0);
+        assert_eq!(glyph.fill.components().alpha, f(0.5));
+        assert_eq!(glyph.fill.components().r, red.components().r);
+    }
+    // Ramp blends from neutral to full across the selection in reading order.
+    let ramp = apply(animator(AnimatorMode::Ramp));
+    assert_eq!(ramp.glyphs[0].position, plain.glyphs[0].position);
+    assert_eq!(ramp.glyphs[0].fill, plain.glyphs[0].fill);
+    assert_eq!(
+        ramp.glyphs[1].position[0],
+        plain.glyphs[1].position[0] + 5.0
+    );
+    assert_eq!(ramp.glyphs[1].fill.components().alpha, f(0.75));
+    assert_eq!(
+        ramp.glyphs[2].position[0],
+        plain.glyphs[2].position[0] + 10.0
+    );
+    assert_eq!(ramp.glyphs[2].fill.components().alpha, f(0.5));
+    assert_eq!(ramp.glyphs[2].fill.components().r, red.components().r);
+    // Follow keeps the first unit at full effect and trails by smoothing.
+    let follow = apply(animator(AnimatorMode::Follow));
+    for (index, factor) in [1.0, 0.7, 0.4].into_iter().enumerate() {
+        assert_eq!(
+            follow.glyphs[index].position[0],
+            plain.glyphs[index].position[0] + 10.0 * factor
+        );
+        assert_eq!(
+            follow.glyphs[index].fill.components().alpha,
+            f(1.0 - 0.5 * factor)
+        );
+    }
+    // Follow without its smoothing parameter is a typed document error.
+    let mut invalid = text.clone();
+    invalid.character_animations = vec![ResolvedCharacterAnimation {
+        mode: AnimatorMode::Follow,
+        follow_smoothing: None,
+        ..animator(AnimatorMode::Follow)
+    }];
+    assert!(matches!(
+        run(&invalid),
+        Err(LayoutError::Text(TextError::InvalidCharacterAnimation))
+    ));
+    // Random draws a stable factor per unit: identical inputs are reproducible
+    // and a different seed moves at least one unit.
+    let mut random = animator(AnimatorMode::Random);
+    random.seed = Some(7);
+    let first = apply(random.clone());
+    let second = apply(random.clone());
+    assert_eq!(first, second);
+    for (glyph, before) in first.glyphs.iter().zip(&plain.glyphs) {
+        let shift = glyph.position[0] - before.position[0];
+        assert!((0.0..=10.0).contains(&shift));
+    }
+    random.seed = Some(8);
+    let other = apply(random);
+    assert!(
+        first
+            .glyphs
+            .iter()
+            .zip(&other.glyphs)
+            .any(|(a, b)| a.position != b.position)
+    );
+}
+
+#[test]
+fn vec006_path_layout_stays_deterministic_and_keeps_cluster_mapping() {
+    let arc = Path {
+        segments: vec![
+            PathSegment::MoveTo([f(20.0), f(120.0)]),
+            PathSegment::CubicTo {
+                control1: [f(100.0), f(20.0)],
+                control2: [f(260.0), f(20.0)],
+                end: [f(340.0), f(120.0)],
+            },
+        ],
+    };
+    let text = guided("日本語のパス", arc);
+    let first = run(&text).unwrap();
+    let second = run(&text).unwrap();
+    assert_eq!(first, second);
+    assert_mapping(&text.text, &first);
+    // Glyph anchors sit on the flattened curve: every outline is non-degenerate.
+    assert!(first.glyphs.iter().all(|g| !g.outline.segments.is_empty()));
+    assert!(first.ink_bounds.unwrap().min[1] < 120.0);
 }

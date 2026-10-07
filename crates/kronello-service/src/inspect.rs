@@ -92,6 +92,8 @@ pub enum VisibilityCode {
     UnsupportedFeature,
     UnsupportedSchema,
     GlyphMissing,
+    /// A text path ended before all glyphs were placed; the rest are dropped.
+    TextPathTruncated,
     InvalidRequest,
     AssetIoError,
     EvaluationFailed,
@@ -120,6 +122,7 @@ impl VisibilityCode {
             "UNSUPPORTED_FEATURE" => Self::UnsupportedFeature,
             "UNSUPPORTED_SCHEMA" => Self::UnsupportedSchema,
             "GLYPH_MISSING" => Self::GlyphMissing,
+            "TEXT_PATH_TRUNCATED" => Self::TextPathTruncated,
             "INVALID_REQUEST" => Self::InvalidRequest,
             "ASSET_IO_ERROR" => Self::AssetIoError,
             _ => Self::EvaluationFailed,
@@ -914,6 +917,18 @@ pub(crate) fn node(r: NodeExplainRequest) -> Result<NodeExplainResult, ServiceEr
                 );
             }
         }
+        if let kronello_render::SceneContent::Text(layout) = &ir.content
+            && !layout.dropped_on_path.is_empty()
+        {
+            reason(
+                &mut result,
+                &r.key,
+                "TEXT_PATH_TRUNCATED",
+                ExplanationCategory::Asset,
+                ExplanationImpact::Information,
+                json!({"dropped_ranges":layout.dropped_on_path}),
+            );
+        }
         if a[0] * b[1] - a[1] * b[0] == 0.0 {
             reason(
                 &mut result,
@@ -1243,6 +1258,7 @@ mod gradient_tests {
                 graphemes: vec![],
                 shaping_clusters: vec![],
                 animation_units: vec![],
+                dropped_on_path: vec![],
                 layout_bounds: Bounds {
                     min: [0.0; 2],
                     max: [1.0; 2],

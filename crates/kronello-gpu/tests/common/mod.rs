@@ -116,6 +116,7 @@ pub fn glyph() -> DrawScene {
         wrap_width: f(32.0),
         line_height: f(30.0),
         alignment: model::TextAlignment::Start,
+        path: None,
     };
     let layout = kronello_text::layout(
         &text,
