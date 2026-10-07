@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SOURCE = ROOT / "docs" / "backlog" / "backlog.json"
 OUTPUT = ROOT / "docs" / "backlog" / "BACKLOG.md"
 
-MILESTONES = ["M0", "M1", "M2", "M3", "M4", "M5", "M6"]
+MILESTONES = ["M0", "M1", "M2", "M3", "M4", "M5", "M7", "M8", "M9", "M10", "M11"]
 PRIORITIES = ["P0", "P1", "P2"]
 STATUSES = ["planned", "in_progress", "done", "dropped"]
 REQUIRED = ["id", "milestone", "priority", "area", "title", "status", "dependencies", "acceptance_criteria"]

@@ -6,7 +6,7 @@
 
 ## 確認時点の集計
 
-PR #9の監査では既存77件のstatusを維持し、未割当だった16件をplannedとして追加した。その後のM5着手を反映した正本は、合計93件、done 79 / in_progress 2 / planned 12。M5は13件中12件がdone、1件（NAME-001）がin_progress、M6は12件すべてplanned。M5/M6の配置・優先度は開発計画であり、納期の約束や未決事項の採用判断ではない。
+PR #9の監査では既存77件のstatusを維持し、未割当だった16件をplannedとして追加した。その後のM5着手を反映した正本は、合計140件、done 79 / in_progress 2 / planned 59。M5は13件中12件がdone、1件（NAME-001）がin_progress。旧M6はM11へ改番し、M7〜M10の機能拡張47件を新たにplannedとして追加した。M7〜M11はすべて未着手である。M5以降の配置・優先度は開発計画であり、納期の約束や未決事項の採用判断ではない。
 
 参照会話の「77件・未完了10件」はPR #9より前の集計であり、現在の件数として転記しない。比較する対象を次のように固定する。
 
@@ -63,11 +63,11 @@ M5作業ツリーではVEC-002・TEXT-002・AUDIO-001・MATTE-001・INSPECT-002�
 | INSPECT-002 | M5 / P1 | 単一graph・temporal/tile計画に更新し、M4/Metalでactual countersとの個別比較が成功。統合checkpointを含め受け入れ済み（[記録](../testing/inspect-002.md)） | [inspect.rs](../../crates/kronello-render/src/inspect.rs)、[ADR-0092](../adr/0092-single-graph-gpu-final-output-and-observations.md) |
 | FRAMEBRIDGE-001 | M5 / P2 | generic selectorを互換用の型付き拒否として明確化。具体8経路の一覧とBGRA/NV12の実機試験を追加し、統合checkpointを含め受け入れ済み（[記録](../testing/framebridge-001.md)） | [FrameBridge](../../crates/kronello-framebridge/src/lib.rs)、[GPU-003](../testing/gpu-003.md) |
 | GUI-007 | M5 / P2 | macOS編集操作を受け入れ済み。共有API同等性、Undo・外部競合・IMEと直接GUIの証拠を[検証記録](../testing/gui-007.md)で分ける | 下表と [10 GUI](../architecture/10-desktop-gui.md) |
-| GUI-005 / GUI-006 | M6 / P2 | Windows WinUI 3 / Linux GTK4アプリ、native preview surfaceとOS固有操作は未実装・未検証 | [ADR-0032](../adr/0032-windows-winui-linux-gtk.md)、[10 GUI](../architecture/10-desktop-gui.md) |
-| RELEASE-002 | M6 / P1 | macOS Developer ID、notarization、staple、Gatekeeper、quarantineを保持した実ダウンロード | [RELEASE-001](../testing/release-001.md)。開発署名の受け入れと分離 |
-| RELEASE-003 / RELEASE-004 | M6 / P2 | Windows/LinuxのGUIを含む製品packageとクリーン環境での配布確認 | [12](../architecture/12-platform-dependencies.md)。CLIビルド成功と分離 |
-| GPU-004 / GPU-005 | M6 / P2 | Windows/Linuxのhardware resident media/render経路 | [GPU-003](../testing/gpu-003.md)。software decode/goldenの成功と分離 |
-| GPU-006 | M6 / P2 | macOS residentのHDR/10-bit/full-range/HEVC hev1等を形式別に評価・昇格 | [GPU-003](../testing/gpu-003.md)。software HDR出力や8-bit SDR保証と分離 |
+| GUI-005 / GUI-006 | M11 / P2 | Windows WinUI 3 / Linux GTK4アプリ、native preview surfaceとOS固有操作は未実装・未検証 | [ADR-0032](../adr/0032-windows-winui-linux-gtk.md)、[10 GUI](../architecture/10-desktop-gui.md) |
+| RELEASE-002 | M11 / P1 | macOS Developer ID、notarization、staple、Gatekeeper、quarantineを保持した実ダウンロード | [RELEASE-001](../testing/release-001.md)。開発署名の受け入れと分離 |
+| RELEASE-003 / RELEASE-004 | M11 / P2 | Windows/LinuxのGUIを含む製品packageとクリーン環境での配布確認 | [12](../architecture/12-platform-dependencies.md)。CLIビルド成功と分離 |
+| GPU-004 / GPU-005 | M11 / P2 | Windows/Linuxのhardware resident media/render経路 | [GPU-003](../testing/gpu-003.md)。software decode/goldenの成功と分離 |
+| GPU-006 | M11 / P2 | macOS residentのHDR/10-bit/full-range/HEVC hev1等を形式別に評価・昇格 | [GPU-003](../testing/gpu-003.md)。software HDR出力や8-bit SDR保証と分離 |
 
 ### macOS GUI で残る明示的な制限
 

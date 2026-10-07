@@ -5,7 +5,7 @@
   "status": "implementation_started",
   "description": "設計と実装の計画・進捗。このファイルがバックログの正本であり、GitHub等へ登録したIssueではない。",
   "specification": "docs/architecture/",
-  "task_count": 93,
+  "task_count": 140,
   "items": [
     {
       "id": "ARC-001",
@@ -1224,7 +1224,7 @@
     },
     {
       "id": "DIM-001",
-      "milestone": "M6",
+      "milestone": "M11",
       "priority": "P2",
       "area": "3d",
       "title": "2.5D Scene3D境界とカメラ",
@@ -1241,7 +1241,7 @@
     },
     {
       "id": "INTEROP-001",
-      "milestone": "M6",
+      "milestone": "M11",
       "priority": "P2",
       "area": "interop",
       "title": "OTIO/SVG/外部レンダーの交換アダプター",
@@ -1258,7 +1258,7 @@
     },
     {
       "id": "PLUGIN-001",
-      "milestone": "M6",
+      "milestone": "M11",
       "priority": "P2",
       "area": "plugins",
       "title": "有界WASM拡張と信頼区分",
@@ -1275,7 +1275,7 @@
     },
     {
       "id": "DIST-001",
-      "milestone": "M6",
+      "milestone": "M11",
       "priority": "P2",
       "area": "distributed",
       "title": "レンダーファームとsimulation bake境界",
@@ -1456,7 +1456,7 @@
     },
     {
       "id": "GUI-005",
-      "milestone": "M6",
+      "milestone": "M11",
       "priority": "P2",
       "area": "gui",
       "title": "WindowsネイティブGUIとプレビュー面の接続",
@@ -1473,7 +1473,7 @@
     },
     {
       "id": "GUI-006",
-      "milestone": "M6",
+      "milestone": "M11",
       "priority": "P2",
       "area": "gui",
       "title": "LinuxネイティブGUIとプレビュー面の接続",
@@ -1490,7 +1490,7 @@
     },
     {
       "id": "RELEASE-002",
-      "milestone": "M6",
+      "milestone": "M11",
       "priority": "P1",
       "area": "release",
       "title": "macOS製品署名・notarization・実ダウンロード検証",
@@ -1508,7 +1508,7 @@
     },
     {
       "id": "RELEASE-003",
-      "milestone": "M6",
+      "milestone": "M11",
       "priority": "P2",
       "area": "release",
       "title": "Windows製品packageとクリーン環境での配布検証",
@@ -1526,7 +1526,7 @@
     },
     {
       "id": "RELEASE-004",
-      "milestone": "M6",
+      "milestone": "M11",
       "priority": "P2",
       "area": "release",
       "title": "Linux製品packageとクリーン環境での配布検証",
@@ -1544,7 +1544,7 @@
     },
     {
       "id": "GPU-004",
-      "milestone": "M6",
+      "milestone": "M11",
       "priority": "P2",
       "area": "gpu",
       "title": "WindowsのGPU常駐media/render経路の昇格",
@@ -1561,7 +1561,7 @@
     },
     {
       "id": "GPU-005",
-      "milestone": "M6",
+      "milestone": "M11",
       "priority": "P2",
       "area": "gpu",
       "title": "LinuxのGPU常駐media/render経路の昇格",
@@ -1578,7 +1578,7 @@
     },
     {
       "id": "GPU-006",
-      "milestone": "M6",
+      "milestone": "M11",
       "priority": "P2",
       "area": "gpu",
       "title": "macOS常駐デコードの追加形式・色精度の保証評価",
@@ -1625,6 +1625,729 @@
         "AUDIO-001の音声特徴量参照を再利用しつつ、残るDataAsset参照要件、動的な過去Property sample、連続補間noiseの型・時間写像・静的依存と循環拒否・意味版を設計記録に固定する",
         "不変の入力hashと固定seedを使い、外部I/Oや時計を評価へ持ち込まず、命令・メモリ・sample予算を実際の追加処理に適用する",
         "任意時刻・逆順・再試行の決定性、時間境界・資産欠落・循環・予算超過を共有APIと最終renderで検証する。人間向け構文のEXPR-002とは独立にAST契約を検証する"
+      ]
+    },
+    {
+      "id": "NLE-003",
+      "milestone": "M7",
+      "priority": "P0",
+      "area": "timeline",
+      "title": "精密編集操作: slip/slide/rolling edit・ripple delete・ギャップ処理",
+      "status": "planned",
+      "dependencies": [
+        "NLE-002"
+      ],
+      "acceptance_criteria": [
+        "slip・slide・rolling edit・ripple delete を sequence モデルと共有 Command/Query API に実装する",
+        "linked clip（映像・音声）間で編集結果の一貫性を保つ",
+        "挿入と上書きの区別・ギャップの生成と除去を型付き操作として扱う",
+        "CLI/MCP での同一操作の意味的一致をテストで確認する"
+      ]
+    },
+    {
+      "id": "NLE-004",
+      "milestone": "M7",
+      "priority": "P0",
+      "area": "timeline",
+      "title": "シーケンス/クリップマーカー・In/Out・ワークエリア書き出し範囲",
+      "status": "planned",
+      "dependencies": [
+        "NLE-002"
+      ],
+      "acceptance_criteria": [
+        "sequence/clip マーカーの追加・削除・移動・色・コメントをモデル化する",
+        "In/Out 点とワークエリアをモデル化し、export の範囲指定として job に渡せる",
+        "Undo・共有編集・保存でマーカーと In/Out が保持されることを確認する"
+      ]
+    },
+    {
+      "id": "SUB-001",
+      "milestone": "M7",
+      "priority": "P0",
+      "area": "captions",
+      "title": "字幕モデル: caption track・字幕 clip kind・スタイルと版管理",
+      "status": "planned",
+      "dependencies": [
+        "NLE-002",
+        "TEXT-002"
+      ],
+      "acceptance_criteria": [
+        "caption track と字幕 clip kind を sequence モデルと schema に追加する",
+        "文字装飾（フォント・色・縁取り・背景・位置）を評価可能な Property として表す",
+        "未知の版・未対応機能は型付き拒否とし、版管理の規約に従う"
+      ]
+    },
+    {
+      "id": "SUB-002",
+      "milestone": "M7",
+      "priority": "P0",
+      "area": "captions",
+      "title": "字幕 I/O: SRT/VTT/ITT 入出力と焼き付け・サイドカー書き出し",
+      "status": "planned",
+      "dependencies": [
+        "SUB-001",
+        "MEDIA-002"
+      ],
+      "acceptance_criteria": [
+        "SRT/VTT/ITT のインポート・エクスポートを計画/適用の編集として実装する",
+        "字幕クリップの描画（焼き付け）と sidecar 書き出しを export profile に追加する",
+        "字幕の時間精度と文字化け・改行処理を fixture で検証する"
+      ]
+    },
+    {
+      "id": "COLOR-002",
+      "milestone": "M7",
+      "priority": "P0",
+      "area": "color",
+      "title": "色補正エフェクト基盤: exposure/levels/curves/HSL の versioned effect",
+      "status": "planned",
+      "dependencies": [
+        "COLOR-001",
+        "FX-001"
+      ],
+      "acceptance_criteria": [
+        "exposure・levels・curves・HSL 補正を versioned effect としてモデルと schema に追加する",
+        "線形作業色空間での演算と HDR/SDR での適用範囲を規約として定める",
+        "CPU/GPU 経路の意味的一致と golden 比較で確認する"
+      ]
+    },
+    {
+      "id": "FX-003",
+      "milestone": "M7",
+      "priority": "P1",
+      "area": "effects",
+      "title": "ブレンドモード全種とトランジション拡張（wipe/slide/dip 等）",
+      "status": "planned",
+      "dependencies": [
+        "GPU-002",
+        "FX-001"
+      ],
+      "acceptance_criteria": [
+        "標準的なブレンドモード一式を BlendMode に追加し CPU/GPU 両経路で合成する",
+        "wipe・slide・dip 等のトランジションを TransitionKind に追加する",
+        "トランジション区間と音声クロスフェードの関係を規約化する"
+      ]
+    },
+    {
+      "id": "GUI-008",
+      "milestone": "M7",
+      "priority": "P0",
+      "area": "gui",
+      "title": "macOS タイムライン編集 UI: trim ツール・マーカー・In/Out・スナップ",
+      "status": "planned",
+      "dependencies": [
+        "NLE-003",
+        "NLE-004",
+        "GUI-007"
+      ],
+      "acceptance_criteria": [
+        "slip/slide/rolling の trim ツールと ripple delete を GUI 操作から共有 API に接続する",
+        "マーカー/In/Out の表示・設定・ジャンプを実装する",
+        "クリップ端・再生ヘッド・マーカーへのスナップを実装し操作を検証する"
+      ]
+    },
+    {
+      "id": "GUI-009",
+      "milestone": "M7",
+      "priority": "P1",
+      "area": "gui",
+      "title": "macOS 字幕編集 UI: caption lane と編集パネル",
+      "status": "planned",
+      "dependencies": [
+        "SUB-001",
+        "GUI-003"
+      ],
+      "acceptance_criteria": [
+        "caption lane の表示と字幕クリップの編集パネルを実装する",
+        "スタイル編集がプレビューに即時反映され Undo で戻ることを確認する"
+      ]
+    },
+    {
+      "id": "GUI-010",
+      "milestone": "M7",
+      "priority": "P1",
+      "area": "gui",
+      "title": "macOS カラー Inspector: 色補正パラメータ編集",
+      "status": "planned",
+      "dependencies": [
+        "COLOR-002",
+        "GUI-003"
+      ],
+      "acceptance_criteria": [
+        "色補正 effect の Inspector 編集 UI を実装する",
+        "パラメータ変更のプレビュー即時反映と Undo を確認する"
+      ]
+    },
+    {
+      "id": "AUDIO-006",
+      "milestone": "M7",
+      "priority": "P1",
+      "area": "audio",
+      "title": "クリップ波形の生成・キャッシュとタイムライン描画",
+      "status": "planned",
+      "dependencies": [
+        "AUDIO-001",
+        "GUI-003"
+      ],
+      "acceptance_criteria": [
+        "audio.analyze を用いたクリップ波形の生成とキャッシュを実装する",
+        "タイムラインへの波形描画とズーム追従を確認する"
+      ]
+    },
+    {
+      "id": "INTEGRATION-003",
+      "milestone": "M7",
+      "priority": "P1",
+      "area": "integration",
+      "title": "縦断デモ第3段階: カット編集+字幕+簡易グレーディング作品",
+      "status": "planned",
+      "dependencies": [
+        "NLE-003",
+        "SUB-002",
+        "COLOR-002",
+        "GUI-008"
+      ],
+      "acceptance_criteria": [
+        "カット編集・字幕・色補正を含む作品を GUI と CLI の両経路で生成する",
+        "書き出し結果の映像・音声・字幕を受け入れ基準として検証する"
+      ]
+    },
+    {
+      "id": "NLE-005",
+      "milestone": "M8",
+      "priority": "P1",
+      "area": "timeline",
+      "title": "トラックロック・クリップ有効/無効・トラックターゲティング",
+      "status": "planned",
+      "dependencies": [
+        "NLE-003"
+      ],
+      "acceptance_criteria": [
+        "track lock・clip enable/disable・track targeting をモデルと共有 API に追加する",
+        "GUI のトラック制御操作を接続し Undo を確認する"
+      ]
+    },
+    {
+      "id": "NLE-006",
+      "milestone": "M8",
+      "priority": "P1",
+      "area": "timeline",
+      "title": "可変リタイム（スピードランプ）と freeze frame/hold",
+      "status": "planned",
+      "dependencies": [
+        "NLE-003"
+      ],
+      "acceptance_criteria": [
+        "TimeMap の曲線化によるスピードランプと freeze frame/hold を実装する",
+        "音声の AudioRetimePolicy との整合と型付き拒否を検証する"
+      ]
+    },
+    {
+      "id": "COLOR-003",
+      "milestone": "M8",
+      "priority": "P1",
+      "area": "color",
+      "title": "LUT (.cube) の取り込み・検証・適用",
+      "status": "planned",
+      "dependencies": [
+        "COLOR-002"
+      ],
+      "acceptance_criteria": [
+        ".cube 3D LUT の取り込み・検証・作品内参照を実装する",
+        "HDR/SDR 変換パイプラインでの適用位置を規約として定める"
+      ]
+    },
+    {
+      "id": "COLOR-004",
+      "milestone": "M8",
+      "priority": "P1",
+      "area": "color",
+      "title": "スコープ: waveform/vectorscope/histogram/RGB parade と GUI パネル",
+      "status": "planned",
+      "dependencies": [
+        "COLOR-002",
+        "GUI-010"
+      ],
+      "acceptance_criteria": [
+        "waveform・vectorscope・histogram・RGB parade の生成を実装する",
+        "macOS GUI のスコープパネルを実装し表示を検証する"
+      ]
+    },
+    {
+      "id": "FX-004",
+      "milestone": "M8",
+      "priority": "P1",
+      "area": "effects",
+      "title": "ベジェマスク: クリップ適用・フェザー・拡張・時間変化",
+      "status": "planned",
+      "dependencies": [
+        "VEC-001",
+        "MATTE-001"
+      ],
+      "acceptance_criteria": [
+        "ベジェマスクのクリップ適用・フェザー・拡張・時間変化をモデル化する",
+        "GUI でのベジェ編集を共有 API に接続する"
+      ]
+    },
+    {
+      "id": "FX-005",
+      "milestone": "M8",
+      "priority": "P1",
+      "area": "effects",
+      "title": "キーイング: chroma key/luma key とスピル抑制",
+      "status": "planned",
+      "dependencies": [
+        "COLOR-002"
+      ],
+      "acceptance_criteria": [
+        "chroma key・luma key を versioned effect として実装する",
+        "スピル抑制・エッジ調整の基本パラメータを含める"
+      ]
+    },
+    {
+      "id": "FX-006",
+      "milestone": "M8",
+      "priority": "P1",
+      "area": "effects",
+      "title": "標準エフェクト拡張: glow/sharpen/vignette/warp 等",
+      "status": "planned",
+      "dependencies": [
+        "FX-003"
+      ],
+      "acceptance_criteria": [
+        "glow・sharpen・vignette・warp 等の標準エフェクトを versioned effect として追加する",
+        "CPU/GPU 経路の意味的一致を確認する"
+      ]
+    },
+    {
+      "id": "FX-007",
+      "milestone": "M8",
+      "priority": "P2",
+      "area": "timeline",
+      "title": "アジャストメントクリップ: 下位レイヤーへのエフェクト一括適用",
+      "status": "planned",
+      "dependencies": [
+        "FX-004"
+      ],
+      "acceptance_criteria": [
+        "adjustment clip kind をモデル化し下位レイヤーへのエフェクト適用を実装する",
+        "範囲・入れ子・トラック制約を型付きで扱う"
+      ]
+    },
+    {
+      "id": "AUDIO-007",
+      "milestone": "M8",
+      "priority": "P1",
+      "area": "audio",
+      "title": "EQ/フィルタ系音声エフェクト: パラメトリックEQ・HPF/LPF",
+      "status": "planned",
+      "dependencies": [
+        "AUDIO-003"
+      ],
+      "acceptance_criteria": [
+        "パラメトリックEQ・HPF/LPF 等のフィルタ系音声エフェクトを実装する",
+        "リアルタイム再生と書き出しの一致を確認する"
+      ]
+    },
+    {
+      "id": "AUDIO-008",
+      "milestone": "M8",
+      "priority": "P1",
+      "area": "audio",
+      "title": "ダイナミクスと LUFS 計測・ノーマライズ",
+      "status": "planned",
+      "dependencies": [
+        "AUDIO-007"
+      ],
+      "acceptance_criteria": [
+        "compressor/limiter を音声エフェクトとして実装する",
+        "LUFS 計測とターゲットノーマライズを実装し検証する"
+      ]
+    },
+    {
+      "id": "AUDIO-009",
+      "milestone": "M8",
+      "priority": "P2",
+      "area": "audio",
+      "title": "音声 UI: VU メーター・オーディオスクラブ・ミキサーパネル",
+      "status": "planned",
+      "dependencies": [
+        "AUDIO-006",
+        "GUI-008"
+      ],
+      "acceptance_criteria": [
+        "VU メーター・オーディオスクラブ・ミキサーパネルを macOS GUI に実装する"
+      ]
+    },
+    {
+      "id": "TRACK-001",
+      "milestone": "M8",
+      "priority": "P2",
+      "area": "tracking",
+      "title": "モーショントラッキング: 点/平面トラッキングと結果の DataAsset 化",
+      "status": "planned",
+      "dependencies": [
+        "COMP-002"
+      ],
+      "acceptance_criteria": [
+        "点/平面モーショントラッキングの解析を実装する",
+        "結果を Property/DataAsset として参照可能にし式・エフェクトへ接続する"
+      ]
+    },
+    {
+      "id": "VEC-006",
+      "milestone": "M8",
+      "priority": "P1",
+      "area": "text",
+      "title": "テキスト拡張: テキストオンパスと文字単位アニメーター",
+      "status": "planned",
+      "dependencies": [
+        "TEXT-002"
+      ],
+      "acceptance_criteria": [
+        "テキストオンパスの描画と layout を実装する",
+        "文字単位アニメーター（範囲・ランダム・追従）を実装する"
+      ]
+    },
+    {
+      "id": "PROXY-001",
+      "milestone": "M8",
+      "priority": "P1",
+      "area": "media",
+      "title": "プロキシワークフロー: プロキシ生成 job・編集時切替・relink",
+      "status": "planned",
+      "dependencies": [
+        "MEDIA-002",
+        "JOB-001"
+      ],
+      "acceptance_criteria": [
+        "プロキシ生成 job と編集時のプロキシ参照切替を実装する",
+        "書き出しでは元素材を用いることを検証する"
+      ]
+    },
+    {
+      "id": "FLOW-001",
+      "milestone": "M8",
+      "priority": "P2",
+      "area": "gui",
+      "title": "ワークフロー UI: ショートカット設定・レイアウト・Undo 履歴パネル",
+      "status": "planned",
+      "dependencies": [
+        "GUI-008"
+      ],
+      "acceptance_criteria": [
+        "キーボードショートカットのカスタマイズを実装する",
+        "ワークスペースレイアウトの保存と Undo 履歴パネルを実装する"
+      ]
+    },
+    {
+      "id": "TRACK-002",
+      "milestone": "M9",
+      "priority": "P2",
+      "area": "tracking",
+      "title": "手ブレ補正（スタビライズ）",
+      "status": "planned",
+      "dependencies": [
+        "TRACK-001"
+      ],
+      "acceptance_criteria": [
+        "トラッキング結果を用いたスタビライズを実装する",
+        "クロップ・補間・境界処理のパラメータを含める"
+      ]
+    },
+    {
+      "id": "TRACK-003",
+      "milestone": "M9",
+      "priority": "P2",
+      "area": "tracking",
+      "title": "オプティカルフロー補間: 滑らかなスローモーション",
+      "status": "planned",
+      "dependencies": [
+        "TRACK-001",
+        "NLE-006"
+      ],
+      "acceptance_criteria": [
+        "オプティカルフローによる中間フレーム補間を実装する",
+        "リタイムとの組み合わせと失敗時の型付き拒否を検証する"
+      ]
+    },
+    {
+      "id": "AUDIO-010",
+      "milestone": "M9",
+      "priority": "P2",
+      "area": "audio",
+      "title": "ピッチ保持リタイムとマルチチャンネル（5.1ch 等）",
+      "status": "planned",
+      "dependencies": [
+        "AUDIO-008"
+      ],
+      "acceptance_criteria": [
+        "ピッチを保持する音声リタイムを実装する",
+        "2ch 超のマルチチャンネル入出力とダウンミックスを実装する"
+      ]
+    },
+    {
+      "id": "GUI-011",
+      "milestone": "M9",
+      "priority": "P2",
+      "area": "gui",
+      "title": "ソース/プログラム二画面モニタ",
+      "status": "planned",
+      "dependencies": [
+        "GUI-008"
+      ],
+      "acceptance_criteria": [
+        "ソースモニタとプログラムモニタの二画面編集 UI を実装する",
+        "インサート/オーバーライト編集操作を接続する"
+      ]
+    },
+    {
+      "id": "AI-001",
+      "milestone": "M9",
+      "priority": "P2",
+      "area": "ai",
+      "title": "音声文字起こし: ローカル推論と字幕トラック連携",
+      "status": "planned",
+      "dependencies": [
+        "SUB-001",
+        "AUDIO-001"
+      ],
+      "acceptance_criteria": [
+        "ローカル推論による音声文字起こしを実装する",
+        "結果を字幕トラックへ反映し信頼度・単語時間を保持する"
+      ]
+    },
+    {
+      "id": "AI-002",
+      "milestone": "M9",
+      "priority": "P2",
+      "area": "ai",
+      "title": "シーン検出: カット境界の自動検出",
+      "status": "planned",
+      "dependencies": [
+        "MEDIA-001"
+      ],
+      "acceptance_criteria": [
+        "映像のシーン境界を自動検出する job を実装する",
+        "検出結果をマーカー/クリップ分割へ適用できる"
+      ]
+    },
+    {
+      "id": "AI-003",
+      "milestone": "M9",
+      "priority": "P2",
+      "area": "ai",
+      "title": "スマートリフレーム: 被写体追従の自動縦横比変換",
+      "status": "planned",
+      "dependencies": [
+        "TRACK-001",
+        "LAYOUT-001"
+      ],
+      "acceptance_criteria": [
+        "被写体追従による自動リフレームを実装する",
+        "responsive layout と組み合わせて検証する"
+      ]
+    },
+    {
+      "id": "NLE-007",
+      "milestone": "M9",
+      "priority": "P2",
+      "area": "timeline",
+      "title": "マルチカム編集: 同期・切替・マルチカムクリップ",
+      "status": "planned",
+      "dependencies": [
+        "NLE-005"
+      ],
+      "acceptance_criteria": [
+        "マルチカムクリップの同期・角度切替編集をモデルと共有 API に実装する",
+        "GUI のマルチカム操作を接続する"
+      ]
+    },
+    {
+      "id": "FLOW-002",
+      "milestone": "M9",
+      "priority": "P2",
+      "area": "gui",
+      "title": "メディア管理 UI: ビン/ブラウザ/オフラインメディア",
+      "status": "planned",
+      "dependencies": [
+        "FLOW-001"
+      ],
+      "acceptance_criteria": [
+        "ビン・メディアブラウザ・サムネイル一覧を実装する",
+        "オフラインメディアの表示と relink 操作を接続する"
+      ]
+    },
+    {
+      "id": "FLOW-003",
+      "milestone": "M9",
+      "priority": "P2",
+      "area": "media",
+      "title": "書き出し運用: ウォッチフォルダ・プリセット・バッチキュー",
+      "status": "planned",
+      "dependencies": [
+        "MEDIA-002",
+        "JOB-002"
+      ],
+      "acceptance_criteria": [
+        "書き出しプリセット・バッチキュー・ウォッチフォルダを実装する"
+      ]
+    },
+    {
+      "id": "AUDIO-011",
+      "milestone": "M9",
+      "priority": "P2",
+      "area": "audio",
+      "title": "VST3/AU プラグインホスティング",
+      "status": "planned",
+      "dependencies": [
+        "AUDIO-009"
+      ],
+      "acceptance_criteria": [
+        "VST3/AU プラグインのホスティングと信頼境界を実装する"
+      ]
+    },
+    {
+      "id": "INTEGRATION-004",
+      "milestone": "M9",
+      "priority": "P2",
+      "area": "integration",
+      "title": "縦断デモ第4段階: AI 補助を含む編集ワークフロー",
+      "status": "planned",
+      "dependencies": [
+        "AI-001",
+        "GUI-011"
+      ],
+      "acceptance_criteria": [
+        "文字起こしから字幕・編集までの一連のワークフローを検証する"
+      ]
+    },
+    {
+      "id": "MEDIA-004",
+      "milestone": "M10",
+      "priority": "P2",
+      "area": "media",
+      "title": "配信拡張: チャプター・マルチ出力・追加コーデック profile",
+      "status": "planned",
+      "dependencies": [
+        "AUDIO-005"
+      ],
+      "acceptance_criteria": [
+        "チャプターマーカー・マルチ出力・DNxHD/GIF/MP3 等の profile を追加する"
+      ]
+    },
+    {
+      "id": "IO-001",
+      "milestone": "M10",
+      "priority": "P2",
+      "area": "io",
+      "title": "外部モニタ出力: SDI/NDI 等のリファレンス出力",
+      "status": "planned",
+      "dependencies": [
+        "GPU-003"
+      ],
+      "acceptance_criteria": [
+        "外部モニタ出力経路を実装し色精度を検証する"
+      ]
+    },
+    {
+      "id": "COLLAB-001",
+      "milestone": "M10",
+      "priority": "P2",
+      "area": "service",
+      "title": "共同編集: 複数ユーザーの同時編集",
+      "status": "planned",
+      "dependencies": [
+        "STORE-003",
+        "SERVICE-001"
+      ],
+      "acceptance_criteria": [
+        "複数ユーザーの同時編集と競合解決のモデルを実装する"
+      ]
+    },
+    {
+      "id": "INTEROP-002",
+      "milestone": "M11",
+      "priority": "P2",
+      "area": "interop",
+      "title": "上級交換: AAF/XML/EDL 等のプロジェクト交換",
+      "status": "planned",
+      "dependencies": [
+        "INTEROP-001"
+      ],
+      "acceptance_criteria": [
+        "AAF/XML/EDL 等の交換フォーマットの入出力を実装する"
+      ]
+    },
+    {
+      "id": "DIM-002",
+      "milestone": "M11",
+      "priority": "P2",
+      "area": "3d",
+      "title": "完全 3D の検討: スコープ評価と段階的導入計画",
+      "status": "planned",
+      "dependencies": [
+        "DIM-001"
+      ],
+      "acceptance_criteria": [
+        "完全 3D のスコープ評価と段階的導入計画を ADR として定める"
+      ]
+    },
+    {
+      "id": "FX-008",
+      "milestone": "M10",
+      "priority": "P2",
+      "area": "effects",
+      "title": "残エフェクト群の拡充",
+      "status": "planned",
+      "dependencies": [
+        "FX-006"
+      ],
+      "acceptance_criteria": [
+        "未実装の標準エフェクトを棚卸しし versioned effect として追加する"
+      ]
+    },
+    {
+      "id": "FLOW-004",
+      "milestone": "M10",
+      "priority": "P2",
+      "area": "media",
+      "title": "キャプチャ/インジェスト: 録画・デッキ取り込み",
+      "status": "planned",
+      "dependencies": [
+        "MEDIA-001"
+      ],
+      "acceptance_criteria": [
+        "録画・デッキ取り込みの経路を実装する"
+      ]
+    },
+    {
+      "id": "MEDIA-005",
+      "milestone": "M10",
+      "priority": "P2",
+      "area": "media",
+      "title": "カメラフォーマット: RAW 系（BRAW/R3D/ProRes RAW）",
+      "status": "planned",
+      "dependencies": [
+        "MEDIA-001"
+      ],
+      "acceptance_criteria": [
+        "カメラ RAW 系フォーマットのデコードと色管理を実装する"
+      ]
+    },
+    {
+      "id": "GUI-012",
+      "milestone": "M10",
+      "priority": "P2",
+      "area": "gui",
+      "title": "ワークスペース完成: 残 UI の統合と UX ポリッシュ",
+      "status": "planned",
+      "dependencies": [
+        "GUI-011",
+        "FLOW-002"
+      ],
+      "acceptance_criteria": [
+        "残る UI 要素を統合しワークスペースとして完成させる"
       ]
     }
   ]
