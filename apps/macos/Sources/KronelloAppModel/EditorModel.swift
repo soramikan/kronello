@@ -76,7 +76,8 @@ public struct EditCandidate {
     @Published public internal(set) var waveforms: [String: ClipWaveform] = [:]
     /// Permanent per-source analysis failures (typed error code) to avoid retry loops.
     @Published public internal(set) var waveformFailures: [String: String] = [:]
-    var waveformPending: Set<String> = []
+    /// In-flight `audio.analyze` keys; empty means waveform work has settled.
+    @Published public internal(set) var waveformPending: Set<String> = []
     @Published public var editTool = "select"
     @Published public var editSnap = true
     @Published public var editScale: Double = 1
