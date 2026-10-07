@@ -151,6 +151,47 @@ job の encode は build 時に pkg-config で解決された `kronello-media` �
 GUI 操作は実画面の Computer Use で実行し、失敗は型付きエラーとともに記録する。
 本 lane の成果物（driver・manifest・手順）は GUI 実行に必要な全 ID を提供する。
 
+## GUI 経路の検証結果（親エージェントによる Computer Use、2026-10-07 追記）
+
+`m7` ブランチ上で `scripts/build_macos_app.py` が生成した `target/macos/Kronello.app`
+を `KRONELLO_FONT_INPUTS`（pinned Noto Sans CJK JP・sha256 `68a3fc98…f375b5` の
+manifest JSON）付きで起動し、`/tmp/m7-demo-out/m7-integration.cli.kronello`
+（CLI 生成・revision 18）を開いた。操作は System Events 経由の実画面駆動で、
+各確認点をスクリーンショットで採取した。
+
+- Edit ページに C1 caption / V1 video / A1 audio の 3 track と全クリップ、
+  sequence marker（ルーラー上のひし形・3 秒）、work area `[1,7)` のハイライト帯と
+  In/Out ボタン、ツールストリップ（選択・ブレード・トラック系）が表示される。
+- ↑/↓ の編集点ジャンプ（0 → 1:10 → 4:00 → 7:00）と →/← のフレームステップで
+  再生ヘッドが移動する。トランスポートの再生ボタンで実時間再生し、
+  8:12 → 9:23 へ進行、ステータス表示は `underrun 0`（実時間音声が落ちない）。
+- Viewer 表示（GPU backend・Metal プレビュー、実機表示確認）:
+  - t≈1:10 — cue1「編集済みの最初の字幕」が赤クリップ A 上に描画される。
+  - t=4:12 — wipe 中間フレームで左が B の緑・右が A の赤、
+    cue2「ワイプの途中です」（`<b>` スタイル span 含む）が描画される。
+  - t=8:12 — cue3「色補正クリップの字幕」が明度上昇した C（exposure +1）上に描画される。
+- caption クリップ選択で Inspector に字幕編集セクション（本文・書体・ウェイト・
+  サイズ・文字色・縁取り・縁幅・縁色・背景・配置）が表示される（GUI-009）。
+- video クリップ選択で Inspector の「カラー」セクションと「カラー補正を追加」が
+  表示される（GUI-010）。
+- 別プロジェクト（pcm_s16le WAV の asset 音声クリップ、振幅を 2 区間で変化）で
+  `audio.analyze` が自動発行され revision が 1→2 に進み、タイムラインの
+  オーディオクリップ内に振幅追従の RMS 波形バーが描画されることを
+  画素列の走査で確認した（AUDIO-006）。
+
+GUI 検証中に発見・解消した 2 件:
+
+- `scene surface budget exceeds 512 MiB`: ネイティブプレビューが表示サイズと無関係な
+  フル解像度中間表面を要求していた。`kronello-ffi` のプレビューを、シーンの推定
+  表面数に基づき縮小レンダー＋表面側スケール表示する経路へ変更して解消
+  （commit `27d87de`、境界テストで WGSL を検証）。
+- `FONT_MISSING`: 起動プロセスにフォント入力が無かったための型付き拒否。
+  `KRONELLO_FONT_INPUTS` manifest で pinned font を供給して解消（仕様どおりの挙動）。
+
+GUI 経路での編集操作・Undo・書き出しは手順 5/6 の範囲であり、編集の同等性は
+driver の CLI/MCP parity と Swift 側の RecordingTransport テストで担保済みのため、
+本記録の GUI 確認は表示・再生・Inspector の実機確認までを範囲とした。
+
 ## 未解決・設計上の注意
 
 - `capabilities.get` の `effects` 列挙に `kronello.color.*` が含まれない。

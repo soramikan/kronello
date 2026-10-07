@@ -1734,7 +1734,7 @@
       "priority": "P0",
       "area": "gui",
       "title": "macOS タイムライン編集 UI: trim ツール・マーカー・In/Out・スナップ",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "NLE-003",
         "NLE-004",
@@ -1752,7 +1752,7 @@
       "priority": "P1",
       "area": "gui",
       "title": "macOS 字幕編集 UI: caption lane と編集パネル",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "SUB-001",
         "GUI-003"
@@ -1768,7 +1768,7 @@
       "priority": "P1",
       "area": "gui",
       "title": "macOS カラー Inspector: 色補正パラメータ編集",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "COLOR-002",
         "GUI-003"
@@ -1784,7 +1784,7 @@
       "priority": "P1",
       "area": "audio",
       "title": "クリップ波形の生成・キャッシュとタイムライン描画",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "AUDIO-001",
         "GUI-003"
@@ -1800,7 +1800,7 @@
       "priority": "P1",
       "area": "integration",
       "title": "縦断デモ第3段階: カット編集+字幕+簡易グレーディング作品",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "NLE-003",
         "SUB-002",

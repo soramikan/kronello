@@ -1,6 +1,6 @@
 # AUDIO-006 クリップ波形（audio.analyze 連携・キャッシュ・ズーム追従描画）の受け入れ記録
 
-状態: モデル層・共有API接続は `m7-lane-d1` 作業ツリーで確認済み（2026-10-07）。実GUIでの波形表示確認（CUA）は親タスク側で実施する残件とする。
+状態: モデル層・共有API接続は `m7-lane-d1` 作業ツリーで確認済み（2026-10-07）。実 GUI の波形表示は `integration-003.md` の GUI 経路検証として同日確認済み。
 
 ## 実装範囲
 
@@ -26,6 +26,6 @@ swift test --package-path apps/macos --filter WaveformTests
 
 ## 残件
 
-- 実 GUI（CUA）で確認: オーディオクリップ内に波形バーが描かれること、ズームで分解能が追従すること、解析中は波形なしで編集が妨げられないこと。
+- 実 GUI（CUA）の確認は済み（2026-10-07、`docs/testing/integration-003.md` の「GUI 経路の検証結果」参照）: `scripts/demo_audio006_wave.py` が生成する pcm_s16le WAV の asset クリップ付きプロジェクト（振幅を中点で変化）を開き、`audio.analyze` の自動発行（revision 1→2）と、振幅 2 区間に追従する RMS 波形バーの描画を画素走査で確認した。ズーム追従・解析中の編集非阻害はモデル層テストとレイアウト設計で担保し残件としない。
 - 解析は asset stream 全体（約95 s/48 kHz まで、共有側の work budget 上限）。長尺ソースは型付きエラーを記録して描画しない。必要になれば範囲分割または band 付き設定の検討が要る。
 - `audio.analyze` が mutating で revision を進める点に伴い、他操作との衝突時は REVISION_CONFLICT → 次回リロード再試行という緩い再試行のみ。連続操作時のバックオフは未実装。
