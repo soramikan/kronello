@@ -527,6 +527,131 @@ impl Builder<'_> {
                     })?);
                 }
             }
+            SceneContent::Caption(caption) => {
+                let geometry = self.push(DagNode::TextLayout {
+                    key: n.key.clone(),
+                    layout: caption.layout.clone(),
+                })?;
+                // Caption glyphs anchor inside the sequence safe area: the
+                // placement translation composes inside the node transform.
+                let caption_transform = transform.compose(Affine2([
+                    [1.0, 0.0, caption.origin[0]],
+                    [0.0, 1.0, caption.origin[1]],
+                ]));
+                let italic_shear = Affine2([
+                    [1.0, -kronello_model::CAPTION_ITALIC_SHEAR, 0.0],
+                    [0.0, 1.0, 0.0],
+                ]);
+                let [a, b] = caption_transform.0;
+                // Stroke widths are authored in design_px; scale them like
+                // shape strokes by the output transform's x-axis norm.
+                let stroke_scale = a[0].hypot(b[0]);
+                if let Some(background) = caption.background {
+                    let bounds = caption.layout.layout_bounds;
+                    let contours = map_contours(
+                        FlattenedPath {
+                            subpaths: vec![kronello_vector::Polyline {
+                                points: vec![
+                                    bounds.min,
+                                    [bounds.max[0], bounds.min[1]],
+                                    bounds.max,
+                                    [bounds.min[0], bounds.max[1]],
+                                ],
+                                closed: true,
+                            }],
+                        },
+                        caption_transform,
+                    )?;
+                    children.push(self.push(DagNode::CoverageDraw {
+                        geometry,
+                        path: CoveragePath {
+                            stroke_geometry: None,
+                            geometry_content_hash:
+                                n.layout_content_hash.clone().unwrap_or_default(),
+                            contours,
+                            fill: Some((background, FillRule::Nonzero)),
+                            stroke: None,
+                            fill_gradient: None,
+                            stroke_gradient: None,
+                            paint_transform: Affine2::IDENTITY.0,
+                        },
+                    })?);
+                }
+                for glyph in &caption.layout.glyphs {
+                    let flags = caption
+                        .span_flags
+                        .get(glyph.style_index)
+                        .copied()
+                        .unwrap_or_default();
+                    // Synthesized italic is an oblique shear in text-local
+                    // space, applied before the placement translation.
+                    let glyph_transform = if flags.italic {
+                        caption_transform.compose(italic_shear)
+                    } else {
+                        caption_transform
+                    };
+                    let (geometry_content_hash, contours) = self.semantic_cache.geometry(
+                        &kronello_model::ResolvedGeometry::BezierPath(glyph.outline.clone()),
+                        n.layout_content_hash.as_deref(),
+                        flatten,
+                        || flatten_outline(&glyph.outline, flatten),
+                    )?;
+                    let contours = map_contours(contours, glyph_transform)?;
+                    // Order: outline ring behind the fill, then the bold ring,
+                    // then the glyph fill. A centered stroke at twice the
+                    // authored width leaves exactly that width visible.
+                    let mut draw = |stroke: Option<(
+                        Color,
+                        f64,
+                        kronello_model::StrokeJoin,
+                        kronello_model::StrokeCap,
+                        f64,
+                    )>,
+                                    fill: Option<(Color, FillRule)>|
+                     -> Result<usize, RenderError> {
+                        self.push(DagNode::CoverageDraw {
+                            geometry,
+                            path: CoveragePath {
+                                stroke_geometry: None,
+                                geometry_content_hash: geometry_content_hash.clone(),
+                                contours: contours.clone(),
+                                fill,
+                                stroke,
+                                fill_gradient: None,
+                                stroke_gradient: None,
+                                paint_transform: Affine2::IDENTITY.0,
+                            },
+                        })
+                    };
+                    if let Some(outline) = &caption.outline
+                        && outline.width.get() > 0.0
+                    {
+                        children.push(draw(
+                            Some((
+                                outline.color,
+                                outline.width.get() * 2.0 * stroke_scale,
+                                kronello_model::StrokeJoin::Round,
+                                kronello_model::StrokeCap::Round,
+                                4.0,
+                            )),
+                            None,
+                        )?);
+                    }
+                    if flags.bold && caption.bold_width > 0.0 {
+                        children.push(draw(
+                            Some((
+                                glyph.fill,
+                                caption.bold_width * 2.0 * stroke_scale,
+                                kronello_model::StrokeJoin::Round,
+                                kronello_model::StrokeCap::Round,
+                                4.0,
+                            )),
+                            None,
+                        )?);
+                    }
+                    children.push(draw(None, Some((glyph.fill, FillRule::Nonzero)))?);
+                }
+            }
         }
         let mut blend_modes = BTreeMap::new();
         for child in 0..self.scene.nodes.len() {

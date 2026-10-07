@@ -1666,7 +1666,7 @@
       "priority": "P0",
       "area": "captions",
       "title": "字幕モデル: caption track・字幕 clip kind・スタイルと版管理",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "NLE-002",
         "TEXT-002"
@@ -1683,7 +1683,7 @@
       "priority": "P0",
       "area": "captions",
       "title": "字幕 I/O: SRT/VTT/ITT 入出力と焼き付け・サイドカー書き出し",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "SUB-001",
         "MEDIA-002"

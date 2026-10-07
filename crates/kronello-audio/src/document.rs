@@ -258,6 +258,13 @@ impl DocumentAudioPlan {
                             SourceRef::Generator { .. } => {
                                 return Err(unsupported("Generator audio requires AUDIO-004"));
                             }
+                            SourceRef::Caption { .. } => {
+                                // Unreachable: captions only sit on caption
+                                // tracks and are already filtered as inaudible.
+                                return Err(unsupported(
+                                    "caption clips are excluded from audio mixing",
+                                ));
+                            }
                         }
                     }
                 }

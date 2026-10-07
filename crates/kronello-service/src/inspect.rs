@@ -461,6 +461,11 @@ fn paints_match(
                 |gradient| gradient.stops.iter().all(|s| predicate(s.color)),
             )
         }),
+        kronello_render::SceneContent::Caption(caption) => {
+            caption.layout.glyphs.iter().all(|g| predicate(g.fill))
+                && caption.outline.as_ref().is_none_or(|o| predicate(o.color))
+                && caption.background.is_none_or(predicate)
+        }
         kronello_render::SceneContent::Empty => true,
         // Decoded video pixels are not known here, so a video paint is never proven to match.
         kronello_render::SceneContent::Video { .. } => false,

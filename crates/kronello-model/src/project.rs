@@ -8,8 +8,8 @@ use thiserror::Error;
 use uuid::Uuid;
 
 use crate::{
-    AnimationCurve, Asset, AudioAnalysisDataAsset, Composition, Expression, Sequence, Shape,
-    TemplateDefinition, TemplateInstance, TextDocument,
+    AnimationCurve, Asset, AudioAnalysisDataAsset, CaptionDocument, Composition, Expression,
+    Sequence, Shape, TemplateDefinition, TemplateInstance, TextDocument,
 };
 
 pub const PROJECT_SCHEMA_VERSION: u32 = 1;
@@ -46,6 +46,8 @@ pub struct Project {
     pub shapes: Vec<DocumentObject<Shape>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub texts: Vec<DocumentObject<TextDocument>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub captions: Vec<DocumentObject<CaptionDocument>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub templates: Vec<DocumentObject<TemplateDefinition>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -90,6 +92,7 @@ impl Default for Project {
             expressions: Vec::new(),
             shapes: Vec::new(),
             texts: Vec::new(),
+            captions: Vec::new(),
             templates: Vec::new(),
             template_instances: Vec::new(),
             assets: Vec::new(),
@@ -121,6 +124,7 @@ impl Project {
                     | "expressions"
                     | "shapes"
                     | "texts"
+                    | "captions"
                     | "templates"
                     | "template_instances"
                     | "assets"
@@ -152,6 +156,10 @@ impl Project {
                 _ => None,
             }))
             .chain(self.texts.iter().filter_map(|object| match object {
+                DocumentObject::Opaque(value) => Some(value),
+                _ => None,
+            }))
+            .chain(self.captions.iter().filter_map(|object| match object {
                 DocumentObject::Opaque(value) => Some(value),
                 _ => None,
             }))
@@ -250,6 +258,31 @@ impl Project {
             };
             if !ids.insert(id) {
                 return Err(ProjectError::InvalidDocument("duplicate object id".into()));
+            }
+        }
+        for object in &self.captions {
+            let id = match object {
+                DocumentObject::Known(caption) => {
+                    if caption.version == crate::CAPTION_VERSION {
+                        caption
+                            .validate()
+                            .map_err(|e| ProjectError::InvalidDocument(e.to_string()))?;
+                    }
+                    caption.id.as_uuid()
+                }
+                DocumentObject::Opaque(value) => {
+                    if value.fields.contains_key("id") {
+                        return Err(ProjectError::InvalidDocument(
+                            "opaque extension shadows id".into(),
+                        ));
+                    }
+                    value.id
+                }
+            };
+            if !ids.insert(id) {
+                return Err(ProjectError::InvalidDocument(
+                    "duplicate or shadowed caption id".into(),
+                ));
             }
         }
         for object in &self.templates {
@@ -422,6 +455,8 @@ impl Project {
             || self.mattes.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(m) if m.version != crate::DOCUMENT_MATTE_VERSION))
             || self.texts.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
             || self.texts.iter().any(|v| matches!(v, DocumentObject::Known(t) if !matches!(t.layout_version, 1 | 2)))
+            || self.captions.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
+            || self.captions.iter().any(|v| matches!(v, DocumentObject::Known(c) if c.version != crate::CAPTION_VERSION))
             || self.curves.iter().any(
                 |v| matches!(v, DocumentObject::Known(c) if c.ensure_supported_version().is_err()),
             )
@@ -483,6 +518,11 @@ impl<'de> Deserialize<'de> for Project {
             },
             texts: if fields.contains_key("texts") {
                 take_field::<_, D::Error>(&mut fields, "texts")?
+            } else {
+                Vec::new()
+            },
+            captions: if fields.contains_key("captions") {
+                take_field::<_, D::Error>(&mut fields, "captions")?
             } else {
                 Vec::new()
             },

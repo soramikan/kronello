@@ -91,6 +91,12 @@ impl JobOutput {
                 clips: vec![],
                 background: [0.0; 3],
             },
+            // Representative sidecar profile; the caption_format field selects
+            // srt/vtt/itt on the wire, all sharing this capability entry.
+            Self::CaptionSidecar {
+                sequence: kronello_model::SequenceId::from_uuid(uuid::Uuid::nil()),
+                caption_format: kronello_model::CaptionFormat::Srt,
+            },
         ]
     }
     fn discovery(&self, media: Option<&MediaCapabilities>) -> ExportProfileCapability {
@@ -134,6 +140,9 @@ impl JobOutput {
                 "libsvtav1",
                 false,
             ),
+            Self::CaptionSidecar { caption_format, .. } => {
+                (vec![], vec![], caption_format.extension(), "", false)
+            }
         };
         let registered = encoder.is_empty()
             || media.is_some_and(|m| {
@@ -220,7 +229,11 @@ mod tests {
         assert_eq!(profiles.len(), expected.len());
         for output in JobOutput::discovery_outputs() {
             let profile = output.discovery(None);
-            if !matches!(output, JobOutput::ImageSequence) {
+            // CaptionSidecar carries no movie profile fields by design.
+            if !matches!(
+                output,
+                JobOutput::ImageSequence | JobOutput::CaptionSidecar { .. }
+            ) {
                 for version in &profile.profile_versions {
                     let mut wire = serde_json::to_value(&output).unwrap();
                     wire["profile_version"] = (*version).into();

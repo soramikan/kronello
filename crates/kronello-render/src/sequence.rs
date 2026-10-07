@@ -77,76 +77,84 @@ pub fn lower_sequence(project: &Project, id: SequenceId) -> Result<Composition, 
         for clip in &track.clips {
             end = end.max(clip.timeline_range.end());
         }
-        if !track.visible() || track.kind == TrackKind::Audio {
-            continue;
-        }
-        let mut clips: Vec<_> = track.clips.iter().collect();
-        clips.sort_by_key(|c| c.timeline_range.start());
-        for clip in clips {
-            if let SourceRef::Asset { asset, .. } = clip.source_ref
-                && let Some(DocumentObject::Known(a)) = project
-                    .assets
-                    .iter()
-                    .find(|a| matches!(a, DocumentObject::Known(a) if a.id == asset))
-                && a.kind != AssetKind::Video
-            {
-                return Err(RenderError::UnsupportedFeature(
-                    "sequence image source rendering".into(),
-                ));
+    }
+    // Non-caption tracks lower in authored order first; every caption cue is a
+    // text node composited above all video regardless of track position.
+    for caption_pass in [false, true] {
+        for track in &sequence.tracks {
+            if !track.visible() || track.kind == TrackKind::Audio {
+                continue;
             }
-            if let SourceRef::Generator {
-                generator, version, ..
-            } = &clip.source_ref
-                && (generator != SOLID_GENERATOR_ID || *version != GENERATOR_VERSION)
-            {
-                return Err(RenderError::UnsupportedFeature(
-                    "generator id/version".into(),
-                ));
+            if (track.kind == TrackKind::Caption) != caption_pass {
+                continue;
             }
-            let local_time_map = match &clip.time_map {
-                TimeMap::Linear(m) => TimeMap::linear(
-                    clip.source_in
-                        .checked_add(m.offset())?
-                        .checked_sub(clip.timeline_range.start().checked_mul(m.speed())?)?,
-                    m.speed(),
-                )?,
-                TimeMap::PiecewiseLinear(m) => TimeMap::piecewise_linear(
-                    m.points()
+            let mut clips: Vec<_> = track.clips.iter().collect();
+            clips.sort_by_key(|c| c.timeline_range.start());
+            for clip in clips {
+                if let SourceRef::Asset { asset, .. } = clip.source_ref
+                    && let Some(DocumentObject::Known(a)) = project
+                        .assets
                         .iter()
-                        .map(|p| {
-                            Ok(TimeMapPoint {
-                                parent: p.parent.checked_add(clip.timeline_range.start())?,
-                                local: p.local.checked_add(clip.source_in)?,
+                        .find(|a| matches!(a, DocumentObject::Known(a) if a.id == asset))
+                    && a.kind != AssetKind::Video
+                {
+                    return Err(RenderError::UnsupportedFeature(
+                        "sequence image source rendering".into(),
+                    ));
+                }
+                if let SourceRef::Generator {
+                    generator, version, ..
+                } = &clip.source_ref
+                    && (generator != SOLID_GENERATOR_ID || *version != GENERATOR_VERSION)
+                {
+                    return Err(RenderError::UnsupportedFeature(
+                        "generator id/version".into(),
+                    ));
+                }
+                let local_time_map = match &clip.time_map {
+                    TimeMap::Linear(m) => TimeMap::linear(
+                        clip.source_in
+                            .checked_add(m.offset())?
+                            .checked_sub(clip.timeline_range.start().checked_mul(m.speed())?)?,
+                        m.speed(),
+                    )?,
+                    TimeMap::PiecewiseLinear(m) => TimeMap::piecewise_linear(
+                        m.points()
+                            .iter()
+                            .map(|p| {
+                                Ok(TimeMapPoint {
+                                    parent: p.parent.checked_add(clip.timeline_range.start())?,
+                                    local: p.local.checked_add(clip.source_in)?,
+                                })
                             })
+                            .collect::<Result<Vec<_>, kronello_time::TimeError>>()?,
+                    )?,
+                    _ => return Err(RenderError::UnsupportedFeature("time map".into())),
+                };
+                nodes.push(SceneNode {
+                    tags: Default::default(),
+                    name: None,
+                    enabled: true,
+                    id: NodeId::from_uuid(clip.id.as_uuid()),
+                    kind: if let SourceRef::Composition { composition } = clip.source_ref {
+                        NodeKind::CompositionInstance(CompositionInstance {
+                            id: CompositionInstanceId::from_uuid(clip.id.as_uuid()),
+                            definition_ref: composition,
+                            input_bindings: Default::default(),
+                            local_time_map,
+                            seed: 0,
                         })
-                        .collect::<Result<Vec<_>, kronello_time::TimeError>>()?,
-                )?,
-                _ => return Err(RenderError::UnsupportedFeature("time map".into())),
-            };
-            end = end.max(clip.timeline_range.end());
-            nodes.push(SceneNode {
-                tags: Default::default(),
-                name: None,
-                enabled: true,
-                id: NodeId::from_uuid(clip.id.as_uuid()),
-                kind: if let SourceRef::Composition { composition } = clip.source_ref {
-                    NodeKind::CompositionInstance(CompositionInstance {
-                        id: CompositionInstanceId::from_uuid(clip.id.as_uuid()),
-                        definition_ref: composition,
-                        input_bindings: Default::default(),
-                        local_time_map,
-                        seed: 0,
-                    })
-                } else {
-                    NodeKind::Null
-                },
-                containment_parent: None,
-                transform_parent: None,
-                child_order: vec![],
-                active_range: clip.timeline_range,
-                properties: clip.properties.clone(),
-                effects: clip.effects.clone(),
-            });
+                    } else {
+                        NodeKind::Null
+                    },
+                    containment_parent: None,
+                    transform_parent: None,
+                    child_order: vec![],
+                    active_range: clip.timeline_range,
+                    properties: clip.properties.clone(),
+                    effects: clip.effects.clone(),
+                });
+            }
         }
     }
     Ok(Composition {

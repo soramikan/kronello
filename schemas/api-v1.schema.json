@@ -781,6 +781,351 @@
       ],
       "type": "object"
     },
+    "CaptionAnchor": {
+      "description": "Nine-direction anchor inside the caption safe area.",
+      "enum": [
+        "top_left",
+        "top_center",
+        "top_right",
+        "center_left",
+        "center",
+        "center_right",
+        "bottom_left",
+        "bottom_center",
+        "bottom_right"
+      ],
+      "type": "string"
+    },
+    "CaptionCueIds": {
+      "additionalProperties": false,
+      "description": "Caller-allocated stable identities for one imported cue (planned/apply\ncommands never allocate IDs during mutation).",
+      "properties": {
+        "caption": {
+          "$ref": "#/$defs/CaptionId"
+        },
+        "clip": {
+          "$ref": "#/$defs/ClipId"
+        }
+      },
+      "required": [
+        "caption",
+        "clip"
+      ],
+      "type": "object"
+    },
+    "CaptionDocument": {
+      "additionalProperties": false,
+      "description": "Versioned cue document. One `CaptionDocument` describes exactly one cue's\ntext, style and placement; its timeline interval lives on the caption clip.",
+      "properties": {
+        "format": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CaptionFormat"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "$ref": "#/$defs/CaptionId"
+        },
+        "placement": {
+          "$ref": "#/$defs/CaptionPlacement"
+        },
+        "spans": {
+          "description": "Ordered, nonoverlapping span overrides at grapheme boundaries.",
+          "items": {
+            "$ref": "#/$defs/CaptionSpan"
+          },
+          "type": "array"
+        },
+        "style": {
+          "$ref": "#/$defs/CaptionStyle"
+        },
+        "text": {
+          "description": "Cue payload text. `\\n` is the only line separator and the content is\ndata: import decoders strip markup, and nothing here is executed.",
+          "type": "string"
+        },
+        "version": {
+          "description": "Supported document version; this implementation accepts only 1.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "text",
+        "style",
+        "placement"
+      ],
+      "type": "object"
+    },
+    "CaptionFormat": {
+      "description": "Import provenance of a cue document. Export always reserializes the stored\ndocument; this metadata never drives rendering.",
+      "enum": [
+        "srt",
+        "vtt",
+        "itt"
+      ],
+      "type": "string"
+    },
+    "CaptionId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "format": "uuid",
+      "type": "string"
+    },
+    "CaptionOutline": {
+      "additionalProperties": false,
+      "description": "Stroke drawn outside the glyph fill, in the sequence working color space.",
+      "properties": {
+        "color": {
+          "$ref": "#/$defs/Color"
+        },
+        "width": {
+          "$ref": "#/$defs/FiniteF64",
+          "description": "Visible outline ring width in design_px; zero is allowed but draws\nnothing. Rendering strokes the glyph path centered at twice this width."
+        }
+      },
+      "required": [
+        "color",
+        "width"
+      ],
+      "type": "object"
+    },
+    "CaptionPlacement": {
+      "additionalProperties": false,
+      "description": "Nine-direction caption placement relative to the sequence safe area.\nRatios are stored exactly as rationals, never as floating point.",
+      "properties": {
+        "anchor": {
+          "$ref": "#/$defs/CaptionAnchor"
+        },
+        "offset": {
+          "description": "Additional offset from the anchor point, as a ratio of the sequence\nextent. +x moves right, +y moves down.",
+          "items": {
+            "$ref": "#/$defs/Rational"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "safe_area_inset": {
+          "description": "Inset applied to both sides of the sequence extent per axis, as a ratio\nof that extent. Each component must be in `0..=1/2`.",
+          "items": {
+            "$ref": "#/$defs/Rational"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "anchor",
+        "safe_area_inset",
+        "offset"
+      ],
+      "type": "object"
+    },
+    "CaptionSpan": {
+      "additionalProperties": false,
+      "description": "Span-level style override. Unknown attributes are rejected by strict\ndecoding instead of being silently dropped.",
+      "properties": {
+        "bold": {
+          "description": "Drawn as a synthesized stroke when no replacement span font is given.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "color": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Color"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "font": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FontRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Explicit replacement face; its bytes remain hash-locked."
+        },
+        "italic": {
+          "description": "Drawn as a synthesized oblique shear when no replacement span font is\ngiven. Both flags are draw-time attributes of the span, not markup.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "range": {
+          "$ref": "#/$defs/TextRange"
+        }
+      },
+      "required": [
+        "range"
+      ],
+      "type": "object"
+    },
+    "CaptionStyle": {
+      "additionalProperties": false,
+      "description": "Cue-wide base style. Span attributes override these values inside their\ntext range only.",
+      "properties": {
+        "background": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional rectangle behind the laid-out cue block."
+        },
+        "fill": {
+          "$ref": "#/$defs/Color",
+          "description": "Straight tagged color evaluated in the sequence working space."
+        },
+        "font": {
+          "$ref": "#/$defs/FontRef",
+          "description": "Hash-locked face; rendering never substitutes family/system fonts."
+        },
+        "outline": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CaptionOutline"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "size": {
+          "$ref": "#/$defs/FiniteF64",
+          "description": "Positive glyph size in design_px."
+        }
+      },
+      "required": [
+        "font",
+        "size",
+        "fill"
+      ],
+      "type": "object"
+    },
+    "CaptionsExportRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "format": {
+          "$ref": "#/$defs/CaptionFormat"
+        },
+        "project": {
+          "type": "string"
+        },
+        "sequence": {
+          "$ref": "#/$defs/SequenceId"
+        }
+      },
+      "required": [
+        "project",
+        "sequence",
+        "format"
+      ],
+      "type": "object"
+    },
+    "CaptionsExportResult": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "description": "Deterministic serialized sidecar text (UTF-8).",
+          "type": "string"
+        },
+        "format": {
+          "$ref": "#/$defs/CaptionFormat"
+        }
+      },
+      "required": [
+        "format",
+        "content"
+      ],
+      "type": "object"
+    },
+    "CaptionsImportPlanRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision": {
+          "type": "string"
+        },
+        "content": {
+          "description": "UTF-8 sidecar document text.",
+          "type": "string"
+        },
+        "cue_ids": {
+          "description": "Exactly one identity pair per parsed cue, in cue order.",
+          "items": {
+            "$ref": "#/$defs/CaptionCueIds"
+          },
+          "type": "array"
+        },
+        "format": {
+          "$ref": "#/$defs/CaptionFormat"
+        },
+        "project": {
+          "type": "string"
+        },
+        "sequence": {
+          "$ref": "#/$defs/SequenceId"
+        },
+        "style": {
+          "$ref": "#/$defs/CaptionStyle",
+          "description": "Base cue style; per-cue format styling overrides individual fields."
+        },
+        "track": {
+          "$ref": "#/$defs/TrackId",
+          "description": "Existing caption track, or the ID of the caption track the plan creates."
+        }
+      },
+      "required": [
+        "project",
+        "base_revision",
+        "sequence",
+        "track",
+        "format",
+        "content",
+        "style",
+        "cue_ids"
+      ],
+      "type": "object"
+    },
+    "CaptionsImportRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "idempotency_key": {
+          "type": "string"
+        },
+        "plan": {
+          "$ref": "#/$defs/CaptionsImportPlanRequest"
+        },
+        "session_id": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "plan",
+        "session_id",
+        "idempotency_key"
+      ],
+      "type": "object"
+    },
     "ChangedKey": {
       "oneOf": [
         {
@@ -1036,7 +1381,8 @@
         "image",
         "audio",
         "composition",
-        "generator"
+        "generator",
+        "caption"
       ],
       "type": "string"
     },
@@ -1655,7 +2001,7 @@
     "DocumentObject10": {
       "anyOf": [
         {
-          "$ref": "#/$defs/ExpressionDataAsset"
+          "$ref": "#/$defs/AudioAnalysisDataAsset"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -1666,7 +2012,7 @@
     "DocumentObject11": {
       "anyOf": [
         {
-          "$ref": "#/$defs/Sequence"
+          "$ref": "#/$defs/ExpressionDataAsset"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -1677,7 +2023,7 @@
     "DocumentObject12": {
       "anyOf": [
         {
-          "$ref": "#/$defs/MatteRelation"
+          "$ref": "#/$defs/Sequence"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -1688,7 +2034,7 @@
     "DocumentObject13": {
       "anyOf": [
         {
-          "$ref": "#/$defs/Repeater"
+          "$ref": "#/$defs/MatteRelation"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -1697,6 +2043,17 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
     },
     "DocumentObject14": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Repeater"
+        },
+        {
+          "$ref": "#/$defs/OpaqueObject"
+        }
+      ],
+      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
+    },
+    "DocumentObject15": {
       "anyOf": [
         {
           "$ref": "#/$defs/ParticleSimulation"
@@ -1754,7 +2111,7 @@
     "DocumentObject6": {
       "anyOf": [
         {
-          "$ref": "#/$defs/TemplateDefinition"
+          "$ref": "#/$defs/CaptionDocument"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -1765,7 +2122,7 @@
     "DocumentObject7": {
       "anyOf": [
         {
-          "$ref": "#/$defs/TemplateInstance"
+          "$ref": "#/$defs/TemplateDefinition"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -1776,7 +2133,7 @@
     "DocumentObject8": {
       "anyOf": [
         {
-          "$ref": "#/$defs/Asset"
+          "$ref": "#/$defs/TemplateInstance"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -1787,7 +2144,7 @@
     "DocumentObject9": {
       "anyOf": [
         {
-          "$ref": "#/$defs/AudioAnalysisDataAsset"
+          "$ref": "#/$defs/Asset"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -2562,6 +2919,50 @@
           },
           "required": [
             "text_set"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Upsert one validated caption cue document.",
+          "properties": {
+            "caption_set": {
+              "additionalProperties": false,
+              "properties": {
+                "caption": {
+                  "$ref": "#/$defs/CaptionDocument"
+                }
+              },
+              "required": [
+                "caption"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "caption_set"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Remove a cue document. Planning rejects a removal that would leave a\ncaption clip referencing a missing document.",
+          "properties": {
+            "caption_remove": {
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "$ref": "#/$defs/CaptionId"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "caption_remove"
           ],
           "type": "object"
         },
@@ -5357,6 +5758,28 @@
             "background"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Subtitle sidecar file (`caption_format` selects srt/vtt/itt). The job\nserializes cue documents from the fixed snapshot; no frames render.",
+          "properties": {
+            "caption_format": {
+              "$ref": "#/$defs/CaptionFormat"
+            },
+            "format": {
+              "const": "caption_sidecar",
+              "type": "string"
+            },
+            "sequence": {
+              "$ref": "#/$defs/SequenceId"
+            }
+          },
+          "required": [
+            "format",
+            "sequence",
+            "caption_format"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -6773,13 +7196,19 @@
       "properties": {
         "assets": {
           "items": {
-            "$ref": "#/$defs/DocumentObject8"
+            "$ref": "#/$defs/DocumentObject9"
           },
           "type": "array"
         },
         "audio_analyses": {
           "items": {
-            "$ref": "#/$defs/DocumentObject9"
+            "$ref": "#/$defs/DocumentObject10"
+          },
+          "type": "array"
+        },
+        "captions": {
+          "items": {
+            "$ref": "#/$defs/DocumentObject6"
           },
           "type": "array"
         },
@@ -6797,7 +7226,7 @@
         },
         "expression_data_assets": {
           "items": {
-            "$ref": "#/$defs/DocumentObject10"
+            "$ref": "#/$defs/DocumentObject11"
           },
           "type": "array"
         },
@@ -6813,7 +7242,7 @@
         },
         "mattes": {
           "items": {
-            "$ref": "#/$defs/DocumentObject12"
+            "$ref": "#/$defs/DocumentObject13"
           },
           "type": "array"
         },
@@ -6822,7 +7251,7 @@
         },
         "repeaters": {
           "items": {
-            "$ref": "#/$defs/DocumentObject13"
+            "$ref": "#/$defs/DocumentObject14"
           },
           "type": "array"
         },
@@ -6839,7 +7268,7 @@
         },
         "sequences": {
           "items": {
-            "$ref": "#/$defs/DocumentObject11"
+            "$ref": "#/$defs/DocumentObject12"
           },
           "type": "array"
         },
@@ -6851,19 +7280,19 @@
         },
         "simulations": {
           "items": {
-            "$ref": "#/$defs/DocumentObject14"
+            "$ref": "#/$defs/DocumentObject15"
           },
           "type": "array"
         },
         "template_instances": {
           "items": {
-            "$ref": "#/$defs/DocumentObject7"
+            "$ref": "#/$defs/DocumentObject8"
           },
           "type": "array"
         },
         "templates": {
           "items": {
-            "$ref": "#/$defs/DocumentObject6"
+            "$ref": "#/$defs/DocumentObject7"
           },
           "type": "array"
         },
@@ -9487,6 +9916,109 @@
             "document"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "base_revision": {
+              "type": "string"
+            },
+            "content": {
+              "description": "UTF-8 sidecar document text.",
+              "type": "string"
+            },
+            "cue_ids": {
+              "description": "Exactly one identity pair per parsed cue, in cue order.",
+              "items": {
+                "$ref": "#/$defs/CaptionCueIds"
+              },
+              "type": "array"
+            },
+            "format": {
+              "$ref": "#/$defs/CaptionFormat"
+            },
+            "operation": {
+              "const": "captions.import_plan",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "sequence": {
+              "$ref": "#/$defs/SequenceId"
+            },
+            "style": {
+              "$ref": "#/$defs/CaptionStyle",
+              "description": "Base cue style; per-cue format styling overrides individual fields."
+            },
+            "track": {
+              "$ref": "#/$defs/TrackId",
+              "description": "Existing caption track, or the ID of the caption track the plan creates."
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "base_revision",
+            "sequence",
+            "track",
+            "format",
+            "content",
+            "style",
+            "cue_ids"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "idempotency_key": {
+              "type": "string"
+            },
+            "operation": {
+              "const": "captions.import",
+              "type": "string"
+            },
+            "plan": {
+              "$ref": "#/$defs/CaptionsImportPlanRequest"
+            },
+            "session_id": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "plan",
+            "session_id",
+            "idempotency_key"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "format": {
+              "$ref": "#/$defs/CaptionFormat"
+            },
+            "operation": {
+              "const": "captions.export",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "sequence": {
+              "$ref": "#/$defs/SequenceId"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "sequence",
+            "format"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -10103,6 +10635,23 @@
             },
             "value": {
               "$ref": "#/$defs/ProjectChangePlan"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "captions",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/CaptionsExportResult"
             }
           },
           "required": [
@@ -11314,6 +11863,23 @@
           "required": [
             "kind",
             "generator"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "caption": {
+              "$ref": "#/$defs/CaptionId"
+            },
+            "kind": {
+              "const": "caption",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "caption"
           ],
           "type": "object"
         }
@@ -13127,6 +13693,32 @@
         },
         {
           "additionalProperties": false,
+          "description": "Append one authored track. Track kind is part of the value; validation\nenforces per-kind clip rules.",
+          "properties": {
+            "track_append": {
+              "additionalProperties": false,
+              "properties": {
+                "sequence": {
+                  "$ref": "#/$defs/SequenceId"
+                },
+                "track": {
+                  "$ref": "#/$defs/Track"
+                }
+              },
+              "required": [
+                "sequence",
+                "track"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "track_append"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "properties": {
             "clip_place": {
               "additionalProperties": false,
@@ -13573,11 +14165,20 @@
       "type": "string"
     },
     "TrackKind": {
-      "enum": [
-        "video",
-        "audio"
-      ],
-      "type": "string"
+      "oneOf": [
+        {
+          "enum": [
+            "video",
+            "audio"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "caption",
+          "description": "Text cues rendered above every video track; never enters audio mixing.",
+          "type": "string"
+        }
+      ]
     },
     "TrackState": {
       "additionalProperties": false,
