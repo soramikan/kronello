@@ -32,6 +32,13 @@ fn write_json(path: impl AsRef<Path>, value: &Value) -> Result<()> {
     fs::write(path, serde_json::to_vec_pretty(value)?)?;
     Ok(())
 }
+/// The scene manifest is the largest golden artifact; keeping it compact
+/// preserves the ADR-0088 per-file size cap without changing its content
+/// (baseline validation compares parsed values, not bytes layout).
+fn write_json_compact(path: impl AsRef<Path>, value: &Value) -> Result<()> {
+    fs::write(path, serde_json::to_vec(value)?)?;
+    Ok(())
+}
 struct Scene {
     id: &'static str,
     width: u32,
@@ -402,7 +409,7 @@ fn run(output: &Path) -> Result<Value> {
     )?;
     write_json(output.join("environment.json"), &environment)?;
     write_json(output.join("provenance.json"), &provenance)?;
-    write_json(output.join("manifest.json"), &manifest)?;
+    write_json_compact(output.join("manifest.json"), &manifest)?;
     let destination = if update {
         output.join("candidate")
     } else {
@@ -410,7 +417,7 @@ fn run(output: &Path) -> Result<Value> {
     };
     fs::create_dir_all(&destination)?;
     write_json(destination.join("environment.json"), &environment)?;
-    write_json(destination.join("manifest.json"), &manifest)?;
+    write_json_compact(destination.join("manifest.json"), &manifest)?;
     write_json(destination.join("provenance.json"), &provenance)?;
     if baseline.join("environment.json").exists() {
         let old: Value = serde_json::from_slice(&fs::read(baseline.join("environment.json"))?)?;
