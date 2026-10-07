@@ -14,7 +14,7 @@ use kronello_time::Time;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use crate::{FontInput, RenderInput, SceneNodeKey, ServiceError};
+use crate::{FontInput, LutInput, RenderInput, SceneNodeKey, ServiceError};
 
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -25,6 +25,9 @@ pub struct NodeExplainRequest {
     pub time: Time,
     #[serde(default)]
     pub fonts: Vec<FontInput>,
+    /// COLOR-003 explicit `.cube` locators for diagnostic scene compile.
+    #[serde(default)]
+    pub luts: Vec<LutInput>,
     /// Explicit transient matte bindings, using the existing RenderSnapshot contract.
     #[serde(default)]
     pub mattes: Vec<MatteBinding>,
@@ -210,7 +213,9 @@ fn compile(
     mattes: Vec<MatteBinding>,
     cache: &mut RenderCache,
 ) -> Result<(kronello_render::RenderSnapshot, SceneIr), ServiceError> {
-    let snapshot = crate::freeze_render_input(stored, input)?.with_mattes(mattes);
+    let snapshot = crate::freeze_render_input(stored, input)?
+        .with_mattes(mattes)
+        .with_luts(crate::load_locked_luts(input)?);
     let bytes = crate::load_locked_fonts(&snapshot, input)?;
     let fonts: Vec<_> = snapshot
         .font_locks()
@@ -238,7 +243,9 @@ pub(crate) fn render(
     };
     let mut cache = RenderCache::default();
     let outcome = (|| -> Result<_, ServiceError> {
-        let snapshot = crate::freeze_render_input(&stored, &r.input)?.with_mattes(r.mattes);
+        let snapshot = crate::freeze_render_input(&stored, &r.input)?
+            .with_mattes(r.mattes)
+            .with_luts(crate::load_locked_luts(&r.input)?);
         let bytes = crate::load_locked_fonts(&snapshot, &r.input)?;
         let fonts: Vec<_> = snapshot
             .font_locks()
@@ -542,6 +549,7 @@ pub(crate) fn node(r: NodeExplainRequest) -> Result<NodeExplainResult, ServiceEr
         },
         profile: Default::default(),
         fonts: r.fonts.clone(),
+        luts: r.luts.clone(),
     };
     let mut cache = RenderCache::default();
     let scene = match compile(&stored, &input, r.time, r.mattes.clone(), &mut cache) {
@@ -1179,6 +1187,59 @@ fn inspect_content(
         _ => (),
     }
     Ok(())
+}
+
+// ---- COLOR-004 scope observation (ADR-0113) ----
+
+/// COLOR-004: evaluate one fixed snapshot frame at `time` and return
+/// deterministic integer scope bins. Bins observe the composited
+/// working-space frame; display conversion remains a client concern.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct InspectScopesRequest {
+    pub input: RenderInput,
+    pub time: Time,
+}
+/// Integer histograms for the four COLOR-004 scope families, plus the
+/// snapshot revision and working space that produced them.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct InspectScopesResult {
+    pub revision: String,
+    pub time: Time,
+    pub working_space: kronello_model::ColorSpace,
+    /// Frame size the bins were computed over, in output pixels.
+    pub size: [u32; 2],
+    pub waveform: kronello_render::ScopeGrid,
+    pub vectorscope: kronello_render::ScopeVectorscope,
+    pub histogram: kronello_render::ScopeHistogram,
+    pub parade: kronello_render::ScopeParade,
+}
+/// `inspect.scopes` is a read-only query rendered through the deterministic
+/// CPU reference backend. The backend is pinned by the service, never by the
+/// caller, so identical inputs produce identical bins.
+pub(crate) fn scopes(
+    r: InspectScopesRequest,
+    service: &crate::Service,
+) -> Result<InspectScopesResult, ServiceError> {
+    let frame = service.render_requested_frame(&crate::FrameRenderRequest {
+        input: r.input.clone(),
+        time: r.time,
+        backend: Some(crate::BackendSelection::CpuReference),
+    })?;
+    let size = r.input.region.pixels;
+    let data =
+        kronello_render::compute_scopes(&frame.pixels.linear, size, frame.metadata.working_space)?;
+    Ok(InspectScopesResult {
+        revision: frame.metadata.revision,
+        time: r.time,
+        working_space: frame.metadata.working_space,
+        size,
+        waveform: data.waveform,
+        vectorscope: data.vectorscope,
+        histogram: data.histogram,
+        parade: data.parade,
+    })
 }
 
 #[cfg(test)]

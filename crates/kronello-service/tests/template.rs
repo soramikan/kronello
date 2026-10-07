@@ -966,6 +966,7 @@ fn media_slots_validate_refs_and_draw_final_instance_overrides() {
                 },
                 profile: Default::default(),
                 fonts: fonts.clone(),
+                luts: vec![],
             },
             time: Time::ONE,
         }))

@@ -86,9 +86,19 @@ pub enum PixelEffect {
         saturation: f32,
         lightness: f32,
     },
+    /// COLOR-003 pointwise `.cube` LUT in working space (ADR-0113). The
+    /// lattice was content-verified before reaching the DAG: `size` is
+    /// document-bounded and `data` keeps red-fastest row order. Alpha is
+    /// preserved; domain-normalized samples clamp to lattice endpoints.
+    ColorLut {
+        lut: kronello_model::CubeLut,
+        intensity: f32,
+    },
 }
 /// Kernel tag shared by all COLOR-002 v1 pointwise passes.
 pub const COLOR002_KERNEL_VERSION: &str = "color002-pointwise-f16-v1";
+/// Kernel tag for the COLOR-003 tetrahedral LUT pass.
+pub const COLOR003_KERNEL_VERSION: &str = "color003-tetrahedral-f16-v1";
 impl PixelEffect {
     /// COLOR-002 corrections are pointwise: no kernel, no neighborhood input.
     pub fn is_pointwise_color(&self) -> bool {
@@ -98,9 +108,17 @@ impl PixelEffect {
                 | Self::ColorLevels { .. }
                 | Self::ColorCurves { .. }
                 | Self::ColorHsl { .. }
+                | Self::ColorLut { .. }
         )
     }
     pub fn from_design(effect: &ResolvedEffect, scale: [f64; 2]) -> Result<Self, RenderError> {
+        // COLOR-003 carries an asset reference, not lattice bytes; the DAG
+        // builder resolves it against the snapshot luts input.
+        if let ResolvedEffect::ColorLut { .. } = effect {
+            return Err(RenderError::InvalidInput(
+                "color lut effects require scene-resolved lattice data".into(),
+            ));
+        }
         // COLOR-002 parameters are resolution-checked in the model crate; the
         // pixel-space form only converts precision since nothing is spatial.
         let pointwise = match effect {
@@ -230,7 +248,9 @@ impl PixelEffect {
         }
     }
     pub fn kernel_version(&self) -> &'static str {
-        if self.is_pointwise_color() {
+        if matches!(self, Self::ColorLut { .. }) {
+            COLOR003_KERNEL_VERSION
+        } else if self.is_pointwise_color() {
             COLOR002_KERNEL_VERSION
         } else if self.covariance().is_some() {
             AFFINE_EFFECT_KERNEL_VERSION
@@ -342,6 +362,14 @@ impl PixelEffect {
                 {
                     return Err(invalid());
                 }
+            }
+            Self::ColorLut { lut, intensity } => {
+                if !intensity.is_finite() || !(0.0..=1.0).contains(intensity) {
+                    return Err(invalid());
+                }
+                lut.validate()
+                    .and_then(|()| lut.validate_document_size())
+                    .map_err(RenderError::from)?;
             }
             _ => unreachable!(),
         }

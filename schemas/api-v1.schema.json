@@ -2988,6 +2988,28 @@
         },
         {
           "additionalProperties": false,
+          "description": "Upsert one validated external asset record. COLOR-003 registers `.cube`\ndocuments as `AssetKind::Data`; the locator stays external and the\ncontent hash is caller-independent only through the import operation\nthat verifies it.",
+          "properties": {
+            "asset_set": {
+              "additionalProperties": false,
+              "properties": {
+                "asset": {
+                  "$ref": "#/$defs/Asset"
+                }
+              },
+              "required": [
+                "asset"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "asset_set"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "properties": {
             "composition_create": {
               "additionalProperties": false,
@@ -3422,6 +3444,28 @@
             "hue_shift",
             "saturation",
             "lightness"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "COLOR-003 3D `.cube` LUT (ADR-0113). `lut` references an\n`AssetKind::Data` asset whose content bytes parse as a normalized\n`CubeLut`; the document stores the reference, never expanded bytes.\n`intensity` blends identity into the sampled output on 0..=1. Alpha is\npreserved and the authored stack order is honored.",
+          "properties": {
+            "intensity": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "const": "color_lut",
+              "type": "string"
+            },
+            "lut": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "required": [
+            "kind",
+            "lut",
+            "intensity"
           ],
           "type": "object"
         }
@@ -5332,6 +5376,72 @@
       ],
       "type": "object"
     },
+    "InspectScopesRequest": {
+      "additionalProperties": false,
+      "description": "COLOR-004: evaluate one fixed snapshot frame at `time` and return\ndeterministic integer scope bins. Bins observe the composited\nworking-space frame; display conversion remains a client concern.",
+      "properties": {
+        "input": {
+          "$ref": "#/$defs/RenderInput"
+        },
+        "time": {
+          "$ref": "#/$defs/Rational"
+        }
+      },
+      "required": [
+        "input",
+        "time"
+      ],
+      "type": "object"
+    },
+    "InspectScopesResult": {
+      "additionalProperties": false,
+      "description": "Integer histograms for the four COLOR-004 scope families, plus the\nsnapshot revision and working space that produced them.",
+      "properties": {
+        "histogram": {
+          "$ref": "#/$defs/ScopeHistogram"
+        },
+        "parade": {
+          "$ref": "#/$defs/ScopeParade"
+        },
+        "revision": {
+          "type": "string"
+        },
+        "size": {
+          "description": "Frame size the bins were computed over, in output pixels.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "time": {
+          "$ref": "#/$defs/Rational"
+        },
+        "vectorscope": {
+          "$ref": "#/$defs/ScopeVectorscope"
+        },
+        "waveform": {
+          "$ref": "#/$defs/ScopeGrid"
+        },
+        "working_space": {
+          "$ref": "#/$defs/ColorSpace"
+        }
+      },
+      "required": [
+        "revision",
+        "time",
+        "working_space",
+        "size",
+        "waveform",
+        "vectorscope",
+        "histogram",
+        "parade"
+      ],
+      "type": "object"
+    },
     "InspectionDependency": {
       "additionalProperties": false,
       "properties": {
@@ -6130,6 +6240,59 @@
       ],
       "type": "object"
     },
+    "LutImportRequest": {
+      "additionalProperties": false,
+      "description": "COLOR-003 `.cube` import request (ADR-0113). The caller-allocated asset id\nnames the record; the content hash is computed from file bytes here and\nrecorded as `content_hash`, never trusted from the request.",
+      "properties": {
+        "asset": {
+          "$ref": "#/$defs/AssetId",
+          "description": "Id of the `AssetKind::Data` record the import upserts."
+        },
+        "base_revision": {
+          "type": "string"
+        },
+        "idempotency_key": {
+          "type": "string"
+        },
+        "path": {
+          "description": "Local `.cube` locator; stored relative to the project directory when it\nlives inside it, otherwise absolute (the relink/search convention).",
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "session_id": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "base_revision",
+        "session_id",
+        "idempotency_key",
+        "path",
+        "asset"
+      ],
+      "type": "object"
+    },
+    "LutInput": {
+      "additionalProperties": false,
+      "description": "COLOR-003 explicit `.cube` render input (ADR-0113): `hash` is the\nlowercase hex SHA-256 of the document bytes an asset records as\n`content_hash`; `path` is a local locator read, parsed and verified when\nthe snapshot is frozen, then carried inside the snapshot for replay.",
+      "properties": {
+        "hash": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "hash",
+        "path"
+      ],
+      "type": "object"
+    },
     "Marker": {
       "additionalProperties": false,
       "description": "A single authored annotation in sequence time. Clip markers reference\nsequence time (not clip-local source time) and stay inside the clip's\n`timeline_range`.",
@@ -6699,6 +6862,14 @@
         },
         "key": {
           "$ref": "#/$defs/SceneNodeKey"
+        },
+        "luts": {
+          "default": [],
+          "description": "COLOR-003 explicit `.cube` locators for diagnostic scene compile.",
+          "items": {
+            "$ref": "#/$defs/LutInput"
+          },
+          "type": "array"
         },
         "mattes": {
           "default": [],
@@ -7691,6 +7862,16 @@
           "minItems": 1,
           "type": "array"
         },
+        "luts": {
+          "description": "COLOR-003 explicit `.cube` locators used only when `fonts` selects\nrender-consistent evaluation.",
+          "items": {
+            "$ref": "#/$defs/LutInput"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "project": {
           "type": "string"
         },
@@ -8064,6 +8245,14 @@
           "default": [],
           "items": {
             "$ref": "#/$defs/FontInput"
+          },
+          "type": "array"
+        },
+        "luts": {
+          "default": [],
+          "description": "COLOR-003 explicit `.cube` locators keyed by content hash, like\n`fonts`. Supplied lattices are verified; unreferenced ones are not\nbound into the scene.",
+          "items": {
+            "$ref": "#/$defs/LutInput"
           },
           "type": "array"
         },
@@ -9925,6 +10114,14 @@
             "key": {
               "$ref": "#/$defs/SceneNodeKey"
             },
+            "luts": {
+              "default": [],
+              "description": "COLOR-003 explicit `.cube` locators for diagnostic scene compile.",
+              "items": {
+                "$ref": "#/$defs/LutInput"
+              },
+              "type": "array"
+            },
             "mattes": {
               "default": [],
               "description": "Explicit transient matte bindings, using the existing RenderSnapshot contract.",
@@ -10004,6 +10201,16 @@
               "maxItems": 100000,
               "minItems": 1,
               "type": "array"
+            },
+            "luts": {
+              "description": "COLOR-003 explicit `.cube` locators used only when `fonts` selects\nrender-consistent evaluation.",
+              "items": {
+                "$ref": "#/$defs/LutInput"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
             },
             "operation": {
               "const": "property.sample",
@@ -10189,6 +10396,69 @@
             "project",
             "sequence",
             "format"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "COLOR-003 `.cube` import request (ADR-0113). The caller-allocated asset id\nnames the record; the content hash is computed from file bytes here and\nrecorded as `content_hash`, never trusted from the request.",
+          "properties": {
+            "asset": {
+              "$ref": "#/$defs/AssetId",
+              "description": "Id of the `AssetKind::Data` record the import upserts."
+            },
+            "base_revision": {
+              "type": "string"
+            },
+            "idempotency_key": {
+              "type": "string"
+            },
+            "operation": {
+              "const": "lut.import",
+              "type": "string"
+            },
+            "path": {
+              "description": "Local `.cube` locator; stored relative to the project directory when it\nlives inside it, otherwise absolute (the relink/search convention).",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "session_id": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "base_revision",
+            "session_id",
+            "idempotency_key",
+            "path",
+            "asset"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "COLOR-004: evaluate one fixed snapshot frame at `time` and return\ndeterministic integer scope bins. Bins observe the composited\nworking-space frame; display conversion remains a client concern.",
+          "properties": {
+            "input": {
+              "$ref": "#/$defs/RenderInput"
+            },
+            "operation": {
+              "const": "inspect.scopes",
+              "type": "string"
+            },
+            "time": {
+              "$ref": "#/$defs/Rational"
+            }
+          },
+          "required": [
+            "operation",
+            "input",
+            "time"
           ],
           "type": "object"
         }
@@ -10474,6 +10744,32 @@
           },
           "required": [
             "ColorHsl"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "COLOR-003 resolved effect. The asset id is content-verified against\nthe snapshot `luts` input before a `PixelEffect` is built; the lattice\nitself never enters the resolved value so snapshots stay hash-stable.",
+          "properties": {
+            "ColorLut": {
+              "properties": {
+                "intensity": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "lut": {
+                  "$ref": "#/$defs/AssetId"
+                }
+              },
+              "required": [
+                "lut",
+                "intensity"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "ColorLut"
           ],
           "type": "object"
         }
@@ -10960,6 +11256,24 @@
             "value"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "COLOR-004 scope bins over one fixed working-space frame (ADR-0113).",
+          "properties": {
+            "kind": {
+              "const": "scopes",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/InspectScopesResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -11052,6 +11366,14 @@
         "fonts": {
           "items": {
             "$ref": "#/$defs/FontInput"
+          },
+          "type": "array"
+        },
+        "luts": {
+          "default": [],
+          "description": "COLOR-003 explicit `.cube` locators for render-consistent evaluation.",
+          "items": {
+            "$ref": "#/$defs/LutInput"
           },
           "type": "array"
         },
@@ -11453,6 +11775,159 @@
     "SchemaKey": {
       "description": "Immutable namespaced schema identity, such as `kronello.transform.opacity`.\nIt is supplied by the schema author, independently of a localized label.",
       "type": "string"
+    },
+    "ScopeGrid": {
+      "additionalProperties": false,
+      "description": "A `columns x levels` integer histogram; `bins[row * columns + column]`,\nrow 0 is the lowest level.",
+      "properties": {
+        "bins": {
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "columns": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "levels": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "columns",
+        "levels",
+        "bins"
+      ],
+      "type": "object"
+    },
+    "ScopeHistogram": {
+      "additionalProperties": false,
+      "description": "Per-channel plus luma histograms on a shared 0..levels domain.",
+      "properties": {
+        "blue": {
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "green": {
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "levels": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "luma": {
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "red": {
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "levels",
+        "red",
+        "green",
+        "blue",
+        "luma"
+      ],
+      "type": "object"
+    },
+    "ScopeParade": {
+      "additionalProperties": false,
+      "description": "RGB parade: three `columns x levels` histograms sharing one grid shape.",
+      "properties": {
+        "blue": {
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "columns": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "green": {
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "levels": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "red": {
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "columns",
+        "levels",
+        "red",
+        "green",
+        "blue"
+      ],
+      "type": "object"
+    },
+    "ScopeVectorscope": {
+      "additionalProperties": false,
+      "description": "`size x size` Cb/Cr histogram; `bins[cr * size + cb]`, centered on neutral.",
+      "properties": {
+        "bins": {
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "size": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "size",
+        "bins"
+      ],
+      "type": "object"
     },
     "SemanticVersions": {
       "additionalProperties": false,

@@ -66,6 +66,10 @@ extension EditorModel {
             ("hue_shift", "hue_shift", "angle", 0.0),
             ("saturation", "saturation", "scalar", 1.0),
             ("lightness", "lightness", "scalar", 0.0)]),
+        // COLOR-003: listed so existing LUT effects enumerate uniformly, but
+        // `addClipEffect` cannot create one — the `lut` parameter must point at
+        // a real Data asset, so `addClipLutEffect` requires the asset id.
+        .init(kind: "color_lut", effectID: EditorModel.lutEffectID, parameters: []),
     ]
     public static let curveTableDefault: [String: Any] = ["columns": ["x": "scalar", "y": "scalar"],
         "rows": [["x": ["kind": "scalar", "value": 0.0], "y": ["kind": "scalar", "value": 0.0]],
@@ -106,6 +110,10 @@ extension EditorModel {
         case "shadow":
             id = "kronello.drop_shadow"; version = 2
             parameters = ["kind": "drop_shadow", "sigma": property("kronello.effect.sigma", "scalar", 8.0), "offset": property("kronello.effect.offset", "vec2", [8.0, 8.0]), "color": property("kronello.effect.color", "color", ["space": "srgb", "components": ["r": 0.0, "g": 0.0, "b": 0.0, "alpha": 1.0]]), "opacity": property("kronello.effect.opacity", "scalar", 0.5)]
+        case "color_lut", Self.lutEffectID:
+            // A LUT effect without a bound Data asset cannot render; creation
+            // goes through `addClipLutEffect` which takes the asset id.
+            return
         case let name where Self.colorEffects.contains(where: { $0.kind == name || $0.effectID == name }):
             guard let spec = Self.colorEffects.first(where: { $0.kind == name || $0.effectID == name }) else { return }
             var parameterIDs: [String: Any] = ["kind": spec.kind]
@@ -163,6 +171,65 @@ extension EditorModel {
         effects.remove(at: index)
         // Referenced properties stay authored, preserving possible animation and future reuse.
         replaceClipEffects(clip, properties: clip.authored.objects("properties"), effects: effects, label: "クリップ効果の削除")
+    }
+    /// COLOR-003 (ADR-0113): `kronello.color.lut` binds a `.cube` Data asset.
+    public static let lutEffectID = "kronello.color.lut"
+    /// Imported `.cube` assets (kind `data`); the LUT picker lists these.
+    public var lutAssets: [(id: String, name: String)] {
+        document.objects("assets").compactMap { asset in
+            guard asset.string("kind") == "data" else { return nil }
+            let locator = asset.object("locator")
+            let name = URL(fileURLWithPath: locator.string("relative").isEmpty
+                ? locator.string("absolute") : locator.string("relative")).lastPathComponent
+            return (asset.string("id"), name)
+        }
+    }
+    /// Hash → file inputs for every imported `.cube` Data asset, resolved
+    /// against the project directory (the RenderInput `luts` convention).
+    public var lutInputs: [[String: Any]] {
+        let base = URL(fileURLWithPath: path).deletingLastPathComponent()
+        return document.objects("assets").compactMap { asset in
+            guard asset.string("kind") == "data" else { return nil }
+            let locator = asset.object("locator")
+            let relative = locator.string("relative")
+            let file = relative.isEmpty ? locator.string("absolute")
+                : base.appendingPathComponent(relative).path
+            guard !file.isEmpty else { return nil }
+            return ["hash": asset.string("content_hash"), "path": file]
+        }
+    }
+    /// Asset id bound to the `lut` parameter through a constant asset_ref.
+    public static func lutParameterAsset(_ clip: EditClip, effect: [String: Any]) -> String? {
+        guard let id = effect.object("parameters")["lut"] as? String,
+              let property = clip.authored.objects("properties").first(where: { $0.string("id") == id }),
+              property.object("source").string("kind") == "constant" else { return nil }
+        return property.object("source").object("value")["value"] as? String
+    }
+    /// Add the versioned LUT effect bound to an imported Data asset at full
+    /// intensity; plain `addClipEffect` rejects `color_lut` on purpose.
+    public func addClipLutEffect(_ clip: EditClip, asset: String) {
+        guard !ui.locked.contains(clip.track), clip.kind != .audio, !asset.isEmpty else { return }
+        var properties = clip.authored.objects("properties"), effects = clip.authored.objects("effects")
+        func property(_ key: String, _ type: String, _ value: Any) -> String {
+            let id = UUID().uuidString
+            properties.append(["id": id, "descriptor": ["key": key, "version": 1], "source": ["kind": "constant", "value": ["kind": type, "value": value]], "modifiers": []]); return id
+        }
+        effects.append(["effect_id": Self.lutEffectID, "version": 1,
+            "parameters": ["kind": "color_lut",
+                "lut": property("kronello.effect.lut", "asset_ref", asset),
+                "intensity": property("kronello.effect.intensity", "scalar", 1.0)]])
+        replaceClipEffects(clip, properties: properties, effects: effects, label: "LUT の追加")
+    }
+    /// Import a `.cube` file as an external `data` asset pinned by content
+    /// hash; the service validates the lattice before the edit commits.
+    public func importLut(path: String) async {
+        guard !busy else { return }
+        do {
+            _ = try await request("lut.import", ["base_revision": revision, "path": path,
+                "asset": UUID().uuidString.lowercased(), "session_id": sessionID,
+                "idempotency_key": UUID().uuidString])
+            try await reload()
+        } catch { mapFailure(error) }
     }
     /// Constant [x, y] behind a vec2 effect parameter reference.
     public static func vec2ParameterValue(_ clip: EditClip, effect: [String: Any], parameter: String) -> [Double]? {

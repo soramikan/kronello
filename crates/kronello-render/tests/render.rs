@@ -2800,6 +2800,7 @@ fn fx_effect_animation_versions_and_cache_identity() {
             (kronello_model::COLOR_LEVELS_ID.into(), 1),
             (kronello_model::COLOR_CURVES_ID.into(), 1),
             (kronello_model::COLOR_HSL_ID.into(), 1),
+            (kronello_model::COLOR_LUT_ID.into(), 1),
         ])
     );
     let mut cache = RenderCache::new(CacheConfig::default());

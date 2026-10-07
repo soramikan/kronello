@@ -111,6 +111,7 @@ impl SemanticVersions {
                 (COLOR_LEVELS_ID.into(), COLOR_EFFECT_VERSION),
                 (COLOR_CURVES_ID.into(), COLOR_EFFECT_VERSION),
                 (COLOR_HSL_ID.into(), COLOR_EFFECT_VERSION),
+                (COLOR_LUT_ID.into(), COLOR_LUT_VERSION),
             ]),
             generators: generator_versions(),
             video_input: initial_video_version(),
@@ -158,6 +159,11 @@ pub struct RenderSnapshot {
     profile: RenderProfile,
     mattes: Vec<MatteBinding>,
     font_locks: Vec<FontRef>,
+    /// COLOR-003 normalized `.cube` lattices keyed by asset content hash.
+    /// Bytes are explicit render inputs; the field is serialized so a fixed
+    /// snapshot keeps deterministic replay identity (ADR-0113).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    luts: BTreeMap<String, kronello_model::CubeLut>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
@@ -244,6 +250,7 @@ impl RenderSnapshot {
                     profile,
                     mattes: vec![],
                     font_locks: vec![],
+                    luts: BTreeMap::new(),
                 };
                 value.validate()?;
                 let definitions = value.definitions()?;
@@ -299,6 +306,7 @@ impl RenderSnapshot {
             profile,
             mattes,
             font_locks: vec![],
+            luts: BTreeMap::new(),
         };
         snapshot.validate()?;
         let definitions = snapshot.definitions()?;
@@ -326,6 +334,17 @@ impl RenderSnapshot {
     pub fn with_mattes(mut self, mattes: Vec<MatteBinding>) -> Self {
         self.mattes = mattes;
         self
+    }
+    /// COLOR-003 content-verified `.cube` lattices keyed by asset content
+    /// hash, loaded from explicit render inputs; transient like `mattes`.
+    pub fn with_luts(mut self, luts: BTreeMap<String, kronello_model::CubeLut>) -> Self {
+        self.luts = luts;
+        self
+    }
+    /// Normalized LUT lattices available to this snapshot, keyed by the
+    /// document asset `content_hash`.
+    pub fn luts(&self) -> &BTreeMap<String, kronello_model::CubeLut> {
+        &self.luts
     }
     pub fn composition(&self) -> CompositionId {
         self.composition
@@ -468,6 +487,18 @@ impl RenderSnapshot {
             if self.semantic_versions.effects.get(id) == Some(&EFFECT_VERSION) {
                 *version = EFFECT_VERSION;
             }
+        }
+        // COLOR-003: snapshots pinned before LUT support carry no
+        // `kronello.color.lut` key. An absent pin rejects LUT execution during
+        // scene construction but must not invalidate unrelated snapshots.
+        if !self
+            .semantic_versions
+            .effects
+            .contains_key(kronello_model::COLOR_LUT_ID)
+        {
+            supported_versions
+                .effects
+                .remove(kronello_model::COLOR_LUT_ID);
         }
         if self.project.semantic_version != PROJECT_SEMANTIC_VERSION
             || self.semantic_versions != supported_versions
@@ -678,6 +709,10 @@ pub struct SceneIr {
     pub design_extent: [f64; 2],
     pub nodes: Vec<SceneNodeIr>,
     pub mattes: Vec<MatteBinding>,
+    /// COLOR-003 lattices resolved for this scene, keyed by document asset id.
+    /// Only assets actually referenced by resolved `kronello.color.lut`
+    /// effects appear; unreferenced render inputs are not bound.
+    pub luts: BTreeMap<AssetId, kronello_model::CubeLut>,
 }
 
 pub fn build_scene_ir(
@@ -865,6 +900,7 @@ pub fn build_scene_ir_with_cache(
         .expect("validated root");
     let mut nodes = vec![];
     let mut used_fonts = BTreeSet::new();
+    let mut luts: BTreeMap<AssetId, kronello_model::CubeLut> = BTreeMap::new();
     let mut mattes = snapshot.mattes.clone();
     for n in evaluated.nodes {
         let values: BTreeMap<_, _> = n
@@ -903,7 +939,34 @@ pub fn build_scene_ir_with_cache(
                     ));
                 }
                 d.validate(&authored.properties, &registry)?;
-                Ok(d.resolve(&values)?)
+                let resolved = d.resolve(&values)?;
+                // COLOR-003: the resolved asset reference is bound to a
+                // content-verified lattice here, while `values` stays free of
+                // lattice bytes so snapshot identity remains hash-stable.
+                if let kronello_model::ResolvedEffect::ColorLut { lut: asset_id, .. } = &resolved {
+                    let asset = content_asset(&snapshot.project, *asset_id)?;
+                    if asset.kind != AssetKind::Data {
+                        return Err(RenderError::Backend {
+                            code: "INVALID_LUT",
+                            message: format!("lut effect asset {asset_id} is not a data asset"),
+                        });
+                    }
+                    let lattice = snapshot.luts.get(&asset.content_hash).ok_or_else(|| {
+                        RenderError::Backend {
+                            code: "LUT_INPUT_MISSING",
+                            message: format!(
+                                "lut asset {} has no verified render input",
+                                asset.content_hash
+                            ),
+                        }
+                    })?;
+                    lattice
+                        .validate()
+                        .and_then(|()| lattice.validate_document_size())
+                        .map_err(RenderError::from)?;
+                    luts.entry(*asset_id).or_insert_with(|| lattice.clone());
+                }
+                Ok(resolved)
             })
             .collect::<Result<Vec<_>, RenderError>>()?;
         let mut layout_content_hash = None;
@@ -1227,6 +1290,7 @@ pub fn build_scene_ir_with_cache(
         design_extent: [root.design_extent.width(), root.design_extent.height()],
         nodes,
         mattes,
+        luts,
     })
 }
 

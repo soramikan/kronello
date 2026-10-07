@@ -103,8 +103,10 @@ pub use caption::{
 };
 
 mod effect;
+mod lut;
 mod template;
 pub use effect::*;
+pub use lut::{CubeLut, LUT_3D_DOCUMENT_MAX_SIZE, LUT_3D_MAX_SIZE, LUT_3D_MIN_SIZE, LutError};
 pub use template::*;
 mod asset;
 pub use asset::{Asset, AssetKind, AssetLocator, StreamMetadata};

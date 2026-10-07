@@ -12,10 +12,12 @@ pub use inspect::*;
 mod output;
 mod temporal;
 pub use temporal::*;
+mod scopes;
 mod simulation;
 mod snapshot;
 mod template;
 pub use effect::*;
+pub use scopes::*;
 
 pub use cache::*;
 pub use dag::*;
@@ -73,6 +75,19 @@ pub enum RenderError {
     Png(#[from] png::EncodingError),
     #[error("{code}: {message}")]
     Backend { code: &'static str, message: String },
+}
+impl From<kronello_model::LutError> for RenderError {
+    fn from(e: kronello_model::LutError) -> Self {
+        match e {
+            kronello_model::LutError::Invalid(message) => Self::Backend {
+                code: "INVALID_LUT",
+                message,
+            },
+            kronello_model::LutError::UnsupportedFeature(message) => {
+                Self::UnsupportedFeature(message)
+            }
+        }
+    }
 }
 impl RenderError {
     pub fn code(&self) -> &'static str {

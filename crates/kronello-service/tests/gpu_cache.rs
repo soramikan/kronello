@@ -34,6 +34,7 @@ fn cache003_service_child() {
                 },
                 profile: Default::default(),
                 fonts: vec![],
+                luts: vec![],
             },
             time: Time::ZERO,
             backend: Some(BackendSelection::Gpu),

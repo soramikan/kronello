@@ -1478,6 +1478,28 @@
             "saturation",
             "lightness"
           ]
+        },
+        {
+          "description": "COLOR-003 3D `.cube` LUT (ADR-0113). `lut` references an\n`AssetKind::Data` asset whose content bytes parse as a normalized\n`CubeLut`; the document stores the reference, never expanded bytes.\n`intensity` blends identity into the sampled output on 0..=1. Alpha is\npreserved and the authored stack order is honored.",
+          "type": "object",
+          "properties": {
+            "intensity": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "color_lut"
+            },
+            "lut": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "lut",
+            "intensity"
+          ]
         }
       ]
     },
