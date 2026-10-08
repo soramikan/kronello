@@ -35,9 +35,12 @@ enum Work {
     ),
     Call(String),
     Subscribe(bool),
-    Attach(preview::Layer, u32, u32),
-    Resize(u32, u32),
-    Redraw(String),
+    /// GUI-011: surfaces are addressed by a slot so one session can drive the
+    /// Source and Program monitors (and future panels) over the same retained
+    /// store/worker. Slot 0 is the original single-surface ABI.
+    Attach(u32, preview::Layer, u32, u32),
+    Resize(u32, u32, u32),
+    Redraw(u32, String),
 }
 static SESSIONS: OnceLock<Mutex<HashMap<u64, Session>>> = OnceLock::new();
 static NEXT: AtomicU64 = AtomicU64::new(1);
@@ -154,7 +157,7 @@ fn worker(
     );
     let mut previous_jobs = Value::Null;
     let mut subscribed = false;
-    let mut preview = None;
+    let mut previews: HashMap<u32, preview::Preview> = HashMap::new();
     loop {
         match receiver.recv_timeout(Duration::from_millis(250)) {
             Ok((id, work)) => {
@@ -214,21 +217,23 @@ fn worker(
                         subscribed = enable;
                         json!({"status":"success"})
                     }
-                    Work::Attach(layer, w, h) => match preview::Preview::attach(layer, w, h) {
+                    Work::Attach(slot, layer, w, h) => match preview::Preview::attach(layer, w, h) {
                         Ok(p) => {
-                            preview = Some(p);
+                            // Replacing a slot releases the previous surface
+                            // only after its queued work has finished (FIFO).
+                            previews.insert(slot, p);
                             json!({"status":"success"})
                         }
                         Err(e) => error(&e),
                     },
-                    Work::Resize(w, h) => match &mut preview {
+                    Work::Resize(slot, w, h) => match previews.get_mut(&slot) {
                         Some(p) => p
                             .resize(w, h)
                             .map(|()| json!({"status":"success"}))
                             .unwrap_or_else(|e| error(&e)),
                         None => error(&ServiceError::new("SURFACE_NOT_ATTACHED", "attach a surface first")),
                     },
-                    Work::Redraw(json) => match &mut preview {
+                    Work::Redraw(slot, json) => match previews.get_mut(&slot) {
                         Some(p) => p
                             .redraw(&service, &json)
                             .unwrap_or_else(|e| error(&e)),
@@ -385,6 +390,34 @@ pub unsafe extern "C" fn kronello_surface_attach(
     width: u32,
     height: u32,
 ) -> u64 {
+    // SAFETY: same layer contract; slot 0 keeps the original surface.
+    unsafe { kronello_surface_attach_at(handle, 0, layer, width, height) }
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn kronello_surface_resize(handle: u64, width: u32, height: u32) -> u64 {
+    kronello_surface_resize_at(handle, 0, width, height)
+}
+/// Same render.frame JSON as CLI/MCP; returns presentation metadata only.
+/// # Safety
+/// json must be readable for len bytes during this call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kronello_surface_redraw(handle: u64, json: *const u8, len: usize) -> u64 {
+    // SAFETY: same JSON buffer contract; slot 0 keeps the original surface.
+    unsafe { kronello_surface_redraw_at(handle, 0, json, len) }
+}
+/// GUI-011: slotted variants address an independent preview surface on the
+/// same session/worker, so the Source and Program monitors share the retained
+/// store, subscriptions and serialized request pipeline.
+/// # Safety
+/// Same contracts as the unslotted surface functions.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kronello_surface_attach_at(
+    handle: u64,
+    surface: u32,
+    layer: *mut c_void,
+    width: u32,
+    height: u32,
+) -> u64 {
     guard(|| {
         if layer.is_null() || width == 0 || height == 0 {
             return 0;
@@ -393,23 +426,37 @@ pub unsafe extern "C" fn kronello_surface_attach(
         // synchronously so queued work never borrows caller-owned lifetime.
         enqueue(
             handle,
-            Work::Attach(unsafe { preview::Layer::retain(layer) }, width, height),
+            Work::Attach(
+                surface,
+                unsafe { preview::Layer::retain(layer) },
+                width,
+                height,
+            ),
         )
     })
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn kronello_surface_resize(handle: u64, width: u32, height: u32) -> u64 {
-    guard(|| enqueue(handle, Work::Resize(width, height)))
+pub extern "C" fn kronello_surface_resize_at(
+    handle: u64,
+    surface: u32,
+    width: u32,
+    height: u32,
+) -> u64 {
+    guard(|| enqueue(handle, Work::Resize(surface, width, height)))
 }
-/// Same render.frame JSON as CLI/MCP; returns presentation metadata only.
 /// # Safety
 /// json must be readable for len bytes during this call.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn kronello_surface_redraw(handle: u64, json: *const u8, len: usize) -> u64 {
+pub unsafe extern "C" fn kronello_surface_redraw_at(
+    handle: u64,
+    surface: u32,
+    json: *const u8,
+    len: usize,
+) -> u64 {
     guard(|| {
         // SAFETY: caller-owned request bytes are copied before returning.
         unsafe { input(json, len) }
-            .map(|s| enqueue(handle, Work::Redraw(s)))
+            .map(|s| enqueue(handle, Work::Redraw(surface, s)))
             .unwrap_or(0)
     })
 }

@@ -194,6 +194,12 @@ pub struct RenderSnapshot {
     composition: CompositionId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     sequence: Option<SequenceId>,
+    /// GUI-011 (ADR-0128): when set, `composition` addresses a synthetic
+    /// lowered source root (`source.rs`) or an authored composition for
+    /// `SourcePreviewRef::Composition`, so source preview shares the
+    /// fixed-snapshot path instead of a second renderer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    source: Option<crate::source::SourcePreviewRef>,
     revision: u64,
     semantic_versions: SemanticVersions,
     profile: RenderProfile,
@@ -294,6 +300,7 @@ impl RenderSnapshot {
                     font_locks: vec![],
                     media_proxies: MediaProxyMode::Off,
                     luts: BTreeMap::new(),
+                    source: None,
                 };
                 value.validate()?;
                 let definitions = value.definitions()?;
@@ -330,12 +337,54 @@ impl RenderSnapshot {
                 value.font_locks = locks.into_iter().collect();
                 Ok(value)
             }
+            crate::RenderTarget::Source { source } => {
+                // Composition sources evaluate the authored definition at the
+                // authored id; media-bearing sources address the synthetic
+                // lowered root so authored content can never reference it.
+                let composition = match source {
+                    crate::source::SourcePreviewRef::Composition { composition } => composition,
+                    _ => crate::source::SOURCE_ROOT_ID,
+                };
+                let mut value = Self {
+                    schema_version: SNAPSHOT_SCHEMA_VERSION,
+                    project: project.clone(),
+                    composition,
+                    sequence: None,
+                    source: Some(source),
+                    revision,
+                    semantic_versions: SemanticVersions::current(project.semantic_version),
+                    profile,
+                    mattes: vec![],
+                    font_locks: vec![],
+                    media_proxies: MediaProxyMode::Off,
+                    luts: BTreeMap::new(),
+                };
+                value.validate()?;
+                let definitions = value.definitions()?;
+                let text_ids: BTreeSet<_> = definitions
+                    .iter()
+                    .flat_map(|c| c.nodes.iter())
+                    .filter_map(|n| match n.kind {
+                        NodeKind::Text { content_ref } => Some(content_ref),
+                        _ => None,
+                    })
+                    .collect();
+                let mut locks = BTreeSet::new();
+                for id in text_ids {
+                    let text = content(&project.texts, id.as_uuid(), |t| t.id.as_uuid())?
+                        .ok_or(TextError::MissingContent { id })?;
+                    locks.extend(text.styles.iter().map(|s| s.font.clone()));
+                }
+                value.font_locks = locks.into_iter().collect();
+                Ok(value)
+            }
         }
     }
     pub fn target(&self) -> crate::RenderTarget {
-        match self.sequence {
-            Some(sequence) => crate::RenderTarget::Sequence { sequence },
-            None => self.composition.into(),
+        match (self.source, self.sequence) {
+            (Some(source), _) => crate::RenderTarget::Source { source },
+            (None, Some(sequence)) => crate::RenderTarget::Sequence { sequence },
+            (None, None) => self.composition.into(),
         }
     }
     pub fn with_contract(
@@ -351,6 +400,7 @@ impl RenderSnapshot {
             project: project.clone(),
             composition,
             sequence: None,
+            source: None,
             revision,
             semantic_versions,
             profile,
@@ -407,6 +457,10 @@ impl RenderSnapshot {
     }
     pub fn composition(&self) -> CompositionId {
         self.composition
+    }
+    /// Source-monitor identity when this snapshot targets `RenderTarget::Source`.
+    pub fn source(&self) -> Option<crate::source::SourcePreviewRef> {
+        self.source
     }
     pub fn project(&self) -> &Project {
         &self.project
@@ -617,6 +671,11 @@ impl RenderSnapshot {
                 "working space must be linear and flatten tolerance positive".into(),
             ));
         }
+        if self.sequence.is_some() && self.source.is_some() {
+            return Err(RenderError::InvalidInput(
+                "snapshot carries both sequence and source targets".into(),
+            ));
+        }
         if let Some(id) = self.sequence {
             if self.composition.as_uuid() != id.as_uuid() {
                 return Err(RenderError::InvalidInput("sequence target mismatch".into()));
@@ -639,6 +698,23 @@ impl RenderSnapshot {
             for node in root.nodes {
                 if let NodeKind::CompositionInstance(i) = node.kind {
                     kronello_template::validate_reachable(&self.project, i.definition_ref)?;
+                }
+            }
+        } else if let Some(source) = self.source {
+            match source {
+                crate::source::SourcePreviewRef::Composition { composition } => {
+                    if composition != self.composition {
+                        return Err(RenderError::InvalidInput(
+                            "source composition target mismatch".into(),
+                        ));
+                    }
+                    kronello_template::validate_reachable(&self.project, composition)?;
+                }
+                _ => {
+                    if self.composition != crate::source::SOURCE_ROOT_ID {
+                        return Err(RenderError::InvalidInput("source target mismatch".into()));
+                    }
+                    crate::source::lower_source(&self.project, &source)?;
                 }
             }
         } else {
@@ -674,6 +750,17 @@ impl RenderSnapshot {
                     }
                     None => crate::sequence::lower_sequence(&self.project, sequence)?,
                 };
+                &lowered
+            } else if let Some(source) =
+                self.source
+                    .filter(|_| id == self.composition)
+                    .filter(|source| {
+                        !matches!(source, crate::source::SourcePreviewRef::Composition { .. })
+                    })
+            {
+                // Source-monitor root: re-lowered from the frozen project on
+                // every evaluation, exactly like a lowered sequence root.
+                lowered = crate::source::lower_source(&self.project, &source)?;
                 &lowered
             } else {
                 content(&self.project.compositions, id.as_uuid(), |c| c.id.as_uuid())?
@@ -1319,6 +1406,53 @@ pub fn build_scene_ir_with_cache(
                         background: resolved.background,
                         origin,
                     })
+                }
+                SourceRef::Multicam { .. } => {
+                    // NLE-007 (ADR-0127): the clip keeps its authored multicam
+                    // identity; the active angle resolves to a concrete decode
+                    // asset/stream and shifts local source time by sync_offset.
+                    let resolved =
+                        crate::source::resolve_source(&snapshot.project, &clip.source_ref)?;
+                    let asset = content_asset(&snapshot.project, resolved.asset)?;
+                    let stream = asset
+                        .streams
+                        .iter()
+                        .find(|s| s.index == resolved.stream_index)
+                        .expect("validated stream");
+                    let extent = [stream.width, stream.height].map(|x| x.map(f64::from));
+                    let [Some(w), Some(h)] = extent else {
+                        return Err(RenderError::UnsupportedFeature(
+                            "video dimensions unavailable".into(),
+                        ));
+                    };
+                    let (decode_asset, decode_stream) =
+                        render_media(snapshot, asset, resolved.stream_index);
+                    if let Some([x, y, cw, ch]) = node_crop
+                        && (x < 0.0
+                            || y < 0.0
+                            || cw <= 0.0
+                            || ch <= 0.0
+                            || x + cw > w + 1e-6
+                            || y + ch > h + 1e-6)
+                    {
+                        return Err(RenderError::InvalidInput(
+                            "clip crop window outside source bounds".into(),
+                        ));
+                    }
+                    let interpolation = clip.time_map.interpolation();
+                    if interpolation.is_some() {
+                        require_frame_interpolation(snapshot)?;
+                    }
+                    video_source = Some((resolved.asset, resolved.stream_index));
+                    SceneContent::Video {
+                        asset: decode_asset.clone(),
+                        stream_index: decode_stream,
+                        time: clip.local_time(time)?.checked_add(resolved.offset)?,
+                        reverse_sampling: clip.reverse_sampling.is_some(),
+                        interpolation,
+                        extent: node_crop.map(|c| [c[2], c[3]]).unwrap_or([w, h]),
+                        crop: node_crop,
+                    }
                 }
                 _ => content,
             };

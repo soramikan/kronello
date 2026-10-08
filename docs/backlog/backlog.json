@@ -2092,7 +2092,7 @@
    "priority": "P2",
    "area": "gui",
    "title": "ソース/プログラム二画面モニタ",
-   "status": "planned",
+   "status": "in_progress",
    "dependencies": [
     "GUI-008"
    ],
@@ -2154,7 +2154,7 @@
    "priority": "P2",
    "area": "timeline",
    "title": "マルチカム編集: 同期・切替・マルチカムクリップ",
-   "status": "planned",
+   "status": "done",
    "dependencies": [
     "NLE-005"
    ],

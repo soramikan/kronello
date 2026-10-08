@@ -276,6 +276,17 @@ fn preview_controls_fail_without_an_attached_surface() {
         unsafe { kronello_surface_attach(h, std::ptr::null_mut(), 64, 32) },
         0
     );
+    // GUI-011: every extra monitor slot tracks its own surface state.
+    assert_eq!(
+        wait(h, kronello_surface_resize_at(h, 1, 64, 32))["error"]["code"],
+        "SURFACE_NOT_ATTACHED"
+    );
+    let id = unsafe { kronello_surface_redraw_at(h, 2, json.as_ptr(), json.len()) };
+    assert_eq!(wait(h, id)["error"]["code"], "SURFACE_NOT_ATTACHED");
+    assert_eq!(
+        unsafe { kronello_surface_attach_at(h, 1, std::ptr::null_mut(), 64, 32) },
+        0
+    );
     kronello_close(h);
 }
 
@@ -291,6 +302,10 @@ fn header_matches_every_exported_function_signature() {
     let _: unsafe extern "C" fn(u64, *mut c_void, u32, u32) -> u64 = kronello_surface_attach;
     let _: extern "C" fn(u64, u32, u32) -> u64 = kronello_surface_resize;
     let _: unsafe extern "C" fn(u64, *const u8, usize) -> u64 = kronello_surface_redraw;
+    let _: unsafe extern "C" fn(u64, u32, *mut c_void, u32, u32) -> u64 =
+        kronello_surface_attach_at;
+    let _: extern "C" fn(u64, u32, u32, u32) -> u64 = kronello_surface_resize_at;
+    let _: unsafe extern "C" fn(u64, u32, *const u8, usize) -> u64 = kronello_surface_redraw_at;
     let _: unsafe extern "C" fn(*const u8, usize, *mut bool, *mut *mut c_char) -> *mut c_void =
         kronello_audio_prepare;
     let _: unsafe extern "C" fn(*const c_void, i64, usize, *mut f32, *mut *mut c_char) -> bool =
@@ -315,6 +330,9 @@ fn header_matches_every_exported_function_signature() {
         "uint64_t kronello_surface_attach(uint64_t handle, void *metal_layer, uint32_t width, uint32_t height);",
         "uint64_t kronello_surface_resize(uint64_t handle, uint32_t width, uint32_t height);",
         "uint64_t kronello_surface_redraw(uint64_t handle, const uint8_t *json, size_t len);",
+        "uint64_t kronello_surface_attach_at(uint64_t handle, uint32_t surface, void *metal_layer, uint32_t width, uint32_t height);",
+        "uint64_t kronello_surface_resize_at(uint64_t handle, uint32_t surface, uint32_t width, uint32_t height);",
+        "uint64_t kronello_surface_redraw_at(uint64_t handle, uint32_t surface, const uint8_t *json, size_t len);",
         "void *kronello_audio_prepare(const uint8_t *json, size_t len, bool *has_audio, char **error);",
         "bool kronello_audio_render(const void *resource, int64_t start_sample, size_t frames, float *output, char **error);",
         "bool kronello_audio_render_metered(const void *resource, int64_t start_sample, size_t frames, float *output, char **meters, char **error);",
@@ -334,7 +352,7 @@ fn header_matches_every_exported_function_signature() {
                 || l.starts_with("bool kronello_")
                 || l.starts_with("char *kronello_"))
             .count(),
-        13
+        16
     );
 }
 

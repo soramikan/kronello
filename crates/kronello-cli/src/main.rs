@@ -5,7 +5,7 @@ mod watch;
 
 use kronello_service::{BackendSelection, Request, Response, Service, ServiceError};
 
-const USAGE: &str = "kronello [--events ndjson] [--backend gpu|cpu-reference|gpu-resident-bgra8|gpu-resident-nv12] [--request-json JSON] [project create|create_plan|import|import_plan|export|info|collect | asset relink|thumbnail | media query | export batch | render frame|sequence|export|submit|explain | node explain | job get|list|cancel|prune | track analyze | audio analyze|loudness|normalize|plugin_probe|plugin_process | proxy generate|status|clear | scene detect|apply | edit plan|apply|undo | expression format | history list | scene query | property sample | capabilities get | sequence create|query | clip place|trim|stretch | instance retime | template_instance retime | template define|instantiate|set_input|set_duration|preview|migration_plan | captions import_plan|import|export] | watch --project P --directory D --preset ID|NAME --output DIR [--poll-ms N] [--once] | worker --job <id> | plugin-helper; otherwise read a tagged service Request from stdin";
+const USAGE: &str = "kronello [--events ndjson] [--backend gpu|cpu-reference|gpu-resident-bgra8|gpu-resident-nv12] [--request-json JSON] [project create|create_plan|import|import_plan|export|info|collect | asset relink|thumbnail | media query | export batch | render frame|sequence|export|submit|explain | node explain | job get|list|cancel|prune | track analyze | audio analyze|loudness|normalize|plugin_probe|plugin_process | proxy generate|status|clear | scene detect|apply | edit plan|apply|undo|insert|overwrite | expression format | history list | scene query | property sample | capabilities get | sequence create|query | clip place|trim|stretch|angle_switch | multicam create | instance retime | template_instance retime | template define|instantiate|set_input|set_duration|preview|migration_plan | captions import_plan|import|export] | watch --project P --directory D --preset ID|NAME --output DIR [--poll-ms N] [--once] | worker --job <id> | plugin-helper; otherwise read a tagged service Request from stdin";
 fn run(stream: Option<&events::Stream>) -> Result<Response, ServiceError> {
     let mut selection = BackendSelection::Gpu;
     let mut literal = None;
@@ -59,13 +59,20 @@ fn run(stream: Option<&events::Stream>) -> Result<Response, ServiceError> {
             verb @ ("create" | "create_plan" | "import" | "import_plan" | "export" | "info"),
         ] => Some(format!("project.{verb}")),
         ["sequence", verb @ ("create" | "query")] => Some(format!("sequence.{verb}")),
-        ["clip", verb @ ("place" | "trim" | "stretch")] => Some(format!("clip.{verb}")),
+        [
+            "clip",
+            verb @ ("place" | "trim" | "stretch" | "angle_switch"),
+        ] => Some(format!("clip.{verb}")),
+        ["multicam", verb @ "create"] => Some(format!("multicam.{verb}")),
         [kind @ ("instance" | "template_instance"), "retime"] => Some(format!("{kind}.retime")),
         [
             "render",
             verb @ ("frame" | "sequence" | "export" | "submit"),
         ] => Some(format!("render.{verb}")),
-        ["edit", verb @ ("plan" | "apply" | "undo")] => Some(format!("edit.{verb}")),
+        [
+            "edit",
+            verb @ ("plan" | "apply" | "undo" | "insert" | "overwrite"),
+        ] => Some(format!("edit.{verb}")),
         ["expression", "format"] => Some("expression.format".into()),
         [
             "template",

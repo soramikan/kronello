@@ -47,8 +47,9 @@ pub use expression::{
     ExpressionDependency, ExpressionError, ExpressionNode, expression_value_bytes,
 };
 pub use id::{
-    AssetId, BinId, CaptionId, ClipId, CompositionId, CompositionInstanceId, ContentId, CurveId,
-    DescriptorId, ExportPresetId, ExpressionId, MarkerId, MaskId, ModifierId, NodeId, PropertyId,
+    AngleId, AssetId, BinId, CaptionId, ClipId, CompositionId, CompositionInstanceId, ContentId,
+    CurveId, DescriptorId, ExportPresetId, ExpressionId, MarkerId, MaskId, ModifierId, MulticamId,
+    NodeId, PropertyId,
     SchemaKey, SequenceId, TrackId,
 };
 pub use property::{DescriptorRef, Modifier, Property, PropertySource, SourceResolver};
@@ -140,3 +141,5 @@ mod matte;
 pub use matte::*;
 mod mask;
 pub use mask::*;
+mod multicam;
+pub use multicam::*;

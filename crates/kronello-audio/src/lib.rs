@@ -18,6 +18,7 @@ mod channels;
 mod document;
 mod dsp;
 mod loudness;
+mod sync;
 mod wsola;
 pub use advanced::{AUDIO_EVALUATION_VERSION, AUDIO_GENERATOR_SILENCE, AUDIO_GENERATOR_TONE};
 pub use channels::{
@@ -27,6 +28,7 @@ pub use channels::{
 };
 pub use document::{AudioSourceMode, AudioTarget, DocumentAudioPlan};
 pub use loudness::{LoudnessReport, loudness, loudness_channels};
+pub use sync::{MAX_SYNC_LAG, estimate_sync_lag, max_search_lag};
 
 pub const SAMPLE_RATE: SampleRate = SampleRate::HZ_48000;
 /// Conservative offline memory limit: ten minutes of frames per source/bus.
@@ -58,6 +60,10 @@ pub enum AudioError {
     Overflow,
     #[error("AUDIO_CLIPPING: {samples} channel samples exceed full scale")]
     Clipping { samples: usize },
+    /// NLE-007 multicam audio sync estimation failure (ADR-0127): silent,
+    /// too-short, ambiguous or weakly correlated input.
+    #[error("MULTICAM_SYNC_FAILED: {0}")]
+    SyncFailed(String),
     #[error(transparent)]
     Time(#[from] kronello_time::TimeError),
 }
@@ -74,6 +80,7 @@ impl AudioError {
             Self::UnsupportedChannelLayout(_) => "UNSUPPORTED_CHANNEL_LAYOUT",
             Self::Overflow => "AUDIO_OVERFLOW",
             Self::Clipping { .. } => "AUDIO_CLIPPING",
+            Self::SyncFailed(_) => "MULTICAM_SYNC_FAILED",
             Self::Time(_) => "TIME_ERROR",
         }
     }

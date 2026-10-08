@@ -53,6 +53,8 @@ func require(_ value: @autoclosure () -> Bool, _ message: String) throws {
     var planCount = 0
     var applyCount = 0
     var callCounts: [String: Int] = [:]
+    /// Full request payload per operation (last one wins) for wire assertions.
+    var lastCalls: [String: [String: Any]] = [:]
     var sampleCount = 0
     var sceneCount = 0
     var notificationHandler: ((String, [String: Any]) -> Void)? {
@@ -66,6 +68,7 @@ func require(_ value: @autoclosure () -> Bool, _ message: String) throws {
     func close() { native.close() }
     func call(_ request: [String: Any]) async throws -> [String: Any] {
         callCounts[request.string("operation"), default: 0] += 1
+        lastCalls[request.string("operation")] = request
         if request.string("operation") == "edit.plan" { planCount += 1 }
         if request.string("operation") == "edit.apply" { lastApply = request; applyCount += 1 }
         if request.string("operation") == "property.sample" { sampleCount += 1 }

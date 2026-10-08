@@ -3,6 +3,8 @@ import SwiftUI
 /// Visual media kinds; colors are used only for icons and clip underlines.
 public enum KRMediaKind: String, CaseIterable, Codable, Sendable {
     case video, image, audio, composition, subtitle, generator, adjustment
+    /// NLE-007: a multicam group shown as one timeline-capable media item.
+    case multicam
     public var icon: KRIcon {
         switch self {
         case .video: return .film
@@ -12,11 +14,12 @@ public enum KRMediaKind: String, CaseIterable, Codable, Sendable {
         case .subtitle: return .captions
         case .generator: return .sparkles
         case .adjustment: return .slidersHorizontal
+        case .multicam: return .clapperboard
         }
     }
     public func color(in palette: KRPalette) -> Color {
         switch self {
-        case .video, .image: return palette.kindVideo
+        case .video, .image, .multicam: return palette.kindVideo
         case .audio: return palette.kindAudio
         case .composition: return palette.kindComposition
         case .subtitle: return palette.kindSubtitle

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import KronelloCore
 import KronelloAppModel
 
 /// Native preview for the selected export target; no per-frame inspection or readback.
@@ -36,10 +37,12 @@ struct ExportMetalPreview: NSViewRepresentable {
                     guard let view, let native = editor.transport as? NativeProjectTransport, !input.isEmpty else { continue }
                     do {
                         let width = UInt32(max(1, view.metal.drawableSize.width)), height = UInt32(max(1,view.metal.drawableSize.height))
-                        if !attached { try await native.session.attach(metalLayer: Unmanaged.passUnretained(view.metal).toOpaque(), width: width, height: height); attached = true }
-                        else { try await native.session.resize(width: width, height: height) }
+                        // Export preview owns a dedicated surface slot so it
+                        // never replaces the edit monitors' attached layers.
+                        if !attached { try await native.session.attach(metalLayer: Unmanaged.passUnretained(view.metal).toOpaque(), width: width, height: height, surface: PreviewSurface.export); attached = true }
+                        else { try await native.session.resize(width: width, height: height, surface: PreviewSurface.export) }
                         var render = input, region = input.object("region"); region["pixels"] = [width,height]; render["region"] = region
-                        _ = try await native.session.redraw(NativeProjectTransport.request(["operation":"render.frame","input":render,"time":time]))
+                        _ = try await native.session.redraw(NativeProjectTransport.request(["operation":"render.frame","input":render,"time":time]), surface: PreviewSurface.export)
                     } catch is CancellationError {} catch { onFailure(editor.serviceFailure(error)) }
                 }
             }

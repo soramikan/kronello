@@ -122,9 +122,44 @@ impl PreparedAudio {
                 "audio project semantic version or unknown fields",
             ));
         }
+        let resolved = match target {
+            RenderTarget::Source { source } => match source {
+                kronello_render::SourcePreviewRef::Composition { .. } => None,
+                _ => Some(
+                    kronello_render::resolve_source(&stored.document, &source.source_ref())
+                        .map_err(crate::ServiceError::from)?,
+                ),
+            },
+            _ => None,
+        };
         let target = match target {
             RenderTarget::Composition { composition } => AudioTarget::Composition(composition),
             RenderTarget::Sequence { sequence } => AudioTarget::Sequence(sequence),
+            // GUI-011 (ADR-0128): a composition source plays its authored
+            // audio plan; media sources decode the resolved angle stream.
+            RenderTarget::Source { source } => match source {
+                kronello_render::SourcePreviewRef::Composition { composition } => {
+                    AudioTarget::Composition(composition)
+                }
+                _ => {
+                    let resolved = resolved.expect("resolved source");
+                    match resolved.audio_stream {
+                        Some(stream_index) => AudioTarget::Source {
+                            asset: resolved.asset,
+                            stream_index,
+                            offset: resolved.offset,
+                        },
+                        None => {
+                            return Ok(Self {
+                                revision: stored.revision.to_string(),
+                                plan: DocumentAudioPlan::default(),
+                                sources: ChannelSources::new(),
+                                has_audio: false,
+                            });
+                        }
+                    }
+                }
+            },
         };
         let plan =
             DocumentAudioPlan::compile_version(&stored.document, target, 2).map_err(audio_error)?;
@@ -133,7 +168,7 @@ impl PreparedAudio {
             AudioTarget::Sequence(id) => stored.document.sequences.iter().any(|s| {
                 matches!(s, DocumentObject::Known(s) if s.id == id && s.tracks.iter().any(|t| t.kind == kronello_model::TrackKind::Audio && t.clips.iter().any(|c| matches!(c.source_ref, kronello_model::SourceRef::Generator { .. }))))
             }),
-            AudioTarget::Composition(_) => false,
+            AudioTarget::Composition(_) | AudioTarget::Source { .. } => false,
         };
         let mut sources = ChannelSources::new();
         let mut frames = 0;

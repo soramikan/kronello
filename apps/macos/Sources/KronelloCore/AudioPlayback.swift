@@ -4,10 +4,14 @@ import CKronelloFFI
 
 public enum PlaybackTarget: Equatable, Sendable {
     case composition(String), sequence(String)
-    public var wire: [String: String] {
+    /// GUI-011: source-monitor target (`RenderTarget::Source`), previewing an
+    /// asset/composition/multicam angle without placing it on the timeline.
+    case source(SourcePreview)
+    public var wire: [String: Any] {
         switch self {
         case .composition(let id): return ["kind": "composition", "composition": id]
         case .sequence(let id): return ["kind": "sequence", "sequence": id]
+        case .source(let source): return ["kind": "source", "source": source.wire]
         }
     }
 }

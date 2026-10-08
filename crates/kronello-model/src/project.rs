@@ -84,6 +84,9 @@ pub struct Project {
     /// `render.submit` settings stored inside the document.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub export_presets: Vec<crate::ExportPreset>,
+    /// NLE-007 multicam groups (ADR-0127); plain entries, never opaque.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub multicams: Vec<crate::MulticamAsset>,
     #[serde(flatten)]
     pub unknown_fields: BTreeMap<String, Value>,
 }
@@ -125,6 +128,7 @@ impl Default for Project {
             simulations: Vec::new(),
             bins: Vec::new(),
             export_presets: Vec::new(),
+            multicams: Vec::new(),
             unknown_fields: BTreeMap::new(),
         }
     }
@@ -162,6 +166,7 @@ impl Project {
                     | "simulations"
                     | "bins"
                     | "export_presets"
+                    | "multicams"
             )
         }) {
             return Err(ProjectError::InvalidDocument(
@@ -431,6 +436,23 @@ impl Project {
                 if !originals.insert(link.original) || !proxies.insert(link.proxy) {
                     return Err(ProjectError::InvalidDocument(
                         "duplicate proxy link member".into(),
+                    ));
+                }
+            }
+        }
+        for multicam in &self.multicams {
+            multicam.validate()?;
+            if !ids.insert(multicam.id.as_uuid()) {
+                return Err(ProjectError::InvalidDocument(
+                    "duplicate multicam id".into(),
+                ));
+            }
+            for angle in &multicam.angles {
+                // Angle ids are stable UUID identity; they must not alias any
+                // other document object id.
+                if !ids.insert(angle.id.as_uuid()) {
+                    return Err(ProjectError::InvalidDocument(
+                        "duplicate multicam angle id".into(),
                     ));
                 }
             }
@@ -753,6 +775,11 @@ impl<'de> Deserialize<'de> for Project {
             },
             export_presets: if fields.contains_key("export_presets") {
                 take_field::<_, D::Error>(&mut fields, "export_presets")?
+            } else {
+                Vec::new()
+            },
+            multicams: if fields.contains_key("multicams") {
+                take_field::<_, D::Error>(&mut fields, "multicams")?
             } else {
                 Vec::new()
             },
