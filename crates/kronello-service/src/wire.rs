@@ -263,6 +263,9 @@ impl<'de> Deserialize<'de> for Request {
             "capabilities.get" => payload(&fields).map(Self::CapabilitiesGet),
             "lut.import" => payload(&fields).map(Self::LutImport),
             "inspect.scopes" => payload(&fields).map(Self::InspectScopes),
+            "io.output.list" => payload(&fields).map(Self::IoOutputList),
+            "io.output.enable" => payload(&fields).map(Self::IoOutputEnable),
+            "io.output.disable" => payload(&fields).map(Self::IoOutputDisable),
             _ => Err(D::Error::custom("unknown operation")),
         }
     }
@@ -306,6 +309,8 @@ impl<'de> Deserialize<'de> for ResultData {
             "normalize" => Self::Normalize(take(&mut fields, "value")?),
             "scopes" => Self::Scopes(take(&mut fields, "value")?),
             "plugin_probe" => Self::PluginProbe(take(&mut fields, "value")?),
+            "output_devices" => Self::OutputDevices(take(&mut fields, "value")?),
+            "output_state" => Self::OutputState(take(&mut fields, "value")?),
             _ => return Err(D::Error::custom("unknown result kind")),
         };
         exhausted::<D::Error>(&fields)?;

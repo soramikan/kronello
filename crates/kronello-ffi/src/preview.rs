@@ -19,17 +19,38 @@ mod metal {
             Self(unsafe { Retained::retain(ptr.cast::<AnyObject>()) }.expect("non-null layer"))
         }
     }
-    pub struct Preview {
-        surface: wgpu::Surface<'static>,
-        gpu: kronello_gpu::GpuContext,
-        config: wgpu::SurfaceConfiguration,
-        pipeline: wgpu::RenderPipeline,
-        layout: wgpu::BindGroupLayout,
-        pipeline_scaled: wgpu::RenderPipeline,
-        layout_scaled: wgpu::BindGroupLayout,
-        sampler: wgpu::Sampler,
-        // Drop after surface and GPU objects.
-        _layer: Layer,
+    /// IO-001 (ADR-0134): the rendered program frame handed to every output
+    /// route. One redraw produces exactly one `FrameSource`, so the program
+    /// monitor, the reference monitor, and Syphon all present the identical
+    /// pixels through the identical presentation transform.
+    pub struct FrameSource {
+        pub revision: String,
+        pub texture: wgpu::Texture,
+        /// Rendered-region pixel extent after budget-fit shrinking.
+        pub pixels: [u32; 2],
+        pub crop_origin: [usize; 2],
+        pub backend: String,
+        pub cpu_uploads: u8,
+    }
+    impl FrameSource {
+        pub fn view(&self) -> wgpu::TextureView {
+            self.texture.create_view(&Default::default())
+        }
+        /// Scale mapping target surface pixels into rendered-region pixels,
+        /// the `transform.xy` contract of `preview_scaled.wgsl`.
+        pub fn scale_for(&self, surface: [u32; 2]) -> [f32; 2] {
+            [
+                self.pixels[0] as f32 / surface[0].max(1) as f32,
+                self.pixels[1] as f32 / surface[1].max(1) as f32,
+            ]
+        }
+    }
+    /// Whether a present attempt put a frame on the output. Occlusion and
+    /// acquire timeouts are typed skips, never failures.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum PresentOutcome {
+        Presented,
+        Skipped(&'static str),
     }
     fn failure(code: &str, e: impl std::fmt::Display) -> ServiceError {
         ServiceError::new(code, e.to_string())
@@ -45,45 +66,31 @@ mod metal {
     fn halve(pixels: [u32; 2]) -> [u32; 2] {
         [(pixels[0] / 2).max(1), (pixels[1] / 2).max(1)]
     }
-    impl Preview {
-        pub fn attach(layer: Layer, width: u32, height: u32) -> Result<Self, ServiceError> {
-            let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-                backends: wgpu::Backends::METAL,
-                ..wgpu::InstanceDescriptor::new_without_display_handle()
-            });
-            // SAFETY: Layer retains the CAMetalLayer through the surface lifetime.
-            let surface = unsafe {
-                instance.create_surface_unsafe(wgpu::SurfaceTargetUnsafe::CoreAnimationLayer(
-                    Retained::as_ptr(&layer.0).cast_mut().cast(),
-                ))
-            }
-            .map_err(|e| failure("SURFACE_UNAVAILABLE", e))?;
-            let adapter =
-                pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-                    compatible_surface: Some(&surface),
-                    ..Default::default()
-                }))
-                .map_err(|e| failure("ADAPTER_UNAVAILABLE", e))?;
-            let gpu = pollster::block_on(kronello_gpu::GpuContext::with_adapter(&adapter))
-                .map_err(|e| failure("DEVICE_UNAVAILABLE", e))?;
-            let caps = surface.get_capabilities(&adapter);
-            let format = caps
-                .formats
-                .iter()
-                .copied()
-                .find(|f| *f == wgpu::TextureFormat::Bgra8Unorm)
-                .ok_or_else(|| failure("UNSUPPORTED_FEATURE", "BGRA8 unorm surface required"))?;
-            let config = wgpu::SurfaceConfiguration {
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-                format,
-                width,
-                height,
-                color_space: wgpu::SurfaceColorSpace::Srgb,
-                present_mode: wgpu::PresentMode::Fifo,
-                desired_maximum_frame_latency: 2,
-                alpha_mode: wgpu::CompositeAlphaMode::Opaque,
-                view_formats: vec![],
-            };
+    /// A CAMetalLayer surface for one output destination.
+    pub fn metal_surface(
+        instance: &wgpu::Instance,
+        layer: &Layer,
+    ) -> Result<wgpu::Surface<'static>, ServiceError> {
+        // SAFETY: Layer retains the CAMetalLayer through the surface lifetime.
+        unsafe {
+            instance.create_surface_unsafe(wgpu::SurfaceTargetUnsafe::CoreAnimationLayer(
+                Retained::as_ptr(&layer.0).cast_mut().cast(),
+            ))
+        }
+        .map_err(|e| failure("SURFACE_UNAVAILABLE", e))
+    }
+    /// Fullscreen-triangle presentation blit with the exact crop/scale and
+    /// SDR sRGB encode the program monitor uses. Every `OutputDevice` renders
+    /// through this same transform, so semantic parity is by construction.
+    pub struct Blit {
+        pipeline: wgpu::RenderPipeline,
+        layout: wgpu::BindGroupLayout,
+        pipeline_scaled: wgpu::RenderPipeline,
+        layout_scaled: wgpu::BindGroupLayout,
+        sampler: wgpu::Sampler,
+    }
+    impl Blit {
+        pub fn new(gpu: &kronello_gpu::GpuContext, format: wgpu::TextureFormat) -> Self {
             let layout = gpu
                 .device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -232,35 +239,293 @@ mod metal {
                 min_filter: wgpu::FilterMode::Linear,
                 ..Default::default()
             });
-            let mut preview = Self {
-                surface,
-                gpu,
-                config,
+            Self {
                 pipeline,
                 layout,
                 pipeline_scaled,
                 layout_scaled,
                 sampler,
+            }
+        }
+        /// Draw the program frame into `target`. `scaled` selects the sampled
+        /// transform; `scale`/`crop_origin` follow the shader contracts.
+        pub fn draw(
+            &self,
+            gpu: &kronello_gpu::GpuContext,
+            source: &wgpu::TextureView,
+            scale: [f32; 2],
+            crop_origin: [usize; 2],
+            target: &wgpu::TextureView,
+            scaled: bool,
+        ) {
+            use wgpu::util::DeviceExt;
+            let uniform;
+            let (layout, entries): (&wgpu::BindGroupLayout, Vec<wgpu::BindGroupEntry>) = if scaled {
+                let bytes = [
+                    scale[0],
+                    scale[1],
+                    crop_origin[0] as f32,
+                    crop_origin[1] as f32,
+                ]
+                .into_iter()
+                .flat_map(f32::to_ne_bytes)
+                .collect::<Vec<_>>();
+                uniform = gpu
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("preview transform"),
+                        contents: &bytes,
+                        usage: wgpu::BufferUsages::UNIFORM,
+                    });
+                (
+                    &self.layout_scaled,
+                    vec![
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(source),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: uniform.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: wgpu::BindingResource::Sampler(&self.sampler),
+                        },
+                    ],
+                )
+            } else {
+                let [x, y] = crop_origin;
+                let bytes = [x as u32, y as u32, 0, 0]
+                    .into_iter()
+                    .flat_map(u32::to_ne_bytes)
+                    .collect::<Vec<_>>();
+                uniform = gpu
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("preview crop"),
+                        contents: &bytes,
+                        usage: wgpu::BufferUsages::UNIFORM,
+                    });
+                (
+                    &self.layout,
+                    vec![
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(source),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: uniform.as_entire_binding(),
+                        },
+                    ],
+                )
+            };
+            let bindings = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("preview"),
+                layout,
+                entries: &entries,
+            });
+            let mut encoder = gpu.device.create_command_encoder(&Default::default());
+            {
+                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("output presentation"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: target,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    ..Default::default()
+                });
+                pass.set_pipeline(if scaled {
+                    &self.pipeline_scaled
+                } else {
+                    &self.pipeline
+                });
+                pass.set_bind_group(0, &bindings, &[]);
+                pass.draw(0..3, 0..1);
+            }
+            gpu.queue.submit([encoder.finish()]);
+        }
+    }
+    /// One CAMetalLayer surface plus its presentation state. Preview surfaces
+    /// and the reference-monitor output are both `Presentation`s bound to the
+    /// shared preview GPU context.
+    pub struct Presentation {
+        surface: wgpu::Surface<'static>,
+        config: wgpu::SurfaceConfiguration,
+        blit: Blit,
+        // Drop after surface and GPU objects.
+        _layer: Layer,
+    }
+    impl Presentation {
+        /// Bind an already-created surface to `gpu`. The surface must have
+        /// been created by the same instance that produced `adapter`.
+        pub fn bind(
+            adapter: &wgpu::Adapter,
+            gpu: &kronello_gpu::GpuContext,
+            surface: wgpu::Surface<'static>,
+            layer: Layer,
+            width: u32,
+            height: u32,
+        ) -> Result<Self, ServiceError> {
+            let caps = surface.get_capabilities(adapter);
+            let format = caps
+                .formats
+                .iter()
+                .copied()
+                .find(|f| *f == wgpu::TextureFormat::Bgra8Unorm)
+                .ok_or_else(|| failure("UNSUPPORTED_FEATURE", "BGRA8 unorm surface required"))?;
+            let config = wgpu::SurfaceConfiguration {
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                format,
+                width,
+                height,
+                color_space: wgpu::SurfaceColorSpace::Srgb,
+                present_mode: wgpu::PresentMode::Fifo,
+                desired_maximum_frame_latency: 2,
+                alpha_mode: wgpu::CompositeAlphaMode::Opaque,
+                view_formats: vec![],
+            };
+            let mut presentation = Self {
+                surface,
+                config,
+                blit: Blit::new(gpu, format),
                 _layer: layer,
             };
-            preview.resize(width, height)?;
-            Ok(preview)
+            presentation.resize(gpu, width, height)?;
+            Ok(presentation)
         }
-        pub fn resize(&mut self, width: u32, height: u32) -> Result<(), ServiceError> {
-            let limit = self.gpu.device.limits().max_texture_dimension_2d;
+        pub fn size(&self) -> [u32; 2] {
+            [self.config.width, self.config.height]
+        }
+        pub fn resize(
+            &mut self,
+            gpu: &kronello_gpu::GpuContext,
+            width: u32,
+            height: u32,
+        ) -> Result<(), ServiceError> {
+            let limit = gpu.device.limits().max_texture_dimension_2d;
             if width == 0 || height == 0 || width > limit || height > limit {
                 return Err(ServiceError::invalid("surface size outside device limits"));
             }
             self.config.width = width;
             self.config.height = height;
-            self.surface.configure(&self.gpu.device, &self.config);
+            self.surface.configure(&gpu.device, &self.config);
             Ok(())
         }
-        pub fn redraw(&mut self, service: &Service<'_>, json: &str) -> Result<Value, ServiceError> {
+        /// Acquire a drawable, blit `source` through the shared transform and
+        /// present. Occluded/timeout acquires are typed skips.
+        pub fn present(
+            &mut self,
+            gpu: &kronello_gpu::GpuContext,
+            source: &wgpu::TextureView,
+            scale: [f32; 2],
+            crop_origin: [usize; 2],
+        ) -> Result<PresentOutcome, ServiceError> {
+            let mut frame = self.surface.get_current_texture();
+            if matches!(frame, wgpu::CurrentSurfaceTexture::Outdated) {
+                // The layer changed under us; reconfigure once and retry.
+                self.surface.configure(&gpu.device, &self.config);
+                frame = self.surface.get_current_texture();
+            }
+            let frame = match frame {
+                wgpu::CurrentSurfaceTexture::Success(frame)
+                | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
+                // Not failures: the host skips this frame and redraws when visible.
+                skipped @ (wgpu::CurrentSurfaceTexture::Occluded
+                | wgpu::CurrentSurfaceTexture::Timeout) => {
+                    return Ok(
+                        if matches!(skipped, wgpu::CurrentSurfaceTexture::Occluded) {
+                            PresentOutcome::Skipped("occluded")
+                        } else {
+                            PresentOutcome::Skipped("timeout")
+                        },
+                    );
+                }
+                other => {
+                    return Err(failure("SURFACE_ACQUIRE_FAILED", format!("{other:?}")));
+                }
+            };
+            let target = frame.texture.create_view(&Default::default());
+            self.blit.draw(
+                gpu,
+                source,
+                scale,
+                crop_origin,
+                &target,
+                scale != [1.0, 1.0],
+            );
+            gpu.queue.present(frame);
+            Ok(PresentOutcome::Presented)
+        }
+    }
+    pub struct Preview {
+        instance: wgpu::Instance,
+        adapter: wgpu::Adapter,
+        gpu: kronello_gpu::GpuContext,
+        presentation: Presentation,
+    }
+    impl Preview {
+        pub fn attach(layer: Layer, width: u32, height: u32) -> Result<Self, ServiceError> {
+            let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+                backends: wgpu::Backends::METAL,
+                ..wgpu::InstanceDescriptor::new_without_display_handle()
+            });
+            let surface = metal_surface(&instance, &layer)?;
+            let adapter =
+                pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+                    compatible_surface: Some(&surface),
+                    ..Default::default()
+                }))
+                .map_err(|e| failure("ADAPTER_UNAVAILABLE", e))?;
+            let gpu = pollster::block_on(kronello_gpu::GpuContext::with_adapter(&adapter))
+                .map_err(|e| failure("DEVICE_UNAVAILABLE", e))?;
+            let presentation = Presentation::bind(&adapter, &gpu, surface, layer, width, height)?;
+            Ok(Self {
+                instance,
+                adapter,
+                gpu,
+                presentation,
+            })
+        }
+        /// The shared device every external output of this session renders
+        /// through, so one program frame can fan out without cross-device
+        /// copies.
+        pub fn gpu(&self) -> &kronello_gpu::GpuContext {
+            &self.gpu
+        }
+        /// IO-001: a second surface on this preview's instance/adapter — the
+        /// reference-monitor output destination. The caller chooses which
+        /// NSScreen's layer this is; display color space is applied on the
+        /// layer by the host (CAMetalLayer colorspace).
+        pub fn output_presentation(
+            &self,
+            layer: Layer,
+            width: u32,
+            height: u32,
+        ) -> Result<Presentation, ServiceError> {
+            let surface = metal_surface(&self.instance, &layer)?;
+            Presentation::bind(&self.adapter, &self.gpu, surface, layer, width, height)
+        }
+        pub fn resize(&mut self, width: u32, height: u32) -> Result<(), ServiceError> {
+            self.presentation.resize(&self.gpu, width, height)
+        }
+        /// Render stage of a redraw: decode the request, budget-fit the
+        /// region, and produce the shared frame texture. Never presents.
+        pub fn render_frame(
+            &mut self,
+            service: &Service<'_>,
+            json: &str,
+        ) -> Result<FrameSource, ServiceError> {
             let Request::RenderFrame(request) = serde_json::from_str(json)? else {
                 return Err(ServiceError::invalid("preview requires render.frame"));
             };
-            if request.input.region.pixels != [self.config.width, self.config.height] {
+            if request.input.region.pixels != self.presentation.size() {
                 return Err(ServiceError::invalid(
                     "render region pixels must match surface size",
                 ));
@@ -269,12 +534,11 @@ mod metal {
             // Preview is a proxy: when a scene's intermediate-surface estimate
             // exceeds the shared budget the frame is rendered smaller and
             // scaled up at presentation instead of failing with
-            // UNSUPPORTED_FEATURE. `scale` converts surface pixels into
-            // rendered-region pixels and `crop_origin` stays in texture pixels.
-            let (revision, texture, scale, crop_origin, backend): (
+            // UNSUPPORTED_FEATURE.
+            let (revision, texture, pixels, crop_origin, backend): (
                 String,
                 wgpu::Texture,
-                [f32; 2],
+                [u32; 2],
                 [usize; 2],
                 String,
             ) = if cpu {
@@ -285,8 +549,8 @@ mod metal {
                     match service.render_requested_frame(&request) {
                         Ok(rendered) => {
                             let scale = [
-                                pixels[0] as f32 / self.config.width as f32,
-                                pixels[1] as f32 / self.config.height as f32,
+                                pixels[0] as f32 / self.presentation.size()[0] as f32,
+                                pixels[1] as f32 / self.presentation.size()[1] as f32,
                             ];
                             let scaled = scale != [1.0, 1.0];
                             let bytes: Vec<u8> = if scaled {
@@ -344,7 +608,7 @@ mod metal {
                             break (
                                 rendered.metadata.revision,
                                 texture,
-                                scale,
+                                pixels,
                                 [0, 0],
                                 rendered.metadata.backend,
                             );
@@ -376,146 +640,53 @@ mod metal {
                     request.input.region.pixels = halve(request.input.region.pixels);
                     attempts += 1;
                 };
-                let scale = [
-                    request.input.region.pixels[0] as f32 / self.config.width as f32,
-                    request.input.region.pixels[1] as f32 / self.config.height as f32,
-                ];
                 let texture = self.gpu.preview_texture(&dag)?;
-                (revision, texture, scale, dag.crop_origin(), "metal".into())
+                (
+                    revision,
+                    texture,
+                    request.input.region.pixels,
+                    dag.crop_origin(),
+                    "metal".into(),
+                )
             };
-            let mut frame = self.surface.get_current_texture();
-            if matches!(frame, wgpu::CurrentSurfaceTexture::Outdated) {
-                // The layer changed under us; reconfigure once and retry.
-                self.surface.configure(&self.gpu.device, &self.config);
-                frame = self.surface.get_current_texture();
-            }
-            let frame = match frame {
-                wgpu::CurrentSurfaceTexture::Success(frame)
-                | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
-                // Not failures: the host skips this frame and redraws when visible.
-                skipped @ (wgpu::CurrentSurfaceTexture::Occluded
-                | wgpu::CurrentSurfaceTexture::Timeout) => {
-                    let skipped = if matches!(skipped, wgpu::CurrentSurfaceTexture::Occluded) {
-                        "occluded"
-                    } else {
-                        "timeout"
-                    };
-                    return Ok(
-                        json!({"status":"success","preview":{"revision":revision,"pixels":[self.config.width,self.config.height],"backend":backend,"image_readbacks":0,"presented":false,"skipped":skipped}}),
-                    );
+            Ok(FrameSource {
+                revision,
+                texture,
+                pixels,
+                crop_origin,
+                backend,
+                cpu_uploads: u8::from(cpu),
+            })
+        }
+        /// Present stage of a program-monitor redraw: blit the shared frame
+        /// onto this preview's surface and report presentation metadata.
+        pub fn present(&mut self, source: &FrameSource) -> Result<Value, ServiceError> {
+            let scale = source.scale_for(self.presentation.size());
+            let view = source.view();
+            let outcome = self
+                .presentation
+                .present(&self.gpu, &view, scale, source.crop_origin)?;
+            let size = self.presentation.size();
+            match outcome {
+                PresentOutcome::Skipped(skipped) => Ok(
+                    json!({"status":"success","preview":{"revision":source.revision,"pixels":size,"backend":source.backend,"image_readbacks":0,"presented":false,"skipped":skipped}}),
+                ),
+                PresentOutcome::Presented => {
+                    // Submission timestamp, not a physical scanout measurement.
+                    unsafe extern "C" {
+                        fn mach_absolute_time() -> u64;
+                    }
+                    // SAFETY: platform clock call without pointer arguments.
+                    let presentation_host_time = unsafe { mach_absolute_time() };
+                    Ok(
+                        json!({"status":"success","preview":{"revision":source.revision,"pixels":size,"backend":source.backend,"image_readbacks":0,"cpu_uploads":source.cpu_uploads,"presented":true,"presentation_host_time":presentation_host_time.to_string()}}),
+                    )
                 }
-                other => return Err(failure("SURFACE_ACQUIRE_FAILED", format!("{other:?}"))),
-            };
-            let scaled = scale != [1.0, 1.0];
-            let source = texture.create_view(&Default::default());
-            let target = frame.texture.create_view(&Default::default());
-            use wgpu::util::DeviceExt;
-            let uniform;
-            let (layout, entries): (&wgpu::BindGroupLayout, Vec<wgpu::BindGroupEntry>) = if scaled {
-                let bytes = [
-                    scale[0],
-                    scale[1],
-                    crop_origin[0] as f32,
-                    crop_origin[1] as f32,
-                ]
-                .into_iter()
-                .flat_map(f32::to_ne_bytes)
-                .collect::<Vec<_>>();
-                uniform = self
-                    .gpu
-                    .device
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("preview transform"),
-                        contents: &bytes,
-                        usage: wgpu::BufferUsages::UNIFORM,
-                    });
-                (
-                    &self.layout_scaled,
-                    vec![
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: wgpu::BindingResource::TextureView(&source),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: uniform.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 2,
-                            resource: wgpu::BindingResource::Sampler(&self.sampler),
-                        },
-                    ],
-                )
-            } else {
-                let [x, y] = crop_origin;
-                let bytes = [x as u32, y as u32, 0, 0]
-                    .into_iter()
-                    .flat_map(u32::to_ne_bytes)
-                    .collect::<Vec<_>>();
-                uniform = self
-                    .gpu
-                    .device
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("preview crop"),
-                        contents: &bytes,
-                        usage: wgpu::BufferUsages::UNIFORM,
-                    });
-                (
-                    &self.layout,
-                    vec![
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: wgpu::BindingResource::TextureView(&source),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: uniform.as_entire_binding(),
-                        },
-                    ],
-                )
-            };
-            let bindings = self
-                .gpu
-                .device
-                .create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("preview"),
-                    layout,
-                    entries: &entries,
-                });
-            let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
-            {
-                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("native preview"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &target,
-                        depth_slice: None,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
-                    ..Default::default()
-                });
-                pass.set_pipeline(if scaled {
-                    &self.pipeline_scaled
-                } else {
-                    &self.pipeline
-                });
-                pass.set_bind_group(0, &bindings, &[]);
-                pass.draw(0..3, 0..1);
             }
-            self.gpu.queue.submit([encoder.finish()]);
-            self.gpu.queue.present(frame);
-            // Submission timestamp, not a physical scanout measurement.
-            unsafe extern "C" {
-                fn mach_absolute_time() -> u64;
-            }
-            // SAFETY: platform clock call without pointer arguments.
-            let presentation_host_time = unsafe { mach_absolute_time() };
-            Ok(
-                json!({"status":"success","preview":{"revision":revision,"pixels":[self.config.width,self.config.height],"backend":backend,"image_readbacks":0,"cpu_uploads":u8::from(cpu),"presented":true,"presentation_host_time":presentation_host_time.to_string()}}),
-            )
+        }
+        pub fn redraw(&mut self, service: &Service<'_>, json: &str) -> Result<Value, ServiceError> {
+            let source = self.render_frame(service, json)?;
+            self.present(&source)
         }
     }
 }
@@ -530,6 +701,16 @@ impl Layer {
         Self
     }
 }
+/// IO-001 stubs: external outputs can never activate off macOS.
+#[cfg(not(target_os = "macos"))]
+pub struct FrameSource;
+#[cfg(not(target_os = "macos"))]
+pub enum PresentOutcome {
+    Presented,
+    Skipped(&'static str),
+}
+#[cfg(not(target_os = "macos"))]
+pub struct Presentation;
 #[cfg(not(target_os = "macos"))]
 pub struct Preview;
 #[cfg(not(target_os = "macos"))]

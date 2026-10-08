@@ -2259,7 +2259,7 @@
       "priority": "P2",
       "area": "io",
       "title": "外部モニタ出力: SDI/NDI 等のリファレンス出力",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "GPU-003"
       ],

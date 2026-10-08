@@ -2,11 +2,12 @@
 //! Unsafe is limited to C buffer ownership and native Metal layer interop.
 #![allow(unsafe_code)]
 mod audio;
+mod output;
 mod preview;
 pub use audio::*;
 use kronello_service::{
     AudioPreparationInput, AudioPrepareRequest, BackendSelection, ProjectRequest, ProjectSession,
-    Request, Response, Service, ServiceError,
+    Request, Response, ResultData, Service, ServiceError,
 };
 use serde_json::{Value, json};
 use std::{
@@ -55,6 +56,14 @@ fn guard<T: Default>(f: impl FnOnce() -> T) -> T {
 }
 fn error(e: &ServiceError) -> Value {
     serde_json::to_value(Response::Error { error: e.clone() }).expect("response JSON")
+}
+/// Wrap a worker-side `ResultData` outcome as the shared Response shape so
+/// io.output.* answers are indistinguishable from service answers.
+fn respond(result: Result<ResultData, ServiceError>) -> Response {
+    match result {
+        Ok(result) => Response::Success { result },
+        Err(error) => Response::Error { error },
+    }
 }
 // SAFETY: caller supplies readable bytes. Copy before returning; the worker
 // never borrows foreign memory. Null and oversized buffers are rejected.
@@ -158,6 +167,9 @@ fn worker(
     let mut previous_jobs = Value::Null;
     let mut subscribed = false;
     let mut previews: HashMap<u32, preview::Preview> = HashMap::new();
+    // IO-001: external output devices bound to this session's program GPU
+    // context. Empty until the caller attaches/enables a route explicitly.
+    let mut outputs = output::OutputSet::default();
     loop {
         match receiver.recv_timeout(Duration::from_millis(250)) {
             Ok((id, work)) => {
@@ -208,6 +220,19 @@ fn worker(
                                     "open with a same-version kronello CLI to submit jobs",
                                 ),
                             },
+                            // IO-001: output commands run on this worker's
+                            // device set, not the service's headless path.
+                            Ok(Request::IoOutputList(_)) => respond(Ok(
+                                ResultData::OutputDevices(outputs.list()),
+                            )),
+                            Ok(Request::IoOutputEnable(r)) => respond(
+                                outputs
+                                    .enable(&r, previews.get(&0))
+                                    .map(ResultData::OutputState),
+                            ),
+                            Ok(Request::IoOutputDisable(r)) => respond(Ok(
+                                ResultData::OutputState(outputs.disable(r.kind)),
+                            )),
                             Ok(request) => service.execute(request),
                             Err(e) => Response::Error { error: e.into() },
                         };
@@ -216,6 +241,24 @@ fn worker(
                     Work::Subscribe(enable) => {
                         subscribed = enable;
                         json!({"status":"success"})
+                    }
+                    // IO-001: the reference-monitor slot binds its surface to
+                    // the program preview's device so the same frame can fan
+                    // out without cross-device copies.
+                    Work::Attach(slot, layer, w, h) if slot == output::REF_MONITOR_SLOT => {
+                        match previews.get(&0) {
+                            Some(program) => match program.output_presentation(layer, w, h) {
+                                Ok(presentation) => {
+                                    outputs.attach_ref_monitor(presentation);
+                                    json!({"status":"success"})
+                                }
+                                Err(e) => error(&e),
+                            },
+                            None => error(&ServiceError::new(
+                                "SURFACE_UNAVAILABLE",
+                                "attach the program monitor surface before the reference monitor",
+                            )),
+                        }
                     }
                     Work::Attach(slot, layer, w, h) => match preview::Preview::attach(layer, w, h) {
                         Ok(p) => {
@@ -226,11 +269,48 @@ fn worker(
                         }
                         Err(e) => error(&e),
                     },
+                    Work::Resize(slot, w, h) if slot == output::REF_MONITOR_SLOT => {
+                        match previews.get(&0) {
+                            Some(program) => outputs
+                                .resize_ref_monitor(program.gpu(), w, h)
+                                .map(|()| json!({"status":"success"}))
+                                .unwrap_or_else(|e| error(&e)),
+                            None => error(&ServiceError::new(
+                                "SURFACE_UNAVAILABLE",
+                                "attach the program monitor surface before the reference monitor",
+                            )),
+                        }
+                    }
                     Work::Resize(slot, w, h) => match previews.get_mut(&slot) {
                         Some(p) => p
                             .resize(w, h)
                             .map(|()| json!({"status":"success"}))
                             .unwrap_or_else(|e| error(&e)),
+                        None => error(&ServiceError::new("SURFACE_NOT_ATTACHED", "attach a surface first")),
+                    },
+                    // IO-001: the program redraw is the single frame source.
+                    // After the program present, every explicitly enabled
+                    // output presents the identical frame; per-route outcomes
+                    // are reported without failing the monitor itself.
+                    Work::Redraw(0, ref json) => match previews.get_mut(&0) {
+                        Some(p) => match p.render_frame(&service, json) {
+                            Ok(source) => {
+                                let mut response = p
+                                    .present(&source)
+                                    .unwrap_or_else(|e| error(&e));
+                                if outputs.has_active() {
+                                    let report = outputs.present_all(&source, p.gpu());
+                                    if let Some(preview) = response
+                                        .get_mut("preview")
+                                        .and_then(Value::as_object_mut)
+                                    {
+                                        preview.insert("outputs".into(), report);
+                                    }
+                                }
+                                response
+                            }
+                            Err(e) => error(&e),
+                        },
                         None => error(&ServiceError::new("SURFACE_NOT_ATTACHED", "attach a surface first")),
                     },
                     Work::Redraw(slot, json) => match previews.get_mut(&slot) {
