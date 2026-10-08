@@ -138,6 +138,16 @@
 | [0119](0119-proxy-workflow.md) | プロキシワークフロー（生成ジョブ・切替・relink） | 採用（実装受け入れ中） | 2026-10-08 |
 | [0120](0120-text-on-path-and-character-animators.md) | テキストオンパスと文字単位アニメーター拡張 | 採用（実装受け入れ中） | 2026-10-08 |
 | [0121](0121-workflow-ui-persistence.md) | ワークフロー UI の永続化位置（ユーザー環境側） | 採用（実装受け入れ中） | 2026-10-08 |
+| [0122](0122-stabilization-from-tracking-data.md) | 手ブレ補正（トラッキングデータからのスタビライズ） | 採用（実装受け入れ中） | 2026-10-08 |
+| [0123](0123-optical-flow-retime-interpolation.md) | オプティカルフロー中間フレーム補間 | 採用（実装受け入れ中） | 2026-10-08 |
+| [0124](0124-pitch-preserving-retime-and-multichannel.md) | ピッチ保持音声リタイムとマルチチャンネル | 採用（実装受け入れ中） | 2026-10-08 |
+| [0125](0125-scene-detection-boundaries.md) | シーン検出（カット境界）と SceneBoundaryAsset | 採用（実装受け入れ中） | 2026-10-08 |
+| [0126](0126-smart-reframe.md) | スマートリフレーム（被写体追従の縦横比変換） | 採用（実装受け入れ中） | 2026-10-08 |
+| [0127](0127-multicam-editing.md) | マルチカム編集モデル | 採用（実装受け入れ中） | 2026-10-08 |
+| [0128](0128-dual-monitor-and-three-point-editing.md) | 二画面モニタと三点編集 | 採用（実装受け入れ中） | 2026-10-08 |
+| [0129](0129-media-bins-and-offline-management.md) | メディア管理（ビン・オフライン・relink） | 採用（実装受け入れ中） | 2026-10-08 |
+| [0130](0130-export-presets-batch-and-watch.md) | 書き出しプリセット・バッチ・ウォッチフォルダ | 採用（実装受け入れ中） | 2026-10-08 |
+| [0131](0131-audio-plugin-hosting-trust-boundary.md) | VST3/AU ホスティングと信頼境界 | 採用（実装受け入れ中） | 2026-10-08 |
 
 ## 追加と変更の規則
 
