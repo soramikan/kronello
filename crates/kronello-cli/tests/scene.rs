@@ -194,25 +194,17 @@ impl Fixture {
             std::thread::sleep(Duration::from_millis(20));
         }
     }
-    /// Poll until the terminal record's worker process has fully exited;
-    /// `job.resume` legitimately refuses a job whose pid is still alive.
+    /// Wait for the worker of a terminal job to fully exit. `job.resume`
+    /// legitimately refuses while `worker_pid` is still alive; a terminal DB
+    /// record precedes process exit, and adopted Linux workers stay zombies
+    /// until captured and reaped by `WorkerCleanup`.
     fn wait_worker_exit(&self, id: &str) {
         let store = JobStore::open(JobConfig::at(&self.state)).unwrap();
-        let start = Instant::now();
-        loop {
-            let record = store.get(id).unwrap();
-            if !record.status.active()
-                && !record
-                    .worker_pid
-                    .is_some_and(kronello_platform::process_is_alive)
-            {
-                return;
-            }
-            assert!(
-                start.elapsed() < Duration::from_secs(60),
-                "worker still alive: {record:?}"
-            );
-            std::thread::sleep(Duration::from_millis(20));
+        let pid = store.get(id).unwrap().worker_pid;
+        if let Some(pid) = pid {
+            self._cleanup
+                .wait_for_exit(pid, Duration::from_secs(60))
+                .unwrap();
         }
     }
     fn export(&self) -> Json {
