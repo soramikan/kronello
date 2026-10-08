@@ -302,12 +302,17 @@ impl<'a> DependencyGraph<'a> {
                 ..
             } = target
             {
+                // Text nodes feed responsive layout bands; Media and Null
+                // (media-slot) nodes carry AI-003 smart-reframe crop windows
+                // through the same layout-input path (ADR-0126).
                 if !graph.scopes.get(instance_path).is_some_and(|scope| {
-                    scope
-                        .composition
-                        .nodes
-                        .iter()
-                        .any(|node| node.id == *text && matches!(node.kind, NodeKind::Text { .. }))
+                    scope.composition.nodes.iter().any(|node| {
+                        node.id == *text
+                            && matches!(
+                                node.kind,
+                                NodeKind::Text { .. } | NodeKind::Media(_) | NodeKind::Null
+                            )
+                    })
                 }) {
                     return Err(EvaluationError::PropertyNotFound(target.clone()));
                 }

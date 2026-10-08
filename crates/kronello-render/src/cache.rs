@@ -455,6 +455,7 @@ impl RasterCacheKey {
                     time,
                     reverse_sampling,
                     extent,
+                    crop,
                     output_to_local,
                     bounds,
                     ..
@@ -470,6 +471,7 @@ impl RasterCacheKey {
                             time,
                             reverse_sampling,
                             extent,
+                            crop,
                             output_to_local,
                             bounds,
                             dag.execution_region(),

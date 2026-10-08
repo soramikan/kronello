@@ -37,6 +37,14 @@ pub const AUDIO_VOLUME_ID: DescriptorId =
 pub const BLEND_MODE_ID: DescriptorId =
     DescriptorId::from_uuid(Uuid::from_u128(0x7ba7fae2_3e1d_4bd9_9b84_2e6a6a9fe101));
 
+/// Fixed identity for `kronello.media.crop_origin` (source-space window min).
+pub const MEDIA_CROP_ORIGIN_ID: DescriptorId =
+    DescriptorId::from_uuid(Uuid::from_u128(0x4d2a8c1e_6f07_4b93_a1e5_3d79c2f408aa));
+/// Fixed identity for `kronello.media.crop_size` (source-space window extent;
+/// `[0, 0]` leaves the frame uncropped).
+pub const MEDIA_CROP_SIZE_ID: DescriptorId =
+    DescriptorId::from_uuid(Uuid::from_u128(0x9b8e1f42_c365_4d0a_b6f2_7a41e9d530c7));
+
 pub(crate) fn registry() -> SchemaRegistry {
     let zero = FiniteF64::new(0.0).expect("finite built-in zero");
     let one = FiniteF64::new(1.0).expect("finite built-in one");
@@ -149,6 +157,23 @@ pub(crate) fn registry() -> SchemaRegistry {
     blend.capabilities.curves = false;
     blend.capabilities.expressions = false;
     blend.capabilities.modifiers = false;
+    // AI-003 (ADR-0126): source-pixel crop window on visual media. A zero
+    // size disables the crop; smart-reframe rules write these as layout
+    // inputs through the shared dependency path.
+    let crop_origin = definition(
+        MEDIA_CROP_ORIGIN_ID,
+        "kronello.media.crop_origin",
+        "Media crop origin",
+        Unit::DesignPx,
+        Value::Vec2([zero; 2]),
+    );
+    let crop_size = definition(
+        MEDIA_CROP_SIZE_ID,
+        "kronello.media.crop_size",
+        "Media crop size",
+        Unit::DesignPx,
+        Value::Vec2([zero; 2]),
+    );
     let mut registry = SchemaRegistry::new();
     for definition in [
         blend,
@@ -161,6 +186,8 @@ pub(crate) fn registry() -> SchemaRegistry {
         opacity,
         fill_color,
         stroke_width,
+        crop_origin,
+        crop_size,
     ] {
         let descriptor = PropertyDescriptor::new(definition).expect("valid built-in descriptor");
         registry

@@ -28,6 +28,7 @@ kronello-time = { path = "../kronello-time" }
 kronello-store = { path = "../kronello-store" }
 kronello-render = { path = "../kronello-render" }
 kronello-tracking = { path = "../kronello-tracking" }
+kronello-scene = { path = "../kronello-scene" }
 kronello-gpu = { path = "../kronello-gpu" }
 kronello-vector = { path = "../kronello-vector" }
 kronello-text = { path = "../kronello-text" }

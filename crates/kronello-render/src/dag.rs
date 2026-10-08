@@ -87,6 +87,9 @@ pub enum DagNode {
         time: kronello_time::Time,
         reverse_sampling: bool,
         extent: [f64; 2],
+        /// AI-003 (ADR-0126): source-pixel window `[x, y, w, h]` sampled by
+        /// the draw; `None` samples the full frame.
+        crop: Option<[f64; 4]>,
         output_to_local: [[f64; 3]; 2],
         bounds: crate::PixelBounds,
     },
@@ -188,6 +191,7 @@ impl RenderDag {
                 time,
                 reverse_sampling,
                 extent,
+                crop,
                 output_to_local,
                 ..
             } = node
@@ -204,6 +208,22 @@ impl RenderDag {
                 {
                     return Err(RenderError::InvalidInput("invalid video image size".into()));
                 }
+                // AI-003 (ADR-0126): the crop window is a source-pixel
+                // rectangle; local design coordinates map onto the window,
+                // not the full frame.
+                let window =
+                    crop.unwrap_or([0.0, 0.0, f64::from(image.size[0]), f64::from(image.size[1])]);
+                if window[0] < 0.0
+                    || window[1] < 0.0
+                    || window[2] <= 0.0
+                    || window[3] <= 0.0
+                    || window[0] + window[2] > f64::from(image.size[0]) + 1e-6
+                    || window[1] + window[3] > f64::from(image.size[1]) + 1e-6
+                {
+                    return Err(RenderError::InvalidInput(
+                        "video crop window outside source bounds".into(),
+                    ));
+                }
                 let [w, h] = dag.execution_region.pixels;
                 let mapping = kronello_eval::Affine2(*output_to_local);
                 let mut pixels = Vec::with_capacity(w as usize * h as usize);
@@ -212,10 +232,12 @@ impl RenderDag {
                         let p = mapping.transform_point([f64::from(x) + 0.5, f64::from(y) + 0.5]);
                         pixels.push(
                             if p[0] >= 0.0 && p[1] >= 0.0 && p[0] < extent[0] && p[1] < extent[1] {
-                                let sx =
-                                    (p[0] * f64::from(image.size[0]) / extent[0]).floor() as usize;
-                                let sy =
-                                    (p[1] * f64::from(image.size[1]) / extent[1]).floor() as usize;
+                                let fx = window[0] + p[0] * window[2] / extent[0];
+                                let fy = window[1] + p[1] * window[3] / extent[1];
+                                let sx = (fx.floor() as i64).clamp(0, i64::from(image.size[0]) - 1)
+                                    as usize;
+                                let sy = (fy.floor() as i64).clamp(0, i64::from(image.size[1]) - 1)
+                                    as usize;
                                 image.pixels[sy * image.size[0] as usize + sx]
                             } else {
                                 [0.0; 4]
@@ -647,6 +669,7 @@ impl Builder<'_> {
                 stream_index,
                 time,
                 extent,
+                crop,
                 reverse_sampling,
             } => {
                 let b = crate::DesignBounds::checked([0.0; 2], *extent)?.transform(transform)?;
@@ -656,6 +679,7 @@ impl Builder<'_> {
                     time: *time,
                     reverse_sampling: *reverse_sampling,
                     extent: *extent,
+                    crop: *crop,
                     output_to_local: inverse(transform)?,
                     bounds: crate::PixelBounds {
                         min: b.min,

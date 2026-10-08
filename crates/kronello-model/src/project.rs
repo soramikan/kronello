@@ -62,6 +62,10 @@ pub struct Project {
     pub audio_analyses: Vec<DocumentObject<AudioAnalysisDataAsset>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tracking_data_assets: Vec<DocumentObject<crate::TrackingDataAsset>>,
+    /// AI-002 (ADR-0125): deterministic cut-detection results, locked to the
+    /// analyzed source asset like tracking data.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub scene_boundary_assets: Vec<DocumentObject<crate::SceneBoundaryAsset>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub expression_data_assets: Vec<DocumentObject<crate::ExpressionDataAsset>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -105,6 +109,7 @@ impl Default for Project {
             proxies: Vec::new(),
             audio_analyses: Vec::new(),
             tracking_data_assets: Vec::new(),
+            scene_boundary_assets: Vec::new(),
             expression_data_assets: Vec::new(),
             sequences: Vec::new(),
             mattes: Vec::new(),
@@ -139,6 +144,7 @@ impl Project {
                     | "proxies"
                     | "audio_analyses"
                     | "tracking_data_assets"
+                    | "scene_boundary_assets"
                     | "expression_data_assets"
                     | "sequences"
                     | "mattes"
@@ -384,6 +390,22 @@ impl Project {
                 ));
             }
         }
+        for object in &self.scene_boundary_assets {
+            let (id, fields) = match object {
+                DocumentObject::Known(value) => {
+                    if value.version == crate::SCENE_BOUNDARY_VERSION {
+                        value.validate()?;
+                    }
+                    (value.id.as_uuid(), None)
+                }
+                DocumentObject::Opaque(value) => (value.id, Some(&value.fields)),
+            };
+            if !ids.insert(id) || fields.is_some_and(|f| f.contains_key("id")) {
+                return Err(ProjectError::InvalidDocument(
+                    "duplicate or shadowed scene boundary asset id".into(),
+                ));
+            }
+        }
         {
             // One link per original and per proxy asset; the proxy asset itself
             // is a normal `assets` entry, so its id already sits in `ids`.
@@ -493,6 +515,7 @@ impl Project {
             || self.template_instances.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
             || self.audio_analyses.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(a) if a.config.version != crate::AUDIO_ANALYSIS_VERSION))
             || self.tracking_data_assets.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(a) if a.version != crate::TRACKING_VERSION))
+            || self.scene_boundary_assets.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(a) if a.version != crate::SCENE_BOUNDARY_VERSION))
             || self.expression_data_assets.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(a) if a.version != crate::EXPRESSION_DATA_VERSION))
             || self.simulations.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(s) if s.version != crate::SIMULATION_VERSION))
             || self.repeaters.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(r) if r.version != crate::REPEATER_VERSION))
@@ -592,6 +615,11 @@ impl<'de> Deserialize<'de> for Project {
             },
             tracking_data_assets: if fields.contains_key("tracking_data_assets") {
                 take_field::<_, D::Error>(&mut fields, "tracking_data_assets")?
+            } else {
+                Vec::new()
+            },
+            scene_boundary_assets: if fields.contains_key("scene_boundary_assets") {
+                take_field::<_, D::Error>(&mut fields, "scene_boundary_assets")?
             } else {
                 Vec::new()
             },

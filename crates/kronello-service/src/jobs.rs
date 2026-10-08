@@ -313,8 +313,9 @@ pub struct JobListResult {
 }
 
 /// Immutable job input. Exactly one payload kind is legal: render jobs carry
-/// `snapshot` + `request`; `proxy.generate` jobs carry `proxy`. Optional
-/// fields keep the render shape byte-compatible with schema_version 1.
+/// `snapshot` + `request`; `proxy.generate` jobs carry `proxy`; `scene.detect`
+/// jobs carry `scene`. Optional fields keep the render shape byte-compatible
+/// with schema_version 1.
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct FixedInput {
@@ -326,6 +327,8 @@ pub(crate) struct FixedInput {
     backend: BackendSelection,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     proxy: Option<crate::proxy::ProxyJobInput>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    scene: Option<crate::scene::SceneJobInput>,
 }
 impl FixedInput {
     fn render(
@@ -339,6 +342,7 @@ impl FixedInput {
             request: Some(request),
             backend,
             proxy: None,
+            scene: None,
         }
     }
     pub(crate) fn proxy(input: crate::proxy::ProxyJobInput) -> Self {
@@ -349,12 +353,25 @@ impl FixedInput {
             // Proxy transcode never touches a render backend.
             backend: BackendSelection::CpuReference,
             proxy: Some(input),
+            scene: None,
         }
     }
-    /// The render payload pair; mutually exclusive with `proxy` by validation.
+    pub(crate) fn scene(input: crate::scene::SceneJobInput) -> Self {
+        Self {
+            schema_version: 1,
+            snapshot: None,
+            request: None,
+            // Scene detection decodes sequentially; no render backend.
+            backend: BackendSelection::CpuReference,
+            proxy: None,
+            scene: Some(input),
+        }
+    }
+    /// The render payload pair; mutually exclusive with `proxy`/`scene` by
+    /// validation.
     fn render_parts(&self) -> Result<(&RenderSnapshot, &RenderSubmitRequest), ServiceError> {
-        match (&self.snapshot, &self.request, &self.proxy) {
-            (Some(snapshot), Some(request), None) => Ok((snapshot, request)),
+        match (&self.snapshot, &self.request, &self.proxy, &self.scene) {
+            (Some(snapshot), Some(request), None, None) => Ok((snapshot, request)),
             _ => Err(ServiceError::new(
                 "JOB_INPUT_HASH_MISMATCH",
                 "fixed input is not a render job",
@@ -362,21 +379,32 @@ impl FixedInput {
         }
     }
     pub(crate) fn proxy_parts(&self) -> Result<&crate::proxy::ProxyJobInput, ServiceError> {
-        match (&self.snapshot, &self.request, &self.proxy) {
-            (None, None, Some(proxy)) => Ok(proxy),
+        match (&self.snapshot, &self.request, &self.proxy, &self.scene) {
+            (None, None, Some(proxy), None) => Ok(proxy),
             _ => Err(ServiceError::new(
                 "JOB_INPUT_HASH_MISMATCH",
                 "fixed input is not a proxy job",
             )),
         }
     }
+    pub(crate) fn scene_parts(&self) -> Result<&crate::scene::SceneJobInput, ServiceError> {
+        match (&self.snapshot, &self.request, &self.proxy, &self.scene) {
+            (None, None, None, Some(scene)) => Ok(scene),
+            _ => Err(ServiceError::new(
+                "JOB_INPUT_HASH_MISMATCH",
+                "fixed input is not a scene job",
+            )),
+        }
+    }
     /// A worker never executes input whose kind disagrees with the job record:
     /// render records carry a content-hashed snapshot; proxy records carry a
-    /// `proxy` payload validated against `record.output_profile`.
+    /// `proxy` payload and scene records a `scene` payload, both validated
+    /// against `record.output_profile`.
     fn kind_matches_record(&self, record: &JobRecord) -> bool {
-        match (&self.snapshot, &self.request, &self.proxy) {
-            (Some(_), Some(_), None) => record.output_profile.get("render").is_some(),
-            (None, None, Some(_)) => record.output_profile.get("proxy_asset_id").is_some(),
+        match (&self.snapshot, &self.request, &self.proxy, &self.scene) {
+            (Some(_), Some(_), None, None) => record.output_profile.get("render").is_some(),
+            (None, None, Some(_), None) => record.output_profile.get("proxy_asset_id").is_some(),
+            (None, None, None, Some(_)) => record.output_profile.get("scene_asset_id").is_some(),
             _ => false,
         }
     }
@@ -535,6 +563,9 @@ impl Service<'_> {
         if let Some(proxy) = &fixed.proxy {
             return crate::proxy::execute_proxy_job(store, record, proxy);
         }
+        if let Some(scene) = &fixed.scene {
+            return crate::scene::execute_scene_job(store, record, scene);
+        }
         let (snapshot, request) = fixed.render_parts()?;
         self.validate_fixed_job(record, fixed)?;
         self.execute_fixed_job(store, record, snapshot, request)
@@ -577,6 +608,30 @@ impl Service<'_> {
                     return Err(ServiceError::new(
                         "OUTPUT_VALIDATION_FAILED",
                         "published proxy differs from the validated receipt",
+                    ));
+                }
+            }
+        } else if let Ok(scene) = fixed.scene_parts() {
+            // A published scene receipt re-validates as a boundary asset whose
+            // declared hash matches the report and the fixed scene input.
+            if record.destination.exists()
+                && let Some(result) = store.publication_result(&record)?
+            {
+                let report = &result["report"];
+                let data: kronello_model::SceneBoundaryAsset =
+                    serde_json::from_slice(&std::fs::read(&record.destination).map_err(|e| {
+                        ServiceError::new("OUTPUT_VALIDATION_FAILED", e.to_string())
+                    })?)
+                    .map_err(|e| ServiceError::new("OUTPUT_VALIDATION_FAILED", e.to_string()))?;
+                if data.validate().is_err()
+                    || report["content_hash"].as_str() != Some(data.content_hash.as_str())
+                    || report["scene_asset_id"].as_str()
+                        != Some(scene.scene_asset_id.to_string().as_str())
+                    || report["asset"].as_str() != Some(scene.asset.id.to_string().as_str())
+                {
+                    return Err(ServiceError::new(
+                        "OUTPUT_VALIDATION_FAILED",
+                        "published scene receipt differs from the validated result",
                     ));
                 }
             }
@@ -680,6 +735,9 @@ impl Service<'_> {
         if let Ok(proxy) = fixed.proxy_parts() {
             return self.validate_proxy_job(record, proxy);
         }
+        if let Ok(scene) = fixed.scene_parts() {
+            return self.validate_scene_job(record, scene);
+        }
         let (snapshot, request) = fixed.render_parts()?;
         snapshot.validate()?;
         // Fixed-input file outputs decode authored originals only (ADR-0119);
@@ -763,6 +821,35 @@ impl Service<'_> {
         }
         input
             .asset
+            .validate()
+            .map_err(|e| ServiceError::invalid(e.to_string()))?;
+        // The source asset is an external reference; content verify is live.
+        kronello_media::resolve_asset(&input.asset, &input.project)?;
+        Ok(())
+    }
+    /// `scene.detect` identity checks shared by the worker and `job.resume`;
+    /// the fixed payload is the whole contract (asset object, stream, range,
+    /// parameters, destination) and must equal the recorded submission.
+    fn validate_scene_job(
+        &self,
+        record: &JobRecord,
+        input: &crate::scene::SceneJobInput,
+    ) -> Result<(), ServiceError> {
+        if input.document_hash != record.snapshot_hash
+            || input.destination != record.destination
+            || serde_json::to_value(input)? != record.output_profile
+        {
+            return Err(ServiceError::new(
+                "JOB_INPUT_HASH_MISMATCH",
+                "fixed scene input identity differs",
+            ));
+        }
+        input
+            .asset
+            .validate()
+            .map_err(|e| ServiceError::invalid(e.to_string()))?;
+        input
+            .params
             .validate()
             .map_err(|e| ServiceError::invalid(e.to_string()))?;
         // The source asset is an external reference; content verify is live.

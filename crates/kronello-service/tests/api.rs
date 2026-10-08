@@ -273,6 +273,7 @@ fn capabilities_registry_media_extension_without_device_initialization() {
         [
             "audio.analyze",
             "track.analyze",
+            "scene.apply",
             "proxy.clear",
             "audio.normalize",
             "sequence.create",
@@ -660,6 +661,9 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
             "asset":uuid,"stream_index":0,"mode":"points",
             "seeds":[{"x":0.5,"y":0.5,"template_radius":8,"search_radius":16}],
             "range":{"start":{"num":"0","den":"1"},"end":time}}),
+        json!({"operation":"scene.detect","project":path,"asset":uuid,"stream_index":0}),
+        json!({"operation":"scene.apply","project":path,"base_revision":"1","session_id":uuid,
+            "idempotency_key":"scene","scene_asset":uuid,"sequence":uuid,"mode":"markers"}),
         json!({"operation":"proxy.generate","project":path,"assets":[uuid],"scale":0.5}),
         json!({"operation":"proxy.status","project":path}),
         json!({"operation":"proxy.clear","project":path,"base_revision":"1","asset":uuid}),
@@ -1241,6 +1245,7 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
         .unwrap();
     let video_id = AssetId::new();
     let proxy_id = AssetId::new();
+    let scene_sequence = SequenceId::new();
     let clip_hash = kronello_media::content_hash(&clip_path).unwrap();
     let mut proxy_stream = clip_stream.clone();
     proxy_stream.index = 0;
@@ -1270,6 +1275,39 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
                 },
             }),
         ],
+        scene_boundary_assets: vec![DocumentObject::Known({
+            let mut data = SceneBoundaryAsset {
+                id: AssetId::new(),
+                version: SCENE_BOUNDARY_VERSION,
+                source: SceneSource {
+                    asset: video_id,
+                    stream_index: 0,
+                    content_hash: clip_hash.clone(),
+                },
+                params: SceneDetectionParams::default(),
+                range: kronello_time::TimeRange::new(
+                    Time::ZERO,
+                    kronello_time::Rational::new(1, 12).unwrap(),
+                )
+                .unwrap(),
+                frames_analyzed: 2,
+                boundaries: vec![SceneBoundary {
+                    time: kronello_time::Rational::new(1, 48).unwrap(),
+                    confidence: FiniteF64::new(0.9).unwrap(),
+                }],
+                content_hash: String::new(),
+            };
+            data.content_hash = data.computed_hash().unwrap();
+            data
+        })],
+        sequences: vec![DocumentObject::Known(serde_json::from_value(json!({
+            "id":scene_sequence,"extent":{"width":16.0,"height":16.0},"frame_rate":{"num":"24","den":"1"},"audio_rate":48000,"working_space":"linear_rec709",
+            "tracks":[{"id":"00620000-0000-4000-8000-000000000009","kind":"video","clips":[{"id":"00620000-0000-4000-8000-00000000000a",
+                "source_ref":{"kind":"asset","asset":video_id,"stream_index":0},
+                "timeline_range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"12"}},"source_in":{"num":"0","den":"1"},
+                "time_map":{"kind":"linear","offset":{"num":"0","den":"1"},"speed":{"num":"1","den":"1"}},
+                "links":[],"effects":[],"audio_retime":"reject"}]}],
+            "transitions":[],"markers":[]})).unwrap())],
         proxies: vec![ProxyLink {
             original: video_id,
             proxy: proxy_id,
@@ -1300,6 +1338,19 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
     execute(
         json!({"operation":"proxy.clear", "project":video_path, "base_revision":"2",
             "asset":video_id}),
+    );
+    // AI-002: detection submits the fixed-input job; apply maps a stored
+    // boundary through the shared marker path at the current revision.
+    execute(
+        json!({"operation":"scene.detect","project":video_path,"asset":video_id,"stream_index":0}),
+    );
+    let scene_asset = execute(json!({"operation":"project.export","project":video_path}))
+        ["document"]["scene_boundary_assets"][0]["id"]
+        .clone();
+    execute(
+        json!({"operation":"scene.apply","project":video_path,"base_revision":"3",
+            "session_id":session,"idempotency_key":"scene-apply",
+            "scene_asset":scene_asset,"sequence":scene_sequence,"mode":"markers"}),
     );
     // COLOR-003/004: import a `.cube` as a hash-pinned Data asset, then query
     // deterministic scope bins over the composited frame.

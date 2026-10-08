@@ -17,6 +17,7 @@ kronello-simulation = { path = "../kronello-simulation" }
 kronello-model = { path = "../kronello-model" }
 kronello-time = { path = "../kronello-time" }
 kronello-eval = { path = "../kronello-eval" }
+kronello-scene = { path = "../kronello-scene" }
 kronello-vector = { path = "../kronello-vector" }
 kronello-text = { path = "../kronello-text" }
 serde = { version = "1", features = ["derive"] }

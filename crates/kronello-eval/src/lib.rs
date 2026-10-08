@@ -26,7 +26,10 @@ use thiserror::Error;
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum RuntimePropertyKey {
     /// Upper compiler supplies a bounds-derived Vec2 for this consumer.
-    /// The graph declares text inputs -> layout value -> consumer property.
+    /// The graph declares upstream inputs -> layout value -> consumer
+    /// property. `text` is the bounds-producing node: a Text node for
+    /// responsive bands, or a Media/Null media node for AI-003
+    /// smart-reframe crop windows (ADR-0126).
     LayoutValue {
         instance_path: InstancePath,
         text: kronello_model::NodeId,

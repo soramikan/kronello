@@ -1172,6 +1172,7 @@ dependencies = [
  "kronello-eval",
  "kronello-gpu",
  "kronello-model",
+ "kronello-scene",
  "kronello-simulation",
  "kronello-template",
  "kronello-testkit",
@@ -1189,6 +1190,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "kronello-scene"
+version = "0.0.0"
+dependencies = [
+ "kronello-model",
+ "kronello-time",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "kronello-service"
 version = "0.0.0"
 dependencies = [
@@ -1201,6 +1212,7 @@ dependencies = [
  "kronello-media",
  "kronello-model",
  "kronello-render",
+ "kronello-scene",
  "kronello-store",
  "kronello-template",
  "kronello-testkit",

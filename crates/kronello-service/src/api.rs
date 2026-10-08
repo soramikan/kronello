@@ -91,6 +91,8 @@ macro_rules! commands {
             ("svg.import_plan", true, SvgImportPlanRequest, EditPlan),
             ("audio.analyze", false, AudioAnalyzeRequest, ProjectInfo),
             ("track.analyze", false, TrackAnalyzeRequest, ProjectInfo),
+            ("scene.detect", true, SceneDetectRequest, kronello_jobs::JobRecord),
+            ("scene.apply", false, SceneApplyRequest, kronello_store::Event),
             ("proxy.generate", true, ProxyGenerateRequest, JobListResult),
             ("proxy.status", true, ProxyStatusRequest, ProxyStatusResult),
             ("proxy.clear", false, ProxyClearRequest, ProjectInfo),

@@ -31,6 +31,8 @@ pub use proxy::{
 };
 mod tracking;
 pub use tracking::TrackAnalyzeRequest;
+mod scene;
+pub use scene::{SceneApplyMode, SceneApplyRequest, SceneDetectRequest, SceneJobInput};
 mod loudness;
 pub use loudness::{
     AudioLoudnessInput, AudioLoudnessRequest, AudioLoudnessResult, AudioNormalizeRequest,
@@ -97,6 +99,10 @@ pub enum Request {
     AudioAnalyze(AudioAnalyzeRequest),
     #[serde(rename = "track.analyze")]
     TrackAnalyze(TrackAnalyzeRequest),
+    #[serde(rename = "scene.detect")]
+    SceneDetect(SceneDetectRequest),
+    #[serde(rename = "scene.apply")]
+    SceneApply(SceneApplyRequest),
     #[serde(rename = "proxy.generate")]
     ProxyGenerate(ProxyGenerateRequest),
     #[serde(rename = "proxy.status")]
@@ -597,6 +603,8 @@ impl<'a> Service<'a> {
             }
             Request::AudioAnalyze(r) => self.analyze_audio(r),
             Request::TrackAnalyze(r) => self.analyze_tracking(r),
+            Request::SceneDetect(r) => self.detect_scene(r).map(|r| ResultData::Job(Box::new(r))),
+            Request::SceneApply(r) => self.apply_scene(r).map(ResultData::Edit),
             Request::ProxyGenerate(r) => self.generate_proxies(r).map(ResultData::Jobs),
             Request::ProxyStatus(r) => self.proxy_status(r).map(ResultData::Proxies),
             Request::ProxyClear(r) => self.proxy_clear(r).map(ResultData::Project),
@@ -1418,6 +1426,8 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
         Request::SvgImportPlan(r) => local_locator(&r.project),
         Request::AudioAnalyze(r) => local_locator(&r.project),
         Request::TrackAnalyze(r) => local_locator(&r.project),
+        Request::SceneDetect(r) => local_locator(&r.project),
+        Request::SceneApply(r) => local_locator(&r.project),
         Request::ProxyGenerate(r) => local_locator(&r.project),
         Request::ProxyStatus(r) => local_locator(&r.project),
         Request::ProxyClear(r) => local_locator(&r.project),

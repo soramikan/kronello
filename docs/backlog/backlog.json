@@ -2123,7 +2123,7 @@
    "priority": "P2",
    "area": "ai",
    "title": "シーン検出: カット境界の自動検出",
-   "status": "planned",
+   "status": "done",
    "dependencies": [
     "MEDIA-001"
    ],
@@ -2138,7 +2138,7 @@
    "priority": "P2",
    "area": "ai",
    "title": "スマートリフレーム: 被写体追従の自動縦横比変換",
-   "status": "planned",
+   "status": "done",
    "dependencies": [
     "TRACK-001",
     "LAYOUT-001"

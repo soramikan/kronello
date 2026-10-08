@@ -745,10 +745,19 @@ impl RenderBackend for ResidentVideoRenderBackend<'_> {
                     time,
                     reverse_sampling,
                     extent,
+                    crop,
                     output_to_local,
                     ..
                 } = node
                 {
+                    if crop.is_some() {
+                        // AI-003 (ADR-0126): resident sampling has no crop
+                        // window channel yet; the software path is the
+                        // authoritative implementation.
+                        return Err(RenderError::UnsupportedFeature(
+                            "smart reframe crop requires explicit software backend".into(),
+                        ));
+                    }
                     if *reverse_sampling {
                         return Err(RenderError::UnsupportedFeature("reverse_grid_v1 requires explicit software presentation-interval decode".into()));
                     }

@@ -186,6 +186,8 @@ impl<'de> Deserialize<'de> for Request {
             "svg.import_plan" => payload(&fields).map(Self::SvgImportPlan),
             "audio.analyze" => payload(&fields).map(Self::AudioAnalyze),
             "track.analyze" => payload(&fields).map(Self::TrackAnalyze),
+            "scene.detect" => payload(&fields).map(Self::SceneDetect),
+            "scene.apply" => payload(&fields).map(Self::SceneApply),
             "proxy.generate" => payload(&fields).map(Self::ProxyGenerate),
             "proxy.status" => payload(&fields).map(Self::ProxyStatus),
             "proxy.clear" => payload(&fields).map(Self::ProxyClear),

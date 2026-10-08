@@ -359,6 +359,7 @@ fn resident_graph_input_and_final_boundary_match_counters_without_cpu_image_uplo
         time: Time::ZERO,
         reverse_sampling: false,
         extent: scene.design_extent,
+        crop: None,
     };
     let region = OutputRegion {
         origin: [0.0; 2],

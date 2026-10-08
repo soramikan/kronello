@@ -1483,7 +1483,11 @@ fn key(key: &str) -> Result<(), ServiceError> {
     }
     Ok(())
 }
-fn retry(store: &ProjectStore, key: &str, payload: &Json) -> Result<Option<Event>, ServiceError> {
+pub(crate) fn retry(
+    store: &ProjectStore,
+    key: &str,
+    payload: &Json,
+) -> Result<Option<Event>, ServiceError> {
     if let Some(r) = store.idempotency_record(key)? {
         if r.service_payload.as_ref() != Some(payload) {
             return Err(StoreError::IdempotencyKeyReused.into());

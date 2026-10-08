@@ -2351,7 +2351,7 @@
     "DocumentObject12": {
       "anyOf": [
         {
-          "$ref": "#/$defs/ExpressionDataAsset"
+          "$ref": "#/$defs/SceneBoundaryAsset"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -2362,7 +2362,7 @@
     "DocumentObject13": {
       "anyOf": [
         {
-          "$ref": "#/$defs/Sequence"
+          "$ref": "#/$defs/ExpressionDataAsset"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -2373,7 +2373,7 @@
     "DocumentObject14": {
       "anyOf": [
         {
-          "$ref": "#/$defs/MatteRelation"
+          "$ref": "#/$defs/Sequence"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -2384,7 +2384,7 @@
     "DocumentObject15": {
       "anyOf": [
         {
-          "$ref": "#/$defs/Repeater"
+          "$ref": "#/$defs/MatteRelation"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -2393,6 +2393,17 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
     },
     "DocumentObject16": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Repeater"
+        },
+        {
+          "$ref": "#/$defs/OpaqueObject"
+        }
+      ],
+      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
+    },
+    "DocumentObject17": {
       "anyOf": [
         {
           "$ref": "#/$defs/ParticleSimulation"
@@ -8273,7 +8284,7 @@
         },
         "expression_data_assets": {
           "items": {
-            "$ref": "#/$defs/DocumentObject12"
+            "$ref": "#/$defs/DocumentObject13"
           },
           "type": "array"
         },
@@ -8289,7 +8300,7 @@
         },
         "mattes": {
           "items": {
-            "$ref": "#/$defs/DocumentObject14"
+            "$ref": "#/$defs/DocumentObject15"
           },
           "type": "array"
         },
@@ -8305,7 +8316,14 @@
         },
         "repeaters": {
           "items": {
-            "$ref": "#/$defs/DocumentObject15"
+            "$ref": "#/$defs/DocumentObject16"
+          },
+          "type": "array"
+        },
+        "scene_boundary_assets": {
+          "description": "AI-002 (ADR-0125): deterministic cut-detection results, locked to the\nanalyzed source asset like tracking data.",
+          "items": {
+            "$ref": "#/$defs/DocumentObject12"
           },
           "type": "array"
         },
@@ -8322,7 +8340,7 @@
         },
         "sequences": {
           "items": {
-            "$ref": "#/$defs/DocumentObject13"
+            "$ref": "#/$defs/DocumentObject14"
           },
           "type": "array"
         },
@@ -8334,7 +8352,7 @@
         },
         "simulations": {
           "items": {
-            "$ref": "#/$defs/DocumentObject16"
+            "$ref": "#/$defs/DocumentObject17"
           },
           "type": "array"
         },
@@ -9000,6 +9018,31 @@
         "den"
       ],
       "type": "object"
+    },
+    "ReframeEasing": {
+      "description": "Temporal smoothing kernel shape (ADR-0126). The window weight is\n`1 - ease(u)` on the normalized offset `u = |dt| / smoothing_window`.",
+      "oneOf": [
+        {
+          "const": "linear",
+          "description": "Tent kernel `1 - u`.",
+          "type": "string"
+        },
+        {
+          "const": "ease_in",
+          "description": "`1 - u^2`: flat near center, sharp window edge.",
+          "type": "string"
+        },
+        {
+          "const": "ease_out",
+          "description": "`(1 - u)^2`: sharp near center, flat window edge.",
+          "type": "string"
+        },
+        {
+          "const": "ease_in_out",
+          "description": "Smoothstep complement `1 - (3u^2 - 2u^3)`.",
+          "type": "string"
+        }
+      ]
     },
     "RelinkRequest": {
       "additionalProperties": false,
@@ -9947,6 +9990,146 @@
             "mode",
             "seeds",
             "range"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "asset": {
+              "$ref": "#/$defs/AssetId"
+            },
+            "expected_revision": {
+              "description": "Optional fence against changes since the caller inspected the project.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AssetId"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Explicit boundary-asset id; absent derives one deterministically from\nthe locked input, parameters and submission revision."
+            },
+            "operation": {
+              "const": "scene.detect",
+              "type": "string"
+            },
+            "params": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/SceneDetectionParams"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector parameters; absent uses the versioned defaults."
+            },
+            "project": {
+              "type": "string"
+            },
+            "range": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TimeRange"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Source-time interval `[start, end)`; absent covers the locked stream\nduration and fails when the stream has none."
+            },
+            "stream_index": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "asset",
+            "stream_index"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "base_revision": {
+              "description": "Decimal revision, independent of JSON number precision.",
+              "type": "string"
+            },
+            "clip": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ClipId"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict boundary mapping to this clip."
+            },
+            "idempotency_key": {
+              "type": "string"
+            },
+            "min_confidence": {
+              "description": "Boundaries below this confidence are ignored; absent keeps all.",
+              "format": "double",
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "mode": {
+              "$ref": "#/$defs/SceneApplyMode"
+            },
+            "operation": {
+              "const": "scene.apply",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "scene_asset": {
+              "$ref": "#/$defs/AssetId"
+            },
+            "sequence": {
+              "$ref": "#/$defs/SequenceId"
+            },
+            "session_id": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "track": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TrackId"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict boundary mapping to clips on this track."
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "base_revision",
+            "idempotency_key",
+            "session_id",
+            "scene_asset",
+            "sequence",
+            "mode"
           ],
           "type": "object"
         },
@@ -12787,6 +12970,252 @@
       "minimum": 0,
       "type": "integer"
     },
+    "SceneApplyMode": {
+      "oneOf": [
+        {
+          "const": "markers",
+          "description": "One sequence-level marker per mapped boundary.",
+          "type": "string"
+        },
+        {
+          "const": "split",
+          "description": "One `ClipSplit` per mapped boundary through the shared NLE rules.",
+          "type": "string"
+        }
+      ]
+    },
+    "SceneApplyRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision": {
+          "description": "Decimal revision, independent of JSON number precision.",
+          "type": "string"
+        },
+        "clip": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ClipId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Restrict boundary mapping to this clip."
+        },
+        "idempotency_key": {
+          "type": "string"
+        },
+        "min_confidence": {
+          "description": "Boundaries below this confidence are ignored; absent keeps all.",
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "mode": {
+          "$ref": "#/$defs/SceneApplyMode"
+        },
+        "project": {
+          "type": "string"
+        },
+        "scene_asset": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "sequence": {
+          "$ref": "#/$defs/SequenceId"
+        },
+        "session_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "track": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TrackId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Restrict boundary mapping to clips on this track."
+        }
+      },
+      "required": [
+        "project",
+        "base_revision",
+        "idempotency_key",
+        "session_id",
+        "scene_asset",
+        "sequence",
+        "mode"
+      ],
+      "type": "object"
+    },
+    "SceneBoundary": {
+      "additionalProperties": false,
+      "properties": {
+        "confidence": {
+          "$ref": "#/$defs/FiniteF64",
+          "description": "Normalized detector confidence in `[0, 1]`."
+        },
+        "time": {
+          "$ref": "#/$defs/Rational",
+          "description": "Rational source presentation time of the first frame of the new scene."
+        }
+      },
+      "required": [
+        "time",
+        "confidence"
+      ],
+      "type": "object"
+    },
+    "SceneBoundaryAsset": {
+      "additionalProperties": false,
+      "properties": {
+        "boundaries": {
+          "description": "Cut boundaries in strictly increasing source time.",
+          "items": {
+            "$ref": "#/$defs/SceneBoundary"
+          },
+          "type": "array"
+        },
+        "content_hash": {
+          "description": "SHA-256 over the versioned payload; recomputed on validation.",
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "frames_analyzed": {
+          "description": "Decoded frames that produced `boundaries` (provenance, not a lookup).",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "id": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "params": {
+          "$ref": "#/$defs/SceneDetectionParams",
+          "description": "Parameters that produced `boundaries`; part of the versioned payload."
+        },
+        "range": {
+          "$ref": "#/$defs/TimeRange",
+          "description": "Analyzed source-time interval `[start, end)`."
+        },
+        "source": {
+          "$ref": "#/$defs/SceneSource"
+        },
+        "version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "source",
+        "params",
+        "range",
+        "frames_analyzed",
+        "boundaries",
+        "content_hash"
+      ],
+      "type": "object"
+    },
+    "SceneDetectRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "asset": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "expected_revision": {
+          "description": "Optional fence against changes since the caller inspected the project.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AssetId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Explicit boundary-asset id; absent derives one deterministically from\nthe locked input, parameters and submission revision."
+        },
+        "params": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SceneDetectionParams"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Detector parameters; absent uses the versioned defaults."
+        },
+        "project": {
+          "type": "string"
+        },
+        "range": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimeRange"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Source-time interval `[start, end)`; absent covers the locked stream\nduration and fails when the stream has none."
+        },
+        "stream_index": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "project",
+        "asset",
+        "stream_index"
+      ],
+      "type": "object"
+    },
+    "SceneDetectionParams": {
+      "additionalProperties": false,
+      "description": "Versioned detection parameters baked into the boundary payload hash.",
+      "properties": {
+        "edge_weight": {
+          "$ref": "#/$defs/FiniteF64",
+          "description": "Edge-change weight mixed into the histogram difference, in `[0, 1]`."
+        },
+        "min_spacing_frames": {
+          "description": "Minimum spacing between emitted boundaries, in sampled frames.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "peak_ratio": {
+          "$ref": "#/$defs/FiniteF64",
+          "description": "A peak must dominate `peak_ratio * mean` when it misses the sigma band."
+        },
+        "threshold_sigma": {
+          "$ref": "#/$defs/FiniteF64",
+          "description": "Adaptive threshold offset: `mean + threshold_sigma * stddev`."
+        }
+      },
+      "required": [
+        "edge_weight",
+        "threshold_sigma",
+        "peak_ratio",
+        "min_spacing_frames"
+      ],
+      "type": "object"
+    },
     "SceneEvaluationRequest": {
       "additionalProperties": false,
       "properties": {
@@ -13197,6 +13626,30 @@
           "uniqueItems": true
         }
       },
+      "type": "object"
+    },
+    "SceneSource": {
+      "additionalProperties": false,
+      "properties": {
+        "asset": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "content_hash": {
+          "description": "Locked `Asset::content_hash`; mismatches mark the result stale.",
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "stream_index": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "asset",
+        "stream_index",
+        "content_hash"
+      ],
       "type": "object"
     },
     "SchemaKey": {
@@ -14051,6 +14504,88 @@
       ],
       "type": "object"
     },
+    "SmartReframeRule": {
+      "additionalProperties": false,
+      "description": "AI-003 (ADR-0126): a media node inside a template composition reframed\nfrom the confidence-weighted gaze of a `TrackingDataAsset`. The window is\ninjected as a layout-derived Vec2 pair through the shared dependency path.",
+      "properties": {
+        "crop_origin_property": {
+          "$ref": "#/$defs/PropertyId",
+          "description": "`kronello.media.crop_origin` property on the media node."
+        },
+        "crop_size_property": {
+          "$ref": "#/$defs/PropertyId",
+          "description": "`kronello.media.crop_size` property on the media node."
+        },
+        "node": {
+          "$ref": "#/$defs/NodeId",
+          "description": "Media (`Media` or `Null` slot) node inside the placement's composition."
+        },
+        "settings": {
+          "$ref": "#/$defs/SmartReframeSettings"
+        },
+        "tracking": {
+          "$ref": "#/$defs/AssetId",
+          "description": "`TrackingDataAsset` supplying the gaze samples."
+        }
+      },
+      "required": [
+        "node",
+        "tracking",
+        "crop_origin_property",
+        "crop_size_property",
+        "settings"
+      ],
+      "type": "object"
+    },
+    "SmartReframeSettings": {
+      "additionalProperties": false,
+      "description": "Versioned smart-reframe settings (ADR-0126): seed selection, temporal\nsmoothing window, padding, zoom cap and easing are all hash-covered.",
+      "properties": {
+        "easing": {
+          "$ref": "#/$defs/ReframeEasing"
+        },
+        "max_zoom": {
+          "$ref": "#/$defs/FiniteF64",
+          "description": "`>= 1`: the crop never shrinks below `1 / max_zoom` of the fitted\nwindow (the tightest allowed crop scale)."
+        },
+        "padding": {
+          "$ref": "#/$defs/FiniteF64",
+          "description": "Gaze margin fraction in `[0, 1]`: `0` is the tightest allowed crop,\n`1` the largest target-aspect window fitting the source."
+        },
+        "seeds": {
+          "description": "Selected `TrackingDataAsset::seeds` indexes feeding the gaze centroid;\nempty selects every seed in stable order.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "smoothing_window": {
+          "$ref": "#/$defs/Duration",
+          "description": "Symmetric temporal smoothing radius in source seconds; zero samples\nonly frames exactly at the source time."
+        },
+        "target_aspect": {
+          "$ref": "#/$defs/FiniteF64",
+          "description": "Target crop aspect ratio `width / height` in source pixels."
+        },
+        "version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version",
+        "seeds",
+        "smoothing_window",
+        "padding",
+        "max_zoom",
+        "target_aspect",
+        "easing"
+      ],
+      "type": "object"
+    },
     "SourceRef": {
       "oneOf": [
         {
@@ -14848,6 +15383,14 @@
           },
           "default": {},
           "type": "object"
+        },
+        "smart_reframes": {
+          "default": [],
+          "description": "AI-003 (ADR-0126): tracking-driven crop windows on media nodes, one\nlayout-derived rule per placement through the shared dependency path.",
+          "items": {
+            "$ref": "#/$defs/SmartReframeRule"
+          },
+          "type": "array"
         }
       },
       "type": "object"

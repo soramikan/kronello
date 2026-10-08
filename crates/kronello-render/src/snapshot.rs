@@ -692,7 +692,7 @@ fn content<T>(
     }
     Ok(None)
 }
-fn content_asset(project: &Project, id: AssetId) -> Result<&Asset, RenderError> {
+pub(crate) fn content_asset(project: &Project, id: AssetId) -> Result<&Asset, RenderError> {
     content(&project.assets, id.as_uuid(), |a| a.id.as_uuid())?.ok_or_else(|| {
         RenderError::Backend {
             code: "ASSET_MISSING",
@@ -758,6 +758,9 @@ pub enum SceneContent {
         time: Time,
         reverse_sampling: bool,
         extent: [f64; 2],
+        /// AI-003 (ADR-0126): source-pixel window `[x, y, w, h]`; `extent` is
+        /// the window size so layout and bounds reflect the crop.
+        crop: Option<[f64; 4]>,
     },
     /// FX-007 (ADR-0116): an adjustment clip node. It draws nothing itself;
     /// DAG lowering rewrites the accumulated lower-track composite through
@@ -1066,6 +1069,9 @@ pub fn build_scene_ir_with_cache(
             .collect::<Result<Vec<_>, RenderError>>()?;
         let mut layout_content_hash = None;
         let properties = values.clone();
+        // AI-003 (ADR-0126): the crop window is evaluated once per node
+        // before `values` can move into shape content.
+        let node_crop = evaluated_crop(&authored.properties, &values)?;
         let mut evaluated_text = None;
         let mut content = match n.kind {
             NodeKind::Shape { content_ref } => {
@@ -1125,7 +1131,7 @@ pub fn build_scene_ir_with_cache(
                                 n.local_time.checked_sub(authored.active_range.start())?;
                             let source =
                                 media.source_in.checked_add(media.time_map.map(relative)?)?;
-                            media_content(snapshot, asset, media.stream_index, source)?
+                            media_content(snapshot, asset, media.stream_index, source, node_crop)?
                         }
                     }
                     AssetKind::Data => {
@@ -1152,7 +1158,7 @@ pub fn build_scene_ir_with_cache(
                 .start_time
                 .unwrap_or(Time::ZERO)
                 .checked_add(relative)?;
-            content = media_content(snapshot, asset, stream.index, source)?;
+            content = media_content(snapshot, asset, stream.index, source, node_crop)?;
         }
         let mut post_effect_opacity = 1.0;
         let mut transitions = Vec::new();
@@ -1196,12 +1202,27 @@ pub fn build_scene_ir_with_cache(
                     };
                     let (decode_asset, decode_stream) =
                         render_media(snapshot, asset, *stream_index);
+                    // The lowered node clones clip properties one-to-one, so
+                    // `authored`/`values` already carry the crop descriptors.
+                    if let Some([x, y, cw, ch]) = node_crop
+                        && (x < 0.0
+                            || y < 0.0
+                            || cw <= 0.0
+                            || ch <= 0.0
+                            || x + cw > w + 1e-6
+                            || y + ch > h + 1e-6)
+                    {
+                        return Err(RenderError::InvalidInput(
+                            "clip crop window outside source bounds".into(),
+                        ));
+                    }
                     SceneContent::Video {
                         asset: decode_asset.clone(),
                         stream_index: decode_stream,
                         time: clip.local_time(time)?,
                         reverse_sampling: clip.reverse_sampling.is_some(),
-                        extent: [w, h],
+                        extent: node_crop.map(|c| [c[2], c[3]]).unwrap_or([w, h]),
+                        crop: node_crop,
                     }
                 }
                 SourceRef::Generator { color, .. } => {
@@ -1438,11 +1459,44 @@ fn require_composition_media(snapshot: &RenderSnapshot) -> Result<(), RenderErro
     }
     Ok(())
 }
+/// AI-003 (ADR-0126): evaluated `kronello.media.crop_*` window in source
+/// pixels. A missing or nonpositive `crop_size` disables the crop; the
+/// origin defaults to `[0, 0]`. Smart-reframe rules write both through the
+/// shared layout-input path; authors may set them directly as well.
+fn evaluated_crop(
+    properties: &[Property],
+    values: &BTreeMap<PropertyId, Value>,
+) -> Result<Option<[f64; 4]>, RenderError> {
+    let lookup = |name: &str| -> Result<Option<[f64; 2]>, RenderError> {
+        let Some(property) = properties
+            .iter()
+            .find(|p| p.descriptor().key.as_str() == name)
+        else {
+            return Ok(None);
+        };
+        match values.get(&property.id()) {
+            None => Ok(None),
+            Some(Value::Vec2(v)) => Ok(Some([v[0].get(), v[1].get()])),
+            Some(_) => Err(RenderError::InvalidInput(
+                "media crop property must evaluate to vec2".into(),
+            )),
+        }
+    };
+    let Some([w, h]) = lookup("kronello.media.crop_size")? else {
+        return Ok(None);
+    };
+    if w <= 0.0 || h <= 0.0 {
+        return Ok(None);
+    }
+    let origin = lookup("kronello.media.crop_origin")?.unwrap_or([0.0, 0.0]);
+    Ok(Some([origin[0], origin[1], w, h]))
+}
 fn media_content(
     snapshot: &RenderSnapshot,
     asset: &Asset,
     stream_index: u32,
     source: Time,
+    crop: Option<[f64; 4]>,
 ) -> Result<SceneContent, RenderError> {
     if !matches!(asset.kind, AssetKind::Video | AssetKind::Image) {
         return Err(RenderError::UnsupportedFeature(
@@ -1462,6 +1516,19 @@ fn media_content(
     if width == 0 || height == 0 {
         return Err(RenderError::InvalidInput(
             "visual media dimensions must be positive".into(),
+        ));
+    }
+    let extent = [f64::from(width), f64::from(height)];
+    if let Some([x, y, w, h]) = crop
+        && (x < 0.0
+            || y < 0.0
+            || w <= 0.0
+            || h <= 0.0
+            || x + w > extent[0] + 1e-6
+            || y + h > extent[1] + 1e-6)
+    {
+        return Err(RenderError::InvalidInput(
+            "media crop window outside source bounds".into(),
         ));
     }
     let time = if asset.kind == AssetKind::Image {
@@ -1487,6 +1554,9 @@ fn media_content(
         asset: decode_asset.clone(),
         stream_index: decode_stream,
         time,
-        extent: [f64::from(width), f64::from(height)],
+        // The layout box is the crop window so bounds and transforms follow
+        // the reframed content.
+        extent: crop.map(|c| [c[2], c[3]]).unwrap_or(extent),
+        crop,
     })
 }

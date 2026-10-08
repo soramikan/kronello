@@ -86,6 +86,16 @@ fn builtin_registry_has_fixed_uuid_v4_key_mappings() {
             "kronello.mask.opacity",
             "f0000000-0010-4400-8000-000000000004",
         ),
+        (
+            MEDIA_CROP_ORIGIN_ID,
+            "kronello.media.crop_origin",
+            "4d2a8c1e-6f07-4b93-a1e5-3d79c2f408aa",
+        ),
+        (
+            MEDIA_CROP_SIZE_ID,
+            "kronello.media.crop_size",
+            "9b8e1f42-c365-4d0a-b6f2-7a41e9d530c7",
+        ),
     ];
     assert_eq!(registry.len(), mappings.len());
     for (id, name, uuid) in mappings {
@@ -116,6 +126,8 @@ fn builtin_registry_enumeration_is_lexical_and_repeatable() {
         "kronello.mask.feather",
         "kronello.mask.opacity",
         "kronello.mask.path",
+        "kronello.media.crop_origin",
+        "kronello.media.crop_size",
         "kronello.opacity",
         "kronello.stroke_width",
         "kronello.transform.anchor",

@@ -26,9 +26,9 @@ mod value;
 mod wire;
 
 pub use builtin::{
-    AUDIO_VOLUME_ID, BLEND_MODE_ID, FILL_COLOR_ID, OPACITY_ID, STROKE_WIDTH_ID,
-    TRANSFORM_ANCHOR_ID, TRANSFORM_POSITION_ID, TRANSFORM_ROTATION_ID, TRANSFORM_SCALE_ID,
-    TRANSFORM_SKEW_ID,
+    AUDIO_VOLUME_ID, BLEND_MODE_ID, FILL_COLOR_ID, MEDIA_CROP_ORIGIN_ID, MEDIA_CROP_SIZE_ID,
+    OPACITY_ID, STROKE_WIDTH_ID, TRANSFORM_ANCHOR_ID, TRANSFORM_POSITION_ID, TRANSFORM_ROTATION_ID,
+    TRANSFORM_SCALE_ID, TRANSFORM_SKEW_ID,
 };
 pub use composition::{
     Composition, CompositionError, CompositionInstance, CompositionReference, DesignExtent,
@@ -122,6 +122,9 @@ pub use proxy::*;
 
 mod tracking;
 pub use tracking::*;
+
+mod scene;
+pub use scene::*;
 
 mod matte;
 pub use matte::*;
