@@ -142,7 +142,11 @@ fn sigint_at_progress_cancels_sequence_without_manifest() {
 }
 #[test]
 fn closed_stdout_cancels_at_progress_and_reports_only_to_stderr() {
-    let (_dir, request) = fixture();
+    // A leaked pipe read end (macOS pipe()+CLOEXEC spawn race with a sibling
+    // test's child) can keep early progress writes succeeding; many frames
+    // guarantee an emit still fails before the manifest commits.
+    let (_dir, mut request) = fixture();
+    request["frame_rate"] = json!({"num":"10000","den":"1"});
     let mut child = spawn();
     let mut reader = BufReader::new(child.stdout.take().unwrap());
     assert_eq!(read_line(&mut reader)["record"], "header");
