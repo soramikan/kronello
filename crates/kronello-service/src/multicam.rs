@@ -276,10 +276,9 @@ fn audio_sync_offsets(
             false,
         )
         .map_err(|e| ServiceError::new(e.code(), e.to_string()))?;
-        let buffer = kronello_audio::AudioBuffer::new(
-            stereo.stereo_frames().expect("stereo layout"),
-        )
-        .map_err(|e| ServiceError::new(e.code(), e.to_string()))?;
+        let buffer =
+            kronello_audio::AudioBuffer::new(stereo.stereo_frames().expect("stereo layout"))
+                .map_err(|e| ServiceError::new(e.code(), e.to_string()))?;
         Ok((buffer, audio_start))
     };
     let (reference_buffer, reference_start) = decode(reference_index)?;

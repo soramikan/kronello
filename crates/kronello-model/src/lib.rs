@@ -49,8 +49,7 @@ pub use expression::{
 pub use id::{
     AngleId, AssetId, BinId, CaptionId, ClipId, CompositionId, CompositionInstanceId, ContentId,
     CurveId, DescriptorId, ExportPresetId, ExpressionId, MarkerId, MaskId, ModifierId, MulticamId,
-    NodeId, PropertyId,
-    SchemaKey, SequenceId, TrackId,
+    NodeId, PropertyId, SchemaKey, SequenceId, TrackId,
 };
 pub use property::{DescriptorRef, Modifier, Property, PropertySource, SourceResolver};
 pub use schema::{
