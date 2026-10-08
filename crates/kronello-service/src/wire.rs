@@ -29,6 +29,8 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                     audio: kronello_audio::AudioSourceMode,
                     #[serde(default = "crate::jobs::movie_profile_v1")]
                     profile_version: u32,
+                    #[serde(default)]
+                    audio_layout: Option<kronello_model::ChannelMask>,
                     clips: Vec<crate::JobAudioClip>,
                     background: [f32; 3],
                 }
@@ -36,6 +38,7 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                 Ok(Self::ProResMov {
                     audio: mov.audio,
                     profile_version: mov.profile_version,
+                    audio_layout: mov.audio_layout,
                     clips: mov.clips,
                     background: mov.background,
                 })
@@ -47,6 +50,8 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                     profile_version: u32,
                     #[serde(default)]
                     audio: kronello_audio::AudioSourceMode,
+                    #[serde(default)]
+                    audio_layout: Option<kronello_model::ChannelMask>,
                     clips: Vec<crate::JobAudioClip>,
                     background: [f32; 3],
                 }
@@ -54,6 +59,7 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                 Ok(Self::ProResSdrFromHdrMov {
                     profile_version: mov.profile_version,
                     audio: mov.audio,
+                    audio_layout: mov.audio_layout,
                     clips: mov.clips,
                     background: mov.background,
                 })
@@ -66,6 +72,8 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                     transfer: kronello_render::HdrTransfer,
                     #[serde(default)]
                     audio: kronello_audio::AudioSourceMode,
+                    #[serde(default)]
+                    audio_layout: Option<kronello_model::ChannelMask>,
                     clips: Vec<crate::JobAudioClip>,
                     background: [f32; 3],
                 }
@@ -74,6 +82,7 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                     profile_version: mov.profile_version,
                     transfer: mov.transfer,
                     audio: mov.audio,
+                    audio_layout: mov.audio_layout,
                     clips: mov.clips,
                     background: mov.background,
                 })
@@ -87,6 +96,8 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                     audio: kronello_audio::AudioSourceMode,
                     #[serde(default)]
                     audio_codec: kronello_media::DeliveryAudioCodec,
+                    #[serde(default)]
+                    audio_layout: Option<kronello_model::ChannelMask>,
                     clips: Vec<crate::JobAudioClip>,
                     background: [f32; 3],
                 }
@@ -96,6 +107,7 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                         profile_version: mov.profile_version,
                         audio: mov.audio,
                         audio_codec: mov.audio_codec,
+                        audio_layout: mov.audio_layout,
                         clips: mov.clips,
                         background: mov.background,
                     },
@@ -103,6 +115,7 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                         profile_version: mov.profile_version,
                         audio: mov.audio,
                         audio_codec: mov.audio_codec,
+                        audio_layout: mov.audio_layout,
                         clips: mov.clips,
                         background: mov.background,
                     },
@@ -110,6 +123,7 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                         profile_version: mov.profile_version,
                         audio: mov.audio,
                         audio_codec: mov.audio_codec,
+                        audio_layout: mov.audio_layout,
                         clips: mov.clips,
                         background: mov.background,
                     },
@@ -117,6 +131,7 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                         profile_version: mov.profile_version,
                         audio: mov.audio,
                         audio_codec: mov.audio_codec,
+                        audio_layout: mov.audio_layout,
                         clips: mov.clips,
                         background: mov.background,
                     },

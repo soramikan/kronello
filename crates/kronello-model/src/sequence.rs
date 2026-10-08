@@ -152,6 +152,10 @@ pub enum AudioRetimePolicy {
     // AUDIO-004 v1: linear sample interpolation, with pitch following speed.
     ResampleV1,
     ReverseResampleV1,
+    // AUDIO-010: deterministic WSOLA; the output length follows the time map
+    // while the source pitch is preserved (ADR-0124). Hold segments (slope 0)
+    // emit silence; reverse playback still requires `ReverseResampleV1`.
+    PitchPreserveV1,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]

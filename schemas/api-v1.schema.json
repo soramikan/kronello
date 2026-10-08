@@ -737,7 +737,8 @@
       "enum": [
         "reject",
         "resample_v1",
-        "reverse_resample_v1"
+        "reverse_resample_v1",
+        "pitch_preserve_v1"
       ],
       "type": "string"
     },
@@ -1406,6 +1407,12 @@
           "type": "object"
         }
       ]
+    },
+    "ChannelMask": {
+      "description": "Versioned speaker-layout bitset (channel_mask v1): 1=mono, 3=stereo, 1551=5.1(side), 63=5.1(back), 1599=7.1",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
     },
     "CharacterAnimation": {
       "additionalProperties": false,
@@ -6329,6 +6336,17 @@
               "$ref": "#/$defs/AudioSourceMode",
               "default": "explicit"
             },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ADR-0124: omitted selects stereo; a set value is validated against\nthe closed layout set at parse time and pins audio envelope 3."
+            },
             "background": {
               "items": {
                 "format": "float",
@@ -6369,6 +6387,16 @@
               "$ref": "#/$defs/AudioSourceMode",
               "default": "explicit"
             },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "background": {
               "items": {
                 "format": "float",
@@ -6408,6 +6436,16 @@
             "audio": {
               "$ref": "#/$defs/AudioSourceMode",
               "default": "explicit"
+            },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "background": {
               "items": {
@@ -6457,6 +6495,16 @@
               "$ref": "#/$defs/DeliveryAudioCodec",
               "default": "alac"
             },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "background": {
               "items": {
                 "format": "float",
@@ -6500,6 +6548,16 @@
             "audio_codec": {
               "$ref": "#/$defs/DeliveryAudioCodec",
               "default": "alac"
+            },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "background": {
               "items": {
@@ -6545,6 +6603,16 @@
               "$ref": "#/$defs/DeliveryAudioCodec",
               "default": "alac"
             },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "background": {
               "items": {
                 "format": "float",
@@ -6588,6 +6656,16 @@
             "audio_codec": {
               "$ref": "#/$defs/DeliveryAudioCodec",
               "default": "alac"
+            },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "background": {
               "items": {
@@ -7301,6 +7379,15 @@
     },
     "MediaStream": {
       "properties": {
+        "channel_mask": {
+          "description": "Native speaker-mask bits when the container records one (ADR-0124).",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "channels": {
           "format": "uint32",
           "minimum": 0,

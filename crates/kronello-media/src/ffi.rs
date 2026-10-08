@@ -660,6 +660,7 @@ mod tests {
 struct NativeStreamInfo {
     start: i64,
     duration: i64,
+    channel_mask: i64,
     kind: c_int,
     num: c_int,
     den: c_int,
@@ -674,12 +675,19 @@ unsafe extern "C" {
     fn km_audio_time_base(a: *mut c_void, num: *mut c_int, den: *mut c_int);
     fn km_audio_rate(a: *mut c_void) -> c_int;
     fn km_audio_channels(a: *mut c_void) -> c_int;
+    fn km_audio_mask(a: *mut c_void) -> i64;
     fn km_audio_pts(a: *mut c_void) -> i64;
     fn km_audio_input_samples(a: *mut c_void) -> c_int;
     fn km_audio_count(a: *mut c_void) -> c_int;
     fn km_audio_copy(a: *mut c_void, out: *mut f32, capacity: c_int) -> c_int;
     fn km_audio_next(a: *mut c_void) -> c_int;
-    fn km_audio_encoder_open(k: *mut c_void, path: *const c_char, kind: c_int) -> *mut c_void;
+    fn km_audio_encoder_open(
+        k: *mut c_void,
+        path: *const c_char,
+        kind: c_int,
+        channels: c_int,
+        mask: i64,
+    ) -> *mut c_void;
     fn km_audio_encoder_close(e: *mut c_void);
     fn km_audio_encoder_block(e: *mut c_void) -> c_int;
     fn km_audio_encoder_frame(e: *mut c_void, samples: *const i32, count: c_int) -> c_int;
@@ -690,6 +698,8 @@ unsafe extern "C" {
         samples: *const i32,
         count: i64,
         kind: c_int,
+        channels: c_int,
+        mask: i64,
     ) -> c_int;
     fn km_probe_open(k: *mut c_void, path: *const c_char) -> *mut c_void;
     fn km_probe_close(k: *mut c_void, format: *mut c_void);
@@ -715,15 +725,32 @@ unsafe extern "C" {
         render_hash: *const c_char,
         export_hash: *const c_char,
         profile: c_int,
+        audio_channels: c_int,
     ) -> c_int;
 }
 
+/// One drained resampler output. `samples` is interleaved f32 in `mask` order
+/// and holds exactly `count * mask.channels()` values (count = frames).
 pub(crate) struct AudioChunk {
     pub pts: Option<Rational>,
     pub input_samples: usize,
     pub rate: u32,
+    /// Native source channel count; identical to `mask.channels()`.
     pub channels: u32,
-    pub frames: Vec<[f32; 2]>,
+    /// Delivered sample layout — the source's own mask, never a fold-down.
+    pub mask: kronello_model::ChannelMask,
+    pub samples: Vec<f32>,
+}
+/// ADR-0124: native layout rejections become typed audio layout errors.
+fn audio_error(runtime: &NativeRuntime) -> MediaError {
+    let detail = runtime.error_detail();
+    match detail.operation.as_str() {
+        "unsupported audio channel layout" => {
+            kronello_audio::AudioError::UnsupportedChannelLayout(runtime.error()).into()
+        }
+        "audio format changes within stream" => MediaError::UnsupportedFeature(runtime.error()),
+        _ => MediaError::Decode(runtime.error()),
+    }
 }
 pub(crate) struct NativeAudioDecoder<'a> {
     ptr: NonNull<c_void>,
@@ -762,18 +789,7 @@ impl<'a> NativeAudioDecoder<'a> {
         unsafe {
             let ret = km_audio_next(self.ptr.as_ptr());
             if ret < 0 {
-                let detail = self.runtime.error_detail();
-                return Err(
-                    if matches!(
-                        detail.operation.as_str(),
-                        "unsupported audio channel layout (mono/stereo only)"
-                            | "audio format changes within stream"
-                    ) {
-                        MediaError::UnsupportedFeature(self.runtime.error())
-                    } else {
-                        MediaError::Decode(self.runtime.error())
-                    },
-                );
+                return Err(audio_error(self.runtime));
             }
             if ret == 0 {
                 return Ok(None);
@@ -782,15 +798,35 @@ impl<'a> NativeAudioDecoder<'a> {
             if !(0..=2_097_152).contains(&count) {
                 return Err(MediaError::Decode("invalid audio copy size".into()));
             }
-            let mut samples = vec![0.0; count as usize * 2];
-            if km_audio_copy(self.ptr.as_ptr(), samples.as_mut_ptr(), count * 2) != count * 2 {
+            let bits = km_audio_mask(self.ptr.as_ptr());
+            let mask = u64::try_from(bits)
+                .ok()
+                .and_then(|bits| kronello_model::ChannelMask::from_bits(bits).ok())
+                .ok_or_else(|| {
+                    MediaError::Audio(kronello_audio::AudioError::UnsupportedChannelLayout(
+                        format!("decoder reported channel mask {bits:#x}"),
+                    ))
+                })?;
+            let channels = km_audio_channels(self.ptr.as_ptr());
+            if channels <= 0 || channels != mask.channels() as c_int {
+                return Err(MediaError::Audio(
+                    kronello_audio::AudioError::UnsupportedChannelLayout(format!(
+                        "decoded frame count {channels} disagrees with layout {}",
+                        mask.name()
+                    )),
+                ));
+            }
+            let total = count as usize * mask.channels();
+            let mut samples = vec![0.0; total];
+            if km_audio_copy(self.ptr.as_ptr(), samples.as_mut_ptr(), total as c_int)
+                != total as c_int
+            {
                 return Err(MediaError::Decode("audio copy failed".into()));
             }
             let pts = km_audio_pts(self.ptr.as_ptr());
             let input_samples = km_audio_input_samples(self.ptr.as_ptr());
             let rate = km_audio_rate(self.ptr.as_ptr());
-            let channels = km_audio_channels(self.ptr.as_ptr());
-            if input_samples < 0 || rate <= 0 || !(1..=2).contains(&channels) {
+            if input_samples < 0 || rate <= 0 {
                 return Err(MediaError::Decode("invalid decoded audio metadata".into()));
             }
             Ok(Some(AudioChunk {
@@ -802,7 +838,8 @@ impl<'a> NativeAudioDecoder<'a> {
                 input_samples: input_samples as usize,
                 rate: rate as u32,
                 channels: channels as u32,
-                frames: samples.chunks_exact(2).map(|s| [s[0], s[1]]).collect(),
+                mask,
+                samples,
             }))
         }
     }
@@ -845,39 +882,64 @@ pub(crate) struct NativeAudioEncoder<'a> {
     ptr: NonNull<c_void>,
     runtime: &'a NativeRuntime,
     pub block: usize,
+    channels: usize,
 }
 impl<'a> NativeAudioEncoder<'a> {
+    /// The requested layout must come from the closed ADR-0124 set; the native
+    /// boundary repeats that check and never substitutes another mask.
     pub(crate) fn open(
         runtime: &'a NativeRuntime,
         path: &Path,
         kind: AudioEncoderKind,
+        layout: kronello_model::ChannelMask,
     ) -> Result<Self, MediaError> {
         let path = path_string(path)?;
+        let channels = c_int::try_from(layout.channels())
+            .map_err(|_| MediaError::InvalidInput("audio channel budget".into()))?;
         // SAFETY: the runtime and path remain live; returned context is owned.
         let ptr = NonNull::new(unsafe {
-            km_audio_encoder_open(runtime.0.as_ptr(), path.as_ptr(), kind as c_int)
+            km_audio_encoder_open(
+                runtime.0.as_ptr(),
+                path.as_ptr(),
+                kind as c_int,
+                channels,
+                u64::from(layout) as i64,
+            )
         })
-        .ok_or_else(|| MediaError::Encode(runtime.error()))?;
+        .ok_or_else(|| {
+            let detail = runtime.error_detail();
+            if detail.operation == "unsupported audio channel layout" {
+                MediaError::Audio(kronello_audio::AudioError::UnsupportedChannelLayout(
+                    runtime.error(),
+                ))
+            } else {
+                MediaError::Encode(runtime.error())
+            }
+        })?;
         let block = unsafe { km_audio_encoder_block(ptr.as_ptr()) } as usize;
         Ok(Self {
             ptr,
             runtime,
             block,
+            channels: layout.channels(),
         })
     }
     pub(crate) fn frame(&mut self, samples: &[i32]) -> Result<(), MediaError> {
-        if samples.is_empty() || !samples.len().is_multiple_of(2) || samples.len() / 2 > self.block
+        if samples.is_empty()
+            || !samples.len().is_multiple_of(self.channels)
+            || samples.len() / self.channels > self.block
         {
             return Err(MediaError::InvalidInput(
                 "audio encoder block length".into(),
             ));
         }
-        // SAFETY: exactly two samples per frame, bounded by the owned codec block.
+        // SAFETY: `channels` interleaved samples per frame, bounded by the
+        // owned codec block; the encoder was opened for exactly this layout.
         if unsafe {
             km_audio_encoder_frame(
                 self.ptr.as_ptr(),
                 samples.as_ptr(),
-                (samples.len() / 2) as c_int,
+                (samples.len() / self.channels) as c_int,
             )
         } < 0
         {
@@ -938,11 +1000,19 @@ impl NativeRuntime {
         output: &Path,
         samples: &[i32],
         kind: AudioEncoderKind,
+        layout: kronello_model::ChannelMask,
     ) -> Result<(), MediaError> {
         let path = path_string(output)?;
-        let count = i64::try_from(samples.len() / 2)
+        let channels = layout.channels();
+        if samples.is_empty() || !samples.len().is_multiple_of(channels) {
+            return Err(MediaError::InvalidInput(
+                "PCM input is not whole frames for the declared layout".into(),
+            ));
+        }
+        let count = i64::try_from(samples.len() / channels)
             .map_err(|_| MediaError::InvalidInput("PCM size overflow".into()))?;
-        // SAFETY: exactly two S32 samples per frame, live for the entire synchronous call.
+        // SAFETY: `channels` interleaved S32 samples per frame, live for the
+        // entire synchronous call; the layout was already validated.
         if unsafe {
             km_audio_encode(
                 self.0.as_ptr(),
@@ -950,10 +1020,19 @@ impl NativeRuntime {
                 samples.as_ptr(),
                 count,
                 kind as c_int,
+                channels as c_int,
+                u64::from(layout) as i64,
             )
         } < 0
         {
-            return Err(MediaError::Encode(self.error()));
+            let detail = self.error_detail();
+            return Err(if detail.operation == "unsupported audio channel layout" {
+                MediaError::Audio(kronello_audio::AudioError::UnsupportedChannelLayout(
+                    self.error(),
+                ))
+            } else {
+                MediaError::Encode(self.error())
+            });
         }
         Ok(())
     }
@@ -998,6 +1077,7 @@ impl NativeRuntime {
                     duration: time(info.duration)?,
                     sample_rate: u32::try_from(info.rate).ok().filter(|v| *v != 0),
                     channels: u32::try_from(info.channels).ok().filter(|v| *v != 0),
+                    channel_mask: u64::try_from(info.channel_mask).ok().filter(|v| *v != 0),
                     width: u32::try_from(info.width).ok().filter(|v| *v != 0),
                     height: u32::try_from(info.height).ok().filter(|v| *v != 0),
                     pixel_format: (info.kind == 0)
@@ -1043,6 +1123,7 @@ impl NativeRuntime {
             Ok(result)
         }
     }
+    #[allow(clippy::too_many_arguments)] // Mirrors the native mux signature one to one.
     pub(crate) fn mux_av(
         &self,
         video: &Path,
@@ -1051,6 +1132,7 @@ impl NativeRuntime {
         render_hash: &str,
         export_hash: &str,
         profile: MovieProfile,
+        audio_channels: u32,
     ) -> Result<(), MediaError> {
         let video = path_string(video)?;
         let audio = path_string(audio)?;
@@ -1059,6 +1141,8 @@ impl NativeRuntime {
             .map_err(|_| MediaError::InvalidInput("hash contains NUL".into()))?;
         let export_hash = CString::new(export_hash)
             .map_err(|_| MediaError::InvalidInput("hash contains NUL".into()))?;
+        let audio_channels = c_int::try_from(audio_channels)
+            .map_err(|_| MediaError::InvalidInput("audio channel budget".into()))?;
         // SAFETY: all strings and the runtime live throughout the synchronous mux.
         if unsafe {
             km_mux_av(
@@ -1069,6 +1153,7 @@ impl NativeRuntime {
                 render_hash.as_ptr(),
                 export_hash.as_ptr(),
                 profile.native_id(),
+                audio_channels,
             )
         } < 0
         {

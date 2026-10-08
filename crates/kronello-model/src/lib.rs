@@ -7,6 +7,8 @@
 mod blend;
 mod builtin;
 pub use blend::{BLEND_KEY, BLEND_VERSION, BlendMode};
+mod channel;
+pub use channel::{CHANNEL_MASK_VERSION, ChannelLayoutError, ChannelMask};
 mod composition;
 mod curve;
 mod error;

@@ -61,14 +61,8 @@ fn alac_pcm24_bit_exact_partial_final_frames_and_no_clobber() {
         assert_eq!(report.frames, count as usize);
         let decoded = runtime.decode_audio(&path, 0).unwrap();
         assert_eq!(decoded.source_start, t(0, 1));
-        assert_eq!(decoded.buffer.frames().len(), count as usize);
-        for (got, want) in decoded
-            .buffer
-            .frames()
-            .iter()
-            .flatten()
-            .zip(&expected.samples)
-        {
+        assert_eq!(decoded.buffer.frame_count(), count as usize);
+        for (got, want) in decoded.buffer.samples().iter().zip(&expected.samples) {
             assert_eq!(
                 got.to_bits(),
                 (*want as f32 / 2147483648.0).to_bits(),
@@ -192,7 +186,7 @@ fn movie_roundtrip(profile: MovieProfile) {
         let samples = sample_range(range).unwrap();
         let n = (samples.end - samples.start) as usize;
         assert_eq!(decoded.source_start, t(0, 1));
-        assert_eq!(decoded.buffer.frames(), vec![[0.0, 0.0]; n]);
+        assert_eq!(decoded.buffer.stereo_frames().unwrap(), vec![[0.0, 0.0]; n]);
         let mut video = runtime.open_video(&req.output).unwrap();
         for i in 0..3 {
             let pts = rate.frame_to_time(i).unwrap();

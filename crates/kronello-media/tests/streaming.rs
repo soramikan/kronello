@@ -210,19 +210,18 @@ fn streamed_audio_matches_whole_mix_and_pts_for_negative_and_ntsc_ranges() {
             .decode_asset_audio(&asset, &dir.path().join("project.kronello"), 0)
             .unwrap()
             .buffer;
-        let sources = kronello_audio::AudioSources::from([((asset.id, 0), source)]);
-        let expected = kronello_audio::mix(&[clip], &sources, req.range)
-            .unwrap()
-            .quantize_pcm24(req.clipping)
-            .unwrap();
-        assert_eq!(decoded.buffer.frames().len() * 2, expected.samples.len());
-        for (actual, expected) in decoded
-            .buffer
-            .frames()
-            .iter()
-            .flatten()
-            .zip(expected.samples)
-        {
+        let sources = kronello_audio::ChannelSources::from([((asset.id, 0), source)]);
+        let expected = kronello_audio::mix_channels(
+            &[clip],
+            &sources,
+            req.range,
+            kronello_model::ChannelMask::STEREO,
+        )
+        .unwrap()
+        .quantize_pcm24(req.clipping)
+        .unwrap();
+        assert_eq!(decoded.buffer.samples().len(), expected.samples.len());
+        for (actual, expected) in decoded.buffer.samples().iter().zip(expected.samples) {
             assert_eq!(actual.to_bits(), (expected as f32 / 2147483648.0).to_bits());
         }
         assert_eq!(
@@ -370,11 +369,12 @@ fn long_export_exceeds_source_and_bus_limits() {
     assert_eq!(report.audio.frames, 601 * 48000);
     let mut ordinal = 0_usize;
     let decoded = runtime
-        .decode_audio_stream(&req.output, 1, &mut |chunk| {
-            for frame in chunk {
+        .decode_audio_stream(&req.output, 1, &mut |chunk, mask| {
+            assert_eq!(mask, kronello_model::ChannelMask::STEREO);
+            for frame in chunk.chunks_exact(2) {
                 let value = ((ordinal % 48000 % 257) as i16 - 128) * 128;
                 let expected = [f32::from(value) / 32768.0, -f32::from(value) / 32768.0];
-                assert_eq!(*frame, expected, "sample {ordinal}");
+                assert_eq!(frame, expected.as_slice(), "sample {ordinal}");
                 ordinal += 1;
             }
             Ok(())

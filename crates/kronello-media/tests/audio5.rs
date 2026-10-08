@@ -133,11 +133,11 @@ fn aac_and_opus_delivery_audio_exact_length_bounded_error() {
                 assert_eq!(decoded.source_start, t(0, 1), "{codec_name} {kind} {count}");
                 assert_eq!(decoded.source_rate, 48_000, "{codec_name} {kind} {count}");
                 assert_eq!(
-                    decoded.buffer.frames().len(),
+                    decoded.buffer.frame_count(),
                     count,
                     "{codec_name} {kind} {count}"
                 );
-                let got = decoded.buffer.frames();
+                let got = decoded.buffer.stereo_frames().unwrap();
                 if kind == "silence" {
                     assert!(
                         got.iter()
@@ -159,7 +159,7 @@ fn aac_and_opus_delivery_audio_exact_length_bounded_error() {
                         .unwrap();
                     assert_eq!(peak, count / 2, "{codec_name} pulse position {count}");
                 } else {
-                    let similarity = cosine_similarity(&source, got);
+                    let similarity = cosine_similarity(&source, &got);
                     assert!(
                         similarity > 0.97,
                         "{codec_name} {kind} similarity {similarity} ({count} samples)"
@@ -276,7 +276,7 @@ fn lossy_movie_roundtrip(profile: MovieProfile) {
         // A/V sync and exact terminal sample count through the remuxed movie.
         let decoded = runtime.decode_audio(&req.output, audio.index).unwrap();
         assert_eq!(decoded.source_start, t(0, 1));
-        assert_eq!(decoded.buffer.frames().len(), report.audio.frames);
+        assert_eq!(decoded.buffer.frame_count(), report.audio.frames);
     }
 }
 

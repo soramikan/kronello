@@ -2437,7 +2437,7 @@ pub fn mix_sequence_audio(
     )
     .map_err(|e| ServiceError::new(e.code(), e.to_string()))?;
     let runtime = kronello_media::MediaRuntime::load()?;
-    let mut sources = kronello_audio::AudioSources::new();
+    let mut sources = kronello_audio::ChannelSources::new();
     for clip in plan.clips() {
         if let std::collections::btree_map::Entry::Vacant(entry) =
             sources.entry((clip.asset, clip.stream_index))
@@ -2457,6 +2457,8 @@ pub fn mix_sequence_audio(
             );
         }
     }
-    plan.mix(&sources, range)
+    // The mix target is the stereo bus: multichannel sources fold down only
+    // through the explicit ADR-0124 matrix.
+    plan.mix_reader(&sources, range)
         .map_err(|e| ServiceError::new(e.code(), e.to_string()))
 }

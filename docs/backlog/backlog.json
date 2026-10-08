@@ -2077,7 +2077,7 @@
    "priority": "P2",
    "area": "audio",
    "title": "ピッチ保持リタイムとマルチチャンネル（5.1ch 等）",
-   "status": "planned",
+   "status": "done",
    "dependencies": [
     "AUDIO-008"
    ],

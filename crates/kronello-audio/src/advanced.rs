@@ -1,4 +1,5 @@
 //! AUDIO-004: bounded, immutable, independently addressable sample evaluation.
+//! AUDIO-010 adds pitch-preserved (WSOLA) sources and channel-masked mixing.
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Range;
 
@@ -6,8 +7,9 @@ use kronello_model::*;
 use kronello_time::{Time, TimeMap, TimeRange};
 
 use crate::{
-    AudioBuffer, AudioClip, AudioError, AudioSourceReader, AudioTarget, Bus, DocumentAudioPlan,
-    Gain, MAX_AUDIO_FRAMES, sample_range,
+    AudioClip, AudioError, AudioTarget, Bus, ChannelBuffer, ChannelBus, ChannelSourceReader,
+    ChannelTrackMeter, DocumentAudioPlan, Gain, MAX_AUDIO_FRAMES, MAX_CHANNELS, channel_meter,
+    layout_matrix, sample_range, wsola::Wsola,
 };
 
 /// Selected by movie profile 3; legacy movie profiles retain evaluator 1.
@@ -16,11 +18,17 @@ pub const AUDIO_GENERATOR_SILENCE: &str = "kronello.audio.silence";
 pub const AUDIO_GENERATOR_TONE: &str = "kronello.audio.tone440";
 const MAX_SAMPLE_OPERATIONS: u64 = 100_000_000;
 const MAX_MAP_POINTS: usize = 1024;
+/// Abstract per-sample cost of a WSOLA source in the operations budget. It
+/// deliberately over-charges the average-case work (the hop search dominates)
+/// so a render cannot schedule unbounded correlation work.
+const WSOLA_SAMPLE_COST: u64 = 48;
 
 #[derive(Debug, Clone)]
 enum Source {
     Legacy(DocumentAudioPlan),
     Resampled,
+    /// AUDIO-010: deterministic WSOLA over the source's own channel layout.
+    PitchPreserved,
     ReversedComposition {
         plan: DocumentAudioPlan,
         duration: Time,
@@ -43,12 +51,14 @@ struct Entry {
     track: TrackId,
 }
 impl Entry {
-    /// Stateful chains must evaluate from placement start so any request
-    /// range reproduces continuous-render samples (ADR-0117).
+    /// Stateful chains and WSOLA cursors must evaluate from placement start
+    /// so any request range reproduces continuous-render samples (ADR-0117).
     fn stateful(&self) -> bool {
-        self.effects
-            .iter()
-            .any(|effect| matches!(effect, EntryEffect::Dsp(_)))
+        matches!(self.source, Source::PitchPreserved)
+            || self
+                .effects
+                .iter()
+                .any(|effect| matches!(effect, EntryEffect::Dsp(_)))
     }
     /// Per-sample operation estimate: gain lookup is cheap; each DSP stage
     /// runs a biquad/dynamics chain over two channels.
@@ -69,10 +79,12 @@ enum ChainStep {
     Dsp(crate::dsp::Processor),
 }
 impl ChainStep {
-    fn new(effect: &EntryEffect) -> Self {
+    /// DSP processors are instantiated over the bus layout; only the LFE
+    /// channel skips compressor/limiter treatment.
+    fn new(effect: &EntryEffect, mask: ChannelMask) -> Self {
         match effect {
             EntryEffect::Gain(property) => Self::Gain(property.clone()),
-            EntryEffect::Dsp(spec) => Self::Dsp(crate::dsp::processor(spec)),
+            EntryEffect::Dsp(spec) => Self::Dsp(crate::dsp::processor(spec, mask)),
         }
     }
 }
@@ -140,7 +152,7 @@ fn validate_map(map: &TimeMap) -> Result<(), AudioError> {
 /// Floor buckets can start before a fractional authored start. Version 2
 /// explicitly extends the first segment for that one partial bucket only.
 /// It never substitutes a zero sample or changes negative source positions.
-fn local_time(clip: &Clip, sample: i64) -> Result<Time, AudioError> {
+pub(crate) fn local_time(clip: &Clip, sample: i64) -> Result<Time, AudioError> {
     let parent = Time::new(sample, 48_000)?.checked_sub(clip.timeline_range.start())?;
     let mapped = if parent < Time::ZERO {
         match &clip.time_map {
@@ -330,6 +342,11 @@ impl AdvancedAudioPlan {
                         }
                     }
                     SourceRef::Asset { .. }
+                        if clip.audio_retime == AudioRetimePolicy::PitchPreserveV1 =>
+                    {
+                        Source::PitchPreserved
+                    }
+                    SourceRef::Asset { .. }
                         if matches!(
                             clip.audio_retime,
                             AudioRetimePolicy::ResampleV1 | AudioRetimePolicy::ReverseResampleV1
@@ -463,7 +480,7 @@ impl AdvancedAudioPlan {
             .iter()
             .flat_map(|entry| match &entry.source {
                 Source::Legacy(plan) | Source::ReversedComposition { plan, .. } => plan.clips(),
-                Source::Resampled => {
+                Source::Resampled | Source::PitchPreserved => {
                     let SourceRef::Asset {
                         asset,
                         stream_index,
@@ -485,25 +502,68 @@ impl AdvancedAudioPlan {
     }
     pub(crate) fn mix(
         &self,
-        sources: &dyn AudioSourceReader,
+        sources: &dyn ChannelSourceReader,
         range: TimeRange,
     ) -> Result<Bus, AudioError> {
-        Ok(self.mix_impl(sources, range, false)?.0)
+        self.mix_channels(sources, range, ChannelMask::STEREO)?
+            .into_stereo_bus()
+    }
+    /// AUDIO-010: identical mixing at any supported bus layout; sources
+    /// convert through the explicit ITU matrix (LFE excluded).
+    pub(crate) fn mix_channels(
+        &self,
+        sources: &dyn ChannelSourceReader,
+        range: TimeRange,
+        target: ChannelMask,
+    ) -> Result<ChannelBus, AudioError> {
+        Ok(self.mix_channels_impl(sources, range, target, false)?.0)
     }
     /// AUDIO-009: identical mixing path plus per-track and master peak/RMS.
     pub(crate) fn mix_metered(
         &self,
-        sources: &dyn AudioSourceReader,
+        sources: &dyn ChannelSourceReader,
         range: TimeRange,
     ) -> Result<(Bus, crate::BusMeters), AudioError> {
-        self.mix_impl(sources, range, true)
+        let (bus, meters) = self.mix_channels_impl(sources, range, ChannelMask::STEREO, true)?;
+        let stereo = |peak: &[f32], rms: &[f32]| -> ([f32; 2], [f32; 2]) {
+            ([peak[0], peak[1]], [rms[0], rms[1]])
+        };
+        let meters = crate::BusMeters {
+            tracks: meters
+                .tracks
+                .iter()
+                .map(|track| {
+                    let (peak, rms) = stereo(&track.peak, &track.rms);
+                    crate::TrackMeter {
+                        track: track.track,
+                        peak,
+                        rms,
+                    }
+                })
+                .collect(),
+            master: {
+                let (peak, rms) = stereo(&meters.master.peak, &meters.master.rms);
+                crate::StereoMeter { peak, rms }
+            },
+        };
+        Ok((bus.into_stereo_bus()?, meters))
     }
-    fn mix_impl(
+    /// AUDIO-010: metered variant at an arbitrary target layout.
+    pub(crate) fn mix_channels_metered(
         &self,
-        sources: &dyn AudioSourceReader,
+        sources: &dyn ChannelSourceReader,
         range: TimeRange,
+        target: ChannelMask,
+    ) -> Result<(ChannelBus, crate::ChannelBusMeters), AudioError> {
+        self.mix_channels_impl(sources, range, target, true)
+    }
+    fn mix_channels_impl(
+        &self,
+        sources: &dyn ChannelSourceReader,
+        range: TimeRange,
+        target: ChannelMask,
         metered: bool,
-    ) -> Result<(Bus, crate::BusMeters), AudioError> {
+    ) -> Result<(ChannelBus, crate::ChannelBusMeters), AudioError> {
         let output = sample_range(range)?;
         let length = output
             .end
@@ -511,6 +571,7 @@ impl AdvancedAudioPlan {
             .and_then(|n| usize::try_from(n).ok())
             .filter(|n| *n <= MAX_AUDIO_FRAMES)
             .ok_or_else(|| budget("audio Bus frames"))?;
+        let channels = target.channels();
         let mut operations = 0_u64;
         for entry in &self.entries {
             let placement = sample_range(entry.clip.timeline_range)?;
@@ -536,6 +597,7 @@ impl AdvancedAudioPlan {
                         .checked_mul(2)
                         .and_then(|v| v.checked_add(8))
                         .ok_or_else(|| budget("reverse Composition sample cost"))?,
+                    Source::PitchPreserved => WSOLA_SAMPLE_COST,
                     _ => 3,
                 };
             operations = operations
@@ -556,7 +618,7 @@ impl AdvancedAudioPlan {
                     length as u64
                 };
                 operations = operations
-                    .checked_add(bus_span * 2)
+                    .checked_add(bus_span * 2 * channels as u64)
                     .ok_or_else(|| budget("audio sample operations"))?;
             }
         }
@@ -578,8 +640,25 @@ impl AdvancedAudioPlan {
             if let Source::ReversedComposition { plan, duration } = &entry.source {
                 let placement = sample_range(entry.clip.timeline_range)?;
                 if !placement.is_empty() {
-                    reversed_composition(&entry.clip, plan, *duration, sources, placement.start)?;
-                    reversed_composition(&entry.clip, plan, *duration, sources, placement.end - 1)?;
+                    let mut scratch = [0.0; MAX_CHANNELS];
+                    reversed_composition(
+                        &entry.clip,
+                        plan,
+                        *duration,
+                        sources,
+                        placement.start,
+                        target,
+                        &mut scratch[..channels],
+                    )?;
+                    reversed_composition(
+                        &entry.clip,
+                        plan,
+                        *duration,
+                        sources,
+                        placement.end - 1,
+                        target,
+                        &mut scratch[..channels],
+                    )?;
                 }
             }
             if matches!(entry.source, Source::Resampled) {
@@ -590,17 +669,57 @@ impl AdvancedAudioPlan {
                 else {
                     unreachable!()
                 };
+                let source_channels = sources.layout(asset, stream_index)?.channels();
                 sources.frame_count(asset, stream_index)?;
                 let placement = sample_range(entry.clip.timeline_range)?;
                 if !placement.is_empty() {
-                    resample(&entry.clip, sources, placement.start)?;
-                    resample(&entry.clip, sources, placement.end - 1)?;
+                    let mut scratch = [0.0; MAX_CHANNELS];
+                    resample(
+                        &entry.clip,
+                        sources,
+                        placement.start,
+                        &mut scratch[..source_channels],
+                    )?;
+                    resample(
+                        &entry.clip,
+                        sources,
+                        placement.end - 1,
+                        &mut scratch[..source_channels],
+                    )?;
+                }
+            }
+            if matches!(entry.source, Source::PitchPreserved) {
+                let SourceRef::Asset {
+                    asset,
+                    stream_index,
+                } = entry.clip.source_ref
+                else {
+                    unreachable!()
+                };
+                sources.layout(asset, stream_index)?;
+                let source_length = sources.frame_count(asset, stream_index)?;
+                let placement = sample_range(entry.clip.timeline_range)?;
+                if !placement.is_empty() {
+                    // The nominal WSOLA cursor must land inside the source for
+                    // the placement endpoints; the correlation window itself
+                    // may read zero-filled context at the edges.
+                    for sample in [placement.start, placement.end - 1] {
+                        let local = local_time(&entry.clip, sample)?
+                            .checked_mul(Time::from_integer(48_000))?;
+                        if local < Time::ZERO
+                            || usize::try_from(local.floor())
+                                .ok()
+                                .is_none_or(|index| index >= source_length)
+                        {
+                            return Err(AudioError::SourceTooShort(asset));
+                        }
+                    }
                 }
             }
         }
-        let mut frames = vec![[0.0; 2]; length];
+        let mut frames = vec![0.0_f32; length * channels];
         // Meter accumulation mirrors the output buffer per contributing track.
-        let mut track_meters: Vec<(TrackId, Vec<[f32; 2]>)> = Vec::new();
+        let mut track_meters: Vec<(TrackId, Vec<f32>)> = Vec::new();
         for entry in &self.entries {
             let placement = sample_range(entry.clip.timeline_range)?;
             let end = output.end.min(placement.end);
@@ -613,20 +732,41 @@ impl AdvancedAudioPlan {
                 continue;
             }
             // A stateful legacy chain evaluates the inner plan from the
-            // placement boundary so the DSP sees continuous history.
+            // placement boundary so the DSP sees continuous history. The bus
+            // arrives already converted to the target layout.
             let legacy = match &entry.source {
-                Source::Legacy(p) => Some(p.mix_reader(
+                Source::Legacy(p) => Some(p.mix_channels(
                     sources,
                     TimeRange::new(Time::new(start, 48_000)?, Time::new(end, 48_000)?)?,
+                    target,
                 )?),
                 _ => None,
             };
+            let (source_mask, matrix) = match &entry.source {
+                Source::Legacy(_) | Source::ReversedComposition { .. } => (target, None),
+                Source::Generator => (
+                    ChannelMask::MONO,
+                    Some(layout_matrix(ChannelMask::MONO, target, false)?),
+                ),
+                Source::Resampled | Source::PitchPreserved => {
+                    let SourceRef::Asset {
+                        asset,
+                        stream_index,
+                    } = entry.clip.source_ref
+                    else {
+                        unreachable!()
+                    };
+                    let mask = sources.layout(asset, stream_index)?;
+                    (mask, Some(layout_matrix(mask, target, false)?))
+                }
+            };
+            let source_channels = source_mask.channels();
             let track_index = if metered {
                 Some(
                     match track_meters.iter().position(|(id, _)| *id == entry.track) {
                         Some(index) => index,
                         None => {
-                            track_meters.push((entry.track, vec![[0.0; 2]; length]));
+                            track_meters.push((entry.track, vec![0.0; length * channels]));
                             track_meters.len() - 1
                         }
                     },
@@ -634,28 +774,84 @@ impl AdvancedAudioPlan {
             } else {
                 None
             };
-            let mut chain: Vec<ChainStep> = entry.effects.iter().map(ChainStep::new).collect();
+            let mut chain: Vec<ChainStep> = entry
+                .effects
+                .iter()
+                .map(|effect| ChainStep::new(effect, target))
+                .collect();
+            // AUDIO-010: a pitch-preserved entry owns one deterministic WSOLA
+            // cursor spanning the evaluated range from placement start.
+            let mut wsola = if matches!(entry.source, Source::PitchPreserved) {
+                let SourceRef::Asset {
+                    asset,
+                    stream_index,
+                } = entry.clip.source_ref
+                else {
+                    unreachable!()
+                };
+                Some(Wsola::new(
+                    &entry.clip,
+                    asset,
+                    stream_index,
+                    source_channels,
+                ))
+            } else {
+                None
+            };
+            let mut raw = [0.0_f32; MAX_CHANNELS];
+            let mut converted = [0.0_f32; MAX_CHANNELS];
             for sample in start..end {
                 let time = Time::new(sample, 48_000)?;
-                let mut frame = match &entry.source {
+                match &entry.source {
                     Source::Legacy(_) => {
                         let index =
                             usize::try_from(sample - start).map_err(|_| AudioError::Overflow)?;
-                        legacy.as_ref().expect("legacy Bus").buffer().frames()[index]
+                        let source = legacy
+                            .as_ref()
+                            .expect("legacy ChannelBus")
+                            .buffer()
+                            .frame(index)
+                            .ok_or(AudioError::Overflow)?;
+                        converted[..channels].copy_from_slice(source);
                     }
-                    Source::Resampled => resample(&entry.clip, sources, sample)?,
+                    Source::Resampled => {
+                        resample(&entry.clip, sources, sample, &mut raw[..source_channels])?;
+                        matrix
+                            .as_ref()
+                            .expect("layout matrix")
+                            .apply(&raw[..source_channels], &mut converted[..channels])?;
+                    }
+                    Source::PitchPreserved => {
+                        wsola.as_mut().expect("wsola cursor").frame(
+                            &entry.clip,
+                            sources,
+                            sample,
+                            &mut raw[..source_channels],
+                        )?;
+                        matrix
+                            .as_ref()
+                            .expect("layout matrix")
+                            .apply(&raw[..source_channels], &mut converted[..channels])?;
+                    }
                     Source::ReversedComposition { plan, duration } => {
-                        reversed_composition(&entry.clip, plan, *duration, sources, sample)?
+                        reversed_composition(
+                            &entry.clip,
+                            plan,
+                            *duration,
+                            sources,
+                            sample,
+                            target,
+                            &mut converted[..channels],
+                        )?;
                     }
                     Source::Generator => {
                         let SourceRef::Generator { generator, .. } = &entry.clip.source_ref else {
                             unreachable!()
                         };
-                        if hold_silent(&entry.clip, sample)? {
+                        raw.fill(0.0);
+                        if !hold_silent(&entry.clip, sample)? {
                             // NLE-006: a hold segment freezes the source clock;
                             // the mix emits silence instead of repeated frames.
-                            [0.0; 2]
-                        } else {
                             let source_time = local_time(&entry.clip, sample)?;
                             if source_time < Time::ZERO {
                                 return Err(invalid("negative Generator source time"));
@@ -668,15 +864,21 @@ impl AdvancedAudioPlan {
                                     cycles.checked_sub(Time::from_integer(cycles.floor()))?;
                                 (number(phase) * std::f64::consts::TAU).sin() as f32 * 0.25
                             };
-                            [value; 2]
+                            raw[..source_channels].fill(value);
                         }
+                        matrix
+                            .as_ref()
+                            .expect("layout matrix")
+                            .apply(&raw[..source_channels], &mut converted[..channels])?;
                     }
-                };
+                }
                 if !matches!(entry.source, Source::Legacy(_))
                     && let Some(volume) = &entry.clip.volume
                 {
                     let gain = self.gain(volume, local_time(&entry.clip, sample)?)?;
-                    frame = frame.map(|v| v * gain);
+                    for value in &mut converted[..channels] {
+                        *value *= gain;
+                    }
                 }
                 // Effects run in authored order for every evaluated sample,
                 // including warm-up samples before the request boundary, so
@@ -685,9 +887,11 @@ impl AdvancedAudioPlan {
                     match step {
                         ChainStep::Gain(property) => {
                             let gain = self.gain(property, time)?;
-                            frame = frame.map(|v| v * gain);
+                            for value in &mut converted[..channels] {
+                                *value *= gain;
+                            }
                         }
-                        ChainStep::Dsp(processor) => frame = processor.process(frame),
+                        ChainStep::Dsp(processor) => processor.process(&mut converted[..channels]),
                     }
                 }
                 if sample < output.start {
@@ -698,42 +902,45 @@ impl AdvancedAudioPlan {
                         let progress =
                             (sample - bounds.start) as f64 / (bounds.end - bounds.start) as f64;
                         let gain = if *incoming { progress } else { 1.0 - progress } as f32;
-                        frame = frame.map(|v| v * gain);
+                        for value in &mut converted[..channels] {
+                            *value *= gain;
+                        }
                     }
                 }
                 let index =
                     usize::try_from(sample - output.start).map_err(|_| AudioError::Overflow)?;
-                for channel in 0..2 {
-                    if !frame[channel].is_finite() {
+                for (channel, value) in converted[..channels].iter().enumerate() {
+                    if !value.is_finite() {
                         return Err(AudioError::Overflow);
                     }
-                    frames[index][channel] += frame[channel];
-                    if !frames[index][channel].is_finite() {
+                    let sum = &mut frames[index * channels + channel];
+                    *sum += value;
+                    if !sum.is_finite() {
                         return Err(AudioError::Overflow);
                     }
                     if let Some(track) = track_index {
-                        track_meters[track].1[index][channel] += frame[channel];
+                        track_meters[track].1[index * channels + channel] += value;
                     }
                 }
             }
         }
-        let bus = Bus {
+        let bus = ChannelBus {
             start_sample: output.start,
-            buffer: AudioBuffer::new(frames)?,
+            buffer: ChannelBuffer::new(target, frames)?,
         };
-        let meters = crate::BusMeters {
+        let meters = crate::ChannelBusMeters {
             tracks: track_meters
                 .iter()
                 .map(|(track, buffer)| {
-                    let meter = crate::stereo_meter(buffer);
-                    crate::TrackMeter {
+                    let meter = channel_meter(target, buffer)?;
+                    Ok(ChannelTrackMeter {
                         track: *track,
                         peak: meter.peak,
                         rms: meter.rms,
-                    }
+                    })
                 })
-                .collect(),
-            master: crate::stereo_meter(bus.buffer().frames()),
+                .collect::<Result<Vec<_>, AudioError>>()?,
+            master: channel_meter(target, bus.buffer().samples())?,
         };
         Ok((bus, meters))
     }
@@ -750,11 +957,15 @@ fn hold_silent(clip: &Clip, sample: i64) -> Result<bool, AudioError> {
     Ok(map.is_hold(parent))
 }
 
+/// Interpolated source frame in the *source's* layout; `out` has the source
+/// channel count. Hold segments emit silence; reverse retime uses the exact
+/// reverse neighbor pair.
 fn resample(
     clip: &Clip,
-    sources: &dyn AudioSourceReader,
+    sources: &dyn ChannelSourceReader,
     sample: i64,
-) -> Result<[f32; 2], AudioError> {
+    out: &mut [f32],
+) -> Result<(), AudioError> {
     let SourceRef::Asset {
         asset,
         stream_index,
@@ -763,7 +974,8 @@ fn resample(
         unreachable!()
     };
     if hold_silent(clip, sample)? {
-        return Ok([0.0; 2]);
+        out.fill(0.0);
+        return Ok(());
     }
     let mut position = local_time(clip, sample)?.checked_mul(Time::from_integer(48_000))?;
     if clip.audio_retime == AudioRetimePolicy::ReverseResampleV1 {
@@ -773,33 +985,42 @@ fn resample(
     }
     let floor = position.floor();
     let index = usize::try_from(floor).map_err(|_| AudioError::SourceTooShort(asset))?;
-    let a = sources.frame(asset, stream_index, index)?;
+    let mut a = [0.0_f32; MAX_CHANNELS];
+    sources.read_frame(asset, stream_index, index, &mut a[..out.len()])?;
     let fraction = position.checked_sub(Time::from_integer(floor))?;
     if fraction == Time::ZERO {
-        return Ok(a);
+        out.copy_from_slice(&a[..out.len()]);
+        return Ok(());
     }
-    let b = sources.frame(
+    let mut b = [0.0_f32; MAX_CHANNELS];
+    sources.read_frame(
         asset,
         stream_index,
         index.checked_add(1).ok_or(AudioError::Overflow)?,
+        &mut b[..out.len()],
     )?;
     let fraction = number(fraction);
-    let result = std::array::from_fn(|channel| {
-        (f64::from(a[channel]) * (1.0 - fraction) + f64::from(b[channel]) * fraction) as f32
-    });
-    if result.iter().any(|v| !v.is_finite()) {
+    for (channel, value) in out.iter_mut().enumerate() {
+        *value =
+            (f64::from(a[channel]) * (1.0 - fraction) + f64::from(b[channel]) * fraction) as f32;
+    }
+    if out.iter().any(|v| !v.is_finite()) {
         return Err(AudioError::Overflow);
     }
-    Ok(result)
+    Ok(())
 }
 
+/// One frame of a reverse-played nested composition, rendered at the bus
+/// layout so >2 channel content survives composition nesting (ADR-0124).
 fn reversed_composition(
     clip: &Clip,
     plan: &DocumentAudioPlan,
     duration: Time,
-    sources: &dyn AudioSourceReader,
+    sources: &dyn ChannelSourceReader,
     sample: i64,
-) -> Result<[f32; 2], AudioError> {
+    target: ChannelMask,
+    out: &mut [f32],
+) -> Result<(), AudioError> {
     let position = local_time(clip, sample)?
         .checked_mul(Time::from_integer(48_000))?
         .checked_sub(Time::ONE)?;
@@ -816,14 +1037,17 @@ fn reversed_composition(
             "reverse Composition audio source neighbor outside bounds",
         ));
     }
-    let bus = plan.mix_reader(sources, TimeRange::new(start, end)?)?;
-    let a = bus.buffer().frames()[0];
+    let bus = plan.mix_channels(sources, TimeRange::new(start, end)?, target)?;
+    let a = bus.buffer().frame(0).ok_or(AudioError::Overflow)?;
     if count == 1 {
-        return Ok(a);
+        out.copy_from_slice(a);
+        return Ok(());
     }
-    let b = bus.buffer().frames()[1];
+    let b = bus.buffer().frame(1).ok_or(AudioError::Overflow)?;
     let fraction = number(fraction);
-    Ok(std::array::from_fn(|channel| {
-        (f64::from(a[channel]) * (1.0 - fraction) + f64::from(b[channel]) * fraction) as f32
-    }))
+    for (channel, value) in out.iter_mut().enumerate() {
+        *value =
+            (f64::from(a[channel]) * (1.0 - fraction) + f64::from(b[channel]) * fraction) as f32;
+    }
+    Ok(())
 }
