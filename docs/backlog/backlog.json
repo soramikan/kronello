@@ -1,11 +1,11 @@
 {
   "schema_version": "0.5",
   "created": "2026-10-01",
-  "updated": "2026-10-07",
+  "updated": "2026-10-08",
   "status": "implementation_started",
   "description": "設計と実装の計画・進捗。このファイルがバックログの正本であり、GitHub等へ登録したIssueではない。",
   "specification": "docs/architecture/",
-  "task_count": 140,
+  "task_count": 141,
   "items": [
     {
       "id": "ARC-001",
@@ -1818,7 +1818,7 @@
       "priority": "P1",
       "area": "timeline",
       "title": "トラックロック・クリップ有効/無効・トラックターゲティング",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "NLE-003"
       ],
@@ -1833,7 +1833,7 @@
       "priority": "P1",
       "area": "timeline",
       "title": "可変リタイム（スピードランプ）と freeze frame/hold",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "NLE-003"
       ],
@@ -1848,7 +1848,7 @@
       "priority": "P1",
       "area": "color",
       "title": "LUT (.cube) の取り込み・検証・適用",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "COLOR-002"
       ],
@@ -1863,7 +1863,7 @@
       "priority": "P1",
       "area": "color",
       "title": "スコープ: waveform/vectorscope/histogram/RGB parade と GUI パネル",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "COLOR-002",
         "GUI-010"
@@ -1879,7 +1879,7 @@
       "priority": "P1",
       "area": "effects",
       "title": "ベジェマスク: クリップ適用・フェザー・拡張・時間変化",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "VEC-001",
         "MATTE-001"
@@ -1895,7 +1895,7 @@
       "priority": "P1",
       "area": "effects",
       "title": "キーイング: chroma key/luma key とスピル抑制",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "COLOR-002"
       ],
@@ -1910,7 +1910,7 @@
       "priority": "P1",
       "area": "effects",
       "title": "標準エフェクト拡張: glow/sharpen/vignette/warp 等",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "FX-003"
       ],
@@ -1925,7 +1925,7 @@
       "priority": "P2",
       "area": "timeline",
       "title": "アジャストメントクリップ: 下位レイヤーへのエフェクト一括適用",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "FX-004"
       ],
@@ -1940,7 +1940,7 @@
       "priority": "P1",
       "area": "audio",
       "title": "EQ/フィルタ系音声エフェクト: パラメトリックEQ・HPF/LPF",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "AUDIO-003"
       ],
@@ -1955,7 +1955,7 @@
       "priority": "P1",
       "area": "audio",
       "title": "ダイナミクスと LUFS 計測・ノーマライズ",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "AUDIO-007"
       ],
@@ -1970,7 +1970,7 @@
       "priority": "P2",
       "area": "audio",
       "title": "音声 UI: VU メーター・オーディオスクラブ・ミキサーパネル",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "AUDIO-006",
         "GUI-008"
@@ -1985,7 +1985,7 @@
       "priority": "P2",
       "area": "tracking",
       "title": "モーショントラッキング: 点/平面トラッキングと結果の DataAsset 化",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "COMP-002"
       ],
@@ -2000,7 +2000,7 @@
       "priority": "P1",
       "area": "text",
       "title": "テキスト拡張: テキストオンパスと文字単位アニメーター",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "TEXT-002"
       ],
@@ -2015,7 +2015,7 @@
       "priority": "P1",
       "area": "media",
       "title": "プロキシワークフロー: プロキシ生成 job・編集時切替・relink",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "MEDIA-002",
         "JOB-001"
@@ -2031,7 +2031,7 @@
       "priority": "P2",
       "area": "gui",
       "title": "ワークフロー UI: ショートカット設定・レイアウト・Undo 履歴パネル",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "GUI-008"
       ],
@@ -2348,6 +2348,26 @@
       ],
       "acceptance_criteria": [
         "残る UI 要素を統合しワークスペースとして完成させる"
+      ]
+    },
+    {
+      "id": "INTEGRATION-005",
+      "milestone": "M8",
+      "priority": "P1",
+      "area": "integration",
+      "title": "縦断デモ（M8 仕上げ検証）: リタイム+マスク+LUT+音声処理を含む作品",
+      "status": "done",
+      "dependencies": [
+        "NLE-006",
+        "FX-004",
+        "FX-007",
+        "COLOR-003",
+        "AUDIO-008",
+        "PROXY-001"
+      ],
+      "acceptance_criteria": [
+        "可変リタイム・freeze・マスク・アジャストメントクリップ・LUT・音声エフェクト・プロキシ切替を含む作品を CLI と MCP の両経路で生成する",
+        "書き出し結果の映像・音声・型付き拒否を受け入れ基準として検証する"
       ]
     }
   ]

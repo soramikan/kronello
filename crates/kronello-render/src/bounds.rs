@@ -112,11 +112,31 @@ pub(crate) fn apply_effects(
                     [0, 1].map(|i| shadow.max[i] + offset[i]),
                 )?)
             }
-            // COLOR-002 pointwise operations never change geometry bounds.
+            // COLOR-002/COLOR-003 pointwise operations never change geometry
+            // bounds.
             ResolvedEffect::ColorExposure { .. }
             | ResolvedEffect::ColorLevels { .. }
             | ResolvedEffect::ColorCurves { .. }
-            | ResolvedEffect::ColorHsl { .. } => input,
+            | ResolvedEffect::ColorHsl { .. }
+            | ResolvedEffect::ColorLut { .. } => input,
+            // FX-005/FX-006 (ADR-0115): keying mattes and vignette keep the
+            // input extent; glow/sharpen grow by the 3-sigma kernel support;
+            // corner pin replaces them with the destination quad hull.
+            ResolvedEffect::ChromaKey { .. }
+            | ResolvedEffect::LumaKey { .. }
+            | ResolvedEffect::Vignette { .. } => input,
+            ResolvedEffect::Glow { radius, .. } | ResolvedEffect::Sharpen { radius, .. } => {
+                input.expand(3.0 * radius)?
+            }
+            ResolvedEffect::CornerPin { corners } => DesignBounds::checked(
+                [0, 1].map(|i| corners.iter().map(|p| p[i]).fold(f64::INFINITY, f64::min)),
+                [0, 1].map(|i| {
+                    corners
+                        .iter()
+                        .map(|p| p[i])
+                        .fold(f64::NEG_INFINITY, f64::max)
+                }),
+            )?,
         });
     }
     Ok(bounds)
@@ -268,6 +288,9 @@ pub(crate) fn derive_scene_bounds(nodes: &mut [SceneNodeIr]) -> Result<(), Rende
                     visual_bounds: bounds,
                 }
             }
+            // FX-007: the node itself draws nothing; a post-pass below unions
+            // the lower-track composite and applies its effect halo.
+            SceneContent::Adjustment => LayoutValue::default(),
             SceneContent::Empty => LayoutValue::default(),
         };
         for child in nodes
@@ -289,6 +312,28 @@ pub(crate) fn derive_scene_bounds(nodes: &mut [SceneNodeIr]) -> Result<(), Rende
                 "invalid bounds containment order".into(),
             ));
         }
+    }
+    // FX-007: an adjustment node's coverage is the composited visual bounds of
+    // every root sibling below it, expanded by its own effect stack. Scene
+    // nodes retain authored order, so the running union tracks "lower" roots.
+    let mut lower = LayoutValue::default();
+    for n in nodes.iter_mut() {
+        if n.parent.is_some() {
+            continue;
+        }
+        if matches!(n.content, SceneContent::Adjustment) {
+            let effects = n
+                .effects
+                .iter()
+                .map(|e| crate::dag::map_effect(e, n.world_transform))
+                .collect::<Result<Vec<_>, _>>()?;
+            n.bounds = LayoutValue {
+                layout_bounds: lower.layout_bounds,
+                ink_bounds: lower.ink_bounds,
+                visual_bounds: apply_effects(lower.visual_bounds, &effects)?,
+            };
+        }
+        lower = lower.union(n.bounds);
     }
     Ok(())
 }

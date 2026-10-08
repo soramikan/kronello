@@ -32,9 +32,12 @@ fn half_rne(value:f32)->f32 {
     let rounded=f32(base+increment)/16777216.0;
     return select(rounded,-rounded,sign!=0u);
 }
-// COLOR-002 pointwise corrections (ADR-0108). config.x==4u selects the pass,
-// config.y the op (1 exposure, 2 levels, 3 curves, 4 HSL), config.z the curve
-// point count. Alpha is preserved; HDR and negative values are never clamped.
+// COLOR-002/COLOR-003 pointwise corrections (ADR-0108/ADR-0113).
+// config.x==4u selects the pass, config.y the op (1 exposure, 2 levels,
+// 3 curves, 4 HSL, 5 LUT), config.z the curve point count or LUT edge size.
+// Alpha is preserved; HDR and negative values are never clamped for ops 1-4.
+// Op 5 samples straight working RGB through tetrahedral interpolation with
+// domain normalization and endpoint clamping, mirroring CubeLut::sample.
 fn color_levels(v:f32)->f32 {
     let n=(v-params.offset.x)/(params.offset.y-params.offset.x);
     var g=n;
@@ -124,6 +127,51 @@ fn main(@builtin(global_invocation_id) id:vec3<u32>) {
             let hsl=rgb_to_hsl(v.rgb);
             rgb=hsl_to_rgb(vec3<f32>(hsl.x+params.offset.x,hsl.y*params.offset.y,hsl.z+params.offset.z));
         }
+        else if op==5u {
+            let n=params.config.z;
+            var straight=vec3<f32>(0.0);
+            if v.a>0.0000152587890625 { straight=v.rgb/v.a; }
+            let pos=clamp((straight-params.offset.rgb)/(params.color.rgb-params.offset.rgb),vec3<f32>(0.0),vec3<f32>(1.0))*f32(n-1u);
+            let base=min(vec3<u32>(floor(pos)),vec3<u32>(n-2u));
+            let f=pos-vec3<f32>(base);
+            // .cube lattice index, red fastest: ((b*n+g)*n+r)*3.
+            let base_index=((base.z*n+base.y)*n+base.x)*3u;
+            let stride_g=3u*n;
+            let stride_b=3u*n*n;
+            var off0=0u; var off1=0u; var off2=0u; var off3=0u;
+            var w=vec4<f32>(0.0);
+            // Tetrahedral branch order mirrors CubeLut::sample exactly so CPU
+            // and GPU select the same sub-tetrahedron on boundary ties.
+            if f.x>=f.y {
+                if f.y>=f.z {
+                    off1=3u; off2=3u+stride_g; off3=3u+stride_g+stride_b;
+                    w=vec4<f32>(1.0-f.x,f.x-f.y,f.y-f.z,f.z);
+                } else if f.x>=f.z {
+                    off1=3u; off2=3u+stride_b; off3=3u+stride_g+stride_b;
+                    w=vec4<f32>(1.0-f.x,f.x-f.z,f.z-f.y,f.y);
+                } else {
+                    off1=stride_b; off2=stride_b+3u; off3=stride_b+3u+stride_g;
+                    w=vec4<f32>(1.0-f.z,f.z-f.x,f.x-f.y,f.y);
+                }
+            } else if f.z>=f.y {
+                off1=stride_b; off2=stride_b+stride_g; off3=stride_b+stride_g+3u;
+                w=vec4<f32>(1.0-f.z,f.z-f.y,f.y-f.x,f.x);
+            } else if f.x>=f.z {
+                off1=stride_g; off2=stride_g+3u; off3=stride_g+3u+stride_b;
+                w=vec4<f32>(1.0-f.y,f.y-f.x,f.x-f.z,f.z);
+            } else {
+                off1=stride_g; off2=stride_g+stride_b; off3=stride_g+stride_b+3u;
+                w=vec4<f32>(1.0-f.y,f.y-f.z,f.z-f.x,f.x);
+            }
+            let c0=vec3<f32>(weights[base_index+off0],weights[base_index+off0+1u],weights[base_index+off0+2u]);
+            let c1=vec3<f32>(weights[base_index+off1],weights[base_index+off1+1u],weights[base_index+off1+2u]);
+            let c2=vec3<f32>(weights[base_index+off2],weights[base_index+off2+1u],weights[base_index+off2+2u]);
+            let c3=vec3<f32>(weights[base_index+off3],weights[base_index+off3+1u],weights[base_index+off3+2u]);
+            let mapped=c0*w.x+c1*w.y+c2*w.z+c3*w.w;
+            // straight + (mapped - straight) * intensity mirrors the CPU
+            // arithmetic exactly; mix() would evaluate x*(1-a)+y*a instead.
+            rgb=(straight+(mapped-straight)*params.offset.w)*v.a;
+        }
         result=vec4<f32>(rgb,v.a);
     }
     else if params.config.x==0u {
@@ -140,6 +188,112 @@ fn main(@builtin(global_invocation_id) id:vec3<u32>) {
             let w=weights[3u*i+2u]; result+=load(p+delta)*w; norm+=w;
         }
         result/=norm;
+    }
+    // FX-005/FX-006 standard ops (ADR-0115). offset.xyz carries the working
+    // luma weights for ops that need luminance/chroma; color.xy carries the
+    // precomputed key chroma for chroma keying.
+    else if params.config.x==5u {
+        // Keying matte extraction: alpha holds the binary matte. config.y
+        // selects 0 luma (offset.w key_luma, color.x tolerance) or 1 chroma
+        // (offset.w cutoff distance, color.xy key Cb/Cr).
+        let v=textureLoad(source,p,0);
+        let s=v.rgb/max(v.a,1e-30);
+        let w=params.offset.xyz;
+        var m=1.0;
+        if params.config.y==0u {
+            let l=dot(s,w);
+            if abs(l-params.offset.w)<params.color.x { m=0.0; }
+        } else {
+            let y=dot(s,w);
+            let c=vec2<f32>((s.b-y)*(0.5/(1.0-w.b)),(s.r-y)*(0.5/(1.0-w.r)));
+            if length(c-params.color.xy)<params.offset.w { m=0.0; }
+        }
+        result=vec4<f32>(0.0,0.0,0.0,m);
+    } else if params.config.x==6u {
+        // Matte erosion: Chebyshev min filter along axis config.z, lerped
+        // between floor(shrink) and floor(shrink)+1.
+        let s=params.offset.x;
+        if s<=0.0 { result=vec4<f32>(0.0,0.0,0.0,load(p).a); }
+        else {
+            let inner=i32(floor(s)); let fr=s-f32(inner); let outer=inner+1;
+            var mi=1e30; var mo=1e30;
+            for (var d=-outer; d<=outer; d++) {
+                var q=p+vec2<i32>(d,0); if params.config.z==1u { q=p+vec2<i32>(0,d); }
+                let a=load(q).a; mo=min(mo,a);
+                if abs(d)<=inner { mi=min(mi,a); }
+            }
+            result=vec4<f32>(0.0,0.0,0.0,mi*(1.0-fr)+mo*fr);
+        }
+    } else if params.config.x==7u {
+        // Key composite: matte is source.a, pixels are the original input.
+        // config.y 0 luma (no despill), 1 chroma (axis despill scaled by
+        // offset.w spill).
+        let v=textureLoad(original,p,0);
+        let m=textureLoad(source,p,0).a;
+        let a=v.a*m;
+        var s=v.rgb/max(v.a,1e-30);
+        if params.config.y==1u {
+            let w=params.offset.xyz; let spill=params.offset.w;
+            let kc=params.color.xy; let kmag=length(kc);
+            if kmag>1e-6 {
+                let y=dot(s,w);
+                let cb=(s.b-y)*(0.5/(1.0-w.b)); let cr=(s.r-y)*(0.5/(1.0-w.r));
+                let axis=kc/kmag;
+                let excess=max(dot(vec2<f32>(cb,cr),axis)-kmag,0.0)*spill;
+                let cbn=cb-axis.x*excess; let crn=cr-axis.y*excess;
+                let db=(cbn-cb)*2.0*(1.0-w.b); let dr=(crn-cr)*2.0*(1.0-w.r);
+                s=vec3<f32>(s.r+dr,s.g-(w.r*dr+w.b*db)/w.g,s.b+db);
+            }
+        }
+        result=vec4<f32>(s*a,a);
+    } else if params.config.x==8u {
+        // Glow extraction: keep the premultiplied pixel when its straight
+        // luminance exceeds offset.w threshold.
+        let v=textureLoad(source,p,0);
+        let s=v.rgb/max(v.a,1e-30);
+        if dot(s,params.offset.xyz)>params.offset.w { result=v; }
+    } else if params.config.x==9u {
+        // Glow additive composite: rgb adds, alpha source-overs the bloom
+        // coverage so the halation lights transparent surroundings.
+        let b=textureLoad(source,p,0); let o=textureLoad(original,p,0);
+        let i=params.offset.x;
+        let rgb=clamp(o.rgb+b.rgb*i,vec3<f32>(-65504.0),vec3<f32>(65504.0));
+        let cov=min(b.a*i,1.0);
+        result=vec4<f32>(rgb,clamp(o.a+cov*(1.0-o.a),0.0,1.0));
+    } else if params.config.x==10u {
+        // Unsharp mask: original + amount*(original-blur) on all channels;
+        // alpha stays in [0,1], rgb clamps to the RGBA16F range.
+        let b=textureLoad(source,p,0); let o=textureLoad(original,p,0);
+        let amt=params.offset.x;
+        let rgb=clamp(o.rgb+amt*(o.rgb-b.rgb),vec3<f32>(-65504.0),vec3<f32>(65504.0));
+        result=vec4<f32>(rgb,clamp(o.a+amt*(o.a-b.a),0.0,1.0));
+    } else if params.config.x==11u {
+        // Vignette: smoothstep corner falloff multiplies premultiplied rgb;
+        // alpha is preserved. offset = amount, midpoint, feather, roundness.
+        let v=textureLoad(source,p,0);
+        let dims=vec2<f32>(textureDimensions(output));
+        let n=(vec2<f32>(p)+0.5)/dims*2.0-1.0;
+        let rect=max(abs(n.x),abs(n.y));
+        let el=length(n)/sqrt(2.0);
+        let d=mix(rect,el,params.offset.w);
+        let t=clamp((d-params.offset.y)/max(params.offset.z,1e-6),0.0,1.0);
+        let s=t*t*(3.0-2.0*t);
+        result=vec4<f32>(v.rgb*(1.0-params.offset.x*s),v.a);
+    } else if params.config.x==12u {
+        // Corner pin inverse warp: weights[0..9] is the row-major 3x3 mapping
+        // dest edge coordinates to source edge coordinates; weights[9..13]
+        // are the source rect min/max for the coverage clip.
+        if params.config.w==0u {
+            let f=vec2<f32>(p)+0.5;
+            let h=vec3<f32>(
+                weights[0]*f.x+weights[1]*f.y+weights[2],
+                weights[3]*f.x+weights[4]*f.y+weights[5],
+                weights[6]*f.x+weights[7]*f.y+weights[8]);
+            let e=h.xy/h.z;
+            if h.z>0.0 && e.x>=weights[9] && e.x<=weights[11] && e.y>=weights[10] && e.y<=weights[12] {
+                result=bilinear(e-vec2<f32>(0.5));
+            }
+        }
     } else {
         let s=textureLoad(original,p,0);
         var alpha=0.0;

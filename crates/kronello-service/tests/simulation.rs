@@ -572,11 +572,13 @@ fn actual_reverse_sequence_references_forward_source_states() {
         timeline_range: TimeRange::new(Time::ZERO, Time::ONE).unwrap(),
         source_in: Time::ONE,
         time_map: TimeMap::linear(Time::ZERO, Time::ONE).unwrap(),
+        enabled: true,
         audio_retime: AudioRetimePolicy::ReverseResampleV1,
         reverse_sampling: Some(ReverseSampling::ReverseGridV1),
         volume: None,
         links: vec![],
         effects: vec![],
+        masks: vec![],
         properties: vec![],
         markers: vec![],
     };
@@ -596,6 +598,7 @@ fn actual_reverse_sequence_references_forward_source_states() {
         transitions: vec![],
         markers: vec![],
         work_area: None,
+        targets: None,
     }));
     let reverse = RenderSnapshot::for_target(
         &p,

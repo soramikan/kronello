@@ -1,10 +1,13 @@
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 import KronelloDesign
 import KronelloAppModel
 
 /// GUI-010 color-correction editor. Adds, edits and removes COLOR-002 effects
 /// through `clip_set_effects`, preserving unrelated effects and animated
-/// parameter sources (shown read-only rather than overwritten).
+/// parameter sources (shown read-only rather than overwritten). COLOR-003 LUT
+/// effects bind a `.cube` Data asset through the shared `lut.import` command.
 struct ClipColorInspector: View {
     @ObservedObject var model: EditorModel
     let clip: EditClip
@@ -15,6 +18,7 @@ struct ClipColorInspector: View {
         "kronello.color.levels": "レベル (Levels)",
         "kronello.color.curves": "カーブ (Curves)",
         "kronello.color.hsl": "HSL",
+        EditorModel.lutEffectID: "LUT (.cube)",
     ]
     /// (parameter field, label, unit, range, step, precision)
     static func rows(_ spec: EditorModel.ColorEffectSpec) -> [(String, String, String, ClosedRange<Double>, Double, Int)] {
@@ -31,16 +35,34 @@ struct ClipColorInspector: View {
         default: return []
         }
     }
-    var disabled: Bool { model.ui.locked.contains(clip.track) || model.busy || model.pendingCandidate != nil }
+    var disabled: Bool { model.trackLocked(clip.track) || model.busy || model.pendingCandidate != nil }
     var body: some View {
         let specs = EditorModel.colorEffectSpecs(on: clip)
         let missing = EditorModel.colorEffects.filter { spec in !specs.contains { $0.spec.effectID == spec.effectID } }
         Group {
             if !missing.isEmpty {
                 KRInspectorSettingRow("追加") {
-                    KRPopupButton("カラー補正を追加", options: missing.map { .init($0.kind, Self.names[$0.effectID] ?? $0.effectID) },
+                    KRPopupButton("カラー補正を追加", options: missing.filter { $0.kind != "color_lut" }.map { .init($0.kind, Self.names[$0.effectID] ?? $0.effectID) },
                         selection: .constant(""), onSelect: { model.addClipEffect($0) })
                         .frame(width: KRWindowMetrics.settingWidth)
+                }
+            }
+            // COLOR-003: LUT needs a `.cube` Data asset, so its add menu lists
+            // imported lattices; a companion button imports a new `.cube`.
+            if !specs.contains(where: { $0.spec.kind == "color_lut" }) {
+                KRInspectorSettingRow("LUT") {
+                    HStack(spacing: KRSpace.space1) {
+                        KRPopupButton("LUT を追加", options: model.lutAssets.map { .init($0.id, $0.name) },
+                            selection: .constant(""), onSelect: { model.addClipLutEffect(clip, asset: $0) })
+                        KRButton(icon: .plus, accessibilityLabel: ".cube を読み込む") {
+                            let panel = NSOpenPanel()
+                            panel.allowedContentTypes = [UTType(filenameExtension: "cube") ?? .data]
+                            panel.allowsMultipleSelection = false; panel.canChooseDirectories = false
+                            if panel.runModal() == .OK, let url = panel.url {
+                                Task { await model.importLut(path: url.path) }
+                            }
+                        }
+                    }.frame(width: KRWindowMetrics.settingWidth, alignment: .leading)
                 }
             }
             ForEach(Array(specs.enumerated()), id: \.offset) { _, entry in
@@ -50,7 +72,8 @@ struct ClipColorInspector: View {
                             model.removeClipEffect(clip, index: entry.index)
                         }
                     }
-                    if entry.spec.kind == "color_curves" { CurveEditor(model: model, clip: clip, effect: entry.effect) }
+                    if entry.spec.kind == "color_lut" { LutEditor(model: model, clip: clip, effect: entry.effect) }
+                    else if entry.spec.kind == "color_curves" { CurveEditor(model: model, clip: clip, effect: entry.effect) }
                     else {
                         ForEach(Array(Self.rows(entry.spec).enumerated()), id: \.offset) { _, row in
                             let (field, label, unit, range, step, precision) = row
@@ -76,6 +99,41 @@ struct ClipColorInspector: View {
                 Text("色補正エフェクトはまだありません").krText(KRType.caption).foregroundStyle(p.inkMuted).padding(.horizontal, KRSpace.space3)
             }
         }.disabled(disabled)
+    }
+}
+
+/// COLOR-003 `.cube` LUT editor: a Data-asset picker plus the scalar
+/// intensity parameter. Both write through `clip_set_effects` constants.
+private struct LutEditor: View {
+    @ObservedObject var model: EditorModel
+    let clip: EditClip
+    let effect: [String: Any]
+    @State private var draftBase: String?
+    @Environment(\.krPalette) var p
+    var body: some View {
+        let assets = model.lutAssets
+        let bound = EditorModel.lutParameterAsset(clip, effect: effect)
+        KRInspectorSettingRow("LUT") {
+            KRPopupButton(bound.flatMap { id in assets.first { $0.id == id }?.name } ?? "LUT を選択",
+                options: assets.map { .init($0.id, $0.name) },
+                selection: .constant(bound ?? ""),
+                onSelect: { model.setClipEffectParameter(clip, effect: effect, parameter: "lut", kind: "asset_ref", value: $0) })
+                .frame(width: KRWindowMetrics.settingWidth)
+        }
+        if let bound, !assets.contains(where: { $0.id == bound }) {
+            Text("参照先の LUT アセットが見つかりません (\(bound))").krText(KRType.caption)
+                .foregroundStyle(p.inkMuted).padding(.horizontal, KRSpace.space3)
+        }
+        KRInspectorSettingRow("強度") {
+            KRNumberField(value: .constant(EditorModel.colorParameterValue(clip, effect: effect, parameter: "intensity") ?? 1),
+                unit: "", step: 0.01, range: 0...1, precision: 2,
+                accessibilityLabel: "LUT の強度", onEditingStart: { draftBase = model.revision },
+                onCommit: { _, value in
+                    model.setClipEffectParameter(clip, effect: effect, parameter: "intensity",
+                        kind: "scalar", value: value, base: draftBase)
+                    draftBase = nil
+                }).frame(width: KRWindowMetrics.settingWidth)
+        }.disabled(!EditorModel.colorParameterIsConstant(clip, effect: effect, parameter: "intensity"))
     }
 }
 

@@ -111,7 +111,7 @@ struct MetalPreview: NSViewRepresentable {
                             try await native.session.resize(width: width, height: height); configuredSize = [width, height]
                         }
                         model.previewRendering = true
-                        var input: [String: Any] = ["project": model.path, "fonts": model.snapshotFonts,
+                        var input: [String: Any] = ["project": model.path, "fonts": model.snapshotFonts, "luts": model.lutInputs,
                             "region": ["origin": [0, 0], "extent": [extent.width, extent.height], "pixels": [width, height]]]
                         input.merge(target) { _, value in value }
                         var request: [String: Any] = ["operation": "render.frame", "input": input, "time": time.wire]

@@ -1,6 +1,6 @@
 # AUDIO-000 基本音声と A/V 書き出し
 
-設計契約: [ADR-0049](../adr/0049-audio-bus-timing-and-codec.md)。基本音声の library API を実装する。AUDIO-000 の範囲は定数音量の明示配置。AUDIO-003 で文書由来の再帰配置・音量 Property / Curve と共有 `render.export` / `render.submit` を追加した。AUDIO-004 は明示 resample・audio clip Gain effect・Generator・crossfade を movie profile 3 へ追加した。AUDIO-002 は buffered realtime playback を追加した（実デバイスの受け入れは検証文書に記録）。pitch-preserving stretch は後続。RENDER-003 で movie export の長尺 streaming を追加した（ADR-0079）。
+設計契約: [ADR-0049](../adr/0049-audio-bus-timing-and-codec.md)。基本音声の library API を実装する。AUDIO-000 の範囲は定数音量の明示配置。AUDIO-003 で文書由来の再帰配置・音量 Property / Curve と共有 `render.export` / `render.submit` を追加した。AUDIO-004 は明示 resample・audio clip Gain effect・Generator・crossfade を movie profile 3 へ追加した。AUDIO-002 は buffered realtime playback を追加した（実デバイスの受け入れは検証文書に記録）。pitch-preserving stretch は後続。RENDER-003 で movie export の長尺 streaming を追加した（ADR-0079）。AUDIO-007/008 は音声用 clip effects（EQ・HPF/LPF・compressor・limiter）と LUFS 計測・ノーマライズ、AUDIO-009 は再生メーター・スクラブ・ミキサーを追加した（ADR-0117）。
 
 ## 依存境界
 
@@ -167,3 +167,34 @@ Bus は codec block（PCM24:4,096、ALAC: native block）ごとに絶対sample�
 最後の partial blockだけを許し、sample count とzero-origin PTSを従来と一致させる。
 `AudioSources` を使う既存 `mix` / `DocumentAudioPlan::mix` は同じ reader経路の互換wrapper。
 [ADR-0079](../adr/0079-bounded-streaming-movie-export.md)、[検証](../testing/render-003.md)。
+
+## AUDIO-007/008/009: フィルタ・ダイナミクス・LUFS・再生メーター
+
+契約は [ADR-0117](../adr/0117-audio-filters-dynamics-loudness.md)、検証は
+[AUDIO-007](../testing/audio-007.md) / [AUDIO-008](../testing/audio-008.md) /
+[AUDIO-009](../testing/audio-009.md)。evaluator 2 の clip effects 契約を拡張し、
+`clip_set_effects` の既存の流れで 5 つの v1 エフェクトを受理する。
+
+- `kronello.audio.eq`（`AudioEq {bands}`、DataTable `kind`/`freq_hz`/`gain_db`/`q`、1..=8 行）、
+  `kronello.audio.hpf` / `kronello.audio.lpf`（`cutoff_hz`、`order` 1..=4）は
+  `dsp.rs` の biquad（RBJ peaking/shelf・Butterworth カスケード、奇数次は一次 section）。
+  `kronello.audio.compressor`（threshold/ratio/attack/release/makeup）は
+  ステレオリンク peak detector + dB 域 gain computer、`kronello.audio.limiter` は
+  瞬時 attack + 指数 release の ceiling。係数は `resolve_audio` の検証済み定数から
+  決定的に導出し、パラメータは Constant source 限定。
+- ステートフルチェーンはプレースメント先頭から評価するため、要求範囲の任意分割は
+  連続ミックスと bit 一致する。リアルタイム再生と書き出しは同一コード経路。
+  非 Constant・映像トラック・範囲外値・不正テーブルは型付きエラー。
+- `audio.loudness` クエリは clip / sequence / asset 対象を共有 plan で render し、
+  `loudness.rs` の ITU-R BS.1770-4 K 重み付き integrated / momentary / short-term LUFS と
+  4x オーバーサンプル true peak（dBTP）を返す。`audio.normalize` は integrated LUFS から
+  目標ゲインを `kronello.audio.gain` として `edit.plan` / `edit.apply` で 1 イベント追記し、
+  Undo 可能・冪等。
+- `mix_metered` はミックスと同一ループでトラック別・マスターの peak/RMS を計測する。
+  `PreparedAudio::render_block_metered` と FFI `kronello_audio_render_metered` が
+  同じ評価経路の PCM とメーター JSON を返し、GUI の VU メーター（トラックヘッダ /
+  ミキサー）へ publish する。オーディオスクラブは既存 realtime パイプラインの
+  有界短区間ランとして実装し、専用評価経路は作らない。
+- トラックゲインの UI マッピング: モデルにトラックレベルのゲイン欄がないため、
+  ミキサーフェーダーはトラック上全クリップの `kronello.audio.volume` へ
+  `clip_set_volume` で同一ゲインを 1 イベント書き込む代理方式（Undo 可能）。

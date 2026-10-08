@@ -1,13 +1,15 @@
 //! Pure geometry derivation from evaluated vector content. Output scale and
 //! tolerance are request inputs, never document fields or stored raster data.
-use kronello_model::{PathSegment, PropertyId, ResolvedGeometry, Shape, ShapeError, Value};
+use kronello_model::{Path, PathSegment, PropertyId, ResolvedGeometry, Shape, ShapeError, Value};
 use kurbo::{BezPath, Ellipse, PathEl, Point, RoundedRect, Shape as KurboShape};
 use std::collections::BTreeMap;
 use thiserror::Error;
 mod dash;
+mod offset;
 mod svg;
 mod trim;
 pub use dash::{MAX_DASH_SEGMENTS, dash_path};
+pub use offset::offset_path;
 pub use svg::*;
 pub use trim::trim_path;
 
@@ -119,24 +121,36 @@ pub fn flatten(
             path
         }
         ResolvedGeometry::BezierPath(path) | ResolvedGeometry::TrimmedPath { path, .. } => {
-            let mut bez = BezPath::new();
-            let p = |v: [kronello_model::FiniteF64; 2]| Point::new(v[0].get(), v[1].get());
-            for segment in path.segments {
-                bez.push(match segment {
-                    PathSegment::MoveTo(v) => PathEl::MoveTo(p(v)),
-                    PathSegment::LineTo(v) => PathEl::LineTo(p(v)),
-                    PathSegment::QuadTo { control, end } => PathEl::QuadTo(p(control), p(end)),
-                    PathSegment::CubicTo {
-                        control1,
-                        control2,
-                        end,
-                    } => PathEl::CurveTo(p(control1), p(control2), p(end)),
-                    PathSegment::Close => PathEl::ClosePath,
-                });
-            }
-            bez
+            bezier_path(&path)
         }
     };
+    let flattened = flatten_bez(path, tolerance)?;
+    if let Some((start, end, offset)) = trim {
+        trim_path(&flattened, start, end, offset)
+    } else {
+        Ok(flattened)
+    }
+}
+
+fn bezier_path(path: &Path) -> BezPath {
+    let mut bez = BezPath::new();
+    let p = |v: [kronello_model::FiniteF64; 2]| Point::new(v[0].get(), v[1].get());
+    for segment in &path.segments {
+        bez.push(match segment {
+            PathSegment::MoveTo(v) => PathEl::MoveTo(p(*v)),
+            PathSegment::LineTo(v) => PathEl::LineTo(p(*v)),
+            PathSegment::QuadTo { control, end } => PathEl::QuadTo(p(*control), p(*end)),
+            PathSegment::CubicTo {
+                control1,
+                control2,
+                end,
+            } => PathEl::CurveTo(p(*control1), p(*control2), p(*end)),
+            PathSegment::Close => PathEl::ClosePath,
+        });
+    }
+    bez
+}
+fn flatten_bez(path: BezPath, tolerance: f64) -> Result<FlattenedPath, VectorError> {
     if !path.is_finite() {
         return Err(VectorError::NonFiniteGeometry);
     }
@@ -167,12 +181,28 @@ pub fn flatten(
     if !finite {
         return Err(VectorError::NonFiniteGeometry);
     }
-    let flattened = FlattenedPath { subpaths };
-    if let Some((start, end, offset)) = trim {
-        trim_path(&flattened, start, end, offset)
-    } else {
-        Ok(flattened)
+    Ok(FlattenedPath { subpaths })
+}
+
+/// Flatten an already-resolved Bezier path — for example a text layout guide —
+/// into the same polyline representation. `tolerance` is in local design_px.
+/// The output walks each subpath in document order; a closed subpath's
+/// polyline returns to its start so its final edge has measurable length.
+pub fn flatten_path(path: &Path, tolerance: f64) -> Result<FlattenedPath, VectorError> {
+    if !tolerance.is_finite() || tolerance <= 0.0 {
+        return Err(VectorError::InvalidRequest);
     }
+    check_work_budget(&ResolvedGeometry::BezierPath(path.clone()), tolerance)?;
+    let mut flattened = flatten_bez(bezier_path(path), tolerance)?;
+    for polyline in &mut flattened.subpaths {
+        if polyline.closed && polyline.points.len() > 1 {
+            let first = polyline.points[0];
+            if polyline.points.last() != Some(&first) {
+                polyline.points.push(first);
+            }
+        }
+    }
+    Ok(flattened)
 }
 
 // Conservative preflight before kurbo allocates/subdivides. The allowance is

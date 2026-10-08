@@ -188,6 +188,11 @@ impl DocumentAudioPlan {
                             continue;
                         }
                         let clip = isolated.unwrap_or(clip);
+                        // NLE-005: a disabled placement keeps its timeline
+                        // occupancy but is inaudible.
+                        if !clip.enabled {
+                            continue;
+                        }
                         let audible = match clip.source_ref {
                             SourceRef::Composition { composition } => {
                                 has_audio(project, composition, &mut BTreeSet::new())?
@@ -264,6 +269,11 @@ impl DocumentAudioPlan {
                                 return Err(unsupported(
                                     "caption clips are excluded from audio mixing",
                                 ));
+                            }
+                            SourceRef::Adjustment => {
+                                // FX-007: adjustment clips scope a video effect
+                                // pass only and never emit audio.
+                                return Err(unsupported("adjustment clips produce no audio"));
                             }
                         }
                     }
@@ -448,6 +458,24 @@ impl DocumentAudioPlan {
     /// directly from its absolute index. Invocation order is irrelevant.
     pub fn mix(&self, sources: &AudioSources, range: TimeRange) -> Result<Bus, AudioError> {
         self.mix_reader(sources, range)
+    }
+    /// AUDIO-009: identical mixing plus per-track/master peak-RMS metering.
+    /// Per-track levels require the AUDIO-004+ evaluator; the legacy plan
+    /// reports only the summed master levels.
+    pub fn mix_metered(
+        &self,
+        sources: &dyn AudioSourceReader,
+        range: TimeRange,
+    ) -> Result<(Bus, crate::BusMeters), AudioError> {
+        if let Some(plan) = &self.advanced {
+            return plan.mix_metered(sources, range);
+        }
+        let bus = self.mix_reader(sources, range)?;
+        let meters = crate::BusMeters {
+            tracks: vec![],
+            master: crate::stereo_meter(bus.buffer().frames()),
+        };
+        Ok((bus, meters))
     }
     /// Evaluate a bounded Bus without retaining complete source buffers.
     pub fn mix_reader(

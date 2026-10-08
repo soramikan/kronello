@@ -83,7 +83,7 @@ unsafe extern "C" {
         hdr: c_int,
     ) -> *mut c_void;
     fn km_encoder_close(e: *mut c_void);
-    fn km_encoder_frame(e: *mut c_void, rgba: *const u8, pts: i64) -> c_int;
+    fn km_encoder_frame(e: *mut c_void, rgba: *const u8, pts: i64, duration: i64) -> c_int;
     fn km_encoder_finish(e: *mut c_void) -> c_int;
     fn km_encoder_frame_size(e: *mut c_void) -> c_int;
     fn km_encoder_format(e: *mut c_void) -> *const c_char;
@@ -336,6 +336,9 @@ impl<'a> NativeDecoder<'a> {
             ))
         }
     }
+    pub(crate) fn runtime(&self) -> &'a NativeRuntime {
+        self.runtime
+    }
     pub(crate) fn restart_origin(&mut self) -> Result<(), MediaError> {
         if self.origin() < 0 {
             // Timestamp seeking cannot reliably rewind negative-origin TS.
@@ -539,8 +542,13 @@ impl<'a> NativeEncoder<'a> {
         })
     }
     // Caller validates byte length against the encoder dimensions before this call.
-    pub(crate) fn frame(&mut self, pixels: &[u8], pts: i64) -> Result<(), MediaError> {
-        if unsafe { km_encoder_frame(self.ptr.as_ptr(), pixels.as_ptr(), pts) } < 0 {
+    pub(crate) fn frame(
+        &mut self,
+        pixels: &[u8],
+        pts: i64,
+        duration: i64,
+    ) -> Result<(), MediaError> {
+        if unsafe { km_encoder_frame(self.ptr.as_ptr(), pixels.as_ptr(), pts, duration) } < 0 {
             Err(MediaError::Encode(self.runtime.error()))
         } else {
             Ok(())

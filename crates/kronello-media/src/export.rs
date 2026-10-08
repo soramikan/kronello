@@ -230,6 +230,12 @@ impl AvExportSnapshot {
         Ok(format!("{:x}", Sha256::digest(serde_json::to_vec(&value)?)))
     }
     pub fn validate(&self) -> Result<(), MediaError> {
+        // Exports decode authored originals only (ADR-0119).
+        if self.render.media_proxies() != kronello_render::MediaProxyMode::Off {
+            return Err(MediaError::UnsupportedFeature(
+                "export snapshots cannot substitute preview proxies".into(),
+            ));
+        }
         if self
             .movie_profile
             .is_some_and(|p| p == MovieProfile::ProResPcm24 || self.schema_version != 3)

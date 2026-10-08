@@ -6,6 +6,7 @@ import KronelloDesign
 struct MotionViewer: View {
     @Environment(\.krPalette) var p
     @ObservedObject var model: EditorModel
+    let workflow: WorkflowSettings
     @State private var canvasEdit: CanvasEdit?
     @State private var guidesOpen = false
     @State private var panOrigin: CGPoint?
@@ -145,16 +146,22 @@ struct MotionViewer: View {
                     .scaleEffect(zoom).offset(x: model.ui.panX, y: model.ui.panY)
                     .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
             }.padding(KRSpace.space4).clipped().focusable().focused($viewerFocused).focusEffectDisabled().krFocusRing(viewerFocused, inset: true)
-                .onKeyPress(.space) { model.playing.toggle(); return .handled }
-                .onKeyPress(.leftArrow) { model.seek(model.frame - 1); return .handled }
-                .onKeyPress(.rightArrow) { model.seek(model.frame + 1); return .handled }
-                .onKeyPress(.home) { model.seek(0); return .handled }
-                .onKeyPress(.end) { model.seek(model.durationFrames - 1); return .handled }
-                .onKeyPress(.escape) { canvasEdit = nil; model.candidateBounds = nil; return .handled }
-                .onKeyPress(characters: CharacterSet(charactersIn: "vhzm ept".replacingOccurrences(of: " ", with: ""))) { press in
-                    let map = ["v": "select", "h": "hand", "z": "zoom", "m": "rectangle", "e": "ellipse", "p": "pen", "t": "text"]
-                    guard let tool = map[press.characters.lowercased()], tool != "text" || model.textFont != nil else { return .ignored }
-                    model.ui.tool = tool; return .handled
+                .onKeyPress { press in
+                    func hit(_ action: ShortcutAction) -> Bool { workflow.binding(for: action).matches(press) }
+                    if hit(.commonCancel) { canvasEdit = nil; model.candidateBounds = nil }
+                    else if hit(.transportPlay) { model.playing.toggle() }
+                    else if hit(.transportStepBack) { model.seek(model.frame - 1) }
+                    else if hit(.transportStepForward) { model.seek(model.frame + 1) }
+                    else if hit(.transportGoStart) { model.seek(0) }
+                    else if hit(.transportGoEnd) { model.seek(model.durationFrames - 1) }
+                    else {
+                        let tools: [(ShortcutAction, String)] = [(.motionToolSelect, "select"), (.motionToolHand, "hand"),
+                            (.motionToolZoom, "zoom"), (.motionToolRectangle, "rectangle"), (.motionToolEllipse, "ellipse"),
+                            (.motionToolPen, "pen"), (.motionToolText, "text")]
+                        guard let tool = tools.first(where: { hit($0.0) })?.1, tool != "text" || model.textFont != nil else { return .ignored }
+                        model.ui.tool = tool
+                    }
+                    return .handled
                 }
         }
     }

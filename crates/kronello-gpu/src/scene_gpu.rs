@@ -598,13 +598,215 @@ impl ScenePass<'_> {
                 [*hue_shift, *saturation, *lightness, 0.0, 0.0, 0.0, 0.0, 0.0],
                 vec![],
             ),
+            // COLOR-003: offset.xyz is domain_min, offset.w is intensity,
+            // color.xyz is domain_max; the lattice is a read-only storage
+            // buffer and config.z carries the edge size (ADR-0113).
+            PixelEffect::ColorLut { lut, intensity } => (
+                5,
+                [
+                    lut.domain_min[0],
+                    lut.domain_min[1],
+                    lut.domain_min[2],
+                    *intensity,
+                    lut.domain_max[0],
+                    lut.domain_max[1],
+                    lut.domain_max[2],
+                    0.0,
+                ],
+                lut.data.clone(),
+            ),
             _ => unreachable!("not a pointwise color effect"),
         };
         let count = match effect {
             PixelEffect::ColorCurves { points } => points.len() as u32,
+            PixelEffect::ColorLut { lut, .. } => lut.size,
             _ => 0,
         };
         self.effect_pass_raw(source, source, [4, op, count, 0], floats, &weights)
+    }
+    /// FX-005/FX-006 multi-pass chains (ADR-0115). Keying runs matte
+    /// extract -> separable erosion -> Gaussian feather -> composite; glow and
+    /// sharpen reuse the separable blur; vignette and corner pin are single
+    /// passes. Every stage lands on an RGBA16F surface like the CPU oracle.
+    fn standard_effect(
+        &mut self,
+        source: &SurfaceLease,
+        effect: &PixelEffect,
+    ) -> Result<Option<SurfaceLease>, GpuError> {
+        let w = crate::effect::luma_weights(self.working);
+        // Shared matte shaping: axis-aligned erosion then feather blur.
+        let pass = |this: &mut Self, matte: SurfaceLease, effect: &PixelEffect| {
+            let (edge_shrink, edge_feather) = match effect {
+                PixelEffect::ChromaKey {
+                    edge_shrink,
+                    edge_feather,
+                    ..
+                }
+                | PixelEffect::LumaKey {
+                    edge_shrink,
+                    edge_feather,
+                    ..
+                } => (*edge_shrink, *edge_feather),
+                _ => return Ok(matte),
+            };
+            let mut matte = matte;
+            for (axis, s) in edge_shrink.iter().enumerate() {
+                if *s > 0.0 {
+                    matte = this.effect_pass_raw(
+                        &matte,
+                        &matte,
+                        [6, 0, axis as u32, 0],
+                        [*s, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                        &[],
+                    )?;
+                }
+            }
+            for (axis, f) in edge_feather.iter().enumerate() {
+                if *f > 0.0 {
+                    matte = this.effect_pass(
+                        &matte,
+                        &matte,
+                        &crate::effect::kernel(*f)?,
+                        axis as u32,
+                        None,
+                    )?;
+                }
+            }
+            Ok(matte)
+        };
+        match effect {
+            PixelEffect::ChromaKey {
+                similarity, spill, ..
+            } => {
+                let key = crate::effect::key_chroma(effect, self.working);
+                let cut = similarity * 0.5_f32.sqrt();
+                let matte = self.effect_pass_raw(
+                    source,
+                    source,
+                    [5, 1, 0, 0],
+                    [w[0], w[1], w[2], cut, key[0], key[1], 0.0, 0.0],
+                    &[],
+                )?;
+                let matte = pass(self, matte, effect)?;
+                Ok(Some(self.effect_pass_raw(
+                    &matte,
+                    source,
+                    [7, 1, 0, 0],
+                    [w[0], w[1], w[2], *spill, key[0], key[1], 0.0, 0.0],
+                    &[],
+                )?))
+            }
+            PixelEffect::LumaKey {
+                key_luma,
+                tolerance,
+                ..
+            } => {
+                let matte = self.effect_pass_raw(
+                    source,
+                    source,
+                    [5, 0, 0, 0],
+                    [w[0], w[1], w[2], *key_luma, *tolerance, 0.0, 0.0, 0.0],
+                    &[],
+                )?;
+                let matte = pass(self, matte, effect)?;
+                Ok(Some(self.effect_pass_raw(
+                    &matte,
+                    source,
+                    [7, 0, 0, 0],
+                    [w[0], w[1], w[2], 0.0, 0.0, 0.0, 0.0, 0.0],
+                    &[],
+                )?))
+            }
+            PixelEffect::Glow {
+                threshold,
+                radius,
+                intensity,
+            } => {
+                let mut bloom = self.effect_pass_raw(
+                    source,
+                    source,
+                    [8, 0, 0, 0],
+                    [w[0], w[1], w[2], *threshold, 0.0, 0.0, 0.0, 0.0],
+                    &[],
+                )?;
+                for (axis, r) in radius.iter().enumerate() {
+                    bloom = self.effect_pass(
+                        &bloom,
+                        &bloom,
+                        &crate::effect::kernel(*r)?,
+                        axis as u32,
+                        None,
+                    )?;
+                }
+                Ok(Some(self.effect_pass_raw(
+                    &bloom,
+                    source,
+                    [9, 0, 0, 0],
+                    [*intensity, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                    &[],
+                )?))
+            }
+            PixelEffect::Sharpen { amount, radius } => {
+                let blurred =
+                    self.effect_pass(source, source, &crate::effect::kernel(radius[0])?, 0, None)?;
+                let blurred = self.effect_pass(
+                    &blurred,
+                    source,
+                    &crate::effect::kernel(radius[1])?,
+                    1,
+                    None,
+                )?;
+                Ok(Some(self.effect_pass_raw(
+                    &blurred,
+                    source,
+                    [10, 0, 0, 0],
+                    [*amount, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                    &[],
+                )?))
+            }
+            PixelEffect::Vignette {
+                amount,
+                midpoint,
+                feather,
+                roundness,
+            } => Ok(Some(self.effect_pass_raw(
+                source,
+                source,
+                [11, 0, 0, 0],
+                [*amount, *midpoint, *feather, *roundness, 0.0, 0.0, 0.0, 0.0],
+                &[],
+            )?)),
+            PixelEffect::CornerPin { pins, source: quad } => {
+                let usable = quad.is_some_and(|r| r.max[0] > r.min[0] && r.max[1] > r.min[1]);
+                let Some(rect) = quad.filter(|_| usable) else {
+                    return Ok(Some(self.effect_pass_raw(
+                        source,
+                        source,
+                        [12, 0, 0, 1],
+                        [0.0; 8],
+                        &[],
+                    )?));
+                };
+                let m = kronello_render::corner_pin_inverse(rect, *pins).map_err(|_| {
+                    GpuError::InvalidInput("corner pin requires a nondegenerate convex quad")
+                })?;
+                let mut weights: Vec<f32> = m.into_iter().flatten().collect();
+                weights.extend([
+                    rect.min[0] as f32,
+                    rect.min[1] as f32,
+                    rect.max[0] as f32,
+                    rect.max[1] as f32,
+                ]);
+                Ok(Some(self.effect_pass_raw(
+                    source,
+                    source,
+                    [12, 0, 0, 0],
+                    [0.0; 8],
+                    &weights,
+                )?))
+            }
+            _ => Ok(None),
+        }
     }
     fn effect(
         &mut self,
@@ -613,6 +815,9 @@ impl ScenePass<'_> {
     ) -> Result<SurfaceLease, GpuError> {
         if effect.is_pointwise_color() {
             return self.color_effect(source, effect);
+        }
+        if let Some(out) = self.standard_effect(source, effect)? {
+            return Ok(out);
         }
         let blurred = if let Some(covariance) = effect.covariance() {
             let taps = kronello_render::affine_gaussian_kernel(covariance).map_err(|_| {

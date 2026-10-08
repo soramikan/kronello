@@ -35,12 +35,14 @@ fn comp_clip(composition: CompositionId, source_in: Time, a: Time, b: Time) -> C
         timeline_range: range(a, b),
         source_in,
         time_map: TimeMap::linear(Time::ZERO, Rational::ONE).unwrap(),
+        enabled: true,
         audio_retime: AudioRetimePolicy::Reject,
         reverse_sampling: None,
         volume: None,
         links: vec![],
         properties: vec![],
         effects: vec![],
+        masks: vec![],
         markers: vec![],
     }
 }
@@ -56,12 +58,14 @@ fn gen_clip(a: Time, b: Time) -> Clip {
         timeline_range: range(a, b),
         source_in: Time::ONE,
         time_map: TimeMap::linear(Time::ZERO, Rational::ONE).unwrap(),
+        enabled: true,
         audio_retime: AudioRetimePolicy::Reject,
         reverse_sampling: None,
         volume: None,
         links: vec![],
         properties: vec![],
         effects: vec![],
+        masks: vec![],
         markers: vec![],
     }
 }
@@ -94,6 +98,7 @@ fn sequence(tracks: Vec<(TrackKind, Vec<Clip>)>) -> Sequence {
         transitions: vec![],
         markers: vec![],
         work_area: None,
+        targets: None,
     }
 }
 fn setup(p: Project) -> (tempfile::TempDir, PathBuf) {

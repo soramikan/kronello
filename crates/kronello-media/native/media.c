@@ -437,7 +437,7 @@ int km_video_rgba64(Km *k, const uint8_t *input, int input_size, const char *for
 
 typedef struct Encoder {
     Km *k; AVFormatContext *format; AVCodecContext *codec; AVFrame *frame; AVPacket *packet;
-    struct SwsContext *sws; AVStream *stream; int header, input_stride;
+    struct SwsContext *sws; AVStream *stream; int header, input_stride; int64_t duration;
 } Encoder;
 void km_encoder_close(Encoder *e) {
     if(!e)return;
@@ -502,19 +502,22 @@ static int write_packets(Encoder *e) {
         int ret=e->k->avcodec_receive_packet(e->codec,e->packet);
         if(ret==AVERROR(EAGAIN)||ret==AVERROR_EOF)return 0;
         if(ret<0)return fail(e->k,ret,"receive packet");
-        /* Input contract: every submitted frame spans one time_base tick. */
-        e->packet->duration=1;
+        /* Input contract: callers report each submitted frame's span in
+         * time_base ticks; packets delayed by the encoder reuse the last
+         * submitted span, which is exact for the low-delay codecs used here. */
+        e->packet->duration=e->duration;
         e->k->av_packet_rescale_ts(e->packet,e->codec->time_base,e->stream->time_base);e->packet->stream_index=e->stream->index;
         ret=e->k->av_interleaved_write_frame(e->format,e->packet);e->k->av_packet_unref(e->packet);
         if(ret<0)return fail(e->k,ret,"write packet");
     }
 }
-int km_encoder_frame(Encoder *e,const uint8_t *rgba,int64_t pts) {
+int km_encoder_frame(Encoder *e,const uint8_t *rgba,int64_t pts,int64_t duration) {
+    if(duration<=0)return fail(e->k,AVERROR(EINVAL),"non-positive frame duration");
     int ret=e->k->av_frame_make_writable(e->frame);if(ret<0)return fail(e->k,ret,"writable frame");
     const uint8_t *data[4]={rgba,NULL,NULL,NULL};int stride[4]={e->input_stride,0,0,0};
     ret=e->k->sws_scale(e->sws,data,stride,0,e->codec->height,e->frame->data,e->frame->linesize);
     if(ret!=e->codec->height)return fail(e->k,AVERROR_INVALIDDATA,"pixel conversion");
-    e->frame->pts=pts; e->frame->duration=1;
+    e->frame->pts=pts; e->frame->duration=duration; e->duration=duration;
     ret=e->k->avcodec_send_frame(e->codec,e->frame);if(ret<0)return fail(e->k,ret,"send frame");return write_packets(e);
 }
 int km_encoder_finish(Encoder *e) {

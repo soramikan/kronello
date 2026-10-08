@@ -116,6 +116,7 @@ pub fn glyph() -> DrawScene {
         wrap_width: f(32.0),
         line_height: f(30.0),
         alignment: model::TextAlignment::Start,
+        path: None,
     };
     let layout = kronello_text::layout(
         &text,
@@ -343,6 +344,7 @@ pub fn scenes() -> Vec<(&'static str, u32, WorkingSpace, DrawScene)> {
     scenes.extend(vec005_scenes());
     scenes.extend(color002_scenes());
     scenes.extend(fx003_scenes());
+    scenes.extend(fx005006_scenes());
     scenes
 }
 
@@ -636,6 +638,171 @@ pub fn gradient_scene(radial: bool) -> DrawScene {
         roots: vec![0],
     }
 }
+/// FX-005/FX-006 scenes (ADR-0115): matte keying over two-color inputs,
+/// kernel-based glow/sharpen, and the spatial vignette/warp effects. The
+/// corner pin quad is stated explicitly because DrawScene-level effects carry
+/// their source bounds directly.
+pub fn fx005006_scenes() -> Vec<(&'static str, u32, WorkingSpace, DrawScene)> {
+    let two_tones = |a: [f32; 4], b: [f32; 4], space: InputSpace| DrawScene {
+        nodes: vec![
+            rectangle([0.0; 2], [8.0, 16.0], paint(a, space)),
+            rectangle([8.0, 0.0], [16.0; 2], paint(b, space)),
+            DrawNode::Group {
+                children: vec![0, 1],
+                opacity: 1.0,
+            },
+        ],
+        roots: vec![2],
+    };
+    let chroma = {
+        let mut scene = two_tones(
+            [0.0, 0.694, 0.251, 1.0],
+            [0.8, 0.15, 0.1, 1.0],
+            InputSpace::Srgb,
+        );
+        scene.nodes.push(DrawNode::Effect {
+            source: 2,
+            effect: PixelEffect::ChromaKey {
+                key_color: model::Color::from_srgb8([0, 177, 64], None),
+                similarity: 0.4,
+                edge_shrink: [0.0; 2],
+                edge_feather: [0.0; 2],
+                spill: 0.5,
+            },
+        });
+        scene.roots = vec![3];
+        scene
+    };
+    let chroma_edges = {
+        let mut scene = two_tones(
+            [0.0, 0.694, 0.251, 1.0],
+            [0.8, 0.15, 0.1, 1.0],
+            InputSpace::Srgb,
+        );
+        scene.nodes.push(DrawNode::Effect {
+            source: 2,
+            effect: PixelEffect::ChromaKey {
+                key_color: model::Color::from_srgb8([0, 177, 64], None),
+                similarity: 0.45,
+                edge_shrink: [1.4, 0.6],
+                edge_feather: [0.9, 0.4],
+                spill: 1.0,
+            },
+        });
+        scene.roots = vec![3];
+        scene
+    };
+    let luma = {
+        let mut scene = two_tones(
+            [0.02, 0.02, 0.02, 1.0],
+            [0.85, 0.6, 0.2, 1.0],
+            InputSpace::LinearRec709,
+        );
+        scene.nodes.push(DrawNode::Effect {
+            source: 2,
+            effect: PixelEffect::LumaKey {
+                key_luma: 0.05,
+                tolerance: 0.15,
+                edge_shrink: [0.75, 0.0],
+                edge_feather: [0.6, 0.6],
+            },
+        });
+        scene.roots = vec![3];
+        scene
+    };
+    let glow = {
+        let mut scene = two_tones(
+            [0.95, 0.9, 0.4, 1.0],
+            [0.05, 0.05, 0.08, 1.0],
+            InputSpace::LinearRec709,
+        );
+        scene.nodes.push(DrawNode::Effect {
+            source: 2,
+            effect: PixelEffect::Glow {
+                threshold: 0.5,
+                radius: [1.6, 0.9],
+                intensity: 0.8,
+            },
+        });
+        scene.roots = vec![3];
+        scene
+    };
+    let sharpen = {
+        let mut scene = two_tones(
+            [0.85, 0.2, 0.1, 1.0],
+            [0.1, 0.15, 0.7, 1.0],
+            InputSpace::LinearRec709,
+        );
+        scene.nodes.push(DrawNode::Effect {
+            source: 2,
+            effect: PixelEffect::Sharpen {
+                amount: 1.5,
+                radius: [1.1, 0.8],
+            },
+        });
+        scene.roots = vec![3];
+        scene
+    };
+    let vignette = {
+        let mut scene = two_tones(
+            [0.6, 0.5, 0.4, 1.0],
+            [0.3, 0.35, 0.5, 1.0],
+            InputSpace::LinearRec709,
+        );
+        scene.nodes.push(DrawNode::Effect {
+            source: 2,
+            effect: PixelEffect::Vignette {
+                amount: 0.85,
+                midpoint: 0.2,
+                feather: 0.7,
+                roundness: 0.6,
+            },
+        });
+        scene.roots = vec![3];
+        scene
+    };
+    let corner_pin = DrawScene {
+        nodes: vec![
+            rectangle(
+                [2.0; 2],
+                [14.0; 2],
+                paint([0.7, 0.3, 0.55, 1.0], InputSpace::LinearRec709),
+            ),
+            DrawNode::Effect {
+                source: 0,
+                effect: PixelEffect::CornerPin {
+                    pins: [[3.0, 1.0], [14.0, 3.0], [12.0, 14.0], [1.0, 13.0]],
+                    // The drawn quad's conservative visual bounds.
+                    source: Some(kronello_render::PixelBounds {
+                        min: [1.0, 1.0],
+                        max: [15.0, 15.0],
+                    }),
+                },
+            },
+        ],
+        roots: vec![1],
+    };
+    vec![
+        ("fx005-chroma-key", 16, WorkingSpace::LinearRec709, chroma),
+        (
+            "fx005-chroma-key-edges",
+            16,
+            WorkingSpace::LinearRec709,
+            chroma_edges,
+        ),
+        ("fx005-luma-key", 16, WorkingSpace::LinearRec2020, luma),
+        ("fx006-glow", 16, WorkingSpace::LinearRec709, glow),
+        ("fx006-sharpen", 16, WorkingSpace::LinearRec2020, sharpen),
+        ("fx006-vignette", 16, WorkingSpace::LinearRec709, vignette),
+        (
+            "fx006-corner-pin",
+            16,
+            WorkingSpace::LinearRec709,
+            corner_pin,
+        ),
+    ]
+}
+
 pub fn vec003_scenes() -> Vec<(&'static str, u32, WorkingSpace, DrawScene)> {
     vec![
         (

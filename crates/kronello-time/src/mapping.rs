@@ -9,8 +9,9 @@ pub struct TimeMapPoint {
     pub local: Time,
 }
 
-/// Exact, stateless mappings. Protected middle segments support hold and loop.
-/// Reverse and general nonlinear playback remain unsupported.
+/// Exact, stateless mappings. Protected middle segments support hold and loop;
+/// piecewise linear segments with equal `local` endpoints express authored
+/// hold (freeze) intervals. Reverse playback remains unsupported.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(try_from = "MapWire", into = "MapWire")]
 #[non_exhaustive]
@@ -27,7 +28,9 @@ pub struct LinearTimeMap {
     speed: Rational,
 }
 
-/// Validated strictly increasing control points; no extrapolation is performed.
+/// Validated control points: strictly increasing `parent` and non-decreasing
+/// `local`. Equal adjacent `local` values form a hold segment over which the
+/// mapped source time stays pinned. No extrapolation is performed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PiecewiseTimeMap {
     points: Vec<TimeMapPoint>,
@@ -77,8 +80,11 @@ impl TimeMap {
         Ok(Self::Linear(LinearTimeMap { offset, speed }))
     }
 
-    /// At least two points, in strictly increasing parent and local order.
-    /// The evaluation domain includes both the first and last control point.
+    /// At least two points, in strictly increasing parent order and
+    /// non-decreasing local order. Equal adjacent `local` values form a hold
+    /// (freeze) segment; a decreasing `local` edge is rejected with
+    /// `TimeMapError::UnsupportedMapSlope`. The evaluation domain includes
+    /// both the first and last control point.
     pub fn piecewise_linear(points: Vec<TimeMapPoint>) -> Result<Self, TimeError> {
         if points.len() < 2 {
             return Err(TimeError::TooFewMapPoints);
@@ -87,7 +93,7 @@ impl TimeMap {
             if pair[0].parent >= pair[1].parent {
                 return Err(TimeError::UnorderedMapPoints);
             }
-            if pair[0].local >= pair[1].local {
+            if pair[0].local > pair[1].local {
                 return Err(TimeError::UnsupportedMapSlope);
             }
         }
@@ -104,6 +110,9 @@ impl TimeMap {
         }
     }
     /// Exact inverse of the canonical monotone clock, including endpoints.
+    /// Piecewise maps are non-injective across a hold segment, so the inverse
+    /// is deterministic: a local value inside or on a hold resolves to the
+    /// hold segment's starting parent (the earliest parent mapping to it).
     pub fn inverse_canonical(&self, local: Time) -> Result<Time, TimeError> {
         match self {
             Self::Protected(_) => Ok(local),
@@ -195,6 +204,39 @@ impl LinearTimeMap {
 impl PiecewiseTimeMap {
     pub fn points(&self) -> &[TimeMapPoint] {
         &self.points
+    }
+
+    /// Segment index owning `parent`. A control point belongs to the segment
+    /// it starts; times before the first control point resolve to segment 0
+    /// and times past the last point to the final segment, matching the
+    /// constant-slope extension used by audio resampling.
+    fn segment_index(&self, parent: Time) -> usize {
+        let points = &self.points;
+        (points
+            .partition_point(|point| point.parent <= parent)
+            .saturating_sub(1))
+        .min(points.len() - 2)
+    }
+
+    /// Whether `parent` falls on a hold segment (zero source-time advance).
+    /// Construction guarantees at least two points, so `segment_index` never
+    /// underflows.
+    pub fn is_hold(&self, parent: Time) -> bool {
+        let segment = self.segment_index(parent);
+        self.points[segment].local == self.points[segment + 1].local
+    }
+
+    /// The rational source-time rate of the segment owning `parent`. A hold
+    /// segment reports zero; out-of-domain times use the extension rule from
+    /// `segment_index`.
+    pub fn slope_at(&self, parent: Time) -> Result<Rational, TimeError> {
+        let segment = self.segment_index(parent);
+        let left = &self.points[segment];
+        let right = &self.points[segment + 1];
+        right
+            .local
+            .checked_sub(left.local)?
+            .checked_div(right.parent.checked_sub(left.parent)?)
     }
 }
 

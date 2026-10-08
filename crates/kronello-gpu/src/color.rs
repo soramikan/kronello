@@ -399,6 +399,20 @@ pub fn apply_color(p: [f32; 4], effect: &kronello_render::PixelEffect) -> [f32; 
             let (h, s, l) = rgb_to_hsl(p[0], p[1], p[2]);
             hsl_to_rgb(h + hue_shift, s * saturation, l + lightness)
         }
+        // COLOR-003 (ADR-0113): the sample position is the straight working
+        // RGB; the result blends back into premultiplied space and preserves
+        // alpha. Domain-external values clamp inside `CubeLut::sample`.
+        PixelEffect::ColorLut { lut, intensity } => {
+            let straight = if p[3] > ALPHA_EPSILON {
+                [p[0] / p[3], p[1] / p[3], p[2] / p[3]]
+            } else {
+                [0.0; 3]
+            };
+            let mapped = lut.sample(straight);
+            let mixed: [f32; 3] =
+                std::array::from_fn(|i| straight[i] + (mapped[i] - straight[i]) * intensity);
+            [mixed[0] * p[3], mixed[1] * p[3], mixed[2] * p[3]]
+        }
         _ => unreachable!("not a pointwise color effect"),
     };
     [rgb[0], rgb[1], rgb[2], p[3]]

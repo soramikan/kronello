@@ -109,12 +109,14 @@ fn sequence(p: &mut Project, root: CompositionId, start: Time, end: Time) -> Seq
         timeline_range: r(start, end),
         source_in: t(1, 100),
         time_map: TimeMap::linear(Time::ZERO, Time::ONE).unwrap(),
+        enabled: true,
         audio_retime: AudioRetimePolicy::Reject,
         reverse_sampling: None,
         volume: Some(Box::new(volume(PropertySource::Constant(scalar(0.5))))),
         links: vec![],
         properties: vec![],
         effects: vec![],
+        masks: vec![],
         markers: vec![],
     };
     let s = Sequence {
@@ -132,6 +134,7 @@ fn sequence(p: &mut Project, root: CompositionId, start: Time, end: Time) -> Seq
         transitions: vec![],
         markers: vec![],
         work_area: None,
+        targets: None,
     };
     let id = s.id;
     p.sequences.push(DocumentObject::Known(s));

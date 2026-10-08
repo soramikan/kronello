@@ -3,8 +3,8 @@
 <!-- このファイルは scripts/backlog.py render が生成する。直接編集しない。正本は backlog.json。 -->
 
 - schema_version: 0.5
-- 更新日: 2026-10-07
-- タスク数: 140
+- 更新日: 2026-10-08
+- タスク数: 141
 
 ## 集計
 
@@ -17,7 +17,7 @@
 | M4 | 0 | 0 | 12 | 0 | 12 |
 | M5 | 0 | 1 | 12 | 0 | 13 |
 | M7 | 0 | 0 | 11 | 0 | 11 |
-| M8 | 15 | 0 | 0 | 0 | 15 |
+| M8 | 0 | 0 | 16 | 0 | 16 |
 | M9 | 12 | 0 | 0 | 0 | 12 |
 | M10 | 7 | 0 | 0 | 0 | 7 |
 | M11 | 14 | 0 | 0 | 0 | 14 |
@@ -892,7 +892,7 @@
 
 ### NLE-005 トラックロック・クリップ有効/無効・トラックターゲティング
 
-- 優先度: P1 / 領域: timeline / 状態: planned
+- 優先度: P1 / 領域: timeline / 状態: done
 - 依存: NLE-003
 - 受け入れ条件:
   - track lock・clip enable/disable・track targeting をモデルと共有 API に追加する
@@ -900,7 +900,7 @@
 
 ### NLE-006 可変リタイム（スピードランプ）と freeze frame/hold
 
-- 優先度: P1 / 領域: timeline / 状態: planned
+- 優先度: P1 / 領域: timeline / 状態: done
 - 依存: NLE-003
 - 受け入れ条件:
   - TimeMap の曲線化によるスピードランプと freeze frame/hold を実装する
@@ -908,7 +908,7 @@
 
 ### COLOR-003 LUT (.cube) の取り込み・検証・適用
 
-- 優先度: P1 / 領域: color / 状態: planned
+- 優先度: P1 / 領域: color / 状態: done
 - 依存: COLOR-002
 - 受け入れ条件:
   - .cube 3D LUT の取り込み・検証・作品内参照を実装する
@@ -916,7 +916,7 @@
 
 ### COLOR-004 スコープ: waveform/vectorscope/histogram/RGB parade と GUI パネル
 
-- 優先度: P1 / 領域: color / 状態: planned
+- 優先度: P1 / 領域: color / 状態: done
 - 依存: COLOR-002, GUI-010
 - 受け入れ条件:
   - waveform・vectorscope・histogram・RGB parade の生成を実装する
@@ -924,7 +924,7 @@
 
 ### FX-004 ベジェマスク: クリップ適用・フェザー・拡張・時間変化
 
-- 優先度: P1 / 領域: effects / 状態: planned
+- 優先度: P1 / 領域: effects / 状態: done
 - 依存: VEC-001, MATTE-001
 - 受け入れ条件:
   - ベジェマスクのクリップ適用・フェザー・拡張・時間変化をモデル化する
@@ -932,7 +932,7 @@
 
 ### FX-005 キーイング: chroma key/luma key とスピル抑制
 
-- 優先度: P1 / 領域: effects / 状態: planned
+- 優先度: P1 / 領域: effects / 状態: done
 - 依存: COLOR-002
 - 受け入れ条件:
   - chroma key・luma key を versioned effect として実装する
@@ -940,7 +940,7 @@
 
 ### FX-006 標準エフェクト拡張: glow/sharpen/vignette/warp 等
 
-- 優先度: P1 / 領域: effects / 状態: planned
+- 優先度: P1 / 領域: effects / 状態: done
 - 依存: FX-003
 - 受け入れ条件:
   - glow・sharpen・vignette・warp 等の標準エフェクトを versioned effect として追加する
@@ -948,7 +948,7 @@
 
 ### FX-007 アジャストメントクリップ: 下位レイヤーへのエフェクト一括適用
 
-- 優先度: P2 / 領域: timeline / 状態: planned
+- 優先度: P2 / 領域: timeline / 状態: done
 - 依存: FX-004
 - 受け入れ条件:
   - adjustment clip kind をモデル化し下位レイヤーへのエフェクト適用を実装する
@@ -956,7 +956,7 @@
 
 ### AUDIO-007 EQ/フィルタ系音声エフェクト: パラメトリックEQ・HPF/LPF
 
-- 優先度: P1 / 領域: audio / 状態: planned
+- 優先度: P1 / 領域: audio / 状態: done
 - 依存: AUDIO-003
 - 受け入れ条件:
   - パラメトリックEQ・HPF/LPF 等のフィルタ系音声エフェクトを実装する
@@ -964,7 +964,7 @@
 
 ### AUDIO-008 ダイナミクスと LUFS 計測・ノーマライズ
 
-- 優先度: P1 / 領域: audio / 状態: planned
+- 優先度: P1 / 領域: audio / 状態: done
 - 依存: AUDIO-007
 - 受け入れ条件:
   - compressor/limiter を音声エフェクトとして実装する
@@ -972,14 +972,14 @@
 
 ### AUDIO-009 音声 UI: VU メーター・オーディオスクラブ・ミキサーパネル
 
-- 優先度: P2 / 領域: audio / 状態: planned
+- 優先度: P2 / 領域: audio / 状態: done
 - 依存: AUDIO-006, GUI-008
 - 受け入れ条件:
   - VU メーター・オーディオスクラブ・ミキサーパネルを macOS GUI に実装する
 
 ### TRACK-001 モーショントラッキング: 点/平面トラッキングと結果の DataAsset 化
 
-- 優先度: P2 / 領域: tracking / 状態: planned
+- 優先度: P2 / 領域: tracking / 状態: done
 - 依存: COMP-002
 - 受け入れ条件:
   - 点/平面モーショントラッキングの解析を実装する
@@ -987,7 +987,7 @@
 
 ### VEC-006 テキスト拡張: テキストオンパスと文字単位アニメーター
 
-- 優先度: P1 / 領域: text / 状態: planned
+- 優先度: P1 / 領域: text / 状態: done
 - 依存: TEXT-002
 - 受け入れ条件:
   - テキストオンパスの描画と layout を実装する
@@ -995,7 +995,7 @@
 
 ### PROXY-001 プロキシワークフロー: プロキシ生成 job・編集時切替・relink
 
-- 優先度: P1 / 領域: media / 状態: planned
+- 優先度: P1 / 領域: media / 状態: done
 - 依存: MEDIA-002, JOB-001
 - 受け入れ条件:
   - プロキシ生成 job と編集時のプロキシ参照切替を実装する
@@ -1003,11 +1003,19 @@
 
 ### FLOW-001 ワークフロー UI: ショートカット設定・レイアウト・Undo 履歴パネル
 
-- 優先度: P2 / 領域: gui / 状態: planned
+- 優先度: P2 / 領域: gui / 状態: done
 - 依存: GUI-008
 - 受け入れ条件:
   - キーボードショートカットのカスタマイズを実装する
   - ワークスペースレイアウトの保存と Undo 履歴パネルを実装する
+
+### INTEGRATION-005 縦断デモ（M8 仕上げ検証）: リタイム+マスク+LUT+音声処理を含む作品
+
+- 優先度: P1 / 領域: integration / 状態: done
+- 依存: NLE-006, FX-004, FX-007, COLOR-003, AUDIO-008, PROXY-001
+- 受け入れ条件:
+  - 可変リタイム・freeze・マスク・アジャストメントクリップ・LUT・音声エフェクト・プロキシ切替を含む作品を CLI と MCP の両経路で生成する
+  - 書き出し結果の映像・音声・型付き拒否を受け入れ基準として検証する
 
 
 ## M9

@@ -1,6 +1,8 @@
 import SwiftUI
 
-/// A track header with neutral number, title, visibility or mute, and lock controls.
+/// A track header with neutral number, title, visibility or mute, lock and
+/// target controls. Targeting exists only on video and audio kinds; caption
+/// lanes render no target button.
 public struct KRTrackHeader: View {
     @Environment(\.krPalette) private var p
     public let number: String
@@ -9,19 +11,30 @@ public struct KRTrackHeader: View {
     public let selected: Bool
     public let hidden: Bool
     public let locked: Bool
+    public let targeted: Bool
     public let visibilityEnabled: Bool
+    /// AUDIO-009: per-block stereo (peak, rms) measured by the shared evaluator.
+    public let meter: (peak: Double, rms: Double)?
     private let visibility: () -> Void
     private let lock: () -> Void
+    private let target: () -> Void
     public init(_ number: String, _ name: String, kind: KRMediaKind, selected: Bool = false, hidden: Bool = false, locked: Bool = false,
-                visibilityEnabled: Bool = true, onVisibility: @escaping () -> Void = {}, onLock: @escaping () -> Void = {}) {
+                targeted: Bool = false, visibilityEnabled: Bool = true, meter: (peak: Double, rms: Double)? = nil,
+                onVisibility: @escaping () -> Void = {}, onLock: @escaping () -> Void = {}, onTarget: @escaping () -> Void = {}) {
         self.number = number; self.name = name; self.kind = kind; self.selected = selected; self.hidden = hidden; self.locked = locked
-        visibility = onVisibility; lock = onLock
-        self.visibilityEnabled = visibilityEnabled
+        self.targeted = targeted
+        visibility = onVisibility; lock = onLock; target = onTarget
+        self.visibilityEnabled = visibilityEnabled; self.meter = meter
     }
     public var body: some View {
         HStack(spacing: KRSpace.space1) {
             Text(number).krText(KRType.ruler).foregroundStyle(p.inkMuted)
             Text(name).krText(KRType.label).foregroundStyle(p.ink).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+            if kind == .video || kind == .audio {
+                KRButton(icon: .crosshair, accessibilityLabel: "ターゲットトラックを切り替える", pressed: targeted, iconSize: 12, action: target)
+                    .help("暗黙の編集先トラック")
+            }
+            if let meter, kind == .audio { KRMeterBar(peak: meter.peak, rms: meter.rms, height: 4).frame(width: 48) }
             KRButton(icon: kind == .audio ? (hidden ? .volumeX : .volume2) : (hidden ? .eyeOff : .eye),
                      accessibilityLabel: kind == .audio ? "ミュートを切り替える" : "表示を切り替える", pressed: hidden, iconSize: 12, action: visibility)
                 .disabled(!visibilityEnabled).help(visibilityEnabled ? "表示・ミュート" : "ロック中または実行中は切り替えられません")

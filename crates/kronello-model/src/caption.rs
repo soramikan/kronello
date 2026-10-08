@@ -582,6 +582,7 @@ impl ResolvedCaption {
             wrap_width: FiniteF64::new(wrap_width)?,
             line_height: FiniteF64::new(self.font_size * CAPTION_LINE_HEIGHT_RATIO)?,
             alignment: self.placement.anchor.alignment(),
+            path: None,
         };
         text.validate()?;
         Ok(text)

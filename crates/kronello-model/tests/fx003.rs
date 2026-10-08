@@ -30,11 +30,13 @@ fn clip(start: i64, end: i64) -> Clip {
         timeline_range: TimeRange::new(t(start, 1), t(end, 1)).unwrap(),
         source_in: Time::ZERO,
         time_map: TimeMap::linear(Time::ZERO, Rational::ONE).unwrap(),
+        enabled: true,
         audio_retime: Default::default(),
         reverse_sampling: None,
         volume: None,
         links: vec![],
         effects: vec![],
+        masks: vec![],
         markers: vec![],
         properties: vec![],
     }
@@ -59,6 +61,7 @@ fn overlapping_sequence() -> (Sequence, Project, ClipId, ClipId) {
         transitions: vec![],
         markers: vec![],
         work_area: None,
+        targets: None,
     };
     (sequence, Project::default(), outgoing.id, incoming.id)
 }

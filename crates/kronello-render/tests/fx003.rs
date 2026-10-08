@@ -20,11 +20,13 @@ fn clip(start_num: i64, start_den: i64, end_num: i64, end_den: i64, rgb: [f64; 3
         timeline_range: TimeRange::new(t(start_num, start_den), t(end_num, end_den)).unwrap(),
         source_in: Time::ZERO,
         time_map: TimeMap::linear(Time::ZERO, Rational::ONE).unwrap(),
+        enabled: true,
         audio_retime: Default::default(),
         reverse_sampling: None,
         volume: None,
         links: vec![],
         effects: vec![],
+        masks: vec![],
         markers: vec![],
         properties: vec![],
     }
@@ -63,6 +65,7 @@ fn project(
                 }],
                 markers: vec![],
                 work_area: None,
+                targets: None,
             })],
             ..Project::default()
         },

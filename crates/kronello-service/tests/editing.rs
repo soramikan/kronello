@@ -1392,6 +1392,12 @@ fn text002_shared_textset_selector_roundtrip_undo_and_stale_edit_rejection() {
         expected_text: text.text.clone(),
         offset: offset.id(),
         opacity: opacity.id(),
+        scale: None,
+        rotation: None,
+        fill: None,
+        mode: AnimatorMode::Step,
+        seed: None,
+        follow_smoothing: None,
     }];
     text.ruby = vec![RubyAssociation {
         base: TextRange {

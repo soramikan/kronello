@@ -30,18 +30,21 @@ fn fixture() -> (Project, SequenceId) {
                 timeline_range: TimeRange::new(Time::ZERO, Time::new(60, 1).unwrap()).unwrap(),
                 source_in: Time::new(1, 48000).unwrap(),
                 time_map: TimeMap::linear(Time::ZERO, Time::new(3, 2).unwrap()).unwrap(),
+                enabled: true,
                 audio_retime: AudioRetimePolicy::ResampleV1,
                 reverse_sampling: None,
                 volume: None,
                 links: vec![],
                 properties: vec![],
                 effects: vec![],
+                masks: vec![],
                 markers: vec![],
             }],
         }],
         transitions: vec![],
         markers: vec![],
         work_area: None,
+        targets: None,
     }));
     (project, sequence)
 }
@@ -138,6 +141,44 @@ fn prepared_blocks_match_export_evaluator_bits_and_remain_revision_pinned() {
     let mut repeated = [0.0; 256];
     prepared.render_block(1, &mut repeated).unwrap();
     assert_eq!(old.map(f32::to_bits), repeated.map(f32::to_bits));
+}
+#[test]
+fn metered_render_reports_per_track_and_master_levels() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("audio.kronello");
+    let (project, sequence) = fixture();
+    let service = Service::new(BackendSelection::CpuReference);
+    let rev = revision(service.execute(Request::ProjectCreate(CreateRequest {
+        project: path.clone(),
+        document: project,
+        plan_hash: None,
+        idempotency_key: None,
+    })));
+    let prepared = PreparedAudio::prepare(
+        &path,
+        kronello_service::RenderTarget::Sequence { sequence },
+        &rev,
+    )
+    .unwrap();
+    let mut block = vec![0.0; 8192];
+    let meters = prepared.render_block_metered(0, &mut block).unwrap();
+    // The shared render path: output matches render_block exactly.
+    let mut plain = vec![0.0; 8192];
+    prepared.render_block(0, &mut plain).unwrap();
+    assert_eq!(block, plain);
+    // One tone440 track: steady-state 0.25 amplitude reads back as the
+    // per-track and master levels for the same rendered block.
+    assert_eq!(meters.tracks.len(), 1);
+    for channel in 0..2 {
+        assert!(meters.tracks[0].peak[channel] > 0.24);
+        assert!(meters.tracks[0].peak[channel] <= 0.25 + 1e-6);
+        assert!((meters.tracks[0].rms[channel] - 0.25 / 2_f32.sqrt()).abs() < 0.01);
+        assert_eq!(meters.master_peak[channel], meters.tracks[0].peak[channel]);
+        assert_eq!(meters.master_rms[channel], meters.tracks[0].rms[channel]);
+    }
+    for mut output in [vec![], vec![1.0], vec![1.0; 8194]] {
+        assert!(prepared.render_block_metered(0, &mut output).is_err());
+    }
 }
 #[test]
 fn playback_bounds_errors_and_absent_audio_are_explicit() {

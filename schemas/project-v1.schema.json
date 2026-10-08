@@ -36,7 +36,7 @@
     "expression_data_assets": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject11"
+        "$ref": "#/$defs/DocumentObject12"
       }
     },
     "expressions": {
@@ -52,16 +52,23 @@
     "mattes": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject13"
+        "$ref": "#/$defs/DocumentObject14"
       }
     },
     "name": {
       "type": "string"
     },
+    "proxies": {
+      "description": "Original → preview-proxy linkage (ADR-0119); never affects authored\nmedia identity or export resolution.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ProxyLink"
+      }
+    },
     "repeaters": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject14"
+        "$ref": "#/$defs/DocumentObject15"
       }
     },
     "schema_version": {
@@ -78,7 +85,7 @@
     "sequences": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject12"
+        "$ref": "#/$defs/DocumentObject13"
       }
     },
     "shapes": {
@@ -90,7 +97,7 @@
     "simulations": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject15"
+        "$ref": "#/$defs/DocumentObject16"
       }
     },
     "template_instances": {
@@ -109,6 +116,12 @@
       "type": "array",
       "items": {
         "$ref": "#/$defs/DocumentObject5"
+      }
+    },
+    "tracking_data_assets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DocumentObject11"
       }
     }
   },
@@ -150,6 +163,16 @@
         "value_type",
         "keys",
         "interpolation_version"
+      ]
+    },
+    "AnimatorMode": {
+      "description": "Per-animation-unit value distribution. `step` applies the evaluated value\nunchanged, `ramp` blends linearly over the selected units in reading order,\n`follow` keeps the first selected unit at full effect and trails later units\nby `follow_smoothing`, and `random` draws a stable seeded factor per unit.",
+      "type": "string",
+      "enum": [
+        "step",
+        "ramp",
+        "follow",
+        "random"
       ]
     },
     "Asset": {
@@ -712,11 +735,67 @@
           "description": "Exact unnormalized source captured when the selector is authored.",
           "type": "string"
         },
+        "fill": {
+          "description": "Straight Color per-unit fill override.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PropertyId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "follow_smoothing": {
+          "description": "Scalar in [0, 1], dimensionless; required when `mode` is `follow`.\n0.0 delegates to `step`; larger values trail later units more.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PropertyId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mode": {
+          "$ref": "#/$defs/AnimatorMode"
+        },
         "offset": {
           "$ref": "#/$defs/PropertyId"
         },
         "opacity": {
           "$ref": "#/$defs/PropertyId"
+        },
+        "rotation": {
+          "description": "Angle per-unit rotation in degrees about the glyph anchor.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PropertyId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scale": {
+          "description": "Vec2 per-unit scale factors, dimensionless; 1.0 is neutral.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PropertyId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "seed": {
+          "description": "Fixed seed for `random`; absent seeds still hash to stable factors.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
         },
         "source": {
           "$ref": "#/$defs/TextRange"
@@ -744,6 +823,10 @@
             "$ref": "#/$defs/Effect"
           }
         },
+        "enabled": {
+          "description": "Authored contribution switch. Disabled clips keep their timeline\noccupancy, links and metadata but are excluded from evaluation, video\ncompositing, audio mixing, captions and transitions. Serialized only\nwhen off so documents written before NLE-005 roundtrip unchanged.",
+          "type": "boolean"
+        },
         "id": {
           "$ref": "#/$defs/ClipId"
         },
@@ -759,6 +842,13 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/Marker"
+          }
+        },
+        "masks": {
+          "description": "FX-004 clip-local Bezier mask stack (ADR-0114). Masks multiply clip\nalpha after content drawing and before `effects`; empty on old documents.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Mask"
           }
         },
         "properties": {
@@ -1119,7 +1209,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/ExpressionDataAsset"
+          "$ref": "#/$defs/TrackingDataAsset"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -1130,7 +1220,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/Sequence"
+          "$ref": "#/$defs/ExpressionDataAsset"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -1141,7 +1231,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/MatteRelation"
+          "$ref": "#/$defs/Sequence"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -1152,7 +1242,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/Repeater"
+          "$ref": "#/$defs/MatteRelation"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -1160,6 +1250,17 @@
       ]
     },
     "DocumentObject15": {
+      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Repeater"
+        },
+        {
+          "$ref": "#/$defs/OpaqueObject"
+        }
+      ]
+    },
+    "DocumentObject16": {
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
@@ -1374,6 +1475,124 @@
           ]
         },
         {
+          "description": "AUDIO-007 parametric EQ. `bands` references a data table property\nwith `kind` (peak | low_shelf | high_shelf), `freq_hz`, `gain_db`\nand `q` columns and 1..=AUDIO_EQ_MAX_BANDS rows.",
+          "type": "object",
+          "properties": {
+            "bands": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "audio_eq"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "bands"
+          ]
+        },
+        {
+          "description": "AUDIO-007 Butterworth high-pass; `order` is 1..=AUDIO_FILTER_MAX_ORDER.",
+          "type": "object",
+          "properties": {
+            "cutoff_hz": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "audio_hpf"
+            },
+            "order": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "cutoff_hz",
+            "order"
+          ]
+        },
+        {
+          "description": "AUDIO-007 Butterworth low-pass; `order` is 1..=AUDIO_FILTER_MAX_ORDER.",
+          "type": "object",
+          "properties": {
+            "cutoff_hz": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "audio_lpf"
+            },
+            "order": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "cutoff_hz",
+            "order"
+          ]
+        },
+        {
+          "description": "AUDIO-008 stereo-linked feed-forward peak compressor.",
+          "type": "object",
+          "properties": {
+            "attack_ms": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "audio_compressor"
+            },
+            "makeup_db": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "ratio": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "release_ms": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "threshold_db": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "threshold_db",
+            "ratio",
+            "attack_ms",
+            "release_ms",
+            "makeup_db"
+          ]
+        },
+        {
+          "description": "AUDIO-008 ceiling limiter with instant attack and release.",
+          "type": "object",
+          "properties": {
+            "ceiling_db": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "audio_limiter"
+            },
+            "release_ms": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "ceiling_db",
+            "release_ms"
+          ]
+        },
+        {
           "description": "COLOR-002 exposure: premultiplied working RGB is scaled by\n2^exposure and shifted by offset; alpha is preserved (ADR-0108).",
           "type": "object",
           "properties": {
@@ -1477,6 +1696,218 @@
             "hue_shift",
             "saturation",
             "lightness"
+          ]
+        },
+        {
+          "description": "FX-005 chroma key (ADR-0115): alpha = keyed Cb/Cr matte, then edge\nshrink/feather adjust the matte and `spill` suppresses the key hue.",
+          "type": "object",
+          "properties": {
+            "edge_feather": {
+              "description": "Matte Gaussian feather sigma in design_px.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "edge_shrink": {
+              "description": "Matte erosion radius in design_px.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "key_color": {
+              "description": "Screen color being removed.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "chroma_key"
+            },
+            "similarity": {
+              "description": "Cb/Cr distance that maps to full transparency; 0..=1.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "spill": {
+              "description": "Spill suppression amount; 0..=1.",
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "key_color",
+            "similarity",
+            "edge_shrink",
+            "edge_feather",
+            "spill"
+          ]
+        },
+        {
+          "description": "FX-005 luma key (ADR-0115): working-space luminance distance drives\nthe alpha matte, then edge shrink/feather adjust it.",
+          "type": "object",
+          "properties": {
+            "edge_feather": {
+              "description": "Matte Gaussian feather sigma in design_px.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "edge_shrink": {
+              "description": "Matte erosion radius in design_px.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "key_luma": {
+              "description": "Straight-color luminance that becomes fully transparent; 0..=1.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "luma_key"
+            },
+            "tolerance": {
+              "description": "Luminance distance that maps to full opacity; 0..=1.",
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "key_luma",
+            "tolerance",
+            "edge_shrink",
+            "edge_feather"
+          ]
+        },
+        {
+          "description": "FX-006 glow (ADR-0115): straight luminance above `threshold` is\nextracted, blurred by a Gaussian of sigma `radius`, and added back.",
+          "type": "object",
+          "properties": {
+            "intensity": {
+              "description": "Additive contribution of the blurred bloom; nonnegative scalar.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "glow"
+            },
+            "radius": {
+              "description": "Gaussian sigma in design_px.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "threshold": {
+              "description": "Straight luminance cutoff; nonnegative scalar.",
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "threshold",
+            "radius",
+            "intensity"
+          ]
+        },
+        {
+          "description": "FX-006 unsharp mask (ADR-0115): out = source + amount * (source -\nblur(source)); the alpha channel participates and stays in [0,1].",
+          "type": "object",
+          "properties": {
+            "amount": {
+              "description": "Unsharp strength; nonnegative scalar.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "sharpen"
+            },
+            "radius": {
+              "description": "Gaussian sigma in design_px.",
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "amount",
+            "radius"
+          ]
+        },
+        {
+          "description": "FX-006 vignette (ADR-0115): darkens RGB toward the image corners;\nalpha is preserved.",
+          "type": "object",
+          "properties": {
+            "amount": {
+              "description": "Maximum darkening factor; 0..=1.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "feather": {
+              "description": "Smoothstep width of the falloff; nonnegative scalar.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "vignette"
+            },
+            "midpoint": {
+              "description": "Normalized distance where darkening starts; 0..=1.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "roundness": {
+              "description": "Rectangle-to-ellipse shape blend; 0..=1.",
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "amount",
+            "midpoint",
+            "feather",
+            "roundness"
+          ]
+        },
+        {
+          "description": "FX-006 corner pin (ADR-0115): the four corners of the incoming\nsurface's bounds are moved to these absolute Composition design_px\npositions, in order top-left, top-right, bottom-right, bottom-left.",
+          "type": "object",
+          "properties": {
+            "bottom_left": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "bottom_right": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "corner_pin"
+            },
+            "top_left": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "top_right": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "top_left",
+            "top_right",
+            "bottom_right",
+            "bottom_left"
+          ]
+        },
+        {
+          "description": "COLOR-003 3D `.cube` LUT (ADR-0113). `lut` references an\n`AssetKind::Data` asset whose content bytes parse as a normalized\n`CubeLut`; the document stores the reference, never expanded bytes.\n`intensity` blends identity into the sampled output on 0..=1. Alpha is\npreserved and the authored stack order is honored.",
+          "type": "object",
+          "properties": {
+            "intensity": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "color_lut"
+            },
+            "lut": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "lut",
+            "intensity"
           ]
         }
       ]
@@ -2672,6 +3103,68 @@
       "type": "string",
       "format": "uuid"
     },
+    "Mask": {
+      "description": "One authored mask row. Every parameter is a Property reference so paths and\nscalars share the existing constant/curve/expression evaluation, evaluated\nin sequence time on the clip's lowered node.",
+      "type": "object",
+      "properties": {
+        "closed": {
+          "description": "Authored path closure. `closed` masks offset as rings; open masks offset\nas open chains. Fill coverage itself always closes subpaths.",
+          "type": "boolean",
+          "default": true
+        },
+        "expansion": {
+          "description": "Outward (positive) or inward (negative) path offset in clip-local\ndesign_px.",
+          "$ref": "#/$defs/PropertyId"
+        },
+        "feather": {
+          "description": "Edge blur sigma in clip-local design_px; nonnegative scalar.",
+          "$ref": "#/$defs/PropertyId"
+        },
+        "id": {
+          "$ref": "#/$defs/MaskId"
+        },
+        "invert": {
+          "description": "Inverts this mask's own coverage before the mode combine.",
+          "type": "boolean",
+          "default": false
+        },
+        "mode": {
+          "$ref": "#/$defs/MaskMode"
+        },
+        "opacity": {
+          "description": "Coverage multiplier in [0,1].",
+          "$ref": "#/$defs/PropertyId"
+        },
+        "path": {
+          "description": "Bezier path in clip-local design_px; `ValueType::Path` property.",
+          "$ref": "#/$defs/PropertyId"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "path",
+        "mode",
+        "feather",
+        "expansion",
+        "opacity"
+      ]
+    },
+    "MaskId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "MaskMode": {
+      "description": "Stack combine order is authored order; coverage composes over the clip's\naccumulated alpha. `Add` unions coverage, `Subtract` removes it, `Intersect`\nkeeps the overlap, and `Difference` keeps the symmetric difference.",
+      "type": "string",
+      "enum": [
+        "add",
+        "subtract",
+        "intersect",
+        "difference"
+      ]
+    },
     "MatteRelation": {
       "type": "object",
       "properties": {
@@ -3324,6 +3817,80 @@
         "loop"
       ]
     },
+    "ProxyLink": {
+      "type": "object",
+      "properties": {
+        "height": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "job": {
+          "description": "Originating `proxy.generate` job id, when produced by a job.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "original": {
+          "description": "Authored media identity; unique across `Project::proxies`.",
+          "$ref": "#/$defs/AssetId"
+        },
+        "original_stream_index": {
+          "description": "Source stream that was transcoded.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "proxy": {
+          "description": "The proxy asset; unique across `Project::proxies` and `assets` entries\nare still independent (a proxy asset may serve exactly one original).",
+          "$ref": "#/$defs/AssetId"
+        },
+        "proxy_stream_index": {
+          "description": "Video stream index inside the proxy asset.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "scale": {
+          "description": "Linear scale applied to source dimensions.",
+          "$ref": "#/$defs/FiniteF64"
+        },
+        "source_content_hash": {
+          "description": "Locked `Asset::content_hash` of the original at registration time.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "source_duration": {
+          "description": "Locked duration of the original stream, used for duration checks.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rational"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "width": {
+          "description": "Proxy pixel dimensions (rounded to the encoder's even constraint).",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "original",
+        "proxy",
+        "original_stream_index",
+        "proxy_stream_index",
+        "scale",
+        "width",
+        "height",
+        "source_content_hash"
+      ]
+    },
     "Rational": {
       "type": "object",
       "properties": {
@@ -3587,6 +4154,17 @@
           "items": {
             "$ref": "#/$defs/Marker"
           }
+        },
+        "targets": {
+          "description": "Implicit destination tracks for edits that take no explicit track, one\nper kind. Referenced tracks must exist and match the entry's kind.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TargetTracks"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "tracks": {
           "description": "Authored bottom-to-top compositing order.",
@@ -3933,6 +4511,20 @@
             "kind",
             "caption"
           ]
+        },
+        {
+          "description": "FX-007 (ADR-0116): no payload; the clip applies `effects` to the\ncomposited lower video tracks across its timeline range.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "adjustment"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
         }
       ]
     },
@@ -4117,6 +4709,33 @@
         "dash_array",
         "dash_offset"
       ]
+    },
+    "TargetTracks": {
+      "description": "Per-kind implicit edit destinations. A present entry must reference an\nexisting track of the matching kind; absent means untargeted.",
+      "type": "object",
+      "properties": {
+        "audio": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TrackId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "video": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TrackId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
     },
     "TemplateBandBinding": {
       "type": "object",
@@ -4576,6 +5195,17 @@
           "description": "Absolute baseline spacing in design_px, not a font-size multiplier.",
           "$ref": "#/$defs/PropertyId"
         },
+        "path": {
+          "description": "Optional `ValueType::Path` Property whose bezier guides glyph baselines.\nWith a path, `alignment` anchors along path arc length instead of the\nwrap box; glyphs past the path end are dropped, not errors.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PropertyId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "ruby": {
           "type": "array",
           "items": {
@@ -4693,7 +5323,7 @@
       ]
     },
     "TimeMap": {
-      "description": "Exact, stateless mappings. Protected middle segments support hold and loop.\nReverse and general nonlinear playback remain unsupported.",
+      "description": "Exact, stateless mappings. Protected middle segments support hold and loop;\npiecewise linear segments with equal `local` endpoints express authored\nhold (freeze) intervals. Reverse playback remains unsupported.",
       "oneOf": [
         {
           "type": "object",
@@ -4860,9 +5490,14 @@
       ]
     },
     "TrackState": {
-      "description": "Authored output switches, independent of GUI selection or editing locks.",
+      "description": "Authored output switches plus the editing lock; `locked` defaults to off so\ndocuments written before NLE-005 stay unlocked.",
       "type": "object",
       "properties": {
+        "locked": {
+          "description": "Editing lock: mutations that would change this track or its clips are\nrejected during planning with `TRACK_LOCKED`.",
+          "type": "boolean",
+          "default": false
+        },
         "muted": {
           "type": "boolean"
         },
@@ -4874,6 +5509,187 @@
       "required": [
         "visible",
         "muted"
+      ]
+    },
+    "TrackedFrame": {
+      "type": "object",
+      "properties": {
+        "homography": {
+          "description": "Plane mode: row-major homography from first-frame normalized\ncoordinates onto this frame's normalized coordinates.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/FiniteF64"
+          },
+          "maxItems": 9,
+          "minItems": 9
+        },
+        "points": {
+          "description": "One entry per seed (points) or per corner (plane).",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TrackedPoint"
+          }
+        },
+        "time": {
+          "description": "Exact rational source presentation time of the sampled frame.",
+          "$ref": "#/$defs/Rational"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "time",
+        "points"
+      ]
+    },
+    "TrackedPoint": {
+      "type": "object",
+      "properties": {
+        "confidence": {
+          "description": "Normalized cross-correlation score in `[-1, 1]`.",
+          "$ref": "#/$defs/FiniteF64"
+        },
+        "x": {
+          "description": "Normalized source-space match center in `[0, 1]` on both axes.",
+          "$ref": "#/$defs/FiniteF64"
+        },
+        "y": {
+          "$ref": "#/$defs/FiniteF64"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y",
+        "confidence"
+      ]
+    },
+    "TrackingDataAsset": {
+      "type": "object",
+      "properties": {
+        "content_hash": {
+          "description": "SHA-256 over the versioned payload; recomputed on validation.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "frames": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TrackedFrame"
+          }
+        },
+        "id": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "mode": {
+          "$ref": "#/$defs/TrackingMode"
+        },
+        "range": {
+          "description": "Analyzed source-time interval `[start, end)`.",
+          "$ref": "#/$defs/TimeRange"
+        },
+        "sample_rate": {
+          "description": "Nominal sample cadence of `frames` rows in source seconds^-1.",
+          "$ref": "#/$defs/Rational"
+        },
+        "seeds": {
+          "description": "Seeds in stable order; plane mode stores the four corners.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TrackingSeed"
+          }
+        },
+        "source": {
+          "$ref": "#/$defs/TrackingSource"
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "source",
+        "mode",
+        "seeds",
+        "range",
+        "sample_rate",
+        "frames",
+        "content_hash"
+      ]
+    },
+    "TrackingMode": {
+      "oneOf": [
+        {
+          "description": "One or more independent template-match points.",
+          "type": "string",
+          "const": "points"
+        },
+        {
+          "description": "Four tracked corners reduced to a per-frame homography.",
+          "type": "string",
+          "const": "plane"
+        }
+      ]
+    },
+    "TrackingSeed": {
+      "type": "object",
+      "properties": {
+        "search_radius": {
+          "description": "Per-frame search half extent around the previous position.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "template_radius": {
+          "description": "Match-template half extent in source pixels.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "x": {
+          "description": "Normalized source-space seed center in `[0, 1]` on both axes.",
+          "$ref": "#/$defs/FiniteF64"
+        },
+        "y": {
+          "$ref": "#/$defs/FiniteF64"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y",
+        "template_radius",
+        "search_radius"
+      ]
+    },
+    "TrackingSource": {
+      "type": "object",
+      "properties": {
+        "asset": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "content_hash": {
+          "description": "Locked `Asset::content_hash`; mismatches mark the result stale.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "stream_index": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "asset",
+        "stream_index",
+        "content_hash"
       ]
     },
     "Transition": {

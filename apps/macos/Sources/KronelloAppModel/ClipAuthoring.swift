@@ -2,16 +2,19 @@ import Foundation
 
 extension EditorModel {
     public func setTrackOutput(_ track: [String: Any]) {
-        guard !ui.locked.contains(track.string("id")) else { return }
-        var state = track.object("state")
+        guard !trackLocked(track.string("id")) else { return }
+        let state = track.object("state")
         let visible = state["visible"] as? Bool ?? true
         let muted = state["muted"] as? Bool ?? false
-        state = ["visible": track.string("kind") == "audio" ? visible : !visible,
-                 "muted": track.string("kind") == "audio" ? !muted : muted]
-        submit([timelineCommand("track_state_set", ["sequence": sequence.string("id"), "track": track.string("id"), "state": state])], label: "トラックの出力変更")
+        // TrackStateSet replaces the whole state, so the persisted lock flag
+        // must be re-emitted or toggling visibility would silently unlock.
+        submit([timelineCommand("track_state_set", ["sequence": sequence.string("id"), "track": track.string("id"), "state": [
+            "visible": track.string("kind") == "audio" ? visible : !visible,
+            "muted": track.string("kind") == "audio" ? !muted : muted,
+            "locked": state["locked"] as? Bool ?? false]])], label: "トラックの出力変更")
     }
     public func setClipTime(_ clip: EditClip, sourceIn: RationalTime? = nil, speedPercent: Double? = nil, base: String? = nil) {
-        guard !ui.locked.contains(clip.track) else { return }
+        guard !trackLocked(clip.track) else { return }
         var map = clip.authored.object("time_map")
         if let percent = speedPercent {
             guard percent.isFinite, percent > 0, percent <= 10000, map.string("kind") == "linear" else {
@@ -26,7 +29,7 @@ extension EditorModel {
             "audio_retime": clip.reversed ? "reverse_resample_v1" : "resample_v1", "reverse_sampling": clip.authored["reverse_sampling"] ?? NSNull()])], label: "クリップの時間設定", base: base)
     }
     public func replaceClipEffects(_ clip: EditClip, properties: [[String: Any]], effects: [[String: Any]], label: String, base: String? = nil) {
-        guard !ui.locked.contains(clip.track) else { return }
+        guard !trackLocked(clip.track) else { return }
         submit([timelineCommand("clip_set_effects", ["sequence": sequence.string("id"), "clip": clip.id, "properties": properties, "effects": effects])], label: label, base: base)
     }
     public func setClipProperty(_ clip: EditClip, key: String, kind: String, value: Any, base: String? = nil) {
@@ -66,10 +69,57 @@ extension EditorModel {
             ("hue_shift", "hue_shift", "angle", 0.0),
             ("saturation", "saturation", "scalar", 1.0),
             ("lightness", "lightness", "scalar", 0.0)]),
+        // COLOR-003: listed so existing LUT effects enumerate uniformly, but
+        // `addClipEffect` cannot create one — the `lut` parameter must point at
+        // a real Data asset, so `addClipLutEffect` requires the asset id.
+        .init(kind: "color_lut", effectID: EditorModel.lutEffectID, parameters: []),
     ]
     public static let curveTableDefault: [String: Any] = ["columns": ["x": "scalar", "y": "scalar"],
         "rows": [["x": ["kind": "scalar", "value": 0.0], "y": ["kind": "scalar", "value": 0.0]],
                  ["x": ["kind": "scalar", "value": 1.0], "y": ["kind": "scalar", "value": 1.0]]]]
+    /// FX-005/FX-006 clip effect specs (ADR-0115). These reuse the generic
+    /// (kind, effect id, parameter defaults) shape; `corner_pin` is excluded
+    /// because its identity quad depends on the sequence extent and is built
+    /// in `addClipEffect`.
+    public static let standardEffects: [ColorEffectSpec] = [
+        .init(kind: "chroma_key", effectID: "kronello.keying.chroma", parameters: [
+            ("key_color", "key_color", "color", ["space": "srgb", "components": ["r": 0.0, "g": 177.0 / 255.0, "b": 64.0 / 255.0, "alpha": 1.0]]),
+            ("similarity", "similarity", "scalar", 0.4),
+            ("edge_shrink", "edge_shrink", "scalar", 0.0),
+            ("edge_feather", "edge_feather", "scalar", 0.0),
+            ("spill", "spill", "scalar", 0.5)]),
+        .init(kind: "luma_key", effectID: "kronello.keying.luma", parameters: [
+            ("key_luma", "key_luma", "scalar", 0.0),
+            ("tolerance", "tolerance", "scalar", 0.1),
+            ("edge_shrink", "edge_shrink", "scalar", 0.0),
+            ("edge_feather", "edge_feather", "scalar", 0.0)]),
+        .init(kind: "glow", effectID: "kronello.glow", parameters: [
+            ("threshold", "threshold", "scalar", 0.8),
+            ("radius", "radius", "scalar", 8.0),
+            ("intensity", "intensity", "scalar", 1.0)]),
+        .init(kind: "sharpen", effectID: "kronello.sharpen", parameters: [
+            ("amount", "amount", "scalar", 0.5),
+            ("radius", "radius", "scalar", 4.0)]),
+        .init(kind: "vignette", effectID: "kronello.vignette", parameters: [
+            ("amount", "amount", "scalar", 0.5),
+            ("midpoint", "midpoint", "scalar", 0.5),
+            ("feather", "feather", "scalar", 0.5),
+            ("roundness", "roundness", "scalar", 0.5)]),
+    ]
+    /// Effect definitions on a clip that belong to the FX-005/FX-006 set.
+    public static func standardEffectSpecs(on clip: EditClip) -> [(index: Int, spec: ColorEffectSpec, effect: [String: Any])] {
+        clip.authored.objects("effects").enumerated().compactMap { index, effect in
+            guard let spec = standardEffects.first(where: { $0.effectID == effect.string("effect_id") }) else { return nil }
+            return (index, spec, effect)
+        }
+    }
+    /// sRGB display components [r, g, b, a] behind a color effect parameter.
+    public static func colorParameterColor(_ clip: EditClip, effect: [String: Any], parameter: String) -> [Double]? {
+        guard let id = effect.object("parameters")[parameter] as? String,
+              let property = clip.authored.objects("properties").first(where: { $0.string("id") == id }),
+              property.object("source").string("kind") == "constant" else { return nil }
+        return srgbComponents(property.object("source").object("value"))
+    }
     /// Effect definitions on a clip that belong to the COLOR-002 set.
     public static func colorEffectSpecs(on clip: EditClip) -> [(index: Int, spec: ColorEffectSpec, effect: [String: Any])] {
         clip.authored.objects("effects").enumerated().compactMap { index, effect in
@@ -106,8 +156,22 @@ extension EditorModel {
         case "shadow":
             id = "kronello.drop_shadow"; version = 2
             parameters = ["kind": "drop_shadow", "sigma": property("kronello.effect.sigma", "scalar", 8.0), "offset": property("kronello.effect.offset", "vec2", [8.0, 8.0]), "color": property("kronello.effect.color", "color", ["space": "srgb", "components": ["r": 0.0, "g": 0.0, "b": 0.0, "alpha": 1.0]]), "opacity": property("kronello.effect.opacity", "scalar", 0.5)]
-        case let name where Self.colorEffects.contains(where: { $0.kind == name || $0.effectID == name }):
-            guard let spec = Self.colorEffects.first(where: { $0.kind == name || $0.effectID == name }) else { return }
+        case "corner_pin":
+            id = "kronello.corner_pin"; version = 1
+            // Identity quad over the sequence extent keeps the clip visually
+            // unchanged at insertion (ADR-0115).
+            let w = extent.width, h = extent.height
+            parameters = ["kind": "corner_pin",
+                "top_left": property("kronello.effect.top_left", "vec2", [0.0, 0.0]),
+                "top_right": property("kronello.effect.top_right", "vec2", [w, 0.0]),
+                "bottom_right": property("kronello.effect.bottom_right", "vec2", [w, h]),
+                "bottom_left": property("kronello.effect.bottom_left", "vec2", [0.0, h])]
+        case "color_lut", Self.lutEffectID:
+            // A LUT effect without a bound Data asset cannot render; creation
+            // goes through `addClipLutEffect` which takes the asset id.
+            return
+        case let name where (Self.colorEffects + Self.standardEffects).contains(where: { $0.kind == name || $0.effectID == name }):
+            guard let spec = (Self.colorEffects + Self.standardEffects).first(where: { $0.kind == name || $0.effectID == name }) else { return }
             var parameterIDs: [String: Any] = ["kind": spec.kind]
             for (field, suffix, type, value) in spec.parameters {
                 parameterIDs[field] = property("kronello.effect." + suffix, type, value)
@@ -123,7 +187,7 @@ extension EditorModel {
     /// effect parameter. Animated or expression-backed parameters keep their
     /// authored source and reject the edit with a typed error.
     public func setClipEffectParameter(_ clip: EditClip, effect: [String: Any], parameter: String, kind: String, value: Any, base: String? = nil) {
-        guard !ui.locked.contains(clip.track), clip.kind != .audio,
+        guard !trackLocked(clip.track), clip.kind != .audio,
               let propertyID = effect.object("parameters")[parameter] as? String else { return }
         var properties = clip.authored.objects("properties")
         guard let index = properties.firstIndex(where: { $0.string("id") == propertyID }) else { return }
@@ -164,6 +228,65 @@ extension EditorModel {
         // Referenced properties stay authored, preserving possible animation and future reuse.
         replaceClipEffects(clip, properties: clip.authored.objects("properties"), effects: effects, label: "クリップ効果の削除")
     }
+    /// COLOR-003 (ADR-0113): `kronello.color.lut` binds a `.cube` Data asset.
+    public static let lutEffectID = "kronello.color.lut"
+    /// Imported `.cube` assets (kind `data`); the LUT picker lists these.
+    public var lutAssets: [(id: String, name: String)] {
+        document.objects("assets").compactMap { asset in
+            guard asset.string("kind") == "data" else { return nil }
+            let locator = asset.object("locator")
+            let name = URL(fileURLWithPath: locator.string("relative").isEmpty
+                ? locator.string("absolute") : locator.string("relative")).lastPathComponent
+            return (asset.string("id"), name)
+        }
+    }
+    /// Hash → file inputs for every imported `.cube` Data asset, resolved
+    /// against the project directory (the RenderInput `luts` convention).
+    public var lutInputs: [[String: Any]] {
+        let base = URL(fileURLWithPath: path).deletingLastPathComponent()
+        return document.objects("assets").compactMap { asset in
+            guard asset.string("kind") == "data" else { return nil }
+            let locator = asset.object("locator")
+            let relative = locator.string("relative")
+            let file = relative.isEmpty ? locator.string("absolute")
+                : base.appendingPathComponent(relative).path
+            guard !file.isEmpty else { return nil }
+            return ["hash": asset.string("content_hash"), "path": file]
+        }
+    }
+    /// Asset id bound to the `lut` parameter through a constant asset_ref.
+    public static func lutParameterAsset(_ clip: EditClip, effect: [String: Any]) -> String? {
+        guard let id = effect.object("parameters")["lut"] as? String,
+              let property = clip.authored.objects("properties").first(where: { $0.string("id") == id }),
+              property.object("source").string("kind") == "constant" else { return nil }
+        return property.object("source").object("value")["value"] as? String
+    }
+    /// Add the versioned LUT effect bound to an imported Data asset at full
+    /// intensity; plain `addClipEffect` rejects `color_lut` on purpose.
+    public func addClipLutEffect(_ clip: EditClip, asset: String) {
+        guard !ui.locked.contains(clip.track), clip.kind != .audio, !asset.isEmpty else { return }
+        var properties = clip.authored.objects("properties"), effects = clip.authored.objects("effects")
+        func property(_ key: String, _ type: String, _ value: Any) -> String {
+            let id = UUID().uuidString
+            properties.append(["id": id, "descriptor": ["key": key, "version": 1], "source": ["kind": "constant", "value": ["kind": type, "value": value]], "modifiers": []]); return id
+        }
+        effects.append(["effect_id": Self.lutEffectID, "version": 1,
+            "parameters": ["kind": "color_lut",
+                "lut": property("kronello.effect.lut", "asset_ref", asset),
+                "intensity": property("kronello.effect.intensity", "scalar", 1.0)]])
+        replaceClipEffects(clip, properties: properties, effects: effects, label: "LUT の追加")
+    }
+    /// Import a `.cube` file as an external `data` asset pinned by content
+    /// hash; the service validates the lattice before the edit commits.
+    public func importLut(path: String) async {
+        guard !busy else { return }
+        do {
+            _ = try await request("lut.import", ["base_revision": revision, "path": path,
+                "asset": UUID().uuidString.lowercased(), "session_id": sessionID,
+                "idempotency_key": UUID().uuidString])
+            try await reload()
+        } catch { mapFailure(error) }
+    }
     /// Constant [x, y] behind a vec2 effect parameter reference.
     public static func vec2ParameterValue(_ clip: EditClip, effect: [String: Any], parameter: String) -> [Double]? {
         guard let id = effect.object("parameters")[parameter] as? String,
@@ -176,7 +299,7 @@ extension EditorModel {
     /// Clip gain Property (`kronello.audio.volume`, nonnegative linear
     /// scalar). Passing nil clears the authored volume back to unity.
     public func setClipVolume(_ clip: EditClip, value: Double?, base: String? = nil) {
-        guard !ui.locked.contains(clip.track), clip.kind == .audio else { return }
+        guard !trackLocked(clip.track), clip.kind == .audio else { return }
         let volume: Any = value.map { v -> [String: Any] in
             ["id": UUID().uuidString, "descriptor": ["key": "kronello.audio.volume", "version": 1],
              "source": ["kind": "constant", "value": ["kind": "scalar", "value": v]], "modifiers": []]
@@ -188,6 +311,33 @@ extension EditorModel {
         guard let property = clip.authored["volume"] as? [String: Any],
               property.object("source").string("kind") == "constant" else { return 1.0 }
         return property.object("source").object("value").number("value")
+    }
+    /// AUDIO-009 mixer fader: one undoable edit writes the same linear gain
+    /// into every clip's `kronello.audio.volume` on the track. The authored
+    /// model has no track-level gain field, so the shared clip Property is
+    /// the gain the evaluator and export path already understand.
+    public func setTrackVolume(_ track: [String: Any], gain: Double, base: String? = nil) {
+        guard !ui.locked.contains(track.string("id")), track.string("kind") == "audio",
+              gain.isFinite, gain >= 0 else { return }
+        var commands: [[String: Any]] = []
+        for clip in track.objects("clips") {
+            let volume: [String: Any] = ["id": UUID().uuidString, "descriptor": ["key": "kronello.audio.volume", "version": 1],
+                "source": ["kind": "constant", "value": ["kind": "scalar", "value": gain]], "modifiers": []]
+            commands.append(timelineCommand("clip_set_volume", ["sequence": sequence.string("id"), "clip": clip.string("id"), "volume": volume]))
+        }
+        guard !commands.isEmpty else { return }
+        submit(commands, label: "トラックの音量", base: base)
+    }
+    /// Fader display value: the shared clip gain when every clip on the track
+    /// agrees, else nil for a mixed state.
+    public func trackVolume(_ track: [String: Any]) -> Double? {
+        let gains = track.objects("clips").map { clip -> Double in
+            guard let property = clip["volume"] as? [String: Any],
+                  property.object("source").string("kind") == "constant" else { return 1.0 }
+            return property.object("source").object("value").number("value")
+        }
+        guard let first = gains.first else { return nil }
+        return gains.allSatisfy { abs($0 - first) < 0.0001 } ? first : nil
     }
 }
 
@@ -212,7 +362,7 @@ extension RationalTime {
 
 extension EditorModel {
     public func setClipReverse(_ clip: EditClip, enabled: Bool) {
-        guard !ui.locked.contains(clip.track), let speed = clip.linearRate else { return }
+        guard !trackLocked(clip.track), let speed = clip.linearRate else { return }
         do {
             let duration = try clip.end.checkedSubtracting(clip.start)
             let travel = try duration.checkedMultiplying(speed).checkedAdding(.wire(clip.authored.object("time_map").object("offset")))

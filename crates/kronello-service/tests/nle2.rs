@@ -141,6 +141,129 @@ fn split_retime_mapping_owned_properties_receipt_and_one_undo() {
 }
 
 #[test]
+fn split_remaps_fx005006_effect_parameter_properties() {
+    let mut c = clip([60, 80, 120], 1, 5);
+    let scalar = |v: f64| {
+        property(
+            "kronello.effect.similarity",
+            Value::Scalar(FiniteF64::new(v).unwrap()),
+        )
+    };
+    let point = |x: f64| {
+        property(
+            "kronello.effect.top_left",
+            Value::Vec2([FiniteF64::new(x).unwrap(), FiniteF64::new(0.0).unwrap()]),
+        )
+    };
+    let key_color = property(
+        "kronello.effect.key_color",
+        Value::Color(Color::from_srgb8([0, 177, 64], None)),
+    );
+    let (similarity, edge_shrink, edge_feather, spill) =
+        (scalar(0.4), scalar(0.0), scalar(0.5), scalar(0.5));
+    let (tl, tr, br, bl) = (point(0.0), point(1.0), point(2.0), point(3.0));
+    c.effects = vec![
+        Effect::Known(EffectDefinition {
+            effect_id: KEYING_CHROMA_ID.into(),
+            version: 1,
+            parameters: EffectParameters::ChromaKey {
+                key_color: key_color.id(),
+                similarity: similarity.id(),
+                edge_shrink: edge_shrink.id(),
+                edge_feather: edge_feather.id(),
+                spill: spill.id(),
+            },
+        }),
+        Effect::Known(EffectDefinition {
+            effect_id: CORNER_PIN_ID.into(),
+            version: 1,
+            parameters: EffectParameters::CornerPin {
+                top_left: tl.id(),
+                top_right: tr.id(),
+                bottom_right: br.id(),
+                bottom_left: bl.id(),
+            },
+        }),
+    ];
+    c.properties = vec![
+        key_color.clone(),
+        similarity.clone(),
+        edge_shrink.clone(),
+        edge_feather.clone(),
+        spill.clone(),
+        tl.clone(),
+        tr.clone(),
+        br.clone(),
+        bl.clone(),
+    ];
+    let authored = c.clone();
+    let s = sequence(vec![c]);
+    let sequence_id = s.id;
+    let (_dir, path) = setup(project(s));
+    let request = apply_request(
+        &path,
+        vec![TimelineCommand::ClipSplit {
+            sequence: sequence_id,
+            clip: authored.id,
+            time: t(5, 2),
+            right_clip: ClipId::new(),
+        }],
+        "split-fx005006",
+    );
+    service().dispatch(Request::EditApply(request)).unwrap();
+    let after = export(&path);
+    let DocumentObject::Known(s) = &after.document.sequences[0] else {
+        panic!()
+    };
+    let [left, right] = s.tracks[0].clips.as_slice() else {
+        panic!()
+    };
+    // Left keeps the authored ids; every right-side parameter reference must
+    // resolve to a distinct cloned property on the right clip.
+    assert_eq!(left.effects, authored.effects);
+    let right_ids: BTreeSet<_> = right.properties.iter().map(|p| p.id()).collect();
+    assert_eq!(right_ids.len(), authored.properties.len());
+    for p in &right.properties {
+        assert!(!authored.properties.iter().any(|o| o.id() == p.id()));
+    }
+    let check = |parameters: &EffectParameters, count: usize| {
+        let ids: Vec<PropertyId> = match parameters {
+            EffectParameters::ChromaKey {
+                key_color,
+                similarity,
+                edge_shrink,
+                edge_feather,
+                spill,
+            } => vec![*key_color, *similarity, *edge_shrink, *edge_feather, *spill],
+            EffectParameters::CornerPin {
+                top_left,
+                top_right,
+                bottom_right,
+                bottom_left,
+            } => vec![*top_left, *top_right, *bottom_right, *bottom_left],
+            _ => panic!("unexpected variant"),
+        };
+        assert_eq!(ids.len(), count);
+        for id in ids {
+            assert!(right_ids.contains(&id));
+        }
+    };
+    for effect in &right.effects {
+        let Effect::Known(definition) = effect else {
+            panic!()
+        };
+        check(
+            &definition.parameters,
+            match definition.effect_id.as_str() {
+                KEYING_CHROMA_ID => 5,
+                CORNER_PIN_ID => 4,
+                _ => panic!("unexpected effect"),
+            },
+        );
+    }
+}
+
+#[test]
 fn split_rejects_boundaries_duplicate_links_and_transition_atomically() {
     let c = clip([20, 40, 80], 0, 4);
     let s = sequence(vec![c.clone()]);
@@ -374,12 +497,14 @@ fn clip(color: [u8; 3], a: i64, b: i64) -> Clip {
         timeline_range: range(t(a, 1), t(b, 1)),
         source_in: Time::ZERO,
         time_map: TimeMap::linear(Time::ZERO, Rational::ONE).unwrap(),
+        enabled: true,
         audio_retime: AudioRetimePolicy::Reject,
         reverse_sampling: None,
         volume: None,
         links: vec![],
         properties: vec![],
         effects: vec![],
+        masks: vec![],
         markers: vec![],
     }
 }
@@ -399,6 +524,7 @@ fn sequence(clips: Vec<Clip>) -> Sequence {
         transitions: vec![],
         markers: vec![],
         work_area: None,
+        targets: None,
     }
 }
 fn project(sequence: Sequence) -> Project {
@@ -1371,6 +1497,8 @@ fn explicit_frame_cpu_backend_matches_session_cpu_video_pixels_and_is_strict() {
             region: crop_region(),
             profile: Default::default(),
             fonts: vec![],
+            media_proxies: kronello_render::MediaProxyMode::Off,
+            luts: vec![],
         },
         time: t(2, 1),
     };
@@ -2003,6 +2131,7 @@ fn gui007_track_output_is_atomic_rendered_and_undoable() {
             state: TrackState {
                 visible: false,
                 muted: false,
+                locked: false,
             },
         }],
         "hide-track",
@@ -2027,6 +2156,7 @@ fn gui007_track_output_is_atomic_rendered_and_undoable() {
             state: TrackState {
                 visible: false,
                 muted: true,
+                locked: false,
             },
         }],
         "stale-track",
@@ -2039,6 +2169,7 @@ fn gui007_track_output_is_atomic_rendered_and_undoable() {
             state: TrackState {
                 visible: true,
                 muted: true,
+                locked: false,
             },
         }],
         "track-other",

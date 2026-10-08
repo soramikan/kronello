@@ -25,8 +25,8 @@
       "wgpu-hal": "30.0.1"
     },
     "hardware": {
-      "cpuinfo": "processor\t: 0\nvendor_id\t: AuthenticAMD\ncpu family\t: 25\nmodel\t\t: 17\nmodel name\t: AMD EPYC 9V74 80-Core Processor\nstepping\t: 1\nmicrocode\t: 0xffffffff\ncpu MHz\t\t: 3699.047\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 4\ncore id\t\t: 0\ncpu cores\t: 2\napicid\t\t: 0\ninitial apicid\t: 0\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 28\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good nopl xtopology tsc_reliable nonstop_tsc cpuid extd_apicid aperfmperf tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 movbe popcnt aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves user_shstk avx512_bf16 clzero xsaveerptr rdpru arat npt nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold v_vmsave_vmload avx512vbmi umip avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid fsrm\nbugs\t\t: sysret_ss_attrs null_seg spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user tsa\nbogomips\t: 5192.28\nTLB size\t: 3584 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 48 bits physical, 48 bits virtual\npower management:\n\nprocessor\t: 1\nvendor_id\t: AuthenticAMD\ncpu family\t: 25\nmodel\t\t: 17\nmodel name\t: AMD EPYC 9V74 80-Core Processor\nstepping\t: 1\nmicrocode\t: 0xffffffff\ncpu MHz\t\t: 2596.141\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 4\ncore id\t\t: 0\ncpu cores\t: 2\napicid\t\t: 1\ninitial apicid\t: 1\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 28\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good nopl xtopology tsc_reliable nonstop_tsc cpuid extd_apicid aperfmperf tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 movbe popcnt aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves user_shstk avx512_bf16 clzero xsaveerptr rdpru arat npt nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold v_vmsave_vmload avx512vbmi umip avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid fsrm\nbugs\t\t: sysret_ss_attrs null_seg spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user tsa\nbogomips\t: 5192.28\nTLB size\t: 3584 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 48 bits physical, 48 bits virtual\npower management:\n\nprocessor\t: 2\nvendor_id\t: AuthenticAMD\ncpu family\t: 25\nmodel\t\t: 17\nmodel name\t: AMD EPYC 9V74 80-Core Processor\nstepping\t: 1\nmicrocode\t: 0xffffffff\ncpu MHz\t\t: 2596.141\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 4\ncore id\t\t: 1\ncpu cores\t: 2\napicid\t\t: 2\ninitial apicid\t: 2\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 28\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good nopl xtopology tsc_reliable nonstop_tsc cpuid extd_apicid aperfmperf tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 movbe popcnt aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves user_shstk avx512_bf16 clzero xsaveerptr rdpru arat npt nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold v_vmsave_vmload avx512vbmi umip avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid fsrm\nbugs\t\t: sysret_ss_attrs null_seg spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user tsa\nbogomips\t: 5192.28\nTLB size\t: 3584 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 48 bits physical, 48 bits virtual\npower management:\n\nprocessor\t: 3\nvendor_id\t: AuthenticAMD\ncpu family\t: 25\nmodel\t\t: 17\nmodel name\t: AMD EPYC 9V74 80-Core Processor\nstepping\t: 1\nmicrocode\t: 0xffffffff\ncpu MHz\t\t: 3694.483\ncache size\t: 1024 KB\nphysical id\t: 0\nsiblings\t: 4\ncore id\t\t: 1\ncpu cores\t: 2\napicid\t\t: 3\ninitial apicid\t: 3\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 28\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good nopl xtopology tsc_reliable nonstop_tsc cpuid extd_apicid aperfmperf tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 movbe popcnt aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves user_shstk avx512_bf16 clzero xsaveerptr rdpru arat npt nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold v_vmsave_vmload avx512vbmi umip avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid fsrm\nbugs\t\t: sysret_ss_attrs null_seg spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user tsa\nbogomips\t: 5192.28\nTLB size\t: 3584 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 48 bits physical, 48 bits virtual\npower management:\n\n",
-      "memory": "MemTotal:       16373452 kB\nMemFree:        10159620 kB\nMemAvailable:   15043552 kB\nBuffers:          111360 kB\nCached:          4954508 kB\nSwapCached:            0 kB\nActive:          1040144 kB\nInactive:        4448016 kB\nActive(anon):     479412 kB\nInactive(anon):        0 kB\nActive(file):     560732 kB\nInactive(file):  4448016 kB\nUnevictable:       46728 kB\nMlocked:           43656 kB\nSwapTotal:       3145724 kB\nSwapFree:        3145724 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:            934632 kB\nWriteback:         18260 kB\nAnonPages:        469060 kB\nMapped:           416304 kB\nShmem:             48352 kB\nKReclaimable:     221136 kB\nSlab:             312788 kB\nSReclaimable:     221136 kB\nSUnreclaim:        91652 kB\nKernelStack:        4336 kB\nPageTables:         7244 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    11332448 kB\nCommitted_AS:    2423072 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:       39648 kB\nVmallocChunk:          0 kB\nPercpu:             2240 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:    126976 kB\nShmemHugePages:        0 kB\nShmemPmdMapped:        0 kB\nFileHugePages:    745472 kB\nFilePmdMapped:         0 kB\nCmaTotal:              0 kB\nCmaFree:               0 kB\nUnaccepted:            0 kB\nBalloon:               0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      119936 kB\nDirectMap2M:     3020800 kB\nDirectMap1G:    15728640 kB\n"
+      "cpuinfo": "processor\t: 0\nvendor_id\t: AuthenticAMD\ncpu family\t: 25\nmodel\t\t: 1\nmodel name\t: AMD EPYC 7763 64-Core Processor\nstepping\t: 1\nmicrocode\t: 0xffffffff\ncpu MHz\t\t: 2445.426\ncache size\t: 512 KB\nphysical id\t: 0\nsiblings\t: 4\ncore id\t\t: 0\ncpu cores\t: 2\napicid\t\t: 0\ninitial apicid\t: 0\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 13\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good nopl tsc_reliable nonstop_tsc cpuid extd_apicid aperfmperf tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 movbe popcnt aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves user_shstk clzero xsaveerptr rdpru arat npt nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold v_vmsave_vmload umip vaes vpclmulqdq rdpid fsrm\nbugs\t\t: sysret_ss_attrs null_seg spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user tsa\nbogomips\t: 4890.85\nTLB size\t: 2560 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 48 bits physical, 48 bits virtual\npower management:\n\nprocessor\t: 1\nvendor_id\t: AuthenticAMD\ncpu family\t: 25\nmodel\t\t: 1\nmodel name\t: AMD EPYC 7763 64-Core Processor\nstepping\t: 1\nmicrocode\t: 0xffffffff\ncpu MHz\t\t: 2445.426\ncache size\t: 512 KB\nphysical id\t: 0\nsiblings\t: 4\ncore id\t\t: 0\ncpu cores\t: 2\napicid\t\t: 1\ninitial apicid\t: 1\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 13\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good nopl tsc_reliable nonstop_tsc cpuid extd_apicid aperfmperf tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 movbe popcnt aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves user_shstk clzero xsaveerptr rdpru arat npt nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold v_vmsave_vmload umip vaes vpclmulqdq rdpid fsrm\nbugs\t\t: sysret_ss_attrs null_seg spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user tsa\nbogomips\t: 4890.85\nTLB size\t: 2560 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 48 bits physical, 48 bits virtual\npower management:\n\nprocessor\t: 2\nvendor_id\t: AuthenticAMD\ncpu family\t: 25\nmodel\t\t: 1\nmodel name\t: AMD EPYC 7763 64-Core Processor\nstepping\t: 1\nmicrocode\t: 0xffffffff\ncpu MHz\t\t: 2445.426\ncache size\t: 512 KB\nphysical id\t: 0\nsiblings\t: 4\ncore id\t\t: 1\ncpu cores\t: 2\napicid\t\t: 2\ninitial apicid\t: 2\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 13\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good nopl tsc_reliable nonstop_tsc cpuid extd_apicid aperfmperf tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 movbe popcnt aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves user_shstk clzero xsaveerptr rdpru arat npt nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold v_vmsave_vmload umip vaes vpclmulqdq rdpid fsrm\nbugs\t\t: sysret_ss_attrs null_seg spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user tsa\nbogomips\t: 4890.85\nTLB size\t: 2560 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 48 bits physical, 48 bits virtual\npower management:\n\nprocessor\t: 3\nvendor_id\t: AuthenticAMD\ncpu family\t: 25\nmodel\t\t: 1\nmodel name\t: AMD EPYC 7763 64-Core Processor\nstepping\t: 1\nmicrocode\t: 0xffffffff\ncpu MHz\t\t: 3243.605\ncache size\t: 512 KB\nphysical id\t: 0\nsiblings\t: 4\ncore id\t\t: 1\ncpu cores\t: 2\napicid\t\t: 3\ninitial apicid\t: 3\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 13\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good nopl tsc_reliable nonstop_tsc cpuid extd_apicid aperfmperf tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 movbe popcnt aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves user_shstk clzero xsaveerptr rdpru arat npt nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold v_vmsave_vmload umip vaes vpclmulqdq rdpid fsrm\nbugs\t\t: sysret_ss_attrs null_seg spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user tsa\nbogomips\t: 4890.85\nTLB size\t: 2560 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 48 bits physical, 48 bits virtual\npower management:\n\n",
+      "memory": "MemTotal:       16373452 kB\nMemFree:        10088468 kB\nMemAvailable:   14965492 kB\nBuffers:          109924 kB\nCached:          4945996 kB\nSwapCached:            0 kB\nActive:           981424 kB\nInactive:        4483380 kB\nActive(anon):     463368 kB\nInactive(anon):        0 kB\nActive(file):     518056 kB\nInactive(file):  4483380 kB\nUnevictable:       46760 kB\nMlocked:           43688 kB\nSwapTotal:       3145724 kB\nSwapFree:        3145724 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:           1008980 kB\nWriteback:             0 kB\nAnonPages:        445492 kB\nMapped:           413116 kB\nShmem:             45672 kB\nKReclaimable:     221540 kB\nSlab:             312840 kB\nSReclaimable:     221540 kB\nSUnreclaim:        91300 kB\nKernelStack:        4384 kB\nPageTables:         7184 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    11332448 kB\nCommitted_AS:    2442688 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:       39696 kB\nVmallocChunk:          0 kB\nPercpu:             2240 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:     92160 kB\nShmemHugePages:        0 kB\nShmemPmdMapped:        0 kB\nFileHugePages:    747520 kB\nFilePmdMapped:         0 kB\nCmaTotal:              0 kB\nCmaFree:               0 kB\nUnaccepted:            0 kB\nBalloon:               0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      134272 kB\nDirectMap2M:     5103616 kB\nDirectMap1G:    13631488 kB\n"
     },
     "os": "Linux runnervmmprz5 6.17.0-1022-azure #22-Ubuntu SMP Mon Jul 27 17:24:03 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux",
     "platform_details": {
@@ -105,8 +105,8 @@
       "sha256": "ac30749b89208e1e97ab17df812603b32a6e9a4bcfce1fc25a8e89197575d2a4"
     },
     "environment.json": {
-      "bytes": 11190,
-      "sha256": "d8fbe2c12a01775f9a9299f79a341b8a6e2464a204bc590745d890e792334cff"
+      "bytes": 10586,
+      "sha256": "b901feeb994ab593acd7cc45b33ff57ead6280af0cec58ea4906a6884487e350"
     },
     "fill-evenodd-hole/frame-0.png": {
       "bytes": 133,
@@ -219,6 +219,62 @@
     "fx003-wipe/frame-0.rgba16f": {
       "bytes": 2048,
       "sha256": "c05bf8031e3c0ff902a1af682e9d533305b252783b44156930e6f6771d4d83a6"
+    },
+    "fx005-chroma-key-edges/frame-0.png": {
+      "bytes": 187,
+      "sha256": "5395e8913a0abe6bfbb6aa04f7e6ee0912ffdc9f74fe2e2fc763e9fe9ba99f3f"
+    },
+    "fx005-chroma-key-edges/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "9d9e215265978323c27d906d69c386f9c7a474739a8babc57673061cdf8ee6a0"
+    },
+    "fx005-chroma-key/frame-0.png": {
+      "bytes": 102,
+      "sha256": "5ff6f750ff64c7473bd09682b92adfaa8b9d4cbaebfcc47ec27e67de95c901b2"
+    },
+    "fx005-chroma-key/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "1b610de5e79a7a44b343dca089b7e946258a3e86d89621d2b5492f4f900e00e6"
+    },
+    "fx005-luma-key/frame-0.png": {
+      "bytes": 168,
+      "sha256": "74ca45fae340503188fcc446db291ba30ed2ac100bb4b50de46d0cbbca964ea1"
+    },
+    "fx005-luma-key/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "12fa4c80ad5154eff7cfc52f05a3782dd16763a2d5ad7236b8441776c06e395b"
+    },
+    "fx006-corner-pin/frame-0.png": {
+      "bytes": 255,
+      "sha256": "6125eb6699e3336170423aa217fbb843d5194771c41d732a0f334535c4878770"
+    },
+    "fx006-corner-pin/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "cfb06a7bf10c568f9987cdb41badf1301e032aaf405f9e746cb28eed30015c4f"
+    },
+    "fx006-glow/frame-0.png": {
+      "bytes": 220,
+      "sha256": "9eaa62a49c5cf21674724b0c2a2d627949afaeda6e704a0f97dbd887f18213df"
+    },
+    "fx006-glow/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "1400e6e68587564b371bec62d16e0b9c20c13e9167c1bb0aebd915d4a8f18512"
+    },
+    "fx006-sharpen/frame-0.png": {
+      "bytes": 280,
+      "sha256": "aef987f30580f9288c18b45977876460acb20442dbe017d100bec075a5a0f9bd"
+    },
+    "fx006-sharpen/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "7b3bdadaa36923206ec0261ea61b1337b1026563b6bffd8493b65379f5d96195"
+    },
+    "fx006-vignette/frame-0.png": {
+      "bytes": 496,
+      "sha256": "ef2e9837a16034a7b7366aa038dd5d63bf6aee1ef27eb80c0e372a4c7f8ca00d"
+    },
+    "fx006-vignette/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "e5cea02120528e5b7d1ec9d1e9886a9231aa18a3effba5ee25f25537f1cca613"
     },
     "glyph-outline-edges/frame-0.png": {
       "bytes": 576,
@@ -341,12 +397,12 @@
       "sha256": "a8a5e6d38abbaff24c17fbd6eac7ad7059ae7b1fb0b722c194be078c516e559a"
     },
     "manifest.json": {
-      "bytes": 251123,
-      "sha256": "f5e90953794f75a88adbe0815b979f3048353e36990ef24148143d59464aa149"
+      "bytes": 95887,
+      "sha256": "f87e057e479b1f783a9a4c28ef09fc27a6eb6dc85d0c7d8e0041a610f030c802"
     },
     "provenance.json": {
       "bytes": 1405,
-      "sha256": "115d79f947e649d07bfc5edba09ea9a217268804190ee981da2d5606d417f531"
+      "sha256": "8f366c738af39c858cd03eee41c392ad6a7a6737366e967e06860f9434429b05"
     },
     "rec2020-conversion/frame-0.png": {
       "bytes": 91,
@@ -450,19 +506,19 @@
     }
   },
   "provenance": {
-    "cargo_lock_sha256": "ea5ea174b5b4700fdf7ebe4333a59191586b49913aea27e9fc36364900208885",
-    "color_code_sha256": "8939a54f089fbfeccdf84abc341a063da92d994f76dfc3ea0b6a49ca13964b1d",
+    "cargo_lock_sha256": "877c23e6494b91c81fbf6bfc142e84232ad8c927335ce519babc34916d4e5ac3",
+    "color_code_sha256": "57893f6365174d028fe8a6651c7c729cfc4b1e1fd779077923783fac44db2404",
     "comparison_code_sha256": "0f09357830b18b3abd193030880e442a65171954f5774e399a4bb0d17f7b2112",
-    "draw_fixture_code_sha256": "e85456ae0943a845d2dd2003a6a80bcc1cdaf7bdea7c68e80908299709238382",
-    "effect_kernel_code_sha256": "b69d16ede96862d6f2a40d858f95c14af51a67b0b867df694e3dc5cb843631a4",
-    "effect_reference_code_sha256": "d320730321b85df34cae66aa8951afe305ca2db8eb9873b4eeed0e768d491657",
-    "effect_shader_sha256": "f303f79f45d7050803d4c909fe05ccede282373a3f1beadfdf2f9d8e3e69dd6a",
+    "draw_fixture_code_sha256": "07e6f7154a93270e94dc88bb9d774913d50b7d56b85ab831cfaa13ca8a7ad25a",
+    "effect_kernel_code_sha256": "2f5b2081a71828e841789cb27b1f0a292146339777520f8701b6980cad9d334a",
+    "effect_reference_code_sha256": "648fd932a2bc1441a94f7fa6e2937aae18c64445d47b09fe4587d1d5bac81318",
+    "effect_shader_sha256": "aa484dab6fab4a7f682847b61362339d912120b5f410105afc53944b4d0e46c4",
     "fixture_manifest_sha256": "13060d35e1ed680a0666197b3d0a6de2606933030f43fda63c169923377aec22",
-    "renderer_code_sha256": "a62722615806f110f12a268c5195f4daaf5157674058b0e604f2b54e5fd2b3b4",
-    "revision": "89601baefc489d51a4def517434fbdf7bfdc9bd4",
-    "scene_code_sha256": "6187f686c0c92cb53ff83f82e59a8eda3c5f0aad07eb9b558fe9759b35c3ce39",
-    "scene_gpu_code_sha256": "0a0c50a0623e5410a56c06979b5a3847805d7baffb1442b8fe9644acfc64019c",
-    "scene_reference_code_sha256": "5601ce58c36e5296bf83d5fcdf42a8cccc55d34adb8031203d9aaa9e106bd437",
+    "renderer_code_sha256": "6ffae1420062f5c6393a78d2ec042db90e678a4a956e42f3633f6f1e3f7f1f4d",
+    "revision": "093c89e36ef166027bdd68bac61244988f3acd83",
+    "scene_code_sha256": "6344db79eed855388197161b596a31d32a6bfc679c56c215691ecd2a9062cb15",
+    "scene_gpu_code_sha256": "c3b0b442d20b7fe6dd38feebadf617f1fc4685d6253bda3af55bbcb8d7b6883d",
+    "scene_reference_code_sha256": "220f9f1868334ef163f710171c5244716d420f2893afa2c1e40b34d98cbde95e",
     "scene_shader_sha256": "81a10f9859ece9c4a4af3e523279ff0ba3e5e42ec4376562c504874501715d39",
     "shader_sha256": "f78694ed5b0dbc653a28601fb6f2d319e9b8d9ed0e02cb60cc8dfad6b5b8c069",
     "status": ""
@@ -1178,6 +1234,111 @@
     {
       "alpha": "premultiplied",
       "id": "fx003-dip",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx005-chroma-key",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx005-chroma-key-edges",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx005-luma-key",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec2020"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx006-glow",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx006-sharpen",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec2020"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx006-vignette",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx006-corner-pin",
       "sample_id": "frame-0",
       "samples_per_frame": 16,
       "size": [

@@ -185,6 +185,12 @@ impl<'de> Deserialize<'de> for Request {
             "svg.export" => payload(&fields).map(Self::SvgExport),
             "svg.import_plan" => payload(&fields).map(Self::SvgImportPlan),
             "audio.analyze" => payload(&fields).map(Self::AudioAnalyze),
+            "track.analyze" => payload(&fields).map(Self::TrackAnalyze),
+            "proxy.generate" => payload(&fields).map(Self::ProxyGenerate),
+            "proxy.status" => payload(&fields).map(Self::ProxyStatus),
+            "proxy.clear" => payload(&fields).map(Self::ProxyClear),
+            "audio.loudness" => payload(&fields).map(Self::AudioLoudness),
+            "audio.normalize" => payload(&fields).map(Self::AudioNormalize),
             "sequence.query" => payload(&fields).map(Self::SequenceQuery),
             "sequence.create" => payload(&fields).map(Self::SequenceCreate),
             "clip.place" => payload(&fields).map(Self::ClipPlace),
@@ -229,6 +235,8 @@ impl<'de> Deserialize<'de> for Request {
             "render.explain" => payload(&fields).map(Self::RenderExplain),
             "property.sample" => payload(&fields).map(Self::PropertySample),
             "capabilities.get" => payload(&fields).map(Self::CapabilitiesGet),
+            "lut.import" => payload(&fields).map(Self::LutImport),
+            "inspect.scopes" => payload(&fields).map(Self::InspectScopes),
             _ => Err(D::Error::custom("unknown operation")),
         }
     }
@@ -262,8 +270,12 @@ impl<'de> Deserialize<'de> for ResultData {
             "node_explanation" => Self::NodeExplanation(take(&mut fields, "value")?),
             "render_explanation" => Self::RenderExplanation(take(&mut fields, "value")?),
             "samples" => Self::Samples(take(&mut fields, "value")?),
+            "proxies" => Self::Proxies(take(&mut fields, "value")?),
             "capabilities" => Self::Capabilities(take(&mut fields, "value")?),
             "captions" => Self::Captions(take(&mut fields, "value")?),
+            "loudness" => Self::Loudness(take(&mut fields, "value")?),
+            "normalize" => Self::Normalize(take(&mut fields, "value")?),
+            "scopes" => Self::Scopes(take(&mut fields, "value")?),
             _ => return Err(D::Error::custom("unknown result kind")),
         };
         exhausted::<D::Error>(&fields)?;
@@ -318,6 +330,16 @@ impl<'de> Deserialize<'de> for crate::RenderInput {
         } else {
             vec![]
         };
+        let media_proxies = if fields.contains_key("media_proxies") {
+            take(&mut fields, "media_proxies")?
+        } else {
+            kronello_render::MediaProxyMode::Off
+        };
+        let luts = if fields.contains_key("luts") {
+            take(&mut fields, "luts")?
+        } else {
+            vec![]
+        };
         exhausted::<D::Error>(&fields)?;
         Ok(Self {
             project,
@@ -326,6 +348,8 @@ impl<'de> Deserialize<'de> for crate::RenderInput {
             region,
             profile,
             fonts,
+            media_proxies,
+            luts,
         })
     }
 }

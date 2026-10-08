@@ -48,12 +48,14 @@ fn create_project_as(
         timeline_range: TimeRange::new(Time::ZERO, duration).unwrap(),
         source_in,
         time_map: TimeMap::linear(Time::ZERO, Rational::ONE).unwrap(),
+        enabled: true,
         audio_retime: AudioRetimePolicy::Reject,
         reverse_sampling: None,
         volume: None,
         links: vec![],
         properties: vec![],
         effects: vec![],
+        masks: vec![],
         markers: vec![],
     };
     let sequence = Sequence {
@@ -71,6 +73,7 @@ fn create_project_as(
         transitions: vec![],
         markers: vec![],
         work_area: None,
+        targets: None,
     };
     let id = sequence.id;
     let mut project = Project::default();
@@ -99,6 +102,8 @@ fn frame(path: &Path, sequence: SequenceId, at: Time, selection: BackendSelectio
             },
             profile: Default::default(),
             fonts: vec![],
+            media_proxies: kronello_render::MediaProxyMode::Off,
+            luts: vec![],
         },
         time: at,
         backend: Some(selection),
@@ -469,6 +474,8 @@ fn actual_hdr_ten_bit_full_range_reject_forged_sdr_locks() {
                         },
                         profile: Default::default(),
                         fonts: vec![],
+                        media_proxies: kronello_render::MediaProxyMode::Off,
+                        luts: vec![],
                     },
                     time: Time::ZERO,
                     backend: Some(backend),

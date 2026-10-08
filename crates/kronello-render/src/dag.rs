@@ -2,8 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use kronello_eval::Affine2;
 use kronello_model::{
-    BlendMode, Color, ColorSpace, FillRule, PropertyId, ResolvedGradient, ResolvedShape, Shape,
-    ShapeGeometry, Value,
+    BlendMode, Color, ColorSpace, FillRule, MaskMode, NodeId, PropertyId, ResolvedGradient,
+    ResolvedMask, ResolvedShape, Shape, ShapeGeometry, Value,
 };
 use kronello_vector::{FlattenRequest, FlattenedPath};
 use serde::{Deserialize, Serialize};
@@ -340,6 +340,267 @@ impl Builder<'_> {
             opacity,
         })
     }
+    /// FX-004: rasterize one resolved mask into a white premultiplied
+    /// coverage raster (alpha = coverage). Expansion offsets the flattened
+    /// path in node-local design_px; feather blurs coverage in output pixels.
+    fn mask_coverage(
+        &mut self,
+        key: &SceneKey,
+        world: Affine2,
+        mask: &ResolvedMask,
+        transform: Affine2,
+        flatten: FlattenRequest,
+        scale: [f64; 2],
+    ) -> Result<usize, RenderError> {
+        let property = PropertyId::from_uuid(uuid::Uuid::nil());
+        let shape = Shape {
+            id: kronello_model::ContentId::from_uuid(uuid::Uuid::nil()),
+            geometry: ShapeGeometry::BezierPath { path: property },
+            fill: None,
+            stroke: None,
+        };
+        let values = BTreeMap::from([(property, Value::Path(mask.path.clone()))]);
+        let resolved = shape.resolve(&values)?;
+        let geometry = self.push(DagNode::Geometry {
+            key: SceneKey {
+                instance_path: key.instance_path.clone(),
+                node: NodeId::from_uuid(mask.id.as_uuid()),
+            },
+            resolved: resolved.clone(),
+        })?;
+        let (geometry_content_hash, contours) =
+            self.semantic_cache
+                .geometry(&resolved.geometry, None, flatten, || {
+                    flatten_outline(&mask.path, flatten)
+                })?;
+        // `closed` decides whether expansion offsets each subpath as a ring;
+        // fill coverage always closes independently.
+        let mut contours = contours;
+        for subpath in &mut contours.subpaths {
+            subpath.closed |= mask.closed;
+        }
+        let contours = if mask.expansion != 0.0 {
+            kronello_vector::offset_path(&contours, mask.expansion)?
+        } else {
+            contours
+        };
+        let contours = map_contours(contours, transform)?;
+        let white = Color::from_srgb8([255; 3], None);
+        let mut id = self.push(DagNode::CoverageDraw {
+            geometry,
+            path: CoveragePath {
+                stroke_geometry: None,
+                geometry_content_hash,
+                contours,
+                fill: Some((white, FillRule::Nonzero)),
+                stroke: None,
+                fill_gradient: None,
+                stroke_gradient: None,
+                paint_transform: Affine2::IDENTITY.0,
+            },
+        })?;
+        if mask.feather > 0.0 {
+            let effect = map_effect(
+                &kronello_model::ResolvedEffect::GaussianBlur {
+                    sigma: mask.feather,
+                },
+                world,
+            )?;
+            id = self.push(DagNode::Effect {
+                source: id,
+                effect: crate::PixelEffect::from_design(&effect, scale)?,
+            })?;
+        }
+        if mask.opacity != 1.0 {
+            id = self.push(DagNode::IsolatedComposite {
+                children: vec![id],
+                opacity: mask.opacity,
+            })?;
+        }
+        if mask.invert {
+            id = self.inverted_coverage(id)?;
+        }
+        Ok(id)
+    }
+    fn inverted_coverage(&mut self, coverage: usize) -> Result<usize, RenderError> {
+        let full = self.push(DagNode::SolidRect {
+            color: Color::from_srgb8([255; 3], None),
+            rect: [
+                0.0,
+                0.0,
+                f64::from(self.region.pixels[0]),
+                f64::from(self.region.pixels[1]),
+            ],
+        })?;
+        self.push(DagNode::Mask {
+            source: full,
+            matte: coverage,
+            kind: MatteKind::AlphaInverted,
+        })
+    }
+    /// Combine mask coverages in authored order. The first mask initializes
+    /// the accumulated coverage (a leading Subtract inverts from full, the
+    /// conventional single-subtract behavior); each later mask applies its
+    /// mode against the accumulator.
+    fn mask_stack_coverage(
+        &mut self,
+        n: &crate::SceneNodeIr,
+        transform: Affine2,
+        flatten: FlattenRequest,
+        scale: [f64; 2],
+    ) -> Result<Option<usize>, RenderError> {
+        let mut accumulated: Option<usize> = None;
+        for mask in &n.masks {
+            let coverage =
+                self.mask_coverage(&n.key, n.world_transform, mask, transform, flatten, scale)?;
+            accumulated = Some(match (accumulated, mask.mode) {
+                (None, MaskMode::Subtract) => self.inverted_coverage(coverage)?,
+                (None, _) => coverage,
+                (Some(acc), MaskMode::Add) => self.push(DagNode::IsolatedComposite {
+                    children: vec![acc, coverage],
+                    opacity: 1.0,
+                })?,
+                (Some(acc), MaskMode::Subtract) => self.push(DagNode::Mask {
+                    source: acc,
+                    matte: coverage,
+                    kind: MatteKind::AlphaInverted,
+                })?,
+                (Some(acc), MaskMode::Intersect) => self.push(DagNode::Mask {
+                    source: acc,
+                    matte: coverage,
+                    kind: MatteKind::Alpha,
+                })?,
+                (Some(acc), MaskMode::Difference) => {
+                    let a = self.push(DagNode::Mask {
+                        source: acc,
+                        matte: coverage,
+                        kind: MatteKind::AlphaInverted,
+                    })?;
+                    let b = self.push(DagNode::Mask {
+                        source: coverage,
+                        matte: acc,
+                        kind: MatteKind::AlphaInverted,
+                    })?;
+                    self.push(DagNode::IsolatedComposite {
+                        children: vec![a, b],
+                        opacity: 1.0,
+                    })?
+                }
+            });
+        }
+        Ok(accumulated)
+    }
+    /// FX-004: multiply the clip's drawn alpha by its accumulated mask
+    /// coverage (no-op when the stack is empty).
+    fn apply_mask_stack(
+        &mut self,
+        source: usize,
+        n: &crate::SceneNodeIr,
+        transform: Affine2,
+        flatten: FlattenRequest,
+        scale: [f64; 2],
+    ) -> Result<usize, RenderError> {
+        if let Some(matte) = self.mask_stack_coverage(n, transform, flatten, scale)? {
+            return self.push(DagNode::Mask {
+                source,
+                matte,
+                kind: MatteKind::Alpha,
+            });
+        }
+        Ok(source)
+    }
+    /// FX-007 (ADR-0116): rewrite the accumulated lower composite through the
+    /// adjustment node's effect chain. Masks and node opacity bound where the
+    /// adjustment applies: `kept` retains the untouched backdrop outside the
+    /// coverage, `filtered` carries the effected backdrop inside it.
+    fn apply_adjustment(
+        &mut self,
+        prefix: Vec<usize>,
+        prefix_modes: &BTreeMap<usize, BlendMode>,
+        n: &crate::SceneNodeIr,
+        scale: [f64; 2],
+    ) -> Result<usize, RenderError> {
+        let backdrop = self.composite(prefix, 1.0, prefix_modes)?;
+        let transform = self.region.design_to_pixel().compose(n.world_transform);
+        let magnification = {
+            let [a, b] = transform.0;
+            (a[0] * a[0] + a[1] * a[1] + b[0] * b[0] + b[1] * b[1]).sqrt()
+        };
+        let flatten =
+            FlattenRequest::new(magnification.max(1.0), self.profile.flatten_tolerance_px)?;
+        let mut id = backdrop;
+        for effect in &n.effects {
+            id = self.push(DagNode::Effect {
+                source: id,
+                effect: crate::PixelEffect::from_design(
+                    &map_effect(effect, n.world_transform)?,
+                    scale,
+                )?,
+            })?;
+        }
+        let strength = n.opacity * n.post_effect_opacity;
+        if !(strength.is_finite() && (0.0..=1.0).contains(&strength)) {
+            return Err(RenderError::InvalidInput(
+                "invalid adjustment opacity".into(),
+            ));
+        }
+        if let Some(matte) = self.mask_stack_coverage(n, transform, flatten, scale)? {
+            // Coverage scales by the adjustment strength so a faded or
+            // half-strength adjustment lerps between backdrop and effect.
+            let coverage = if strength != 1.0 {
+                self.push(DagNode::IsolatedComposite {
+                    children: vec![matte],
+                    opacity: strength,
+                })?
+            } else {
+                matte
+            };
+            let kept = self.push(DagNode::Mask {
+                source: backdrop,
+                matte: coverage,
+                kind: MatteKind::AlphaInverted,
+            })?;
+            let filtered = self.push(DagNode::Mask {
+                source: id,
+                matte: coverage,
+                kind: MatteKind::Alpha,
+            })?;
+            id = self.push(DagNode::IsolatedComposite {
+                children: vec![kept, filtered],
+                opacity: 1.0,
+            })?;
+        } else if strength != 1.0 {
+            // Maskless half-strength adjustment: lerp over the whole frame.
+            let full = self.push(DagNode::SolidRect {
+                color: Color::from_srgb8([255; 3], None),
+                rect: [
+                    0.0,
+                    0.0,
+                    f64::from(self.region.pixels[0]),
+                    f64::from(self.region.pixels[1]),
+                ],
+            })?;
+            let coverage = self.push(DagNode::IsolatedComposite {
+                children: vec![full],
+                opacity: strength,
+            })?;
+            let kept = self.push(DagNode::Mask {
+                source: backdrop,
+                matte: coverage,
+                kind: MatteKind::AlphaInverted,
+            })?;
+            let filtered = self.push(DagNode::Mask {
+                source: id,
+                matte: coverage,
+                kind: MatteKind::Alpha,
+            })?;
+            id = self.push(DagNode::IsolatedComposite {
+                children: vec![kept, filtered],
+                opacity: 1.0,
+            })?;
+        }
+        Ok(id)
+    }
     fn node(&mut self, index: usize, depth: usize) -> Result<usize, RenderError> {
         if depth > 24 {
             return Err(RenderError::UnsupportedFeature(
@@ -370,9 +631,17 @@ impl Builder<'_> {
         let magnification = (a[0] * a[0] + a[1] * a[1] + b[0] * b[0] + b[1] * b[1]).sqrt();
         let flatten =
             FlattenRequest::new(magnification.max(1.0), self.profile.flatten_tolerance_px)?;
+        if matches!(n.content, SceneContent::Adjustment) {
+            // The root-loop rewrite performs the actual pass; standalone
+            // lowering draws nothing (visited only by the dependency sweep).
+            let id = self.composite(vec![], 1.0, &BTreeMap::new())?;
+            self.visiting.remove(&index);
+            self.cache.insert(index, id);
+            return Ok(id);
+        }
         let mut children = vec![];
         match &n.content {
-            SceneContent::Empty => (),
+            SceneContent::Empty | SceneContent::Adjustment => (),
             SceneContent::Video {
                 asset,
                 stream_index,
@@ -676,13 +945,38 @@ impl Builder<'_> {
         let mut id = self.composite(children, n.opacity, &blend_modes)?;
         let scale =
             std::array::from_fn(|i| f64::from(self.region.pixels[i]) / self.region.extent[i]);
+        // FX-004 (ADR-0114): the mask stack multiplies drawn alpha after the
+        // clip's own content and before its effect chain.
+        id = self.apply_mask_stack(id, n, transform, flatten, scale)?;
         for effect in &n.effects {
+            let mapped = map_effect(effect, n.world_transform)?;
+            let pixel = if let kronello_model::ResolvedEffect::ColorLut {
+                lut: asset_id,
+                intensity,
+            } = &mapped
+            {
+                // COLOR-003: the lattice was bound to this asset during scene
+                // IR construction; absence here is a typed render failure.
+                let lattice =
+                    self.scene
+                        .luts
+                        .get(asset_id)
+                        .ok_or_else(|| RenderError::Backend {
+                            code: "LUT_INPUT_MISSING",
+                            message: format!("lut data for asset {asset_id} was not resolved"),
+                        })?;
+                let effect = crate::PixelEffect::ColorLut {
+                    lut: lattice.clone(),
+                    intensity: *intensity as f32,
+                };
+                effect.validate()?;
+                effect
+            } else {
+                crate::PixelEffect::from_design(&mapped, scale)?
+            };
             id = self.push(DagNode::Effect {
                 source: id,
-                effect: crate::PixelEffect::from_design(
-                    &map_effect(effect, n.world_transform)?,
-                    scale,
-                )?,
+                effect: pixel,
             })?;
         }
         if !n.post_effect_opacity.is_finite() || !(0.0..=1.0).contains(&n.post_effect_opacity) {
@@ -880,14 +1174,28 @@ fn build_unpadded_dag(
         nodes: vec![],
         semantic_cache,
     };
+    let scale: [f64; 2] = std::array::from_fn(|i| f64::from(region.pixels[i]) / region.extent[i]);
     let mut roots = vec![];
-    let mut root_modes = BTreeMap::new();
+    let mut root_modes: BTreeMap<usize, BlendMode> = BTreeMap::new();
     for (i, n) in scene.nodes.iter().enumerate() {
-        if n.parent.is_none() && !b.hidden.contains(&n.key) {
-            let id = b.node(i, 1)?;
-            roots.push(id);
-            root_modes.insert(id, n.blend_mode);
+        if n.parent.is_some() || b.hidden.contains(&n.key) {
+            continue;
         }
+        if matches!(n.content, SceneContent::Adjustment) {
+            // FX-007: the adjustment rewrites everything composited below it;
+            // stacking order falls out of the authored root order.
+            if !roots.is_empty() {
+                let adjusted =
+                    b.apply_adjustment(std::mem::take(&mut roots), &root_modes, n, scale)?;
+                root_modes.clear();
+                roots.push(adjusted);
+                root_modes.insert(adjusted, BlendMode::Normal);
+            }
+            continue;
+        }
+        let id = b.node(i, 1)?;
+        roots.push(id);
+        root_modes.insert(id, n.blend_mode);
     }
     // Check all nodes, including a cycle consisting entirely of hidden mattes.
     for i in 0..scene.nodes.len() {
@@ -939,6 +1247,10 @@ pub fn build_render_dag_with_cache(
 ) -> Result<RenderDag, RenderError> {
     use crate::PixelBounds;
     let mut dag = build_unpadded_dag(scene, profile, region, cache)?;
+    // FX-006: a corner pin warps the incoming surface's own corner rectangle
+    // into the authored quad, so the backward ROI walk needs the source quad
+    // on each pin before it runs.
+    patch_corner_pin_sources(&mut dag);
     let bounds = derive_bounds(&dag.nodes);
     let requested = PixelBounds {
         min: [0.0; 2],
@@ -982,10 +1294,24 @@ pub fn build_render_dag_with_cache(
         dag = build_unpadded_dag(scene, profile, execution, cache)?;
         dag.region = region;
         dag.execution_region = execution;
+        patch_corner_pin_sources(&mut dag);
     }
     dag.requests = requests;
     dag.bounds = bounds;
     Ok(dag)
+}
+/// FX-006 corner pin: record the input node's visual bounds as the warp
+/// source quad, on the DAG's current pixel lattice (ADR-0115).
+fn patch_corner_pin_sources(dag: &mut RenderDag) {
+    let bounds = derive_bounds(&dag.nodes);
+    for node in &mut dag.nodes {
+        let DagNode::Effect { source, effect } = node else {
+            continue;
+        };
+        if let crate::PixelEffect::CornerPin { source: quad, .. } = effect {
+            *quad = bounds[*source].visual_bounds;
+        }
+    }
 }
 fn derive_bounds(nodes: &[DagNode]) -> Vec<crate::NodeBounds> {
     use crate::{NodeBounds, PixelBounds};
@@ -1088,13 +1414,15 @@ pub(crate) fn map_effect(
     transform: Affine2,
 ) -> Result<kronello_model::ResolvedEffect, RenderError> {
     use kronello_model::ResolvedEffect;
-    // COLOR-002 pointwise operations commute with any placement transform.
+    // COLOR-002/COLOR-003 pointwise operations commute with any placement
+    // transform.
     if matches!(
         effect,
         ResolvedEffect::ColorExposure { .. }
             | ResolvedEffect::ColorLevels { .. }
             | ResolvedEffect::ColorCurves { .. }
             | ResolvedEffect::ColorHsl { .. }
+            | ResolvedEffect::ColorLut { .. }
     ) {
         return Ok(effect.clone());
     }
@@ -1131,26 +1459,30 @@ pub(crate) fn map_effect(
     let x = a[0].hypot(b[0]);
     let y = a[1].hypot(b[1]);
     let dot = a[0] * a[1] + b[0] * b[1];
-    let sigma = match effect {
-        ResolvedEffect::GaussianBlur { sigma } | ResolvedEffect::DropShadow { sigma, .. } => *sigma,
-        _ => unreachable!(),
+    // Design-px lengths scale by the x-axis norm; a nonuniform or sheared
+    // transform rejects positive widths exactly like the Gaussian effects.
+    let length = |v: f64| -> Result<f64, RenderError> {
+        if v > 0.0
+            && ((x - y).abs() > 1e-10 * x.max(y).max(1.0) || dot.abs() > 1e-10 * (x * y).max(1.0))
+        {
+            return Err(RenderError::UnsupportedFeature(
+                "nonuniform transformed Gaussian effect".into(),
+            ));
+        }
+        Ok(v * x)
     };
-    if sigma > 0.0
-        && ((x - y).abs() > 1e-10 * x.max(y).max(1.0) || dot.abs() > 1e-10 * (x * y).max(1.0))
-    {
-        return Err(RenderError::UnsupportedFeature(
-            "nonuniform transformed Gaussian effect".into(),
-        ));
-    }
     Ok(match effect {
-        ResolvedEffect::GaussianBlur { .. } => ResolvedEffect::GaussianBlur { sigma: sigma * x },
+        ResolvedEffect::GaussianBlur { sigma } => ResolvedEffect::GaussianBlur {
+            sigma: length(*sigma)?,
+        },
         ResolvedEffect::DropShadow {
+            sigma,
             offset,
             color,
             opacity,
             ..
         } => ResolvedEffect::DropShadow {
-            sigma: sigma * x,
+            sigma: length(*sigma)?,
             offset: [
                 a[0] * offset[0] + a[1] * offset[1],
                 b[0] * offset[0] + b[1] * offset[1],
@@ -1158,7 +1490,47 @@ pub(crate) fn map_effect(
             color: *color,
             opacity: *opacity,
         },
-        _ => unreachable!(),
+        // Vignette is normalized-position pointwise and corner pins are
+        // already absolute Composition design_px positions; both commute.
+        ResolvedEffect::Vignette { .. } | ResolvedEffect::CornerPin { .. } => effect.clone(),
+        ResolvedEffect::ChromaKey {
+            key_color,
+            similarity,
+            edge_shrink,
+            edge_feather,
+            spill,
+        } => ResolvedEffect::ChromaKey {
+            key_color: *key_color,
+            similarity: *similarity,
+            edge_shrink: length(*edge_shrink)?,
+            edge_feather: length(*edge_feather)?,
+            spill: *spill,
+        },
+        ResolvedEffect::LumaKey {
+            key_luma,
+            tolerance,
+            edge_shrink,
+            edge_feather,
+        } => ResolvedEffect::LumaKey {
+            key_luma: *key_luma,
+            tolerance: *tolerance,
+            edge_shrink: length(*edge_shrink)?,
+            edge_feather: length(*edge_feather)?,
+        },
+        ResolvedEffect::Glow {
+            threshold,
+            radius,
+            intensity,
+        } => ResolvedEffect::Glow {
+            threshold: *threshold,
+            radius: length(*radius)?,
+            intensity: *intensity,
+        },
+        ResolvedEffect::Sharpen { amount, radius } => ResolvedEffect::Sharpen {
+            amount: *amount,
+            radius: length(*radius)?,
+        },
+        _ => unreachable!("color and affine variants handled above"),
     })
 }
 

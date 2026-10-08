@@ -6,7 +6,7 @@ import Foundation
     public let track: String
     public init(model: EditorModel, track: String) { self.model = model; self.track = track }
     public var canAccept: Bool {
-        model.assetSelection != nil && !model.busy && model.pendingCandidate == nil && !model.ui.locked.contains(track)
+        model.assetSelection != nil && !model.busy && model.pendingCandidate == nil && !model.trackLocked(track)
     }
     @discardableResult public func update(at frame: Int64) -> Bool {
         guard canAccept else { return false }

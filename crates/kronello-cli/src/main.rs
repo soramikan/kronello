@@ -4,7 +4,7 @@ mod events;
 
 use kronello_service::{BackendSelection, Request, Response, Service, ServiceError};
 
-const USAGE: &str = "kronello [--events ndjson] [--backend gpu|cpu-reference|gpu-resident-bgra8|gpu-resident-nv12] [--request-json JSON] [project create|create_plan|import|import_plan|export|info|collect | asset relink | render frame|sequence|export|submit|explain | node explain | job get|list|cancel|prune | edit plan|apply|undo | expression format | history list | scene query | property sample | capabilities get | sequence create|query | clip place|trim|stretch | instance retime | template_instance retime | template define|instantiate|set_input|set_duration|preview|migration_plan | captions import_plan|import|export] | worker --job <id>; otherwise read a tagged service Request from stdin";
+const USAGE: &str = "kronello [--events ndjson] [--backend gpu|cpu-reference|gpu-resident-bgra8|gpu-resident-nv12] [--request-json JSON] [project create|create_plan|import|import_plan|export|info|collect | asset relink | render frame|sequence|export|submit|explain | node explain | job get|list|cancel|prune | track analyze | proxy generate|status|clear | edit plan|apply|undo | expression format | history list | scene query | property sample | capabilities get | sequence create|query | clip place|trim|stretch | instance retime | template_instance retime | template define|instantiate|set_input|set_duration|preview|migration_plan | captions import_plan|import|export] | worker --job <id>; otherwise read a tagged service Request from stdin";
 fn run(stream: Option<&events::Stream>) -> Result<Response, ServiceError> {
     let mut selection = BackendSelection::Gpu;
     let mut literal = None;
@@ -69,6 +69,8 @@ fn run(stream: Option<&events::Stream>) -> Result<Response, ServiceError> {
             | "migration_plan"),
         ] => Some(format!("template.{verb}")),
         ["job", verb @ ("get" | "list" | "cancel" | "prune")] => Some(format!("job.{verb}")),
+        ["track", "analyze"] => Some("track.analyze".into()),
+        ["proxy", verb @ ("generate" | "status" | "clear")] => Some(format!("proxy.{verb}")),
         ["history", "list"] => Some("history.list".into()),
         ["scene", "query"] => Some("scene.query".into()),
         ["node", "explain"] => Some("node.explain".into()),

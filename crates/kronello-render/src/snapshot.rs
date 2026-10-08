@@ -74,6 +74,12 @@ pub struct SemanticVersions {
     pub composition_media: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hdr: Option<u32>,
+    /// FX-004 clip mask coverage semantics (ADR-0114).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clip_mask: Option<u32>,
+    /// FX-007 adjustment clip semantics (ADR-0116).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adjustment_clip: Option<u32>,
 }
 fn generator_versions() -> BTreeMap<String, u32> {
     BTreeMap::from([(SOLID_GENERATOR_ID.into(), 1)])
@@ -111,12 +117,22 @@ impl SemanticVersions {
                 (COLOR_LEVELS_ID.into(), COLOR_EFFECT_VERSION),
                 (COLOR_CURVES_ID.into(), COLOR_EFFECT_VERSION),
                 (COLOR_HSL_ID.into(), COLOR_EFFECT_VERSION),
+                // FX-005/FX-006 versioned ids (ADR-0115).
+                (KEYING_CHROMA_ID.into(), STANDARD_EFFECT_VERSION),
+                (KEYING_LUMA_ID.into(), STANDARD_EFFECT_VERSION),
+                (GLOW_ID.into(), STANDARD_EFFECT_VERSION),
+                (SHARPEN_ID.into(), STANDARD_EFFECT_VERSION),
+                (VIGNETTE_ID.into(), STANDARD_EFFECT_VERSION),
+                (CORNER_PIN_ID.into(), STANDARD_EFFECT_VERSION),
+                (COLOR_LUT_ID.into(), COLOR_LUT_VERSION),
             ]),
             generators: generator_versions(),
             video_input: initial_video_version(),
             temporal: Some(TEMPORAL_VERSION),
             composition_media: Some(COMPOSITION_MEDIA_VERSION),
             hdr: Some(crate::HDR_VERSION),
+            clip_mask: Some(kronello_model::MASK_VERSION),
+            adjustment_clip: Some(kronello_model::ADJUSTMENT_VERSION),
         }
     }
 }
@@ -145,6 +161,21 @@ impl Default for RenderProfile {
 /// No device handles, latest-document lookup, implicit fonts, or mutable state.
 /// The complete Project (including independent opaque data) participates in the
 /// identity even though only the selected dependency closure is executable.
+/// Transient render-input choice for preview proxy substitution (ADR-0119).
+/// `Off` is the only legal mode for file-writing outputs; `Prefer` substitutes
+/// a registered proxy for decode while keeping authored extent and identity.
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum MediaProxyMode {
+    /// Always decode the authored original asset (exports and fixed jobs).
+    #[default]
+    Off,
+    /// Decode the registered proxy when the link is valid, otherwise fall back
+    /// to the original at full quality. Preview-only.
+    Prefer,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RenderSnapshot {
@@ -158,6 +189,13 @@ pub struct RenderSnapshot {
     profile: RenderProfile,
     mattes: Vec<MatteBinding>,
     font_locks: Vec<FontRef>,
+    #[serde(default)]
+    media_proxies: MediaProxyMode,
+    /// COLOR-003 normalized `.cube` lattices keyed by asset content hash.
+    /// Bytes are explicit render inputs; the field is serialized so a fixed
+    /// snapshot keeps deterministic replay identity (ADR-0113).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    luts: BTreeMap<String, kronello_model::CubeLut>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
@@ -244,6 +282,8 @@ impl RenderSnapshot {
                     profile,
                     mattes: vec![],
                     font_locks: vec![],
+                    media_proxies: MediaProxyMode::Off,
+                    luts: BTreeMap::new(),
                 };
                 value.validate()?;
                 let definitions = value.definitions()?;
@@ -260,8 +300,15 @@ impl RenderSnapshot {
                 }
                 // Caption cue fonts, including clip-level overrides and span
                 // faces, are locked by hash exactly like text node fonts.
+                // Disabled cues render nothing, so they need no font locks
+                // and a missing caption behind one must not fail the render.
                 let registry = render_registry();
-                for clip in source.tracks.iter().flat_map(|t| &t.clips) {
+                for clip in source
+                    .tracks
+                    .iter()
+                    .flat_map(|t| &t.clips)
+                    .filter(|c| c.enabled)
+                {
                     let SourceRef::Caption { caption } = &clip.source_ref else {
                         continue;
                     };
@@ -299,6 +346,8 @@ impl RenderSnapshot {
             profile,
             mattes,
             font_locks: vec![],
+            media_proxies: MediaProxyMode::Off,
+            luts: BTreeMap::new(),
         };
         snapshot.validate()?;
         let definitions = snapshot.definitions()?;
@@ -326,6 +375,25 @@ impl RenderSnapshot {
     pub fn with_mattes(mut self, mattes: Vec<MatteBinding>) -> Self {
         self.mattes = mattes;
         self
+    }
+    /// Transient preview proxy mode; does not alter the saved Project.
+    pub fn with_media_proxies(mut self, mode: MediaProxyMode) -> Self {
+        self.media_proxies = mode;
+        self
+    }
+    pub fn media_proxies(&self) -> MediaProxyMode {
+        self.media_proxies
+    }
+    /// COLOR-003 content-verified `.cube` lattices keyed by asset content
+    /// hash, loaded from explicit render inputs; transient like `mattes`.
+    pub fn with_luts(mut self, luts: BTreeMap<String, kronello_model::CubeLut>) -> Self {
+        self.luts = luts;
+        self
+    }
+    /// Normalized LUT lattices available to this snapshot, keyed by the
+    /// document asset `content_hash`.
+    pub fn luts(&self) -> &BTreeMap<String, kronello_model::CubeLut> {
+        &self.luts
     }
     pub fn composition(&self) -> CompositionId {
         self.composition
@@ -446,6 +514,20 @@ impl RenderSnapshot {
         if self.semantic_versions.hdr.is_none() && self.profile.hdr.is_none() {
             supported_versions.hdr = None;
         }
+        // FX-004/FX-007: snapshots without mask/adjustment semantics may still
+        // target documents that never use them.
+        let has_clip_masks = self.project.sequences.iter().any(|s| {
+            matches!(s, DocumentObject::Known(s) if s.tracks.iter().flat_map(|t| &t.clips).any(|c| !c.masks.is_empty()))
+        });
+        if self.semantic_versions.clip_mask.is_none() && !has_clip_masks {
+            supported_versions.clip_mask = None;
+        }
+        let has_adjustments = self.project.sequences.iter().any(|s| {
+            matches!(s, DocumentObject::Known(s) if s.tracks.iter().flat_map(|t| &t.clips).any(|c| matches!(c.source_ref, SourceRef::Adjustment)))
+        });
+        if self.semantic_versions.adjustment_clip.is_none() && !has_adjustments {
+            supported_versions.adjustment_clip = None;
+        }
         if self.semantic_versions.composition_media.is_none() {
             supported_versions.composition_media = None;
         }
@@ -468,6 +550,18 @@ impl RenderSnapshot {
             if self.semantic_versions.effects.get(id) == Some(&EFFECT_VERSION) {
                 *version = EFFECT_VERSION;
             }
+        }
+        // COLOR-003: snapshots pinned before LUT support carry no
+        // `kronello.color.lut` key. An absent pin rejects LUT execution during
+        // scene construction but must not invalidate unrelated snapshots.
+        if !self
+            .semantic_versions
+            .effects
+            .contains_key(kronello_model::COLOR_LUT_ID)
+        {
+            supported_versions
+                .effects
+                .remove(kronello_model::COLOR_LUT_ID);
         }
         if self.project.semantic_version != PROJECT_SEMANTIC_VERSION
             || self.semantic_versions != supported_versions
@@ -606,6 +700,31 @@ fn content_asset(project: &Project, id: AssetId) -> Result<&Asset, RenderError> 
         }
     })
 }
+/// Transient preview substitution (ADR-0119): in `Prefer` mode a valid
+/// `ProxyLink` retargets decode to the proxy asset/stream. Any absent, stale
+/// or inconsistent link falls back to the authored stream at full quality —
+/// substitution never errors and never changes authored media identity.
+fn render_media<'a>(
+    snapshot: &'a RenderSnapshot,
+    asset: &'a Asset,
+    stream_index: u32,
+) -> (&'a Asset, u32) {
+    if snapshot.media_proxies != MediaProxyMode::Prefer || asset.kind != AssetKind::Video {
+        return (asset, stream_index);
+    }
+    let Some(link) = snapshot.project.proxy_link(asset.id) else {
+        return (asset, stream_index);
+    };
+    if link.original_stream_index != stream_index
+        || snapshot.project.proxy_link_state(link).is_err()
+    {
+        return (asset, stream_index);
+    }
+    match content_asset(&snapshot.project, link.proxy) {
+        Ok(proxy) => (proxy, link.proxy_stream_index),
+        Err(_) => (asset, stream_index),
+    }
+}
 
 /// Resolved caption draw input: laid-out glyphs plus cue-level attributes that
 /// are not part of `TextDocument` (outline ring, block background, synthesized
@@ -640,6 +759,10 @@ pub enum SceneContent {
         reverse_sampling: bool,
         extent: [f64; 2],
     },
+    /// FX-007 (ADR-0116): an adjustment clip node. It draws nothing itself;
+    /// DAG lowering rewrites the accumulated lower-track composite through
+    /// the node's masks and effects at its root position.
+    Adjustment,
 }
 /// Resolved FX-003 transition operation on one incoming clip node
 /// (ADR-0109). Crossfade and dip use post_effect_opacity for the incoming
@@ -661,6 +784,9 @@ pub struct SceneNodeIr {
     pub transitions: Vec<SceneTransition>,
     pub blend_mode: BlendMode,
     pub effects: Vec<ResolvedEffect>,
+    /// FX-004 clip-local mask stack resolved at this instant (ADR-0114).
+    /// Empty for composition-authored nodes and maskless clips.
+    pub masks: Vec<ResolvedMask>,
     /// Final node values, including template and layout inputs.
     pub properties: BTreeMap<PropertyId, Value>,
     pub text: Option<String>,
@@ -678,6 +804,10 @@ pub struct SceneIr {
     pub design_extent: [f64; 2],
     pub nodes: Vec<SceneNodeIr>,
     pub mattes: Vec<MatteBinding>,
+    /// COLOR-003 lattices resolved for this scene, keyed by document asset id.
+    /// Only assets actually referenced by resolved `kronello.color.lut`
+    /// effects appear; unreferenced render inputs are not bound.
+    pub luts: BTreeMap<AssetId, kronello_model::CubeLut>,
 }
 
 pub fn build_scene_ir(
@@ -865,6 +995,7 @@ pub fn build_scene_ir_with_cache(
         .expect("validated root");
     let mut nodes = vec![];
     let mut used_fonts = BTreeSet::new();
+    let mut luts: BTreeMap<AssetId, kronello_model::CubeLut> = BTreeMap::new();
     let mut mattes = snapshot.mattes.clone();
     for n in evaluated.nodes {
         let values: BTreeMap<_, _> = n
@@ -903,7 +1034,34 @@ pub fn build_scene_ir_with_cache(
                     ));
                 }
                 d.validate(&authored.properties, &registry)?;
-                Ok(d.resolve(&values)?)
+                let resolved = d.resolve(&values)?;
+                // COLOR-003: the resolved asset reference is bound to a
+                // content-verified lattice here, while `values` stays free of
+                // lattice bytes so snapshot identity remains hash-stable.
+                if let kronello_model::ResolvedEffect::ColorLut { lut: asset_id, .. } = &resolved {
+                    let asset = content_asset(&snapshot.project, *asset_id)?;
+                    if asset.kind != AssetKind::Data {
+                        return Err(RenderError::Backend {
+                            code: "INVALID_LUT",
+                            message: format!("lut effect asset {asset_id} is not a data asset"),
+                        });
+                    }
+                    let lattice = snapshot.luts.get(&asset.content_hash).ok_or_else(|| {
+                        RenderError::Backend {
+                            code: "LUT_INPUT_MISSING",
+                            message: format!(
+                                "lut asset {} has no verified render input",
+                                asset.content_hash
+                            ),
+                        }
+                    })?;
+                    lattice
+                        .validate()
+                        .and_then(|()| lattice.validate_document_size())
+                        .map_err(RenderError::from)?;
+                    luts.entry(*asset_id).or_insert_with(|| lattice.clone());
+                }
+                Ok(resolved)
             })
             .collect::<Result<Vec<_>, RenderError>>()?;
         let mut layout_content_hash = None;
@@ -967,7 +1125,7 @@ pub fn build_scene_ir_with_cache(
                                 n.local_time.checked_sub(authored.active_range.start())?;
                             let source =
                                 media.source_in.checked_add(media.time_map.map(relative)?)?;
-                            media_content(asset, media.stream_index, source)?
+                            media_content(snapshot, asset, media.stream_index, source)?
                         }
                     }
                     AssetKind::Data => {
@@ -994,11 +1152,12 @@ pub fn build_scene_ir_with_cache(
                 .start_time
                 .unwrap_or(Time::ZERO)
                 .checked_add(relative)?;
-            content = media_content(asset, stream.index, source)?;
+            content = media_content(snapshot, asset, stream.index, source)?;
         }
         let mut post_effect_opacity = 1.0;
         let mut transitions = Vec::new();
         let mut transition_offset = [0.0; 2];
+        let mut masks = Vec::new();
         if let Some(sequence) = snapshot
             .sequence
             .filter(|_| n.composition == snapshot.composition)
@@ -1035,9 +1194,11 @@ pub fn build_scene_ir_with_cache(
                             "video dimensions unavailable".into(),
                         ));
                     };
+                    let (decode_asset, decode_stream) =
+                        render_media(snapshot, asset, *stream_index);
                     SceneContent::Video {
-                        asset: asset.clone(),
-                        stream_index: *stream_index,
+                        asset: decode_asset.clone(),
+                        stream_index: decode_stream,
                         time: clip.local_time(time)?,
                         reverse_sampling: clip.reverse_sampling.is_some(),
                         extent: [w, h],
@@ -1046,6 +1207,7 @@ pub fn build_scene_ir_with_cache(
                 SourceRef::Generator { color, .. } => {
                     crate::sequence::solid_content(*color, sequence.extent)?
                 }
+                SourceRef::Adjustment => SceneContent::Adjustment,
                 SourceRef::Caption { caption } => {
                     let document =
                         self::content(&snapshot.project.captions, caption.as_uuid(), |c| {
@@ -1082,8 +1244,30 @@ pub fn build_scene_ir_with_cache(
                 }
                 _ => content,
             };
+            // FX-004: mask parameters are clip properties evaluated in
+            // sequence time on the lowered node, so the resolved values map
+            // already carries this instant's path/feather/expansion/opacity.
+            masks = clip
+                .masks
+                .iter()
+                .map(|mask| {
+                    mask.resolve(&properties).map_err(|e| RenderError::Backend {
+                        code: e.code(),
+                        message: e.to_string(),
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
             for tr in &sequence.transitions {
-                if tr.incoming == clip.id && tr.range.contains(time) {
+                // The transition contributes only when both endpoints are
+                // enabled; a disabled clip leaves a hole rather than a
+                // partially rendered transition (NLE-005).
+                let outgoing_enabled = sequence
+                    .tracks
+                    .iter()
+                    .flat_map(|t| &t.clips)
+                    .find(|c| c.id == tr.outgoing)
+                    .is_some_and(|c| c.enabled);
+                if tr.incoming == clip.id && tr.range.contains(time) && outgoing_enabled {
                     if tr.version != 1 {
                         return Err(RenderError::UnsupportedFeature("transition version".into()));
                     }
@@ -1207,6 +1391,7 @@ pub fn build_scene_ir_with_cache(
             transitions,
             blend_mode,
             effects,
+            masks,
             properties,
             text: evaluated_text,
             content,
@@ -1227,6 +1412,7 @@ pub fn build_scene_ir_with_cache(
         design_extent: [root.design_extent.width(), root.design_extent.height()],
         nodes,
         mattes,
+        luts,
     })
 }
 
@@ -1253,6 +1439,7 @@ fn require_composition_media(snapshot: &RenderSnapshot) -> Result<(), RenderErro
     Ok(())
 }
 fn media_content(
+    snapshot: &RenderSnapshot,
     asset: &Asset,
     stream_index: u32,
     source: Time,
@@ -1293,10 +1480,12 @@ fn media_content(
         }
         source
     };
+    // Authored extent and bounds are validated above; only decode swaps.
+    let (decode_asset, decode_stream) = render_media(snapshot, asset, stream_index);
     Ok(SceneContent::Video {
         reverse_sampling: false,
-        asset: asset.clone(),
-        stream_index,
+        asset: decode_asset.clone(),
+        stream_index: decode_stream,
         time,
         extent: [f64::from(width), f64::from(height)],
     })

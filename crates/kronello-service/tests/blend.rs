@@ -41,11 +41,13 @@ fn fixture() -> (Project, SequenceId, ClipId) {
         timeline_range: range,
         source_in: Time::ZERO,
         time_map: TimeMap::linear(Time::ZERO, Rational::ONE).unwrap(),
+        enabled: true,
         reverse_sampling: None,
         audio_retime: AudioRetimePolicy::Reject,
         volume: None,
         links: vec![],
         effects: vec![],
+        masks: vec![],
         properties: vec![],
         markers: vec![],
     };
@@ -79,6 +81,7 @@ fn fixture() -> (Project, SequenceId, ClipId) {
         transitions: vec![],
         markers: vec![],
         work_area: None,
+        targets: None,
     };
     let id = sequence.id;
     p.sequences.push(DocumentObject::Known(sequence));

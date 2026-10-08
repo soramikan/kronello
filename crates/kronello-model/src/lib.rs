@@ -46,8 +46,8 @@ pub use expression::{
 };
 pub use id::{
     AssetId, CaptionId, ClipId, CompositionId, CompositionInstanceId, ContentId, CurveId,
-    DescriptorId, ExpressionId, MarkerId, ModifierId, NodeId, PropertyId, SchemaKey, SequenceId,
-    TrackId,
+    DescriptorId, ExpressionId, MarkerId, MaskId, ModifierId, NodeId, PropertyId, SchemaKey,
+    SequenceId, TrackId,
 };
 pub use property::{DescriptorRef, Modifier, Property, PropertySource, SourceResolver};
 pub use schema::{
@@ -86,10 +86,10 @@ pub use shape::{
 
 mod text;
 pub use text::{
-    CharacterAnimation, FontRef, ResolvedCharacterAnimation, ResolvedText, ResolvedTextStyle,
-    RubyAssociation, TEXT_ADVANCED_LAYOUT_VERSION, TEXT_LAYOUT_VERSION, TextAlignment,
-    TextDirection, TextDocument, TextError, TextRange, TextStyleSpan, text_descriptors,
-    validate_text_contents,
+    AnimatorMode, CharacterAnimation, FontRef, ResolvedCharacterAnimation, ResolvedText,
+    ResolvedTextStyle, RubyAssociation, TEXT_ADVANCED_LAYOUT_VERSION, TEXT_LAYOUT_VERSION,
+    TextAlignment, TextDirection, TextDocument, TextError, TextRange, TextStyleSpan,
+    text_descriptors, validate_text_contents,
 };
 
 mod caption;
@@ -103,8 +103,10 @@ pub use caption::{
 };
 
 mod effect;
+mod lut;
 mod template;
 pub use effect::*;
+pub use lut::{CubeLut, LUT_3D_DOCUMENT_MAX_SIZE, LUT_3D_MAX_SIZE, LUT_3D_MIN_SIZE, LutError};
 pub use template::*;
 mod asset;
 pub use asset::{Asset, AssetKind, AssetLocator, StreamMetadata};
@@ -115,5 +117,13 @@ pub use sequence::*;
 mod audio_analysis;
 pub use audio_analysis::*;
 
+mod proxy;
+pub use proxy::*;
+
+mod tracking;
+pub use tracking::*;
+
 mod matte;
 pub use matte::*;
+mod mask;
+pub use mask::*;

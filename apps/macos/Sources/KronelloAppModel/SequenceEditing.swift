@@ -40,8 +40,14 @@ public struct EditClip: Identifiable {
         guard map.string("kind") == "linear" else { return nil }
         return .wire(map.object("speed"))
     }
+    /// Authored contribution switch (NLE-005); absent means enabled.
+    public var enabled: Bool { authored["enabled"] as? Bool ?? true }
+    /// Piecewise maps carry speed ramps and freeze holds (NLE-006).
+    public var timeMapKind: String { authored.object("time_map").string("kind") }
     public var speedLabel: String {
-        guard let rate = linearRate else { return "非線形" }
+        guard let rate = linearRate else {
+            return timeMapKind == "piecewise_linear" ? "速度ランプ" : "非線形"
+        }
         return String(format: "%.1f%%", Double(rate.num)! / Double(rate.den)! * 100)
     }
     public var reversed: Bool { authored.string("reverse_sampling") == "reverse_grid_v1" }
@@ -202,14 +208,14 @@ extension EditorModel {
         selectClip(clip.id)
     }
     private func startCandidate(_ clip: EditClip, mode: TimelineCandidate.Mode) {
-        guard !busy, pendingCandidate == nil, !ui.locked.contains(clip.track), timelineCandidate == nil else { return }
+        guard !busy, pendingCandidate == nil, !trackLocked(clip.track), timelineCandidate == nil else { return }
         selectClip(clip.id)
         let start = clip.start.frames(rateNum: rateNum, rateDen: rateDen), end = clip.end.frames(rateNum: rateNum, rateDen: rateDen)
         timelineCandidate = .init(base: revision, sequence: sequence.string("id"), track: clip.track, clip: clip.authored, name: clipName(clip), kind: clip.kind, missing: clipMissing(clip),
             mode: mode, originalStart: start, originalEnd: end, start: start, end: end, cut: start, rightID: UUID().uuidString.lowercased())
     }
     public func beginAssetGesture(_ asset: EditAsset, track: String, at frame: Int64) {
-        guard !busy, pendingCandidate == nil, timelineCandidate == nil, !ui.locked.contains(track) else { return }
+        guard !busy, pendingCandidate == nil, timelineCandidate == nil, !trackLocked(track) else { return }
         let length = asset.duration.frames(rateNum: rateNum, rateDen: rateDen)
         // Caption lanes accept no asset placements; cues come from caption editing.
         guard length > 0, let target = sequence.objects("tracks").first(where: { $0.string("id") == track }),
@@ -330,7 +336,7 @@ extension EditorModel {
     /// Delete the selected clip, keeping the gap. `ripple` removes the clip's
     /// timeline range and closes the gap on its track instead.
     public func deleteSelectedClip(ripple: Bool = false) {
-        guard let clip = selectedClip, !busy, pendingCandidate == nil, timelineCandidate == nil, !ui.locked.contains(clip.track) else { return }
+        guard let clip = selectedClip, !busy, pendingCandidate == nil, timelineCandidate == nil, !trackLocked(clip.track) else { return }
         if ripple {
             submit([timelineCommand("ripple_delete", ["sequence": sequence.string("id"), "tracks": [clip.track],
                 "range": clip.authored.object("timeline_range"), "linked": true])], label: "リップル削除")
@@ -366,5 +372,55 @@ extension EditorModel {
         let tracks = sequence.objects("tracks"), kind = tracks.first { $0.string("id") == id }?.string("kind") ?? "video"
         let prefix = kind == "audio" ? "A" : kind == "caption" ? "C" : "V"
         return prefix + String((tracks.filter { $0.string("kind") == kind }.firstIndex { $0.string("id") == id } ?? 0) + 1)
+    }
+    /// NLE-005 persisted track lock. This reads the document through the
+    /// sequence query, not `ui.locked` (which now covers motion layers only).
+    public func trackLocked(_ id: String) -> Bool {
+        sequence.objects("tracks").first { $0.string("id") == id }?.object("state")["locked"] as? Bool ?? false
+    }
+    /// TrackStateSet replaces the whole state, so the toggle re-emits the
+    /// persisted visibility/mute values alongside the flipped lock.
+    public func setTrackLocked(_ track: [String: Any]) {
+        let state = track.object("state")
+        submit([timelineCommand("track_state_set", ["sequence": sequence.string("id"), "track": track.string("id"), "state": [
+            "visible": state["visible"] as? Bool ?? true,
+            "muted": state["muted"] as? Bool ?? false,
+            "locked": !(state["locked"] as? Bool ?? false)]])], label: "トラックのロック切替")
+    }
+    /// NLE-005 implicit edit destination: one video and one audio target.
+    /// Re-selecting the current target clears that kind's entry.
+    public func trackTargeted(_ track: [String: Any]) -> Bool {
+        let kind = track.string("kind")
+        guard kind == "video" || kind == "audio" else { return false }
+        return sequence.object("targets").string(kind) == track.string("id")
+    }
+    public func setTrackTarget(_ track: [String: Any]) {
+        let kind = track.string("kind"), id = track.string("id")
+        guard kind == "video" || kind == "audio" else { return }
+        let current = sequence.object("targets")
+        var wire: [String: Any] = [:]
+        for key in ["video", "audio"] {
+            let existing = current[key] as? String
+            if key == kind {
+                if existing != id { wire[key] = id }
+            } else if let existing {
+                wire[key] = existing
+            }
+        }
+        submit([timelineCommand("sequence_targets_set", ["sequence": sequence.string("id"),
+            "targets": wire.isEmpty ? NSNull() : wire])], label: "ターゲットトラックの変更")
+    }
+    /// NLE-005 authored contribution switch; the clip keeps its occupancy.
+    public func setClipEnabled(_ clip: EditClip, enabled: Bool) {
+        guard !trackLocked(clip.track), !busy, pendingCandidate == nil else { return }
+        submit([timelineCommand("clip_enable_set", ["sequence": sequence.string("id"), "clip": clip.id, "enabled": enabled])],
+            label: enabled ? "クリップの有効化" : "クリップの無効化")
+    }
+    /// NLE-006 freeze at the playhead: splits the clip and pins the right
+    /// part's source time. Service-side validation rejects linked,
+    /// transitioned, caption or reversed clips with typed errors.
+    public func freezeClipAtPlayhead(_ clip: EditClip) {
+        guard !trackLocked(clip.track), !busy, pendingCandidate == nil, timelineCandidate == nil else { return }
+        submit([timelineCommand("clip_freeze", ["sequence": sequence.string("id"), "clip": clip.id, "at": frameTime(frame).wire])], label: "フリーズフレーム")
     }
 }

@@ -17,7 +17,7 @@ struct CaptionInspector: View {
     var font: [String: Any] { style.object("font") }
     var families: [String] { Array(Set(model.lockedFonts.map { $0.string("family") } + [font.string("family")])).filter { !$0.isEmpty }.sorted() }
     var weights: [[String: Any]] { model.lockedFonts.filter { $0.string("family") == font.string("family") } }
-    var disabled: Bool { model.ui.locked.contains(clip.track) || model.busy || model.pendingCandidate != nil }
+    var disabled: Bool { model.trackLocked(clip.track) || model.busy || model.pendingCandidate != nil }
     static let anchors: [(id: String, label: String)] = [
         ("top_left", "左上"), ("top_center", "上"), ("top_right", "右上"),
         ("center_left", "左"), ("center", "中央"), ("center_right", "右"),

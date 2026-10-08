@@ -24,12 +24,14 @@ fn clip(a: Time, b: Time) -> Clip {
         timeline_range: range(a, b),
         source_in: Time::ZERO,
         time_map: TimeMap::linear(Time::ZERO, Rational::ONE).unwrap(),
+        enabled: true,
         audio_retime: AudioRetimePolicy::Reject,
         reverse_sampling: None,
         volume: None,
         links: vec![],
         properties: vec![],
         effects: vec![],
+        masks: vec![],
         markers: vec![],
     }
 }
@@ -49,6 +51,7 @@ fn sequence(clips: Vec<Clip>) -> Sequence {
         transitions: vec![],
         markers: vec![],
         work_area: None,
+        targets: None,
     }
 }
 fn marker(time: Time, color: MarkerColor, comment: Option<&str>) -> Marker {
@@ -457,6 +460,8 @@ fn work_area_maps_explicitly_into_the_render_job_range() {
                     },
                     profile: Default::default(),
                     fonts: vec![],
+                    media_proxies: kronello_render::MediaProxyMode::Off,
+                    luts: vec![],
                 },
                 range: work_area,
                 frame_rate: FrameRate::new(24, 1).unwrap(),

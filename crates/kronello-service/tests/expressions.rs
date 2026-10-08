@@ -69,6 +69,7 @@ fn sample(
             }],
             times: vec![Time::ZERO, Time::new(1, 2).unwrap()],
             fonts: None,
+            luts: None,
         }))?
     else {
         panic!()

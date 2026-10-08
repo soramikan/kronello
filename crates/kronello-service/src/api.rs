@@ -90,6 +90,12 @@ macro_rules! commands {
             ("svg.export", true, SvgExportRequest, SvgExportResult),
             ("svg.import_plan", true, SvgImportPlanRequest, EditPlan),
             ("audio.analyze", false, AudioAnalyzeRequest, ProjectInfo),
+            ("track.analyze", false, TrackAnalyzeRequest, ProjectInfo),
+            ("proxy.generate", true, ProxyGenerateRequest, JobListResult),
+            ("proxy.status", true, ProxyStatusRequest, ProxyStatusResult),
+            ("proxy.clear", false, ProxyClearRequest, ProjectInfo),
+            ("audio.loudness", true, AudioLoudnessRequest, AudioLoudnessResult),
+            ("audio.normalize", false, AudioNormalizeRequest, AudioNormalizeResult),
             ("sequence.query", true, SequenceQueryRequest, SequenceQueryResult),
             ("sequence.create", false, SequenceCreateRequest, kronello_store::Event),
             ("clip.place", false, ClipPlaceRequest, kronello_store::Event),
@@ -133,7 +139,9 @@ macro_rules! commands {
             ("template.set_duration", false, TemplateSetDurationRequest, kronello_store::Event),
             ("captions.import_plan", true, CaptionsImportPlanRequest, EditPlan),
             ("captions.import", false, CaptionsImportRequest, kronello_store::Event),
-            ("captions.export", true, CaptionsExportRequest, CaptionsExportResult)
+            ("captions.export", true, CaptionsExportRequest, CaptionsExportResult),
+            ("lut.import", false, LutImportRequest, kronello_store::Event),
+            ("inspect.scopes", true, InspectScopesRequest, InspectScopesResult)
         }
     };
 }
@@ -179,6 +187,9 @@ impl CapabilitiesResult {
                 "audio_gain_v1",
                 "audio_generator_v1",
                 "audio_crossfade_v1",
+                "audio_filters_v1",
+                "audio_dynamics_v1",
+                "audio_loudness_v1",
                 "movie_delivery_v1",
                 "composition",
                 "document_matte_v1",
@@ -201,6 +212,8 @@ impl CapabilitiesResult {
                 "template",
                 "captions_v1",
                 "caption_sidecar_v1",
+                "motion_tracking_v1",
+                "media_proxies_v1",
             ]
             .map(String::from)
             .to_vec(),
@@ -208,6 +221,16 @@ impl CapabilitiesResult {
                 kronello_model::GAUSSIAN_BLUR_ID.into(),
                 kronello_model::DROP_SHADOW_ID.into(),
                 kronello_model::AUDIO_GAIN_ID.into(),
+                kronello_model::AUDIO_EQ_ID.into(),
+                kronello_model::AUDIO_HPF_ID.into(),
+                kronello_model::AUDIO_LPF_ID.into(),
+                kronello_model::AUDIO_COMPRESSOR_ID.into(),
+                kronello_model::AUDIO_LIMITER_ID.into(),
+                kronello_model::COLOR_EXPOSURE_ID.into(),
+                kronello_model::COLOR_LEVELS_ID.into(),
+                kronello_model::COLOR_CURVES_ID.into(),
+                kronello_model::COLOR_HSL_ID.into(),
+                kronello_model::COLOR_LUT_ID.into(),
             ],
             backends: ["wgpu_rgba16f", "cpu_reference_float32"]
                 .map(String::from)

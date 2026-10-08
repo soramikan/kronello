@@ -12,12 +12,22 @@ import KronelloAppModel
                 .onOpenURL { url in if url.isFileURL { Task { await controller.open(url.path) } } }
         }.windowStyle(.hiddenTitleBar).windowResizability(.contentMinSize)
             .defaultSize(width: KRWindowMetrics.welcomeWidth, height: KRWindowMetrics.welcomeHeight)
-            .commands { KronelloCommands(controller: controller) }
+            .commands { KronelloCommands(controller: controller, workflow: controller.workflow) }
         Settings {
-            KRPanel("設定") { VStack(alignment: .leading, spacing: KRSpace.space4) {
-                KRCheckbox("Light テーマ", isOn: $controller.preferences.light)
-                KRCheckbox("起動時に Welcome を表示", isOn: $controller.preferences.showWelcome)
-            }.padding(KRSpace.space4).frame(width: 360, alignment: .leading) }.fixedSize().krTheme(controller.theme)
+            KRPanel("設定") {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: KRSpace.space4) {
+                        KRCheckbox("Light テーマ", isOn: $controller.preferences.light)
+                        KRCheckbox("起動時に Welcome を表示", isOn: $controller.preferences.showWelcome)
+                        Divider()
+                        Text("ワークスペース").krText(KRType.heading)
+                        LayoutSettings(workflow: controller.workflow)
+                        Divider()
+                        Text("ショートカット").krText(KRType.heading)
+                        ShortcutSettings(workflow: controller.workflow)
+                    }.padding(KRSpace.space4).frame(width: 460, alignment: .leading)
+                }
+            }.frame(maxHeight: 720).fixedSize(horizontal: true, vertical: false).krTheme(controller.theme)
                 .onChange(of: controller.preferences.light) { _, _ in controller.savePreferences() }
                 .onChange(of: controller.preferences.showWelcome) { _, _ in controller.savePreferences() }
         }
@@ -27,21 +37,31 @@ import KronelloAppModel
 struct KronelloCommands: Commands {
     @Environment(\.openWindow) private var openWindow
     @ObservedObject var controller: AppController
+    @ObservedObject var workflow: WorkflowSettings
+    private func shortcut(_ action: ShortcutAction) -> (key: KeyEquivalent, modifiers: EventModifiers) {
+        let binding = workflow.binding(for: action)
+        return (binding.keyEquivalent, binding.eventModifiers)
+    }
     var body: some Commands {
                 CommandGroup(replacing: .newItem) {
-                    Button("新規プロジェクト…") { openWindow(id: "main"); controller.newPanel() }.keyboardShortcut("n")
-                    Button("開く…") { openWindow(id: "main"); controller.openPanel() }.keyboardShortcut("o")
-                    Button("プロジェクトを閉じる", action: controller.closeProject).keyboardShortcut("w").disabled(controller.editor == nil)
+                    let new = shortcut(.newProject), open = shortcut(.openProject), close = shortcut(.closeProject)
+                    Button("新規プロジェクト…") { openWindow(id: "main"); controller.newPanel() }.keyboardShortcut(new.key, modifiers: new.modifiers)
+                    Button("開く…") { openWindow(id: "main"); controller.openPanel() }.keyboardShortcut(open.key, modifiers: open.modifiers)
+                    Button("プロジェクトを閉じる", action: controller.closeProject).keyboardShortcut(close.key, modifiers: close.modifiers).disabled(controller.editor == nil)
                 }
                 CommandGroup(replacing: .undoRedo) {
-                    Button("取り消す") { Task { await controller.editor?.undo() } }.keyboardShortcut("z").disabled(controller.editor?.canUndo != true)
-                    Button("やり直す") { Task { await controller.editor?.undo(redo: true) } }.keyboardShortcut("z", modifiers: [.command, .shift]).disabled(controller.editor?.canRedo != true)
+                    let undo = shortcut(.undo), redo = shortcut(.redo)
+                    Button("取り消す") { Task { await controller.editor?.undo() } }.keyboardShortcut(undo.key, modifiers: undo.modifiers).disabled(controller.editor?.canUndo != true)
+                    Button("やり直す") { Task { await controller.editor?.undo(redo: true) } }.keyboardShortcut(redo.key, modifiers: redo.modifiers).disabled(controller.editor?.canRedo != true)
                 }
                 // Extend the system View menu instead of adding a second one.
                 CommandGroup(before: .toolbar) {
-                    ForEach(Array(["編集", "モーション", "テンプレート", "書き出し"].enumerated()), id: \.offset) { index, label in
-                        Button(label) { controller.editor?.ui.page = ["edit", "motion", "template", "export"][index] }
-                            .keyboardShortcut(KeyEquivalent(Character(String(index + 1))))
+                    let pages: [(ShortcutAction, String, String)] = [(.pageEdit, "編集", "edit"), (.pageMotion, "モーション", "motion"),
+                                                                   (.pageTemplate, "テンプレート", "template"), (.pageExport, "書き出し", "export")]
+                    ForEach(pages, id: \.2) { action, label, page in
+                        let binding = workflow.binding(for: action)
+                        Button(label) { controller.editor?.ui.page = page }
+                            .keyboardShortcut(binding.keyEquivalent, modifiers: binding.eventModifiers)
                             .disabled(controller.editor == nil)
                     }
                     Divider()
@@ -58,7 +78,7 @@ struct AppRoot: View {
             if let editor = controller.editor {
                 // Native preview coordinators and page StateObjects belong to
                 // this project session, even when a second file reuses the window.
-                EditorWindow(model: editor).id(ObjectIdentifier(editor))
+                EditorWindow(model: editor, workflow: controller.workflow).id(ObjectIdentifier(editor))
             }
             else {
                 KRWelcome(recent: controller.recent, showAtLaunch: $controller.preferences.showWelcome,

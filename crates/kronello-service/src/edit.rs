@@ -145,6 +145,13 @@ pub enum EditCommand {
     CaptionRemove {
         id: kronello_model::CaptionId,
     },
+    /// Upsert one validated external asset record. COLOR-003 registers `.cube`
+    /// documents as `AssetKind::Data`; the locator stays external and the
+    /// content hash is caller-independent only through the import operation
+    /// that verifies it.
+    AssetSet {
+        asset: kronello_model::Asset,
+    },
     CompositionCreate {
         composition: Composition,
     },
@@ -529,6 +536,21 @@ fn property_mut(
     object: Uuid,
     id: PropertyId,
 ) -> Result<&mut Property, ServiceError> {
+    // NLE-005: a clip property edit is a clip mutation. Generic property
+    // commands funnel through here, so the locked-track guard lives at the
+    // shared resolution point and applies to every caller at once.
+    for s in &project.sequences {
+        if let DocumentObject::Known(s) = s {
+            for track in &s.tracks {
+                if track.locked() && track.clips.iter().any(|c| c.id.as_uuid() == object) {
+                    return Err(ServiceError::new(
+                        "TRACK_LOCKED",
+                        "clip is on a locked track",
+                    ));
+                }
+            }
+        }
+    }
     for s in &mut project.sequences {
         if let DocumentObject::Known(s) = s {
             for c in s.tracks.iter_mut().flat_map(|t| &mut t.clips) {
@@ -1178,6 +1200,21 @@ fn apply_command(
                 project
                     .captions
                     .push(DocumentObject::Known(caption.clone()));
+            }
+        }
+        EditCommand::AssetSet { asset } => {
+            asset
+                .validate()
+                .map_err(|e| ServiceError::new("INVALID_DOCUMENT", e.to_string()))?;
+            structure(keys, asset.id.as_uuid(), project.id);
+            if let Some(a) = project
+                .assets
+                .iter_mut()
+                .find(|a| matches!(a, DocumentObject::Known(a) if a.id == asset.id))
+            {
+                *a = DocumentObject::Known(asset.clone());
+            } else {
+                project.assets.push(DocumentObject::Known(asset.clone()));
             }
         }
         EditCommand::CaptionRemove { id } => {

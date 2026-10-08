@@ -8,9 +8,13 @@ private let projectAssetType = UTType(exportedAs: "com.kronello.project-asset", 
 
 struct EditPage: View {
     @ObservedObject var model: EditorModel
+    @ObservedObject var workflow: WorkflowSettings
     var body: some View {
-        KREditLayout(project: { EditProjectPanel(model: model) }, viewer: { SequenceViewer(model: model) },
-                     inspector: { ClipInspector(model: model) }, tracks: { SequenceTracks(model: model) })
+        let layout = workflow.layout(for: "edit")
+        KREditLayout(projectPanel: layout.leadingPanel, inspectorPanel: layout.trailingPanel, tracksPanel: layout.bottomPanel,
+                     projectWidth: layout.leadingWidth, inspectorWidth: layout.trailingWidth, tracksHeight: layout.bottomHeight,
+                     project: { EditProjectPanel(model: model) }, viewer: { SequenceViewer(model: model) },
+                     inspector: { ClipInspector(model: model) }, tracks: { SequenceTracks(model: model, workflow: workflow) })
             .onAppear { model.activatePlayback(for: model.sequence) }
             .onChange(of: model.sequence.string("id") + model.activeRate.string("num") + "/" + model.activeRate.string("den")) { _, _ in model.activatePlayback(for: model.sequence) }
     }
@@ -26,10 +30,23 @@ struct EditProjectPanel: View {
                 KRSearchField("素材を検索", text: $search).padding(KRSpace.space2)
                 if tab == "effects" {
                     VStack(alignment: .leading, spacing: KRSpace.space3) {
-                        KRButton("Gaussian Blur", icon: .sparkles) { model.addClipEffect("blur") }
-                        KRButton("Drop Shadow", icon: .layers) { model.addClipEffect("shadow") }
-                        Text("選択中の映像クリップに追加します。").krText(KRType.caption)
-                    }.padding().disabled(model.selectedClip == nil || model.selectedClip?.kind == .audio || model.busy || model.pendingCandidate != nil)
+                        VStack(alignment: .leading, spacing: KRSpace.space3) {
+                            KRButton("Gaussian Blur", icon: .sparkles) { model.addClipEffect("blur") }
+                            KRButton("Drop Shadow", icon: .layers) { model.addClipEffect("shadow") }
+                            KRButton("Chroma Key", icon: .sparkles) { model.addClipEffect("chroma_key") }
+                            KRButton("Luma Key", icon: .sparkles) { model.addClipEffect("luma_key") }
+                            KRButton("Glow", icon: .sparkles) { model.addClipEffect("glow") }
+                            KRButton("Sharpen", icon: .sparkles) { model.addClipEffect("sharpen") }
+                            KRButton("Vignette", icon: .sparkles) { model.addClipEffect("vignette") }
+                            KRButton("Corner Pin", icon: .sparkles) { model.addClipEffect("corner_pin") }
+                            Text("選択中の映像クリップに追加します。").krText(KRType.caption)
+                        }.disabled(model.selectedClip == nil || model.selectedClip?.kind == .audio || model.busy || model.pendingCandidate != nil)
+                        Divider()
+                        VStack(alignment: .leading, spacing: KRSpace.space3) {
+                            KRButton("アジャストメントクリップを追加", icon: .sparkles) { model.addAdjustmentClip() }
+                            Text("再生ヘッドに新規映像トラックへ追加し、下の映像全体へ効果をかけます。").krText(KRType.caption)
+                        }.disabled(model.sequence.isEmpty || model.busy || model.pendingCandidate != nil)
+                    }.padding()
                 }
                 else {
                     ScrollView(.vertical) {
@@ -96,6 +113,9 @@ struct SequenceViewer: View {
                         else {
                             KRViewerFrame(aspectRatio: max(1, model.extent.width) / max(1, model.extent.height)) {
                                 MetalPreview(model: model)
+                                if let clip = model.selectedClip, !EditorModel.clipMasks(clip).isEmpty {
+                                    MaskOverlay(model: model, clip: clip)
+                                }
                                 if safeArea { Rectangle().strokeBorder(p.inkMuted, style: .init(lineWidth: 1, dash: [4, 4])).padding(24).allowsHitTesting(false) }
                             }.offset(x: model.editViewSettings.panX, y: model.editViewSettings.panY)
                                 .contentShape(Rectangle())
@@ -122,6 +142,8 @@ struct SequenceViewer: View {
                         }; Spacer() }.padding(KRSpace.space3).allowsHitTesting(false) }
                     }.background(p.surface0)
                 }
+                // COLOR-004: deterministic scopes observe the composited frame.
+                if model.ui.sequence != nil { ScopesPanel(model: model) }
                 KRTransportBar(frames: Binding(get: { model.frame }, set: { model.seek($0) }), fps: model.nominalFPS, duration: model.durationCode,
                     playing: $model.playing, looping: $model.ui.looping, zoom: $model.ui.zoom, resolution: $model.ui.resolution,
                     onStep: { model.seek(model.frame + Int64($0)) }, onBoundary: { model.seek($0 ? model.durationFrames - 1 : 0) })
@@ -181,6 +203,11 @@ struct ClipInspector: View {
                                 KRNumberField(value: .constant(clip.linearRate.map { Double($0.num)! / Double($0.den)! * 100 } ?? 100), unit: "%", step: 0.1, range: 0.1...10000, accessibilityLabel: "速度", onEditingStart: { draftBases["speed"] = model.revision }, onCommit: { _, value in model.setClipTime(clip, speedPercent: value, base: draftBases.removeValue(forKey: "speed")) }).disabled(clip.linearRate == nil)
                             }
                             KRInspectorSettingRow("逆再生") { KRCheckbox("", isOn: Binding(get: { clip.reversed }, set: { model.setClipReverse(clip, enabled: $0) })).accessibilityLabel("逆再生").disabled(clip.linearRate == nil) }
+                            if clip.linearRate == nil {
+                                // NLE-006: piecewise maps (speed ramps and freeze holds) are
+                                // shown read-only; percent/reverse edits need a Linear map.
+                                Text("\(clip.speedLabel)：非線形タイムマップです。").krText(KRType.caption).foregroundStyle(p.accentInk).padding(.horizontal, KRSpace.space3)
+                            }
                             Text("速度は0.1%単位。配置の尺を維持し、逆再生は選択区間の末尾から始めます。").krText(KRType.caption).foregroundStyle(p.inkMuted).padding(.horizontal, KRSpace.space3)
                         } }
                         if clip.kind == .audio { section("音量") {
@@ -197,13 +224,19 @@ struct ClipInspector: View {
                                 KRPopupButton("描画モード", options: EditPresentation.blendModes.map { .init($0.wire, $0.label) }, selection: Binding(get: { clip.authored.objects("properties").first { $0.object("descriptor").string("key") == "kronello.blend_mode" }?.object("source").object("value").string("value") ?? "normal" }, set: { model.setClipProperty(clip, key: "kronello.blend_mode", kind: "enum", value: $0, base: draftBases.removeValue(forKey: "blend")) }), onEditingStart: { draftBases["blend"] = model.revision })
                             }
                         }.disabled(clip.kind == .audio)
+                        if clip.kind != .audio && clip.kind != .subtitle { section("マスク") { ClipMaskInspector(model: model, clip: clip) } }
                         section("Effects") {
                             ForEach(Array(clip.authored.objects("effects").enumerated()), id: \.offset) { index, effect in
                                 VStack(alignment: .leading, spacing: 0) {
                                     HStack { Text(ClipColorInspector.names[effect.string("effect_id")] ?? Self.effectName(effect.string("effect_id"))).krText(KRType.label); Spacer(); KRButton(icon: .trash2, accessibilityLabel: "効果を削除") { model.removeClipEffect(clip, index: index) } }.padding(.horizontal, KRSpace.space3)
+                                    if effect.string("effect_id") == "kronello.keying.chroma" {
+                                        KRInspectorSettingRow("キー色") {
+                                            ClipEffectColorEditor(model: model, clip: clip, effect: effect, parameter: "key_color")
+                                        }
+                                    }
                                     ForEach(Array(Self.effectRows(effect.string("effect_id")).enumerated()), id: \.offset) { _, row in
                                         let (field, label, unit, range, step) = row
-                                        if field == "offset" {
+                                        if Self.vec2Fields.contains(field) {
                                             KRInspectorSettingRow(label) {
                                                 HStack(spacing: KRSpace.space1) {
                                                     ForEach(0..<2, id: \.self) { axis in
@@ -233,6 +266,19 @@ struct ClipInspector: View {
                         if clip.kind != .audio { section("カラー") { ClipColorInspector(model: model, clip: clip) } }
                         if clip.composition != nil { KRButton("モーションで開く", icon: .layers, variant: .secondary) { model.openClipInMotion(clip) }.padding(.horizontal, KRSpace.space3) }
                         section("編集") {
+                            KRInspectorSettingRow("有効") {
+                                KRCheckbox("", isOn: Binding(get: { clip.enabled }, set: { model.setClipEnabled(clip, enabled: $0) }))
+                                    .accessibilityLabel("クリップの有効")
+                                    .disabled(model.trackLocked(clip.track) || model.busy || model.pendingCandidate != nil)
+                            }
+                            Text("無効なクリップは区間を保ったまま映像・音声・字幕・トランジションに寄与しません。").krText(KRType.caption).foregroundStyle(p.inkMuted).padding(.horizontal, KRSpace.space3)
+                            if clip.kind != .subtitle {
+                                KRButton("再生ヘッドでフリーズ", icon: .pause, variant: .secondary) { model.freezeClipAtPlayhead(clip) }
+                                    .disabled(model.busy || model.pendingCandidate != nil || model.trackLocked(clip.track)
+                                        || !(model.frame > clip.start.frames(rateNum: model.rateNum, rateDen: model.rateDen)
+                                            && model.frame < clip.end.frames(rateNum: model.rateNum, rateDen: model.rateDen)))
+                                    .padding(.horizontal, KRSpace.space3)
+                            }
                             KRButton("再生ヘッドにクリップマーカー", icon: .circle, variant: .secondary) { model.addClipMarker(clip) }
                                 .disabled(model.busy || model.pendingCandidate != nil)
                                 .padding(.horizontal, KRSpace.space3)
@@ -264,11 +310,19 @@ struct ClipInspector: View {
         case "kronello.gaussian_blur": return "Gaussian Blur"
         case "kronello.drop_shadow": return "Drop Shadow"
         case "kronello.audio.gain": return "Audio Gain"
+        case "kronello.keying.chroma": return "Chroma Key"
+        case "kronello.keying.luma": return "Luma Key"
+        case "kronello.glow": return "Glow"
+        case "kronello.sharpen": return "Sharpen"
+        case "kronello.vignette": return "Vignette"
+        case "kronello.corner_pin": return "Corner Pin"
         default: return id
         }
     }
+    /// Parameters that render as an X/Y vec2 pair instead of a scalar field.
+    static let vec2Fields: Set<String> = ["offset", "top_left", "top_right", "bottom_right", "bottom_left"]
     /// Editable constant parameters of a clip effect: (parameter field, row
-    /// label, unit, range, step). "offset" rows render as a vec2 pair.
+    /// label, unit, range, step). Fields in `vec2Fields` render as a pair.
     static func effectRows(_ id: String) -> [(String, String, String, ClosedRange<Double>, Double)] {
         switch id {
         case "kronello.gaussian_blur":
@@ -276,6 +330,23 @@ struct ClipInspector: View {
         case "kronello.drop_shadow":
             return [("sigma", "ぼかし", "px", 0...256, 0.1), ("offset", "オフセット", "px", -512...512, 0.5),
                     ("opacity", "不透明度", "", 0...1, 0.01)]
+        case "kronello.keying.chroma":
+            return [("similarity", "類似度", "", 0...1, 0.01), ("edge_shrink", "縮小", "px", 0...64, 0.1),
+                    ("edge_feather", "ぼかし", "px", 0...64, 0.1), ("spill", "スピル除去", "", 0...1, 0.01)]
+        case "kronello.keying.luma":
+            return [("key_luma", "キー輝度", "", 0...1, 0.01), ("tolerance", "許容度", "", 0...1, 0.01),
+                    ("edge_shrink", "縮小", "px", 0...64, 0.1), ("edge_feather", "ぼかし", "px", 0...64, 0.1)]
+        case "kronello.glow":
+            return [("threshold", "しきい値", "", 0...4, 0.01), ("radius", "半径", "px", 0...256, 0.1),
+                    ("intensity", "強度", "×", 0...8, 0.01)]
+        case "kronello.sharpen":
+            return [("amount", "量", "×", 0...8, 0.01), ("radius", "半径", "px", 0...64, 0.1)]
+        case "kronello.vignette":
+            return [("amount", "量", "", 0...1, 0.01), ("midpoint", "中間点", "", 0...1, 0.01),
+                    ("feather", "ぼかし", "", 0...4, 0.01), ("roundness", "丸み", "", 0...1, 0.01)]
+        case "kronello.corner_pin":
+            return [("top_left", "左上", "px", -8192...8192, 1), ("top_right", "右上", "px", -8192...8192, 1),
+                    ("bottom_right", "右下", "px", -8192...8192, 1), ("bottom_left", "左下", "px", -8192...8192, 1)]
         default: return []
         }
     }
@@ -290,7 +361,9 @@ struct ClipInspector: View {
 struct SequenceTracks: View {
     @Environment(\.krPalette) var p
     @ObservedObject var model: EditorModel
+    let workflow: WorkflowSettings
     @FocusState private var tracksFocused: Bool
+    @State private var showMixer = false
     var body: some View {
         KRPanel(header: { HStack(spacing: KRSpace.space2) {
             KRPanelTitle("Sequence")
@@ -307,9 +380,15 @@ struct SequenceTracks: View {
                 .disabled(model.busy || model.pendingCandidate != nil)
             KRButton(icon: .x, accessibilityLabel: "In/Out を解除") { model.clearWorkArea() }
                 .disabled(model.workArea == nil)
+            KRButton(icon: .audioLines, accessibilityLabel: "オーディオスクラブ", pressed: model.audioScrubEnabled) { model.audioScrubEnabled.toggle() }
+                .disabled(model.ui.sequence == nil || model.playbackMuted)
+            KRButton(icon: .slidersHorizontal, accessibilityLabel: "ミキサー", pressed: showMixer) { showMixer.toggle() }
+                .disabled(model.ui.sequence == nil)
             KRButton(icon: .chevronsLeft, accessibilityLabel: "時間軸を縮小") { model.editScale = max(1, model.editScale / 2) }
             KRButton(icon: .plus, accessibilityLabel: "時間軸を拡大") { model.editScale = min(16, model.editScale * 2) }
         }) {
+            VStack(spacing: 0) {
+                if showMixer { AudioMixer(model: model).krBottomLine() }
             GeometryReader { proxy in
                 let laneWidth = max(320, proxy.size.width - 200) * model.editScale
                 let frameWidth = (laneWidth - KRSpace.space2 * 2) / Double(max(model.durationFrames, Int64(model.nominalFPS * 5)))
@@ -335,36 +414,40 @@ struct SequenceTracks: View {
                     }.frame(width: 200 + laneWidth, alignment: .topLeading).coordinateSpace(name: "sequenceTracks")
                 }
             }
+            }
         }
         .focusable().focused($tracksFocused)
         .overlay { if tracksFocused { Rectangle().strokeBorder(p.selection, lineWidth: 2).allowsHitTesting(false) } }
         .onKeyPress { key in
             guard tracksFocused else { return .ignored }
-            switch key.key {
-            case .escape: model.cancelClipGesture(); model.selectMarker(nil)
-            case .space: model.playing.toggle()
-            case .leftArrow: model.seek(model.frame - 1)
-            case .rightArrow: model.seek(model.frame + 1)
-            case .upArrow: model.jumpToTimelineBoundary(forward: false)
-            case .downArrow: model.jumpToTimelineBoundary(forward: true)
-            case .delete, .deleteForward:
-                if let marker = model.selectedMarker { model.removeMarker(marker) }
-                else if key.modifiers.contains(.option) { model.deleteSelectedClip(ripple: true) }
-                else { model.deleteSelectedClip() }
-            case "v": model.editTool = "select"
-            case "b": model.editTool = "blade"
-            case "y": model.editTool = "slip"
-            case "u": model.editTool = "slide"
-            case "n": model.editTool = "roll"
-            case "h": model.editTool = "hand"
-            case "m":
-                if key.modifiers.contains(.shift), let clip = model.selectedClip { model.addClipMarker(clip) }
-                else { model.addSequenceMarker() }
-            case "i": model.setInPoint()
-            case "o": model.setOutPoint()
-            case "x": if key.modifiers.contains(.option) { model.clearWorkArea() } else { return .ignored }
-            default: return .ignored
+            func hit(_ action: ShortcutAction) -> Bool { workflow.binding(for: action).matches(key) }
+            if hit(.commonCancel) { model.cancelClipGesture(); model.selectMarker(nil) }
+            else if hit(.transportPlay) { model.playing.toggle() }
+            else if hit(.transportStepBack) { model.seek(model.frame - 1) }
+            else if hit(.transportStepForward) { model.seek(model.frame + 1) }
+            else if hit(.editJumpPrevious) { model.jumpToTimelineBoundary(forward: false) }
+            else if hit(.editJumpNext) { model.jumpToTimelineBoundary(forward: true) }
+            else if hit(.editDeleteRipple) {
+                if let marker = model.selectedMarker { model.removeMarker(marker) } else { model.deleteSelectedClip(ripple: true) }
             }
+            else if hit(.editDelete) || key.key == .deleteForward {
+                if let marker = model.selectedMarker { model.removeMarker(marker) } else { model.deleteSelectedClip() }
+            }
+            else if hit(.editToolSelect) { model.editTool = "select" }
+            else if hit(.editToolBlade) { model.editTool = "blade" }
+            else if hit(.editToolSlip) { model.editTool = "slip" }
+            else if hit(.editToolSlide) { model.editTool = "slide" }
+            else if hit(.editToolRoll) { model.editTool = "roll" }
+            else if hit(.editToolHand) { model.editTool = "hand" }
+            else if hit(.editClipMarker) {
+                guard let clip = model.selectedClip else { return .ignored }
+                model.addClipMarker(clip)
+            }
+            else if hit(.editMarker) { model.addSequenceMarker() }
+            else if hit(.editSetIn) { model.setInPoint() }
+            else if hit(.editSetOut) { model.setOutPoint() }
+            else if hit(.editClearWorkArea) { model.clearWorkArea() }
+            else { return .ignored }
             return .handled
         }
     }
@@ -449,9 +532,11 @@ struct SequenceTracks: View {
         }
     }
     func lane(_ track: [String: Any], width: Double, frameWidth: Double) -> some View {
-        let id = track.string("id"), kind = track.string("kind"), locked = model.ui.locked.contains(id)
+        let id = track.string("id"), kind = track.string("kind"), locked = model.trackLocked(id)
         return KRTrack(header: .init(model.trackNumber(id), kind == "audio" ? "Audio" : kind == "caption" ? "Caption" : "Video", kind: kind == "audio" ? .audio : kind == "caption" ? .subtitle : .video,
-            selected: model.selectedClip?.track == id, hidden: kind == "audio" ? (track.object("state")["muted"] as? Bool ?? false) : !(track.object("state")["visible"] as? Bool ?? true), locked: locked, visibilityEnabled: !locked && !model.busy && model.pendingCandidate == nil, onVisibility: { model.setTrackOutput(track) }, onLock: { model.toggleLock(id) }), headerWidth: 200, locked: locked) {
+            selected: model.selectedClip?.track == id, hidden: kind == "audio" ? (track.object("state")["muted"] as? Bool ?? false) : !(track.object("state")["visible"] as? Bool ?? true), locked: locked, targeted: model.trackTargeted(track), visibilityEnabled: !locked && !model.busy && model.pendingCandidate == nil,
+            meter: model.playbackMeters?.track(id).map { (peak: Double($0.stereoPeak), rms: Double($0.stereoRms)) },
+            onVisibility: { model.setTrackOutput(track) }, onLock: { model.setTrackLocked(track) }, onTarget: { model.setTrackTarget(track) }), headerWidth: 200, locked: locked) {
             ZStack(alignment: .leading) {
                 Color.clear.contentShape(Rectangle()).onTapGesture { tracksFocused = true; model.selectClip(nil) }
                 ForEach(model.editClips.filter { $0.track == id }) { clip in
@@ -509,8 +594,13 @@ struct SequenceTracks: View {
         return KRClip(model.clipName(clip), kind: clip.kind, state: missing.map { .missing($0) } ?? (model.ui.clipSelection == clip.id ? .selected : .resting), onSelect: { model.selectClip(clip.id) })
             .allowsHitTesting(false)
             .accessibilityHidden(true)
+            .opacity(clip.enabled ? 1 : 0.4)
             .overlay(alignment: .bottom) { clipWaveform(clip, frameWidth: frameWidth) }
             .overlay(alignment: .topLeading) { clipMarkers(clip, start: start, frameWidth: frameWidth) }
+            // NLE-006: a piecewise map carries a speed ramp or freeze hold; mark it on the lane.
+            .overlay(alignment: .topTrailing) { if clip.timeMapKind == "piecewise_linear" {
+                KRIconView(.slidersHorizontal).foregroundStyle(p.accentInk).padding(2)
+            } }
             // A cue has no source window: splitting is not a caption operation.
             .overlay { if model.editTool == "blade" && clip.kind != .subtitle {
                 KRBladeHitArea("\(model.clipName(clip)) を分割", begin: { fraction in
@@ -591,5 +681,60 @@ struct AssetPlacementDrop: DropDelegate {
         trace("perform"); guard validateDrop(info: info) else { return false }
         guard updateCandidate(info: info) else { return false }
         Task { await receiver.commit() }; return true
+    }
+}
+
+/// AUDIO-009: one strip per audio track plus a master strip. Faders route
+/// through the shared edit API (one undoable clip_set_volume per clip); the
+/// meters show the evaluator's rendered-block peak/RMS, and mute reuses the
+/// track output / monitoring toggles instead of a UI-only path.
+struct AudioMixer: View {
+    @Environment(\.krPalette) var p
+    @ObservedObject var model: EditorModel
+    var body: some View {
+        ScrollView(.horizontal) {
+            HStack(alignment: .top, spacing: KRSpace.space2) {
+                ForEach(model.orderedTracks.filter { $0.string("kind") == "audio" }, id: \.selfID) { track in
+                    MixerStrip(model: model, track: track)
+                }
+                MixerMasterStrip(model: model)
+            }.padding(KRSpace.space2)
+        }.frame(height: 128).background(p.surface100)
+    }
+}
+
+struct MixerStrip: View {
+    @Environment(\.krPalette) var p
+    @ObservedObject var model: EditorModel
+    let track: [String: Any]
+    var body: some View {
+        let id = track.string("id"), muted = track.object("state")["muted"] as? Bool ?? false
+        let locked = model.ui.locked.contains(id), meter = model.playbackMeters?.track(id)
+        VStack(spacing: KRSpace.space1) {
+            Text(model.trackNumber(id)).krText(KRType.label).foregroundStyle(p.ink)
+            KRMeterBar(peak: Double(meter?.stereoPeak ?? 0), rms: Double(meter?.stereoRms ?? 0)).frame(width: 64)
+            KRSlider(value: .constant(model.trackVolume(track) ?? 1), range: 0...2, step: 0.05,
+                accessibilityLabel: "\(model.trackNumber(id)) フェーダー",
+                onCommit: { _, value in model.setTrackVolume(track, gain: value) }).frame(width: 64)
+            HStack(spacing: KRSpace.space1) {
+                KRButton(icon: muted ? .volumeX : .volume2, accessibilityLabel: "ミュートを切り替える", pressed: muted, iconSize: 12) { model.setTrackOutput(track) }
+                Text(String(format: "%.0f%%", (model.trackVolume(track) ?? 1) * 100)).krText(KRType.caption).foregroundStyle(p.inkMuted)
+            }
+        }.frame(width: 80).padding(.vertical, KRSpace.space1)
+            .opacity(locked ? 0.6 : 1)
+            .disabled(locked || model.busy || model.pendingCandidate != nil)
+    }
+}
+
+struct MixerMasterStrip: View {
+    @Environment(\.krPalette) var p
+    @ObservedObject var model: EditorModel
+    var body: some View {
+        VStack(spacing: KRSpace.space1) {
+            Text("Master").krText(KRType.label).foregroundStyle(p.ink)
+            KRMeterBar(peak: Double(model.playbackMeters?.masterPeak ?? 0), rms: Double(model.playbackMeters?.masterRms ?? 0)).frame(width: 64)
+            KRButton(icon: model.playbackMuted ? .volumeX : .volume2, accessibilityLabel: "モニター音量", pressed: model.playbackMuted, iconSize: 12) { model.playbackMuted.toggle() }
+        }.frame(width: 80).padding(.vertical, KRSpace.space1)
+            .padding(.leading, KRSpace.space2).overlay(alignment: .leading) { p.line.frame(width: 1) }
     }
 }

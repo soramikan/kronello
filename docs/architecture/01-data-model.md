@@ -7,9 +7,9 @@
 | Project | schema_version, semantic_version, assets, sequences, compositions, templates |
 | Asset | id, content_hash, kind, stream_metadata, immutable_locator |
 | DataAsset | id, schema, content_hash, values, time_mapping, analyzer_version |
-| Sequence | id, extent, frame_rate, audio_rate, working_space, tracks, transitions |
-| Track | id, kind（video / audio）, clips |
-| Clip | id, source_ref, timeline_range, source_in, time_map, volume, links, properties, effects |
+| Sequence | id, extent, frame_rate, audio_rate, working_space, tracks, transitions, markers, work_area, targets |
+| Track | id, kind（video / audio / caption）, clips, state（visible / muted / locked） |
+| Clip | id, source_ref, timeline_range, source_in, time_map, enabled, volume, links, properties, effects, markers |
 | Composition | id, duration, design_extent, edit_rate, root_nodes, properties, inputs, markers, output_ports |
 | SceneNode | id, kind, containment_parent, transform_parent, child_order, active_range, transform_ref, content_ref |
 | CompositionInstance | id, definition_ref, input_bindings, local_time_map, seed |
@@ -41,6 +41,22 @@ M7 は専用 `TrackKind::Caption` と版付き `CaptionDocument`（[ADR-0107](..
 NLE-003 は `TimelineCommand` に slip（`clip_slip`、配置を固定して source window を移動）、slide（`clip_slide`、隣接 clip が source handle で delta を吸収）、rolling edit（`clip_roll`、共有 edit point を移動して合計占有区間を維持）、`clip_delete` / `ripple_delete`、型付き `clip_insert` / `clip_overwrite` を追加した。いずれも `EditCommand::Timeline` 経由の plan / apply / 選択的 Undo で動き、`linked` 指定は相互リンク成分全体に原子的に拡大する。リンクを分離する削除・上書きは `LINKED_EDIT_REQUIRED` 等の型付き拒否とし、失敗した編集は文書を部分変更しない。track 内の clip 配列は timeline start 順を正準形とする。
 
 NLE-004 は `Marker { id: MarkerId, time, color: MarkerColor, comment: Option<String> }` を `Sequence.markers` と `Clip.markers` に、In/Out を `Sequence.work_area: Option<TimeRange>` に追加した（[ADR-0110](../adr/0110-sequence-markers-and-work-area.md)）。clip marker は sequence 時刻で、その clip の `timeline_range` 内に制約される。trim は範囲外 marker を落とし、stretch は marker を範囲に比例変換する。sequence marker は非負で内容 extent 内、work_area は非空かつ extent 内を validate する。操作は `marker_set`（同一 ID の upsert で色・コメント更新）/ `marker_remove` / `marker_move` / `work_area_set`。書き出し範囲は引き続き `SequenceRenderRequest.range` のみが決め、service は `work_area` を暗黙に読まない。検証は [NLE-003](../testing/nle-003.md) / [NLE-004](../testing/nle-004.md) を参照。
+
+## NLE-005 のロック・有効性・ターゲット
+
+[ADR-0111](../adr/0111-track-lock-clip-enable-and-targeting.md) で 3 つの編集状態を作品ドキュメントへ永続化した。
+
+- `TrackState.locked: bool`（`#[serde(default)]`）：編集保護であり描画・音声評価に影響しない。ロック済み track の clip・track 自身への変更は計画時に `TRACK_LOCKED` で型付き拒否し、配置・trim/stretch・move・slip/slide/roll・ripple・split/delete・retime・effect/property/volume・clip marker・リンク・トランジション・隣接 clip を巻き込む操作をすべて覆う。`track_state_set` は `TrackState` 全体を受け取るためロック自身は同コマンドで切り替えられる。拒否された plan は文書も revision も変えない。
+- `Clip.enabled: bool`（既定 true、`enabled = true` は直列化を省略）：`enabled = false` のクリップはタイムライン区間・リンク・メタデータを保ったまま、映像評価・合成・音声ミックス・字幕描画/出力・トランジション寄与から除外される。
+- `Sequence.targets: Option<TargetTracks>`（`TargetTracks { video, audio }`）：種別ごと 1 本の暗黙の編集対象 track を指し、参照先は存在し種別が一致する必要がある。コマンドは `clip_enable_set` / `sequence_targets_set`。GUI 側の `ui.locked` はモーションのレイヤーロックのみを担い、シーケンス track のロックは永続化された `TrackState` を読む。
+
+NLE-006 の `clip_freeze` と piecewise hold map は [ADR-0112](../adr/0112-variable-retime-and-freeze-hold.md) と [02 時刻](02-time.md#nle-006-のホールドfreeze区間と速度ランプ) を参照。検証は [NLE-005](../testing/nle-005.md) / [NLE-006](../testing/nle-006.md)。
+
+## FX-004 / FX-007 のマスクとアジャストメントクリップ
+
+FX-004 は `Clip.masks: Vec<Mask>` を追加した（[ADR-0114](../adr/0114-bezier-masks.md)）。`Mask` は `id: MaskId`・`mode: MaskMode`（add / subtract / intersect / difference）・`invert`・`closed` と、`path`（`ValueType::Path`）・`feather`・`expansion`・`opacity` の 4 つのクリップ所有 `PropertyId` 参照からなる。マスクはクリップ描画後・clip effects 前にカバレッジをアルファ乗算し、feather は境界ぼかし、expansion はパスオフセットで、スタックは authored 順に結合する。点数・枚数の予算と型付きエラー（`MASK_*`）を持ち、編集は `clip_masks_set` がスタックと参照プロパティを原子置換する。matte（ノード間関係）とは別物で、video track のクリップのみ有効。検証は [FX-004](../testing/fx-004.md) を参照。
+
+FX-007 は `SourceRef::Adjustment`（payload なし、wire は `{"kind":"adjustment"}`）を追加した（[ADR-0116](../adr/0116-adjustment-clips.md)）。adjustment clip は自身の `timeline_range` で下位 video track の合成結果をグループ化し `clip.effects` を適用する。video track 限定・恒等 `time_map`・`source_in = 0`・`audio_retime = Reject` を型付きで強制し、trim / split / stretch は配置範囲のみを変える。専用コマンドはなく `clip_place` がそのまま受け付け、`sequence.query` は `ClipKind::Adjustment` を返す。`clip.masks` は適用範囲の限定として機能する。検証は [FX-007](../testing/fx-007.md) を参照。
 
 ## ID とインスタンス
 

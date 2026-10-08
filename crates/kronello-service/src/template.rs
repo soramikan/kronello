@@ -599,7 +599,7 @@ fn preview_candidate(
             nodes: vec![placement],
             properties: vec![],
         }));
-    match crate::query::evaluated_scene(&candidate, path, root_id, time, fonts) {
+    match crate::query::evaluated_scene(&candidate, path, root_id, time, fonts, &[]) {
         Ok(scene) => {
             result.nodes = scene
                 .nodes
@@ -644,6 +644,8 @@ fn preview_candidate(
                 region,
                 profile: Default::default(),
                 fonts: fonts.to_vec(),
+                media_proxies: kronello_render::MediaProxyMode::Off,
+                luts: vec![],
             };
             let snapshot = crate::freeze_render_input(&candidate, &input)?;
             let bytes = crate::load_locked_fonts(&snapshot, &input)?;

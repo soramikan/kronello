@@ -32,6 +32,13 @@ fn write_json(path: impl AsRef<Path>, value: &Value) -> Result<()> {
     fs::write(path, serde_json::to_vec_pretty(value)?)?;
     Ok(())
 }
+/// The scene manifest is the largest golden artifact; keeping it compact
+/// preserves the ADR-0088 per-file size cap without changing its content
+/// (baseline validation compares parsed values, not bytes layout).
+fn write_json_compact(path: impl AsRef<Path>, value: &Value) -> Result<()> {
+    fs::write(path, serde_json::to_vec(value)?)?;
+    Ok(())
+}
 struct Scene {
     id: &'static str,
     width: u32,
@@ -206,7 +213,7 @@ fn draw_manifest(scene: &DrawScene) -> Value {
     }).collect::<Vec<_>>()})
 }
 fn manifest(scenes: &[Scene], fixture_hash: &str, font_hash: &str) -> Value {
-    json!({"schema_version":3,"affine_effect_kernel_version":kronello_render::AFFINE_EFFECT_KERNEL_VERSION,"affine_effect_semantic_version":kronello_model::AFFINE_EFFECT_VERSION,"effect_kernel_version":EFFECT_KERNEL_VERSION,"effect_semantic_versions":{kronello_model::GAUSSIAN_BLUR_ID:kronello_model::EFFECT_VERSION,kronello_model::DROP_SHADOW_ID:kronello_model::EFFECT_VERSION},"stroke_geometry_version":kronello_render::STROKE_GEOMETRY_VERSION,"gradient_interpolation_version":kronello_render::GRADIENT_INTERPOLATION_VERSION,"comparison_version":1,"rgb_absolute":1.0/1024.0,"rgb_relative":1.0/1024.0,"alpha_absolute":1.0/1024.0,"fixture_hash":fixture_hash,"font_hash":font_hash,"flatten_tolerance_px":0.02,"catalog":serde_json::from_str::<Value>(include_str!("../../../tests/golden/apple-silicon-metal/scenes.json")).unwrap(),"scenes":scenes.iter().map(|s| json!({"id":s.id,"sample_id":"frame-0","size":[s.width,s.height],"design_extent":[s.width,s.height],"origin":[0,0],"time":{"num":"0","den":"1"},"working_space":format!("{:?}",s.space),"alpha":"premultiplied","output_transform":s.output.map(|o| format!("{:?}",o)),"comparison_space":"linear working-space premultiplied; external output decoded back before comparison","display_transform":"external-unpremultiply-then-srgb-clamp; visualization only","color_pipeline_id":if s.draw.is_some() {"vec003-grid4-v2"} else {"gpu001-linear-v1"},"samples_per_frame":if s.draw.is_some() {16} else {1},"seed":0,"draw":s.draw.as_ref().map(draw_manifest),"layers":s.layers.iter().map(|l| json!({"size":l.size,"translation":l.translation,"rotation_degrees":l.rotation_degrees,"input_space":format!("{:?}",l.image.space),"input_size":[l.image.width,l.image.height],"straight_pixels":l.image.pixels})).collect::<Vec<_>>()})).collect::<Vec<_>>()})
+    json!({"schema_version":3,"affine_effect_kernel_version":kronello_render::AFFINE_EFFECT_KERNEL_VERSION,"affine_effect_semantic_version":kronello_model::AFFINE_EFFECT_VERSION,"effect_kernel_version":EFFECT_KERNEL_VERSION,"effect_semantic_versions":{kronello_model::GAUSSIAN_BLUR_ID:kronello_model::EFFECT_VERSION,kronello_model::DROP_SHADOW_ID:kronello_model::EFFECT_VERSION,kronello_model::KEYING_CHROMA_ID:kronello_model::STANDARD_EFFECT_VERSION,kronello_model::KEYING_LUMA_ID:kronello_model::STANDARD_EFFECT_VERSION,kronello_model::GLOW_ID:kronello_model::STANDARD_EFFECT_VERSION,kronello_model::SHARPEN_ID:kronello_model::STANDARD_EFFECT_VERSION,kronello_model::VIGNETTE_ID:kronello_model::STANDARD_EFFECT_VERSION,kronello_model::CORNER_PIN_ID:kronello_model::STANDARD_EFFECT_VERSION},"stroke_geometry_version":kronello_render::STROKE_GEOMETRY_VERSION,"gradient_interpolation_version":kronello_render::GRADIENT_INTERPOLATION_VERSION,"comparison_version":1,"rgb_absolute":1.0/1024.0,"rgb_relative":1.0/1024.0,"alpha_absolute":1.0/1024.0,"fixture_hash":fixture_hash,"font_hash":font_hash,"flatten_tolerance_px":0.02,"catalog":serde_json::from_str::<Value>(include_str!("../../../tests/golden/apple-silicon-metal/scenes.json")).unwrap(),"scenes":scenes.iter().map(|s| json!({"id":s.id,"sample_id":"frame-0","size":[s.width,s.height],"design_extent":[s.width,s.height],"origin":[0,0],"time":{"num":"0","den":"1"},"working_space":format!("{:?}",s.space),"alpha":"premultiplied","output_transform":s.output.map(|o| format!("{:?}",o)),"comparison_space":"linear working-space premultiplied; external output decoded back before comparison","display_transform":"external-unpremultiply-then-srgb-clamp; visualization only","color_pipeline_id":if s.draw.is_some() {"vec003-grid4-v2"} else {"gpu001-linear-v1"},"samples_per_frame":if s.draw.is_some() {16} else {1},"seed":0,"draw":s.draw.as_ref().map(draw_manifest),"layers":s.layers.iter().map(|l| json!({"size":l.size,"translation":l.translation,"rotation_degrees":l.rotation_degrees,"input_space":format!("{:?}",l.image.space),"input_size":[l.image.width,l.image.height],"straight_pixels":l.image.pixels})).collect::<Vec<_>>()})).collect::<Vec<_>>()})
 }
 
 // Hardware model, OS, driver and dependency versions are provenance only.
@@ -402,7 +409,7 @@ fn run(output: &Path) -> Result<Value> {
     )?;
     write_json(output.join("environment.json"), &environment)?;
     write_json(output.join("provenance.json"), &provenance)?;
-    write_json(output.join("manifest.json"), &manifest)?;
+    write_json_compact(output.join("manifest.json"), &manifest)?;
     let destination = if update {
         output.join("candidate")
     } else {
@@ -410,7 +417,7 @@ fn run(output: &Path) -> Result<Value> {
     };
     fs::create_dir_all(&destination)?;
     write_json(destination.join("environment.json"), &environment)?;
-    write_json(destination.join("manifest.json"), &manifest)?;
+    write_json_compact(destination.join("manifest.json"), &manifest)?;
     write_json(destination.join("provenance.json"), &provenance)?;
     if baseline.join("environment.json").exists() {
         let old: Value = serde_json::from_slice(&fs::read(baseline.join("environment.json"))?)?;
@@ -629,7 +636,7 @@ fn cpu_catalog_and_vec003_manifest_match_harness() {
         catalog["scene_ids"],
         json!(scenes.iter().map(|s| s.id).collect::<Vec<_>>())
     );
-    assert_eq!(scenes.len(), 49);
+    assert_eq!(scenes.len(), 56);
     let m = manifest(&scenes, "fixture-test", "font-test");
     assert_eq!(
         m["stroke_geometry_version"],

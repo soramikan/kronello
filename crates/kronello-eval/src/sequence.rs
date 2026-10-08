@@ -29,10 +29,13 @@ pub fn evaluate_sequence(
         if track.kind == TrackKind::Audio {
             continue;
         }
+        // Disabled clips still occupy their range on the track but contribute
+        // nothing to evaluation, so they cannot shadow an enabled clip or
+        // trip the single-active-clip rule.
         let active: Vec<_> = track
             .clips
             .iter()
-            .filter(|c| c.timeline_range.contains(time))
+            .filter(|c| c.enabled && c.timeline_range.contains(time))
             .collect();
         if active.len() > 1 {
             return Err(SequenceError::Overlap(track.id).into());

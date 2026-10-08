@@ -78,8 +78,13 @@ impl ExpressionDataAsset {
     }
 }
 impl Project {
+    /// Authored inline tables plus one derived view per tracking asset
+    /// (ADR-0118). Tracking rows can exceed the authored 1 MiB table budget:
+    /// derived views are evaluator-bounded by `TRACKING_MAX_FRAMES` instead.
+    /// A stale tracking source fails every evaluation, like audio analyses.
     pub fn expression_data_inputs(&self) -> Result<Vec<ExpressionDataAsset>, ProjectError> {
-        self.expression_data_assets
+        let mut inputs: Vec<ExpressionDataAsset> = self
+            .expression_data_assets
             .iter()
             .map(|d| match d {
                 DocumentObject::Known(d) => {
@@ -88,6 +93,10 @@ impl Project {
                 }
                 DocumentObject::Opaque(_) => Err(ProjectError::UnsupportedMeaning),
             })
-            .collect()
+            .collect::<Result<_, _>>()?;
+        for data in self.tracking_data_inputs()? {
+            inputs.push(data.expression_asset()?);
+        }
+        Ok(inputs)
     }
 }

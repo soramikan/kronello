@@ -127,6 +127,17 @@
 | [0108](0108-versioned-color-correction-effects.md) | 版付き色補正エフェクト（exposure/levels/curves/HSL） | 採用（実装受け入れ中） | 2026-10-07 |
 | [0109](0109-blend-modes-and-parameterized-transitions.md) | ブレンドモード一式とパラメータ付きトランジション | 採用（実装受け入れ中） | 2026-10-07 |
 | [0110](0110-sequence-markers-and-work-area.md) | シーケンス/クリップマーカーとIn/Out・ワークエリア | 採用（実装受け入れ中） | 2026-10-07 |
+| [0111](0111-track-lock-clip-enable-and-targeting.md) | トラックロック・クリップ有効/無効・ターゲティング | 採用（実装受け入れ中） | 2026-10-08 |
+| [0112](0112-variable-retime-and-freeze-hold.md) | 可変リタイムと freeze/hold の TimeMap 拡張 | 採用（実装受け入れ中） | 2026-10-08 |
+| [0113](0113-lut-import-and-scope-observation.md) | LUT(.cube) の取り込み・適用位置とスコープ観測契約 | 採用（実装受け入れ中） | 2026-10-08 |
+| [0114](0114-bezier-masks.md) | ベジェマスク（クリップ適用・フェザー・拡張・時間変化） | 採用（実装受け入れ中） | 2026-10-08 |
+| [0115](0115-keying-and-standard-effects.md) | キーイング（chroma/luma）と標準エフェクト拡張 | 採用（実装受け入れ中） | 2026-10-08 |
+| [0116](0116-adjustment-clips.md) | アジャストメントクリップ（下位レイヤーへの一括適用） | 採用（実装受け入れ中） | 2026-10-08 |
+| [0117](0117-audio-filters-dynamics-loudness.md) | 音声フィルタ・ダイナミクス・LUFS 計測と再生メーター | 採用（実装受け入れ中） | 2026-10-08 |
+| [0118](0118-motion-tracking-data-assets.md) | モーショントラッキングと結果の DataAsset 化 | 採用（実装受け入れ中） | 2026-10-08 |
+| [0119](0119-proxy-workflow.md) | プロキシワークフロー（生成ジョブ・切替・relink） | 採用（実装受け入れ中） | 2026-10-08 |
+| [0120](0120-text-on-path-and-character-animators.md) | テキストオンパスと文字単位アニメーター拡張 | 採用（実装受け入れ中） | 2026-10-08 |
+| [0121](0121-workflow-ui-persistence.md) | ワークフロー UI の永続化位置（ユーザー環境側） | 採用（実装受け入れ中） | 2026-10-08 |
 
 ## 追加と変更の規則
 

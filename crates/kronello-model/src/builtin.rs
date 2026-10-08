@@ -167,5 +167,11 @@ pub(crate) fn registry() -> SchemaRegistry {
             .register(descriptor)
             .expect("unique built-in identity");
     }
+    // FX-004 clip mask parameters are clip-owned builtins like the rest.
+    for descriptor in crate::mask_descriptors() {
+        registry
+            .register(descriptor)
+            .expect("unique built-in mask identity");
+    }
     registry
 }

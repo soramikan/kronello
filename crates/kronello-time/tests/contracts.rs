@@ -353,13 +353,55 @@ fn piecewise_map_rejects_invalid_order_and_unsupported_slopes() {
     }
     for points in [
         vec![point(0, 1), point(1, 0)],
-        vec![point(0, 1), point(1, 1)],
+        vec![point(0, 2), point(1, 2), point(2, 1)],
     ] {
         assert_eq!(
             TimeMap::piecewise_linear(points),
             Err(TimeError::UnsupportedMapSlope)
         );
     }
+}
+
+#[test]
+fn piecewise_hold_segments_pin_local_and_invert_deterministically() {
+    // Ramp, then a hold, then another ramp: local plateaus are legal.
+    let map = TimeMap::piecewise_linear(vec![point(0, 0), point(2, 1), point(4, 1), point(6, 3)])
+        .unwrap();
+    // map() returns the pinned local value across the whole hold, endpoints
+    // included.
+    assert_eq!(map.map(t(2)).unwrap(), t(1));
+    assert_eq!(map.map(t(3)).unwrap(), t(1));
+    assert_eq!(map.map(t(4)).unwrap(), t(1));
+    assert_eq!(map.map(t(5)).unwrap(), t(2));
+    // The map is non-injective across a hold, so the inverse resolves to the
+    // hold segment's starting parent: the earliest parent mapping to the
+    // local value.
+    assert_eq!(map.inverse_canonical(t(1)).unwrap(), t(2));
+    assert_eq!(map.inverse_canonical(t(2)).unwrap(), t(5));
+    // Consecutive hold segments still resolve to the first hold's start.
+    let chained = TimeMap::piecewise_linear(vec![
+        point(0, 0),
+        point(1, 1),
+        point(2, 1),
+        point(3, 1),
+        point(4, 2),
+    ])
+    .unwrap();
+    assert_eq!(chained.inverse_canonical(t(1)).unwrap(), t(1));
+    let map = match map {
+        TimeMap::PiecewiseLinear(map) => map,
+        _ => unreachable!(),
+    };
+    assert!(!map.is_hold(t(0)));
+    assert!(!map.is_hold(t(1)));
+    assert!(map.is_hold(t(2)));
+    assert!(map.is_hold(t(3)));
+    // The final control point owns the last segment; it is not a hold.
+    assert!(!map.is_hold(t(4)));
+    assert!(!map.is_hold(t(6)));
+    assert_eq!(map.slope_at(t(3)).unwrap(), Rational::ZERO);
+    assert_eq!(map.slope_at(t(5)).unwrap(), Rational::ONE);
+    assert_eq!(map.slope_at(t(1)).unwrap(), r(1, 2));
 }
 
 #[test]
