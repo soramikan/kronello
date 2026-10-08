@@ -41,6 +41,7 @@ fn solid(rgb: [f64; 3], start: Time, end: Time) -> Clip {
         audio_retime: Default::default(),
         reverse_sampling: None,
         volume: None,
+        pan: None,
         links: vec![],
         enabled: true,
         effects: vec![],
@@ -68,6 +69,7 @@ fn adjustment(range: TimeRange, ev: f64) -> Clip {
         audio_retime: Default::default(),
         reverse_sampling: None,
         volume: None,
+        pan: None,
         links: vec![],
         enabled: true,
         effects: vec![Effect::Known(EffectDefinition {

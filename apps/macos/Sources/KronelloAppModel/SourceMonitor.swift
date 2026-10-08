@@ -171,8 +171,23 @@ extension EditorModel {
             mapFailure(ServiceFailure(code: "SOURCE_MISSING", message: "ソースを解決できません"))
             return
         }
+        // GUI-012: restore the persisted destination override only while the
+        // track still exists and accepts this source kind; stale ids fall
+        // back to the sequence target. Eligibility is computed from `source`
+        // directly because `sourceMonitor` is not installed yet.
+        var persisted: String? = nil
+        if let candidate = editViewSettings.sourceTrack {
+            var audio = false
+            if case .asset(let id, _) = source,
+               let asset = document.objects("assets").first(where: { $0.string("id") == id }) {
+                audio = asset.string("kind") == "audio"
+            }
+            persisted = sequence.objects("tracks").contains {
+                $0.string("id") == candidate && $0.string("kind") == (audio ? "audio" : "video")
+            } ? candidate : nil
+        }
         sourceMonitor = SourceMonitor(source: source, name: name, time: window.start,
-                                      inPoint: window.start, outPoint: window.end, track: nil)
+                                      inPoint: window.start, outPoint: window.end, track: persisted)
         sourcePreviewFailure = nil
     }
     public func openAssetInSource(_ asset: EditAsset) {
@@ -273,8 +288,11 @@ extension EditorModel {
     public var sourceDestinationLabel: String {
         sourceDestinationTrack.map { trackNumber($0) } ?? "ターゲットなし"
     }
+    /// GUI-012: the monitor assignment persists in `ui.editView.sourceTrack`
+    /// (ADR-0033 user state) and reseeds the next monitor that opens.
     public func setSourceDestination(_ track: String?) {
         sourceMonitor?.track = track
+        var view = editViewSettings; view.sourceTrack = track; ui.editView = view
     }
 
     // MARK: - Three-point editing (GUI-011)

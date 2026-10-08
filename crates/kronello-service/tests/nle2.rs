@@ -506,6 +506,7 @@ fn clip(color: [u8; 3], a: i64, b: i64) -> Clip {
         effects: vec![],
         masks: vec![],
         markers: vec![],
+        pan: None,
     }
 }
 fn sequence(clips: Vec<Clip>) -> Sequence {

@@ -34,6 +34,7 @@ fn clip(start: i64, end: i64) -> Clip {
         audio_retime: Default::default(),
         reverse_sampling: None,
         volume: None,
+        pan: None,
         links: vec![],
         effects: vec![],
         masks: vec![],

@@ -44,6 +44,7 @@ fn comp_clip(composition: CompositionId, source_in: Time, a: Time, b: Time) -> C
         effects: vec![],
         masks: vec![],
         markers: vec![],
+        pan: None,
     }
 }
 /// Unbounded solid generator source for pure placement semantics.
@@ -67,6 +68,7 @@ fn gen_clip(a: Time, b: Time) -> Clip {
         effects: vec![],
         masks: vec![],
         markers: vec![],
+        pan: None,
     }
 }
 fn audio_clip(a: Time, b: Time) -> Clip {

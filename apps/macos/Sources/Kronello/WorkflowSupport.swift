@@ -206,6 +206,12 @@ struct HistoryPanel: View {
     }()
     var body: some View {
         KRPanel("履歴", actions: {
+            // GUI-012: the undo/redo stacks are session state; the buttons and
+            // the "現在位置" marker make the position inside the list explicit.
+            KRButton("取り消す", icon: .undo2, variant: .secondary) { Task { await model.undo() } }
+                .disabled(!model.canUndo)
+            KRButton("やり直す", icon: .redo2, variant: .secondary) { Task { await model.undo(redo: true) } }
+                .disabled(!model.canRedo)
             KRButton(icon: .x, accessibilityLabel: "閉じる") { dismiss() }
         }) {
             if model.historyPanel.isEmpty {
@@ -221,6 +227,10 @@ struct HistoryPanel: View {
         }.frame(width: 480, height: 440)
             .task { do { try await model.loadHistory() } catch { model.mapFailure(error) } }
     }
+    /// Latest applied (non-undone) row — the position undo/redo acts around.
+    private var currentEntryID: String? {
+        model.historyPanel.last { !$0.undone }?.id
+    }
     func row(_ entry: HistoryEntry) -> some View {
         HStack(spacing: KRSpace.space2) {
             KRIconView(entry.isUndo ? .undo2 : .history, size: 12).foregroundStyle(entry.undone ? p.inkMuted : p.ink)
@@ -232,6 +242,9 @@ struct HistoryPanel: View {
             if entry.undone {
                 Text("取消済み").krText(KRType.caption).foregroundStyle(p.inkMuted)
             } else {
+                if entry.id == currentEntryID {
+                    Text("現在位置").krText(KRType.caption).foregroundStyle(p.accentInk)
+                }
                 KRButton("取り消す", variant: .secondary) { Task { await model.undoEvent(entry.id) } }
                     .disabled(model.busy)
             }

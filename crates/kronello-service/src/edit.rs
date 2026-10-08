@@ -492,6 +492,10 @@ pub(crate) fn validate(project: &Project) -> Result<(), ServiceError> {
                         .validate_sources(&r, &Catalog(project))
                         .map_err(invalid)?;
                 }
+                if let Some(pan) = &clip.pan {
+                    pan.validate_sources(&r, &Catalog(project))
+                        .map_err(invalid)?;
+                }
             }
         }
     }

@@ -919,6 +919,17 @@
             "$ref": "#/$defs/Mask"
           }
         },
+        "pan": {
+          "description": "GUI-012 (ADR-0138): constant stereo balance in [-1, 1], absent means\ncenter. Applied to the clip's mixed output after volume, effects and\nfades; the basic (pre-AUDIO-004) mixer rejects it as unsupported.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Property"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "properties": {
           "description": "Placement transform and effect parameters, evaluated in sequence time.",
           "type": "array",

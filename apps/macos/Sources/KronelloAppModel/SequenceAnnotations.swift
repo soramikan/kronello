@@ -61,6 +61,17 @@ extension EditorModel {
         if let clip = marker.clip { fields["clip"] = clip }
         submit([timelineCommand("marker_set", fields)], label: "マーカー色の変更")
     }
+    /// GUI-012: comment editing reuses the same `marker_set` upsert; an empty
+    /// comment clears the field (stored `null`, never an empty string).
+    public func setMarkerComment(_ marker: EditMarker, comment: String) {
+        let trimmed = comment.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed != marker.comment else { return }
+        var fields: [String: Any] = ["sequence": sequence.string("id"),
+            "marker": ["id": marker.id, "time": marker.time.wire, "color": marker.color,
+                       "comment": trimmed.isEmpty ? NSNull() : trimmed as Any]]
+        if let clip = marker.clip { fields["clip"] = clip }
+        submit([timelineCommand("marker_set", fields)], label: "マーカーコメントの変更")
+    }
     public func removeMarker(_ marker: EditMarker) {
         var fields: [String: Any] = ["sequence": sequence.string("id"), "marker": marker.id]
         if let clip = marker.clip { fields["clip"] = clip }

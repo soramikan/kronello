@@ -35,6 +35,7 @@ fn clip(a: Time, b: Time) -> Clip {
         effects: vec![],
         markers: vec![],
         masks: vec![],
+        pan: None,
     }
 }
 fn audio_asset() -> Asset {

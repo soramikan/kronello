@@ -63,6 +63,11 @@ import UniformTypeIdentifiers
     func open(_ path: String, new: Bool = false) async {
         guard !loading else { return }; loading = true; defer { loading = false }
         do {
+            // GUI-012: the raster scratch directory routes to the in-process
+            // worker via the process environment, so it must be set before
+            // `NativeProjectTransport` opens the session (ADR-0033 user prefs).
+            if preferences.scratchDirectory.isEmpty { unsetenv("KRONELLO_RASTER_CACHE_ROOT") }
+            else { setenv("KRONELLO_RASTER_CACHE_ROOT", preferences.scratchDirectory, 1) }
             let transport = try NativeProjectTransport(path: path, worker: worker)
             let model = EditorModel(path: path, transport: transport, stateStore: store)
             if let manifest = ProcessInfo.processInfo.environment["KRONELLO_FONT_INPUTS"] {
@@ -70,6 +75,11 @@ import UniformTypeIdentifiers
             }
             do { try await model.start(newDocument: new ? EditorModel.newDocument(name: URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent) : nil) }
             catch { await model.close(); throw error }
+            // GUI-012 playback defaults: session flags apply every open; the
+            // loop flag only seeds projects with no persisted UI state.
+            model.audioScrubEnabled = preferences.playbackScrub
+            model.playbackMuted = preferences.playbackMuted
+            if !model.restoredUIState { model.ui.looping = preferences.playbackLooping }
             await editor?.close(); editor = model
             editorChanges = model.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
             preferences.recent.removeAll { $0.path == path }

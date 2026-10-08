@@ -8,7 +8,11 @@ import KronelloAppModel
 /// returned integer bins — no display transform is applied here.
 struct ScopesPanel: View {
     @ObservedObject var model: EditorModel
-    @State private var expanded = false
+    /// GUI-012: scope visibility persists per workspace layout (ADR-0033).
+    private var expanded: Bool {
+        get { model.ui.layout.scopesVisible }
+        nonmutating set { model.ui.layout.scopesVisible = newValue }
+    }
     @State private var scopes: ScopeBins?
     @State private var failure: ServiceFailure?
     @State private var loading = false

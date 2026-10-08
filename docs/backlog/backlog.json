@@ -2358,7 +2358,7 @@
       "priority": "P2",
       "area": "gui",
       "title": "ワークスペース完成: 残 UI の統合と UX ポリッシュ",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "GUI-011",
         "FLOW-002"

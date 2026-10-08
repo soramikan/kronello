@@ -651,6 +651,28 @@
         },
         {
           "additionalProperties": false,
+          "description": "GUI-012 (ADR-0138): one audio track measured in place — every other\ntrack is muted in the measurement snapshot, so the result is the\ntrack's program contribution, not an isolated clip. The measured\nrange is the target track's own clip extent.",
+          "properties": {
+            "kind": {
+              "const": "track",
+              "type": "string"
+            },
+            "sequence": {
+              "$ref": "#/$defs/SequenceId"
+            },
+            "track": {
+              "$ref": "#/$defs/TrackId"
+            }
+          },
+          "required": [
+            "kind",
+            "sequence",
+            "track"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "A verified asset stream, optionally limited to a source range.",
           "properties": {
             "asset": {
@@ -1761,6 +1783,17 @@
             "$ref": "#/$defs/Mask"
           },
           "type": "array"
+        },
+        "pan": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Property"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "GUI-012 (ADR-0138): constant stereo balance in [-1, 1], absent means\ncenter. Applied to the clip's mixed output after volume, effects and\nfades; the basic (pre-AUDIO-004) mixer rejects it as unsupported."
         },
         "properties": {
           "description": "Placement transform and effect parameters, evaluated in sequence time.",
@@ -20476,6 +20509,42 @@
           },
           "required": [
             "clip_set_volume"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "GUI-012 (ADR-0138): authored stereo balance on one clip\n(`kronello.audio.pan`, constant scalar in [-1, 1]); None restores\ncenter. Same undo/idempotency contract as ClipSetVolume.",
+          "properties": {
+            "clip_set_pan": {
+              "additionalProperties": false,
+              "properties": {
+                "clip": {
+                  "$ref": "#/$defs/ClipId"
+                },
+                "pan": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Property"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "sequence": {
+                  "$ref": "#/$defs/SequenceId"
+                }
+              },
+              "required": [
+                "sequence",
+                "clip"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "clip_set_pan"
           ],
           "type": "object"
         },

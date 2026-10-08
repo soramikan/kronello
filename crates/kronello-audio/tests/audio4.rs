@@ -113,6 +113,7 @@ fn sequence(p: &mut Project, root: CompositionId, start: Time, end: Time) -> Seq
         audio_retime: AudioRetimePolicy::Reject,
         reverse_sampling: None,
         volume: Some(Box::new(volume(PropertySource::Constant(scalar(0.5))))),
+        pan: None,
         links: vec![],
         properties: vec![],
         effects: vec![],

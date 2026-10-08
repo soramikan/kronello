@@ -115,6 +115,7 @@ impl Fixture {
                     masks: vec![],
                     properties: vec![],
                     markers: vec![],
+                    pan: None,
                 }],
             }],
             transitions: vec![],

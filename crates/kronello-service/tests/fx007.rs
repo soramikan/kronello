@@ -48,6 +48,7 @@ fn solid(rgb: [u8; 3]) -> Clip {
         masks: vec![],
         markers: vec![],
         properties: vec![],
+        pan: None,
     }
 }
 fn adjustment(exposure_ev: f64) -> Clip {
@@ -75,6 +76,7 @@ fn adjustment(exposure_ev: f64) -> Clip {
         masks: vec![],
         markers: vec![],
         properties: vec![exposure, offset],
+        pan: None,
     }
 }
 fn sequence(tracks: Vec<Track>) -> Sequence {

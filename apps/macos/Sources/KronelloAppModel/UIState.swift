@@ -8,6 +8,10 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
     public var bottomHeight: Double = 344
     public var tools = KRToolStripPlacement()
     public var valuesVisible = true
+    /// GUI-012: edit-page mixer strip visibility, per workspace layout.
+    public var mixerVisible = false
+    /// GUI-012: monitor scopes panel visibility, per workspace layout.
+    public var scopesVisible = false
     public init() {}
 }
 
@@ -26,6 +30,12 @@ public struct CanvasSettings: Codable, Equatable, Sendable {
 public struct EditViewSettings: Codable, Equatable, Sendable {
     public var panX = 0.0
     public var panY = 0.0
+    /// GUI-012: persisted timeline zoom factor (px per frame relative scale).
+    public var editScale = 1.0
+    /// GUI-012: persisted snapping flag for edit gestures.
+    public var editSnap = true
+    /// GUI-012: last source-monitor destination track override.
+    public var sourceTrack: String?
     public init() {}
 }
 public struct LockedFontSource: Codable, Equatable, Sendable {
@@ -103,6 +113,16 @@ public struct AppPreferences: Codable, Sendable {
     public var light = false
     public var showWelcome = true
     public var recent: [RecentProject] = []
+    /// GUI-012: playback defaults applied when a project session opens.
+    /// Scrub and monitor mute are session flags; looping only seeds projects
+    /// that have no persisted UI state yet.
+    public var playbackScrub = true
+    public var playbackMuted = false
+    public var playbackLooping = false
+    /// GUI-012: raster scratch/cache root, exported to the worker as
+    /// `KRONELLO_RASTER_CACHE_ROOT` before a session opens. Empty keeps the
+    /// platform default (`~/Library/Caches/kronello/raster` on macOS).
+    public var scratchDirectory = ""
     public init() {}
 }
 
@@ -119,6 +139,11 @@ public actor UIStateStore {
     }
     public func load(projectID: String) throws -> ProjectUIState {
         try read(ProjectUIState.self, at: stateURL(projectID: projectID)) ?? .init()
+    }
+    /// Whether a persisted state file exists; playback defaults only apply
+    /// when the project has never written UI state (GUI-012).
+    public func hasState(projectID: String) throws -> Bool {
+        FileManager.default.fileExists(atPath: try stateURL(projectID: projectID).path)
     }
     public func save(_ state: ProjectUIState, projectID: String) throws { try write(state, at: stateURL(projectID: projectID)) }
     public func preferences() throws -> AppPreferences { try read(AppPreferences.self, at: root.appendingPathComponent("preferences.json")) ?? .init() }

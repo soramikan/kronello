@@ -70,6 +70,7 @@ fn clip(start: i64, end: i64) -> Clip {
         audio_retime: AudioRetimePolicy::Reject,
         reverse_sampling: None,
         volume: None,
+        pan: None,
         links: vec![],
         enabled: true,
         effects: vec![],
