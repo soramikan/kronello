@@ -24,6 +24,9 @@ import KronelloDesign
     @Published public private(set) var checking = false
     @Published public private(set) var submitting = false
     @Published public var previewFailure: ServiceFailure?
+    /// Explicit CPU-reference retry for preview only; final export jobs still
+    /// run their configured backend and fail typed on unsupported input.
+    @Published public private(set) var cpuReference = false
     @Published public private(set) var jobFailure: ServiceFailure?
     @Published public private(set) var checkedRevision: String?
     private var checkedKey: String?
@@ -128,6 +131,16 @@ import KronelloDesign
         if format == "pro_res_mov" && version == "1" && audio != "explicit" { errors.append(.init(code: "UNSUPPORTED_FEATURE", message: "profile 1 は explicit 音声だけを扱います")) }
         if editor.pendingCandidate != nil || editor.busy { errors.append(.init(code: "REVISION_CONFLICT", message: "編集の確定または競合の解決を待ってください")) }
         return errors
+    }
+    /// Same explicit recovery as the edit monitors: when the preview reports
+    /// an unsupported media backend, offer a CPU-reference retry.
+    public var offersCPUReference: Bool {
+        !cpuReference && previewFailure?.code == "UNSUPPORTED_FEATURE"
+            && previewFailure?.message.contains("video requires explicit media backend") == true
+    }
+    public func chooseCPUReference() {
+        guard offersCPUReference else { return }
+        cpuReference = true; previewFailure = nil
     }
     public var canSubmit: Bool { !checking && !submitting && errors.isEmpty && checkedKey == configurationKey && checkedRevision == editor.revision }
     public static func failure(_ raw: [String: Any]) -> ServiceFailure { .init(code: raw.string("code"), message: raw.string("message"), details: raw.object("details")) }

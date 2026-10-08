@@ -8,6 +8,7 @@ struct ExportMetalPreview: NSViewRepresentable {
     let editor: EditorModel
     let input: [String: Any]
     let time: [String: Any]
+    let cpuReference: Bool
     let onFailure: (ServiceFailure) -> Void
     func makeCoordinator() -> Coordinator { Coordinator(editor, onFailure: onFailure) }
     func makeNSView(context: Context) -> MetalView {
@@ -15,7 +16,7 @@ struct ExportMetalPreview: NSViewRepresentable {
         view.changed = { [weak coordinator = context.coordinator] _ in coordinator?.schedule() }
         return view
     }
-    func updateNSView(_ view: MetalView, context: Context) { context.coordinator.input = input; context.coordinator.time = time; context.coordinator.schedule() }
+    func updateNSView(_ view: MetalView, context: Context) { context.coordinator.input = input; context.coordinator.time = time; context.coordinator.cpuReference = cpuReference; context.coordinator.schedule() }
     static func dismantleNSView(_ view: MetalView, coordinator: Coordinator) { view.changed = nil; coordinator.task?.cancel() }
     @MainActor final class Coordinator {
         let editor: EditorModel
@@ -23,6 +24,7 @@ struct ExportMetalPreview: NSViewRepresentable {
         weak var view: MetalView?
         var input: [String: Any] = [:]
         var time: [String: Any] = [:]
+        var cpuReference = false
         var attached = false
         var pending = false
         var task: Task<Void,Never>?
@@ -42,7 +44,9 @@ struct ExportMetalPreview: NSViewRepresentable {
                         if !attached { try await native.session.attach(metalLayer: Unmanaged.passUnretained(view.metal).toOpaque(), width: width, height: height, surface: PreviewSurface.export); attached = true }
                         else { try await native.session.resize(width: width, height: height, surface: PreviewSurface.export) }
                         var render = input, region = input.object("region"); region["pixels"] = [width,height]; render["region"] = region
-                        _ = try await native.session.redraw(NativeProjectTransport.request(["operation":"render.frame","input":render,"time":time]), surface: PreviewSurface.export)
+                        var request: [String: Any] = ["operation":"render.frame","input":render,"time":time]
+                        if cpuReference { request["backend"] = "cpu_reference" }
+                        _ = try await native.session.redraw(NativeProjectTransport.request(request), surface: PreviewSurface.export)
                     } catch is CancellationError {} catch { onFailure(editor.serviceFailure(error)) }
                 }
             }

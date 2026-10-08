@@ -6,4 +6,5 @@ final class SourceMonitorTests: XCTestCase {
     @MainActor func testSourceOpenMarkingAndWindow() async throws { try await SourceMonitorChecks().verifySourceOpenMarkingAndWindow() }
     @MainActor func testInsertOverwriteThreePoint() async throws { try await SourceMonitorChecks().verifyInsertOverwriteThreePoint() }
     @MainActor func testMulticamCreatePreviewAndSwitch() async throws { try await SourceMonitorChecks().verifyMulticamCreatePreviewAndSwitch() }
+    @MainActor func testClipAnalysisAuthoring() async throws { try await SourceMonitorChecks().verifyClipAnalysisAuthoring() }
 }

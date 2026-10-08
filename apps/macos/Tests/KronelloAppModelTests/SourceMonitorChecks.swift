@@ -119,6 +119,24 @@ import KronelloDesign
         try require(e.sourceMonitor?.source == .asset(f.videoA, 0), "Monitor loads the asset stream")
         try require(e.sourceFrame == 0 && e.sourceDurationFrames == 720, "Window starts at stream start, 30 s at 24 fps")
         try require(e.sourceExtent(for: .asset(f.videoA, 0)) == CGSize(width: 1920, height: 1080), "Extent comes from stream pixels")
+        // An unsupported media backend on the source surface offers the same
+        // explicit CPU-reference retry as the program monitor.
+        try require(!e.offersSourceCPUReference && !e.usesSourceCPUReference, "No CPU offer before a failure")
+        e.reportSourcePreviewFailure(.init(code: "UNSUPPORTED_FEATURE", message: "video requires explicit media backend"), for: e.sourcePreviewIdentity)
+        try require(e.offersSourceCPUReference, "Unsupported backend offers the source CPU fallback")
+        e.chooseSourceCPUReference()
+        try require(e.usesSourceCPUReference && e.sourcePreviewFailure == nil, "Choosing CPU clears the source failure")
+        e.reportSourcePreviewFailure(.init(code: "UNSUPPORTED_FEATURE", message: "video requires explicit media backend"), for: e.sourcePreviewIdentity)
+        try require(!e.offersSourceCPUReference, "No repeated offer once CPU is chosen")
+        // The opt-in is scoped to the preview target: another source does not
+        // inherit it, and returning to the chosen source keeps it.
+        if let assetB = e.editAssets.first(where: { $0.source["asset"] as? String == f.videoB }) {
+            e.openAssetInSource(assetB)
+            try require(!e.usesSourceCPUReference, "CPU choice does not leak to another source")
+            e.openAssetInSource(assetA)
+            try require(e.usesSourceCPUReference, "CPU choice stays per source target")
+        }
+        e.sourcePreviewFailure = nil
         // Marking: In at 1 s, Out at 2 s on the sequence's 24 fps grid.
         e.seekSourceFrame(24); e.setSourceInPoint()
         try require(e.sourceMonitor?.inPoint == RationalTime(num: 1, den: 1), "In stores source-local rational time")
@@ -286,6 +304,40 @@ import KronelloDesign
         try require(e.editClips.first { $0.id == clip.id }?.multicam?.angle == angleA
                     && e.clipName(e.editClips.first { $0.id == clip.id }!) == "Interview · A-cam",
                     "Clip's active angle changed")
+        // TRACK-002: a multicam clip's trackable source resolves through the
+        // active angle (asset + stream + sync offset), and the kind gate lets
+        // track.analyze through — the request then fails typed on the fake
+        // locator, proving it reached the service rather than a local guard.
+        let switchedClip = e.editClips.first { $0.id == clip.id }!
+        try require(e.trackableSource(switchedClip)?.asset == f.videoA
+                    && e.trackableSource(switchedClip)?.stream == 0
+                    && e.trackableSource(switchedClip)?.offset == RationalTime(num: 0, den: 1),
+                    "Multicam clip resolves the active angle's media")
+        e.stabilizeClip(switchedClip)
+        for _ in 0..<200 where !e.stabilizePending.isEmpty {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let analyze = f.transport.lastCalls["track.analyze"] ?? [:]
+        try require(analyze.string("asset") == f.videoA && (analyze["stream_index"] as? Int) == 0
+                    && analyze.string("mode") == "points",
+                    "Stabilize analyzes the active angle's asset stream")
+        try require(e.failure != nil && e.stabilizePending.isEmpty,
+                    "Fake media fails typed and unwinds the pending flag")
+        e.failure = nil
+        // A persisted blank angle name (allowed by the schema) falls back to
+        // the source filename so pickers stay distinguishable; ids stay the
+        // identity, labels are never used as keys.
+        let angleC = UUID().uuidString.lowercased(), angleD = UUID().uuidString.lowercased()
+        base = e.revision
+        e.createMulticam(name: "Blank", sync: "manual",
+            angles: [["id": angleC, "asset": f.videoA, "stream_index": 0, "name": ""],
+                     ["id": angleD, "asset": f.videoB, "stream_index": 0, "name": "tail"]],
+            reference: nil, offsets: [angleC: RationalTime(num: 0, den: 1), angleD: RationalTime(num: 0, den: 1)])
+        try await waitForApply(f, after: base)
+        let blank = e.multicamGroups.first { $0.name == "Blank" }
+        try require(blank?.angles.first?.displayName == "cam_a.mov",
+                    "Blank angle name falls back to the source filename; got \(blank?.angles.first?.displayName ?? "nil")")
+        try require(blank?.angles.last?.displayName == "tail", "Set angle names win over the fallback")
         // A non-multicam clip never issues the operation. The asset insert
         // targets V2 explicitly because `seek` clamps to the content end and
         // the multicam clip occupies the head of V1.
@@ -303,6 +355,123 @@ import KronelloDesign
         let calls = f.transport.callCounts["clip.angle_switch"] ?? 0
         e.switchClipAngle(assetClip, to: angleB)
         try require((f.transport.callCounts["clip.angle_switch"] ?? 0) == calls, "Switch guard skips non-multicam clips")
+        await finish(f)
+    }
+
+    /// TRACK-002/003 + AI-002 clip analysis authoring: stabilization's
+    /// `track.analyze` → `clip_set_effects` chain, optical-flow interpolation
+    /// through `clip_time_set`, and the `scene.detect` / `scene.apply` shared
+    /// operations. Every request rides the real worker so the strict schema
+    /// validates the wire shape; fake locators make media-dependent steps
+    /// fail typed instead of silently succeeding.
+    func verifyClipAnalysisAuthoring() async throws {
+        let f = try await fixture()
+        // scene.detect lands in the process-wide job store; keep it under
+        // the test folder instead of the user's state root.
+        setenv("KRONELLO_STATE_ROOT", f.folder.appendingPathComponent("job-state").path, 1)
+        defer { unsetenv("KRONELLO_STATE_ROOT") }
+        let e = f.editor
+        // A 1 s asset clip from source window [1 s, 2 s) covering the head of
+        // V1 (overwrite splits the composition clip, leaving a [1 s, 3 s)
+        // remainder for the ineligible-source checks).
+        guard let assetA = assetA(f) else { throw GUICheckError(message: "video asset row missing") }
+        e.openAssetInSource(assetA)
+        e.seekSourceFrame(24); e.setSourceInPoint()
+        e.seekSourceFrame(48); e.setSourceOutPoint()
+        e.seek(0)
+        var base = e.revision
+        e.overwriteSource()
+        try await waitForApply(f, after: base)
+        guard var clip = e.editClips.first(where: { $0.authored.object("source_ref").string("kind") == "asset" }),
+              let comp = e.editClips.first(where: { $0.composition != nil })
+        else { throw GUICheckError(message: "clips missing") }
+        // Eligibility narrows to forward asset clips on video tracks.
+        try require(e.trackableSource(comp) == nil && !e.interpolationEligible(comp) && !e.sceneDetectEligible(comp),
+                    "Composition clips expose no media source")
+        try require(e.trackableSource(clip)?.asset == f.videoA && e.trackableSource(clip)?.stream == 0
+                    && e.trackableSource(clip)?.offset == RationalTime(num: 0, den: 1),
+                    "Asset clip resolves its media source")
+        try require(e.interpolationEligible(clip) && e.sceneDetectEligible(clip) && e.clipInterpolation(clip) == nil
+                    && !e.clipHasStabilize(clip), "Linear asset clip is eligible for every analysis flow")
+        // TRACK-003: enabling optical flow converts the linear map to its
+        // equivalent two-point piecewise map (media = source_in + local).
+        base = e.revision
+        e.setClipInterpolation(clip, opticalFlow: true)
+        try await waitForApply(f, after: base)
+        clip = e.editClips.first { $0.id == clip.id }!
+        var map = clip.authored.object("time_map")
+        var points = map.objects("points")
+        try require(map.string("kind") == "piecewise_linear" && points.count == 2, "Linear map converts to piecewise")
+        try require(RationalTime.wire(points[0].object("parent")) == RationalTime(num: 0, den: 1)
+                    && RationalTime.wire(points[0].object("local")) == RationalTime(num: 0, den: 1)
+                    && RationalTime.wire(points[1].object("parent")) == RationalTime(num: 1, den: 1)
+                    && RationalTime.wire(points[1].object("local")) == RationalTime(num: 1, den: 1),
+                    "Piecewise points preserve the identity map over the clip range")
+        let interpolation = map.object("interpolation")
+        try require(interpolation.string("mode") == "optical_flow"
+                    && Int(interpolation.string("block_radius")) == 4 && Int(interpolation.string("search_radius")) == 8
+                    && Int(interpolation.string("levels")) == 3
+                    && RationalTime.wire(interpolation.object("confidence_floor")) == RationalTime(num: 1, den: 4)
+                    && RationalTime.wire(interpolation.object("max_low_confidence")) == RationalTime(num: 1, den: 2),
+                    "Optical-flow config carries the versioned defaults verbatim")
+        // A piecewise clip is not stabilizable (the guard rejects nonlinear
+        // maps without issuing track.analyze).
+        e.stabilizeClip(clip)
+        try require(e.failure?.code == "UNSUPPORTED_FEATURE" && f.transport.lastCalls["track.analyze"] == nil,
+                    "Speed-ramped clips reject stabilization before any analysis")
+        e.failure = nil
+        // Disabling folds the affine two-point map back to linear.
+        base = e.revision
+        e.setClipInterpolation(clip, opticalFlow: false)
+        try await waitForApply(f, after: base)
+        clip = e.editClips.first { $0.id == clip.id }!
+        map = clip.authored.object("time_map")
+        try require(map.string("kind") == "linear" && map["interpolation"] == nil
+                    && RationalTime.wire(map.object("speed")) == RationalTime(num: 1, den: 1)
+                    && RationalTime.wire(map.object("offset")) == RationalTime(num: 0, den: 1),
+                    "Affine piecewise map folds back to the equivalent linear map")
+        // TRACK-002: stabilization submits track.analyze for the clip's media
+        // window. The fake locator fails typed inside the service; the pending
+        // flag unwinds and no clip_set_effects ever reaches edit.apply.
+        let applies = f.transport.callCounts["edit.apply"] ?? 0
+        e.stabilizeClip(clip)
+        for _ in 0..<200 where !e.stabilizePending.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        let analyze = f.transport.lastCalls["track.analyze"] ?? [:]
+        try require(analyze.string("asset") == f.videoA && (analyze["stream_index"] as? Int) == 0
+                    && analyze.string("mode") == "points" && analyze.objects("seeds").count == 3,
+                    "track.analyze carries the clip's asset stream with seed points")
+        try require(RationalTime.wire(analyze.object("range").object("start")) == RationalTime(num: 1, den: 1)
+                    && RationalTime.wire(analyze.object("range").object("end")) == RationalTime(num: 2, den: 1),
+                    "Analysis range covers the clip's media window [1 s, 2 s)")
+        try require(UUID(uuidString: analyze.string("id")) != nil
+                    && UUID(uuidString: analyze.string("idempotency_key")) != nil
+                    && !analyze.string("base_revision").isEmpty,
+                    "track.analyze carries identity and revision fields")
+        try require((f.transport.callCounts["edit.apply"] ?? 0) == applies && e.stabilizePending.isEmpty
+                    && e.failure != nil, "Failed analysis unwinds without mutating the document")
+        e.failure = nil
+        // AI-002: detection submits a shared job scoped to the clip's stream.
+        e.detectScenes(clip)
+        for _ in 0..<200 where f.transport.lastCalls["scene.detect"] == nil { try await Task.sleep(for: .milliseconds(10)) }
+        let detect = f.transport.lastCalls["scene.detect"] ?? [:]
+        try require(detect.string("asset") == f.videoA && (detect["stream_index"] as? Int) == 0,
+                    "scene.detect targets the clip's asset stream")
+        try require(e.sceneBoundaryAssets(for: clip).isEmpty, "No committed boundary assets yet")
+        // scene.apply rides submitDirect (session_id + idempotency + base) and
+        // fails typed on an unknown boundary asset instead of silently no-oping.
+        let sceneAsset = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+        base = e.revision
+        e.applySceneBoundaries(clip, asset: sceneAsset, split: false)
+        for _ in 0..<200 where e.failure == nil { try await Task.sleep(for: .milliseconds(10)) }
+        let apply = f.transport.lastCalls["scene.apply"] ?? [:]
+        try require(apply.string("scene_asset") == sceneAsset && apply.string("sequence") == f.sequence
+                    && apply.string("mode") == "markers" && apply.string("clip") == clip.id,
+                    "scene.apply carries the boundary asset, sequence, clip and mode")
+        try require(apply.string("base_revision") == base
+                    && UUID(uuidString: apply.string("session_id")) != nil
+                    && UUID(uuidString: apply.string("idempotency_key")) != nil,
+                    "scene.apply carries shared revision/session/idempotency fields")
+        try require(e.failure != nil, "Unknown boundary asset fails typed")
         await finish(f)
     }
 }

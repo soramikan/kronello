@@ -2092,7 +2092,7 @@
       "priority": "P2",
       "area": "gui",
       "title": "ソース/プログラム二画面モニタ",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "GUI-008"
       ],
@@ -2376,7 +2376,7 @@
       "priority": "P2",
       "area": "integration",
       "title": "縦断デモ第4段階: M9 編集ワークフロー（文字起こしを除く）",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "AI-002",
         "GUI-011",

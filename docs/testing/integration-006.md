@@ -58,6 +58,34 @@ python3 scripts/demo_integration_m9.py \
 `{cli,mcp}-media`（angle-a/b.mov・tone.mov・scene-boundary 資産）、
 隔離 `state/` を保存した。
 
+### GUI 検証（Computer Use、2026-10-09）
+
+`apps/macos` のネイティブ GUI（`dev.kronello.Kronello`）を Computer Use で操作し、
+上記 CLI/MCP 経路と同じ共有操作が GUI から到達することを確認した。検証用の変更は
+すべて取り消しで元に戻し、デモプロジェクトは初期状態（rev 42 時点の内容と一致）へ
+復帰させた。
+
+- **二画面モニタ（GUI-011）**: Source / Program の二画面を確認。ソース側で
+  In/Out・出力先・インサート/上書きを操作。クリップ跨ぎ点への `edit.insert` は
+  `INVALID_CLIP · insert point straddles a clip` の型付きエラーシートを表示、
+  上書きは `edit.overwrite` で成功し Undo で完全復元。
+- **スタビライズ（TRACK-002）**: マルチカムクリップ選択時にアクティブ angle の
+  素材へ `track.analyze` が発行され、「解析中…」の pending 表示を経て Inspector に
+  `kronello.stabilize` のパラメータ（平滑化半径・最大移動・最大回転・最大クロップ）
+  が永続化。Undo でエフェクト消失・ボタン再有効化を確認。
+- **シーン（AI-002）**: 検出済み境界の件数表示と「境界でクリップを分割」から
+  8 s クリップが 5 片へ分割され、Undo で 1 本へ復元。
+- **フレーム補間（TRACK-003）**: Inspector の「フレーム補間」で `optical_flow` を
+  適用すると線形マップが等価な 2 点ピースワイズへ変換され、「なし」で線形マップへ
+  畳み戻されることを revision と表示で確認。
+- **CPU 参照フォールバック**: Source / Program / 書き出しプレビューの
+  `UNSUPPORTED_FEATURE`（明示 backend 要求）時に「CPU 参照で表示」ボタンが出て、
+  選択後に実フレームが描画されることを確認。選択はプレビュー対象ごとに保持される。
+- **マルチカム角度ラベル**: 空の angle `name` が素材ファイル名へフォールバックし、
+  ソース選択・角度ピッカー・タイムラインラベルで角度を区別できることを確認。
+- **メディアページ**: サムネイルが video/image 資産でのみ遅延読み込みされる
+  ことを確認。
+
 ### 検証で発見・修正した不具合（本デモが初めて実経路を通した箇所）
 
 - `crates/kronello-model/src/export_presets.rs`: `ExportOutput` は内部タグ
@@ -70,6 +98,15 @@ python3 scripts/demo_integration_m9.py \
   `Deserialize` に変更。回帰テスト
   `export_preset_save_decodes_f32_fields_from_wire_json` を
   `crates/kronello-service/tests/flow003.rs` に追加。
+- `crates/kronello-service/src/edit.rs` の `validate_undo`: GUI 監査で
+  「編集 → 編集 → 取り消し → 取り消し」の逐次 Undo が永久にブロックされる
+  ことを実機で確認した。Undo イベントが対象と同じ `changed_keys` で追記され、
+  それ自体が「後続の active イベント」として先行編集の Undo を拒否していた。
+  [ADR-0132](../adr/0132-sequential-undo-conflict-scope.md) で「後続 forward
+  編集を打ち消した Undo イベント」を競合対象から外し、回帰テスト
+  `undo_of_later_edit_does_not_block_undoing_earlier_edit` を追加。
+  依存していた `editing.rs` / `modifiers.rs` / `nle2.rs` の旧前提テストを
+  新セマンティクスへ更新した。
 
 ## 環境・確認済みコマンド
 
@@ -79,7 +116,9 @@ python3 scripts/demo_integration_m9.py \
 | `python3 scripts/demo_integration_m9.py --output-directory target/m9-acceptance/integration-006 --backend cpu-reference` | 0、56 checks verified |
 | `python3 scripts/demo_integration_m9.py --output-directory target/m9-acceptance/integration-006-gpu --backend gpu` | 0、56 checks verified |
 | `cargo test -p kronello-service --locked --test flow003` | 0、4 件全件合格 |
-| `cargo fmt --all --check` / `cargo clippy -p kronello-model -p kronello-service --all-targets --locked -- -D warnings` | 0 |
+| `cargo test --workspace --locked` | 0、全スイート合格 |
+| `swift build --package-path apps/macos` / `swift test --package-path apps/macos` | 0、118 tests 合格 |
+| `cargo fmt --all --check` / `cargo clippy --workspace --all-targets --locked -- -D warnings` | 0 |
 
 FFmpeg / ffprobe は PATH の `/opt/homebrew/bin`（9.0.2）を検査用に使う。
 parity 比較は作品 semantics の一致を扱うため、media locator はファイル名へ、

@@ -83,7 +83,7 @@ struct MetalPreview: NSViewRepresentable {
             source == nil ? model.previewIdentity : model.sourcePreviewIdentity
         }
         private var cpuReference: Bool {
-            source == nil ? model.usesCPUReference : model.sourceCPUReference
+            source == nil ? model.usesCPUReference : model.usesSourceCPUReference
         }
         private var designExtent: CGSize {
             if let source {

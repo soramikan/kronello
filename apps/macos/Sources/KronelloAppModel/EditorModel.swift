@@ -90,6 +90,8 @@ public struct EditCandidate {
     @Published public internal(set) var waveformFailures: [String: String] = [:]
     /// In-flight `audio.analyze` keys; empty means waveform work has settled.
     @Published public internal(set) var waveformPending: Set<String> = []
+    /// In-flight `track.analyze` clip ids for the stabilize flow (TRACK-002).
+    @Published public internal(set) var stabilizePending: Set<String> = []
     @Published public var editTool = "select"
     @Published public var editSnap = true
     @Published public var editScale: Double = 1
@@ -125,9 +127,13 @@ public struct EditCandidate {
     @Published public var sourceMonitor: SourceMonitor?
     @Published private var sourcePreviewIssue: PreviewIssue?
     @Published public var sourcePreviewRendering = false
-    /// The source monitor's own CPU-reference opt-in, separate from
-    /// `cpuReferenceSequences` (which is scoped to sequence targets).
-    @Published public var sourceCPUReference = false
+    /// The source monitor's own CPU-reference opt-in per preview target,
+    /// separate from `cpuReferenceSequences` (which is scoped to sequences).
+    /// A later source never inherits another target's choice.
+    @Published public private(set) var sourceCPUReferenceTargets: Set<String> = []
+    public var usesSourceCPUReference: Bool {
+        sourceMonitor.map { sourceCPUReferenceTargets.contains($0.source.key) } ?? false
+    }
     public var previewIdentity: PreviewIdentity { .init(target: ui.page == "edit" ? "sequence:\(ui.sequence ?? "")" : "composition:\(ui.composition ?? "")", revision: revision, time: ui.time) }
     public var previewFailure: ServiceFailure? {
         get { previewIssue?.identity == previewIdentity ? previewIssue?.failure : nil }
@@ -159,6 +165,18 @@ public struct EditCandidate {
     public func reportSourcePreviewFailure(_ failure: ServiceFailure?, for identity: PreviewIdentity) {
         guard identity == sourcePreviewIdentity else { return }
         sourcePreviewIssue = failure.map { .init(identity: identity, failure: $0) }
+    }
+    /// Same explicit recovery as the program monitor: when the source preview
+    /// reports an unsupported media backend, offer a CPU-reference retry
+    /// instead of leaving the viewer dead.
+    public var offersSourceCPUReference: Bool {
+        sourceMonitor != nil && !usesSourceCPUReference
+            && sourcePreviewFailure?.code == "UNSUPPORTED_FEATURE"
+            && sourcePreviewFailure?.message.contains("video requires explicit media backend") == true
+    }
+    public func chooseSourceCPUReference() {
+        guard offersSourceCPUReference, let source = sourceMonitor?.source else { return }
+        sourceCPUReferenceTargets.insert(source.key); sourcePreviewFailure = nil; refreshToken += 1
     }
     @Published public private(set) var pendingCandidate: EditCandidate?
     @Published public var candidateBounds: CGRect?

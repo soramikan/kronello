@@ -114,9 +114,12 @@ struct ExportPage: View {
         KRPanel("プレビュー") {
             VStack(spacing: KRSpace.space2) {
                 if let error = model.previewFailure {
-                    KRViewerError(.init(error.code,error.message), copy: { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(error.copyText,forType:.string) }, retry: { model.previewFailure = nil }).padding(KRSpace.space3)
+                    VStack(spacing: KRSpace.space3) {
+                        KRViewerError(.init(error.code,error.message), copy: { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(error.copyText,forType:.string) }, retry: { model.previewFailure = nil }).padding(KRSpace.space3)
+                        if model.offersCPUReference { KRButton("CPU 参照で表示", variant: .secondary) { model.chooseCPUReference() } }
+                    }
                 } else { KRViewerFrame(aspectRatio: max(1,model.extent[0]) / max(1,model.extent[1])) {
-                    ExportMetalPreview(editor: editor, input: model.input, time: model.time(previewFrame), onFailure: { model.previewFailure = $0 })
+                    ExportMetalPreview(editor: editor, input: model.input, time: model.time(previewFrame), cpuReference: model.cpuReference, onFailure: { model.previewFailure = $0 })
                 }.padding(KRSpace.space3) }
                 HStack {
                     Text(KRTimecode.format(frames: model.firstFrame, fps: model.nominalFPS)).krText(KRType.ruler)

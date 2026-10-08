@@ -43,6 +43,17 @@ struct EditProjectPanel: View {
                             KRButton("Sharpen", icon: .sparkles) { model.addClipEffect("sharpen") }
                             KRButton("Vignette", icon: .sparkles) { model.addClipEffect("vignette") }
                             KRButton("Corner Pin", icon: .sparkles) { model.addClipEffect("corner_pin") }
+                            // TRACK-002: analyze the clip's media, then bind
+                            // kronello.stabilize to the committed tracking asset.
+                            KRButton("スタビライズ", icon: .crosshair) { if let clip = model.selectedClip { model.stabilizeClip(clip) } }
+                                .disabled(model.selectedClip.map { clip in
+                                    model.stabilizePending.contains(clip.id) || clip.timeMapKind != "linear"
+                                        || (clip.kind != .video && clip.kind != .multicam)
+                                        || model.trackableSource(clip) == nil || model.clipHasStabilize(clip)
+                                } ?? true)
+                            if let clip = model.selectedClip, model.stabilizePending.contains(clip.id) {
+                                Text("解析中…").krText(KRType.caption)
+                            }
                             Text("選択中の映像クリップに追加します。").krText(KRType.caption)
                         }.disabled(model.selectedClip == nil || model.selectedClip?.kind == .audio || model.busy || model.pendingCandidate != nil)
                         Divider()
@@ -159,9 +170,12 @@ struct SourceViewer: View {
                     MetalPreview(model: model, source: monitor.source)
                 }.padding(KRSpace.space3).clipped()
                 if let failure = model.sourcePreviewFailure {
-                    KRViewerError(.init(failure.code, failure.message),
-                        copy: { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(failure.copyText, forType: .string) },
-                        retry: { model.sourcePreviewFailure = nil; model.closeSourceMonitor() })
+                    VStack(spacing: KRSpace.space3) {
+                        KRViewerError(.init(failure.code, failure.message),
+                            copy: { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(failure.copyText, forType: .string) },
+                            retry: { model.sourcePreviewFailure = nil; model.closeSourceMonitor() })
+                        if model.offersSourceCPUReference { KRButton("CPU 参照で表示", variant: .secondary) { model.chooseSourceCPUReference() } }
+                    }
                 }
                 if model.sourcePreviewRendering { VStack { HStack {
                     KRActivityIndicator(); Spacer()
@@ -355,6 +369,14 @@ struct ClipInspector: View {
                                 KRNumberField(value: .constant(clip.linearRate.map { Double($0.num)! / Double($0.den)! * 100 } ?? 100), unit: "%", step: 0.1, range: 0.1...10000, accessibilityLabel: "速度", onEditingStart: { draftBases["speed"] = model.revision }, onCommit: { _, value in model.setClipTime(clip, speedPercent: value, base: draftBases.removeValue(forKey: "speed")) }).disabled(clip.linearRate == nil)
                             }
                             KRInspectorSettingRow("逆再生") { KRCheckbox("", isOn: Binding(get: { clip.reversed }, set: { model.setClipReverse(clip, enabled: $0) })).accessibilityLabel("逆再生").disabled(clip.linearRate == nil) }
+                            // TRACK-003: intermediate-frame synthesis rides the
+                            // clip time map; linear maps convert to piecewise.
+                            KRInspectorSettingRow("フレーム補間") {
+                                KRPopupButton("フレーム補間", options: [.init("", "なし"), .init("optical_flow", "オプティカルフロー")],
+                                    selection: Binding(get: { model.clipInterpolation(clip) ?? "" },
+                                        set: { model.setClipInterpolation(clip, opticalFlow: !$0.isEmpty) }))
+                                    .disabled(!model.interpolationEligible(clip) || model.busy || model.pendingCandidate != nil)
+                            }
                             if clip.linearRate == nil {
                                 // NLE-006: piecewise maps (speed ramps and freeze holds) are
                                 // shown read-only; percent/reverse edits need a Linear map.
@@ -408,7 +430,7 @@ struct ClipInspector: View {
                                             KRInspectorSettingRow(label) {
                                                 KRNumberField(value: .constant(EditorModel.colorParameterValue(clip, effect: effect, parameter: field) ?? 0), unit: unit, step: step, range: range, precision: 2,
                                                     accessibilityLabel: label, onEditingStart: { draftBases[field] = model.revision },
-                                                    onCommit: { _, value in model.setClipEffectParameter(clip, effect: effect, parameter: field, kind: "scalar", value: value, base: draftBases.removeValue(forKey: field)) })
+                                                    onCommit: { _, value in model.setClipEffectParameter(clip, effect: effect, parameter: field, kind: Self.effectRowKind(effect.string("effect_id"), field), value: value, base: draftBases.removeValue(forKey: field)) })
                                             }
                                         }
                                     }
@@ -447,6 +469,24 @@ struct ClipInspector: View {
                                 .padding(.horizontal, KRSpace.space3)
                             Text("リップル削除は対象クリップの区間を全トラックから詰めます。⌥⌫ でも実行できます。").krText(KRType.caption).foregroundStyle(p.inkMuted).padding(.horizontal, KRSpace.space3)
                         }
+                        // AI-002: detection runs as a shared job; committed
+                        // boundary assets for this clip's source can then be
+                        // mapped to sequence markers or clip splits.
+                        if model.sceneDetectEligible(clip) { section("シーン") {
+                            if let boundaries = model.sceneBoundaryAssets(for: clip).last {
+                                let count = boundaries.objects("boundaries").count
+                                KRButton("境界をマーカーに追加（\(count) 件）", icon: .circle, variant: .secondary) { model.applySceneBoundaries(clip, asset: boundaries.string("id"), split: false) }
+                                    .disabled(model.busy || model.pendingCandidate != nil || model.trackLocked(clip.track))
+                                    .padding(.horizontal, KRSpace.space3)
+                                KRButton("境界でクリップを分割", icon: .scissors, variant: .secondary) { model.applySceneBoundaries(clip, asset: boundaries.string("id"), split: true) }
+                                    .disabled(model.busy || model.pendingCandidate != nil || model.trackLocked(clip.track))
+                                    .padding(.horizontal, KRSpace.space3)
+                            }
+                            KRButton("シーンを検出", icon: .scan, variant: .secondary) { model.detectScenes(clip) }
+                                .disabled(model.busy || model.pendingCandidate != nil)
+                                .padding(.horizontal, KRSpace.space3)
+                            Text("検出はジョブとして実行され、完了した境界がここに反映されます。シーン分割はクリップの素材範囲内の境界に適用されます。").krText(KRType.caption).foregroundStyle(p.inkMuted).padding(.horizontal, KRSpace.space3)
+                        } }
                     }.padding(.vertical, KRSpace.space3)
                 }
             } else { KREmptyState(icon: .mousePointer2, title: "クリップを選択", message: "トラックでクリップを選択してください。") }
@@ -473,6 +513,7 @@ struct ClipInspector: View {
         case "kronello.sharpen": return "Sharpen"
         case "kronello.vignette": return "Vignette"
         case "kronello.corner_pin": return "Corner Pin"
+        case "kronello.stabilize": return "Stabilize"
         default: return id
         }
     }
@@ -504,8 +545,19 @@ struct ClipInspector: View {
         case "kronello.corner_pin":
             return [("top_left", "左上", "px", -8192...8192, 1), ("top_right", "右上", "px", -8192...8192, 1),
                     ("bottom_right", "右下", "px", -8192...8192, 1), ("bottom_left", "左下", "px", -8192...8192, 1)]
+        case "kronello.stabilize":
+            return [("smoothing_radius", "平滑化半径", "f", 0...4096, 1),
+                    ("max_displacement", "最大移動", "px", 0...512, 1),
+                    ("max_rotation", "最大回転", "°", 0...90, 0.5),
+                    ("max_crop", "最大クロップ", "", 0...0.5, 0.01)]
         default: return []
         }
+    }
+    /// Value kind a scalar row writes; angle parameters need `"angle"` or the
+    /// service rejects the kind on `clip_set_effects`.
+    static func effectRowKind(_ id: String, _ field: String) -> String {
+        if id == "kronello.stabilize", field == "max_rotation" { return "angle" }
+        return "scalar"
     }
     func opacity(_ clip: EditClip) -> String {
         guard let property = clip.authored.objects("properties").first(where: { $0.object("descriptor").string("key") == "kronello.opacity" }) else { return "100.0%" }

@@ -131,8 +131,11 @@ struct MediaPage: View {
                         Text(failure.code).krText(KRType.ruler).foregroundStyle(p.inkMuted)
                     }
                 } else {
-                    KRIconView(mediaKind(of: entry).icon).foregroundStyle(p.inkMuted)
-                        .onAppear { model.ensureThumbnail(id) }
+                    let kind = mediaKind(of: entry)
+                    KRIconView(kind.icon).foregroundStyle(p.inkMuted)
+                        .onAppear {
+                            if kind == .video || kind == .image { model.ensureThumbnail(id) }
+                        }
                 }
             }.frame(height: 96).clipped()
             Text(model.name(of: entry)).krText(KRType.body).foregroundStyle(offline ? p.danger : p.ink).lineLimit(1)

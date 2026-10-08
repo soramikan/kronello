@@ -258,9 +258,7 @@ impl<'de> Deserialize<'de> for ExportOutput {
                     map.next_entry::<String, Box<serde_json::value::RawValue>>()?
                 {
                     if fields.insert(key.clone(), value).is_some() {
-                        return Err(M::Error::custom(format!(
-                            "duplicate output field: {key}"
-                        )));
+                        return Err(M::Error::custom(format!("duplicate output field: {key}")));
                     }
                 }
                 Ok(fields)

@@ -27,11 +27,14 @@ public struct SourceMonitor: Equatable, Sendable {
 public struct MulticamAngleInfo: Equatable, Sendable, Identifiable {
     public let id: String
     public let name: String
+    /// Deterministic label for a blank `name` (source filename, else
+    /// "アングル N"). Labels are presentation only; `id` stays the identity.
+    public let fallbackName: String
     public let asset: String
     public let streamIndex: Int
     /// `media_time = multicam_time + sync_offset` (ADR-0127).
     public let syncOffset: RationalTime
-    public var displayName: String { name.isEmpty ? "アングル" : name }
+    public var displayName: String { name.isEmpty ? fallbackName : name }
 }
 
 /// NLE-007: a multicam group with its ordered angles.
@@ -65,11 +68,16 @@ extension EditorModel {
     // MARK: - Multicam document access (NLE-007)
 
     public var multicamGroups: [MulticamGroupInfo] {
-        document.objects("multicams").map { group in
+        let assets = document.objects("assets")
+        return document.objects("multicams").map { group in
             MulticamGroupInfo(id: group.string("id"), name: group.string("name"),
-                angles: group.objects("angles").map { angle in
-                    MulticamAngleInfo(id: angle.string("id"), name: angle.string("name"),
-                        asset: angle.string("asset"), streamIndex: Int(angle.number("stream_index")),
+                angles: group.objects("angles").enumerated().map { index, angle in
+                    let assetID = angle.string("asset")
+                    let locator = assets.first { $0.string("id") == assetID }?.object("locator") ?? [:]
+                    let file = URL(fileURLWithPath: locator.string("relative").isEmpty ? locator.string("absolute") : locator.string("relative")).lastPathComponent
+                    return MulticamAngleInfo(id: angle.string("id"), name: angle.string("name"),
+                        fallbackName: file.isEmpty ? "アングル \(index + 1)" : file,
+                        asset: assetID, streamIndex: Int(angle.number("stream_index")),
                         syncOffset: .wire(angle.object("sync_offset")))
                 })
         }
