@@ -659,3 +659,33 @@ modern response は `resultType: complete` と serverInfo metadata を返し、c
 共通 `render.export` / `render.submit` の `JobOutput` は `pro_res_hdr_mov` version 1（`transfer: pq|hlg`）と `pro_res_sdr_from_hdr_mov` version 1 を持つ。前者は固定 render HDR transfer と一致する ProRes HQ 10-bit / Rec.2100 + PCM24、後者は明示 SDR tone map + BT.709 + PCM24 を指定する。capability は `hdr_rec2100_203nits_v1` と閉じた profile discovery を返す。固定 worker は snapshot/profile/意味版を再解釈せず、codec/bit depth/color tags を probe で検証する。
 
 `FrameMetadata.hdr` は transfer / reference white 203 / HLG peak 1000 を示す。`MediaProbe` の video stream は native pixel format / primaries / transfer / matrix / range を返す。HDR movie は display PNG の SDR tone map を使わない。native GUI の single DAG preview には HDR display 処理を持たせず、HDR は型付き未対応として `render.frame` の display artifact に案内する。[ADR-0086](../adr/0086-rec2100-native-precision-and-fixed-hdr-output.md) を参照。
+
+## AUDIO-011 のプラグイン操作
+
+[ADR-0131](../adr/0131-audio-plugin-hosting-trust-boundary.md) に従い、registry に
+2 操作を追加した（CLI は `audio plugin_probe` / `audio plugin_process`、MCP は同名
+tool）。両方とも project document を変更しない read_only 操作で、plugin code は
+detached helper だけがロードする。
+
+| operation | payload | result |
+|---|---|---|
+| `audio.plugin_probe` | `{plugin: PluginSpec, deadline_ms?}` | `PluginProbeResult`（class / version / parameter / bus の report） |
+| `audio.plugin_process` | `{project, expected_revision?, asset, stream_index?, plugin, destination, deadline_ms?}` | `JobRecord`（固定入力ジョブ投入） |
+
+`PluginSpec` は `format`（`vst3` / `audio_unit`）・`path?`・`sha256?`・`component`・
+`version?`・`parameters`（最大 1,024 行）を持ち、file-backed plugin は
+`bundle_manifest_hash` の pin を要求する。pin は submit・worker 開始・helper の
+`dlopen` 直前で再検証し、不一致は `ASSET_HASH_MISMATCH`、欠落は `PLUGIN_MISSING`。
+`audio.plugin_probe` は helper と bounded describe 交換を行い plugin identity を返す。
+`audio.plugin_process` は `plugin` payload の固定入力ジョブを記録し、worker が
+locked audio stream → helper → PCM24 `.mov` の receipted publication を行う
+（[14 ジョブ](14-jobs.md#audio-011-のプラグイン固定入力ジョブ)）。
+`deadline_ms` は 1,000..=600,000 ms（既定 120,000）。
+
+capabilities.features に `audio_plugin_host_v1`、effects に `kronello.audio.plugin`
+を追加した。`kronello.audio.plugin` effect の authoring binding は model が検証するが、
+evaluator / render は常に `UNSUPPORTED_FEATURE` で拒否し、実行入口はこの 2 操作に
+限定する。公開 schema と GeneratedAPI.swift は生成器から再同期済み。
+helper の起動失敗・crash・timeout・protocol 違反は `PLUGIN_FAILED` /
+`PLUGIN_TIMEOUT` / `PLUGIN_PROTOCOL` / `INVALID_REQUEST` の型付きエラー。
+検証は [AUDIO-011](../testing/audio-011.md) を参照。

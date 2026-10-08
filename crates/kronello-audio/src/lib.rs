@@ -161,6 +161,14 @@ pub struct Bus {
     buffer: AudioBuffer,
 }
 impl Bus {
+    /// One finished offline bus starting at `start_sample`. `AudioBuffer::new`
+    /// already enforces the frame budget and finite-sample invariant.
+    pub fn new(start_sample: i64, buffer: AudioBuffer) -> Self {
+        Self {
+            start_sample,
+            buffer,
+        }
+    }
     pub fn start_sample(&self) -> i64 {
         self.start_sample
     }

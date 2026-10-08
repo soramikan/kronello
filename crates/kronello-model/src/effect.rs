@@ -36,6 +36,14 @@ pub const AUDIO_MAX_RATIO: f64 = 100.0;
 pub const AUDIO_MIN_TIME_MS: f64 = 0.01;
 /// AUDIO-008: envelope time constant range in milliseconds.
 pub const AUDIO_MAX_TIME_MS: f64 = 10_000.0;
+/// AUDIO-011 (ADR-0131): hash-pinned third-party audio plugin binding.
+/// Never executed by the in-process evaluator; processing happens only in
+/// the detached plugin worker via `audio.plugin_process` / plugin jobs.
+pub const AUDIO_PLUGIN_ID: &str = "kronello.audio.plugin";
+/// AUDIO-011 supported semantic version.
+pub const AUDIO_PLUGIN_VERSION: u32 = EFFECT_VERSION;
+/// AUDIO-011: maximum rows in the `plugin_parameters` data table.
+pub const AUDIO_PLUGIN_MAX_PARAMS: usize = 1_024;
 pub const AFFINE_EFFECT_VERSION: u32 = 2;
 /// COLOR-002 pointwise color correction effect ids (ADR-0108).
 pub const COLOR_EXPOSURE_ID: &str = "kronello.color.exposure";
@@ -227,6 +235,27 @@ pub enum EffectParameters {
         lut: PropertyId,
         intensity: PropertyId,
     },
+    /// AUDIO-011 (ADR-0131): hash-pinned audio plugin binding. The document
+    /// carries only identity + pin metadata — a bundle path string, format,
+    /// component id, manifest hash and version — never plugin bytes. The
+    /// binding is processed exclusively by the detached plugin worker; the
+    /// audio evaluator rejects it with `UNSUPPORTED_FEATURE`.
+    AudioPlugin {
+        /// Bundle directory or module file path.
+        bundle: PropertyId,
+        /// `vst3` | `audio_unit`.
+        format: PropertyId,
+        /// VST3 32-hex class id or AU `type:subtype:manufacturer` triplet.
+        component: PropertyId,
+        /// Lowercase hex SHA-256 manifest pin (empty for built-in AUs).
+        sha256: PropertyId,
+        /// Recorded plugin version pin (AU hex version / VST3 class
+        /// version string; empty = unpinned).
+        plugin_version: PropertyId,
+        /// DataTable `{ param: Scalar, value: Scalar }` — VST3 normalized
+        /// parameter ids, AU native parameter values; ≤1024 rows.
+        parameters: PropertyId,
+    },
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum ResolvedEffect {
@@ -387,6 +416,7 @@ impl EffectDefinition {
             EffectParameters::Vignette { .. } => (VIGNETTE_ID, STANDARD_EFFECT_VERSION),
             EffectParameters::CornerPin { .. } => (CORNER_PIN_ID, STANDARD_EFFECT_VERSION),
             EffectParameters::ColorLut { .. } => (COLOR_LUT_ID, COLOR_LUT_VERSION),
+            EffectParameters::AudioPlugin { .. } => (AUDIO_PLUGIN_ID, AUDIO_PLUGIN_VERSION),
         };
         if self.effect_id != id || !(EFFECT_VERSION..=latest).contains(&self.version) {
             return Err(EffectError::UnsupportedFeature);
@@ -524,6 +554,21 @@ impl EffectDefinition {
                 (lut, ValueType::AssetRef, Unit::Dimensionless),
                 (intensity, ValueType::Scalar, Unit::Dimensionless),
             ],
+            EffectParameters::AudioPlugin {
+                bundle,
+                format,
+                component,
+                sha256,
+                plugin_version,
+                parameters,
+            } => vec![
+                (bundle, ValueType::String, Unit::Dimensionless),
+                (format, ValueType::Enum, Unit::Dimensionless),
+                (component, ValueType::String, Unit::Dimensionless),
+                (sha256, ValueType::String, Unit::Dimensionless),
+                (plugin_version, ValueType::String, Unit::Dimensionless),
+                (parameters, ValueType::DataTable, Unit::Dimensionless),
+            ],
         }
     }
     pub fn validate(
@@ -589,6 +634,7 @@ impl EffectDefinition {
                 | EffectParameters::AudioLpf { .. }
                 | EffectParameters::AudioCompressor { .. }
                 | EffectParameters::AudioLimiter { .. }
+                | EffectParameters::AudioPlugin { .. }
         ) {
             self.resolve_audio(values)?;
             return Err(EffectError::UnsupportedFeature);
@@ -603,6 +649,7 @@ impl EffectDefinition {
             | EffectParameters::AudioLpf { .. }
             | EffectParameters::AudioCompressor { .. }
             | EffectParameters::AudioLimiter { .. }
+            | EffectParameters::AudioPlugin { .. }
             | EffectParameters::ColorExposure { .. }
             | EffectParameters::ColorLevels { .. }
             | EffectParameters::ColorCurves { .. }
@@ -625,7 +672,8 @@ impl EffectDefinition {
             | EffectParameters::AudioHpf { .. }
             | EffectParameters::AudioLpf { .. }
             | EffectParameters::AudioCompressor { .. }
-            | EffectParameters::AudioLimiter { .. } => unreachable!("handled above"),
+            | EffectParameters::AudioLimiter { .. }
+            | EffectParameters::AudioPlugin { .. } => unreachable!("handled above"),
             EffectParameters::GaussianBlur { .. } => {
                 if self.version == AFFINE_EFFECT_VERSION {
                     ResolvedEffect::AffineGaussianBlur {
@@ -966,9 +1014,118 @@ impl EffectDefinition {
                 ceiling_db: bounded(ceiling_db, -AUDIO_MAX_DB, 0.0)?,
                 release_ms: milliseconds(release_ms)?,
             }),
+            EffectParameters::AudioPlugin {
+                bundle,
+                format,
+                component,
+                sha256,
+                plugin_version,
+                parameters,
+            } => {
+                // AUDIO-011 (ADR-0131): validate the authored pin fields so
+                // malformed bindings surface as typed parameter errors before
+                // the domain rejection below. Execution belongs to the
+                // detached plugin worker, never this evaluator.
+                plugin_binding_values(
+                    values,
+                    bundle,
+                    format,
+                    component,
+                    sha256,
+                    plugin_version,
+                    parameters,
+                )?;
+                Err(EffectError::UnsupportedFeature)
+            }
             _ => Err(EffectError::UnsupportedFeature),
         }
     }
+}
+/// AUDIO-011: validate the authored plugin binding values (`bundle`,
+/// `format`, `component`, `sha256`, `plugin_version`, `parameters`). Mirrors
+/// the `kronello-plugin` `PluginSpec::validate` contract without depending on
+/// it — the model layer stays free of process/host types.
+fn plugin_binding_values(
+    values: &BTreeMap<PropertyId, Value>,
+    bundle: PropertyId,
+    format: PropertyId,
+    component: PropertyId,
+    sha256: PropertyId,
+    plugin_version: PropertyId,
+    parameters: PropertyId,
+) -> Result<(), EffectError> {
+    let text = |id: PropertyId| match values.get(&id) {
+        Some(Value::String(value)) => Ok(value.as_str()),
+        _ => Err(EffectError::InvalidParameter(id)),
+    };
+    let bundle_v = text(bundle)?;
+    let format_v = match values.get(&format) {
+        Some(Value::Enum(value)) => value.as_str(),
+        _ => return Err(EffectError::InvalidParameter(format)),
+    };
+    let component_v = text(component)?;
+    let sha256_v = text(sha256)?;
+    let _ = text(plugin_version)?;
+    let vst3 = match format_v {
+        "vst3" => true,
+        "audio_unit" => false,
+        _ => return Err(EffectError::InvalidParameter(format)),
+    };
+    if vst3 && bundle_v.is_empty() {
+        return Err(EffectError::InvalidParameter(bundle));
+    }
+    if bundle_v.is_empty() && !sha256_v.is_empty() {
+        // A file-less built-in component carries no bytes to pin.
+        return Err(EffectError::InvalidParameter(sha256));
+    }
+    let sha256_ok = sha256_v.is_empty()
+        || (sha256_v.len() == 64
+            && sha256_v
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)));
+    if !sha256_ok {
+        return Err(EffectError::InvalidParameter(sha256));
+    }
+    let component_ok = if vst3 {
+        component_v.len() == 32 && component_v.bytes().all(|b| b.is_ascii_hexdigit())
+    } else {
+        let parts: Vec<&str> = component_v.split(':').collect();
+        parts.len() == 3 && parts.iter().all(|p| p.len() == 4 && p.is_ascii())
+    };
+    if !component_ok {
+        return Err(EffectError::InvalidParameter(component));
+    }
+    let table = match values.get(&parameters) {
+        Some(Value::DataTable(table)) => table,
+        _ => return Err(EffectError::InvalidParameter(parameters)),
+    };
+    if table.columns.len() != 2
+        || table.columns.get("param") != Some(&ValueType::Scalar)
+        || table.columns.get("value") != Some(&ValueType::Scalar)
+        || table.rows.len() > AUDIO_PLUGIN_MAX_PARAMS
+    {
+        return Err(EffectError::InvalidParameter(parameters));
+    }
+    for row in &table.rows {
+        if row.len() != 2 {
+            return Err(EffectError::InvalidParameter(parameters));
+        }
+        let (Some(Value::Scalar(param)), Some(Value::Scalar(value))) =
+            (row.get("param"), row.get("value"))
+        else {
+            return Err(EffectError::InvalidParameter(parameters));
+        };
+        let (param, value) = (param.get(), value.get());
+        // `param` carries the u32 parameter id. VST3 values are the
+        // normalized 0..=1 domain; AudioUnit values are native and finite.
+        if !(0.0..=u32::MAX as f64).contains(&param)
+            || param.fract() != 0.0
+            || (vst3 && !(0.0..=1.0).contains(&value))
+        {
+            return Err(EffectError::InvalidParameter(parameters));
+        }
+    }
+    Ok(())
 }
 /// Validate and extract the AUDIO-007 EQ band table: exactly four columns
 /// `kind` (enum: peak | low_shelf | high_shelf), `freq_hz`, `gain_db` and `q`
@@ -1096,6 +1253,17 @@ fn eq_bands_default() -> Value {
             ("gain_db".to_string(), Value::Scalar(f(0.0))),
             ("q".to_string(), Value::Scalar(f(1.0))),
         ])],
+    })
+}
+/// Empty `{ param, value }` scalar table used as the AUDIO-011
+/// `plugin_parameters` default (ADR-0131).
+fn plugin_params_default() -> Value {
+    Value::DataTable(crate::DataTable {
+        columns: BTreeMap::from([
+            ("param".to_string(), ValueType::Scalar),
+            ("value".to_string(), ValueType::Scalar),
+        ]),
+        rows: Vec::new(),
     })
 }
 pub fn effect_descriptors() -> Vec<PropertyDescriptor> {
@@ -1360,6 +1528,43 @@ pub fn effect_descriptors() -> Vec<PropertyDescriptor> {
             0xf0000000_0010_4500_8000_000000000009,
             "ceiling_db",
             Value::Scalar(f(-1.0)),
+            Unit::Dimensionless,
+        ),
+        // AUDIO-011 plugin binding descriptors (ADR-0131). Reserved 49xx.
+        (
+            0xf0000000_0010_4900_8000_000000000001,
+            "plugin_bundle",
+            Value::String(String::new()),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4900_8000_000000000002,
+            "plugin_format",
+            Value::Enum("vst3".to_string()),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4900_8000_000000000003,
+            "plugin_component",
+            Value::String(String::new()),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4900_8000_000000000004,
+            "plugin_sha256",
+            Value::String(String::new()),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4900_8000_000000000005,
+            "plugin_version",
+            Value::String(String::new()),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4900_8000_000000000006,
+            "plugin_parameters",
+            plugin_params_default(),
             Unit::Dimensionless,
         ),
     ]

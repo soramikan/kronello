@@ -6,6 +6,10 @@ async fn main() -> std::process::ExitCode {
     if let Some(exit) = kronello_service::worker_entry() {
         return exit;
     }
+    // AUDIO-011: `kronello-mcp plugin-helper` is the detached plugin host entry.
+    if let Some(exit) = kronello_service::plugin_helper_entry() {
+        return exit;
+    }
     let mut backend = BackendSelection::Gpu;
     let mut http = false;
     let mut config = kronello_mcp::http::HttpConfig::default();

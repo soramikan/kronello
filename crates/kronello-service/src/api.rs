@@ -96,6 +96,8 @@ macro_rules! commands {
             ("proxy.clear", false, ProxyClearRequest, ProjectInfo),
             ("audio.loudness", true, AudioLoudnessRequest, AudioLoudnessResult),
             ("audio.normalize", false, AudioNormalizeRequest, AudioNormalizeResult),
+            ("audio.plugin_probe", true, PluginProbeRequest, PluginProbeResult),
+            ("audio.plugin_process", true, PluginProcessRequest, kronello_jobs::JobRecord),
             ("sequence.query", true, SequenceQueryRequest, SequenceQueryResult),
             ("sequence.create", false, SequenceCreateRequest, kronello_store::Event),
             ("clip.place", false, ClipPlaceRequest, kronello_store::Event),
@@ -214,6 +216,7 @@ impl CapabilitiesResult {
                 "caption_sidecar_v1",
                 "motion_tracking_v1",
                 "media_proxies_v1",
+                "audio_plugin_host_v1",
             ]
             .map(String::from)
             .to_vec(),
@@ -231,6 +234,7 @@ impl CapabilitiesResult {
                 kronello_model::COLOR_CURVES_ID.into(),
                 kronello_model::COLOR_HSL_ID.into(),
                 kronello_model::COLOR_LUT_ID.into(),
+                kronello_model::AUDIO_PLUGIN_ID.into(),
             ],
             backends: ["wgpu_rgba16f", "cpu_reference_float32"]
                 .map(String::from)

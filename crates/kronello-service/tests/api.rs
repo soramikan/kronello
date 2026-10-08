@@ -11,6 +11,50 @@ use uuid::Uuid;
 fn service() -> Service<'static> {
     Service::new(BackendSelection::Gpu)
 }
+/// AUDIO-011: the every-command sweep executes `audio.plugin_probe` through a
+/// real detached helper against the deterministic fixture bundle.
+fn plugin_helper() -> kronello_plugin::HelperCommand {
+    let exe = std::env::current_exe().unwrap();
+    let target_dir = exe.parent().unwrap().parent().unwrap();
+    let binary = target_dir.join(format!(
+        "kronello-plugin-host{}",
+        std::env::consts::EXE_SUFFIX
+    ));
+    if !binary.is_file() {
+        let status =
+            std::process::Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()))
+                .args([
+                    "build",
+                    "-p",
+                    "kronello-plugin",
+                    "--bin",
+                    "kronello-plugin-host",
+                ])
+                .current_dir(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."))
+                .status()
+                .unwrap();
+        assert!(status.success() && binary.is_file());
+    }
+    kronello_plugin::HelperCommand {
+        program: binary,
+        args: Vec::new(),
+        envs: Vec::new(),
+    }
+}
+fn plugin_fixture() -> (PathBuf, String) {
+    static FIXTURE: std::sync::OnceLock<(PathBuf, String)> = std::sync::OnceLock::new();
+    FIXTURE
+        .get_or_init(|| {
+            let dir =
+                std::env::temp_dir().join(format!("kronello-api-plugin-{}", std::process::id()));
+            std::fs::create_dir_all(&dir).unwrap();
+            let bundle = kronello_plugin::test_support::build_fixture_bundle(&dir)
+                .expect("compile vst3 fixture");
+            let hash = kronello_plugin::bundle_manifest_hash(&bundle).unwrap();
+            (bundle, hash)
+        })
+        .clone()
+}
 fn fixture() -> Project {
     serde_json::from_str(include_str!("../../../examples/m1-demo.project.json")).unwrap()
 }
@@ -259,6 +303,7 @@ fn capabilities_registry_media_extension_without_device_initialization() {
             "kronello.color.curves",
             "kronello.color.hsl",
             "kronello.color.lut",
+            "kronello.audio.plugin",
         ]
     );
     assert!(c.backends.contains(&"cpu_reference_float32".into()));
@@ -669,6 +714,15 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
             "session_id":uuid,"idempotency_key":"normalize","sequence":uuid,"clip":uuid,"target_lufs":-16.0}),
         json!({"operation":"lut.import","project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"lut","path":"a.cube","asset":uuid}),
         json!({"operation":"inspect.scopes","input":input,"time":time}),
+        json!({"operation":"audio.plugin_probe","plugin":{"format":"vst3","path":"plugins/Acme.vst3",
+            "sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "component":"6b726f6e656c6c6f746573746761696e","version":"1.0.0",
+            "parameters":[{"id":0,"value":0.5}]},"deadline_ms":5000}),
+        json!({"operation":"audio.plugin_process","project":path,"asset":uuid,"stream_index":0,
+            "plugin":{"format":"vst3","path":"plugins/Acme.vst3",
+            "sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "component":"6b726f6e656c6c6f746573746761696e","parameters":[]},
+            "destination":"processed.mov"}),
     ];
     assert_eq!(requests.len(), command_registry().len());
     for request in requests {
@@ -896,7 +950,10 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
         .with_job_config(kronello_jobs::JobConfig::at(job_state.path()))
         // This test covers submit's successful wire result. Actual detached
         // execution and completion are checked by CLI/MCP process integration.
-        .with_worker_executable(PathBuf::from("/usr/bin/false"));
+        .with_worker_executable(PathBuf::from("/usr/bin/false"))
+        // AUDIO-011: probe runs a real detached helper; the job worker is the
+        // stub above, so process submission only freezes the fixed input.
+        .with_plugin_helper(plugin_helper());
     let mut checked = BTreeSet::new();
     let mut execute = |request: Json| {
         envelope.validate(&request).unwrap();
@@ -1241,6 +1298,7 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
         .unwrap();
     let video_id = AssetId::new();
     let proxy_id = AssetId::new();
+    let audio_id = AssetId::new();
     let clip_hash = kronello_media::content_hash(&clip_path).unwrap();
     let mut proxy_stream = clip_stream.clone();
     proxy_stream.index = 0;
@@ -1255,6 +1313,32 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
                 streams: vec![clip_stream],
                 locator: AssetLocator {
                     relative: Some("clip.mov".into()),
+                    absolute: None,
+                },
+            }),
+            // AUDIO-011: submit reads only the recorded metadata; the locked
+            // bytes are resolved by the detached worker, which the stub does
+            // not run.
+            DocumentObject::Known(Asset {
+                id: audio_id,
+                content_hash: "1".repeat(64),
+                kind: AssetKind::Audio,
+                streams: vec![StreamMetadata {
+                    index: 1,
+                    codec: "pcm_s24le".into(),
+                    time_base: kronello_time::Rational::new(1, 48_000).unwrap(),
+                    duration: Some(kronello_time::Rational::new(1, 10).unwrap()),
+                    start_time: None,
+                    width: None,
+                    height: None,
+                    pixel_format: None,
+                    color_primaries: None,
+                    color_transfer: None,
+                    color_matrix: None,
+                    color_range: None,
+                }],
+                locator: AssetLocator {
+                    relative: Some("tone.mov".into()),
                     absolute: None,
                 },
             }),
@@ -1300,6 +1384,18 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
     execute(
         json!({"operation":"proxy.clear", "project":video_path, "base_revision":"2",
             "asset":video_id}),
+    );
+    // AUDIO-011: probe runs the describe exchange through the real detached
+    // helper; process submission freezes the pinned spec into a fixed job.
+    let (plugin_bundle, plugin_hash) = plugin_fixture();
+    let plugin_spec = json!({"format":"vst3","path":plugin_bundle,"sha256":plugin_hash,
+        "component":kronello_plugin::test_support::FIXTURE_CLASS_ID,
+        "parameters":[{"id":0,"value":0.5}]});
+    execute(json!({"operation":"audio.plugin_probe", "plugin":plugin_spec}));
+    execute(
+        json!({"operation":"audio.plugin_process", "project":video_path, "asset":audio_id,
+            "stream_index":1, "plugin":plugin_spec,
+            "destination":dir.path().join("plugin-out.mov")}),
     );
     // COLOR-003/004: import a `.cube` as a hash-pinned Data asset, then query
     // deterministic scope bins over the composited frame.

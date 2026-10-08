@@ -100,7 +100,7 @@ pub struct ProxyClearRequest {
     pub asset: AssetId,
 }
 
-fn document_hash(document: &kronello_model::Project) -> Result<String, ServiceError> {
+pub(crate) fn document_hash(document: &kronello_model::Project) -> Result<String, ServiceError> {
     Ok(format!(
         "{:x}",
         Sha256::digest(serde_json::to_vec(&serde_json::to_value(document)?)?)

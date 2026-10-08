@@ -313,8 +313,9 @@ pub struct JobListResult {
 }
 
 /// Immutable job input. Exactly one payload kind is legal: render jobs carry
-/// `snapshot` + `request`; `proxy.generate` jobs carry `proxy`. Optional
-/// fields keep the render shape byte-compatible with schema_version 1.
+/// `snapshot` + `request`; `proxy.generate` jobs carry `proxy`;
+/// `audio.plugin_process` jobs carry `plugin`. Optional fields keep the
+/// render shape byte-compatible with schema_version 1.
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct FixedInput {
@@ -326,6 +327,8 @@ pub(crate) struct FixedInput {
     backend: BackendSelection,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     proxy: Option<crate::proxy::ProxyJobInput>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    plugin: Option<crate::plugin::PluginJobInput>,
 }
 impl FixedInput {
     fn render(
@@ -339,6 +342,7 @@ impl FixedInput {
             request: Some(request),
             backend,
             proxy: None,
+            plugin: None,
         }
     }
     pub(crate) fn proxy(input: crate::proxy::ProxyJobInput) -> Self {
@@ -349,12 +353,26 @@ impl FixedInput {
             // Proxy transcode never touches a render backend.
             backend: BackendSelection::CpuReference,
             proxy: Some(input),
+            plugin: None,
         }
     }
-    /// The render payload pair; mutually exclusive with `proxy` by validation.
+    /// AUDIO-011: the plugin payload holds the pinned spec; no render state.
+    pub(crate) fn plugin(input: crate::plugin::PluginJobInput) -> Self {
+        Self {
+            schema_version: 1,
+            snapshot: None,
+            request: None,
+            // Plugin processing never touches a render backend.
+            backend: BackendSelection::CpuReference,
+            proxy: None,
+            plugin: Some(input),
+        }
+    }
+    /// The render payload pair; mutually exclusive with `proxy`/`plugin` by
+    /// validation.
     fn render_parts(&self) -> Result<(&RenderSnapshot, &RenderSubmitRequest), ServiceError> {
-        match (&self.snapshot, &self.request, &self.proxy) {
-            (Some(snapshot), Some(request), None) => Ok((snapshot, request)),
+        match (&self.snapshot, &self.request, &self.proxy, &self.plugin) {
+            (Some(snapshot), Some(request), None, None) => Ok((snapshot, request)),
             _ => Err(ServiceError::new(
                 "JOB_INPUT_HASH_MISMATCH",
                 "fixed input is not a render job",
@@ -362,21 +380,32 @@ impl FixedInput {
         }
     }
     pub(crate) fn proxy_parts(&self) -> Result<&crate::proxy::ProxyJobInput, ServiceError> {
-        match (&self.snapshot, &self.request, &self.proxy) {
-            (None, None, Some(proxy)) => Ok(proxy),
+        match (&self.snapshot, &self.request, &self.proxy, &self.plugin) {
+            (None, None, Some(proxy), None) => Ok(proxy),
             _ => Err(ServiceError::new(
                 "JOB_INPUT_HASH_MISMATCH",
                 "fixed input is not a proxy job",
             )),
         }
     }
+    pub(crate) fn plugin_parts(&self) -> Result<&crate::plugin::PluginJobInput, ServiceError> {
+        match (&self.snapshot, &self.request, &self.proxy, &self.plugin) {
+            (None, None, None, Some(plugin)) => Ok(plugin),
+            _ => Err(ServiceError::new(
+                "JOB_INPUT_HASH_MISMATCH",
+                "fixed input is not a plugin job",
+            )),
+        }
+    }
     /// A worker never executes input whose kind disagrees with the job record:
     /// render records carry a content-hashed snapshot; proxy records carry a
-    /// `proxy` payload validated against `record.output_profile`.
+    /// `proxy` payload; plugin records carry a `plugin` payload validated
+    /// against `record.output_profile`.
     fn kind_matches_record(&self, record: &JobRecord) -> bool {
-        match (&self.snapshot, &self.request, &self.proxy) {
-            (Some(_), Some(_), None) => record.output_profile.get("render").is_some(),
-            (None, None, Some(_)) => record.output_profile.get("proxy_asset_id").is_some(),
+        match (&self.snapshot, &self.request, &self.proxy, &self.plugin) {
+            (Some(_), Some(_), None, None) => record.output_profile.get("render").is_some(),
+            (None, None, Some(_), None) => record.output_profile.get("proxy_asset_id").is_some(),
+            (None, None, None, Some(_)) => record.output_profile.get("plugin").is_some(),
             _ => false,
         }
     }
@@ -389,7 +418,7 @@ impl From<JobError> for ServiceError {
 fn job_error(e: ServiceError) -> JobError {
     JobError::new(&e.code, e.message)
 }
-fn absolute(path: &Path) -> Result<PathBuf, ServiceError> {
+pub(crate) fn absolute(path: &Path) -> Result<PathBuf, ServiceError> {
     Ok(if path.is_absolute() {
         path.to_path_buf()
     } else {
@@ -535,6 +564,14 @@ impl Service<'_> {
         if let Some(proxy) = &fixed.proxy {
             return crate::proxy::execute_proxy_job(store, record, proxy);
         }
+        if let Some(plugin) = &fixed.plugin {
+            return crate::plugin::execute_plugin_job(
+                store,
+                record,
+                plugin,
+                self.plugin_helper.as_ref(),
+            );
+        }
         let (snapshot, request) = fixed.render_parts()?;
         self.validate_fixed_job(record, fixed)?;
         self.execute_fixed_job(store, record, snapshot, request)
@@ -577,6 +614,26 @@ impl Service<'_> {
                     return Err(ServiceError::new(
                         "OUTPUT_VALIDATION_FAILED",
                         "published proxy differs from the validated receipt",
+                    ));
+                }
+            }
+        } else if let Ok(plugin) = fixed.plugin_parts() {
+            // A published plugin .mov must hash to the receipt bytes exactly.
+            if record.destination.exists()
+                && let Some(result) = store.publication_result(&record)?
+            {
+                let report = &result["report"];
+                let expected = report["content_hash"].as_str().unwrap_or_default();
+                let actual = kronello_media::content_hash(&record.destination)
+                    .map_err(|e| ServiceError::new("OUTPUT_VALIDATION_FAILED", e.to_string()))?;
+                if actual != expected
+                    || report["asset"].as_str() != Some(plugin.asset.id.to_string().as_str())
+                    || report["plugin"]["component"].as_str()
+                        != Some(plugin.plugin.component.as_str())
+                {
+                    return Err(ServiceError::new(
+                        "OUTPUT_VALIDATION_FAILED",
+                        "published plugin output differs from the validated receipt",
                     ));
                 }
             }
@@ -679,6 +736,9 @@ impl Service<'_> {
         }
         if let Ok(proxy) = fixed.proxy_parts() {
             return self.validate_proxy_job(record, proxy);
+        }
+        if let Ok(plugin) = fixed.plugin_parts() {
+            return crate::plugin::validate_plugin_job(record, plugin);
         }
         let (snapshot, request) = fixed.render_parts()?;
         snapshot.validate()?;
