@@ -194,6 +194,27 @@ impl Fixture {
             std::thread::sleep(Duration::from_millis(20));
         }
     }
+    /// Poll until the terminal record's worker process has fully exited;
+    /// `job.resume` legitimately refuses a job whose pid is still alive.
+    fn wait_worker_exit(&self, id: &str) {
+        let store = JobStore::open(JobConfig::at(&self.state)).unwrap();
+        let start = Instant::now();
+        loop {
+            let record = store.get(id).unwrap();
+            if !record.status.active()
+                && !record
+                    .worker_pid
+                    .is_some_and(kronello_platform::process_is_alive)
+            {
+                return;
+            }
+            assert!(
+                start.elapsed() < Duration::from_secs(60),
+                "worker still alive: {record:?}"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
     fn export(&self) -> Json {
         self.cli(json!({"operation":"project.export","project":self.project}))
     }
@@ -234,7 +255,10 @@ fn scene_detect_publishes_boundary_asset_and_apply_marks_sequence() {
         "document asset matches the published receipt"
     );
     let scene_asset = scene_assets[0]["id"].clone();
-    // `job.resume` re-validates the published result without rerunning.
+    // `job.resume` re-validates the published result without rerunning; it
+    // legitimately refuses while the successful worker's pid is still alive,
+    // so wait for the process to exit first (CI teardown lags the status flip).
+    fixture.wait_worker_exit(&record.id);
     let resumed = fixture.cli(json!({"operation":"job.resume","job":record.id}));
     assert_eq!(resumed["status"], "succeeded", "{resumed}");
     // `kronello scene apply` maps the boundary to a sequence marker.
