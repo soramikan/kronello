@@ -746,6 +746,7 @@ pub fn probe_camera_raw(
     let probe = |streams| MediaProbe {
         streams,
         duration: None,
+        chapters: vec![],
         render_snapshot_hash: String::new(),
         export_snapshot_hash: String::new(),
     };

@@ -867,11 +867,40 @@ impl<'a> Service<'a> {
                                 &r.render.output_directory,
                                 &r.output,
                             )?;
-                            let av = jobs::movie_snapshot(snapshot, &r.output)?;
+                            let mut snapshots = vec![jobs::movie_snapshot(snapshot, &r.output)?];
+                            // MEDIA-004: extra legs share this render pass and
+                            // write to their own declared destinations.
+                            let mut outputs = Vec::with_capacity(r.outputs.len());
+                            let mut destinations = std::collections::BTreeSet::new();
+                            destinations.insert(r.render.output_directory.clone());
+                            for spec in &r.outputs {
+                                jobs::validate_movie_destination(&spec.destination, &spec.output)?;
+                                if spec.destination.exists() {
+                                    return Err(ServiceError::new(
+                                        "OUTPUT_EXISTS",
+                                        "delivery destination already exists",
+                                    ));
+                                }
+                                if !destinations.insert(spec.destination.clone()) {
+                                    return Err(ServiceError::invalid(
+                                        "delivery outputs must be distinct",
+                                    ));
+                                }
+                                let settings = spec.output.movie_settings()?;
+                                outputs.push(kronello_media::DeliveryOutput {
+                                    output: spec.destination.clone(),
+                                    profile: settings.profile,
+                                    background: settings.background,
+                                    chapters: spec.chapters,
+                                });
+                                snapshots.push(jobs::movie_snapshot(snapshot, &spec.output)?);
+                            }
                             let settings = r.output.movie_settings()?;
                             let runtime = kronello_media::MediaRuntime::load()?;
-                            let report = runtime.export_av(
-                                &av,
+                            let snapshot_refs: Vec<&kronello_media::AvExportSnapshot> =
+                                snapshots.iter().collect();
+                            let report = runtime.export_delivery(
+                                &snapshot_refs,
                                 &r.render.input.project,
                                 fonts,
                                 backend,
@@ -882,6 +911,8 @@ impl<'a> Service<'a> {
                                     region: r.render.input.region,
                                     background: settings.background,
                                     clipping: kronello_audio::ClippingPolicy::Reject,
+                                    chapters: r.chapters,
+                                    outputs,
                                 },
                             )?;
                             Ok(ResultData::Movie(Box::new(report)))

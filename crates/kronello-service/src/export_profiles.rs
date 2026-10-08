@@ -21,6 +21,10 @@ pub enum ExportAudioCodec {
     Alac,
     Aac,
     Opus,
+    /// MEDIA-004: MP3 CBR elementary deliverables (libmp3lame).
+    Mp3,
+    /// MEDIA-004: FLAC lossless elementary deliverables.
+    Flac,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -98,6 +102,41 @@ impl JobOutput {
                 clips: vec![],
                 background: [0.0; 3],
             },
+            // MEDIA-004: one representative per new output tag; the closed
+            // `dnx_profile` set and profile versions validate through
+            // `movie_settings` like every other variant.
+            Self::DnxMov {
+                audio: Explicit,
+                profile_version: 1,
+                dnx_profile: kronello_media::DnxProfile::DnxhrHq,
+                audio_layout: None,
+                clips: vec![],
+                background: [0.0; 3],
+            },
+            Self::DnxMxf {
+                audio: Explicit,
+                profile_version: 1,
+                dnx_profile: kronello_media::DnxProfile::Dnxhd,
+                audio_layout: None,
+                clips: vec![],
+                background: [0.0; 3],
+            },
+            Self::Gif {
+                profile_version: 1,
+                background: [0.0; 3],
+            },
+            Self::Mp3 {
+                audio: Explicit,
+                profile_version: 1,
+                audio_layout: None,
+                clips: vec![],
+            },
+            Self::Flac {
+                audio: Explicit,
+                profile_version: 1,
+                audio_layout: None,
+                clips: vec![],
+            },
             // Representative sidecar profile; the caption_format field selects
             // srt/vtt/itt on the wire, all sharing this capability entry.
             Self::CaptionSidecar {
@@ -147,6 +186,39 @@ impl JobOutput {
                 "libsvtav1",
                 false,
             ),
+            Self::DnxMov { .. } => (
+                vec![Explicit, Document, Silence],
+                vec!["pcm_s24le"],
+                "mov",
+                "dnxhd",
+                false,
+            ),
+            Self::DnxMxf { .. } => (
+                vec![Explicit, Document, Silence],
+                vec!["pcm_s24le"],
+                "mxf",
+                "dnxhd",
+                false,
+            ),
+            // Video-only deliverable: the GIF encoder slot is checked like a
+            // video encoder; the leg carries no audio stream.
+            Self::Gif { .. } => (vec![], vec![], "gif", "gif", false),
+            // Audio-only deliverables: the closed encoder doubles as the
+            // video-encoder slot so an absent codec reports unavailable.
+            Self::Mp3 { .. } => (
+                vec![Explicit, Document, Silence],
+                vec!["libmp3lame"],
+                "mp3",
+                "libmp3lame",
+                false,
+            ),
+            Self::Flac { .. } => (
+                vec![Explicit, Document, Silence],
+                vec!["flac"],
+                "flac",
+                "flac",
+                false,
+            ),
             Self::CaptionSidecar { caption_format, .. } => {
                 (vec![], vec![], caption_format.extension(), "", false)
             }
@@ -175,6 +247,8 @@ impl JobOutput {
                     "alac" => ExportAudioCodec::Alac,
                     "aac" => ExportAudioCodec::Aac,
                     "libopus" => ExportAudioCodec::Opus,
+                    "libmp3lame" => ExportAudioCodec::Mp3,
+                    "flac" => ExportAudioCodec::Flac,
                     _ => unreachable!("closed audio codec"),
                 })
                 .collect(),

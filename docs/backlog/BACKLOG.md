@@ -1134,7 +1134,7 @@
 
 ### MEDIA-004 配信拡張: チャプター・マルチ出力・追加コーデック profile
 
-- 優先度: P2 / 領域: media / 状態: planned
+- 優先度: P2 / 領域: media / 状態: done
 - 依存: AUDIO-005
 - 受け入れ条件:
   - チャプターマーカー・マルチ出力・DNxHD/GIF/MP3 等の profile を追加する

@@ -132,6 +132,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 },
                 background: [0.0; 3],
                 clipping: kronello_audio::ClippingPolicy::Reject,
+                chapters: kronello_media::ChapterPolicy::Transfer,
+                outputs: Vec::new(),
             };
             let start = Instant::now();
             let report = runtime.export_av(&fixed, dir.path(), &[], backend, &request)?;

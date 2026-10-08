@@ -252,6 +252,8 @@ fn marker(time: Time) -> Marker {
         id: MarkerId::new(),
         time,
         color: MarkerColor::Blue,
+        role: kronello_model::MarkerRole::Standard,
+        title: None,
         comment: None,
     }
 }
@@ -646,6 +648,8 @@ fn clip_enable_set_disables_contribution_keeps_occupancy_and_undoes() {
                 id: MarkerId::new(),
                 time: t(2, 1),
                 color: MarkerColor::White,
+                role: kronello_model::MarkerRole::Standard,
+                title: None,
                 comment: None,
             },
         }],

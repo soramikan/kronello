@@ -121,6 +121,8 @@ fn movie_roundtrip(profile: MovieProfile) {
             },
             background: [0.1, 0.2, 0.3],
             clipping: ClippingPolicy::Reject,
+            chapters: kronello_media::ChapterPolicy::Transfer,
+            outputs: Vec::new(),
         };
         let report = runtime
             .export_av(
@@ -165,9 +167,12 @@ fn movie_roundtrip(profile: MovieProfile) {
             MovieProfile::HevcAlacV1 => "hevc_videotoolbox",
             _ => unreachable!(),
         };
-        assert_eq!(report.video.encoder.as_deref(), Some(expected_encoder));
         assert_eq!(
-            report.video.execution,
+            report.video.as_ref().unwrap().encoder.as_deref(),
+            Some(expected_encoder)
+        );
+        assert_eq!(
+            report.video.as_ref().unwrap().execution,
             if profile == MovieProfile::Av1Mp4AlacV1 {
                 ExecutionKind::Software
             } else {
@@ -175,7 +180,7 @@ fn movie_roundtrip(profile: MovieProfile) {
             }
         );
         assert_eq!(
-            report.video.transfer_path,
+            report.video.as_ref().unwrap().transfer_path,
             if profile == MovieProfile::Av1Mp4AlacV1 {
                 "cpu_rgba_to_software_encoder"
             } else {
@@ -271,7 +276,7 @@ fn delivery_profile_hash_versions_and_missing_hardware_are_closed() {
     for profile in [MovieProfile::H264AlacV1, MovieProfile::HevcAlacV1] {
         assert_eq!(
             capabilities
-                .select_encoder(profile.video_codec())
+                .select_encoder(profile.video_codec().unwrap())
                 .unwrap_err()
                 .code(),
             "ENCODER_UNAVAILABLE"

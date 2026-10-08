@@ -46,6 +46,8 @@ fn request(
         },
         background: [0.1, 0.2, 0.3],
         clipping: ClippingPolicy::Reject,
+        chapters: kronello_media::ChapterPolicy::Transfer,
+        outputs: Vec::new(),
     }
 }
 struct Pattern;
@@ -366,7 +368,7 @@ fn long_export_exceeds_source_and_bus_limits() {
             &req,
         )
         .unwrap();
-    assert_eq!(report.audio.frames, 601 * 48000);
+    assert_eq!(report.audio.as_ref().unwrap().frames, 601 * 48000);
     let mut ordinal = 0_usize;
     let decoded = runtime
         .decode_audio_stream(&req.output, 1, &mut |chunk, mask| {
@@ -381,8 +383,8 @@ fn long_export_exceeds_source_and_bus_limits() {
         })
         .unwrap();
     assert_eq!(decoded.source_start, Time::ZERO);
-    assert_eq!(decoded.frames, report.audio.frames);
-    assert_eq!(ordinal, report.audio.frames);
+    assert_eq!(decoded.frames, report.audio.as_ref().unwrap().frames);
+    assert_eq!(ordinal, report.audio.as_ref().unwrap().frames);
     assert_eq!(report.frames.len(), 601);
     assert_eq!(
         report.probe.streams[0].duration,
@@ -399,7 +401,7 @@ fn long_export_exceeds_source_and_bus_limits() {
     println!(
         "long frames={} audio_samples={} output_bytes={}",
         report.frames.len(),
-        report.audio.frames,
+        report.audio.as_ref().unwrap().frames,
         std::fs::metadata(&req.output).unwrap().len()
     );
     assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 2);
@@ -427,8 +429,16 @@ fn four_k_export_exceeds_previous_video_payload_limit() {
         )
         .unwrap();
     assert_eq!(report.frames.len(), 9);
-    assert!(report.video.transfers.cpu_conversion_input_bytes > 256 * 1024 * 1024);
-    assert_eq!(report.audio.frames, 18000);
+    assert!(
+        report
+            .video
+            .as_ref()
+            .unwrap()
+            .transfers
+            .cpu_conversion_input_bytes
+            > 256 * 1024 * 1024
+    );
+    assert_eq!(report.audio.as_ref().unwrap().frames, 18000);
     println!(
         "streaming_io={}",
         serde_json::to_string(report.streaming.as_ref().unwrap()).unwrap()

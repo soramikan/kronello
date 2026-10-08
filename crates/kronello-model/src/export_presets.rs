@@ -72,6 +72,18 @@ pub enum ExportAudioCodec {
     Aac,
     Opus,
 }
+/// Mirror of `kronello_media::DnxProfile` (MEDIA-004, ADR-0133).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ExportDnxProfile {
+    #[default]
+    Dnxhd,
+    DnxhrLb,
+    DnxhrSq,
+    DnxhrHq,
+    DnxhrHqx,
+    Dnxhr444,
+}
 /// Mirror of `kronello_render::HdrTransfer`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -229,6 +241,51 @@ pub enum ExportOutput {
         clips: Vec<ExportAudioClip>,
         background: [f32; 3],
     },
+    /// MEDIA-004: DNxHD/DNxHR + PCM24 in MOV.
+    DnxMov {
+        profile_version: u32,
+        dnx_profile: ExportDnxProfile,
+        #[serde(default)]
+        audio: ExportAudioMode,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        audio_layout: Option<ChannelMask>,
+        clips: Vec<ExportAudioClip>,
+        background: [f32; 3],
+    },
+    /// MEDIA-004: DNxHD/DNxHR + PCM24 in MXF.
+    DnxMxf {
+        profile_version: u32,
+        dnx_profile: ExportDnxProfile,
+        #[serde(default)]
+        audio: ExportAudioMode,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        audio_layout: Option<ChannelMask>,
+        clips: Vec<ExportAudioClip>,
+        background: [f32; 3],
+    },
+    /// MEDIA-004: deterministic indexed-color GIF (video only).
+    Gif {
+        profile_version: u32,
+        background: [f32; 3],
+    },
+    /// MEDIA-004: MP3 CBR elementary audio (mono/stereo layouts only).
+    Mp3 {
+        profile_version: u32,
+        #[serde(default)]
+        audio: ExportAudioMode,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        audio_layout: Option<ChannelMask>,
+        clips: Vec<ExportAudioClip>,
+    },
+    /// MEDIA-004: FLAC lossless elementary audio.
+    Flac {
+        profile_version: u32,
+        #[serde(default)]
+        audio: ExportAudioMode,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        audio_layout: Option<ChannelMask>,
+        clips: Vec<ExportAudioClip>,
+    },
     /// Subtitle sidecar file; the target must be the same sequence.
     CaptionSidecar {
         sequence: SequenceId,
@@ -322,6 +379,34 @@ impl<'de> Deserialize<'de> for ExportOutput {
         }
         #[derive(Deserialize)]
         #[serde(deny_unknown_fields)]
+        struct Dnx {
+            profile_version: u32,
+            dnx_profile: ExportDnxProfile,
+            #[serde(default)]
+            audio: ExportAudioMode,
+            #[serde(default)]
+            audio_layout: Option<ChannelMask>,
+            clips: Vec<ExportAudioClip>,
+            background: [f32; 3],
+        }
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Gif {
+            profile_version: u32,
+            background: [f32; 3],
+        }
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct ElementaryAudio {
+            profile_version: u32,
+            #[serde(default)]
+            audio: ExportAudioMode,
+            #[serde(default)]
+            audio_layout: Option<ChannelMask>,
+            clips: Vec<ExportAudioClip>,
+        }
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
         struct Sidecar {
             sequence: SequenceId,
             caption_format: CaptionFormat,
@@ -408,6 +493,51 @@ impl<'de> Deserialize<'de> for ExportOutput {
                     },
                 })
             }
+            "dnx_mov" | "dnx_mxf" => {
+                let p: Dnx = serde_json::from_str(&json).map_err(D::Error::custom)?;
+                Ok(match format.as_str() {
+                    "dnx_mov" => Self::DnxMov {
+                        profile_version: p.profile_version,
+                        dnx_profile: p.dnx_profile,
+                        audio: p.audio,
+                        audio_layout: p.audio_layout,
+                        clips: p.clips,
+                        background: p.background,
+                    },
+                    _ => Self::DnxMxf {
+                        profile_version: p.profile_version,
+                        dnx_profile: p.dnx_profile,
+                        audio: p.audio,
+                        audio_layout: p.audio_layout,
+                        clips: p.clips,
+                        background: p.background,
+                    },
+                })
+            }
+            "gif" => {
+                let p: Gif = serde_json::from_str(&json).map_err(D::Error::custom)?;
+                Ok(Self::Gif {
+                    profile_version: p.profile_version,
+                    background: p.background,
+                })
+            }
+            "mp3" | "flac" => {
+                let p: ElementaryAudio = serde_json::from_str(&json).map_err(D::Error::custom)?;
+                Ok(match format.as_str() {
+                    "mp3" => Self::Mp3 {
+                        profile_version: p.profile_version,
+                        audio: p.audio,
+                        audio_layout: p.audio_layout,
+                        clips: p.clips,
+                    },
+                    _ => Self::Flac {
+                        profile_version: p.profile_version,
+                        audio: p.audio,
+                        audio_layout: p.audio_layout,
+                        clips: p.clips,
+                    },
+                })
+            }
             "caption_sidecar" => {
                 let p: Sidecar = serde_json::from_str(&json).map_err(D::Error::custom)?;
                 Ok(Self::CaptionSidecar {
@@ -426,6 +556,11 @@ impl<'de> Deserialize<'de> for ExportOutput {
                     "h264_mov",
                     "hevc_mov",
                     "av1_webm",
+                    "dnx_mov",
+                    "dnx_mxf",
+                    "gif",
+                    "mp3",
+                    "flac",
                     "caption_sidecar",
                 ],
             )),
@@ -439,14 +574,18 @@ impl ExportOutput {
     /// Explicit audio clips of the movie variants, for asset reference checks.
     pub fn audio_clips(&self) -> &[ExportAudioClip] {
         match self {
-            Self::ImageSequence | Self::CaptionSidecar { .. } => &[],
+            Self::ImageSequence | Self::Gif { .. } | Self::CaptionSidecar { .. } => &[],
             Self::ProResMov { clips, .. }
             | Self::ProResSdrFromHdrMov { clips, .. }
             | Self::ProResHdrMov { clips, .. }
             | Self::Av1Mp4 { clips, .. }
             | Self::H264Mov { clips, .. }
             | Self::HevcMov { clips, .. }
-            | Self::Av1Webm { clips, .. } => clips,
+            | Self::Av1Webm { clips, .. }
+            | Self::DnxMov { clips, .. }
+            | Self::DnxMxf { clips, .. }
+            | Self::Mp3 { clips, .. }
+            | Self::Flac { clips, .. } => clips,
         }
     }
 }
