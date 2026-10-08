@@ -1,6 +1,8 @@
 # GPU 画素の golden 比較
 
-COLOR-002 / FX-003 は 9 シーン（`color002-exposure-rec709` / `color002-levels-rec2020` / `color002-curves-rec709` / `color002-hsl-rec709` / `fx003-blend-separable` / `fx003-blend-nonseparable` / `fx003-wipe` / `fx003-slide` / `fx003-dip`）を追加し、現在は **49 シーン・49 comparison frames**。候補生成・CPU oracle 検証・明示採用・通常比較は 2026-10-07 の revision `ba4f429` で成功した（[COLOR-002](color-002.md) / [FX-003](fx-003.md)）。採用で既存シーン `coverage-fill-stroke` の RGBA16F が 1 チャンネルだけ変わった（最大差 2^-11、binary16 の 1 ulp、許容誤差内）。
+FX-005 / FX-006 は 7 シーン（`fx005-chroma-key` / `fx005-chroma-key-edges` / `fx005-luma-key` / `fx006-glow` / `fx006-sharpen` / `fx006-vignette` / `fx006-corner-pin`）を追加し、現在は **56 シーン・56 comparison frames**。apple-silicon-metal の候補生成・CPU oracle 検証・明示採用は lane C の revision `47ed7ec` で、linux-vulkan / windows-dx12 の基準採用は CI run 37711522980 の実 adapter 候補から revision `d6f9848` で実施した（[QA-004](qa-004.md) の M8 節）。
+
+COLOR-002 / FX-003 は 9 シーン（`color002-exposure-rec709` / `color002-levels-rec2020` / `color002-curves-rec709` / `color002-hsl-rec709` / `fx003-blend-separable` / `fx003-blend-nonseparable` / `fx003-wipe` / `fx003-slide` / `fx003-dip`）を追加し、FX-005 / FX-006 追加前のカタログは **49 シーン・49 comparison frames**。候補生成・CPU oracle 検証・明示採用・通常比較は 2026-10-07 の revision `ba4f429` で成功した（[COLOR-002](color-002.md) / [FX-003](fx-003.md)）。採用で既存シーン `coverage-fill-stroke` の RGBA16F が 1 チャンネルだけ変わった（最大差 2^-11、binary16 の 1 ulp、許容誤差内）。
 
 VEC-005 は `stroke-dashes` / `stroke-inside-evenodd` / `stroke-outside-nonzero` / `stroke-affine-reflected` を追加し、M7 前のカタログは **40 シーン・40 comparison frames**。新しいstrokeの候補生成・画像レビュー・明示採用・通常比較は2026-10-05のrevision `2ce3d81`で成功した（[VEC-005](vec-005.md)）。M3最終40シーン比較とM4の環境別基準は [M3受け入れ](m3-acceptance.md) / [QA-004](qa-004.md) を参照する。
 
@@ -26,7 +28,7 @@ QA-003 は [ADR-0047](../adr/0047-apple-silicon-metal-golden.md) に従い、GPU
 
 | パス | 内容 |
 |---|---|
-| `tests/golden/apple-silicon-metal/scenes.json` | 40 シーンのカタログ、coverage / stroke / gradient / effect の意味版 |
+| `tests/golden/apple-silicon-metal/scenes.json` | 56 シーンのカタログ、coverage / stroke / gradient / effect の意味版 |
 | 同ディレクトリの `manifest.json` | 全シーン入力・設定、fixture / font hash、比較方式・許容誤差の版 |
 | 同ディレクトリの `environment.json` / `provenance.json` | 基準生成時の環境と revision / コード・入力 hash。環境一致を要求しない |
 | 同ディレクトリの `adoption.json` | 各採用ファイルの SHA-256 / byte 数、シーン設定、許容誤差、環境・provenance をまとめた採用 manifest |
