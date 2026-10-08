@@ -1169,7 +1169,7 @@
 
 ### MEDIA-005 カメラフォーマット: RAW 系（BRAW/R3D/ProRes RAW）
 
-- 優先度: P2 / 領域: media / 状態: planned
+- 優先度: P2 / 領域: media / 状態: done
 - 依存: MEDIA-001
 - 受け入れ条件:
   - カメラ RAW 系フォーマットのデコードと色管理を実装する

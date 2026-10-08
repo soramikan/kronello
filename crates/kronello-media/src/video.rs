@@ -21,12 +21,18 @@ pub struct VideoDecoder<'a> {
 }
 impl MediaRuntime {
     /// Open a canonical local file. URL and playlist sources are rejected.
+    /// Detected camera RAW containers are rejected before FFmpeg sees them:
+    /// stills decode through LibRaw, CinemaDNG through the frame sequence,
+    /// ProRes RAW through the macOS native path, and BRAW/R3D never decode.
     pub fn open_video(&self, path: &Path) -> Result<VideoDecoder<'_>, MediaError> {
         let path = path.canonicalize()?;
         if !path.is_file() {
             return Err(MediaError::InvalidInput(
                 "expected a local regular file".into(),
             ));
+        }
+        if let Some(detection) = crate::raw::sniff_camera_raw(&path)? {
+            return Err(detection.unsupported());
         }
         let native = ffi::NativeDecoder::open(&self.native, &path)?;
         let report = MediaPathReport {

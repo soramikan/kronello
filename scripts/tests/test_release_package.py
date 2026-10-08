@@ -49,14 +49,14 @@ class ReleasePackageTests(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(b"\xcf\xfa\xed\xfe")
 
-    def test_all_eleven_machos_are_scanned_including_five_ffmpeg_libraries(self):
+    def test_all_twelve_machos_are_scanned_including_five_ffmpeg_libraries(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             self.macho_tree(root)
             runner = FakeOtool()
             result = common.check_linkage(root, runner)
-            self.assertEqual(len(result), 11)
-            self.assertEqual(len([c for c in runner.commands if c[1] == "-l"]), 11)
+            self.assertEqual(len(result), 12)
+            self.assertEqual(len([c for c in runner.commands if c[1] == "-l"]), 12)
             self.assertTrue(all(c[2:4] == ["-arch", "all"] for c in runner.commands if c[0] == "otool"))
             for name in common.FFMPEG:
                 self.assertIn(f"lib/lib{name}.{common.FFMPEG[name]}.dylib", result)

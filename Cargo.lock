@@ -1133,6 +1133,7 @@ dependencies = [
  "kronello-model",
  "kronello-render",
  "kronello-template",
+ "kronello-testkit",
  "kronello-text",
  "kronello-time",
  "kronello-tracking",

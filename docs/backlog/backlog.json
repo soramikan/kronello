@@ -2344,7 +2344,7 @@
       "priority": "P2",
       "area": "media",
       "title": "カメラフォーマット: RAW 系（BRAW/R3D/ProRes RAW）",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "MEDIA-001"
       ],

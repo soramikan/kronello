@@ -151,6 +151,20 @@ def verify(prefix, manifest):
         if actual != expected:
             raise ValueError(f"pinned dependency version mismatch: {dependency}: {actual}")
         external_versions[dependency] = actual
+    # LibRaw reports "0.22.2-Release" so compare the leading version field; the
+    # versioned real file is what CDLL must open, not the dev symlinks.
+    pattern = "*raw*.dll" if sys.platform == "win32" else ("libraw_r.*.dylib" if sys.platform == "darwin" else "libraw_r.so.*")
+    matches = [p for p in runtime_dir.glob(pattern) if p.is_file() and not p.is_symlink()]
+    if len(matches) != 1:
+        raise ValueError(f"one pinned shared LibRaw required: {pattern}: {[p.name for p in matches]}")
+    library = ctypes.CDLL(str(matches[0]))
+    libraw_version = library.libraw_version
+    libraw_version.restype = ctypes.c_char_p
+    actual = libraw_version().decode().split("-")[0]
+    expected = next(d["version"] for d in manifest["dependencies"] if d["name"] == "libraw")
+    if actual != expected:
+        raise ValueError(f"pinned dependency version mismatch: libraw: {actual}")
+    external_versions["libraw"] = actual
     shared = sorted(p for p in runtime_dir.iterdir() if p.is_file() and not p.is_symlink() and (".so" in p.name or p.suffix in {".dylib", ".dll"}))
     if not shared or any(p.suffix == ".a" and not p.name.endswith(".dll.a") for p in (prefix / "lib").iterdir()):
         raise ValueError("shared libraries only required")
