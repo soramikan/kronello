@@ -41,6 +41,12 @@ mod tracking;
 pub use tracking::TrackAnalyzeRequest;
 mod scene;
 pub use scene::{SceneApplyMode, SceneApplyRequest, SceneDetectRequest, SceneJobInput};
+mod capture;
+pub use capture::{
+    CaptureCodec, CaptureColor, CaptureDeckProbeRequest, CaptureFormat, CaptureJobInput,
+    CaptureOrphan, CaptureSessionEntry, CaptureSource, CaptureStartRequest, CaptureStatusRequest,
+    CaptureStatusResult, CaptureStopRequest, DeckDevice, DeckDeviceEntry, DeckProbeResult,
+};
 mod loudness;
 pub use loudness::{
     AudioLoudnessInput, AudioLoudnessRequest, AudioLoudnessResult, AudioNormalizeRequest,
@@ -122,6 +128,19 @@ pub enum Request {
     ProxyStatus(ProxyStatusRequest),
     #[serde(rename = "proxy.clear")]
     ProxyClear(ProxyClearRequest),
+    /// FLOW-004 capture/ingest (ADR-0135): a detached recording session job.
+    #[serde(rename = "capture.start")]
+    CaptureStart(CaptureStartRequest),
+    /// Graceful end-of-input; the worker finalizes and publishes the recording.
+    #[serde(rename = "capture.stop")]
+    CaptureStop(CaptureStopRequest),
+    /// Session list plus typed orphan reconciliation for the capture area.
+    #[serde(rename = "capture.status")]
+    CaptureStatus(CaptureStatusRequest),
+    /// Vendor-SDK deck ingest boundary (DeckLink/RS-422); typed
+    /// `UNSUPPORTED_FEATURE` when no adapter is linked.
+    #[serde(rename = "capture.deck_probe")]
+    CaptureDeckProbe(CaptureDeckProbeRequest),
     #[serde(rename = "audio.loudness")]
     AudioLoudness(AudioLoudnessRequest),
     #[serde(rename = "audio.normalize")]
@@ -414,6 +433,10 @@ pub enum ResultData {
     OutputDevices(IoOutputListResult),
     /// IO-001 enable/disable state acknowledgement.
     OutputState(IoOutputStateResult),
+    /// FLOW-004 capture session and orphan reconciliation report (ADR-0135).
+    Capture(Box<CaptureStatusResult>),
+    /// FLOW-004 vendor deck adapter device report (ADR-0135).
+    DeckProbe(DeckProbeResult),
 }
 #[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
 #[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
@@ -681,6 +704,12 @@ impl<'a> Service<'a> {
             Request::ProxyGenerate(r) => self.generate_proxies(r).map(ResultData::Jobs),
             Request::ProxyStatus(r) => self.proxy_status(r).map(ResultData::Proxies),
             Request::ProxyClear(r) => self.proxy_clear(r).map(ResultData::Project),
+            Request::CaptureStart(r) => self.capture_start(r).map(|r| ResultData::Job(Box::new(r))),
+            Request::CaptureStop(r) => self.capture_stop(r).map(|r| ResultData::Job(Box::new(r))),
+            Request::CaptureStatus(r) => self
+                .capture_status(r)
+                .map(|r| ResultData::Capture(Box::new(r))),
+            Request::CaptureDeckProbe(r) => self.capture_deck_probe(r).map(ResultData::DeckProbe),
             Request::AudioLoudness(r) => self.loudness(r).map(ResultData::Loudness),
             Request::AudioNormalize(r) => self
                 .normalize_audio(r)
@@ -1547,6 +1576,10 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
         Request::ProxyGenerate(r) => local_locator(&r.project),
         Request::ProxyStatus(r) => local_locator(&r.project),
         Request::ProxyClear(r) => local_locator(&r.project),
+        Request::CaptureStart(r) => local_locator(&r.project),
+        Request::CaptureStop(r) => local_locator(&r.project),
+        Request::CaptureStatus(r) => local_locator(&r.project),
+        Request::CaptureDeckProbe(_) => Ok(()),
         Request::AudioLoudness(r) => local_locator(&r.project),
         Request::AudioNormalize(r) => local_locator(&r.project),
         Request::AudioPluginProbe(r) => match &r.plugin.path {

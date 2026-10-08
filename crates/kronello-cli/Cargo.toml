@@ -38,6 +38,7 @@ kronello-render = { path = "../kronello-render" }
 kronello-time = { path = "../kronello-time" }
 kronello-testkit = { path = "../kronello-testkit" }
 tempfile = "3"
+uuid = { version = "1", features = ["v4"] }
 sha2 = "0.10"
 png = "0.18"
 kronello-store = { path = "../kronello-store" }
