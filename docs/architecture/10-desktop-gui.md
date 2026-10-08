@@ -35,7 +35,7 @@ kronello-ffi  --->  kronello-service (Command / Query API)
 - メニューバー、ファイルダイアログ、ウインドウの枠など OS が描くものは OS のものを使う。
 - テーマは Dark（既定）と Light。書体は Noto Sans JP / Noto Sans Mono を同梱し、アイコンは Lucide を使う。
 - 値の正本は [tokens.json](../design-system/tokens.json)。各実装はトークン名を定数名として写し、値を直接書かない。
-- メインウインドウは 4 つのページ（編集・モーション・テンプレート・書き出し）で分け、各ページの配置はワークスペースとして保存する（[ADR-0055](../adr/0055-main-window-pages-and-workspaces.md)）。画面ごとの仕様は [画面](../design-system/screens/README.md)。
+- メインウインドウは 5 つのページ（編集・モーション・テンプレート・メディア・書き出し）で分け、各ページの配置はワークスペースとして保存する（[ADR-0055](../adr/0055-main-window-pages-and-workspaces.md)）。メディアページは M9 FLOW-002 で追加した（[ADR-0129](../adr/0129-media-bins-and-offline-management.md)）。画面ごとの仕様は [画面](../design-system/screens/README.md)。
 
 ## FFI 境界の規約
 
@@ -205,6 +205,14 @@ Export は320pxの設定、中央の native Viewer、304pxの確認、設定を�
 
 設計判断は [ADR-0078](../adr/0078-template-export-pages-and-inspected-snapshot.md)、
 実行した checks と SwiftPM / Metal / 両 theme の pending 手順は [GUI-004 の検証](../testing/gui-004.md)。
+
+メディアページは `media.query` の一覧・probe・typed error を表示し、bin は共有
+`bin_*` 編集 command、オフライン asset の再リンクは共有 `asset.relink` を呼ぶ。
+サムネイルは `asset.thumbnail` の RGBA8 を in-memory cache するだけで document に
+書かない。Export は document の `export_presets` を一覧・保存・読み戻し・削除でき、
+複数選択を `export.batch` の順序付き preset item として送る。destination は提出時に
+共有 stem 規則 + `preset_output_extension` で決め、`kronello watch` と同じ命名を使う
+（[検証](../testing/flow-002.md)、[検証](../testing/flow-003.md)）。
 
 ## 未接続の編集操作の追跡
 

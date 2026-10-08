@@ -1,10 +1,11 @@
 //! Machine transport adapter. All document and execution policy lives in service.
 use std::io::{Read, Write};
 mod events;
+mod watch;
 
 use kronello_service::{BackendSelection, Request, Response, Service, ServiceError};
 
-const USAGE: &str = "kronello [--events ndjson] [--backend gpu|cpu-reference|gpu-resident-bgra8|gpu-resident-nv12] [--request-json JSON] [project create|create_plan|import|import_plan|export|info|collect | asset relink | render frame|sequence|export|submit|explain | node explain | job get|list|cancel|prune | track analyze | proxy generate|status|clear | scene detect|apply | edit plan|apply|undo | expression format | history list | scene query | property sample | capabilities get | sequence create|query | clip place|trim|stretch | instance retime | template_instance retime | template define|instantiate|set_input|set_duration|preview|migration_plan | captions import_plan|import|export] | worker --job <id>; otherwise read a tagged service Request from stdin";
+const USAGE: &str = "kronello [--events ndjson] [--backend gpu|cpu-reference|gpu-resident-bgra8|gpu-resident-nv12] [--request-json JSON] [project create|create_plan|import|import_plan|export|info|collect | asset relink|thumbnail | media query | export batch | render frame|sequence|export|submit|explain | node explain | job get|list|cancel|prune | track analyze | proxy generate|status|clear | scene detect|apply | edit plan|apply|undo | expression format | history list | scene query | property sample | capabilities get | sequence create|query | clip place|trim|stretch | instance retime | template_instance retime | template define|instantiate|set_input|set_duration|preview|migration_plan | captions import_plan|import|export] | watch --project P --directory D --preset ID|NAME --output DIR [--poll-ms N] [--once] | worker --job <id>; otherwise read a tagged service Request from stdin";
 fn run(stream: Option<&events::Stream>) -> Result<Response, ServiceError> {
     let mut selection = BackendSelection::Gpu;
     let mut literal = None;
@@ -37,6 +38,9 @@ fn run(stream: Option<&events::Stream>) -> Result<Response, ServiceError> {
                 )
             }
             "--help" | "-h" => return Err(ServiceError::new("USAGE", USAGE)),
+            // `watch` owns its flag tail; values are data, including ones
+            // that look like global options.
+            _ if command.first().map(String::as_str) == Some("watch") => command.push(arg),
             _ if arg.starts_with('-') => {
                 return Err(ServiceError::invalid(format!("unknown option: {arg}")));
             }
@@ -77,11 +81,15 @@ fn run(stream: Option<&events::Stream>) -> Result<Response, ServiceError> {
         ["render", "explain"] => Some("render.explain".into()),
         ["property", "sample"] => Some("property.sample".into()),
         ["asset", "relink"] => Some("asset.relink".into()),
+        ["asset", "thumbnail"] => Some("asset.thumbnail".into()),
+        ["media", "query"] => Some("media.query".into()),
+        ["export", "batch"] => Some("export.batch".into()),
         ["project", "collect"] => Some("project.collect".into()),
         ["capabilities", "get"] => Some("capabilities.get".into()),
         ["captions", verb @ ("import_plan" | "import" | "export")] => {
             Some(format!("captions.{verb}"))
         }
+        ["watch", ..] => return watch::run(&command[1..], selection),
         _ => return Err(ServiceError::invalid(USAGE)),
     };
     let json = if let Some(json) = literal {

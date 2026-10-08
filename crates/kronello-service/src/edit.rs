@@ -145,6 +145,33 @@ pub enum EditCommand {
     CaptionRemove {
         id: kronello_model::CaptionId,
     },
+    /// FLOW-002 (ADR-0129): create one named bin; fails when the id exists.
+    BinCreate {
+        bin: kronello_model::Bin,
+    },
+    /// Rename an existing bin; membership is untouched.
+    BinRename {
+        bin: kronello_model::BinId,
+        name: String,
+    },
+    /// Delete one bin; asset records are untouched.
+    BinDelete {
+        bin: kronello_model::BinId,
+    },
+    /// Replace one bin's membership with exactly this ordered asset set.
+    BinAssign {
+        bin: kronello_model::BinId,
+        assets: Vec<kronello_model::AssetId>,
+    },
+    /// FLOW-003 (ADR-0130): upsert one versioned export preset. Updating a
+    /// preset in place is an upsert with the same id.
+    ExportPresetSave {
+        preset: kronello_model::ExportPreset,
+    },
+    /// Remove one export preset; already queued jobs keep their fixed input.
+    ExportPresetDelete {
+        preset: kronello_model::ExportPresetId,
+    },
     /// Upsert one validated external asset record. COLOR-003 registers `.cube`
     /// documents as `AssetKind::Data`; the locator stays external and the
     /// content hash is caller-independent only through the import operation
@@ -382,6 +409,8 @@ pub(crate) fn validate(project: &Project) -> Result<(), ServiceError> {
         DocumentObject::Known(d) => Some(d.id),
         _ => None,
     }));
+    object_ids.extend(project.bins.iter().map(|b| b.id.as_uuid()));
+    object_ids.extend(project.export_presets.iter().map(|p| p.id.as_uuid()));
     for s in &project.sequences {
         if let DocumentObject::Known(s) = s {
             object_ids.insert(s.id.as_uuid());
@@ -1227,6 +1256,86 @@ fn apply_command(
             }
             caption_keys(project, *id, keys);
         }
+        EditCommand::BinCreate { bin } => {
+            bin.validate()
+                .map_err(|e| ServiceError::new("INVALID_DOCUMENT", e.to_string()))?;
+            if project.bins.iter().any(|b| b.id == bin.id) {
+                return Err(invalid("bin already exists"));
+            }
+            structure(keys, bin.id.as_uuid(), project.id);
+            project.bins.push(bin.clone());
+        }
+        EditCommand::BinRename { bin, name } => {
+            let b = project
+                .bins
+                .iter_mut()
+                .find(|b| b.id == *bin)
+                .ok_or_else(|| invalid("bin not found"))?;
+            if name.trim().is_empty() {
+                return Err(invalid("bin name must not be empty"));
+            }
+            structure(keys, bin.as_uuid(), bin.as_uuid());
+            b.name = name.clone();
+        }
+        EditCommand::BinDelete { bin } => {
+            structure(keys, bin.as_uuid(), bin.as_uuid());
+            let before = project.bins.len();
+            project.bins.retain(|b| b.id != *bin);
+            if project.bins.len() == before {
+                return Err(invalid("bin not found"));
+            }
+        }
+        EditCommand::BinAssign { bin, assets } => {
+            // Members must name real assets and stay duplicate-free, so stored
+            // membership can never dangle or double-count.
+            let known: BTreeSet<Uuid> = project
+                .assets
+                .iter()
+                .map(|object| match object {
+                    DocumentObject::Known(asset) => asset.id.as_uuid(),
+                    DocumentObject::Opaque(value) => value.id,
+                })
+                .collect();
+            if assets.iter().any(|a| !known.contains(&a.as_uuid())) {
+                return Err(invalid("bin member asset missing"));
+            }
+            let mut members = BTreeSet::new();
+            if assets.iter().any(|a| !members.insert(*a)) {
+                return Err(invalid("duplicate bin member"));
+            }
+            let b = project
+                .bins
+                .iter_mut()
+                .find(|b| b.id == *bin)
+                .ok_or_else(|| invalid("bin not found"))?;
+            structure(keys, bin.as_uuid(), bin.as_uuid());
+            b.assets = assets.clone();
+        }
+        EditCommand::ExportPresetSave { preset } => {
+            // Field-level checks run here; target/asset references against the
+            // candidate document are enforced by validate() after apply.
+            preset
+                .validate()
+                .map_err(|e| ServiceError::new("INVALID_DOCUMENT", e.to_string()))?;
+            structure(keys, preset.id.as_uuid(), project.id);
+            if let Some(existing) = project
+                .export_presets
+                .iter_mut()
+                .find(|p| p.id == preset.id)
+            {
+                *existing = preset.clone();
+            } else {
+                project.export_presets.push(preset.clone());
+            }
+        }
+        EditCommand::ExportPresetDelete { preset } => {
+            structure(keys, preset.as_uuid(), preset.as_uuid());
+            let before = project.export_presets.len();
+            project.export_presets.retain(|p| p.id != *preset);
+            if project.export_presets.len() == before {
+                return Err(invalid("export preset not found"));
+            }
+        }
     }
     Ok(())
 }
@@ -1308,6 +1417,8 @@ fn unordered_collection(path: &[String]) -> bool {
                 | "captions"
                 | "sequences"
                 | "mattes"
+                | "bins"
+                | "export_presets"
         ),
         [compositions, _, collection] if compositions == "compositions" => {
             matches!(collection.as_str(), "nodes" | "properties")
@@ -1340,6 +1451,8 @@ fn diff(old: &Json, new: &Json, path: &mut Vec<String>, out: &mut Vec<Mutation>)
                                 | "templates"
                                 | "template_instances"
                                 | "sequences"
+                                | "bins"
+                                | "export_presets"
                         )
                     {
                         diff(value, &Json::Array(vec![]), path, out);
@@ -1362,6 +1475,8 @@ fn diff(old: &Json, new: &Json, path: &mut Vec<String>, out: &mut Vec<Mutation>)
                                 | "templates"
                                 | "template_instances"
                                 | "sequences"
+                                | "bins"
+                                | "export_presets"
                         )
                     {
                         diff(&Json::Array(vec![]), value, path, out);

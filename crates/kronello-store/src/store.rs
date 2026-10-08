@@ -122,6 +122,8 @@ impl Mutation {
                                 | "template_instances"
                                 | "sequences"
                                 | "captions"
+                                | "bins"
+                                | "export_presets"
                         )
                         && !object.contains_key(part)
                     {

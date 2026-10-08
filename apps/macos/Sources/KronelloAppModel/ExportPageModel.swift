@@ -204,6 +204,126 @@ import KronelloDesign
         if hideCompleted && ["succeeded","canceled"].contains(status) { return false }
         switch filter { case "active": return active; case "done": return status == "succeeded"; case "failed": return ["failed","interrupted"].contains(status); default: return true }
     } }
+    // MARK: - FLOW-003 shared export presets and batch queue (ADR-0130)
+    /// Presets live in the shared document; selection is session-only UI state.
+    @Published public var presetSelection: Set<String> = []
+    @Published public var presetName = ""
+    /// Per-item outcomes of the last `export.batch`, in request order.
+    @Published public private(set) var batchResults: [[String: Any]] = []
+    public var presets: [[String: Any]] { editor.document.objects("export_presets") }
+    /// Output extension for destination naming: the movie container, the
+    /// caption sidecar format, or none for image sequences (a directory).
+    /// Mirrors `preset_output_extension` in the shared service.
+    public func presetExtension(_ preset: [String: Any]) -> String? {
+        let output = preset.object("output")
+        switch output.string("format") {
+        case "image_sequence": return nil
+        case "caption_sidecar": return output.string("caption_format")
+        default: return profiles.first { $0.string("format") == output.string("format") }?.string("container_extension")
+        }
+    }
+    /// The destination stem rule `kronello watch` applies, so GUI batch exports
+    /// and watch folders name outputs identically.
+    public static func sanitizedStem(_ name: String) -> String {
+        let mapped = name.prefix(64).map { character -> Character in
+            guard let value = character.asciiValue else { return "_" }
+            let okay = (65...90).contains(value) || (97...122).contains(value)
+                || (48...57).contains(value) || value == 45 || value == 95
+            return okay ? character : "_"
+        }
+        return mapped.isEmpty ? "preset" : String(mapped)
+    }
+    /// The shared ExportPreset payload mirroring this form's render settings
+    /// field-for-field (destination is supplied per submission, never stored).
+    public func presetPayload(id: String, name: String) -> [String: Any] {
+        var preset: [String: Any] = [
+            "version": 1, "id": id, "name": name,
+            "range": ["start": time(firstFrame), "end": time(exclusiveFrame)],
+            "frame_rate": ["num": String(fpsNum), "den": String(fpsDen)],
+            "region": ["origin": [0.0, 0.0], "extent": extent,
+                       "pixels": extent.map { Int(min(16_777_216, max(1, $0.rounded()))) }],
+            "profile": ["working_space": "linear_rec709", "flatten_tolerance_px": 0.02],
+            "output": output,
+        ]
+        if selectedTarget.string("kind") == "sequence" {
+            preset["target"] = ["kind": "sequence", "sequence": targetValue.string("id")]
+        } else {
+            preset["composition"] = targetValue.string("id")
+        }
+        return preset
+    }
+    /// Upsert a preset through the shared edit commands; a reused name keeps
+    /// the same id so stored identity stays stable.
+    public func savePreset(name: String) async {
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        let id = presets.first { $0.string("name") == name }?.string("id") ?? UUID().uuidString.lowercased()
+        _ = await editor.apply(.init(base: editor.revision,
+            commands: [["export_preset_save": ["preset": presetPayload(id: id, name: name)]]],
+            label: "書き出しプリセットの保存"))
+    }
+    public func deletePreset(_ id: String) async {
+        _ = await editor.apply(.init(base: editor.revision,
+            commands: [["export_preset_delete": ["preset": id]]],
+            label: "書き出しプリセットの削除"))
+        presetSelection.remove(id)
+        batchResults.removeAll()
+    }
+    /// Restore the form fields a preset was saved with.
+    public func loadPreset(_ id: String) {
+        guard let preset = presets.first(where: { $0.string("id") == id }) else { return }
+        let output = preset.object("output")
+        let sequence = preset.object("target").string("sequence")
+        let composition = preset.string("composition")
+        if !sequence.isEmpty { target = "sequence:" + sequence }
+        else if !composition.isEmpty { target = "composition:" + composition }
+        format = output.string("format")
+        selectProfile()
+        if let version = output["profile_version"] as? Int { self.version = String(version) }
+        if !output.string("audio").isEmpty { audio = output.string("audio") }
+        if !output.string("caption_format").isEmpty { captionFormat = output.string("caption_format") }
+        if !output.string("transfer").isEmpty { transfer = output.string("transfer") }
+        if let background = output["background"] as? [NSNumber] { self.background = background.contains(1) ? "white" : "black" }
+        let rateNum = Int64(preset.object("frame_rate").string("num")) ?? fpsNum
+        let rateDen = Int64(preset.object("frame_rate").string("den")) ?? 1
+        let start = RationalTime.wire(preset.object("range").object("start")).frames(rateNum: rateNum, rateDen: rateDen)
+        let end = RationalTime.wire(preset.object("range").object("end")).frames(rateNum: rateNum, rateDen: rateDen)
+        if start != 0 || end != totalFrames { rangeMode = "inout"; startFrame = start; endFrame = end }
+        presetName = preset.string("name")
+        clearInspection()
+    }
+    /// Submit every selected preset as one ordered `export.batch`; each item
+    /// resolves server-side into the identical `render.submit` payload.
+    /// Destinations derive from one chosen directory by the shared naming rule.
+    public func submitPresetBatch(directory: String) async {
+        let selected = presets.filter { presetSelection.contains($0.string("id")) }
+        guard !selected.isEmpty, !submitting else { return }
+        submitting = true; defer { submitting = false }
+        let items: [[String: Any]] = selected.map { preset in
+            let suffix = presetExtension(preset).map { "." + $0 } ?? ""
+            return ["preset": preset.string("id"), "project": editor.path,
+                    "destination": directory + "/" + Self.sanitizedStem(preset.string("name")) + suffix]
+        }
+        do {
+            let result = try await sharedRequest("export.batch", ["items": items, "failure_policy": "continue"])
+            batchResults = result.objects("items")
+            for item in batchResults {
+                if let job = item["job"] as? [String: Any] {
+                    jobs.removeAll { $0.string("id") == job.string("id") }
+                    jobs.insert(job, at: 0)
+                }
+            }
+            // refreshJobs clears jobFailure on success; the first typed item
+            // failure must win so it surfaces in the jobs panel.
+            let itemFailure = batchResults.first { $0.string("outcome") == "failed" }.map { item -> ServiceFailure in
+                let error = item.object("error")
+                return .init(code: error.string("code"), message: error.string("message"), details: error.object("details"))
+            }
+            await refreshJobs()
+            if let itemFailure { jobFailure = itemFailure }
+            beginPollingIfActive()
+        } catch { jobFailure = editor.serviceFailure(error) }
+    }
     public static func state(_ job: [String: Any]) -> KRJobState {
         switch job.string("status") {
         case "queued": return .queued

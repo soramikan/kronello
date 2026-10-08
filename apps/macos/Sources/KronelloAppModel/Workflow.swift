@@ -32,6 +32,7 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable {
     case pageEdit = "page.edit"
     case pageMotion = "page.motion"
     case pageTemplate = "page.template"
+    case pageMedia = "page.media"
     case pageExport = "page.export"
     case transportPlay = "transport.play"
     case transportStepBack = "transport.step_back"
@@ -72,6 +73,7 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable {
         case .pageEdit: return KeyBinding(key: "1", modifiers: ["command"])
         case .pageMotion: return KeyBinding(key: "2", modifiers: ["command"])
         case .pageTemplate: return KeyBinding(key: "3", modifiers: ["command"])
+        case .pageMedia: return KeyBinding(key: "5", modifiers: ["command"])
         case .pageExport: return KeyBinding(key: "4", modifiers: ["command"])
         case .transportPlay: return KeyBinding(key: "space")
         case .transportStepBack: return KeyBinding(key: "left")
@@ -108,7 +110,7 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable {
         switch self {
         case .newProject, .openProject, .closeProject: return "ファイル"
         case .undo, .redo: return "編集"
-        case .pageEdit, .pageMotion, .pageTemplate, .pageExport: return "ページ"
+        case .pageEdit, .pageMotion, .pageTemplate, .pageMedia, .pageExport: return "ページ"
         case .transportPlay, .transportStepBack, .transportStepForward, .transportGoStart, .transportGoEnd:
             return "再生"
         case .commonCancel: return "共通"
@@ -132,6 +134,7 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable {
         case .pageEdit: return "編集ページ"
         case .pageMotion: return "モーションページ"
         case .pageTemplate: return "テンプレートページ"
+        case .pageMedia: return "メディアページ"
         case .pageExport: return "書き出しページ"
         case .transportPlay: return "再生 / 停止"
         case .transportStepBack: return "1 フレーム戻る"

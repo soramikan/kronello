@@ -485,6 +485,37 @@ impl VideoDecoder<'_> {
             rgba,
         }))
     }
+    /// Decode the frame whose presentation interval covers `time` into explicit
+    /// SDR RGBA8. Deterministic fixed-snapshot preview used for thumbnails
+    /// (FLOW-002, ADR-0129): same timestamp always yields the same frame and
+    /// the same color path as `next_rgba`.
+    pub fn rgba_at(&mut self, time: Rational) -> Result<RgbaVideoFrame, MediaError> {
+        let decoded = self.decode_at(time)?;
+        let metadata = kronello_model::StreamMetadata {
+            index: self.native.stream(),
+            codec: String::new(),
+            time_base: self.native.time_base,
+            duration: None,
+            start_time: None,
+            width: Some(decoded.width),
+            height: Some(decoded.height),
+            pixel_format: Some(decoded.pixel_format.clone()),
+            color_primaries: Some(decoded.color_primaries.clone()),
+            color_transfer: Some(decoded.color_transfer.clone()),
+            color_matrix: Some(decoded.color_matrix.clone()),
+            color_range: Some(decoded.color_range.clone()),
+        };
+        let policy = video_color_policy(&metadata)?;
+        let rgba = ffi::video_rgba(self.native.runtime(), &decoded, policy.range == "pc")?;
+        let duration = decoded.end.checked_sub(decoded.pts)?;
+        Ok(RgbaVideoFrame {
+            pts: decoded.pts,
+            duration,
+            width: decoded.width,
+            height: decoded.height,
+            rgba,
+        })
+    }
 }
 /// Deterministic fixed-point bilinear scale of packed opaque RGBA8.
 /// Integer arithmetic only; output alpha is always 255.

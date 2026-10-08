@@ -119,6 +119,9 @@ macro_rules! commands {
             ("project.import", false, ImportRequest, ProjectInfo),
             ("project.export", true, ProjectRequest, ExportResult),
             ("project.info", true, ProjectRequest, ProjectInfo),
+            ("media.query", true, MediaQueryRequest, MediaQueryResult),
+            ("asset.thumbnail", true, AssetThumbnailRequest, AssetThumbnailResult),
+            ("export.batch", true, ExportBatchRequest, ExportBatchResult),
             ("asset.relink", false, RelinkRequest, ProjectInfo),
             ("project.collect", true, CollectRequest, kronello_media::CollectedProject),
             ("render.frame", true, FrameRenderRequest, FrameResult),
@@ -216,6 +219,10 @@ impl CapabilitiesResult {
                 "caption_sidecar_v1",
                 "motion_tracking_v1",
                 "media_proxies_v1",
+                "media_bins_v1",
+                "export_presets_v1",
+                "export_batch_v1",
+                "asset_thumbnail_v1",
             ]
             .map(String::from)
             .to_vec(),
