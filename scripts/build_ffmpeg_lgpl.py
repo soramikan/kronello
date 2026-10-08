@@ -191,10 +191,13 @@ def main():
     work.mkdir()
     entries = {entry["name"]: entry for entry in manifest["dependencies"]}
     svt, ffmpeg, dav1d, opus = entries["svt-av1"], entries["ffmpeg"], entries["dav1d"], entries["opus"]
+    lame, libraw = entries["lame"], entries["libraw"]
     svt_source = extract(sources["svt-av1"], work / "svt-source")
     ffmpeg_source = extract(sources["ffmpeg"], work / "ffmpeg-source")
     dav1d_source = extract(sources["dav1d"], work / "dav1d-source")
     opus_source = extract(sources["opus"], work / "opus-source")
+    lame_source = extract(sources["lame"], work / "lame-source")
+    libraw_source = extract(sources["libraw"], work / "libraw-source")
     dav1d_build = work / "dav1d-build"
     run(["meson", "setup", dav1d_build, dav1d_source, *dav1d["meson"], f"--prefix={prefix}", "--libdir=lib"])
     run(["meson", "compile", "-C", dav1d_build, "-j", args.jobs])
@@ -213,10 +216,22 @@ def main():
     run(["cmake", *(["-G", "Ninja"] if sys.platform == "win32" else []), "-S", svt_source, "-B", svt_build, *svt["cmake"], *svt.get("platform_cmake", {}).get(sys.platform, []), f"-DCMAKE_INSTALL_PREFIX={prefix}", "-DCMAKE_INSTALL_LIBDIR=lib"])
     run(["cmake", "--build", svt_build, "--parallel", args.jobs])
     run(["cmake", "--install", svt_build])
+    # LAME must be installed before FFmpeg configure so pkg-config exposes libmp3lame.
+    lame_build = work / "lame-build"
+    lame_build.mkdir()
+    configure = msys2_posix(bash, lame_source / "configure") if bash else (lame_source / "configure").as_posix()
+    run([*([bash] if bash else []), configure,
+         *lame["configure"], *lame.get("platform_configure", {}).get(sys.platform, []),
+         f"--prefix={prefix}", "--libdir=" + str(prefix / "lib")], cwd=lame_build)
+    run(["make", f"-j{args.jobs}"], cwd=lame_build)
+    run(["make", "install"], cwd=lame_build)
     env = dict(os.environ, PKG_CONFIG_PATH=str(prefix / "lib/pkgconfig"), PKG_CONFIG_LIBDIR=str(prefix / "lib/pkgconfig"))
     ffmpeg_build = work / "ffmpeg-build"
     ffmpeg_build.mkdir()
     flags = [*ffmpeg["configure"], f"--prefix={prefix.as_posix()}"]
+    # LAME ships no pkg-config file; FFmpeg's configure probes lame/lame.h and
+    # -lmp3lame, so expose the vendored prefix explicitly on every platform.
+    flags += [f"--extra-cflags=-I{prefix / 'include'}", f"--extra-ldflags=-L{prefix / 'lib'}"]
     if sys.platform == "win32":
         flags += ["--target-os=mingw32", "--arch=x86_64", "--cc=gcc", "--cxx=g++"]
     else:
@@ -226,6 +241,14 @@ def main():
     run([*([bash] if bash else []), (ffmpeg_source / "configure").as_posix(), *flags], cwd=ffmpeg_build, env=env)
     run(["make", f"-j{args.jobs}"], cwd=ffmpeg_build, env=env)
     run(["make", "install"], cwd=ffmpeg_build, env=env)
+    libraw_build = work / "libraw-build"
+    libraw_build.mkdir()
+    configure = msys2_posix(bash, libraw_source / "configure") if bash else (libraw_source / "configure").as_posix()
+    run([*([bash] if bash else []), configure,
+         *libraw["configure"], *libraw.get("platform_configure", {}).get(sys.platform, []),
+         f"--prefix={prefix}", "--libdir=" + str(prefix / "lib")], cwd=libraw_build, env=env)
+    run(["make", f"-j{args.jobs}"], cwd=libraw_build, env=env)
+    run(["make", "install"], cwd=libraw_build, env=env)
     if sys.platform == "win32":
         # Copy only the MinGW runtime DLLs into the explicit runtime directory;
         # loading the finished runtime never depends on MSYS being on PATH.
@@ -236,7 +259,7 @@ def main():
             shutil.copy2(dependency, prefix / "bin" / name)
     licenses = prefix / "licenses"
     licenses.mkdir()
-    for entry, source_dir in [(ffmpeg, ffmpeg_source), (svt, svt_source), (dav1d, dav1d_source), (opus, opus_source)]:
+    for entry, source_dir in [(ffmpeg, ffmpeg_source), (svt, svt_source), (dav1d, dav1d_source), (opus, opus_source), (lame, lame_source), (libraw, libraw_source)]:
         destination = licenses / entry["name"]
         destination.mkdir()
         for name in entry["license_files"]:

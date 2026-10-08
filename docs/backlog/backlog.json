@@ -5,7 +5,7 @@
   "status": "implementation_started",
   "description": "設計と実装の計画・進捗。このファイルがバックログの正本であり、GitHub等へ登録したIssueではない。",
   "specification": "docs/architecture/",
-  "task_count": 142,
+  "task_count": 143,
   "items": [
     {
       "id": "ARC-001",
@@ -1220,6 +1220,23 @@
       "acceptance_criteria": [
         "順次再生とcheckpointからのseekを固定環境で比較する",
         "入力変更で影響するcheckpointを無効化する"
+      ]
+    },
+    {
+      "id": "INTEGRATION-007",
+      "milestone": "M10",
+      "priority": "P2",
+      "area": "integration",
+      "title": "縦断デモ第5段階: M10 配信・拡張ワークフロー（共同編集を除く）",
+      "status": "planned",
+      "dependencies": [
+        "MEDIA-004",
+        "FX-008",
+        "GUI-012"
+      ],
+      "acceptance_criteria": [
+        "チャプター付きマルチ出力書き出し、新エフェクトのタイムライン適用、RAW インジェスト、capture 経路、外部モニタ出力切替を CLI と MCP の両経路で検証する",
+        "プロジェクト export・レンダー出力・型付き拒否の CLI/MCP parity を確認する"
       ]
     },
     {
