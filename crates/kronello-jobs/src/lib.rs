@@ -578,6 +578,28 @@ impl JobStore {
             Ok(())
         })
     }
+    /// Graceful end-of-input signal for open-ended session jobs (FLOW-004
+    /// capture). Unlike `cancel`, which abandons the execution, the owning
+    /// worker treats the `stop.request` marker in its job directory as
+    /// "finish recording and publish what was captured". Requesting stop on a
+    /// terminal job is an idempotent no-op returning the current record.
+    pub fn request_stop(&self, id: &str) -> Result<JobRecord, JobError> {
+        let record = self.get(id)?;
+        if record.status.active() {
+            let marker = self.directory(id)?.join("stop.request");
+            if !marker.exists() {
+                let file = std::fs::File::create(&marker)?;
+                file.sync_all()?;
+            }
+        }
+        Ok(record)
+    }
+    /// Whether a stop marker was left for the session job. The worker polls
+    /// this between captured frames; it is a filesystem signal, not a job
+    /// state transition, so a dead worker's marker simply stays behind.
+    pub fn stop_requested(&self, id: &str) -> Result<bool, JobError> {
+        Ok(self.directory(id)?.join("stop.request").exists())
+    }
     pub fn heartbeat(&self, id: &str) -> Result<(), JobError> {
         // Apply the bound before any SQLite operation, including connection setup.
         // A busy writer must not park this thread for the normal five seconds.
@@ -760,7 +782,7 @@ impl JobStore {
         result: serde_json::Value,
         publish: impl FnOnce() -> Result<(), JobError>,
     ) -> Result<(), JobError> {
-        self.publish_generation(id, None, result, publish)
+        self.publish_generation(id, None, None, result, publish)
     }
     pub fn publish_attempt(
         &self,
@@ -769,12 +791,27 @@ impl JobStore {
         result: serde_json::Value,
         publish: impl FnOnce() -> Result<(), JobError>,
     ) -> Result<(), JobError> {
-        self.publish_generation(id, Some(attempt), result, publish)
+        self.publish_generation(id, Some(attempt), None, result, publish)
+    }
+    /// Session-style jobs (FLOW-004 capture) only learn the authoritative
+    /// frame count when the source stops, so `total_frames` at submission is a
+    /// placeholder. This commits the final count with the same lease and
+    /// cancellation checks as [`JobStore::publish_attempt`].
+    pub fn publish_attempt_frames(
+        &self,
+        id: &str,
+        attempt: u64,
+        frames: u64,
+        result: serde_json::Value,
+        publish: impl FnOnce() -> Result<(), JobError>,
+    ) -> Result<(), JobError> {
+        self.publish_generation(id, Some(attempt), Some(frames), result, publish)
     }
     fn publish_generation(
         &self,
         id: &str,
         attempt: Option<u64>,
+        frames: Option<u64>,
         result: serde_json::Value,
         publish: impl FnOnce() -> Result<(), JobError>,
     ) -> Result<(), JobError> {
@@ -790,6 +827,9 @@ impl JobStore {
             }
             publish()?;
             r.status = JobStatus::Succeeded;
+            if let Some(frames) = frames {
+                r.total_frames = frames;
+            }
             r.completed_frames = r.total_frames;
             r.result = if r.publication_hash.is_some() {
                 None

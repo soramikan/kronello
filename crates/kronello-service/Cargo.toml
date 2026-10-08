@@ -30,6 +30,7 @@ kronello-render = { path = "../kronello-render" }
 kronello-tracking = { path = "../kronello-tracking" }
 kronello-scene = { path = "../kronello-scene" }
 kronello-gpu = { path = "../kronello-gpu" }
+kronello-framebridge = { path = "../kronello-framebridge" }
 kronello-vector = { path = "../kronello-vector" }
 kronello-text = { path = "../kronello-text" }
 kronello-plugin = { path = "../kronello-plugin" }
@@ -43,6 +44,5 @@ tempfile = "3"
 [dev-dependencies]
 png = "0.18"
 kronello-testkit = { path = "../kronello-testkit" }
-kronello-framebridge = { path = "../kronello-framebridge" }
 kronello-plugin = { path = "../kronello-plugin", features = ["test-support"] }
 jsonschema = { version = "0.46", default-features = false }

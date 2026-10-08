@@ -387,7 +387,7 @@ impl crate::Service<'_> {
     }
 }
 
-fn known_asset(document: &kronello_model::Project, id: AssetId) -> Option<&Asset> {
+pub(crate) fn known_asset(document: &kronello_model::Project, id: AssetId) -> Option<&Asset> {
     document.assets.iter().find_map(|a| match a {
         DocumentObject::Known(a) if a.id == id => Some(a),
         _ => None,

@@ -745,6 +745,14 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
             "sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "component":"6b726f6e656c6c6f746573746761696e","parameters":[]},
             "destination":"processed.mov"}),
+        json!({"operation":"capture.start","project":path,
+            "source":{"kind":"synthetic"},
+            "format":{"width":16,"height":8,"frame_rate":{"num":"24","den":"1"},
+                "codec":"pro_res","color":"bt709"},
+            "idempotency_key":"capture","max_frames":4}),
+        json!({"operation":"capture.stop","project":path,"job":uuid.to_string()}),
+        json!({"operation":"capture.status","project":path}),
+        json!({"operation":"capture.deck_probe"}),
     ];
     assert_eq!(requests.len(), command_registry().len());
     for request in requests {
@@ -1533,6 +1541,29 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
             "output":{"format":"image_sequence"}}}]}),
     );
     assert_eq!(batch["items"][0]["outcome"], "submitted");
+    // FLOW-004 (ADR-0135): capture sessions submit as detached jobs; the
+    // stub worker above never records, so start returns the submitted
+    // record, stop leaves a graceful marker and status lists the session.
+    let capture_job = execute(json!({"operation":"capture.start","project":path,
+            "source":{"kind":"synthetic"},
+            "format":{"width":16,"height":8,"frame_rate":{"num":"24","den":"1"},
+                "codec":"pro_res","color":"bt709"},
+            "idempotency_key":"contract-capture","max_frames":4}));
+    assert!(capture_job["id"].is_string());
+    execute(json!({"operation":"capture.stop","project":path,"job":capture_job["id"]}));
+    let capture_status = execute(json!({"operation":"capture.status","project":path}));
+    assert_eq!(
+        capture_status["sessions"][0]["job"]["id"],
+        capture_job["id"]
+    );
+    // The deck boundary is the typed vendor-SDK gate: no adapter is linked in
+    // this build, so the honest answer is UNSUPPORTED_FEATURE, not Success.
+    let deck = engine.execute_json(r#"{"operation":"capture.deck_probe"}"#);
+    let Response::Error { error, .. } = &deck else {
+        panic!("deck probe without a vendor adapter must fail: {deck:?}")
+    };
+    assert_eq!(error.code, "UNSUPPORTED_FEATURE");
+    checked.insert("capture.deck_probe".to_owned());
     assert_eq!(
         checked,
         command_registry().into_iter().map(|c| c.name).collect()

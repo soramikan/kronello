@@ -2330,7 +2330,7 @@
       "priority": "P2",
       "area": "media",
       "title": "キャプチャ/インジェスト: 録画・デッキ取り込み",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "MEDIA-001"
       ],

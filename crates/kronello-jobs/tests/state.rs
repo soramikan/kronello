@@ -311,6 +311,59 @@ fn publication_is_atomic_and_never_clobbers_existing_file_or_empty_directory() {
         );
     }
 }
+/// FLOW-004 (ADR-0135): `stop.request` is a filesystem signal polled by the
+/// owning worker — not a state transition — and `publish_attempt_frames`
+/// commits the frame count an open-ended session discovers only at stop.
+#[test]
+fn session_stop_marker_and_publish_attempt_frames_commit_final_count() {
+    let temp = tempfile::tempdir().unwrap();
+    let store = JobStore::open(JobConfig::at(temp.path())).unwrap();
+    // Open-ended capture session: total_frames is a placeholder at submit.
+    let record = store
+        .submit(
+            b"fixed",
+            Submission {
+                engine_version: "test".into(),
+                project_id: "test".into(),
+                revision: "1".into(),
+                snapshot_hash: "test".into(),
+                output_profile: json!({"capture_asset_id": "asset"}),
+                destination: temp.path().join("capture.mov"),
+                total_frames: 0,
+            },
+        )
+        .unwrap();
+    assert!(!store.stop_requested(&record.id).unwrap());
+    let returned = store.request_stop(&record.id).unwrap();
+    assert_eq!(returned.id, record.id);
+    assert!(store.stop_requested(&record.id).unwrap());
+    // The marker is not a state change and a repeated request is idempotent.
+    assert_eq!(store.get(&record.id).unwrap().status, JobStatus::Queued);
+    store.request_stop(&record.id).unwrap();
+    assert!(claim_retrying_contention(&store, &record.id).unwrap());
+    let staging = store.staging(&record).unwrap();
+    let staged = staging.output();
+    std::fs::write(&staged, b"finalized").unwrap();
+    store
+        .publish_attempt_frames(
+            record.id.as_str(),
+            0,
+            7,
+            json!({"report": {"frames": 7}}),
+            || publish_path(&staged, &record.destination),
+        )
+        .unwrap();
+    let done = store.get(&record.id).unwrap();
+    assert_eq!(done.status, JobStatus::Succeeded);
+    assert_eq!(done.total_frames, 7);
+    assert_eq!(done.completed_frames, 7);
+    assert!(record.destination.is_file());
+    // Stopping a terminal session is a no-op, not an error.
+    assert_eq!(
+        store.request_stop(&record.id).unwrap().status,
+        JobStatus::Succeeded
+    );
+}
 #[test]
 fn invalid_configuration_ids_and_newer_database_are_rejected() {
     let temp = tempfile::tempdir().unwrap();

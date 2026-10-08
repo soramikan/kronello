@@ -96,6 +96,10 @@ macro_rules! commands {
             ("proxy.generate", true, ProxyGenerateRequest, JobListResult),
             ("proxy.status", true, ProxyStatusRequest, ProxyStatusResult),
             ("proxy.clear", false, ProxyClearRequest, ProjectInfo),
+            ("capture.start", true, CaptureStartRequest, kronello_jobs::JobRecord),
+            ("capture.stop", true, CaptureStopRequest, kronello_jobs::JobRecord),
+            ("capture.status", true, CaptureStatusRequest, CaptureStatusResult),
+            ("capture.deck_probe", true, CaptureDeckProbeRequest, DeckProbeResult),
             ("audio.loudness", true, AudioLoudnessRequest, AudioLoudnessResult),
             ("audio.normalize", false, AudioNormalizeRequest, AudioNormalizeResult),
             ("audio.plugin_probe", true, PluginProbeRequest, PluginProbeResult),
@@ -230,6 +234,7 @@ impl CapabilitiesResult {
                 "export_batch_v1",
                 "asset_thumbnail_v1",
                 "audio_plugin_host_v1",
+                "capture_ingest_v1",
             ]
             .map(String::from)
             .to_vec(),

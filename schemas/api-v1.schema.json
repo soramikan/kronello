@@ -1488,6 +1488,361 @@
       ],
       "type": "object"
     },
+    "CaptureCodec": {
+      "description": "The recorded container/codec contract. `pro_res` is the only codec in v1:\nthe provisional spool is lossless RGBA8 and finalization encodes a BT.709\nProRes MOV through the bounded `kronello-media` encoder.",
+      "enum": [
+        "pro_res"
+      ],
+      "type": "string"
+    },
+    "CaptureColor": {
+      "description": "Recorded signal color tag. `bt709` is the only supported tag in v1; the\nProRes container stream carries the matching `colr` metadata.",
+      "enum": [
+        "bt709"
+      ],
+      "type": "string"
+    },
+    "CaptureDeckProbeRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "device": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DeckDevice"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Restrict the probe to one vendor adapter family."
+        }
+      },
+      "type": "object"
+    },
+    "CaptureFormat": {
+      "additionalProperties": false,
+      "description": "Static output contract fixed at submission. Captured frames are appended in\ndelivery order and container-stamped one tick per frame at `frame_rate` —\nthe record path performs no drops and no re-time correction.",
+      "properties": {
+        "codec": {
+          "$ref": "#/$defs/CaptureCodec"
+        },
+        "color": {
+          "$ref": "#/$defs/CaptureColor"
+        },
+        "frame_rate": {
+          "$ref": "#/$defs/FrameRate"
+        },
+        "height": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "width": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "width",
+        "height",
+        "frame_rate",
+        "codec",
+        "color"
+      ],
+      "type": "object"
+    },
+    "CaptureOrphan": {
+      "additionalProperties": false,
+      "description": "A provisional spool whose owning session ended without publication —\nworker death, failure, or cancellation. Reported, never silently deleted\nand never exposed as a project asset.",
+      "properties": {
+        "bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "job": {
+          "description": "Owning job id when the filename parses as one.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "job_status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JobStatus"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Job status when the record resolves; `interrupted` marks a dead worker."
+        },
+        "provisional": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provisional",
+        "bytes"
+      ],
+      "type": "object"
+    },
+    "CaptureSessionEntry": {
+      "additionalProperties": false,
+      "description": "One capture session observed by `capture.status`; the job record is the\nauthoritative progress/lifecycle source (ADR-0025).",
+      "properties": {
+        "asset": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "asset_registered": {
+          "description": "Whether the document already contains the registered asset.",
+          "type": "boolean"
+        },
+        "job": {
+          "$ref": "#/$defs/JobRecord"
+        },
+        "provisional": {
+          "description": "The live provisional spool path while it exists. It is never a project\nasset; only a finalized, hashed publication registers one.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source": {
+          "$ref": "#/$defs/CaptureSource"
+        },
+        "stop_requested": {
+          "description": "`true` once `capture.stop` was requested while the worker still runs.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "job",
+        "asset",
+        "source",
+        "stop_requested",
+        "asset_registered"
+      ],
+      "type": "object"
+    },
+    "CaptureSource": {
+      "description": "Capture sources. Selection is explicit: a screen/window/app source names\nits target; `synthetic` is the deterministic in-repo adapter used by tests;\n`deck` is the vendor-SDK ingest boundary (ADR-0134 style).",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Deterministic in-repo source: a paced synthetic frame generator.",
+          "properties": {
+            "kind": {
+              "const": "synthetic",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Full-display capture; `display` is a `CGDirectDisplayID`, absent is main.",
+          "properties": {
+            "display": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "kind": {
+              "const": "screen",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A single window by `CGWindowID`.",
+          "properties": {
+            "kind": {
+              "const": "window",
+              "type": "string"
+            },
+            "window": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "window"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Every on-screen window owned by the bundle identifier.",
+          "properties": {
+            "bundle_id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "application",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "bundle_id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Deck ingest through the vendor SDK adapter (DeckLink / RS-422).",
+          "properties": {
+            "device": {
+              "$ref": "#/$defs/DeckDevice"
+            },
+            "device_id": {
+              "description": "Vendor-reported device identity; absent selects the first device.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "kind": {
+              "const": "deck",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "device"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "CaptureStartRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "asset": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AssetId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Caller-pinned asset id; absent mints a fresh one."
+        },
+        "expected_revision": {
+          "description": "Optional fence against changes since the caller inspected the project.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "format": {
+          "$ref": "#/$defs/CaptureFormat"
+        },
+        "idempotency_key": {
+          "description": "FLOW-003-style submission key scoped to the project; replay returns the\nrecorded job without spawning a second recording.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "max_frames": {
+          "description": "Stop and publish automatically after this many frames.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "project": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/CaptureSource"
+        }
+      },
+      "required": [
+        "project",
+        "source",
+        "format"
+      ],
+      "type": "object"
+    },
+    "CaptureStatusRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "job": {
+          "description": "Restrict the session list to one job id. Orphans are always reported\nfor the project-wide capture directory.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "type": "object"
+    },
+    "CaptureStatusResult": {
+      "additionalProperties": false,
+      "properties": {
+        "orphans": {
+          "items": {
+            "$ref": "#/$defs/CaptureOrphan"
+          },
+          "type": "array"
+        },
+        "sessions": {
+          "items": {
+            "$ref": "#/$defs/CaptureSessionEntry"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "sessions",
+        "orphans"
+      ],
+      "type": "object"
+    },
+    "CaptureStopRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "job": {
+          "description": "Capture job id (the session). Stop is a graceful end-of-input signal;\nthe worker still hashes and registers what was recorded.",
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "job"
+      ],
+      "type": "object"
+    },
     "ChangedKey": {
       "oneOf": [
         {
@@ -2393,6 +2748,49 @@
       "required": [
         "columns",
         "rows"
+      ],
+      "type": "object"
+    },
+    "DeckDevice": {
+      "enum": [
+        "decklink",
+        "rs422"
+      ],
+      "type": "string"
+    },
+    "DeckDeviceEntry": {
+      "additionalProperties": false,
+      "description": "One deck device reported by a linked vendor adapter build.",
+      "properties": {
+        "device": {
+          "$ref": "#/$defs/DeckDevice"
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "device",
+        "id",
+        "label"
+      ],
+      "type": "object"
+    },
+    "DeckProbeResult": {
+      "additionalProperties": false,
+      "properties": {
+        "devices": {
+          "items": {
+            "$ref": "#/$defs/DeckDeviceEntry"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "devices"
       ],
       "type": "object"
     },
@@ -12360,6 +12758,139 @@
         },
         {
           "additionalProperties": false,
+          "description": "FLOW-004 capture/ingest (ADR-0135): a detached recording session job.",
+          "properties": {
+            "asset": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AssetId"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Caller-pinned asset id; absent mints a fresh one."
+            },
+            "expected_revision": {
+              "description": "Optional fence against changes since the caller inspected the project.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "format": {
+              "$ref": "#/$defs/CaptureFormat"
+            },
+            "idempotency_key": {
+              "description": "FLOW-003-style submission key scoped to the project; replay returns the\nrecorded job without spawning a second recording.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "max_frames": {
+              "description": "Stop and publish automatically after this many frames.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "operation": {
+              "const": "capture.start",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "source": {
+              "$ref": "#/$defs/CaptureSource"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "source",
+            "format"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Graceful end-of-input; the worker finalizes and publishes the recording.",
+          "properties": {
+            "job": {
+              "description": "Capture job id (the session). Stop is a graceful end-of-input signal;\nthe worker still hashes and registers what was recorded.",
+              "type": "string"
+            },
+            "operation": {
+              "const": "capture.stop",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "job"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Session list plus typed orphan reconciliation for the capture area.",
+          "properties": {
+            "job": {
+              "description": "Restrict the session list to one job id. Orphans are always reported\nfor the project-wide capture directory.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "operation": {
+              "const": "capture.status",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Vendor-SDK deck ingest boundary (DeckLink/RS-422); typed\n`UNSUPPORTED_FEATURE` when no adapter is linked.",
+          "properties": {
+            "device": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DeckDevice"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict the probe to one vendor adapter family."
+            },
+            "operation": {
+              "const": "capture.deck_probe",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "properties": {
             "base_revision": {
               "type": "string"
@@ -15572,6 +16103,42 @@
             },
             "value": {
               "$ref": "#/$defs/PluginProbeResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FLOW-004 capture session and orphan reconciliation report (ADR-0135).",
+          "properties": {
+            "kind": {
+              "const": "capture",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/CaptureStatusResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FLOW-004 vendor deck adapter device report (ADR-0135).",
+          "properties": {
+            "kind": {
+              "const": "deck_probe",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/DeckProbeResult"
             }
           },
           "required": [

@@ -357,8 +357,9 @@ pub struct JobListResult {
 
 /// Immutable job input. Exactly one payload kind is legal: render jobs carry
 /// `snapshot` + `request`; `proxy.generate` jobs carry `proxy`; `scene.detect`
-/// jobs carry `scene`; `audio.plugin_process` jobs carry `plugin`. Optional
-/// fields keep the render shape byte-compatible with schema_version 1.
+/// jobs carry `scene`; `audio.plugin_process` jobs carry `plugin`;
+/// `capture.start` jobs carry `capture`. Optional fields keep the render shape
+/// byte-compatible with schema_version 1.
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct FixedInput {
@@ -374,6 +375,8 @@ pub(crate) struct FixedInput {
     scene: Option<crate::scene::SceneJobInput>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     plugin: Option<crate::plugin::PluginJobInput>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    capture: Option<crate::capture::CaptureJobInput>,
 }
 impl FixedInput {
     fn render(
@@ -389,6 +392,7 @@ impl FixedInput {
             proxy: None,
             scene: None,
             plugin: None,
+            capture: None,
         }
     }
     pub(crate) fn proxy(input: crate::proxy::ProxyJobInput) -> Self {
@@ -401,6 +405,7 @@ impl FixedInput {
             proxy: Some(input),
             scene: None,
             plugin: None,
+            capture: None,
         }
     }
     pub(crate) fn scene(input: crate::scene::SceneJobInput) -> Self {
@@ -413,6 +418,7 @@ impl FixedInput {
             proxy: None,
             scene: Some(input),
             plugin: None,
+            capture: None,
         }
     }
     /// AUDIO-011: the plugin payload holds the pinned spec; no render state.
@@ -426,10 +432,24 @@ impl FixedInput {
             proxy: None,
             scene: None,
             plugin: Some(input),
+            capture: None,
+        }
+    }
+    /// FLOW-004: capture sessions never touch a render backend.
+    pub(crate) fn capture(input: crate::capture::CaptureJobInput) -> Self {
+        Self {
+            schema_version: 1,
+            snapshot: None,
+            request: None,
+            backend: BackendSelection::CpuReference,
+            proxy: None,
+            scene: None,
+            plugin: None,
+            capture: Some(input),
         }
     }
     /// The render payload pair; mutually exclusive with `proxy`/`scene`/
-    /// `plugin` by validation.
+    /// `plugin`/`capture` by validation.
     fn render_parts(&self) -> Result<(&RenderSnapshot, &RenderSubmitRequest), ServiceError> {
         match (
             &self.snapshot,
@@ -437,8 +457,9 @@ impl FixedInput {
             &self.proxy,
             &self.scene,
             &self.plugin,
+            &self.capture,
         ) {
-            (Some(snapshot), Some(request), None, None, None) => Ok((snapshot, request)),
+            (Some(snapshot), Some(request), None, None, None, None) => Ok((snapshot, request)),
             _ => Err(ServiceError::new(
                 "JOB_INPUT_HASH_MISMATCH",
                 "fixed input is not a render job",
@@ -452,8 +473,9 @@ impl FixedInput {
             &self.proxy,
             &self.scene,
             &self.plugin,
+            &self.capture,
         ) {
-            (None, None, Some(proxy), None, None) => Ok(proxy),
+            (None, None, Some(proxy), None, None, None) => Ok(proxy),
             _ => Err(ServiceError::new(
                 "JOB_INPUT_HASH_MISMATCH",
                 "fixed input is not a proxy job",
@@ -467,8 +489,9 @@ impl FixedInput {
             &self.proxy,
             &self.scene,
             &self.plugin,
+            &self.capture,
         ) {
-            (None, None, None, Some(scene), None) => Ok(scene),
+            (None, None, None, Some(scene), None, None) => Ok(scene),
             _ => Err(ServiceError::new(
                 "JOB_INPUT_HASH_MISMATCH",
                 "fixed input is not a scene job",
@@ -482,18 +505,36 @@ impl FixedInput {
             &self.proxy,
             &self.scene,
             &self.plugin,
+            &self.capture,
         ) {
-            (None, None, None, None, Some(plugin)) => Ok(plugin),
+            (None, None, None, None, Some(plugin), None) => Ok(plugin),
             _ => Err(ServiceError::new(
                 "JOB_INPUT_HASH_MISMATCH",
                 "fixed input is not a plugin job",
             )),
         }
     }
+    pub(crate) fn capture_parts(&self) -> Result<&crate::capture::CaptureJobInput, ServiceError> {
+        match (
+            &self.snapshot,
+            &self.request,
+            &self.proxy,
+            &self.scene,
+            &self.plugin,
+            &self.capture,
+        ) {
+            (None, None, None, None, None, Some(capture)) => Ok(capture),
+            _ => Err(ServiceError::new(
+                "JOB_INPUT_HASH_MISMATCH",
+                "fixed input is not a capture job",
+            )),
+        }
+    }
     /// A worker never executes input whose kind disagrees with the job record:
     /// render records carry a content-hashed snapshot; proxy records carry a
-    /// `proxy` payload, scene records a `scene` payload and plugin records a
-    /// `plugin` payload, all validated against `record.output_profile`.
+    /// `proxy` payload, scene records a `scene` payload, plugin records a
+    /// `plugin` payload and capture records a `capture` payload, all validated
+    /// against `record.output_profile`.
     fn kind_matches_record(&self, record: &JobRecord) -> bool {
         match (
             &self.snapshot,
@@ -501,15 +542,23 @@ impl FixedInput {
             &self.proxy,
             &self.scene,
             &self.plugin,
+            &self.capture,
         ) {
-            (Some(_), Some(_), None, None, None) => record.output_profile.get("render").is_some(),
-            (None, None, Some(_), None, None) => {
+            (Some(_), Some(_), None, None, None, None) => {
+                record.output_profile.get("render").is_some()
+            }
+            (None, None, Some(_), None, None, None) => {
                 record.output_profile.get("proxy_asset_id").is_some()
             }
-            (None, None, None, Some(_), None) => {
+            (None, None, None, Some(_), None, None) => {
                 record.output_profile.get("scene_asset_id").is_some()
             }
-            (None, None, None, None, Some(_)) => record.output_profile.get("plugin").is_some(),
+            (None, None, None, None, Some(_), None) => {
+                record.output_profile.get("plugin").is_some()
+            }
+            (None, None, None, None, None, Some(_)) => {
+                record.output_profile.get("capture_asset_id").is_some()
+            }
             _ => false,
         }
     }
@@ -669,7 +718,11 @@ impl Service<'_> {
         let fixed = FixedInput::render(snapshot, request, backend);
         Ok((serde_json::to_vec(&fixed)?, submission))
     }
-    fn spawn_worker(&self, store: &JobStore, record: &JobRecord) -> Result<(), ServiceError> {
+    pub(crate) fn spawn_worker(
+        &self,
+        store: &JobStore,
+        record: &JobRecord,
+    ) -> Result<(), ServiceError> {
         let executable = match &self.worker_executable {
             Some(path) => path.clone(),
             None => std::env::current_exe()?,
@@ -895,6 +948,9 @@ impl Service<'_> {
                 self.plugin_helper.as_ref(),
             );
         }
+        if let Some(capture) = &fixed.capture {
+            return crate::capture::execute_capture_job(store, record, capture);
+        }
         let (snapshot, request) = fixed.render_parts()?;
         self.validate_fixed_job(record, fixed)?;
         self.execute_fixed_job(store, record, snapshot, request)
@@ -981,6 +1037,25 @@ impl Service<'_> {
                     return Err(ServiceError::new(
                         "OUTPUT_VALIDATION_FAILED",
                         "published plugin output differs from the validated receipt",
+                    ));
+                }
+            }
+        } else if let Ok(capture) = fixed.capture_parts() {
+            // A published capture must hash to the validated receipt bytes.
+            if record.destination.exists()
+                && let Some(result) = store.publication_result(&record)?
+            {
+                let report = &result["report"];
+                let expected = report["content_hash"].as_str().unwrap_or_default();
+                let actual = kronello_media::content_hash(&record.destination)
+                    .map_err(|e| ServiceError::new("OUTPUT_VALIDATION_FAILED", e.to_string()))?;
+                if actual != expected
+                    || report["capture_asset_id"].as_str()
+                        != Some(capture.capture_asset_id.to_string().as_str())
+                {
+                    return Err(ServiceError::new(
+                        "OUTPUT_VALIDATION_FAILED",
+                        "published capture differs from the validated receipt",
                     ));
                 }
             }
@@ -1091,6 +1166,9 @@ impl Service<'_> {
         }
         if let Ok(plugin) = fixed.plugin_parts() {
             return crate::plugin::validate_plugin_job(record, plugin);
+        }
+        if let Ok(capture) = fixed.capture_parts() {
+            return crate::capture::validate_capture_job(record, capture);
         }
         let (snapshot, request) = fixed.render_parts()?;
         snapshot.validate()?;
