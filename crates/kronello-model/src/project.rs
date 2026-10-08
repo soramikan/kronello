@@ -72,6 +72,9 @@ pub struct Project {
     pub repeaters: Vec<DocumentObject<crate::Repeater>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub simulations: Vec<DocumentObject<crate::ParticleSimulation>>,
+    /// NLE-007 multicam groups (ADR-0127); plain entries, never opaque.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub multicams: Vec<crate::MulticamAsset>,
     #[serde(flatten)]
     pub unknown_fields: BTreeMap<String, Value>,
 }
@@ -110,6 +113,7 @@ impl Default for Project {
             mattes: Vec::new(),
             repeaters: Vec::new(),
             simulations: Vec::new(),
+            multicams: Vec::new(),
             unknown_fields: BTreeMap::new(),
         }
     }
@@ -144,6 +148,7 @@ impl Project {
                     | "mattes"
                     | "repeaters"
                     | "simulations"
+                    | "multicams"
             )
         }) {
             return Err(ProjectError::InvalidDocument(
@@ -401,6 +406,23 @@ impl Project {
                 }
             }
         }
+        for multicam in &self.multicams {
+            multicam.validate()?;
+            if !ids.insert(multicam.id.as_uuid()) {
+                return Err(ProjectError::InvalidDocument(
+                    "duplicate multicam id".into(),
+                ));
+            }
+            for angle in &multicam.angles {
+                // Angle ids are stable UUID identity; they must not alias any
+                // other document object id.
+                if !ids.insert(angle.id.as_uuid()) {
+                    return Err(ProjectError::InvalidDocument(
+                        "duplicate multicam angle id".into(),
+                    ));
+                }
+            }
+        }
         for object in &self.sequences {
             let id = match object {
                 DocumentObject::Known(sequence) => {
@@ -622,6 +644,11 @@ impl<'de> Deserialize<'de> for Project {
             },
             mattes: if fields.contains_key("mattes") {
                 take_field::<_, D::Error>(&mut fields, "mattes")?
+            } else {
+                Vec::new()
+            },
+            multicams: if fields.contains_key("multicams") {
+                take_field::<_, D::Error>(&mut fields, "multicams")?
             } else {
                 Vec::new()
             },

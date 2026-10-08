@@ -7,8 +7,21 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum RenderTarget {
-    Composition { composition: CompositionId },
-    Sequence { sequence: SequenceId },
+    Composition {
+        composition: CompositionId,
+    },
+    Sequence {
+        sequence: SequenceId,
+    },
+    /// GUI-011 source monitor (ADR-0128): previews one document source —
+    /// a bin asset stream, the resolved angle of a multicam group, or a
+    /// composition — in source-local monitor time through the ordinary
+    /// fixed-snapshot scene path. The narrowed `SourcePreviewRef` keeps this
+    /// enum `Copy + Eq`; clip `SourceRef` values convert through
+    /// `SourcePreviewRef::from_source_ref`.
+    Source {
+        source: crate::source::SourcePreviewRef,
+    },
 }
 impl From<CompositionId> for RenderTarget {
     fn from(composition: CompositionId) -> Self {
@@ -101,6 +114,24 @@ pub fn lower_sequence(project: &Project, id: SequenceId) -> Result<Composition, 
                     return Err(RenderError::UnsupportedFeature(
                         "sequence image source rendering".into(),
                     ));
+                }
+                if let SourceRef::Multicam { multicam, angle } = &clip.source_ref {
+                    let group = project
+                        .multicams
+                        .iter()
+                        .find(|group| group.id == *multicam)
+                        .expect("validated multicam group");
+                    let angle = group.angle(*angle).expect("validated multicam angle");
+                    if let Some(DocumentObject::Known(a)) = project
+                        .assets
+                        .iter()
+                        .find(|a| matches!(a, DocumentObject::Known(a) if a.id == angle.asset))
+                        && a.kind != AssetKind::Video
+                    {
+                        return Err(RenderError::UnsupportedFeature(
+                            "sequence image source rendering".into(),
+                        ));
+                    }
                 }
                 if let SourceRef::Generator {
                     generator, version, ..

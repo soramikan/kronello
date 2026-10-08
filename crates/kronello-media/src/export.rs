@@ -989,6 +989,24 @@ fn document_plan(render: &RenderSnapshot, profile: u32) -> Result<DocumentAudioP
             AudioTarget::Composition(composition)
         }
         kronello_render::RenderTarget::Sequence { sequence } => AudioTarget::Sequence(sequence),
+        kronello_render::RenderTarget::Source { source } => match source {
+            kronello_render::SourcePreviewRef::Composition { composition } => {
+                AudioTarget::Composition(composition)
+            }
+            _ => {
+                let resolved =
+                    kronello_render::resolve_source(render.project(), &source.source_ref())?;
+                let Some(stream_index) = resolved.audio_stream else {
+                    // Sources without an audio stream export silent audio.
+                    return Ok(DocumentAudioPlan::default());
+                };
+                AudioTarget::Source {
+                    asset: resolved.asset,
+                    stream_index,
+                    offset: resolved.offset,
+                }
+            }
+        },
     };
     Ok(DocumentAudioPlan::compile_version(
         render.project(),

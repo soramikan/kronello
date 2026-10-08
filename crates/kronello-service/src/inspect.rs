@@ -235,9 +235,9 @@ pub(crate) fn render(
 ) -> Result<RenderExplainResult, ServiceError> {
     r.input.region.validate()?;
     let stored = stored(&r.input.project)?;
-    let target = match (r.input.composition, r.input.target) {
-        (Some(composition), None) => composition.into(),
-        (None, Some(target)) => target,
+    let target = match (&r.input.composition, &r.input.target) {
+        (Some(composition), None) => (*composition).into(),
+        (None, Some(target)) => *target,
         _ => {
             return Err(ServiceError::invalid(
                 "specify exactly one of composition or target",

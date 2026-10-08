@@ -152,6 +152,13 @@ pub enum EditCommand {
     AssetSet {
         asset: kronello_model::Asset,
     },
+    /// NLE-007 (ADR-0127): upsert one multicam group with resolved
+    /// `sync_offset`s. `multicam.create` computes the offsets before
+    /// planning; dropping an angle still referenced by a clip fails
+    /// whole-document validation like any other broken reference.
+    MulticamSet {
+        multicam: kronello_model::MulticamAsset,
+    },
     CompositionCreate {
         composition: Composition,
     },
@@ -1215,6 +1222,36 @@ fn apply_command(
                 *a = DocumentObject::Known(asset.clone());
             } else {
                 project.assets.push(DocumentObject::Known(asset.clone()));
+            }
+        }
+        EditCommand::MulticamSet { multicam } => {
+            multicam
+                .validate()
+                .map_err(|e| ServiceError::new("INVALID_DOCUMENT", e.to_string()))?;
+            for angle in &multicam.angles {
+                if !project
+                    .assets
+                    .iter()
+                    .any(|a| matches!(a, DocumentObject::Known(a) if a.id == angle.asset))
+                {
+                    return Err(ServiceError::new(
+                        "ASSET_MISSING",
+                        "multicam angle asset missing",
+                    ));
+                }
+            }
+            structure(keys, multicam.id.as_uuid(), project.id);
+            for angle in &multicam.angles {
+                structure(keys, angle.id.as_uuid(), multicam.id.as_uuid());
+            }
+            if let Some(existing) = project
+                .multicams
+                .iter_mut()
+                .find(|group| group.id == multicam.id)
+            {
+                *existing = multicam.clone();
+            } else {
+                project.multicams.push(multicam.clone());
             }
         }
         EditCommand::CaptionRemove { id } => {

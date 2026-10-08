@@ -279,6 +279,10 @@ fn capabilities_registry_media_extension_without_device_initialization() {
             "clip.place",
             "clip.trim",
             "clip.stretch",
+            "clip.angle_switch",
+            "multicam.create",
+            "edit.insert",
+            "edit.overwrite",
             "instance.retime",
             "template_instance.retime",
             "project.create",
@@ -609,6 +613,14 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
         json!({"operation":"clip.place", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"clip","sequence":uuid,"track":uuid,"clip":clip}),
         json!({"operation":"clip.trim", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"trim","sequence":uuid,"clip":uuid,"range":clip["timeline_range"]}),
         json!({"operation":"clip.stretch", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"stretch","sequence":uuid,"clip":uuid,"range":clip["timeline_range"]}),
+        json!({"operation":"clip.angle_switch", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"angle","sequence":uuid,"clip":uuid,"angle":uuid}),
+        json!({"operation":"multicam.create", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"multicam","multicam":uuid,"sync":"manual",
+            "angles":[{"id":"11111111-2222-4333-8444-555555555555","asset":uuid,"stream_index":0}],
+            "offsets":{"11111111-2222-4333-8444-555555555555":{"num":"0","den":"1"}}}),
+        json!({"operation":"edit.insert", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"insert","sequence":uuid,"clip":uuid,
+            "source":clip["source_ref"],"source_range":clip["timeline_range"],"at":{"num":"0","den":"1"}}),
+        json!({"operation":"edit.overwrite", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"overwrite","sequence":uuid,"clip":uuid,
+            "source":clip["source_ref"],"source_range":clip["timeline_range"],"at":{"num":"0","den":"1"},"split_tail":uuid}),
         json!({"operation":"instance.retime", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"retime","composition":composition,"node":uuid,"time_map":clip["time_map"]}),
         json!({"operation":"template_instance.retime", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"retime-template","instance":uuid,"duration":time}),
         json!({"operation":"render.export", "render":{"input":input,"range":{"start":{"num":"0","den":"1"},"end":time},"frame_rate":{"num":"24","den":"1"},"output_directory":"movie.mov"},"output":{"format":"pro_res_mov","clips":[],"background":[0,0,0]}}),
@@ -1300,6 +1312,40 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
     execute(
         json!({"operation":"proxy.clear", "project":video_path, "base_revision":"2",
             "asset":video_id}),
+    );
+    // NLE-007/GUI-011 (ADR-0127/0128): multicam creation, per-clip angle
+    // switching and shared three-point insert/overwrite all ride the same
+    // plan/apply event pipeline against a real media asset.
+    let mc_sequence = Uuid::new_v4();
+    let mc_track = Uuid::new_v4();
+    let multicam_id = Uuid::new_v4();
+    let (angle_a, angle_b) = (Uuid::new_v4(), Uuid::new_v4());
+    let mc_clip = Uuid::new_v4();
+    let mut mc_offsets = serde_json::Map::new();
+    for angle in [angle_a, angle_b] {
+        mc_offsets.insert(angle.to_string(), json!({"num":"0","den":"1"}));
+    }
+    execute(
+        json!({"operation":"sequence.create","project":video_path,"base_revision":"3","session_id":session,"idempotency_key":"create-mc-seq","sequence":{"id":mc_sequence,"extent":{"width":64.0,"height":32.0},"frame_rate":{"num":"24","den":"1"},"audio_rate":48000,"working_space":"linear_rec709","tracks":[{"id":mc_track,"kind":"video","clips":[]}]}}),
+    );
+    execute(
+        json!({"operation":"multicam.create","project":video_path,"base_revision":"4","session_id":session,"idempotency_key":"multicam","multicam":multicam_id,"name":"Camera Group","sync":"manual",
+            "angles":[{"id":angle_a,"asset":video_id,"stream_index":0},{"id":angle_b,"asset":video_id,"stream_index":0}],
+            "offsets":mc_offsets}),
+    );
+    execute(
+        json!({"operation":"clip.place","project":video_path,"base_revision":"5","session_id":session,"idempotency_key":"place-mc-clip","sequence":mc_sequence,"track":mc_track,"clip":{"id":mc_clip,"source_ref":{"kind":"multicam","multicam":multicam_id,"angle":angle_a},"timeline_range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"24"}},"source_in":{"num":"0","den":"1"},"time_map":{"kind":"linear","offset":{"num":"0","den":"1"},"speed":{"num":"1","den":"1"}},"links":[],"effects":[]}}),
+    );
+    execute(
+        json!({"operation":"clip.angle_switch","project":video_path,"base_revision":"6","session_id":session,"idempotency_key":"angle-switch","sequence":mc_sequence,"clip":mc_clip,"angle":angle_b}),
+    );
+    execute(
+        json!({"operation":"edit.insert","project":video_path,"base_revision":"7","session_id":session,"idempotency_key":"insert-clip","sequence":mc_sequence,"clip":Uuid::new_v4(),
+            "source":{"kind":"asset","asset":video_id,"stream_index":0},"source_range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"24"}},"at":{"num":"1","den":"24"},"track":mc_track}),
+    );
+    execute(
+        json!({"operation":"edit.overwrite","project":video_path,"base_revision":"8","session_id":session,"idempotency_key":"overwrite-clip","sequence":mc_sequence,"clip":Uuid::new_v4(),
+            "source":{"kind":"asset","asset":video_id,"stream_index":0},"source_range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"24"}},"at":{"num":"0","den":"1"},"track":mc_track}),
     );
     // COLOR-003/004: import a `.cube` as a hash-pinned Data asset, then query
     // deterministic scope bins over the composited frame.

@@ -46,6 +46,12 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable {
     case editSetIn = "edit.set_in"
     case editSetOut = "edit.set_out"
     case editClearWorkArea = "edit.clear_work_area"
+    /// GUI-011: three-point edit and source-monitor marking keys.
+    case editInsert = "edit.insert"
+    case editOverwrite = "edit.overwrite"
+    case sourceSetIn = "source.set_in"
+    case sourceSetOut = "source.set_out"
+    case sourceClear = "source.clear_marks"
     case editJumpPrevious = "edit.jump_previous"
     case editJumpNext = "edit.jump_next"
     case editToolSelect = "edit.tool.select"
@@ -86,6 +92,11 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable {
         case .editSetIn: return KeyBinding(key: "i")
         case .editSetOut: return KeyBinding(key: "o")
         case .editClearWorkArea: return KeyBinding(key: "x", modifiers: ["option"])
+        case .editInsert: return KeyBinding(key: ",")
+        case .editOverwrite: return KeyBinding(key: ".")
+        case .sourceSetIn: return KeyBinding(key: "i", modifiers: ["shift"])
+        case .sourceSetOut: return KeyBinding(key: "o", modifiers: ["shift"])
+        case .sourceClear: return KeyBinding(key: "x", modifiers: ["shift"])
         case .editJumpPrevious: return KeyBinding(key: "up")
         case .editJumpNext: return KeyBinding(key: "down")
         case .editToolSelect: return KeyBinding(key: "v")
@@ -115,6 +126,8 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable {
         case .editDelete, .editDeleteRipple, .editMarker, .editClipMarker, .editSetIn, .editSetOut,
              .editClearWorkArea, .editJumpPrevious, .editJumpNext:
             return "タイムライン"
+        case .editInsert, .editOverwrite: return "インサート編集"
+        case .sourceSetIn, .sourceSetOut, .sourceClear: return "ソースモニタ"
         case .editToolSelect, .editToolBlade, .editToolSlip, .editToolSlide, .editToolRoll, .editToolHand:
             return "編集ツール"
         case .motionToolSelect, .motionToolHand, .motionToolZoom, .motionToolRectangle,
@@ -146,6 +159,11 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable {
         case .editSetIn: return "In 点を設定"
         case .editSetOut: return "Out 点を設定"
         case .editClearWorkArea: return "In/Out を解除"
+        case .editInsert: return "ソースをインサート"
+        case .editOverwrite: return "ソースを上書き"
+        case .sourceSetIn: return "ソース In 点を設定"
+        case .sourceSetOut: return "ソース Out 点を設定"
+        case .sourceClear: return "ソース In/Out を解除"
         case .editJumpPrevious: return "前の編集点へ"
         case .editJumpNext: return "次の編集点へ"
         case .editToolSelect: return "選択ツール"

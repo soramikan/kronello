@@ -101,6 +101,10 @@ macro_rules! commands {
             ("clip.place", false, ClipPlaceRequest, kronello_store::Event),
             ("clip.trim", false, ClipTrimRequest, kronello_store::Event),
             ("clip.stretch", false, ClipStretchRequest, kronello_store::Event),
+            ("clip.angle_switch", false, ClipAngleSwitchRequest, kronello_store::Event),
+            ("multicam.create", false, MulticamCreateRequest, kronello_store::Event),
+            ("edit.insert", false, EditInsertRequest, kronello_store::Event),
+            ("edit.overwrite", false, EditOverwriteRequest, kronello_store::Event),
             ("instance.retime", false, InstanceRetimeRequest, kronello_store::Event),
             ("template_instance.retime", false, TemplateInstanceRetimeRequest, kronello_store::Event),
 

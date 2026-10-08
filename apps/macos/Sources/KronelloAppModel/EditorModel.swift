@@ -50,8 +50,14 @@ public struct EditCandidate {
     public let commands: [[String: Any]]
     public let label: String
     public let key: String
-    public init(base: String, commands: [[String: Any]], label: String, key: String = UUID().uuidString) {
-        self.base = base; self.commands = commands; self.label = label; self.key = key
+    /// GUI-011/NLE-007: dedicated shared operations (`edit.insert`,
+    /// `edit.overwrite`, `clip.angle_switch`, `multicam.create`) validate,
+    /// plan and apply inside one service call. `fields` carries the operation
+    /// payload; base revision/session/idempotency are added at submission.
+    public let direct: (operation: String, fields: [String: Any])?
+    public init(base: String, commands: [[String: Any]], label: String, key: String = UUID().uuidString,
+                direct: (operation: String, fields: [String: Any])? = nil) {
+        self.base = base; self.commands = commands; self.label = label; self.key = key; self.direct = direct
     }
 }
 
@@ -114,6 +120,14 @@ public struct EditCandidate {
     @Published public var previewRendering = false
     @Published public var previewPresented: PreviewIdentity?
     @Published public private(set) var cpuReferenceSequences: Set<String> = []
+    /// GUI-011: source-monitor session state (ADR-0128). Selection and In/Out
+    /// are presentation state only — never a GUI-only project mutation.
+    @Published public var sourceMonitor: SourceMonitor?
+    @Published private var sourcePreviewIssue: PreviewIssue?
+    @Published public var sourcePreviewRendering = false
+    /// The source monitor's own CPU-reference opt-in, separate from
+    /// `cpuReferenceSequences` (which is scoped to sequence targets).
+    @Published public var sourceCPUReference = false
     public var previewIdentity: PreviewIdentity { .init(target: ui.page == "edit" ? "sequence:\(ui.sequence ?? "")" : "composition:\(ui.composition ?? "")", revision: revision, time: ui.time) }
     public var previewFailure: ServiceFailure? {
         get { previewIssue?.identity == previewIdentity ? previewIssue?.failure : nil }
@@ -131,6 +145,20 @@ public struct EditCandidate {
     public func reportPreviewFailure(_ failure: ServiceFailure?, for identity: PreviewIdentity) {
         guard identity == previewIdentity else { return }
         previewIssue = failure.map { .init(identity: identity, failure: $0) }
+    }
+    /// Source-monitor preview identity: per-surface identity isolation keeps a
+    /// stale source frame from being presented as program output.
+    public var sourcePreviewIdentity: PreviewIdentity {
+        .init(target: "source:\(sourceMonitor?.source.key ?? "")", revision: revision,
+              time: sourceMonitor?.time ?? RationalTime(num: 0, den: 1))
+    }
+    public var sourcePreviewFailure: ServiceFailure? {
+        get { sourcePreviewIssue?.identity == sourcePreviewIdentity ? sourcePreviewIssue?.failure : nil }
+        set { sourcePreviewIssue = newValue.map { .init(identity: sourcePreviewIdentity, failure: $0) } }
+    }
+    public func reportSourcePreviewFailure(_ failure: ServiceFailure?, for identity: PreviewIdentity) {
+        guard identity == sourcePreviewIdentity else { return }
+        sourcePreviewIssue = failure.map { .init(identity: identity, failure: $0) }
     }
     @Published public private(set) var pendingCandidate: EditCandidate?
     @Published public var candidateBounds: CGRect?
@@ -525,14 +553,31 @@ public struct EditCandidate {
         let candidate = EditCandidate(base: base ?? revision, commands: commands, label: label)
         Task { _ = await apply(candidate) }
     }
+    /// GUI-011/NLE-007: submit one dedicated shared operation (see
+    /// `EditCandidate.direct`). The service resolves, plans and applies it in
+    /// a single typed call; the returned Event feeds undo like `edit.apply`.
+    public func submitDirect(_ operation: String, _ fields: [String: Any], label: String, base: String? = nil) {
+        guard !busy && pendingCandidate == nil else { return }
+        let candidate = EditCandidate(base: base ?? revision, commands: [], label: label, direct: (operation, fields))
+        Task { _ = await apply(candidate) }
+    }
     @discardableResult public func apply(_ candidate: EditCandidate) async -> [String: Any]? {
         guard !busy else { return nil }
         busy = true
         defer { busy = false; candidateBounds = nil; numberOrigin = nil }
         do {
-            let plan = try await request("edit.plan", ["base_revision": candidate.base, "commands": candidate.commands])
-            let event = try await request("edit.apply", ["base_revision": candidate.base, "commands": candidate.commands,
-                "plan_hash": plan.string("plan_hash"), "session_id": sessionID, "idempotency_key": candidate.key])
+            let event: [String: Any]
+            if let direct = candidate.direct {
+                var fields = direct.fields
+                fields["base_revision"] = candidate.base
+                fields["session_id"] = sessionID
+                fields["idempotency_key"] = candidate.key
+                event = try await request(direct.operation, fields)
+            } else {
+                let plan = try await request("edit.plan", ["base_revision": candidate.base, "commands": candidate.commands])
+                event = try await request("edit.apply", ["base_revision": candidate.base, "commands": candidate.commands,
+                    "plan_hash": plan.string("plan_hash"), "session_id": sessionID, "idempotency_key": candidate.key])
+            }
             undoState.issued(event.string("id")); pendingCandidate = nil; revisionConflict = nil
             eventLabels[event.string("id")] = candidate.label
             try await reload(); return event
@@ -550,7 +595,11 @@ public struct EditCandidate {
         guard let previous = pendingCandidate else { return }
         pendingCandidate = nil
         // A deliberate user retry gets a fresh plan and idempotency key.
-        submit(previous.commands, label: previous.label, base: revision)
+        if let direct = previous.direct {
+            submitDirect(direct.operation, direct.fields, label: previous.label, base: revision)
+        } else {
+            submit(previous.commands, label: previous.label, base: revision)
+        }
     }
     public func undo(redo: Bool = false) async {
         guard !busy, let event = redo ? undoState.redo.last : undoState.undo.last else { return }

@@ -865,6 +865,7 @@ fn insert_opens_a_typed_gap_and_overwrite_replaces_in_place() {
             sequence: sid,
             track,
             clip: Box::new(overlay.clone()),
+            split_tail: None,
         }],
     );
     let s = stored(&path, sid);
@@ -901,6 +902,7 @@ fn overwrite_splits_straddling_clips_and_rejects_linked_targets() {
             sequence: sid,
             track,
             clip: Box::new(gen_clip(t(2, 1), t(5, 1))),
+            split_tail: None,
         }],
     );
     let s = stored(&path, sid);
@@ -930,6 +932,7 @@ fn overwrite_splits_straddling_clips_and_rejects_linked_targets() {
             sequence: sid,
             track: video,
             clip: Box::new(gen_clip(t(0, 1), t(2, 1))),
+            split_tail: None,
         }],
         "LINKED_EDIT_REQUIRED",
     );

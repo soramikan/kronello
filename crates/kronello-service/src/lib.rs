@@ -8,9 +8,11 @@ pub use export_profiles::{
 };
 mod font_authoring;
 pub use font_authoring::FontPinRequest;
+mod multicam;
 mod nle;
 mod playback;
 pub use kronello_render::RenderTarget;
+pub use multicam::*;
 pub use nle::*;
 pub use playback::{
     AudioPreparationInput, AudioPrepareRequest, BlockMeters, MAX_PLAYBACK_BLOCK_FRAMES,
@@ -117,6 +119,18 @@ pub enum Request {
     ClipTrim(ClipTrimRequest),
     #[serde(rename = "clip.stretch")]
     ClipStretch(ClipStretchRequest),
+    /// NLE-007: repoint one clip's active multicam angle (ADR-0127).
+    #[serde(rename = "clip.angle_switch")]
+    ClipAngleSwitch(ClipAngleSwitchRequest),
+    /// NLE-007: create a multicam group with resolved sync offsets (ADR-0127).
+    #[serde(rename = "multicam.create")]
+    MulticamCreate(MulticamCreateRequest),
+    /// GUI-011: three-point ripple insert from the source monitor (ADR-0128).
+    #[serde(rename = "edit.insert")]
+    EditInsert(EditInsertRequest),
+    /// GUI-011: three-point overwrite from the source monitor (ADR-0128).
+    #[serde(rename = "edit.overwrite")]
+    EditOverwrite(EditOverwriteRequest),
     #[serde(rename = "instance.retime")]
     InstanceRetime(InstanceRetimeRequest),
     #[serde(rename = "template_instance.retime")]
@@ -609,6 +623,10 @@ impl<'a> Service<'a> {
             Request::ClipPlace(r) => nle::clip_place(r).map(ResultData::Edit),
             Request::ClipTrim(r) => nle::clip_trim(r).map(ResultData::Edit),
             Request::ClipStretch(r) => nle::clip_stretch(r).map(ResultData::Edit),
+            Request::ClipAngleSwitch(r) => nle::clip_angle_switch(r).map(ResultData::Edit),
+            Request::MulticamCreate(r) => multicam::multicam_create(r).map(ResultData::Edit),
+            Request::EditInsert(r) => nle::edit_insert(r).map(ResultData::Edit),
+            Request::EditOverwrite(r) => nle::edit_overwrite(r).map(ResultData::Edit),
             Request::InstanceRetime(r) => nle::instance_retime(r).map(ResultData::Edit),
             Request::TemplateInstanceRetime(r) => {
                 nle::template_instance_retime(r).map(ResultData::Edit)
@@ -1035,9 +1053,9 @@ fn freeze_render_input(
     stored: &kronello_store::Snapshot,
     input: &RenderInput,
 ) -> Result<RenderSnapshot, ServiceError> {
-    let target = match (input.composition, input.target) {
-        (Some(composition), None) => composition.into(),
-        (None, Some(target)) => target,
+    let target = match (&input.composition, &input.target) {
+        (Some(composition), None) => (*composition).into(),
+        (None, Some(target)) => *target,
         _ => {
             return Err(ServiceError::invalid(
                 "specify exactly one of composition or target",
@@ -1312,6 +1330,10 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
         Request::ClipPlace(r) => local_locator(&r.project),
         Request::ClipTrim(r) => local_locator(&r.project),
         Request::ClipStretch(r) => local_locator(&r.project),
+        Request::ClipAngleSwitch(r) => local_locator(&r.project),
+        Request::MulticamCreate(r) => local_locator(&r.project),
+        Request::EditInsert(r) => local_locator(&r.project),
+        Request::EditOverwrite(r) => local_locator(&r.project),
         Request::InstanceRetime(r) => local_locator(&r.project),
         Request::TemplateInstanceRetime(r) => local_locator(&r.project),
 
