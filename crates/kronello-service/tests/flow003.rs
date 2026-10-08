@@ -395,3 +395,45 @@ fn export_batch_resolves_stored_presets_server_side() {
     .unwrap_err();
     assert_eq!(error.code, "PRESET_MISSING");
 }
+
+/// The preset output must decode through the wire JSON path: internally-tagged
+/// enums lose arbitrary-precision f32 values (`background`, clip `gain`) when
+/// serde buffers them as Content, so `ExportOutput` decodes its payload
+/// fields through RawValue like `SourceRef` and the service `JobOutput`.
+#[test]
+fn export_preset_save_decodes_f32_fields_from_wire_json() {
+    let request = json!({"operation":"edit.plan","project":"p.kronello",
+        "base_revision":"1","commands":[{"export_preset_save":{"preset":{
+            "version":1,"id":Uuid::new_v4(),"name":"配信",
+            "target":{"kind":"sequence","sequence":Uuid::new_v4()},
+            "range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"24"}},
+            "frame_rate":{"num":"24","den":"1"},
+            "region":{"origin":[0.0,0.0],"extent":[64.0,32.0],"pixels":[8,4]},
+            "output":{"format":"pro_res_mov","profile_version":3,
+                      "audio":"document","audio_layout":1551,
+                      "clips":[{"asset":Uuid::new_v4(),"stream_index":0,
+                                "placement":{"start":{"num":"0","den":"1"},
+                                             "end":{"num":"1","den":"24"}},
+                                "source_in":{"num":"0","den":"1"},
+                                "gain":0.5}],
+                      "background":[0.5,0.25,0.125]}}}}]})
+    .to_string();
+    let Request::EditPlan(plan) = serde_json::from_str(&request).unwrap() else {
+        panic!()
+    };
+    let [EditCommand::ExportPresetSave { preset }] = &plan.commands[..] else {
+        panic!()
+    };
+    let ExportOutput::ProResMov {
+        audio_layout,
+        clips,
+        background,
+        ..
+    } = &preset.output
+    else {
+        panic!()
+    };
+    assert_eq!(*audio_layout, Some(ChannelMask::SURROUND_5_1));
+    assert_eq!(*background, [0.5, 0.25, 0.125]);
+    assert_eq!(clips[0].gain, 0.5);
+}

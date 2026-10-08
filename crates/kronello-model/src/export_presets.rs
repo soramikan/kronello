@@ -151,7 +151,7 @@ pub struct ExportAudioClip {
 /// Mirror of `kronello_service::JobOutput`; the same `"format"` tag, snake_case
 /// variant names, field names and field defaults are required for the
 /// one-to-one conversion at submission time.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, JsonSchema)]
 #[serde(tag = "format", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ExportOutput {
     #[default]
@@ -234,6 +234,205 @@ pub enum ExportOutput {
         sequence: SequenceId,
         caption_format: CaptionFormat,
     },
+}
+// Decode variant payloads directly from JSON. Serde's internally-tagged Content
+// buffer cannot keep arbitrary-precision numbers on the concrete f32 fields
+// (`background`, `ExportAudioClip::gain`); each variant payload re-parses
+// through `serde_json::from_str` like `SourceRef` and the service JobOutput.
+impl<'de> Deserialize<'de> for ExportOutput {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        use serde::de::Error;
+        type Fields = std::collections::BTreeMap<String, Box<serde_json::value::RawValue>>;
+        struct Unique;
+        impl<'de> serde::de::Visitor<'de> for Unique {
+            type Value = Fields;
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("output object with unique fields")
+            }
+            fn visit_map<M: serde::de::MapAccess<'de>>(
+                self,
+                mut map: M,
+            ) -> Result<Fields, M::Error> {
+                let mut fields = Fields::new();
+                while let Some((key, value)) =
+                    map.next_entry::<String, Box<serde_json::value::RawValue>>()?
+                {
+                    if fields.insert(key.clone(), value).is_some() {
+                        return Err(M::Error::custom(format!(
+                            "duplicate output field: {key}"
+                        )));
+                    }
+                }
+                Ok(fields)
+            }
+        }
+        let mut fields = deserializer.deserialize_map(Unique)?;
+        let format = fields
+            .remove("format")
+            .ok_or_else(|| D::Error::missing_field("format"))?;
+        let format: String = serde_json::from_str(format.get()).map_err(D::Error::custom)?;
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct ImageSequence {}
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct ProRes {
+            #[serde(default)]
+            audio: ExportAudioMode,
+            #[serde(default = "movie_profile_v1")]
+            profile_version: u32,
+            #[serde(default)]
+            audio_layout: Option<ChannelMask>,
+            clips: Vec<ExportAudioClip>,
+            background: [f32; 3],
+        }
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct SdrMov {
+            profile_version: u32,
+            #[serde(default)]
+            audio: ExportAudioMode,
+            #[serde(default)]
+            audio_layout: Option<ChannelMask>,
+            clips: Vec<ExportAudioClip>,
+            background: [f32; 3],
+        }
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct HdrMov {
+            profile_version: u32,
+            transfer: ExportTransfer,
+            #[serde(default)]
+            audio: ExportAudioMode,
+            #[serde(default)]
+            audio_layout: Option<ChannelMask>,
+            clips: Vec<ExportAudioClip>,
+            background: [f32; 3],
+        }
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Delivery {
+            profile_version: u32,
+            #[serde(default)]
+            audio: ExportAudioMode,
+            #[serde(default)]
+            audio_codec: ExportAudioCodec,
+            #[serde(default)]
+            audio_layout: Option<ChannelMask>,
+            clips: Vec<ExportAudioClip>,
+            background: [f32; 3],
+        }
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Sidecar {
+            sequence: SequenceId,
+            caption_format: CaptionFormat,
+        }
+        let json = serde_json::to_string(&fields).map_err(D::Error::custom)?;
+        match format.as_str() {
+            "image_sequence" => {
+                let _: ImageSequence = serde_json::from_str(&json).map_err(D::Error::custom)?;
+                Ok(Self::ImageSequence)
+            }
+            "pro_res_mov" => {
+                let p: ProRes = serde_json::from_str(&json).map_err(D::Error::custom)?;
+                Ok(Self::ProResMov {
+                    audio: p.audio,
+                    profile_version: p.profile_version,
+                    audio_layout: p.audio_layout,
+                    clips: p.clips,
+                    background: p.background,
+                })
+            }
+            "pro_res_sdr_from_hdr_mov" => {
+                let p: SdrMov = serde_json::from_str(&json).map_err(D::Error::custom)?;
+                Ok(Self::ProResSdrFromHdrMov {
+                    profile_version: p.profile_version,
+                    audio: p.audio,
+                    audio_layout: p.audio_layout,
+                    clips: p.clips,
+                    background: p.background,
+                })
+            }
+            "pro_res_hdr_mov" => {
+                let p: HdrMov = serde_json::from_str(&json).map_err(D::Error::custom)?;
+                Ok(Self::ProResHdrMov {
+                    profile_version: p.profile_version,
+                    transfer: p.transfer,
+                    audio: p.audio,
+                    audio_layout: p.audio_layout,
+                    clips: p.clips,
+                    background: p.background,
+                })
+            }
+            "av1_mp4" | "h264_mov" | "hevc_mov" | "av1_webm" => {
+                let p: Delivery = serde_json::from_str(&json).map_err(D::Error::custom)?;
+                let (profile_version, audio, audio_codec, audio_layout, clips, background) = (
+                    p.profile_version,
+                    p.audio,
+                    p.audio_codec,
+                    p.audio_layout,
+                    p.clips,
+                    p.background,
+                );
+                Ok(match format.as_str() {
+                    "av1_mp4" => Self::Av1Mp4 {
+                        profile_version,
+                        audio,
+                        audio_codec,
+                        audio_layout,
+                        clips,
+                        background,
+                    },
+                    "h264_mov" => Self::H264Mov {
+                        profile_version,
+                        audio,
+                        audio_codec,
+                        audio_layout,
+                        clips,
+                        background,
+                    },
+                    "hevc_mov" => Self::HevcMov {
+                        profile_version,
+                        audio,
+                        audio_codec,
+                        audio_layout,
+                        clips,
+                        background,
+                    },
+                    _ => Self::Av1Webm {
+                        profile_version,
+                        audio,
+                        audio_codec,
+                        audio_layout,
+                        clips,
+                        background,
+                    },
+                })
+            }
+            "caption_sidecar" => {
+                let p: Sidecar = serde_json::from_str(&json).map_err(D::Error::custom)?;
+                Ok(Self::CaptionSidecar {
+                    sequence: p.sequence,
+                    caption_format: p.caption_format,
+                })
+            }
+            _ => Err(D::Error::unknown_variant(
+                &format,
+                &[
+                    "image_sequence",
+                    "pro_res_mov",
+                    "pro_res_sdr_from_hdr_mov",
+                    "pro_res_hdr_mov",
+                    "av1_mp4",
+                    "h264_mov",
+                    "hevc_mov",
+                    "av1_webm",
+                    "caption_sidecar",
+                ],
+            )),
+        }
+    }
 }
 fn movie_profile_v1() -> u32 {
     1
