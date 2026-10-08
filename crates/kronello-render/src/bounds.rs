@@ -79,10 +79,19 @@ impl LayoutValue {
     }
 }
 
+/// `extent` is the composition design extent when known; coverage that
+/// outgrows it (procedural generate, inward radial zoom) reports `None`,
+/// meaning the stage has no finite design-space bound.
 pub(crate) fn apply_effects(
     mut bounds: Option<DesignBounds>,
     effects: &[ResolvedEffect],
+    extent: Option<[f64; 2]>,
 ) -> Result<Option<DesignBounds>, RenderError> {
+    let extent_bounds = || -> Result<Option<DesignBounds>, RenderError> {
+        extent
+            .map(|e| DesignBounds::checked([0.0; 2], e))
+            .transpose()
+    };
     for effect in effects {
         let Some(input) = bounds else { break };
         // Raster execution rounds this support outwards to its output lattice.
@@ -140,6 +149,65 @@ pub(crate) fn apply_effects(
                         .fold(f64::NEG_INFINITY, f64::max)
                 }),
             )?,
+            // FX-008 (ADR-0137): pointwise and lattice effects keep the input
+            // extent.
+            ResolvedEffect::Grain { .. }
+            | ResolvedEffect::Mosaic { .. }
+            | ResolvedEffect::Invert { .. }
+            | ResolvedEffect::ChannelMixer { .. }
+            | ResolvedEffect::Tint { .. } => input,
+            ResolvedEffect::DirectionalBlur {
+                angle_degrees,
+                length,
+            } => {
+                let rad = angle_degrees.to_radians();
+                let halo = [
+                    rad.cos().abs() * length / 2.0,
+                    rad.sin().abs() * length / 2.0,
+                ];
+                DesignBounds::checked(
+                    [0, 1].map(|i| input.min[i] - halo[i]),
+                    [0, 1].map(|i| input.max[i] + halo[i]),
+                )?
+            }
+            ResolvedEffect::RadialBlur {
+                mode,
+                amount,
+                center,
+            } => {
+                // Spin keeps ink on its radius around `center`; zoom projects
+                // outward by up to 1/(1-amount) — the composition extent
+                // bounds the full-inward case.
+                if matches!(mode, kronello_model::RadialBlurMode::Zoom) && *amount >= 1.0 {
+                    bounds = extent_bounds()?;
+                    continue;
+                }
+                let radius = [0, 1].map(|i| {
+                    (input.min[i] - center[i])
+                        .abs()
+                        .max((input.max[i] - center[i]).abs())
+                });
+                let factor = match mode {
+                    kronello_model::RadialBlurMode::Spin => 1.0,
+                    kronello_model::RadialBlurMode::Zoom => 1.0 / (1.0 - amount),
+                };
+                DesignBounds::checked(
+                    [0, 1].map(|i| center[i] - radius[i] * factor - 1.0),
+                    [0, 1].map(|i| center[i] + radius[i] * factor + 1.0),
+                )?
+            }
+            ResolvedEffect::Displace { displacement, .. } => {
+                let halo = [0, 1].map(|r| displacement[r][0].abs() + displacement[r][1].abs());
+                DesignBounds::checked(
+                    [0, 1].map(|i| input.min[i] - halo[i]),
+                    [0, 1].map(|i| input.max[i] + halo[i]),
+                )?
+            }
+            // The generated leaf covers the whole composition surface.
+            ResolvedEffect::Generate { .. } => {
+                bounds = extent_bounds()?;
+                continue;
+            }
         });
     }
     Ok(bounds)
@@ -149,6 +217,7 @@ pub(crate) fn text_bounds(
     layout: &LayoutResult,
     transform: Affine2,
     effects: &[ResolvedEffect],
+    extent: Option<[f64; 2]>,
 ) -> Result<LayoutValue, RenderError> {
     let map = |b: kronello_text::Bounds| DesignBounds::checked(b.min, b.max)?.transform(transform);
     let layout_bounds = Some(map(layout.layout_bounds)?);
@@ -160,7 +229,7 @@ pub(crate) fn text_bounds(
     Ok(LayoutValue {
         layout_bounds,
         ink_bounds,
-        visual_bounds: apply_effects(ink_bounds, &effects)?,
+        visual_bounds: apply_effects(ink_bounds, &effects, extent)?,
     })
 }
 
@@ -192,7 +261,10 @@ pub(crate) fn stroke_halo(width: f64, join: StrokeJoin, cap: StrokeCap, limit: f
     width * 0.5 * join.max(cap)
 }
 
-pub(crate) fn derive_scene_bounds(nodes: &mut [SceneNodeIr]) -> Result<(), RenderError> {
+pub(crate) fn derive_scene_bounds(
+    nodes: &mut [SceneNodeIr],
+    extent: [f64; 2],
+) -> Result<(), RenderError> {
     let indices: BTreeMap<_, _> = nodes
         .iter()
         .enumerate()
@@ -240,7 +312,9 @@ pub(crate) fn derive_scene_bounds(nodes: &mut [SceneNodeIr]) -> Result<(), Rende
                     visual_bounds: map_t(ink)?,
                 }
             }
-            SceneContent::Text(layout) => text_bounds(layout, n.world_transform, &[])?,
+            SceneContent::Text(layout) => {
+                text_bounds(layout, n.world_transform, &[], Some(extent))?
+            }
             SceneContent::Shape { resolved, .. } => {
                 let geometry = kronello_vector::geometry_bounds(&resolved.geometry)?
                     .map(|(min, max)| DesignBounds::checked(min, max))
@@ -307,7 +381,7 @@ pub(crate) fn derive_scene_bounds(nodes: &mut [SceneNodeIr]) -> Result<(), Rende
             .iter()
             .map(|e| crate::dag::map_effect(e, n.world_transform))
             .collect::<Result<Vec<_>, _>>()?;
-        value.visual_bounds = apply_effects(value.visual_bounds, &effects)?;
+        value.visual_bounds = apply_effects(value.visual_bounds, &effects, Some(extent))?;
         nodes[i].bounds = value;
         // Bounds derivation relies on the compiler's containment pre-order.
         if nodes[i].parent.as_ref().is_some_and(|p| indices[p] >= i) {
@@ -333,7 +407,7 @@ pub(crate) fn derive_scene_bounds(nodes: &mut [SceneNodeIr]) -> Result<(), Rende
             n.bounds = LayoutValue {
                 layout_bounds: lower.layout_bounds,
                 ink_bounds: lower.ink_bounds,
-                visual_bounds: apply_effects(lower.visual_bounds, &effects)?,
+                visual_bounds: apply_effects(lower.visual_bounds, &effects, Some(extent))?,
             };
         }
         lower = lower.union(n.bounds);
@@ -364,7 +438,9 @@ mod affine_tests {
             min: [0.0; 2],
             max: [10.0; 2],
         };
-        let b = apply_effects(Some(input), &[mapped]).unwrap().unwrap();
+        let b = apply_effects(Some(input), &[mapped], Some([640.0, 360.0]))
+            .unwrap()
+            .unwrap();
         assert_eq!(b.min, [3.0 - 6.0 * 5.0_f64.sqrt(), -7.0]);
         assert_eq!(b.max, [13.0 + 6.0 * 5.0_f64.sqrt(), 15.0]);
     }

@@ -139,6 +139,8 @@ semantic visual halo は軸別 `3 sigma hypot(A[i][0], A[i][1])`、pixel halo �
 
 `PixelEffect::required_input` が output → input ROI を宣言し、DAG の逆順で Group / mask / 共有入力へ union を伝播する。初期 executor は必要領域の union を元の画素格子で描画し、要求画素へ crop する。`RenderDag::bounds()` の ink / visual は変換と離散 halo を含む output pixel bounds。effect params・意味版・upstream identities・ROI・色・backend namespace を cache key に含める。metadata は effect id ごとの対応版上限（新規 2 / 旧 1）を固定する。各 authored effect の版が algorithm を選び、上限 1 の snapshot に版 2 は入れない。GPU / golden の採用検証は [FX-001 の検証記録](../testing/fx-001.md) に分けて記録する。
 
+FX-008（[ADR-0137](../adr/0137-remaining-standard-effects.md)、reverb は [ADR-0139](../adr/0139-reverb-feedback-comb-topology.md)）は残る標準エフェクトを version 1 で追加する。映像は `grain`（seed 付きセルノイズ、alpha 保存、seed は DAG builder がシーン時刻を畳み込む）・`mosaic`・`invert`・`channel_mixer`・`tint`・`directional_blur`・`radial_blur`・`displace`・`generate` の 9 種。`displace` は変位面を暗黙参照せず、明示 secondary 入力の `DagNode::EffectMap` へ lower し、`SceneIr.displacement_maps` が node → map SceneKey を束縛する。map 欠落・重複・`EffectMap` への Displace 以外の指定は型付き拒否。`generate` は source-free の `DagNode::Generate` 葉で実行面全体を覆う。WGSL は effect op 14–22 と displace map の binding 6 を持ち、CPU oracle と両 working space で画素比較する。音声は `delay`（整数サンプル）・`reverb`（決定的並列フィードバックコム、RT60 換算の feedback）・`pitch`（source-stage の時間保存 WSOLA、rate-strided 窓）・`gate`（threshold / attack / release / hysteresis）の 4 種。pitch の generator ソース・reverse retime 適用は型付き拒否。採用・見送りの棚卸しと検証は [FX-008 の検証記録](../testing/fx-008.md) を参照する。
+
 ## 高解像度
 
 RGBA16F の 3840x2160 は 63.28125 MiB、7680x4320 は 253.125 MiB（画像データのみ）。
@@ -257,6 +259,8 @@ DAG は topological なノード列と明示 input index を持つ。index は�
 | `CoverageDraw` | Geometry / TextLayout を参照し、要求 scale で flatten した contour とタグ付き paint を描画 |
 | `IsolatedComposite` | 順序付きの子を source-over し、局所 opacity を RGB / alpha へ一度だけ適用 |
 | `Mask` | source / matte 参照。alpha または線形 working-space luminance の coverage |
+| `EffectMap` | FX-008 の 2 入力 effect。`source` が変位対象、`map` が出力位置で評価する変位面。`PixelEffect::Displace` のみ有効 |
+| `Generate` | FX-008 の source-free 葉。実行面全体を覆い、`PixelEffect::Generate` のみ有効 |
 | `OutputTransform` | 全 root の隔離合成を入力とし、線形 premultiplied と外部 straight sRGB を生成 |
 
 `OutputRegion { origin, extent, pixels }` は設計座標の矩形を出力画素へ写す。`p = diag(pixels / extent) × (design_position - origin)`、左上原点・+Y 下向き。ROI / 解像度を変えても文書・組版は変えない。異なるアスペクト比を要求したときは、この明示写像で伸縮し、responsive variant の再組版を暗黙に行わない。flatten の最大拡大率は node world transform と ROI 写像を合成した行列の Frobenius norm で保守的に求める。

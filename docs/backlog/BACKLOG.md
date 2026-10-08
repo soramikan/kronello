@@ -1155,7 +1155,7 @@
 
 ### FX-008 残エフェクト群の拡充
 
-- 優先度: P2 / 領域: effects / 状態: planned
+- 優先度: P2 / 領域: effects / 状態: done
 - 依存: FX-006
 - 受け入れ条件:
   - 未実装の標準エフェクトを棚卸しし versioned effect として追加する

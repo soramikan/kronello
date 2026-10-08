@@ -267,6 +267,182 @@ impl Limiter {
 fn time_constant(ms: f64) -> f64 {
     (-1.0 / (ms * (SAMPLE_RATE / 1_000.0))).exp()
 }
+/// FX-008: integer-sample recirculating echo (ADR-0137). One independent
+/// ring buffer per channel (the LFE channel is delayed like every other —
+/// only dynamics detectors exclude it, ADR-0124). The write value is the
+/// input plus the feedback-scaled read, so the taps decay geometrically;
+/// output is `dry*x + wet*delayed` with all state zero-initialized.
+#[derive(Debug, Clone)]
+pub(crate) struct Delay {
+    feedback: f64,
+    wet: f64,
+    dry: f64,
+    /// `rings[channel]` is the per-channel circular buffer.
+    rings: Vec<Vec<f64>>,
+    position: usize,
+}
+impl Delay {
+    fn new(delay_samples: u32, feedback_db: f64, wet: f64, dry: f64, channels: usize) -> Self {
+        Self {
+            feedback: 10_f64.powf(feedback_db / 20.0),
+            wet,
+            dry,
+            rings: vec![vec![0.0; delay_samples as usize]; channels],
+            position: 0,
+        }
+    }
+    fn process(&mut self, frame: &mut [f32]) {
+        for (channel, value) in frame.iter_mut().enumerate() {
+            let ring = &mut self.rings[channel];
+            let delayed = ring[self.position];
+            let x = f64::from(*value);
+            ring[self.position] = x + delayed * self.feedback;
+            *value = (self.dry * x + self.wet * delayed) as f32;
+        }
+        self.position = (self.position + 1) % self.rings[0].len();
+    }
+}
+/// FX-008 (ADR-0139): deterministic feedback-comb reverb. Each channel owns
+/// [`REVERB_COMBS`] parallel damped comb lines whose co-prime lengths decorrelate
+/// the echoes; the per-comb feedback magnitude realizes the authored RT60
+/// (`decay_s`) via `g = 10^(-3 D / T60)`. A one-pole lowpass inside each loop
+/// realizes `damping` (0 = flat loop, 1 = silent tail). Wet taps sum to the
+/// comb mean so `wet`/`dry` keep unit-consistent output levels.
+#[derive(Debug, Clone)]
+pub(crate) struct Reverb {
+    wet: f64,
+    dry: f64,
+    damping: f64,
+    /// `combs[channel][line]` — ring buffer, write position, feedback, and
+    /// the in-loop lowpass state for that comb.
+    combs: Vec<Vec<Comb>>,
+}
+#[derive(Debug, Clone)]
+struct Comb {
+    ring: Vec<f64>,
+    position: usize,
+    feedback: f64,
+    lowpass: f64,
+}
+/// Co-prime comb lengths in 48 kHz samples; fixed so every render shares the
+/// identical room response (ADR-0139).
+const REVERB_COMBS: [usize; 4] = [1_157, 1_361, 1_499, 1_723];
+impl Reverb {
+    fn new(decay_s: f64, damping: f64, wet: f64, dry: f64, channels: usize) -> Self {
+        // RT60 feedback magnitude: the loop must shed 60 dB across decay_s.
+        // decay_s <= 0 yields zero feedback (a bare tapped comb).
+        let feedback = |length: usize| {
+            if decay_s > 0.0 {
+                10_f64.powf(-3.0 * length as f64 / (decay_s * SAMPLE_RATE))
+            } else {
+                0.0
+            }
+        };
+        Self {
+            wet,
+            dry,
+            damping,
+            combs: (0..channels)
+                .map(|_| {
+                    REVERB_COMBS
+                        .iter()
+                        .map(|&length| Comb {
+                            ring: vec![0.0; length],
+                            position: 0,
+                            feedback: feedback(length),
+                            lowpass: 0.0,
+                        })
+                        .collect()
+                })
+                .collect(),
+        }
+    }
+    fn process(&mut self, frame: &mut [f32]) {
+        for (channel, value) in frame.iter_mut().enumerate() {
+            let x = f64::from(*value);
+            let mut wet = 0.0;
+            for comb in &mut self.combs[channel] {
+                let read = comb.ring[comb.position];
+                comb.lowpass += (1.0 - self.damping) * (read - comb.lowpass);
+                comb.ring[comb.position] = x + comb.lowpass * comb.feedback;
+                comb.position = (comb.position + 1) % comb.ring.len();
+                wet += read;
+            }
+            *value = (self.dry * x + self.wet * wet / REVERB_COMBS.len() as f64) as f32;
+        }
+    }
+}
+/// FX-008: channel-linked noise gate with hysteresis (ADR-0137). The
+/// envelope is the compressor's one-pole peak detector over the non-LFE
+/// channels; the gate opens at `threshold_db` and stays open until the
+/// envelope falls below `threshold_db - hysteresis_db`. The open/close gain
+/// ramps with attack/release one-pole smoothing; the LFE channel passes
+/// through unprocessed like the other dynamics stages (ADR-0124).
+#[derive(Debug, Clone)]
+pub(crate) struct Gate {
+    threshold_db: f64,
+    attack: f64,
+    release: f64,
+    hysteresis_db: f64,
+    envelope: f64,
+    gain: f64,
+    open: bool,
+    lfe: Option<usize>,
+}
+impl Gate {
+    fn new(
+        threshold_db: f64,
+        attack_ms: f64,
+        release_ms: f64,
+        hysteresis_db: f64,
+        lfe: Option<usize>,
+    ) -> Self {
+        Self {
+            threshold_db,
+            attack: time_constant(attack_ms),
+            release: time_constant(release_ms),
+            hysteresis_db,
+            envelope: 0.0,
+            gain: 0.0,
+            open: false,
+            lfe,
+        }
+    }
+    fn process(&mut self, frame: &mut [f32]) {
+        let detector = frame
+            .iter()
+            .enumerate()
+            .filter(|(channel, _)| Some(*channel) != self.lfe)
+            .fold(0.0_f64, |m, (_, v)| m.max(f64::from(v.abs())));
+        let coefficient = if detector > self.envelope {
+            self.attack
+        } else {
+            self.release
+        };
+        self.envelope = coefficient * self.envelope + (1.0 - coefficient) * detector;
+        let envelope_db = 20.0 * self.envelope.max(1e-12).log10();
+        if self.open {
+            if envelope_db < self.threshold_db - self.hysteresis_db {
+                self.open = false;
+            }
+        } else if envelope_db >= self.threshold_db {
+            self.open = true;
+        }
+        let target = if self.open { 1.0 } else { 0.0 };
+        let ramp = if target > self.gain {
+            self.attack
+        } else {
+            self.release
+        };
+        self.gain = ramp * self.gain + (1.0 - ramp) * target;
+        for (channel, value) in frame.iter_mut().enumerate() {
+            if Some(channel) == self.lfe {
+                continue;
+            }
+            *value = (f64::from(*value) * self.gain) as f32;
+        }
+    }
+}
 /// A stateful per-sample processing stage instantiated for one mix request.
 /// `process` is in-place over a bus-layout frame (any supported channel
 /// count).
@@ -276,6 +452,9 @@ pub(crate) enum Processor {
     Filters(Vec<Biquad>),
     Compressor(Box<Compressor>),
     Limiter(Limiter),
+    Delay(Box<Delay>),
+    Reverb(Box<Reverb>),
+    Gate(Gate),
 }
 impl Processor {
     pub(crate) fn process(&mut self, frame: &mut [f32]) {
@@ -287,6 +466,9 @@ impl Processor {
             }
             Self::Compressor(compressor) => compressor.process(frame),
             Self::Limiter(limiter) => limiter.process(frame),
+            Self::Delay(delay) => delay.process(frame),
+            Self::Reverb(reverb) => reverb.process(frame),
+            Self::Gate(gate) => gate.process(frame),
         }
     }
 }
@@ -323,6 +505,43 @@ pub(crate) fn processor(spec: &ResolvedAudioEffect, mask: ChannelMask) -> Proces
             ceiling_db,
             release_ms,
         } => Processor::Limiter(Limiter::new(*ceiling_db, *release_ms, lfe_index(mask))),
+        ResolvedAudioEffect::Delay {
+            delay_samples,
+            feedback_db,
+            wet,
+            dry,
+        } => Processor::Delay(Box::new(Delay::new(
+            *delay_samples,
+            *feedback_db,
+            *wet,
+            *dry,
+            channels,
+        ))),
+        ResolvedAudioEffect::Reverb {
+            decay_s,
+            damping,
+            wet,
+            dry,
+        } => Processor::Reverb(Box::new(Reverb::new(
+            *decay_s, *damping, *wet, *dry, channels,
+        ))),
+        ResolvedAudioEffect::Gate {
+            threshold_db,
+            attack_ms,
+            release_ms,
+            hysteresis_db,
+        } => Processor::Gate(Gate::new(
+            *threshold_db,
+            *attack_ms,
+            *release_ms,
+            *hysteresis_db,
+            lfe_index(mask),
+        )),
+        // FX-008: pitch executes at the source stage (WSOLA rate scaling),
+        // never as an in-chain processor; the plan compiler filters it.
+        ResolvedAudioEffect::Pitch { .. } => {
+            unreachable!("kronello.audio.pitch runs at the source stage")
+        }
     }
 }
 
@@ -516,5 +735,113 @@ mod tests {
                 .collect::<Vec<_>>()
         };
         assert_eq!(run(), run());
+    }
+    #[test]
+    fn fx008_delay_repeats_at_the_exact_sample_then_decays() {
+        // 480-sample echo: the tap is silent for the first wrap, replays the
+        // input on the second, and the -6 dB feedback halves every repeat.
+        let spec = ResolvedAudioEffect::Delay {
+            delay_samples: 480,
+            feedback_db: -6.0,
+            wet: 1.0,
+            dry: 0.0,
+        };
+        let mut input = vec![[0.0; 2]; 2_400];
+        input[0] = [1.0, 0.5];
+        let mut p = processor(&spec, ChannelMask::STEREO);
+        let out = run(&mut p, &input);
+        assert!(out[..480].iter().all(|f| *f == [0.0; 2]));
+        assert!((f64::from(out[480][0]) - 1.0).abs() < 1e-7);
+        let fb = 10_f64.powf(-6.0 / 20.0);
+        assert!((f64::from(out[960][0]) - fb).abs() < 1e-7);
+        assert!((f64::from(out[1_440][0]) - fb * fb).abs() < 1e-7);
+        // Dry/wet mixing: dry-only is an identity pass.
+        let spec = ResolvedAudioEffect::Delay {
+            delay_samples: 480,
+            feedback_db: -6.0,
+            wet: 0.0,
+            dry: 1.0,
+        };
+        let mut p = processor(&spec, ChannelMask::STEREO);
+        assert_eq!(run(&mut p, &input[..480]), input[..480]);
+    }
+    #[test]
+    fn fx008_reverb_builds_a_decay_tail_after_the_comb_delay() {
+        // With dry muted, output stays silent until the shortest comb line
+        // wraps (1157 samples), then decays with the authored RT60.
+        let spec = ResolvedAudioEffect::Reverb {
+            decay_s: 0.2,
+            damping: 0.3,
+            wet: 1.0,
+            dry: 0.0,
+        };
+        let mut input = vec![[0.0; 2]; 24_000];
+        input[0] = [1.0, 1.0];
+        let mut p = processor(&spec, ChannelMask::STEREO);
+        let out = run(&mut p, &input);
+        assert!(out[..1_157].iter().all(|f| *f == [0.0; 2]));
+        assert!(out[1_157..3_000].iter().any(|f| *f != [0.0; 2]));
+        let early = rms(&out, 1_200);
+        let late = rms(&out[16_000..], 0);
+        assert!(late < early, "tail must decay (early {early}, late {late})");
+        // Feedback-comb state is deterministic: identical reruns are equal.
+        let mut again = processor(&spec, ChannelMask::STEREO);
+        assert_eq!(run(&mut again, &input), out);
+        // damping=1 suppresses the tail relative to a flat loop.
+        let spec = ResolvedAudioEffect::Reverb {
+            decay_s: 0.2,
+            damping: 1.0,
+            wet: 1.0,
+            dry: 0.0,
+        };
+        let mut p = processor(&spec, ChannelMask::STEREO);
+        let damped = run(&mut p, &input);
+        assert!(rms(&damped, 8_000) < early, "damped tail too loud");
+    }
+    #[test]
+    fn fx008_gate_opens_at_threshold_and_holds_through_hysteresis() {
+        // Threshold -20 dB with 6 dB hysteresis: opens at >= -20 dB, closes
+        // below -26 dB. A -23 dB signal keeps an open gate open and a closed
+        // gate closed.
+        let spec = ResolvedAudioEffect::Gate {
+            threshold_db: -20.0,
+            attack_ms: 1.0,
+            release_ms: 20.0,
+            hysteresis_db: 6.0,
+        };
+        let level = |db: f64| 10_f64.powf(db / 20.0) as f32;
+        let mut p = processor(&spec, ChannelMask::STEREO);
+        // Quiet start: the closed gate stays closed inside the band.
+        let quiet = run(&mut p, &vec![[level(-23.0); 2]; 4_800]);
+        assert!(quiet.iter().all(|f| *f == [0.0; 2]));
+        // Loud segment opens the gate and the gain ramps to 1.
+        let loud = run(&mut p, &vec![[level(-6.0); 2]; 9_600]);
+        assert!(loud.last().unwrap()[0] > level(-6.0) * 0.9);
+        // Back inside the hysteresis band the open gate stays open.
+        let mid = run(&mut p, &vec![[level(-23.0); 2]; 4_800]);
+        assert!(mid.last().unwrap()[0] > level(-23.0) * 0.9);
+        // Far below the close level the release ramp mutes the tail.
+        let silent = run(&mut p, &vec![[level(-60.0); 2]; 9_600]);
+        assert!(silent.last().unwrap()[0].abs() < level(-40.0));
+        // LFE is detected nowhere and scaled nowhere (ADR-0124 parity).
+        let spec = ResolvedAudioEffect::Gate {
+            threshold_db: -20.0,
+            attack_ms: 1.0,
+            release_ms: 20.0,
+            hysteresis_db: 6.0,
+        };
+        let mut p = processor(&spec, ChannelMask::SURROUND_5_1);
+        let mut frame = [0.001, 0.001, 0.001, 0.99, 0.001, 0.001];
+        for _ in 0..4_800 {
+            p.process(&mut frame);
+        }
+        assert_eq!(frame[3], 0.99, "LFE must pass unprocessed");
+        assert!(frame[0].abs() < 0.001 + 1e-6);
+    }
+    #[test]
+    #[should_panic(expected = "source stage")]
+    fn fx008_pitch_is_never_an_in_chain_processor() {
+        let spec = ResolvedAudioEffect::Pitch { semitones: 12.0 };
+        let _ = processor(&spec, ChannelMask::STEREO);
     }
 }

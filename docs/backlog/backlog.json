@@ -2316,7 +2316,7 @@
       "priority": "P2",
       "area": "effects",
       "title": "残エフェクト群の拡充",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "FX-006"
       ],

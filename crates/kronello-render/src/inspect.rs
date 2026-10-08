@@ -160,6 +160,11 @@ pub fn explain_render_path(
                     surfaces += 3;
                     ("EFFECT", None, true)
                 }
+                DagNode::EffectMap { .. } => {
+                    surfaces += 3;
+                    ("EFFECT_MAP", None, true)
+                }
+                DagNode::Generate { .. } => ("GENERATE", None, true),
                 DagNode::Blend { .. } => ("BLEND", None, true),
                 DagNode::Mask { .. } => ("MASK", None, true),
                 DagNode::SolidRect { .. } => ("SOLID_RECT", None, true),

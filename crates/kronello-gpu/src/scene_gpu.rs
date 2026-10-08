@@ -472,6 +472,21 @@ impl ScenePass<'_> {
         floats: [f32; 8],
         weights: &[f32],
     ) -> Result<SurfaceLease, GpuError> {
+        // Binding 6 exists in every effect bind group; non-displace ops never
+        // sample it, so the source doubles as a harmless placeholder.
+        self.effect_pass_mapped(source, original, source, config, floats, weights)
+    }
+    /// FX-008 (ADR-0137): like `effect_pass_raw` plus the displacement-map
+    /// surface bound at binding 6.
+    fn effect_pass_mapped(
+        &mut self,
+        source: &SurfaceLease,
+        original: &SurfaceLease,
+        map: &SurfaceLease,
+        config: [u32; 4],
+        floats: [f32; 8],
+        weights: &[f32],
+    ) -> Result<SurfaceLease, GpuError> {
         let output = self.texture()?;
         let mut params = Vec::new();
         params.extend(config.into_iter().flat_map(u32::to_le_bytes));
@@ -511,6 +526,7 @@ impl ScenePass<'_> {
             source.create_view(&Default::default()),
             original.create_view(&Default::default()),
             output.create_view(&Default::default()),
+            map.create_view(&Default::default()),
         ];
         let bind = self
             .gpu
@@ -542,6 +558,10 @@ impl ScenePass<'_> {
                     wgpu::BindGroupEntry {
                         binding: 5,
                         resource: self.validation.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 6,
+                        resource: wgpu::BindingResource::TextureView(&views[3]),
                     },
                 ],
             });
@@ -843,6 +863,37 @@ impl ScenePass<'_> {
             _ => Ok(None),
         }
     }
+    /// FX-008 (ADR-0137) single-pass kernels. `Displace` additionally samples
+    /// `map` at the output texel; `Generate` ignores `source` entirely and
+    /// covers the surface procedurally.
+    fn fx008_effect(
+        &mut self,
+        source: &SurfaceLease,
+        map: Option<&SurfaceLease>,
+        effect: &PixelEffect,
+    ) -> Result<SurfaceLease, GpuError> {
+        let Some((config, floats, weights)) = crate::effect::fx008_params(effect, self.working)
+        else {
+            return Err(GpuError::UnsupportedFeature(
+                "effect has no FX-008 kernel lowering",
+            ));
+        };
+        let map = match (map, effect) {
+            (Some(map), PixelEffect::Displace { .. }) => map.clone(),
+            (None, PixelEffect::Displace { .. }) => {
+                return Err(GpuError::InvalidInput(
+                    "displace requires a displacement-map surface",
+                ));
+            }
+            (Some(_), _) => {
+                return Err(GpuError::InvalidInput(
+                    "map input requires a displace effect",
+                ));
+            }
+            (None, _) => source.clone(),
+        };
+        self.effect_pass_mapped(source, source, &map, config, floats, &weights)
+    }
     fn effect(
         &mut self,
         source: &SurfaceLease,
@@ -853,6 +904,9 @@ impl ScenePass<'_> {
         }
         if let Some(out) = self.standard_effect(source, effect)? {
             return Ok(out);
+        }
+        if effect.is_fx008() {
+            return self.fx008_effect(source, None, effect);
         }
         let blurred = if let Some(covariance) = effect.covariance() {
             let taps = kronello_render::affine_gaussian_kernel(covariance).map_err(|_| {
@@ -1036,6 +1090,20 @@ impl ScenePass<'_> {
             DrawNode::Effect { source, effect } => {
                 let source = self.node(scene, *source, cache)?;
                 self.effect(&source, effect)?
+            }
+            DrawNode::EffectMap {
+                source,
+                map,
+                effect,
+            } => {
+                let source = self.node(scene, *source, cache)?;
+                let map = self.node(scene, *map, cache)?;
+                self.fx008_effect(&source, Some(&map), effect)?
+            }
+            DrawNode::Generate { effect } => {
+                // Source-free: the blank fills the source/original binding
+                // slots the shader requires; op 22 never samples them.
+                self.fx008_effect(&self.blank.clone(), None, effect)?
             }
             DrawNode::Masked {
                 source,

@@ -134,6 +134,16 @@ impl SemanticVersions {
                 (COLOR_LUT_ID.into(), COLOR_LUT_VERSION),
                 // TRACK-002 versioned id (ADR-0122).
                 (STABILIZE_ID.into(), STABILIZE_VERSION),
+                // FX-008 versioned ids (ADR-0137).
+                (GRAIN_ID.into(), FX008_EFFECT_VERSION),
+                (MOSAIC_ID.into(), FX008_EFFECT_VERSION),
+                (INVERT_ID.into(), FX008_EFFECT_VERSION),
+                (CHANNEL_MIXER_ID.into(), FX008_EFFECT_VERSION),
+                (TINT_ID.into(), FX008_EFFECT_VERSION),
+                (DIRECTIONAL_BLUR_ID.into(), FX008_EFFECT_VERSION),
+                (RADIAL_BLUR_ID.into(), FX008_EFFECT_VERSION),
+                (DISPLACE_ID.into(), FX008_EFFECT_VERSION),
+                (GENERATE_ID.into(), FX008_EFFECT_VERSION),
             ]),
             generators: generator_versions(),
             video_input: initial_video_version(),
@@ -204,6 +214,10 @@ pub struct RenderSnapshot {
     semantic_versions: SemanticVersions,
     profile: RenderProfile,
     mattes: Vec<MatteBinding>,
+    /// FX-008 (ADR-0137): transient displacement-map bindings, explicit
+    /// render inputs like `mattes`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    displacement_maps: Vec<DisplacementBinding>,
     font_locks: Vec<FontRef>,
     #[serde(default)]
     media_proxies: MediaProxyMode,
@@ -233,6 +247,18 @@ pub struct MatteBinding {
     pub matte: SceneKey,
     pub kind: MatteKind,
     pub visible: bool,
+}
+/// FX-008 (ADR-0137): explicit render inputs binding a scene node whose
+/// `kronello.displace` effect reads a second node's raster as its
+/// displacement map. The bound map node keeps its own normal draw position
+/// (unlike a consumed matte); keys use stable instance paths.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DisplacementBinding {
+    /// The scene node carrying `kronello.displace`.
+    pub source: SceneKey,
+    /// The scene node rasterized as the displacement map input.
+    pub map: SceneKey,
 }
 #[derive(
     Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, schemars::JsonSchema,
@@ -297,6 +323,7 @@ impl RenderSnapshot {
                     semantic_versions: SemanticVersions::current(project.semantic_version),
                     profile,
                     mattes: vec![],
+                    displacement_maps: vec![],
                     font_locks: vec![],
                     media_proxies: MediaProxyMode::Off,
                     luts: BTreeMap::new(),
@@ -355,6 +382,7 @@ impl RenderSnapshot {
                     semantic_versions: SemanticVersions::current(project.semantic_version),
                     profile,
                     mattes: vec![],
+                    displacement_maps: vec![],
                     font_locks: vec![],
                     media_proxies: MediaProxyMode::Off,
                     luts: BTreeMap::new(),
@@ -405,6 +433,7 @@ impl RenderSnapshot {
             semantic_versions,
             profile,
             mattes,
+            displacement_maps: vec![],
             font_locks: vec![],
             media_proxies: MediaProxyMode::Off,
             luts: BTreeMap::new(),
@@ -435,6 +464,16 @@ impl RenderSnapshot {
     pub fn with_mattes(mut self, mattes: Vec<MatteBinding>) -> Self {
         self.mattes = mattes;
         self
+    }
+    /// FX-008 (ADR-0137): explicit transient displacement-map bindings;
+    /// does not alter the saved Project.
+    pub fn with_displacement_maps(mut self, maps: Vec<DisplacementBinding>) -> Self {
+        self.displacement_maps = maps;
+        self
+    }
+    /// Displacement-map bindings available to this snapshot.
+    pub fn displacement_maps(&self) -> &[DisplacementBinding] {
+        &self.displacement_maps
     }
     /// Transient preview proxy mode; does not alter the saved Project.
     pub fn with_media_proxies(mut self, mode: MediaProxyMode) -> Self {
@@ -638,6 +677,14 @@ impl RenderSnapshot {
             supported_versions
                 .effects
                 .remove(kronello_model::STABILIZE_ID);
+        }
+        // FX-008 (ADR-0137): same pinning contract — an absent per-id pin
+        // rejects execution during scene construction without invalidating
+        // snapshots authored before the effect existed.
+        for id in FX008_EFFECT_IDS {
+            if !self.semantic_versions.effects.contains_key(id) {
+                supported_versions.effects.remove(id);
+            }
         }
         // TRACK-003 (ADR-0123): frame interpolation is authored on the time
         // map. Snapshots pinned before the feature carry no version; they
@@ -931,6 +978,8 @@ pub struct SceneIr {
     pub design_extent: [f64; 2],
     pub nodes: Vec<SceneNodeIr>,
     pub mattes: Vec<MatteBinding>,
+    /// FX-008 (ADR-0137): displacement-map bindings resolved for this scene.
+    pub displacement_maps: Vec<DisplacementBinding>,
     /// COLOR-003 lattices resolved for this scene, keyed by document asset id.
     /// Only assets actually referenced by resolved `kronello.color.lut`
     /// effects appear; unreferenced render inputs are not bound.
@@ -1621,13 +1670,17 @@ pub fn build_scene_ir_with_cache(
             "snapshot missing required font lock".into(),
         ));
     }
-    crate::bounds::derive_scene_bounds(&mut nodes)?;
+    crate::bounds::derive_scene_bounds(
+        &mut nodes,
+        [root.design_extent.width(), root.design_extent.height()],
+    )?;
     Ok(SceneIr {
         composition: snapshot.composition,
         time,
         design_extent: [root.design_extent.width(), root.design_extent.height()],
         nodes,
         mattes,
+        displacement_maps: snapshot.displacement_maps.clone(),
         luts,
     })
 }

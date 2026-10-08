@@ -1,6 +1,8 @@
 # GPU 画素の golden 比較
 
-FX-005 / FX-006 は 7 シーン（`fx005-chroma-key` / `fx005-chroma-key-edges` / `fx005-luma-key` / `fx006-glow` / `fx006-sharpen` / `fx006-vignette` / `fx006-corner-pin`）を追加し、現在は **56 シーン・56 comparison frames**。apple-silicon-metal の候補生成・CPU oracle 検証・明示採用は lane C の revision `47ed7ec` で、linux-vulkan / windows-dx12 の基準採用は CI run 37711522980 の実 adapter 候補から revision `d6f9848` で実施した（[QA-004](qa-004.md) の M8 節）。
+FX-008 は 9 シーン（`fx008-grain` / `fx008-mosaic` / `fx008-channel-mixer` / `fx008-invert` / `fx008-tint` / `fx008-directional-blur` / `fx008-radial-blur` / `fx008-displace` / `fx008-generate`）を追加し、現在は **65 シーン・65 comparison frames**。apple-silicon-metal の候補生成・CPU oracle 検証・明示採用・通常比較（全シーン mismatch 0）は lane B の revision `f230eea` で実施した（[FX-008](fx-008.md)）。linux-vulkan / windows-dx12 の 65 シーン基準は実 adapter 候補の採用待ちで、56 シーン基準のままである。
+
+FX-005 / FX-006 は 7 シーン（`fx005-chroma-key` / `fx005-chroma-key-edges` / `fx005-luma-key` / `fx006-glow` / `fx006-sharpen` / `fx006-vignette` / `fx006-corner-pin`）を追加し、追加時のカタログは **56 シーン・56 comparison frames**。apple-silicon-metal の候補生成・CPU oracle 検証・明示採用は lane C の revision `47ed7ec` で、linux-vulkan / windows-dx12 の基準採用は CI run 37711522980 の実 adapter 候補から revision `d6f9848` で実施した（[QA-004](qa-004.md) の M8 節）。
 
 COLOR-002 / FX-003 は 9 シーン（`color002-exposure-rec709` / `color002-levels-rec2020` / `color002-curves-rec709` / `color002-hsl-rec709` / `fx003-blend-separable` / `fx003-blend-nonseparable` / `fx003-wipe` / `fx003-slide` / `fx003-dip`）を追加し、FX-005 / FX-006 追加前のカタログは **49 シーン・49 comparison frames**。候補生成・CPU oracle 検証・明示採用・通常比較は 2026-10-07 の revision `ba4f429` で成功した（[COLOR-002](color-002.md) / [FX-003](fx-003.md)）。採用で既存シーン `coverage-fill-stroke` の RGBA16F が 1 チャンネルだけ変わった（最大差 2^-11、binary16 の 1 ulp、許容誤差内）。
 
@@ -28,7 +30,7 @@ QA-003 は [ADR-0047](../adr/0047-apple-silicon-metal-golden.md) に従い、GPU
 
 | パス | 内容 |
 |---|---|
-| `tests/golden/apple-silicon-metal/scenes.json` | 56 シーンのカタログ、coverage / stroke / gradient / effect の意味版 |
+| `tests/golden/apple-silicon-metal/scenes.json` | 65 シーンのカタログ、coverage / stroke / gradient / effect の意味版 |
 | 同ディレクトリの `manifest.json` | 全シーン入力・設定、fixture / font hash、比較方式・許容誤差の版 |
 | 同ディレクトリの `environment.json` / `provenance.json` | 基準生成時の環境と revision / コード・入力 hash。環境一致を要求しない |
 | 同ディレクトリの `adoption.json` | 各採用ファイルの SHA-256 / byte 数、シーン設定、許容誤差、環境・provenance をまとめた採用 manifest |
@@ -101,6 +103,8 @@ FX-001 の 3 シーンは `fx-gaussian-alpha` / `fx-shadow-srgb` / `fx-shadow-re
 FX-002 の 4 シーンは冒頭の通り。各 effect の manifest に実際の `kernel_version` / `semantic_version` と covariance / transformed offset を含める。追加 kernel は `fx002-affine-ellipse-lattice-rne16-v2`、意味版 2。top-level の legacy kernel / 意味版 1 の情報も保持する。
 
 VEC-005 の各 draw は dash 配列・評価済み phase・alignment・fill rule・局所 fragment・inverse affine を追加記録する。fixture は ADR-0066 と同様に不連続境界の exact tie を避け、既存許容誤差を維持する。
+
+FX-008 の 9 シーンは冒頭の通り。`fx008-displace` は `EffectMap` の 2 入力（warped source + 明示 displacement map draw）、`fx008-generate` は `Generate` の source-free 葉として manifest に記録され、各 draw の `effect` manifest は実際の `kernel_version` と semantic version 1 を持つ。比較方式・許容誤差は既存と同じ。
 
 manifest schema は 3。coverage は `vec003-grid4-v2`、stroke の対応上限は `vec005-local-stroke-v2`、各 draw の実際の版は旧 `vec003-centered-stroke-v1` または新しい文字列、gradient は `vec004-explicit-interpolation-v1`。固定 4×4 の pixel sample pattern を GPU / CPU で共有する。`samples_per_frame=16` は空間 AA であり、時間・motion blur のサンプル数ではない。全 draw-list、font hash、flatten tolerance 0.02 px、gradient stops / paint transform / stroke join・cap・miter limit を記録する。
 

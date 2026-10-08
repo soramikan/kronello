@@ -75,6 +75,98 @@ pub const STANDARD_EFFECT_VERSION: u32 = EFFECT_VERSION;
 pub const STABILIZE_ID: &str = "kronello.stabilize";
 pub const STABILIZE_VERSION: u32 = 1;
 
+/// FX-008 (ADR-0137): remaining standard video effects. All nine share one
+/// version family; every variant debuts at version 1.
+pub const GRAIN_ID: &str = "kronello.grain";
+pub const MOSAIC_ID: &str = "kronello.mosaic";
+pub const INVERT_ID: &str = "kronello.invert";
+pub const CHANNEL_MIXER_ID: &str = "kronello.channel_mixer";
+pub const TINT_ID: &str = "kronello.tint";
+pub const DIRECTIONAL_BLUR_ID: &str = "kronello.directional_blur";
+pub const RADIAL_BLUR_ID: &str = "kronello.radial_blur";
+pub const DISPLACE_ID: &str = "kronello.displace";
+pub const GENERATE_ID: &str = "kronello.generate";
+/// FX-008 supported version is 1 for every added video effect.
+pub const FX008_EFFECT_VERSION: u32 = 1;
+/// FX-008 audio effects, versioned like the earlier audio family.
+pub const AUDIO_DELAY_ID: &str = "kronello.audio.delay";
+pub const AUDIO_REVERB_ID: &str = "kronello.audio.reverb";
+pub const AUDIO_PITCH_ID: &str = "kronello.audio.pitch";
+pub const AUDIO_GATE_ID: &str = "kronello.audio.gate";
+/// FX-008: all nine versioned video effect ids, for snapshot pinning loops.
+pub const FX008_EFFECT_IDS: [&str; 9] = [
+    GRAIN_ID,
+    MOSAIC_ID,
+    INVERT_ID,
+    CHANNEL_MIXER_ID,
+    TINT_ID,
+    DIRECTIONAL_BLUR_ID,
+    RADIAL_BLUR_ID,
+    DISPLACE_ID,
+    GENERATE_ID,
+];
+/// FX-008: all four versioned audio effect ids.
+pub const FX008_AUDIO_IDS: [&str; 4] = [
+    AUDIO_DELAY_ID,
+    AUDIO_REVERB_ID,
+    AUDIO_PITCH_ID,
+    AUDIO_GATE_ID,
+];
+/// Grain temporal hashing folds the scene's rational time into the authored
+/// seed; the value is a signed 31-bit integer.
+pub const GRAIN_MAX_SEED: f64 = 2_147_483_647.0;
+/// Pitch shift bound in semitones; ±48 spans four octaves each way.
+pub const AUDIO_PITCH_MAX_SEMITONES: f64 = 48.0;
+/// Gate hysteresis bound in dB.
+pub const AUDIO_GATE_MAX_HYSTERESIS_DB: f64 = 120.0;
+/// Channel-mixer coefficient magnitude bound.
+pub const CHANNEL_MIXER_MAX_COEFFICIENT: f64 = 1_024.0;
+
+/// FX-008: sampling basis for `kronello.mosaic`. `center` samples the block
+/// center texel; `edge` samples the block's top-left texel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum MosaicBasis {
+    Center,
+    Edge,
+}
+/// FX-008: channel selection for `kronello.invert`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum InvertChannel {
+    Rgb,
+    Red,
+    Green,
+    Blue,
+    Alpha,
+}
+/// FX-008: displacement-map channel for `kronello.displace`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplaceChannel {
+    Red,
+    Green,
+    Blue,
+    Alpha,
+    Luminance,
+}
+/// FX-008: radial blur shape for `kronello.radial_blur`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RadialBlurMode {
+    Spin,
+    Zoom,
+}
+/// FX-008: synthesized layer kind for `kronello.generate`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum GenerateKind {
+    GradientLinear,
+    GradientRadial,
+    Checkerboard,
+    Grid,
+}
+
 /// TRACK-002: how the stabilized output covers regions the inverse warp maps
 /// outside the source frame. `Fill` paints `fill_color`; `replicate` clamps
 /// to edge texels; `reflect` mirrors the frame at its boundary.
@@ -296,6 +388,110 @@ pub enum EffectParameters {
         fill_color: PropertyId,
         sampling: PropertyId,
     },
+    /// FX-008 (ADR-0137): deterministic film grain. `amount` scales the
+    /// injected noise on 0..=1; `size` is the noise cell edge in design_px;
+    /// `monochrome` shares one lattice across RGB; `seed` is a signed 31-bit
+    /// integer folded with the scene time into the hash lattice.
+    Grain {
+        amount: PropertyId,
+        size: PropertyId,
+        monochrome: PropertyId,
+        seed: PropertyId,
+    },
+    /// FX-008: pixelation. `block_size` is the block edge in design_px;
+    /// `basis` selects the sampled texel inside each block.
+    Mosaic {
+        block_size: PropertyId,
+        basis: PropertyId,
+    },
+    /// FX-008: straight-color inversion. `channel` selects which channels
+    /// invert; alpha inversions keep straight RGB and recombine premultiplied.
+    Invert {
+        channel: PropertyId,
+    },
+    /// FX-008: 4x4 channel matrix on premultiplied RGBA. `matrix` references
+    /// a data table with scalar columns `red`, `green`, `blue`, `alpha` and
+    /// exactly four rows (row = output channel in r,g,b,a order).
+    ChannelMixer {
+        matrix: PropertyId,
+    },
+    /// FX-008: maps straight working luminance onto the black→white ramp and
+    /// blends by `amount`; alpha is preserved.
+    Tint {
+        map_black: PropertyId,
+        map_white: PropertyId,
+        amount: PropertyId,
+    },
+    /// FX-008: uniform motion blur. `angle` is the direction in degrees,
+    /// `length` the total blur span in design_px.
+    DirectionalBlur {
+        angle: PropertyId,
+        length: PropertyId,
+    },
+    /// FX-008: spin/zoom radial blur around `center` (node-local design_px).
+    /// `amount` is the total rotation in degrees for `spin` and the inward
+    /// scale extent on 0..=1 for `zoom`.
+    RadialBlur {
+        mode: PropertyId,
+        amount: PropertyId,
+        center: PropertyId,
+    },
+    /// FX-008: displacement-map warp. The map layer is an explicitly bound
+    /// secondary input (snapshot displacement binding); `channel_x` /
+    /// `channel_y` pick the map channels and `scale_x` / `scale_y` are the
+    /// signed maximum displacements in node-local design_px.
+    Displace {
+        channel_x: PropertyId,
+        channel_y: PropertyId,
+        scale_x: PropertyId,
+        scale_y: PropertyId,
+    },
+    /// FX-008: source-independent layer synthesis replacing the incoming
+    /// raster at its chain position. `kind` selects gradient/checkerboard/
+    /// grid; `point_a`/`point_b` are node-local design_px anchors (gradient
+    /// endpoints; radial uses `point_a` as center and `|b-a|` as radius);
+    /// `cell_size` is the checker/grid cell edge and `line_width` the grid
+    /// line width, both design_px.
+    Generate {
+        generator: PropertyId,
+        color_a: PropertyId,
+        color_b: PropertyId,
+        point_a: PropertyId,
+        point_b: PropertyId,
+        cell_size: PropertyId,
+        line_width: PropertyId,
+    },
+    /// FX-008: integer-sample echo. `delay_ms` rounds to whole 48 kHz
+    /// samples; `feedback_db` (<=0) recirculates; `wet`/`dry` mix on 0..=1.
+    AudioDelay {
+        delay_ms: PropertyId,
+        feedback_db: PropertyId,
+        wet: PropertyId,
+        dry: PropertyId,
+    },
+    /// FX-008 (ADR-0139): deterministic feedback-comb reverb realizing an
+    /// algorithmically generated room response. `decay_ms` is the RT60
+    /// target; `damping` is the in-loop lowpass amount on 0..=1.
+    AudioReverb {
+        decay_ms: PropertyId,
+        damping: PropertyId,
+        wet: PropertyId,
+        dry: PropertyId,
+    },
+    /// FX-008: semitone pitch shift executed at the source stage through the
+    /// deterministic WSOLA rate-resampled window (±AUDIO_PITCH_MAX_SEMITONES).
+    AudioPitch {
+        semitones: PropertyId,
+    },
+    /// FX-008: noise gate with hysteresis. `threshold_db` is the open level;
+    /// the gate closes below `threshold_db - hysteresis_db`; `attack_ms` /
+    /// `release_ms` smooth the open/close gain ramps.
+    AudioGate {
+        threshold_db: PropertyId,
+        attack_ms: PropertyId,
+        release_ms: PropertyId,
+        hysteresis_db: PropertyId,
+    },
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum ResolvedEffect {
@@ -399,6 +595,64 @@ pub enum ResolvedEffect {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         inverse: Option<[[f64; 3]; 2]>,
     },
+    /// FX-008: `seed` is the resolved signed 31-bit integer; the DAG builder
+    /// folds the scene time into it so the noise field is temporal.
+    Grain {
+        amount: f64,
+        size: f64,
+        monochrome: bool,
+        seed: i64,
+    },
+    /// FX-008: `block_size` is the square block edge in design_px.
+    Mosaic {
+        block_size: f64,
+        basis: MosaicBasis,
+    },
+    Invert {
+        channel: InvertChannel,
+    },
+    /// FX-008: row-major premultiplied RGBA matrix (row = output channel).
+    ChannelMixer {
+        matrix: [[f64; 4]; 4],
+    },
+    Tint {
+        map_black: Color,
+        map_white: Color,
+        amount: f64,
+    },
+    /// FX-008: `angle_degrees` in the node's local design space; the DAG
+    /// mapper rotates it into the output lattice with the transform.
+    DirectionalBlur {
+        angle_degrees: f64,
+        length: f64,
+    },
+    /// FX-008: `center` is node-local design_px; `amount` is degrees for
+    /// `spin`, the 0..=1 inward extent for `zoom`.
+    RadialBlur {
+        mode: RadialBlurMode,
+        amount: f64,
+        center: [f64; 2],
+    },
+    /// FX-008: `displacement` is the design_px offset contributed per unit
+    /// signed channel value; column 0 maps `channel_x`, column 1 maps
+    /// `channel_y`. Resolution stores `diag(scale_x, scale_y)`; the DAG
+    /// mapper composes the node transform behind it so rotations shear the
+    /// displacement axes exactly like drop-shadow offsets.
+    Displace {
+        channel_x: DisplaceChannel,
+        channel_y: DisplaceChannel,
+        displacement: [[f64; 2]; 2],
+    },
+    /// FX-008: all geometry in node-local design_px; see `EffectParameters`.
+    Generate {
+        generator: GenerateKind,
+        color_a: Color,
+        color_b: Color,
+        point_a: [f64; 2],
+        point_b: [f64; 2],
+        cell_size: f64,
+        line_width: f64,
+    },
 }
 /// AUDIO-007/008: one validated parametric EQ band (ADR-0117).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -441,6 +695,33 @@ pub enum ResolvedAudioEffect {
         ceiling_db: f64,
         release_ms: f64,
     },
+    /// FX-008: `delay_samples` is the integer 48 kHz delay resolved from
+    /// `delay_ms`; `feedback_db` is the recirculation gain in dB (<=0).
+    Delay {
+        delay_samples: u32,
+        feedback_db: f64,
+        wet: f64,
+        dry: f64,
+    },
+    /// FX-008 (ADR-0139): deterministic feedback-comb reverb. `decay_s` is
+    /// the RT60 target in seconds; `damping` is 0..=1.
+    Reverb {
+        decay_s: f64,
+        damping: f64,
+        wet: f64,
+        dry: f64,
+    },
+    /// FX-008: semitone pitch shift; executed at the source stage, never as
+    /// an in-chain processor.
+    Pitch {
+        semitones: f64,
+    },
+    Gate {
+        threshold_db: f64,
+        attack_ms: f64,
+        release_ms: f64,
+        hysteresis_db: f64,
+    },
 }
 #[derive(Debug, thiserror::Error)]
 pub enum EffectError {
@@ -475,6 +756,19 @@ impl EffectDefinition {
             EffectParameters::ColorLut { .. } => (COLOR_LUT_ID, COLOR_LUT_VERSION),
             EffectParameters::AudioPlugin { .. } => (AUDIO_PLUGIN_ID, AUDIO_PLUGIN_VERSION),
             EffectParameters::Stabilize { .. } => (STABILIZE_ID, STABILIZE_VERSION),
+            EffectParameters::Grain { .. } => (GRAIN_ID, FX008_EFFECT_VERSION),
+            EffectParameters::Mosaic { .. } => (MOSAIC_ID, FX008_EFFECT_VERSION),
+            EffectParameters::Invert { .. } => (INVERT_ID, FX008_EFFECT_VERSION),
+            EffectParameters::ChannelMixer { .. } => (CHANNEL_MIXER_ID, FX008_EFFECT_VERSION),
+            EffectParameters::Tint { .. } => (TINT_ID, FX008_EFFECT_VERSION),
+            EffectParameters::DirectionalBlur { .. } => (DIRECTIONAL_BLUR_ID, FX008_EFFECT_VERSION),
+            EffectParameters::RadialBlur { .. } => (RADIAL_BLUR_ID, FX008_EFFECT_VERSION),
+            EffectParameters::Displace { .. } => (DISPLACE_ID, FX008_EFFECT_VERSION),
+            EffectParameters::Generate { .. } => (GENERATE_ID, FX008_EFFECT_VERSION),
+            EffectParameters::AudioDelay { .. } => (AUDIO_DELAY_ID, EFFECT_VERSION),
+            EffectParameters::AudioReverb { .. } => (AUDIO_REVERB_ID, EFFECT_VERSION),
+            EffectParameters::AudioPitch { .. } => (AUDIO_PITCH_ID, EFFECT_VERSION),
+            EffectParameters::AudioGate { .. } => (AUDIO_GATE_ID, EFFECT_VERSION),
         };
         if self.effect_id != id || !(EFFECT_VERSION..=latest).contains(&self.version) {
             return Err(EffectError::UnsupportedFeature);
@@ -646,6 +940,107 @@ impl EffectDefinition {
                 (fill_color, ValueType::Color, Unit::Dimensionless),
                 (sampling, ValueType::Enum, Unit::Dimensionless),
             ],
+            EffectParameters::Grain {
+                amount,
+                size,
+                monochrome,
+                seed,
+            } => vec![
+                (amount, ValueType::Scalar, Unit::Dimensionless),
+                (size, ValueType::Scalar, Unit::DesignPx),
+                (monochrome, ValueType::Bool, Unit::Dimensionless),
+                (seed, ValueType::Scalar, Unit::Dimensionless),
+            ],
+            EffectParameters::Mosaic { block_size, basis } => vec![
+                (block_size, ValueType::Scalar, Unit::DesignPx),
+                (basis, ValueType::Enum, Unit::Dimensionless),
+            ],
+            EffectParameters::Invert { channel } => {
+                vec![(channel, ValueType::Enum, Unit::Dimensionless)]
+            }
+            EffectParameters::ChannelMixer { matrix } => {
+                vec![(matrix, ValueType::DataTable, Unit::Dimensionless)]
+            }
+            EffectParameters::Tint {
+                map_black,
+                map_white,
+                amount,
+            } => vec![
+                (map_black, ValueType::Color, Unit::Dimensionless),
+                (map_white, ValueType::Color, Unit::Dimensionless),
+                (amount, ValueType::Scalar, Unit::Dimensionless),
+            ],
+            EffectParameters::DirectionalBlur { angle, length } => vec![
+                (angle, ValueType::Angle, Unit::Degrees),
+                (length, ValueType::Scalar, Unit::DesignPx),
+            ],
+            EffectParameters::RadialBlur {
+                mode,
+                amount,
+                center,
+            } => vec![
+                (mode, ValueType::Enum, Unit::Dimensionless),
+                (amount, ValueType::Scalar, Unit::Dimensionless),
+                (center, ValueType::Vec2, Unit::DesignPx),
+            ],
+            EffectParameters::Displace {
+                channel_x,
+                channel_y,
+                scale_x,
+                scale_y,
+            } => vec![
+                (channel_x, ValueType::Enum, Unit::Dimensionless),
+                (channel_y, ValueType::Enum, Unit::Dimensionless),
+                (scale_x, ValueType::Scalar, Unit::DesignPx),
+                (scale_y, ValueType::Scalar, Unit::DesignPx),
+            ],
+            EffectParameters::Generate {
+                generator: kind,
+                color_a,
+                color_b,
+                point_a,
+                point_b,
+                cell_size,
+                line_width,
+            } => vec![
+                (kind, ValueType::Enum, Unit::Dimensionless),
+                (color_a, ValueType::Color, Unit::Dimensionless),
+                (color_b, ValueType::Color, Unit::Dimensionless),
+                (point_a, ValueType::Vec2, Unit::DesignPx),
+                (point_b, ValueType::Vec2, Unit::DesignPx),
+                (cell_size, ValueType::Scalar, Unit::DesignPx),
+                (line_width, ValueType::Scalar, Unit::DesignPx),
+            ],
+            EffectParameters::AudioDelay {
+                delay_ms,
+                feedback_db,
+                wet,
+                dry,
+            } => [delay_ms, feedback_db, wet, dry]
+                .into_iter()
+                .map(|id| (id, ValueType::Scalar, Unit::Dimensionless))
+                .collect(),
+            EffectParameters::AudioReverb {
+                decay_ms,
+                damping,
+                wet,
+                dry,
+            } => [decay_ms, damping, wet, dry]
+                .into_iter()
+                .map(|id| (id, ValueType::Scalar, Unit::Dimensionless))
+                .collect(),
+            EffectParameters::AudioPitch { semitones } => {
+                vec![(semitones, ValueType::Scalar, Unit::Dimensionless)]
+            }
+            EffectParameters::AudioGate {
+                threshold_db,
+                attack_ms,
+                release_ms,
+                hysteresis_db,
+            } => [threshold_db, attack_ms, release_ms, hysteresis_db]
+                .into_iter()
+                .map(|id| (id, ValueType::Scalar, Unit::Dimensionless))
+                .collect(),
         }
     }
     pub fn validate(
@@ -707,9 +1102,24 @@ impl EffectDefinition {
         if matches!(self.parameters, EffectParameters::Stabilize { .. }) {
             return self.resolve_stabilize(values);
         }
-        // AUDIO-007/008: filters and dynamics are executed only by the audio
-        // evaluator. The generic resolve still validates parameters so that
-        // failures surface as typed errors before the domain rejection.
+        // FX-008 (ADR-0137): remaining standard video effects.
+        if matches!(
+            self.parameters,
+            EffectParameters::Grain { .. }
+                | EffectParameters::Mosaic { .. }
+                | EffectParameters::Invert { .. }
+                | EffectParameters::ChannelMixer { .. }
+                | EffectParameters::Tint { .. }
+                | EffectParameters::DirectionalBlur { .. }
+                | EffectParameters::RadialBlur { .. }
+                | EffectParameters::Displace { .. }
+                | EffectParameters::Generate { .. }
+        ) {
+            return self.resolve_fx008(values);
+        }
+        // AUDIO-007/008/FX-008: filters and dynamics are executed only by the
+        // audio evaluator. The generic resolve still validates parameters so
+        // that failures surface as typed errors before the domain rejection.
         if matches!(
             self.parameters,
             EffectParameters::AudioEq { .. }
@@ -718,6 +1128,10 @@ impl EffectDefinition {
                 | EffectParameters::AudioCompressor { .. }
                 | EffectParameters::AudioLimiter { .. }
                 | EffectParameters::AudioPlugin { .. }
+                | EffectParameters::AudioDelay { .. }
+                | EffectParameters::AudioReverb { .. }
+                | EffectParameters::AudioPitch { .. }
+                | EffectParameters::AudioGate { .. }
         ) {
             self.resolve_audio(values)?;
             return Err(EffectError::UnsupportedFeature);
@@ -733,6 +1147,10 @@ impl EffectDefinition {
             | EffectParameters::AudioCompressor { .. }
             | EffectParameters::AudioLimiter { .. }
             | EffectParameters::AudioPlugin { .. }
+            | EffectParameters::AudioDelay { .. }
+            | EffectParameters::AudioReverb { .. }
+            | EffectParameters::AudioPitch { .. }
+            | EffectParameters::AudioGate { .. }
             | EffectParameters::ColorExposure { .. }
             | EffectParameters::ColorLevels { .. }
             | EffectParameters::ColorCurves { .. }
@@ -744,7 +1162,16 @@ impl EffectDefinition {
             | EffectParameters::Vignette { .. }
             | EffectParameters::CornerPin { .. }
             | EffectParameters::ColorLut { .. }
-            | EffectParameters::Stabilize { .. } => unreachable!("handled above"),
+            | EffectParameters::Stabilize { .. }
+            | EffectParameters::Grain { .. }
+            | EffectParameters::Mosaic { .. }
+            | EffectParameters::Invert { .. }
+            | EffectParameters::ChannelMixer { .. }
+            | EffectParameters::Tint { .. }
+            | EffectParameters::DirectionalBlur { .. }
+            | EffectParameters::RadialBlur { .. }
+            | EffectParameters::Displace { .. }
+            | EffectParameters::Generate { .. } => unreachable!("handled above"),
         };
         let sigma = scalar(sigma_id)?;
         if !(0.0..=1_000_000.0).contains(&sigma) {
@@ -1001,6 +1428,223 @@ impl EffectDefinition {
             inverse: None,
         })
     }
+    /// FX-008 parameter validation (ADR-0137). Unit-interval parameters are
+    /// range-checked; lengths, positions and angles share the existing 1e6
+    /// budget; enum parameters are validated against their descriptor values.
+    fn resolve_fx008(
+        &self,
+        values: &BTreeMap<PropertyId, Value>,
+    ) -> Result<ResolvedEffect, EffectError> {
+        let scalar = |id| match values.get(&id) {
+            Some(Value::Scalar(v)) => Ok(v.get()),
+            _ => Err(EffectError::InvalidParameter(id)),
+        };
+        let unit_interval = |id| -> Result<f64, EffectError> {
+            let value = scalar(id)?;
+            if (0.0..=1.0).contains(&value) {
+                Ok(value)
+            } else {
+                Err(EffectError::InvalidParameter(id))
+            }
+        };
+        let nonnegative = |id| -> Result<f64, EffectError> {
+            let value = scalar(id)?;
+            if (0.0..=1_000_000.0).contains(&value) {
+                Ok(value)
+            } else {
+                Err(EffectError::InvalidParameter(id))
+            }
+        };
+        let positive = |id| -> Result<f64, EffectError> {
+            let value = scalar(id)?;
+            if value > 0.0 && value <= 1_000_000.0 {
+                Ok(value)
+            } else {
+                Err(EffectError::InvalidParameter(id))
+            }
+        };
+        let bounded = |id, min: f64, max: f64| -> Result<f64, EffectError> {
+            let value = scalar(id)?;
+            if (min..=max).contains(&value) {
+                Ok(value)
+            } else {
+                Err(EffectError::InvalidParameter(id))
+            }
+        };
+        let point = |id| -> Result<[f64; 2], EffectError> {
+            match values.get(&id) {
+                Some(Value::Vec2(v)) => {
+                    let v = v.map(FiniteF64::get);
+                    if v.iter().all(|c| c.abs() <= 1_000_000.0) {
+                        Ok(v)
+                    } else {
+                        Err(EffectError::InvalidParameter(id))
+                    }
+                }
+                _ => Err(EffectError::InvalidParameter(id)),
+            }
+        };
+        let color = |id| -> Result<Color, EffectError> {
+            match values.get(&id) {
+                Some(Value::Color(v)) => Ok(*v),
+                _ => Err(EffectError::InvalidParameter(id)),
+            }
+        };
+        let enumeration = |id, allowed: &[&str]| -> Result<&str, EffectError> {
+            match values.get(&id) {
+                Some(Value::Enum(v)) if allowed.contains(&v.as_str()) => Ok(v.as_str()),
+                _ => Err(EffectError::InvalidParameter(id)),
+            }
+        };
+        match self.parameters {
+            EffectParameters::Grain {
+                amount,
+                size,
+                monochrome,
+                seed,
+            } => {
+                let monochrome = match values.get(&monochrome) {
+                    Some(Value::Bool(v)) => *v,
+                    _ => return Err(EffectError::InvalidParameter(monochrome)),
+                };
+                let seed_value = bounded(seed, -GRAIN_MAX_SEED, GRAIN_MAX_SEED)?;
+                if seed_value.fract() != 0.0 {
+                    return Err(EffectError::InvalidParameter(seed));
+                }
+                Ok(ResolvedEffect::Grain {
+                    amount: unit_interval(amount)?,
+                    size: positive(size)?,
+                    monochrome,
+                    seed: seed_value as i64,
+                })
+            }
+            EffectParameters::Mosaic { block_size, basis } => {
+                let basis = match enumeration(basis, &["center", "edge"])? {
+                    "center" => MosaicBasis::Center,
+                    _ => MosaicBasis::Edge,
+                };
+                Ok(ResolvedEffect::Mosaic {
+                    block_size: positive(block_size)?,
+                    basis,
+                })
+            }
+            EffectParameters::Invert { channel } => {
+                let channel = match enumeration(channel, &["rgb", "red", "green", "blue", "alpha"])?
+                {
+                    "red" => InvertChannel::Red,
+                    "green" => InvertChannel::Green,
+                    "blue" => InvertChannel::Blue,
+                    "alpha" => InvertChannel::Alpha,
+                    _ => InvertChannel::Rgb,
+                };
+                Ok(ResolvedEffect::Invert { channel })
+            }
+            EffectParameters::ChannelMixer { matrix } => {
+                let table = match values.get(&matrix) {
+                    Some(Value::DataTable(t)) => t,
+                    _ => return Err(EffectError::InvalidParameter(matrix)),
+                };
+                Ok(ResolvedEffect::ChannelMixer {
+                    matrix: channel_mixer(table).ok_or(EffectError::InvalidParameter(matrix))?,
+                })
+            }
+            EffectParameters::Tint {
+                map_black,
+                map_white,
+                amount,
+            } => Ok(ResolvedEffect::Tint {
+                map_black: color(map_black)?,
+                map_white: color(map_white)?,
+                amount: unit_interval(amount)?,
+            }),
+            EffectParameters::DirectionalBlur { angle, length } => {
+                let angle_degrees = match values.get(&angle) {
+                    Some(Value::Angle(v)) => v.get(),
+                    _ => return Err(EffectError::InvalidParameter(angle)),
+                };
+                if angle_degrees.abs() > 1_000_000.0 {
+                    return Err(EffectError::InvalidParameter(angle));
+                }
+                Ok(ResolvedEffect::DirectionalBlur {
+                    angle_degrees,
+                    length: nonnegative(length)?,
+                })
+            }
+            EffectParameters::RadialBlur {
+                mode,
+                amount,
+                center,
+            } => {
+                let mode = match enumeration(mode, &["spin", "zoom"])? {
+                    "spin" => RadialBlurMode::Spin,
+                    _ => RadialBlurMode::Zoom,
+                };
+                let amount = match mode {
+                    // Spin amount is a signed total rotation in degrees.
+                    RadialBlurMode::Spin => bounded(amount, -1_000_000.0, 1_000_000.0)?,
+                    RadialBlurMode::Zoom => unit_interval(amount)?,
+                };
+                Ok(ResolvedEffect::RadialBlur {
+                    mode,
+                    amount,
+                    center: point(center)?,
+                })
+            }
+            EffectParameters::Displace {
+                channel_x,
+                channel_y,
+                scale_x,
+                scale_y,
+            } => {
+                let channel = |id| -> Result<DisplaceChannel, EffectError> {
+                    match enumeration(id, &["red", "green", "blue", "alpha", "luminance"])? {
+                        "red" => Ok(DisplaceChannel::Red),
+                        "green" => Ok(DisplaceChannel::Green),
+                        "blue" => Ok(DisplaceChannel::Blue),
+                        "alpha" => Ok(DisplaceChannel::Alpha),
+                        _ => Ok(DisplaceChannel::Luminance),
+                    }
+                };
+                Ok(ResolvedEffect::Displace {
+                    channel_x: channel(channel_x)?,
+                    channel_y: channel(channel_y)?,
+                    displacement: [
+                        [bounded(scale_x, -1_000_000.0, 1_000_000.0)?, 0.0],
+                        [0.0, bounded(scale_y, -1_000_000.0, 1_000_000.0)?],
+                    ],
+                })
+            }
+            EffectParameters::Generate {
+                generator: kind,
+                color_a,
+                color_b,
+                point_a,
+                point_b,
+                cell_size,
+                line_width,
+            } => {
+                let kind = match enumeration(
+                    kind,
+                    &["gradient_linear", "gradient_radial", "checkerboard", "grid"],
+                )? {
+                    "gradient_radial" => GenerateKind::GradientRadial,
+                    "checkerboard" => GenerateKind::Checkerboard,
+                    "grid" => GenerateKind::Grid,
+                    _ => GenerateKind::GradientLinear,
+                };
+                Ok(ResolvedEffect::Generate {
+                    generator: kind,
+                    color_a: color(color_a)?,
+                    color_b: color(color_b)?,
+                    point_a: point(point_a)?,
+                    point_b: point(point_b)?,
+                    cell_size: positive(cell_size)?,
+                    line_width: nonnegative(line_width)?,
+                })
+            }
+            _ => unreachable!("fx008 resolution is only invoked for fx008 variants"),
+        }
+    }
     /// COLOR-002 parameter validation happens here because ranges are
     /// cross-parameter (levels) or structural (curve table). Magnitude bounds
     /// match the existing 1e6 scalar budget.
@@ -1202,6 +1846,55 @@ impl EffectDefinition {
                 )?;
                 Err(EffectError::UnsupportedFeature)
             }
+            EffectParameters::AudioDelay {
+                delay_ms,
+                feedback_db,
+                wet,
+                dry,
+            } => {
+                // ADR-0137: the delay is an integer number of 48 kHz samples.
+                // Milliseconds quantize deterministically by rounding.
+                let ms = milliseconds(delay_ms)?;
+                let delay_samples = ms * 48.0;
+                if !(1.0..=1_000_000.0).contains(&delay_samples) {
+                    return Err(EffectError::InvalidParameter(delay_ms));
+                }
+                Ok(ResolvedAudioEffect::Delay {
+                    delay_samples: delay_samples.round() as u32,
+                    feedback_db: bounded(feedback_db, -AUDIO_MAX_DB, 0.0)?,
+                    wet: bounded(wet, 0.0, 1.0)?,
+                    dry: bounded(dry, 0.0, 1.0)?,
+                })
+            }
+            EffectParameters::AudioReverb {
+                decay_ms,
+                damping,
+                wet,
+                dry,
+            } => Ok(ResolvedAudioEffect::Reverb {
+                decay_s: milliseconds(decay_ms)? / 1_000.0,
+                damping: bounded(damping, 0.0, 1.0)?,
+                wet: bounded(wet, 0.0, 1.0)?,
+                dry: bounded(dry, 0.0, 1.0)?,
+            }),
+            EffectParameters::AudioPitch { semitones } => Ok(ResolvedAudioEffect::Pitch {
+                semitones: bounded(
+                    semitones,
+                    -AUDIO_PITCH_MAX_SEMITONES,
+                    AUDIO_PITCH_MAX_SEMITONES,
+                )?,
+            }),
+            EffectParameters::AudioGate {
+                threshold_db,
+                attack_ms,
+                release_ms,
+                hysteresis_db,
+            } => Ok(ResolvedAudioEffect::Gate {
+                threshold_db: bounded(threshold_db, -AUDIO_MAX_DB, 0.0)?,
+                attack_ms: milliseconds(attack_ms)?,
+                release_ms: milliseconds(release_ms)?,
+                hysteresis_db: bounded(hysteresis_db, 0.0, AUDIO_GATE_MAX_HYSTERESIS_DB)?,
+            }),
             _ => Err(EffectError::UnsupportedFeature),
         }
     }
@@ -1340,6 +2033,35 @@ fn eq_bands(table: &crate::DataTable) -> Option<Vec<AudioEqBand>> {
     }
     Some(bands)
 }
+/// FX-008: validate and extract the `kronello.channel_mixer` 4x4 coefficient
+/// table. Exactly four scalar columns `red`, `green`, `blue`, `alpha` and
+/// exactly four rows; row order maps to output channels r, g, b, a.
+fn channel_mixer(table: &crate::DataTable) -> Option<[[f64; 4]; 4]> {
+    const COLUMNS: [&str; 4] = ["red", "green", "blue", "alpha"];
+    if table.columns.len() != 4
+        || COLUMNS
+            .iter()
+            .any(|name| table.columns.get(*name) != Some(&ValueType::Scalar))
+        || table.rows.len() != 4
+    {
+        return None;
+    }
+    let mut matrix = [[0.0; 4]; 4];
+    for (row, output) in table.rows.iter().zip(matrix.iter_mut()) {
+        if row.len() != 4 {
+            return None;
+        }
+        for (name, cell) in COLUMNS.iter().zip(output.iter_mut()) {
+            match row.get(*name) {
+                Some(Value::Scalar(v)) if v.get().abs() <= CHANNEL_MIXER_MAX_COEFFICIENT => {
+                    *cell = v.get();
+                }
+                _ => return None,
+            }
+        }
+    }
+    Some(matrix)
+}
 /// Validate and extract the COLOR-002 curve table: exactly two scalar columns
 /// named `x` and `y`, 2..=CURVES_MAX_POINTS rows, strictly increasing `x`,
 /// both coordinates in [0,1].
@@ -1429,6 +2151,34 @@ fn plugin_params_default() -> Value {
             ("value".to_string(), ValueType::Scalar),
         ]),
         rows: Vec::new(),
+    })
+}
+/// Identity 4x4 `{ red, green, blue, alpha }` coefficient table used as the
+/// FX-008 `matrix` default (ADR-0137).
+fn mixer_default() -> Value {
+    let f = |v| FiniteF64::new(v).expect("finite mixer default");
+    let columns = BTreeMap::from([
+        ("red".to_string(), ValueType::Scalar),
+        ("green".to_string(), ValueType::Scalar),
+        ("blue".to_string(), ValueType::Scalar),
+        ("alpha".to_string(), ValueType::Scalar),
+    ]);
+    let row = |r, g, b, a| {
+        BTreeMap::from([
+            ("red".to_string(), Value::Scalar(f(r))),
+            ("green".to_string(), Value::Scalar(f(g))),
+            ("blue".to_string(), Value::Scalar(f(b))),
+            ("alpha".to_string(), Value::Scalar(f(a))),
+        ])
+    };
+    Value::DataTable(crate::DataTable {
+        columns,
+        rows: vec![
+            row(1.0, 0.0, 0.0, 0.0),
+            row(0.0, 1.0, 0.0, 0.0),
+            row(0.0, 0.0, 1.0, 0.0),
+            row(0.0, 0.0, 0.0, 1.0),
+        ],
     })
 }
 pub fn effect_descriptors() -> Vec<PropertyDescriptor> {
@@ -1781,6 +2531,217 @@ pub fn effect_descriptors() -> Vec<PropertyDescriptor> {
             Value::Enum("bilinear".into()),
             Unit::Dimensionless,
         ),
+        // FX-008 descriptors (ADR-0137). Reserved 55xx.
+        (
+            0xf0000000_0010_5500_8000_000000000001,
+            "grain_amount",
+            Value::Scalar(f(0.25)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_5500_8000_000000000002,
+            "grain_size",
+            Value::Scalar(f(1.5)),
+            Unit::DesignPx,
+        ),
+        (
+            0xf0000000_0010_5500_8000_000000000003,
+            "monochrome",
+            Value::Bool(true),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_5500_8000_000000000004,
+            "seed",
+            Value::Scalar(f(0.0)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_5500_8000_000000000005,
+            "block_size",
+            Value::Scalar(f(8.0)),
+            Unit::DesignPx,
+        ),
+        (
+            0xf0000000_0010_5500_8000_000000000006,
+            "mosaic_basis",
+            Value::Enum("center".into()),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_5500_8000_000000000007,
+            "invert_channel",
+            Value::Enum("rgb".into()),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_5500_8000_000000000008,
+            "matrix",
+            mixer_default(),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_5500_8000_000000000009,
+            "map_black",
+            Value::Color(Color::from_srgb8([0; 3], None)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_5500_8000_00000000000a,
+            "map_white",
+            Value::Color(Color::from_srgb8([255; 3], None)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_5500_8000_00000000000b,
+            "tint_amount",
+            Value::Scalar(f(1.0)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_5500_8000_00000000000c,
+            "angle",
+            Value::Angle(f(45.0)),
+            Unit::Degrees,
+        ),
+        (
+            0xf0000000_0010_5500_8000_00000000000d,
+            "length",
+            Value::Scalar(f(16.0)),
+            Unit::DesignPx,
+        ),
+        (
+            0xf0000000_0010_5500_8000_00000000000e,
+            "radial_mode",
+            Value::Enum("spin".into()),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_5500_8000_00000000000f,
+            "radial_amount",
+            Value::Scalar(f(10.0)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_5500_8000_000000000010,
+            "radial_center",
+            Value::Vec2([f(0.0); 2]),
+            Unit::DesignPx,
+        ),
+        (
+            0xf0000000_0010_5500_8000_000000000011,
+            "displace_channel_x",
+            Value::Enum("luminance".into()),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_5500_8000_000000000012,
+            "displace_channel_y",
+            Value::Enum("luminance".into()),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_5500_8000_000000000013,
+            "displace_scale_x",
+            Value::Scalar(f(16.0)),
+            Unit::DesignPx,
+        ),
+        (
+            0xf0000000_0010_5500_8000_000000000014,
+            "displace_scale_y",
+            Value::Scalar(f(16.0)),
+            Unit::DesignPx,
+        ),
+        (
+            0xf0000000_0010_5500_8000_000000000015,
+            "generate_kind",
+            Value::Enum("gradient_linear".into()),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_5500_8000_000000000016,
+            "generate_color_a",
+            Value::Color(Color::from_srgb8([255; 3], None)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_5500_8000_000000000017,
+            "generate_color_b",
+            Value::Color(Color::from_srgb8([0; 3], None)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_5500_8000_000000000018,
+            "generate_point_a",
+            Value::Vec2([f(0.0); 2]),
+            Unit::DesignPx,
+        ),
+        (
+            0xf0000000_0010_5500_8000_000000000019,
+            "generate_point_b",
+            Value::Vec2([f(64.0); 2]),
+            Unit::DesignPx,
+        ),
+        (
+            0xf0000000_0010_5500_8000_00000000001a,
+            "generate_cell_size",
+            Value::Scalar(f(16.0)),
+            Unit::DesignPx,
+        ),
+        (
+            0xf0000000_0010_5500_8000_00000000001b,
+            "generate_line_width",
+            Value::Scalar(f(1.0)),
+            Unit::DesignPx,
+        ),
+        (
+            0xf0000000_0010_5500_8000_00000000001c,
+            "delay_ms",
+            Value::Scalar(f(250.0)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_5500_8000_00000000001d,
+            "feedback_db",
+            Value::Scalar(f(-12.0)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_5500_8000_00000000001e,
+            "wet",
+            Value::Scalar(f(0.3)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_5500_8000_00000000001f,
+            "dry",
+            Value::Scalar(f(1.0)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_5500_8000_000000000020,
+            "decay_ms",
+            Value::Scalar(f(800.0)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_5500_8000_000000000021,
+            "damping",
+            Value::Scalar(f(0.3)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_5500_8000_000000000022,
+            "semitones",
+            Value::Scalar(f(0.0)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_5500_8000_000000000023,
+            "hysteresis_db",
+            Value::Scalar(f(6.0)),
+            Unit::Dimensionless,
+        ),
     ]
     .into_iter()
     .map(|(id, name, value, unit)| {
@@ -1794,6 +2755,13 @@ pub fn effect_descriptors() -> Vec<PropertyDescriptor> {
         );
         d.repeatable = true;
         if name == "offset" {
+            d.coordinate_space = Some(crate::CoordinateSpace::LocalDesign);
+        }
+        // FX-008 node-local design_px anchors.
+        if matches!(
+            name,
+            "radial_center" | "generate_point_a" | "generate_point_b"
+        ) {
             d.coordinate_space = Some(crate::CoordinateSpace::LocalDesign);
         }
         // Corner pins are absolute Composition design_px positions.
@@ -1818,6 +2786,8 @@ pub fn effect_descriptors() -> Vec<PropertyDescriptor> {
                 | "intensity"
                 | "amount"
                 | "feather"
+                | "length"
+                | "generate_line_width"
         ) {
             d.range = Some(ValueRange::Scalar(
                 NumericRange::inclusive(0.0, 1_000_000.0).expect("effect range"),
@@ -1825,7 +2795,17 @@ pub fn effect_descriptors() -> Vec<PropertyDescriptor> {
         }
         if matches!(
             name,
-            "similarity" | "spill" | "key_luma" | "tolerance" | "midpoint" | "roundness"
+            "similarity"
+                | "spill"
+                | "key_luma"
+                | "tolerance"
+                | "midpoint"
+                | "roundness"
+                | "grain_amount"
+                | "tint_amount"
+                | "wet"
+                | "dry"
+                | "damping"
         ) {
             d.range = Some(ValueRange::Scalar(
                 NumericRange::inclusive(0.0, 1.0).expect("effect range"),
@@ -1835,6 +2815,54 @@ pub fn effect_descriptors() -> Vec<PropertyDescriptor> {
             let mut bound = NumericRange::inclusive(0.0, 1_000_000.0).expect("gamma range");
             bound.min.as_mut().expect("min").inclusive = false;
             d.range = Some(ValueRange::Scalar(bound));
+        }
+        // FX-008 strictly positive lengths.
+        if matches!(name, "grain_size" | "block_size" | "generate_cell_size") {
+            let mut bound = NumericRange::inclusive(0.0, 1_000_000.0).expect("length range");
+            bound.min.as_mut().expect("min").inclusive = false;
+            d.range = Some(ValueRange::Scalar(bound));
+        }
+        // FX-008 signed extents.
+        if matches!(
+            name,
+            "displace_scale_x" | "displace_scale_y" | "radial_amount"
+        ) {
+            d.range = Some(ValueRange::Scalar(
+                NumericRange::inclusive(-1_000_000.0, 1_000_000.0).expect("effect range"),
+            ));
+        }
+        if name == "angle" {
+            d.range = Some(ValueRange::Angle(
+                NumericRange::inclusive(-1_000_000.0, 1_000_000.0).expect("angle range"),
+            ));
+        }
+        if name == "seed" {
+            d.range = Some(ValueRange::Scalar(
+                NumericRange::inclusive(-GRAIN_MAX_SEED, GRAIN_MAX_SEED).expect("seed range"),
+            ));
+        }
+        if matches!(name, "delay_ms" | "decay_ms") {
+            d.range = Some(ValueRange::Scalar(
+                NumericRange::inclusive(AUDIO_MIN_TIME_MS, AUDIO_MAX_TIME_MS)
+                    .expect("audio time range"),
+            ));
+        }
+        if name == "feedback_db" {
+            d.range = Some(ValueRange::Scalar(
+                NumericRange::inclusive(-AUDIO_MAX_DB, 0.0).expect("feedback range"),
+            ));
+        }
+        if name == "semitones" {
+            d.range = Some(ValueRange::Scalar(
+                NumericRange::inclusive(-AUDIO_PITCH_MAX_SEMITONES, AUDIO_PITCH_MAX_SEMITONES)
+                    .expect("semitone range"),
+            ));
+        }
+        if name == "hysteresis_db" {
+            d.range = Some(ValueRange::Scalar(
+                NumericRange::inclusive(0.0, AUDIO_GATE_MAX_HYSTERESIS_DB)
+                    .expect("hysteresis range"),
+            ));
         }
         PropertyDescriptor::new(d).expect("effect descriptor")
     })

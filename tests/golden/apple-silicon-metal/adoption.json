@@ -305,6 +305,78 @@
       "bytes": 2048,
       "sha256": "e5cea02120528e5b7d1ec9d1e9886a9231aa18a3effba5ee25f25537f1cca613"
     },
+    "fx008-channel-mixer/frame-0.png": {
+      "bytes": 108,
+      "sha256": "7ad9fdcbb28e7b403135edd0b45c98562191a47994c58244fd692533f6689075"
+    },
+    "fx008-channel-mixer/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "b9bb4893146c7b044d211be5946f8d176f7c58c1d833b047a34d922a9030b4ab"
+    },
+    "fx008-directional-blur/frame-0.png": {
+      "bytes": 220,
+      "sha256": "1866f5de7c73ab670c475224fe8a1f668c0124d99009f3b082c6d83e6b49731b"
+    },
+    "fx008-directional-blur/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "1db2b4bae231243476f53346e1adae28fc9a8ad1c020a9a76aaef439d45fa2a9"
+    },
+    "fx008-displace/frame-0.png": {
+      "bytes": 180,
+      "sha256": "69c87533cd48eb3ccd49d6c14b86dac3c1c47a4464a967b5e3f5cb7742bd4604"
+    },
+    "fx008-displace/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "d2557239d973c61079534f7d59b5b19900fe8ca04b98a367665311f768e2d19e"
+    },
+    "fx008-generate/frame-0.png": {
+      "bytes": 127,
+      "sha256": "9685a8325c34990c8ca9926ba60842af9384a43e14455061bdf7c82f172aae11"
+    },
+    "fx008-generate/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "29e2efb99db56b824e8c5d816085fb76e4694f9c6ccc9f4df6dd41b812301d04"
+    },
+    "fx008-grain/frame-0.png": {
+      "bytes": 388,
+      "sha256": "20a90b3312cf5354200a2a19edb1ad318951cef82e59a15b962137adb5031517"
+    },
+    "fx008-grain/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "7599613716c2d389fa65edf2d19769eecab259f10d5589ab099dcff5d55f0d65"
+    },
+    "fx008-invert/frame-0.png": {
+      "bytes": 106,
+      "sha256": "152d118150f5c8d58fa950d6c5e195f7da5f4000a7c73157e49f7f6e56ba223b"
+    },
+    "fx008-invert/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "50b085e108cdffe59d924a8181d30f8e69a6d9bcad2e3d6c0d655fc40a86e59c"
+    },
+    "fx008-mosaic/frame-0.png": {
+      "bytes": 116,
+      "sha256": "70a4a87f4a693d87dce2b9e46404e9a99585ef8c732c697387ca131e3760e2cf"
+    },
+    "fx008-mosaic/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "3104f209eac771d9a7959a0f70d6be9a1aad646190594a4003e937882063985a"
+    },
+    "fx008-radial-blur/frame-0.png": {
+      "bytes": 325,
+      "sha256": "bd93d458549ff76129c24bdae999720b934d74ebfbee9ca37619d4323479c0bb"
+    },
+    "fx008-radial-blur/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "22070bcdb9a9e4eaa0c78f9eb4f62d008d5c798a455d878d0f72edc73eb6c957"
+    },
+    "fx008-tint/frame-0.png": {
+      "bytes": 106,
+      "sha256": "418ab58d6cd1d1c8d7eaae5e83048c15b6f30e52d21d76eab2c64f3f252a832d"
+    },
+    "fx008-tint/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "557b7500e1ae1386f59808a5daa19e2fb726d96f1558a4d18ea949d7617e448d"
+    },
     "glyph-outline-edges/frame-0.png": {
       "bytes": 576,
       "sha256": "8a940ae2fd380ab13c67ab9b9195789973b7d1d6a4ba22edaa642c1c5ef348e8"
@@ -426,12 +498,12 @@
       "sha256": "a8a5e6d38abbaff24c17fbd6eac7ad7059ae7b1fb0b722c194be078c516e559a"
     },
     "manifest.json": {
-      "bytes": 95887,
-      "sha256": "f87e057e479b1f783a9a4c28ef09fc27a6eb6dc85d0c7d8e0041a610f030c802"
+      "bytes": 109957,
+      "sha256": "e8ffbb6eac31c5f68594301c3bc0d418419d4c0b76e685d16fbfe5ed6cb45367"
     },
     "provenance.json": {
       "bytes": 1405,
-      "sha256": "697e2676e38f63647f2a61bb0d2ba6486cbf83a40f174955b7cd4c2ae2582018"
+      "sha256": "b4b66760a35e3cb3d1dd0e604151ff06fd363b57995148f5a1132c9dd03a5744"
     },
     "rec2020-conversion/frame-0.png": {
       "bytes": 91,
@@ -535,19 +607,19 @@
     }
   },
   "provenance": {
-    "cargo_lock_sha256": "ea5ea174b5b4700fdf7ebe4333a59191586b49913aea27e9fc36364900208885",
-    "color_code_sha256": "8939a54f089fbfeccdf84abc341a063da92d994f76dfc3ea0b6a49ca13964b1d",
+    "cargo_lock_sha256": "28abd2c00de977e22e1739d588476816ea28119129b964d4109139940f62c6a0",
+    "color_code_sha256": "57893f6365174d028fe8a6651c7c729cfc4b1e1fd779077923783fac44db2404",
     "comparison_code_sha256": "0f09357830b18b3abd193030880e442a65171954f5774e399a4bb0d17f7b2112",
-    "draw_fixture_code_sha256": "8c6b173b8630b8e50720377b87c75e87cdcdb11857828d933cd2cdff5f85d612",
-    "effect_kernel_code_sha256": "8d0abc211270755289517412e2f98950f6dd72380cecaf1c07a6de259295a637",
-    "effect_reference_code_sha256": "648fd932a2bc1441a94f7fa6e2937aae18c64445d47b09fe4587d1d5bac81318",
-    "effect_shader_sha256": "70ba525a4feff8b812cf3c7064696767a0e762d6ef0ac4cb20c87c2437f35637",
+    "draw_fixture_code_sha256": "b4ab2c4b83cb57e3e4b438c1e4f9d3213ad0427f12f44ad748e74605a9bc9eeb",
+    "effect_kernel_code_sha256": "02e25f6a42dc1c7d403dac5678bf05cbe699859342abab51cfa506457bf21c5b",
+    "effect_reference_code_sha256": "510edacc1df7ebdd24dccd867a3bd3a20006f75fcb3fbce3f5029a2c0bbea68d",
+    "effect_shader_sha256": "477895777c2cfa235a6b677f8772da7395903c3b5d93b34e4799a6da76a12d12",
     "fixture_manifest_sha256": "13060d35e1ed680a0666197b3d0a6de2606933030f43fda63c169923377aec22",
-    "renderer_code_sha256": "6ffae1420062f5c6393a78d2ec042db90e678a4a956e42f3633f6f1e3f7f1f4d",
-    "revision": "c3cc15306085e9a59d38eafbdbdda2cbad3bcbec",
-    "scene_code_sha256": "6344db79eed855388197161b596a31d32a6bfc679c56c215691ecd2a9062cb15",
-    "scene_gpu_code_sha256": "049dfa0d14021955a9dd567656bcbee68176bcc48a472dc4c56a0bec3896dd97",
-    "scene_reference_code_sha256": "220f9f1868334ef163f710171c5244716d420f2893afa2c1e40b34d98cbde95e",
+    "renderer_code_sha256": "b8ee875117fac139229cd31c34293bdc75f3c5b77549939045bfcf2e51c36249",
+    "revision": "f230eea5e8afa703d4de22407bd6ecf9108afabd",
+    "scene_code_sha256": "e34e7eb74c66828c7a6ee5cb2b64846af9e9f81b0e0eb6877840f20a53997231",
+    "scene_gpu_code_sha256": "8797f44bab253b89a36241e20df8234ee56d9fe41d04cd77306c86b46d2c6549",
+    "scene_reference_code_sha256": "4e695ba7154af4ffd19e65f7208cbc26251c82fa8a5d707def6936eacefea69f",
     "scene_shader_sha256": "81a10f9859ece9c4a4af3e523279ff0ba3e5e42ec4376562c504874501715d39",
     "shader_sha256": "f78694ed5b0dbc653a28601fb6f2d319e9b8d9ed0e02cb60cc8dfad6b5b8c069",
     "status": ""
@@ -1368,6 +1440,141 @@
     {
       "alpha": "premultiplied",
       "id": "fx006-corner-pin",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx008-grain",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx008-mosaic",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx008-channel-mixer",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec2020"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx008-invert",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec2020"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx008-tint",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx008-directional-blur",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx008-radial-blur",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec2020"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx008-displace",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx008-generate",
       "sample_id": "frame-0",
       "samples_per_frame": 16,
       "size": [
