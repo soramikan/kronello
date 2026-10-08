@@ -290,10 +290,12 @@ fn expand_is_explicit_independent_seed_preserving_and_undoable() {
     );
     assert_ne!(image(&path, root, times[1]).linear, frames[1]);
     run(json!({"operation":"edit.undo","project":path,"base_revision":modified.revision,"event_id":edit.id,"session_id":Uuid::new_v4(),"idempotency_key":"undo-individual"})).unwrap();
+    // ADR-0132: undoing the later property edit only restored the
+    // post-expand state, so undoing the expansion itself is allowed and
+    // removes every copied object.
     let revision = export(&path).revision;
-    let error = run(json!({"operation":"edit.undo","project":path,"base_revision":revision,"event_id":event.id,"session_id":Uuid::new_v4(),"idempotency_key":"undo-expand-conflict"})).unwrap_err();
-    assert_eq!(error.code, "UNDO_CONFLICT");
-    assert_eq!(export(&path).document, expanded.document);
+    run(json!({"operation":"edit.undo","project":path,"base_revision":revision,"event_id":event.id,"session_id":Uuid::new_v4(),"idempotency_key":"undo-expand"})).unwrap();
+    assert_eq!(export(&path).document, original.document);
     // An uncontested expansion uses ordinary persisted undo and removes every copied object.
     let clean_path = dir.path().join("undo-expand.kronello");
     run(json!({"operation":"project.create","project":clean_path,"document":original.document}))

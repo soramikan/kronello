@@ -1766,19 +1766,31 @@ fn validate_undo<'a>(
     }
     let mut conflicts = Vec::new();
     for e in events {
-        if e.revision > target.revision && active.contains(&e.id) {
-            let keys: BTreeSet<_> = e
-                .changed_keys
-                .iter()
-                .filter(|key| target.changed_keys.iter().any(|t| overlap(t, key)))
-                .cloned()
-                .collect();
-            if !keys.is_empty() {
-                conflicts.push(UndoConflict {
-                    event_id: e.id,
-                    keys,
-                });
-            }
+        if e.revision <= target.revision || !active.contains(&e.id) {
+            continue;
+        }
+        // An undo event that cancelled a later *forward* edit restored the
+        // target's keys to their post-target values; counting it as a
+        // conflicting write would make sequential undos unwalkable (each
+        // undo would block the previous edit forever). Undos of undo events
+        // (redos) are real later writes and still count.
+        if e.undo_of
+            .and_then(|undone| events.iter().find(|p| p.id == undone))
+            .is_some_and(|undone| undone.revision > target.revision && undone.undo_of.is_none())
+        {
+            continue;
+        }
+        let keys: BTreeSet<_> = e
+            .changed_keys
+            .iter()
+            .filter(|key| target.changed_keys.iter().any(|t| overlap(t, key)))
+            .cloned()
+            .collect();
+        if !keys.is_empty() {
+            conflicts.push(UndoConflict {
+                event_id: e.id,
+                keys,
+            });
         }
     }
     if !conflicts.is_empty() {
@@ -2248,5 +2260,57 @@ mod regression_tests {
             assert!(store.idempotency_record("locked-check").unwrap().is_none());
             store.close().unwrap();
         }
+    }
+    #[test]
+    fn undo_of_later_edit_does_not_block_undoing_earlier_edit() {
+        // GUI audit: undo appends an event that shares the target's changed
+        // keys. That event restores post-target state and must not count as a
+        // later conflicting write, or one undo would wedge the whole stack.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("undo-chain.kronello");
+        let mut store = ProjectStore::open(&path, OpenOptions::default()).unwrap();
+        let document_id = store.snapshot().unwrap().document.id;
+        let changed_keys = BTreeSet::from([ChangedKey::Structure {
+            object_id: document_id,
+            parent_container_id: document_id,
+        }]);
+        let apply = |store: &mut ProjectStore, name: &str, base_revision: u64| {
+            store
+                .apply(ApplyRequest {
+                    base_revision,
+                    session_id: Uuid::new_v4(),
+                    mutations: vec![Mutation::Set {
+                        path: vec!["name".into()],
+                        value: json!(name),
+                    }],
+                    changed_keys: changed_keys.clone(),
+                    idempotency_key: None,
+                    undo_of: None,
+                })
+                .unwrap()
+        };
+        let first = apply(&mut store, "first", 0);
+        let second = apply(&mut store, "second", 1);
+        store.close().unwrap();
+        undo(UndoRequest {
+            project: path.clone(),
+            base_revision: "2".into(),
+            session_id: Uuid::new_v4(),
+            idempotency_key: "undo-second".into(),
+            event_id: second.id,
+        })
+        .unwrap();
+        // The undo event sits on the same keys as `first` but cancelled a
+        // later forward edit; undoing `first` must still be allowed.
+        undo(UndoRequest {
+            project: path.clone(),
+            base_revision: "3".into(),
+            session_id: Uuid::new_v4(),
+            idempotency_key: "undo-first".into(),
+            event_id: first.id,
+        })
+        .unwrap();
+        let reopened = ProjectStore::open(&path, OpenOptions::default()).unwrap();
+        assert_eq!(reopened.snapshot().unwrap().document.name, "");
     }
 }

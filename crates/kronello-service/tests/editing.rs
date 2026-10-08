@@ -399,14 +399,20 @@ fn undo_conflict_lists_events_keys_and_rejects_whole_batch() {
     assert!(store.idempotency_record("conflict").unwrap().is_none());
     store.close().unwrap();
     let u = undo(&path, &b, "undo-b");
-    // The undone B is excluded; its still-active inverse is itself an event,
-    // and ADR-0026 requires explicitly targeting that event when keys overlap.
+    // ADR-0132: u only cancelled the later forward edit B and restored the
+    // post-A state, so it does not block undoing A.
+    let undo_a = undo(&path, &a, "undo-a");
+    assert_eq!(undo_a.undo_of, Some(a.id));
+    assert_eq!(source(&export(&path).document, 0, 1), source(&p, 0, 1));
+    // Redoing B by undoing u still conflicts with the active undo of A:
+    // undo events of non-forward events remain real later writes.
     let e = service()
-        .dispatch(Request::EditUndo(undo_request(&path, &a, "conflict-2")))
+        .dispatch(Request::EditUndo(undo_request(&path, &u, "redo-b")))
         .unwrap_err();
+    assert_eq!(e.code, "UNDO_CONFLICT");
     assert_eq!(
         e.details.unwrap()["conflicts"][0]["event_id"],
-        u.id.to_string()
+        undo_a.id.to_string()
     );
 }
 

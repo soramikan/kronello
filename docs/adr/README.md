@@ -41,7 +41,7 @@
 | [0023](0023-naming-cinewright.md) | 名称を Cinewright に変更する | 置換（0042） | 2026-10-02 |
 | [0024](0024-working-color-space.md) | 作業用色空間は Sequence ごとに選択し、既定を線形 Rec.709 とする | 採用 | 2026-10-02 |
 | [0025](0025-detached-render-workers.md) | レンダージョブは切り離した worker プロセスで実行する | 採用 | 2026-10-02 |
-| [0026](0026-selective-undo.md) | Undo は逆操作の発行とし、競合時は拒否する | 採用 | 2026-10-02 |
+| [0026](0026-selective-undo.md) | Undo は逆操作の発行とし、競合時は拒否する | 部分置換（0132） | 2026-10-02 |
 | [0027](0027-wal-single-file-on-close.md) | 開いている間は WAL、閉じるときに単一ファイルへ戻す | 採用 | 2026-10-02 |
 | [0028](0028-asset-references-and-relink.md) | 素材は相対パスと絶対パスの両方で参照し、hash で検証する | 採用 | 2026-10-02 |
 | [0029](0029-public-json-schema.md) | 版付きの公開 JSON スキーマを一つ定義する | 採用 | 2026-10-02 |
@@ -148,6 +148,7 @@
 | [0129](0129-media-bins-and-offline-management.md) | メディア管理（ビン・オフライン・relink） | 採用（実装受け入れ中） | 2026-10-08 |
 | [0130](0130-export-presets-batch-and-watch.md) | 書き出しプリセット・バッチ・ウォッチフォルダ | 採用（実装受け入れ中） | 2026-10-08 |
 | [0131](0131-audio-plugin-hosting-trust-boundary.md) | VST3/AU ホスティングと信頼境界 | 採用（実装受け入れ中） | 2026-10-08 |
+| [0132](0132-sequential-undo-conflict-scope.md) | Undo イベントの競合範囲を打ち消し対象に限定する | 採用 | 2026-10-08 |
 
 ## 追加と変更の規則
 

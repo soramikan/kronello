@@ -128,7 +128,7 @@ Undo は対象 Event の保存 inverse を現在文書に適用した候補を�
 
 値変更は `(object_id, property_id)` が一致したときに競合する。同じ node の別 Property は独立。共有 curve の編集はその curve の直接消費者すべての Property キーを導出する。構造変更は対象 ID または親コンテナ ID の重なりで競合し、構造変更と値変更は対象 object ID の一致で競合する。reparent は旧・新の親を記録する。content / curve / definition の直接参照を新規作成する操作も resource ID を記録し、後続の参照を残したまま作成元を取り消さない。式・評価 DAG の間接的な依存を競合キーへ拡張しない。
 
-対象より後の未取り消し Event が上記キーに触れれば、一切適用せず `UNDO_CONFLICT`。`error.details.conflicts` は `{event_id, keys}` の配列で、競合した後続 Event のキーを返す。Undo 自体も未取り消し Event であり、同じキーを持つ逆操作も競合対象になる。先の操作を Undo した後に同じ領域を操作する場合は、履歴の最新の Undo / Redo Event を対象にする。
+対象より後の未取り消し Event が上記キーに触れれば、一切適用せず `UNDO_CONFLICT`。`error.details.conflicts` は `{event_id, keys}` の配列で、競合した後続 Event のキーを返す。ただし [ADR-0132](../adr/0132-sequential-undo-conflict-scope.md) に従い、「対象より後の forward 編集を打ち消した Undo Event」は競合に数えない（逐次 Undo が遡れるようにするため）。Redo（Undo Event の取り消し）や対象より前を打ち消した Undo Event は通常どおり競合対象になる。先の操作を Undo した後に同じ領域を操作する場合は、履歴の最新の Undo / Redo Event を対象にする。
 
 | 実装済み error code | 条件 |
 |---|---|
