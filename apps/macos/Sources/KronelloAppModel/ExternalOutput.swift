@@ -39,7 +39,9 @@ public struct OutputDeviceEntry: Equatable, Sendable {
     public func refresh() async {
         guard let model else { return }
         do {
-            let result = try await model.request("io.output.list")
+            // io.output.* are projectless operations: `model.request` injects
+            // `project`, which the strict request schema rejects.
+            let result = try await model.transport.call(["operation": "io.output.list"])
             devices = result.objects("devices").map { device in
                 OutputDeviceEntry(
                     kind: device.string("kind"), name: device.string("name"),
@@ -61,8 +63,9 @@ public struct OutputDeviceEntry: Equatable, Sendable {
                 if enabled, destination == "ref_monitor" {
                     try await refMonitorPresenter?(true)
                 }
-                _ = try await model.request(enabled ? "io.output.enable" : "io.output.disable",
-                                            ["kind": destination])
+                _ = try await model.transport.call([
+                    "operation": enabled ? "io.output.enable" : "io.output.disable",
+                    "kind": destination])
                 if !enabled, destination == "ref_monitor" {
                     try await refMonitorPresenter?(false)
                 }

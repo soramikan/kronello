@@ -87,8 +87,12 @@ struct ScopesPanel: View {
         let extent = model.extent
         let width = 256, height = max(1, min(256, Int((CGFloat(width) * extent.height / max(1, extent.width)).rounded())))
         do {
-            let value = try await model.request("inspect.scopes", [
-                "input": ["target": ["kind": "sequence", "sequence": sequence],
+            // inspect.scopes is a projectless operation; `model.request`
+            // would inject `project` and fail strict request validation.
+            let value = try await model.transport.call([
+                "operation": "inspect.scopes",
+                "input": ["project": model.path,
+                    "target": ["kind": "sequence", "sequence": sequence],
                     "region": ["origin": [0.0, 0.0], "extent": [extent.width, extent.height], "pixels": [width, height]],
                     "luts": model.lutInputs],
                 "time": model.ui.time.wire])
