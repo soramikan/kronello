@@ -85,6 +85,32 @@ fn cfr_vfr_bframes_seek_exact_intervals_and_drain() {
         );
     }
 }
+/// FLOW-002 (ADR-0129): `rgba_at` is the fixed-snapshot preview path for
+/// thumbnails — the same timestamp must always yield identical RGBA8 bytes
+/// regardless of decoder history.
+#[test]
+fn rgba_at_returns_deterministic_opaque_sdr_frame() {
+    let runtime = MediaRuntime::load().unwrap();
+    let mut decoder = runtime
+        .open_video(&fixtures().join("cfr-24-1.nut"))
+        .unwrap();
+    let first = decoder.rgba_at(r(2, 24)).unwrap();
+    assert_eq!(first.rgba.len(), (first.width * first.height * 4) as usize);
+    assert!(first.rgba.chunks(4).all(|px| px[3] == 255));
+    // A different query followed by the same query, and a fresh decoder, both
+    // reproduce the identical frame bytes.
+    decoder.rgba_at(r(0, 1)).unwrap();
+    let repeat = decoder.rgba_at(r(2, 24)).unwrap();
+    assert_eq!(repeat.rgba, first.rgba);
+    let mut fresh = runtime
+        .open_video(&fixtures().join("cfr-24-1.nut"))
+        .unwrap();
+    assert_eq!(fresh.rgba_at(r(2, 24)).unwrap().rgba, first.rgba);
+    assert_eq!(
+        decoder.rgba_at(r(3, 1)).unwrap_err().code(),
+        "FRAME_NOT_FOUND"
+    );
+}
 #[test]
 fn native_hdr_preserves_ten_bit_planes_and_tags() {
     let runtime = MediaRuntime::load().unwrap();

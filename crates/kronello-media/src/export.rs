@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use kronello_audio::{
     AudioClip, AudioSourceMode, AudioTarget, ClippingPolicy, DocumentAudioPlan, SAMPLE_RATE,
-    mix_reader, sample_range,
+    sample_range,
 };
 use kronello_model::{ColorSpace, DocumentObject};
 use kronello_render::{
@@ -137,6 +137,13 @@ pub struct AvExportSnapshot {
     audio: AudioSourceMode,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     movie_profile: Option<MovieProfile>,
+    /// AUDIO-010: the declared output speaker layout. Stereo is the default
+    /// and keeps the pre-AUDIO-010 envelope bytes identical.
+    #[serde(
+        default = "stereo_audio_layout",
+        skip_serializing_if = "is_stereo_layout"
+    )]
+    audio_layout: kronello_model::ChannelMask,
 }
 impl AvExportSnapshot {
     pub fn new(render: &RenderSnapshot, clips: Vec<AudioClip>) -> Result<Self, MediaError> {
@@ -146,6 +153,7 @@ impl AvExportSnapshot {
             clips,
             audio: AudioSourceMode::Explicit,
             movie_profile: None,
+            audio_layout: kronello_model::ChannelMask::STEREO,
         };
         snapshot.validate()?;
         Ok(snapshot)
@@ -167,6 +175,24 @@ impl AvExportSnapshot {
     ) -> Result<Self, MediaError> {
         Self::with_audio_movie_profile(render, audio, clips, profile, None)
     }
+    /// AUDIO-010: an explicit non-stereo output layout. It pins audio
+    /// envelope 3 (evaluator 2) because pitch-preserved retime and
+    /// multichannel mixing are defined there. `movie_profile == None` selects
+    /// the PCM24 MOV audio stage; `Some(profile)` selects its codec.
+    pub fn with_audio_layout(
+        render: &RenderSnapshot,
+        audio: AudioSourceMode,
+        clips: Vec<AudioClip>,
+        movie_profile: Option<MovieProfile>,
+        audio_layout: kronello_model::ChannelMask,
+    ) -> Result<Self, MediaError> {
+        if audio_layout == kronello_model::ChannelMask::STEREO {
+            return Err(MediaError::InvalidInput(
+                "stereo exports use the standard audio constructors".into(),
+            ));
+        }
+        Self::with_audio_movie_layout(render, audio, clips, 3, movie_profile, audio_layout)
+    }
     fn with_audio_movie_profile(
         render: &RenderSnapshot,
         audio: AudioSourceMode,
@@ -174,9 +200,31 @@ impl AvExportSnapshot {
         profile: u32,
         movie_profile: Option<MovieProfile>,
     ) -> Result<Self, MediaError> {
+        Self::with_audio_movie_layout(
+            render,
+            audio,
+            clips,
+            profile,
+            movie_profile,
+            kronello_model::ChannelMask::STEREO,
+        )
+    }
+    fn with_audio_movie_layout(
+        render: &RenderSnapshot,
+        audio: AudioSourceMode,
+        clips: Vec<AudioClip>,
+        profile: u32,
+        movie_profile: Option<MovieProfile>,
+        audio_layout: kronello_model::ChannelMask,
+    ) -> Result<Self, MediaError> {
         if !matches!(profile, 2 | 3) {
             return Err(MediaError::UnsupportedFeature(
                 "audio profile version".into(),
+            ));
+        }
+        if audio_layout != kronello_model::ChannelMask::STEREO && profile != 3 {
+            return Err(MediaError::UnsupportedFeature(
+                "multichannel audio requires audio envelope 3".into(),
             ));
         }
         if audio != AudioSourceMode::Explicit && !clips.is_empty() {
@@ -195,6 +243,7 @@ impl AvExportSnapshot {
             clips,
             audio,
             movie_profile,
+            audio_layout,
         };
         snapshot.validate()?;
         Ok(snapshot)
@@ -219,6 +268,10 @@ impl AvExportSnapshot {
     pub fn audio(&self) -> AudioSourceMode {
         self.audio
     }
+    /// The declared output speaker layout (ADR-0124).
+    pub fn audio_layout(&self) -> kronello_model::ChannelMask {
+        self.audio_layout
+    }
     pub fn render(&self) -> &RenderSnapshot {
         &self.render
     }
@@ -236,12 +289,20 @@ impl AvExportSnapshot {
                 "export snapshots cannot substitute preview proxies".into(),
             ));
         }
-        if self
-            .movie_profile
-            .is_some_and(|p| p == MovieProfile::ProResPcm24 || self.schema_version != 3)
-        {
+        if self.movie_profile.is_some_and(|p| {
+            (p == MovieProfile::ProResPcm24
+                && self.audio_layout == kronello_model::ChannelMask::STEREO)
+                || self.schema_version != 3
+        }) {
             return Err(MediaError::UnsupportedFeature(
                 "delivery profiles require audio envelope 3".into(),
+            ));
+        }
+        // Multichannel output is defined only on audio envelope 3; stereo
+        // envelopes keep their exact pre-AUDIO-010 semantics.
+        if self.audio_layout != kronello_model::ChannelMask::STEREO && self.schema_version != 3 {
+            return Err(MediaError::UnsupportedFeature(
+                "multichannel audio requires audio envelope 3".into(),
             ));
         }
         if !matches!(self.schema_version, 1..=3)
@@ -322,6 +383,9 @@ pub struct MediaStream {
     pub duration: Option<Rational>,
     pub sample_rate: Option<u32>,
     pub channels: Option<u32>,
+    /// Native speaker-mask bits when the container records one (ADR-0124).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel_mask: Option<u64>,
     pub width: Option<u32>,
     pub height: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -350,6 +414,17 @@ impl MediaProbe {
         self.verify_movie(MovieProfile::ProResPcm24)
     }
     pub fn verify_movie(&self, profile: MovieProfile) -> Result<(), MediaError> {
+        self.verify_movie_layout(profile, kronello_model::ChannelMask::STEREO)
+    }
+    /// Verify at the explicitly declared audio layout (ADR-0124): the probed
+    /// stream must carry exactly `audio_layout`'s channel count, and a
+    /// reported native mask must belong to the closed layout set — lossless
+    /// profiles (PCM24/ALAC) must round-trip the exact mask.
+    pub fn verify_movie_layout(
+        &self,
+        profile: MovieProfile,
+        audio_layout: kronello_model::ChannelMask,
+    ) -> Result<(), MediaError> {
         if self.streams.len() != 2 {
             return Err(MediaError::Encode(
                 "expected exactly two output streams".into(),
@@ -369,13 +444,30 @@ impl MediaProbe {
         if video.codec != video_codec
             || audio.codec != audio_codec
             || audio.sample_rate != Some(48_000)
-            || audio.channels != Some(2)
+            || audio.channels != Some(audio_layout.channels() as u32)
             || video.start != Some(Rational::ZERO)
             || audio.start != Some(Rational::ZERO)
         {
             return Err(MediaError::Encode(
-                "invalid A/V codec, sample format or start PTS".into(),
+                "invalid A/V codec, sample format, channel layout or start PTS".into(),
             ));
+        }
+        if let Some(mask) = audio.channel_mask {
+            let parsed = kronello_model::ChannelMask::from_bits(mask).ok();
+            // Lossless containers preserve the exact mask; lossy codecs may
+            // normalize side/back surround naming but must still describe a
+            // member of the closed set for the same channel count.
+            let lossless = matches!(audio_codec, "pcm_s24le" | "alac");
+            let ok = match parsed {
+                Some(m) if lossless => m == audio_layout,
+                Some(m) => m.channels() as u32 == audio.channels.unwrap_or(0),
+                None => false,
+            };
+            if !ok {
+                return Err(MediaError::Encode(
+                    "muxed audio layout does not match the declared channel mask".into(),
+                ));
+            }
         }
         if let Some(transfer) = profile.hdr_transfer()
             && (video.pixel_format.as_deref() != Some("yuv422p10le")
@@ -493,8 +585,11 @@ impl MediaRuntime {
             render_hash,
             export_hash,
             MovieProfile::ProResPcm24,
+            kronello_model::ChannelMask::STEREO,
         )
     }
+    /// `audio_layout` is the declared contract of the audio intermediate:
+    /// the mux fails when the file's channel count differs (ADR-0124).
     #[allow(clippy::too_many_arguments)] // Explicit codec contract accompanies both snapshot identities.
     pub fn mux_movie(
         &self,
@@ -504,6 +599,7 @@ impl MediaRuntime {
         render_hash: &str,
         export_hash: &str,
         profile: MovieProfile,
+        audio_layout: kronello_model::ChannelMask,
     ) -> Result<MediaProbe, MediaError> {
         for hash in [render_hash, export_hash] {
             if hash.len() != 64
@@ -536,7 +632,7 @@ impl MediaRuntime {
             render_snapshot_hash: String::new(),
             export_snapshot_hash: String::new(),
         }
-        .verify_movie(profile)?;
+        .verify_movie_layout(profile, audio_layout)?;
         let temp = stage_file(output)?;
         self.native.mux_av(
             &video,
@@ -545,9 +641,10 @@ impl MediaRuntime {
             render_hash,
             export_hash,
             profile,
+            audio_layout.channels() as u32,
         )?;
         let probe = self.probe(temp.path())?;
-        probe.verify_movie(profile)?;
+        probe.verify_movie_layout(profile, audio_layout)?;
         if profile == MovieProfile::HevcAlacV1 {
             let video = probe
                 .streams
@@ -744,12 +841,19 @@ impl MediaRuntime {
             return Err(MediaError::InvalidInput("empty audio output".into()));
         }
         let audio_kind = profile.audio_kind();
+        // ADR-0124: the snapshot declares the single output layout; the
+        // bus converts sources deterministically and never folds down.
+        let audio_layout = snapshot.audio_layout;
         let audio_file = stage.path().join(match audio_kind {
             crate::ffi::AudioEncoderKind::Opus => "audio.webm",
             _ => "audio.mov",
         });
-        let mut audio_encoder =
-            crate::ffi::NativeAudioEncoder::open(&self.native, &audio_file, audio_kind)?;
+        let mut audio_encoder = crate::ffi::NativeAudioEncoder::open(
+            &self.native,
+            &audio_file,
+            audio_kind,
+            audio_layout,
+        )?;
         let mut clipped_samples = 0_usize;
         let mut start = samples.start;
         while start < samples.end {
@@ -764,8 +868,10 @@ impl MediaRuntime {
                 SAMPLE_RATE.sample_to_time(end)?,
             )?;
             let bus = match &plan {
-                Some(plan) => plan.mix_reader(&sources, range)?,
-                None => mix_reader(&snapshot.clips, &sources, range)?,
+                Some(plan) => plan.mix_channels(&sources, range, audio_layout)?,
+                None => {
+                    kronello_audio::mix_channels(&snapshot.clips, &sources, range, audio_layout)?
+                }
             };
             let quantized = bus.quantize_pcm24(request.clipping)?;
             clipped_samples = clipped_samples
@@ -782,7 +888,7 @@ impl MediaRuntime {
         let audio = AudioEncodeReport {
             codec: profile.codecs().1.into(),
             sample_rate: 48_000,
-            channels: 2,
+            channels: audio_layout.channels() as u32,
             frames: usize::try_from(samples.end - samples.start)
                 .map_err(|_| MediaError::InvalidInput("audio count overflow".into()))?,
             clipped_samples,
@@ -909,6 +1015,7 @@ impl MediaRuntime {
             &render_hash,
             &export_hash,
             profile,
+            audio_layout,
         )?;
         Ok(AvExportReport {
             schema_version: 1,
@@ -983,12 +1090,36 @@ fn bt709_rgba(pixels: &[[f32; 4]], background: [f32; 3]) -> Result<Vec<u8>, Medi
 fn is_explicit(mode: &AudioSourceMode) -> bool {
     *mode == AudioSourceMode::Explicit
 }
+fn stereo_audio_layout() -> kronello_model::ChannelMask {
+    kronello_model::ChannelMask::STEREO
+}
+fn is_stereo_layout(mask: &kronello_model::ChannelMask) -> bool {
+    *mask == kronello_model::ChannelMask::STEREO
+}
 fn document_plan(render: &RenderSnapshot, profile: u32) -> Result<DocumentAudioPlan, MediaError> {
     let target = match render.target() {
         kronello_render::RenderTarget::Composition { composition } => {
             AudioTarget::Composition(composition)
         }
         kronello_render::RenderTarget::Sequence { sequence } => AudioTarget::Sequence(sequence),
+        kronello_render::RenderTarget::Source { source } => match source {
+            kronello_render::SourcePreviewRef::Composition { composition } => {
+                AudioTarget::Composition(composition)
+            }
+            _ => {
+                let resolved =
+                    kronello_render::resolve_source(render.project(), &source.source_ref())?;
+                let Some(stream_index) = resolved.audio_stream else {
+                    // Sources without an audio stream export silent audio.
+                    return Ok(DocumentAudioPlan::default());
+                };
+                AudioTarget::Source {
+                    asset: resolved.asset,
+                    stream_index,
+                    offset: resolved.offset,
+                }
+            }
+        },
     };
     Ok(DocumentAudioPlan::compile_version(
         render.project(),

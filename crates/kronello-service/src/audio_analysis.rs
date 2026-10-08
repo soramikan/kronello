@@ -1,6 +1,6 @@
 //! Shared offline analysis command. Decoding and analysis happen once before storage.
 use crate::{ImportRequest, ResultData, ServiceError};
-use kronello_audio::{AudioBuffer, MAX_AUDIO_FRAMES};
+use kronello_audio::{ChannelBuffer, MAX_AUDIO_FRAMES};
 use kronello_model::{AssetId, AudioAnalysisConfig, AudioAnalysisSource, DocumentObject};
 use kronello_render::RenderTarget;
 use kronello_time::TimeRange;
@@ -83,7 +83,9 @@ impl crate::Service<'_> {
         {
             return Err(ServiceError::invalid("analysis id already exists"));
         }
-        let (source, start, buffer) = match &request.input {
+        // The analysis contract is stereo; multichannel assets fold down only
+        // through the explicit ADR-0124 matrix inside analyze_audio_channels.
+        let (source, start, buffer): (_, _, ChannelBuffer) = match &request.input {
             AudioAnalyzeInput::Asset {
                 asset,
                 stream_index,
@@ -142,13 +144,13 @@ impl crate::Service<'_> {
                     *target,
                     &request.base_revision,
                 )?;
-                let mut frames = Vec::with_capacity(length);
+                let mut frames = Vec::with_capacity(length * 2);
                 let mut offset = 0;
                 while offset < length {
                     let n = (length - offset).min(crate::MAX_PLAYBACK_BLOCK_FRAMES);
                     let mut block = vec![0.0; n * 2];
                     prepared.render_block(samples.start + offset as i64, &mut block)?;
-                    frames.extend(block.chunks_exact(2).map(|s| [s[0], s[1]]));
+                    frames.extend_from_slice(&block);
                     offset += n;
                 }
                 let identity = serde_json::to_vec(&(&stored.document, target, range, 2u32))
@@ -161,13 +163,19 @@ impl crate::Service<'_> {
                         evaluator_version: 2,
                     },
                     samples.start,
-                    AudioBuffer::new(frames).map_err(audio_error)?,
+                    ChannelBuffer::new(kronello_model::ChannelMask::STEREO, frames)
+                        .map_err(audio_error)?,
                 )
             }
         };
-        let data =
-            kronello_audio::analyze_audio(request.id, source, request.config, start, &buffer)
-                .map_err(audio_error)?;
+        let data = kronello_audio::analyze_audio_channels(
+            request.id,
+            source,
+            request.config,
+            start,
+            &buffer,
+        )
+        .map_err(audio_error)?;
         let mut document = stored.document;
         document.audio_analyses.push(DocumentObject::Known(data));
         crate::project::import_with_payload(

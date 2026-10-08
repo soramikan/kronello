@@ -128,7 +128,7 @@ Undo は対象 Event の保存 inverse を現在文書に適用した候補を�
 
 値変更は `(object_id, property_id)` が一致したときに競合する。同じ node の別 Property は独立。共有 curve の編集はその curve の直接消費者すべての Property キーを導出する。構造変更は対象 ID または親コンテナ ID の重なりで競合し、構造変更と値変更は対象 object ID の一致で競合する。reparent は旧・新の親を記録する。content / curve / definition の直接参照を新規作成する操作も resource ID を記録し、後続の参照を残したまま作成元を取り消さない。式・評価 DAG の間接的な依存を競合キーへ拡張しない。
 
-対象より後の未取り消し Event が上記キーに触れれば、一切適用せず `UNDO_CONFLICT`。`error.details.conflicts` は `{event_id, keys}` の配列で、競合した後続 Event のキーを返す。Undo 自体も未取り消し Event であり、同じキーを持つ逆操作も競合対象になる。先の操作を Undo した後に同じ領域を操作する場合は、履歴の最新の Undo / Redo Event を対象にする。
+対象より後の未取り消し Event が上記キーに触れれば、一切適用せず `UNDO_CONFLICT`。`error.details.conflicts` は `{event_id, keys}` の配列で、競合した後続 Event のキーを返す。ただし [ADR-0132](../adr/0132-sequential-undo-conflict-scope.md) に従い、「対象より後の forward 編集を打ち消した Undo Event」は競合に数えない（逐次 Undo が遡れるようにするため）。Redo（Undo Event の取り消し）や対象より前を打ち消した Undo Event は通常どおり競合対象になる。先の操作を Undo した後に同じ領域を操作する場合は、履歴の最新の Undo / Redo Event を対象にする。
 
 | 実装済み error code | 条件 |
 |---|---|
@@ -175,6 +175,8 @@ request envelope・既知 payload は未知 field と重複 field を拒否す�
 M4で`job.resume`、M5作業ツリーで`audio.analyze`、`svg.inspect` / `svg.export` / `svg.import_plan`、`font.pin`を追加し、現在のregistryは44操作である。M5の追加操作は対応するVEC-002・AUDIO-001・GUI-007で作業ツリーの受け入れを確認済み（[進捗記録](../testing/m5-acceptance.md)）。`audio.analyze`は作品を更新し、SVG三操作と`font.pin`は読み取り専用。全操作の正本は`command_registry()`と生成schemaであり、過去の一覧を現行の全操作数として固定しない。
 
 GUI-007のNormal / Multiply / Screenは新しいtransport操作を増やさず、既存の `edit.plan/apply` と `TimelineCommand::ClipSetEffects` を使ってClipの `kronello.blend_mode` Propertyを編集する。共有保存・revision・再送・Undoと実画素の個別試験は成功し、GUI確認と最終統合検証は残る（[ADR-0101](../adr/0101-linear-premultiplied-layer-blend.md)、[検証記録](../testing/gui-007-blend.md)）。
+
+M9のFLOW-002は`media.query`（asset の kind・stream・locator・`present_unverified`/`missing` の存在 probe と typed error）と`asset.thumbnail`（固定 snapshot `rgba_at` の opaque RGBA8、16..=1024 px）を read_only registry に追加し、bin は `bin_create` / `bin_rename` / `bin_delete` / `bin_assign` の `EditCommand` で共有編集する。FLOW-003は `export_preset_save` / `export_preset_delete` の `EditCommand` と `export.batch` を追加した。`export.batch` は順序付き item（`submission` か `preset`+`project`+`destination` の排他指定）を正規化し、destination 重複・不明 preset の `PRESET_MISSING`・明示 key 重複を検証してから `job_keys` による keyed submit へ渡す。item 結果は `submitted` / `replayed` / `skipped` / `failed` で `stop` / `continue` の policy に従う（[ADR-0129](../adr/0129-media-bins-and-offline-management.md)、[ADR-0130](../adr/0130-export-presets-batch-and-watch.md)、[検証](../testing/flow-002.md)、[検証](../testing/flow-003.md)）。CLI は `asset thumbnail` / `media query` / `export batch` と poll 型の `kronello watch --project P --directory D --preset ID|NAME --output DIR [--poll-ms N] [--once]` を持つ。
 
 ### history.list のページング
 
@@ -659,3 +661,33 @@ modern response は `resultType: complete` と serverInfo metadata を返し、c
 共通 `render.export` / `render.submit` の `JobOutput` は `pro_res_hdr_mov` version 1（`transfer: pq|hlg`）と `pro_res_sdr_from_hdr_mov` version 1 を持つ。前者は固定 render HDR transfer と一致する ProRes HQ 10-bit / Rec.2100 + PCM24、後者は明示 SDR tone map + BT.709 + PCM24 を指定する。capability は `hdr_rec2100_203nits_v1` と閉じた profile discovery を返す。固定 worker は snapshot/profile/意味版を再解釈せず、codec/bit depth/color tags を probe で検証する。
 
 `FrameMetadata.hdr` は transfer / reference white 203 / HLG peak 1000 を示す。`MediaProbe` の video stream は native pixel format / primaries / transfer / matrix / range を返す。HDR movie は display PNG の SDR tone map を使わない。native GUI の single DAG preview には HDR display 処理を持たせず、HDR は型付き未対応として `render.frame` の display artifact に案内する。[ADR-0086](../adr/0086-rec2100-native-precision-and-fixed-hdr-output.md) を参照。
+
+## AUDIO-011 のプラグイン操作
+
+[ADR-0131](../adr/0131-audio-plugin-hosting-trust-boundary.md) に従い、registry に
+2 操作を追加した（CLI は `audio plugin_probe` / `audio plugin_process`、MCP は同名
+tool）。両方とも project document を変更しない read_only 操作で、plugin code は
+detached helper だけがロードする。
+
+| operation | payload | result |
+|---|---|---|
+| `audio.plugin_probe` | `{plugin: PluginSpec, deadline_ms?}` | `PluginProbeResult`（class / version / parameter / bus の report） |
+| `audio.plugin_process` | `{project, expected_revision?, asset, stream_index?, plugin, destination, deadline_ms?}` | `JobRecord`（固定入力ジョブ投入） |
+
+`PluginSpec` は `format`（`vst3` / `audio_unit`）・`path?`・`sha256?`・`component`・
+`version?`・`parameters`（最大 1,024 行）を持ち、file-backed plugin は
+`bundle_manifest_hash` の pin を要求する。pin は submit・worker 開始・helper の
+`dlopen` 直前で再検証し、不一致は `ASSET_HASH_MISMATCH`、欠落は `PLUGIN_MISSING`。
+`audio.plugin_probe` は helper と bounded describe 交換を行い plugin identity を返す。
+`audio.plugin_process` は `plugin` payload の固定入力ジョブを記録し、worker が
+locked audio stream → helper → PCM24 `.mov` の receipted publication を行う
+（[14 ジョブ](14-jobs.md#audio-011-のプラグイン固定入力ジョブ)）。
+`deadline_ms` は 1,000..=600,000 ms（既定 120,000）。
+
+capabilities.features に `audio_plugin_host_v1`、effects に `kronello.audio.plugin`
+を追加した。`kronello.audio.plugin` effect の authoring binding は model が検証するが、
+evaluator / render は常に `UNSUPPORTED_FEATURE` で拒否し、実行入口はこの 2 操作に
+限定する。公開 schema と GeneratedAPI.swift は生成器から再同期済み。
+helper の起動失敗・crash・timeout・protocol 違反は `PLUGIN_FAILED` /
+`PLUGIN_TIMEOUT` / `PLUGIN_PROTOCOL` / `INVALID_REQUEST` の型付きエラー。
+検証は [AUDIO-011](../testing/audio-011.md) を参照。

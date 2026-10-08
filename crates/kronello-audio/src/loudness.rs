@@ -1,7 +1,11 @@
 //! AUDIO-008: ITU-R BS.1770-4 K-weighted loudness measurement plus
-//! 4x-oversampled true-peak estimation on the 48 kHz stereo bus (ADR-0117).
-//! Deterministic: fixed coefficients, fixed block grid, no wall clock.
-use crate::{AudioError, MAX_AUDIO_FRAMES, dsp::Biquad};
+//! 4x-oversampled true-peak estimation on the 48 kHz bus (ADR-0117).
+//! AUDIO-010 extends it to the closed ADR-0124 layout set with the
+//! BS.1770-4 channel weighting (surrounds 1.41, LFE excluded from the
+//! energy sum). Deterministic: fixed coefficients, fixed block grid,
+//! no wall clock.
+use crate::{AudioError, ChannelBuffer, MAX_AUDIO_FRAMES, dsp::Biquad};
+use kronello_model::ChannelMask;
 
 /// ITU-R BS.1770-4 integration windows on the 48 kHz sample grid.
 const MOMENTARY: usize = 19_200; // 400 ms
@@ -24,8 +28,8 @@ pub struct LoudnessReport {
     pub true_peak_dbtp: Option<f64>,
 }
 /// BS.1770-4 K-weighting at 48 kHz: stage-1 high-shelf then stage-2 RLB
-/// high-pass, both applied independently to left and right.
-fn k_weighting() -> [Biquad; 2] {
+/// high-pass, each stage applied independently to every channel.
+fn k_weighting(channels: usize) -> [Biquad; 2] {
     [
         Biquad::normalized(
             [
@@ -34,47 +38,80 @@ fn k_weighting() -> [Biquad; 2] {
                 1.198_392_810_852_85,
             ],
             [1.0, -1.690_659_293_182_41, 0.732_480_774_215_85],
+            channels,
         ),
         Biquad::normalized(
             [1.0, -2.0, 1.0],
             [1.0, -1.990_047_454_833_98, 0.990_072_250_366_21],
+            channels,
         ),
     ]
+}
+/// BS.1770-4 channel weighting `G_i` applied to channel mean squares:
+/// 1.0 for front speakers, 1.41 for surrounds, 0 for LFE (excluded).
+fn channel_weight(bit: u64) -> f64 {
+    match bit {
+        ChannelMask::SIDE_LEFT
+        | ChannelMask::SIDE_RIGHT
+        | ChannelMask::BACK_LEFT
+        | ChannelMask::BACK_RIGHT => 1.41,
+        ChannelMask::LOW_FREQUENCY => 0.0,
+        _ => 1.0,
+    }
 }
 /// Measure a finite interleaved stereo range. Caller bounds memory; this
 /// refuses inputs above the shared audio budget.
 pub fn loudness(frames: &[[f32; 2]]) -> Result<LoudnessReport, AudioError> {
-    if frames.len() > MAX_AUDIO_FRAMES || frames.iter().flatten().any(|v| !v.is_finite()) {
+    loudness_channels(&ChannelBuffer::from_stereo(frames)?)
+}
+/// AUDIO-010: BS.1770-4 over any closed-set layout. K-weighting runs
+/// independently per channel and block energy sums `G_i * mean_square_i`,
+/// which keeps stereo input bit-identical to [`loudness`].
+pub fn loudness_channels(buffer: &ChannelBuffer) -> Result<LoudnessReport, AudioError> {
+    let channels = buffer.channels();
+    let frames = buffer.frame_count();
+    if frames > MAX_AUDIO_FRAMES || buffer.samples().iter().any(|v| !v.is_finite()) {
         return Err(AudioError::InvalidInput(
             "loudness input budget or finite sample violation".into(),
         ));
     }
-    // K-weight the full range once; block statistics read prefix energies.
-    let mut filter = k_weighting();
-    let mut prefix = Vec::with_capacity(frames.len() + 1);
+    let weights: Vec<f64> = buffer
+        .mask()
+        .channel_bits()
+        .iter()
+        .map(|bit| channel_weight(*bit))
+        .collect();
+    // K-weight the full range once per channel; block statistics read the
+    // single weighted prefix-energy series.
+    let mut filter = k_weighting(channels);
+    let mut prefix = Vec::with_capacity(frames + 1);
     prefix.push(0.0_f64);
-    for frame in frames {
-        let mut y = *frame;
+    let mut y = vec![0.0_f32; channels];
+    for frame in buffer.samples().chunks_exact(channels) {
+        y.copy_from_slice(frame);
         for stage in &mut filter {
-            y = stage.process(y);
+            stage.process(&mut y);
         }
-        let energy = f64::from(y[0]) * f64::from(y[0]) + f64::from(y[1]) * f64::from(y[1]);
+        let mut energy = 0.0_f64;
+        for (channel, value) in y.iter().enumerate() {
+            energy += weights[channel] * f64::from(*value) * f64::from(*value);
+        }
         prefix.push(prefix.last().copied().unwrap_or(0.0) + energy);
     }
     let mean_square = |start: usize, len: usize| (prefix[start + len] - prefix[start]) / len as f64;
     // Momentary blocks on the fixed 400 ms / 100 ms hop grid.
     let mut blocks = Vec::new();
     let mut start = 0_usize;
-    while start + MOMENTARY <= frames.len() {
+    while start + MOMENTARY <= frames {
         let z = mean_square(start, MOMENTARY);
         blocks.push((z, OFFSET + 10.0 * z.max(1e-30).log10()));
         start += HOP;
     }
     let momentary_lufs = blocks.iter().map(|(_, l)| *l).reduce(f64::max);
-    let short_term_lufs = if frames.len() >= SHORT_TERM {
+    let short_term_lufs = if frames >= SHORT_TERM {
         let mut best = f64::NEG_INFINITY;
         let mut start = 0_usize;
-        while start + SHORT_TERM <= frames.len() {
+        while start + SHORT_TERM <= frames {
             let z = mean_square(start, SHORT_TERM);
             best = best.max(OFFSET + 10.0 * z.max(1e-30).log10());
             start += HOP;
@@ -117,7 +154,7 @@ pub fn loudness(frames: &[[f32; 2]]) -> Result<LoudnessReport, AudioError> {
         integrated_lufs,
         momentary_lufs,
         short_term_lufs,
-        true_peak_dbtp: true_peak(frames),
+        true_peak_dbtp: true_peak(buffer),
     })
 }
 const UPSAMPLE: usize = 4;
@@ -155,21 +192,25 @@ fn interpolation_phases() -> [[f64; PHASE_TAPS]; UPSAMPLE] {
     phases
 }
 /// Peak over the 4x-oversampled signal and the raw samples, in dBTP.
-fn true_peak(frames: &[[f32; 2]]) -> Option<f64> {
-    if frames.is_empty() {
+/// True peak is a per-channel maximum, so every channel of the layout is
+/// measured (including LFE, which is excluded only from loudness energy).
+fn true_peak(buffer: &ChannelBuffer) -> Option<f64> {
+    let channels = buffer.channels();
+    let frames = buffer.frame_count();
+    if frames == 0 {
         return None;
     }
     let phases = interpolation_phases();
     let mut peak = 0.0_f64;
-    for channel in 0..2 {
+    for channel in 0..channels {
         let read = |i: i64| -> f64 {
-            if i < 0 || i as usize >= frames.len() {
+            if i < 0 || i as usize >= frames {
                 0.0
             } else {
-                f64::from(frames[i as usize][channel])
+                f64::from(buffer.samples()[i as usize * channels + channel])
             }
         };
-        for i in 0..frames.len() as i64 {
+        for i in 0..frames as i64 {
             for taps in &phases {
                 let mut y = 0.0;
                 for (k, coefficient) in taps.iter().enumerate() {

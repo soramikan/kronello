@@ -6,12 +6,12 @@ use std::collections::btree_map::Entry;
 use std::path::{Path, PathBuf};
 
 use kronello_audio::{
-    AudioBuffer, AudioSources, AudioTarget, DocumentAudioPlan, MAX_AUDIO_FRAMES, sample_range,
+    AudioTarget, ChannelBuffer, ChannelSources, DocumentAudioPlan, MAX_AUDIO_FRAMES, sample_range,
 };
 use kronello_model::{
-    AUDIO_GAIN_ID, AssetId, ClipId, DescriptorRef, DocumentObject, Effect, EffectDefinition,
-    EffectParameters, FiniteF64, Project, Property, PropertyId, PropertySource, SchemaKey,
-    SequenceId, TrackState, Value,
+    AUDIO_GAIN_ID, AssetId, ChannelMask, ClipId, DescriptorRef, DocumentObject, Effect,
+    EffectDefinition, EffectParameters, FiniteF64, Project, Property, PropertyId, PropertySource,
+    SchemaKey, SequenceId, TrackState, Value,
 };
 use kronello_store::Event;
 use kronello_time::{Time, TimeRange};
@@ -171,12 +171,14 @@ fn solo_clip_document(document: &Project, sequence: SequenceId, clip: ClipId) ->
     document
 }
 /// Compile the shared plan for one document and decode its declared sources.
+/// The loudness measurement target is the stereo bus (the AUDIO-008 contract);
+/// multichannel sources fold down through the explicit ADR-0124 matrix.
 fn render_plan(
     project_path: &Path,
     document: &Project,
     target: AudioTarget,
     range: TimeRange,
-) -> Result<AudioBuffer, ServiceError> {
+) -> Result<ChannelBuffer, ServiceError> {
     let samples = sample_range(range).map_err(audio_error)?;
     let length = samples
         .end
@@ -189,7 +191,7 @@ fn render_plan(
     }
     let _ = length;
     let plan = DocumentAudioPlan::compile_version(document, target, 2).map_err(audio_error)?;
-    let mut sources = AudioSources::new();
+    let mut sources = ChannelSources::new();
     let mut decoded_frames = 0_usize;
     let clips = plan.clips();
     if !clips.is_empty() {
@@ -210,12 +212,14 @@ fn render_plan(
                     clip.stream_index,
                     MAX_AUDIO_FRAMES - decoded_frames,
                 )?;
-                decoded_frames += decoded.buffer.frames().len();
+                decoded_frames += decoded.buffer.frame_count();
                 entry.insert(decoded.buffer);
             }
         }
     }
-    let bus = plan.mix(&sources, range).map_err(audio_error)?;
+    let bus = plan
+        .mix_channels(&sources, range, ChannelMask::STEREO)
+        .map_err(audio_error)?;
     Ok(bus.buffer().clone())
 }
 impl crate::Service<'_> {
@@ -289,18 +293,21 @@ impl crate::Service<'_> {
                 match range {
                     Some(range) => {
                         let samples = sample_range(*range).map_err(audio_error)?;
+                        let channels = decoded.buffer.channels();
                         if samples.start < 0
                             || usize::try_from(samples.end).unwrap_or(usize::MAX)
-                                > decoded.buffer.frames().len()
+                                > decoded.buffer.frame_count()
                         {
                             return Err(ServiceError::new(
                                 "AUDIO_SOURCE_TOO_SHORT",
                                 "asset loudness range exceeds decoded stream",
                             ));
                         }
-                        AudioBuffer::new(
-                            decoded.buffer.frames()[samples.start as usize..samples.end as usize]
-                                .to_vec(),
+                        let begin = samples.start as usize * channels;
+                        let end = samples.end as usize * channels;
+                        ChannelBuffer::new(
+                            decoded.buffer.mask(),
+                            decoded.buffer.samples()[begin..end].to_vec(),
                         )
                         .map_err(audio_error)?
                     }
@@ -308,14 +315,14 @@ impl crate::Service<'_> {
                 }
             }
         };
-        let report = kronello_audio::loudness(buffer.frames()).map_err(audio_error)?;
+        let report = kronello_audio::loudness_channels(&buffer).map_err(audio_error)?;
         Ok(AudioLoudnessResult {
             revision: stored.revision.to_string(),
             integrated_lufs: report.integrated_lufs,
             momentary_lufs: report.momentary_lufs,
             short_term_lufs: report.short_term_lufs,
             true_peak_dbtp: report.true_peak_dbtp,
-            frames: buffer.frames().len() as u64,
+            frames: buffer.frame_count() as u64,
         })
     }
     /// AUDIO-008 normalize: measure integrated loudness of the clip through
@@ -349,7 +356,7 @@ impl crate::Service<'_> {
             AudioTarget::Sequence(r.sequence),
             clip.timeline_range,
         )?;
-        let measured = kronello_audio::loudness(rendered.frames())
+        let measured = kronello_audio::loudness_channels(&rendered)
             .map_err(audio_error)?
             .integrated_lufs
             .ok_or_else(|| {

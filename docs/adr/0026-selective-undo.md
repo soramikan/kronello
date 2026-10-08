@@ -1,6 +1,6 @@
 # ADR-0026: Undo は逆操作の発行とし、競合時は拒否する
 
-- 状態: 採用
+- 状態: 部分置換（[ADR-0132](0132-sequential-undo-conflict-scope.md): 後続 forward 編集を打ち消した Undo イベントを競合判定の対象から外す。逆操作イベント・session・changed keys・永続化の契約は維持）
 - 日付: 2026-10-02
 
 ## 背景

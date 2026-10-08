@@ -57,7 +57,8 @@ struct KronelloCommands: Commands {
                 // Extend the system View menu instead of adding a second one.
                 CommandGroup(before: .toolbar) {
                     let pages: [(ShortcutAction, String, String)] = [(.pageEdit, "編集", "edit"), (.pageMotion, "モーション", "motion"),
-                                                                   (.pageTemplate, "テンプレート", "template"), (.pageExport, "書き出し", "export")]
+                                                                   (.pageTemplate, "テンプレート", "template"), (.pageMedia, "メディア", "media"),
+                                                                   (.pageExport, "書き出し", "export")]
                     ForEach(pages, id: \.2) { action, label, page in
                         let binding = workflow.binding(for: action)
                         Button(label) { controller.editor?.ui.page = page }

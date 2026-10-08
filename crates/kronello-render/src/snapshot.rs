@@ -21,6 +21,9 @@ fn legacy_visibility_version() -> u32 {
     1
 }
 pub const COMPOSITION_MEDIA_VERSION: u32 = 1;
+/// TRACK-003 (ADR-0123): authored optical-flow intermediate-frame synthesis.
+/// Legacy snapshots leave the pin absent and only decode presented frames.
+pub const FRAME_INTERPOLATION_VERSION: u32 = 1;
 pub const TEMPORAL_VERSION: u32 = 1;
 pub const VIDEO_INPUT_VERSION: &str = "nle002-sdr-rgba8-nearest-v1";
 fn initial_video_version() -> String {
@@ -70,6 +73,10 @@ pub struct SemanticVersions {
     pub video_input: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub temporal: Option<u32>,
+    /// TRACK-003 (ADR-0123): pinned whenever the document may author
+    /// `TimeMap::interpolation`; unpinned snapshots reject synthesis.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frame_interpolation: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub composition_media: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -125,10 +132,13 @@ impl SemanticVersions {
                 (VIGNETTE_ID.into(), STANDARD_EFFECT_VERSION),
                 (CORNER_PIN_ID.into(), STANDARD_EFFECT_VERSION),
                 (COLOR_LUT_ID.into(), COLOR_LUT_VERSION),
+                // TRACK-002 versioned id (ADR-0122).
+                (STABILIZE_ID.into(), STABILIZE_VERSION),
             ]),
             generators: generator_versions(),
             video_input: initial_video_version(),
             temporal: Some(TEMPORAL_VERSION),
+            frame_interpolation: Some(FRAME_INTERPOLATION_VERSION),
             composition_media: Some(COMPOSITION_MEDIA_VERSION),
             hdr: Some(crate::HDR_VERSION),
             clip_mask: Some(kronello_model::MASK_VERSION),
@@ -184,6 +194,12 @@ pub struct RenderSnapshot {
     composition: CompositionId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     sequence: Option<SequenceId>,
+    /// GUI-011 (ADR-0128): when set, `composition` addresses a synthetic
+    /// lowered source root (`source.rs`) or an authored composition for
+    /// `SourcePreviewRef::Composition`, so source preview shares the
+    /// fixed-snapshot path instead of a second renderer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    source: Option<crate::source::SourcePreviewRef>,
     revision: u64,
     semantic_versions: SemanticVersions,
     profile: RenderProfile,
@@ -284,6 +300,7 @@ impl RenderSnapshot {
                     font_locks: vec![],
                     media_proxies: MediaProxyMode::Off,
                     luts: BTreeMap::new(),
+                    source: None,
                 };
                 value.validate()?;
                 let definitions = value.definitions()?;
@@ -320,12 +337,54 @@ impl RenderSnapshot {
                 value.font_locks = locks.into_iter().collect();
                 Ok(value)
             }
+            crate::RenderTarget::Source { source } => {
+                // Composition sources evaluate the authored definition at the
+                // authored id; media-bearing sources address the synthetic
+                // lowered root so authored content can never reference it.
+                let composition = match source {
+                    crate::source::SourcePreviewRef::Composition { composition } => composition,
+                    _ => crate::source::SOURCE_ROOT_ID,
+                };
+                let mut value = Self {
+                    schema_version: SNAPSHOT_SCHEMA_VERSION,
+                    project: project.clone(),
+                    composition,
+                    sequence: None,
+                    source: Some(source),
+                    revision,
+                    semantic_versions: SemanticVersions::current(project.semantic_version),
+                    profile,
+                    mattes: vec![],
+                    font_locks: vec![],
+                    media_proxies: MediaProxyMode::Off,
+                    luts: BTreeMap::new(),
+                };
+                value.validate()?;
+                let definitions = value.definitions()?;
+                let text_ids: BTreeSet<_> = definitions
+                    .iter()
+                    .flat_map(|c| c.nodes.iter())
+                    .filter_map(|n| match n.kind {
+                        NodeKind::Text { content_ref } => Some(content_ref),
+                        _ => None,
+                    })
+                    .collect();
+                let mut locks = BTreeSet::new();
+                for id in text_ids {
+                    let text = content(&project.texts, id.as_uuid(), |t| t.id.as_uuid())?
+                        .ok_or(TextError::MissingContent { id })?;
+                    locks.extend(text.styles.iter().map(|s| s.font.clone()));
+                }
+                value.font_locks = locks.into_iter().collect();
+                Ok(value)
+            }
         }
     }
     pub fn target(&self) -> crate::RenderTarget {
-        match self.sequence {
-            Some(sequence) => crate::RenderTarget::Sequence { sequence },
-            None => self.composition.into(),
+        match (self.source, self.sequence) {
+            (Some(source), _) => crate::RenderTarget::Source { source },
+            (None, Some(sequence)) => crate::RenderTarget::Sequence { sequence },
+            (None, None) => self.composition.into(),
         }
     }
     pub fn with_contract(
@@ -341,6 +400,7 @@ impl RenderSnapshot {
             project: project.clone(),
             composition,
             sequence: None,
+            source: None,
             revision,
             semantic_versions,
             profile,
@@ -397,6 +457,10 @@ impl RenderSnapshot {
     }
     pub fn composition(&self) -> CompositionId {
         self.composition
+    }
+    /// Source-monitor identity when this snapshot targets `RenderTarget::Source`.
+    pub fn source(&self) -> Option<crate::source::SourcePreviewRef> {
+        self.source
     }
     pub fn project(&self) -> &Project {
         &self.project
@@ -563,6 +627,30 @@ impl RenderSnapshot {
                 .effects
                 .remove(kronello_model::COLOR_LUT_ID);
         }
+        // TRACK-002 (ADR-0122): same pinning contract as COLOR-003 — an
+        // absent `kronello.stabilize` pin rejects execution during scene
+        // construction without invalidating unrelated snapshots.
+        if !self
+            .semantic_versions
+            .effects
+            .contains_key(kronello_model::STABILIZE_ID)
+        {
+            supported_versions
+                .effects
+                .remove(kronello_model::STABILIZE_ID);
+        }
+        // TRACK-003 (ADR-0123): frame interpolation is authored on the time
+        // map. Snapshots pinned before the feature carry no version; they
+        // remain valid only while no authored clip or Media node requests
+        // intermediate frames.
+        let has_frame_interpolation = self.project.sequences.iter().any(|s| {
+            matches!(s, DocumentObject::Known(s) if s.tracks.iter().flat_map(|t| &t.clips).any(|c| c.time_map.interpolation().is_some()))
+        }) || self.project.compositions.iter().any(|c| {
+            matches!(c, DocumentObject::Known(c) if c.nodes.iter().any(|n| matches!(&n.kind, NodeKind::Media(m) if m.time_map.interpolation().is_some())))
+        });
+        if self.semantic_versions.frame_interpolation.is_none() && !has_frame_interpolation {
+            supported_versions.frame_interpolation = None;
+        }
         if self.project.semantic_version != PROJECT_SEMANTIC_VERSION
             || self.semantic_versions != supported_versions
         {
@@ -581,6 +669,11 @@ impl RenderSnapshot {
         {
             return Err(RenderError::InvalidInput(
                 "working space must be linear and flatten tolerance positive".into(),
+            ));
+        }
+        if self.sequence.is_some() && self.source.is_some() {
+            return Err(RenderError::InvalidInput(
+                "snapshot carries both sequence and source targets".into(),
             ));
         }
         if let Some(id) = self.sequence {
@@ -605,6 +698,23 @@ impl RenderSnapshot {
             for node in root.nodes {
                 if let NodeKind::CompositionInstance(i) = node.kind {
                     kronello_template::validate_reachable(&self.project, i.definition_ref)?;
+                }
+            }
+        } else if let Some(source) = self.source {
+            match source {
+                crate::source::SourcePreviewRef::Composition { composition } => {
+                    if composition != self.composition {
+                        return Err(RenderError::InvalidInput(
+                            "source composition target mismatch".into(),
+                        ));
+                    }
+                    kronello_template::validate_reachable(&self.project, composition)?;
+                }
+                _ => {
+                    if self.composition != crate::source::SOURCE_ROOT_ID {
+                        return Err(RenderError::InvalidInput("source target mismatch".into()));
+                    }
+                    crate::source::lower_source(&self.project, &source)?;
                 }
             }
         } else {
@@ -640,6 +750,17 @@ impl RenderSnapshot {
                     }
                     None => crate::sequence::lower_sequence(&self.project, sequence)?,
                 };
+                &lowered
+            } else if let Some(source) =
+                self.source
+                    .filter(|_| id == self.composition)
+                    .filter(|source| {
+                        !matches!(source, crate::source::SourcePreviewRef::Composition { .. })
+                    })
+            {
+                // Source-monitor root: re-lowered from the frozen project on
+                // every evaluation, exactly like a lowered sequence root.
+                lowered = crate::source::lower_source(&self.project, &source)?;
                 &lowered
             } else {
                 content(&self.project.compositions, id.as_uuid(), |c| c.id.as_uuid())?
@@ -692,7 +813,7 @@ fn content<T>(
     }
     Ok(None)
 }
-fn content_asset(project: &Project, id: AssetId) -> Result<&Asset, RenderError> {
+pub(crate) fn content_asset(project: &Project, id: AssetId) -> Result<&Asset, RenderError> {
     content(&project.assets, id.as_uuid(), |a| a.id.as_uuid())?.ok_or_else(|| {
         RenderError::Backend {
             code: "ASSET_MISSING",
@@ -757,7 +878,13 @@ pub enum SceneContent {
         stream_index: u32,
         time: Time,
         reverse_sampling: bool,
+        /// TRACK-003 (ADR-0123): authored intermediate-frame synthesis for
+        /// this sample; `None` keeps the legacy single-frame decode.
+        interpolation: Option<kronello_time::FrameInterpolation>,
         extent: [f64; 2],
+        /// AI-003 (ADR-0126): source-pixel window `[x, y, w, h]`; `extent` is
+        /// the window size so layout and bounds reflect the crop.
+        crop: Option<[f64; 4]>,
     },
     /// FX-007 (ADR-0116): an adjustment clip node. It draws nothing itself;
     /// DAG lowering rewrites the accumulated lower-track composite through
@@ -1018,7 +1145,7 @@ pub fn build_scene_ir_with_cache(
         if authored.effects.len() > 16 {
             return Err(EffectError::StackBudget.into());
         }
-        let effects = authored
+        let mut effects = authored
             .effects
             .iter()
             .map(|e| {
@@ -1066,7 +1193,13 @@ pub fn build_scene_ir_with_cache(
             .collect::<Result<Vec<_>, RenderError>>()?;
         let mut layout_content_hash = None;
         let properties = values.clone();
+        // AI-003 (ADR-0126): the crop window is evaluated once per node
+        // before `values` can move into shape content.
+        let node_crop = evaluated_crop(&authored.properties, &values)?;
         let mut evaluated_text = None;
+        // TRACK-002: the authored visual source (asset id + authored stream)
+        // feeding this node's video content, for tracking-data lock checks.
+        let mut video_source: Option<(AssetId, u32)> = None;
         let mut content = match n.kind {
             NodeKind::Shape { content_ref } => {
                 let shape = content(&snapshot.project.shapes, content_ref.as_uuid(), |s| {
@@ -1125,7 +1258,15 @@ pub fn build_scene_ir_with_cache(
                                 n.local_time.checked_sub(authored.active_range.start())?;
                             let source =
                                 media.source_in.checked_add(media.time_map.map(relative)?)?;
-                            media_content(snapshot, asset, media.stream_index, source)?
+                            video_source = Some((media.asset, media.stream_index));
+                            media_content(
+                                snapshot,
+                                asset,
+                                media.stream_index,
+                                source,
+                                node_crop,
+                                media.time_map.interpolation(),
+                            )?
                         }
                     }
                     AssetKind::Data => {
@@ -1152,7 +1293,10 @@ pub fn build_scene_ir_with_cache(
                 .start_time
                 .unwrap_or(Time::ZERO)
                 .checked_add(relative)?;
-            content = media_content(snapshot, asset, stream.index, source)?;
+            // MediaSlot substitution streams the asset start-time directly;
+            // the slot path never carries authored time-map interpolation.
+            video_source = Some((asset.id, stream.index));
+            content = media_content(snapshot, asset, stream.index, source, node_crop, None)?;
         }
         let mut post_effect_opacity = 1.0;
         let mut transitions = Vec::new();
@@ -1196,12 +1340,33 @@ pub fn build_scene_ir_with_cache(
                     };
                     let (decode_asset, decode_stream) =
                         render_media(snapshot, asset, *stream_index);
+                    // The lowered node clones clip properties one-to-one, so
+                    // `authored`/`values` already carry the crop descriptors.
+                    if let Some([x, y, cw, ch]) = node_crop
+                        && (x < 0.0
+                            || y < 0.0
+                            || cw <= 0.0
+                            || ch <= 0.0
+                            || x + cw > w + 1e-6
+                            || y + ch > h + 1e-6)
+                    {
+                        return Err(RenderError::InvalidInput(
+                            "clip crop window outside source bounds".into(),
+                        ));
+                    }
+                    let interpolation = clip.time_map.interpolation();
+                    if interpolation.is_some() {
+                        require_frame_interpolation(snapshot)?;
+                    }
+                    video_source = Some((asset.id, *stream_index));
                     SceneContent::Video {
                         asset: decode_asset.clone(),
                         stream_index: decode_stream,
                         time: clip.local_time(time)?,
                         reverse_sampling: clip.reverse_sampling.is_some(),
-                        extent: [w, h],
+                        interpolation,
+                        extent: node_crop.map(|c| [c[2], c[3]]).unwrap_or([w, h]),
+                        crop: node_crop,
                     }
                 }
                 SourceRef::Generator { color, .. } => {
@@ -1241,6 +1406,53 @@ pub fn build_scene_ir_with_cache(
                         background: resolved.background,
                         origin,
                     })
+                }
+                SourceRef::Multicam { .. } => {
+                    // NLE-007 (ADR-0127): the clip keeps its authored multicam
+                    // identity; the active angle resolves to a concrete decode
+                    // asset/stream and shifts local source time by sync_offset.
+                    let resolved =
+                        crate::source::resolve_source(&snapshot.project, &clip.source_ref)?;
+                    let asset = content_asset(&snapshot.project, resolved.asset)?;
+                    let stream = asset
+                        .streams
+                        .iter()
+                        .find(|s| s.index == resolved.stream_index)
+                        .expect("validated stream");
+                    let extent = [stream.width, stream.height].map(|x| x.map(f64::from));
+                    let [Some(w), Some(h)] = extent else {
+                        return Err(RenderError::UnsupportedFeature(
+                            "video dimensions unavailable".into(),
+                        ));
+                    };
+                    let (decode_asset, decode_stream) =
+                        render_media(snapshot, asset, resolved.stream_index);
+                    if let Some([x, y, cw, ch]) = node_crop
+                        && (x < 0.0
+                            || y < 0.0
+                            || cw <= 0.0
+                            || ch <= 0.0
+                            || x + cw > w + 1e-6
+                            || y + ch > h + 1e-6)
+                    {
+                        return Err(RenderError::InvalidInput(
+                            "clip crop window outside source bounds".into(),
+                        ));
+                    }
+                    let interpolation = clip.time_map.interpolation();
+                    if interpolation.is_some() {
+                        require_frame_interpolation(snapshot)?;
+                    }
+                    video_source = Some((resolved.asset, resolved.stream_index));
+                    SceneContent::Video {
+                        asset: decode_asset.clone(),
+                        stream_index: decode_stream,
+                        time: clip.local_time(time)?.checked_add(resolved.offset)?,
+                        reverse_sampling: clip.reverse_sampling.is_some(),
+                        interpolation,
+                        extent: node_crop.map(|c| [c[2], c[3]]).unwrap_or([w, h]),
+                        crop: node_crop,
+                    }
                 }
                 _ => content,
             };
@@ -1364,6 +1576,10 @@ pub fn build_scene_ir_with_cache(
                 visible: relation.visible,
             });
         }
+        // TRACK-002 (ADR-0122): bind the per-frame inverse correction to
+        // resolved stabilize effects on video nodes. The tracking asset is
+        // content-locked to the authored source; failures are typed.
+        resolve_stabilize(&mut effects, &content, video_source, snapshot)?;
         BlendMode::from_properties(&authored.properties)
             .map_err(|e| RenderError::InvalidInput(e.to_string()))?;
         let blend_mode = if let Some(property) = authored
@@ -1438,16 +1654,158 @@ fn require_composition_media(snapshot: &RenderSnapshot) -> Result<(), RenderErro
     }
     Ok(())
 }
+/// AI-003 (ADR-0126): evaluated `kronello.media.crop_*` window in source
+/// pixels. A missing or nonpositive `crop_size` disables the crop; the
+/// origin defaults to `[0, 0]`. Smart-reframe rules write both through the
+/// shared layout-input path; authors may set them directly as well.
+fn evaluated_crop(
+    properties: &[Property],
+    values: &BTreeMap<PropertyId, Value>,
+) -> Result<Option<[f64; 4]>, RenderError> {
+    let lookup = |name: &str| -> Result<Option<[f64; 2]>, RenderError> {
+        let Some(property) = properties
+            .iter()
+            .find(|p| p.descriptor().key.as_str() == name)
+        else {
+            return Ok(None);
+        };
+        match values.get(&property.id()) {
+            None => Ok(None),
+            Some(Value::Vec2(v)) => Ok(Some([v[0].get(), v[1].get()])),
+            Some(_) => Err(RenderError::InvalidInput(
+                "media crop property must evaluate to vec2".into(),
+            )),
+        }
+    };
+    let Some([w, h]) = lookup("kronello.media.crop_size")? else {
+        return Ok(None);
+    };
+    if w <= 0.0 || h <= 0.0 {
+        return Ok(None);
+    }
+    let origin = lookup("kronello.media.crop_origin")?.unwrap_or([0.0, 0.0]);
+    Ok(Some([origin[0], origin[1], w, h]))
+}
+/// TRACK-003 (ADR-0123): the pinned `frame_interpolation` version gates any
+/// authored intermediate-frame synthesis; unpinned snapshots decode only
+/// presented frames.
+fn require_frame_interpolation(snapshot: &RenderSnapshot) -> Result<(), RenderError> {
+    if snapshot.semantic_versions.frame_interpolation != Some(FRAME_INTERPOLATION_VERSION) {
+        return Err(RenderError::UnsupportedFeature(
+            "frame interpolation requires pinned frame_interpolation semantic version 1".into(),
+        ));
+    }
+    Ok(())
+}
+/// TRACK-002 (ADR-0122): resolve `kronello.stabilize` effects to a bound
+/// per-frame inverse correction. The referenced `TrackingDataAsset` must be
+/// known, valid and content-locked to the authored source asset+stream that
+/// feeds this node's video content; every failure is a typed render error.
+fn resolve_stabilize(
+    effects: &mut [kronello_model::ResolvedEffect],
+    content: &SceneContent,
+    video_source: Option<(AssetId, u32)>,
+    snapshot: &RenderSnapshot,
+) -> Result<(), RenderError> {
+    if !effects
+        .iter()
+        .any(|e| matches!(e, kronello_model::ResolvedEffect::Stabilize { .. }))
+    {
+        return Ok(());
+    }
+    let SceneContent::Video {
+        time,
+        extent,
+        interpolation,
+        ..
+    } = content
+    else {
+        return Err(RenderError::InvalidInput(
+            "stabilize requires video clip or media node content".into(),
+        ));
+    };
+    // A synthesized frame has no stable tracked lattice: stabilization binds
+    // to authored presentation samples only.
+    if interpolation.is_some() {
+        return Err(RenderError::UnsupportedFeature(
+            "stabilize cannot combine with frame interpolation".into(),
+        ));
+    }
+    let (source_asset_id, source_stream) = video_source.ok_or_else(|| {
+        RenderError::InvalidInput("stabilize requires an authored video source".into())
+    })?;
+    let authored = content_asset(&snapshot.project, source_asset_id)?;
+    for effect in effects.iter_mut() {
+        let kronello_model::ResolvedEffect::Stabilize {
+            tracking,
+            smoothing_radius,
+            max_displacement,
+            max_rotation,
+            max_crop,
+            inverse,
+            ..
+        } = effect
+        else {
+            continue;
+        };
+        let data = snapshot
+            .project
+            .tracking_data_assets
+            .iter()
+            .find_map(|o| match o {
+                DocumentObject::Known(d) if d.id == *tracking => Some(d),
+                _ => None,
+            })
+            .ok_or_else(|| RenderError::Backend {
+                code: "TRACKING_DATA_MISSING",
+                message: "stabilize tracking data asset is absent or opaque".into(),
+            })?;
+        if data.source.asset != authored.id
+            || data.source.stream_index != source_stream
+            || data.source.content_hash != authored.content_hash
+        {
+            return Err(RenderError::Backend {
+                code: "TRACKING_DATA_STALE",
+                message: "stabilize tracking data is not locked to the clip source".into(),
+            });
+        }
+        let params = kronello_tracking::StabilizeParams {
+            smoothing_radius: *smoothing_radius,
+            max_displacement: *max_displacement,
+            max_rotation: *max_rotation,
+            max_crop: *max_crop,
+        };
+        *inverse = Some(
+            kronello_tracking::correction_inverse(data, *time, &params, *extent).map_err(|e| {
+                RenderError::Backend {
+                    code: e.code(),
+                    message: e.to_string(),
+                }
+            })?,
+        );
+    }
+    Ok(())
+}
 fn media_content(
     snapshot: &RenderSnapshot,
     asset: &Asset,
     stream_index: u32,
     source: Time,
+    crop: Option<[f64; 4]>,
+    interpolation: Option<kronello_time::FrameInterpolation>,
 ) -> Result<SceneContent, RenderError> {
     if !matches!(asset.kind, AssetKind::Video | AssetKind::Image) {
         return Err(RenderError::UnsupportedFeature(
             "MediaSlot requires image/video asset".into(),
         ));
+    }
+    if interpolation.is_some() {
+        if asset.kind != AssetKind::Video {
+            return Err(RenderError::UnsupportedFeature(
+                "frame interpolation requires a video asset".into(),
+            ));
+        }
+        require_frame_interpolation(snapshot)?;
     }
     let stream = asset
         .streams
@@ -1462,6 +1820,19 @@ fn media_content(
     if width == 0 || height == 0 {
         return Err(RenderError::InvalidInput(
             "visual media dimensions must be positive".into(),
+        ));
+    }
+    let extent = [f64::from(width), f64::from(height)];
+    if let Some([x, y, w, h]) = crop
+        && (x < 0.0
+            || y < 0.0
+            || w <= 0.0
+            || h <= 0.0
+            || x + w > extent[0] + 1e-6
+            || y + h > extent[1] + 1e-6)
+    {
+        return Err(RenderError::InvalidInput(
+            "media crop window outside source bounds".into(),
         ));
     }
     let time = if asset.kind == AssetKind::Image {
@@ -1487,6 +1858,10 @@ fn media_content(
         asset: decode_asset.clone(),
         stream_index: decode_stream,
         time,
-        extent: [f64::from(width), f64::from(height)],
+        interpolation,
+        // The layout box is the crop window so bounds and transforms follow
+        // the reframed content.
+        extent: crop.map(|c| [c[2], c[3]]).unwrap_or(extent),
+        crop,
     })
 }

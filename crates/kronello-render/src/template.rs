@@ -1,5 +1,5 @@
 //! Upper compilation schedules text before bounds consumers, without reverse imports.
-use crate::{RenderCache, RenderError};
+use crate::{RenderCache, RenderError, snapshot::content_asset};
 use kronello_eval::{DependencyDeclarations, DependencyGraph, NodeKey, RuntimePropertyKey};
 use kronello_model::*;
 use kronello_text::{FontData, LayoutResult};
@@ -15,6 +15,8 @@ pub(crate) struct TemplateRuntime {
     pub layouts: BTreeMap<NodeKey, LayoutResult>,
     bands: Vec<(InstancePath, TemplateBandBinding)>,
     limits: BTreeMap<NodeKey, usize>,
+    /// AI-003 (ADR-0126): tracking-driven crop rules per placement.
+    reframes: Vec<(InstancePath, kronello_model::SmartReframeRule)>,
 }
 fn key(path: &InstancePath, node: NodeId, property: PropertyId) -> RuntimePropertyKey {
     PropertyKey {
@@ -227,6 +229,61 @@ impl TemplateRuntime {
                                 .insert(key(&child, b.band_node, target), vec![layout]);
                         }
                         runtime.bands.push((child.clone(), b.clone()));
+                    }
+                    for rule in &constraints.smart_reframes {
+                        rule.settings
+                            .validate()
+                            .map_err(|e| RenderError::InvalidInput(e.to_string()))?;
+                        let media = definitions
+                            .iter()
+                            .find(|c| c.id == placement.definition_ref)
+                            .ok_or_else(|| {
+                                RenderError::InvalidInput(
+                                    "missing specialized template definition".into(),
+                                )
+                            })?
+                            .nodes
+                            .iter()
+                            .find(|n| n.id == rule.node)
+                            .ok_or_else(|| {
+                                RenderError::InvalidInput("smart reframe node missing".into())
+                            })?;
+                        if !matches!(media.kind, NodeKind::Media(_) | NodeKind::Null) {
+                            return Err(RenderError::InvalidInput(
+                                "smart reframe requires a media node".into(),
+                            ));
+                        }
+                        for (property, descriptor) in [
+                            (rule.crop_origin_property, "kronello.media.crop_origin"),
+                            (rule.crop_size_property, "kronello.media.crop_size"),
+                        ] {
+                            if !media.properties.iter().any(|p| {
+                                p.id() == property && p.descriptor().key.as_str() == descriptor
+                            }) {
+                                return Err(RenderError::InvalidInput(
+                                    "smart reframe crop property missing".into(),
+                                ));
+                            }
+                            let layout = RuntimePropertyKey::LayoutValue {
+                                instance_path: child.clone(),
+                                text: rule.node,
+                                consumer: property,
+                            };
+                            runtime.dependencies.insert(layout.clone(), Vec::new());
+                            runtime
+                                .dependencies
+                                .insert(key(&child, rule.node, property), vec![layout]);
+                        }
+                        if !project
+                            .tracking_data_assets
+                            .iter()
+                            .any(|a| matches!(a, DocumentObject::Known(a) if a.id == rule.tracking))
+                        {
+                            return Err(RenderError::InvalidInput(
+                                "smart reframe tracking asset missing".into(),
+                            ));
+                        }
+                        runtime.reframes.push((child.clone(), rule.clone()));
                     }
                     runtime
                         .limits
@@ -451,6 +508,149 @@ impl TemplateRuntime {
                     consumer: b.position_property,
                 },
                 Value::Vec2(position),
+            );
+        }
+        // AI-003 (ADR-0126): smart-reframe windows are pure functions of the
+        // versioned tracking asset, settings and source time. Inactive rules
+        // skip insertion exactly like inactive band texts.
+        let reframes = self.reframes.clone();
+        for (path, rule) in &reframes {
+            let local = graph.local_time(path, time)?;
+            let mut parent = InstancePath::root();
+            let mut c = &definitions[0];
+            let mut active = true;
+            for instance in path.ids() {
+                let placement = c
+                    .nodes
+                    .iter()
+                    .find(|n| matches!(&n.kind, NodeKind::CompositionInstance(p) if p.id == *instance))
+                    .unwrap();
+                if !active_with_parents(placement, c, graph.local_time(&parent, time)?) {
+                    active = false;
+                    break;
+                }
+                let NodeKind::CompositionInstance(p) = &placement.kind else {
+                    unreachable!()
+                };
+                parent = parent.child(*instance);
+                c = definitions
+                    .iter()
+                    .find(|c| c.id == p.definition_ref)
+                    .unwrap();
+            }
+            if !active {
+                continue;
+            }
+            let authored = c.nodes.iter().find(|n| n.id == rule.node).unwrap();
+            if !active_with_parents(authored, c, local) {
+                continue;
+            }
+            let zero = Value::Vec2([FiniteF64::new(0.0).expect("finite"); 2]);
+            let mut insert = |consumer, value: Value| {
+                self.inputs.insert(
+                    RuntimePropertyKey::LayoutValue {
+                        instance_path: path.clone(),
+                        text: rule.node,
+                        consumer,
+                    },
+                    value,
+                );
+            };
+            let relative = local.checked_sub(authored.active_range.start())?;
+            let (asset_id, stream_index, source_time) = match &authored.kind {
+                NodeKind::Media(media) => (
+                    media.asset,
+                    media.stream_index,
+                    media.source_in.checked_add(media.time_map.map(relative)?)?,
+                ),
+                NodeKind::Null => {
+                    let node = NodeKey {
+                        instance_path: path.clone(),
+                        node: rule.node,
+                    };
+                    let Some(&asset) = self.media_slots.get(&node) else {
+                        // An unbound slot draws nothing; the disabled crop
+                        // keeps consumer evaluation total.
+                        insert(rule.crop_origin_property, zero.clone());
+                        insert(rule.crop_size_property, zero.clone());
+                        continue;
+                    };
+                    let asset_data = content_asset(project, asset)?;
+                    let stream = asset_data
+                        .streams
+                        .iter()
+                        .find(|s| s.width.is_some() && s.height.is_some())
+                        .ok_or_else(|| {
+                            RenderError::UnsupportedFeature(
+                                "smart reframe media slot has no visual stream".into(),
+                            )
+                        })?;
+                    (
+                        asset,
+                        stream.index,
+                        stream
+                            .start_time
+                            .unwrap_or(Time::ZERO)
+                            .checked_add(relative)?,
+                    )
+                }
+                _ => unreachable!("validated smart reframe node kind"),
+            };
+            let asset_data = content_asset(project, asset_id)?;
+            let stream = asset_data
+                .streams
+                .iter()
+                .find(|s| s.index == stream_index)
+                .ok_or_else(|| RenderError::InvalidInput("smart reframe stream missing".into()))?;
+            let (Some(width), Some(height)) = (stream.width, stream.height) else {
+                return Err(RenderError::UnsupportedFeature(
+                    "smart reframe source dimensions missing".into(),
+                ));
+            };
+            let tracking = project
+                .tracking_data_assets
+                .iter()
+                .find_map(|a| match a {
+                    DocumentObject::Known(a) if a.id == rule.tracking => Some(a),
+                    _ => None,
+                })
+                .ok_or_else(|| {
+                    RenderError::InvalidInput("smart reframe tracking asset missing".into())
+                })?;
+            tracking
+                .validate()
+                .map_err(|e| RenderError::InvalidInput(e.to_string()))?;
+            if !project.assets.iter().any(|a| {
+                matches!(a, DocumentObject::Known(a)
+                    if a.id == tracking.source.asset
+                        && a.content_hash == tracking.source.content_hash)
+            }) {
+                return Err(RenderError::InvalidInput(
+                    "stale smart reframe tracking source".into(),
+                ));
+            }
+            let window = kronello_scene::reframe_window(
+                tracking,
+                &rule.settings,
+                source_time,
+                [f64::from(width), f64::from(height)],
+            )
+            .map_err(|e| RenderError::Backend {
+                code: e.code(),
+                message: e.to_string(),
+            })?;
+            let finite = |v: f64| {
+                FiniteF64::new(v).map_err(|_| {
+                    RenderError::InvalidInput("smart reframe window not finite".into())
+                })
+            };
+            insert(
+                rule.crop_origin_property,
+                Value::Vec2([finite(window[0])?, finite(window[1])?]),
+            );
+            insert(
+                rule.crop_size_property,
+                Value::Vec2([finite(window[2])?, finite(window[3])?]),
             );
         }
         Ok(())

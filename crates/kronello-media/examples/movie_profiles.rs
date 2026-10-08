@@ -112,14 +112,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let expected = bus.quantize_pcm24(ClippingPolicy::Reject)?;
     let decoded = runtime.decode_audio(&request.output, 1)?;
     assert_eq!(decoded.source_start, Rational::ZERO);
-    assert_eq!(decoded.buffer.frames().len(), 4804);
-    for (sample, pcm) in decoded
-        .buffer
-        .frames()
-        .iter()
-        .flatten()
-        .zip(expected.samples)
-    {
+    assert_eq!(decoded.buffer.frame_count(), 4804);
+    for (sample, pcm) in decoded.buffer.samples().iter().zip(expected.samples) {
         assert_eq!(sample.to_bits(), ((pcm / 256) as f32 / 8388608.0).to_bits());
     }
     let mut decoder = runtime.open_video(&request.output)?;

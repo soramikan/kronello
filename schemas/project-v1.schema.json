@@ -15,6 +15,13 @@
         "$ref": "#/$defs/DocumentObject10"
       }
     },
+    "bins": {
+      "description": "FLOW-002 media organization (ADR-0129): unordered bin collection keyed\nby `Bin.id`. An asset may appear in several bins.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Bin"
+      }
+    },
     "captions": {
       "type": "array",
       "items": {
@@ -33,10 +40,17 @@
         "$ref": "#/$defs/DocumentObject2"
       }
     },
+    "export_presets": {
+      "description": "FLOW-003 shared export presets (ADR-0130): versioned, destination-free\n`render.submit` settings stored inside the document.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ExportPreset"
+      }
+    },
     "expression_data_assets": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject12"
+        "$ref": "#/$defs/DocumentObject13"
       }
     },
     "expressions": {
@@ -52,7 +66,14 @@
     "mattes": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject14"
+        "$ref": "#/$defs/DocumentObject15"
+      }
+    },
+    "multicams": {
+      "description": "NLE-007 multicam groups (ADR-0127); plain entries, never opaque.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/MulticamAsset"
       }
     },
     "name": {
@@ -68,7 +89,14 @@
     "repeaters": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject15"
+        "$ref": "#/$defs/DocumentObject16"
+      }
+    },
+    "scene_boundary_assets": {
+      "description": "AI-002 (ADR-0125): deterministic cut-detection results, locked to the\nanalyzed source asset like tracking data.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DocumentObject12"
       }
     },
     "schema_version": {
@@ -85,7 +113,7 @@
     "sequences": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject13"
+        "$ref": "#/$defs/DocumentObject14"
       }
     },
     "shapes": {
@@ -97,7 +125,7 @@
     "simulations": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/DocumentObject16"
+        "$ref": "#/$defs/DocumentObject17"
       }
     },
     "template_instances": {
@@ -135,6 +163,11 @@
     "curves"
   ],
   "$defs": {
+    "AngleId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "type": "string",
+      "format": "uuid"
+    },
     "AnimationCurve": {
       "description": "Validated, strictly time-ordered document data; evaluation lives in\nkronello-animation. Unknown meaning versions can be retained and serialized,\nbut cannot be edited or evaluated as version 1. Empty curves are editable;\nevaluating one is an explicit error, never an implicit default value.",
       "type": "object",
@@ -492,8 +525,37 @@
       "enum": [
         "reject",
         "resample_v1",
-        "reverse_resample_v1"
+        "reverse_resample_v1",
+        "pitch_preserve_v1"
       ]
+    },
+    "Bin": {
+      "type": "object",
+      "properties": {
+        "assets": {
+          "description": "Insertion-ordered membership. The list behaves like an ordered set:\nmembership edits assign each asset at most once.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AssetId"
+          }
+        },
+        "id": {
+          "$ref": "#/$defs/BinId"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name"
+      ]
+    },
+    "BinId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "type": "string",
+      "format": "uuid"
     },
     "BoundsStage": {
       "description": "Resolution-independent bounds stage selected by a layout consumer.",
@@ -726,6 +788,12 @@
         "size",
         "fill"
       ]
+    },
+    "ChannelMask": {
+      "description": "Versioned speaker-layout bitset (channel_mask v1): 1=mono, 3=stereo, 1551=5.1(side), 63=5.1(back), 1599=7.1",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
     },
     "CharacterAnimation": {
       "description": "Logical source selection. Ranges are never glyph or line indices.",
@@ -1220,7 +1288,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/ExpressionDataAsset"
+          "$ref": "#/$defs/SceneBoundaryAsset"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -1231,7 +1299,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/Sequence"
+          "$ref": "#/$defs/ExpressionDataAsset"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -1242,7 +1310,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/MatteRelation"
+          "$ref": "#/$defs/Sequence"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -1253,7 +1321,7 @@
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
-          "$ref": "#/$defs/Repeater"
+          "$ref": "#/$defs/MatteRelation"
         },
         {
           "$ref": "#/$defs/OpaqueObject"
@@ -1261,6 +1329,17 @@
       ]
     },
     "DocumentObject16": {
+      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Repeater"
+        },
+        {
+          "$ref": "#/$defs/OpaqueObject"
+        }
+      ]
+    },
+    "DocumentObject17": {
       "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants.",
       "anyOf": [
         {
@@ -1909,6 +1988,96 @@
             "lut",
             "intensity"
           ]
+        },
+        {
+          "description": "AUDIO-011 (ADR-0131): hash-pinned audio plugin binding. The document\ncarries only identity + pin metadata — a bundle path string, format,\ncomponent id, manifest hash and version — never plugin bytes. The\nbinding is processed exclusively by the detached plugin worker; the\naudio evaluator rejects it with `UNSUPPORTED_FEATURE`.",
+          "type": "object",
+          "properties": {
+            "bundle": {
+              "description": "Bundle directory or module file path.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "component": {
+              "description": "VST3 32-hex class id or AU `type:subtype:manufacturer` triplet.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "format": {
+              "description": "`vst3` | `audio_unit`.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "audio_plugin"
+            },
+            "parameters": {
+              "description": "DataTable `{ param: Scalar, value: Scalar }` — VST3 normalized\nparameter ids, AU native parameter values; ≤1024 rows.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "plugin_version": {
+              "description": "Recorded plugin version pin (AU hex version / VST3 class\nversion string; empty = unpinned).",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "sha256": {
+              "description": "Lowercase hex SHA-256 manifest pin (empty for built-in AUs).",
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "bundle",
+            "format",
+            "component",
+            "sha256",
+            "plugin_version",
+            "parameters"
+          ]
+        },
+        {
+          "description": "TRACK-002 (ADR-0122): invert tracked camera motion. `tracking`\nreferences a `TrackingDataAsset`; the smoothed trajectory uses a\nsymmetric window of `2*smoothing_radius+1` tracked samples;\n`max_displacement` (design px), `max_rotation` (degrees) and\n`max_crop` (unit interval of the source frame area) bound the applied\ncorrection; `border` selects the uncovered-region policy with\n`fill_color` for `fill`; `sampling` picks the resampler.",
+          "type": "object",
+          "properties": {
+            "border": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "fill_color": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "stabilize"
+            },
+            "max_crop": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "max_displacement": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "max_rotation": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "sampling": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "smoothing_radius": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "tracking": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "tracking",
+            "smoothing_radius",
+            "max_displacement",
+            "max_rotation",
+            "max_crop",
+            "border",
+            "fill_color",
+            "sampling"
+          ]
         }
       ]
     },
@@ -1943,6 +2112,725 @@
       "additionalProperties": false,
       "required": [
         "source"
+      ]
+    },
+    "ExportAudioClip": {
+      "description": "Mirror of `kronello_service::JobAudioClip`.",
+      "type": "object",
+      "properties": {
+        "asset": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "gain": {
+          "type": "number",
+          "format": "float"
+        },
+        "placement": {
+          "$ref": "#/$defs/TimeRange"
+        },
+        "source_in": {
+          "$ref": "#/$defs/Rational"
+        },
+        "stream_index": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "asset",
+        "stream_index",
+        "placement",
+        "source_in",
+        "gain"
+      ]
+    },
+    "ExportAudioCodec": {
+      "description": "Mirror of `kronello_media::DeliveryAudioCodec`.",
+      "type": "string",
+      "enum": [
+        "alac",
+        "aac",
+        "opus"
+      ]
+    },
+    "ExportAudioMode": {
+      "description": "Mirror of `kronello_audio::AudioSourceMode`.",
+      "type": "string",
+      "enum": [
+        "document",
+        "explicit",
+        "silence"
+      ]
+    },
+    "ExportCutPolicy": {
+      "description": "Mirror of `kronello_render::CutPolicy`.",
+      "type": "string",
+      "enum": [
+        "avoid_crossing",
+        "allow_crossing"
+      ]
+    },
+    "ExportHdrSettings": {
+      "description": "Mirror of `kronello_render::HdrSettings`.",
+      "type": "object",
+      "properties": {
+        "transfer": {
+          "$ref": "#/$defs/ExportTransfer"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "transfer"
+      ]
+    },
+    "ExportOutput": {
+      "description": "Mirror of `kronello_service::JobOutput`; the same `\"format\"` tag, snake_case\nvariant names, field names and field defaults are required for the\none-to-one conversion at submission time.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "format": {
+              "type": "string",
+              "const": "image_sequence"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "format"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/ExportAudioMode",
+              "default": "explicit"
+            },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "background": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "format": "float"
+              },
+              "maxItems": 3,
+              "minItems": 3
+            },
+            "clips": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ExportAudioClip"
+              }
+            },
+            "format": {
+              "type": "string",
+              "const": "pro_res_mov"
+            },
+            "profile_version": {
+              "type": "integer",
+              "format": "uint32",
+              "default": 1,
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "format",
+            "clips",
+            "background"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/ExportAudioMode",
+              "default": "explicit"
+            },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "background": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "format": "float"
+              },
+              "maxItems": 3,
+              "minItems": 3
+            },
+            "clips": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ExportAudioClip"
+              }
+            },
+            "format": {
+              "type": "string",
+              "const": "pro_res_sdr_from_hdr_mov"
+            },
+            "profile_version": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "format",
+            "profile_version",
+            "clips",
+            "background"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/ExportAudioMode",
+              "default": "explicit"
+            },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "background": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "format": "float"
+              },
+              "maxItems": 3,
+              "minItems": 3
+            },
+            "clips": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ExportAudioClip"
+              }
+            },
+            "format": {
+              "type": "string",
+              "const": "pro_res_hdr_mov"
+            },
+            "profile_version": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "transfer": {
+              "$ref": "#/$defs/ExportTransfer"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "format",
+            "profile_version",
+            "transfer",
+            "clips",
+            "background"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/ExportAudioMode",
+              "default": "explicit"
+            },
+            "audio_codec": {
+              "$ref": "#/$defs/ExportAudioCodec",
+              "default": "alac"
+            },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "background": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "format": "float"
+              },
+              "maxItems": 3,
+              "minItems": 3
+            },
+            "clips": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ExportAudioClip"
+              }
+            },
+            "format": {
+              "type": "string",
+              "const": "av1_mp4"
+            },
+            "profile_version": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "format",
+            "profile_version",
+            "clips",
+            "background"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/ExportAudioMode",
+              "default": "explicit"
+            },
+            "audio_codec": {
+              "$ref": "#/$defs/ExportAudioCodec",
+              "default": "alac"
+            },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "background": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "format": "float"
+              },
+              "maxItems": 3,
+              "minItems": 3
+            },
+            "clips": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ExportAudioClip"
+              }
+            },
+            "format": {
+              "type": "string",
+              "const": "h264_mov"
+            },
+            "profile_version": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "format",
+            "profile_version",
+            "clips",
+            "background"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/ExportAudioMode",
+              "default": "explicit"
+            },
+            "audio_codec": {
+              "$ref": "#/$defs/ExportAudioCodec",
+              "default": "alac"
+            },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "background": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "format": "float"
+              },
+              "maxItems": 3,
+              "minItems": 3
+            },
+            "clips": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ExportAudioClip"
+              }
+            },
+            "format": {
+              "type": "string",
+              "const": "hevc_mov"
+            },
+            "profile_version": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "format",
+            "profile_version",
+            "clips",
+            "background"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/ExportAudioMode",
+              "default": "explicit"
+            },
+            "audio_codec": {
+              "$ref": "#/$defs/ExportAudioCodec",
+              "default": "alac"
+            },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "background": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "format": "float"
+              },
+              "maxItems": 3,
+              "minItems": 3
+            },
+            "clips": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ExportAudioClip"
+              }
+            },
+            "format": {
+              "type": "string",
+              "const": "av1_webm"
+            },
+            "profile_version": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "format",
+            "profile_version",
+            "clips",
+            "background"
+          ]
+        },
+        {
+          "description": "Subtitle sidecar file; the target must be the same sequence.",
+          "type": "object",
+          "properties": {
+            "caption_format": {
+              "$ref": "#/$defs/CaptionFormat"
+            },
+            "format": {
+              "type": "string",
+              "const": "caption_sidecar"
+            },
+            "sequence": {
+              "$ref": "#/$defs/SequenceId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "format",
+            "sequence",
+            "caption_format"
+          ]
+        }
+      ]
+    },
+    "ExportPreset": {
+      "description": "A versioned, named, destination-independent export setting stored in the\nproject document. `destination` is supplied per submission, never stored.",
+      "type": "object",
+      "properties": {
+        "composition": {
+          "description": "Legacy single-composition shortcut; exactly one of `composition` and\n`target` must be set, matching the `RenderInput` rule.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CompositionId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "frame_rate": {
+          "$ref": "#/$defs/FrameRate"
+        },
+        "id": {
+          "$ref": "#/$defs/ExportPresetId"
+        },
+        "name": {
+          "type": "string"
+        },
+        "output": {
+          "$ref": "#/$defs/ExportOutput",
+          "default": {
+            "format": "image_sequence"
+          }
+        },
+        "profile": {
+          "$ref": "#/$defs/ExportProfile",
+          "default": {
+            "flatten_tolerance_px": 0.02,
+            "working_space": "linear_rec709"
+          }
+        },
+        "range": {
+          "$ref": "#/$defs/TimeRange"
+        },
+        "region": {
+          "$ref": "#/$defs/ExportRegion"
+        },
+        "required_features": {
+          "description": "Submission-time capability requirements, forwarded to the job request.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "target": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExportTarget"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "version": {
+          "description": "Payload schema version; must equal [`EXPORT_PRESET_VERSION`].",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "id",
+        "name",
+        "range",
+        "frame_rate",
+        "region"
+      ]
+    },
+    "ExportPresetId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "ExportProfile": {
+      "description": "Mirror of `kronello_render::RenderProfile`; defaults match its `Default`.",
+      "type": "object",
+      "properties": {
+        "flatten_tolerance_px": {
+          "type": "number",
+          "format": "double"
+        },
+        "hdr": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExportHdrSettings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "temporal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExportTemporalSettings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "working_space": {
+          "$ref": "#/$defs/ColorSpace"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "working_space",
+        "flatten_tolerance_px"
+      ]
+    },
+    "ExportRegion": {
+      "description": "Mirror of `kronello_render::OutputRegion`.",
+      "type": "object",
+      "properties": {
+        "extent": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "format": "double"
+          },
+          "maxItems": 2,
+          "minItems": 2
+        },
+        "origin": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "format": "double"
+          },
+          "maxItems": 2,
+          "minItems": 2
+        },
+        "pixels": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "maxItems": 2,
+          "minItems": 2
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "origin",
+        "extent",
+        "pixels"
+      ]
+    },
+    "ExportTarget": {
+      "description": "Mirror of `kronello_render::RenderTarget` (`\"kind\"` tagged).",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "composition": {
+              "$ref": "#/$defs/CompositionId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "composition"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "composition"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "sequence"
+            },
+            "sequence": {
+              "$ref": "#/$defs/SequenceId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "sequence"
+          ]
+        }
+      ]
+    },
+    "ExportTemporalSettings": {
+      "description": "Mirror of `kronello_render::TemporalSettings`.",
+      "type": "object",
+      "properties": {
+        "cut_policy": {
+          "$ref": "#/$defs/ExportCutPolicy"
+        },
+        "frame_rate": {
+          "$ref": "#/$defs/FrameRate"
+        },
+        "samples": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "shutter_angle": {
+          "$ref": "#/$defs/Rational"
+        },
+        "shutter_phase": {
+          "$ref": "#/$defs/Rational"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "frame_rate",
+        "shutter_angle",
+        "shutter_phase",
+        "samples",
+        "cut_policy"
+      ]
+    },
+    "ExportTransfer": {
+      "description": "Mirror of `kronello_render::HdrTransfer`.",
+      "type": "string",
+      "enum": [
+        "pq",
+        "hlg"
       ]
     },
     "Expression": {
@@ -2657,6 +3545,13 @@
       "type": "number",
       "format": "double"
     },
+    "FlowFallbackPolicy": {
+      "description": "TRACK-003 (ADR-0123): the explicit failure policy authored on an\noptical-flow interpolation. There is no silent fallback; `blend` is the\nonly permitted degraded path and must be authored.",
+      "type": "string",
+      "enum": [
+        "blend"
+      ]
+    },
     "FontRef": {
       "description": "File hash plus face index fixes the actual bytes; names are verified too.\nNo family lookup or implicit system-font fallback is permitted.",
       "type": "object",
@@ -2682,6 +3577,67 @@
         "postscript_name",
         "sha256",
         "face_index"
+      ]
+    },
+    "FrameInterpolation": {
+      "description": "TRACK-003 (ADR-0123): intermediate-frame synthesis mode attached to a\npiecewise retime. Absence keeps the legacy nearest-frame sampling.",
+      "oneOf": [
+        {
+          "description": "Bidirectional flow warps the neighboring decoded frames.",
+          "type": "object",
+          "properties": {
+            "block_radius": {
+              "description": "Half-size of the matched block; the block spans `2*r+1` pixels.",
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "confidence_floor": {
+              "description": "Per-cell forward/backward consistency confidence floor in `[0, 1]`.",
+              "$ref": "#/$defs/Rational"
+            },
+            "flow_fallback": {
+              "description": "Explicit degraded-mode policy; `None` rejects on low confidence.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/FlowFallbackPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "levels": {
+              "description": "Pyramid levels including the base image.",
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "max_low_confidence": {
+              "description": "Maximum tolerated fraction of low-confidence cells in `[0, 1]`;\nexceeding it rejects with `FLOW_CONFIDENCE_LOW` (or blends, when\n`flow_fallback` is authored).",
+              "$ref": "#/$defs/Rational"
+            },
+            "mode": {
+              "type": "string",
+              "const": "optical_flow"
+            },
+            "search_radius": {
+              "description": "Half-size of the exhaustive search window at the coarsest level.",
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "block_radius",
+            "search_radius",
+            "levels",
+            "confidence_floor",
+            "max_low_confidence"
+          ]
+        }
       ]
     },
     "FrameRate": {
@@ -3277,6 +4233,72 @@
       ]
     },
     "ModifierId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "MulticamAngle": {
+      "type": "object",
+      "properties": {
+        "asset": {
+          "description": "Camera media. Resolved against `Project.assets` at validation and\nrender time; a missing asset is a typed `SOURCE_MISSING` failure.",
+          "$ref": "#/$defs/AssetId"
+        },
+        "id": {
+          "description": "Stable UUID identity; never an array index or display name.",
+          "$ref": "#/$defs/AngleId"
+        },
+        "name": {
+          "description": "Display label; never used as identity.",
+          "type": "string",
+          "default": ""
+        },
+        "stream_index": {
+          "description": "Visual stream inside `asset` that carries this angle's picture.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "sync_offset": {
+          "description": "Angle media time minus multicam-local source time, in rational seconds.\n`media_time = multicam_time + sync_offset`; the sign convention is fixed\nso `clip.angle_switch` changes only which stream is sampled.",
+          "$ref": "#/$defs/Rational"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "asset",
+        "stream_index",
+        "sync_offset"
+      ]
+    },
+    "MulticamAsset": {
+      "type": "object",
+      "properties": {
+        "angles": {
+          "description": "Angles in display order. Angle order never affects synchronization;\n`multicam.create` modes that need a reference take an explicit\n`AngleId` or use the first authored angle.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MulticamAngle"
+          }
+        },
+        "id": {
+          "description": "Stable UUID identity; never an array index or display name.",
+          "$ref": "#/$defs/MulticamId"
+        },
+        "name": {
+          "description": "Display label; never used as identity.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "angles"
+      ]
+    },
+    "MulticamId": {
       "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
       "type": "string",
       "format": "uuid"
@@ -3909,6 +4931,31 @@
         "den"
       ]
     },
+    "ReframeEasing": {
+      "description": "Temporal smoothing kernel shape (ADR-0126). The window weight is\n`1 - ease(u)` on the normalized offset `u = |dt| / smoothing_window`.",
+      "oneOf": [
+        {
+          "description": "Tent kernel `1 - u`.",
+          "type": "string",
+          "const": "linear"
+        },
+        {
+          "description": "`1 - u^2`: flat near center, sharp window edge.",
+          "type": "string",
+          "const": "ease_in"
+        },
+        {
+          "description": "`(1 - u)^2`: sharp near center, flat window edge.",
+          "type": "string",
+          "const": "ease_out"
+        },
+        {
+          "description": "Smoothstep complement `1 - (3u^2 - 2u^3)`.",
+          "type": "string",
+          "const": "ease_in_out"
+        }
+      ]
+    },
     "RepeatInstance": {
       "type": "object",
       "properties": {
@@ -4048,6 +5095,108 @@
       "format": "uint32",
       "minimum": 0
     },
+    "SceneBoundary": {
+      "type": "object",
+      "properties": {
+        "confidence": {
+          "description": "Normalized detector confidence in `[0, 1]`.",
+          "$ref": "#/$defs/FiniteF64"
+        },
+        "time": {
+          "description": "Rational source presentation time of the first frame of the new scene.",
+          "$ref": "#/$defs/Rational"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "time",
+        "confidence"
+      ]
+    },
+    "SceneBoundaryAsset": {
+      "type": "object",
+      "properties": {
+        "boundaries": {
+          "description": "Cut boundaries in strictly increasing source time.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SceneBoundary"
+          }
+        },
+        "content_hash": {
+          "description": "SHA-256 over the versioned payload; recomputed on validation.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "frames_analyzed": {
+          "description": "Decoded frames that produced `boundaries` (provenance, not a lookup).",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "id": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "params": {
+          "description": "Parameters that produced `boundaries`; part of the versioned payload.",
+          "$ref": "#/$defs/SceneDetectionParams"
+        },
+        "range": {
+          "description": "Analyzed source-time interval `[start, end)`.",
+          "$ref": "#/$defs/TimeRange"
+        },
+        "source": {
+          "$ref": "#/$defs/SceneSource"
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "source",
+        "params",
+        "range",
+        "frames_analyzed",
+        "boundaries",
+        "content_hash"
+      ]
+    },
+    "SceneDetectionParams": {
+      "description": "Versioned detection parameters baked into the boundary payload hash.",
+      "type": "object",
+      "properties": {
+        "edge_weight": {
+          "description": "Edge-change weight mixed into the histogram difference, in `[0, 1]`.",
+          "$ref": "#/$defs/FiniteF64"
+        },
+        "min_spacing_frames": {
+          "description": "Minimum spacing between emitted boundaries, in sampled frames.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "peak_ratio": {
+          "description": "A peak must dominate `peak_ratio * mean` when it misses the sigma band.",
+          "$ref": "#/$defs/FiniteF64"
+        },
+        "threshold_sigma": {
+          "description": "Adaptive threshold offset: `mean + threshold_sigma * stddev`.",
+          "$ref": "#/$defs/FiniteF64"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "edge_weight",
+        "threshold_sigma",
+        "peak_ratio",
+        "min_spacing_frames"
+      ]
+    },
     "SceneNode": {
       "type": "object",
       "properties": {
@@ -4127,6 +5276,30 @@
         "child_order",
         "active_range",
         "properties"
+      ]
+    },
+    "SceneSource": {
+      "type": "object",
+      "properties": {
+        "asset": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "content_hash": {
+          "description": "Locked `Asset::content_hash`; mismatches mark the result stale.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "stream_index": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "asset",
+        "stream_index",
+        "content_hash"
       ]
     },
     "SchemaKey": {
@@ -4418,6 +5591,88 @@
         "direction"
       ]
     },
+    "SmartReframeRule": {
+      "description": "AI-003 (ADR-0126): a media node inside a template composition reframed\nfrom the confidence-weighted gaze of a `TrackingDataAsset`. The window is\ninjected as a layout-derived Vec2 pair through the shared dependency path.",
+      "type": "object",
+      "properties": {
+        "crop_origin_property": {
+          "description": "`kronello.media.crop_origin` property on the media node.",
+          "$ref": "#/$defs/PropertyId"
+        },
+        "crop_size_property": {
+          "description": "`kronello.media.crop_size` property on the media node.",
+          "$ref": "#/$defs/PropertyId"
+        },
+        "node": {
+          "description": "Media (`Media` or `Null` slot) node inside the placement's composition.",
+          "$ref": "#/$defs/NodeId"
+        },
+        "settings": {
+          "$ref": "#/$defs/SmartReframeSettings"
+        },
+        "tracking": {
+          "description": "`TrackingDataAsset` supplying the gaze samples.",
+          "$ref": "#/$defs/AssetId"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "node",
+        "tracking",
+        "crop_origin_property",
+        "crop_size_property",
+        "settings"
+      ]
+    },
+    "SmartReframeSettings": {
+      "description": "Versioned smart-reframe settings (ADR-0126): seed selection, temporal\nsmoothing window, padding, zoom cap and easing are all hash-covered.",
+      "type": "object",
+      "properties": {
+        "easing": {
+          "$ref": "#/$defs/ReframeEasing"
+        },
+        "max_zoom": {
+          "description": "`>= 1`: the crop never shrinks below `1 / max_zoom` of the fitted\nwindow (the tightest allowed crop scale).",
+          "$ref": "#/$defs/FiniteF64"
+        },
+        "padding": {
+          "description": "Gaze margin fraction in `[0, 1]`: `0` is the tightest allowed crop,\n`1` the largest target-aspect window fitting the source.",
+          "$ref": "#/$defs/FiniteF64"
+        },
+        "seeds": {
+          "description": "Selected `TrackingDataAsset::seeds` indexes feeding the gaze centroid;\nempty selects every seed in stable order.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "smoothing_window": {
+          "description": "Symmetric temporal smoothing radius in source seconds; zero samples\nonly frames exactly at the source time.",
+          "$ref": "#/$defs/Duration"
+        },
+        "target_aspect": {
+          "description": "Target crop aspect ratio `width / height` in source pixels.",
+          "$ref": "#/$defs/FiniteF64"
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "seeds",
+        "smoothing_window",
+        "padding",
+        "max_zoom",
+        "target_aspect",
+        "easing"
+      ]
+    },
     "SourceRef": {
       "oneOf": [
         {
@@ -4524,6 +5779,28 @@
           "additionalProperties": false,
           "required": [
             "kind"
+          ]
+        },
+        {
+          "description": "NLE-007 (ADR-0127): one active angle of a `Project.multicams` group.\nThe clip's local source time lives in multicam-local time; the angle's\n`sync_offset` maps it to that angle's media time, so `clip.angle_switch`\nre-samples the same multicam interval through another stream.",
+          "type": "object",
+          "properties": {
+            "angle": {
+              "$ref": "#/$defs/AngleId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "multicam"
+            },
+            "multicam": {
+              "$ref": "#/$defs/MulticamId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "multicam",
+            "angle"
           ]
         }
       ]
@@ -4842,6 +6119,14 @@
             "minimum": 0
           },
           "default": {}
+        },
+        "smart_reframes": {
+          "description": "AI-003 (ADR-0126): tracking-driven crop windows on media nodes, one\nlayout-derived rule per placement through the shared dependency path.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SmartReframeRule"
+          }
         }
       },
       "additionalProperties": false
@@ -5349,6 +6634,17 @@
         {
           "type": "object",
           "properties": {
+            "interpolation": {
+              "description": "TRACK-003: absent keeps the legacy single-frame sample.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/FrameInterpolation"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "kind": {
               "type": "string",
               "const": "piecewise_linear"

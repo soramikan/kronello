@@ -28,9 +28,11 @@ kronello-time = { path = "../kronello-time" }
 kronello-store = { path = "../kronello-store" }
 kronello-render = { path = "../kronello-render" }
 kronello-tracking = { path = "../kronello-tracking" }
+kronello-scene = { path = "../kronello-scene" }
 kronello-gpu = { path = "../kronello-gpu" }
 kronello-vector = { path = "../kronello-vector" }
 kronello-text = { path = "../kronello-text" }
+kronello-plugin = { path = "../kronello-plugin" }
 xml-rs = "=0.8.29"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip", "raw_value"] }
@@ -42,4 +44,5 @@ tempfile = "3"
 png = "0.18"
 kronello-testkit = { path = "../kronello-testkit" }
 kronello-framebridge = { path = "../kronello-framebridge" }
+kronello-plugin = { path = "../kronello-plugin", features = ["test-support"] }
 jsonschema = { version = "0.46", default-features = false }

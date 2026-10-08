@@ -357,6 +357,16 @@ extension RationalTime {
         guard !numerator.overflow, !denominator.overflow else { throw Self.overflow }
         return .init(num: numerator.partialValue, den: denominator.partialValue)
     }
+    public func checkedDividing(_ other: Self) throws -> Self {
+        guard let a = Int64(num), let b = Int64(den), let c = Int64(other.num), let d = Int64(other.den), c != 0 else { throw Self.overflow }
+        let numerator = a.multipliedReportingOverflow(by: d), denominator = b.multipliedReportingOverflow(by: c)
+        let negated = numerator.partialValue.multipliedReportingOverflow(by: -1)
+        guard !numerator.overflow, !denominator.overflow, denominator.partialValue != 0, !negated.overflow else { throw Self.overflow }
+        // Keep the wire-normalized positive denominator.
+        return denominator.partialValue > 0
+            ? .init(num: numerator.partialValue, den: denominator.partialValue)
+            : .init(num: negated.partialValue, den: -denominator.partialValue)
+    }
     private static var overflow: ServiceFailure { .init(code: "TIME_OVERFLOW", message: "時間の計算範囲を超えました") }
 }
 

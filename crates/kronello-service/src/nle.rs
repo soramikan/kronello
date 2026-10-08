@@ -141,10 +141,15 @@ pub enum TimelineCommand {
     /// Place `clip` over its `timeline_range`, replacing covered placements or
     /// covered split segments without moving neighbours. The typed overwrite
     /// counterpart of `ClipInsert`; transitions sharing the range conflict.
+    /// `split_tail` supplies the stable id for the new tail clip created when
+    /// a middle overwrite splits a covered clip in two; the head keeps the
+    /// covered clip's identity.
     ClipOverwrite {
         sequence: SequenceId,
         track: TrackId,
         clip: Box<Clip>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        split_tail: Option<ClipId>,
     },
     /// Upsert a sequence marker (`clip` absent) or a marker scoped to that
     /// clip's timeline range. Marker times are always sequence times.
@@ -220,6 +225,15 @@ pub enum TimelineCommand {
         clip: ClipId,
         volume: Option<Property>,
     },
+    /// NLE-007 (ADR-0127): repoint one clip's active multicam angle. Only the
+    /// addressed clip's `SourceRef::Multicam.angle` changes — the
+    /// multicam-local source window is untouched and later clips never
+    /// inherit the switch.
+    ClipAngleSwitch {
+        sequence: SequenceId,
+        clip: ClipId,
+        angle: AngleId,
+    },
     InstanceRetime {
         composition: CompositionId,
         node: NodeId,
@@ -248,6 +262,9 @@ pub enum ClipKind {
     /// FX-007 adjustment clip (ADR-0116): applies `clip.effects` to the
     /// composited lower video tracks over its timeline range.
     Adjustment,
+    /// NLE-007 multicam clip (ADR-0127): one active angle of a
+    /// `Project.multicams` group.
+    Multicam,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -388,6 +405,40 @@ pub(crate) fn sequence_query(
                             Some("UNSUPPORTED_FEATURE: sequence image source rendering".into());
                     }
                     kind
+                }
+                SourceRef::Multicam { multicam, angle } => {
+                    let group = project
+                        .multicams
+                        .iter()
+                        .find(|group| group.id == *multicam)
+                        .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "multicam missing"))?;
+                    let angle = group.angle(*angle).ok_or_else(|| {
+                        ServiceError::new("SOURCE_MISSING", "multicam angle missing")
+                    })?;
+                    let asset = project
+                        .assets
+                        .iter()
+                        .find_map(|a| match a {
+                            DocumentObject::Known(a) if a.id == angle.asset => Some(a),
+                            _ => None,
+                        })
+                        .ok_or_else(|| {
+                            ServiceError::new("ASSET_MISSING", "asset metadata missing")
+                        })?;
+                    let stream = asset
+                        .streams
+                        .iter()
+                        .find(|s| s.index == angle.stream_index)
+                        .ok_or_else(|| {
+                            ServiceError::new("SOURCE_MISSING", "asset stream missing")
+                        })?;
+                    match kronello_media::video_color_policy(stream) {
+                        Ok(policy) => video_color = Some(policy),
+                        Err(error) => {
+                            unsupported_reason = Some(format!("{}: {error}", error.code()))
+                        }
+                    }
+                    ClipKind::Multicam
                 }
             };
             clips.push(ClipQuery {
@@ -890,6 +941,50 @@ fn split_owned_objects(clip: &mut Clip) -> Result<(), ServiceError> {
                 bottom_left,
             } => {
                 for id in [top_left, top_right, bottom_right, bottom_left] {
+                    remap(id)?;
+                }
+            }
+            EffectParameters::AudioPlugin {
+                bundle,
+                format,
+                component,
+                sha256,
+                plugin_version,
+                parameters,
+            } => {
+                for id in [
+                    bundle,
+                    format,
+                    component,
+                    sha256,
+                    plugin_version,
+                    parameters,
+                ] {
+                    remap(id)?;
+                }
+            }
+            // TRACK-002 (ADR-0122): the tracking reference stays pointed at
+            // the same TrackingDataAsset on the right side of the split.
+            EffectParameters::Stabilize {
+                tracking,
+                smoothing_radius,
+                max_displacement,
+                max_rotation,
+                max_crop,
+                border,
+                fill_color,
+                sampling,
+            } => {
+                for id in [
+                    tracking,
+                    smoothing_radius,
+                    max_displacement,
+                    max_rotation,
+                    max_crop,
+                    border,
+                    fill_color,
+                    sampling,
+                ] {
                     remap(id)?;
                 }
             }
@@ -1487,6 +1582,7 @@ pub(crate) fn mutate(
             sequence,
             track,
             clip,
+            split_tail,
         } => {
             let source = sequence_ref(project, *sequence)?;
             let range = clip.timeline_range;
@@ -1498,13 +1594,14 @@ pub(crate) fn mutate(
                 .iter()
                 .find(|t| t.id == *track)
                 .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "track missing"))?;
-            if has_clip(source, clip.id) {
+            if has_clip(source, clip.id) || split_tail.is_some_and(|id| has_clip(source, id)) {
                 return Err(ServiceError::new("INVALID_CLIP", "clip id already placed"));
             }
             // Overwrite never separates linked placements; covered or trimmed
             // linked clips must be removed through a linked operation first.
             let mut doomed = BTreeSet::new();
             let mut edits = std::collections::BTreeMap::new();
+            let mut tails = Vec::new();
             for c in &target.clips {
                 let Some(overlap) = c.timeline_range.intersection(range) else {
                     continue;
@@ -1517,6 +1614,29 @@ pub(crate) fn mutate(
                 }
                 if overlap == c.timeline_range {
                     doomed.insert(c.id);
+                    continue;
+                }
+                if c.timeline_range.start() < range.start() && c.timeline_range.end() > range.end()
+                {
+                    // GUI-011: a middle overwrite splits the covered clip.
+                    // The head keeps the covered clip's identity; the tail is
+                    // a new clip with the caller-supplied stable id.
+                    let tail_id = split_tail.ok_or_else(|| {
+                        ServiceError::new(
+                            "INVALID_CLIP",
+                            "middle overwrite requires a split_tail clip id",
+                        )
+                    })?;
+                    let head = right_edge(c, range.start())?;
+                    let mut tail = c
+                        .trimmed(
+                            TimeRange::new(range.end(), c.timeline_range.end())
+                                .map_err(SequenceError::from)?,
+                        )
+                        .map_err(Into::<ServiceError>::into)?;
+                    tail.id = tail_id;
+                    edits.insert(c.id, head);
+                    tails.push(tail);
                     continue;
                 }
                 if c.timeline_range.start() < range.start() {
@@ -1554,6 +1674,10 @@ pub(crate) fn mutate(
                 if let Some(next) = edits.remove(&c.id) {
                     *c = next;
                 }
+            }
+            for tail in tails {
+                keys.insert(changed(tail.id.as_uuid(), track.as_uuid()));
+                insert_sorted(&mut target.clips, tail);
             }
             insert_sorted(&mut target.clips, (**clip).clone());
             timeline_keys(s, project_id, &affected, keys);
@@ -2129,6 +2253,51 @@ pub(crate) fn mutate(
             keys.insert(changed(sequence.as_uuid(), project.id));
             keys.insert(changed(clip.as_uuid(), sequence.as_uuid()));
         }
+        TimelineCommand::ClipAngleSwitch {
+            sequence,
+            clip,
+            angle,
+        } => {
+            let source = sequence_ref(project, *sequence)?;
+            let c = source
+                .tracks
+                .iter()
+                .flat_map(|t| &t.clips)
+                .find(|c| c.id == *clip)
+                .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "clip missing"))?;
+            let SourceRef::Multicam { multicam, .. } = &c.source_ref else {
+                return Err(ServiceError::new(
+                    "INVALID_CLIP",
+                    "angle switch requires a multicam clip",
+                ));
+            };
+            let group = project
+                .multicams
+                .iter()
+                .find(|group| group.id == *multicam)
+                .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "multicam missing"))?;
+            if group.angle(*angle).is_none() {
+                return Err(ServiceError::new(
+                    "SOURCE_MISSING",
+                    "multicam angle missing",
+                ));
+            }
+            ensure_unlocked(source, &BTreeSet::from([*clip]))?;
+            let multicam = *multicam;
+            let s = sequence_mut(project, *sequence)?;
+            let c = s
+                .tracks
+                .iter_mut()
+                .flat_map(|t| &mut t.clips)
+                .find(|c| c.id == *clip)
+                .expect("clip checked");
+            c.source_ref = SourceRef::Multicam {
+                multicam,
+                angle: *angle,
+            };
+            keys.insert(changed(sequence.as_uuid(), project.id));
+            keys.insert(changed(clip.as_uuid(), sequence.as_uuid()));
+        }
         TimelineCommand::InstanceRetime {
             composition,
             node,
@@ -2437,7 +2606,7 @@ pub fn mix_sequence_audio(
     )
     .map_err(|e| ServiceError::new(e.code(), e.to_string()))?;
     let runtime = kronello_media::MediaRuntime::load()?;
-    let mut sources = kronello_audio::AudioSources::new();
+    let mut sources = kronello_audio::ChannelSources::new();
     for clip in plan.clips() {
         if let std::collections::btree_map::Entry::Vacant(entry) =
             sources.entry((clip.asset, clip.stream_index))
@@ -2457,6 +2626,349 @@ pub fn mix_sequence_audio(
             );
         }
     }
-    plan.mix(&sources, range)
+    // The mix target is the stereo bus: multichannel sources fold down only
+    // through the explicit ADR-0124 matrix.
+    plan.mix_reader(&sources, range)
         .map_err(|e| ServiceError::new(e.code(), e.to_string()))
+}
+
+/// NLE-007 (ADR-0127): repoint one clip's active multicam angle. Only the
+/// addressed clip changes; the multicam-local source window is untouched and
+/// later clips never inherit the switch.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ClipAngleSwitchRequest {
+    pub project: PathBuf,
+    pub base_revision: String,
+    pub session_id: Uuid,
+    pub idempotency_key: String,
+    pub sequence: SequenceId,
+    pub clip: ClipId,
+    /// Replacement active angle of the clip's own multicam group.
+    pub angle: AngleId,
+}
+pub(crate) fn clip_angle_switch(
+    r: ClipAngleSwitchRequest,
+) -> Result<kronello_store::Event, ServiceError> {
+    let commands = vec![EditCommand::Timeline(Box::new(
+        TimelineCommand::ClipAngleSwitch {
+            sequence: r.sequence,
+            clip: r.clip,
+            angle: r.angle,
+        },
+    ))];
+    let plan = crate::edit::plan(PlanRequest {
+        project: r.project.clone(),
+        base_revision: r.base_revision.clone(),
+        commands: commands.clone(),
+    })?;
+    crate::edit::apply(EditApplyRequest {
+        project: r.project,
+        base_revision: r.base_revision,
+        session_id: r.session_id,
+        idempotency_key: r.idempotency_key,
+        plan_hash: plan.plan_hash,
+        commands,
+    })
+}
+
+/// GUI-011 (ADR-0128): shared three-point placement input for `edit.insert`.
+/// `source_range` is the source monitor's [in, out) window in source-local
+/// time and `at` is the destination point (playhead or sequence in). `track`
+/// overrides the sequence's declared `targets` selection.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct EditInsertRequest {
+    pub project: PathBuf,
+    pub base_revision: String,
+    pub session_id: Uuid,
+    pub idempotency_key: String,
+    pub sequence: SequenceId,
+    /// Stable clip identity chosen by the caller; never derived at apply.
+    pub clip: ClipId,
+    /// Media source for the new clip (asset, multicam angle or composition).
+    pub source: SourceRef,
+    /// Source window `[in, out)` in source-local time.
+    pub source_range: TimeRange,
+    /// Destination point where the window's start lands.
+    pub at: Time,
+    /// Destination track; absent resolves `Sequence.targets` by source kind.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub track: Option<TrackId>,
+    /// Expand the ripple shift across reciprocal clip links.
+    #[serde(default)]
+    pub linked: bool,
+}
+pub(crate) fn edit_insert(r: EditInsertRequest) -> Result<kronello_store::Event, ServiceError> {
+    let clip = source_edit_clip(
+        &r.project,
+        &r.base_revision,
+        &SourceEditSpec {
+            sequence: r.sequence,
+            clip: r.clip,
+            source: &r.source,
+            source_range: r.source_range,
+            at: r.at,
+            track: r.track,
+        },
+    )?;
+    let commands = vec![EditCommand::Timeline(Box::new(
+        TimelineCommand::ClipInsert {
+            sequence: r.sequence,
+            track: clip.1,
+            clip: Box::new(clip.0),
+            linked: r.linked,
+        },
+    ))];
+    let plan = crate::edit::plan(PlanRequest {
+        project: r.project.clone(),
+        base_revision: r.base_revision.clone(),
+        commands: commands.clone(),
+    })?;
+    crate::edit::apply(EditApplyRequest {
+        project: r.project,
+        base_revision: r.base_revision,
+        session_id: r.session_id,
+        idempotency_key: r.idempotency_key,
+        plan_hash: plan.plan_hash,
+        commands,
+    })
+}
+
+/// GUI-011 (ADR-0128): same three-point input as [`EditInsertRequest`], but
+/// the placement replaces covered content instead of rippling it.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct EditOverwriteRequest {
+    pub project: PathBuf,
+    pub base_revision: String,
+    pub session_id: Uuid,
+    pub idempotency_key: String,
+    pub sequence: SequenceId,
+    /// Stable clip identity chosen by the caller; never derived at apply.
+    pub clip: ClipId,
+    /// Media source for the new clip (asset, multicam angle or composition).
+    pub source: SourceRef,
+    /// Source window `[in, out)` in source-local time.
+    pub source_range: TimeRange,
+    /// Destination point where the window's start lands.
+    pub at: Time,
+    /// Destination track; absent resolves `Sequence.targets` by source kind.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub track: Option<TrackId>,
+    /// Stable id for the tail clip created when the overwrite splits a
+    /// covered clip in two. Required only when a covered clip spans both
+    /// overwrite edges; unused otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub split_tail: Option<ClipId>,
+}
+pub(crate) fn edit_overwrite(
+    r: EditOverwriteRequest,
+) -> Result<kronello_store::Event, ServiceError> {
+    let clip = source_edit_clip(
+        &r.project,
+        &r.base_revision,
+        &SourceEditSpec {
+            sequence: r.sequence,
+            clip: r.clip,
+            source: &r.source,
+            source_range: r.source_range,
+            at: r.at,
+            track: r.track,
+        },
+    )?;
+    let commands = vec![EditCommand::Timeline(Box::new(
+        TimelineCommand::ClipOverwrite {
+            sequence: r.sequence,
+            track: clip.1,
+            clip: Box::new(clip.0),
+            split_tail: r.split_tail,
+        },
+    ))];
+    let plan = crate::edit::plan(PlanRequest {
+        project: r.project.clone(),
+        base_revision: r.base_revision.clone(),
+        commands: commands.clone(),
+    })?;
+    crate::edit::apply(EditApplyRequest {
+        project: r.project,
+        base_revision: r.base_revision,
+        session_id: r.session_id,
+        idempotency_key: r.idempotency_key,
+        plan_hash: plan.plan_hash,
+        commands,
+    })
+}
+
+struct SourceEditSpec<'a> {
+    sequence: SequenceId,
+    clip: ClipId,
+    source: &'a SourceRef,
+    source_range: TimeRange,
+    at: Time,
+    track: Option<TrackId>,
+}
+/// Read the stored document once to resolve the source's track kind, the
+/// sequence's `targets` destination and the new clip's timeline window. The
+/// read is checked against `base_revision`; the authoritative conflict check
+/// still happens inside `edit::plan`/`edit::apply`.
+fn source_edit_clip(
+    project_path: &std::path::Path,
+    base_revision: &str,
+    spec: &SourceEditSpec<'_>,
+) -> Result<(Clip, TrackId), ServiceError> {
+    let store = crate::open_existing(project_path)?;
+    let stored = store.snapshot()?;
+    store.close()?;
+    if stored.revision != crate::parse_revision(base_revision)? {
+        return Err(ServiceError::new(
+            "REVISION_CONFLICT",
+            "project revision changed before edit resolution",
+        ));
+    }
+    let kind = source_track_kind(&stored.document, spec.source)?;
+    let sequence = stored
+        .document
+        .sequences
+        .iter()
+        .find_map(|s| match s {
+            DocumentObject::Known(s) if s.id == spec.sequence => Some(s),
+            _ => None,
+        })
+        .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "sequence missing"))?;
+    let track = destination_track(sequence, kind, spec.track)?;
+    let duration = spec
+        .source_range
+        .duration()
+        .map_err(|e| ServiceError::new("INVALID_CLIP", e.to_string()))?
+        .as_time();
+    if duration <= Time::ZERO {
+        return Err(ServiceError::new(
+            "INVALID_CLIP",
+            "source range must be nonempty",
+        ));
+    }
+    let timeline = TimeRange::new(
+        spec.at,
+        spec.at
+            .checked_add(duration)
+            .map_err(|e| ServiceError::new("INVALID_CLIP", e.to_string()))?,
+    )
+    .map_err(|e| ServiceError::new("INVALID_CLIP", e.to_string()))?;
+    Ok((
+        Clip {
+            id: spec.clip,
+            source_ref: spec.source.clone(),
+            timeline_range: timeline,
+            source_in: spec.source_range.start(),
+            time_map: TimeMap::linear(Time::ZERO, kronello_time::Rational::ONE)
+                .map_err(|e| ServiceError::new("INVALID_CLIP", e.to_string()))?,
+            enabled: true,
+            audio_retime: AudioRetimePolicy::Reject,
+            reverse_sampling: None,
+            volume: None,
+            links: vec![],
+            effects: vec![],
+            masks: vec![],
+            properties: vec![],
+            markers: vec![],
+        },
+        track,
+    ))
+}
+/// The destination kind a three-point source implies. Non-media sources
+/// (captions, adjustments) are not insertable through this operation.
+fn source_track_kind(project: &Project, source: &SourceRef) -> Result<TrackKind, ServiceError> {
+    match source {
+        SourceRef::Asset { asset, .. } => {
+            let a = project
+                .assets
+                .iter()
+                .find_map(|a| match a {
+                    DocumentObject::Known(a) if a.id == *asset => Some(a),
+                    _ => None,
+                })
+                .ok_or_else(|| ServiceError::new("ASSET_MISSING", "edit source asset missing"))?;
+            match a.kind {
+                AssetKind::Audio => Ok(TrackKind::Audio),
+                AssetKind::Video | AssetKind::Image => Ok(TrackKind::Video),
+                AssetKind::Data => Err(ServiceError::new(
+                    "INVALID_CLIP",
+                    "data asset is not a timeline source",
+                )),
+            }
+        }
+        SourceRef::Multicam { multicam, angle } => {
+            let group = project
+                .multicams
+                .iter()
+                .find(|group| group.id == *multicam)
+                .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "multicam missing"))?;
+            if group.angle(*angle).is_none() {
+                return Err(ServiceError::new(
+                    "SOURCE_MISSING",
+                    "multicam angle missing",
+                ));
+            }
+            Ok(TrackKind::Video)
+        }
+        SourceRef::Composition { composition } => {
+            if !project
+                .compositions
+                .iter()
+                .any(|c| matches!(c, DocumentObject::Known(c) if c.id == *composition))
+            {
+                return Err(ServiceError::new(
+                    "SOURCE_MISSING",
+                    "edit source composition missing",
+                ));
+            }
+            Ok(TrackKind::Video)
+        }
+        SourceRef::Generator { generator, .. } => {
+            if matches!(
+                generator.as_str(),
+                kronello_audio::AUDIO_GENERATOR_SILENCE | kronello_audio::AUDIO_GENERATOR_TONE
+            ) {
+                Ok(TrackKind::Audio)
+            } else {
+                Ok(TrackKind::Video)
+            }
+        }
+        SourceRef::Caption { .. } | SourceRef::Adjustment => Err(ServiceError::new(
+            "INVALID_CLIP",
+            "source is not insertable media",
+        )),
+    }
+}
+/// Resolve the destination track: an explicit `track` must exist and match
+/// the source's kind; otherwise `Sequence.targets` supplies it.
+fn destination_track(
+    sequence: &Sequence,
+    kind: TrackKind,
+    explicit: Option<TrackId>,
+) -> Result<TrackId, ServiceError> {
+    let id = explicit
+        .or_else(|| {
+            sequence.targets.as_ref().and_then(|t| match kind {
+                TrackKind::Video => t.video,
+                TrackKind::Audio => t.audio,
+                TrackKind::Caption => None,
+            })
+        })
+        .ok_or_else(|| {
+            ServiceError::new("TARGET_MISSING", "no destination track for source kind")
+        })?;
+    let track = sequence
+        .tracks
+        .iter()
+        .find(|t| t.id == id)
+        .ok_or_else(|| ServiceError::new("TARGET_MISSING", "destination track missing"))?;
+    if track.kind != kind {
+        return Err(ServiceError::new(
+            "INVALID_CLIP",
+            "destination track kind does not match source",
+        ));
+    }
+    Ok(id)
 }

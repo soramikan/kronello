@@ -121,7 +121,23 @@ extension EditorModel {
                     missing: sequenceResult.objects("asset_status").first { $0.string("asset") == asset.string("id") }?.object("error")["code"] as? String)
             }
         }
-        return media + compositions.enumerated().map { index, comp in
+        // NLE-007: each multicam group is one placeable clip whose source_ref
+        // pins the first angle; `clip.angle_switch` changes the angle later.
+        let multicam = multicamGroups.compactMap { group -> EditAsset? in
+            guard let first = group.angles.first else { return nil }
+            let source: [String: Any] = ["kind": "multicam", "multicam": group.id, "angle": first.id]
+            let window = sourceWindow(.multicam(group.id, first.id))
+            let length = window.flatMap { w in w.end.flatMap { try? $0.checkedSubtracting(w.start) } }
+            let missing = group.angles.first { angle in
+                sequenceResult.objects("asset_status").contains { $0.string("asset") == angle.asset }
+            }.flatMap { angle in
+                sequenceResult.objects("asset_status").first { $0.string("asset") == angle.asset }?.object("error")["code"] as? String
+            }
+            return EditAsset(id: "multicam:" + group.id, name: group.name.isEmpty ? "マルチカム" : group.name,
+                kind: .multicam, source: source, duration: length ?? .init(num: 0, den: 1),
+                sourceIn: window?.start ?? .init(num: 0, den: 1), meta: "\(group.angles.count) 角度", missing: missing)
+        }
+        return media + multicam + compositions.enumerated().map { index, comp in
             EditAsset(id: comp.string("id"), name: "Composition \(index + 1)", kind: .composition,
                 source: ["kind": "composition", "composition": comp.string("id")], duration: .wire(comp.object("duration")),
                 sourceIn: .init(num: 0, den: 1), meta: "\(comp.objects("nodes").count) 件", missing: nil)
@@ -133,10 +149,25 @@ extension EditorModel {
             let text = clip.caption.flatMap { captionDocument(id: $0) }?.string("text").components(separatedBy: "\n").first ?? ""
             return text.isEmpty ? "字幕" : text
         }
+        // NLE-007: name follows the clip's active angle, not the group's
+        // first-angle EditAsset row (which only matches while un-switched).
+        if let multicam = clip.multicam, let group = multicamGroup(multicam.group) {
+            let angle = group.angles.first { $0.id == multicam.angle }
+            let base = group.name.isEmpty ? "マルチカム" : group.name
+            return angle.map { base + " · " + $0.displayName } ?? base
+        }
         return editAssets.first { NSDictionary(dictionary: $0.source) == NSDictionary(dictionary: source) }?.name ?? source.string("generator")
     }
     public func clipMissing(_ clip: EditClip) -> String? {
         let source = clip.authored.object("source_ref")
+        // NLE-007: a multicam clip is missing when its active angle's asset
+        // stream is (asset_status is keyed by asset, one diagnostic per row).
+        if let multicam = clip.multicam {
+            guard let angle = multicamGroup(multicam.group)?.angles.first(where: { $0.id == multicam.angle }) else {
+                return "SOURCE_MISSING"
+            }
+            return sequenceResult.objects("asset_status").first { $0.string("asset") == angle.asset }?.object("error")["code"] as? String
+        }
         return editAssets.first { NSDictionary(dictionary: $0.source) == NSDictionary(dictionary: source) }?.missing
     }
     public func validateClipSelection(actor: String) {

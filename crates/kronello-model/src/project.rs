@@ -62,6 +62,10 @@ pub struct Project {
     pub audio_analyses: Vec<DocumentObject<AudioAnalysisDataAsset>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tracking_data_assets: Vec<DocumentObject<crate::TrackingDataAsset>>,
+    /// AI-002 (ADR-0125): deterministic cut-detection results, locked to the
+    /// analyzed source asset like tracking data.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub scene_boundary_assets: Vec<DocumentObject<crate::SceneBoundaryAsset>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub expression_data_assets: Vec<DocumentObject<crate::ExpressionDataAsset>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -72,6 +76,17 @@ pub struct Project {
     pub repeaters: Vec<DocumentObject<crate::Repeater>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub simulations: Vec<DocumentObject<crate::ParticleSimulation>>,
+    /// FLOW-002 media organization (ADR-0129): unordered bin collection keyed
+    /// by `Bin.id`. An asset may appear in several bins.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub bins: Vec<crate::Bin>,
+    /// FLOW-003 shared export presets (ADR-0130): versioned, destination-free
+    /// `render.submit` settings stored inside the document.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub export_presets: Vec<crate::ExportPreset>,
+    /// NLE-007 multicam groups (ADR-0127); plain entries, never opaque.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub multicams: Vec<crate::MulticamAsset>,
     #[serde(flatten)]
     pub unknown_fields: BTreeMap<String, Value>,
 }
@@ -105,11 +120,15 @@ impl Default for Project {
             proxies: Vec::new(),
             audio_analyses: Vec::new(),
             tracking_data_assets: Vec::new(),
+            scene_boundary_assets: Vec::new(),
             expression_data_assets: Vec::new(),
             sequences: Vec::new(),
             mattes: Vec::new(),
             repeaters: Vec::new(),
             simulations: Vec::new(),
+            bins: Vec::new(),
+            export_presets: Vec::new(),
+            multicams: Vec::new(),
             unknown_fields: BTreeMap::new(),
         }
     }
@@ -139,11 +158,15 @@ impl Project {
                     | "proxies"
                     | "audio_analyses"
                     | "tracking_data_assets"
+                    | "scene_boundary_assets"
                     | "expression_data_assets"
                     | "sequences"
                     | "mattes"
                     | "repeaters"
                     | "simulations"
+                    | "bins"
+                    | "export_presets"
+                    | "multicams"
             )
         }) {
             return Err(ProjectError::InvalidDocument(
@@ -384,6 +407,22 @@ impl Project {
                 ));
             }
         }
+        for object in &self.scene_boundary_assets {
+            let (id, fields) = match object {
+                DocumentObject::Known(value) => {
+                    if value.version == crate::SCENE_BOUNDARY_VERSION {
+                        value.validate()?;
+                    }
+                    (value.id.as_uuid(), None)
+                }
+                DocumentObject::Opaque(value) => (value.id, Some(&value.fields)),
+            };
+            if !ids.insert(id) || fields.is_some_and(|f| f.contains_key("id")) {
+                return Err(ProjectError::InvalidDocument(
+                    "duplicate or shadowed scene boundary asset id".into(),
+                ));
+            }
+        }
         {
             // One link per original and per proxy asset; the proxy asset itself
             // is a normal `assets` entry, so its id already sits in `ids`.
@@ -397,6 +436,23 @@ impl Project {
                 if !originals.insert(link.original) || !proxies.insert(link.proxy) {
                     return Err(ProjectError::InvalidDocument(
                         "duplicate proxy link member".into(),
+                    ));
+                }
+            }
+        }
+        for multicam in &self.multicams {
+            multicam.validate()?;
+            if !ids.insert(multicam.id.as_uuid()) {
+                return Err(ProjectError::InvalidDocument(
+                    "duplicate multicam id".into(),
+                ));
+            }
+            for angle in &multicam.angles {
+                // Angle ids are stable UUID identity; they must not alias any
+                // other document object id.
+                if !ids.insert(angle.id.as_uuid()) {
+                    return Err(ProjectError::InvalidDocument(
+                        "duplicate multicam angle id".into(),
                     ));
                 }
             }
@@ -464,6 +520,87 @@ impl Project {
                 }
             }
         }
+        // FLOW-002/003 (ADR-0129/0130): bins and export presets are unordered
+        // member collections like the other document collections. Known and
+        // opaque objects both contribute ids, so references may point at opaque
+        // records that this build cannot interpret but must preserve.
+        let asset_ids: std::collections::BTreeSet<uuid::Uuid> = self
+            .assets
+            .iter()
+            .map(|object| match object {
+                DocumentObject::Known(asset) => asset.id.as_uuid(),
+                DocumentObject::Opaque(value) => value.id,
+            })
+            .collect();
+        let composition_ids: std::collections::BTreeSet<uuid::Uuid> = self
+            .compositions
+            .iter()
+            .map(|object| match object {
+                DocumentObject::Known(c) => c.id.as_uuid(),
+                DocumentObject::Opaque(value) => value.id,
+            })
+            .collect();
+        let sequence_ids: std::collections::BTreeSet<uuid::Uuid> = self
+            .sequences
+            .iter()
+            .map(|object| match object {
+                DocumentObject::Known(s) => s.id.as_uuid(),
+                DocumentObject::Opaque(value) => value.id,
+            })
+            .collect();
+        for bin in &self.bins {
+            bin.validate()?;
+            if !ids.insert(bin.id.as_uuid()) {
+                return Err(ProjectError::InvalidDocument("duplicate object id".into()));
+            }
+            if bin
+                .assets
+                .iter()
+                .any(|asset| !asset_ids.contains(&asset.as_uuid()))
+            {
+                return Err(ProjectError::InvalidDocument(
+                    "bin membership references an unknown asset".into(),
+                ));
+            }
+        }
+        for preset in &self.export_presets {
+            preset.validate()?;
+            if !ids.insert(preset.id.as_uuid()) {
+                return Err(ProjectError::InvalidDocument("duplicate object id".into()));
+            }
+            let target_ok = match (preset.composition, preset.target) {
+                (Some(composition), None) => composition_ids.contains(&composition.as_uuid()),
+                (None, Some(crate::ExportTarget::Composition { composition })) => {
+                    composition_ids.contains(&composition.as_uuid())
+                }
+                (None, Some(crate::ExportTarget::Sequence { sequence })) => {
+                    sequence_ids.contains(&sequence.as_uuid())
+                }
+                _ => false,
+            };
+            if !target_ok {
+                return Err(ProjectError::InvalidDocument(
+                    "export preset references an unknown target".into(),
+                ));
+            }
+            if let crate::ExportOutput::CaptionSidecar { sequence, .. } = &preset.output
+                && !sequence_ids.contains(&sequence.as_uuid())
+            {
+                return Err(ProjectError::InvalidDocument(
+                    "export preset references an unknown sequence".into(),
+                ));
+            }
+            if preset
+                .output
+                .audio_clips()
+                .iter()
+                .any(|clip| !asset_ids.contains(&clip.asset.as_uuid()))
+            {
+                return Err(ProjectError::InvalidDocument(
+                    "export preset audio clip references an unknown asset".into(),
+                ));
+            }
+        }
         Ok(())
     }
 
@@ -493,6 +630,7 @@ impl Project {
             || self.template_instances.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
             || self.audio_analyses.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(a) if a.config.version != crate::AUDIO_ANALYSIS_VERSION))
             || self.tracking_data_assets.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(a) if a.version != crate::TRACKING_VERSION))
+            || self.scene_boundary_assets.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(a) if a.version != crate::SCENE_BOUNDARY_VERSION))
             || self.expression_data_assets.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(a) if a.version != crate::EXPRESSION_DATA_VERSION))
             || self.simulations.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(s) if s.version != crate::SIMULATION_VERSION))
             || self.repeaters.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(r) if r.version != crate::REPEATER_VERSION))
@@ -595,6 +733,11 @@ impl<'de> Deserialize<'de> for Project {
             } else {
                 Vec::new()
             },
+            scene_boundary_assets: if fields.contains_key("scene_boundary_assets") {
+                take_field::<_, D::Error>(&mut fields, "scene_boundary_assets")?
+            } else {
+                Vec::new()
+            },
             proxies: if fields.contains_key("proxies") {
                 take_field::<_, D::Error>(&mut fields, "proxies")?
             } else {
@@ -622,6 +765,21 @@ impl<'de> Deserialize<'de> for Project {
             },
             mattes: if fields.contains_key("mattes") {
                 take_field::<_, D::Error>(&mut fields, "mattes")?
+            } else {
+                Vec::new()
+            },
+            bins: if fields.contains_key("bins") {
+                take_field::<_, D::Error>(&mut fields, "bins")?
+            } else {
+                Vec::new()
+            },
+            export_presets: if fields.contains_key("export_presets") {
+                take_field::<_, D::Error>(&mut fields, "export_presets")?
+            } else {
+                Vec::new()
+            },
+            multicams: if fields.contains_key("multicams") {
+                take_field::<_, D::Error>(&mut fields, "multicams")?
             } else {
                 Vec::new()
             },

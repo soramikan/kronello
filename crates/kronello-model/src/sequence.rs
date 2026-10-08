@@ -152,6 +152,10 @@ pub enum AudioRetimePolicy {
     // AUDIO-004 v1: linear sample interpolation, with pitch following speed.
     ResampleV1,
     ReverseResampleV1,
+    // AUDIO-010: deterministic WSOLA; the output length follows the time map
+    // while the source pitch is preserved (ADR-0124). Hold segments (slope 0)
+    // emit silence; reverse playback still requires `ReverseResampleV1`.
+    PitchPreserveV1,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -194,6 +198,14 @@ pub enum SourceRef {
     /// FX-007 (ADR-0116): no payload; the clip applies `effects` to the
     /// composited lower video tracks across its timeline range.
     Adjustment,
+    /// NLE-007 (ADR-0127): one active angle of a `Project.multicams` group.
+    /// The clip's local source time lives in multicam-local time; the angle's
+    /// `sync_offset` maps it to that angle's media time, so `clip.angle_switch`
+    /// re-samples the same multicam interval through another stream.
+    Multicam {
+        multicam: MulticamId,
+        angle: AngleId,
+    },
 }
 // Decode variant payloads directly from JSON. Serde's internally-tagged Content
 // buffer cannot preserve arbitrary-precision float values inside Color.
@@ -255,6 +267,12 @@ impl<'de> Deserialize<'de> for SourceRef {
         #[derive(Deserialize)]
         #[serde(deny_unknown_fields)]
         struct AdjustmentSource {}
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct MulticamSource {
+            multicam: MulticamId,
+            angle: AngleId,
+        }
         let json = serde_json::to_string(&fields).map_err(D::Error::custom)?;
         match kind.as_str() {
             "composition" => {
@@ -285,6 +303,13 @@ impl<'de> Deserialize<'de> for SourceRef {
             "adjustment" => {
                 serde_json::from_str::<AdjustmentSource>(&json).map_err(D::Error::custom)?;
                 Ok(Self::Adjustment)
+            }
+            "multicam" => {
+                let p: MulticamSource = serde_json::from_str(&json).map_err(D::Error::custom)?;
+                Ok(Self::Multicam {
+                    multicam: p.multicam,
+                    angle: p.angle,
+                })
             }
             _ => Err(D::Error::custom("unknown source kind")),
         }
@@ -451,7 +476,7 @@ impl Clip {
                         .map(shift.checked_add(duration)?)?
                         .checked_sub(origin)?,
                 });
-                TimeMap::piecewise_linear(points)?
+                TimeMap::piecewise_linear_with_interpolation(points, m.interpolation())?
             }
             _ => return Err(SequenceError::Unsupported("time map".into())),
         };
@@ -472,7 +497,7 @@ impl Clip {
             TimeMap::Linear(m) => {
                 TimeMap::linear(m.offset(), m.speed().checked_mul(old.checked_div(new)?)?)?
             }
-            TimeMap::PiecewiseLinear(m) => TimeMap::piecewise_linear(
+            TimeMap::PiecewiseLinear(m) => TimeMap::piecewise_linear_with_interpolation(
                 m.points()
                     .iter()
                     .map(|p| {
@@ -482,6 +507,7 @@ impl Clip {
                         })
                     })
                     .collect::<Result<Vec<_>, TimeError>>()?,
+                m.interpolation(),
             )?,
             _ => return Err(SequenceError::Unsupported("time map".into())),
         };
@@ -682,6 +708,19 @@ impl Sequence {
                         "caption clips require a caption track".into(),
                     ));
                 }
+                // TRACK-003 (ADR-0123): intermediate-frame synthesis applies
+                // only to forward-direction video-track asset clips. Every
+                // other source keeps the legacy single-frame sample and must
+                // not carry the mode.
+                if clip.time_map.interpolation().is_some()
+                    && (!matches!(&clip.source_ref, SourceRef::Asset { .. })
+                        || clip.reverse_sampling.is_some()
+                        || track.kind != TrackKind::Video)
+                {
+                    return Err(SequenceError::Unsupported(
+                        "frame interpolation requires a forward video asset clip".into(),
+                    ));
+                }
                 match &clip.source_ref {
                     SourceRef::Caption { caption } => {
                         if clip.source_in != Time::ZERO
@@ -828,6 +867,15 @@ impl Sequence {
                                 "asset kind does not match track".into(),
                             ));
                         }
+                        // TRACK-003: flow synthesis needs decoded neighbor
+                        // frames; only video streams provide them.
+                        if clip.time_map.interpolation().is_some()
+                            && source.kind != AssetKind::Video
+                        {
+                            return Err(SequenceError::Unsupported(
+                                "frame interpolation requires a video asset".into(),
+                            ));
+                        }
                     }
                     SourceRef::Generator { .. } => (),
                     SourceRef::Adjustment => {
@@ -844,6 +892,80 @@ impl Sequence {
                             return Err(SequenceError::Invalid(
                                 "adjustment clip requires a video track, zero source_in and an identity time map without retime, reverse or gain".into(),
                             ));
+                        }
+                    }
+                    SourceRef::Multicam { multicam, angle } => {
+                        // NLE-007 (ADR-0127): multicam clips carry picture only
+                        // and live on video tracks. Angle audio enters the
+                        // program through ordinary asset clips.
+                        if track.kind != TrackKind::Video {
+                            return Err(SequenceError::Invalid(
+                                "multicam clips require a video track".into(),
+                            ));
+                        }
+                        let group = project
+                            .multicams
+                            .iter()
+                            .find(|group| group.id == *multicam)
+                            .ok_or_else(|| SequenceError::MissingSource(multicam.to_string()))?;
+                        let angle = group
+                            .angle(*angle)
+                            .ok_or_else(|| SequenceError::MissingSource(angle.to_string()))?;
+                        if project.assets.iter().any(
+                            |a| matches!(a, DocumentObject::Opaque(a) if a.id == angle.asset.as_uuid()),
+                        ) {
+                            continue;
+                        }
+                        let source = project
+                            .assets
+                            .iter()
+                            .find_map(|a| match a {
+                                DocumentObject::Known(a) if a.id == angle.asset => Some(a),
+                                _ => None,
+                            })
+                            .ok_or_else(|| SequenceError::MissingSource(angle.asset.to_string()))?;
+                        let stream = source
+                            .streams
+                            .iter()
+                            .find(|s| s.index == angle.stream_index)
+                            .ok_or_else(|| SequenceError::MissingSource("asset stream".into()))?;
+                        if !matches!(source.kind, AssetKind::Video | AssetKind::Image) {
+                            return Err(SequenceError::Invalid(
+                                "asset kind does not match track".into(),
+                            ));
+                        }
+                        if source.kind == AssetKind::Video {
+                            // Angle media time = multicam-local source time
+                            // shifted by the angle's sync_offset.
+                            let media_start = start.checked_add(angle.sync_offset)?;
+                            let media_end = end.checked_add(angle.sync_offset)?;
+                            let origin = stream.start_time.unwrap_or(Time::ZERO);
+                            if media_start < origin
+                                || (clip.reverse_sampling.is_some() && media_end < origin)
+                                || stream
+                                    .duration
+                                    .map(|duration| origin.checked_add(duration))
+                                    .transpose()?
+                                    .is_some_and(|limit| {
+                                        media_end > limit
+                                            || (clip.reverse_sampling.is_some()
+                                                && media_start > limit)
+                                    })
+                            {
+                                return Err(SequenceError::Invalid("asset source bounds".into()));
+                            }
+                            if clip.reverse_sampling.is_some() {
+                                stream.duration.ok_or_else(|| {
+                                    SequenceError::Unsupported(
+                                        "reverse requires locked source duration".into(),
+                                    )
+                                })?;
+                                if stream.width.is_none() || stream.height.is_none() {
+                                    return Err(SequenceError::Unsupported(
+                                        "reverse requires locked video dimensions".into(),
+                                    ));
+                                }
+                            }
                         }
                     }
                 }

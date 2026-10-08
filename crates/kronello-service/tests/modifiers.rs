@@ -145,15 +145,29 @@ fn modifier_order_inverse_conflicts_and_selective_undo() {
             .contains(&second.id.to_string())
     );
     let order_inverse = undo(&path, &second, "undo-order");
-    let inverse_conflict = run(undo_request(&path, &first, "active-inverse-conflict")).unwrap_err();
+    // ADR-0132: the undo of the later reorder only restored the post-insert
+    // order, so undoing the insert itself is allowed.
+    let undo_first = undo(&path, &first, "undo-first");
+    assert_eq!(undo_first.undo_of, Some(first.id));
+    assert!(property(&exported(&path).document).modifiers().is_empty());
+    // Redoing the reorder by undoing its undo is still ordered by the active
+    // undo of the insert on the same keys.
+    let inverse_conflict = run(undo_request(
+        &path,
+        &order_inverse,
+        "active-inverse-conflict",
+    ))
+    .unwrap_err();
     assert_eq!(inverse_conflict.code, "UNDO_CONFLICT");
     assert!(
         inverse_conflict
             .details
             .unwrap()
             .to_string()
-            .contains(&order_inverse.id.to_string())
+            .contains(&undo_first.id.to_string())
     );
+    // Restore the inserted modifiers for the remaining assertions.
+    undo(&path, &undo_first, "redo-first-insert");
     assert_eq!(
         property(&exported(&path).document).modifiers(),
         &[b.clone(), a.clone()]

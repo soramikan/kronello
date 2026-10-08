@@ -254,6 +254,28 @@ fn key_composite(
     }
     surface_pixels(&output)
 }
+/// TRACK-002 fill color in premultiplied working space (ADR-0122).
+pub(crate) fn stabilize_fill(effect: &PixelEffect, working: WorkingSpace) -> [f32; 4] {
+    let PixelEffect::Stabilize { fill, .. } = effect else {
+        return [0.0; 4];
+    };
+    let c = fill.components();
+    let space = match fill.space() {
+        kronello_model::ColorSpace::Srgb => crate::InputSpace::Srgb,
+        kronello_model::ColorSpace::LinearRec709 => crate::InputSpace::LinearRec709,
+        kronello_model::ColorSpace::LinearRec2020 => crate::InputSpace::LinearRec2020,
+    };
+    color::to_working(
+        [
+            c.r.get() as f32,
+            c.g.get() as f32,
+            c.b.get() as f32,
+            c.alpha.get() as f32,
+        ],
+        space,
+        working,
+    )
+}
 /// FX-005/FX-006 CPU oracle chains, matching the WGSL ops one-to-one
 /// (ADR-0115). Every intermediate is rounded to binary16 like the surfaces.
 fn apply_standard(
@@ -384,6 +406,60 @@ fn apply_standard(
                         output[(y as u32 * size[0] + x as u32) as usize] =
                             bilinear(&source, size, [ex - 0.5, ey - 0.5]);
                     }
+                }
+            }
+            surface_pixels(&output)
+        }
+        // TRACK-002 (ADR-0122): inverse warp through the resolved `frame`
+        // transform with authored border processing, then re-embedding into
+        // the input raster through `unmap`. Mirrors WGSL op 13 one-to-one.
+        PixelEffect::Stabilize {
+            frame,
+            unmap,
+            size: extent,
+            border,
+            sampling,
+            ..
+        } => {
+            let fill = stabilize_fill(effect, working);
+            let mut output = vec![[0.0; 4]; source.len()];
+            for y in 0..size[1] as i32 {
+                for x in 0..size[0] as i32 {
+                    let (fx, fy) = (x as f32 + 0.5, y as f32 + 0.5);
+                    let mut s = [
+                        frame[0][0] * fx + frame[0][1] * fy + frame[0][2],
+                        frame[1][0] * fx + frame[1][1] * fy + frame[1][2],
+                    ];
+                    let inside =
+                        s[0] >= 0.0 && s[0] <= extent[0] && s[1] >= 0.0 && s[1] <= extent[1];
+                    if *border == kronello_model::StabilizeBorder::Fill && !inside {
+                        output[(y as u32 * size[0] + x as u32) as usize] = fill;
+                        continue;
+                    }
+                    match border {
+                        kronello_model::StabilizeBorder::Replicate => {
+                            s = [s[0].clamp(0.0, extent[0]), s[1].clamp(0.0, extent[1])];
+                        }
+                        kronello_model::StabilizeBorder::Reflect => {
+                            for (v, e) in s.iter_mut().zip(extent.iter()) {
+                                let m = *v - 2.0 * e * (*v / (2.0 * e)).floor();
+                                *v = if m > *e { 2.0 * e - m } else { m };
+                            }
+                        }
+                        kronello_model::StabilizeBorder::Fill => (),
+                    }
+                    let r = [
+                        unmap[0][0] * s[0] + unmap[0][1] * s[1] + unmap[0][2],
+                        unmap[1][0] * s[0] + unmap[1][1] * s[1] + unmap[1][2],
+                    ];
+                    output[(y as u32 * size[0] + x as u32) as usize] = match sampling {
+                        kronello_model::StabilizeSampling::Nearest => {
+                            load(&source, size, r[0].floor() as i32, r[1].floor() as i32)
+                        }
+                        kronello_model::StabilizeSampling::Bilinear => {
+                            bilinear(&source, size, [r[0] - 0.5, r[1] - 0.5])
+                        }
+                    };
                 }
             }
             surface_pixels(&output)

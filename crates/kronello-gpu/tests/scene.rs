@@ -1571,3 +1571,181 @@ fn gpu_color003_lut_matches_cpu_reference_in_both_spaces() {
         }
     }
 }
+
+/// TRACK-002 (ADR-0122): a 4x4 raster whose texel value encodes its position
+/// (`[x/4, y/4, 0, 1]` — all f16-exact) lets nearest taps identify the
+/// sampled source cell directly.
+fn track002_scene(
+    frame: [[f32; 3]; 2],
+    border: kronello_model::StabilizeBorder,
+    sampling: kronello_model::StabilizeSampling,
+) -> DrawScene {
+    let mut src = vec![[0.0; 4]; 16];
+    for y in 0..4u32 {
+        for x in 0..4u32 {
+            src[(y * 4 + x) as usize] = [x as f32 / 4.0, y as f32 / 4.0, 0.0, 1.0];
+        }
+    }
+    DrawScene {
+        nodes: vec![
+            DrawNode::Raster(src),
+            DrawNode::Effect {
+                source: 0,
+                effect: PixelEffect::Stabilize {
+                    frame,
+                    unmap: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+                    size: [4.0, 4.0],
+                    border,
+                    fill: kronello_model::Color::new(
+                        kronello_model::ColorSpace::Srgb,
+                        [1.0, 0.0, 0.0],
+                        0.5,
+                    )
+                    .unwrap(),
+                    sampling,
+                },
+            },
+        ],
+        roots: vec![1],
+    }
+}
+#[test]
+fn cpu_track002_stabilize_borders_and_sampling() {
+    use kronello_model::{StabilizeBorder, StabilizeSampling};
+    let half = |v: f32| half::f16::from_f32(v).to_f32();
+    let size = RenderSize::pixels(4, 4);
+    // Identity warp reproduces the source under both samplers.
+    for sampling in [StabilizeSampling::Nearest, StabilizeSampling::Bilinear] {
+        let scene = track002_scene(
+            [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+            StabilizeBorder::Fill,
+            sampling,
+        );
+        let px = render_scene_reference(size, &scene, WorkingSpace::LinearRec709).unwrap();
+        for y in 0..4usize {
+            for x in 0..4usize {
+                assert_eq!(
+                    px[y * 4 + x],
+                    [half(x as f32 / 4.0), half(y as f32 / 4.0), 0.0, 1.0],
+                    "({x},{y}) {sampling:?}"
+                );
+            }
+        }
+    }
+    // Shift by -2: positions s = x - 1.5 map to texel x - 2.
+    let shifted = [[1.0, 0.0, -2.0], [0.0, 1.0, 0.0]];
+    let fill = [half(0.5), 0.0, 0.0, half(0.5)];
+    let px = render_scene_reference(
+        size,
+        &track002_scene(shifted, StabilizeBorder::Fill, StabilizeSampling::Nearest),
+        WorkingSpace::LinearRec709,
+    )
+    .unwrap();
+    for y in 0..4usize {
+        assert_eq!(px[y * 4], fill);
+        assert_eq!(px[y * 4 + 1], fill);
+        for x in 2..4usize {
+            assert_eq!(
+                px[y * 4 + x],
+                [half((x - 2) as f32 / 4.0), half(y as f32 / 4.0), 0.0, 1.0],
+                "fill ({x},{y})"
+            );
+        }
+    }
+    // Replicate clamps s into the extent: edge columns read texel 0.
+    let px = render_scene_reference(
+        size,
+        &track002_scene(
+            shifted,
+            StabilizeBorder::Replicate,
+            StabilizeSampling::Nearest,
+        ),
+        WorkingSpace::LinearRec709,
+    )
+    .unwrap();
+    for y in 0..4usize {
+        for x in 0..2usize {
+            assert_eq!(px[y * 4 + x], [0.0, half(y as f32 / 4.0), 0.0, 1.0]);
+        }
+    }
+    // Reflect folds s = -1.5 onto +1.5 → texel 1, and s = -0.5 onto +0.5 →
+    // texel 0.
+    let px = render_scene_reference(
+        size,
+        &track002_scene(
+            shifted,
+            StabilizeBorder::Reflect,
+            StabilizeSampling::Nearest,
+        ),
+        WorkingSpace::LinearRec709,
+    )
+    .unwrap();
+    for y in 0..4usize {
+        for x in 0..2usize {
+            let expected_x = (1 - x) as f32 / 4.0;
+            assert_eq!(
+                px[y * 4 + x],
+                [half(expected_x), half(y as f32 / 4.0), 0.0, 1.0],
+                "reflect ({x},{y})"
+            );
+        }
+    }
+    // Bilinear at a half-texel shift blends the bracketing texels 50/50.
+    let px = render_scene_reference(
+        size,
+        &track002_scene(
+            [[1.0, 0.0, -1.5], [0.0, 1.0, 0.0]],
+            StabilizeBorder::Fill,
+            StabilizeSampling::Bilinear,
+        ),
+        WorkingSpace::LinearRec709,
+    )
+    .unwrap();
+    for y in 0..4usize {
+        assert_eq!(px[y * 4], fill);
+        // s = 0 centers on texel 0: the -1 tap is outside and contributes
+        // transparent black, halving the read value and alpha.
+        assert_eq!(px[y * 4 + 1], [0.0, half(y as f32 / 8.0), 0.0, 0.5]);
+        for x in 2..4usize {
+            assert_eq!(
+                px[y * 4 + x],
+                [
+                    half((2 * x - 3) as f32 / 8.0),
+                    half(y as f32 / 4.0),
+                    0.0,
+                    1.0
+                ],
+                "bilinear ({x},{y})"
+            );
+        }
+    }
+}
+#[test]
+fn gpu_track002_stabilize_matches_cpu_reference() {
+    use kronello_model::{StabilizeBorder, StabilizeSampling};
+    for working in [WorkingSpace::LinearRec709, WorkingSpace::LinearRec2020] {
+        for (frame, border, sampling) in [
+            (
+                [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+                StabilizeBorder::Fill,
+                StabilizeSampling::Bilinear,
+            ),
+            (
+                [[1.0, 0.0, -2.0], [0.0, 1.0, 0.0]],
+                StabilizeBorder::Replicate,
+                StabilizeSampling::Nearest,
+            ),
+            (
+                [[1.0, 0.0, -1.5], [0.0, 1.0, -0.5]],
+                StabilizeBorder::Reflect,
+                StabilizeSampling::Bilinear,
+            ),
+        ] {
+            let scene = track002_scene(frame, border, sampling);
+            let size = RenderSize::pixels(4, 4);
+            let expected = render_scene_reference(size, &scene, working).unwrap();
+            let actual = gpu().render_scene(size, &scene, working).unwrap();
+            compare(4, working, &expected, &actual.pixels);
+        }
+    }
+}

@@ -18,6 +18,7 @@ struct EditorWindow: View {
             if model.ui.page == "motion" { MotionPage(model: model, workflow: workflow, historyOpen: $historyOpen) }
             else if model.ui.page == "edit" { EditPage(model: model, workflow: workflow) }
             else if model.ui.page == "template" { TemplatePage(model: model) }
+            else if model.ui.page == "media" { MediaPage(model: model) }
             else if model.ui.page == "export" { ExportPage(model: model) }
             else { KREmptyState(icon: model.ui.page == "export" ? .clapperboard : .layers,
                 title: model.ui.page == "template" ? "テンプレートページ" : "書き出しページ",
@@ -66,7 +67,7 @@ struct EditorWindow: View {
             p.line.frame(width: 1, height: KRSize.controlHeight)
             KRPopupButton("ワークスペース", options: [.init("standard", "標準", icon: .layoutPanelLeft)], selection: $model.ui.workspace).fixedSize()
         }.padding(.horizontal, KRSpace.space3).frame(height: KRWindowMetrics.toolbar)
-            .overlay { KRSegmentedControl([.init("edit", "編集"), .init("motion", "モーション"), .init("template", "テンプレート"), .init("export", "書き出し")], selection: $model.ui.page) }
+            .overlay { KRSegmentedControl([.init("edit", "編集"), .init("motion", "モーション"), .init("template", "テンプレート"), .init("media", "メディア"), .init("export", "書き出し")], selection: $model.ui.page) }
             .overlay(alignment: .bottom) { p.line.frame(height: 1) }
     }
     var diagnostic: KRDiagnostic? {

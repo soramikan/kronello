@@ -5,8 +5,10 @@ use kronello_jobs::{JobConfig, JobError, JobRecord, JobStore, Submission};
 use kronello_media::{
     AvExportRequest, AvExportSnapshot, DeliveryAudioCodec, MediaRuntime, MovieProfile,
 };
-use kronello_model::{AssetId, CaptionFormat, DocumentObject, SequenceId};
-use kronello_render::{RenderSnapshot, SequenceRequest, frame_samples};
+use kronello_model::{AssetId, CaptionFormat, ChannelMask, DocumentObject, SequenceId};
+use kronello_render::{
+    RenderProfile, RenderSnapshot, RenderTarget, SequenceRequest, frame_samples,
+};
 use kronello_time::{Time, TimeRange};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -44,6 +46,10 @@ pub enum JobOutput {
         audio: kronello_audio::AudioSourceMode,
         #[serde(default = "movie_profile_v1")]
         profile_version: u32,
+        /// ADR-0124: omitted selects stereo; a set value is validated against
+        /// the closed layout set at parse time and pins audio envelope 3.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        audio_layout: Option<ChannelMask>,
         clips: Vec<JobAudioClip>,
         background: [f32; 3],
     },
@@ -51,6 +57,8 @@ pub enum JobOutput {
         profile_version: u32,
         #[serde(default)]
         audio: kronello_audio::AudioSourceMode,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        audio_layout: Option<ChannelMask>,
         clips: Vec<JobAudioClip>,
         background: [f32; 3],
     },
@@ -59,6 +67,8 @@ pub enum JobOutput {
         transfer: kronello_render::HdrTransfer,
         #[serde(default)]
         audio: kronello_audio::AudioSourceMode,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        audio_layout: Option<ChannelMask>,
         clips: Vec<JobAudioClip>,
         background: [f32; 3],
     },
@@ -68,6 +78,8 @@ pub enum JobOutput {
         audio: kronello_audio::AudioSourceMode,
         #[serde(default)]
         audio_codec: DeliveryAudioCodec,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        audio_layout: Option<ChannelMask>,
         clips: Vec<JobAudioClip>,
         background: [f32; 3],
     },
@@ -77,6 +89,8 @@ pub enum JobOutput {
         audio: kronello_audio::AudioSourceMode,
         #[serde(default)]
         audio_codec: DeliveryAudioCodec,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        audio_layout: Option<ChannelMask>,
         clips: Vec<JobAudioClip>,
         background: [f32; 3],
     },
@@ -86,6 +100,8 @@ pub enum JobOutput {
         audio: kronello_audio::AudioSourceMode,
         #[serde(default)]
         audio_codec: DeliveryAudioCodec,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        audio_layout: Option<ChannelMask>,
         clips: Vec<JobAudioClip>,
         background: [f32; 3],
     },
@@ -95,6 +111,8 @@ pub enum JobOutput {
         audio: kronello_audio::AudioSourceMode,
         #[serde(default)]
         audio_codec: DeliveryAudioCodec,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        audio_layout: Option<ChannelMask>,
         clips: Vec<JobAudioClip>,
         background: [f32; 3],
     },
@@ -109,6 +127,8 @@ pub(crate) struct MovieSettings<'a> {
     pub profile: MovieProfile,
     pub audio_version: u32,
     pub audio: kronello_audio::AudioSourceMode,
+    /// ADR-0124 declared output layout; stereo when the field is omitted.
+    pub audio_layout: ChannelMask,
     pub clips: &'a [JobAudioClip],
     pub background: [f32; 3],
 }
@@ -127,7 +147,7 @@ impl JobOutput {
         }
     }
     pub(crate) fn movie_settings(&self) -> Result<MovieSettings<'_>, ServiceError> {
-        let (profile, version, audio, clips, background) = match self {
+        let (profile, version, audio, audio_layout, clips, background) = match self {
             Self::ImageSequence | Self::CaptionSidecar { .. } => {
                 return Err(ServiceError::invalid(
                     "render.export requires a movie profile",
@@ -136,24 +156,28 @@ impl JobOutput {
             Self::ProResMov {
                 profile_version,
                 audio,
+                audio_layout,
                 clips,
                 background,
             } => (
                 MovieProfile::ProResPcm24,
                 *profile_version,
                 *audio,
+                *audio_layout,
                 clips,
                 *background,
             ),
             Self::ProResSdrFromHdrMov {
                 profile_version,
                 audio,
+                audio_layout,
                 clips,
                 background,
             } => (
                 MovieProfile::ProResSdrFromHdrPcm24V1,
                 *profile_version,
                 *audio,
+                *audio_layout,
                 clips,
                 *background,
             ),
@@ -161,6 +185,7 @@ impl JobOutput {
                 profile_version,
                 transfer,
                 audio,
+                audio_layout,
                 clips,
                 background,
             } => (
@@ -170,6 +195,7 @@ impl JobOutput {
                 },
                 *profile_version,
                 *audio,
+                *audio_layout,
                 clips,
                 *background,
             ),
@@ -177,6 +203,7 @@ impl JobOutput {
                 profile_version,
                 audio,
                 audio_codec,
+                audio_layout,
                 clips,
                 background,
             } => (
@@ -192,6 +219,7 @@ impl JobOutput {
                 },
                 *profile_version,
                 *audio,
+                *audio_layout,
                 clips,
                 *background,
             ),
@@ -199,6 +227,7 @@ impl JobOutput {
                 profile_version,
                 audio,
                 audio_codec,
+                audio_layout,
                 clips,
                 background,
             } => (
@@ -214,6 +243,7 @@ impl JobOutput {
                 },
                 *profile_version,
                 *audio,
+                *audio_layout,
                 clips,
                 *background,
             ),
@@ -221,6 +251,7 @@ impl JobOutput {
                 profile_version,
                 audio,
                 audio_codec,
+                audio_layout,
                 clips,
                 background,
             } => (
@@ -236,6 +267,7 @@ impl JobOutput {
                 },
                 *profile_version,
                 *audio,
+                *audio_layout,
                 clips,
                 *background,
             ),
@@ -243,6 +275,7 @@ impl JobOutput {
                 profile_version,
                 audio,
                 audio_codec,
+                audio_layout,
                 clips,
                 background,
             } => (
@@ -257,10 +290,12 @@ impl JobOutput {
                 },
                 *profile_version,
                 *audio,
+                *audio_layout,
                 clips,
                 *background,
             ),
         };
+        let audio_layout = audio_layout.unwrap_or(ChannelMask::STEREO);
         let legacy = profile == MovieProfile::ProResPcm24;
         if (legacy
             && (!self.supported_profile_versions().contains(&version)
@@ -272,10 +307,18 @@ impl JobOutput {
                 "unsupported movie version or legacy audio mode",
             ));
         }
+        // AUDIO-010: multichannel export is defined only on audio envelope 3.
+        if audio_layout != ChannelMask::STEREO && legacy && version != 3 {
+            return Err(ServiceError::new(
+                "UNSUPPORTED_FEATURE",
+                "multichannel audio requires profile_version 3",
+            ));
+        }
         Ok(MovieSettings {
             profile,
             audio_version: if legacy { version } else { 3 },
             audio,
+            audio_layout,
             clips,
             background,
         })
@@ -313,7 +356,8 @@ pub struct JobListResult {
 }
 
 /// Immutable job input. Exactly one payload kind is legal: render jobs carry
-/// `snapshot` + `request`; `proxy.generate` jobs carry `proxy`. Optional
+/// `snapshot` + `request`; `proxy.generate` jobs carry `proxy`; `scene.detect`
+/// jobs carry `scene`; `audio.plugin_process` jobs carry `plugin`. Optional
 /// fields keep the render shape byte-compatible with schema_version 1.
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -326,6 +370,10 @@ pub(crate) struct FixedInput {
     backend: BackendSelection,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     proxy: Option<crate::proxy::ProxyJobInput>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    scene: Option<crate::scene::SceneJobInput>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    plugin: Option<crate::plugin::PluginJobInput>,
 }
 impl FixedInput {
     fn render(
@@ -339,6 +387,8 @@ impl FixedInput {
             request: Some(request),
             backend,
             proxy: None,
+            scene: None,
+            plugin: None,
         }
     }
     pub(crate) fn proxy(input: crate::proxy::ProxyJobInput) -> Self {
@@ -349,12 +399,46 @@ impl FixedInput {
             // Proxy transcode never touches a render backend.
             backend: BackendSelection::CpuReference,
             proxy: Some(input),
+            scene: None,
+            plugin: None,
         }
     }
-    /// The render payload pair; mutually exclusive with `proxy` by validation.
+    pub(crate) fn scene(input: crate::scene::SceneJobInput) -> Self {
+        Self {
+            schema_version: 1,
+            snapshot: None,
+            request: None,
+            // Scene detection decodes sequentially; no render backend.
+            backend: BackendSelection::CpuReference,
+            proxy: None,
+            scene: Some(input),
+            plugin: None,
+        }
+    }
+    /// AUDIO-011: the plugin payload holds the pinned spec; no render state.
+    pub(crate) fn plugin(input: crate::plugin::PluginJobInput) -> Self {
+        Self {
+            schema_version: 1,
+            snapshot: None,
+            request: None,
+            // Plugin processing never touches a render backend.
+            backend: BackendSelection::CpuReference,
+            proxy: None,
+            scene: None,
+            plugin: Some(input),
+        }
+    }
+    /// The render payload pair; mutually exclusive with `proxy`/`scene`/
+    /// `plugin` by validation.
     fn render_parts(&self) -> Result<(&RenderSnapshot, &RenderSubmitRequest), ServiceError> {
-        match (&self.snapshot, &self.request, &self.proxy) {
-            (Some(snapshot), Some(request), None) => Ok((snapshot, request)),
+        match (
+            &self.snapshot,
+            &self.request,
+            &self.proxy,
+            &self.scene,
+            &self.plugin,
+        ) {
+            (Some(snapshot), Some(request), None, None, None) => Ok((snapshot, request)),
             _ => Err(ServiceError::new(
                 "JOB_INPUT_HASH_MISMATCH",
                 "fixed input is not a render job",
@@ -362,21 +446,70 @@ impl FixedInput {
         }
     }
     pub(crate) fn proxy_parts(&self) -> Result<&crate::proxy::ProxyJobInput, ServiceError> {
-        match (&self.snapshot, &self.request, &self.proxy) {
-            (None, None, Some(proxy)) => Ok(proxy),
+        match (
+            &self.snapshot,
+            &self.request,
+            &self.proxy,
+            &self.scene,
+            &self.plugin,
+        ) {
+            (None, None, Some(proxy), None, None) => Ok(proxy),
             _ => Err(ServiceError::new(
                 "JOB_INPUT_HASH_MISMATCH",
                 "fixed input is not a proxy job",
             )),
         }
     }
+    pub(crate) fn scene_parts(&self) -> Result<&crate::scene::SceneJobInput, ServiceError> {
+        match (
+            &self.snapshot,
+            &self.request,
+            &self.proxy,
+            &self.scene,
+            &self.plugin,
+        ) {
+            (None, None, None, Some(scene), None) => Ok(scene),
+            _ => Err(ServiceError::new(
+                "JOB_INPUT_HASH_MISMATCH",
+                "fixed input is not a scene job",
+            )),
+        }
+    }
+    pub(crate) fn plugin_parts(&self) -> Result<&crate::plugin::PluginJobInput, ServiceError> {
+        match (
+            &self.snapshot,
+            &self.request,
+            &self.proxy,
+            &self.scene,
+            &self.plugin,
+        ) {
+            (None, None, None, None, Some(plugin)) => Ok(plugin),
+            _ => Err(ServiceError::new(
+                "JOB_INPUT_HASH_MISMATCH",
+                "fixed input is not a plugin job",
+            )),
+        }
+    }
     /// A worker never executes input whose kind disagrees with the job record:
     /// render records carry a content-hashed snapshot; proxy records carry a
-    /// `proxy` payload validated against `record.output_profile`.
+    /// `proxy` payload, scene records a `scene` payload and plugin records a
+    /// `plugin` payload, all validated against `record.output_profile`.
     fn kind_matches_record(&self, record: &JobRecord) -> bool {
-        match (&self.snapshot, &self.request, &self.proxy) {
-            (Some(_), Some(_), None) => record.output_profile.get("render").is_some(),
-            (None, None, Some(_)) => record.output_profile.get("proxy_asset_id").is_some(),
+        match (
+            &self.snapshot,
+            &self.request,
+            &self.proxy,
+            &self.scene,
+            &self.plugin,
+        ) {
+            (Some(_), Some(_), None, None, None) => record.output_profile.get("render").is_some(),
+            (None, None, Some(_), None, None) => {
+                record.output_profile.get("proxy_asset_id").is_some()
+            }
+            (None, None, None, Some(_), None) => {
+                record.output_profile.get("scene_asset_id").is_some()
+            }
+            (None, None, None, None, Some(_)) => record.output_profile.get("plugin").is_some(),
             _ => false,
         }
     }
@@ -389,7 +522,7 @@ impl From<JobError> for ServiceError {
 fn job_error(e: ServiceError) -> JobError {
     JobError::new(&e.code, e.message)
 }
-fn absolute(path: &Path) -> Result<PathBuf, ServiceError> {
+pub(crate) fn absolute(path: &Path) -> Result<PathBuf, ServiceError> {
     Ok(if path.is_absolute() {
         path.to_path_buf()
     } else {
@@ -423,19 +556,24 @@ impl Service<'_> {
             None => JobConfig::from_env()?,
         })?)
     }
-    pub(crate) fn submit_job(
+    /// Worker serialization rejects injected backends once per submission.
+    fn worker_backend(&self) -> Result<BackendSelection, ServiceError> {
+        match self.backend {
+            Backend::Selected(selection) => Ok(selection),
+            Backend::Injected(_) => Err(ServiceError::new(
+                "UNSUPPORTED_FEATURE",
+                "in-process injected backend cannot be serialized for worker",
+            )),
+        }
+    }
+    /// Path normalization only: canonical project locator, absolute
+    /// destination/font/lut locators, region and feature gates. Validation that
+    /// reads the document or would fail on a job's own published output (the
+    /// `OUTPUT_EXISTS` check) stays in `freeze_submission`.
+    fn normalize_submission(
         &self,
         mut request: RenderSubmitRequest,
-    ) -> Result<JobRecord, ServiceError> {
-        let backend = match self.backend {
-            Backend::Selected(selection) => selection,
-            Backend::Injected(_) => {
-                return Err(ServiceError::new(
-                    "UNSUPPORTED_FEATURE",
-                    "in-process injected backend cannot be serialized for worker",
-                ));
-            }
-        };
+    ) -> Result<RenderSubmitRequest, ServiceError> {
         request.render.input.region.validate()?;
         features(&request.required_features)?;
         let project_path = request.render.input.project.canonicalize().map_err(|e| {
@@ -448,26 +586,34 @@ impl Service<'_> {
                 e.to_string(),
             )
         })?;
-        request.render.input.project = project_path.clone();
+        request.render.input.project = project_path;
         request.render.output_directory = absolute(&request.render.output_directory)?;
-        if request.render.output_directory.exists() {
-            return Err(ServiceError::new(
-                "OUTPUT_EXISTS",
-                "destination already exists",
-            ));
-        }
         for font in &mut request.render.input.fonts {
             font.path = absolute(&font.path)?;
         }
         for lut in &mut request.render.input.luts {
             lut.path = absolute(&lut.path)?;
         }
-        let stored = crate::session::read_snapshot(&project_path)?;
+        Ok(request)
+    }
+    /// Full validation and snapshot freezing for a normalized request.
+    /// Rejects an existing destination so a fresh submission never overwrites.
+    fn freeze_submission(
+        &self,
+        request: &RenderSubmitRequest,
+        stored: &kronello_store::Snapshot,
+    ) -> Result<RenderSnapshot, ServiceError> {
+        if request.render.output_directory.exists() {
+            return Err(ServiceError::new(
+                "OUTPUT_EXISTS",
+                "destination already exists",
+            ));
+        }
         check_expected_revision(request.expected_revision.as_deref(), stored.revision)?;
         crate::document_asset_locators(&stored.document)?;
         // COLOR-003 lattices are embedded in the fixed snapshot at submit so
         // worker replay never re-reads a mutable locator (ADR-0113).
-        let snapshot = crate::freeze_render_input(&stored, &request.render.input)?
+        let snapshot = crate::freeze_render_input(stored, &request.render.input)?
             .with_luts(crate::load_locked_luts(&request.render.input)?);
         // Every fixed job decodes authored originals (ADR-0119), including
         // image-sequence and sidecar outputs that never build a movie snapshot.
@@ -498,7 +644,19 @@ impl Service<'_> {
                 movie_snapshot(&snapshot, &request.output)?;
             }
         }
-        let store = self.jobs()?;
+        Ok(snapshot)
+    }
+    /// Freeze a normalized request into fixed input bytes plus its job
+    /// submission record data.
+    fn prepared_input(
+        &self,
+        request: RenderSubmitRequest,
+        backend: BackendSelection,
+    ) -> Result<(Vec<u8>, Submission), ServiceError> {
+        let stored = crate::session::read_snapshot(&request.render.input.project)?;
+        let snapshot = self.freeze_submission(&request, &stored)?;
+        let total_frames =
+            frame_samples(request.render.range, request.render.frame_rate)?.len() as u64;
         let submission = Submission {
             engine_version: env!("CARGO_PKG_VERSION").into(),
             project_id: snapshot.project().id.to_string(),
@@ -509,16 +667,207 @@ impl Service<'_> {
             total_frames,
         };
         let fixed = FixedInput::render(snapshot, request, backend);
+        Ok((serde_json::to_vec(&fixed)?, submission))
+    }
+    fn spawn_worker(&self, store: &JobStore, record: &JobRecord) -> Result<(), ServiceError> {
         let executable = match &self.worker_executable {
             Some(path) => path.clone(),
             None => std::env::current_exe()?,
         };
-        let record = store.submit(&serde_json::to_vec(&fixed)?, submission)?;
         if let Err(error) = store.spawn_attempt(&record.id, record.attempt, &executable) {
             store.finish_error_attempt(&record.id, record.attempt, &error)?;
             return Err(error.into());
         }
+        Ok(())
+    }
+    pub(crate) fn submit_job(
+        &self,
+        request: RenderSubmitRequest,
+    ) -> Result<JobRecord, ServiceError> {
+        let backend = self.worker_backend()?;
+        let request = self.normalize_submission(request)?;
+        let (fixed, submission) = self.prepared_input(request, backend)?;
+        let store = self.jobs()?;
+        let record = store.submit(&fixed, submission)?;
+        self.spawn_worker(&store, &record)?;
         Ok(record)
+    }
+    /// FLOW-003 keyed submission (ADR-0130). The read-only replay check runs
+    /// before `freeze_submission`, so replaying an identical request never
+    /// trips `OUTPUT_EXISTS` on the job's own published destination. The
+    /// authoritative key check repeats atomically inside `submit_keyed`.
+    fn submit_batch_item(
+        &self,
+        store: &JobStore,
+        request: RenderSubmitRequest,
+        key: &str,
+        payload: &str,
+    ) -> Result<kronello_jobs::KeyedSubmission, ServiceError> {
+        let backend = self.worker_backend()?;
+        let stored = crate::session::read_snapshot(&request.render.input.project)?;
+        let project_id = stored.document.id.to_string();
+        if let Some(record) = store.replay(&project_id, key, payload)? {
+            return Ok(kronello_jobs::KeyedSubmission::Replayed(record));
+        }
+        let snapshot = self.freeze_submission(&request, &stored)?;
+        let total_frames =
+            frame_samples(request.render.range, request.render.frame_rate)?.len() as u64;
+        let submission = Submission {
+            engine_version: env!("CARGO_PKG_VERSION").into(),
+            project_id,
+            revision: snapshot.revision().to_string(),
+            snapshot_hash: snapshot.content_hash()?,
+            output_profile: serde_json::to_value(&request)?,
+            destination: request.render.output_directory.clone(),
+            total_frames,
+        };
+        let fixed = FixedInput::render(snapshot, request, backend);
+        let outcome = store.submit_keyed(&serde_json::to_vec(&fixed)?, submission, key, payload)?;
+        if let kronello_jobs::KeyedSubmission::Submitted(record) = &outcome {
+            self.spawn_worker(store, record)?;
+        }
+        Ok(outcome)
+    }
+    /// FLOW-003 `export.batch` (ADR-0130). Items are attempted strictly in
+    /// array order; `failure_policy` decides whether the first failure marks
+    /// the remaining items `skipped` (`stop`) or every item is attempted
+    /// (`continue`). Item failures never abort the request — each outcome is
+    /// reported deterministically at the item's own position.
+    pub(crate) fn export_batch(
+        &self,
+        request: ExportBatchRequest,
+    ) -> Result<ExportBatchResult, ServiceError> {
+        if request.items.is_empty() {
+            return Err(ServiceError::invalid(
+                "export.batch requires at least one item",
+            ));
+        }
+        let mut keys = std::collections::BTreeSet::new();
+        let mut destinations = std::collections::BTreeSet::new();
+        for item in &request.items {
+            match (&item.submission, &item.preset) {
+                (Some(_), Some(_)) | (None, None) => {
+                    return Err(ServiceError::invalid(
+                        "each batch item requires exactly one of submission or preset",
+                    ));
+                }
+                _ => {}
+            }
+            if let Some(key) = &item.idempotency_key
+                && !keys.insert(key.as_str())
+            {
+                return Err(ServiceError::invalid("duplicate batch idempotency key"));
+            }
+        }
+        // Normalize every item before any submission: preset items resolve
+        // against a freshly read snapshot, and a shape error fails the whole
+        // request deterministically instead of leaving a half-queued batch.
+        let mut normalized = Vec::with_capacity(request.items.len());
+        for item in &request.items {
+            let submission = self.resolve_batch_item(item)?;
+            let payload = serde_json::to_string(&submission)?;
+            // Explicit keys win; absent keys derive from the normalized
+            // submission so identical items replay instead of duplicating.
+            let key = item
+                .idempotency_key
+                .clone()
+                .unwrap_or_else(|| format!("auto:{:x}", Sha256::digest(payload.as_bytes())));
+            if key.is_empty() || key.len() > 256 {
+                return Err(ServiceError::invalid(
+                    "idempotency_key must contain 1..256 UTF-8 bytes",
+                ));
+            }
+            if !destinations.insert(submission.render.output_directory.clone()) {
+                return Err(ServiceError::invalid("duplicate batch output destination"));
+            }
+            normalized.push((key, payload, submission));
+        }
+        let store = self.jobs()?;
+        let mut items = Vec::with_capacity(normalized.len());
+        let mut stopped = false;
+        for (key, payload, submission) in normalized.into_iter() {
+            if stopped {
+                items.push(ExportBatchItemResult {
+                    idempotency_key: key,
+                    outcome: ExportBatchOutcome::Skipped,
+                    job: None,
+                    error: Some(ServiceError::new(
+                        "BATCH_STOPPED",
+                        "skipped after an earlier batch item failed",
+                    )),
+                });
+                continue;
+            }
+            match self.submit_batch_item(&store, submission, &key, &payload) {
+                Ok(kronello_jobs::KeyedSubmission::Submitted(job)) => {
+                    items.push(ExportBatchItemResult {
+                        idempotency_key: key,
+                        outcome: ExportBatchOutcome::Submitted,
+                        job: Some(job),
+                        error: None,
+                    });
+                }
+                Ok(kronello_jobs::KeyedSubmission::Replayed(job)) => {
+                    items.push(ExportBatchItemResult {
+                        idempotency_key: key,
+                        outcome: ExportBatchOutcome::Replayed,
+                        job: Some(job),
+                        error: None,
+                    });
+                }
+                Err(error) => {
+                    items.push(ExportBatchItemResult {
+                        idempotency_key: key,
+                        outcome: ExportBatchOutcome::Failed,
+                        job: None,
+                        error: Some(error),
+                    });
+                    stopped = request.failure_policy == BatchFailurePolicy::Stop;
+                }
+            }
+        }
+        Ok(ExportBatchResult { items })
+    }
+    /// Resolve one batch item to a normalized submission. `preset` items are
+    /// converted server-side so every transport produces identical requests.
+    fn resolve_batch_item(
+        &self,
+        item: &ExportBatchItem,
+    ) -> Result<RenderSubmitRequest, ServiceError> {
+        let submission = match (&item.submission, &item.preset) {
+            (Some(submission), None) => (**submission).clone(),
+            (None, Some(preset)) => {
+                let project = item
+                    .project
+                    .clone()
+                    .ok_or_else(|| ServiceError::invalid("preset batch items require project"))?;
+                let destination = item.destination.clone().ok_or_else(|| {
+                    ServiceError::invalid("preset batch items require destination")
+                })?;
+                let project_path = project.canonicalize().map_err(|e| {
+                    ServiceError::new(
+                        if e.kind() == std::io::ErrorKind::NotFound {
+                            "PROJECT_NOT_FOUND"
+                        } else {
+                            "IO_ERROR"
+                        },
+                        e.to_string(),
+                    )
+                })?;
+                let stored = crate::session::read_snapshot(&project_path)?;
+                let preset = stored
+                    .document
+                    .export_presets
+                    .iter()
+                    .find(|p| p.id == *preset)
+                    .ok_or_else(|| {
+                        ServiceError::new("PRESET_MISSING", "export preset not found")
+                    })?;
+                preset_submission(preset, &project_path, destination)?
+            }
+            _ => unreachable!("item shape checked by export_batch"),
+        };
+        self.normalize_submission(submission)
     }
     fn render_fixed_job(
         &self,
@@ -534,6 +883,17 @@ impl Service<'_> {
         }
         if let Some(proxy) = &fixed.proxy {
             return crate::proxy::execute_proxy_job(store, record, proxy);
+        }
+        if let Some(scene) = &fixed.scene {
+            return crate::scene::execute_scene_job(store, record, scene);
+        }
+        if let Some(plugin) = &fixed.plugin {
+            return crate::plugin::execute_plugin_job(
+                store,
+                record,
+                plugin,
+                self.plugin_helper.as_ref(),
+            );
         }
         let (snapshot, request) = fixed.render_parts()?;
         self.validate_fixed_job(record, fixed)?;
@@ -580,6 +940,50 @@ impl Service<'_> {
                     ));
                 }
             }
+        } else if let Ok(scene) = fixed.scene_parts() {
+            // A published scene receipt re-validates as a boundary asset whose
+            // declared hash matches the report and the fixed scene input.
+            if record.destination.exists()
+                && let Some(result) = store.publication_result(&record)?
+            {
+                let report = &result["report"];
+                let data: kronello_model::SceneBoundaryAsset =
+                    serde_json::from_slice(&std::fs::read(&record.destination).map_err(|e| {
+                        ServiceError::new("OUTPUT_VALIDATION_FAILED", e.to_string())
+                    })?)
+                    .map_err(|e| ServiceError::new("OUTPUT_VALIDATION_FAILED", e.to_string()))?;
+                if data.validate().is_err()
+                    || report["content_hash"].as_str() != Some(data.content_hash.as_str())
+                    || report["scene_asset_id"].as_str()
+                        != Some(scene.scene_asset_id.to_string().as_str())
+                    || report["asset"].as_str() != Some(scene.asset.id.to_string().as_str())
+                {
+                    return Err(ServiceError::new(
+                        "OUTPUT_VALIDATION_FAILED",
+                        "published scene receipt differs from the validated result",
+                    ));
+                }
+            }
+        } else if let Ok(plugin) = fixed.plugin_parts() {
+            // A published plugin .mov must hash to the receipt bytes exactly.
+            if record.destination.exists()
+                && let Some(result) = store.publication_result(&record)?
+            {
+                let report = &result["report"];
+                let expected = report["content_hash"].as_str().unwrap_or_default();
+                let actual = kronello_media::content_hash(&record.destination)
+                    .map_err(|e| ServiceError::new("OUTPUT_VALIDATION_FAILED", e.to_string()))?;
+                if actual != expected
+                    || report["asset"].as_str() != Some(plugin.asset.id.to_string().as_str())
+                    || report["plugin"]["component"].as_str()
+                        != Some(plugin.plugin.component.as_str())
+                {
+                    return Err(ServiceError::new(
+                        "OUTPUT_VALIDATION_FAILED",
+                        "published plugin output differs from the validated receipt",
+                    ));
+                }
+            }
         } else if record.destination.exists()
             && let Some(result) = store.publication_result(&record)?
         {
@@ -623,9 +1027,11 @@ impl Service<'_> {
                             .map_err(|error| {
                                 ServiceError::new("OUTPUT_VALIDATION_FAILED", error.to_string())
                             })?;
-                    probe.verify_movie(settings.profile).map_err(|error| {
-                        ServiceError::new("OUTPUT_VALIDATION_FAILED", error.to_string())
-                    })?;
+                    probe
+                        .verify_movie_layout(settings.profile, settings.audio_layout)
+                        .map_err(|error| {
+                            ServiceError::new("OUTPUT_VALIDATION_FAILED", error.to_string())
+                        })?;
                     let (snapshot, _) = fixed.render_parts()?;
                     let expected = movie_snapshot(snapshot, output)?;
                     let report: kronello_media::AvExportReport =
@@ -679,6 +1085,12 @@ impl Service<'_> {
         }
         if let Ok(proxy) = fixed.proxy_parts() {
             return self.validate_proxy_job(record, proxy);
+        }
+        if let Ok(scene) = fixed.scene_parts() {
+            return self.validate_scene_job(record, scene);
+        }
+        if let Ok(plugin) = fixed.plugin_parts() {
+            return crate::plugin::validate_plugin_job(record, plugin);
         }
         let (snapshot, request) = fixed.render_parts()?;
         snapshot.validate()?;
@@ -763,6 +1175,35 @@ impl Service<'_> {
         }
         input
             .asset
+            .validate()
+            .map_err(|e| ServiceError::invalid(e.to_string()))?;
+        // The source asset is an external reference; content verify is live.
+        kronello_media::resolve_asset(&input.asset, &input.project)?;
+        Ok(())
+    }
+    /// `scene.detect` identity checks shared by the worker and `job.resume`;
+    /// the fixed payload is the whole contract (asset object, stream, range,
+    /// parameters, destination) and must equal the recorded submission.
+    fn validate_scene_job(
+        &self,
+        record: &JobRecord,
+        input: &crate::scene::SceneJobInput,
+    ) -> Result<(), ServiceError> {
+        if input.document_hash != record.snapshot_hash
+            || input.destination != record.destination
+            || serde_json::to_value(input)? != record.output_profile
+        {
+            return Err(ServiceError::new(
+                "JOB_INPUT_HASH_MISMATCH",
+                "fixed scene input identity differs",
+            ));
+        }
+        input
+            .asset
+            .validate()
+            .map_err(|e| ServiceError::invalid(e.to_string()))?;
+        input
+            .params
             .validate()
             .map_err(|e| ServiceError::invalid(e.to_string()))?;
         // The source asset is an external reference; content verify is live.
@@ -919,7 +1360,7 @@ impl Service<'_> {
                         let probe = runtime.probe(&stage_path).map_err(|e| {
                             ServiceError::new("OUTPUT_VALIDATION_FAILED", e.to_string())
                         })?;
-                        probe.verify_movie(settings.profile)?;
+                        probe.verify_movie_layout(settings.profile, settings.audio_layout)?;
                         if report.frames.len() as u64 != record.total_frames
                             || probe.render_snapshot_hash != record.snapshot_hash
                         {
@@ -1063,7 +1504,17 @@ pub(crate) fn movie_snapshot(
         .iter()
         .map(JobAudioClip::compile)
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(if settings.profile != MovieProfile::ProResPcm24 {
+    // A non-stereo layout pins audio envelope 3; `None` keeps the ProRes+PCM24
+    // MOV stage while `Some(profile)` selects the delivery codec/container.
+    Ok(if settings.audio_layout != ChannelMask::STEREO {
+        AvExportSnapshot::with_audio_layout(
+            snapshot,
+            settings.audio,
+            clips,
+            (settings.profile != MovieProfile::ProResPcm24).then_some(settings.profile),
+            settings.audio_layout,
+        )?
+    } else if settings.profile != MovieProfile::ProResPcm24 {
         AvExportSnapshot::with_movie_profile(snapshot, settings.audio, clips, settings.profile)?
     } else if settings.audio_version == 1 {
         AvExportSnapshot::new(snapshot, clips)?
@@ -1145,4 +1596,324 @@ pub(crate) fn check_expected_revision(
         }
     }
     Ok(())
+}
+
+/// FLOW-003 `export.batch` (ADR-0130). One item per queued export; ordering is
+/// the array order, and replay identity is the normalized submission payload.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ExportBatchItem {
+    /// Submission idempotency key scoped to the project. When absent, a
+    /// deterministic `auto:<sha256>` key derives from the normalized
+    /// submission so identical items replay their original job.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub idempotency_key: Option<String>,
+    /// Inline `render.submit`-equivalent request. Exactly one of `submission`
+    /// or `preset` must be set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub submission: Option<Box<RenderSubmitRequest>>,
+    /// Stored `Project.export_presets` id, resolved and converted
+    /// server-side. Requires `project` and `destination`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preset: Option<kronello_model::ExportPresetId>,
+    /// Project containing the preset; required when `preset` is set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<PathBuf>,
+    /// Output locator supplied to the preset; required when `preset` is set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub destination: Option<PathBuf>,
+}
+/// Deterministic failure behavior for `export.batch` (ADR-0130).
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum BatchFailurePolicy {
+    /// First failed item marks the remaining items `skipped`.
+    #[default]
+    Stop,
+    /// Every item is attempted; failures are reported per item.
+    Continue,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ExportBatchRequest {
+    /// Attempted strictly in array order. Output destinations must be unique
+    /// across the batch.
+    pub items: Vec<ExportBatchItem>,
+    #[serde(default)]
+    pub failure_policy: BatchFailurePolicy,
+}
+/// Per-item batch disposition, in request order (ADR-0130).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ExportBatchOutcome {
+    /// A new job record committed and a worker attempt spawned.
+    Submitted,
+    /// The idempotency key replayed an existing job; nothing was requeued.
+    Replayed,
+    /// Never attempted: `stop` policy after an earlier item failed.
+    Skipped,
+    /// Validation, replay conflict or spawn failure; `error` carries the code.
+    Failed,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ExportBatchItemResult {
+    /// The effective submission key (the explicit key or the derived one).
+    pub idempotency_key: String,
+    pub outcome: ExportBatchOutcome,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub job: Option<JobRecord>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<ServiceError>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ExportBatchResult {
+    /// One result per request item, in the request order.
+    pub items: Vec<ExportBatchItemResult>,
+}
+
+fn audio_mode(mode: kronello_model::ExportAudioMode) -> kronello_audio::AudioSourceMode {
+    match mode {
+        kronello_model::ExportAudioMode::Document => kronello_audio::AudioSourceMode::Document,
+        kronello_model::ExportAudioMode::Explicit => kronello_audio::AudioSourceMode::Explicit,
+        kronello_model::ExportAudioMode::Silence => kronello_audio::AudioSourceMode::Silence,
+    }
+}
+fn audio_codec(codec: kronello_model::ExportAudioCodec) -> DeliveryAudioCodec {
+    match codec {
+        kronello_model::ExportAudioCodec::Alac => DeliveryAudioCodec::Alac,
+        kronello_model::ExportAudioCodec::Aac => DeliveryAudioCodec::Aac,
+        kronello_model::ExportAudioCodec::Opus => DeliveryAudioCodec::Opus,
+    }
+}
+fn hdr_transfer(transfer: kronello_model::ExportTransfer) -> kronello_render::HdrTransfer {
+    match transfer {
+        kronello_model::ExportTransfer::Pq => kronello_render::HdrTransfer::Pq,
+        kronello_model::ExportTransfer::Hlg => kronello_render::HdrTransfer::Hlg,
+    }
+}
+fn job_audio_clip(clip: &kronello_model::ExportAudioClip) -> JobAudioClip {
+    JobAudioClip {
+        asset: clip.asset,
+        stream_index: clip.stream_index,
+        placement: clip.placement,
+        source_in: clip.source_in,
+        gain: clip.gain,
+    }
+}
+/// Convert a stored preset's output mirror into the shared `JobOutput`. This
+/// is the only translation point; a drift test asserts every mirror variant.
+pub fn preset_job_output(output: &kronello_model::ExportOutput) -> JobOutput {
+    use kronello_model::ExportOutput as model;
+    match output {
+        model::ImageSequence => JobOutput::ImageSequence,
+        model::ProResMov {
+            audio,
+            profile_version,
+            audio_layout,
+            clips,
+            background,
+        } => JobOutput::ProResMov {
+            audio: audio_mode(*audio),
+            profile_version: *profile_version,
+            audio_layout: *audio_layout,
+            clips: clips.iter().map(job_audio_clip).collect(),
+            background: *background,
+        },
+        model::ProResSdrFromHdrMov {
+            profile_version,
+            audio,
+            audio_layout,
+            clips,
+            background,
+        } => JobOutput::ProResSdrFromHdrMov {
+            profile_version: *profile_version,
+            audio: audio_mode(*audio),
+            audio_layout: *audio_layout,
+            clips: clips.iter().map(job_audio_clip).collect(),
+            background: *background,
+        },
+        model::ProResHdrMov {
+            profile_version,
+            transfer: t,
+            audio,
+            audio_layout,
+            clips,
+            background,
+        } => JobOutput::ProResHdrMov {
+            profile_version: *profile_version,
+            transfer: hdr_transfer(*t),
+            audio: audio_mode(*audio),
+            audio_layout: *audio_layout,
+            clips: clips.iter().map(job_audio_clip).collect(),
+            background: *background,
+        },
+        model::Av1Mp4 {
+            profile_version,
+            audio,
+            audio_codec: codec,
+            audio_layout,
+            clips,
+            background,
+        } => JobOutput::Av1Mp4 {
+            profile_version: *profile_version,
+            audio: audio_mode(*audio),
+            audio_codec: audio_codec(*codec),
+            audio_layout: *audio_layout,
+            clips: clips.iter().map(job_audio_clip).collect(),
+            background: *background,
+        },
+        model::H264Mov {
+            profile_version,
+            audio,
+            audio_codec: codec,
+            audio_layout,
+            clips,
+            background,
+        } => JobOutput::H264Mov {
+            profile_version: *profile_version,
+            audio: audio_mode(*audio),
+            audio_codec: audio_codec(*codec),
+            audio_layout: *audio_layout,
+            clips: clips.iter().map(job_audio_clip).collect(),
+            background: *background,
+        },
+        model::HevcMov {
+            profile_version,
+            audio,
+            audio_codec: codec,
+            audio_layout,
+            clips,
+            background,
+        } => JobOutput::HevcMov {
+            profile_version: *profile_version,
+            audio: audio_mode(*audio),
+            audio_codec: audio_codec(*codec),
+            audio_layout: *audio_layout,
+            clips: clips.iter().map(job_audio_clip).collect(),
+            background: *background,
+        },
+        model::Av1Webm {
+            profile_version,
+            audio,
+            audio_codec: codec,
+            audio_layout,
+            clips,
+            background,
+        } => JobOutput::Av1Webm {
+            profile_version: *profile_version,
+            audio: audio_mode(*audio),
+            audio_codec: audio_codec(*codec),
+            audio_layout: *audio_layout,
+            clips: clips.iter().map(job_audio_clip).collect(),
+            background: *background,
+        },
+        model::CaptionSidecar {
+            sequence,
+            caption_format,
+        } => JobOutput::CaptionSidecar {
+            sequence: *sequence,
+            caption_format: *caption_format,
+        },
+    }
+}
+/// File extension for a preset's output: the movie container or caption
+/// sidecar extension, or `None` for image sequences (a directory destination).
+/// Shared so `kronello watch` and other callers name destinations identically.
+pub fn preset_output_extension(
+    preset: &kronello_model::ExportPreset,
+) -> Result<Option<&'static str>, ServiceError> {
+    Ok(match &preset.output {
+        kronello_model::ExportOutput::ImageSequence => None,
+        kronello_model::ExportOutput::CaptionSidecar { caption_format, .. } => {
+            Some(caption_format.extension())
+        }
+        output => Some(
+            preset_job_output(output)
+                .movie_settings()?
+                .profile
+                .container(),
+        ),
+    })
+}
+/// FLOW-003 (ADR-0130): convert a stored preset into a `render.submit` request
+/// by supplying the runtime destination. The one-way conversion is shared so
+/// CLI watch, GUI batch export and MCP agree field-for-field.
+pub fn preset_submission(
+    preset: &kronello_model::ExportPreset,
+    project: &Path,
+    destination: PathBuf,
+) -> Result<RenderSubmitRequest, ServiceError> {
+    use kronello_model as model;
+    preset
+        .validate()
+        .map_err(|e| ServiceError::new("INVALID_DOCUMENT", e.to_string()))?;
+    let output = preset_job_output(&preset.output);
+    let (composition, target) = match (preset.composition, preset.target) {
+        (Some(composition), None) => (Some(composition), None),
+        (None, Some(target)) => (
+            None,
+            Some(match target {
+                model::ExportTarget::Composition { composition } => {
+                    RenderTarget::Composition { composition }
+                }
+                model::ExportTarget::Sequence { sequence } => RenderTarget::Sequence { sequence },
+            }),
+        ),
+        _ => {
+            return Err(ServiceError::invalid(
+                "export preset requires exactly one of composition or target",
+            ));
+        }
+    };
+    Ok(RenderSubmitRequest {
+        expected_revision: None,
+        render: SequenceRenderRequest {
+            input: crate::RenderInput {
+                project: project.to_path_buf(),
+                composition,
+                target,
+                region: kronello_render::OutputRegion {
+                    origin: preset.region.origin,
+                    extent: preset.region.extent,
+                    pixels: preset.region.pixels,
+                },
+                profile: RenderProfile {
+                    working_space: preset.profile.working_space,
+                    flatten_tolerance_px: preset.profile.flatten_tolerance_px,
+                    temporal: preset
+                        .profile
+                        .temporal
+                        .map(|t| kronello_render::TemporalSettings {
+                            frame_rate: t.frame_rate,
+                            shutter_angle: t.shutter_angle,
+                            shutter_phase: t.shutter_phase,
+                            samples: t.samples,
+                            cut_policy: match t.cut_policy {
+                                model::ExportCutPolicy::AvoidCrossing => {
+                                    kronello_render::CutPolicy::AvoidCrossing
+                                }
+                                model::ExportCutPolicy::AllowCrossing => {
+                                    kronello_render::CutPolicy::AllowCrossing
+                                }
+                            },
+                        }),
+                    hdr: preset.profile.hdr.map(|h| kronello_render::HdrSettings {
+                        transfer: hdr_transfer(h.transfer),
+                    }),
+                },
+                fonts: Vec::new(),
+                media_proxies: kronello_render::MediaProxyMode::Off,
+                luts: Vec::new(),
+            },
+            range: preset.range,
+            frame_rate: preset.frame_rate,
+            output_directory: destination,
+        },
+        output,
+        required_features: preset.required_features.clone(),
+    })
 }

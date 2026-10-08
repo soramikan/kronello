@@ -4,7 +4,7 @@
 
 | オブジェクト | 主なフィールド |
 |---|---|
-| Project | schema_version, semantic_version, assets, sequences, compositions, templates |
+| Project | schema_version, semantic_version, assets, sequences, compositions, templates, bins, export_presets |
 | Asset | id, content_hash, kind, stream_metadata, immutable_locator |
 | DataAsset | id, schema, content_hash, values, time_mapping, analyzer_version |
 | Sequence | id, extent, frame_rate, audio_rate, working_space, tracks, transitions, markers, work_area, targets |
@@ -17,9 +17,11 @@
 | AnimationCurve | id, value_type, keys, interpolation_version |
 | TemplateDefinition | id, template_id, version, composition_ref, public_inputs, duration_policy, constraints, content_hash |
 | TemplateInstance | id, definition_ref, version, duration, inputs |
+| Bin | id, name, assets（安定 AssetId 参照、複数 bin 所属可） |
+| ExportPreset | version, id, name, composition|target, range, frame_rate, region, profile, output |
 | RenderSnapshot | content_hash, schema_version, revision, asset/font/data locks, semantic_versions, profile |
 
-STORE-001 では `Project` の最小保存外枠として UUID `id`、`name`、構造版・意味版、Composition / Curve 集合、未知フィールドを実装した。TEMPLATE-001 は省略可能な `templates` / `template_instances` を追加し、定義の不変な版と配置ごとの入力を別保存する。MEDIA-001 の `assets` と NLE-001 の `sequences` も省略可能な集合として実装した。未知内容の保持と編集可否、公開 JSON Schema は [09 保存と同時編集](09-storage-concurrency.md) と [ADR-0046](../adr/0046-store-format-and-location-policy.md) を参照する。
+STORE-001 では `Project` の最小保存外枠として UUID `id`、`name`、構造版・意味版、Composition / Curve 集合、未知フィールドを実装した。TEMPLATE-001 は省略可能な `templates` / `template_instances` を追加し、定義の不変な版と配置ごとの入力を別保存する。MEDIA-001 の `assets` と NLE-001 の `sequences` も省略可能な集合として実装した。FLOW-002 は bin の `bins`（[ADR-0129](../adr/0129-media-bins-and-offline-management.md)）、FLOW-003 は版付き `export_presets`（[ADR-0130](../adr/0130-export-presets-batch-and-watch.md)）を同じ省略可能な集合として追加した。bin / preset の差分は配列位置ではなく安定 ID で比較し、選択 Undo を保つ。未知内容の保持と編集可否、公開 JSON Schema は [09 保存と同時編集](09-storage-concurrency.md) と [ADR-0046](../adr/0046-store-format-and-location-policy.md) を参照する。
 
 SourceRef は Asset、Composition、Generator を区別する。SourceRef の型が増えても Clip の編集意味は変えない。
 

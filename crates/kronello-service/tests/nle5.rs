@@ -476,6 +476,7 @@ fn locked_track_rejects_every_clip_mutation_atomically() {
             sequence: sid,
             track: locked_track,
             clip: Box::new(clip(t(9, 1), t(10, 1))),
+            split_tail: None,
         },
         TimelineCommand::Ripple {
             sequence: sid,

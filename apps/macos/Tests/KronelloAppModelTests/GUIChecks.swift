@@ -19,6 +19,9 @@ func require(_ value: @autoclosure () -> Bool, _ message: String) throws {
     var latency: Duration = .zero
     var sampleResponse: (([String: Any]) throws -> [String: Any])?
     var formatResponse: (([String: Any]) throws -> [String: Any])?
+    /// FLOW-002/003 hooks for operations outside the built-in table. Returning
+    /// nil falls through to the empty default response.
+    var extraHandler: (([String: Any]) throws -> [String: Any]?)?
     func ready() async throws {}
     func subscribe() async throws {}
     func poll() throws {}
@@ -38,7 +41,7 @@ func require(_ value: @autoclosure () -> Bool, _ message: String) throws {
         case "edit.apply", "edit.undo":
             if let error = nextError { throw error }
             revision = String((Int(revision) ?? 1) + 1); return ["id": eventID, "revision": Int(revision)!]
-        default: return [:]
+        default: return try extraHandler?(request) ?? [:]
         }
     }
 }
@@ -50,6 +53,8 @@ func require(_ value: @autoclosure () -> Bool, _ message: String) throws {
     var planCount = 0
     var applyCount = 0
     var callCounts: [String: Int] = [:]
+    /// Full request payload per operation (last one wins) for wire assertions.
+    var lastCalls: [String: [String: Any]] = [:]
     var sampleCount = 0
     var sceneCount = 0
     var notificationHandler: ((String, [String: Any]) -> Void)? {
@@ -63,6 +68,7 @@ func require(_ value: @autoclosure () -> Bool, _ message: String) throws {
     func close() { native.close() }
     func call(_ request: [String: Any]) async throws -> [String: Any] {
         callCounts[request.string("operation"), default: 0] += 1
+        lastCalls[request.string("operation")] = request
         if request.string("operation") == "edit.plan" { planCount += 1 }
         if request.string("operation") == "edit.apply" { lastApply = request; applyCount += 1 }
         if request.string("operation") == "property.sample" { sampleCount += 1 }

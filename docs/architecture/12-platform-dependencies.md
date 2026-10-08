@@ -136,7 +136,7 @@ Project の `assets` は stable AssetId、SHA-256 content_hash、kind、rational
 
 ## AUDIO-000 の音声境界
 
-`kronello-audio` の純粋な 48 kHz stereo f32 Bus と、media の native decode / libswresample / PCM24 encode / MOV mux を実装する。libswresample は他の 4 library と同じ directory / ABI policy で動的ロードし、capabilities は全 5 library の license / configuration と PCM24 codec を検証する。mono は等倍複製、stereo は保持、多チャンネルの暗黙 downmix は拒否する。同梱 build は ADR-0106 の libopus も配布 manifest に含め、FFmpeg を `--enable-libopus` で構成する。ビルドスクリプトの verify-only は全 5 library と PCM24 に加え、libopus の同梱と encoder 登録を調べる。配布物の受け入れでは、再配置後の media capabilities の verify_distribution と codec roundtrip も実行する。
+`kronello-audio` の純粋な 48 kHz stereo f32 Bus と、media の native decode / libswresample / PCM24 encode / MOV mux を実装する。libswresample は他の 4 library と同じ directory / ABI policy で動的ロードし、capabilities は全 5 library の license / configuration と PCM24 codec を検証する。mono は等倍複製、stereo は保持、多チャンネルの暗黙 downmix は拒否する。AUDIO-010 以降、チャンネルレイアウトは `channel_mask`（mono / stereo / 5.1 / 7.1 の closed set）として decode → mix → encode の全段で保持し、mono はそのまま mono で、>2ch で mask 未指定の素材は `UNSUPPORTED_CHANNEL_LAYOUT` を返す（明示 downmix のみ。[ADR-0124](../adr/0124-pitch-preserving-retime-and-multichannel.md)）。同梱 build は ADR-0106 の libopus も配布 manifest に含め、FFmpeg を `--enable-libopus` で構成する。ビルドスクリプトの verify-only は全 5 library と PCM24 に加え、libopus の同梱と encoder 登録を調べる。配布物の受け入れでは、再配置後の media capabilities の verify_distribution と codec roundtrip も実行する。
 
 音量・量子化・snapshot / 時間の詳細は [基本音声](audio-000.md)、crate 単位の検証と host の残り範囲は [AUDIO-000 の検証](../testing/audio-000.md) を参照。
 

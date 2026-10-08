@@ -63,6 +63,10 @@ pub struct TemplateConstraints {
     pub bands: Vec<TemplateBandBinding>,
     #[serde(default)]
     pub max_lines: BTreeMap<NodeId, usize>,
+    /// AI-003 (ADR-0126): tracking-driven crop windows on media nodes, one
+    /// layout-derived rule per placement through the shared dependency path.
+    #[serde(default)]
+    pub smart_reframes: Vec<crate::SmartReframeRule>,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]

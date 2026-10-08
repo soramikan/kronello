@@ -7,6 +7,8 @@
 mod blend;
 mod builtin;
 pub use blend::{BLEND_KEY, BLEND_VERSION, BlendMode};
+mod channel;
+pub use channel::{CHANNEL_MASK_VERSION, ChannelLayoutError, ChannelMask};
 mod composition;
 mod curve;
 mod error;
@@ -26,9 +28,9 @@ mod value;
 mod wire;
 
 pub use builtin::{
-    AUDIO_VOLUME_ID, BLEND_MODE_ID, FILL_COLOR_ID, OPACITY_ID, STROKE_WIDTH_ID,
-    TRANSFORM_ANCHOR_ID, TRANSFORM_POSITION_ID, TRANSFORM_ROTATION_ID, TRANSFORM_SCALE_ID,
-    TRANSFORM_SKEW_ID,
+    AUDIO_VOLUME_ID, BLEND_MODE_ID, FILL_COLOR_ID, MEDIA_CROP_ORIGIN_ID, MEDIA_CROP_SIZE_ID,
+    OPACITY_ID, STROKE_WIDTH_ID, TRANSFORM_ANCHOR_ID, TRANSFORM_POSITION_ID, TRANSFORM_ROTATION_ID,
+    TRANSFORM_SCALE_ID, TRANSFORM_SKEW_ID,
 };
 pub use composition::{
     Composition, CompositionError, CompositionInstance, CompositionReference, DesignExtent,
@@ -45,9 +47,9 @@ pub use expression::{
     ExpressionDependency, ExpressionError, ExpressionNode, expression_value_bytes,
 };
 pub use id::{
-    AssetId, CaptionId, ClipId, CompositionId, CompositionInstanceId, ContentId, CurveId,
-    DescriptorId, ExpressionId, MarkerId, MaskId, ModifierId, NodeId, PropertyId, SchemaKey,
-    SequenceId, TrackId,
+    AngleId, AssetId, BinId, CaptionId, ClipId, CompositionId, CompositionInstanceId, ContentId,
+    CurveId, DescriptorId, ExportPresetId, ExpressionId, MarkerId, MaskId, ModifierId, MulticamId,
+    NodeId, PropertyId, SchemaKey, SequenceId, TrackId,
 };
 pub use property::{DescriptorRef, Modifier, Property, PropertySource, SourceResolver};
 pub use schema::{
@@ -110,6 +112,14 @@ pub use lut::{CubeLut, LUT_3D_DOCUMENT_MAX_SIZE, LUT_3D_MAX_SIZE, LUT_3D_MIN_SIZ
 pub use template::*;
 mod asset;
 pub use asset::{Asset, AssetKind, AssetLocator, StreamMetadata};
+mod bins;
+pub use bins::Bin;
+mod export_presets;
+pub use export_presets::{
+    EXPORT_PRESET_VERSION, ExportAudioClip, ExportAudioCodec, ExportAudioMode, ExportCutPolicy,
+    ExportHdrSettings, ExportOutput, ExportPreset, ExportProfile, ExportRegion, ExportTarget,
+    ExportTemporalSettings, ExportTransfer,
+};
 
 mod sequence;
 pub use sequence::*;
@@ -123,7 +133,12 @@ pub use proxy::*;
 mod tracking;
 pub use tracking::*;
 
+mod scene;
+pub use scene::*;
+
 mod matte;
 pub use matte::*;
 mod mask;
 pub use mask::*;
+mod multicam;
+pub use multicam::*;

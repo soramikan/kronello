@@ -291,3 +291,6 @@ pub use media::{DecodedVideoFrame, VideoDecodeBackend, VideoImage};
 
 mod sequence;
 pub use sequence::{RenderTarget, lower_sequence};
+
+mod source;
+pub use source::{ResolvedSource, SourcePreviewRef, lower_source, resolve_source};

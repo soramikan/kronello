@@ -1750,8 +1750,9 @@ fn gpu_nle2_clip_effects_and_explicit_video_upload_match_cpu() {
     let scene = build_scene_ir(&snap, t(2, 1), &[]).unwrap();
     let dag = build_render_dag(&scene, snap.profile(), region())
         .unwrap()
-        .resolve_video(|a, i, t, w, reverse| {
+        .resolve_video(|a, i, t, w, reverse, interpolation| {
             assert!(!reverse);
+            assert!(interpolation.is_none());
             runtime.decode_video_image(a, &path, i, t, w).map_err(|e| {
                 kronello_render::RenderError::Backend {
                     code: e.code(),
@@ -1922,8 +1923,10 @@ fn transitions_plan_apply_idempotency_selective_undo_and_reload() {
     assert_eq!(undo(&path, event.id).unwrap_err().code, "UNDO_CONFLICT");
     undo(&path, changed.id).unwrap();
     assert_eq!(export(&path).document, after);
-    // ADR-0026 also treats a still-active inverse as a conflicting event.
-    assert_eq!(undo(&path, event.id).unwrap_err().code, "UNDO_CONFLICT");
+    // ADR-0132: the undo of `changed` only restored the post-`event` state,
+    // so it does not block undoing `event` itself.
+    undo(&path, event.id).unwrap();
+    assert_eq!(export(&path).document, initial);
     let (_fresh_dir, path) = setup(initial.clone());
     let event = apply(
         &path,
@@ -2101,7 +2104,10 @@ fn ripple_and_transitive_linked_move_are_atomic_and_keep_source_time() {
     );
     undo(&path, moved.id).unwrap();
     assert_eq!(export(&path).document, linked);
-    assert_eq!(undo(&path, link.id).unwrap_err().code, "UNDO_CONFLICT");
+    // ADR-0132: both later edits were cancelled by their own undos, which
+    // only restored post-`link` state, so undoing `link` is now allowed.
+    undo(&path, link.id).unwrap();
+    assert_eq!(export(&path).document, initial);
     let (_fresh_dir, path) = setup(initial.clone());
     let link = apply(
         &path,

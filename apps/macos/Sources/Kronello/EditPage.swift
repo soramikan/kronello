@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
+import KronelloCore
 import KronelloAppModel
 import KronelloDesign
 
@@ -13,7 +14,10 @@ struct EditPage: View {
         let layout = workflow.layout(for: "edit")
         KREditLayout(projectPanel: layout.leadingPanel, inspectorPanel: layout.trailingPanel, tracksPanel: layout.bottomPanel,
                      projectWidth: layout.leadingWidth, inspectorWidth: layout.trailingWidth, tracksHeight: layout.bottomHeight,
-                     project: { EditProjectPanel(model: model) }, viewer: { SequenceViewer(model: model) },
+                     // GUI-011 (ADR-0128): Source monitor sits left of the
+                     // Program monitor; both render through one session.
+                     project: { EditProjectPanel(model: model) },
+                     viewer: { HStack(spacing: 0) { SourceViewer(model: model, workflow: workflow); SequenceViewer(model: model) } },
                      inspector: { ClipInspector(model: model) }, tracks: { SequenceTracks(model: model, workflow: workflow) })
             .onAppear { model.activatePlayback(for: model.sequence) }
             .onChange(of: model.sequence.string("id") + model.activeRate.string("num") + "/" + model.activeRate.string("den")) { _, _ in model.activatePlayback(for: model.sequence) }
@@ -39,6 +43,17 @@ struct EditProjectPanel: View {
                             KRButton("Sharpen", icon: .sparkles) { model.addClipEffect("sharpen") }
                             KRButton("Vignette", icon: .sparkles) { model.addClipEffect("vignette") }
                             KRButton("Corner Pin", icon: .sparkles) { model.addClipEffect("corner_pin") }
+                            // TRACK-002: analyze the clip's media, then bind
+                            // kronello.stabilize to the committed tracking asset.
+                            KRButton("スタビライズ", icon: .crosshair) { if let clip = model.selectedClip { model.stabilizeClip(clip) } }
+                                .disabled(model.selectedClip.map { clip in
+                                    model.stabilizePending.contains(clip.id) || clip.timeMapKind != "linear"
+                                        || (clip.kind != .video && clip.kind != .multicam)
+                                        || model.trackableSource(clip) == nil || model.clipHasStabilize(clip)
+                                } ?? true)
+                            if let clip = model.selectedClip, model.stabilizePending.contains(clip.id) {
+                                Text("解析中…").krText(KRType.caption)
+                            }
                             Text("選択中の映像クリップに追加します。").krText(KRType.caption)
                         }.disabled(model.selectedClip == nil || model.selectedClip?.kind == .audio || model.busy || model.pendingCandidate != nil)
                         Divider()
@@ -56,7 +71,10 @@ struct EditProjectPanel: View {
                                         duration: KRTimecode.format(frames: max(0, asset.duration.frames(rateNum: model.rateNum, rateDen: model.rateDen)), fps: model.nominalFPS),
                                         selected: model.assetSelection == asset.id, missing: asset.missing,
                                         onSelect: { model.assetSelection = asset.id }, onOpen: {
+                                            // GUI-011: media and multicam sources open in the Source monitor;
+                                            // compositions keep their Motion-page navigation.
                                             if let composition = asset.source["composition"] as? String { model.ui.page = "motion"; model.setComposition(composition) }
+                                            else { model.openAssetInSource(asset) }
                                         })
                                         .onDrag {
                                             if ProcessInfo.processInfo.environment["KRONELLO_TRACE_ASSET_DRAG"] == "1" { NSLog("asset drag SwiftUI provider") }
@@ -72,9 +90,145 @@ struct EditProjectPanel: View {
                             }
                     }
                 }
+                if tab == "project" {
+                    // NLE-007: multicam groups are authored through the shared
+                    // `multicam.create` operation (timecode/audio/manual sync).
+                    HStack {
+                        KRButton("マルチカムを作成…", icon: .clapperboard, variant: .secondary) { multicamDraft = .init() }
+                            .disabled(model.busy || model.pendingCandidate != nil)
+                        Spacer(minLength: 0)
+                    }.padding(KRSpace.space2).overlay(alignment: .top) { Color.primary.opacity(0.001) }
+                }
                 Spacer(minLength: 0)
             }
         }
+        .sheet(item: $multicamDraft) { draft in
+            MulticamCreateSheet(model: model, draft: draft)
+        }
+    }
+    @State private var multicamDraft: MulticamCreateSheet.Draft?
+}
+
+/// GUI-011 source monitor (ADR-0128): loads bin assets, timeline-clip
+/// sources and multicam angles onto the dedicated preview surface; In/Out
+/// controls and insert/overwrite drive the shared three-point operations.
+struct SourceViewer: View {
+    @Environment(\.krPalette) var p
+    @ObservedObject var model: EditorModel
+    let workflow: WorkflowSettings
+    @FocusState private var focused: Bool
+    private var choices: [(preview: SourcePreview, name: String, kind: KRMediaKind)] { model.sourceChoices() }
+    var body: some View {
+        KRPanel(header: {
+            HStack(spacing: KRSpace.space2) {
+                KRPanelTitle("Source")
+                if let monitor = model.sourceMonitor {
+                    Text(monitor.name).krText(KRType.caption).foregroundStyle(p.inkMuted).lineLimit(1)
+                }
+            }
+        }, actions: {
+            HStack(spacing: KRSpace.space2) {
+                KRPopupButton("ソース", options: choices.map { KRPopupOption($0.preview.key, $0.name, icon: $0.kind.icon) },
+                    selection: Binding(get: { model.sourceMonitor?.source.key ?? "" }, set: { key in
+                        guard let choice = choices.first(where: { $0.preview.key == key }) else { return }
+                        model.openSource(choice.preview, name: choice.name)
+                    })).frame(width: 160).disabled(choices.isEmpty)
+                if model.sourceMonitor != nil {
+                    KRButton(icon: .x, accessibilityLabel: "ソースモニタを閉じる") { model.closeSourceMonitor() }
+                }
+            }
+        }) {
+            if let monitor = model.sourceMonitor {
+                loaded(monitor)
+            } else {
+                KREmptyState(icon: .film, title: "ソースなし",
+                    message: choices.isEmpty ? "素材を読み込むとここにプレビューされます。" : "上の「ソース」か素材・クリップのダブルクリックで開きます。")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .focusable().focused($focused)
+        .overlay { if focused { Rectangle().strokeBorder(p.selection, lineWidth: 2).allowsHitTesting(false).padding(1) } }
+        .onKeyPress { key in
+            guard focused else { return .ignored }
+            func hit(_ action: ShortcutAction) -> Bool { workflow.binding(for: action).matches(key) }
+            if hit(.transportStepBack) { model.seekSourceFrame(model.sourceFrame - 1) }
+            else if hit(.transportStepForward) { model.seekSourceFrame(model.sourceFrame + 1) }
+            else if hit(.sourceSetIn) { model.setSourceInPoint() }
+            else if hit(.sourceSetOut) { model.setSourceOutPoint() }
+            else if hit(.sourceClear) { model.clearSourcePoints() }
+            else if hit(.editInsert) { model.insertSource() }
+            else if hit(.editOverwrite) { model.overwriteSource() }
+            else { return .ignored }
+            return .handled
+        }
+    }
+    private func loaded(_ monitor: SourceMonitor) -> some View {
+        VStack(spacing: 0) {
+            ZStack {
+                let extent = model.sourceExtent(for: monitor.source)
+                KRViewerFrame(aspectRatio: max(1, extent.width) / max(1, extent.height)) {
+                    MetalPreview(model: model, source: monitor.source)
+                }.padding(KRSpace.space3).clipped()
+                if let failure = model.sourcePreviewFailure {
+                    VStack(spacing: KRSpace.space3) {
+                        KRViewerError(.init(failure.code, failure.message),
+                            copy: { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(failure.copyText, forType: .string) },
+                            retry: { model.sourcePreviewFailure = nil; model.closeSourceMonitor() })
+                        if model.offersSourceCPUReference { KRButton("CPU 参照で表示", variant: .secondary) { model.chooseSourceCPUReference() } }
+                    }
+                }
+                if model.sourcePreviewRendering { VStack { HStack {
+                    KRActivityIndicator(); Spacer()
+                }; Spacer() }.padding(KRSpace.space3).allowsHitTesting(false) }
+            }.background(p.surface0).frame(maxHeight: .infinity)
+                .contentShape(Rectangle()).onTapGesture { focused = true }
+            controls(monitor)
+        }
+    }
+    private func rangeLabel(_ monitor: SourceMonitor) -> String {
+        func point(_ value: RationalTime?) -> String {
+            value.map { KRTimecode.format(frames: max(0, $0.frames(rateNum: model.rateNum, rateDen: model.rateDen)), fps: model.nominalFPS) } ?? "--:--:--:--"
+        }
+        var parts = ["In \(point(monitor.inPoint))", "Out \(point(monitor.outPoint))"]
+        if let duration = model.sourceDurationFrames {
+            parts.append("尺 " + KRTimecode.format(frames: max(0, duration), fps: model.nominalFPS))
+        }
+        return parts.joined(separator: "  ")
+    }
+    private func controls(_ monitor: SourceMonitor) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: KRSpace.space2) {
+                KRTimecodeField(frames: Binding(get: { model.sourceFrame }, set: { model.seekSourceFrame($0) }),
+                    fps: model.nominalFPS, label: "ソース時刻", onSeek: model.seekSourceFrame)
+                Spacer(minLength: 0)
+                KRButton(icon: .stepBack, accessibilityLabel: "ソースを 1 フレーム戻る") { model.seekSourceFrame(model.sourceFrame - 1) }
+                KRButton(icon: .stepForward, accessibilityLabel: "ソースを 1 フレーム進む") { model.seekSourceFrame(model.sourceFrame + 1) }
+                KRButton("In", variant: .plain) { model.setSourceInPoint() }
+                KRButton("Out", variant: .plain) { model.setSourceOutPoint() }
+                KRButton(icon: .x, accessibilityLabel: "ソースの In/Out を解除") { model.clearSourcePoints() }
+            }
+            .padding(.horizontal, KRSpace.space3).padding(.top, KRSpace.space1)
+            HStack(spacing: KRSpace.space2) {
+                Text(rangeLabel(monitor)).krText(KRType.caption).foregroundStyle(p.inkMuted).lineLimit(1)
+                Spacer(minLength: 0)
+                if case .multicam(let group, let angle) = monitor.source, let info = model.multicamGroup(group) {
+                    KRPopupButton("アングル", options: info.angles.map { KRPopupOption($0.id, $0.displayName) },
+                        selection: Binding(get: { angle }, set: { model.previewSourceAngle($0) })).frame(width: 110)
+                }
+                KRPopupButton("出力先", options: destinationOptions,
+                    selection: Binding(get: { model.sourceMonitor?.track ?? "" },
+                                       set: { model.setSourceDestination($0.isEmpty ? nil : $0) })).frame(width: 110)
+                KRButton("インサート", variant: .secondary) { model.insertSource() }
+                    .disabled(model.sourceEditRange == nil || model.busy || model.pendingCandidate != nil || model.ui.sequence == nil)
+                KRButton("上書き", variant: .secondary) { model.overwriteSource() }
+                    .disabled(model.sourceEditRange == nil || model.busy || model.pendingCandidate != nil || model.ui.sequence == nil)
+            }
+            .padding(.horizontal, KRSpace.space3).padding(.vertical, KRSpace.space1)
+        }.background(p.surface100).overlay(alignment: .top) { p.line.frame(height: 1) }
+    }
+    private var destinationOptions: [KRPopupOption] {
+        [KRPopupOption("", "自動 (" + model.sourceDestinationLabel + ")")]
+            + model.sourceDestinationTracks().map { KRPopupOption($0.string("id"), model.trackNumber($0.string("id")), disabled: model.trackLocked($0.string("id"))) }
     }
 }
 
@@ -197,12 +351,32 @@ struct ClipInspector: View {
                                 timeRow("ソース開始", frames: RationalTime.wire(clip.authored.object("source_in")).frames(rateNum: model.rateNum, rateDen: model.rateDen), onEditingStart: { draftBases["source"] = model.revision }) { model.setClipTime(clip, sourceIn: model.frameTime($0), base: draftBases.removeValue(forKey: "source")) }
                             }
                         }
+                        // NLE-007: multicam clips switch their active angle
+                        // through the shared clip.angle_switch operation.
+                        if let multicam = clip.multicam, let group = model.multicamGroup(multicam.group) {
+                            section("マルチカム") {
+                                KRInspectorSettingRow("アングル") {
+                                    KRPopupButton("アングル", options: group.angles.map { .init($0.id, $0.displayName) },
+                                        selection: Binding(get: { multicam.angle }, set: { model.switchClipAngle(clip, to: $0) }))
+                                        .disabled(model.trackLocked(clip.track) || model.busy || model.pendingCandidate != nil)
+                                }
+                                Text((group.name.isEmpty ? "マルチカム" : group.name) + " · \(group.angles.count) アングル").krText(KRType.caption).foregroundStyle(p.inkMuted).padding(.horizontal, KRSpace.space3)
+                            }
+                        }
                         if clip.kind == .subtitle { section("字幕") { CaptionInspector(model: model, clip: clip) } }
                         if clip.kind != .subtitle { section("時間") {
                             KRInspectorSettingRow("速度") {
                                 KRNumberField(value: .constant(clip.linearRate.map { Double($0.num)! / Double($0.den)! * 100 } ?? 100), unit: "%", step: 0.1, range: 0.1...10000, accessibilityLabel: "速度", onEditingStart: { draftBases["speed"] = model.revision }, onCommit: { _, value in model.setClipTime(clip, speedPercent: value, base: draftBases.removeValue(forKey: "speed")) }).disabled(clip.linearRate == nil)
                             }
                             KRInspectorSettingRow("逆再生") { KRCheckbox("", isOn: Binding(get: { clip.reversed }, set: { model.setClipReverse(clip, enabled: $0) })).accessibilityLabel("逆再生").disabled(clip.linearRate == nil) }
+                            // TRACK-003: intermediate-frame synthesis rides the
+                            // clip time map; linear maps convert to piecewise.
+                            KRInspectorSettingRow("フレーム補間") {
+                                KRPopupButton("フレーム補間", options: [.init("", "なし"), .init("optical_flow", "オプティカルフロー")],
+                                    selection: Binding(get: { model.clipInterpolation(clip) ?? "" },
+                                        set: { model.setClipInterpolation(clip, opticalFlow: !$0.isEmpty) }))
+                                    .disabled(!model.interpolationEligible(clip) || model.busy || model.pendingCandidate != nil)
+                            }
                             if clip.linearRate == nil {
                                 // NLE-006: piecewise maps (speed ramps and freeze holds) are
                                 // shown read-only; percent/reverse edits need a Linear map.
@@ -256,7 +430,7 @@ struct ClipInspector: View {
                                             KRInspectorSettingRow(label) {
                                                 KRNumberField(value: .constant(EditorModel.colorParameterValue(clip, effect: effect, parameter: field) ?? 0), unit: unit, step: step, range: range, precision: 2,
                                                     accessibilityLabel: label, onEditingStart: { draftBases[field] = model.revision },
-                                                    onCommit: { _, value in model.setClipEffectParameter(clip, effect: effect, parameter: field, kind: "scalar", value: value, base: draftBases.removeValue(forKey: field)) })
+                                                    onCommit: { _, value in model.setClipEffectParameter(clip, effect: effect, parameter: field, kind: Self.effectRowKind(effect.string("effect_id"), field), value: value, base: draftBases.removeValue(forKey: field)) })
                                             }
                                         }
                                     }
@@ -265,6 +439,11 @@ struct ClipInspector: View {
                         }.disabled(clip.kind == .audio)
                         if clip.kind != .audio { section("カラー") { ClipColorInspector(model: model, clip: clip) } }
                         if clip.composition != nil { KRButton("モーションで開く", icon: .layers, variant: .secondary) { model.openClipInMotion(clip) }.padding(.horizontal, KRSpace.space3) }
+                        // GUI-011: any previewable clip source opens in the
+                        // Source monitor at the playhead-matched source time.
+                        if clip.sourcePreview != nil {
+                            KRButton("ソースモニタで開く", icon: .film, variant: .secondary) { model.openClipInSource(clip) }.padding(.horizontal, KRSpace.space3)
+                        }
                         section("編集") {
                             KRInspectorSettingRow("有効") {
                                 KRCheckbox("", isOn: Binding(get: { clip.enabled }, set: { model.setClipEnabled(clip, enabled: $0) }))
@@ -290,6 +469,24 @@ struct ClipInspector: View {
                                 .padding(.horizontal, KRSpace.space3)
                             Text("リップル削除は対象クリップの区間を全トラックから詰めます。⌥⌫ でも実行できます。").krText(KRType.caption).foregroundStyle(p.inkMuted).padding(.horizontal, KRSpace.space3)
                         }
+                        // AI-002: detection runs as a shared job; committed
+                        // boundary assets for this clip's source can then be
+                        // mapped to sequence markers or clip splits.
+                        if model.sceneDetectEligible(clip) { section("シーン") {
+                            if let boundaries = model.sceneBoundaryAssets(for: clip).last {
+                                let count = boundaries.objects("boundaries").count
+                                KRButton("境界をマーカーに追加（\(count) 件）", icon: .circle, variant: .secondary) { model.applySceneBoundaries(clip, asset: boundaries.string("id"), split: false) }
+                                    .disabled(model.busy || model.pendingCandidate != nil || model.trackLocked(clip.track))
+                                    .padding(.horizontal, KRSpace.space3)
+                                KRButton("境界でクリップを分割", icon: .scissors, variant: .secondary) { model.applySceneBoundaries(clip, asset: boundaries.string("id"), split: true) }
+                                    .disabled(model.busy || model.pendingCandidate != nil || model.trackLocked(clip.track))
+                                    .padding(.horizontal, KRSpace.space3)
+                            }
+                            KRButton("シーンを検出", icon: .scan, variant: .secondary) { model.detectScenes(clip) }
+                                .disabled(model.busy || model.pendingCandidate != nil)
+                                .padding(.horizontal, KRSpace.space3)
+                            Text("検出はジョブとして実行され、完了した境界がここに反映されます。シーン分割はクリップの素材範囲内の境界に適用されます。").krText(KRType.caption).foregroundStyle(p.inkMuted).padding(.horizontal, KRSpace.space3)
+                        } }
                     }.padding(.vertical, KRSpace.space3)
                 }
             } else { KREmptyState(icon: .mousePointer2, title: "クリップを選択", message: "トラックでクリップを選択してください。") }
@@ -316,6 +513,7 @@ struct ClipInspector: View {
         case "kronello.sharpen": return "Sharpen"
         case "kronello.vignette": return "Vignette"
         case "kronello.corner_pin": return "Corner Pin"
+        case "kronello.stabilize": return "Stabilize"
         default: return id
         }
     }
@@ -347,8 +545,19 @@ struct ClipInspector: View {
         case "kronello.corner_pin":
             return [("top_left", "左上", "px", -8192...8192, 1), ("top_right", "右上", "px", -8192...8192, 1),
                     ("bottom_right", "右下", "px", -8192...8192, 1), ("bottom_left", "左下", "px", -8192...8192, 1)]
+        case "kronello.stabilize":
+            return [("smoothing_radius", "平滑化半径", "f", 0...4096, 1),
+                    ("max_displacement", "最大移動", "px", 0...512, 1),
+                    ("max_rotation", "最大回転", "°", 0...90, 0.5),
+                    ("max_crop", "最大クロップ", "", 0...0.5, 0.01)]
         default: return []
         }
+    }
+    /// Value kind a scalar row writes; angle parameters need `"angle"` or the
+    /// service rejects the kind on `clip_set_effects`.
+    static func effectRowKind(_ id: String, _ field: String) -> String {
+        if id == "kronello.stabilize", field == "max_rotation" { return "angle" }
+        return "scalar"
     }
     func opacity(_ clip: EditClip) -> String {
         guard let property = clip.authored.objects("properties").first(where: { $0.object("descriptor").string("key") == "kronello.opacity" }) else { return "100.0%" }
@@ -447,6 +656,13 @@ struct SequenceTracks: View {
             else if hit(.editSetIn) { model.setInPoint() }
             else if hit(.editSetOut) { model.setOutPoint() }
             else if hit(.editClearWorkArea) { model.clearWorkArea() }
+            // GUI-011: three-point edit keys also work while the tracks hold
+            // focus, so the monitor never needs pointer focus to commit.
+            else if hit(.editInsert) { model.insertSource() }
+            else if hit(.editOverwrite) { model.overwriteSource() }
+            else if hit(.sourceSetIn) { model.setSourceInPoint() }
+            else if hit(.sourceSetOut) { model.setSourceOutPoint() }
+            else if hit(.sourceClear) { model.clearSourcePoints() }
             else { return .ignored }
             return .handled
         }
@@ -609,7 +825,12 @@ struct SequenceTracks: View {
             } else {
                 KRClipHitArea(missing.map { model.clipName(clip) + " " + $0 } ?? model.clipName(clip),
                     select: { tracksFocused = true; model.selectClip(clip.id) },
-                    open: { if clip.composition != nil { model.openClipInMotion(clip) } },
+                    open: {
+                        // GUI-011: media/multicam clips open their source in
+                        // the Source monitor; composition clips keep Motion.
+                        if clip.composition != nil { model.openClipInMotion(clip) }
+                        else if clip.sourcePreview != nil { model.openClipInSource(clip) }
+                    },
                     begin: { mode in
                         if model.editTool == "roll" {
                             model.beginRollGesture(clip, atStartEdge: mode == .trimStart); return
@@ -736,5 +957,109 @@ struct MixerMasterStrip: View {
             KRButton(icon: model.playbackMuted ? .volumeX : .volume2, accessibilityLabel: "モニター音量", pressed: model.playbackMuted, iconSize: 12) { model.playbackMuted.toggle() }
         }.frame(width: 80).padding(.vertical, KRSpace.space1)
             .padding(.leading, KRSpace.space2).overlay(alignment: .leading) { p.line.frame(width: 1) }
+    }
+}
+
+/// NLE-007 multicam creation (ADR-0127): picks visual streams as ordered
+/// angles and submits the shared `multicam.create` operation. Sync modes map
+/// 1:1 to `MulticamSync` — "timecode" aligns declared start_time, "audio"
+/// cross-correlates decoded audio (MULTICAM_SYNC_FAILED surfaces typed), and
+/// "manual" takes the per-angle offsets entered here.
+struct MulticamCreateSheet: View {
+    struct Draft: Identifiable { let id = UUID() }
+    @Environment(\.krPalette) var p
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var model: EditorModel
+    let draft: Draft
+    @State private var name = ""
+    @State private var sync = "timecode"
+    /// EditAsset ids in selection order — order is the authored angle order.
+    @State private var selected: [String] = []
+    /// Manual-mode offset per EditAsset id, in sequence-rate frames.
+    @State private var offsets: [String: Double] = [:]
+    @State private var reference = ""
+    /// Angles must be visual streams; audio-only assets are not angle sources.
+    private var candidates: [EditAsset] { model.editAssets.filter { $0.kind == .video || $0.kind == .image } }
+    var body: some View {
+        VStack(alignment: .leading, spacing: KRSpace.space3) {
+            Text("マルチカムを作成").krText(KRType.heading)
+            KRTextField("名前", value: $name)
+            KRPopupButton("同期", options: [
+                KRPopupOption("timecode", "タイムコード（開始時刻を揃える）"),
+                KRPopupOption("audio", "音声波形（相互相関）"),
+                KRPopupOption("manual", "手動オフセット"),
+            ], selection: $sync)
+            if sync != "manual" {
+                KRPopupButton("基準アングル", options: selected.compactMap { id in
+                    candidates.first { $0.id == id }.map { KRPopupOption($0.id, $0.name) }
+                }, selection: $reference)
+                    .onChange(of: selected) { _, _ in if !selected.contains(reference) { reference = selected.first ?? "" } }
+                    .disabled(selected.isEmpty)
+            }
+            Text("アングル（選択順がアングル順）").krText(KRType.label).foregroundStyle(p.inkMuted)
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(candidates) { asset in
+                        angleRow(asset)
+                    }
+                    if candidates.isEmpty { KREmptyState(icon: .film, title: "映像素材なし", message: "映像・画像素材を先に読み込んでください。") }
+                }
+            }.frame(minHeight: 160, maxHeight: 260)
+            if sync == "audio" {
+                Text("角度ごとの音声波形の相互相関で同期します。推定に失敗した場合は型付きエラーになります。").krText(KRType.caption).foregroundStyle(p.inkMuted)
+            } else if sync == "manual" {
+                Text("各アングルの同期オフセット（フレーム）。media_time = マルチカム時間 + オフセット です。").krText(KRType.caption).foregroundStyle(p.inkMuted)
+            }
+            HStack {
+                Spacer()
+                KRButton("キャンセル", variant: .secondary) { dismiss() }
+                KRButton("作成", variant: .primary) { create() }
+                    .disabled(selected.count < 2 || model.busy || model.pendingCandidate != nil)
+            }
+        }.padding(KRSpace.space4).frame(width: 420)
+    }
+    private func angleRow(_ asset: EditAsset) -> some View {
+        let on = selected.contains(asset.id)
+        return HStack(spacing: KRSpace.space2) {
+            KRCheckbox(asset.name, isOn: Binding(get: { on }, set: { checked in
+                if checked { selected.append(asset.id); if reference.isEmpty { reference = asset.id } }
+                else { selected.removeAll { $0 == asset.id }; if reference == asset.id { reference = selected.first ?? "" } }
+            }), appearance: .resting)
+            if on { Text("\(selected.firstIndex(of: asset.id).map { $0 + 1 } ?? 0)").krText(KRType.timecode).foregroundStyle(p.accentInk) }
+            Spacer(minLength: 0)
+            if on && sync == "manual" {
+                KRNumberField(value: Binding(get: { offsets[asset.id] ?? 0 }, set: { offsets[asset.id] = $0 }),
+                    step: 1, range: -100000...100000, precision: 0, accessibilityLabel: asset.name + " のオフセット") { _, _ in }
+                    .frame(width: 100)
+                Text("f").krText(KRType.caption).foregroundStyle(p.inkMuted)
+            }
+        }.padding(.horizontal, KRSpace.space2).frame(minHeight: KRSize.rowHeight)
+    }
+    private func create() {
+        // Caller-chosen stable ids: row id → fresh angle UUID before submit.
+        var fields: [[String: Any]] = []
+        var angleIDs: [String: String] = [:]
+        for row in selected {
+            guard let asset = candidates.first(where: { $0.id == row }) else { continue }
+            let angleID = UUID().uuidString.lowercased()
+            angleIDs[row] = angleID
+            fields.append([
+                "id": angleID,
+                "asset": asset.source.string("asset"),
+                "stream_index": (asset.source["stream_index"] as? NSNumber)?.intValue ?? 0,
+                "name": asset.name,
+            ])
+        }
+        var offsetTimes: [String: RationalTime] = [:]
+        if sync == "manual" {
+            for row in selected {
+                guard let angleID = angleIDs[row] else { continue }
+                let frames = Int64((offsets[row] ?? 0).rounded())
+                offsetTimes[angleID] = RationalTime(num: frames * model.rateDen, den: model.rateNum)
+            }
+        }
+        model.createMulticam(name: name.isEmpty ? "マルチカム" : name, sync: sync, angles: fields,
+                             reference: angleIDs[reference], offsets: offsetTimes)
+        dismiss()
     }
 }

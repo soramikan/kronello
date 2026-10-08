@@ -36,6 +36,14 @@ pub const AUDIO_MAX_RATIO: f64 = 100.0;
 pub const AUDIO_MIN_TIME_MS: f64 = 0.01;
 /// AUDIO-008: envelope time constant range in milliseconds.
 pub const AUDIO_MAX_TIME_MS: f64 = 10_000.0;
+/// AUDIO-011 (ADR-0131): hash-pinned third-party audio plugin binding.
+/// Never executed by the in-process evaluator; processing happens only in
+/// the detached plugin worker via `audio.plugin_process` / plugin jobs.
+pub const AUDIO_PLUGIN_ID: &str = "kronello.audio.plugin";
+/// AUDIO-011 supported semantic version.
+pub const AUDIO_PLUGIN_VERSION: u32 = EFFECT_VERSION;
+/// AUDIO-011: maximum rows in the `plugin_parameters` data table.
+pub const AUDIO_PLUGIN_MAX_PARAMS: usize = 1_024;
 pub const AFFINE_EFFECT_VERSION: u32 = 2;
 /// COLOR-002 pointwise color correction effect ids (ADR-0108).
 pub const COLOR_EXPOSURE_ID: &str = "kronello.color.exposure";
@@ -62,6 +70,29 @@ pub const VIGNETTE_ID: &str = "kronello.vignette";
 pub const CORNER_PIN_ID: &str = "kronello.corner_pin";
 /// FX-005/FX-006 supported version is EFFECT_VERSION (1).
 pub const STANDARD_EFFECT_VERSION: u32 = EFFECT_VERSION;
+
+/// TRACK-002 (ADR-0122): tracking-driven stabilization.
+pub const STABILIZE_ID: &str = "kronello.stabilize";
+pub const STABILIZE_VERSION: u32 = 1;
+
+/// TRACK-002: how the stabilized output covers regions the inverse warp maps
+/// outside the source frame. `Fill` paints `fill_color`; `replicate` clamps
+/// to edge texels; `reflect` mirrors the frame at its boundary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum StabilizeBorder {
+    Fill,
+    Replicate,
+    Reflect,
+}
+
+/// TRACK-002: source-frame resampling for the stabilized inverse warp.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum StabilizeSampling {
+    Nearest,
+    Bilinear,
+}
 
 /// Unknown ids, parameters, fields and variants are retained verbatim.
 #[derive(Debug, Clone, PartialEq, Serialize, schemars::JsonSchema)]
@@ -227,6 +258,44 @@ pub enum EffectParameters {
         lut: PropertyId,
         intensity: PropertyId,
     },
+    /// AUDIO-011 (ADR-0131): hash-pinned audio plugin binding. The document
+    /// carries only identity + pin metadata — a bundle path string, format,
+    /// component id, manifest hash and version — never plugin bytes. The
+    /// binding is processed exclusively by the detached plugin worker; the
+    /// audio evaluator rejects it with `UNSUPPORTED_FEATURE`.
+    AudioPlugin {
+        /// Bundle directory or module file path.
+        bundle: PropertyId,
+        /// `vst3` | `audio_unit`.
+        format: PropertyId,
+        /// VST3 32-hex class id or AU `type:subtype:manufacturer` triplet.
+        component: PropertyId,
+        /// Lowercase hex SHA-256 manifest pin (empty for built-in AUs).
+        sha256: PropertyId,
+        /// Recorded plugin version pin (AU hex version / VST3 class
+        /// version string; empty = unpinned).
+        plugin_version: PropertyId,
+        /// DataTable `{ param: Scalar, value: Scalar }` — VST3 normalized
+        /// parameter ids, AU native parameter values; ≤1024 rows.
+        parameters: PropertyId,
+    },
+    /// TRACK-002 (ADR-0122): invert tracked camera motion. `tracking`
+    /// references a `TrackingDataAsset`; the smoothed trajectory uses a
+    /// symmetric window of `2*smoothing_radius+1` tracked samples;
+    /// `max_displacement` (design px), `max_rotation` (degrees) and
+    /// `max_crop` (unit interval of the source frame area) bound the applied
+    /// correction; `border` selects the uncovered-region policy with
+    /// `fill_color` for `fill`; `sampling` picks the resampler.
+    Stabilize {
+        tracking: PropertyId,
+        smoothing_radius: PropertyId,
+        max_displacement: PropertyId,
+        max_rotation: PropertyId,
+        max_crop: PropertyId,
+        border: PropertyId,
+        fill_color: PropertyId,
+        sampling: PropertyId,
+    },
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum ResolvedEffect {
@@ -313,6 +382,23 @@ pub enum ResolvedEffect {
         lut: AssetId,
         intensity: f64,
     },
+    /// TRACK-002 (ADR-0122) resolved effect. `tracking` is the authored
+    /// `TrackingDataAsset` id; `inverse` is the output-frame→source-frame
+    /// inverse correction (2x3 row-major affine, source pixel space) resolved
+    /// per frame by the scene pass. `None` until that pass binds the tracking
+    /// data to the resolved source time.
+    Stabilize {
+        tracking: AssetId,
+        smoothing_radius: u32,
+        max_displacement: f64,
+        max_rotation: f64,
+        max_crop: f64,
+        border: StabilizeBorder,
+        fill_color: Color,
+        sampling: StabilizeSampling,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        inverse: Option<[[f64; 3]; 2]>,
+    },
 }
 /// AUDIO-007/008: one validated parametric EQ band (ADR-0117).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -387,6 +473,8 @@ impl EffectDefinition {
             EffectParameters::Vignette { .. } => (VIGNETTE_ID, STANDARD_EFFECT_VERSION),
             EffectParameters::CornerPin { .. } => (CORNER_PIN_ID, STANDARD_EFFECT_VERSION),
             EffectParameters::ColorLut { .. } => (COLOR_LUT_ID, COLOR_LUT_VERSION),
+            EffectParameters::AudioPlugin { .. } => (AUDIO_PLUGIN_ID, AUDIO_PLUGIN_VERSION),
+            EffectParameters::Stabilize { .. } => (STABILIZE_ID, STABILIZE_VERSION),
         };
         if self.effect_id != id || !(EFFECT_VERSION..=latest).contains(&self.version) {
             return Err(EffectError::UnsupportedFeature);
@@ -524,6 +612,40 @@ impl EffectDefinition {
                 (lut, ValueType::AssetRef, Unit::Dimensionless),
                 (intensity, ValueType::Scalar, Unit::Dimensionless),
             ],
+            EffectParameters::AudioPlugin {
+                bundle,
+                format,
+                component,
+                sha256,
+                plugin_version,
+                parameters,
+            } => vec![
+                (bundle, ValueType::String, Unit::Dimensionless),
+                (format, ValueType::Enum, Unit::Dimensionless),
+                (component, ValueType::String, Unit::Dimensionless),
+                (sha256, ValueType::String, Unit::Dimensionless),
+                (plugin_version, ValueType::String, Unit::Dimensionless),
+                (parameters, ValueType::DataTable, Unit::Dimensionless),
+            ],
+            EffectParameters::Stabilize {
+                tracking,
+                smoothing_radius,
+                max_displacement,
+                max_rotation,
+                max_crop,
+                border,
+                fill_color,
+                sampling,
+            } => vec![
+                (tracking, ValueType::AssetRef, Unit::Dimensionless),
+                (smoothing_radius, ValueType::Scalar, Unit::Dimensionless),
+                (max_displacement, ValueType::Scalar, Unit::DesignPx),
+                (max_rotation, ValueType::Angle, Unit::Degrees),
+                (max_crop, ValueType::Scalar, Unit::Dimensionless),
+                (border, ValueType::Enum, Unit::Dimensionless),
+                (fill_color, ValueType::Color, Unit::Dimensionless),
+                (sampling, ValueType::Enum, Unit::Dimensionless),
+            ],
         }
     }
     pub fn validate(
@@ -579,6 +701,12 @@ impl EffectDefinition {
         ) {
             return self.resolve_standard(values);
         }
+        // TRACK-002 (ADR-0122): stabilize carries the authored tracking
+        // reference and evaluated parameters; the per-frame inverse transform
+        // is bound later by the scene pass.
+        if matches!(self.parameters, EffectParameters::Stabilize { .. }) {
+            return self.resolve_stabilize(values);
+        }
         // AUDIO-007/008: filters and dynamics are executed only by the audio
         // evaluator. The generic resolve still validates parameters so that
         // failures surface as typed errors before the domain rejection.
@@ -589,6 +717,7 @@ impl EffectDefinition {
                 | EffectParameters::AudioLpf { .. }
                 | EffectParameters::AudioCompressor { .. }
                 | EffectParameters::AudioLimiter { .. }
+                | EffectParameters::AudioPlugin { .. }
         ) {
             self.resolve_audio(values)?;
             return Err(EffectError::UnsupportedFeature);
@@ -603,6 +732,7 @@ impl EffectDefinition {
             | EffectParameters::AudioLpf { .. }
             | EffectParameters::AudioCompressor { .. }
             | EffectParameters::AudioLimiter { .. }
+            | EffectParameters::AudioPlugin { .. }
             | EffectParameters::ColorExposure { .. }
             | EffectParameters::ColorLevels { .. }
             | EffectParameters::ColorCurves { .. }
@@ -613,7 +743,8 @@ impl EffectDefinition {
             | EffectParameters::Sharpen { .. }
             | EffectParameters::Vignette { .. }
             | EffectParameters::CornerPin { .. }
-            | EffectParameters::ColorLut { .. } => unreachable!("handled above"),
+            | EffectParameters::ColorLut { .. }
+            | EffectParameters::Stabilize { .. } => unreachable!("handled above"),
         };
         let sigma = scalar(sigma_id)?;
         if !(0.0..=1_000_000.0).contains(&sigma) {
@@ -625,7 +756,8 @@ impl EffectDefinition {
             | EffectParameters::AudioHpf { .. }
             | EffectParameters::AudioLpf { .. }
             | EffectParameters::AudioCompressor { .. }
-            | EffectParameters::AudioLimiter { .. } => unreachable!("handled above"),
+            | EffectParameters::AudioLimiter { .. }
+            | EffectParameters::AudioPlugin { .. } => unreachable!("handled above"),
             EffectParameters::GaussianBlur { .. } => {
                 if self.version == AFFINE_EFFECT_VERSION {
                     ResolvedEffect::AffineGaussianBlur {
@@ -787,6 +919,87 @@ impl EffectDefinition {
             }),
             _ => unreachable!("standard resolution is only invoked for FX-005/006 variants"),
         }
+    }
+    /// TRACK-002 (ADR-0122) parameter validation. Enum strings parse into the
+    /// versioned policy enums; numeric parameters share the effect budgets;
+    /// `smoothing_radius` accepts integral scalars only. The inverse warp is
+    /// scene-resolved, so `inverse` starts unset.
+    fn resolve_stabilize(
+        &self,
+        values: &BTreeMap<PropertyId, Value>,
+    ) -> Result<ResolvedEffect, EffectError> {
+        let scalar = |id| match values.get(&id) {
+            Some(Value::Scalar(v)) => Ok(v.get()),
+            _ => Err(EffectError::InvalidParameter(id)),
+        };
+        let EffectParameters::Stabilize {
+            tracking,
+            smoothing_radius,
+            max_displacement,
+            max_rotation,
+            max_crop,
+            border,
+            fill_color,
+            sampling,
+        } = self.parameters
+        else {
+            unreachable!("stabilize resolution is only invoked for the stabilize variant")
+        };
+        let tracking = match values.get(&tracking) {
+            Some(Value::AssetRef(id)) => *id,
+            _ => return Err(EffectError::InvalidParameter(tracking)),
+        };
+        let radius = scalar(smoothing_radius)?;
+        if !(radius.fract() == 0.0 && (0.0..=4096.0).contains(&radius)) {
+            return Err(EffectError::InvalidParameter(smoothing_radius));
+        }
+        let displacement = scalar(max_displacement)?;
+        if !(0.0..=1_000_000.0).contains(&displacement) {
+            return Err(EffectError::InvalidParameter(max_displacement));
+        }
+        let rotation = match values.get(&max_rotation) {
+            Some(Value::Angle(v)) => v.get(),
+            _ => return Err(EffectError::InvalidParameter(max_rotation)),
+        };
+        if !(0.0..=1_000_000.0).contains(&rotation) {
+            return Err(EffectError::InvalidParameter(max_rotation));
+        }
+        let crop = scalar(max_crop)?;
+        if !(0.0..=1.0).contains(&crop) {
+            return Err(EffectError::InvalidParameter(max_crop));
+        }
+        let border = match values.get(&border) {
+            Some(Value::Enum(v)) => match v.as_str() {
+                "fill" => StabilizeBorder::Fill,
+                "replicate" => StabilizeBorder::Replicate,
+                "reflect" => StabilizeBorder::Reflect,
+                _ => return Err(EffectError::InvalidParameter(border)),
+            },
+            _ => return Err(EffectError::InvalidParameter(border)),
+        };
+        let fill_color = match values.get(&fill_color) {
+            Some(Value::Color(v)) => *v,
+            _ => return Err(EffectError::InvalidParameter(fill_color)),
+        };
+        let sampling = match values.get(&sampling) {
+            Some(Value::Enum(v)) => match v.as_str() {
+                "nearest" => StabilizeSampling::Nearest,
+                "bilinear" => StabilizeSampling::Bilinear,
+                _ => return Err(EffectError::InvalidParameter(sampling)),
+            },
+            _ => return Err(EffectError::InvalidParameter(sampling)),
+        };
+        Ok(ResolvedEffect::Stabilize {
+            tracking,
+            smoothing_radius: radius as u32,
+            max_displacement: displacement,
+            max_rotation: rotation,
+            max_crop: crop,
+            border,
+            fill_color,
+            sampling,
+            inverse: None,
+        })
     }
     /// COLOR-002 parameter validation happens here because ranges are
     /// cross-parameter (levels) or structural (curve table). Magnitude bounds
@@ -966,9 +1179,118 @@ impl EffectDefinition {
                 ceiling_db: bounded(ceiling_db, -AUDIO_MAX_DB, 0.0)?,
                 release_ms: milliseconds(release_ms)?,
             }),
+            EffectParameters::AudioPlugin {
+                bundle,
+                format,
+                component,
+                sha256,
+                plugin_version,
+                parameters,
+            } => {
+                // AUDIO-011 (ADR-0131): validate the authored pin fields so
+                // malformed bindings surface as typed parameter errors before
+                // the domain rejection below. Execution belongs to the
+                // detached plugin worker, never this evaluator.
+                plugin_binding_values(
+                    values,
+                    bundle,
+                    format,
+                    component,
+                    sha256,
+                    plugin_version,
+                    parameters,
+                )?;
+                Err(EffectError::UnsupportedFeature)
+            }
             _ => Err(EffectError::UnsupportedFeature),
         }
     }
+}
+/// AUDIO-011: validate the authored plugin binding values (`bundle`,
+/// `format`, `component`, `sha256`, `plugin_version`, `parameters`). Mirrors
+/// the `kronello-plugin` `PluginSpec::validate` contract without depending on
+/// it — the model layer stays free of process/host types.
+fn plugin_binding_values(
+    values: &BTreeMap<PropertyId, Value>,
+    bundle: PropertyId,
+    format: PropertyId,
+    component: PropertyId,
+    sha256: PropertyId,
+    plugin_version: PropertyId,
+    parameters: PropertyId,
+) -> Result<(), EffectError> {
+    let text = |id: PropertyId| match values.get(&id) {
+        Some(Value::String(value)) => Ok(value.as_str()),
+        _ => Err(EffectError::InvalidParameter(id)),
+    };
+    let bundle_v = text(bundle)?;
+    let format_v = match values.get(&format) {
+        Some(Value::Enum(value)) => value.as_str(),
+        _ => return Err(EffectError::InvalidParameter(format)),
+    };
+    let component_v = text(component)?;
+    let sha256_v = text(sha256)?;
+    let _ = text(plugin_version)?;
+    let vst3 = match format_v {
+        "vst3" => true,
+        "audio_unit" => false,
+        _ => return Err(EffectError::InvalidParameter(format)),
+    };
+    if vst3 && bundle_v.is_empty() {
+        return Err(EffectError::InvalidParameter(bundle));
+    }
+    if bundle_v.is_empty() && !sha256_v.is_empty() {
+        // A file-less built-in component carries no bytes to pin.
+        return Err(EffectError::InvalidParameter(sha256));
+    }
+    let sha256_ok = sha256_v.is_empty()
+        || (sha256_v.len() == 64
+            && sha256_v
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)));
+    if !sha256_ok {
+        return Err(EffectError::InvalidParameter(sha256));
+    }
+    let component_ok = if vst3 {
+        component_v.len() == 32 && component_v.bytes().all(|b| b.is_ascii_hexdigit())
+    } else {
+        let parts: Vec<&str> = component_v.split(':').collect();
+        parts.len() == 3 && parts.iter().all(|p| p.len() == 4 && p.is_ascii())
+    };
+    if !component_ok {
+        return Err(EffectError::InvalidParameter(component));
+    }
+    let table = match values.get(&parameters) {
+        Some(Value::DataTable(table)) => table,
+        _ => return Err(EffectError::InvalidParameter(parameters)),
+    };
+    if table.columns.len() != 2
+        || table.columns.get("param") != Some(&ValueType::Scalar)
+        || table.columns.get("value") != Some(&ValueType::Scalar)
+        || table.rows.len() > AUDIO_PLUGIN_MAX_PARAMS
+    {
+        return Err(EffectError::InvalidParameter(parameters));
+    }
+    for row in &table.rows {
+        if row.len() != 2 {
+            return Err(EffectError::InvalidParameter(parameters));
+        }
+        let (Some(Value::Scalar(param)), Some(Value::Scalar(value))) =
+            (row.get("param"), row.get("value"))
+        else {
+            return Err(EffectError::InvalidParameter(parameters));
+        };
+        let (param, value) = (param.get(), value.get());
+        // `param` carries the u32 parameter id. VST3 values are the
+        // normalized 0..=1 domain; AudioUnit values are native and finite.
+        if !(0.0..=u32::MAX as f64).contains(&param)
+            || param.fract() != 0.0
+            || (vst3 && !(0.0..=1.0).contains(&value))
+        {
+            return Err(EffectError::InvalidParameter(parameters));
+        }
+    }
+    Ok(())
 }
 /// Validate and extract the AUDIO-007 EQ band table: exactly four columns
 /// `kind` (enum: peak | low_shelf | high_shelf), `freq_hz`, `gain_db` and `q`
@@ -1096,6 +1418,17 @@ fn eq_bands_default() -> Value {
             ("gain_db".to_string(), Value::Scalar(f(0.0))),
             ("q".to_string(), Value::Scalar(f(1.0))),
         ])],
+    })
+}
+/// Empty `{ param, value }` scalar table used as the AUDIO-011
+/// `plugin_parameters` default (ADR-0131).
+fn plugin_params_default() -> Value {
+    Value::DataTable(crate::DataTable {
+        columns: BTreeMap::from([
+            ("param".to_string(), ValueType::Scalar),
+            ("value".to_string(), ValueType::Scalar),
+        ]),
+        rows: Vec::new(),
     })
 }
 pub fn effect_descriptors() -> Vec<PropertyDescriptor> {
@@ -1360,6 +1693,92 @@ pub fn effect_descriptors() -> Vec<PropertyDescriptor> {
             0xf0000000_0010_4500_8000_000000000009,
             "ceiling_db",
             Value::Scalar(f(-1.0)),
+            Unit::Dimensionless,
+        ),
+        // AUDIO-011 plugin binding descriptors (ADR-0131). Reserved 49xx.
+        (
+            0xf0000000_0010_4900_8000_000000000001,
+            "plugin_bundle",
+            Value::String(String::new()),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4900_8000_000000000002,
+            "plugin_format",
+            Value::Enum("vst3".to_string()),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4900_8000_000000000003,
+            "plugin_component",
+            Value::String(String::new()),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4900_8000_000000000004,
+            "plugin_sha256",
+            Value::String(String::new()),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4900_8000_000000000005,
+            "plugin_version",
+            Value::String(String::new()),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4900_8000_000000000006,
+            "plugin_parameters",
+            plugin_params_default(),
+            Unit::Dimensionless,
+        ),
+        // TRACK-002 stabilize descriptors (ADR-0122).
+        (
+            0xf0000000_0010_4700_8000_000000000001,
+            "tracking",
+            Value::AssetRef(AssetId::from_uuid(uuid::Uuid::nil())),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4700_8000_000000000002,
+            "smoothing_radius",
+            Value::Scalar(f(16.0)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4700_8000_000000000003,
+            "max_displacement",
+            Value::Scalar(f(64.0)),
+            Unit::DesignPx,
+        ),
+        (
+            0xf0000000_0010_4700_8000_000000000004,
+            "max_rotation",
+            Value::Angle(f(5.0)),
+            Unit::Degrees,
+        ),
+        (
+            0xf0000000_0010_4700_8000_000000000005,
+            "max_crop",
+            Value::Scalar(f(0.25)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4700_8000_000000000006,
+            "border",
+            Value::Enum("replicate".into()),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4700_8000_000000000007,
+            "fill_color",
+            Value::Color(Color::from_srgb8([0; 3], Some(0))),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4700_8000_000000000008,
+            "sampling",
+            Value::Enum("bilinear".into()),
             Unit::Dimensionless,
         ),
     ]

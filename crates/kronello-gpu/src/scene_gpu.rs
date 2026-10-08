@@ -805,6 +805,41 @@ impl ScenePass<'_> {
                     &weights,
                 )?))
             }
+            PixelEffect::Stabilize {
+                frame,
+                unmap,
+                size,
+                border,
+                sampling,
+                ..
+            } => {
+                // TRACK-002 (ADR-0122): weights carry `frame` then `unmap`
+                // (both row-major 2x3) then the source extent; offset is the
+                // premultiplied working-space fill color.
+                let mut weights: Vec<f32> = frame.iter().flatten().copied().collect();
+                weights.extend(unmap.iter().flatten().copied());
+                weights.extend([size[0], size[1]]);
+                let fill = crate::effect::stabilize_fill(effect, self.working);
+                Ok(Some(self.effect_pass_raw(
+                    source,
+                    source,
+                    [
+                        13,
+                        match border {
+                            kronello_model::StabilizeBorder::Fill => 0,
+                            kronello_model::StabilizeBorder::Replicate => 1,
+                            kronello_model::StabilizeBorder::Reflect => 2,
+                        },
+                        match sampling {
+                            kronello_model::StabilizeSampling::Nearest => 0,
+                            kronello_model::StabilizeSampling::Bilinear => 1,
+                        },
+                        0,
+                    ],
+                    [fill[0], fill[1], fill[2], fill[3], 0.0, 0.0, 0.0, 0.0],
+                    &weights,
+                )?))
+            }
             _ => Ok(None),
         }
     }

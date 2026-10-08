@@ -54,6 +54,13 @@ void kronello_audio_free(void *resource);
 uint64_t kronello_surface_attach(uint64_t handle, void *metal_layer, uint32_t width, uint32_t height);
 uint64_t kronello_surface_resize(uint64_t handle, uint32_t width, uint32_t height);
 uint64_t kronello_surface_redraw(uint64_t handle, const uint8_t *json, size_t len);
+/* GUI-011: slotted variants give one session several independent preview
+ * surfaces (Source/Program monitors) on the same serialized worker. The
+ * unslotted calls above are slot-0 aliases; each slot retains its own
+ * CAMetalLayer and surfaces are replaced/released independently. */
+uint64_t kronello_surface_attach_at(uint64_t handle, uint32_t surface, void *metal_layer, uint32_t width, uint32_t height);
+uint64_t kronello_surface_resize_at(uint64_t handle, uint32_t surface, uint32_t width, uint32_t height);
+uint64_t kronello_surface_redraw_at(uint64_t handle, uint32_t surface, const uint8_t *json, size_t len);
 #ifdef __cplusplus
 }
 #endif

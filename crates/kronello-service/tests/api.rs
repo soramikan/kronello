@@ -11,6 +11,50 @@ use uuid::Uuid;
 fn service() -> Service<'static> {
     Service::new(BackendSelection::Gpu)
 }
+/// AUDIO-011: the every-command sweep executes `audio.plugin_probe` through a
+/// real detached helper against the deterministic fixture bundle.
+fn plugin_helper() -> kronello_plugin::HelperCommand {
+    let exe = std::env::current_exe().unwrap();
+    let target_dir = exe.parent().unwrap().parent().unwrap();
+    let binary = target_dir.join(format!(
+        "kronello-plugin-host{}",
+        std::env::consts::EXE_SUFFIX
+    ));
+    if !binary.is_file() {
+        let status =
+            std::process::Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()))
+                .args([
+                    "build",
+                    "-p",
+                    "kronello-plugin",
+                    "--bin",
+                    "kronello-plugin-host",
+                ])
+                .current_dir(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."))
+                .status()
+                .unwrap();
+        assert!(status.success() && binary.is_file());
+    }
+    kronello_plugin::HelperCommand {
+        program: binary,
+        args: Vec::new(),
+        envs: Vec::new(),
+    }
+}
+fn plugin_fixture() -> (PathBuf, String) {
+    static FIXTURE: std::sync::OnceLock<(PathBuf, String)> = std::sync::OnceLock::new();
+    FIXTURE
+        .get_or_init(|| {
+            let dir =
+                std::env::temp_dir().join(format!("kronello-api-plugin-{}", std::process::id()));
+            std::fs::create_dir_all(&dir).unwrap();
+            let bundle = kronello_plugin::test_support::build_fixture_bundle(&dir)
+                .expect("compile vst3 fixture");
+            let hash = kronello_plugin::bundle_manifest_hash(&bundle).unwrap();
+            (bundle, hash)
+        })
+        .clone()
+}
 fn fixture() -> Project {
     serde_json::from_str(include_str!("../../../examples/m1-demo.project.json")).unwrap()
 }
@@ -259,6 +303,7 @@ fn capabilities_registry_media_extension_without_device_initialization() {
             "kronello.color.curves",
             "kronello.color.hsl",
             "kronello.color.lut",
+            "kronello.audio.plugin",
         ]
     );
     assert!(c.backends.contains(&"cpu_reference_float32".into()));
@@ -273,12 +318,17 @@ fn capabilities_registry_media_extension_without_device_initialization() {
         [
             "audio.analyze",
             "track.analyze",
+            "scene.apply",
             "proxy.clear",
             "audio.normalize",
             "sequence.create",
             "clip.place",
             "clip.trim",
             "clip.stretch",
+            "clip.angle_switch",
+            "multicam.create",
+            "edit.insert",
+            "edit.overwrite",
             "instance.retime",
             "template_instance.retime",
             "project.create",
@@ -609,6 +659,14 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
         json!({"operation":"clip.place", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"clip","sequence":uuid,"track":uuid,"clip":clip}),
         json!({"operation":"clip.trim", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"trim","sequence":uuid,"clip":uuid,"range":clip["timeline_range"]}),
         json!({"operation":"clip.stretch", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"stretch","sequence":uuid,"clip":uuid,"range":clip["timeline_range"]}),
+        json!({"operation":"clip.angle_switch", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"angle","sequence":uuid,"clip":uuid,"angle":uuid}),
+        json!({"operation":"multicam.create", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"multicam","multicam":uuid,"sync":"manual",
+            "angles":[{"id":"11111111-2222-4333-8444-555555555555","asset":uuid,"stream_index":0}],
+            "offsets":{"11111111-2222-4333-8444-555555555555":{"num":"0","den":"1"}}}),
+        json!({"operation":"edit.insert", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"insert","sequence":uuid,"clip":uuid,
+            "source":clip["source_ref"],"source_range":clip["timeline_range"],"at":{"num":"0","den":"1"}}),
+        json!({"operation":"edit.overwrite", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"overwrite","sequence":uuid,"clip":uuid,
+            "source":clip["source_ref"],"source_range":clip["timeline_range"],"at":{"num":"0","den":"1"},"split_tail":uuid}),
         json!({"operation":"instance.retime", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"retime","composition":composition,"node":uuid,"time_map":clip["time_map"]}),
         json!({"operation":"template_instance.retime", "project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"retime-template","instance":uuid,"duration":time}),
         json!({"operation":"render.export", "render":{"input":input,"range":{"start":{"num":"0","den":"1"},"end":time},"frame_rate":{"num":"24","den":"1"},"output_directory":"movie.mov"},"output":{"format":"pro_res_mov","clips":[],"background":[0,0,0]}}),
@@ -640,6 +698,12 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
         json!({"operation":"capabilities.get"}),
         json!({"operation":"asset.relink", "project":path, "base_revision":"1", "asset":uuid, "search_directory":"assets"}),
         json!({"operation":"project.collect", "project":path, "output_directory":"collected"}),
+        json!({"operation":"media.query", "project":path}),
+        json!({"operation":"asset.thumbnail", "project":path, "asset":uuid, "max_size":64}),
+        json!({"operation":"export.batch", "items":[{"idempotency_key":"batch",
+            "submission":{"render":{"input":input,"range":{"start":{"num":"0","den":"1"},"end":time},
+            "frame_rate":{"num":"24","den":"1"},"output_directory":"frames"},
+            "output":{"format":"image_sequence"}}}]}),
         json!({"operation":"template.define", "project":path, "base_revision":"1", "session_id":uuid, "idempotency_key":"define", "definition":definition}),
         json!({"operation":"template.instantiate", "project":path, "base_revision":"1", "session_id":uuid, "idempotency_key":"place", "composition":composition, "node":uuid, "index":0, "instance":instance}),
         json!({"operation":"template.set_input", "project":path, "base_revision":"1", "session_id":uuid, "idempotency_key":"input", "instance":uuid, "name":"headline", "value":{"kind":"string", "value":"text"}}),
@@ -660,6 +724,9 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
             "asset":uuid,"stream_index":0,"mode":"points",
             "seeds":[{"x":0.5,"y":0.5,"template_radius":8,"search_radius":16}],
             "range":{"start":{"num":"0","den":"1"},"end":time}}),
+        json!({"operation":"scene.detect","project":path,"asset":uuid,"stream_index":0}),
+        json!({"operation":"scene.apply","project":path,"base_revision":"1","session_id":uuid,
+            "idempotency_key":"scene","scene_asset":uuid,"sequence":uuid,"mode":"markers"}),
         json!({"operation":"proxy.generate","project":path,"assets":[uuid],"scale":0.5}),
         json!({"operation":"proxy.status","project":path}),
         json!({"operation":"proxy.clear","project":path,"base_revision":"1","asset":uuid}),
@@ -669,6 +736,15 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
             "session_id":uuid,"idempotency_key":"normalize","sequence":uuid,"clip":uuid,"target_lufs":-16.0}),
         json!({"operation":"lut.import","project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"lut","path":"a.cube","asset":uuid}),
         json!({"operation":"inspect.scopes","input":input,"time":time}),
+        json!({"operation":"audio.plugin_probe","plugin":{"format":"vst3","path":"plugins/Acme.vst3",
+            "sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "component":"6b726f6e656c6c6f746573746761696e","version":"1.0.0",
+            "parameters":[{"id":0,"value":0.5}]},"deadline_ms":5000}),
+        json!({"operation":"audio.plugin_process","project":path,"asset":uuid,"stream_index":0,
+            "plugin":{"format":"vst3","path":"plugins/Acme.vst3",
+            "sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "component":"6b726f6e656c6c6f746573746761696e","parameters":[]},
+            "destination":"processed.mov"}),
     ];
     assert_eq!(requests.len(), command_registry().len());
     for request in requests {
@@ -896,7 +972,10 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
         .with_job_config(kronello_jobs::JobConfig::at(job_state.path()))
         // This test covers submit's successful wire result. Actual detached
         // execution and completion are checked by CLI/MCP process integration.
-        .with_worker_executable(PathBuf::from("/usr/bin/false"));
+        .with_worker_executable(PathBuf::from("/usr/bin/false"))
+        // AUDIO-011: probe runs a real detached helper; the job worker is the
+        // stub above, so process submission only freezes the fixed input.
+        .with_plugin_helper(plugin_helper());
     let mut checked = BTreeSet::new();
     let mut execute = |request: Json| {
         envelope.validate(&request).unwrap();
@@ -1241,6 +1320,8 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
         .unwrap();
     let video_id = AssetId::new();
     let proxy_id = AssetId::new();
+    let scene_sequence = SequenceId::new();
+    let audio_id = AssetId::new();
     let clip_hash = kronello_media::content_hash(&clip_path).unwrap();
     let mut proxy_stream = clip_stream.clone();
     proxy_stream.index = 0;
@@ -1258,6 +1339,32 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
                     absolute: None,
                 },
             }),
+            // AUDIO-011: submit reads only the recorded metadata; the locked
+            // bytes are resolved by the detached worker, which the stub does
+            // not run.
+            DocumentObject::Known(Asset {
+                id: audio_id,
+                content_hash: "1".repeat(64),
+                kind: AssetKind::Audio,
+                streams: vec![StreamMetadata {
+                    index: 1,
+                    codec: "pcm_s24le".into(),
+                    time_base: kronello_time::Rational::new(1, 48_000).unwrap(),
+                    duration: Some(kronello_time::Rational::new(1, 10).unwrap()),
+                    start_time: None,
+                    width: None,
+                    height: None,
+                    pixel_format: None,
+                    color_primaries: None,
+                    color_transfer: None,
+                    color_matrix: None,
+                    color_range: None,
+                }],
+                locator: AssetLocator {
+                    relative: Some("tone.mov".into()),
+                    absolute: None,
+                },
+            }),
             DocumentObject::Known(Asset {
                 id: proxy_id,
                 content_hash: "0000000000000000000000000000000000000000000000000000000000000000"
@@ -1270,6 +1377,39 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
                 },
             }),
         ],
+        scene_boundary_assets: vec![DocumentObject::Known({
+            let mut data = SceneBoundaryAsset {
+                id: AssetId::new(),
+                version: SCENE_BOUNDARY_VERSION,
+                source: SceneSource {
+                    asset: video_id,
+                    stream_index: 0,
+                    content_hash: clip_hash.clone(),
+                },
+                params: SceneDetectionParams::default(),
+                range: kronello_time::TimeRange::new(
+                    Time::ZERO,
+                    kronello_time::Rational::new(1, 12).unwrap(),
+                )
+                .unwrap(),
+                frames_analyzed: 2,
+                boundaries: vec![SceneBoundary {
+                    time: kronello_time::Rational::new(1, 48).unwrap(),
+                    confidence: FiniteF64::new(0.9).unwrap(),
+                }],
+                content_hash: String::new(),
+            };
+            data.content_hash = data.computed_hash().unwrap();
+            data
+        })],
+        sequences: vec![DocumentObject::Known(serde_json::from_value(json!({
+            "id":scene_sequence,"extent":{"width":16.0,"height":16.0},"frame_rate":{"num":"24","den":"1"},"audio_rate":48000,"working_space":"linear_rec709",
+            "tracks":[{"id":"00620000-0000-4000-8000-000000000009","kind":"video","clips":[{"id":"00620000-0000-4000-8000-00000000000a",
+                "source_ref":{"kind":"asset","asset":video_id,"stream_index":0},
+                "timeline_range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"12"}},"source_in":{"num":"0","den":"1"},
+                "time_map":{"kind":"linear","offset":{"num":"0","den":"1"},"speed":{"num":"1","den":"1"}},
+                "links":[],"effects":[],"audio_retime":"reject"}]}],
+            "transitions":[],"markers":[]})).unwrap())],
         proxies: vec![ProxyLink {
             original: video_id,
             proxy: proxy_id,
@@ -1301,6 +1441,65 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
         json!({"operation":"proxy.clear", "project":video_path, "base_revision":"2",
             "asset":video_id}),
     );
+    // AI-002: detection submits the fixed-input job; apply maps a stored
+    // boundary through the shared marker path at the current revision.
+    execute(
+        json!({"operation":"scene.detect","project":video_path,"asset":video_id,"stream_index":0}),
+    );
+    let scene_asset = execute(json!({"operation":"project.export","project":video_path}))
+        ["document"]["scene_boundary_assets"][0]["id"]
+        .clone();
+    execute(
+        json!({"operation":"scene.apply","project":video_path,"base_revision":"3",
+            "session_id":session,"idempotency_key":"scene-apply",
+            "scene_asset":scene_asset,"sequence":scene_sequence,"mode":"markers"}),
+    );
+    // AUDIO-011: probe runs the describe exchange through the real detached
+    // helper; process submission freezes the pinned spec into a fixed job.
+    let (plugin_bundle, plugin_hash) = plugin_fixture();
+    let plugin_spec = json!({"format":"vst3","path":plugin_bundle,"sha256":plugin_hash,
+        "component":kronello_plugin::test_support::FIXTURE_CLASS_ID,
+        "parameters":[{"id":0,"value":0.5}]});
+    execute(json!({"operation":"audio.plugin_probe", "plugin":plugin_spec}));
+    execute(
+        json!({"operation":"audio.plugin_process", "project":video_path, "asset":audio_id,
+            "stream_index":1, "plugin":plugin_spec,
+            "destination":dir.path().join("plugin-out.mov")}),
+    );
+    // NLE-007/GUI-011 (ADR-0127/0128): multicam creation, per-clip angle
+    // switching and shared three-point insert/overwrite all ride the same
+    // plan/apply event pipeline against a real media asset.
+    let mc_sequence = Uuid::new_v4();
+    let mc_track = Uuid::new_v4();
+    let multicam_id = Uuid::new_v4();
+    let (angle_a, angle_b) = (Uuid::new_v4(), Uuid::new_v4());
+    let mc_clip = Uuid::new_v4();
+    let mut mc_offsets = serde_json::Map::new();
+    for angle in [angle_a, angle_b] {
+        mc_offsets.insert(angle.to_string(), json!({"num":"0","den":"1"}));
+    }
+    execute(
+        json!({"operation":"sequence.create","project":video_path,"base_revision":"4","session_id":session,"idempotency_key":"create-mc-seq","sequence":{"id":mc_sequence,"extent":{"width":64.0,"height":32.0},"frame_rate":{"num":"24","den":"1"},"audio_rate":48000,"working_space":"linear_rec709","tracks":[{"id":mc_track,"kind":"video","clips":[]}]}}),
+    );
+    execute(
+        json!({"operation":"multicam.create","project":video_path,"base_revision":"5","session_id":session,"idempotency_key":"multicam","multicam":multicam_id,"name":"Camera Group","sync":"manual",
+            "angles":[{"id":angle_a,"asset":video_id,"stream_index":0},{"id":angle_b,"asset":video_id,"stream_index":0}],
+            "offsets":mc_offsets}),
+    );
+    execute(
+        json!({"operation":"clip.place","project":video_path,"base_revision":"6","session_id":session,"idempotency_key":"place-mc-clip","sequence":mc_sequence,"track":mc_track,"clip":{"id":mc_clip,"source_ref":{"kind":"multicam","multicam":multicam_id,"angle":angle_a},"timeline_range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"24"}},"source_in":{"num":"0","den":"1"},"time_map":{"kind":"linear","offset":{"num":"0","den":"1"},"speed":{"num":"1","den":"1"}},"links":[],"effects":[]}}),
+    );
+    execute(
+        json!({"operation":"clip.angle_switch","project":video_path,"base_revision":"7","session_id":session,"idempotency_key":"angle-switch","sequence":mc_sequence,"clip":mc_clip,"angle":angle_b}),
+    );
+    execute(
+        json!({"operation":"edit.insert","project":video_path,"base_revision":"8","session_id":session,"idempotency_key":"insert-clip","sequence":mc_sequence,"clip":Uuid::new_v4(),
+            "source":{"kind":"asset","asset":video_id,"stream_index":0},"source_range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"24"}},"at":{"num":"1","den":"24"},"track":mc_track}),
+    );
+    execute(
+        json!({"operation":"edit.overwrite","project":video_path,"base_revision":"9","session_id":session,"idempotency_key":"overwrite-clip","sequence":mc_sequence,"clip":Uuid::new_v4(),
+            "source":{"kind":"asset","asset":video_id,"stream_index":0},"source_range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"24"}},"at":{"num":"0","den":"1"},"track":mc_track}),
+    );
     // COLOR-003/004: import a `.cube` as a hash-pinned Data asset, then query
     // deterministic scope bins over the composited frame.
     let cube = dir.path().join("contract.cube");
@@ -1316,6 +1515,24 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
         "session_id":session,"idempotency_key":"lut","path":cube,"asset":Uuid::new_v4()}),
     );
     execute(json!({"operation":"inspect.scopes","input":input,"time":{"num":"0","den":"1"}}));
+    // FLOW-002/003: media query, a fixed-time video thumbnail and a keyed
+    // batch submission through the shared registry surface.
+    let media = execute(json!({"operation":"media.query","project":video_path}));
+    assert_eq!(media["assets"][0]["asset"], json!(video_id));
+    let thumb = execute(
+        json!({"operation":"asset.thumbnail","project":video_path,"asset":video_id,"max_size":16}),
+    );
+    assert_eq!(thumb["width"], 16);
+    assert_eq!(thumb["rgba"].as_array().unwrap().len(), 16 * 16 * 4);
+    let batch = execute(
+        json!({"operation":"export.batch","items":[{"idempotency_key":"contract-batch",
+            "submission":{"render":{"input":input,
+            "range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"24"}},
+            "frame_rate":{"num":"24","den":"1"},
+            "output_directory":dir.path().join("batch-frames")},
+            "output":{"format":"image_sequence"}}}]}),
+    );
+    assert_eq!(batch["items"][0]["outcome"], "submitted");
     assert_eq!(
         checked,
         command_registry().into_iter().map(|c| c.name).collect()
@@ -1372,6 +1589,23 @@ fn all_filesystem_boundaries_reject_uris_before_access() {
         );
         invalid_locator(
             json!({"operation":"project.collect", "project":"missing.kronello", "output_directory":uri}),
+        );
+        invalid_locator(json!({"operation":"media.query", "project":uri}));
+        invalid_locator(
+            json!({"operation":"asset.thumbnail", "project":uri, "asset":uuid, "max_size":64}),
+        );
+        invalid_locator(
+            json!({"operation":"export.batch", "items":[{"preset":uuid, "project":uri,
+                "destination":"local.mov"}]}),
+        );
+        invalid_locator(json!({"operation":"export.batch", "items":[{"preset":uuid,
+                "project":"missing.kronello", "destination":uri}]}));
+        invalid_locator(
+            json!({"operation":"export.batch", "items":[{"submission":{"render":{"input":{
+                "project":"missing.kronello","composition":composition,
+                "region":{"origin":[0.0,0.0],"extent":[64.0,32.0],"pixels":[8,4]}},
+                "range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"1"}},
+                "frame_rate":{"num":"1","den":"1"},"output_directory":uri}}}]}),
         );
     }
     let unsafe_fonts = json!([{"identity":document["texts"][0]["styles"][0]["font"],"path":"https://example.invalid/font.otf"}]);

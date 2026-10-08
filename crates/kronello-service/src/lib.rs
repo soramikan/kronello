@@ -8,9 +8,11 @@ pub use export_profiles::{
 };
 mod font_authoring;
 pub use font_authoring::FontPinRequest;
+mod multicam;
 mod nle;
 mod playback;
 pub use kronello_render::RenderTarget;
+pub use multicam::*;
 pub use nle::*;
 pub use playback::{
     AudioPreparationInput, AudioPrepareRequest, BlockMeters, MAX_PLAYBACK_BLOCK_FRAMES,
@@ -29,8 +31,16 @@ pub use proxy::{
     ProxyClearRequest, ProxyGenerateRequest, ProxyJobInput, ProxyState, ProxyStatusEntry,
     ProxyStatusRequest, ProxyStatusResult,
 };
+mod plugin;
+/// AUDIO-011 helper-process entry for embedding binaries (ADR-0131):
+/// `<program> plugin-helper` runs the bounded stdin/stdout plugin protocol.
+/// The detached helper is the only process that ever loads plugin code.
+pub use kronello_plugin::helper_entry as plugin_helper_entry;
+pub use plugin::{PluginJobInput, PluginProbeRequest, PluginProbeResult, PluginProcessRequest};
 mod tracking;
 pub use tracking::TrackAnalyzeRequest;
+mod scene;
+pub use scene::{SceneApplyMode, SceneApplyRequest, SceneDetectRequest, SceneJobInput};
 mod loudness;
 pub use loudness::{
     AudioLoudnessInput, AudioLoudnessRequest, AudioLoudnessResult, AudioNormalizeRequest,
@@ -63,7 +73,10 @@ pub use template::{
     TemplateSetInputRequest,
 };
 mod media;
-pub use media::{CollectRequest, LutImportRequest, RelinkRequest};
+pub use media::{
+    AssetThumbnailRequest, AssetThumbnailResult, CollectRequest, LutImportRequest, MediaAssetEntry,
+    MediaQueryRequest, MediaQueryResult, RelinkRequest,
+};
 mod control;
 pub use control::ExecutionControl;
 
@@ -97,6 +110,10 @@ pub enum Request {
     AudioAnalyze(AudioAnalyzeRequest),
     #[serde(rename = "track.analyze")]
     TrackAnalyze(TrackAnalyzeRequest),
+    #[serde(rename = "scene.detect")]
+    SceneDetect(SceneDetectRequest),
+    #[serde(rename = "scene.apply")]
+    SceneApply(SceneApplyRequest),
     #[serde(rename = "proxy.generate")]
     ProxyGenerate(ProxyGenerateRequest),
     #[serde(rename = "proxy.status")]
@@ -107,6 +124,10 @@ pub enum Request {
     AudioLoudness(AudioLoudnessRequest),
     #[serde(rename = "audio.normalize")]
     AudioNormalize(AudioNormalizeRequest),
+    #[serde(rename = "audio.plugin_probe")]
+    AudioPluginProbe(PluginProbeRequest),
+    #[serde(rename = "audio.plugin_process")]
+    AudioPluginProcess(PluginProcessRequest),
     #[serde(rename = "sequence.query")]
     SequenceQuery(SequenceQueryRequest),
     #[serde(rename = "sequence.create")]
@@ -117,6 +138,18 @@ pub enum Request {
     ClipTrim(ClipTrimRequest),
     #[serde(rename = "clip.stretch")]
     ClipStretch(ClipStretchRequest),
+    /// NLE-007: repoint one clip's active multicam angle (ADR-0127).
+    #[serde(rename = "clip.angle_switch")]
+    ClipAngleSwitch(ClipAngleSwitchRequest),
+    /// NLE-007: create a multicam group with resolved sync offsets (ADR-0127).
+    #[serde(rename = "multicam.create")]
+    MulticamCreate(MulticamCreateRequest),
+    /// GUI-011: three-point ripple insert from the source monitor (ADR-0128).
+    #[serde(rename = "edit.insert")]
+    EditInsert(EditInsertRequest),
+    /// GUI-011: three-point overwrite from the source monitor (ADR-0128).
+    #[serde(rename = "edit.overwrite")]
+    EditOverwrite(EditOverwriteRequest),
     #[serde(rename = "instance.retime")]
     InstanceRetime(InstanceRetimeRequest),
     #[serde(rename = "template_instance.retime")]
@@ -148,6 +181,12 @@ pub enum Request {
     TemplateInstantiate(TemplateInstantiateRequest),
     #[serde(rename = "template.set_input")]
     TemplateSetInput(TemplateSetInputRequest),
+    #[serde(rename = "media.query")]
+    MediaQuery(MediaQueryRequest),
+    #[serde(rename = "asset.thumbnail")]
+    AssetThumbnail(AssetThumbnailRequest),
+    #[serde(rename = "export.batch")]
+    ExportBatch(ExportBatchRequest),
     #[serde(rename = "asset.relink")]
     AssetRelink(RelinkRequest),
     #[serde(rename = "project.collect")]
@@ -345,6 +384,12 @@ pub enum ResultData {
     RenderExplanation(Box<RenderExplainResult>),
     Samples(PropertySampleResult),
     Proxies(ProxyStatusResult),
+    /// FLOW-002 project media browser payload (ADR-0129).
+    Media(Box<MediaQueryResult>),
+    /// FLOW-002 fixed-time thumbnail pixels (transport data, never document).
+    Thumbnail(Box<AssetThumbnailResult>),
+    /// FLOW-003 ordered per-item batch outcomes (ADR-0130).
+    Batch(Box<ExportBatchResult>),
     Capabilities(Box<CapabilitiesResult>),
     ProjectPlan(Box<ProjectChangePlan>),
     Captions(CaptionsExportResult),
@@ -352,6 +397,8 @@ pub enum ResultData {
     Normalize(Box<AudioNormalizeResult>),
     /// COLOR-004 scope bins over one fixed working-space frame (ADR-0113).
     Scopes(Box<InspectScopesResult>),
+    /// AUDIO-011 detached-helper plugin identity report (ADR-0131).
+    PluginProbe(PluginProbeResult),
 }
 #[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
 #[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
@@ -485,6 +532,7 @@ pub struct Service<'a> {
     media_capabilities: Option<MediaCapabilities>,
     job_config: Option<kronello_jobs::JobConfig>,
     worker_executable: Option<PathBuf>,
+    plugin_helper: Option<kronello_plugin::HelperCommand>,
     read_only_inspection: bool,
 }
 impl Service<'_> {
@@ -495,13 +543,17 @@ impl Service<'_> {
             media_capabilities: None,
             job_config: None,
             worker_executable: None,
+            plugin_helper: None,
             read_only_inspection: false,
         }
     }
 }
 impl<'a> Service<'a> {
-    /// Prepare a native preview through the same snapshot/font/compiler policy
-    /// as render.frame. Native adapters own presentation, never document edits.
+    /// Prepare a native preview through the same snapshot/font/compiler/media
+    /// policy as render.frame: external media is resolved through the explicit
+    /// software decode adapter so every returned DAG lowers without a
+    /// media-backend selection. Native adapters own presentation, never
+    /// document edits.
     pub fn preview_dag(
         &self,
         request: &FrameRenderRequest,
@@ -523,6 +575,7 @@ impl<'a> Service<'a> {
                 snapshot.profile(),
                 request.input.region,
             )?;
+            let dag = kronello_media::resolve_dag_media(&dag, &request.input.project)?;
             Ok((snapshot.revision().to_string(), dag))
         })
     }
@@ -533,11 +586,22 @@ impl<'a> Service<'a> {
             media_capabilities: None,
             job_config: None,
             worker_executable: None,
+            plugin_helper: None,
             read_only_inspection: false,
         }
     }
     pub fn with_media_capabilities(mut self, capabilities: MediaCapabilities) -> Self {
         self.media_capabilities = Some(capabilities);
+        self
+    }
+    /// Explicit helper command for `audio.plugin_probe`/`audio.plugin_process`
+    /// exchanges. Unset uses the documented resolution order
+    /// (`KRONELLO_PLUGIN_HELPER`, sibling `kronello-plugin-host`, then the
+    /// current executable re-entered as `plugin-helper`). Detached workers
+    /// spawned by this service resolve the helper in their own process — set
+    /// `KRONELLO_PLUGIN_HELPER` in their environment to override them.
+    pub fn with_plugin_helper(mut self, command: kronello_plugin::HelperCommand) -> Self {
+        self.plugin_helper = Some(command);
         self
     }
     /// Snapshot-only inspection for resources/prompts. Existing command tools
@@ -597,6 +661,8 @@ impl<'a> Service<'a> {
             }
             Request::AudioAnalyze(r) => self.analyze_audio(r),
             Request::TrackAnalyze(r) => self.analyze_tracking(r),
+            Request::SceneDetect(r) => self.detect_scene(r).map(|r| ResultData::Job(Box::new(r))),
+            Request::SceneApply(r) => self.apply_scene(r).map(ResultData::Edit),
             Request::ProxyGenerate(r) => self.generate_proxies(r).map(ResultData::Jobs),
             Request::ProxyStatus(r) => self.proxy_status(r).map(ResultData::Proxies),
             Request::ProxyClear(r) => self.proxy_clear(r).map(ResultData::Project),
@@ -604,11 +670,19 @@ impl<'a> Service<'a> {
             Request::AudioNormalize(r) => self
                 .normalize_audio(r)
                 .map(|r| ResultData::Normalize(Box::new(r))),
+            Request::AudioPluginProbe(r) => self.plugin_probe(r).map(ResultData::PluginProbe),
+            Request::AudioPluginProcess(r) => {
+                self.plugin_process(r).map(|r| ResultData::Job(Box::new(r)))
+            }
             Request::SequenceQuery(r) => nle::sequence_query(r).map(ResultData::Timeline),
             Request::SequenceCreate(r) => nle::sequence_create(r).map(ResultData::Edit),
             Request::ClipPlace(r) => nle::clip_place(r).map(ResultData::Edit),
             Request::ClipTrim(r) => nle::clip_trim(r).map(ResultData::Edit),
             Request::ClipStretch(r) => nle::clip_stretch(r).map(ResultData::Edit),
+            Request::ClipAngleSwitch(r) => nle::clip_angle_switch(r).map(ResultData::Edit),
+            Request::MulticamCreate(r) => multicam::multicam_create(r).map(ResultData::Edit),
+            Request::EditInsert(r) => nle::edit_insert(r).map(ResultData::Edit),
+            Request::EditOverwrite(r) => nle::edit_overwrite(r).map(ResultData::Edit),
             Request::InstanceRetime(r) => nle::instance_retime(r).map(ResultData::Edit),
             Request::TemplateInstanceRetime(r) => {
                 nle::template_instance_retime(r).map(ResultData::Edit)
@@ -674,6 +748,11 @@ impl<'a> Service<'a> {
                 query::expression_format(r).map(ResultData::ExpressionText)
             }
             Request::HistoryList(r) => edit::history(r).map(ResultData::History),
+            Request::MediaQuery(r) => media::media_query(r).map(|r| ResultData::Media(Box::new(r))),
+            Request::AssetThumbnail(r) => {
+                media::thumbnail(r).map(|r| ResultData::Thumbnail(Box::new(r)))
+            }
+            Request::ExportBatch(r) => self.export_batch(r).map(|r| ResultData::Batch(Box::new(r))),
             Request::AssetRelink(r) => media::relink(r).map(ResultData::Project),
             Request::ProjectCollect(r) => media::collect(r).map(ResultData::Collected),
             Request::ProjectCreatePlan(r) => {
@@ -1035,9 +1114,9 @@ fn freeze_render_input(
     stored: &kronello_store::Snapshot,
     input: &RenderInput,
 ) -> Result<RenderSnapshot, ServiceError> {
-    let target = match (input.composition, input.target) {
-        (Some(composition), None) => composition.into(),
-        (None, Some(target)) => target,
+    let target = match (&input.composition, &input.target) {
+        (Some(composition), None) => (*composition).into(),
+        (None, Some(target)) => *target,
         _ => {
             return Err(ServiceError::invalid(
                 "specify exactly one of composition or target",
@@ -1312,6 +1391,10 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
         Request::ClipPlace(r) => local_locator(&r.project),
         Request::ClipTrim(r) => local_locator(&r.project),
         Request::ClipStretch(r) => local_locator(&r.project),
+        Request::ClipAngleSwitch(r) => local_locator(&r.project),
+        Request::MulticamCreate(r) => local_locator(&r.project),
+        Request::EditInsert(r) => local_locator(&r.project),
+        Request::EditOverwrite(r) => local_locator(&r.project),
         Request::InstanceRetime(r) => local_locator(&r.project),
         Request::TemplateInstanceRetime(r) => local_locator(&r.project),
 
@@ -1406,6 +1489,27 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
             local_locator(&r.output_directory)?;
             render_locators(&r.input)
         }
+        Request::MediaQuery(r) => local_locator(&r.project),
+        Request::AssetThumbnail(r) => local_locator(&r.project),
+        Request::ExportBatch(r) => {
+            for item in &r.items {
+                if let Some(submission) = &item.submission {
+                    local_locator(&submission.render.output_directory)?;
+                    render_locators(&submission.render.input)?;
+                }
+                if item.preset.is_some() {
+                    let project = item.project.as_ref().ok_or_else(|| {
+                        ServiceError::invalid("preset batch items require project")
+                    })?;
+                    local_locator(project)?;
+                    let destination = item.destination.as_ref().ok_or_else(|| {
+                        ServiceError::invalid("preset batch items require destination")
+                    })?;
+                    local_locator(destination)?;
+                }
+            }
+            Ok(())
+        }
         Request::AssetRelink(r) => {
             local_locator(&r.project)?;
             local_locator(&r.search_directory)
@@ -1418,11 +1522,25 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
         Request::SvgImportPlan(r) => local_locator(&r.project),
         Request::AudioAnalyze(r) => local_locator(&r.project),
         Request::TrackAnalyze(r) => local_locator(&r.project),
+        Request::SceneDetect(r) => local_locator(&r.project),
+        Request::SceneApply(r) => local_locator(&r.project),
         Request::ProxyGenerate(r) => local_locator(&r.project),
         Request::ProxyStatus(r) => local_locator(&r.project),
         Request::ProxyClear(r) => local_locator(&r.project),
         Request::AudioLoudness(r) => local_locator(&r.project),
         Request::AudioNormalize(r) => local_locator(&r.project),
+        Request::AudioPluginProbe(r) => match &r.plugin.path {
+            Some(path) => local_locator(path),
+            None => Ok(()),
+        },
+        Request::AudioPluginProcess(r) => {
+            local_locator(&r.project)?;
+            local_locator(&r.destination)?;
+            match &r.plugin.path {
+                Some(path) => local_locator(path),
+                None => Ok(()),
+            }
+        }
         Request::CaptionsImportPlan(r) => local_locator(&r.project),
         Request::CaptionsImport(r) => local_locator(&r.plan.project),
         Request::CaptionsExport(r) => local_locator(&r.project),

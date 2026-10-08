@@ -6,8 +6,8 @@ use kronello_time::{Time, TimeMap, TimeRange};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AudioClip, AudioError, AudioSourceReader, AudioSources, Bus, Gain, mix_with_gain_reader,
-    sample_index, sample_range,
+    AudioClip, AudioError, AudioSources, Bus, ChannelBus, ChannelSourceReader, Gain,
+    mix_with_gain_channels, sample_index, sample_range,
 };
 
 #[derive(
@@ -24,6 +24,15 @@ pub enum AudioSourceMode {
 pub enum AudioTarget {
     Sequence(SequenceId),
     Composition(CompositionId),
+    /// GUI-011 source monitor (ADR-0128): one asset stream heard through the
+    /// shared mixer. `offset` is the PTS-domain shift applied to monitor time
+    /// before reading decoded samples (0 for a plain asset, the angle's
+    /// `sync_offset` for a multicam source).
+    Source {
+        asset: AssetId,
+        stream_index: u32,
+        offset: Time,
+    },
 }
 #[derive(Debug, Clone)]
 struct ClipGain {
@@ -127,7 +136,15 @@ impl DocumentAudioPlan {
     ) -> Result<Self, AudioError> {
         match version {
             1 => Self::compile(project, target),
-            2 if matches!(target, AudioTarget::Composition(_)) => Self::compile(project, target),
+            // A source monitor decodes one already-selected stream; there are
+            // no clip interactions for the version-2 advanced semantics.
+            2 if matches!(
+                target,
+                AudioTarget::Composition(_) | AudioTarget::Source { .. }
+            ) =>
+            {
+                Self::compile(project, target)
+            }
             2 => Ok(Self {
                 advanced: Some(Box::new(crate::advanced::AdvancedAudioPlan::compile(
                     project, target,
@@ -156,6 +173,56 @@ impl DocumentAudioPlan {
     ) -> Result<Self, AudioError> {
         let mut plan = Self::default();
         match target {
+            AudioTarget::Source {
+                asset,
+                stream_index,
+                offset,
+            } => {
+                // One bounded placement decodes the authored stream exactly
+                // like a clip on an audio track; `offset` shifts monitor time
+                // into the stream's absolute PTS domain before sample lookup.
+                validate_asset(project, asset, stream_index)?;
+                let stream = project
+                    .assets
+                    .iter()
+                    .find_map(|a| match a {
+                        DocumentObject::Known(a) if a.id == asset => Some(a),
+                        _ => None,
+                    })
+                    .and_then(|asset| asset.streams.iter().find(|s| s.index == stream_index))
+                    .expect("validated stream");
+                if stream.width.is_some() || stream.height.is_some() {
+                    return Err(invalid("source stream is not audio"));
+                }
+                let audio_start = stream.start_time.unwrap_or(Time::ZERO);
+                let media_end = stream
+                    .duration
+                    .map(|duration| audio_start.checked_add(duration))
+                    .transpose()?
+                    .unwrap_or_else(|| {
+                        Time::new(crate::MAX_AUDIO_FRAMES as i64, 48_000)
+                            .expect("audio budget bound")
+                    });
+                // Monitor time t maps to media PTS t + offset, then to the
+                // decoded index (t + offset - audio_start)·48k. Clamp the
+                // placement to nonnegative monitor time and keep source_in
+                // nonnegative so clipping before the stream start is silent.
+                let placement_start = (audio_start.checked_sub(offset)?).max(Time::ZERO);
+                let placement_end = (media_end.checked_sub(offset)?).max(placement_start);
+                let source_in = (offset.checked_sub(audio_start)?).max(Time::ZERO);
+                let placement = TimeRange::new(placement_start, placement_end)?;
+                plan.placements.push(Placement {
+                    clip: AudioClip {
+                        asset,
+                        stream_index,
+                        placement,
+                        source_in,
+                        gain: Gain::UNITY,
+                    },
+                    active: placement,
+                    gains: vec![],
+                });
+            }
             AudioTarget::Composition(id) => {
                 let c = composition(project, id)?;
                 plan.walk(
@@ -274,6 +341,12 @@ impl DocumentAudioPlan {
                                 // FX-007: adjustment clips scope a video effect
                                 // pass only and never emit audio.
                                 return Err(unsupported("adjustment clips produce no audio"));
+                            }
+                            SourceRef::Multicam { .. } => {
+                                // NLE-007: multicam clips are video-track
+                                // picture sources (ADR-0127). Angle audio
+                                // enters through ordinary asset clips.
+                                return Err(unsupported("multicam clips produce no audio"));
                             }
                         }
                     }
@@ -464,7 +537,7 @@ impl DocumentAudioPlan {
     /// reports only the summed master levels.
     pub fn mix_metered(
         &self,
-        sources: &dyn AudioSourceReader,
+        sources: &dyn ChannelSourceReader,
         range: TimeRange,
     ) -> Result<(Bus, crate::BusMeters), AudioError> {
         if let Some(plan) = &self.advanced {
@@ -477,48 +550,91 @@ impl DocumentAudioPlan {
         };
         Ok((bus, meters))
     }
+    /// AUDIO-010: identical mixing at an explicit target layout. Sources keep
+    /// their decoded channel mask through conversion; LFE is excluded from
+    /// fold-down unless the target carries it.
+    pub fn mix_channels(
+        &self,
+        sources: &dyn ChannelSourceReader,
+        range: TimeRange,
+        target: ChannelMask,
+    ) -> Result<ChannelBus, AudioError> {
+        Ok(self.mix_channels_metered(sources, range, target)?.0)
+    }
+    /// Metered variant of [`mix_channels`](Self::mix_channels).
+    pub fn mix_channels_metered(
+        &self,
+        sources: &dyn ChannelSourceReader,
+        range: TimeRange,
+        target: ChannelMask,
+    ) -> Result<(ChannelBus, crate::ChannelBusMeters), AudioError> {
+        if let Some(plan) = &self.advanced {
+            return plan.mix_channels_metered(sources, range, target);
+        }
+        let bus = self.mix_channels_impl(sources, range, target)?;
+        let meters = crate::ChannelBusMeters {
+            tracks: vec![],
+            master: crate::channel_meter(target, bus.buffer().samples())?,
+        };
+        Ok((bus, meters))
+    }
     /// Evaluate a bounded Bus without retaining complete source buffers.
     pub fn mix_reader(
         &self,
-        sources: &dyn AudioSourceReader,
+        sources: &dyn ChannelSourceReader,
         range: TimeRange,
     ) -> Result<Bus, AudioError> {
         if let Some(plan) = &self.advanced {
             return plan.mix(sources, range);
         }
+        self.mix_channels_impl(sources, range, ChannelMask::STEREO)?
+            .into_stereo_bus()
+    }
+    fn mix_channels_impl(
+        &self,
+        sources: &dyn ChannelSourceReader,
+        range: TimeRange,
+        target: ChannelMask,
+    ) -> Result<ChannelBus, AudioError> {
         let active = self
             .placements
             .iter()
             .map(|p| sample_range(p.active))
             .collect::<Result<Vec<_>, _>>()?;
-        mix_with_gain_reader(&self.clips(), sources, range, &mut |index, sample| {
-            if !active[index].contains(&sample) {
-                return Gain::new(0.0);
-            }
-            let p = &self.placements[index];
-            let time = Time::new(sample, 48_000)?;
-            let mut gain = 1.0;
-            for g in &p.gains {
-                let value = match g.property.source() {
-                    PropertySource::Constant(value) => value.clone(),
-                    PropertySource::Curve(id) => {
-                        let curve = self
-                            .curves
-                            .get(id)
-                            .ok_or_else(|| invalid("volume curve missing or opaque"))?;
-                        kronello_animation::sample(curve, time.checked_add(g.offset)?)
-                            .map_err(|e| invalid(e.to_string()))?
-                    }
-                    _ => {
-                        return Err(unsupported(
-                            "volume expressions require a later audio contract",
-                        ));
-                    }
-                };
-                gain *= scalar_gain(value)?.linear();
-            }
-            Gain::new(gain)
-        })
+        mix_with_gain_channels(
+            &self.clips(),
+            sources,
+            range,
+            &mut |index, sample| {
+                if !active[index].contains(&sample) {
+                    return Gain::new(0.0);
+                }
+                let p = &self.placements[index];
+                let time = Time::new(sample, 48_000)?;
+                let mut gain = 1.0;
+                for g in &p.gains {
+                    let value = match g.property.source() {
+                        PropertySource::Constant(value) => value.clone(),
+                        PropertySource::Curve(id) => {
+                            let curve = self
+                                .curves
+                                .get(id)
+                                .ok_or_else(|| invalid("volume curve missing or opaque"))?;
+                            kronello_animation::sample(curve, time.checked_add(g.offset)?)
+                                .map_err(|e| invalid(e.to_string()))?
+                        }
+                        _ => {
+                            return Err(unsupported(
+                                "volume expressions require a later audio contract",
+                            ));
+                        }
+                    };
+                    gain *= scalar_gain(value)?.linear();
+                }
+                Gain::new(gain)
+            },
+            target,
+        )
     }
 }
 pub(super) fn scalar_gain(value: Value) -> Result<Gain, AudioError> {

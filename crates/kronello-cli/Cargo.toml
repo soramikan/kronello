@@ -20,12 +20,15 @@ path = "src/main.rs"
 [dependencies]
 tokio = { version = "1", features = ["rt", "signal"] }
 kronello-service = { path = "../kronello-service" }
+kronello-model = { path = "../kronello-model" }
+kronello-media = { path = "../kronello-media" }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 
 [dev-dependencies]
 kronello-audio = { path = "../kronello-audio" }
 kronello-media = { path = "../kronello-media" }
 kronello-service = { path = "../kronello-service", features = ["test-adapter-unavailable", "test-job-control"] }
+kronello-plugin = { path = "../kronello-plugin", features = ["test-support"] }
 kronello-jobs = { path = "../kronello-jobs", features = ["test-support"] }
 kronello-platform = { path = "../kronello-platform" }
 rusqlite = { version = "0.38", features = ["bundled"] }

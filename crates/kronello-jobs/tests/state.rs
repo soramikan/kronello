@@ -326,3 +326,149 @@ fn invalid_configuration_ids_and_newer_database_are_rejected() {
     db.execute_batch("PRAGMA user_version=999;").unwrap();
     assert!(JobStore::open(JobConfig::at(temp.path())).is_err());
 }
+/// FLOW-003 (ADR-0130): keyed submissions replay identical payloads, reject
+/// key reuse with different content, and commit key+job atomically.
+#[test]
+fn keyed_submission_replays_rejects_reuse_and_scopes_projects() {
+    let temp = tempfile::tempdir().unwrap();
+    let store = JobStore::open(JobConfig::at(temp.path())).unwrap();
+    let submission = || Submission {
+        engine_version: "test".into(),
+        project_id: "project-a".into(),
+        revision: "1".into(),
+        snapshot_hash: "snap".into(),
+        output_profile: json!({"kind": "render"}),
+        destination: temp.path().join("out-a"),
+        total_frames: 3,
+    };
+    let KeyedSubmission::Submitted(first) = store
+        .submit_keyed(b"fixed-a", submission(), "batch-1", "payload-a")
+        .unwrap()
+    else {
+        panic!("first keyed submit must create a job")
+    };
+    // Identical payload replays the same job without a second input directory.
+    let KeyedSubmission::Replayed(again) = store
+        .submit_keyed(b"ignored", submission(), "batch-1", "payload-a")
+        .unwrap()
+    else {
+        panic!("identical payload must replay")
+    };
+    assert_eq!(again.id, first.id);
+    assert_eq!(
+        std::fs::read_dir(temp.path().join("jobs")).unwrap().count(),
+        1
+    );
+    assert_eq!(
+        store
+            .replay("project-a", "batch-1", "payload-a")
+            .unwrap()
+            .unwrap()
+            .id,
+        first.id
+    );
+    // A different payload under the same key is a typed conflict everywhere.
+    for error in [
+        store.replay("project-a", "batch-1", "other").unwrap_err(),
+        store
+            .submit_keyed(b"fixed-b", submission(), "batch-1", "other")
+            .unwrap_err(),
+    ] {
+        assert_eq!(error.code(), "IDEMPOTENCY_KEY_REUSED");
+    }
+    // Keys are scoped to the submitting project.
+    let mut other = submission();
+    other.project_id = "project-b".into();
+    assert!(matches!(
+        store
+            .submit_keyed(b"fixed-b", other, "batch-1", "other")
+            .unwrap(),
+        KeyedSubmission::Submitted(_)
+    ));
+    // Length limits: 1..256 UTF-8 bytes.
+    assert_eq!(
+        store
+            .submit_keyed(b"x", submission(), "", "p")
+            .unwrap_err()
+            .code(),
+        "INVALID_REQUEST"
+    );
+    assert_eq!(
+        store
+            .submit_keyed(b"x", submission(), &"k".repeat(257), "p")
+            .unwrap_err()
+            .code(),
+        "INVALID_REQUEST"
+    );
+    assert!(matches!(
+        store
+            .submit_keyed(b"x", submission(), &"k".repeat(256), "p")
+            .unwrap(),
+        KeyedSubmission::Submitted(_)
+    ));
+}
+/// A key whose job row disappeared is dropped and resubmitted cleanly.
+#[test]
+fn keyed_submission_cleans_up_dangling_keys() {
+    let temp = tempfile::tempdir().unwrap();
+    let store = JobStore::open(JobConfig::at(temp.path())).unwrap();
+    let submission = || Submission {
+        engine_version: "test".into(),
+        project_id: "p".into(),
+        revision: "1".into(),
+        snapshot_hash: "s".into(),
+        output_profile: json!({}),
+        destination: temp.path().join("out"),
+        total_frames: 1,
+    };
+    let KeyedSubmission::Submitted(first) =
+        store.submit_keyed(b"in", submission(), "k", "v").unwrap()
+    else {
+        panic!()
+    };
+    let db = rusqlite::Connection::open(temp.path().join("jobs.sqlite3")).unwrap();
+    db.execute("DELETE FROM jobs WHERE id=?1", [&first.id])
+        .unwrap();
+    drop(db);
+    assert!(
+        store.replay("p", "k", "v").unwrap().is_none(),
+        "dangling key reads as absent"
+    );
+    let KeyedSubmission::Submitted(second) =
+        store.submit_keyed(b"in", submission(), "k", "v").unwrap()
+    else {
+        panic!("dangling key must be replaced by a fresh job")
+    };
+    assert_ne!(second.id, first.id);
+}
+/// Schema version 1 databases gain job_keys through the version-2 migration.
+#[test]
+fn version_one_database_migrates_to_keyed_schema() {
+    let temp = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(temp.path().join("jobs")).unwrap();
+    std::fs::create_dir_all(temp.path().join("job-results")).unwrap();
+    let db = rusqlite::Connection::open(temp.path().join("jobs.sqlite3")).unwrap();
+    db.execute_batch(
+        "CREATE TABLE jobs(seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, record TEXT NOT NULL); PRAGMA user_version=1;",
+    )
+    .unwrap();
+    drop(db);
+    let store = JobStore::open(JobConfig::at(temp.path())).unwrap();
+    assert!(matches!(
+        store.submit_keyed(
+            b"in",
+            Submission {
+                engine_version: "t".into(),
+                project_id: "p".into(),
+                revision: "1".into(),
+                snapshot_hash: "s".into(),
+                output_profile: json!({}),
+                destination: temp.path().join("o"),
+                total_frames: 1,
+            },
+            "k",
+            "v",
+        ),
+        Ok(KeyedSubmission::Submitted(_))
+    ));
+}

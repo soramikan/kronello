@@ -455,6 +455,8 @@ impl RasterCacheKey {
                     time,
                     reverse_sampling,
                     extent,
+                    crop,
+                    interpolation,
                     output_to_local,
                     bounds,
                     ..
@@ -470,6 +472,11 @@ impl RasterCacheKey {
                             time,
                             reverse_sampling,
                             extent,
+                            crop,
+                            // TRACK-003: the authored synthesis mode is part of
+                            // the raster identity even though the decoded
+                            // input digest already covers pixel content.
+                            interpolation,
                             output_to_local,
                             bounds,
                             dag.execution_region(),

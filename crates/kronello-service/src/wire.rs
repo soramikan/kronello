@@ -29,6 +29,8 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                     audio: kronello_audio::AudioSourceMode,
                     #[serde(default = "crate::jobs::movie_profile_v1")]
                     profile_version: u32,
+                    #[serde(default)]
+                    audio_layout: Option<kronello_model::ChannelMask>,
                     clips: Vec<crate::JobAudioClip>,
                     background: [f32; 3],
                 }
@@ -36,6 +38,7 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                 Ok(Self::ProResMov {
                     audio: mov.audio,
                     profile_version: mov.profile_version,
+                    audio_layout: mov.audio_layout,
                     clips: mov.clips,
                     background: mov.background,
                 })
@@ -47,6 +50,8 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                     profile_version: u32,
                     #[serde(default)]
                     audio: kronello_audio::AudioSourceMode,
+                    #[serde(default)]
+                    audio_layout: Option<kronello_model::ChannelMask>,
                     clips: Vec<crate::JobAudioClip>,
                     background: [f32; 3],
                 }
@@ -54,6 +59,7 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                 Ok(Self::ProResSdrFromHdrMov {
                     profile_version: mov.profile_version,
                     audio: mov.audio,
+                    audio_layout: mov.audio_layout,
                     clips: mov.clips,
                     background: mov.background,
                 })
@@ -66,6 +72,8 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                     transfer: kronello_render::HdrTransfer,
                     #[serde(default)]
                     audio: kronello_audio::AudioSourceMode,
+                    #[serde(default)]
+                    audio_layout: Option<kronello_model::ChannelMask>,
                     clips: Vec<crate::JobAudioClip>,
                     background: [f32; 3],
                 }
@@ -74,6 +82,7 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                     profile_version: mov.profile_version,
                     transfer: mov.transfer,
                     audio: mov.audio,
+                    audio_layout: mov.audio_layout,
                     clips: mov.clips,
                     background: mov.background,
                 })
@@ -87,6 +96,8 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                     audio: kronello_audio::AudioSourceMode,
                     #[serde(default)]
                     audio_codec: kronello_media::DeliveryAudioCodec,
+                    #[serde(default)]
+                    audio_layout: Option<kronello_model::ChannelMask>,
                     clips: Vec<crate::JobAudioClip>,
                     background: [f32; 3],
                 }
@@ -96,6 +107,7 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                         profile_version: mov.profile_version,
                         audio: mov.audio,
                         audio_codec: mov.audio_codec,
+                        audio_layout: mov.audio_layout,
                         clips: mov.clips,
                         background: mov.background,
                     },
@@ -103,6 +115,7 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                         profile_version: mov.profile_version,
                         audio: mov.audio,
                         audio_codec: mov.audio_codec,
+                        audio_layout: mov.audio_layout,
                         clips: mov.clips,
                         background: mov.background,
                     },
@@ -110,6 +123,7 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                         profile_version: mov.profile_version,
                         audio: mov.audio,
                         audio_codec: mov.audio_codec,
+                        audio_layout: mov.audio_layout,
                         clips: mov.clips,
                         background: mov.background,
                     },
@@ -117,6 +131,7 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                         profile_version: mov.profile_version,
                         audio: mov.audio,
                         audio_codec: mov.audio_codec,
+                        audio_layout: mov.audio_layout,
                         clips: mov.clips,
                         background: mov.background,
                     },
@@ -186,16 +201,24 @@ impl<'de> Deserialize<'de> for Request {
             "svg.import_plan" => payload(&fields).map(Self::SvgImportPlan),
             "audio.analyze" => payload(&fields).map(Self::AudioAnalyze),
             "track.analyze" => payload(&fields).map(Self::TrackAnalyze),
+            "scene.detect" => payload(&fields).map(Self::SceneDetect),
+            "scene.apply" => payload(&fields).map(Self::SceneApply),
             "proxy.generate" => payload(&fields).map(Self::ProxyGenerate),
             "proxy.status" => payload(&fields).map(Self::ProxyStatus),
             "proxy.clear" => payload(&fields).map(Self::ProxyClear),
             "audio.loudness" => payload(&fields).map(Self::AudioLoudness),
             "audio.normalize" => payload(&fields).map(Self::AudioNormalize),
+            "audio.plugin_probe" => payload(&fields).map(Self::AudioPluginProbe),
+            "audio.plugin_process" => payload(&fields).map(Self::AudioPluginProcess),
             "sequence.query" => payload(&fields).map(Self::SequenceQuery),
             "sequence.create" => payload(&fields).map(Self::SequenceCreate),
             "clip.place" => payload(&fields).map(Self::ClipPlace),
             "clip.trim" => payload(&fields).map(Self::ClipTrim),
             "clip.stretch" => payload(&fields).map(Self::ClipStretch),
+            "clip.angle_switch" => payload(&fields).map(Self::ClipAngleSwitch),
+            "multicam.create" => payload(&fields).map(Self::MulticamCreate),
+            "edit.insert" => payload(&fields).map(Self::EditInsert),
+            "edit.overwrite" => payload(&fields).map(Self::EditOverwrite),
             "instance.retime" => payload(&fields).map(Self::InstanceRetime),
             "template_instance.retime" => payload(&fields).map(Self::TemplateInstanceRetime),
             "captions.import_plan" => payload(&fields).map(Self::CaptionsImportPlan),
@@ -215,6 +238,9 @@ impl<'de> Deserialize<'de> for Request {
             "template.define" => payload(&fields).map(Self::TemplateDefine),
             "template.instantiate" => payload(&fields).map(Self::TemplateInstantiate),
             "template.set_input" => payload(&fields).map(Self::TemplateSetInput),
+            "media.query" => payload(&fields).map(Self::MediaQuery),
+            "asset.thumbnail" => payload(&fields).map(Self::AssetThumbnail),
+            "export.batch" => payload(&fields).map(Self::ExportBatch),
             "asset.relink" => payload(&fields).map(Self::AssetRelink),
             "project.collect" => payload(&fields).map(Self::ProjectCollect),
             "project.create_plan" => payload(&fields).map(Self::ProjectCreatePlan),
@@ -271,11 +297,15 @@ impl<'de> Deserialize<'de> for ResultData {
             "render_explanation" => Self::RenderExplanation(take(&mut fields, "value")?),
             "samples" => Self::Samples(take(&mut fields, "value")?),
             "proxies" => Self::Proxies(take(&mut fields, "value")?),
+            "media" => Self::Media(take(&mut fields, "value")?),
+            "thumbnail" => Self::Thumbnail(take(&mut fields, "value")?),
+            "batch" => Self::Batch(take(&mut fields, "value")?),
             "capabilities" => Self::Capabilities(take(&mut fields, "value")?),
             "captions" => Self::Captions(take(&mut fields, "value")?),
             "loudness" => Self::Loudness(take(&mut fields, "value")?),
             "normalize" => Self::Normalize(take(&mut fields, "value")?),
             "scopes" => Self::Scopes(take(&mut fields, "value")?),
+            "plugin_probe" => Self::PluginProbe(take(&mut fields, "value")?),
             _ => return Err(D::Error::custom("unknown result kind")),
         };
         exhausted::<D::Error>(&fields)?;

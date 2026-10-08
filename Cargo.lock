@@ -1004,6 +1004,7 @@ dependencies = [
  "kronello-media",
  "kronello-model",
  "kronello-platform",
+ "kronello-plugin",
  "kronello-render",
  "kronello-service",
  "kronello-store",
@@ -1130,6 +1131,7 @@ dependencies = [
  "kronello-template",
  "kronello-text",
  "kronello-time",
+ "kronello-tracking",
  "pkg-config",
  "png",
  "schemars",
@@ -1165,6 +1167,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "kronello-plugin"
+version = "0.0.0"
+dependencies = [
+ "nix",
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "kronello-render"
 version = "0.0.0"
 dependencies = [
@@ -1172,11 +1187,13 @@ dependencies = [
  "kronello-eval",
  "kronello-gpu",
  "kronello-model",
+ "kronello-scene",
  "kronello-simulation",
  "kronello-template",
  "kronello-testkit",
  "kronello-text",
  "kronello-time",
+ "kronello-tracking",
  "kronello-vector",
  "png",
  "schemars",
@@ -1186,6 +1203,16 @@ dependencies = [
  "tempfile",
  "thiserror",
  "uuid",
+]
+
+[[package]]
+name = "kronello-scene"
+version = "0.0.0"
+dependencies = [
+ "kronello-model",
+ "kronello-time",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -1200,7 +1227,9 @@ dependencies = [
  "kronello-jobs",
  "kronello-media",
  "kronello-model",
+ "kronello-plugin",
  "kronello-render",
+ "kronello-scene",
  "kronello-store",
  "kronello-template",
  "kronello-testkit",

@@ -61,6 +61,46 @@ struct ExportPage: View {
                         if model.selectedProfile.string("execution") == "hardware" { Text("hardware 必須 · device の利用可否は投入時に確認します。software へ自動代替しません。").krText(KRType.caption).foregroundStyle(p.inkMuted) }
                         KRTextField("出力先", value: $model.destination)
                         KRButton("選択…", variant: .secondary) { chooseDestination() }
+                        // FLOW-003 (ADR-0130): shared document presets.
+                        p.line.frame(height: 1)
+                        Text("書き出しプリセット").krText(KRType.label)
+                        Text("現在の設定を作品に保存すると、GUI / CLI / MCP と watch フォルダから同じ設定で書き出せます。")
+                            .krText(KRType.caption).foregroundStyle(p.inkMuted)
+                        HStack(spacing: KRSpace.space2) {
+                            KRTextField("プリセット名", value: $model.presetName)
+                            KRButton("保存", variant: .secondary) {
+                                Task { await model.savePreset(name: model.presetName) }
+                            }.disabled(model.presetName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.errors.contains { $0.code != "OUTPUT_EXISTS" })
+                        }
+                        ForEach(model.presets, id: \.selfID) { preset in
+                            let id = preset.string("id")
+                            HStack(spacing: KRSpace.space2) {
+                                KRCheckbox("", isOn: Binding(
+                                    get: { model.presetSelection.contains(id) },
+                                    set: { on in if on { model.presetSelection.insert(id) } else { model.presetSelection.remove(id) } }))
+                                Button { model.loadPreset(id) } label: {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(preset.string("name")).krText(KRType.body).foregroundStyle(p.ink).lineLimit(1)
+                                        Text(preset.object("output").string("format")).krText(KRType.caption).foregroundStyle(p.inkMuted)
+                                    }.frame(maxWidth: .infinity, alignment: .leading)
+                                    .contentShape(Rectangle())
+                                }.buttonStyle(.plain)
+                                KRButton(icon: .trash2, accessibilityLabel: "プリセットを削除") {
+                                    Task { await model.deletePreset(id) }
+                                }
+                            }
+                        }
+                        if !model.presets.isEmpty {
+                            KRButton("選択したプリセットで一括書き出し…", variant: .secondary) { chooseBatchDirectory() }
+                                .disabled(model.presetSelection.isEmpty || model.submitting)
+                            Text("出力先ディレクトリを選ぶと、プリセット名と形式から各出力名を決めて共有バッチキューへ投入します。")
+                                .krText(KRType.caption).foregroundStyle(p.inkMuted)
+                        }
+                        ForEach(Array(model.batchResults.enumerated()), id: \.offset) { _, item in
+                            if item.string("outcome") == "failed" {
+                                KRErrorLine(.init(item.object("error").string("code"), item.object("error").string("message")))
+                            }
+                        }
                     }.padding(KRSpace.space3)
                 }
                 Spacer(minLength: 0)
@@ -74,9 +114,12 @@ struct ExportPage: View {
         KRPanel("プレビュー") {
             VStack(spacing: KRSpace.space2) {
                 if let error = model.previewFailure {
-                    KRViewerError(.init(error.code,error.message), copy: { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(error.copyText,forType:.string) }, retry: { model.previewFailure = nil }).padding(KRSpace.space3)
+                    VStack(spacing: KRSpace.space3) {
+                        KRViewerError(.init(error.code,error.message), copy: { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(error.copyText,forType:.string) }, retry: { model.previewFailure = nil }).padding(KRSpace.space3)
+                        if model.offersCPUReference { KRButton("CPU 参照で表示", variant: .secondary) { model.chooseCPUReference() } }
+                    }
                 } else { KRViewerFrame(aspectRatio: max(1,model.extent[0]) / max(1,model.extent[1])) {
-                    ExportMetalPreview(editor: editor, input: model.input, time: model.time(previewFrame), onFailure: { model.previewFailure = $0 })
+                    ExportMetalPreview(editor: editor, input: model.input, time: model.time(previewFrame), cpuReference: model.cpuReference, onFailure: { model.previewFailure = $0 })
                 }.padding(KRSpace.space3) }
                 HStack {
                     Text(KRTimecode.format(frames: model.firstFrame, fps: model.nominalFPS)).krText(KRType.ruler)
@@ -156,6 +199,15 @@ struct ExportPage: View {
         let ext = model.format == "caption_sidecar" ? model.captionFormat : model.selectedProfile.string("container_extension")
         panel.nameFieldStringValue = "export" + (ext.isEmpty ? "" : "." + ext)
         if panel.runModal() == .OK, let url = panel.url { model.destination = url.path }
+    }
+    /// Batch destinations derive from one directory by the shared naming rule
+    /// (`preset_output_extension` + watch's stem sanitizer) — never per item.
+    func chooseBatchDirectory() {
+        let panel = NSOpenPanel(); panel.title = "バッチ書き出し先ディレクトリを選択"
+        panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.allowsMultipleSelection = false
+        if panel.runModal() == .OK, let url = panel.url {
+            Task { await model.submitPresetBatch(directory: url.path) }
+        }
     }
 }
 private extension Dictionary where Key == String, Value == Any { var formatID: String { string("format") } }

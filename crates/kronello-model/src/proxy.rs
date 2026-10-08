@@ -120,6 +120,15 @@ impl crate::Project {
                 }
             }
         }
+        // NLE-007: multicam angles reference document assets directly.
+        if self
+            .multicams
+            .iter()
+            .flat_map(|group| &group.angles)
+            .any(|angle| angle.asset == id)
+        {
+            return true;
+        }
         for object in &self.template_instances {
             if let crate::DocumentObject::Known(instance) = object
                 && instance.inputs.values().any(value_ref)

@@ -101,7 +101,7 @@ heartbeat thread の join 中も watchdog は有効。全 process の停止中�
 
 Windows publication は同じ DB fence の中で `MoveFileExW(..., 0)` を使い、既存 file / 空 directory を `OUTPUT_EXISTS` として拒否する。copy/delete は許可せず、別 volume は `OUTPUT_CROSS_VOLUME`（Unix の EXDEV も同じ code）。同一 volume の rename と DB commit の間の電源断の窓は維持する。
 
-画像連番は destination volume の temporary directory に全 artifact を出力し、manifest・metadata・byte 長・hash・snapshot identity を再読検証する。既存 pro_res_mov は ProRes + stereo 48 kHz PCM24、明示 background と選択 mode の音声を同じ AvExportSnapshot から出力し、stream / PTS / duration / snapshot metadata を probe する。frame 境界と確定前に cancel を確認する。DB transaction 内で lease / cancel を再確認し、atomic NOREPLACE rename で全 directory または movie file を一度に確定する。既存成果物は空 directory も上書きしない。
+画像連番は destination volume の temporary directory に全 artifact を出力し、manifest・metadata・byte 長・hash・snapshot identity を再読検証する。既存 pro_res_mov は ProRes + stereo 48 kHz PCM24、明示 background と選択 mode の音声を同じ AvExportSnapshot から出力し、stream / PTS / duration / snapshot metadata を probe する。AUDIO-010 の `audio_layout` 宣言時は宣言 `channel_mask` の channel 数で mux し、`verify_movie_layout` で codec / channel 数 / mask / PTS を照合する。frame 境界と確定前に cancel を確認する。DB transaction 内で lease / cancel を再確認し、atomic NOREPLACE rename で全 directory または movie file を一度に確定する。既存成果物は空 directory も上書きしない。
 
 movie の bounded streaming は ADR-0079、HDR profile は ADR-0086 に従う。SIGKILL は destination volume に temporary directory を残しうるが、resume は job / input / snapshot / attempt が一致する owner marker だけを回収する。公開前に全 artifact の streaming hash と結果を state root の `job-results/{job}-{attempt}.json` に fsync し、その byte hash を短い DB transaction に anchor してから NOREPLACE rename する。hash・receipt 書き込み・owned stage 回収は writer transaction の外で行う。rename 後・DB commit 前の中断では、明示 resume が receipt と全 artifact の hash・metadata を照合し、一致した場合だけ新 worker なしで succeeded に補正する。壊れた output や別 job の成果物は変更しない。巨大な result は receipt から DB connection / process gate を閉じた後に読み込み、公開 JobRecord に復元する。receipt は input / log の prune 後も保持する。
 
@@ -166,3 +166,37 @@ source chunk、audio block、video frameと最終mux前にcancelを確認する�
 強制終了後の回収と resume は ADR-0087 の owner marker / anchored receipt 検証に従う。
 `AvExportReport.streaming` の byte counters とホスト検証範囲は
 [ADR-0079](../adr/0079-bounded-streaming-movie-export.md)、[RENDER-003](../testing/render-003.md) を参照する。
+
+## FLOW-003 の keyed submission とバッチ書き出し
+
+[ADR-0130](../adr/0130-export-presets-batch-and-watch.md) で JobStore を schema version 2（`job_keys`
+table）へ拡張し、`export.batch` の各 item に任意の idempotency key を持たせた。
+同じ key の再提出は既存 JobRecord を返して新 worker を起こさず、replay の確認は destination 存在
+チェックより先に行う。key 未指定の batch item は正規化した submission JSON から `auto:<sha256>`
+を導出する。`export.batch` は順序付き item をまとめて受け、`failure_policy` の `stop` / `continue`
+で deterministic に進行する。検証は [FLOW-003](../testing/flow-003.md) を参照。
+
+## AUDIO-011 のプラグイン固定入力ジョブ
+
+`audio.plugin_process` は [ADR-0131](../adr/0131-audio-plugin-hosting-trust-boundary.md) の
+固定入力ジョブを投入する。`FixedInput` は render（snapshot + request）/ proxy /
+plugin のいずれか 1 つの payload を持ち、plugin ジョブは render snapshot を持たない。
+
+- `PluginJobInput` は canonical project path・submit 時 document hash
+  （record の `snapshot_hash`）・locked Asset・stream_index・pin 済み `PluginSpec`・
+  destination・`deadline_ms` を持つ。plugin bundle の byte や render state は含めない。
+  record の `output_profile` は input の canonical JSON で、job kind 照合は
+  `output_profile["plugin"]` の存在で判定する。
+- submit は spec 検証・`verify_spec_pin`・asset kind / audio stream・`.mov`
+  destination・revision fence を確認し、進捗分母に locked stream の推定
+  48 kHz frame 数を記録する。worker は resume を含む全 attempt で
+  `validate_plugin_job`（document hash・destination・output_profile の厳密一致、
+  spec + pin + asset locator の再検証）を通してから decode に入る。
+- worker は locked stream を decode し、little-endian f32 interleaved の stage file
+  を書き、`plugin-helper` へ process request を 1 回投げる。出力 frame 数・
+  finite 検査・PCM24 encode・probe 後に既存の receipt / no-clobber
+  publication fence で確定する。plugin 由来の全失敗は型付きエラーで
+  `failed` に終わり、確定済み成果物を壊さない。
+- helper プロセスだけが plugin ABI を `dlopen` する。service・worker 自身・
+  render 経路は bundle をロードしない。helper 解決・timeout・protocol の
+  契約は [audio-000](audio-000.md#audio-011-vst3--au-プラグインホスティングの信頼境界) を参照。
