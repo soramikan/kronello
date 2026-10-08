@@ -79,6 +79,55 @@ fn encode_proxy_produces_verified_half_scale_prores() {
 }
 
 #[test]
+fn encode_proxy_preserves_source_frame_spans() {
+    // Real containers carry a stream time base finer than the frame rate
+    // (e.g. 512 ticks per 24fps frame at 1/12288). Packet spans must follow
+    // the demuxed frame durations so the published duration matches the
+    // source instead of collapsing every packet to a single tick.
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("source.mov");
+    let runtime = MediaRuntime::load().unwrap();
+    runtime
+        .encode_video_stream(
+            &EncodeRequest {
+                output: source.clone(),
+                codec: EncodeCodec::ProRes,
+                width: 32,
+                height: 24,
+                time_base: r(1, 12288),
+            },
+            4,
+            &mut |index| {
+                Ok(EncodeFrame {
+                    pts: r(index as i64 * 512, 12288),
+                    rgba: vec![255u8; 32 * 24 * 4],
+                })
+            },
+        )
+        .unwrap();
+    let probed = runtime.probe(&source).unwrap();
+    let stream = probed
+        .streams
+        .iter()
+        .find(|s| s.kind == StreamKind::Video)
+        .unwrap();
+    assert_eq!(stream.duration, Some(r(1, 6)));
+    let output = dir.path().join("proxy.mov");
+    let result = runtime
+        .encode_proxy(&source, 0, 16, 12, &output, &mut |_| Ok(()))
+        .unwrap();
+    assert_eq!(result.frames, 4);
+    assert_eq!(result.time_base, r(1, 12288));
+    assert_eq!(result.duration, Some(r(1, 6)));
+    let mut decoder = runtime.open_video_stream(&output, 0).unwrap();
+    let mut pts = Vec::new();
+    while let Some(frame) = decoder.next_rgba().unwrap() {
+        pts.push(frame.pts);
+    }
+    assert_eq!(pts, (0..4).map(|i| r(i * 512, 12288)).collect::<Vec<_>>());
+}
+
+#[test]
 fn export_snapshot_rejects_preview_proxy_mode() {
     // A Prefer-mode snapshot can never enter the export path (ADR-0119).
     let composition = kronello_model::CompositionId::new();

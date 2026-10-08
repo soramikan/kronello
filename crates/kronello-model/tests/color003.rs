@@ -107,8 +107,10 @@ fn color003_lut_descriptor_types_and_versions_are_pinned() {
         .lookup(&SchemaKey::new("kronello.effect.intensity").unwrap())
         .unwrap();
     assert_eq!(intensity.definition().default, scalar(1.0));
-    // The descriptor range also rejects out-of-contract intensity constants.
-    assert!(intensity.validate_value(&scalar(1.5)).is_err());
+    // `intensity` is a shared nonnegative-scalar descriptor (glow accepts
+    // values above 1); the LUT-specific 0..=1 blend bound is enforced by
+    // ColorLut resolution in the test above.
+    assert!(intensity.validate_value(&scalar(-0.5)).is_err());
     assert!(intensity.validate_value(&scalar(0.5)).is_ok());
     let (d, properties, _) = definition(
         &r,

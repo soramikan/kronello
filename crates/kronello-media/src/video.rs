@@ -157,6 +157,8 @@ impl MediaRuntime {
             hdr,
         )?;
         let mut previous = None;
+        let mut pending: Option<(EncodeFrame, i64)> = None;
+        let mut last_span = 1i64;
         for index in 0..count {
             let frame = produce(index)?;
             let tick = frame.pts.checked_div(request.time_base)?;
@@ -178,7 +180,17 @@ impl MediaRuntime {
                 ));
             }
             previous = Some(frame.pts);
-            encoder.frame(&frame.rgba, tick.numerator())?;
+            let tick = tick.numerator();
+            // Packet spans are the distance to the next submitted PTS so
+            // non-unit tick spacing survives into the container duration;
+            // the final frame inherits the last observed span.
+            if let Some((frame, pts)) = pending.replace((frame, tick)) {
+                last_span = tick - pts;
+                encoder.frame(&frame.rgba, pts, last_span)?;
+            }
+        }
+        if let Some((frame, pts)) = pending {
+            encoder.frame(&frame.rgba, pts, last_span)?;
         }
         encoder.finish()?;
         let pixel_format = encoder.pixel_format.clone();

@@ -88,9 +88,25 @@ impl MediaRuntime {
                         "proxy source must yield strictly increasing integral ticks".into(),
                     ));
                 }
+                // Packet spans come from the demuxed frame duration; sources
+                // that publish no span on a frame (common on the tail) inherit
+                // the spacing established by the preceding frame.
+                let span = frame.duration.checked_div(time_base)?;
+                let duration = if span.denominator() == 1 && span.numerator() > 0 {
+                    span.numerator()
+                } else {
+                    match previous {
+                        Some(p) => tick.numerator() - p,
+                        None => {
+                            return Err(MediaError::InvalidInput(
+                                "proxy source must yield positive integral frame durations".into(),
+                            ));
+                        }
+                    }
+                };
                 previous = Some(tick.numerator());
                 let rgba = scale_rgba8(&frame.rgba, frame.width, frame.height, width, height)?;
-                encoder.frame(&rgba, tick.numerator())?;
+                encoder.frame(&rgba, tick.numerator(), duration)?;
                 frames = frames
                     .checked_add(1)
                     .ok_or_else(|| MediaError::InvalidInput("proxy frame overflow".into()))?;

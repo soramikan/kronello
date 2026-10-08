@@ -16,6 +16,7 @@ use kronello_model::{
 use kronello_store::Event;
 use kronello_time::{Time, TimeRange};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::{EditApplyRequest, EditCommand, ServiceError, TimelineCommand, edit};
@@ -366,8 +367,23 @@ impl crate::Service<'_> {
             ));
         }
         // The appended gain effect multiplies the measured chain output by
-        // exactly the gain needed to reach the target.
-        let property_id = PropertyId::new();
+        // exactly the gain needed to reach the target. Its identity is
+        // derived from the clip and current property count so CLI and MCP
+        // runs of the same command stream mint identical documents; the
+        // derivation never uses array positions or display names.
+        let property_id = PropertyId::from_uuid({
+            let mut digest = Sha256::new();
+            digest.update(b"kronello.audio-normalize-gain-v1");
+            digest.update(clip.id.as_uuid().as_bytes());
+            digest.update(clip.properties.len().to_be_bytes());
+            let hash = digest.finalize();
+            let mut bytes = [0u8; 16];
+            bytes.copy_from_slice(&hash[..16]);
+            // UUID v8, RFC variant: application-defined deterministic identity.
+            bytes[6] = (bytes[6] & 0x0f) | 0x80;
+            bytes[8] = (bytes[8] & 0x3f) | 0x80;
+            Uuid::from_bytes(bytes)
+        });
         let property = Property::new(
             property_id,
             DescriptorRef {

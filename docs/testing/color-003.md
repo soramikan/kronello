@@ -8,7 +8,7 @@
 
 - `.cube` パーサは `kronello_model::lut`（`crates/kronello-model/src/lut.rs`）に置く純粋バイトパーサ。`LUT_3D_SIZE 2..=65`、`TITLE`、コメント、`DOMAIN_MIN` / `DOMAIN_MAX`、RGB 行を受理する。document/render 側の上限 `N <= 33` は `validate_document_size` で別段検査する。`LUT_1D_SIZE` のみの文書は `UNSUPPORTED_FEATURE`、不正文書は `INVALID_LUT` の型付きエラー。
 - LUT は外部 `Asset`（`AssetKind::Data`）として保存し、格子データを作品文書に展開しない。`lut.import` はファイルバイトを読み、sha256 `content_hash` を自前で計算して記録する（要求側の hash は信用しない）。locator はプロジェクト直下なら相対、それ以外は絶対パス。
-- エフェクトパラメータは `lut`（`ValueType::AssetRef`、descriptor id `0xf0000000-0010-4200-8000-000000000001`）と `intensity`（scalar `0..=1`、同 `...0002`）。`EffectDefinition::validate` / `resolve` が所有・型・値域を検査する。
+- エフェクトパラメータは `lut`（`ValueType::AssetRef`、descriptor id `0xf0000000-0010-4200-8000-000000000001`）と `intensity`（非負 scalar、Glow と共有の `kronello.effect.intensity` / `0xf0000000-0010-4300-8000-00000000000a`）。`EffectDefinition::validate` / `resolve` が所有・型・値域を検査し、LUT 固有の `0..=1` ブレンド域は `resolve` が検査する（Glow の 1 超 intensity と共有キーでも混同されない、`vignette`/`sharpen` の共有 `amount` と同じ規約）。
 - 画素演算は作業空間の unpremultiplied RGB をドメイン正規化して四面体補間し、範囲外は端点色へ clamp、alpha は不変、`straight + (mapped - straight) * intensity` で原画像とブレンドする。CPU oracle は `kronello_gpu::color`、WGSL は `effect.wgsl` の if-chain 実装（switch / 動的 index なし、FXC 互換）で同じ式を共有する。LUT バイトは `RenderInput.luts`（hash → パス）で渡し、sha256 を検証してから lattice を結び付ける。
 - 参照先が未指定・欠落・種別違い・格子不正なら `LUT_INPUT_MISSING` / `INVALID_LUT` 等の型付きエラーでレンダーを止める。エフェクトは著者順に pointwise 適用される。
 

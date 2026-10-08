@@ -237,7 +237,27 @@ impl crate::Service<'_> {
         };
         let (proxy_width, proxy_height) = proxy_dimensions(width, height, scale)
             .ok_or_else(|| ServiceError::invalid("proxy dimensions out of range"))?;
-        let proxy_asset_id = AssetId::new();
+        // The proxy artifact is a deterministic function of the locked source
+        // stream, scale and submission revision; deriving its identity (like
+        // split/freeze owned IDs) keeps CLI and MCP submissions minting the
+        // same asset, destination name and link.
+        let proxy_asset_id = AssetId::from_uuid({
+            let mut digest = Sha256::new();
+            digest.update(b"kronello.proxy-asset-v1");
+            digest.update(asset_id.as_uuid().as_bytes());
+            digest.update(stream_index.to_be_bytes());
+            digest.update(scale.to_bits().to_be_bytes());
+            digest.update(proxy_width.to_be_bytes());
+            digest.update(proxy_height.to_be_bytes());
+            digest.update(revision.to_be_bytes());
+            let hash = digest.finalize();
+            let mut bytes = [0u8; 16];
+            bytes.copy_from_slice(&hash[..16]);
+            // UUID v8, RFC variant: application-defined deterministic identity.
+            bytes[6] = (bytes[6] & 0x0f) | 0x80;
+            bytes[8] = (bytes[8] & 0x3f) | 0x80;
+            uuid::Uuid::from_bytes(bytes)
+        });
         let destination = proxy_destination(project, proxy_asset_id)?;
         if destination.exists() {
             return Err(ServiceError::new(
