@@ -449,7 +449,7 @@ impl GpuContext {
         self.device
             .poll(wgpu::PollType::Wait {
                 submission_index: None,
-                timeout: Some(Duration::from_secs(300)),
+                timeout: Some(Duration::from_secs(600)),
             })
             .map_err(|e| GpuError::Readback(e.to_string()))?;
         Ok(())
