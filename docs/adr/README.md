@@ -149,6 +149,12 @@
 | [0130](0130-export-presets-batch-and-watch.md) | 書き出しプリセット・バッチ・ウォッチフォルダ | 採用（実装受け入れ中） | 2026-10-08 |
 | [0131](0131-audio-plugin-hosting-trust-boundary.md) | VST3/AU ホスティングと信頼境界 | 採用（実装受け入れ中） | 2026-10-08 |
 | [0132](0132-sequential-undo-conflict-scope.md) | Undo イベントの競合範囲を打ち消し対象に限定する | 採用 | 2026-10-08 |
+| [0133](0133-delivery-chapters-multi-output-codec-profiles.md) | 配信拡張: チャプター・マルチ出力・コーデック profile | 採用 | 2026-10-08 |
+| [0134](0134-external-monitor-output.md) | 外部モニタ出力とベンダー SDK 境界 | 採用 | 2026-10-08 |
+| [0135](0135-capture-ingest.md) | キャプチャ/インジェスト経路 | 採用 | 2026-10-08 |
+| [0136](0136-camera-raw-decoding.md) | カメラ RAW デコードとベンダー SDK 境界 | 採用 | 2026-10-08 |
+| [0137](0137-remaining-standard-effects.md) | 残エフェクト群の棚卸しと追加方針 | 採用 | 2026-10-08 |
+| [0138](0138-workspace-completion.md) | ワークスペース完成の範囲 | 採用 | 2026-10-08 |
 
 ## 追加と変更の規則
 
