@@ -199,6 +199,22 @@ pub struct Submission {
     pub destination: PathBuf,
     pub total_frames: u64,
 }
+/// Outcome of [`JobStore::submit_keyed`] (FLOW-003, ADR-0130).
+#[derive(Debug)]
+pub enum KeyedSubmission {
+    /// A fresh job row and its key committed atomically.
+    Submitted(JobRecord),
+    /// The key was already recorded with the identical payload; the recorded
+    /// job (any status) is returned without creating a duplicate.
+    Replayed(JobRecord),
+}
+impl KeyedSubmission {
+    pub fn record(&self) -> &JobRecord {
+        match self {
+            Self::Submitted(record) | Self::Replayed(record) => record,
+        }
+    }
+}
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PruneResult {
@@ -272,7 +288,9 @@ impl JobStore {
         let db = store.connect()?;
         let version: u32 = db.query_row("PRAGMA user_version", [], |r| r.get(0))?;
         if version == 0 {
-            db.execute_batch("PRAGMA journal_mode=WAL; BEGIN IMMEDIATE; CREATE TABLE IF NOT EXISTS jobs(seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, record TEXT NOT NULL); PRAGMA user_version=1; COMMIT;")?;
+            db.execute_batch("PRAGMA journal_mode=WAL; BEGIN IMMEDIATE; CREATE TABLE IF NOT EXISTS jobs(seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, record TEXT NOT NULL); CREATE TABLE IF NOT EXISTS job_keys(project_id TEXT NOT NULL, key TEXT NOT NULL, payload TEXT NOT NULL, job_id TEXT NOT NULL, PRIMARY KEY(project_id,key)); PRAGMA user_version=2; COMMIT;")?;
+        } else if version == 1 {
+            db.execute_batch("BEGIN IMMEDIATE; CREATE TABLE IF NOT EXISTS job_keys(project_id TEXT NOT NULL, key TEXT NOT NULL, payload TEXT NOT NULL, job_id TEXT NOT NULL, PRIMARY KEY(project_id,key)); PRAGMA user_version=2; COMMIT;")?;
         }
         Ok(store)
     }
@@ -288,7 +306,7 @@ impl JobStore {
         db.busy_timeout(timeout)?;
         db.execute_batch("PRAGMA synchronous=FULL;")?;
         let version: u32 = db.query_row("PRAGMA user_version", [], |r| r.get(0))?;
-        if version > 1 {
+        if version > 2 {
             return Err(JobError::new("UNSUPPORTED_SCHEMA_VERSION", "job database"));
         }
         Ok(JobConnection {
@@ -307,43 +325,50 @@ impl JobStore {
         }
         Ok(self.config.state_root.join("jobs").join(id))
     }
+    fn write_input(directory: &Path, input: &[u8]) -> Result<(), JobError> {
+        use std::io::Write;
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(directory.join("input.json"))?;
+        file.write_all(input)?;
+        file.sync_all()?;
+        Ok(())
+    }
+    fn new_record(id: String, submission: Submission, input: &[u8]) -> JobRecord {
+        let now = now_ms();
+        JobRecord {
+            id,
+            submitted_at_ms: now,
+            engine_version: submission.engine_version,
+            project_id: submission.project_id,
+            revision: submission.revision,
+            snapshot_hash: submission.snapshot_hash,
+            input_hash: hash(input),
+            output_profile: submission.output_profile,
+            destination: submission.destination,
+            status: JobStatus::Queued,
+            completed_frames: 0,
+            total_frames: submission.total_frames,
+            heartbeat_at_ms: now,
+            worker_pid: None,
+            cancel_requested: false,
+            finished_at_ms: None,
+            result: None,
+            error: None,
+            directory_pruned: false,
+            attempt: 0,
+            publication_hash: None,
+        }
+    }
     pub fn submit(&self, input: &[u8], submission: Submission) -> Result<JobRecord, JobError> {
         self.prune()?;
         let id = uuid::Uuid::new_v4().to_string();
         let directory = self.directory(&id)?;
         std::fs::create_dir(&directory)?;
         let result = (|| {
-            use std::io::Write;
-            let mut file = std::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(directory.join("input.json"))?;
-            file.write_all(input)?;
-            file.sync_all()?;
-            let now = now_ms();
-            let r = JobRecord {
-                id,
-                submitted_at_ms: now,
-                engine_version: submission.engine_version,
-                project_id: submission.project_id,
-                revision: submission.revision,
-                snapshot_hash: submission.snapshot_hash,
-                input_hash: hash(input),
-                output_profile: submission.output_profile,
-                destination: submission.destination,
-                status: JobStatus::Queued,
-                completed_frames: 0,
-                total_frames: submission.total_frames,
-                heartbeat_at_ms: now,
-                worker_pid: None,
-                cancel_requested: false,
-                finished_at_ms: None,
-                result: None,
-                error: None,
-                directory_pruned: false,
-                attempt: 0,
-                publication_hash: None,
-            };
+            Self::write_input(&directory, input)?;
+            let r = Self::new_record(id, submission, input);
             self.connect()?.execute(
                 "INSERT INTO jobs(id,record) VALUES(?1,?2)",
                 params![r.id, serde_json::to_string(&r)?],
@@ -354,6 +379,131 @@ impl JobStore {
             let _ = std::fs::remove_dir_all(directory);
         }
         result
+    }
+    /// Look up a recorded idempotency key. `Ok(Some)` returns the recorded
+    /// payload and job id; a payload mismatch is a typed
+    /// `IDEMPOTENCY_KEY_REUSED` error, matching project-store policy.
+    fn keyed_record(
+        db: &Connection,
+        project_id: &str,
+        key: &str,
+    ) -> Result<Option<(String, String)>, JobError> {
+        db.query_row(
+            "SELECT payload,job_id FROM job_keys WHERE project_id=?1 AND key=?2",
+            params![project_id, key],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .optional()
+        .map_err(Into::into)
+    }
+    /// Read-only keyed replay. Callers consult this before staging input so a
+    /// true replay skips validations that would fail on the job's own output
+    /// (e.g. destination already published). [`JobStore::submit_keyed`] repeats
+    /// the check atomically inside its writer transaction.
+    pub fn replay(
+        &self,
+        project_id: &str,
+        key: &str,
+        payload: &str,
+    ) -> Result<Option<JobRecord>, JobError> {
+        let db = self.connect()?;
+        let Some((stored, job_id)) = Self::keyed_record(&db, project_id, key)? else {
+            return Ok(None);
+        };
+        if stored != payload {
+            return Err(JobError::new(
+                "IDEMPOTENCY_KEY_REUSED",
+                "idempotency key reused with a different payload",
+            ));
+        }
+        match read(&db, &job_id) {
+            Ok(record) => Ok(Some(record)),
+            // A dangling key (job row removed) is treated as absent; the
+            // writer transaction in submit_keyed owns the cleanup.
+            Err(_) => Ok(None),
+        }
+    }
+    /// Idempotent job submission (FLOW-003, ADR-0130). `key` is scoped to the
+    /// submission's project; a previously recorded key with an identical
+    /// payload replays its job instead of creating a duplicate, and a key
+    /// recorded with different content is rejected. The key and the job row
+    /// commit in one transaction, so a recorded key always names a job.
+    pub fn submit_keyed(
+        &self,
+        input: &[u8],
+        submission: Submission,
+        key: &str,
+        payload: &str,
+    ) -> Result<KeyedSubmission, JobError> {
+        if key.is_empty() || key.len() > 256 {
+            return Err(JobError::new(
+                "INVALID_REQUEST",
+                "idempotency_key must contain 1..256 UTF-8 bytes",
+            ));
+        }
+        self.prune()?;
+        // Optimistic replay on a read connection: a matching key+payload with a
+        // live job returns immediately without staging input bytes. The
+        // authoritative re-check below runs inside the writer transaction.
+        {
+            let db = self.connect()?;
+            if let Some((stored, job_id)) = Self::keyed_record(&db, &submission.project_id, key)? {
+                if stored != payload {
+                    return Err(JobError::new(
+                        "IDEMPOTENCY_KEY_REUSED",
+                        "idempotency key reused with a different payload",
+                    ));
+                }
+                if let Ok(record) = read(&db, &job_id) {
+                    return Ok(KeyedSubmission::Replayed(record));
+                }
+            }
+        }
+        let id = uuid::Uuid::new_v4().to_string();
+        let directory = self.directory(&id)?;
+        std::fs::create_dir(&directory)?;
+        let result = (|| {
+            Self::write_input(&directory, input)?;
+            let mut db = self.connect()?;
+            let tx = db.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            if let Some((stored, job_id)) = Self::keyed_record(&tx, &submission.project_id, key)? {
+                if stored != payload {
+                    return Err(JobError::new(
+                        "IDEMPOTENCY_KEY_REUSED",
+                        "idempotency key reused with a different payload",
+                    ));
+                }
+                if let Ok(record) = read(&tx, &job_id) {
+                    tx.rollback()?;
+                    return Ok(KeyedSubmission::Replayed(record));
+                }
+                // The keyed job was removed entirely (never published or the DB
+                // was rebuilt): drop the dangling key and resubmit.
+                tx.execute(
+                    "DELETE FROM job_keys WHERE project_id=?1 AND key=?2",
+                    params![submission.project_id, key],
+                )?;
+            }
+            let r = Self::new_record(id, submission, input);
+            tx.execute(
+                "INSERT INTO jobs(id,record) VALUES(?1,?2)",
+                params![r.id, serde_json::to_string(&r)?],
+            )?;
+            tx.execute(
+                "INSERT INTO job_keys(project_id,key,payload,job_id) VALUES(?1,?2,?3,?4)",
+                params![r.project_id, key, payload, r.id],
+            )?;
+            tx.commit()?;
+            Ok(KeyedSubmission::Submitted(r))
+        })();
+        match result {
+            Ok(submitted @ KeyedSubmission::Submitted(_)) => Ok(submitted),
+            outcome => {
+                // Replays and failures never keep the staged input directory.
+                let _ = std::fs::remove_dir_all(directory);
+                outcome
+            }
+        }
     }
     pub fn input(&self, r: &JobRecord) -> Result<Vec<u8>, JobError> {
         let bytes = std::fs::read(self.directory(&r.id)?.join("input.json"))?;

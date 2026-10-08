@@ -640,6 +640,12 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
         json!({"operation":"capabilities.get"}),
         json!({"operation":"asset.relink", "project":path, "base_revision":"1", "asset":uuid, "search_directory":"assets"}),
         json!({"operation":"project.collect", "project":path, "output_directory":"collected"}),
+        json!({"operation":"media.query", "project":path}),
+        json!({"operation":"asset.thumbnail", "project":path, "asset":uuid, "max_size":64}),
+        json!({"operation":"export.batch", "items":[{"idempotency_key":"batch",
+            "submission":{"render":{"input":input,"range":{"start":{"num":"0","den":"1"},"end":time},
+            "frame_rate":{"num":"24","den":"1"},"output_directory":"frames"},
+            "output":{"format":"image_sequence"}}}]}),
         json!({"operation":"template.define", "project":path, "base_revision":"1", "session_id":uuid, "idempotency_key":"define", "definition":definition}),
         json!({"operation":"template.instantiate", "project":path, "base_revision":"1", "session_id":uuid, "idempotency_key":"place", "composition":composition, "node":uuid, "index":0, "instance":instance}),
         json!({"operation":"template.set_input", "project":path, "base_revision":"1", "session_id":uuid, "idempotency_key":"input", "instance":uuid, "name":"headline", "value":{"kind":"string", "value":"text"}}),
@@ -1316,6 +1322,24 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
         "session_id":session,"idempotency_key":"lut","path":cube,"asset":Uuid::new_v4()}),
     );
     execute(json!({"operation":"inspect.scopes","input":input,"time":{"num":"0","den":"1"}}));
+    // FLOW-002/003: media query, a fixed-time video thumbnail and a keyed
+    // batch submission through the shared registry surface.
+    let media = execute(json!({"operation":"media.query","project":video_path}));
+    assert_eq!(media["assets"][0]["asset"], json!(video_id));
+    let thumb = execute(
+        json!({"operation":"asset.thumbnail","project":video_path,"asset":video_id,"max_size":16}),
+    );
+    assert_eq!(thumb["width"], 16);
+    assert_eq!(thumb["rgba"].as_array().unwrap().len(), 16 * 16 * 4);
+    let batch = execute(
+        json!({"operation":"export.batch","items":[{"idempotency_key":"contract-batch",
+            "submission":{"render":{"input":input,
+            "range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"24"}},
+            "frame_rate":{"num":"24","den":"1"},
+            "output_directory":dir.path().join("batch-frames")},
+            "output":{"format":"image_sequence"}}}]}),
+    );
+    assert_eq!(batch["items"][0]["outcome"], "submitted");
     assert_eq!(
         checked,
         command_registry().into_iter().map(|c| c.name).collect()
@@ -1372,6 +1396,23 @@ fn all_filesystem_boundaries_reject_uris_before_access() {
         );
         invalid_locator(
             json!({"operation":"project.collect", "project":"missing.kronello", "output_directory":uri}),
+        );
+        invalid_locator(json!({"operation":"media.query", "project":uri}));
+        invalid_locator(
+            json!({"operation":"asset.thumbnail", "project":uri, "asset":uuid, "max_size":64}),
+        );
+        invalid_locator(
+            json!({"operation":"export.batch", "items":[{"preset":uuid, "project":uri,
+                "destination":"local.mov"}]}),
+        );
+        invalid_locator(json!({"operation":"export.batch", "items":[{"preset":uuid,
+                "project":"missing.kronello", "destination":uri}]}));
+        invalid_locator(
+            json!({"operation":"export.batch", "items":[{"submission":{"render":{"input":{
+                "project":"missing.kronello","composition":composition,
+                "region":{"origin":[0.0,0.0],"extent":[64.0,32.0],"pixels":[8,4]}},
+                "range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"1"}},
+                "frame_rate":{"num":"1","den":"1"},"output_directory":uri}}}]}),
         );
     }
     let unsafe_fonts = json!([{"identity":document["texts"][0]["styles"][0]["font"],"path":"https://example.invalid/font.otf"}]);

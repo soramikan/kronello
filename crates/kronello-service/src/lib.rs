@@ -63,7 +63,10 @@ pub use template::{
     TemplateSetInputRequest,
 };
 mod media;
-pub use media::{CollectRequest, LutImportRequest, RelinkRequest};
+pub use media::{
+    AssetThumbnailRequest, AssetThumbnailResult, CollectRequest, LutImportRequest, MediaAssetEntry,
+    MediaQueryRequest, MediaQueryResult, RelinkRequest,
+};
 mod control;
 pub use control::ExecutionControl;
 
@@ -148,6 +151,12 @@ pub enum Request {
     TemplateInstantiate(TemplateInstantiateRequest),
     #[serde(rename = "template.set_input")]
     TemplateSetInput(TemplateSetInputRequest),
+    #[serde(rename = "media.query")]
+    MediaQuery(MediaQueryRequest),
+    #[serde(rename = "asset.thumbnail")]
+    AssetThumbnail(AssetThumbnailRequest),
+    #[serde(rename = "export.batch")]
+    ExportBatch(ExportBatchRequest),
     #[serde(rename = "asset.relink")]
     AssetRelink(RelinkRequest),
     #[serde(rename = "project.collect")]
@@ -345,6 +354,12 @@ pub enum ResultData {
     RenderExplanation(Box<RenderExplainResult>),
     Samples(PropertySampleResult),
     Proxies(ProxyStatusResult),
+    /// FLOW-002 project media browser payload (ADR-0129).
+    Media(Box<MediaQueryResult>),
+    /// FLOW-002 fixed-time thumbnail pixels (transport data, never document).
+    Thumbnail(Box<AssetThumbnailResult>),
+    /// FLOW-003 ordered per-item batch outcomes (ADR-0130).
+    Batch(Box<ExportBatchResult>),
     Capabilities(Box<CapabilitiesResult>),
     ProjectPlan(Box<ProjectChangePlan>),
     Captions(CaptionsExportResult),
@@ -674,6 +689,11 @@ impl<'a> Service<'a> {
                 query::expression_format(r).map(ResultData::ExpressionText)
             }
             Request::HistoryList(r) => edit::history(r).map(ResultData::History),
+            Request::MediaQuery(r) => media::media_query(r).map(|r| ResultData::Media(Box::new(r))),
+            Request::AssetThumbnail(r) => {
+                media::thumbnail(r).map(|r| ResultData::Thumbnail(Box::new(r)))
+            }
+            Request::ExportBatch(r) => self.export_batch(r).map(|r| ResultData::Batch(Box::new(r))),
             Request::AssetRelink(r) => media::relink(r).map(ResultData::Project),
             Request::ProjectCollect(r) => media::collect(r).map(ResultData::Collected),
             Request::ProjectCreatePlan(r) => {
@@ -1405,6 +1425,27 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
         Request::RenderSequence(r) => {
             local_locator(&r.output_directory)?;
             render_locators(&r.input)
+        }
+        Request::MediaQuery(r) => local_locator(&r.project),
+        Request::AssetThumbnail(r) => local_locator(&r.project),
+        Request::ExportBatch(r) => {
+            for item in &r.items {
+                if let Some(submission) = &item.submission {
+                    local_locator(&submission.render.output_directory)?;
+                    render_locators(&submission.render.input)?;
+                }
+                if item.preset.is_some() {
+                    let project = item.project.as_ref().ok_or_else(|| {
+                        ServiceError::invalid("preset batch items require project")
+                    })?;
+                    local_locator(project)?;
+                    let destination = item.destination.as_ref().ok_or_else(|| {
+                        ServiceError::invalid("preset batch items require destination")
+                    })?;
+                    local_locator(destination)?;
+                }
+            }
+            Ok(())
         }
         Request::AssetRelink(r) => {
             local_locator(&r.project)?;

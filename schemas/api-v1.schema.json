@@ -146,6 +146,87 @@
       ],
       "type": "object"
     },
+    "AssetThumbnailRequest": {
+      "additionalProperties": false,
+      "description": "FLOW-002 fixed-snapshot thumbnail (ADR-0129). The decoded source frame is\naddressed by an exact rational time and scaled with the deterministic\ninteger `scale_rgba8` path — no clock, GPU or random input participates.\nThe pixels are transport data only; caches live in the caller, never in\nthe document.",
+      "properties": {
+        "asset": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "max_size": {
+          "description": "Longest edge of the output thumbnail in pixels (16..=1024).",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "project": {
+          "type": "string"
+        },
+        "time": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rational"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Source presentation time for video; absent decodes the origin frame.\nIgnored for still images."
+        }
+      },
+      "required": [
+        "project",
+        "asset",
+        "max_size"
+      ],
+      "type": "object"
+    },
+    "AssetThumbnailResult": {
+      "additionalProperties": false,
+      "properties": {
+        "asset": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "height": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pts": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rational"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Source frame timestamp actually covered by the decoded video frame."
+        },
+        "rgba": {
+          "description": "Straight opaque RGBA8, row-major `width * height * 4` bytes.",
+          "items": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "width": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "asset",
+        "width",
+        "height",
+        "rgba"
+      ],
+      "type": "object"
+    },
     "AudioAnalysisConfig": {
       "additionalProperties": false,
       "properties": {
@@ -886,6 +967,49 @@
           "type": "string"
         }
       ]
+    },
+    "BatchFailurePolicy": {
+      "description": "Deterministic failure behavior for `export.batch` (ADR-0130).",
+      "oneOf": [
+        {
+          "const": "stop",
+          "description": "First failed item marks the remaining items `skipped`.",
+          "type": "string"
+        },
+        {
+          "const": "continue",
+          "description": "Every item is attempted; failures are reported per item.",
+          "type": "string"
+        }
+      ]
+    },
+    "Bin": {
+      "additionalProperties": false,
+      "properties": {
+        "assets": {
+          "description": "Insertion-ordered membership. The list behaves like an ordered set:\nmembership edits assign each asset at most once.",
+          "items": {
+            "$ref": "#/$defs/AssetId"
+          },
+          "type": "array"
+        },
+        "id": {
+          "$ref": "#/$defs/BinId"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "type": "object"
+    },
+    "BinId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "format": "uuid",
+      "type": "string"
     },
     "BoundsStage": {
       "description": "Resolution-independent bounds stage selected by a layout consumer.",
@@ -3307,6 +3431,149 @@
         },
         {
           "additionalProperties": false,
+          "description": "FLOW-002 (ADR-0129): create one named bin; fails when the id exists.",
+          "properties": {
+            "bin_create": {
+              "additionalProperties": false,
+              "properties": {
+                "bin": {
+                  "$ref": "#/$defs/Bin"
+                }
+              },
+              "required": [
+                "bin"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "bin_create"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Rename an existing bin; membership is untouched.",
+          "properties": {
+            "bin_rename": {
+              "additionalProperties": false,
+              "properties": {
+                "bin": {
+                  "$ref": "#/$defs/BinId"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "bin",
+                "name"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "bin_rename"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Delete one bin; asset records are untouched.",
+          "properties": {
+            "bin_delete": {
+              "additionalProperties": false,
+              "properties": {
+                "bin": {
+                  "$ref": "#/$defs/BinId"
+                }
+              },
+              "required": [
+                "bin"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "bin_delete"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Replace one bin's membership with exactly this ordered asset set.",
+          "properties": {
+            "bin_assign": {
+              "additionalProperties": false,
+              "properties": {
+                "assets": {
+                  "items": {
+                    "$ref": "#/$defs/AssetId"
+                  },
+                  "type": "array"
+                },
+                "bin": {
+                  "$ref": "#/$defs/BinId"
+                }
+              },
+              "required": [
+                "bin",
+                "assets"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "bin_assign"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FLOW-003 (ADR-0130): upsert one versioned export preset. Updating a\npreset in place is an upsert with the same id.",
+          "properties": {
+            "export_preset_save": {
+              "additionalProperties": false,
+              "properties": {
+                "preset": {
+                  "$ref": "#/$defs/ExportPreset"
+                }
+              },
+              "required": [
+                "preset"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "export_preset_save"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Remove one export preset; already queued jobs keep their fixed input.",
+          "properties": {
+            "export_preset_delete": {
+              "additionalProperties": false,
+              "properties": {
+                "preset": {
+                  "$ref": "#/$defs/ExportPresetId"
+                }
+              },
+              "required": [
+                "preset"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "export_preset_delete"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Upsert one validated external asset record. COLOR-003 registers `.cube`\ndocuments as `AssetKind::Data`; the locator stays external and the\ncontent hash is caller-independent only through the import operation\nthat verifies it.",
           "properties": {
             "asset_set": {
@@ -4236,12 +4503,218 @@
       ],
       "type": "string"
     },
+    "ExportAudioClip": {
+      "additionalProperties": false,
+      "description": "Mirror of `kronello_service::JobAudioClip`.",
+      "properties": {
+        "asset": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "gain": {
+          "format": "float",
+          "type": "number"
+        },
+        "placement": {
+          "$ref": "#/$defs/TimeRange"
+        },
+        "source_in": {
+          "$ref": "#/$defs/Rational"
+        },
+        "stream_index": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "asset",
+        "stream_index",
+        "placement",
+        "source_in",
+        "gain"
+      ],
+      "type": "object"
+    },
     "ExportAudioCodec": {
+      "description": "Mirror of `kronello_media::DeliveryAudioCodec`.",
+      "enum": [
+        "alac",
+        "aac",
+        "opus"
+      ],
+      "type": "string"
+    },
+    "ExportAudioCodec2": {
       "enum": [
         "pcm_s24le",
         "alac",
         "aac",
         "opus"
+      ],
+      "type": "string"
+    },
+    "ExportAudioMode": {
+      "description": "Mirror of `kronello_audio::AudioSourceMode`.",
+      "enum": [
+        "document",
+        "explicit",
+        "silence"
+      ],
+      "type": "string"
+    },
+    "ExportBatchItem": {
+      "additionalProperties": false,
+      "description": "FLOW-003 `export.batch` (ADR-0130). One item per queued export; ordering is\nthe array order, and replay identity is the normalized submission payload.",
+      "properties": {
+        "destination": {
+          "description": "Output locator supplied to the preset; required when `preset` is set.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "idempotency_key": {
+          "description": "Submission idempotency key scoped to the project. When absent, a\ndeterministic `auto:<sha256>` key derives from the normalized\nsubmission so identical items replay their original job.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "preset": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExportPresetId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Stored `Project.export_presets` id, resolved and converted\nserver-side. Requires `project` and `destination`."
+        },
+        "project": {
+          "description": "Project containing the preset; required when `preset` is set.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "submission": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RenderSubmitRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Inline `render.submit`-equivalent request. Exactly one of `submission`\nor `preset` must be set."
+        }
+      },
+      "type": "object"
+    },
+    "ExportBatchItemResult": {
+      "additionalProperties": false,
+      "properties": {
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ServiceError"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "idempotency_key": {
+          "description": "The effective submission key (the explicit key or the derived one).",
+          "type": "string"
+        },
+        "job": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JobRecord"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "outcome": {
+          "$ref": "#/$defs/ExportBatchOutcome"
+        }
+      },
+      "required": [
+        "idempotency_key",
+        "outcome"
+      ],
+      "type": "object"
+    },
+    "ExportBatchOutcome": {
+      "description": "Per-item batch disposition, in request order (ADR-0130).",
+      "oneOf": [
+        {
+          "const": "submitted",
+          "description": "A new job record committed and a worker attempt spawned.",
+          "type": "string"
+        },
+        {
+          "const": "replayed",
+          "description": "The idempotency key replayed an existing job; nothing was requeued.",
+          "type": "string"
+        },
+        {
+          "const": "skipped",
+          "description": "Never attempted: `stop` policy after an earlier item failed.",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "description": "Validation, replay conflict or spawn failure; `error` carries the code.",
+          "type": "string"
+        }
+      ]
+    },
+    "ExportBatchRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "failure_policy": {
+          "$ref": "#/$defs/BatchFailurePolicy",
+          "default": "stop"
+        },
+        "items": {
+          "description": "Attempted strictly in array order. Output destinations must be unique\nacross the batch.",
+          "items": {
+            "$ref": "#/$defs/ExportBatchItem"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "type": "object"
+    },
+    "ExportBatchResult": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "description": "One result per request item, in the request order.",
+          "items": {
+            "$ref": "#/$defs/ExportBatchItemResult"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "type": "object"
+    },
+    "ExportCutPolicy": {
+      "description": "Mirror of `kronello_render::CutPolicy`.",
+      "enum": [
+        "avoid_crossing",
+        "allow_crossing"
       ],
       "type": "string"
     },
@@ -4252,13 +4725,486 @@
       ],
       "type": "string"
     },
+    "ExportHdrSettings": {
+      "additionalProperties": false,
+      "description": "Mirror of `kronello_render::HdrSettings`.",
+      "properties": {
+        "transfer": {
+          "$ref": "#/$defs/ExportTransfer"
+        }
+      },
+      "required": [
+        "transfer"
+      ],
+      "type": "object"
+    },
+    "ExportOutput": {
+      "description": "Mirror of `kronello_service::JobOutput`; the same `\"format\"` tag, snake_case\nvariant names, field names and field defaults are required for the\none-to-one conversion at submission time.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "format": {
+              "const": "image_sequence",
+              "type": "string"
+            }
+          },
+          "required": [
+            "format"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/ExportAudioMode",
+              "default": "explicit"
+            },
+            "background": {
+              "items": {
+                "format": "float",
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/ExportAudioClip"
+              },
+              "type": "array"
+            },
+            "format": {
+              "const": "pro_res_mov",
+              "type": "string"
+            },
+            "profile_version": {
+              "default": 1,
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "clips",
+            "background"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/ExportAudioMode",
+              "default": "explicit"
+            },
+            "background": {
+              "items": {
+                "format": "float",
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/ExportAudioClip"
+              },
+              "type": "array"
+            },
+            "format": {
+              "const": "pro_res_sdr_from_hdr_mov",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "clips",
+            "background"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/ExportAudioMode",
+              "default": "explicit"
+            },
+            "background": {
+              "items": {
+                "format": "float",
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/ExportAudioClip"
+              },
+              "type": "array"
+            },
+            "format": {
+              "const": "pro_res_hdr_mov",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "transfer": {
+              "$ref": "#/$defs/ExportTransfer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "transfer",
+            "clips",
+            "background"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/ExportAudioMode",
+              "default": "explicit"
+            },
+            "audio_codec": {
+              "$ref": "#/$defs/ExportAudioCodec",
+              "default": "alac"
+            },
+            "background": {
+              "items": {
+                "format": "float",
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/ExportAudioClip"
+              },
+              "type": "array"
+            },
+            "format": {
+              "const": "av1_mp4",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "clips",
+            "background"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/ExportAudioMode",
+              "default": "explicit"
+            },
+            "audio_codec": {
+              "$ref": "#/$defs/ExportAudioCodec",
+              "default": "alac"
+            },
+            "background": {
+              "items": {
+                "format": "float",
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/ExportAudioClip"
+              },
+              "type": "array"
+            },
+            "format": {
+              "const": "h264_mov",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "clips",
+            "background"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/ExportAudioMode",
+              "default": "explicit"
+            },
+            "audio_codec": {
+              "$ref": "#/$defs/ExportAudioCodec",
+              "default": "alac"
+            },
+            "background": {
+              "items": {
+                "format": "float",
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/ExportAudioClip"
+              },
+              "type": "array"
+            },
+            "format": {
+              "const": "hevc_mov",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "clips",
+            "background"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/ExportAudioMode",
+              "default": "explicit"
+            },
+            "audio_codec": {
+              "$ref": "#/$defs/ExportAudioCodec",
+              "default": "alac"
+            },
+            "background": {
+              "items": {
+                "format": "float",
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/ExportAudioClip"
+              },
+              "type": "array"
+            },
+            "format": {
+              "const": "av1_webm",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "clips",
+            "background"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Subtitle sidecar file; the target must be the same sequence.",
+          "properties": {
+            "caption_format": {
+              "$ref": "#/$defs/CaptionFormat"
+            },
+            "format": {
+              "const": "caption_sidecar",
+              "type": "string"
+            },
+            "sequence": {
+              "$ref": "#/$defs/SequenceId"
+            }
+          },
+          "required": [
+            "format",
+            "sequence",
+            "caption_format"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ExportPreset": {
+      "additionalProperties": false,
+      "description": "A versioned, named, destination-independent export setting stored in the\nproject document. `destination` is supplied per submission, never stored.",
+      "properties": {
+        "composition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CompositionId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Legacy single-composition shortcut; exactly one of `composition` and\n`target` must be set, matching the `RenderInput` rule."
+        },
+        "frame_rate": {
+          "$ref": "#/$defs/FrameRate"
+        },
+        "id": {
+          "$ref": "#/$defs/ExportPresetId"
+        },
+        "name": {
+          "type": "string"
+        },
+        "output": {
+          "$ref": "#/$defs/ExportOutput",
+          "default": {
+            "format": "image_sequence"
+          }
+        },
+        "profile": {
+          "$ref": "#/$defs/ExportProfile",
+          "default": {
+            "flatten_tolerance_px": 0.02,
+            "working_space": "linear_rec709"
+          }
+        },
+        "range": {
+          "$ref": "#/$defs/TimeRange"
+        },
+        "region": {
+          "$ref": "#/$defs/ExportRegion"
+        },
+        "required_features": {
+          "description": "Submission-time capability requirements, forwarded to the job request.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExportTarget"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "version": {
+          "description": "Payload schema version; must equal [`EXPORT_PRESET_VERSION`].",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version",
+        "id",
+        "name",
+        "range",
+        "frame_rate",
+        "region"
+      ],
+      "type": "object"
+    },
+    "ExportPresetId": {
+      "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
+      "format": "uuid",
+      "type": "string"
+    },
+    "ExportProfile": {
+      "additionalProperties": false,
+      "description": "Mirror of `kronello_render::RenderProfile`; defaults match its `Default`.",
+      "properties": {
+        "flatten_tolerance_px": {
+          "format": "double",
+          "type": "number"
+        },
+        "hdr": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExportHdrSettings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "temporal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExportTemporalSettings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "working_space": {
+          "$ref": "#/$defs/ColorSpace"
+        }
+      },
+      "required": [
+        "working_space",
+        "flatten_tolerance_px"
+      ],
+      "type": "object"
+    },
     "ExportProfileCapability": {
       "additionalProperties": false,
       "properties": {
         "audio_codecs": {
           "description": "All delivery audio codecs accepted by this output's closed profiles.",
           "items": {
-            "$ref": "#/$defs/ExportAudioCodec"
+            "$ref": "#/$defs/ExportAudioCodec2"
           },
           "type": "array"
         },
@@ -4314,6 +5260,46 @@
       ],
       "type": "object"
     },
+    "ExportRegion": {
+      "additionalProperties": false,
+      "description": "Mirror of `kronello_render::OutputRegion`.",
+      "properties": {
+        "extent": {
+          "items": {
+            "format": "double",
+            "type": "number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "origin": {
+          "items": {
+            "format": "double",
+            "type": "number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "pixels": {
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "origin",
+        "extent",
+        "pixels"
+      ],
+      "type": "object"
+    },
     "ExportResult": {
       "additionalProperties": false,
       "properties": {
@@ -4329,6 +5315,84 @@
         "document"
       ],
       "type": "object"
+    },
+    "ExportTarget": {
+      "description": "Mirror of `kronello_render::RenderTarget` (`\"kind\"` tagged).",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "composition": {
+              "$ref": "#/$defs/CompositionId"
+            },
+            "kind": {
+              "const": "composition",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "composition"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "sequence",
+              "type": "string"
+            },
+            "sequence": {
+              "$ref": "#/$defs/SequenceId"
+            }
+          },
+          "required": [
+            "kind",
+            "sequence"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ExportTemporalSettings": {
+      "additionalProperties": false,
+      "description": "Mirror of `kronello_render::TemporalSettings`.",
+      "properties": {
+        "cut_policy": {
+          "$ref": "#/$defs/ExportCutPolicy"
+        },
+        "frame_rate": {
+          "$ref": "#/$defs/FrameRate"
+        },
+        "samples": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "shutter_angle": {
+          "$ref": "#/$defs/Rational"
+        },
+        "shutter_phase": {
+          "$ref": "#/$defs/Rational"
+        }
+      },
+      "required": [
+        "frame_rate",
+        "shutter_angle",
+        "shutter_phase",
+        "samples",
+        "cut_policy"
+      ],
+      "type": "object"
+    },
+    "ExportTransfer": {
+      "description": "Mirror of `kronello_render::HdrTransfer`.",
+      "enum": [
+        "pq",
+        "hlg"
+      ],
+      "type": "string"
     },
     "Expression": {
       "additionalProperties": false,
@@ -7106,6 +8170,51 @@
       ],
       "type": "object"
     },
+    "MediaAssetEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "asset": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "availability": {
+          "$ref": "#/$defs/AssetAvailability"
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Asset"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The full asset record for known-version objects. Opaque assets carry\nonly their identity plus an `UNSUPPORTED_SCHEMA_VERSION` status."
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ServiceError"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "size_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "asset",
+        "availability"
+      ],
+      "type": "object"
+    },
     "MediaCapabilities": {
       "additionalProperties": false,
       "properties": {
@@ -7298,6 +8407,47 @@
           "type": "string"
         }
       ]
+    },
+    "MediaQueryRequest": {
+      "additionalProperties": false,
+      "description": "FLOW-002 project-wide media browser query (ADR-0129). Reports every asset\nwith the same cheap locator probe `sequence.query` uses — present files are\nunverified until a hash-checked `resolve_asset` runs — plus the persisted\nbin list. Ordered by document position, never by wall clock.",
+      "properties": {
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "type": "object"
+    },
+    "MediaQueryResult": {
+      "additionalProperties": false,
+      "properties": {
+        "assets": {
+          "description": "Every project asset, in document order.",
+          "items": {
+            "$ref": "#/$defs/MediaAssetEntry"
+          },
+          "type": "array"
+        },
+        "bins": {
+          "description": "Persisted bins (ADR-0129); membership references `assets` ids.",
+          "items": {
+            "$ref": "#/$defs/Bin"
+          },
+          "type": "array"
+        },
+        "revision": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "revision",
+        "assets",
+        "bins"
+      ],
+      "type": "object"
     },
     "MediaStream": {
       "properties": {
@@ -8253,6 +9403,13 @@
           },
           "type": "array"
         },
+        "bins": {
+          "description": "FLOW-002 media organization (ADR-0129): unordered bin collection keyed\nby `Bin.id`. An asset may appear in several bins.",
+          "items": {
+            "$ref": "#/$defs/Bin"
+          },
+          "type": "array"
+        },
         "captions": {
           "items": {
             "$ref": "#/$defs/DocumentObject6"
@@ -8268,6 +9425,13 @@
         "curves": {
           "items": {
             "$ref": "#/$defs/DocumentObject2"
+          },
+          "type": "array"
+        },
+        "export_presets": {
+          "description": "FLOW-003 shared export presets (ADR-0130): versioned, destination-free\n`render.submit` settings stored inside the document.",
+          "items": {
+            "$ref": "#/$defs/ExportPreset"
           },
           "type": "array"
         },
@@ -10816,6 +11980,89 @@
         },
         {
           "additionalProperties": false,
+          "description": "FLOW-002 project-wide media browser query (ADR-0129). Reports every asset\nwith the same cheap locator probe `sequence.query` uses — present files are\nunverified until a hash-checked `resolve_asset` runs — plus the persisted\nbin list. Ordered by document position, never by wall clock.",
+          "properties": {
+            "operation": {
+              "const": "media.query",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FLOW-002 fixed-snapshot thumbnail (ADR-0129). The decoded source frame is\naddressed by an exact rational time and scaled with the deterministic\ninteger `scale_rgba8` path — no clock, GPU or random input participates.\nThe pixels are transport data only; caches live in the caller, never in\nthe document.",
+          "properties": {
+            "asset": {
+              "$ref": "#/$defs/AssetId"
+            },
+            "max_size": {
+              "description": "Longest edge of the output thumbnail in pixels (16..=1024).",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "operation": {
+              "const": "asset.thumbnail",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "time": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Rational"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Source presentation time for video; absent decodes the origin frame.\nIgnored for still images."
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "asset",
+            "max_size"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "failure_policy": {
+              "$ref": "#/$defs/BatchFailurePolicy",
+              "default": "stop"
+            },
+            "items": {
+              "description": "Attempted strictly in array order. Output destinations must be unique\nacross the batch.",
+              "items": {
+                "$ref": "#/$defs/ExportBatchItem"
+              },
+              "type": "array"
+            },
+            "operation": {
+              "const": "export.batch",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "items"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "properties": {
             "asset": {
               "$ref": "#/$defs/AssetId"
@@ -12591,6 +13838,60 @@
             },
             "value": {
               "$ref": "#/$defs/ProxyStatusResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FLOW-002 project media browser payload (ADR-0129).",
+          "properties": {
+            "kind": {
+              "const": "media",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/MediaQueryResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FLOW-002 fixed-time thumbnail pixels (transport data, never document).",
+          "properties": {
+            "kind": {
+              "const": "thumbnail",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/AssetThumbnailResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FLOW-003 ordered per-item batch outcomes (ADR-0130).",
+          "properties": {
+            "kind": {
+              "const": "batch",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/ExportBatchResult"
             }
           },
           "required": [

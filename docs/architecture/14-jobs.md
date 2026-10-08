@@ -166,3 +166,12 @@ source chunk、audio block、video frameと最終mux前にcancelを確認する�
 強制終了後の回収と resume は ADR-0087 の owner marker / anchored receipt 検証に従う。
 `AvExportReport.streaming` の byte counters とホスト検証範囲は
 [ADR-0079](../adr/0079-bounded-streaming-movie-export.md)、[RENDER-003](../testing/render-003.md) を参照する。
+
+## FLOW-003 の keyed submission とバッチ書き出し
+
+[ADR-0130](../adr/0130-export-presets-batch-and-watch.md) で JobStore を schema version 2（`job_keys`
+table）へ拡張し、`export.batch` の各 item に任意の idempotency key を持たせた。
+同じ key の再提出は既存 JobRecord を返して新 worker を起こさず、replay の確認は destination 存在
+チェックより先に行う。key 未指定の batch item は正規化した submission JSON から `auto:<sha256>`
+を導出する。`export.batch` は順序付き item をまとめて受け、`failure_policy` の `stop` / `continue`
+で deterministic に進行する。検証は [FLOW-003](../testing/flow-003.md) を参照。

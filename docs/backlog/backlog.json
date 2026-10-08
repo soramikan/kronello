@@ -2169,7 +2169,7 @@
    "priority": "P2",
    "area": "gui",
    "title": "メディア管理 UI: ビン/ブラウザ/オフラインメディア",
-   "status": "planned",
+   "status": "done",
    "dependencies": [
     "FLOW-001"
    ],
@@ -2184,7 +2184,7 @@
    "priority": "P2",
    "area": "media",
    "title": "書き出し運用: ウォッチフォルダ・プリセット・バッチキュー",
-   "status": "planned",
+   "status": "done",
    "dependencies": [
     "MEDIA-002",
     "JOB-002"

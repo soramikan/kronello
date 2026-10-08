@@ -19,6 +19,9 @@ func require(_ value: @autoclosure () -> Bool, _ message: String) throws {
     var latency: Duration = .zero
     var sampleResponse: (([String: Any]) throws -> [String: Any])?
     var formatResponse: (([String: Any]) throws -> [String: Any])?
+    /// FLOW-002/003 hooks for operations outside the built-in table. Returning
+    /// nil falls through to the empty default response.
+    var extraHandler: (([String: Any]) throws -> [String: Any]?)?
     func ready() async throws {}
     func subscribe() async throws {}
     func poll() throws {}
@@ -38,7 +41,7 @@ func require(_ value: @autoclosure () -> Bool, _ message: String) throws {
         case "edit.apply", "edit.undo":
             if let error = nextError { throw error }
             revision = String((Int(revision) ?? 1) + 1); return ["id": eventID, "revision": Int(revision)!]
-        default: return [:]
+        default: return try extraHandler?(request) ?? [:]
         }
     }
 }

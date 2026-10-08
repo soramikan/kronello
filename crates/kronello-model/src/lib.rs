@@ -45,9 +45,9 @@ pub use expression::{
     ExpressionDependency, ExpressionError, ExpressionNode, expression_value_bytes,
 };
 pub use id::{
-    AssetId, CaptionId, ClipId, CompositionId, CompositionInstanceId, ContentId, CurveId,
-    DescriptorId, ExpressionId, MarkerId, MaskId, ModifierId, NodeId, PropertyId, SchemaKey,
-    SequenceId, TrackId,
+    AssetId, BinId, CaptionId, ClipId, CompositionId, CompositionInstanceId, ContentId, CurveId,
+    DescriptorId, ExportPresetId, ExpressionId, MarkerId, MaskId, ModifierId, NodeId, PropertyId,
+    SchemaKey, SequenceId, TrackId,
 };
 pub use property::{DescriptorRef, Modifier, Property, PropertySource, SourceResolver};
 pub use schema::{
@@ -110,6 +110,14 @@ pub use lut::{CubeLut, LUT_3D_DOCUMENT_MAX_SIZE, LUT_3D_MAX_SIZE, LUT_3D_MIN_SIZ
 pub use template::*;
 mod asset;
 pub use asset::{Asset, AssetKind, AssetLocator, StreamMetadata};
+mod bins;
+pub use bins::Bin;
+mod export_presets;
+pub use export_presets::{
+    EXPORT_PRESET_VERSION, ExportAudioClip, ExportAudioCodec, ExportAudioMode, ExportCutPolicy,
+    ExportHdrSettings, ExportOutput, ExportPreset, ExportProfile, ExportRegion, ExportTarget,
+    ExportTemporalSettings, ExportTransfer,
+};
 
 mod sequence;
 pub use sequence::*;
