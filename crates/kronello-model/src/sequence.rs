@@ -451,7 +451,7 @@ impl Clip {
                         .map(shift.checked_add(duration)?)?
                         .checked_sub(origin)?,
                 });
-                TimeMap::piecewise_linear(points)?
+                TimeMap::piecewise_linear_with_interpolation(points, m.interpolation())?
             }
             _ => return Err(SequenceError::Unsupported("time map".into())),
         };
@@ -472,7 +472,7 @@ impl Clip {
             TimeMap::Linear(m) => {
                 TimeMap::linear(m.offset(), m.speed().checked_mul(old.checked_div(new)?)?)?
             }
-            TimeMap::PiecewiseLinear(m) => TimeMap::piecewise_linear(
+            TimeMap::PiecewiseLinear(m) => TimeMap::piecewise_linear_with_interpolation(
                 m.points()
                     .iter()
                     .map(|p| {
@@ -482,6 +482,7 @@ impl Clip {
                         })
                     })
                     .collect::<Result<Vec<_>, TimeError>>()?,
+                m.interpolation(),
             )?,
             _ => return Err(SequenceError::Unsupported("time map".into())),
         };
@@ -682,6 +683,19 @@ impl Sequence {
                         "caption clips require a caption track".into(),
                     ));
                 }
+                // TRACK-003 (ADR-0123): intermediate-frame synthesis applies
+                // only to forward-direction video-track asset clips. Every
+                // other source keeps the legacy single-frame sample and must
+                // not carry the mode.
+                if clip.time_map.interpolation().is_some()
+                    && (!matches!(&clip.source_ref, SourceRef::Asset { .. })
+                        || clip.reverse_sampling.is_some()
+                        || track.kind != TrackKind::Video)
+                {
+                    return Err(SequenceError::Unsupported(
+                        "frame interpolation requires a forward video asset clip".into(),
+                    ));
+                }
                 match &clip.source_ref {
                     SourceRef::Caption { caption } => {
                         if clip.source_in != Time::ZERO
@@ -826,6 +840,15 @@ impl Sequence {
                         {
                             return Err(SequenceError::Invalid(
                                 "asset kind does not match track".into(),
+                            ));
+                        }
+                        // TRACK-003: flow synthesis needs decoded neighbor
+                        // frames; only video streams provide them.
+                        if clip.time_map.interpolation().is_some()
+                            && source.kind != AssetKind::Video
+                        {
+                            return Err(SequenceError::Unsupported(
+                                "frame interpolation requires a video asset".into(),
                             ));
                         }
                     }

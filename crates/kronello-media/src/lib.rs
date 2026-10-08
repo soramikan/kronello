@@ -61,6 +61,8 @@ pub enum MediaError {
     Time(#[from] kronello_time::TimeError),
     #[error(transparent)]
     Project(#[from] kronello_model::ProjectError),
+    #[error(transparent)]
+    Flow(#[from] kronello_tracking::FlowError),
 }
 impl MediaError {
     pub fn code(&self) -> &'static str {
@@ -81,6 +83,7 @@ impl MediaError {
             Self::Io(_) => "MEDIA_IO_ERROR",
             Self::Json(_) => "INVALID_MEDIA_INPUT",
             Self::Time(_) => "TIME_ERROR",
+            Self::Flow(e) => e.code(),
         }
     }
 }

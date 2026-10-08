@@ -87,6 +87,9 @@ pub enum DagNode {
         time: kronello_time::Time,
         reverse_sampling: bool,
         extent: [f64; 2],
+        /// TRACK-003 (ADR-0123): authored intermediate-frame synthesis for
+        /// this source sample; `None` decodes the single containing frame.
+        interpolation: Option<kronello_time::FrameInterpolation>,
         output_to_local: [[f64; 3]; 2],
         bounds: crate::PixelBounds,
     },
@@ -169,7 +172,9 @@ pub struct RenderDag {
 }
 impl RenderDag {
     /// Resolve external video only through a caller-selected media backend.
-    /// Sampling is nearest, at the output pixel center, without frame interpolation.
+    /// Sampling is nearest, at the output pixel center; an authored
+    /// `interpolation` mode lets the backend synthesize the exact source
+    /// instant from the neighboring decoded frames (TRACK-003, ADR-0123).
     pub fn resolve_video(
         &self,
         mut decode: impl FnMut(
@@ -178,6 +183,7 @@ impl RenderDag {
             kronello_time::Time,
             ColorSpace,
             bool,
+            Option<kronello_time::FrameInterpolation>,
         ) -> Result<crate::VideoImage, RenderError>,
     ) -> Result<Self, RenderError> {
         let mut dag = self.clone();
@@ -188,6 +194,7 @@ impl RenderDag {
                 time,
                 reverse_sampling,
                 extent,
+                interpolation,
                 output_to_local,
                 ..
             } = node
@@ -198,6 +205,7 @@ impl RenderDag {
                     *time,
                     dag.working_space,
                     *reverse_sampling,
+                    *interpolation,
                 )?;
                 if image.size.contains(&0)
                     || image.size[0] as usize * image.size[1] as usize != image.pixels.len()
@@ -648,6 +656,7 @@ impl Builder<'_> {
                 time,
                 extent,
                 reverse_sampling,
+                interpolation,
             } => {
                 let b = crate::DesignBounds::checked([0.0; 2], *extent)?.transform(transform)?;
                 children.push(self.push(DagNode::VideoDraw {
@@ -656,6 +665,7 @@ impl Builder<'_> {
                     time: *time,
                     reverse_sampling: *reverse_sampling,
                     extent: *extent,
+                    interpolation: *interpolation,
                     output_to_local: inverse(transform)?,
                     bounds: crate::PixelBounds {
                         min: b.min,
@@ -971,6 +981,40 @@ impl Builder<'_> {
                 };
                 effect.validate()?;
                 effect
+            } else if let kronello_model::ResolvedEffect::Stabilize {
+                inverse: tracked_inverse,
+                border,
+                fill_color,
+                sampling,
+                ..
+            } = &mapped
+            {
+                // TRACK-002 (ADR-0122): the scene pass bound `inverse` — the
+                // source-space inverse correction C^-1 — to this node's video
+                // content. `frame` composes C^-1 behind output→local so the
+                // kernel resolves corrected source-extent positions; `unmap`
+                // is the draw transform re-embedding the border-resolved
+                // position into the input raster where the frame was drawn.
+                let crate::SceneContent::Video { extent, .. } = &n.content else {
+                    return Err(RenderError::InvalidInput(
+                        "stabilize requires video content".into(),
+                    ));
+                };
+                let Some(frame_inverse) = tracked_inverse else {
+                    return Err(RenderError::InvalidInput(
+                        "stabilize tracking data unresolved".into(),
+                    ));
+                };
+                let frame = kronello_eval::Affine2(*frame_inverse)
+                    .compose(kronello_eval::Affine2(inverse(transform)?));
+                crate::PixelEffect::stabilize(
+                    frame,
+                    transform,
+                    *extent,
+                    *border,
+                    *fill_color,
+                    *sampling,
+                )?
             } else {
                 crate::PixelEffect::from_design(&mapped, scale)?
             };
@@ -1492,7 +1536,12 @@ pub(crate) fn map_effect(
         },
         // Vignette is normalized-position pointwise and corner pins are
         // already absolute Composition design_px positions; both commute.
-        ResolvedEffect::Vignette { .. } | ResolvedEffect::CornerPin { .. } => effect.clone(),
+        // TRACK-002 stabilize limits live in source-pixel space and its
+        // inverse transform is applied through the pixel-stage `unmap`; the
+        // resolved value passes through untouched.
+        ResolvedEffect::Vignette { .. }
+        | ResolvedEffect::CornerPin { .. }
+        | ResolvedEffect::Stabilize { .. } => effect.clone(),
         ResolvedEffect::ChromaKey {
             key_color,
             similarity,

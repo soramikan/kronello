@@ -24,4 +24,6 @@ pub enum TimeError {
     UnsupportedMapSlope,
     #[error("timestamp is outside the piecewise mapping domain")]
     OutsideMapDomain,
+    #[error("invalid frame interpolation configuration")]
+    InvalidFrameInterpolation,
 }

@@ -9,6 +9,82 @@ pub struct TimeMapPoint {
     pub local: Time,
 }
 
+/// TRACK-003 (ADR-0123): the explicit failure policy authored on an
+/// optical-flow interpolation. There is no silent fallback; `blend` is the
+/// only permitted degraded path and must be authored.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum FlowFallbackPolicy {
+    Blend,
+}
+
+/// TRACK-003 (ADR-0123): deterministic pyramidal block-matching parameters.
+/// Integer radii bound the search cost; confidence thresholds are exact
+/// rationals in `[0, 1]` so the whole configuration stays `Eq` and hashes
+/// identically through the document/caches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct OpticalFlowConfig {
+    /// Half-size of the matched block; the block spans `2*r+1` pixels.
+    pub block_radius: u32,
+    /// Half-size of the exhaustive search window at the coarsest level.
+    pub search_radius: u32,
+    /// Pyramid levels including the base image.
+    pub levels: u32,
+    /// Per-cell forward/backward consistency confidence floor in `[0, 1]`.
+    pub confidence_floor: Rational,
+    /// Maximum tolerated fraction of low-confidence cells in `[0, 1]`;
+    /// exceeding it rejects with `FLOW_CONFIDENCE_LOW` (or blends, when
+    /// `flow_fallback` is authored).
+    pub max_low_confidence: Rational,
+    /// Explicit degraded-mode policy; `None` rejects on low confidence.
+    pub flow_fallback: Option<FlowFallbackPolicy>,
+}
+
+impl OpticalFlowConfig {
+    /// Conservative defaults used when callers construct a config without
+    /// specific tuning; all fields remain explicit in the document.
+    pub fn default_config() -> Self {
+        Self {
+            block_radius: 4,
+            search_radius: 8,
+            levels: 3,
+            confidence_floor: Rational::new(1, 4).expect("static rational"),
+            max_low_confidence: Rational::new(1, 2).expect("static rational"),
+            flow_fallback: None,
+        }
+    }
+
+    /// Bounds and finiteness enforced at construction and deserialization.
+    pub fn validate(&self) -> Result<(), TimeError> {
+        let unit = |v: Rational| v >= Rational::ZERO && v <= Rational::ONE;
+        if !(1..=16).contains(&self.block_radius)
+            || !(1..=64).contains(&self.search_radius)
+            || !(1..=6).contains(&self.levels)
+            || !unit(self.confidence_floor)
+            || !unit(self.max_low_confidence)
+        {
+            return Err(TimeError::InvalidFrameInterpolation);
+        }
+        Ok(())
+    }
+}
+
+impl Default for OpticalFlowConfig {
+    fn default() -> Self {
+        Self::default_config()
+    }
+}
+
+/// TRACK-003 (ADR-0123): intermediate-frame synthesis mode attached to a
+/// piecewise retime. Absence keeps the legacy nearest-frame sampling.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(tag = "mode", rename_all = "snake_case")]
+pub enum FrameInterpolation {
+    /// Bidirectional flow warps the neighboring decoded frames.
+    OpticalFlow(OpticalFlowConfig),
+}
+
 /// Exact, stateless mappings. Protected middle segments support hold and loop;
 /// piecewise linear segments with equal `local` endpoints express authored
 /// hold (freeze) intervals. Reverse playback remains unsupported.
@@ -30,10 +106,14 @@ pub struct LinearTimeMap {
 
 /// Validated control points: strictly increasing `parent` and non-decreasing
 /// `local`. Equal adjacent `local` values form a hold segment over which the
-/// mapped source time stays pinned. No extrapolation is performed.
+/// mapped source time stays pinned. No extrapolation is performed. The
+/// optional `interpolation` mode selects intermediate-frame synthesis when
+/// the mapped source time lands inside a source frame's presentation
+/// interval; `None` preserves the legacy single-frame sample.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PiecewiseTimeMap {
     points: Vec<TimeMapPoint>,
+    interpolation: Option<FrameInterpolation>,
 }
 
 /// Only the middle is retimed; intro/outro retain unit speed.
@@ -86,6 +166,16 @@ impl TimeMap {
     /// `TimeMapError::UnsupportedMapSlope`. The evaluation domain includes
     /// both the first and last control point.
     pub fn piecewise_linear(points: Vec<TimeMapPoint>) -> Result<Self, TimeError> {
+        Self::piecewise_linear_with_interpolation(points, None)
+    }
+
+    /// TRACK-003 (ADR-0123): the same validated control points plus an
+    /// optional intermediate-frame synthesis mode. The mode is part of the
+    /// map identity and follows the map through serialization and hashing.
+    pub fn piecewise_linear_with_interpolation(
+        points: Vec<TimeMapPoint>,
+        interpolation: Option<FrameInterpolation>,
+    ) -> Result<Self, TimeError> {
         if points.len() < 2 {
             return Err(TimeError::TooFewMapPoints);
         }
@@ -97,7 +187,21 @@ impl TimeMap {
                 return Err(TimeError::UnsupportedMapSlope);
             }
         }
-        Ok(Self::PiecewiseLinear(PiecewiseTimeMap { points }))
+        if let Some(FrameInterpolation::OpticalFlow(config)) = interpolation {
+            config.validate()?;
+        }
+        Ok(Self::PiecewiseLinear(PiecewiseTimeMap {
+            points,
+            interpolation,
+        }))
+    }
+
+    /// The authored intermediate-frame synthesis mode, if any.
+    pub fn interpolation(&self) -> Option<FrameInterpolation> {
+        match self {
+            Self::PiecewiseLinear(map) => map.interpolation,
+            _ => None,
+        }
     }
 
     /// Evaluate without frame snapping, mutable state, or implicit clamping.
@@ -206,6 +310,11 @@ impl PiecewiseTimeMap {
         &self.points
     }
 
+    /// TRACK-003 (ADR-0123): the authored synthesis mode for this map.
+    pub fn interpolation(&self) -> Option<FrameInterpolation> {
+        self.interpolation
+    }
+
     /// Segment index owning `parent`. A control point belongs to the segment
     /// it starts; times before the first control point resolve to segment 0
     /// and times past the last point to the final segment, matching the
@@ -249,6 +358,9 @@ enum MapWire {
     },
     PiecewiseLinear {
         points: Vec<TimeMapPoint>,
+        /// TRACK-003: absent keeps the legacy single-frame sample.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        interpolation: Option<FrameInterpolation>,
     },
     Protected {
         authoring: Duration,
@@ -265,7 +377,10 @@ impl TryFrom<MapWire> for TimeMap {
     fn try_from(value: MapWire) -> Result<Self, Self::Error> {
         match value {
             MapWire::Linear { offset, speed } => Self::linear(offset, speed),
-            MapWire::PiecewiseLinear { points } => Self::piecewise_linear(points),
+            MapWire::PiecewiseLinear {
+                points,
+                interpolation,
+            } => Self::piecewise_linear_with_interpolation(points, interpolation),
             MapWire::Protected {
                 authoring,
                 requested,
@@ -284,7 +399,10 @@ impl From<TimeMap> for MapWire {
                 offset: map.offset,
                 speed: map.speed,
             },
-            TimeMap::PiecewiseLinear(map) => Self::PiecewiseLinear { points: map.points },
+            TimeMap::PiecewiseLinear(map) => Self::PiecewiseLinear {
+                points: map.points,
+                interpolation: map.interpolation,
+            },
             TimeMap::Protected(map) => Self::Protected {
                 authoring: map.authoring,
                 requested: map.requested,

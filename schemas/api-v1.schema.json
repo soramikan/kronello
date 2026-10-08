@@ -4095,6 +4095,52 @@
             "intensity"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "TRACK-002 (ADR-0122): invert tracked camera motion. `tracking`\nreferences a `TrackingDataAsset`; the smoothed trajectory uses a\nsymmetric window of `2*smoothing_radius+1` tracked samples;\n`max_displacement` (design px), `max_rotation` (degrees) and\n`max_crop` (unit interval of the source frame area) bound the applied\ncorrection; `border` selects the uncovered-region policy with\n`fill_color` for `fill`; `sampling` picks the resampler.",
+          "properties": {
+            "border": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "fill_color": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "const": "stabilize",
+              "type": "string"
+            },
+            "max_crop": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "max_displacement": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "max_rotation": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "sampling": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "smoothing_radius": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "tracking": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "required": [
+            "kind",
+            "tracking",
+            "smoothing_radius",
+            "max_displacement",
+            "max_rotation",
+            "max_crop",
+            "border",
+            "fill_color",
+            "sampling"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -5134,6 +5180,13 @@
       "format": "double",
       "type": "number"
     },
+    "FlowFallbackPolicy": {
+      "description": "TRACK-003 (ADR-0123): the explicit failure policy authored on an\noptical-flow interpolation. There is no silent fallback; `blend` is the\nonly permitted degraded path and must be authored.",
+      "enum": [
+        "blend"
+      ],
+      "type": "string"
+    },
     "FontInput": {
       "additionalProperties": false,
       "properties": {
@@ -5194,6 +5247,67 @@
         "face_index"
       ],
       "type": "object"
+    },
+    "FrameInterpolation": {
+      "description": "TRACK-003 (ADR-0123): intermediate-frame synthesis mode attached to a\npiecewise retime. Absence keeps the legacy nearest-frame sampling.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Bidirectional flow warps the neighboring decoded frames.",
+          "properties": {
+            "block_radius": {
+              "description": "Half-size of the matched block; the block spans `2*r+1` pixels.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "confidence_floor": {
+              "$ref": "#/$defs/Rational",
+              "description": "Per-cell forward/backward consistency confidence floor in `[0, 1]`."
+            },
+            "flow_fallback": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/FlowFallbackPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Explicit degraded-mode policy; `None` rejects on low confidence."
+            },
+            "levels": {
+              "description": "Pyramid levels including the base image.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "max_low_confidence": {
+              "$ref": "#/$defs/Rational",
+              "description": "Maximum tolerated fraction of low-confidence cells in `[0, 1]`;\nexceeding it rejects with `FLOW_CONFIDENCE_LOW` (or blends, when\n`flow_fallback` is authored)."
+            },
+            "mode": {
+              "const": "optical_flow",
+              "type": "string"
+            },
+            "search_radius": {
+              "description": "Half-size of the exhaustive search window at the coarsest level.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "mode",
+            "block_radius",
+            "search_radius",
+            "levels",
+            "confidence_floor",
+            "max_low_confidence"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "FrameMetadata": {
       "additionalProperties": false,
@@ -12148,6 +12262,77 @@
             "ColorLut"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "TRACK-002 (ADR-0122) resolved effect. `tracking` is the authored\n`TrackingDataAsset` id; `inverse` is the output-frame→source-frame\ninverse correction (2x3 row-major affine, source pixel space) resolved\nper frame by the scene pass. `None` until that pass binds the tracking\ndata to the resolved source time.",
+          "properties": {
+            "Stabilize": {
+              "properties": {
+                "border": {
+                  "$ref": "#/$defs/StabilizeBorder"
+                },
+                "fill_color": {
+                  "$ref": "#/$defs/Color"
+                },
+                "inverse": {
+                  "items": {
+                    "items": {
+                      "format": "double",
+                      "type": "number"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                },
+                "max_crop": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "max_displacement": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "max_rotation": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "sampling": {
+                  "$ref": "#/$defs/StabilizeSampling"
+                },
+                "smoothing_radius": {
+                  "format": "uint32",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "tracking": {
+                  "$ref": "#/$defs/AssetId"
+                }
+              },
+              "required": [
+                "tracking",
+                "smoothing_radius",
+                "max_displacement",
+                "max_rotation",
+                "max_crop",
+                "border",
+                "fill_color",
+                "sampling"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "Stabilize"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -13441,6 +13626,15 @@
           "minimum": 0,
           "type": "integer"
         },
+        "frame_interpolation": {
+          "description": "TRACK-003 (ADR-0123): pinned whenever the document may author\n`TimeMap::interpolation`; unpinned snapshots reject synthesis.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "generators": {
           "additionalProperties": {
             "format": "uint32",
@@ -14160,6 +14354,23 @@
           "type": "object"
         }
       ]
+    },
+    "StabilizeBorder": {
+      "description": "TRACK-002: how the stabilized output covers regions the inverse warp maps\noutside the source frame. `Fill` paints `fill_color`; `replicate` clamps\nto edge texels; `reflect` mirrors the frame at its boundary.",
+      "enum": [
+        "fill",
+        "replicate",
+        "reflect"
+      ],
+      "type": "string"
+    },
+    "StabilizeSampling": {
+      "description": "TRACK-002: source-frame resampling for the stabilized inverse warp.",
+      "enum": [
+        "nearest",
+        "bilinear"
+      ],
+      "type": "string"
     },
     "StreamKind": {
       "enum": [
@@ -15819,6 +16030,17 @@
         {
           "additionalProperties": false,
           "properties": {
+            "interpolation": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/FrameInterpolation"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "TRACK-003: absent keeps the legacy single-frame sample."
+            },
             "kind": {
               "const": "piecewise_linear",
               "type": "string"

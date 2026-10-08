@@ -2046,7 +2046,7 @@
    "priority": "P2",
    "area": "tracking",
    "title": "手ブレ補正（スタビライズ）",
-   "status": "planned",
+   "status": "done",
    "dependencies": [
     "TRACK-001"
    ],
@@ -2061,7 +2061,7 @@
    "priority": "P2",
    "area": "tracking",
    "title": "オプティカルフロー補間: 滑らかなスローモーション",
-   "status": "planned",
+   "status": "done",
    "dependencies": [
     "TRACK-001",
     "NLE-006"

@@ -78,6 +78,20 @@ template_instance.retime は選択 variant の authoring 尺と公開 duration p
 hold map を持つクリップを生成する。検証は [NLE-006](../testing/nle-006.md)
 を参照。
 
+### TRACK-003 の中間フレーム補間
+
+[ADR-0123](../adr/0123-optical-flow-retime-interpolation.md) で
+`PiecewiseTimeMap` に版付き `interpolation` モードを追加した。
+`"optical_flow"` は `OpticalFlowConfig`（block/search 半径・ピラミッド段数・
+有理数の信頼度閾値・明示の `flow_fallback`）を保持し、map の同一性・
+直列化・hash に含まれる。`map` 自体の有理数意味は変わらず、補間は mapped
+時刻が presentation frame の中間へ落ちたときだけ decode 層が働く。
+`Linear` / `Protected` map と非 video ソースには付けられず、
+Sequence 検証が video asset clip・順方向サンプリングを要求する。
+pin なしの旧 snapshot は authored interpolation を持つ project で
+`UNSUPPORTED_FEATURE` にする（[ADR-0123](../adr/0123-optical-flow-retime-interpolation.md)
+・検証は [TRACK-003](../testing/track-003.md) を参照）。
+
 ## 純粋評価
 
 通常のアニメーションは任意時刻の純粋評価とする（[ADR-0003](../adr/0003-pure-evaluation-at-arbitrary-time.md)）。同じスナップショット・時刻・インスタンスに対する評価結果は、要求順（順方向・逆順・ランダム）に依存しない。状態を必要とする表現は Simulation（[06 拡張点](06-extensions.md)）へ分離する。

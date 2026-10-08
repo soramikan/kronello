@@ -424,3 +424,81 @@ fn map_json_roundtrips_and_preserves_validation() {
     assert!(serde_json::from_str::<TimeMap>(r#"{"kind":"piecewise_linear","points":[]}"#).is_err());
     assert!(serde_json::from_str::<TimeMap>(r#"{"kind":"nonlinear"}"#).is_err());
 }
+
+#[test]
+fn track003_frame_interpolation_wire_and_validation() {
+    use kronello_time::{FlowFallbackPolicy, FrameInterpolation, OpticalFlowConfig};
+    let config = OpticalFlowConfig {
+        block_radius: 2,
+        search_radius: 4,
+        levels: 2,
+        confidence_floor: r(1, 4),
+        max_low_confidence: r(1, 2),
+        flow_fallback: Some(FlowFallbackPolicy::Blend),
+    };
+    config.validate().unwrap();
+    let interpolation = FrameInterpolation::OpticalFlow(config);
+    let map = TimeMap::piecewise_linear_with_interpolation(
+        vec![point(0, 0), point(2, 1)],
+        Some(interpolation),
+    )
+    .unwrap();
+    assert_eq!(map.interpolation(), Some(interpolation));
+    // The authored mode rides the map identity through the wire form.
+    let wire = serde_json::to_string(&map).unwrap();
+    let back: TimeMap = serde_json::from_str(&wire).unwrap();
+    assert_eq!(back, map);
+    // Linear/protected maps carry no authored mode.
+    assert_eq!(TimeMap::linear(t(0), t(1)).unwrap().interpolation(), None);
+    // Out-of-range fields fail construction and direct validation with the
+    // typed error.
+    for bad in [
+        OpticalFlowConfig {
+            block_radius: 0,
+            ..config
+        },
+        OpticalFlowConfig {
+            search_radius: 65,
+            ..config
+        },
+        OpticalFlowConfig {
+            levels: 7,
+            ..config
+        },
+        OpticalFlowConfig {
+            confidence_floor: r(3, 2),
+            ..config
+        },
+        OpticalFlowConfig {
+            max_low_confidence: r(-1, 2),
+            ..config
+        },
+    ] {
+        assert_eq!(bad.validate(), Err(TimeError::InvalidFrameInterpolation));
+        assert_eq!(
+            TimeMap::piecewise_linear_with_interpolation(
+                vec![point(0, 0), point(2, 1)],
+                Some(FrameInterpolation::OpticalFlow(bad)),
+            ),
+            Err(TimeError::InvalidFrameInterpolation)
+        );
+    }
+    // The wire form round-trips through validation on deserialization.
+    let bad_wire = serde_json::json!({
+        "kind": "piecewise_linear",
+        "points": [
+            {"parent": {"num": "0", "den": "1"}, "local": {"num": "0", "den": "1"}},
+            {"parent": {"num": "2", "den": "1"}, "local": {"num": "1", "den": "1"}}
+        ],
+        "interpolation": {
+            "mode": "optical_flow",
+            "block_radius": 0,
+            "search_radius": 4,
+            "levels": 2,
+            "confidence_floor": {"num": "1", "den": "4"},
+            "max_low_confidence": {"num": "1", "den": "2"},
+            "flow_fallback": null
+        }
+    });
+    assert!(serde_json::from_value::<TimeMap>(bad_wire).is_err());
+}

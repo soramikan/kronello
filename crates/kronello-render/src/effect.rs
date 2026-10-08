@@ -145,6 +145,19 @@ pub enum PixelEffect {
         lut: kronello_model::CubeLut,
         intensity: f32,
     },
+    /// TRACK-002 (ADR-0122): inverse-warp stabilization in the source-pixel
+    /// frame. `frame` maps output-lattice pixels onto corrected source-lattice
+    /// positions (the tracked inverse); `unmap` maps them back to input raster
+    /// positions; `size` is the source frame extent in pixels. `border` is
+    /// the uncovered-region policy with `fill` for `Fill`.
+    Stabilize {
+        frame: [[f32; 3]; 2],
+        unmap: [[f32; 3]; 2],
+        size: [f32; 2],
+        border: kronello_model::StabilizeBorder,
+        fill: Color,
+        sampling: kronello_model::StabilizeSampling,
+    },
 }
 /// Kernel tag shared by all COLOR-002 v1 pointwise passes.
 pub const COLOR002_KERNEL_VERSION: &str = "color002-pointwise-f16-v1";
@@ -155,6 +168,28 @@ pub const STANDARD_KERNEL_VERSION: &str = "fx005006-keying-standard-f16-v1";
 const STANDARD_KERNEL_MAX_RADIUS: f32 = 1024.0;
 /// Kernel tag for the COLOR-003 tetrahedral LUT pass.
 pub const COLOR003_KERNEL_VERSION: &str = "color003-tetrahedral-f16-v1";
+/// Kernel tag for the TRACK-002 stabilize warp pass.
+pub const STABILIZE_KERNEL_VERSION: &str = "track002-stabilize-warp-f16-v1";
+/// Inverse of a row-major 2x3 affine in f64; `None` when degenerate or
+/// non-finite. Used only by stabilize bound estimation.
+fn stabilize_inverse(m: &[[f32; 3]; 2]) -> Option<[[f64; 3]; 2]> {
+    let (a, b, tx) = (f64::from(m[0][0]), f64::from(m[0][1]), f64::from(m[0][2]));
+    let (d, e, ty) = (f64::from(m[1][0]), f64::from(m[1][1]), f64::from(m[1][2]));
+    let det = a * e - b * d;
+    if !det.is_finite() || det.abs() <= 1e-12 {
+        return None;
+    }
+    let (ia, ib, id, ie) = (e / det, -b / det, -d / det, a / det);
+    let out = [
+        [ia, ib, -(ia * tx + ib * ty)],
+        [id, ie, -(id * tx + ie * ty)],
+    ];
+    if out.iter().flatten().all(|v| v.is_finite()) {
+        Some(out)
+    } else {
+        None
+    }
+}
 impl PixelEffect {
     /// COLOR-002 corrections are pointwise: no kernel, no neighborhood input.
     pub fn is_pointwise_color(&self) -> bool {
@@ -178,6 +213,7 @@ impl PixelEffect {
                 | Self::Sharpen { .. }
                 | Self::Vignette { .. }
                 | Self::CornerPin { .. }
+                | Self::Stabilize { .. }
         )
     }
     /// Scale-only lowering retains the historic meaning: the map is a pure
@@ -269,6 +305,13 @@ impl PixelEffect {
                     source: None,
                 })
             }
+            // TRACK-002 builds from the scene-resolved tracking transform and
+            // the node's video extent, not from the generic design map.
+            ResolvedEffect::Stabilize { .. } => {
+                return Err(RenderError::InvalidInput(
+                    "stabilize effects require scene-resolved tracking data".into(),
+                ));
+            }
             _ => None,
         };
         if let Some(result) = standard {
@@ -277,12 +320,42 @@ impl PixelEffect {
         }
         Self::from_design_spatial(effect, scale)
     }
+    /// TRACK-002 (ADR-0122): build the pixel warp from the scene-resolved
+    /// output→corrected-source inverse (`frame`) and `unmap`, the map from
+    /// output pixels back onto the drawn input raster. `size` is the authored
+    /// video extent in pixels.
+    pub fn stabilize(
+        frame: Affine2,
+        unmap: Affine2,
+        size: [f64; 2],
+        border: kronello_model::StabilizeBorder,
+        fill: Color,
+        sampling: kronello_model::StabilizeSampling,
+    ) -> Result<Self, RenderError> {
+        let cast = |m: [[f64; 3]; 2]| m.map(|r| r.map(|v| v as f32));
+        let result = Self::Stabilize {
+            frame: cast(frame.0),
+            unmap: cast(unmap.0),
+            size: size.map(|v| v as f32),
+            border,
+            fill,
+            sampling,
+        };
+        result.validate()?;
+        Ok(result)
+    }
     fn from_design_spatial(effect: &ResolvedEffect, scale: [f64; 2]) -> Result<Self, RenderError> {
         // COLOR-003 carries an asset reference, not lattice bytes; the DAG
         // builder resolves it against the snapshot luts input.
         if let ResolvedEffect::ColorLut { .. } = effect {
             return Err(RenderError::InvalidInput(
                 "color lut effects require scene-resolved lattice data".into(),
+            ));
+        }
+        // TRACK-002 likewise requires its scene-resolved inverse transform.
+        if let ResolvedEffect::Stabilize { .. } = effect {
+            return Err(RenderError::InvalidInput(
+                "stabilize effects require scene-resolved tracking data".into(),
             ));
         }
         // COLOR-002 parameters are resolution-checked in the model crate; the
@@ -414,7 +487,9 @@ impl PixelEffect {
         }
     }
     pub fn kernel_version(&self) -> &'static str {
-        if matches!(self, Self::ColorLut { .. }) {
+        if matches!(self, Self::Stabilize { .. }) {
+            STABILIZE_KERNEL_VERSION
+        } else if matches!(self, Self::ColorLut { .. }) {
             COLOR003_KERNEL_VERSION
         } else if self.is_pointwise_color() {
             COLOR002_KERNEL_VERSION
@@ -427,7 +502,9 @@ impl PixelEffect {
         }
     }
     pub fn semantic_version(&self) -> u32 {
-        if self.is_pointwise_color() {
+        if matches!(self, Self::Stabilize { .. }) {
+            kronello_model::STABILIZE_VERSION
+        } else if self.is_pointwise_color() {
             kronello_model::COLOR_EFFECT_VERSION
         } else if self.is_standard() {
             kronello_model::STANDARD_EFFECT_VERSION
@@ -475,12 +552,14 @@ impl PixelEffect {
     }
     /// Gaussian sigma equivalents for the separable kernel paths: blur sigma
     /// for blur/shadow, `radius` for glow/sharpen, `edge_feather` for keying.
+    /// Warp kernels (stabilize) have no Gaussian support.
     fn kernel_sigmas(&self) -> Vec<[f32; 2]> {
         match self {
             Self::Glow { radius, .. } | Self::Sharpen { radius, .. } => vec![*radius],
             Self::ChromaKey { edge_feather, .. } | Self::LumaKey { edge_feather, .. } => {
                 vec![*edge_feather]
             }
+            Self::Stabilize { .. } => vec![],
             _ => vec![self.sigma()],
         }
     }
@@ -591,6 +670,18 @@ impl PixelEffect {
                     *pins,
                 )?;
             }
+            Self::Stabilize {
+                frame, unmap, size, ..
+            } => {
+                let finite2x3 = |m: &[[f32; 3]; 2]| m.iter().flatten().all(|v| v.is_finite());
+                if !finite2x3(frame)
+                    || !finite2x3(unmap)
+                    || size.iter().any(|v| !v.is_finite() || *v <= 0.0)
+                    || size.iter().any(|v| *v > 1_000_000.0)
+                {
+                    return Err(invalid());
+                }
+            }
             _ => unreachable!("not a standard effect"),
         }
         // Kernel budgets: erosions cap at the Gaussian radius; feathers and
@@ -689,6 +780,39 @@ impl PixelEffect {
             | Self::Glow { .. }
             | Self::Sharpen { .. } => output.expand(halo),
             Self::CornerPin { source, .. } => source.unwrap_or(output),
+            // TRACK-002: the kernel reads the input raster at `unmap(s')`
+            // where s' is the border-resolved source-extent position, so the
+            // conservative request is the `unmap` hull of the source frame.
+            Self::Stabilize { unmap, size, .. } => {
+                let r = |c: [f64; 2]| {
+                    [
+                        f64::from(unmap[0][0]) * c[0]
+                            + f64::from(unmap[0][1]) * c[1]
+                            + f64::from(unmap[0][2]),
+                        f64::from(unmap[1][0]) * c[0]
+                            + f64::from(unmap[1][1]) * c[1]
+                            + f64::from(unmap[1][2]),
+                    ]
+                };
+                let (w, h) = (f64::from(size[0]), f64::from(size[1]));
+                let corners = [r([0.0, 0.0]), r([w, 0.0]), r([w, h]), r([0.0, h])];
+                PixelBounds {
+                    min: [0, 1].map(|i| {
+                        corners
+                            .iter()
+                            .map(|c| c[i])
+                            .fold(f64::INFINITY, f64::min)
+                            .floor()
+                    }),
+                    max: [0, 1].map(|i| {
+                        corners
+                            .iter()
+                            .map(|c| c[i])
+                            .fold(f64::NEG_INFINITY, f64::max)
+                            .ceil()
+                    }),
+                }
+            }
             Self::DropShadow { offset, .. } | Self::AffineDropShadow { offset, .. } => {
                 let shifted = output.translate(offset.map(|v| -f64::from(v)));
                 let shifted = PixelBounds {
@@ -712,6 +836,51 @@ impl PixelEffect {
             | Self::Sharpen { .. } => input.expand(halo),
             Self::ChromaKey { .. } | Self::LumaKey { .. } | Self::Vignette { .. } => input,
             Self::CornerPin { pins, .. } => corner_pin_hull(*pins),
+            // TRACK-002: edge-extension borders keep coverage over the whole
+            // input raster; a transparent fill only covers output pixels whose
+            // corrected source position lands inside the frame, i.e. the
+            // inverse-`frame` hull of the source rectangle.
+            Self::Stabilize {
+                frame,
+                size,
+                border,
+                fill,
+                ..
+            } => {
+                if *border == kronello_model::StabilizeBorder::Fill
+                    && fill.components().alpha.get() == 0.0
+                {
+                    let (w, h) = (f64::from(size[0]), f64::from(size[1]));
+                    let Some(inv) = stabilize_inverse(frame) else {
+                        return input;
+                    };
+                    let r = |c: [f64; 2]| {
+                        [
+                            inv[0][0] * c[0] + inv[0][1] * c[1] + inv[0][2],
+                            inv[1][0] * c[0] + inv[1][1] * c[1] + inv[1][2],
+                        ]
+                    };
+                    let corners = [r([0.0, 0.0]), r([w, 0.0]), r([w, h]), r([0.0, h])];
+                    PixelBounds {
+                        min: [0, 1].map(|i| {
+                            corners
+                                .iter()
+                                .map(|c| c[i])
+                                .fold(f64::INFINITY, f64::min)
+                                .floor()
+                        }),
+                        max: [0, 1].map(|i| {
+                            corners
+                                .iter()
+                                .map(|c| c[i])
+                                .fold(f64::NEG_INFINITY, f64::max)
+                                .ceil()
+                        }),
+                    }
+                } else {
+                    input
+                }
+            }
             Self::DropShadow { offset, .. } | Self::AffineDropShadow { offset, .. } => {
                 let shifted = input.expand(halo).translate(offset.map(f64::from));
                 input.union(PixelBounds {
