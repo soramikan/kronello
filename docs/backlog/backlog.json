@@ -2245,7 +2245,7 @@
       "priority": "P2",
       "area": "media",
       "title": "配信拡張: チャプター・マルチ出力・追加コーデック profile",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "AUDIO-005"
       ],

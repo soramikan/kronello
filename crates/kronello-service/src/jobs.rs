@@ -116,6 +116,52 @@ pub enum JobOutput {
         clips: Vec<JobAudioClip>,
         background: [f32; 3],
     },
+    /// MEDIA-004 (ADR-0133): DNxHD/DNxHR + PCM24 in MOV. `dnx_profile`
+    /// selects the closed `dnxhd` encoder profile.
+    DnxMov {
+        profile_version: u32,
+        dnx_profile: kronello_media::DnxProfile,
+        #[serde(default)]
+        audio: kronello_audio::AudioSourceMode,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        audio_layout: Option<ChannelMask>,
+        clips: Vec<JobAudioClip>,
+        background: [f32; 3],
+    },
+    /// MEDIA-004: DNxHD/DNxHR + PCM24 in MXF.
+    DnxMxf {
+        profile_version: u32,
+        dnx_profile: kronello_media::DnxProfile,
+        #[serde(default)]
+        audio: kronello_audio::AudioSourceMode,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        audio_layout: Option<ChannelMask>,
+        clips: Vec<JobAudioClip>,
+        background: [f32; 3],
+    },
+    /// MEDIA-004: deterministic two-phase indexed-color GIF (video only).
+    Gif {
+        profile_version: u32,
+        background: [f32; 3],
+    },
+    /// MEDIA-004: MP3 CBR elementary audio (mono/stereo layouts only).
+    Mp3 {
+        profile_version: u32,
+        #[serde(default)]
+        audio: kronello_audio::AudioSourceMode,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        audio_layout: Option<ChannelMask>,
+        clips: Vec<JobAudioClip>,
+    },
+    /// MEDIA-004: FLAC lossless elementary audio.
+    Flac {
+        profile_version: u32,
+        #[serde(default)]
+        audio: kronello_audio::AudioSourceMode,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        audio_layout: Option<ChannelMask>,
+        clips: Vec<JobAudioClip>,
+    },
     /// Subtitle sidecar file (`caption_format` selects srt/vtt/itt). The job
     /// serializes cue documents from the fixed snapshot; no frames render.
     CaptionSidecar {
@@ -143,11 +189,25 @@ impl JobOutput {
             | Self::H264Mov { .. }
             | Self::HevcMov { .. }
             | Self::Av1Webm { .. }
+            | Self::DnxMov { .. }
+            | Self::DnxMxf { .. }
+            | Self::Gif { .. }
+            | Self::Mp3 { .. }
+            | Self::Flac { .. }
             | Self::CaptionSidecar { .. } => &[1],
         }
     }
     pub(crate) fn movie_settings(&self) -> Result<MovieSettings<'_>, ServiceError> {
-        let (profile, version, audio, audio_layout, clips, background) = match self {
+        type OutputTuple<'a> = (
+            MovieProfile,
+            u32,
+            kronello_audio::AudioSourceMode,
+            Option<ChannelMask>,
+            &'a [JobAudioClip],
+            [f32; 3],
+        );
+        let (profile, version, audio, audio_layout, clips, background): OutputTuple<'_> = match self
+        {
             Self::ImageSequence | Self::CaptionSidecar { .. } => {
                 return Err(ServiceError::invalid(
                     "render.export requires a movie profile",
@@ -294,6 +354,67 @@ impl JobOutput {
                 clips,
                 *background,
             ),
+            Self::DnxMov {
+                profile_version,
+                dnx_profile,
+                audio,
+                audio_layout,
+                clips,
+                background,
+            }
+            | Self::DnxMxf {
+                profile_version,
+                dnx_profile,
+                audio,
+                audio_layout,
+                clips,
+                background,
+            } => (
+                MovieProfile::dnx(*dnx_profile, matches!(self, Self::DnxMxf { .. })),
+                *profile_version,
+                *audio,
+                *audio_layout,
+                clips,
+                *background,
+            ),
+            Self::Gif {
+                profile_version,
+                background,
+            } => (
+                MovieProfile::GifV1,
+                *profile_version,
+                // A GIF leg carries no audio stream; the snapshot pins silence.
+                kronello_audio::AudioSourceMode::Silence,
+                None,
+                &[],
+                *background,
+            ),
+            Self::Mp3 {
+                profile_version,
+                audio,
+                audio_layout,
+                clips,
+            } => (
+                MovieProfile::Mp3V1,
+                *profile_version,
+                *audio,
+                *audio_layout,
+                clips,
+                [0.0; 3],
+            ),
+            Self::Flac {
+                profile_version,
+                audio,
+                audio_layout,
+                clips,
+            } => (
+                MovieProfile::FlacV1,
+                *profile_version,
+                *audio,
+                *audio_layout,
+                clips,
+                [0.0; 3],
+            ),
         };
         let audio_layout = audio_layout.unwrap_or(ChannelMask::STEREO);
         let legacy = profile == MovieProfile::ProResPcm24;
@@ -314,6 +435,14 @@ impl JobOutput {
                 "multichannel audio requires profile_version 3",
             ));
         }
+        // MEDIA-004: MP3 is mono/stereo CBR; wider layouts are a typed
+        // capability rejection, not an encoder failure.
+        if profile == MovieProfile::Mp3V1 && audio_layout.channels() > 2 {
+            return Err(ServiceError::new(
+                "UNSUPPORTED_FEATURE",
+                "mp3 requires a mono or stereo audio layout",
+            ));
+        }
         Ok(MovieSettings {
             profile,
             audio_version: if legacy { version } else { 3 },
@@ -323,6 +452,26 @@ impl JobOutput {
             background,
         })
     }
+}
+fn chapters_transfer(policy: &kronello_media::ChapterPolicy) -> bool {
+    *policy == kronello_media::ChapterPolicy::Transfer
+}
+/// MEDIA-004 (ADR-0133): one additional delivery leg of an `export.render`
+/// job. All legs share the single render pass; each leg has its own frozen
+/// export snapshot, staged artifact, probe verification and no-clobber
+/// publish. Any leg failure fails the whole job.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct OutputSpec {
+    /// Absolute publish destination; the extension must match the profile's
+    /// container and the path must be free at submission.
+    pub destination: PathBuf,
+    #[serde(default)]
+    pub output: JobOutput,
+    /// Chapter transfer policy for this leg; incapable containers produce a
+    /// typed `CHAPTERS_DROPPED` warning rather than silent loss.
+    #[serde(default, skip_serializing_if = "chapters_transfer")]
+    pub chapters: kronello_media::ChapterPolicy,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -335,6 +484,12 @@ pub struct RenderSubmitRequest {
     pub render: SequenceRenderRequest,
     #[serde(default)]
     pub output: JobOutput,
+    /// MEDIA-004: chapter transfer policy for the primary `output` leg.
+    #[serde(default, skip_serializing_if = "chapters_transfer")]
+    pub chapters: kronello_media::ChapterPolicy,
+    /// MEDIA-004 (ADR-0133): extra output legs sharing the one render pass.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub outputs: Vec<OutputSpec>,
     #[serde(default)]
     pub required_features: Vec<String>,
 }
@@ -539,6 +694,26 @@ pub(crate) fn features(required: &[String]) -> Result<(), ServiceError> {
     }
     Ok(())
 }
+/// MEDIA-004 (ADR-0133): every extra leg stages inside the primary output's
+/// staging directory, so all publish destinations must live on the same
+/// filesystem volume for the atomic no-clobber publish to be possible. A
+/// missing parent is not diagnosed here — publication reports the IO error.
+fn same_publish_volume(a: &Path, b: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let meta = |p: &Path| p.parent().and_then(|d| std::fs::metadata(d).ok());
+        match (meta(a), meta(b)) {
+            (Some(a), Some(b)) => a.dev() == b.dev(),
+            _ => true,
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (a, b);
+        true
+    }
+}
 impl Service<'_> {
     /// Embedders supply the same-version executable implementing worker_entry.
     /// CLI and MCP use their own executable by default.
@@ -588,6 +763,9 @@ impl Service<'_> {
         })?;
         request.render.input.project = project_path;
         request.render.output_directory = absolute(&request.render.output_directory)?;
+        for spec in &mut request.outputs {
+            spec.destination = absolute(&spec.destination)?;
+        }
         for font in &mut request.render.input.fonts {
             font.path = absolute(&font.path)?;
         }
@@ -630,6 +808,20 @@ impl Service<'_> {
                 "job range must contain at least one frame",
             ));
         }
+        // MEDIA-004 (ADR-0133): extra legs fan out only from movie-capable
+        // primaries; every leg's destination is validated and must be free.
+        if !request.outputs.is_empty()
+            && matches!(
+                request.output,
+                JobOutput::ImageSequence | JobOutput::CaptionSidecar { .. }
+            )
+        {
+            return Err(ServiceError::new(
+                "UNSUPPORTED_FEATURE",
+                "multi-output requires a movie-capable primary output",
+            ));
+        }
+        let mut destinations = std::collections::BTreeSet::new();
         match &request.output {
             JobOutput::ImageSequence => (),
             JobOutput::CaptionSidecar {
@@ -643,6 +835,26 @@ impl Service<'_> {
                 validate_movie_destination(&request.render.output_directory, &request.output)?;
                 movie_snapshot(&snapshot, &request.output)?;
             }
+        }
+        destinations.insert(request.render.output_directory.clone());
+        for spec in &request.outputs {
+            if spec.destination.exists() {
+                return Err(ServiceError::new(
+                    "OUTPUT_EXISTS",
+                    "destination already exists",
+                ));
+            }
+            if !destinations.insert(spec.destination.clone()) {
+                return Err(ServiceError::invalid("output destinations must differ"));
+            }
+            if !same_publish_volume(&request.render.output_directory, &spec.destination) {
+                return Err(ServiceError::new(
+                    "UNSUPPORTED_FEATURE",
+                    "delivery outputs must share the primary destination volume",
+                ));
+            }
+            validate_movie_destination(&spec.destination, &spec.output)?;
+            movie_snapshot(&snapshot, &spec.output)?;
         }
         Ok(snapshot)
     }
@@ -1021,23 +1233,67 @@ impl Service<'_> {
                 }
                 output => {
                     let settings = output.movie_settings()?;
-                    let probe =
-                        MediaRuntime::load()?
-                            .probe(&record.destination)
+                    let (snapshot, _) = fixed.render_parts()?;
+                    let report: kronello_media::AvExportReport =
+                        serde_json::from_value(result["report"].clone())?;
+                    // MEDIA-004: re-validate every published leg against its
+                    // own profile shape, destination and frozen snapshot hash.
+                    let mut legs = vec![(
+                        record.destination.clone(),
+                        output.clone(),
+                        settings.audio_layout,
+                    )];
+                    for spec in &request.outputs {
+                        legs.push((
+                            spec.destination.clone(),
+                            spec.output.clone(),
+                            spec.output.movie_settings()?.audio_layout,
+                        ));
+                    }
+                    if legs.len() != report.outputs.len() {
+                        return Err(ServiceError::new(
+                            "OUTPUT_VALIDATION_FAILED",
+                            "published leg count differs from the receipt",
+                        ));
+                    }
+                    let runtime = MediaRuntime::load()?;
+                    for ((destination, leg_output, layout), leg) in legs.iter().zip(&report.outputs)
+                    {
+                        if !destination.exists() {
+                            return Err(ServiceError::new(
+                                "OUTPUT_VALIDATION_FAILED",
+                                "published leg is missing",
+                            ));
+                        }
+                        let expected = movie_snapshot(snapshot, leg_output)?;
+                        let probe = runtime.probe(destination).map_err(|error| {
+                            ServiceError::new("OUTPUT_VALIDATION_FAILED", error.to_string())
+                        })?;
+                        probe
+                            .verify_delivery(leg.profile, *layout)
                             .map_err(|error| {
                                 ServiceError::new("OUTPUT_VALIDATION_FAILED", error.to_string())
                             })?;
-                    probe
-                        .verify_movie_layout(settings.profile, settings.audio_layout)
-                        .map_err(|error| {
-                            ServiceError::new("OUTPUT_VALIDATION_FAILED", error.to_string())
-                        })?;
-                    let (snapshot, _) = fixed.render_parts()?;
+                        // MXF legs embed no custom tags; they authenticate
+                        // through probe shape and the receipt hash instead.
+                        if leg.profile.embeds_snapshot_identity()
+                            && (probe.render_snapshot_hash != record.snapshot_hash
+                                || probe.export_snapshot_hash != expected.content_hash()?)
+                        {
+                            return Err(ServiceError::new(
+                                "OUTPUT_VALIDATION_FAILED",
+                                "published leg snapshot identity differs",
+                            ));
+                        }
+                    }
+                    let probe = runtime.probe(&record.destination).map_err(|error| {
+                        ServiceError::new("OUTPUT_VALIDATION_FAILED", error.to_string())
+                    })?;
                     let expected = movie_snapshot(snapshot, output)?;
-                    let report: kronello_media::AvExportReport =
-                        serde_json::from_value(result["report"].clone())?;
-                    if probe.render_snapshot_hash != record.snapshot_hash
-                        || probe.export_snapshot_hash != expected.content_hash()?
+                    let embeds = expected.movie_profile().embeds_snapshot_identity();
+                    if (embeds
+                        && (probe.render_snapshot_hash != record.snapshot_hash
+                            || probe.export_snapshot_hash != expected.content_hash()?))
                         || report.frames.len() as u64 != record.total_frames
                         || report.render_snapshot_hash != record.snapshot_hash
                         || report
@@ -1115,6 +1371,34 @@ impl Service<'_> {
             output => {
                 movie_snapshot(snapshot, output)?;
             }
+        }
+        // MEDIA-004: every extra leg re-validates its own fixed snapshot and
+        // destination contract against the same frozen render.
+        if !request.outputs.is_empty()
+            && matches!(
+                request.output,
+                JobOutput::ImageSequence | JobOutput::CaptionSidecar { .. }
+            )
+        {
+            return Err(ServiceError::new(
+                "UNSUPPORTED_FEATURE",
+                "multi-output requires a movie-capable primary output",
+            ));
+        }
+        let mut destinations = std::collections::BTreeSet::new();
+        destinations.insert(request.render.output_directory.clone());
+        for spec in &request.outputs {
+            if !destinations.insert(spec.destination.clone()) {
+                return Err(ServiceError::invalid("output destinations must differ"));
+            }
+            if !same_publish_volume(&request.render.output_directory, &spec.destination) {
+                return Err(ServiceError::new(
+                    "UNSUPPORTED_FEATURE",
+                    "delivery outputs must share the primary destination volume",
+                ));
+            }
+            validate_movie_destination(&spec.destination, &spec.output)?;
+            movie_snapshot(snapshot, &spec.output)?;
         }
         features(&request.required_features)?;
         if snapshot.content_hash()? != record.snapshot_hash {
@@ -1333,19 +1617,52 @@ impl Service<'_> {
                     output => {
                         let settings = output.movie_settings()?;
                         let runtime = MediaRuntime::load()?;
-                        let av = movie_snapshot(snapshot, &request.output)?;
-                        let report = runtime.export_av_with_checkpoint(
-                            &av,
+                        let primary_av = movie_snapshot(snapshot, &request.output)?;
+                        // MEDIA-004 (ADR-0133): extra legs stage beside the
+                        // primary artifact inside a directory-shaped output
+                        // staging path, then publish per leg.
+                        let multi = !request.outputs.is_empty();
+                        if multi {
+                            std::fs::create_dir(&stage_path)?;
+                        }
+                        let leg_path = |index: usize, container: &str| -> PathBuf {
+                            if multi {
+                                stage_path.join(format!("leg_{index}.{container}"))
+                            } else {
+                                // The single staged artifact still carries its
+                                // container extension: media validates every
+                                // leg path against the profile's container.
+                                stage_path.with_extension(container)
+                            }
+                        };
+                        let mut av_snapshots = vec![primary_av];
+                        let mut delivery_outputs = Vec::with_capacity(request.outputs.len());
+                        for (index, spec) in request.outputs.iter().enumerate() {
+                            let leg_settings = spec.output.movie_settings()?;
+                            delivery_outputs.push(kronello_media::DeliveryOutput {
+                                output: leg_path(index + 1, leg_settings.profile.container()),
+                                profile: leg_settings.profile,
+                                background: leg_settings.background,
+                                chapters: spec.chapters,
+                            });
+                            av_snapshots.push(movie_snapshot(snapshot, &spec.output)?);
+                        }
+                        let leg0 = leg_path(0, settings.profile.container());
+                        let av_refs: Vec<&AvExportSnapshot> = av_snapshots.iter().collect();
+                        let report = runtime.export_delivery_with_checkpoint(
+                            &av_refs,
                             &render.input.project,
                             &fonts,
                             backend,
                             &AvExportRequest {
-                                output: stage_path.clone(),
+                                output: leg0.clone(),
                                 range: render.range,
                                 frame_rate: render.frame_rate,
                                 region: render.input.region,
                                 background: settings.background,
                                 clipping: kronello_audio::ClippingPolicy::Reject,
+                                chapters: request.chapters,
+                                outputs: delivery_outputs,
                             },
                             &mut |n| {
                                 checkpoint(n).map_err(kronello_media::MediaError::InvalidInput)
@@ -1355,15 +1672,31 @@ impl Service<'_> {
                         if std::env::var_os("KRONELLO_TEST_JOB_CORRUPT_OUTPUT").as_deref()
                             == Some(std::ffi::OsStr::new("1"))
                         {
-                            std::fs::write(&stage_path, b"corrupt")?;
+                            std::fs::write(&leg0, b"corrupt")?;
                         }
-                        let probe = runtime.probe(&stage_path).map_err(|e| {
-                            ServiceError::new("OUTPUT_VALIDATION_FAILED", e.to_string())
-                        })?;
-                        probe.verify_movie_layout(settings.profile, settings.audio_layout)?;
-                        if report.frames.len() as u64 != record.total_frames
-                            || probe.render_snapshot_hash != record.snapshot_hash
-                        {
+                        // Every leg verifies independently; movie legs also
+                        // bind snapshot identities embedded by the muxer.
+                        for (index, leg) in report.outputs.iter().enumerate() {
+                            let probe = runtime.probe(&leg.output).map_err(|e| {
+                                ServiceError::new("OUTPUT_VALIDATION_FAILED", e.to_string())
+                            })?;
+                            probe
+                                .verify_delivery(leg.profile, av_snapshots[index].audio_layout())
+                                .map_err(|e| {
+                                    ServiceError::new("OUTPUT_VALIDATION_FAILED", e.to_string())
+                                })?;
+                            if leg.profile.embeds_snapshot_identity()
+                                && (probe.render_snapshot_hash != record.snapshot_hash
+                                    || probe.export_snapshot_hash
+                                        != av_snapshots[index].content_hash()?)
+                            {
+                                return Err(ServiceError::new(
+                                    "OUTPUT_VALIDATION_FAILED",
+                                    "published leg snapshot identity differs",
+                                ));
+                            }
+                        }
+                        if report.frames.len() as u64 != record.total_frames {
                             return Err(ServiceError::new(
                                 "OUTPUT_VALIDATION_FAILED",
                                 "MOV frame count or snapshot identity differs",
@@ -1380,14 +1713,84 @@ impl Service<'_> {
         }
         let mut result = rendered?;
         // Paths in the report describe the deliverable rather than staging.
-        if let Some(request) = result.get_mut("request") {
-            request["output"] = serde_json::to_value(destination)?;
+        if let Some(request_json) = result.get_mut("request") {
+            request_json["output"] = serde_json::to_value(destination)?;
+            if let Some(outputs) = request_json
+                .get_mut("outputs")
+                .and_then(|v| v.as_array_mut())
+            {
+                for (value, spec) in outputs.iter_mut().zip(&request.outputs) {
+                    value["output"] = serde_json::to_value(&spec.destination)?;
+                }
+            }
         }
-        let result =
+        // MEDIA-004: per-leg reports carry each leg's final destination.
+        if let Some(outputs) = result.get_mut("outputs").and_then(|v| v.as_array_mut()) {
+            for (index, value) in outputs.iter_mut().enumerate() {
+                let leg_destination = if index == 0 {
+                    destination.clone()
+                } else {
+                    request.outputs[index - 1].destination.clone()
+                };
+                value["output"] = serde_json::to_value(leg_destination)?;
+            }
+        }
+        let mut result_json =
             serde_json::json!({"destination": destination, "validated": true, "report": result});
-        store.prepare_publication(record, &stage_path, result.clone())?;
-        store.publish_attempt(&record.id, record.attempt, result, || {
-            kronello_jobs::publish_path(&stage_path, destination)?;
+        if !request.outputs.is_empty() {
+            let destinations: Vec<&PathBuf> = std::iter::once(destination)
+                .chain(request.outputs.iter().map(|s| &s.destination))
+                .collect();
+            result_json["destinations"] = serde_json::to_value(destinations)?;
+        }
+        // The receipt hashes the published artifact set. A single movie leg is
+        // one staged file (`output.<container>`); a multi-output stage is the
+        // directory of leg files; sequences/sidecars keep `stage_path` itself.
+        let artifact_root = if !request.outputs.is_empty() {
+            stage_path.clone()
+        } else if let Ok(settings) = request.output.movie_settings() {
+            stage_path.with_extension(settings.profile.container())
+        } else {
+            stage_path.clone()
+        };
+        if request.outputs.is_empty() {
+            store.prepare_publication(record, &artifact_root, result_json.clone())?;
+        } else {
+            // Per-leg destinations let recovery reconcile a renamed set or
+            // refuse a partially published one instead of trusting leg 0.
+            let leg_destinations: Vec<PathBuf> = std::iter::once(destination.clone())
+                .chain(request.outputs.iter().map(|s| s.destination.clone()))
+                .collect();
+            store.prepare_publication_destinations(
+                record,
+                &artifact_root,
+                leg_destinations,
+                result_json.clone(),
+            )?;
+        }
+        // Staged leg paths -> publish destinations; computed before the lease
+        // transaction so the closure performs only atomic renames.
+        let mut publication = Vec::with_capacity(request.outputs.len() + 1);
+        if request.outputs.is_empty() {
+            publication.push((artifact_root.clone(), destination.clone()));
+        } else {
+            let container = request.output.movie_settings()?.profile.container();
+            publication.push((
+                stage_path.join(format!("leg_0.{container}")),
+                destination.clone(),
+            ));
+            for (index, spec) in request.outputs.iter().enumerate() {
+                let container = spec.output.movie_settings()?.profile.container();
+                publication.push((
+                    stage_path.join(format!("leg_{}.{container}", index + 1)),
+                    spec.destination.clone(),
+                ));
+            }
+        }
+        store.publish_attempt(&record.id, record.attempt, result_json, || {
+            for (staged, target) in &publication {
+                kronello_jobs::publish_path(staged, target)?;
+            }
             #[cfg(all(feature = "test-job-control", debug_assertions))]
             if let Some(gate) = std::env::var_os("KRONELLO_TEST_JOB_AFTER_RENAME_GATE") {
                 while !Path::new(&gate).exists() {
@@ -1695,6 +2098,17 @@ fn hdr_transfer(transfer: kronello_model::ExportTransfer) -> kronello_render::Hd
         kronello_model::ExportTransfer::Hlg => kronello_render::HdrTransfer::Hlg,
     }
 }
+fn dnx_profile(profile: kronello_model::ExportDnxProfile) -> kronello_media::DnxProfile {
+    use kronello_model::ExportDnxProfile as M;
+    match profile {
+        M::Dnxhd => kronello_media::DnxProfile::Dnxhd,
+        M::DnxhrLb => kronello_media::DnxProfile::DnxhrLb,
+        M::DnxhrSq => kronello_media::DnxProfile::DnxhrSq,
+        M::DnxhrHq => kronello_media::DnxProfile::DnxhrHq,
+        M::DnxhrHqx => kronello_media::DnxProfile::DnxhrHqx,
+        M::Dnxhr444 => kronello_media::DnxProfile::Dnxhr444,
+    }
+}
 fn job_audio_clip(clip: &kronello_model::ExportAudioClip) -> JobAudioClip {
     JobAudioClip {
         asset: clip.asset,
@@ -1811,6 +2225,65 @@ pub fn preset_job_output(output: &kronello_model::ExportOutput) -> JobOutput {
             clips: clips.iter().map(job_audio_clip).collect(),
             background: *background,
         },
+        model::DnxMov {
+            profile_version,
+            dnx_profile: profile,
+            audio,
+            audio_layout,
+            clips,
+            background,
+        } => JobOutput::DnxMov {
+            profile_version: *profile_version,
+            dnx_profile: dnx_profile(*profile),
+            audio: audio_mode(*audio),
+            audio_layout: *audio_layout,
+            clips: clips.iter().map(job_audio_clip).collect(),
+            background: *background,
+        },
+        model::DnxMxf {
+            profile_version,
+            dnx_profile: profile,
+            audio,
+            audio_layout,
+            clips,
+            background,
+        } => JobOutput::DnxMxf {
+            profile_version: *profile_version,
+            dnx_profile: dnx_profile(*profile),
+            audio: audio_mode(*audio),
+            audio_layout: *audio_layout,
+            clips: clips.iter().map(job_audio_clip).collect(),
+            background: *background,
+        },
+        model::Gif {
+            profile_version,
+            background,
+        } => JobOutput::Gif {
+            profile_version: *profile_version,
+            background: *background,
+        },
+        model::Mp3 {
+            profile_version,
+            audio,
+            audio_layout,
+            clips,
+        } => JobOutput::Mp3 {
+            profile_version: *profile_version,
+            audio: audio_mode(*audio),
+            audio_layout: *audio_layout,
+            clips: clips.iter().map(job_audio_clip).collect(),
+        },
+        model::Flac {
+            profile_version,
+            audio,
+            audio_layout,
+            clips,
+        } => JobOutput::Flac {
+            profile_version: *profile_version,
+            audio: audio_mode(*audio),
+            audio_layout: *audio_layout,
+            clips: clips.iter().map(job_audio_clip).collect(),
+        },
         model::CaptionSidecar {
             sequence,
             caption_format,
@@ -1914,6 +2387,8 @@ pub fn preset_submission(
             output_directory: destination,
         },
         output,
+        chapters: kronello_media::ChapterPolicy::Transfer,
+        outputs: Vec::new(),
         required_features: preset.required_features.clone(),
     })
 }

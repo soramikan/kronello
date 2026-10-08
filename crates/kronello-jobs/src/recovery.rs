@@ -165,6 +165,7 @@ mod tests {
             worker_store.prepare_publication_inner(
                 &running,
                 &output,
+                Vec::new(),
                 serde_json::json!({"validated":true,"report":{"frames":[1,2,3]}}),
                 || {
                     ready.send(()).unwrap();
@@ -370,6 +371,11 @@ struct Artifact {
 struct Receipt {
     identity: Identity,
     artifacts: Vec<Artifact>,
+    /// MEDIA-004 (ADR-0133): per-leg publish destinations for multi-output
+    /// jobs, ordered leg 0..N. Empty for single-artifact publications, which
+    /// reconcile by comparing the artifact tree under `record.destination`.
+    #[serde(default)]
+    destinations: Vec<PathBuf>,
     result: serde_json::Value,
 }
 fn digest_file(file: &mut std::fs::File) -> Result<(u64, String), JobError> {
@@ -596,12 +602,26 @@ impl JobStore {
         output: &Path,
         result: serde_json::Value,
     ) -> Result<(), JobError> {
-        self.prepare_publication_inner(record, output, result, || {})
+        self.prepare_publication_inner(record, output, Vec::new(), result, || {})
+    }
+    /// MEDIA-004 (ADR-0133): multi-output jobs publish one staged artifact per
+    /// destination. `destinations` records each leg's publish target (leg 0 is
+    /// `record.destination`) so recovery can reconcile or refuse a partially
+    /// renamed output set instead of comparing the primary destination alone.
+    pub fn prepare_publication_destinations(
+        &self,
+        record: &JobRecord,
+        output: &Path,
+        destinations: Vec<PathBuf>,
+        result: serde_json::Value,
+    ) -> Result<(), JobError> {
+        self.prepare_publication_inner(record, output, destinations, result, || {})
     }
     fn prepare_publication_inner(
         &self,
         record: &JobRecord,
         output: &Path,
+        destinations: Vec<PathBuf>,
         result: serde_json::Value,
         before_anchor: impl FnOnce(),
     ) -> Result<(), JobError> {
@@ -609,6 +629,7 @@ impl JobStore {
         let receipt = Receipt {
             identity: Identity::of(record),
             artifacts: artifacts(output)?,
+            destinations,
             result,
         };
         let path = self.receipt_path(record)?;
@@ -698,18 +719,84 @@ impl JobStore {
         }
         Ok(Some(receipt))
     }
-    fn reconcile_record(&self, record: &mut JobRecord) -> Result<bool, JobError> {
+    /// Reconcile a renamed-but-uncommitted publication. `stamps` receives the
+    /// observed stamp of every receipt destination that exists, so the caller
+    /// can detect both partial publication and post-validation tampering.
+    fn reconcile_record(
+        &self,
+        record: &mut JobRecord,
+        stamps: &mut Vec<(PathBuf, DestinationStamp)>,
+    ) -> Result<bool, JobError> {
         let path = self.receipt_path(record)?;
-        if !path.exists() || !record.destination.exists() {
+        if !path.exists() {
             return Ok(false);
         }
         self.input(record)?;
+        if !record.destination.exists() && record.publication_hash.is_none() {
+            // Unanchored receipt: the attempt crashed between the receipt
+            // write and the lease commit. Staging cleanup owns the file and
+            // any extra-leg destinations are unknowable until requeue.
+            return Ok(false);
+        }
         let receipt = self.read_receipt(record)?.ok_or_else(|| {
             JobError::new("OUTPUT_VALIDATION_FAILED", "missing publication receipt")
         })?;
-        if receipt.identity != Identity::of(record)
-            || receipt.artifacts != artifacts(&record.destination)?
-        {
+        let destinations = if receipt.destinations.is_empty() {
+            vec![record.destination.clone()]
+        } else {
+            if receipt.destinations.first() != Some(&record.destination) {
+                return Err(JobError::new(
+                    "JOB_INPUT_HASH_MISMATCH",
+                    "publication receipt primary destination differs",
+                ));
+            }
+            receipt.destinations.clone()
+        };
+        for destination in &destinations {
+            if let Some(stamp) = destination_stamp(destination)? {
+                stamps.push((destination.clone(), stamp));
+            }
+        }
+        // Every leg must be published before the job can reconcile: a missing
+        // destination means the rename sequence was interrupted mid-flight.
+        if stamps.len() != destinations.len() {
+            return Ok(false);
+        }
+        let verified = if receipt.destinations.is_empty() {
+            // Single-artifact publication: the destination tree mirrors the
+            // staged tree (a file's relative path is empty either way).
+            receipt.artifacts == artifacts(&record.destination)?
+        } else {
+            // Each leg publishes exactly one file; its destination artifact
+            // list is a single empty-relative-path entry with identical bytes.
+            receipt.artifacts.len() == destinations.len()
+                && destinations.iter().enumerate().try_fold(
+                    true,
+                    |ok, (index, destination)| -> Result<bool, JobError> {
+                        let leg = receipt
+                            .artifacts
+                            .iter()
+                            .find(|a| {
+                                a.path
+                                    .file_stem()
+                                    .is_some_and(|s| s == format!("leg_{index}").as_str())
+                            })
+                            .ok_or_else(|| {
+                                JobError::new(
+                                    "OUTPUT_VALIDATION_FAILED",
+                                    "publication receipt is missing a leg artifact",
+                                )
+                            })?;
+                        let expected = [Artifact {
+                            path: PathBuf::new(),
+                            bytes: leg.bytes,
+                            sha256: leg.sha256.clone(),
+                        }];
+                        Ok(ok && artifacts(destination)? == expected)
+                    },
+                )?
+        };
+        if receipt.identity != Identity::of(record) || !verified {
             return Err(JobError::new(
                 "OUTPUT_VALIDATION_FAILED",
                 "published artifact differs from validated receipt",
@@ -748,10 +835,17 @@ impl JobStore {
         self.input(&original)?;
         let stamp = destination_stamp(&original.destination)?;
         let mut verified = original.clone();
-        let reconciled = self.reconcile_record(&mut verified)?;
+        let mut leg_stamps = Vec::new();
+        let reconciled = self.reconcile_record(&mut verified, &mut leg_stamps)?;
         verified.result = None;
         verify_owned(&stage_path(&original)?, &Identity::of(&original))?;
-        if !reconciled && (original.status == JobStatus::Succeeded || stamp.is_some()) {
+        // No-clobber holds for every declared destination: a partial rename
+        // set must never be silently overwritten by a fresh attempt.
+        if !reconciled
+            && (original.status == JobStatus::Succeeded
+                || stamp.is_some()
+                || !leg_stamps.is_empty())
+        {
             return Err(JobError::new(
                 "OUTPUT_EXISTS",
                 "destination cannot be replaced",
@@ -786,6 +880,14 @@ impl JobStore {
                     "OUTPUT_VALIDATION_FAILED",
                     "destination changed during recovery",
                 ));
+            }
+            for (path, observed) in &leg_stamps {
+                if destination_stamp(path)?.as_ref() != Some(observed) {
+                    return Err(JobError::new(
+                        "OUTPUT_VALIDATION_FAILED",
+                        "destination changed during recovery",
+                    ));
+                }
             }
             if reconciled {
                 record.status = JobStatus::Succeeded;

@@ -706,6 +706,8 @@ fn caption_sidecar_output_wire_shape_and_validation() {
             sequence,
             caption_format: CaptionFormat::Srt,
         },
+        chapters: kronello_media::ChapterPolicy::Transfer,
+        outputs: vec![],
         required_features: vec![],
     };
     let error = engine()

@@ -2006,3 +2006,188 @@ fn work_area_and_markers_snapshot_but_range_stays_explicit() {
     let done = f.wait(&submitted.id, JobStatus::Succeeded);
     assert_eq!(done.completed_frames, 3);
 }
+
+#[test]
+fn multi_output_fixed_job_publishes_and_authenticates_every_leg() {
+    let f = Fixture::new();
+    // A sequence with chapter markers is the fan-out target: the MOV leg
+    // carries them, GIF/MP3 legs record a typed drop warning (ADR-0133).
+    let sequence = kronello_model::SequenceId::new();
+    let track = kronello_model::TrackId::new();
+    let clip = kronello_model::ClipId::new();
+    let intro = kronello_model::MarkerId::new();
+    let middle = kronello_model::MarkerId::new();
+    let session = track.as_uuid();
+    let definition = json!({"id":sequence,"extent":{"width":64.0,"height":32.0},
+        "frame_rate":{"num":"24","den":"1"},"audio_rate":48000,"working_space":"linear_rec709",
+        "markers":[
+            {"id":intro,"time":{"num":"0","den":"1"},"role":"chapter","color":"green","title":"Intro"},
+            {"id":middle,"time":{"num":"1","den":"16"},"role":"chapter","color":"green","title":"Middle"}],
+        "tracks":[{"id":track,"kind":"video","clips":[{"id":clip,
+            "source_ref":{"kind":"composition","composition":f.document["compositions"][0]["id"]},
+            "timeline_range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"8"}},
+            "source_in":{"num":"0","den":"1"},
+            "time_map":{"kind":"linear","offset":{"num":"0","den":"1"},"speed":{"num":"1","den":"1"}},
+            "audio_retime":"reject","links":[],"effects":[]}]}]});
+    f.cli(
+        json!({"operation":"sequence.create","project":f.project,"base_revision":"1",
+        "session_id":session,"idempotency_key":"multi-output-sequence","sequence":definition}),
+        None,
+        false,
+    );
+    let movie = f.temp.path().join("multi.mov");
+    let gif = f.temp.path().join("multi.gif");
+    let mp3 = f.temp.path().join("multi.mp3");
+    let mut render = f.render(&movie);
+    render["input"]
+        .as_object_mut()
+        .unwrap()
+        .remove("composition");
+    render["input"]["target"] = json!({"kind":"sequence","sequence":sequence});
+    let primary = json!({"format":"pro_res_mov","profile_version":3,"audio":"silence","clips":[],"background":[0.1,0.1,0.1]});
+    let submitted = f.submit_request(
+        json!({"operation":"render.submit","render":render,"output":primary,
+        "outputs":[
+            {"destination":gif,"output":{"format":"gif","profile_version":1,"background":[0.1,0.1,0.1]}},
+            {"destination":mp3,"output":{"format":"mp3","profile_version":1,"audio":"silence","clips":[]}}]}),
+        None,
+        false,
+    );
+    // The fixed input froze every leg: destinations and profiles round-trip.
+    let fixed: Value = serde_json::from_slice(
+        &std::fs::read(
+            f.store()
+                .directory(&submitted.id)
+                .unwrap()
+                .join("input.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let legs = fixed["request"]["outputs"].as_array().unwrap();
+    assert_eq!(legs.len(), 2);
+    assert_eq!(legs[0]["destination"], json!(gif));
+    assert_eq!(legs[0]["output"]["format"], "gif");
+    assert_eq!(legs[1]["destination"], json!(mp3));
+    assert_eq!(legs[1]["output"]["format"], "mp3");
+    let finished = f.wait(&submitted.id, JobStatus::Succeeded);
+    assert!(movie.is_file() && gif.is_file() && mp3.is_file());
+    // One render pass fed three legs; the report carries every leg's probe.
+    let report = finished.result.unwrap()["report"].clone();
+    assert_eq!(report["frames"].as_array().unwrap().len(), 3);
+    assert_eq!(finished.completed_frames, 3);
+    let outputs = report["outputs"].as_array().unwrap();
+    assert_eq!(outputs.len(), 3);
+    assert_eq!(outputs[0]["output"], json!(movie));
+    assert_eq!(outputs[0]["chapters"].as_array().unwrap().len(), 2);
+    for (leg, destination) in outputs[1..].iter().zip([&gif, &mp3]) {
+        assert_eq!(leg["output"], json!(destination));
+        assert_eq!(leg["warnings"][0]["code"], "CHAPTERS_DROPPED");
+    }
+    let runtime = kronello_media::MediaRuntime::load().unwrap();
+    let probe = runtime.probe(&movie).unwrap();
+    probe
+        .verify_movie(kronello_media::MovieProfile::ProResPcm24)
+        .unwrap();
+    assert_eq!(probe.render_snapshot_hash, submitted.snapshot_hash);
+    probe
+        .verify_chapters(&[
+            kronello_media::MediaChapter {
+                id: 0,
+                start: kronello_time::Rational::ZERO,
+                end: kronello_time::Rational::new(1, 16).unwrap(),
+                title: "Intro".into(),
+            },
+            kronello_media::MediaChapter {
+                id: 1,
+                start: kronello_time::Rational::new(1, 16).unwrap(),
+                end: kronello_time::Rational::new(1, 8).unwrap(),
+                title: "Middle".into(),
+            },
+        ])
+        .unwrap();
+    let probe = runtime.probe(&gif).unwrap();
+    probe
+        .verify_delivery(
+            kronello_media::MovieProfile::GifV1,
+            kronello_model::ChannelMask::STEREO,
+        )
+        .unwrap();
+    assert_eq!(probe.streams.len(), 1);
+    assert_eq!(probe.streams[0].codec, "gif");
+    let probe = runtime.probe(&mp3).unwrap();
+    probe
+        .verify_delivery(
+            kronello_media::MovieProfile::Mp3V1,
+            kronello_model::ChannelMask::STEREO,
+        )
+        .unwrap();
+    assert_eq!(probe.streams.len(), 1);
+    assert_eq!(probe.streams[0].codec, "mp3");
+    assert_eq!(probe.streams[0].sample_rate, Some(48_000));
+    // Resume reconciles the renamed-but-uncommitted path in reverse: every
+    // declared destination byte-verifies against the receipt, so the record
+    // returns to Succeeded without a re-render.
+    let resumed: JobRecord =
+        serde_json::from_value(f.service(json!({"operation":"job.resume","job":submitted.id})))
+            .unwrap();
+    assert_eq!(resumed.status, JobStatus::Succeeded);
+    // A tampered leg is caught by the receipt hash instead of reconciling.
+    let mut bytes = std::fs::read(&gif).unwrap();
+    let flip = bytes.len() / 2;
+    bytes[flip] ^= 0x55;
+    std::fs::write(&gif, bytes).unwrap();
+    assert_eq!(
+        f.service_error(json!({"operation":"job.resume","job":submitted.id}))["code"],
+        "OUTPUT_VALIDATION_FAILED"
+    );
+    // A missing leg is a partial publication: the service's fixed-job
+    // re-validation refuses before recovery is reached, and recovery itself
+    // would still refuse the partial rename set rather than silently
+    // replacing the surviving destinations.
+    std::fs::remove_file(&gif).unwrap();
+    assert_eq!(
+        f.service_error(json!({"operation":"job.resume","job":submitted.id}))["code"],
+        "OUTPUT_VALIDATION_FAILED"
+    );
+}
+
+#[test]
+fn multi_output_submission_rejects_invalid_leg_destinations() {
+    let f = Fixture::new();
+    let render = f.render(&f.temp.path().join("primary.mov"));
+    let leg =
+        |destination: PathBuf, output: Value| json!({"destination":destination,"output":output});
+    let gif = |destination: PathBuf| {
+        leg(
+            destination,
+            json!({"format":"gif","profile_version":1,"background":[0,0,0]}),
+        )
+    };
+    // A leg whose destination already exists rejects the whole submission.
+    let occupied = f.temp.path().join("occupied.gif");
+    std::fs::write(&occupied, b"taken").unwrap();
+    let error = f.service_error(json!({"operation":"render.submit","render":render,
+        "output":{"format":"pro_res_mov","profile_version":3,"audio":"silence","clips":[],"background":[0,0,0]},
+        "outputs":[gif(occupied)]}));
+    assert_eq!(error["code"], "OUTPUT_EXISTS");
+    // Duplicate destinations across legs are rejected.
+    let same = f.temp.path().join("dup.gif");
+    let error = f.service_error(json!({"operation":"render.submit","render":render,
+        "output":{"format":"pro_res_mov","profile_version":3,"audio":"silence","clips":[],"background":[0,0,0]},
+        "outputs":[gif(same.clone()),gif(same)]}));
+    assert_eq!(error["code"], "INVALID_REQUEST");
+    // The leg extension must match its profile container.
+    let error = f.service_error(json!({"operation":"render.submit","render":render,
+        "output":{"format":"pro_res_mov","profile_version":3,"audio":"silence","clips":[],"background":[0,0,0]},
+        "outputs":[leg(f.temp.path().join("wrong.mov"),
+            json!({"format":"gif","profile_version":1,"background":[0,0,0]}))]}));
+    assert_eq!(error["code"], "INVALID_MEDIA_INPUT");
+    // Multi-output requires a movie-capable primary.
+    let error = f.service_error(
+        json!({"operation":"render.submit","render":f.render(&f.temp.path().join("frames")),
+        "output":{"format":"image_sequence"},
+        "outputs":[gif(f.temp.path().join("extra.gif"))]}),
+    );
+    assert_eq!(error["code"], "UNSUPPORTED_FEATURE");
+}

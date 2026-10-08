@@ -221,6 +221,8 @@ fn hdr_fixture_roundtrip(test_gpu: bool) {
                     region,
                     background: [0.0; 3],
                     clipping: kronello_audio::ClippingPolicy::Reject,
+                    chapters: kronello_media::ChapterPolicy::Transfer,
+                    outputs: Vec::new(),
                 },
             )
             .unwrap();
@@ -270,6 +272,8 @@ fn hdr_fixture_roundtrip(test_gpu: bool) {
                     region,
                     background: [0.0; 3],
                     clipping: kronello_audio::ClippingPolicy::Reject,
+                    chapters: kronello_media::ChapterPolicy::Transfer,
+                    outputs: Vec::new(),
                 },
             )
             .unwrap();
@@ -454,6 +458,8 @@ fn hdr_fixture_roundtrip(test_gpu: bool) {
                     region,
                     background: [0.0; 3],
                     clipping: kronello_audio::ClippingPolicy::Reject,
+                    chapters: kronello_media::ChapterPolicy::Transfer,
+                    outputs: Vec::new(),
                 },
             )
             .unwrap();
@@ -592,7 +598,9 @@ fn hdr_fixture_roundtrip(test_gpu: bool) {
                         frame_rate: kronello_time::FrameRate::new(24, 1).unwrap(),
                         region,
                         background: [0.0; 3],
-                        clipping: kronello_audio::ClippingPolicy::Reject
+                        clipping: kronello_audio::ClippingPolicy::Reject,
+                        chapters: kronello_media::ChapterPolicy::Transfer,
+                        outputs: Vec::new(),
                     }
                 )
                 .unwrap_err()
@@ -643,7 +651,9 @@ fn hdr_fixture_roundtrip(test_gpu: bool) {
                             frame_rate: kronello_time::FrameRate::new(24, 1).unwrap(),
                             region,
                             background: [0.0; 3],
-                            clipping: kronello_audio::ClippingPolicy::Reject
+                            clipping: kronello_audio::ClippingPolicy::Reject,
+                            chapters: kronello_media::ChapterPolicy::Transfer,
+                            outputs: Vec::new(),
                         }
                     )
                     .unwrap_err()

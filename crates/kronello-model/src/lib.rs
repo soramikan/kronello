@@ -117,8 +117,8 @@ pub use bins::Bin;
 mod export_presets;
 pub use export_presets::{
     EXPORT_PRESET_VERSION, ExportAudioClip, ExportAudioCodec, ExportAudioMode, ExportCutPolicy,
-    ExportHdrSettings, ExportOutput, ExportPreset, ExportProfile, ExportRegion, ExportTarget,
-    ExportTemporalSettings, ExportTransfer,
+    ExportDnxProfile, ExportHdrSettings, ExportOutput, ExportPreset, ExportProfile, ExportRegion,
+    ExportTarget, ExportTemporalSettings, ExportTransfer,
 };
 
 mod sequence;

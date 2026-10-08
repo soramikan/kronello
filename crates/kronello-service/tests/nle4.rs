@@ -59,6 +59,8 @@ fn marker(time: Time, color: MarkerColor, comment: Option<&str>) -> Marker {
         id: MarkerId::new(),
         time,
         color,
+        role: kronello_model::MarkerRole::Standard,
+        title: None,
         comment: comment.map(str::to_owned),
     }
 }
@@ -288,6 +290,8 @@ fn marker_times_are_bounded_and_moves_validate_the_same_extent() {
                 id,
                 time: t(2, 1),
                 color: MarkerColor::Blue,
+                role: kronello_model::MarkerRole::Standard,
+                title: None,
                 comment: None,
             },
         }],
@@ -468,6 +472,8 @@ fn work_area_maps_explicitly_into_the_render_job_range() {
                 output_directory: dir.path().join("work-area-frames"),
             },
             output: JobOutput::ImageSequence,
+            chapters: kronello_media::ChapterPolicy::Transfer,
+            outputs: vec![],
             required_features: vec![],
         }))
         .unwrap()

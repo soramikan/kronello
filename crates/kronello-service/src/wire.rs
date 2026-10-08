@@ -137,6 +137,79 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                     },
                 })
             }
+            "dnx_mov" | "dnx_mxf" => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct Dnx {
+                    profile_version: u32,
+                    dnx_profile: kronello_media::DnxProfile,
+                    #[serde(default)]
+                    audio: kronello_audio::AudioSourceMode,
+                    #[serde(default)]
+                    audio_layout: Option<kronello_model::ChannelMask>,
+                    clips: Vec<crate::JobAudioClip>,
+                    background: [f32; 3],
+                }
+                let mov: Dnx = payload(&fields)?;
+                Ok(match format.as_str() {
+                    "dnx_mov" => Self::DnxMov {
+                        profile_version: mov.profile_version,
+                        dnx_profile: mov.dnx_profile,
+                        audio: mov.audio,
+                        audio_layout: mov.audio_layout,
+                        clips: mov.clips,
+                        background: mov.background,
+                    },
+                    _ => Self::DnxMxf {
+                        profile_version: mov.profile_version,
+                        dnx_profile: mov.dnx_profile,
+                        audio: mov.audio,
+                        audio_layout: mov.audio_layout,
+                        clips: mov.clips,
+                        background: mov.background,
+                    },
+                })
+            }
+            "gif" => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct Gif {
+                    profile_version: u32,
+                    background: [f32; 3],
+                }
+                let gif: Gif = payload(&fields)?;
+                Ok(Self::Gif {
+                    profile_version: gif.profile_version,
+                    background: gif.background,
+                })
+            }
+            "mp3" | "flac" => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct ElementaryAudio {
+                    profile_version: u32,
+                    #[serde(default)]
+                    audio: kronello_audio::AudioSourceMode,
+                    #[serde(default)]
+                    audio_layout: Option<kronello_model::ChannelMask>,
+                    clips: Vec<crate::JobAudioClip>,
+                }
+                let leg: ElementaryAudio = payload(&fields)?;
+                Ok(match format.as_str() {
+                    "mp3" => Self::Mp3 {
+                        profile_version: leg.profile_version,
+                        audio: leg.audio,
+                        audio_layout: leg.audio_layout,
+                        clips: leg.clips,
+                    },
+                    _ => Self::Flac {
+                        profile_version: leg.profile_version,
+                        audio: leg.audio,
+                        audio_layout: leg.audio_layout,
+                        clips: leg.clips,
+                    },
+                })
+            }
             "caption_sidecar" => {
                 #[derive(Deserialize)]
                 #[serde(deny_unknown_fields)]

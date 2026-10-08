@@ -10,7 +10,7 @@ use kronello_jobs::{JobRecord, JobStore, Submission};
 use kronello_media::MediaRuntime;
 use kronello_model::{
     Asset, AssetId, AssetKind, ClipId, DocumentObject, FiniteF64, Marker, MarkerColor, MarkerId,
-    SCENE_BOUNDARY_VERSION, SCENE_DETECT_MAX_FRAMES, SceneBoundary, SceneBoundaryAsset,
+    MarkerRole, SCENE_BOUNDARY_VERSION, SCENE_DETECT_MAX_FRAMES, SceneBoundary, SceneBoundaryAsset,
     SceneDetectionParams, SceneSource, SequenceId, SourceRef, TrackId,
 };
 use kronello_store::Event;
@@ -484,6 +484,8 @@ impl crate::Service<'_> {
                                 id: scene_marker_id(scene.id, time),
                                 time,
                                 color: MarkerColor::Red,
+                                role: MarkerRole::Standard,
+                                title: None,
                                 comment: Some(format!(
                                     "scene boundary {:.0}%",
                                     confidence.get() * 100.0

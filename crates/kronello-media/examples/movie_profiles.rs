@@ -90,6 +90,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
         background: [0.1, 0.2, 0.3],
         clipping: ClippingPolicy::Reject,
+        chapters: kronello_media::ChapterPolicy::Transfer,
+        outputs: Vec::new(),
     };
     let report = runtime.export_av(
         &snapshot,
@@ -100,7 +102,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     report.probe.verify_movie(profile)?;
     assert_eq!(
-        report.video.execution,
+        report.video.as_ref().unwrap().execution,
         if profile == MovieProfile::Av1Mp4AlacV1 {
             ExecutionKind::Software
         } else {

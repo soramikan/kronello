@@ -836,10 +836,71 @@
       ],
       "type": "string"
     },
+    "AvExportOutputReport": {
+      "description": "Per-leg result of a multi-output delivery (ADR-0133): each output carries\nits own probe, transfer report and warnings. `chapters` lists the markers\nactually written into the container.",
+      "properties": {
+        "audio": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AudioEncodeReport"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "chapters": {
+          "items": {
+            "$ref": "#/$defs/MediaChapter"
+          },
+          "type": "array"
+        },
+        "output": {
+          "description": "Destination as declared in the request leg.",
+          "type": "string"
+        },
+        "probe": {
+          "$ref": "#/$defs/MediaProbe"
+        },
+        "profile": {
+          "$ref": "#/$defs/MovieProfile"
+        },
+        "video": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MediaPathReport"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "warnings": {
+          "items": {
+            "$ref": "#/$defs/MediaWarning"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "output",
+        "profile",
+        "probe"
+      ],
+      "type": "object"
+    },
     "AvExportReport": {
       "properties": {
         "audio": {
-          "$ref": "#/$defs/AudioEncodeReport"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AudioEncodeReport"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Primary leg audio report; absent for video-only deliveries."
         },
         "audio_profile_version": {
           "default": 1,
@@ -873,6 +934,13 @@
             }
           ]
         },
+        "outputs": {
+          "description": "MEDIA-004: one entry per leg in request order, primary first.",
+          "items": {
+            "$ref": "#/$defs/AvExportOutputReport"
+          },
+          "type": "array"
+        },
         "probe": {
           "$ref": "#/$defs/MediaProbe"
         },
@@ -901,7 +969,15 @@
           ]
         },
         "video": {
-          "$ref": "#/$defs/MediaPathReport"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MediaPathReport"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Primary leg transfer report; absent for audio-only deliveries."
         }
       },
       "required": [
@@ -912,8 +988,6 @@
         "request",
         "sample_range",
         "frames",
-        "video",
-        "audio",
         "probe"
       ],
       "type": "object"
@@ -930,6 +1004,10 @@
           "minItems": 3,
           "type": "array"
         },
+        "chapters": {
+          "$ref": "#/$defs/ChapterPolicy",
+          "description": "MEDIA-004: chapter transfer policy for the primary leg."
+        },
         "clipping": {
           "$ref": "#/$defs/ClippingPolicy"
         },
@@ -937,7 +1015,15 @@
           "$ref": "#/$defs/FrameRate"
         },
         "output": {
+          "description": "Primary output destination; `movie_profile` comes from the snapshot.",
           "type": "string"
+        },
+        "outputs": {
+          "description": "MEDIA-004 (ADR-0133): additional output legs; empty keeps the\npre-M10 single-output wire shape.",
+          "items": {
+            "$ref": "#/$defs/DeliveryOutput"
+          },
+          "type": "array"
         },
         "range": {
           "$ref": "#/$defs/TimeRange"
@@ -1542,6 +1628,21 @@
       "format": "uint64",
       "minimum": 0,
       "type": "integer"
+    },
+    "ChapterPolicy": {
+      "description": "Whether chapter markers transfer into a leg that can hold them\n(ADR-0133). Only authored chapter markers in the export range move;\nmarker colors and comments never cross the container boundary.",
+      "oneOf": [
+        {
+          "const": "transfer",
+          "description": "Copy chapters where the container supports them; otherwise record a\ntyped `CHAPTERS_DROPPED` warning on the leg report.",
+          "type": "string"
+        },
+        {
+          "const": "omit",
+          "description": "Explicitly drop chapter markers for this leg without warning.",
+          "type": "string"
+        }
+      ]
     },
     "CharacterAnimation": {
       "additionalProperties": false,
@@ -2404,6 +2505,40 @@
       ],
       "type": "string"
     },
+    "DeliveryOutput": {
+      "additionalProperties": false,
+      "description": "MEDIA-004 (ADR-0133): one additional output leg sharing the single render\npass. The leg's movie profile, audio contract and snapshot identity come\nfrom the matching `AvExportSnapshot` in the call, not from this spec.",
+      "properties": {
+        "background": {
+          "description": "Explicit opaque background in the profile's pixel class space.",
+          "items": {
+            "format": "float",
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "chapters": {
+          "$ref": "#/$defs/ChapterPolicy",
+          "default": "transfer"
+        },
+        "output": {
+          "description": "Publish destination; staged and renamed like the primary `output`.",
+          "type": "string"
+        },
+        "profile": {
+          "$ref": "#/$defs/MovieProfile",
+          "description": "Versioned delivery profile for this leg; must equal the companion\nsnapshot's `movie_profile`."
+        }
+      },
+      "required": [
+        "output",
+        "profile",
+        "background"
+      ],
+      "type": "object"
+    },
     "DescriptorRef": {
       "additionalProperties": false,
       "properties": {
@@ -2487,6 +2622,26 @@
         "color"
       ],
       "type": "object"
+    },
+    "DnxProfile": {
+      "description": "MEDIA-004 (ADR-0133): closed FFmpeg `dnxhd` encoder profile argument for\nthe DNxHD/DNxHR delivery profiles.",
+      "oneOf": [
+        {
+          "enum": [
+            "dnxhr_lb",
+            "dnxhr_sq",
+            "dnxhr_hq",
+            "dnxhr_hqx",
+            "dnxhr444"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "dnxhd",
+          "description": "DNxHD family; the encoder resolves the exact bit profile from the\nraster and frame rate and rejects non-compliant combinations.",
+          "type": "string"
+        }
+      ]
     },
     "DocumentMatteKind": {
       "enum": [
@@ -4862,13 +5017,27 @@
       "type": "string"
     },
     "ExportAudioCodec2": {
-      "enum": [
-        "pcm_s24le",
-        "alac",
-        "aac",
-        "opus"
-      ],
-      "type": "string"
+      "oneOf": [
+        {
+          "enum": [
+            "pcm_s24le",
+            "alac",
+            "aac",
+            "opus"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "mp3",
+          "description": "MEDIA-004: MP3 CBR elementary deliverables (libmp3lame).",
+          "type": "string"
+        },
+        {
+          "const": "flac",
+          "description": "MEDIA-004: FLAC lossless elementary deliverables.",
+          "type": "string"
+        }
+      ]
     },
     "ExportAudioMode": {
       "description": "Mirror of `kronello_audio::AudioSourceMode`.",
@@ -5032,6 +5201,18 @@
       "enum": [
         "avoid_crossing",
         "allow_crossing"
+      ],
+      "type": "string"
+    },
+    "ExportDnxProfile": {
+      "description": "Mirror of `kronello_media::DnxProfile` (MEDIA-004, ADR-0133).",
+      "enum": [
+        "dnxhd",
+        "dnxhr_lb",
+        "dnxhr_sq",
+        "dnxhr_hq",
+        "dnxhr_hqx",
+        "dnxhr444"
       ],
       "type": "string"
     },
@@ -5438,6 +5619,228 @@
             "profile_version",
             "clips",
             "background"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "MEDIA-004: DNxHD/DNxHR + PCM24 in MOV.",
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/ExportAudioMode",
+              "default": "explicit"
+            },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "background": {
+              "items": {
+                "format": "float",
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/ExportAudioClip"
+              },
+              "type": "array"
+            },
+            "dnx_profile": {
+              "$ref": "#/$defs/ExportDnxProfile"
+            },
+            "format": {
+              "const": "dnx_mov",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "dnx_profile",
+            "clips",
+            "background"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "MEDIA-004: DNxHD/DNxHR + PCM24 in MXF.",
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/ExportAudioMode",
+              "default": "explicit"
+            },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "background": {
+              "items": {
+                "format": "float",
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/ExportAudioClip"
+              },
+              "type": "array"
+            },
+            "dnx_profile": {
+              "$ref": "#/$defs/ExportDnxProfile"
+            },
+            "format": {
+              "const": "dnx_mxf",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "dnx_profile",
+            "clips",
+            "background"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "MEDIA-004: deterministic indexed-color GIF (video only).",
+          "properties": {
+            "background": {
+              "items": {
+                "format": "float",
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "format": {
+              "const": "gif",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "background"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "MEDIA-004: MP3 CBR elementary audio (mono/stereo layouts only).",
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/ExportAudioMode",
+              "default": "explicit"
+            },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/ExportAudioClip"
+              },
+              "type": "array"
+            },
+            "format": {
+              "const": "mp3",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "clips"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "MEDIA-004: FLAC lossless elementary audio.",
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/ExportAudioMode",
+              "default": "explicit"
+            },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/ExportAudioClip"
+              },
+              "type": "array"
+            },
+            "format": {
+              "const": "flac",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "clips"
           ],
           "type": "object"
         },
@@ -8214,6 +8617,228 @@
         },
         {
           "additionalProperties": false,
+          "description": "MEDIA-004 (ADR-0133): DNxHD/DNxHR + PCM24 in MOV. `dnx_profile`\nselects the closed `dnxhd` encoder profile.",
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/AudioSourceMode",
+              "default": "explicit"
+            },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "background": {
+              "items": {
+                "format": "float",
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/JobAudioClip"
+              },
+              "type": "array"
+            },
+            "dnx_profile": {
+              "$ref": "#/$defs/DnxProfile"
+            },
+            "format": {
+              "const": "dnx_mov",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "dnx_profile",
+            "clips",
+            "background"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "MEDIA-004: DNxHD/DNxHR + PCM24 in MXF.",
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/AudioSourceMode",
+              "default": "explicit"
+            },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "background": {
+              "items": {
+                "format": "float",
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/JobAudioClip"
+              },
+              "type": "array"
+            },
+            "dnx_profile": {
+              "$ref": "#/$defs/DnxProfile"
+            },
+            "format": {
+              "const": "dnx_mxf",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "dnx_profile",
+            "clips",
+            "background"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "MEDIA-004: deterministic two-phase indexed-color GIF (video only).",
+          "properties": {
+            "background": {
+              "items": {
+                "format": "float",
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "format": {
+              "const": "gif",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "background"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "MEDIA-004: MP3 CBR elementary audio (mono/stereo layouts only).",
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/AudioSourceMode",
+              "default": "explicit"
+            },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/JobAudioClip"
+              },
+              "type": "array"
+            },
+            "format": {
+              "const": "mp3",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "clips"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "MEDIA-004: FLAC lossless elementary audio.",
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/AudioSourceMode",
+              "default": "explicit"
+            },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/JobAudioClip"
+              },
+              "type": "array"
+            },
+            "format": {
+              "const": "flac",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "clips"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Subtitle sidecar file (`caption_format` selects srt/vtt/itt). The job\nserializes cue documents from the fixed snapshot; no frames render.",
           "properties": {
             "caption_format": {
@@ -8526,8 +9151,19 @@
         "id": {
           "$ref": "#/$defs/MarkerId"
         },
+        "role": {
+          "$ref": "#/$defs/MarkerRole",
+          "description": "MEDIA-004 (ADR-0133): semantic role. `chapter` entries transfer into\nchapter-capable delivery containers; absent in pre-M10 documents."
+        },
         "time": {
           "$ref": "#/$defs/Rational"
+        },
+        "title": {
+          "description": "Chapter display title written to capable containers. `comment` stays\nthe authoring annotation and is never transferred (ADR-0133).",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -8555,6 +9191,21 @@
       "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
       "format": "uuid",
       "type": "string"
+    },
+    "MarkerRole": {
+      "description": "Closed marker roles; transports never infer delivery semantics from text.",
+      "oneOf": [
+        {
+          "const": "standard",
+          "description": "Time annotation without delivery semantics.",
+          "type": "string"
+        },
+        {
+          "const": "chapter",
+          "description": "Output chapter boundary; the marker `title` is the chapter name.",
+          "type": "string"
+        }
+      ]
     },
     "Mask": {
       "additionalProperties": false,
@@ -8814,6 +9465,33 @@
       ],
       "type": "object"
     },
+    "MediaChapter": {
+      "additionalProperties": false,
+      "description": "MEDIA-004 (ADR-0133): one container chapter in output-relative master\ntime. `id` is informational on probes; on write the muxer assigns its own.",
+      "properties": {
+        "end": {
+          "$ref": "#/$defs/Rational",
+          "description": "Exclusive end; strictly greater than `start` at the 1/48000 master\nclock granularity used across the FFI boundary."
+        },
+        "id": {
+          "default": 0,
+          "format": "int64",
+          "type": "integer"
+        },
+        "start": {
+          "$ref": "#/$defs/Rational"
+        },
+        "title": {
+          "description": "Display title copied from the chapter marker; may be empty.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "type": "object"
+    },
     "MediaNode": {
       "additionalProperties": false,
       "description": "Explicit media stream; AUDIO-003 executes audio only.",
@@ -8888,6 +9566,13 @@
     },
     "MediaProbe": {
       "properties": {
+        "chapters": {
+          "description": "MEDIA-004: container chapters in output-relative master time.",
+          "items": {
+            "$ref": "#/$defs/MediaChapter"
+          },
+          "type": "array"
+        },
         "duration": {
           "anyOf": [
             {
@@ -9134,6 +9819,23 @@
       ],
       "type": "object"
     },
+    "MediaWarning": {
+      "additionalProperties": false,
+      "description": "A typed non-fatal delivery notice recorded on a leg report (ADR-0133).",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "type": "object"
+    },
     "Modifier": {
       "additionalProperties": false,
       "description": "Ordered modifier frame only, with semantic parameters and a stable identity.\nNo modifier algorithm or execution capability is implemented here. The\nanimation compiler must resolve kind/version and reject unsupported kinds.",
@@ -9174,20 +9876,51 @@
       "type": "string"
     },
     "MovieProfile": {
-      "enum": [
-        "pro_res_pcm24",
-        "av1_mp4_alac_v1",
-        "h264_alac_v1",
-        "hevc_alac_v1",
-        "pro_res_pq_pcm24_v1",
-        "pro_res_hlg_pcm24_v1",
-        "pro_res_sdr_from_hdr_pcm24_v1",
-        "h264_aac_v1",
-        "hevc_aac_v1",
-        "av1_mp4_aac_v1",
-        "av1_webm_opus_v1"
-      ],
-      "type": "string"
+      "oneOf": [
+        {
+          "enum": [
+            "pro_res_pcm24",
+            "av1_mp4_alac_v1",
+            "h264_alac_v1",
+            "hevc_alac_v1",
+            "pro_res_pq_pcm24_v1",
+            "pro_res_hlg_pcm24_v1",
+            "pro_res_sdr_from_hdr_pcm24_v1",
+            "h264_aac_v1",
+            "hevc_aac_v1",
+            "av1_mp4_aac_v1",
+            "av1_webm_opus_v1",
+            "dnxhd_mov_pcm24_v1",
+            "dnxhr_lb_mov_pcm24_v1",
+            "dnxhr_sq_mov_pcm24_v1",
+            "dnxhr_hq_mov_pcm24_v1",
+            "dnxhr_hqx_mov_pcm24_v1",
+            "dnxhr444_mov_pcm24_v1",
+            "dnxhd_mxf_pcm24_v1",
+            "dnxhr_lb_mxf_pcm24_v1",
+            "dnxhr_sq_mxf_pcm24_v1",
+            "dnxhr_hq_mxf_pcm24_v1",
+            "dnxhr_hqx_mxf_pcm24_v1",
+            "dnxhr444_mxf_pcm24_v1"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "gif_v1",
+          "description": "Deterministic two-pass indexed-color GIF (palette LUT + Bayer dither).",
+          "type": "string"
+        },
+        {
+          "const": "mp3_v1",
+          "description": "MP3 CBR 256k mono/stereo elementary output.",
+          "type": "string"
+        },
+        {
+          "const": "flac_v1",
+          "description": "FLAC lossless elementary output.",
+          "type": "string"
+        }
+      ]
     },
     "MulticamAngle": {
       "additionalProperties": false,
@@ -9786,6 +10519,30 @@
         "origin",
         "extent",
         "pixels"
+      ],
+      "type": "object"
+    },
+    "OutputSpec": {
+      "additionalProperties": false,
+      "description": "MEDIA-004 (ADR-0133): one additional delivery leg of an `export.render`\njob. All legs share the single render pass; each leg has its own frozen\nexport snapshot, staged artifact, probe verification and no-clobber\npublish. Any leg failure fails the whole job.",
+      "properties": {
+        "chapters": {
+          "$ref": "#/$defs/ChapterPolicy",
+          "description": "Chapter transfer policy for this leg; incapable containers produce a\ntyped `CHAPTERS_DROPPED` warning rather than silent loss."
+        },
+        "destination": {
+          "description": "Absolute publish destination; the extension must match the profile's\ncontainer and the path must be free at submission.",
+          "type": "string"
+        },
+        "output": {
+          "$ref": "#/$defs/JobOutput",
+          "default": {
+            "format": "image_sequence"
+          }
+        }
+      },
+      "required": [
+        "destination"
       ],
       "type": "object"
     },
@@ -11596,6 +12353,10 @@
     "RenderSubmitRequest": {
       "additionalProperties": false,
       "properties": {
+        "chapters": {
+          "$ref": "#/$defs/ChapterPolicy",
+          "description": "MEDIA-004: chapter transfer policy for the primary `output` leg."
+        },
         "expected_revision": {
           "description": "Optional fence against changes since the caller inspected the project.",
           "type": [
@@ -11608,6 +12369,13 @@
           "default": {
             "format": "image_sequence"
           }
+        },
+        "outputs": {
+          "description": "MEDIA-004 (ADR-0133): extra output legs sharing the one render pass.",
+          "items": {
+            "$ref": "#/$defs/OutputSpec"
+          },
+          "type": "array"
         },
         "render": {
           "$ref": "#/$defs/SequenceRenderRequest",
@@ -13039,6 +13807,10 @@
         {
           "additionalProperties": false,
           "properties": {
+            "chapters": {
+              "$ref": "#/$defs/ChapterPolicy",
+              "description": "MEDIA-004: chapter transfer policy for the primary `output` leg."
+            },
             "expected_revision": {
               "description": "Optional fence against changes since the caller inspected the project.",
               "type": [
@@ -13055,6 +13827,13 @@
               "default": {
                 "format": "image_sequence"
               }
+            },
+            "outputs": {
+              "description": "MEDIA-004 (ADR-0133): extra output legs sharing the one render pass.",
+              "items": {
+                "$ref": "#/$defs/OutputSpec"
+              },
+              "type": "array"
             },
             "render": {
               "$ref": "#/$defs/SequenceRenderRequest",
@@ -13077,6 +13856,10 @@
         {
           "additionalProperties": false,
           "properties": {
+            "chapters": {
+              "$ref": "#/$defs/ChapterPolicy",
+              "description": "MEDIA-004: chapter transfer policy for the primary `output` leg."
+            },
             "expected_revision": {
               "description": "Optional fence against changes since the caller inspected the project.",
               "type": [
@@ -13093,6 +13876,13 @@
               "default": {
                 "format": "image_sequence"
               }
+            },
+            "outputs": {
+              "description": "MEDIA-004 (ADR-0133): extra output legs sharing the one render pass.",
+              "items": {
+                "$ref": "#/$defs/OutputSpec"
+              },
+              "type": "array"
             },
             "render": {
               "$ref": "#/$defs/SequenceRenderRequest",

@@ -122,8 +122,33 @@ pub struct Marker {
     pub id: MarkerId,
     pub time: Time,
     pub color: MarkerColor,
+    /// MEDIA-004 (ADR-0133): semantic role. `chapter` entries transfer into
+    /// chapter-capable delivery containers; absent in pre-M10 documents.
+    #[serde(default, skip_serializing_if = "MarkerRole::is_standard")]
+    pub role: MarkerRole,
+    /// Chapter display title written to capable containers. `comment` stays
+    /// the authoring annotation and is never transferred (ADR-0133).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub comment: Option<String>,
+}
+/// Closed marker roles; transports never infer delivery semantics from text.
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum MarkerRole {
+    /// Time annotation without delivery semantics.
+    #[default]
+    Standard,
+    /// Output chapter boundary; the marker `title` is the chapter name.
+    Chapter,
+}
+impl MarkerRole {
+    fn is_standard(&self) -> bool {
+        *self == Self::Standard
+    }
 }
 /// Closed set; transports never guess a color from a label.
 #[derive(

@@ -251,6 +251,8 @@ fn lossy_movie_roundtrip(profile: MovieProfile) {
             },
             background: [0.1, 0.2, 0.3],
             clipping: ClippingPolicy::Reject,
+            chapters: kronello_media::ChapterPolicy::Transfer,
+            outputs: Vec::new(),
         };
         let report = runtime
             .export_av(
@@ -276,7 +278,10 @@ fn lossy_movie_roundtrip(profile: MovieProfile) {
         // A/V sync and exact terminal sample count through the remuxed movie.
         let decoded = runtime.decode_audio(&req.output, audio.index).unwrap();
         assert_eq!(decoded.source_start, t(0, 1));
-        assert_eq!(decoded.buffer.frame_count(), report.audio.frames);
+        assert_eq!(
+            decoded.buffer.frame_count(),
+            report.audio.as_ref().unwrap().frames
+        );
     }
 }
 

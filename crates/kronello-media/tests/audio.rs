@@ -93,6 +93,8 @@ fn request(path: &Path, rate: FrameRate) -> AvExportRequest {
         },
         background: [0.1, 0.2, 0.3],
         clipping: ClippingPolicy::Reject,
+        chapters: kronello_media::ChapterPolicy::Transfer,
+        outputs: Vec::new(),
     }
 }
 #[test]
@@ -351,7 +353,7 @@ fn export_fixed_snapshot_muxes_av_with_exact_pts_and_sample_precision_at_three_r
         let expected_range = sample_range(request.range).unwrap();
         assert_eq!(report.sample_range, expected_range);
         assert_eq!(
-            report.audio.frames,
+            report.audio.as_ref().unwrap().frames,
             (expected_range.end - expected_range.start) as usize
         );
         let video_duration = report
@@ -371,7 +373,10 @@ fn export_fixed_snapshot_muxes_av_with_exact_pts_and_sample_precision_at_three_r
             .duration
             .unwrap();
         assert_eq!(video_duration, rate.frame_to_time(3).unwrap());
-        assert_eq!(audio_duration, t(report.audio.frames as i64, 48000));
+        assert_eq!(
+            audio_duration,
+            t(report.audio.as_ref().unwrap().frames as i64, 48000)
+        );
         let delta = video_duration.checked_sub(audio_duration).unwrap();
         assert!(delta < t(1, 48000) && delta > t(-1, 48000));
         let mut decoder = runtime.open_video(&output).unwrap();
@@ -395,7 +400,10 @@ fn export_fixed_snapshot_muxes_av_with_exact_pts_and_sample_precision_at_three_r
             .index;
         let decoded = runtime.decode_audio(&output, audio_stream).unwrap();
         assert_eq!(decoded.source_start, Rational::ZERO);
-        assert_eq!(decoded.buffer.frame_count(), report.audio.frames);
+        assert_eq!(
+            decoded.buffer.frame_count(),
+            report.audio.as_ref().unwrap().frames
+        );
         let source = runtime
             .decode_asset_audio(&a, &dir.path().join("project.kronello"), 0)
             .unwrap()
