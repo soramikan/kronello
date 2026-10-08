@@ -60,6 +60,8 @@ FX-004 は `Clip.masks: Vec<Mask>` を追加した（[ADR-0114](../adr/0114-bezi
 
 FX-007 は `SourceRef::Adjustment`（payload なし、wire は `{"kind":"adjustment"}`）を追加した（[ADR-0116](../adr/0116-adjustment-clips.md)）。adjustment clip は自身の `timeline_range` で下位 video track の合成結果をグループ化し `clip.effects` を適用する。video track 限定・恒等 `time_map`・`source_in = 0`・`audio_retime = Reject` を型付きで強制し、trim / split / stretch は配置範囲のみを変える。専用コマンドはなく `clip_place` がそのまま受け付け、`sequence.query` は `ClipKind::Adjustment` を返す。`clip.masks` は適用範囲の限定として機能する。検証は [FX-007](../testing/fx-007.md) を参照。
 
+FX-008 は `EffectParameters` に残標準エフェクトの版付き variant（version 1、descriptor は 55xx 番台）を追加した（[ADR-0137](../adr/0137-remaining-standard-effects.md)、reverb 構成は [ADR-0139](../adr/0139-reverb-feedback-comb-topology.md)）。映像は `Grain` / `Mosaic` / `Invert` / `ChannelMixer` / `Tint` / `DirectionalBlur` / `RadialBlur` / `Displace` / `Generate`、音声は `AudioDelay` / `AudioReverb` / `AudioPitch` / `AudioGate`。enum 型 `MosaicBasis` / `InvertChannel` / `DisplaceChannel` / `RadialBlurMode` / `GenerateKind` も版付きで、`resolve` / `validate` は非有限値・範囲外・不正 enum を型付き `EffectError` にする。検証は [FX-008](../testing/fx-008.md) を参照。
+
 ## ID とインスタンス
 
 NodeId や PropertyId を配列番号や名前から導出しない。表示名の変更で参照は変わらない。

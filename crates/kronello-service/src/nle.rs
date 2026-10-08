@@ -988,6 +988,98 @@ fn split_owned_objects(clip: &mut Clip) -> Result<(), ServiceError> {
                     remap(id)?;
                 }
             }
+            // FX-008 (ADR-0137): every property reference on the split copy
+            // remaps like the older effects.
+            EffectParameters::Grain {
+                amount,
+                size,
+                monochrome,
+                seed,
+            } => {
+                for id in [amount, size, monochrome, seed] {
+                    remap(id)?;
+                }
+            }
+            EffectParameters::Mosaic { block_size, basis } => {
+                remap(block_size)?;
+                remap(basis)?;
+            }
+            EffectParameters::Invert { channel } => remap(channel)?,
+            EffectParameters::ChannelMixer { matrix } => remap(matrix)?,
+            EffectParameters::Tint {
+                map_black,
+                map_white,
+                amount,
+            } => {
+                for id in [map_black, map_white, amount] {
+                    remap(id)?;
+                }
+            }
+            EffectParameters::DirectionalBlur { angle, length } => {
+                remap(angle)?;
+                remap(length)?;
+            }
+            EffectParameters::RadialBlur {
+                mode,
+                amount,
+                center,
+            } => {
+                for id in [mode, amount, center] {
+                    remap(id)?;
+                }
+            }
+            EffectParameters::Displace {
+                channel_x,
+                channel_y,
+                scale_x,
+                scale_y,
+            } => {
+                for id in [channel_x, channel_y, scale_x, scale_y] {
+                    remap(id)?;
+                }
+            }
+            EffectParameters::Generate {
+                generator,
+                color_a,
+                color_b,
+                point_a,
+                point_b,
+                cell_size,
+                line_width,
+            } => {
+                for id in [
+                    generator, color_a, color_b, point_a, point_b, cell_size, line_width,
+                ] {
+                    remap(id)?;
+                }
+            }
+            EffectParameters::AudioDelay {
+                delay_ms,
+                feedback_db,
+                wet,
+                dry,
+            }
+            | EffectParameters::AudioReverb {
+                decay_ms: delay_ms,
+                damping: feedback_db,
+                wet,
+                dry,
+            } => {
+                for id in [delay_ms, feedback_db, wet, dry] {
+                    remap(id)?;
+                }
+            }
+            EffectParameters::AudioPitch { semitones } => remap(semitones)?,
+            EffectParameters::AudioGate {
+                threshold_db,
+                attack_ms,
+                release_ms,
+                hysteresis_db,
+            } => {
+                for id in [threshold_db, attack_ms, release_ms, hysteresis_db] {
+                    remap(id)?;
+                }
+            }
         }
     }
     // FX-004: mask rows are owned by the placement like properties — the

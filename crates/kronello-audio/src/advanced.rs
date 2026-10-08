@@ -29,6 +29,13 @@ enum Source {
     Resampled,
     /// AUDIO-010: deterministic WSOLA over the source's own channel layout.
     PitchPreserved,
+    /// FX-008: `kronello.audio.pitch` — the same deterministic WSOLA source
+    /// whose emitted windows stride the source by `rate = 2^(semitones/12)`:
+    /// pitch shifts by `rate` while duration and cursor position are
+    /// preserved (ADR-0137).
+    Pitch {
+        rate: f64,
+    },
     ReversedComposition {
         plan: DocumentAudioPlan,
         duration: Time,
@@ -54,19 +61,21 @@ impl Entry {
     /// Stateful chains and WSOLA cursors must evaluate from placement start
     /// so any request range reproduces continuous-render samples (ADR-0117).
     fn stateful(&self) -> bool {
-        matches!(self.source, Source::PitchPreserved)
+        matches!(self.source, Source::PitchPreserved | Source::Pitch { .. })
             || self
                 .effects
                 .iter()
                 .any(|effect| matches!(effect, EntryEffect::Dsp(_)))
     }
-    /// Per-sample operation estimate: gain lookup is cheap; each DSP stage
-    /// runs a biquad/dynamics chain over two channels.
+    /// Per-sample operation estimate: gain lookup is cheap; DSP stages run
+    /// filter/dynamics/delay lines over the bus channels. The reverb's
+    /// per-channel comb bank costs more than a single biquad/dynamics pass.
     fn effect_cost(&self) -> u64 {
         self.effects
             .iter()
             .map(|effect| match effect {
                 EntryEffect::Gain(_) => 1,
+                EntryEffect::Dsp(ResolvedAudioEffect::Reverb { .. }) => 24,
                 EntryEffect::Dsp(_) => 8,
             })
             .sum()
@@ -133,6 +142,25 @@ fn audio_parameter_ids(parameters: &EffectParameters) -> Vec<PropertyId> {
             ceiling_db,
             release_ms,
         } => vec![*ceiling_db, *release_ms],
+        EffectParameters::AudioDelay {
+            delay_ms,
+            feedback_db,
+            wet,
+            dry,
+        } => vec![*delay_ms, *feedback_db, *wet, *dry],
+        EffectParameters::AudioReverb {
+            decay_ms,
+            damping,
+            wet,
+            dry,
+        } => vec![*decay_ms, *damping, *wet, *dry],
+        EffectParameters::AudioPitch { semitones } => vec![*semitones],
+        EffectParameters::AudioGate {
+            threshold_db,
+            attack_ms,
+            release_ms,
+            hysteresis_db,
+        } => vec![*threshold_db, *attack_ms, *release_ms, *hysteresis_db],
         _ => vec![],
     }
 }
@@ -234,6 +262,11 @@ impl AdvancedAudioPlan {
                     continue;
                 }
                 let mut effects = vec![];
+                // FX-008: `kronello.audio.pitch` executes at the source
+                // stage — resolved semitones accumulate into the WSOLA rate
+                // below instead of entering the DSP chain (ADR-0137).
+                let mut pitch_semitones = 0.0_f64;
+                let mut pitched = false;
                 let mut referenced = BTreeSet::new();
                 for effect in &clip.effects {
                     if track.kind != TrackKind::Audio {
@@ -297,7 +330,14 @@ impl AdvancedAudioPlan {
                                     unsupported("audio clips accept kronello.audio.* effects only")
                                 }
                             })?;
-                            effects.push(EntryEffect::Dsp(spec));
+                            // FX-008: pitch is a source-stage effect; several
+                            // pitch entries compose by adding semitones.
+                            if let ResolvedAudioEffect::Pitch { semitones } = spec {
+                                pitch_semitones += semitones;
+                                pitched = true;
+                            } else {
+                                effects.push(EntryEffect::Dsp(spec));
+                            }
                         }
                     }
                 }
@@ -375,6 +415,39 @@ impl AdvancedAudioPlan {
                             project, target, &clean,
                         )?)
                     }
+                };
+                // FX-008: a resolved pitch effect replaces the source with
+                // the deterministic WSOLA cursor whose emitted windows
+                // stride the source by rate 2^(semitones/12), shifting
+                // pitch while preserving duration. It requires an Asset
+                // source on a forward retime policy — nested compositions,
+                // Generators and reverse playback stay typed errors
+                // (ADR-0137).
+                let source = if pitched {
+                    let rate = 2.0_f64.powf(pitch_semitones / 12.0);
+                    if !(rate.is_finite() && rate > 0.0) {
+                        return Err(invalid("pitch semitone rate out of range"));
+                    }
+                    let supported = matches!(clip.source_ref, SourceRef::Asset { .. })
+                        && matches!(
+                            clip.audio_retime,
+                            AudioRetimePolicy::Reject
+                                | AudioRetimePolicy::ResampleV1
+                                | AudioRetimePolicy::PitchPreserveV1
+                        )
+                        && matches!(
+                            source,
+                            Source::Resampled | Source::PitchPreserved | Source::Legacy(_)
+                        );
+                    if !supported {
+                        return Err(unsupported(
+                            "kronello.audio.pitch requires an Asset source with a \
+                             forward retime policy",
+                        ));
+                    }
+                    Source::Pitch { rate }
+                } else {
+                    source
                 };
                 if !matches!(source, Source::Legacy(_))
                     && matches!(&clip.time_map, TimeMap::PiecewiseLinear(m) if m.points()[0].parent != Time::ZERO)
@@ -490,7 +563,7 @@ impl AdvancedAudioPlan {
             .iter()
             .flat_map(|entry| match &entry.source {
                 Source::Legacy(plan) | Source::ReversedComposition { plan, .. } => plan.clips(),
-                Source::Resampled | Source::PitchPreserved => {
+                Source::Resampled | Source::PitchPreserved | Source::Pitch { .. } => {
                     let SourceRef::Asset {
                         asset,
                         stream_index,
@@ -607,7 +680,7 @@ impl AdvancedAudioPlan {
                         .checked_mul(2)
                         .and_then(|v| v.checked_add(8))
                         .ok_or_else(|| budget("reverse Composition sample cost"))?,
-                    Source::PitchPreserved => WSOLA_SAMPLE_COST,
+                    Source::PitchPreserved | Source::Pitch { .. } => WSOLA_SAMPLE_COST,
                     _ => 3,
                 };
             operations = operations
@@ -698,7 +771,7 @@ impl AdvancedAudioPlan {
                     )?;
                 }
             }
-            if matches!(entry.source, Source::PitchPreserved) {
+            if matches!(entry.source, Source::PitchPreserved | Source::Pitch { .. }) {
                 let SourceRef::Asset {
                     asset,
                     stream_index,
@@ -710,17 +783,20 @@ impl AdvancedAudioPlan {
                 let source_length = sources.frame_count(asset, stream_index)?;
                 let placement = sample_range(entry.clip.timeline_range)?;
                 if !placement.is_empty() {
-                    // The nominal WSOLA cursor must land inside the source for
-                    // the placement endpoints; the correlation window itself
-                    // may read zero-filled context at the edges.
+                    // The nominal WSOLA cursor must land inside the source
+                    // for the placement endpoints; the correlation window
+                    // itself may read zero-filled context at the edges. The
+                    // FX-008 pitch rate strides the emitted window but does
+                    // not scale the cursor, so the same bound covers
+                    // Source::Pitch.
                     for sample in [placement.start, placement.end - 1] {
                         let local = local_time(&entry.clip, sample)?
                             .checked_mul(Time::from_integer(48_000))?;
-                        if local < Time::ZERO
+                        let too_short = local < Time::ZERO
                             || usize::try_from(local.floor())
                                 .ok()
-                                .is_none_or(|index| index >= source_length)
-                        {
+                                .is_none_or(|index| index >= source_length);
+                        if too_short {
                             return Err(AudioError::SourceTooShort(asset));
                         }
                     }
@@ -758,7 +834,7 @@ impl AdvancedAudioPlan {
                     ChannelMask::MONO,
                     Some(layout_matrix(ChannelMask::MONO, target, false)?),
                 ),
-                Source::Resampled | Source::PitchPreserved => {
+                Source::Resampled | Source::PitchPreserved | Source::Pitch { .. } => {
                     let SourceRef::Asset {
                         asset,
                         stream_index,
@@ -789,9 +865,15 @@ impl AdvancedAudioPlan {
                 .iter()
                 .map(|effect| ChainStep::new(effect, target))
                 .collect();
-            // AUDIO-010: a pitch-preserved entry owns one deterministic WSOLA
-            // cursor spanning the evaluated range from placement start.
-            let mut wsola = if matches!(entry.source, Source::PitchPreserved) {
+            // AUDIO-010/FX-008: pitch-preserving entries (retime and the
+            // source-stage pitch effect) own one deterministic WSOLA cursor
+            // spanning the evaluated range from placement start.
+            let wsola_rate = match entry.source {
+                Source::Pitch { rate } => rate,
+                Source::PitchPreserved => 1.0,
+                _ => 0.0,
+            };
+            let mut wsola = if wsola_rate > 0.0 {
                 let SourceRef::Asset {
                     asset,
                     stream_index,
@@ -804,6 +886,7 @@ impl AdvancedAudioPlan {
                     asset,
                     stream_index,
                     source_channels,
+                    wsola_rate,
                 ))
             } else {
                 None
@@ -831,7 +914,7 @@ impl AdvancedAudioPlan {
                             .expect("layout matrix")
                             .apply(&raw[..source_channels], &mut converted[..channels])?;
                     }
-                    Source::PitchPreserved => {
+                    Source::PitchPreserved | Source::Pitch { .. } => {
                         wsola.as_mut().expect("wsola cursor").frame(
                             &entry.clip,
                             sources,

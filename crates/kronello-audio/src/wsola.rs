@@ -34,7 +34,10 @@ fn invalid(detail: &str) -> AudioError {
 
 /// Local source position (in samples) of the hop anchored at `sample`,
 /// derived from the clip's rational time map — never accumulated state.
-fn nominal_position(clip: &Clip, anchor: i64) -> Result<(Time, i64, Time), AudioError> {
+/// The FX-008 pitch rate does not scale this cursor: pitch shifting keeps
+/// duration by advancing the cursor at map speed while the emitted window
+/// strides the source by `rate` (`produce_hop`).
+fn nominal_position(clip: &Clip, anchor: i64) -> Result<(i64, f64), AudioError> {
     let local = super::advanced::local_time(clip, anchor)?;
     let position = local.checked_mul(Time::from_integer(48_000))?;
     if position < Time::ZERO {
@@ -45,7 +48,7 @@ fn nominal_position(clip: &Clip, anchor: i64) -> Result<(Time, i64, Time), Audio
     }
     let base = position.floor();
     let fraction = position.checked_sub(Time::from_integer(base))?;
-    Ok((position, base, fraction))
+    Ok((base, number(&fraction)))
 }
 
 /// Rational instantaneous source-time rate at absolute `sample`.
@@ -69,6 +72,10 @@ pub(crate) struct Wsola {
     channels: usize,
     asset: AssetId,
     stream: u32,
+    /// FX-008 source-stage pitch ratio: 2^(semitones/12); 1.0 for AUDIO-010.
+    /// The cursor advances at map speed (duration preserved); emitted
+    /// windows stride the source by `rate`, shifting pitch by `rate`x.
+    rate: f64,
     window: Vec<f64>,
     /// Accumulated overlap from prior segments over the next `OVERLAP`
     /// positions of the upcoming hop.
@@ -82,7 +89,13 @@ pub(crate) struct Wsola {
     next_anchor: i64,
 }
 impl Wsola {
-    pub(crate) fn new(clip: &Clip, asset: AssetId, stream: u32, channels: usize) -> Self {
+    pub(crate) fn new(
+        clip: &Clip,
+        asset: AssetId,
+        stream: u32,
+        channels: usize,
+        rate: f64,
+    ) -> Self {
         let window = (0..WSOLA_WINDOW)
             .map(|i| 0.5 - 0.5 * (std::f64::consts::TAU * i as f64 / WSOLA_WINDOW as f64).cos())
             .collect();
@@ -96,6 +109,7 @@ impl Wsola {
             channels,
             asset,
             stream,
+            rate,
             window,
             tail: vec![[0.0; MAX_CHANNELS]; OVERLAP],
             input: vec![[0.0; MAX_CHANNELS]; 2 * WSOLA_SEARCH + WSOLA_WINDOW],
@@ -153,12 +167,43 @@ impl Wsola {
             Err(_) => out.fill(0.0),
         }
     }
+    /// FX-008: read the rate-resampled source `s_r[n] = s[n * rate]` at a
+    /// fractional position with deterministic two-tap linear interpolation.
+    /// The correlation context zero-fills outside the source exactly like
+    /// `read`; the nominal cursor itself is bounds-checked by the caller.
+    fn read_strided(&self, sources: &dyn ChannelSourceReader, position: f64, out: &mut [f64]) {
+        if !position.is_finite() {
+            out.fill(0.0);
+            return;
+        }
+        let floor = position.floor();
+        let fraction = position - floor;
+        let index = floor as i64;
+        let mut a = [0.0_f64; MAX_CHANNELS];
+        self.read(sources, index, &mut a);
+        if fraction == 0.0 {
+            out.copy_from_slice(&a[..out.len()]);
+            return;
+        }
+        let mut b = [0.0_f64; MAX_CHANNELS];
+        self.read(sources, index.saturating_add(1), &mut b);
+        for (channel, out) in out.iter_mut().enumerate() {
+            *out = a[channel] * (1.0 - fraction) + b[channel] * fraction;
+        }
+    }
     fn produce_hop(
         &mut self,
         clip: &Clip,
         sources: &dyn ChannelSourceReader,
     ) -> Result<(), AudioError> {
-        debug_assert_eq!(clip.audio_retime, AudioRetimePolicy::PitchPreserveV1);
+        // AUDIO-010 uses PitchPreserveV1; the FX-008 source-stage pitch
+        // effect additionally admits Reject / ResampleV1 forward retimes.
+        debug_assert!(matches!(
+            clip.audio_retime,
+            AudioRetimePolicy::PitchPreserveV1
+                | AudioRetimePolicy::ResampleV1
+                | AudioRetimePolicy::Reject
+        ));
         let anchor = self.next_anchor;
         self.next_anchor += WSOLA_HOP as i64;
         self.out.clear();
@@ -170,16 +215,20 @@ impl Wsola {
             self.tail.fill([0.0; MAX_CHANNELS]);
             return Ok(());
         }
-        let (_, base, fraction) = nominal_position(clip, anchor)?;
+        let (base, fraction) = nominal_position(clip, anchor)?;
         if base < 0 {
             return Err(AudioError::SourceTooShort(self.asset));
         }
         let base = usize::try_from(base).map_err(|_| AudioError::SourceTooShort(self.asset))?;
-        if slope == Rational::ONE {
-            // Unity speed reproduces resample_v1 exactly; no windowing.
+        // The source advances 1:1 with the output when the map slope is
+        // exactly one and no pitch shift applies; that path reproduces
+        // resample_v1 linear interpolation bit-for-bit with no windowing.
+        // FX-008's `rate != 1` always needs the windowed path: emitted
+        // samples stride the source by `rate` inside each window, so the
+        // overlap-add structure stays required even at unity speed.
+        if self.rate == 1.0 && number(&slope) == 1.0 {
             self.tail.fill([0.0; MAX_CHANNELS]);
             let len = sources.frame_count(self.asset, self.stream)?;
-            let fraction = number(&fraction);
             for i in 0..WSOLA_HOP {
                 let index = base
                     .checked_add(i)
@@ -209,14 +258,27 @@ impl Wsola {
         // Windowed path: gather the search context, then pick the candidate
         // offset with the best normalized cross-correlation against the
         // pending overlap. Iteration order 0, -1, +1, -2, +2, ... and a
-        // strict `>` comparison make the selection fully deterministic.
+        // strict `>` comparison make the selection fully deterministic. For
+        // the FX-008 pitch rate the context strides the source by `rate`
+        // around the unscaled cursor so a window plays `rate` times faster
+        // (pitch `rate`x, duration preserved); rate 1 keeps the exact
+        // integer-frame path.
+        let scaled = base as f64 + fraction;
         for offset in 0..self.input.len() {
             let mut frame = [0.0_f64; MAX_CHANNELS];
-            self.read(
-                sources,
-                base as i64 - WSOLA_SEARCH as i64 + offset as i64,
-                &mut frame,
-            );
+            if self.rate == 1.0 {
+                self.read(
+                    sources,
+                    base as i64 - WSOLA_SEARCH as i64 + offset as i64,
+                    &mut frame,
+                );
+            } else {
+                self.read_strided(
+                    sources,
+                    scaled + (offset as i64 - WSOLA_SEARCH as i64) as f64 * self.rate,
+                    &mut frame,
+                );
+            }
             self.input[offset] = frame;
         }
         let mut energy_tail = 0.0_f64;

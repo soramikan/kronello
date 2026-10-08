@@ -5,6 +5,9 @@ struct Params { config:vec4<u32>, offset:vec4<f32>, color:vec4<f32> }
 @group(0) @binding(3) var<uniform> params:Params;
 @group(0) @binding(4) var<storage,read> weights:array<f32>;
 @group(0) @binding(5) var<storage,read_write> validation:atomic<u32>;
+// FX-008 (ADR-0137): second input surface bound by the scene pass. Only the
+// displace op (config.x==21u) samples it; every other pass binds the source.
+@group(0) @binding(6) var displace_map:texture_2d<f32>;
 fn load(p:vec2<i32>)->vec4<f32> {
     if any(p<vec2<i32>(0)) || any(p>=vec2<i32>(textureDimensions(source))) {return vec4<f32>(0.0);}
     return textureLoad(source,p,0);
@@ -18,6 +21,31 @@ fn bilinear_parts(base:vec2<i32>, f:vec2<f32>)->vec4<f32> {
     let c=load(base+vec2<i32>(0,1)); let d=load(base+vec2<i32>(1,1));
     let top=a+(b-a)*f.x; let bottom=c+(d-c)*f.x;
     return top+(bottom-top)*f.y;
+}
+fn load_map(p:vec2<i32>)->vec4<f32> {
+    if any(p<vec2<i32>(0)) || any(p>=vec2<i32>(textureDimensions(displace_map))) {return vec4<f32>(0.0);}
+    return textureLoad(displace_map,p,0);
+}
+// FX-008 grain hash (ADR-0137): lowbias32, word-for-word the CPU mix.
+fn mix32(h_in:u32)->u32 {
+    var h=h_in;
+    h^=h>>16u; h*=0x7feb352du; h^=h>>15u; h*=0x846ca68bu; h^=h>>16u;
+    return h;
+}
+fn grain_noise(cell:vec3<i32>,seed:u32)->f32 {
+    var h=seed;
+    h=mix32(h^u32(cell.x));
+    h=mix32(h^u32(cell.y));
+    h=mix32(h^u32(cell.z));
+    return f32(mix32(h))/4294967296.0;
+}
+// Displace map channel select: 0-2 stored RGB, 3 alpha, 4 straight luma.
+fn map_channel(m:vec4<f32>,luma:f32,ch:u32)->f32 {
+    if ch==0u { return m.r; }
+    if ch==1u { return m.g; }
+    if ch==2u { return m.b; }
+    if ch==3u { return m.a; }
+    return luma;
 }
 // Explicit IEEE binary16 RNE prevents backend storage conversion from choosing
 // a different rounding mode. The returned f32 is exactly half-representable.
@@ -325,6 +353,146 @@ fn main(@builtin(global_invocation_id) id:vec3<u32>) {
                 result=bilinear(r-vec2<f32>(0.5));
             }
         }
+    }
+    // FX-008 remaining standard effects (ADR-0137). Ops 14-22 mirror the
+    // CPU oracle expression-for-expression; surfaces stay RGBA16F.
+    else if params.config.x==14u {
+        // Grain: deterministic cell hash on the output lattice; straight
+        // working RGB gains amount*(noise-0.5); alpha is preserved.
+        // offset = (amount, cell size, seed bits); config.y selects monochrome.
+        let v=textureLoad(source,p,0);
+        let s=v.rgb/max(v.a,1e-30);
+        let cell=vec3<i32>(
+            i32(clamp(floor((f32(p.x)+0.5)/params.offset.y),-2147000000.0,2147000000.0)),
+            i32(clamp(floor((f32(p.y)+0.5)/params.offset.y),-2147000000.0,2147000000.0)),
+            0);
+        let seed=bitcast<u32>(params.offset.z);
+        var rgb=vec3<f32>(0.0);
+        if params.config.y==1u {
+            let n=grain_noise(cell,seed);
+            rgb=s+vec3<f32>(params.offset.x*(n-0.5));
+        } else {
+            for (var c=0;c<3;c++) {
+                rgb[c]=s[c]+params.offset.x*(grain_noise(cell+vec3<i32>(0,0,c),seed)-0.5);
+            }
+        }
+        result=vec4<f32>(rgb*v.a,v.a);
+    } else if params.config.x==15u {
+        // Mosaic: block basis 0 samples the block-center texel, 1 the
+        // top-left edge texel; lattice indices clamp before i32 conversion.
+        let bs=params.offset.x;
+        let b=vec2<f32>(floor(f32(p.x)/bs),floor(f32(p.y)/bs));
+        var t=vec2<f32>(0.0);
+        if params.config.y==0u { t=b*bs+vec2<f32>(bs*0.5); }
+        else { t=b*bs; }
+        result=load(vec2<i32>(
+            i32(clamp(floor(t.x),-2147000000.0,2147000000.0)),
+            i32(clamp(floor(t.y),-2147000000.0,2147000000.0))));
+    } else if params.config.x==16u {
+        // Invert on straight working channels; config.y 0 rgb, 1-3 single
+        // channel, 4 alpha (straight RGB is kept and re-associated).
+        let v=textureLoad(source,p,0);
+        let s=v.rgb/max(v.a,1e-30);
+        if params.config.y==4u {
+            result=vec4<f32>(s*(1.0-v.a),1.0-v.a);
+        } else {
+            var o=s;
+            if params.config.y==0u { o=vec3<f32>(1.0)-s; }
+            else { o[params.config.y-1u]=1.0-s[params.config.y-1u]; }
+            result=vec4<f32>(o*v.a,v.a);
+        }
+    } else if params.config.x==17u {
+        // Channel mixer: the premultiplied vec4 passes through the row-major
+        // 4x4 matrix held in weights[0..16].
+        let v=textureLoad(source,p,0);
+        var o=vec4<f32>(0.0);
+        for (var r=0u;r<4u;r++) {
+            o[r]=weights[4u*r]*v.x+weights[4u*r+1u]*v.y+weights[4u*r+2u]*v.z+weights[4u*r+3u]*v.w;
+        }
+        result=o;
+    } else if params.config.x==18u {
+        // Tint: straight working luma maps between the authored black/white
+        // colors, blended by amount; alpha is preserved.
+        // offset = (amount, luma w.xyz); color = map_black; weights = map_white.
+        let v=textureLoad(source,p,0);
+        let s=v.rgb/max(v.a,1e-30);
+        let l=dot(s,params.offset.yzw);
+        let mw=vec3<f32>(weights[0],weights[1],weights[2]);
+        let mapped=params.color.rgb+l*(mw-params.color.rgb);
+        let o=s+(mapped-s)*params.offset.x;
+        result=vec4<f32>(o*v.a,v.a);
+    } else if params.config.x==19u {
+        // Directional blur: ceil(length) midpoint taps along the normalized
+        // direction; offset = (dir.x, dir.y, length). A zero length samples
+        // the texel itself and is the identity.
+        let dir=params.offset.xy; let len=params.offset.z;
+        let taps=max(1u,u32(ceil(len)));
+        var acc=vec4<f32>(0.0);
+        for (var i=0u;i<taps;i++) {
+            let t=-len*0.5+(f32(i)+0.5)*len/f32(taps);
+            acc+=bilinear(vec2<f32>(p)+dir*t);
+        }
+        result=acc/f32(taps);
+    } else if params.config.x==20u {
+        // Radial blur: 64 midpoint taps; mode 0 spins degrees around the
+        // center over [-amount/2, amount/2], mode 1 scales toward the center
+        // over (1-amount, 1]. offset = (amount, center.x, center.y).
+        let amount=params.offset.x; let center=params.offset.yz;
+        let rel=vec2<f32>(p)+vec2<f32>(0.5)-center;
+        var acc=vec4<f32>(0.0);
+        for (var i=0u;i<64u;i++) {
+            let t=(f32(i)+0.5)/64.0;
+            var pos=center;
+            if params.config.y==0u {
+                let angle=(-amount*0.5+amount*t)*0.017453292519943295;
+                let cs=cos(angle); let sn=sin(angle);
+                pos=center+vec2<f32>(rel.x*cs-rel.y*sn,rel.x*sn+rel.y*cs);
+            } else {
+                pos=center+rel*((1.0-amount)+amount*t);
+            }
+            acc+=bilinear(pos-vec2<f32>(0.5));
+        }
+        result=acc/64.0;
+    } else if params.config.x==21u {
+        // Displace: the map surface (binding 6) at the output texel supplies
+        // channel values v in [0,1]; (2v-1) passes through the 2x2
+        // displacement matrix in weights[0..4] (row-major) to offset the
+        // bilinear source sample. weights[4..7] hold the luma weights.
+        let m=load_map(p);
+        let luma=dot(m.rgb/max(m.a,1e-30),vec3<f32>(weights[4],weights[5],weights[6]));
+        let vx=map_channel(m,luma,params.config.y);
+        let vy=map_channel(m,luma,params.config.z);
+        let off=vec2<f32>(
+            (2.0*vx-1.0)*weights[0]+(2.0*vy-1.0)*weights[1],
+            (2.0*vx-1.0)*weights[2]+(2.0*vy-1.0)*weights[3]);
+        result=bilinear(vec2<f32>(p)+off);
+    } else if params.config.x==22u {
+        // Generate: procedural coverage of the output surface; colors arrive
+        // as straight working RGBA. offset = (point_a, point_b); color =
+        // color_a; weights = color_b, cell size, line width.
+        let f=vec2<f32>(p)+vec2<f32>(0.5);
+        let pa=params.offset.xy; let pb=params.offset.zw;
+        let ca=params.color;
+        let cb=vec4<f32>(weights[0],weights[1],weights[2],weights[3]);
+        let cell=weights[4]; let lw=weights[5];
+        var t=0.0;
+        if params.config.y==0u {
+            let d=pb-pa; let dd=dot(d,d);
+            if dd>0.0 { t=clamp(dot(f-pa,d)/dd,0.0,1.0); }
+        } else if params.config.y==1u {
+            let r=length(pb-pa);
+            if r>0.0 { t=clamp(length(f-pa)/r,0.0,1.0); } else { t=1.0; }
+        } else if params.config.y==2u {
+            let cx=i32(clamp(floor(f.x/cell),-2147000000.0,2147000000.0));
+            let cy=i32(clamp(floor(f.y/cell),-2147000000.0,2147000000.0));
+            if ((cx+cy)&1)==1 { t=1.0; }
+        } else {
+            let dx=abs(f.x-round(f.x/cell)*cell);
+            let dy=abs(f.y-round(f.y/cell)*cell);
+            if dx*2.0<=lw || dy*2.0<=lw { t=1.0; }
+        }
+        let straight=ca+(cb-ca)*t;
+        result=vec4<f32>(straight.rgb*straight.a,straight.a);
     } else {
         let s=textureLoad(original,p,0);
         var alpha=0.0;

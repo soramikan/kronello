@@ -280,3 +280,27 @@ UI・service・render・evaluator のいずれのプロセスにもロードし�
   `KRONELLO_PLUGIN_TIMEOUT_MS`（既定 120,000 ms）は helper watchdog、
   worker 側はさらに 30 秒の margin を持つ。テスト・埋込みは
   `Service::with_plugin_helper` で注入できる。
+
+## FX-008: delay / reverb / pitch / gate
+
+契約は [ADR-0137](../adr/0137-remaining-standard-effects.md) と
+[ADR-0139](../adr/0139-reverb-feedback-comb-topology.md)、検証は
+[FX-008](../testing/fx-008.md)。`clip_set_effects` の既存の流れで 4 つの
+v1 エフェクトを受理し、すべて決定的な `dsp.rs` 実装で、分割レンダーは
+連続ミックスと bit 一致する。
+
+- `kronello.audio.delay`（`delay_ms`・`feedback_db`・`wet`・`dry`）は
+  `delay_ms` を 48 kHz 整数サンプルへ量子化したリングバッファで、
+  非正の feedback は再循環しない。`kronello.audio.gate`
+  （`threshold_db`・`attack_ms`・`release_ms`・`hysteresis_db`）は
+  hysteresis 帯を持つ開閉状態機械。
+- `kronello.audio.reverb`（`decay_s`・`damping`・`wet`・`dry`）は
+  チャンネルごとに 4 本の並列フィードバックコム（48 kHz 基準の
+  互いに素な固定長 1,157/1,361/1,499/1,723 サンプル）で、feedback は
+  RT60 換算 `g = 10^(-3 D / T60)`、ループ内の一段ローパスが damping を
+  実現する（ADR-0139）。外部 IR 取り込みは後続。
+- `kronello.audio.pitch`（`semitones`）は in-chain processor ではなく
+  ソースステージの時間保存型ピッチシフトで、`wsola.rs` の窓処理を
+  `rate = 2^(semitones/12)` の stride でソースへ読ませる。カーソルは
+  実時間のまま進みクリップ持続は変わらない。asset ソース以外・
+  generator・reverse retime・短いソースは型付きエラー。

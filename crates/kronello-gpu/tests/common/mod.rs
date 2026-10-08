@@ -345,6 +345,7 @@ pub fn scenes() -> Vec<(&'static str, u32, WorkingSpace, DrawScene)> {
     scenes.extend(color002_scenes());
     scenes.extend(fx003_scenes());
     scenes.extend(fx005006_scenes());
+    scenes.extend(fx008_scenes());
     scenes
 }
 
@@ -800,6 +801,183 @@ pub fn fx005006_scenes() -> Vec<(&'static str, u32, WorkingSpace, DrawScene)> {
             WorkingSpace::LinearRec709,
             corner_pin,
         ),
+    ]
+}
+
+/// FX-008 scenes (ADR-0137): the nine versioned standard effects. Sharp
+/// two-tone content keeps cell, mixing and warp geometry observable; the
+/// displace map and the generate leaf exercise the FX-008 node kinds.
+pub fn fx008_scenes() -> Vec<(&'static str, u32, WorkingSpace, DrawScene)> {
+    let two_tones = |a: [f32; 4], b: [f32; 4], space: InputSpace| DrawScene {
+        nodes: vec![
+            rectangle([0.0; 2], [8.0, 16.0], paint(a, space)),
+            rectangle([8.0, 0.0], [16.0; 2], paint(b, space)),
+            DrawNode::Group {
+                children: vec![0, 1],
+                opacity: 1.0,
+            },
+        ],
+        roots: vec![2],
+    };
+    let with_effect = |mut scene: DrawScene, effect: PixelEffect| {
+        scene.nodes.push(DrawNode::Effect { source: 2, effect });
+        scene.roots = vec![3];
+        scene
+    };
+    let grain = with_effect(
+        two_tones(
+            [0.55, 0.4, 0.2, 0.85],
+            [0.15, 0.3, 0.65, 0.85],
+            InputSpace::Srgb,
+        ),
+        PixelEffect::Grain {
+            amount: 0.4,
+            size: 2.0,
+            monochrome: false,
+            seed: 17,
+        },
+    );
+    let mosaic = with_effect(
+        two_tones(
+            [0.9, 0.3, 0.2, 1.0],
+            [0.1, 0.5, 0.8, 1.0],
+            InputSpace::LinearRec709,
+        ),
+        PixelEffect::Mosaic {
+            block_size: 3.0,
+            basis: model::MosaicBasis::Center,
+        },
+    );
+    let mixer = with_effect(
+        two_tones(
+            [0.7, 0.25, 0.15, 1.0],
+            [0.2, 0.6, 0.4, 0.75],
+            InputSpace::LinearRec2020,
+        ),
+        PixelEffect::ChannelMixer {
+            // Swap red/blue, halve green, keep alpha.
+            matrix: [
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.5, 0.0, 0.0],
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+        },
+    );
+    let mut invert = mixer.clone();
+    invert.nodes.push(DrawNode::Effect {
+        source: 3,
+        effect: PixelEffect::Invert {
+            channel: model::InvertChannel::Green,
+        },
+    });
+    invert.roots = vec![4];
+    let tint = with_effect(
+        two_tones(
+            [0.05, 0.05, 0.05, 1.0],
+            [0.85, 0.7, 0.4, 1.0],
+            InputSpace::LinearRec709,
+        ),
+        PixelEffect::Tint {
+            map_black: model::Color::from_srgb8([20, 30, 80], None),
+            map_white: model::Color::from_srgb8([240, 200, 60], None),
+            amount: 0.85,
+        },
+    );
+    let directional = with_effect(
+        two_tones(
+            [0.85, 0.2, 0.1, 1.0],
+            [0.05, 0.1, 0.6, 1.0],
+            InputSpace::LinearRec709,
+        ),
+        PixelEffect::DirectionalBlur {
+            direction: [0.6, -0.8],
+            length: 5.0,
+        },
+    );
+    let radial = with_effect(
+        two_tones(
+            [0.9, 0.85, 0.3, 1.0],
+            [0.1, 0.1, 0.55, 1.0],
+            InputSpace::LinearRec2020,
+        ),
+        PixelEffect::RadialBlur {
+            mode: model::RadialBlurMode::Spin,
+            amount: 25.0,
+            center: [8.0, 8.0],
+        },
+    );
+    let displace = {
+        let mut scene = two_tones(
+            [0.8, 0.2, 0.5, 1.0],
+            [0.1, 0.45, 0.75, 1.0],
+            InputSpace::LinearRec709,
+        );
+        scene.nodes.push(DrawNode::Generate {
+            effect: PixelEffect::Generate {
+                generator: model::GenerateKind::GradientLinear,
+                color_a: model::Color::from_srgb8([0, 0, 0], None),
+                color_b: model::Color::from_srgb8([255, 255, 255], None),
+                point_a: [0.0, 0.0],
+                point_b: [16.0, 0.0],
+                cell_size: 2.0,
+                line_width: 1.0,
+            },
+        });
+        scene.nodes.push(DrawNode::EffectMap {
+            source: 2,
+            map: 3,
+            effect: PixelEffect::Displace {
+                channel_x: model::DisplaceChannel::Luminance,
+                channel_y: model::DisplaceChannel::Luminance,
+                displacement: [[3.0, 0.0], [0.0, -2.0]],
+            },
+        });
+        scene.roots = vec![4];
+        scene
+    };
+    let generate = DrawScene {
+        nodes: vec![
+            DrawNode::Generate {
+                effect: PixelEffect::Generate {
+                    generator: model::GenerateKind::Checkerboard,
+                    color_a: model::Color::from_srgb8([230, 230, 230], None),
+                    color_b: model::Color::from_srgb8([40, 40, 40], None),
+                    point_a: [0.0, 0.0],
+                    point_b: [16.0, 16.0],
+                    cell_size: 4.0,
+                    line_width: 1.0,
+                },
+            },
+            DrawNode::Effect {
+                source: 0,
+                effect: PixelEffect::Invert {
+                    channel: model::InvertChannel::Blue,
+                },
+            },
+        ],
+        roots: vec![1],
+    };
+    vec![
+        ("fx008-grain", 16, WorkingSpace::LinearRec709, grain),
+        ("fx008-mosaic", 16, WorkingSpace::LinearRec709, mosaic),
+        (
+            "fx008-channel-mixer",
+            16,
+            WorkingSpace::LinearRec2020,
+            mixer,
+        ),
+        ("fx008-invert", 16, WorkingSpace::LinearRec2020, invert),
+        ("fx008-tint", 16, WorkingSpace::LinearRec709, tint),
+        (
+            "fx008-directional-blur",
+            16,
+            WorkingSpace::LinearRec709,
+            directional,
+        ),
+        ("fx008-radial-blur", 16, WorkingSpace::LinearRec2020, radial),
+        ("fx008-displace", 16, WorkingSpace::LinearRec709, displace),
+        ("fx008-generate", 16, WorkingSpace::LinearRec709, generate),
     ]
 }
 

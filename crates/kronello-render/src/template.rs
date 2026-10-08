@@ -452,7 +452,7 @@ impl TemplateRuntime {
             let transform = graph
                 .node_transform_with_inputs(&node, time, &self.inputs)?
                 .affine();
-            let mut bounds = crate::bounds::text_bounds(layout, transform, &[])?;
+            let mut bounds = crate::bounds::text_bounds(layout, transform, &[], None)?;
             if b.bounds == BoundsStage::Visual {
                 let c = path
                     .resolve(definitions[0].id, definitions)
@@ -479,7 +479,7 @@ impl TemplateRuntime {
                 let parent =
                     graph.node_parent_world_transform_with_inputs(&node, time, &self.inputs)?;
                 let visual =
-                    crate::bounds::text_bounds(layout, parent.compose(transform), &effects)?
+                    crate::bounds::text_bounds(layout, parent.compose(transform), &effects, None)?
                         .visual_bounds;
                 bounds.visual_bounds = visual.map(|b| b.transform(inverse(parent)?)).transpose()?;
             }
