@@ -1259,3 +1259,140 @@ fn clip_volume_edit_is_revisioned_idempotent_undoable_and_changes_fixed_hash() {
     assert_eq!(export(&path).document, before.document);
     assert_eq!(export(&path).revision, "3");
 }
+
+fn png_asset(dir: &Path, name: &str, width: u32, height: u32, rgba: [u8; 4]) -> Asset {
+    let path = dir.join(name);
+    let mut encoder = png::Encoder::new(std::fs::File::create(&path).unwrap(), width, height);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    encoder.set_source_srgb(png::SrgbRenderingIntent::Perceptual);
+    let mut writer = encoder.write_header().unwrap();
+    writer
+        .write_image_data(&rgba.repeat((width * height) as usize))
+        .unwrap();
+    writer.finish().unwrap();
+    Asset {
+        id: AssetId::new(),
+        content_hash: kronello_media::content_hash(&path).unwrap(),
+        kind: AssetKind::Image,
+        streams: vec![StreamMetadata {
+            index: 0,
+            codec: "png".into(),
+            time_base: Rational::new(1, 24).unwrap(),
+            duration: None,
+            start_time: None,
+            width: Some(width),
+            height: Some(height),
+            pixel_format: Some("rgba".into()),
+            color_primaries: Some("bt709".into()),
+            color_transfer: Some("iec61966-2-1".into()),
+            color_matrix: Some("gbr".into()),
+            color_range: Some("pc".into()),
+        }],
+        locator: AssetLocator {
+            relative: Some(name.into()),
+            absolute: None,
+        },
+    }
+}
+
+#[test]
+fn preview_dag_resolves_media_through_the_explicit_decode_adapter() {
+    let dir = tempfile::tempdir().unwrap();
+    let asset = png_asset(dir.path(), "logo.png", 4, 2, [255, 0, 0, 255]);
+    let asset_id = asset.id;
+    let mut p = fixture();
+    p.assets.push(DocumentObject::Known(asset));
+    // Timeline clips reject still-image sources earlier; a composition Media
+    // node is the image path that lowers to DagNode::VideoDraw.
+    let registry = kronello_render::render_registry();
+    let volume = Property::new(
+        PropertyId::new(),
+        DescriptorRef::new(
+            registry
+                .lookup(&SchemaKey::new("kronello.audio.volume").unwrap())
+                .unwrap(),
+        ),
+        PropertySource::Constant(Value::Scalar(FiniteF64::new(1.0).unwrap())),
+        vec![],
+        &registry,
+    )
+    .unwrap();
+    let node = SceneNode {
+        tags: Default::default(),
+        name: None,
+        enabled: true,
+        id: NodeId::new(),
+        kind: NodeKind::Media(MediaNode {
+            asset: asset_id,
+            stream_index: 0,
+            source_in: Time::ZERO,
+            time_map: TimeMap::linear(Time::ZERO, Rational::ONE).unwrap(),
+            volume: volume.id(),
+        }),
+        containment_parent: None,
+        transform_parent: None,
+        child_order: vec![],
+        active_range: range(t(0, 1), t(3, 1)),
+        properties: vec![volume],
+        effects: vec![],
+    };
+    let cid = {
+        let DocumentObject::Known(c) = &mut p.compositions[0] else {
+            panic!()
+        };
+        c.root_nodes.push(node.id);
+        c.nodes.push(node);
+        c.id
+    };
+    let path = dir.path().join("preview.kronello");
+    engine()
+        .dispatch(Request::ProjectCreate(CreateRequest {
+            plan_hash: None,
+            idempotency_key: None,
+            project: path.clone(),
+            document: p,
+        }))
+        .unwrap();
+    let request = |time| FrameRenderRequest {
+        backend: None,
+        input: RenderInput {
+            project: path.clone(),
+            composition: None,
+            target: Some(RenderTarget::Composition { composition: cid }),
+            region: region(),
+            profile: Default::default(),
+            fonts: vec![],
+            media_proxies: kronello_render::MediaProxyMode::Off,
+            luts: vec![],
+        },
+        time,
+    };
+    let (_, dag) = Service::new(BackendSelection::Gpu)
+        .preview_dag(&request(t(1, 2)))
+        .unwrap();
+    assert!(
+        !dag.nodes()
+            .iter()
+            .any(|n| matches!(n, kronello_render::DagNode::VideoDraw { .. })),
+        "preview DAG must not hand unresolved media to a backend"
+    );
+    assert!(
+        dag.nodes()
+            .iter()
+            .any(|n| matches!(n, kronello_render::DagNode::RasterInput { pixels } if pixels.len() == 64 * 32)),
+        "resolved media becomes an explicit raster input"
+    );
+    // A missing asset surfaces the decode adapter's typed error, never the
+    // backend-free lowering guard.
+    std::fs::remove_file(dir.path().join("logo.png")).unwrap();
+    let error = Service::new(BackendSelection::Gpu)
+        .preview_dag(&request(t(1, 2)))
+        .unwrap_err();
+    assert!(
+        !error
+            .message
+            .contains("video requires explicit media backend"),
+        "{error:?}"
+    );
+}

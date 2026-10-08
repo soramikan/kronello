@@ -549,8 +549,11 @@ impl Service<'_> {
     }
 }
 impl<'a> Service<'a> {
-    /// Prepare a native preview through the same snapshot/font/compiler policy
-    /// as render.frame. Native adapters own presentation, never document edits.
+    /// Prepare a native preview through the same snapshot/font/compiler/media
+    /// policy as render.frame: external media is resolved through the explicit
+    /// software decode adapter so every returned DAG lowers without a
+    /// media-backend selection. Native adapters own presentation, never
+    /// document edits.
     pub fn preview_dag(
         &self,
         request: &FrameRenderRequest,
@@ -572,6 +575,7 @@ impl<'a> Service<'a> {
                 snapshot.profile(),
                 request.input.region,
             )?;
+            let dag = kronello_media::resolve_dag_media(&dag, &request.input.project)?;
             Ok((snapshot.revision().to_string(), dag))
         })
     }

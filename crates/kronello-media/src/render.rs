@@ -489,6 +489,48 @@ fn luma_of_rgba8(rgba: &[u8]) -> Vec<u8> {
         .collect()
 }
 
+/// Resolve a DAG's external media through the explicit software decode
+/// contract. Shared by `VideoRenderBackend` and the native preview adapter so
+/// no backend ever lowers an unresolved `VideoDraw`; decode failures stay
+/// typed errors and images decode without loading the video runtime.
+pub fn resolve_dag_media(dag: &RenderDag, project_path: &Path) -> Result<RenderDag, RenderError> {
+    let runtime = if dag
+        .nodes()
+        .iter()
+        .any(|n| matches!(n, kronello_render::DagNode::VideoDraw { asset, .. } if asset.kind == kronello_model::AssetKind::Video))
+    {
+        Some(MediaRuntime::load().map_err(render_error)?)
+    } else {
+        None
+    };
+    dag.resolve_video(
+        |asset, stream, time, working, reverse_sampling, interpolation| {
+            if asset.kind == kronello_model::AssetKind::Image {
+                if interpolation.is_some() {
+                    return Err(RenderError::UnsupportedFeature(
+                        "frame interpolation requires a video asset".into(),
+                    ));
+                }
+                return crate::decode_image_asset(asset, project_path, stream, working)
+                    .map_err(render_error);
+            }
+            runtime
+                .as_ref()
+                .expect("video runtime")
+                .decode_video_image_with_sampling(
+                    asset,
+                    project_path,
+                    stream,
+                    time,
+                    working,
+                    dag.hdr(),
+                    reverse_sampling,
+                    interpolation,
+                )
+                .map_err(render_error)
+        },
+    )
+}
 /// The source project path supplies only a stable locator base. Project state
 /// and asset locks come exclusively from the RenderDag's fixed snapshot.
 pub struct VideoRenderBackend<'a> {
@@ -552,42 +594,7 @@ impl RenderBackend for VideoRenderBackend<'_> {
         cache: &mut RenderCache,
     ) -> Result<BackendFrame, RenderError> {
         let _scope = self.begin_observation_scope()?;
-        let runtime = if dag
-            .nodes()
-            .iter()
-            .any(|n| matches!(n, kronello_render::DagNode::VideoDraw { asset, .. } if asset.kind == kronello_model::AssetKind::Video))
-        {
-            Some(MediaRuntime::load().map_err(render_error)?)
-        } else {
-            None
-        };
-        let resolved = dag.resolve_video(
-            |asset, stream, time, working, reverse_sampling, interpolation| {
-                if asset.kind == kronello_model::AssetKind::Image {
-                    if interpolation.is_some() {
-                        return Err(RenderError::UnsupportedFeature(
-                            "frame interpolation requires a video asset".into(),
-                        ));
-                    }
-                    return crate::decode_image_asset(asset, self.project_path, stream, working)
-                        .map_err(render_error);
-                }
-                runtime
-                    .as_ref()
-                    .expect("video runtime")
-                    .decode_video_image_with_sampling(
-                        asset,
-                        self.project_path,
-                        stream,
-                        time,
-                        working,
-                        dag.hdr(),
-                        reverse_sampling,
-                        interpolation,
-                    )
-                    .map_err(render_error)
-            },
-        )?;
+        let resolved = resolve_dag_media(dag, self.project_path)?;
         self.backend.execute_with_cache(&resolved, cache)
     }
 }

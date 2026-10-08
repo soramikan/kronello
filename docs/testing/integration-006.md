@@ -107,6 +107,18 @@ python3 scripts/demo_integration_m9.py \
   `undo_of_later_edit_does_not_block_undoing_earlier_edit` を追加。
   依存していた `editing.rs` / `modifiers.rs` / `nle2.rs` の旧前提テストを
   新セマンティクスへ更新した。
+- `Service::preview_dag` / `kronello-ffi` の Metal プレビュー: native
+  preview 経路は `preview_dag` の未解決 DAG を `preview_texture` へ直接渡し、
+  `VideoDraw`（タイムラインクリップ・Media ノード・MediaSlot の video/image
+  全般）で常に `UNSUPPORTED_FEATURE: video requires explicit media backend`
+  となり、CPU 参照フォールバックが実質必須だった。`VideoRenderBackend` の
+  decode 契約を `kronello_media::resolve_dag_media` として切り出し、
+  `preview_dag` が render.frame と同じ明示 media adapter で `RasterInput`
+  まで解決してから返すよう修正。デコード失敗は型付きエラーのまま。
+  回帰テスト `preview_dag_resolves_media_through_the_explicit_decode_adapter`
+  を `crates/kronello-service/tests/nle.rs` に追加。実機再検証では
+  Program / Source 両モニタがバッジなしの GPU preview で動画フレームを
+  表示した。
 
 ## 環境・確認済みコマンド
 
