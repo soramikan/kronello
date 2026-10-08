@@ -252,6 +252,8 @@ struct SequenceViewer: View {
                      selection: Binding(get: { model.ui.sequence ?? "" }, set: { model.setSequence($0) }))
         }, actions: { HStack {
             if model.usesCPUReference { Text("CPU 参照").krText(KRType.caption).foregroundStyle(p.inkMuted) }
+            // IO-001 (ADR-0134): external output destination + explicit toggle.
+            ExternalOutputControls(model: model, output: model.output)
             KRButton(icon: .scan, accessibilityLabel: "セーフエリア", pressed: safeArea) { safeArea.toggle() }
         } }) {
             VStack(spacing: 0) {

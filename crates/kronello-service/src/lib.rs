@@ -77,6 +77,8 @@ pub use media::{
     AssetThumbnailRequest, AssetThumbnailResult, CollectRequest, LutImportRequest, MediaAssetEntry,
     MediaQueryRequest, MediaQueryResult, RelinkRequest,
 };
+mod output;
+pub use output::*;
 mod control;
 pub use control::ExecutionControl;
 
@@ -237,6 +239,15 @@ pub enum Request {
     LutImport(LutImportRequest),
     #[serde(rename = "inspect.scopes")]
     InspectScopes(InspectScopesRequest),
+    /// IO-001: external monitor output enumeration (ADR-0134).
+    #[serde(rename = "io.output.list")]
+    IoOutputList(IoOutputListRequest),
+    /// IO-001: explicit output enable; native session only.
+    #[serde(rename = "io.output.enable")]
+    IoOutputEnable(IoOutputEnableRequest),
+    /// IO-001: explicit output disable; native session only.
+    #[serde(rename = "io.output.disable")]
+    IoOutputDisable(IoOutputDisableRequest),
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -399,6 +410,10 @@ pub enum ResultData {
     Scopes(Box<InspectScopesResult>),
     /// AUDIO-011 detached-helper plugin identity report (ADR-0131).
     PluginProbe(PluginProbeResult),
+    /// IO-001 external output enumeration (ADR-0134).
+    OutputDevices(IoOutputListResult),
+    /// IO-001 enable/disable state acknowledgement.
+    OutputState(IoOutputStateResult),
 }
 #[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
 #[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
@@ -772,6 +787,11 @@ impl<'a> Service<'a> {
             Request::InspectScopes(r) => {
                 inspect::scopes(r, self).map(|result| ResultData::Scopes(Box::new(result)))
             }
+            Request::IoOutputList(_) => Ok(ResultData::OutputDevices(output_device_list(false))),
+            // IO-001: activation requires the FFI output session. Headless
+            // transports reject typed; there is no silent no-op.
+            Request::IoOutputEnable(r) => Err(external_output_requires_native_session(r.kind)),
+            Request::IoOutputDisable(r) => Err(external_output_requires_native_session(r.kind)),
             Request::ProjectInfo(r) => {
                 if self.read_only_inspection {
                     Ok(ResultData::Project(snapshot_info(
@@ -1549,6 +1569,9 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
             local_locator(&r.path)
         }
         Request::InspectScopes(r) => render_locators(&r.input),
+        Request::IoOutputList(_) | Request::IoOutputEnable(_) | Request::IoOutputDisable(_) => {
+            Ok(())
+        }
     }
 }
 fn render_locators(input: &RenderInput) -> Result<(), ServiceError> {

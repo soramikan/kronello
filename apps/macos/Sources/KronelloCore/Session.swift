@@ -144,6 +144,10 @@ public enum PreviewSurface {
     public static let program: UInt32 = 0
     public static let source: UInt32 = 1
     public static let export: UInt32 = 2
+    /// IO-001 (ADR-0134): external reference-monitor surface. The FFI worker
+    /// binds it to the program preview's device so one program frame fans out
+    /// to every enabled output without cross-device copies.
+    public static let refMonitor: UInt32 = 8
 }
 
 /// GUI-011: a source-monitor preview target (`SourcePreviewRef` on the wire).

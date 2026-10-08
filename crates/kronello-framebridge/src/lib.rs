@@ -3,6 +3,7 @@ use kronello_gpu::{GpuContext, GpuError, TransferStats};
 use std::time::{Duration, Instant};
 #[cfg(target_os = "macos")]
 mod macos;
+pub mod output;
 #[cfg(target_os = "macos")]
 pub mod resident;
 #[cfg(target_os = "macos")]

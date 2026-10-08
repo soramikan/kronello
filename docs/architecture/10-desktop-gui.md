@@ -214,6 +214,35 @@ Export は320pxの設定、中央の native Viewer、304pxの確認、設定を�
 共有 stem 規則 + `preset_output_extension` で決め、`kronello watch` と同じ命名を使う
 （[検証](../testing/flow-002.md)、[検証](../testing/flow-003.md)）。
 
+## IO-001 の実装範囲
+
+IO-001 は外部モニタ出力を [ADR-0134](../adr/0134-external-monitor-output.md) の契約で実装した。
+出力ルートはすべて FFI worker が所有する `OutputDevice` 契約（kind / format / colorspace /
+pacing / typed error）に従い、有効化は共有レジストリの `io.output.enable` /
+`io.output.disable` だけを通す。`io.output.list` は実行時の `dlopen` 検出結果
+（detected / available / active / transport）を返し、GUI / CLI / MCP は同じ wire を使う。
+headless transport では有効化が型付き `UNSUPPORTED_FEATURE` で拒否される。
+
+フレームの供給元は Program monitor 一回の redraw である。`preview::Preview` は render 段と
+present 段に分かれ、`FrameSource`（rendered texture・region・crop origin）を一度だけ作り、
+program surface と全ての有効出力が同じ `Blit` 変換（crop / scaled + SDR sRGB encode）で
+present する。`Presentation` は CAMetalLayer surface を束ね、ref monitor は
+`kronello_surface_attach_at` の slot 8 で Program preview と同じ instance / adapter / device
+に結び付ける。ルートごとの成否は redraw 応答の `preview.outputs` に報告し、Program
+monitor 自体の成功を外部出力の失敗で落とさない。
+
+ref monitor は `RefMonitorWindow` がメイン以外の `NSScreen` 全画面の borderless window を
+開き、layer にその `NSScreen.colorSpace` を設定した上で slot 8 に attach する。
+Syphon は `kronello-framebridge::output` が `Syphon.framework` を実行時検出し、存在するとき
+だけ `SyphonMetalServer` を生成して BGRA8 MTLTexture を publish する。framework 未導入・
+program surface 未 attach・外部 display 不在は `UNSUPPORTED_FEATURE` / `SURFACE_UNAVAILABLE`
+の型付き拒否であり、黙った no-op も別出力への暗黙 fallback もない。SDI / NDI / deck
+制御は `VendorOutputAdapter` の検出境界だけを定義し、この build では常に `UNSUPPORTED_FEATURE`。
+
+GUI は Program monitor ヘッダの `ExternalOutputControls`（destination picker + 明示 toggle）
+だけを追加し、選択・失敗は session 状態として `ExternalOutputModel` に保持する。
+検証範囲と hardware 依存の残件は [IO-001 の受け入れ記録](../testing/io-001.md)。
+
 ## 未接続の編集操作の追跡
 
 GUI-001〜004の完了は、すべての設計上のコントロールが編集可能という意味ではない。EditのEffects追加・速度/ソース開始/逆再生・合成設定・トラック表示/ミュート、Motionのガイド/スナップ、色・書体/ウェイト・複数Text style spanなど、監査時に無効化または表示専用だった操作をGUI-007（M5）で追跡する。M5作業ツリーでは一部のUIと共有APIを追加中であり、実装済みの操作と未完の受け入れを区別する。根拠とAPI/UIの区別は [現在の実装範囲と残件](../roadmap/implementation-status.md#macos-gui-で残る明示的な制限) を参照する。

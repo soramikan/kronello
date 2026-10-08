@@ -1035,11 +1035,14 @@ name = "kronello-ffi"
 version = "0.0.0"
 dependencies = [
  "half",
+ "kronello-framebridge",
  "kronello-gpu",
  "kronello-render",
  "kronello-service",
  "naga",
  "objc2",
+ "objc2-metal",
+ "objc2-quartz-core",
  "pollster",
  "serde_json",
  "tempfile",
@@ -1777,9 +1780,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96c1358452b371bf9f104e21ec536d37a650eb10f7ee379fff67d2e08d537f1f"
 dependencies = [
  "bitflags",
+ "block2",
+ "libc",
  "objc2",
  "objc2-core-foundation",
  "objc2-core-graphics",
+ "objc2-core-video",
  "objc2-foundation",
  "objc2-metal",
 ]

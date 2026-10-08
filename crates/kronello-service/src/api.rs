@@ -152,7 +152,10 @@ macro_rules! commands {
             ("captions.import", false, CaptionsImportRequest, kronello_store::Event),
             ("captions.export", true, CaptionsExportRequest, CaptionsExportResult),
             ("lut.import", false, LutImportRequest, kronello_store::Event),
-            ("inspect.scopes", true, InspectScopesRequest, InspectScopesResult)
+            ("inspect.scopes", true, InspectScopesRequest, InspectScopesResult),
+            ("io.output.list", true, IoOutputListRequest, IoOutputListResult),
+            ("io.output.enable", true, IoOutputEnableRequest, IoOutputStateResult),
+            ("io.output.disable", true, IoOutputDisableRequest, IoOutputStateResult)
         }
     };
 }

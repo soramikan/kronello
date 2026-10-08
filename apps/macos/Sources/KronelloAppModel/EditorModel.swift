@@ -197,6 +197,9 @@ public struct EditCandidate {
     }
     public let playback = RealtimePlayback()
     public let playbackEvidence = PlaybackEvidence()
+    /// IO-001 (ADR-0134): external monitor output state (lazy so the output
+    /// model's weak back-reference is installed after init).
+    public lazy var output = ExternalOutputModel(model: self)
     public var waitForVideoPresentation: (() async -> Void)?
     public private(set) var playbackTarget: PlaybackTarget?
     public private(set) var playbackRateNum: Int64?
@@ -309,6 +312,9 @@ public struct EditCandidate {
         }
     }
     public func close() async {
+        // IO-001: close the external output window before the session dies;
+        // the FFI releases its output devices with the session either way.
+        try? await output.refMonitorPresenter?(false)
         playing = false; polling?.cancel(); stateWrite?.cancel()
         presentationTimer?.cancel(); playbackControl?.cancel()
         do { try await playback.stop() } catch { mapFailure(error) }

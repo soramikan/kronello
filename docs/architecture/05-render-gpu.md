@@ -226,6 +226,8 @@ M1 / Metal の追加実測では、wgpu 30.0.1 の同一 MTLDevice による IOS
 
 scene は参照欠落・循環・不正 opacity / 色 / 幾何を型付きエラーで拒否する。保守的な予算は 1,024 nodes、各 group / roots 1,024 references、合計 65,536 edges、深さ 32、座標の絶対値・stroke 幅 1,000,000 以下、GPU 中間面の上限推計 512 MiB（CPU 参照にも float32 の面サイズで同じ予算を適用）。デバイス限界超過もエラー。GPU 不在では skip / CPU fallback しない。CPU upload は幾何と制御データのみで、合成・mask は GPU 常駐。`TransferStats` はこれらを control upload として計上し、最終 GPU copy / image readback と、4 bytes の validation status readback（1 回）を計上する。性能・資源プール・tiling・高品質 AA は今後の検証対象。
 
+IO-001（[ADR-0134](../adr/0134-external-monitor-output.md)）の外部モニタ出力は、この render 経路の上に置く native 側の提示層である。`kronello-ffi` が program monitor 一回の redraw で作った `FrameSource` を、program surface・ref monitor・Syphon の全ルートで同じ SDR sRGB encode（crop / scaled blit）で present し、BGRA8 target の readback が program monitor の変換結果と一致することを GPU 環境の parity テストで検証する。出力先 display の色空間適用・出力の有効化・vendor SDK 境界は [10 デスクトップ GUI](10-desktop-gui.md#io-001-の実装範囲) と [IO-001 の受け入れ記録](../testing/io-001.md) を参照。
+
 ## M1 RENDER-001 の Scene IR / Render DAG と連番出力
 
 `kronello-render` は store / GPU に通常依存しない。`RenderBackend` を呼出側から渡し、`kronello-gpu::GpuContext` の trait 実装で GPU-002 の coverage・隔離合成・mask・出力変換を実行する。`kronello-gpu::render_adapter::CpuReferenceBackend` は明示選択する float32 の参照実装で、通常の意味テストに使う。GPU adapter 不在を CPU で補う動作はない。render → gpu の参照はテスト用 dev-dependency だけとする（ADR-0043）。既存 GPU API は維持する。

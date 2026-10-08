@@ -7760,6 +7760,72 @@
       ],
       "type": "object"
     },
+    "IoOutputDisableRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/OutputDeviceKind"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "IoOutputEnableRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/OutputDeviceKind"
+        },
+        "name": {
+          "description": "Optional display name for the published output (for example the Syphon\nserver name). Never a locator or an arbitrary command string.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "IoOutputListRequest": {
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "IoOutputListResult": {
+      "additionalProperties": false,
+      "properties": {
+        "devices": {
+          "items": {
+            "$ref": "#/$defs/OutputDeviceInfo"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "devices"
+      ],
+      "type": "object"
+    },
+    "IoOutputStateResult": {
+      "additionalProperties": false,
+      "properties": {
+        "active": {
+          "type": "boolean"
+        },
+        "kind": {
+          "$ref": "#/$defs/OutputDeviceKind"
+        }
+      },
+      "required": [
+        "kind",
+        "active"
+      ],
+      "type": "object"
+    },
     "JobAudioClip": {
       "additionalProperties": false,
       "properties": {
@@ -9727,6 +9793,57 @@
         "id"
       ],
       "type": "object"
+    },
+    "OutputDeviceInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "active": {
+          "description": "An output of this kind is currently enabled in this session.",
+          "type": "boolean"
+        },
+        "available": {
+          "description": "This transport can activate the output right now (native session for\nref_monitor/syphon; a contributed adapter for vendor outputs).",
+          "type": "boolean"
+        },
+        "detail": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "detected": {
+          "description": "Runtime probe: the platform/framework/SDK is present. Detection never\nimplies an adapter can be opened.",
+          "type": "boolean"
+        },
+        "kind": {
+          "$ref": "#/$defs/OutputDeviceKind"
+        },
+        "name": {
+          "type": "string"
+        },
+        "transport": {
+          "description": "The contract an activation would use: `native_surface`,\n`syphon`, or `vendor_sdk`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "name",
+        "transport",
+        "detected",
+        "available",
+        "active"
+      ],
+      "type": "object"
+    },
+    "OutputDeviceKind": {
+      "enum": [
+        "ref_monitor",
+        "syphon",
+        "sdi",
+        "ndi"
+      ],
+      "type": "string"
     },
     "OutputFile": {
       "additionalProperties": false,
@@ -14370,6 +14487,63 @@
             "time"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "IO-001: external monitor output enumeration (ADR-0134).",
+          "properties": {
+            "operation": {
+              "const": "io.output.list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "IO-001: explicit output enable; native session only.",
+          "properties": {
+            "kind": {
+              "$ref": "#/$defs/OutputDeviceKind"
+            },
+            "name": {
+              "description": "Optional display name for the published output (for example the Syphon\nserver name). Never a locator or an arbitrary command string.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "operation": {
+              "const": "io.output.enable",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "IO-001: explicit output disable; native session only.",
+          "properties": {
+            "kind": {
+              "$ref": "#/$defs/OutputDeviceKind"
+            },
+            "operation": {
+              "const": "io.output.disable",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "kind"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -15572,6 +15746,42 @@
             },
             "value": {
               "$ref": "#/$defs/PluginProbeResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "IO-001 external output enumeration (ADR-0134).",
+          "properties": {
+            "kind": {
+              "const": "output_devices",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/IoOutputListResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "IO-001 enable/disable state acknowledgement.",
+          "properties": {
+            "kind": {
+              "const": "output_state",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/IoOutputStateResult"
             }
           },
           "required": [

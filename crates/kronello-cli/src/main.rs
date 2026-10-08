@@ -97,6 +97,10 @@ fn run(stream: Option<&events::Stream>) -> Result<Response, ServiceError> {
         ["export", "batch"] => Some("export.batch".into()),
         ["project", "collect"] => Some("project.collect".into()),
         ["capabilities", "get"] => Some("capabilities.get".into()),
+        // IO-001 (ADR-0134): external output enumeration and explicit enable.
+        ["io", "output", verb @ ("list" | "enable" | "disable")] => {
+            Some(format!("io.output.{verb}"))
+        }
         ["captions", verb @ ("import_plan" | "import" | "export")] => {
             Some(format!("captions.{verb}"))
         }

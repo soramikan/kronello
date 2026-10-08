@@ -745,6 +745,12 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
             "sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "component":"6b726f6e656c6c6f746573746761696e","parameters":[]},
             "destination":"processed.mov"}),
+        // IO-001 (ADR-0134): external output enumeration and explicit
+        // activation. Payloads stay schema-shaped; headless execution is a
+        // typed reject covered by the io001 test.
+        json!({"operation":"io.output.list"}),
+        json!({"operation":"io.output.enable","kind":"syphon","name":"Kronello Program"}),
+        json!({"operation":"io.output.disable","kind":"syphon"}),
     ];
     assert_eq!(requests.len(), command_registry().len());
     for request in requests {
@@ -1533,6 +1539,21 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
             "output":{"format":"image_sequence"}}}]}),
     );
     assert_eq!(batch["items"][0]["outcome"], "submitted");
+    // IO-001 (ADR-0134): enumeration succeeds headless with honest runtime
+    // detection; activation requires the FFI output session, so headless
+    // enable/disable are typed UNSUPPORTED_FEATURE rejects. All three ride
+    // the same envelope and registry schemas.
+    let outputs = execute(json!({"operation":"io.output.list"}));
+    assert_eq!(outputs["devices"].as_array().unwrap().len(), 4);
+    for op in ["io.output.enable", "io.output.disable"] {
+        let request = json!({"operation":op,"kind":"syphon"});
+        envelope.validate(&request).unwrap();
+        let Response::Error { error } = engine.execute_json(&request.to_string()) else {
+            panic!("{op} must be a typed reject headless")
+        };
+        assert_eq!(error.code, "UNSUPPORTED_FEATURE", "{op}: {error:?}");
+        checked.insert(op.to_owned());
+    }
     assert_eq!(
         checked,
         command_registry().into_iter().map(|c| c.name).collect()

@@ -479,7 +479,10 @@ fn versions_negotiate_and_registry_schemas_are_self_contained() {
             );
             if !matches!(
                 command.name.as_str(),
-                "capabilities.get" | "job.list" | "job.prune"
+                // io.output.list, like the other parameter-free queries, accepts
+                // an empty request and reports device detection instead of an
+                // INVALID_REQUEST.
+                "capabilities.get" | "job.list" | "job.prune" | "io.output.list"
             ) {
                 let missing = client.call(&command.name, json!({}));
                 assert_error(&missing, "INVALID_REQUEST");
