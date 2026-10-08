@@ -1,7 +1,7 @@
 {
   "schema_version": "0.5",
   "created": "2026-10-01",
-  "updated": "2026-10-08",
+  "updated": "2026-10-09",
   "status": "implementation_started",
   "description": "設計と実装の計画・進捗。このファイルがバックログの正本であり、GitHub等へ登録したIssueではない。",
   "specification": "docs/architecture/",
@@ -1228,7 +1228,7 @@
       "priority": "P2",
       "area": "integration",
       "title": "縦断デモ第5段階: M10 配信・拡張ワークフロー（共同編集を除く）",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "MEDIA-004",
         "FX-008",
