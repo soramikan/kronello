@@ -8,6 +8,8 @@ use std::fmt::{Debug, Display, Formatter};
 mod fixtures;
 pub use fixtures::{EXTERNAL_FIXTURE_DIR_ENV, FixtureError, FixtureResolver, resolve_fixture};
 
+pub mod rawmedia;
+
 /// A diagnostic retaining the location and both semantic values.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SemanticMismatch {

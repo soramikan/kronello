@@ -562,10 +562,18 @@ impl MediaRuntime {
     pub fn probe_codec_tag(&self, path: &Path, stream_index: u32) -> Result<u32, MediaError> {
         self.native.probe_codec_tag(path, stream_index)
     }
+    /// Camera RAW containers are probed without FFmpeg (ADR-0136): detection
+    /// owns the file before any generic demuxer sees it, BRAW/R3D report a
+    /// typed vendor-SDK rejection, and ProRes RAW reports its QuickTime
+    /// metadata with the rgba64h contract. Registration callers can lock the
+    /// returned stream fields directly into `StreamMetadata`.
     pub fn probe(&self, path: &Path) -> Result<MediaProbe, MediaError> {
         let path = path.canonicalize()?;
         if !path.is_file() {
             return Err(MediaError::InvalidInput("expected local file".into()));
+        }
+        if let Some(detection) = crate::raw::sniff_camera_raw(&path)? {
+            return crate::raw::probe_camera_raw(&path, detection);
         }
         self.native.probe(&path)
     }

@@ -23,6 +23,18 @@ unsafe extern "C" {
         error: *mut c_char,
         error_size: usize,
     ) -> i32;
+    fn kronello_fb_read_samples_raw(
+        path: *const c_char,
+        stream: u32,
+        time_num: i64,
+        time_den: i64,
+        canonical_origin: i32,
+        samples: *mut *mut c_void,
+        capacity: usize,
+        count: *mut usize,
+        error: *mut c_char,
+        error_size: usize,
+    ) -> i32;
 }
 fn error(stage: NativeStage, detail: impl Into<String>) -> NativeError {
     NativeError {
@@ -35,6 +47,8 @@ fn error(stage: NativeStage, detail: impl Into<String>) -> NativeError {
 pub enum ResidentFormat {
     Bgra8,
     Nv12VideoRange,
+    /// ProRes RAW decoder output: linear scene-referred 64-bit RGBA half.
+    ProResRawRgbah,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VideoTransfer {
@@ -194,12 +208,13 @@ fn decode_selected(
     if time.1 <= 0 {
         return Err(error(NativeStage::Decode, "invalid rational time"));
     }
-    let (mut frames, hardware, _, timestamps) = videotoolbox::decode(
-        samples,
-        format == ResidentFormat::Nv12VideoRange,
-        true,
-        Some(time),
-    )?;
+    let mode = match format {
+        ResidentFormat::Bgra8 => videotoolbox::DecodeMode::SdrBgra8,
+        ResidentFormat::Nv12VideoRange => videotoolbox::DecodeMode::SdrNv12,
+        ResidentFormat::ProResRawRgbah => videotoolbox::DecodeMode::ProResRaw,
+    };
+    let (mut frames, hardware, _, timestamps) =
+        videotoolbox::decode(samples, mode, true, Some(time))?;
     if hardware != Some(true) {
         return Err(error(
             NativeStage::HardwareDecoderQuery,
@@ -292,10 +307,15 @@ fn decode_file_inner(
     let mut pointers = vec![std::ptr::null_mut(); 262144];
     let mut count = 0;
     let mut diagnostic = [0u8; 512];
+    let raw_mode = format == ResidentFormat::ProResRawRgbah;
     // SAFETY: Fixed-capacity initialized out-array, live NUL path and writable
     // diagnostic; native returns +1 CMSampleBuffer handles for count entries.
     let code = unsafe {
-        kronello_fb_read_samples(
+        (if raw_mode {
+            kronello_fb_read_samples_raw
+        } else {
+            kronello_fb_read_samples
+        })(
             cpath.as_ptr(),
             stream,
             time.0,
@@ -570,4 +590,175 @@ fn exact_time_add(a: CMTime, b: CMTime, sign: i128) -> Result<CMTime, NativeErro
     })?;
     // SAFETY: Reduced exact ratio retains a positive checked native timescale.
     Ok(unsafe { CMTime::new(value, scale) })
+}
+
+/// ADR-0136/0081 capability probe: true only when VideoToolbox reports ProRes
+/// RAW or RAW-HQ hardware decode support. This is a capability query, never a
+/// promise; decode still verifies the session hardware property.
+pub fn prores_raw_hardware_supported() -> bool {
+    videotoolbox::prores_raw_supported()
+}
+
+/// ProRes RAW decode: demux `aprn`/`aprh` compressed samples and
+/// hardware-decode into a linear scene-referred 64RGBAHalf buffer. Codec
+/// admission, hardware decode and output format are all verified.
+pub fn decode_file_prores_raw(
+    path: &Path,
+    stream: u32,
+    time: (i64, i64),
+    interval: [(i64, i64); 2],
+) -> Result<HardwareFrame, NativeError> {
+    if !prores_raw_hardware_supported() {
+        return Err(error(
+            NativeStage::HardwareDecoderQuery,
+            "ProRes RAW hardware decode unsupported on this system",
+        ));
+    }
+    if time.1 <= 0
+        || interval.iter().any(|(_, den)| *den <= 0)
+        || i128::from(time.0) * i128::from(interval[0].1)
+            < i128::from(interval[0].0) * i128::from(time.1)
+        || i128::from(time.0) * i128::from(interval[1].1)
+            >= i128::from(interval[1].0) * i128::from(time.1)
+    {
+        return Err(error(
+            NativeStage::FrameSelection,
+            "time outside canonical locked half-open stream interval",
+        ));
+    }
+    decode_file_inner(
+        path,
+        stream,
+        time,
+        ResidentFormat::ProResRawRgbah,
+        Some(interval[0]),
+    )
+}
+
+fn half_to_f32(h: u16) -> f32 {
+    let sign = u32::from(h >> 15);
+    let exponent = u32::from((h >> 10) & 0x1f);
+    let fraction = f64::from(h & 0x3ff);
+    let value = match exponent {
+        0 => fraction * (2f64).powi(-24),
+        31 => {
+            if fraction == 0.0 {
+                f64::INFINITY
+            } else {
+                f64::NAN
+            }
+        }
+        e => (1.0 + fraction / 1024.0) * (2f64).powi(e as i32 - 15),
+    };
+    (if sign == 1 { -value } else { value }) as f32
+}
+
+impl HardwareFrame {
+    /// Color primaries attached to the decoded buffer, mapped to the locked
+    /// tag names. `None` means the decoder produced an untagged buffer and the
+    /// locked stream contract stands.
+    pub fn color_primaries(&self) -> Option<String> {
+        use objc2_core_foundation::CFString;
+        use objc2_core_video::{
+            kCVImageBufferColorPrimaries_ITU_R_709_2, kCVImageBufferColorPrimaries_ITU_R_2020,
+            kCVImageBufferColorPrimariesKey,
+        };
+        // SAFETY: Retained decoded buffer; Copy returns a +1 CFType.
+        let value = unsafe {
+            self.buffer
+                .0
+                .attachment(kCVImageBufferColorPrimariesKey, std::ptr::null_mut())
+        }?;
+        let text = value.downcast_ref::<CFString>().map(|s| s.to_string())?;
+        // SAFETY: Process-lifetime CFString constants; read-only compare.
+        let (r2020, r709) = unsafe {
+            (
+                kCVImageBufferColorPrimaries_ITU_R_2020.to_string(),
+                kCVImageBufferColorPrimaries_ITU_R_709_2.to_string(),
+            )
+        };
+        Some(if text == r2020 {
+            "bt2020".to_string()
+        } else if text == r709 {
+            "bt709".to_string()
+        } else {
+            text
+        })
+    }
+
+    /// CPU read of the ProRes RAW 64RGBAHalf buffer into f32 RGBA (linear,
+    /// scene-referred, unclamped). Validation/deterministic conversion only.
+    pub fn linear_pixels(&self) -> Result<Vec<f32>, NativeError> {
+        use objc2_core_video::{
+            CVPixelBufferGetBaseAddress, CVPixelBufferGetBytesPerRow,
+            CVPixelBufferGetPixelFormatType, CVPixelBufferLockBaseAddress, CVPixelBufferLockFlags,
+            CVPixelBufferUnlockBaseAddress, kCVPixelFormatType_64RGBAHalf,
+        };
+        if self.format != ResidentFormat::ProResRawRgbah
+            || CVPixelBufferGetPixelFormatType(&self.buffer.0) != kCVPixelFormatType_64RGBAHalf
+        {
+            return Err(error(
+                NativeStage::Readback,
+                "linear_pixels requires a 64RGBAHalf ProRes RAW buffer",
+            ));
+        }
+        let buffer = &self.buffer.0;
+        // SAFETY: A completed, retained decoder output is locked read-only.
+        let status =
+            unsafe { CVPixelBufferLockBaseAddress(buffer, CVPixelBufferLockFlags::ReadOnly) };
+        if status != 0 {
+            return Err(error(
+                NativeStage::Readback,
+                format!("pixel lock OSStatus={status}"),
+            ));
+        }
+        let [width, height] = self.size();
+        let result = (|| {
+            let row_bytes = (width as usize)
+                .checked_mul(8)
+                .and_then(|r| (height as usize).checked_mul(r))
+                .ok_or_else(|| error(NativeStage::Readback, "surface size overflow"))?;
+            if row_bytes > 1024 * 1024 * 1024 {
+                return Err(error(
+                    NativeStage::Readback,
+                    "64RGBAHalf surface budget exceeded",
+                ));
+            }
+            let stride = CVPixelBufferGetBytesPerRow(buffer);
+            let base = CVPixelBufferGetBaseAddress(buffer).cast::<u8>();
+            let row = width as usize * 8;
+            if base.is_null() || row > stride {
+                return Err(error(NativeStage::Readback, "invalid buffer layout"));
+            }
+            let mut pixels = Vec::with_capacity(width as usize * height as usize * 4);
+            for y in 0..height as usize {
+                // SAFETY: Locked plane owns height rows of stride bytes; the
+                // row slice stays inside the checked row width.
+                let start = unsafe { base.add(y * stride) };
+                for x in 0..width as usize {
+                    for channel in 0..4 {
+                        // SAFETY: in-bounds within the checked row.
+                        let h = unsafe {
+                            u16::from_ne_bytes([
+                                *start.add(x * 8 + channel * 2),
+                                *start.add(x * 8 + channel * 2 + 1),
+                            ])
+                        };
+                        pixels.push(half_to_f32(h));
+                    }
+                }
+            }
+            Ok(pixels)
+        })();
+        // SAFETY: Matches the successful read-only lock, including error paths.
+        let status =
+            unsafe { CVPixelBufferUnlockBaseAddress(buffer, CVPixelBufferLockFlags::ReadOnly) };
+        if status != 0 {
+            return Err(error(
+                NativeStage::Readback,
+                format!("pixel unlock OSStatus={status}"),
+            ));
+        }
+        result
+    }
 }

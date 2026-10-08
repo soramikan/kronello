@@ -2,6 +2,11 @@
 #![deny(unsafe_code)]
 mod image;
 pub use image::*;
+mod raw;
+pub use raw::*;
+#[cfg(kronello_libraw)]
+#[allow(unsafe_code)]
+mod rawffi;
 mod render;
 pub use render::*;
 mod assets;

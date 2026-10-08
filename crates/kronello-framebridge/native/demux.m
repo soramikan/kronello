@@ -78,11 +78,21 @@ static int resident_format_supported(CMFormatDescriptionRef format) {
     return offset+4<=size && (bytes[offset]&3)==1 && (bytes[offset+1]&7)==0 && (bytes[offset+2]&7)==0;
 }
 
+// ProRes RAW admission (ADR-0136): the compressed format description must be
+// an actual ProRes RAW/RAW-HQ video description. SDR color/tag checks do not
+// apply; the decoder output contract is validated after decode instead.
+static int raw_format_supported(CMFormatDescriptionRef format) {
+    FourCharCode codec=CMFormatDescriptionGetMediaSubType(format);
+    return codec==kCMVideoCodecType_AppleProResRAW ||
+           codec==kCMVideoCodecType_AppleProResRAWHQ;
+}
+
 // Return retained compressed samples in a bounded caller buffer. The caller
 // releases every sample even on error; no decompressed CPU pixels are requested.
-int kronello_fb_read_samples(const char *path, uint32_t stream, int64_t time_num, int64_t time_den, int canonical_origin,
-                            void **samples, size_t capacity, size_t *count,
-                            char *error, size_t error_size) {
+static int read_samples(const char *path, uint32_t stream, int64_t time_num, int64_t time_den, int canonical_origin,
+                        int raw_mode,
+                        void **samples, size_t capacity, size_t *count,
+                        char *error, size_t error_size) {
     @autoreleasepool {
         *count = 0;
         NSURL *url = [NSURL fileURLWithPath:[NSString stringWithUTF8String:path]];
@@ -134,10 +144,13 @@ int kronello_fb_read_samples(const char *path, uint32_t stream, int64_t time_num
                 snprintf(error, error_size, "nonempty compressed sample lacks format/data buffer");
                 return -7;
             }
-            if (!resident_format_supported(CMSampleBufferGetFormatDescription(sample))) {
+            CMFormatDescriptionRef format=CMSampleBufferGetFormatDescription(sample);
+            if (raw_mode ? !raw_format_supported(format) : !resident_format_supported(format)) {
                 CFRelease(sample);
                 [reader cancelReading];
-                snprintf(error,error_size,"actual compressed color/range/chroma/bit depth unsupported or unverified; require tagged SDR BT709 8-bit 420");
+                snprintf(error,error_size,raw_mode?
+                    "actual compressed codec is not ProRes RAW/RAW-HQ":
+                    "actual compressed color/range/chroma/bit depth unsupported or unverified; require tagged SDR BT709 8-bit 420");
                 return -8;
             }
             compressed_bytes += CMSampleBufferGetTotalSampleSize(sample);
@@ -155,4 +168,19 @@ int kronello_fb_read_samples(const char *path, uint32_t stream, int64_t time_num
         }
         return 0;
     }
+}
+
+int kronello_fb_read_samples(const char *path, uint32_t stream, int64_t time_num, int64_t time_den, int canonical_origin,
+                            void **samples, size_t capacity, size_t *count,
+                            char *error, size_t error_size) {
+    return read_samples(path, stream, time_num, time_den, canonical_origin, 0,
+                        samples, capacity, count, error, error_size);
+}
+
+// ProRes RAW samples use the same bounded reader with raw-mode admission.
+int kronello_fb_read_samples_raw(const char *path, uint32_t stream, int64_t time_num, int64_t time_den, int canonical_origin,
+                                 void **samples, size_t capacity, size_t *count,
+                                 char *error, size_t error_size) {
+    return read_samples(path, stream, time_num, time_den, canonical_origin, 1,
+                        samples, capacity, count, error, error_size);
 }

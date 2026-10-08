@@ -314,11 +314,41 @@ pub(crate) fn thumbnail(
         .ok_or_else(|| ServiceError::new("ASSET_MISSING", "asset ID not present"))?;
     let (pts, width, height, rgba) = match asset.kind {
         kronello_model::AssetKind::Video => {
-            let path = kronello_media::resolve_asset(&asset, &request.project)?;
-            let runtime = MediaRuntime::load()?;
-            let mut decoder = runtime.open_video(&path)?;
-            let frame = decoder.rgba_at(request.time.unwrap_or(kronello_time::Rational::ZERO))?;
-            (Some(frame.pts), frame.width, frame.height, frame.rgba)
+            let stream_index = asset
+                .streams
+                .first()
+                .ok_or_else(|| ServiceError::invalid("video asset has no stream"))?
+                .index;
+            let codec = asset
+                .streams
+                .iter()
+                .find(|s| s.index == stream_index)
+                .map(|s| s.codec.as_str());
+            // Camera RAW video codecs own their decode boundary (ADR-0136):
+            // open_video rejects them, so thumbnails use the same locked
+            // codec dispatch as the render path.
+            if codec.is_some_and(kronello_media::is_camera_raw_video_codec) {
+                let image = MediaRuntime::load()?.decode_video_image(
+                    &asset,
+                    &request.project,
+                    stream_index,
+                    request.time.unwrap_or(kronello_time::Rational::ZERO),
+                    kronello_model::ColorSpace::LinearRec709,
+                )?;
+                (
+                    None,
+                    image.size[0],
+                    image.size[1],
+                    linear_premultiplied_to_srgb8(&image.pixels),
+                )
+            } else {
+                let path = kronello_media::resolve_asset(&asset, &request.project)?;
+                let runtime = MediaRuntime::load()?;
+                let mut decoder = runtime.open_video(&path)?;
+                let frame =
+                    decoder.rgba_at(request.time.unwrap_or(kronello_time::Rational::ZERO))?;
+                (Some(frame.pts), frame.width, frame.height, frame.rgba)
+            }
         }
         kronello_model::AssetKind::Image => {
             let stream = asset
