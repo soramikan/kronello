@@ -26,7 +26,7 @@
     },
     "hardware": {
       "computer": "runnervmfi6oq",
-      "processor": "AMD64 Family 25 Model 1 Stepping 1, AuthenticAMD"
+      "processor": "AMD64 Family 25 Model 17 Stepping 1, AuthenticAMD"
     },
     "os": "\r\nMicrosoft Windows [Version 10.0.26100.33438]",
     "platform_details": {
@@ -104,8 +104,8 @@
       "sha256": "ac30749b89208e1e97ab17df812603b32a6e9a4bcfce1fc25a8e89197575d2a4"
     },
     "environment.json": {
-      "bytes": 3349,
-      "sha256": "2e812217a99ae27702754e24aefc9fc9f2bb86ae2eefd123824370b590012957"
+      "bytes": 3350,
+      "sha256": "2fb482fd20bfe1695d7a4017821e507459758135b939ac47bee3fa53b64c67c1"
     },
     "fill-evenodd-hole/frame-0.png": {
       "bytes": 133,
@@ -218,6 +218,62 @@
     "fx003-wipe/frame-0.rgba16f": {
       "bytes": 2048,
       "sha256": "c05bf8031e3c0ff902a1af682e9d533305b252783b44156930e6f6771d4d83a6"
+    },
+    "fx005-chroma-key-edges/frame-0.png": {
+      "bytes": 187,
+      "sha256": "5395e8913a0abe6bfbb6aa04f7e6ee0912ffdc9f74fe2e2fc763e9fe9ba99f3f"
+    },
+    "fx005-chroma-key-edges/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "9d9e215265978323c27d906d69c386f9c7a474739a8babc57673061cdf8ee6a0"
+    },
+    "fx005-chroma-key/frame-0.png": {
+      "bytes": 102,
+      "sha256": "5ff6f750ff64c7473bd09682b92adfaa8b9d4cbaebfcc47ec27e67de95c901b2"
+    },
+    "fx005-chroma-key/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "1b610de5e79a7a44b343dca089b7e946258a3e86d89621d2b5492f4f900e00e6"
+    },
+    "fx005-luma-key/frame-0.png": {
+      "bytes": 168,
+      "sha256": "74ca45fae340503188fcc446db291ba30ed2ac100bb4b50de46d0cbbca964ea1"
+    },
+    "fx005-luma-key/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "12fa4c80ad5154eff7cfc52f05a3782dd16763a2d5ad7236b8441776c06e395b"
+    },
+    "fx006-corner-pin/frame-0.png": {
+      "bytes": 255,
+      "sha256": "6125eb6699e3336170423aa217fbb843d5194771c41d732a0f334535c4878770"
+    },
+    "fx006-corner-pin/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "cfb06a7bf10c568f9987cdb41badf1301e032aaf405f9e746cb28eed30015c4f"
+    },
+    "fx006-glow/frame-0.png": {
+      "bytes": 220,
+      "sha256": "9eaa62a49c5cf21674724b0c2a2d627949afaeda6e704a0f97dbd887f18213df"
+    },
+    "fx006-glow/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "1400e6e68587564b371bec62d16e0b9c20c13e9167c1bb0aebd915d4a8f18512"
+    },
+    "fx006-sharpen/frame-0.png": {
+      "bytes": 280,
+      "sha256": "aef987f30580f9288c18b45977876460acb20442dbe017d100bec075a5a0f9bd"
+    },
+    "fx006-sharpen/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "7b3bdadaa36923206ec0261ea61b1337b1026563b6bffd8493b65379f5d96195"
+    },
+    "fx006-vignette/frame-0.png": {
+      "bytes": 496,
+      "sha256": "ef2e9837a16034a7b7366aa038dd5d63bf6aee1ef27eb80c0e372a4c7f8ca00d"
+    },
+    "fx006-vignette/frame-0.rgba16f": {
+      "bytes": 2048,
+      "sha256": "e5cea02120528e5b7d1ec9d1e9886a9231aa18a3effba5ee25f25537f1cca613"
     },
     "glyph-outline-edges/frame-0.png": {
       "bytes": 576,
@@ -340,12 +396,12 @@
       "sha256": "a8a5e6d38abbaff24c17fbd6eac7ad7059ae7b1fb0b722c194be078c516e559a"
     },
     "manifest.json": {
-      "bytes": 251311,
-      "sha256": "c07e8a1067b2697ed547cdd17a788d4ed5d8455e2b99ac26a26329beeb915e00"
+      "bytes": 95915,
+      "sha256": "5a72047c3a917b86c905dddc93a9dbe59731ac8c811579b8043fb02b96408fd9"
     },
     "provenance.json": {
       "bytes": 1405,
-      "sha256": "c9923c675b2e9b75f0dcee33185210d133a448e59d8de17421dfde1577e8d434"
+      "sha256": "8f366c738af39c858cd03eee41c392ad6a7a6737366e967e06860f9434429b05"
     },
     "rec2020-conversion/frame-0.png": {
       "bytes": 91,
@@ -449,19 +505,19 @@
     }
   },
   "provenance": {
-    "cargo_lock_sha256": "ea5ea174b5b4700fdf7ebe4333a59191586b49913aea27e9fc36364900208885",
-    "color_code_sha256": "8939a54f089fbfeccdf84abc341a063da92d994f76dfc3ea0b6a49ca13964b1d",
+    "cargo_lock_sha256": "877c23e6494b91c81fbf6bfc142e84232ad8c927335ce519babc34916d4e5ac3",
+    "color_code_sha256": "57893f6365174d028fe8a6651c7c729cfc4b1e1fd779077923783fac44db2404",
     "comparison_code_sha256": "0f09357830b18b3abd193030880e442a65171954f5774e399a4bb0d17f7b2112",
-    "draw_fixture_code_sha256": "e85456ae0943a845d2dd2003a6a80bcc1cdaf7bdea7c68e80908299709238382",
-    "effect_kernel_code_sha256": "b69d16ede96862d6f2a40d858f95c14af51a67b0b867df694e3dc5cb843631a4",
-    "effect_reference_code_sha256": "d320730321b85df34cae66aa8951afe305ca2db8eb9873b4eeed0e768d491657",
-    "effect_shader_sha256": "f303f79f45d7050803d4c909fe05ccede282373a3f1beadfdf2f9d8e3e69dd6a",
+    "draw_fixture_code_sha256": "07e6f7154a93270e94dc88bb9d774913d50b7d56b85ab831cfaa13ca8a7ad25a",
+    "effect_kernel_code_sha256": "2f5b2081a71828e841789cb27b1f0a292146339777520f8701b6980cad9d334a",
+    "effect_reference_code_sha256": "648fd932a2bc1441a94f7fa6e2937aae18c64445d47b09fe4587d1d5bac81318",
+    "effect_shader_sha256": "aa484dab6fab4a7f682847b61362339d912120b5f410105afc53944b4d0e46c4",
     "fixture_manifest_sha256": "13060d35e1ed680a0666197b3d0a6de2606933030f43fda63c169923377aec22",
     "renderer_code_sha256": "6ffae1420062f5c6393a78d2ec042db90e678a4a956e42f3633f6f1e3f7f1f4d",
-    "revision": "cfe967b253a5683e6422191d36fa971773d8ff54",
-    "scene_code_sha256": "6187f686c0c92cb53ff83f82e59a8eda3c5f0aad07eb9b558fe9759b35c3ce39",
-    "scene_gpu_code_sha256": "2942e0b5824f0989d0ce2b55945bfed370a83c945c620e6117a1ac9a44e2b538",
-    "scene_reference_code_sha256": "5601ce58c36e5296bf83d5fcdf42a8cccc55d34adb8031203d9aaa9e106bd437",
+    "revision": "093c89e36ef166027bdd68bac61244988f3acd83",
+    "scene_code_sha256": "6344db79eed855388197161b596a31d32a6bfc679c56c215691ecd2a9062cb15",
+    "scene_gpu_code_sha256": "c3b0b442d20b7fe6dd38feebadf617f1fc4685d6253bda3af55bbcb8d7b6883d",
+    "scene_reference_code_sha256": "220f9f1868334ef163f710171c5244716d420f2893afa2c1e40b34d98cbde95e",
     "scene_shader_sha256": "81a10f9859ece9c4a4af3e523279ff0ba3e5e42ec4376562c504874501715d39",
     "shader_sha256": "f78694ed5b0dbc653a28601fb6f2d319e9b8d9ed0e02cb60cc8dfad6b5b8c069",
     "status": ""
@@ -1177,6 +1233,111 @@
     {
       "alpha": "premultiplied",
       "id": "fx003-dip",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx005-chroma-key",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx005-chroma-key-edges",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx005-luma-key",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec2020"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx006-glow",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx006-sharpen",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec2020"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx006-vignette",
+      "sample_id": "frame-0",
+      "samples_per_frame": 16,
+      "size": [
+        16,
+        16
+      ],
+      "time": {
+        "den": "1",
+        "num": "0"
+      },
+      "working_space": "LinearRec709"
+    },
+    {
+      "alpha": "premultiplied",
+      "id": "fx006-corner-pin",
       "sample_id": "frame-0",
       "samples_per_frame": 16,
       "size": [
