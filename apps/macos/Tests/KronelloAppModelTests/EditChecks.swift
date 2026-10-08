@@ -318,9 +318,22 @@ import KronelloDesign
         try require(receiver.update(at: 120) && e.timelineCandidate?.start == 120, "Final-position fallback creates a candidate")
         receiver.exit()
         try require(e.timelineCandidate == nil && f.transport.applyCount == afterUndo, "Exiting cancels only the local placement")
-        e.ui.locked.insert(f.track)
+        // NLE-005 persisted lock: ui.locked only covers motion layers, so the
+        // shared track_state_set path must gate the placement instead.
+        guard let trackDict = e.sequence.objects("tracks").first(where: { $0.string("id") == f.track }) else {
+            throw GUICheckError(message: "track missing from the sequence query")
+        }
+        e.setTrackLocked(trackDict)
+        for _ in 0..<200 { if e.trackLocked(f.track) && !e.busy { break }; try await Task.sleep(for: .milliseconds(10)) }
+        try require(e.trackLocked(f.track) && !e.busy, "Lock apply finished before the placement attempt")
         try require(!receiver.canAccept && !receiver.update(at: 140), "Locked tracks reject placement before service mutation")
-        e.ui.locked.remove(f.track)
+        guard let lockedDict = e.sequence.objects("tracks").first(where: { $0.string("id") == f.track }) else {
+            throw GUICheckError(message: "track missing after lock apply")
+        }
+        e.setTrackLocked(lockedDict)
+        for _ in 0..<200 { if !e.trackLocked(f.track) && !e.busy { break }; try await Task.sleep(for: .milliseconds(10)) }
+        try require(!e.busy, "Unlock apply finished before the next gesture")
+        let afterLockCycle = f.transport.applyCount
         e.beginClipGesture(e.editClips[0], mode: .move)
         try require(!receiver.update(at: 140) && e.timelineCandidate?.mode == .move, "A foreign edit candidate is neither accepted nor overwritten")
         receiver.exit()
@@ -333,7 +346,7 @@ import KronelloDesign
         try require(e.timelineCandidate != nil, "Exit from another destination preserves the candidate")
         receiver.exit()
         e.assetSelection = e.editAssets.first { $0.kind == .audio }!.id
-        try require(!receiver.update(at: 140) && e.timelineCandidate == nil && f.transport.applyCount == afterUndo,
+        try require(!receiver.update(at: 140) && e.timelineCandidate == nil && f.transport.applyCount == afterLockCycle,
                     "Audio asset to video track is forbidden without a candidate or service edit")
         await finish(f)
     }
