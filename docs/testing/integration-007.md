@@ -71,3 +71,34 @@ job 状態の parity はそのまま比較する。
 - `io.output.*` / `capture.deck_probe` は projectless operation で、
   `project` フィールドは `deny_unknown_fields` で `INVALID_REQUEST`。
   driver は両経路とも project を付けない呼び出しに修正した。
+
+## GUI 監査（Computer Use）
+
+`target/macos/Kronello.app`（`d55fdbf` 時点ビルド・署名済み）を
+open-computer-use で実機監査した。起動画面・最近のプロジェクト
+（欠落パスは `PROJECT_NOT_FOUND` で型付き表示）、編集・モーション・
+テンプレート・メディア・書き出しの全ページ、Source/Program 両モニタの
+GPU プレビュー（CPU 参照バッジなし）、外部出力 UI、ジョブシート、
+スコープパネル、ミキサー、マーカータブ、書き出しプリフライト
+（`INVALID_MEDIA_INPUT` ×2 で書き出し不可を正しく表示）を確認した。
+
+監査で発見・修正した不具合:
+
+- GUI-012 で追加された永続化キー（`playbackScrub`・`mixerVisible`・
+  `scopesVisible`・`editScale`・`editSnap`・`sourceTrack`）を持たない
+  旧 `ui-state` / preferences JSON が `keyNotFound` でプロジェクト全体を
+  開けなくしていた。合成 `Decodable` を `decodeIfPresent` + 既定値の
+  手書き init に置き換え、旧ファイルの後方互換を回復
+  （`ccd6bef`・回帰テスト `verifyLegacyStateDecoding` 追加）。
+- `EditorModel.request` は全リクエストに `project` を注入するが、
+  `io.output.*`・`job.*`・`inspect.scopes` は projectless operation で
+  `deny_unknown_fields` に抵触し `DecodingError` になっていた。
+  各呼び出しを `transport.call` 直送りに修正（`inspect.scopes` は
+  `input.project` で RenderInput を満たす）し、ジョブ一覧は
+  `project_id` でクライアント側フィルタに変更（`d55fdbf`）。
+- 外部出力: `io.output.list` の列挙（ref_monitor / syphon / sdi / ndi）が
+  popup に反映され、未検出の Syphon/SDI/NDI は disabled で表示。
+  `ref_monitor` 有効化は単一ディスプレイ環境で
+  「外部ディスプレイが見つかりません」の型付き拒否を確認。
+- スコープ: 波形・ベクトルスコープ・ヒストグラム・RGB パレードが
+  合成フレームの実ビンで描画されることを確認。
