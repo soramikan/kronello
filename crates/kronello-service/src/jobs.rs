@@ -5,7 +5,7 @@ use kronello_jobs::{JobConfig, JobError, JobRecord, JobStore, Submission};
 use kronello_media::{
     AvExportRequest, AvExportSnapshot, DeliveryAudioCodec, MediaRuntime, MovieProfile,
 };
-use kronello_model::{AssetId, CaptionFormat, DocumentObject, SequenceId};
+use kronello_model::{AssetId, CaptionFormat, ChannelMask, DocumentObject, SequenceId};
 use kronello_render::{RenderSnapshot, SequenceRequest, frame_samples};
 use kronello_time::{Time, TimeRange};
 use serde::{Deserialize, Serialize};
@@ -44,6 +44,10 @@ pub enum JobOutput {
         audio: kronello_audio::AudioSourceMode,
         #[serde(default = "movie_profile_v1")]
         profile_version: u32,
+        /// ADR-0124: omitted selects stereo; a set value is validated against
+        /// the closed layout set at parse time and pins audio envelope 3.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        audio_layout: Option<ChannelMask>,
         clips: Vec<JobAudioClip>,
         background: [f32; 3],
     },
@@ -51,6 +55,8 @@ pub enum JobOutput {
         profile_version: u32,
         #[serde(default)]
         audio: kronello_audio::AudioSourceMode,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        audio_layout: Option<ChannelMask>,
         clips: Vec<JobAudioClip>,
         background: [f32; 3],
     },
@@ -59,6 +65,8 @@ pub enum JobOutput {
         transfer: kronello_render::HdrTransfer,
         #[serde(default)]
         audio: kronello_audio::AudioSourceMode,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        audio_layout: Option<ChannelMask>,
         clips: Vec<JobAudioClip>,
         background: [f32; 3],
     },
@@ -68,6 +76,8 @@ pub enum JobOutput {
         audio: kronello_audio::AudioSourceMode,
         #[serde(default)]
         audio_codec: DeliveryAudioCodec,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        audio_layout: Option<ChannelMask>,
         clips: Vec<JobAudioClip>,
         background: [f32; 3],
     },
@@ -77,6 +87,8 @@ pub enum JobOutput {
         audio: kronello_audio::AudioSourceMode,
         #[serde(default)]
         audio_codec: DeliveryAudioCodec,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        audio_layout: Option<ChannelMask>,
         clips: Vec<JobAudioClip>,
         background: [f32; 3],
     },
@@ -86,6 +98,8 @@ pub enum JobOutput {
         audio: kronello_audio::AudioSourceMode,
         #[serde(default)]
         audio_codec: DeliveryAudioCodec,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        audio_layout: Option<ChannelMask>,
         clips: Vec<JobAudioClip>,
         background: [f32; 3],
     },
@@ -95,6 +109,8 @@ pub enum JobOutput {
         audio: kronello_audio::AudioSourceMode,
         #[serde(default)]
         audio_codec: DeliveryAudioCodec,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        audio_layout: Option<ChannelMask>,
         clips: Vec<JobAudioClip>,
         background: [f32; 3],
     },
@@ -109,6 +125,8 @@ pub(crate) struct MovieSettings<'a> {
     pub profile: MovieProfile,
     pub audio_version: u32,
     pub audio: kronello_audio::AudioSourceMode,
+    /// ADR-0124 declared output layout; stereo when the field is omitted.
+    pub audio_layout: ChannelMask,
     pub clips: &'a [JobAudioClip],
     pub background: [f32; 3],
 }
@@ -127,7 +145,7 @@ impl JobOutput {
         }
     }
     pub(crate) fn movie_settings(&self) -> Result<MovieSettings<'_>, ServiceError> {
-        let (profile, version, audio, clips, background) = match self {
+        let (profile, version, audio, audio_layout, clips, background) = match self {
             Self::ImageSequence | Self::CaptionSidecar { .. } => {
                 return Err(ServiceError::invalid(
                     "render.export requires a movie profile",
@@ -136,24 +154,28 @@ impl JobOutput {
             Self::ProResMov {
                 profile_version,
                 audio,
+                audio_layout,
                 clips,
                 background,
             } => (
                 MovieProfile::ProResPcm24,
                 *profile_version,
                 *audio,
+                *audio_layout,
                 clips,
                 *background,
             ),
             Self::ProResSdrFromHdrMov {
                 profile_version,
                 audio,
+                audio_layout,
                 clips,
                 background,
             } => (
                 MovieProfile::ProResSdrFromHdrPcm24V1,
                 *profile_version,
                 *audio,
+                *audio_layout,
                 clips,
                 *background,
             ),
@@ -161,6 +183,7 @@ impl JobOutput {
                 profile_version,
                 transfer,
                 audio,
+                audio_layout,
                 clips,
                 background,
             } => (
@@ -170,6 +193,7 @@ impl JobOutput {
                 },
                 *profile_version,
                 *audio,
+                *audio_layout,
                 clips,
                 *background,
             ),
@@ -177,6 +201,7 @@ impl JobOutput {
                 profile_version,
                 audio,
                 audio_codec,
+                audio_layout,
                 clips,
                 background,
             } => (
@@ -192,6 +217,7 @@ impl JobOutput {
                 },
                 *profile_version,
                 *audio,
+                *audio_layout,
                 clips,
                 *background,
             ),
@@ -199,6 +225,7 @@ impl JobOutput {
                 profile_version,
                 audio,
                 audio_codec,
+                audio_layout,
                 clips,
                 background,
             } => (
@@ -214,6 +241,7 @@ impl JobOutput {
                 },
                 *profile_version,
                 *audio,
+                *audio_layout,
                 clips,
                 *background,
             ),
@@ -221,6 +249,7 @@ impl JobOutput {
                 profile_version,
                 audio,
                 audio_codec,
+                audio_layout,
                 clips,
                 background,
             } => (
@@ -236,6 +265,7 @@ impl JobOutput {
                 },
                 *profile_version,
                 *audio,
+                *audio_layout,
                 clips,
                 *background,
             ),
@@ -243,6 +273,7 @@ impl JobOutput {
                 profile_version,
                 audio,
                 audio_codec,
+                audio_layout,
                 clips,
                 background,
             } => (
@@ -257,10 +288,12 @@ impl JobOutput {
                 },
                 *profile_version,
                 *audio,
+                *audio_layout,
                 clips,
                 *background,
             ),
         };
+        let audio_layout = audio_layout.unwrap_or(ChannelMask::STEREO);
         let legacy = profile == MovieProfile::ProResPcm24;
         if (legacy
             && (!self.supported_profile_versions().contains(&version)
@@ -272,10 +305,18 @@ impl JobOutput {
                 "unsupported movie version or legacy audio mode",
             ));
         }
+        // AUDIO-010: multichannel export is defined only on audio envelope 3.
+        if audio_layout != ChannelMask::STEREO && legacy && version != 3 {
+            return Err(ServiceError::new(
+                "UNSUPPORTED_FEATURE",
+                "multichannel audio requires profile_version 3",
+            ));
+        }
         Ok(MovieSettings {
             profile,
             audio_version: if legacy { version } else { 3 },
             audio,
+            audio_layout,
             clips,
             background,
         })
@@ -678,9 +719,11 @@ impl Service<'_> {
                             .map_err(|error| {
                                 ServiceError::new("OUTPUT_VALIDATION_FAILED", error.to_string())
                             })?;
-                    probe.verify_movie(settings.profile).map_err(|error| {
-                        ServiceError::new("OUTPUT_VALIDATION_FAILED", error.to_string())
-                    })?;
+                    probe
+                        .verify_movie_layout(settings.profile, settings.audio_layout)
+                        .map_err(|error| {
+                            ServiceError::new("OUTPUT_VALIDATION_FAILED", error.to_string())
+                        })?;
                     let (snapshot, _) = fixed.render_parts()?;
                     let expected = movie_snapshot(snapshot, output)?;
                     let report: kronello_media::AvExportReport =
@@ -1006,7 +1049,7 @@ impl Service<'_> {
                         let probe = runtime.probe(&stage_path).map_err(|e| {
                             ServiceError::new("OUTPUT_VALIDATION_FAILED", e.to_string())
                         })?;
-                        probe.verify_movie(settings.profile)?;
+                        probe.verify_movie_layout(settings.profile, settings.audio_layout)?;
                         if report.frames.len() as u64 != record.total_frames
                             || probe.render_snapshot_hash != record.snapshot_hash
                         {
@@ -1150,7 +1193,17 @@ pub(crate) fn movie_snapshot(
         .iter()
         .map(JobAudioClip::compile)
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(if settings.profile != MovieProfile::ProResPcm24 {
+    // A non-stereo layout pins audio envelope 3; `None` keeps the ProRes+PCM24
+    // MOV stage while `Some(profile)` selects the delivery codec/container.
+    Ok(if settings.audio_layout != ChannelMask::STEREO {
+        AvExportSnapshot::with_audio_layout(
+            snapshot,
+            settings.audio,
+            clips,
+            (settings.profile != MovieProfile::ProResPcm24).then_some(settings.profile),
+            settings.audio_layout,
+        )?
+    } else if settings.profile != MovieProfile::ProResPcm24 {
         AvExportSnapshot::with_movie_profile(snapshot, settings.audio, clips, settings.profile)?
     } else if settings.audio_version == 1 {
         AvExportSnapshot::new(snapshot, clips)?

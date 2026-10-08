@@ -868,11 +868,12 @@ fn asset_audio_tracks_mix_on_absolute_grid_and_reject_retime() {
         .decode_asset_audio(&asset, Path::new("audio.kronello"), 0)
         .unwrap();
     assert_eq!(bus.start_sample(), 0);
+    let decoded_frames = decoded.buffer.stereo_frames().unwrap();
     assert_eq!(bus.buffer().frames().len(), 2880);
     assert_eq!(bus.buffer().frames()[0], [0.0; 2]);
     assert_eq!(bus.buffer().frames()[2400], [0.0; 2]);
     for index in 1..2400 {
-        let expected = decoded.buffer.frames()[480 + index - 1].map(|v| v * 2.0);
+        let expected = decoded_frames[480 + index - 1].map(|v| v * 2.0);
         assert_eq!(bus.buffer().frames()[index], expected);
     }
     let cut = t(1001, 30000);

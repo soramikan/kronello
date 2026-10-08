@@ -1,6 +1,6 @@
 //! Owned preview runtime resources. Not entries in the stateless request registry.
 use crate::ServiceError;
-use kronello_audio::{AudioSources, AudioTarget, DocumentAudioPlan, MAX_AUDIO_FRAMES};
+use kronello_audio::{AudioTarget, ChannelSources, DocumentAudioPlan, MAX_AUDIO_FRAMES};
 use kronello_model::{DocumentObject, TrackId};
 use kronello_render::RenderTarget;
 use kronello_store::{ProjectStore, Snapshot};
@@ -78,7 +78,10 @@ impl crate::Service<'_> {
 pub struct PreparedAudio {
     revision: String,
     plan: DocumentAudioPlan,
-    sources: AudioSources,
+    /// Decoded sources keep their own speaker layout (ADR-0124); the block
+    /// renderer's declared monitor layout is stereo, so multichannel sources
+    /// fold down only through the explicit evaluator matrix.
+    sources: ChannelSources,
     has_audio: bool,
 }
 
@@ -132,7 +135,7 @@ impl PreparedAudio {
             }),
             AudioTarget::Composition(_) => false,
         };
-        let mut sources = AudioSources::new();
+        let mut sources = ChannelSources::new();
         let mut frames = 0;
         if !clips.is_empty() {
             let runtime = kronello_media::MediaRuntime::load()?;
@@ -155,7 +158,7 @@ impl PreparedAudio {
                         clip.stream_index,
                         MAX_AUDIO_FRAMES - frames,
                     )?;
-                    frames += decoded.buffer.frames().len();
+                    frames += decoded.buffer.frame_count();
                     entry.insert(decoded.buffer);
                 }
             }
@@ -197,7 +200,10 @@ impl PreparedAudio {
             Time::new(end, 48000).map_err(time_error)?,
         )
         .map_err(time_error)?;
-        let bus = self.plan.mix(&self.sources, range).map_err(audio_error)?;
+        let bus = self
+            .plan
+            .mix_reader(&self.sources, range)
+            .map_err(audio_error)?;
         for (out, frame) in output.chunks_exact_mut(2).zip(bus.buffer().frames()) {
             out.copy_from_slice(frame);
         }

@@ -1,5 +1,8 @@
-//! Pure offline stereo mixing on the absolute 48 kHz sample grid.
+//! Pure offline channel-masked mixing on the absolute 48 kHz sample grid.
 //! No codecs, filesystem, device handles, or mutable project lookups.
+//! Channel layouts follow ADR-0124: an explicit versioned [`ChannelMask`]
+//! rides every buffer and bus; layout conversion is explicit and LFE is
+//! excluded unless requested.
 use std::collections::BTreeMap;
 use std::ops::Range;
 
@@ -9,17 +12,25 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 mod analysis;
-pub use analysis::analyze_audio;
+pub use analysis::{analyze_audio, analyze_audio_channels};
 mod advanced;
+mod channels;
 mod document;
 mod dsp;
 mod loudness;
+mod wsola;
 pub use advanced::{AUDIO_EVALUATION_VERSION, AUDIO_GENERATOR_SILENCE, AUDIO_GENERATOR_TONE};
+pub use channels::{
+    ChannelBuffer, ChannelBus, ChannelBusMeters, ChannelMeter, ChannelSourceReader, ChannelSources,
+    ChannelTrackMeter, ITU_CENTER_COEFFICIENT, ITU_SURROUND_MONO_COEFFICIENT, LayoutMatrix,
+    MAX_CHANNELS, channel_meter, convert_layout, layout_matrix,
+};
 pub use document::{AudioSourceMode, AudioTarget, DocumentAudioPlan};
-pub use loudness::{LoudnessReport, loudness};
+pub use loudness::{LoudnessReport, loudness, loudness_channels};
 
 pub const SAMPLE_RATE: SampleRate = SampleRate::HZ_48000;
-/// Conservative offline memory limit: ten minutes of stereo frames.
+/// Conservative offline memory limit: ten minutes of frames per source/bus.
+/// Multichannel buses additionally bound total samples by channels.
 pub const MAX_AUDIO_FRAMES: usize = 48_000 * 600;
 
 #[derive(Debug, Error)]
@@ -38,6 +49,11 @@ pub enum AudioError {
     Sequence(#[from] kronello_model::SequenceError),
     #[error("UNSUPPORTED_FEATURE: {0}")]
     Unsupported(String),
+    /// ADR-0124: masks outside the closed set, layout/count mismatches, and
+    /// frames sized for a different layout are all typed rejections; the
+    /// pipeline never falls back to a guessed layout.
+    #[error("UNSUPPORTED_CHANNEL_LAYOUT: {0}")]
+    UnsupportedChannelLayout(String),
     #[error("AUDIO_OVERFLOW: non-finite mixing result")]
     Overflow,
     #[error("AUDIO_CLIPPING: {samples} channel samples exceed full scale")]
@@ -55,10 +71,22 @@ impl AudioError {
             Self::SourceTooShort(_) => "AUDIO_SOURCE_TOO_SHORT",
             Self::Sequence(e) => e.code(),
             Self::Unsupported(_) => "UNSUPPORTED_FEATURE",
+            Self::UnsupportedChannelLayout(_) => "UNSUPPORTED_CHANNEL_LAYOUT",
             Self::Overflow => "AUDIO_OVERFLOW",
             Self::Clipping { .. } => "AUDIO_CLIPPING",
             Self::Time(_) => "TIME_ERROR",
         }
+    }
+}
+impl From<kronello_model::ChannelLayoutError> for AudioError {
+    fn from(error: kronello_model::ChannelLayoutError) -> Self {
+        let message = error.to_string();
+        Self::UnsupportedChannelLayout(
+            message
+                .strip_prefix("UNSUPPORTED_CHANNEL_LAYOUT: ")
+                .unwrap_or(&message)
+                .to_string(),
+        )
     }
 }
 
@@ -167,37 +195,50 @@ impl Bus {
     pub fn buffer(&self) -> &AudioBuffer {
         &self.buffer
     }
+    pub(crate) fn from_frames(
+        start_sample: i64,
+        buffer: ChannelBuffer,
+    ) -> Result<Self, AudioError> {
+        let frames = buffer.stereo_frames().ok_or_else(|| {
+            AudioError::UnsupportedChannelLayout(
+                "a stereo Bus requires a stereo ChannelBuffer".into(),
+            )
+        })?;
+        Ok(Self {
+            start_sample,
+            buffer: AudioBuffer::new(frames)?,
+        })
+    }
     /// Signed PCM24 in the high 24 bits of S32, for FFmpeg's native pcm_s24le.
     /// Round to nearest, ties away from zero; no dither. Full-scale +1 maps to
     /// 8388607 and -1 maps to -8388608. Saturation must be explicitly requested.
     pub fn quantize_pcm24(&self, policy: ClippingPolicy) -> Result<QuantizedAudio, AudioError> {
-        let clipped_samples = self
-            .buffer
-            .frames
-            .iter()
-            .flatten()
-            .filter(|v| v.abs() > 1.0)
-            .count();
-        if policy == ClippingPolicy::Reject && clipped_samples != 0 {
-            return Err(AudioError::Clipping {
-                samples: clipped_samples,
-            });
-        }
-        let samples = self
-            .buffer
-            .frames
-            .iter()
-            .flatten()
-            .map(|v| {
-                let q = (f64::from(v.clamp(-1.0, 1.0)) * 8_388_608.0).round();
-                (q.clamp(-8_388_608.0, 8_388_607.0) as i32) * 256
-            })
-            .collect();
-        Ok(QuantizedAudio {
-            samples,
-            clipped_samples,
-        })
+        quantize_samples(self.buffer.frames().as_flattened(), policy)
     }
+}
+/// Shared PCM24 quantizer for stereo and multichannel buses: interleaved
+/// samples in, signed S32 samples out (`sample * 2^24 << 8`, ties away).
+pub fn quantize_samples(
+    samples: &[f32],
+    policy: ClippingPolicy,
+) -> Result<QuantizedAudio, AudioError> {
+    let clipped_samples = samples.iter().filter(|v| v.abs() > 1.0).count();
+    if policy == ClippingPolicy::Reject && clipped_samples != 0 {
+        return Err(AudioError::Clipping {
+            samples: clipped_samples,
+        });
+    }
+    let samples = samples
+        .iter()
+        .map(|v| {
+            let q = (f64::from(v.clamp(-1.0, 1.0)) * 8_388_608.0).round();
+            (q.clamp(-8_388_608.0, 8_388_607.0) as i32) * 256
+        })
+        .collect();
+    Ok(QuantizedAudio {
+        samples,
+        clipped_samples,
+    })
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -258,31 +299,9 @@ pub fn stereo_meter(frames: &[[f32; 2]]) -> StereoMeter {
 }
 
 /// Each source key selects the exact authored stream of a verified asset.
+/// `AudioSources` stores stereo frames; [`ChannelSources`] carries any
+/// supported layout.
 pub type AudioSources = BTreeMap<(AssetId, u32), AudioBuffer>;
-
-/// Read-only indexed source contract. Implementations may page samples without
-/// exposing files or codecs to this pure evaluator. Missing samples are errors.
-pub trait AudioSourceReader {
-    fn frame_count(&self, asset: AssetId, stream: u32) -> Result<usize, AudioError>;
-    fn frame(&self, asset: AssetId, stream: u32, index: usize) -> Result<[f32; 2], AudioError>;
-}
-impl AudioSourceReader for AudioSources {
-    fn frame_count(&self, asset: AssetId, stream: u32) -> Result<usize, AudioError> {
-        Ok(self
-            .get(&(asset, stream))
-            .ok_or(AudioError::AssetMissing(asset))?
-            .frames
-            .len())
-    }
-    fn frame(&self, asset: AssetId, stream: u32, index: usize) -> Result<[f32; 2], AudioError> {
-        self.get(&(asset, stream))
-            .ok_or(AudioError::AssetMissing(asset))?
-            .frames
-            .get(index)
-            .copied()
-            .ok_or(AudioError::SourceTooShort(asset))
-    }
-}
 
 /// Calculate every boundary from absolute rational time. Adjacent requests use
 /// identical floor boundaries; rounded frame lengths are never accumulated.
@@ -294,10 +313,11 @@ pub fn mix(
     mix_reader(clips, sources, range)
 }
 
-/// Mix a bounded Bus from indexed immutable sources.
+/// Mix a bounded stereo Bus from indexed immutable sources. Multichannel
+/// sources are explicitly downmixed to stereo (ADR-0124, LFE excluded).
 pub fn mix_reader(
     clips: &[AudioClip],
-    sources: &dyn AudioSourceReader,
+    sources: &dyn ChannelSourceReader,
     range: TimeRange,
 ) -> Result<Bus, AudioError> {
     mix_with_gain_reader(clips, sources, range, &mut |_, _| Ok(Gain::UNITY))
@@ -313,12 +333,41 @@ pub fn mix_with_gain(
     mix_with_gain_reader(clips, sources, range, gain)
 }
 
+/// Mix at an explicit target layout. `target` must come from the closed
+/// ADR-0124 set; every source converts through [`layout_matrix`] — there is
+/// no implicit fold-down, the caller picks the output mask.
+pub fn mix_channels(
+    clips: &[AudioClip],
+    sources: &dyn ChannelSourceReader,
+    range: TimeRange,
+    target: kronello_model::ChannelMask,
+) -> Result<ChannelBus, AudioError> {
+    mix_with_gain_channels(clips, sources, range, &mut |_, _| Ok(Gain::UNITY), target)
+}
+
 pub(crate) fn mix_with_gain_reader(
     clips: &[AudioClip],
-    sources: &dyn AudioSourceReader,
+    sources: &dyn ChannelSourceReader,
     range: TimeRange,
     gain: &mut dyn FnMut(usize, i64) -> Result<Gain, AudioError>,
 ) -> Result<Bus, AudioError> {
+    let bus = mix_with_gain_channels(
+        clips,
+        sources,
+        range,
+        gain,
+        kronello_model::ChannelMask::STEREO,
+    )?;
+    bus.into_stereo_bus()
+}
+
+pub(crate) fn mix_with_gain_channels(
+    clips: &[AudioClip],
+    sources: &dyn ChannelSourceReader,
+    range: TimeRange,
+    gain: &mut dyn FnMut(usize, i64) -> Result<Gain, AudioError>,
+    target: kronello_model::ChannelMask,
+) -> Result<ChannelBus, AudioError> {
     let output = sample_range(range)?;
     let length = output
         .end
@@ -326,12 +375,16 @@ pub(crate) fn mix_with_gain_reader(
         .and_then(|v| usize::try_from(v).ok())
         .filter(|v| *v <= MAX_AUDIO_FRAMES)
         .ok_or_else(|| AudioError::InvalidInput("bus sample budget exceeded".into()))?;
-    let mut frames = vec![[0.0; 2]; length];
+    let channels = target.channels();
+    let mut frames = vec![0.0_f32; length * channels];
     for (clip_index, clip) in clips.iter().enumerate() {
         clip.validate()?;
         let placement = sample_range(clip.placement)?;
         let source_in = sample_index(clip.source_in)?;
         let source_length = sources.frame_count(clip.asset, clip.stream_index)?;
+        let source_mask = sources.layout(clip.asset, clip.stream_index)?;
+        let source_channels = source_mask.channels();
+        let matrix = layout_matrix(source_mask, target, false)?;
         let source_end = source_in
             .checked_add(
                 placement
@@ -356,19 +409,28 @@ pub(crate) fn mix_with_gain_reader(
         let src = usize::try_from(source_in + (start - placement.start))
             .map_err(|_| AudioError::Overflow)?;
         let len = usize::try_from(end - start).map_err(|_| AudioError::Overflow)?;
-        for (offset, out) in frames[dst..dst + len].iter_mut().enumerate() {
-            let input = sources.frame(clip.asset, clip.stream_index, src + offset)?;
+        let mut input = [0.0_f32; MAX_CHANNELS];
+        let mut converted = [0.0_f32; MAX_CHANNELS];
+        for offset in 0..len {
+            sources.read_frame(
+                clip.asset,
+                clip.stream_index,
+                src + offset,
+                &mut input[..source_channels],
+            )?;
+            matrix.apply(&input[..source_channels], &mut converted[..channels])?;
             let linear = gain(clip_index, start + offset as i64)?.linear() * clip.gain.0;
-            for channel in 0..2 {
-                out[channel] += input[channel] * linear;
-                if !out[channel].is_finite() {
+            for channel in 0..channels {
+                let out = &mut frames[(dst + offset) * channels + channel];
+                *out += converted[channel] * linear;
+                if !out.is_finite() {
                     return Err(AudioError::Overflow);
                 }
             }
         }
     }
-    Ok(Bus {
+    Ok(ChannelBus {
         start_sample: output.start,
-        buffer: AudioBuffer::new(frames)?,
+        buffer: ChannelBuffer::new(target, frames)?,
     })
 }

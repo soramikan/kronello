@@ -1,9 +1,31 @@
 //! Bounded offline FFT analysis; the immutable result is consumed without PCM.
-use crate::{AudioBuffer, AudioError};
+use crate::{AudioBuffer, AudioError, ChannelBuffer};
 use kronello_model::{
     AssetId, AudioAnalysisConfig, AudioAnalysisDataAsset, AudioAnalysisFrame, AudioAnalysisSource,
+    ChannelMask,
 };
 use kronello_time::Time;
+
+/// AUDIO-010: analysis is a stereo contract. Multichannel inputs fold down
+/// only through the explicit ADR-0124 stereo matrix (LFE excluded); stereo
+/// buffers pass through without conversion.
+pub fn analyze_audio_channels(
+    id: AssetId,
+    source: AudioAnalysisSource,
+    config: AudioAnalysisConfig,
+    start_sample: i64,
+    buffer: &ChannelBuffer,
+) -> Result<AudioAnalysisDataAsset, AudioError> {
+    let buffer = match buffer.stereo_frames() {
+        Some(frames) => AudioBuffer::new(frames)?,
+        None => AudioBuffer::new(
+            crate::convert_layout(buffer, ChannelMask::STEREO, false)?
+                .stereo_frames()
+                .expect("stereo conversion target"),
+        )?,
+    };
+    analyze_audio(id, source, config, start_sample, &buffer)
+}
 
 /// Rectangular windows; stereo RMS and channel-averaged one-sided FFT energy.
 /// The final window is zero padded; energy is normalized by window squared.

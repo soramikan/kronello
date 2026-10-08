@@ -152,12 +152,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .ok_or("missing PCM24")?;
     let decoded = runtime.decode_audio(&mux, audio_stream.index)?;
     assert_eq!(decoded.source_start, Rational::ZERO);
-    assert_eq!(decoded.buffer.frames().len(), 8000);
+    assert_eq!(decoded.buffer.frame_count(), 8000);
     for (actual, expected) in decoded
         .buffer
-        .frames()
+        .samples()
         .iter()
-        .flatten()
         .zip(samples.iter().flatten())
     {
         assert!((actual - expected).abs() <= 1.0 / 8388608.0);

@@ -1307,7 +1307,7 @@ fn document_audio_sync_and_fixed_job_survive_volume_edit_and_project_deletion_nt
     let baseline_audio = runtime.decode_audio(Path::new(&baseline_file), 1).unwrap();
     let job_audio = runtime.decode_audio(&job.destination, 1).unwrap();
     assert_eq!(job_audio.buffer, baseline_audio.buffer);
-    assert_eq!(job_audio.buffer.frames()[0], [0.0625, -0.0625]);
+    assert_eq!(job_audio.buffer.frame(0).unwrap(), [0.0625, -0.0625]);
     let mut original_video = runtime.open_video(Path::new(&baseline_file)).unwrap();
     let mut fixed_video = runtime.open_video(&job.destination).unwrap();
     for frame in baseline["frames"].as_array().unwrap() {
@@ -1317,6 +1317,133 @@ fn document_audio_sync_and_fixed_job_survive_volume_edit_and_project_deletion_nt
             fixed_video.decode_at(time).unwrap().pixels
         );
     }
+}
+/// 5.1 WAV (WAVEFORMATEXTENSIBLE, `dwChannelMask` 0x60F) on the sequence
+/// audio track: the surround source is what the job must carry end to end.
+fn surround_sequence_fixture(f: &Fixture) -> (Value, Value) {
+    use sha2::Digest;
+    let source = f.temp.path().join("surround.wav");
+    let frames = 9600u32;
+    let mut fmt = Vec::new();
+    fmt.extend(0xFFFEu16.to_le_bytes()); // WAVE_FORMAT_EXTENSIBLE
+    fmt.extend(6u16.to_le_bytes());
+    fmt.extend(48000u32.to_le_bytes());
+    fmt.extend((48000 * 12u32).to_le_bytes());
+    fmt.extend(12u16.to_le_bytes());
+    fmt.extend(16u16.to_le_bytes());
+    fmt.extend(22u16.to_le_bytes()); // cbSize
+    fmt.extend(16u16.to_le_bytes()); // wValidBitsPerSample
+    fmt.extend(0x60fu32.to_le_bytes()); // dwChannelMask = 5.1 side
+    fmt.extend(1u32.to_le_bytes()); // SubFormat PCM, Data1
+    fmt.extend(0u16.to_le_bytes()); // Data2
+    fmt.extend(0x0010u16.to_le_bytes()); // Data3
+    fmt.extend([0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71]); // Data4
+    let mut data = Vec::new();
+    for i in 0..frames {
+        for channel in 0..6u32 {
+            let sample = (0.2
+                * (std::f64::consts::TAU * 440.0 * f64::from(i) / 48000.0 + f64::from(channel))
+                    .sin()
+                * 32767.0)
+                .round() as i16;
+            data.extend(sample.to_le_bytes());
+        }
+    }
+    let mut wav = Vec::new();
+    wav.extend(b"RIFF");
+    wav.extend((28 + fmt.len() as u32 + data.len() as u32).to_le_bytes());
+    wav.extend(b"WAVE");
+    wav.extend(b"fmt ");
+    wav.extend((fmt.len() as u32).to_le_bytes());
+    wav.extend(fmt);
+    wav.extend(b"data");
+    wav.extend((data.len() as u32).to_le_bytes());
+    wav.extend(data);
+    std::fs::write(&source, &wav).unwrap();
+    let asset = kronello_model::AssetId::new();
+    let sequence = kronello_model::SequenceId::new();
+    let volume = json!({"id":kronello_model::PropertyId::new(),"descriptor":{"key":"kronello.audio.volume","version":1},"source":{"kind":"constant","value":{"kind":"scalar","value":1.0}},"modifiers":[]});
+    let placement = json!({"start":{"num":"0","den":"1"},"end":{"num":"1","den":"5"}});
+    let mut document = f.document.clone();
+    document["assets"] = json!([{"id":asset,"kind":"audio","content_hash":format!("{:x}",sha2::Sha256::digest(&wav)),
+        "locator":{"relative":null,"absolute":source},"streams":[{"index":0,"codec":"pcm_s16le","time_base":{"num":"1","den":"48000"},"duration":{"num":"1","den":"5"},
+            "width":null,"height":null,"pixel_format":null,"color_primaries":null,"color_transfer":null,"color_matrix":null,"color_range":null}]}]);
+    document["sequences"] = json!([{"id":sequence,"extent":{"width":64.0,"height":32.0},"frame_rate":{"num":"30000","den":"1001"},"audio_rate":48000,"working_space":"linear_rec709",
+        "tracks":[{"id":kronello_model::TrackId::new(),"kind":"video","clips":[{"id":kronello_model::ClipId::new(),"source_ref":{"kind":"composition","composition":document["compositions"][0]["id"]},"timeline_range":placement,"source_in":{"num":"0","den":"1"},"time_map":{"kind":"linear","offset":{"num":"0","den":"1"},"speed":{"num":"1","den":"1"}},"links":[],"effects":[]}]},
+            {"id":kronello_model::TrackId::new(),"kind":"audio","clips":[{"id":kronello_model::ClipId::new(),"source_ref":{"kind":"asset","asset":asset,"stream_index":0},"timeline_range":placement,"source_in":{"num":"0","den":"1"},"time_map":{"kind":"linear","offset":{"num":"0","den":"1"},"speed":{"num":"1","den":"1"}},"volume":volume,"links":[],"effects":[]}]}]}]);
+    let mut render = f.render(&f.temp.path().join("document.mov"));
+    render["input"]
+        .as_object_mut()
+        .unwrap()
+        .remove("composition");
+    render["input"]["target"] = json!({"kind":"sequence","sequence":sequence});
+    render["frame_rate"] = json!({"num":"30000","den":"1001"});
+    render["range"] = json!({"start":{"num":"0","den":"1"},"end":{"num":"1001","den":"10000"}});
+    (document, render)
+}
+#[test]
+fn surround_audio_layout_reaches_fixed_job_output_and_probe() {
+    let f = Fixture::new();
+    let (document, render) = surround_sequence_fixture(&f);
+    f.service(json!({"operation":"project.import","project":f.project,"base_revision":"1","document":document}));
+    // AUDIO-010: the declared output layout must ride on audio envelope 3.
+    let layout = kronello_model::ChannelMask::SURROUND_5_1.bits();
+    let profile = json!({"format":"pro_res_mov","profile_version":3,"audio":"document","clips":[],"background":[0,0,0],"audio_layout":layout});
+    let baseline = f.cli(
+        json!({"operation":"render.export","render":render,"output":profile}),
+        None,
+        false,
+    );
+    let baseline_file = render["output_directory"].as_str().unwrap().to_owned();
+    let mut request = render.clone();
+    request["output_directory"] = json!(f.temp.path().join("job.mov"));
+    let job = f.submit_request(
+        json!({"operation":"render.submit","render":request,"output":profile}),
+        None,
+        false,
+    );
+    let done = f.wait(&job.id, JobStatus::Succeeded);
+    let report = &done.result.as_ref().unwrap()["report"];
+    assert_eq!(
+        report["export_snapshot_hash"],
+        baseline["export_snapshot_hash"]
+    );
+    assert_eq!(report["audio"]["channels"], 6);
+    assert_eq!(report["audio"]["frames"], baseline["audio"]["frames"]);
+    assert_eq!(report["audio_profile_version"], 3);
+    let runtime = kronello_media::MediaRuntime::load().unwrap();
+    let probe = runtime.probe(&job.destination).unwrap();
+    probe
+        .verify_movie_layout(
+            kronello_media::MovieProfile::ProResPcm24,
+            kronello_model::ChannelMask::SURROUND_5_1,
+        )
+        .unwrap();
+    let stream = probe
+        .streams
+        .iter()
+        .find(|s| s.kind == kronello_media::StreamKind::Audio)
+        .unwrap();
+    assert_eq!(stream.channels, Some(6));
+    assert_eq!(stream.channel_mask, Some(layout));
+    let baseline_audio = runtime.decode_audio(Path::new(&baseline_file), 1).unwrap();
+    let job_audio = runtime.decode_audio(&job.destination, 1).unwrap();
+    assert_eq!(
+        job_audio.buffer.mask(),
+        kronello_model::ChannelMask::SURROUND_5_1
+    );
+    assert_eq!(job_audio.buffer.samples(), baseline_audio.buffer.samples());
+}
+#[test]
+fn multichannel_layout_on_legacy_audio_envelope_is_rejected_at_submit() {
+    let f = Fixture::new();
+    let (document, render) = surround_sequence_fixture(&f);
+    f.service(json!({"operation":"project.import","project":f.project,"base_revision":"1","document":document}));
+    let layout = kronello_model::ChannelMask::SURROUND_5_1.bits();
+    let error = f.service_error(
+        json!({"operation":"render.submit","render":render,"output":{"format":"pro_res_mov","profile_version":1,"audio":"document","clips":[],"background":[0,0,0],"audio_layout":layout}}),
+    );
+    assert_eq!(error["code"], "UNSUPPORTED_FEATURE", "{error}");
 }
 #[test]
 fn document_audio_worker_missing_hash_mismatch_and_clipping_never_publish() {
@@ -1469,16 +1596,19 @@ fn audio4_retime_gain_generator_crossfade_fixed_job_matches_sync_ntsc() {
         .decode_asset_audio(audio_asset, &f.project, audio_clip.stream_index)
         .unwrap()
         .buffer;
-    let sources = [((audio_clip.asset, audio_clip.stream_index), source)].into();
+    let sources: kronello_audio::ChannelSources =
+        [((audio_clip.asset, audio_clip.stream_index), source)].into();
     let range = serde_json::from_value(render["range"].clone()).unwrap();
-    let bus = plan.mix(&sources, range).unwrap();
+    let bus = plan
+        .mix_channels(&sources, range, kronello_model::ChannelMask::STEREO)
+        .unwrap();
     let pcm = bus
         .quantize_pcm24(kronello_audio::ClippingPolicy::Reject)
         .unwrap();
-    for (actual, expected) in job_audio.buffer.frames().iter().flatten().zip(pcm.samples) {
+    for (actual, expected) in job_audio.buffer.samples().iter().zip(pcm.samples) {
         assert_eq!(*actual, (expected / 256) as f32 / 8388608.0);
     }
-    assert_eq!(job_audio.buffer.frames()[0], [0.03125, -0.03125]);
+    assert_eq!(job_audio.buffer.frame(0).unwrap(), [0.03125, -0.03125]);
     let mut original_video = runtime.open_video(Path::new(&baseline_file)).unwrap();
     let mut fixed_video = runtime.open_video(&job.destination).unwrap();
     for frame in baseline["frames"].as_array().unwrap() {
@@ -1565,7 +1695,7 @@ fn delivery_sync_fixed_job_and_alac_match_quantized_evaluator(
         json!({"num":"0","den":"1"})
     );
     assert_eq!(decoded.buffer, original.buffer);
-    assert_eq!(decoded.buffer.frames().len(), 4804);
+    assert_eq!(decoded.buffer.frame_count(), 4804);
     let typed: kronello_model::Project = serde_json::from_value(document.clone()).unwrap();
     let sequence = serde_json::from_value(document["sequences"][0]["id"].clone()).unwrap();
     let plan = kronello_audio::DocumentAudioPlan::compile_version(
@@ -1587,16 +1717,19 @@ fn delivery_sync_fixed_job_and_alac_match_quantized_evaluator(
         .decode_asset_audio(asset, &f.project, clip.stream_index)
         .unwrap()
         .buffer;
+    let sources: kronello_audio::ChannelSources =
+        [((clip.asset, clip.stream_index), source)].into();
     let bus = plan
-        .mix(
-            &[((clip.asset, clip.stream_index), source)].into(),
+        .mix_channels(
+            &sources,
             serde_json::from_value(render["range"].clone()).unwrap(),
+            kronello_model::ChannelMask::STEREO,
         )
         .unwrap();
     let pcm = bus
         .quantize_pcm24(kronello_audio::ClippingPolicy::Reject)
         .unwrap();
-    for (actual, expected) in decoded.buffer.frames().iter().flatten().zip(pcm.samples) {
+    for (actual, expected) in decoded.buffer.samples().iter().zip(pcm.samples) {
         assert_eq!(
             actual.to_bits(),
             ((expected / 256) as f32 / 8388608.0).to_bits()

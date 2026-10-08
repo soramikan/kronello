@@ -530,10 +530,21 @@ const char *km_encoder_format(Encoder *e){return e->k->av_get_pix_fmt_name(e->co
 
 int km_encoder_frame_size(Encoder *e){return e->k->av_image_get_buffer_size(e->codec->pix_fmt,e->codec->width,e->codec->height,1);}
 
-/* Audio decoder owns one swresample context. Mono is duplicated at unity;
- * only an explicit mono/stereo layout is accepted, never an implicit downmix. */
+/* The closed ADR-0124 speaker-layout set shared with kronello-model. Any
+ * other native mask or a custom/non-native order is a typed rejection. */
+static int audio_mask_supported(uint64_t mask) {
+    return mask==AV_CH_LAYOUT_MONO || mask==AV_CH_LAYOUT_STEREO ||
+        mask==AV_CH_LAYOUT_5POINT1 || mask==AV_CH_LAYOUT_5POINT1_BACK ||
+        mask==AV_CH_LAYOUT_7POINT1;
+}
+static int audio_mask_channels(uint64_t mask) {
+    int n=0;while(mask){mask&=mask-1;++n;}return n;
+}
+/* Audio decoder owns one swresample context. The source's own channel layout
+ * is preserved through resampling; conversion is the caller's explicit choice. */
 typedef struct AudioDecoder {
     Decoder *d; SwrContext *swr; float *samples; int count, rate, channels, format;
+    int64_t mask;
     int initialized, eof; int64_t pts; int input_samples;
 } AudioDecoder;
 void km_audio_close(AudioDecoder *a) {
@@ -551,11 +562,12 @@ AudioDecoder *km_audio_open(Km *k,const char *path,int stream) {
 void km_audio_time_base(AudioDecoder *a,int *num,int *den) { km_decoder_time_base(a->d,num,den); }
 int km_audio_rate(AudioDecoder *a) { return a->rate; }
 int km_audio_channels(AudioDecoder *a) { return a->channels; }
+int64_t km_audio_mask(AudioDecoder *a) { return a->mask; }
 int64_t km_audio_pts(AudioDecoder *a) { return a->pts; }
 int km_audio_input_samples(AudioDecoder *a) { return a->input_samples; }
 int km_audio_count(AudioDecoder *a) { return a->count; }
 int km_audio_copy(AudioDecoder *a,float *out,int capacity) {
-    if(capacity!=a->count*2)return -1;
+    if(a->channels<=0 || capacity!=a->count*a->channels)return -1;
     if(capacity)memcpy(out,a->samples,(size_t)capacity*sizeof(float));
     return capacity;
 }
@@ -571,47 +583,42 @@ int km_audio_next(AudioDecoder *a) {
         int channels=f->ch_layout.nb_channels;
         if(f->sample_rate<=0 || f->sample_rate>768000 || f->nb_samples<=0 || f->nb_samples>1048576)
             return fail(k,AVERROR_INVALIDDATA,"invalid audio rate or frame size");
-        /* Basic WAV records a channel count without a speaker mask. Define
-         * its one/two-channel order explicitly as mono or left/right. */
+        /* ADR-0124: only mono/stereo containers may omit the speaker mask;
+         * FFmpeg's documented default for those counts is exact. Any wider
+         * layout without a native mask is rejected, never guessed. */
         if(channels>=1 && channels<=2 && f->ch_layout.order==AV_CHANNEL_ORDER_UNSPEC) {
             k->av_channel_layout_uninit(&f->ch_layout);
             k->av_channel_layout_default(&f->ch_layout,channels);
         }
-        if(channels<1 || channels>2 || f->ch_layout.order!=AV_CHANNEL_ORDER_NATIVE ||
-            f->ch_layout.u.mask!=(channels==1?AV_CH_LAYOUT_MONO:AV_CH_LAYOUT_STEREO))
-            return fail(k,AVERROR(ENOSYS),"unsupported audio channel layout (mono/stereo only)");
+        if(f->ch_layout.order!=AV_CHANNEL_ORDER_NATIVE ||
+            !audio_mask_supported(f->ch_layout.u.mask) ||
+            channels!=audio_mask_channels(f->ch_layout.u.mask))
+            return fail(k,AVERROR(ENOSYS),"unsupported audio channel layout");
         if(!a->initialized) {
             a->rate=f->sample_rate;a->channels=channels;a->format=f->format;
-            AVChannelLayout layout=AV_CHANNEL_LAYOUT_STEREO;
-            ret=k->swr_alloc_set_opts2(&a->swr,&layout,AV_SAMPLE_FMT_FLT,48000,
+            a->mask=(int64_t)f->ch_layout.u.mask;
+            /* Resample into the source's own layout: no fold-down, no
+             * channel synthesis. Layout conversion is the caller's choice. */
+            ret=k->swr_alloc_set_opts2(&a->swr,&f->ch_layout,AV_SAMPLE_FMT_FLT,48000,
                 &f->ch_layout,f->format,f->sample_rate,0,NULL);
             if(ret<0)return fail(k,ret,"allocate resampler");
-            /* Disable the default -3 dB mono matrix: duplicate mono at unity. */
-            if(channels==1) {
-                /* Keep swresample mono, then duplicate the converted samples. */
-                k->swr_free(&a->swr);
-                layout=(AVChannelLayout)AV_CHANNEL_LAYOUT_MONO;
-                ret=k->swr_alloc_set_opts2(&a->swr,&layout,AV_SAMPLE_FMT_FLT,48000,
-                    &f->ch_layout,f->format,f->sample_rate,0,NULL);
-                if(ret<0)return fail(k,ret,"allocate mono resampler");
-            }
             ret=k->swr_init(a->swr);if(ret<0)return fail(k,ret,"initialize resampler");
             a->initialized=1;
-        } else if(a->rate!=f->sample_rate || a->channels!=channels || a->format!=f->format) {
+        } else if(a->rate!=f->sample_rate || a->channels!=channels || a->format!=f->format ||
+            a->mask!=(int64_t)f->ch_layout.u.mask) {
             return fail(k,AVERROR(ENOSYS),"audio format changes within stream");
         }
     } else if(!a->initialized) { a->eof=1;return 0; }
     int64_t capacity=k->av_rescale_rnd(k->swr_get_delay(a->swr,a->rate)+a->input_samples,48000,a->rate,AV_ROUND_UP);
     if(capacity<0 || capacity>2097152)return fail(k,AVERROR_INVALIDDATA,"resampler buffer budget");
     if(capacity==0){a->eof=1;return 0;}
-    float *samples=realloc(a->samples,(size_t)capacity*2*sizeof(float));
+    float *samples=realloc(a->samples,(size_t)capacity*a->channels*sizeof(float));
     if(!samples)return fail(k,AVERROR(ENOMEM),"resampler output allocation");
     a->samples=samples;
     uint8_t *out=(uint8_t *)samples;
     int count=k->swr_convert(a->swr,&out,(int)capacity,
         a->input_samples?(const uint8_t **)f->extended_data:NULL,a->input_samples);
     if(count<0)return fail(k,count,"convert audio");
-    if(a->channels==1)for(int i=count-1;i>=0;--i){samples[2*i]=samples[i];samples[2*i+1]=samples[i];}
     a->count=count;
     if(!a->input_samples && !count){a->eof=1;return 0;}
     return 1;
@@ -622,7 +629,7 @@ int km_audio_next(AudioDecoder *a) {
 typedef struct AudioEncoder {
     Km *k; AVFormatContext *format; AVCodecContext *codec;
     AVFrame *frame; AVPacket *packet; AVStream *stream;
-    int block, kind, partial; int64_t count;
+    int block, kind, partial, channels; int64_t mask, count;
 } AudioEncoder;
 /* Closed delivery audio kinds: PCM24 MOV, ALAC MP4, AAC-LC MP4, Opus WebM. */
 static const struct {
@@ -640,11 +647,16 @@ void km_audio_encoder_close(AudioEncoder *e) {
     if(e->format){if(e->format->pb)k->avio_closep(&e->format->pb);k->avformat_free_context(e->format);}
     free(e);
 }
-AudioEncoder *km_audio_encoder_open(Km *k,const char *path,int kind) {
+AudioEncoder *km_audio_encoder_open(Km *k,const char *path,int kind,
+    int channels,int64_t mask) {
     AudioEncoder *e=calloc(1,sizeof(*e));
     if(!e){fail(k,AVERROR(ENOMEM),"audio allocation");return NULL;}
     if(kind<0 || kind>3){fail(k,AVERROR(EINVAL),"unknown audio kind");free(e);return NULL;}
-    e->k=k;e->kind=kind;
+    if(mask<0 || !audio_mask_supported((uint64_t)mask) ||
+        channels!=audio_mask_channels((uint64_t)mask)) {
+        fail(k,AVERROR(ENOSYS),"unsupported audio channel layout");free(e);return NULL;
+    }
+    e->k=k;e->kind=kind;e->channels=channels;e->mask=mask;
     const AVCodec *encoder=k->avcodec_find_encoder_by_name(AUDIO_KINDS[kind].encoder);
     int ret=AVERROR_ENCODER_NOT_FOUND;
     if(!encoder){fail(k,ret,"audio encoder unavailable");goto failed;}
@@ -657,7 +669,9 @@ AudioEncoder *km_audio_encoder_open(Km *k,const char *path,int kind) {
     e->codec->time_base=(AVRational){1,48000};
     if(kind==1)e->codec->bits_per_raw_sample=24;
     if(AUDIO_KINDS[kind].bitrate)e->codec->bit_rate=AUDIO_KINDS[kind].bitrate;
-    k->av_channel_layout_default(&e->codec->ch_layout,2);
+    e->codec->ch_layout.order=AV_CHANNEL_ORDER_NATIVE;
+    e->codec->ch_layout.nb_channels=channels;
+    e->codec->ch_layout.u.mask=(uint64_t)mask;
     if(e->format->oformat->flags & AVFMT_GLOBALHEADER)e->codec->flags|=AV_CODEC_FLAG_GLOBAL_HEADER;
     AVDictionary *codec_options=NULL;
     if(kind==3) {
@@ -709,18 +723,19 @@ int km_audio_encoder_frame(AudioEncoder *e,const int32_t *samples,int count) {
     int ret=k->av_frame_make_writable(e->frame);if(ret<0)return fail(k,ret,"audio writable buffer");
     e->frame->nb_samples=count;e->frame->pts=e->count;
     enum AVSampleFormat fmt=e->codec->sample_fmt;
-    if(fmt==AV_SAMPLE_FMT_S32)memcpy(e->frame->data[0],samples,(size_t)count*2*sizeof(int32_t));
+    int channels=e->channels;
+    if(fmt==AV_SAMPLE_FMT_S32)memcpy(e->frame->data[0],samples,(size_t)count*channels*sizeof(int32_t));
     else if(fmt==AV_SAMPLE_FMT_FLT) {
         float *out=(float *)e->frame->data[0];
-        for(int j=0;j<count*2;++j)out[j]=(float)(samples[j]/2147483648.0);
+        for(int j=0;j<count*channels;++j)out[j]=(float)(samples[j]/2147483648.0);
     } else {
-        for(int ch=0;ch<2;++ch) {
+        for(int ch=0;ch<channels;++ch) {
             if(fmt==AV_SAMPLE_FMT_S32P) {
                 int32_t *plane=(int32_t *)e->frame->data[ch];
-                for(int j=0;j<count;++j)plane[j]=samples[j*2+ch];
+                for(int j=0;j<count;++j)plane[j]=samples[j*channels+ch];
             } else {
                 float *plane=(float *)e->frame->data[ch];
-                for(int j=0;j<count;++j)plane[j]=(float)(samples[j*2+ch]/2147483648.0);
+                for(int j=0;j<count;++j)plane[j]=(float)(samples[j*channels+ch]/2147483648.0);
             }
         }
     }
@@ -739,12 +754,13 @@ int km_audio_encoder_finish(AudioEncoder *e) {
     ret=k->av_write_trailer(e->format);if(ret<0)return fail(k,ret,"audio trailer");
     ret=k->avio_closep(&e->format->pb);return ret<0?fail(k,ret,"close audio output"):0;
 }
-int km_audio_encode(Km *k,const char *path,const int32_t *samples,int64_t count,int kind) {
-    AudioEncoder *e=km_audio_encoder_open(k,path,kind);if(!e)return -1;
+int km_audio_encode(Km *k,const char *path,const int32_t *samples,int64_t count,
+    int kind,int channels,int64_t mask) {
+    AudioEncoder *e=km_audio_encoder_open(k,path,kind,channels,mask);if(!e)return -1;
     int ret=0;
     for(int64_t i=0;i<count;i+=e->block) {
         int n=(int)((count-i)<e->block?(count-i):e->block);
-        ret=km_audio_encoder_frame(e,samples+i*2,n);if(ret<0)break;
+        ret=km_audio_encoder_frame(e,samples+i*channels,n);if(ret<0)break;
     }
     if(ret>=0)ret=km_audio_encoder_finish(e);
     km_audio_encoder_close(e);return ret;
@@ -765,11 +781,13 @@ void km_probe_close(Km *k,AVFormatContext *format) { k->avformat_close_input(&fo
 int km_probe_count(AVFormatContext *format) { return (int)format->nb_streams; }
 int64_t km_probe_format_duration(AVFormatContext *format) { return format->duration; }
 typedef struct StreamInfo {
-    int64_t start,duration;int kind,num,den,rate,channels,width,height;
+    int64_t start,duration,channel_mask;int kind,num,den,rate,channels,width,height;
 } StreamInfo;
 void km_probe_stream(AVFormatContext *format,int i,StreamInfo *out) {
     AVStream *s=format->streams[i];AVCodecParameters *p=s->codecpar;
-    *out=(StreamInfo){s->start_time,s->duration,p->codec_type,s->time_base.num,s->time_base.den,
+    *out=(StreamInfo){s->start_time,s->duration,
+        p->ch_layout.order==AV_CHANNEL_ORDER_NATIVE?(int64_t)p->ch_layout.u.mask:-1,
+        p->codec_type,s->time_base.num,s->time_base.den,
         p->sample_rate,p->ch_layout.nb_channels,p->width,p->height};
 }
 const char *km_probe_codec(Km *k,AVFormatContext *format,int i) { return k->avcodec_get_name(format->streams[i]->codecpar->codec_id); }
@@ -798,7 +816,7 @@ static int read_mux_packet(Km *k,AVFormatContext *f,AVPacket *p,int stream) {
 /* HEVC delivery stores parameter sets in hvcC, with a fixed hvc1 sample entry. */
 uint32_t km_mux_video_tag(int profile) { return (profile==3 || profile==5)?MKTAG('h','v','c','1'):0; }
 int km_mux_av(Km *k,const char *video,const char *audio,const char *path,
-    const char *render_hash,const char *export_hash,int profile) {
+    const char *render_hash,const char *export_hash,int profile,int audio_channels) {
     AVFormatContext *input[2]={NULL,NULL},*out=NULL;AVPacket *packets[2]={NULL,NULL};
     AVStream *streams[2]={NULL,NULL};int index[2]={-1,-1},ready[2]={0,0};
     int ret=0;
@@ -808,6 +826,8 @@ int km_mux_av(Km *k,const char *video,const char *audio,const char *path,
         AV_CODEC_ID_ALAC,AV_CODEC_ID_AAC,AV_CODEC_ID_AAC,AV_CODEC_ID_AAC,AV_CODEC_ID_OPUS};
     const char *containers[8]={"mov","mp4","mov","mov","mov","mov","mp4","webm"};
     if(profile<0 || profile>7)return fail(k,AVERROR(EINVAL),"unknown movie profile");
+    if(audio_channels<1 || audio_channels>8)
+        return fail(k,AVERROR(EINVAL),"mux audio channel budget");
     const char *paths[2]={video,audio};
     for(int i=0;i<2;++i) {
         input[i]=km_probe_open(k,paths[i]);if(!input[i]){ret=-1;goto done;}
@@ -819,8 +839,9 @@ int km_mux_av(Km *k,const char *video,const char *audio,const char *path,
             s->codecpar->codec_id!=(i?audios[profile]:videos[profile])) {
             ret=fail(k,AVERROR_INVALIDDATA,"mux requires zero-origin streams matching the closed movie profile");goto done;
         }
-        if(i && (s->codecpar->sample_rate!=48000 || s->codecpar->ch_layout.nb_channels!=2)) {
-            ret=fail(k,AVERROR_INVALIDDATA,"mux requires stereo 48 kHz audio");goto done;
+        if(i && (s->codecpar->sample_rate!=48000 ||
+            s->codecpar->ch_layout.nb_channels!=audio_channels)) {
+            ret=fail(k,AVERROR_INVALIDDATA,"mux requires the declared 48 kHz audio layout");goto done;
         }
         packets[i]=k->av_packet_alloc();if(!packets[i]){ret=fail(k,AVERROR(ENOMEM),"mux packet allocation");goto done;}
     }

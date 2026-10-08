@@ -198,3 +198,39 @@ Bus は codec block（PCM24:4,096、ALAC: native block）ごとに絶対sample�
 - トラックゲインの UI マッピング: モデルにトラックレベルのゲイン欄がないため、
   ミキサーフェーダーはトラック上全クリップの `kronello.audio.volume` へ
   `clip_set_volume` で同一ゲインを 1 イベント書き込む代理方式（Undo 可能）。
+
+## AUDIO-010: ピッチ保持リタイムとマルチチャンネル
+
+契約は [ADR-0124](../adr/0124-pitch-preserving-retime-and-multichannel.md)、検証は
+[AUDIO-010](../testing/audio-010.md)。
+
+- `ChannelMask`（model の版付き u64 speaker bitset）は mono / stereo /
+  5.1(side) / 5.1(back) / 7.1 の closed set だけを受理し、未知マスク・
+  チャンネル数不一致は `UNSUPPORTED_CHANNEL_LAYOUT`。position ベースの
+  任意配置は扱わない。
+- `ChannelBuffer` / `ChannelBus` / `ChannelSources` / `ChannelSourceReader` が
+  decode → bus ミックス → エフェクト → encode の全段で `channel_mask` を保持する。
+  エフェクトはチャンネルごとに適用（compressor/limiter のみ LFE 除外規則）。
+  `mix_channels` は出力 `channel_mask` への明示変換のみを行い、暗黙の
+  fold-down はしない。ダウンミックスは ITU 係数（center -3dB、surround -3dB、
+  LFE 既定除外）の決定的係数表で、mono 出力・legacy stereo reader も同じ経路を通る。
+  `into_stereo_bus` は非 stereo を拒否する。
+- `AudioRetimePolicy::PitchPreserveV1`（wire 値 `pitch_preserve_v1`）は
+  `wsola.rs` の決定的 WSOLA（窓 1024・合成ホップ 512・探索半幅 256、
+  正規化相互相関・固定候補順・f64 蓄積）でピッチを保持する。乱数・外部
+  プロセス・プラットフォーム DSP を使わず、リタイム比は有理数タイムマップから
+  導出する。正速度の Linear / PiecewiseLinear のみ、piecewise slope 0 の hold
+  は明示的な無音、speed 1 は `resample_v1` と同一経路。WSOLA の hop anchor は
+  placement 先頭に固定されるため、分割レンダーは連続レンダーと bit 一致する。
+  非対応マップ・reverse 組合せ・ソース不足は型付きエラー。
+- media の decode は FFmpeg `AVChannelLayout` のネイティブ mask を公開し、
+  >2ch で mask 未指定の素材は `UNSUPPORTED_CHANNEL_LAYOUT`（mono / stereo の
+  未指定は documented default layout に正規化）。encode / mux は ch 数と mask を
+  受け、宣言と実レイアウトの不一致は型付きエラー。probe は `channel_mask` を報告し、
+  `MediaProbe::verify_movie_layout(profile, layout)` が codec・ch 数・mask・
+  0-origin PTS を出力検証する。`encode_audio_channels` / `mux_movie` は
+  `AvExportSnapshot::with_audio_layout` が pin する audio envelope 3 と対になる。
+- `JobOutput` のムービー出力は `audio_layout: Option<ChannelMask>`（省略 = stereo の
+  後方互換）を持ち、非 stereo は `profile_version` 3 を要求する。submit・worker の
+  双方が同じ `movie_snapshot` / `verify_movie_layout` を通すため、CLI・MCP の
+  共有経路は同じ検証を受ける。

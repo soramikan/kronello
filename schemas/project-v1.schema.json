@@ -499,7 +499,8 @@
       "enum": [
         "reject",
         "resample_v1",
-        "reverse_resample_v1"
+        "reverse_resample_v1",
+        "pitch_preserve_v1"
       ]
     },
     "BoundsStage": {

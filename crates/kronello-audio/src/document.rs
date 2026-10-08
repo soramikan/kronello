@@ -6,8 +6,8 @@ use kronello_time::{Time, TimeMap, TimeRange};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AudioClip, AudioError, AudioSourceReader, AudioSources, Bus, Gain, mix_with_gain_reader,
-    sample_index, sample_range,
+    AudioClip, AudioError, AudioSources, Bus, ChannelBus, ChannelSourceReader, Gain,
+    mix_with_gain_channels, sample_index, sample_range,
 };
 
 #[derive(
@@ -464,7 +464,7 @@ impl DocumentAudioPlan {
     /// reports only the summed master levels.
     pub fn mix_metered(
         &self,
-        sources: &dyn AudioSourceReader,
+        sources: &dyn ChannelSourceReader,
         range: TimeRange,
     ) -> Result<(Bus, crate::BusMeters), AudioError> {
         if let Some(plan) = &self.advanced {
@@ -477,48 +477,91 @@ impl DocumentAudioPlan {
         };
         Ok((bus, meters))
     }
+    /// AUDIO-010: identical mixing at an explicit target layout. Sources keep
+    /// their decoded channel mask through conversion; LFE is excluded from
+    /// fold-down unless the target carries it.
+    pub fn mix_channels(
+        &self,
+        sources: &dyn ChannelSourceReader,
+        range: TimeRange,
+        target: ChannelMask,
+    ) -> Result<ChannelBus, AudioError> {
+        Ok(self.mix_channels_metered(sources, range, target)?.0)
+    }
+    /// Metered variant of [`mix_channels`](Self::mix_channels).
+    pub fn mix_channels_metered(
+        &self,
+        sources: &dyn ChannelSourceReader,
+        range: TimeRange,
+        target: ChannelMask,
+    ) -> Result<(ChannelBus, crate::ChannelBusMeters), AudioError> {
+        if let Some(plan) = &self.advanced {
+            return plan.mix_channels_metered(sources, range, target);
+        }
+        let bus = self.mix_channels_impl(sources, range, target)?;
+        let meters = crate::ChannelBusMeters {
+            tracks: vec![],
+            master: crate::channel_meter(target, bus.buffer().samples())?,
+        };
+        Ok((bus, meters))
+    }
     /// Evaluate a bounded Bus without retaining complete source buffers.
     pub fn mix_reader(
         &self,
-        sources: &dyn AudioSourceReader,
+        sources: &dyn ChannelSourceReader,
         range: TimeRange,
     ) -> Result<Bus, AudioError> {
         if let Some(plan) = &self.advanced {
             return plan.mix(sources, range);
         }
+        self.mix_channels_impl(sources, range, ChannelMask::STEREO)?
+            .into_stereo_bus()
+    }
+    fn mix_channels_impl(
+        &self,
+        sources: &dyn ChannelSourceReader,
+        range: TimeRange,
+        target: ChannelMask,
+    ) -> Result<ChannelBus, AudioError> {
         let active = self
             .placements
             .iter()
             .map(|p| sample_range(p.active))
             .collect::<Result<Vec<_>, _>>()?;
-        mix_with_gain_reader(&self.clips(), sources, range, &mut |index, sample| {
-            if !active[index].contains(&sample) {
-                return Gain::new(0.0);
-            }
-            let p = &self.placements[index];
-            let time = Time::new(sample, 48_000)?;
-            let mut gain = 1.0;
-            for g in &p.gains {
-                let value = match g.property.source() {
-                    PropertySource::Constant(value) => value.clone(),
-                    PropertySource::Curve(id) => {
-                        let curve = self
-                            .curves
-                            .get(id)
-                            .ok_or_else(|| invalid("volume curve missing or opaque"))?;
-                        kronello_animation::sample(curve, time.checked_add(g.offset)?)
-                            .map_err(|e| invalid(e.to_string()))?
-                    }
-                    _ => {
-                        return Err(unsupported(
-                            "volume expressions require a later audio contract",
-                        ));
-                    }
-                };
-                gain *= scalar_gain(value)?.linear();
-            }
-            Gain::new(gain)
-        })
+        mix_with_gain_channels(
+            &self.clips(),
+            sources,
+            range,
+            &mut |index, sample| {
+                if !active[index].contains(&sample) {
+                    return Gain::new(0.0);
+                }
+                let p = &self.placements[index];
+                let time = Time::new(sample, 48_000)?;
+                let mut gain = 1.0;
+                for g in &p.gains {
+                    let value = match g.property.source() {
+                        PropertySource::Constant(value) => value.clone(),
+                        PropertySource::Curve(id) => {
+                            let curve = self
+                                .curves
+                                .get(id)
+                                .ok_or_else(|| invalid("volume curve missing or opaque"))?;
+                            kronello_animation::sample(curve, time.checked_add(g.offset)?)
+                                .map_err(|e| invalid(e.to_string()))?
+                        }
+                        _ => {
+                            return Err(unsupported(
+                                "volume expressions require a later audio contract",
+                            ));
+                        }
+                    };
+                    gain *= scalar_gain(value)?.linear();
+                }
+                Gain::new(gain)
+            },
+            target,
+        )
     }
 }
 pub(super) fn scalar_gain(value: Value) -> Result<Gain, AudioError> {

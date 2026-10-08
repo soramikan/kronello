@@ -112,7 +112,7 @@ fn bounded_decode_rejects_before_exceeding_remaining_source_budget() {
         .decode_asset_audio_bounded(&asset, dir.path(), 0, 128)
         .unwrap();
     let legacy = runtime.decode_asset_audio(&asset, dir.path(), 0).unwrap();
-    assert_eq!(decoded.buffer.frames(), legacy.buffer.frames());
+    assert_eq!(decoded.buffer, legacy.buffer);
 }
 #[test]
 fn bundled_pcm_fixture_decodes_exact_stereo_samples() {
@@ -122,7 +122,7 @@ fn bundled_pcm_fixture_decodes_exact_stereo_samples() {
     assert_eq!(decoded.source_rate, 48000);
     assert_eq!(decoded.source_channels, 2);
     assert_eq!(decoded.source_start, Rational::ZERO);
-    assert_eq!(decoded.buffer.frames().len(), 4800);
+    assert_eq!(decoded.buffer.frame_count(), 4800);
     let expected: Vec<_> = bytes[44..]
         .chunks_exact(4)
         .map(|b| {
@@ -132,7 +132,7 @@ fn bundled_pcm_fixture_decodes_exact_stereo_samples() {
             ]
         })
         .collect();
-    assert_eq!(decoded.buffer.frames(), expected);
+    assert_eq!(decoded.buffer.stereo_frames().unwrap(), expected);
 }
 #[test]
 fn swresample_converts_mono_stereo_rates_and_drains_tail() {
@@ -144,22 +144,35 @@ fn swresample_converts_mono_stereo_rates_and_drains_tail() {
         let decoded = runtime.decode_audio(&path, 0).unwrap();
         assert_eq!(decoded.source_rate, rate);
         assert_eq!(decoded.source_channels, u32::from(channels));
+        // The decoder preserves the source layout: mono stays mono, never an
+        // implicit stereo duplication.
         assert_eq!(
-            decoded.buffer.frames().len(),
+            decoded.buffer.mask(),
+            if channels == 1 {
+                kronello_model::ChannelMask::MONO
+            } else {
+                kronello_model::ChannelMask::STEREO
+            }
+        );
+        assert_eq!(decoded.buffer.channels(), usize::from(channels));
+        assert_eq!(
+            decoded.buffer.frame_count(),
             4800,
             "drained sample count at {rate}"
         );
         for i in 64..4736 {
             let expected = 0.5 * (2.0 * std::f64::consts::PI * 440.0 * i as f64 / 48000.0).sin();
-            let frame = decoded.buffer.frames()[i];
+            let frame = decoded.buffer.frame(i).unwrap();
             assert!(
                 (f64::from(frame[0]) - expected).abs() < 0.0003,
                 "{rate}: sample {i}"
             );
-            assert_eq!(frame[1], if channels == 1 { frame[0] } else { -frame[0] });
+            if channels == 2 {
+                assert_eq!(frame[1], -frame[0]);
+            }
         }
         assert!(
-            decoded.buffer.frames()[4790][0].abs() > 0.01,
+            decoded.buffer.frame(4790).unwrap()[0].abs() > 0.01,
             "resampler flush retains the tail"
         );
     }
@@ -172,7 +185,7 @@ fn unsupported_channel_layout_and_stream_selection_fail() {
     write_wave(&path, 48000, 3, 4800);
     assert_eq!(
         runtime.decode_audio(&path, 0).unwrap_err().code(),
-        "UNSUPPORTED_FEATURE"
+        "UNSUPPORTED_CHANNEL_LAYOUT"
     );
     assert!(runtime.decode_audio(&fixture(), 1).is_err());
     assert_eq!(
@@ -238,14 +251,8 @@ fn pcm24_roundtrip_quantization_clipping_policy_and_output_rollback() {
     assert_eq!(report.clipped_samples, 0);
     let decoded = runtime.decode_audio(&output, 0).unwrap();
     assert_eq!(decoded.source_start, Rational::ZERO);
-    assert_eq!(decoded.buffer.frames().len(), 4);
-    for (actual, expected) in decoded
-        .buffer
-        .frames()
-        .iter()
-        .flatten()
-        .zip(frames.iter().flatten())
-    {
+    assert_eq!(decoded.buffer.frame_count(), 4);
+    for (actual, expected) in decoded.buffer.samples().iter().zip(frames.iter().flatten()) {
         assert!((actual - expected).abs() <= 1.0 / 8388608.0);
     }
     let probe = runtime.probe(&output).unwrap();
@@ -388,19 +395,24 @@ fn export_fixed_snapshot_muxes_av_with_exact_pts_and_sample_precision_at_three_r
             .index;
         let decoded = runtime.decode_audio(&output, audio_stream).unwrap();
         assert_eq!(decoded.source_start, Rational::ZERO);
-        assert_eq!(decoded.buffer.frames().len(), report.audio.frames);
+        assert_eq!(decoded.buffer.frame_count(), report.audio.frames);
         let source = runtime
             .decode_asset_audio(&a, &dir.path().join("project.kronello"), 0)
             .unwrap()
             .buffer;
-        let sources = AudioSources::from([((a.id, 0), source)]);
-        let expected = mix(snapshot.clips(), &sources, request.range).unwrap();
+        let sources = ChannelSources::from([((a.id, 0), source)]);
+        let expected = mix_channels(
+            snapshot.clips(),
+            &sources,
+            request.range,
+            ChannelMask::STEREO,
+        )
+        .unwrap();
         for (actual, expected) in decoded
             .buffer
-            .frames()
+            .samples()
             .iter()
-            .flatten()
-            .zip(expected.buffer().frames().iter().flatten())
+            .zip(expected.buffer().samples().iter())
         {
             assert!((actual - expected).abs() <= 1.0 / 8388608.0);
         }
@@ -634,10 +646,7 @@ fn document_audio_source_modes_are_explicit_backward_compatible_and_hashed() {
             .unwrap();
         report.probe.verify_av().unwrap();
         let decoded = runtime.decode_audio(&req.output, 1).unwrap();
-        assert_eq!(
-            decoded.buffer.frames().iter().flatten().any(|v| *v != 0.0),
-            audible
-        );
+        assert_eq!(decoded.buffer.samples().iter().any(|v| *v != 0.0), audible);
     }
     let DocumentObject::Known(a) = &mut p.assets[0] else {
         panic!()
@@ -660,7 +669,7 @@ fn document_audio_source_modes_are_explicit_backward_compatible_and_hashed() {
         )
         .unwrap();
     let decoded = runtime.decode_audio(&req.output, 1).unwrap();
-    assert!(decoded.buffer.frames().iter().flatten().any(|v| *v != 0.0));
+    assert!(decoded.buffer.samples().iter().any(|v| *v != 0.0));
 
     // Visual streams contribute no document audio; container audio remains explicit.
     let DocumentObject::Known(a) = &mut p.assets[0] else {
@@ -699,7 +708,7 @@ fn document_audio_source_modes_are_explicit_backward_compatible_and_hashed() {
             )
             .unwrap_err()
             .code(),
-        "UNSUPPORTED_FEATURE"
+        "UNSUPPORTED_CHANNEL_LAYOUT"
     );
     assert!(!req.output.exists());
 }
