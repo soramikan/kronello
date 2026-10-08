@@ -581,6 +581,7 @@ fn actual_reverse_sequence_references_forward_source_states() {
         masks: vec![],
         properties: vec![],
         markers: vec![],
+        pan: None,
     };
     let id = SequenceId::new();
     p.sequences.push(DocumentObject::Known(Sequence {

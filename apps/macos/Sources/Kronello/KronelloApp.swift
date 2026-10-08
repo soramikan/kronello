@@ -4,6 +4,7 @@ import KronelloAppModel
 
 @main struct KronelloApp: App {
     @StateObject private var controller = AppController()
+    @State private var settingsTab = "general"
     var body: some Scene {
         Window("Kronello", id: "main") {
             AppRoot(controller: controller).krTheme(controller.theme)
@@ -15,21 +16,63 @@ import KronelloAppModel
             .commands { KronelloCommands(controller: controller, workflow: controller.workflow) }
         Settings {
             KRPanel("設定") {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: KRSpace.space4) {
-                        KRCheckbox("Light テーマ", isOn: $controller.preferences.light)
-                        KRCheckbox("起動時に Welcome を表示", isOn: $controller.preferences.showWelcome)
-                        Divider()
-                        Text("ワークスペース").krText(KRType.heading)
-                        LayoutSettings(workflow: controller.workflow)
-                        Divider()
-                        Text("ショートカット").krText(KRType.heading)
-                        ShortcutSettings(workflow: controller.workflow)
-                    }.padding(KRSpace.space4).frame(width: 460, alignment: .leading)
-                }
+                VStack(alignment: .leading, spacing: KRSpace.space3) {
+                    KRSegmentedControl([
+                        .init("general", "一般"), .init("playback", "再生"),
+                        .init("workspace", "ワークスペース"), .init("shortcuts", "ショートカット"),
+                    ], selection: $settingsTab).fixedSize()
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: KRSpace.space4) {
+                            if settingsTab == "general" {
+                                KRCheckbox("Light テーマ", isOn: $controller.preferences.light)
+                                KRCheckbox("起動時に Welcome を表示", isOn: $controller.preferences.showWelcome)
+                                Divider()
+                                // GUI-012: scratch/cache location routes to the
+                                // worker through KRONELLO_RASTER_CACHE_ROOT on
+                                // the next project open.
+                                Text("スクラッチ").krText(KRType.heading)
+                                KRTextField("キャッシュフォルダ", value: $controller.preferences.scratchDirectory,
+                                    placeholder: "デフォルト（~/Library/Caches/kronello）",
+                                    help: "ラスタキャッシュの保存先。空欄で既定値。次回プロジェクトを開いたときから有効です。")
+                                HStack(spacing: KRSpace.space2) {
+                                    KRButton("フォルダを選択…", variant: .secondary) { chooseScratch() }
+                                    if !controller.preferences.scratchDirectory.isEmpty {
+                                        KRButton("既定に戻す", variant: .plain) { controller.preferences.scratchDirectory = "" }
+                                    }
+                                }
+                            } else if settingsTab == "playback" {
+                                // GUI-012: playback defaults for new sessions.
+                                // Looping only seeds projects that have never
+                                // written UI state; saved state always wins.
+                                KRCheckbox("スクラブ時にオーディオを再生", isOn: $controller.preferences.playbackScrub)
+                                KRCheckbox("モニター音量をミュートで開始", isOn: $controller.preferences.playbackMuted)
+                                KRCheckbox("ループ再生を既定で有効", isOn: $controller.preferences.playbackLooping)
+                                Text("スクラブとミュートはプロジェクトを開くたびに適用されます。ループは UI 状態が未保存のプロジェクトのみ初期値になります。")
+                                    .krText(KRType.caption).foregroundStyle(.secondary)
+                            } else if settingsTab == "workspace" {
+                                LayoutSettings(workflow: controller.workflow)
+                            } else {
+                                ShortcutSettings(workflow: controller.workflow)
+                            }
+                        }.padding(.vertical, KRSpace.space2).frame(width: 460, alignment: .leading)
+                    }
+                }.padding(KRSpace.space4)
             }.frame(maxHeight: 720).fixedSize(horizontal: true, vertical: false).krTheme(controller.theme)
                 .onChange(of: controller.preferences.light) { _, _ in controller.savePreferences() }
                 .onChange(of: controller.preferences.showWelcome) { _, _ in controller.savePreferences() }
+                .onChange(of: controller.preferences.playbackScrub) { _, _ in controller.savePreferences() }
+                .onChange(of: controller.preferences.playbackMuted) { _, _ in controller.savePreferences() }
+                .onChange(of: controller.preferences.playbackLooping) { _, _ in controller.savePreferences() }
+                .onChange(of: controller.preferences.scratchDirectory) { _, _ in controller.savePreferences() }
+        }
+    }
+    /// GUI-012: scratch-folder picker for the raster cache location.
+    private func chooseScratch() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.allowsMultipleSelection = false
+        panel.prompt = "キャッシュフォルダに設定"
+        if panel.runModal() == .OK, let url = panel.url {
+            controller.preferences.scratchDirectory = url.path
         }
     }
 }

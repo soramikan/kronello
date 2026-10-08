@@ -27,6 +27,11 @@ fn builtin_registry_has_fixed_uuid_v4_key_mappings() {
             "e9cf4a80-2b64-4b8e-9e29-dfe6bc119a63",
         ),
         (
+            AUDIO_PAN_ID,
+            "kronello.audio.pan",
+            "4c1d7f3e-9a28-4b62-8e51-7f0c2d9a6b34",
+        ),
+        (
             TRANSFORM_POSITION_ID,
             "kronello.transform.position",
             "60b3f16c-3677-4c83-8b90-f175f965ee98",
@@ -119,6 +124,7 @@ fn builtin_registries_have_identical_ids_keys_and_contents() {
 #[test]
 fn builtin_registry_enumeration_is_lexical_and_repeatable() {
     let expected = [
+        "kronello.audio.pan",
         "kronello.audio.volume",
         "kronello.blend_mode",
         "kronello.fill_color",

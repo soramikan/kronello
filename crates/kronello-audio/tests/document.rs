@@ -118,6 +118,7 @@ fn sequence(p: &mut Project, root: CompositionId, start: Time, end: Time) -> Seq
         effects: vec![],
         masks: vec![],
         markers: vec![],
+        pan: None,
     };
     let s = Sequence {
         id: SequenceId::new(),

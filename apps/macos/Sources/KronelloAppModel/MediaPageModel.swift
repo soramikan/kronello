@@ -31,6 +31,14 @@ import KronelloDesign
     @Published public private(set) var thumbnailPending: Set<String> = []
     @Published public private(set) var loading = false
     @Published public var failure: ServiceFailure?
+    /// GUI-012 (ADR-0119): per-original proxy link state from the shared
+    /// `proxy.status` report — "ready" / "stale" / "missing", keyed by the
+    /// original asset id.
+    @Published public private(set) var proxyStates: [String: String] = [:]
+    /// Terminal message from the last `project.collect` run.
+    @Published public private(set) var collectResult: String?
+    /// In-flight collect path; the button disables while a copy runs.
+    @Published public private(set) var collecting = false
     public init(editor: EditorModel) { self.editor = editor }
     /// Browser grid thumbnails are requested at this longest-edge cap.
     public nonisolated static let thumbnailSize = 128
@@ -134,6 +142,65 @@ import KronelloDesign
             await refresh()
         } catch { failure = editor.serviceFailure(error) }
     }
+    // MARK: - GUI-012 proxy workflow (ADR-0119)
+
+    /// Refresh the shared `proxy.status` report into `proxyStates`.
+    public func refreshProxies() async {
+        do {
+            let result = try await request("proxy.status")
+            var states: [String: String] = [:]
+            for entry in result.objects("proxies") {
+                states[entry.object("link").string("original")] = entry.string("state")
+            }
+            proxyStates = states
+        } catch { failure = editor.serviceFailure(error) }
+    }
+    /// Submit one `proxy.generate` fixed-input job per selected video asset.
+    /// Only video originals are eligible; the fence carries the latest
+    /// document revision like every other submit in this model.
+    public func generateProxies(for ids: [String]) async {
+        let eligible = ids.filter { id in
+            assets.contains { $0.string("asset") == id && $0.object("detail").string("kind") == "video" && !isOffline($0) }
+        }
+        guard !eligible.isEmpty else { return }
+        do {
+            _ = try await request("proxy.generate", ["expected_revision": editor.revision, "assets": eligible])
+            await refreshProxies()
+        } catch { failure = editor.serviceFailure(error) }
+    }
+    /// Remove the proxy link for an original (or its proxy id); the managed
+    /// proxy asset object goes away with the link.
+    public func clearProxy(for asset: String) async {
+        do {
+            _ = try await request("proxy.clear", ["base_revision": editor.revision, "asset": asset])
+            try await editor.reload()
+            await refresh()
+            await refreshProxies()
+        } catch { failure = editor.serviceFailure(error) }
+    }
+    /// `proxy.generate` is job-driven: originals with a link or an active
+    /// generate job are skipped by the caller, not duplicated.
+    public func proxyEligible(_ entry: [String: Any]) -> Bool {
+        let id = entry.string("asset")
+        return kind(of: entry) == "video" && !isOffline(entry)
+            && proxyStates[id] == nil
+    }
+
+    // MARK: - GUI-012 project collection (FLOW-002)
+
+    /// Copy the project file plus all verified assets to a chosen directory.
+    /// `project.collect` is read-only against this project; the result is the
+    /// staged copy's directory/asset count.
+    public func collectProject(to directory: String) async {
+        guard !collecting else { return }
+        collecting = true; defer { collecting = false }
+        do {
+            let result = try await request("project.collect", ["output_directory": directory])
+            collectResult = "\(result.string("directory")) に \(Int(result.number("asset_count"))) 件の素材を収集しました"
+            failure = nil
+        } catch { failure = editor.serviceFailure(error) }
+    }
+
     /// Lazily request one fixed-snapshot thumbnail per asset. Asset content is
     /// pinned by `content_hash`, so a cached result stays valid for the whole
     /// session; permanent failures cache the typed error to stop retry loops.

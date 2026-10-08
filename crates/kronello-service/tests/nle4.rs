@@ -33,6 +33,7 @@ fn clip(a: Time, b: Time) -> Clip {
         effects: vec![],
         masks: vec![],
         markers: vec![],
+        pan: None,
     }
 }
 fn sequence(clips: Vec<Clip>) -> Sequence {

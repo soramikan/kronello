@@ -93,8 +93,17 @@ public struct EditCandidate {
     /// In-flight `track.analyze` clip ids for the stabilize flow (TRACK-002).
     @Published public internal(set) var stabilizePending: Set<String> = []
     @Published public var editTool = "select"
-    @Published public var editSnap = true
-    @Published public var editScale: Double = 1
+    /// GUI-012: snapping and timeline zoom persist in user state (ADR-0033).
+    /// The computed accessors keep the established API while the storage
+    /// lives in `ui.editView`, so the debounced `ui` writer owns durability.
+    public var editSnap: Bool {
+        get { ui.editView?.editSnap ?? true }
+        set { var view = editViewSettings; view.editSnap = newValue; ui.editView = view }
+    }
+    public var editScale: Double {
+        get { ui.editView?.editScale ?? 1 }
+        set { var view = editViewSettings; view.editScale = newValue.isFinite && newValue > 0 ? newValue : 1; ui.editView = view }
+    }
     @Published public private(set) var layers: [Layer] = []
     @Published public private(set) var document: [String: Any] = [:]
     @Published public private(set) var scene: [String: Any] = [:]
@@ -184,6 +193,11 @@ public struct EditCandidate {
     @Published public var playing = false { didSet { if playing != oldValue { playbackRequested() } } }
     /// AUDIO-009: last rendered-block peak/RMS from the shared evaluator.
     @Published public private(set) var playbackMeters: PlaybackMeters?
+    /// GUI-012: on-demand BS.1770 readouts keyed "track:<id>" / "sequence",
+    /// pinned to the measured revision so edits hide stale values.
+    @Published public var loudnessReadings: [String: LoudnessReading] = [:]
+    @Published public var loudnessRevisions: [String: String] = [:]
+    @Published public var loudnessBusy: Set<String> = []
     /// AUDIO-009: seek plays a short audio run through the playback pipeline.
     @Published public var audioScrubEnabled = true
     @Published public private(set) var playbackStatus = "停止"
@@ -206,9 +220,9 @@ public struct EditCandidate {
     private var resumeSample: Int64?
     private var playbackIntent: UInt64 = 0
     private var reportedUnderruns: UInt64 = 0
-    @Published public private(set) var busy = false
+    @Published public internal(set) var busy = false
     @Published public private(set) var refreshToken = 0
-    @Published public private(set) var jobs: [[String: Any]] = []
+    @Published public internal(set) var jobs: [[String: Any]] = []
     public var fonts: [[String: Any]] = []
     public var snapshotFonts: [[String: Any]] { Self.fontInputs(fonts, requiredBy: document) }
     public static func fontInputs(_ inputs: [[String: Any]], requiredBy document: [String: Any]) -> [[String: Any]] {
@@ -238,6 +252,9 @@ public struct EditCandidate {
     private var reloadAgain = false
     private var reloadWaiters: [CheckedContinuation<Void, Error>] = []
     private var loadedUI = false
+    /// Whether this project's UI state was restored from disk on first load;
+    /// playback defaults seed `ui.looping` only when no state file existed.
+    public private(set) var restoredUIState = false
     private var numberOrigin: (base: String, layer: Layer, time: RationalTime)?
     public var current: [String: Any] { compositions.first { $0.string("id") == ui.composition } ?? [:] }
     public var selected: Layer? { layers.first { $0.id == ui.selection } }
@@ -343,6 +360,7 @@ public struct EditCandidate {
             let export = try await request("project.export")
             projectID = info.string("project_id"); name = info.string("name"); safeMode = info.string("open_mode") == "safe"
             if !loadedUI {
+                restoredUIState = (try? await stateStore.hasState(projectID: projectID)) ?? false
                 ui = try await stateStore.load(projectID: projectID); loadedUI = true
                 for source in ui.fontSources ?? [] { if !fonts.contains(where: { $0.object("identity").string("sha256") == source.sha256 && Int($0.object("identity").number("face_index")) == source.faceIndex }) { fonts.append(["identity": source.identity, "path": source.path]) } }
             }
@@ -607,6 +625,13 @@ public struct EditCandidate {
             } else { mapFailure(error) }
             return nil
         }
+    }
+    /// Shared post-apply bookkeeping for dedicated mutation envelopes
+    /// (GUI-012 `captions.import`): the returned Event joins undo history
+    /// with its display label and clears any pending conflict state.
+    func recordIssuedEvent(_ event: [String: Any], label: String) {
+        undoState.issued(event.string("id")); pendingCandidate = nil; revisionConflict = nil
+        eventLabels[event.string("id")] = label
     }
     public func discardCandidate() { pendingCandidate = nil; revisionConflict = nil; candidateBounds = nil; numberOrigin = nil }
     public func reapply() {

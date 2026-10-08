@@ -57,6 +57,7 @@ fn create_project_as(
         effects: vec![],
         masks: vec![],
         markers: vec![],
+        pan: None,
     };
     let sequence = Sequence {
         id: SequenceId::new(),

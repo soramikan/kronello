@@ -50,6 +50,7 @@ fn fixture(asset_channels: usize) -> (Project, SequenceId, AssetId, ClipId) {
         audio_retime: AudioRetimePolicy::Reject,
         reverse_sampling: None,
         volume: None,
+        pan: None,
         links: vec![],
         effects: vec![],
         masks: vec![],

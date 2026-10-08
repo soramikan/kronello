@@ -50,6 +50,7 @@ fn clip(composition: CompositionId, start: Time, end: Time, speed: Rational) -> 
         masks: vec![],
         properties: vec![],
         markers: vec![],
+        pan: None,
     }
 }
 fn sequence(p: &Project) -> Sequence {
@@ -842,6 +843,7 @@ fn asset_audio_tracks_mix_on_absolute_grid_and_reject_retime() {
         masks: vec![],
         properties: vec![],
         markers: vec![],
+        pan: None,
     };
     s.tracks.push(Track {
         state: None,

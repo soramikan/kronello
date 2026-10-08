@@ -73,6 +73,7 @@ fn generator_clip() -> Clip {
         audio_retime: AudioRetimePolicy::ResampleV1,
         reverse_sampling: None,
         volume: None,
+        pan: None,
         links: vec![],
         enabled: true,
         properties: vec![],

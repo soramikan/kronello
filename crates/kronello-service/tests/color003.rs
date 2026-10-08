@@ -47,6 +47,7 @@ fn fixture() -> (Project, SequenceId, ClipId) {
         properties: vec![],
         markers: vec![],
         masks: vec![],
+        pan: None,
     };
     let clip_id = clip.id;
     let sequence = Sequence {

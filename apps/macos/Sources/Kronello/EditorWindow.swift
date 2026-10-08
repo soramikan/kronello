@@ -19,11 +19,7 @@ struct EditorWindow: View {
             else if model.ui.page == "edit" { EditPage(model: model, workflow: workflow) }
             else if model.ui.page == "template" { TemplatePage(model: model) }
             else if model.ui.page == "media" { MediaPage(model: model) }
-            else if model.ui.page == "export" { ExportPage(model: model) }
-            else { KREmptyState(icon: model.ui.page == "export" ? .clapperboard : .layers,
-                title: model.ui.page == "template" ? "テンプレートページ" : "書き出しページ",
-                message: "このページは GUI-004 で追加します。モーションページで作業を続けられます。")
-                .frame(maxWidth: .infinity, maxHeight: .infinity) }
+            else { ExportPage(model: model) }
             KRStatusBar(saved: (model.busy ? "保存中" : "保存済み") + (model.safeMode ? " · 安全モード" : "") + " · " + model.playbackStatus, revision: "rev " + model.revision,
                 externalChange: model.externalChange, error: diagnostic, job: jobSummary,
                 onError: { if model.undoConflict != nil {} else if model.revisionConflict == nil { model.failure = model.previewFailure ?? model.playbackFailure } }, onJobs: { jobsOpen = true })
@@ -47,8 +43,10 @@ struct EditorWindow: View {
                 HistoryPanel(model: model).krTheme(theme)
             }
             .sheet(isPresented: $jobsOpen) {
-                KRDialog("Jobs", body: "共有 job_progress の最新通知です。", detail: jsonText(model.jobs),
-                    actions: [.init("ok", "閉じる", variant: .primary) { jobsOpen = false }]).krTheme(theme)
+                // GUI-012: actionable job rows (cancel/resume/prune) through
+                // the shared job.* queries — no raw JSON dump.
+                JobsPanel(model: model).krTheme(theme)
+                    .task { await model.refreshJobs() }
             }
             .sheet(isPresented: $safeDetailsOpen) {
                 KRDialog("安全モード", body: "共有 project.info が safe を返しました。編集中の同じ store をセッションが保持し、CLI / MCP による open を排除します。プロジェクトを閉じるかアプリを終了すると、処理の完了後に排他を解放します。",
@@ -87,6 +85,52 @@ struct EditorWindow: View {
     func jsonText(_ object: Any) -> String {
         guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys]) else { return "" }
         return String(data: data, encoding: .utf8) ?? ""
+    }
+}
+
+/// GUI-012: project jobs sheet — the same `job.list` rows the export page
+/// shows, plus cancel/resume/prune through the shared `job.*` queries.
+struct JobsPanel: View {
+    @Environment(\.krPalette) private var p
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var model: EditorModel
+    var body: some View {
+        KRPanel("ジョブ", actions: {
+            KRButton("完了した記録を整理", variant: .secondary) { Task { await model.pruneJobs() } }
+                .disabled(model.busy || !model.jobs.contains { ["succeeded", "canceled", "failed"].contains($0.string("status")) })
+            KRButton(icon: .refreshCw, accessibilityLabel: "ジョブを更新") { Task { await model.refreshJobs() } }
+            KRButton(icon: .x, accessibilityLabel: "閉じる") { dismiss() }
+        }) {
+            if model.jobs.isEmpty {
+                KREmptyState(icon: .clock, title: "ジョブなし",
+                    message: "書き出しやプロキシ生成などの処理はここに表示されます。")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(model.jobs, id: \.selfID) { job in row(job) }
+                    }
+                }
+            }
+        }.frame(width: 560, height: 420)
+    }
+    func row(_ job: [String: Any]) -> some View {
+        KRJobRow(URL(fileURLWithPath: job.string("destination")).lastPathComponent.isEmpty ? job.string("id") : URL(fileURLWithPath: job.string("destination")).lastPathComponent,
+            detail: job.object("output_profile").string("format") + " · rev " + job.string("revision") + " · " + String(job.string("id").prefix(8)),
+            state: ExportPageModel.state(job)) {
+            let id = job.string("id")
+            if EditorModel.jobCanCancel(job) {
+                KRButton("中止", variant: .plain) { Task { await model.cancelJob(id) } }
+                    .disabled(job["cancel_requested"] as? Bool == true || model.busy)
+            }
+            if EditorModel.jobCanResume(job) {
+                KRButton("再開", variant: .plain) { Task { await model.resumeJob(id) } }
+                    .disabled(model.busy)
+            }
+            if job.string("status") == "succeeded", !job.string("destination").isEmpty {
+                KRButton("表示", variant: .plain) { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: job.string("destination"))]) }
+            }
+        }
     }
 }
 

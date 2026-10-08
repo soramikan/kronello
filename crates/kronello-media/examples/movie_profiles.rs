@@ -54,6 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     audio_retime: Default::default(),
                     reverse_sampling: None,
                     volume: None,
+                    pan: None,
                     links: vec![],
                     effects: vec![],
                     masks: vec![],

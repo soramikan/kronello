@@ -282,6 +282,11 @@ impl DocumentAudioPlan {
                         if !clip.effects.is_empty() {
                             return Err(unsupported("audio clip effects require AUDIO-004"));
                         }
+                        // GUI-012: stereo balance runs on the AUDIO-004 mixer;
+                        // the basic plan cannot approximate it.
+                        if clip.pan.is_some() {
+                            return Err(unsupported("audio pan requires AUDIO-004"));
+                        }
                         if track.kind == TrackKind::Audio && !clip.properties.is_empty() {
                             return Err(unsupported("audio clip Properties require AUDIO-004"));
                         }

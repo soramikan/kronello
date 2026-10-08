@@ -50,6 +50,7 @@ fn fixture() -> (Project, SequenceId, ClipId) {
         masks: vec![],
         properties: vec![],
         markers: vec![],
+        pan: None,
     };
     let bottom = make_clip([0.2, 0.6, 0.1]);
     let mut top = make_clip([0.8, 0.2, 0.4]);

@@ -367,10 +367,14 @@ impl AdvancedAudioPlan {
                     _ => {
                         // Legacy recursive placement retains its exact affine sample phase.
                         // Nested/composition retime and node effects remain explicit errors.
+                        // GUI-012: pan is applied by this mixer after the Legacy
+                        // plan renders (see the pan_gains pass below); stripping
+                        // it here keeps the version-1 clip contract untouched.
                         let mut clean = clip.clone();
                         clean.effects.clear();
                         clean.properties.clear();
                         clean.links.clear();
+                        clean.pan = None;
                         Source::Legacy(DocumentAudioPlan::compile_isolated_clip(
                             project, target, &clean,
                         )?)
@@ -391,6 +395,11 @@ impl AdvancedAudioPlan {
                     && let Some(property) = &clip.volume
                 {
                     plan.capture_property(project, property)?;
+                }
+                // GUI-012: pan is a constant scalar — no curve capture, just
+                // the shared contract check (applies to Legacy sources too).
+                if let Some(pan) = &clip.pan {
+                    validate_pan(pan).map_err(|e| invalid(&e.to_string()))?;
                 }
                 flattened_count += match &source {
                     Source::Legacy(p) | Source::ReversedComposition { plan: p, .. } => {
@@ -917,6 +926,17 @@ impl AdvancedAudioPlan {
                         }
                     }
                 }
+                // GUI-012: constant-power balance on the clip's mixed output,
+                // after volume, authored effects and fades — every source
+                // kind (including Legacy plans) pans uniformly.
+                if let Some(pan) = &entry.clip.pan {
+                    if channels < 2 {
+                        return Err(unsupported("audio pan requires a stereo output bus"));
+                    }
+                    let (left, right) = pan_gains(pan)?;
+                    converted[0] *= left;
+                    converted[1] *= right;
+                }
                 let index =
                     usize::try_from(sample - output.start).map_err(|_| AudioError::Overflow)?;
                 for (channel, value) in converted[..channels].iter().enumerate() {
@@ -954,6 +974,18 @@ impl AdvancedAudioPlan {
         };
         Ok((bus, meters))
     }
+}
+/// GUI-012: constant-power stereo balance for `kronello.audio.pan` in
+/// [-1, 1]; center is -3 dB per channel, hard pan silences the other side.
+/// `validate_pan` (model + compile) already confined the source to a
+/// Constant scalar, so anything else is a contract violation.
+fn pan_gains(property: &Property) -> Result<(f32, f32), AudioError> {
+    let PropertySource::Constant(Value::Scalar(value)) = property.source() else {
+        return Err(unsupported("audio pan requires a Constant scalar"));
+    };
+    let pan = value.get().clamp(-1.0, 1.0) as f32;
+    let angle = (pan + 1.0) * std::f32::consts::FRAC_PI_4;
+    Ok((angle.cos(), angle.sin()))
 }
 /// NLE-006: a piecewise hold segment has zero source-time advance; resampling
 /// emits silence there rather than reading the pinned source frame as audio.

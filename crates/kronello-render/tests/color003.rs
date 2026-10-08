@@ -116,6 +116,7 @@ fn project(
         audio_retime: Default::default(),
         reverse_sampling: None,
         volume: None,
+        pan: None,
         links: vec![],
         enabled: true,
         effects,
