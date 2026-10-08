@@ -125,6 +125,9 @@ pub(crate) fn apply_effects(
             ResolvedEffect::ChromaKey { .. }
             | ResolvedEffect::LumaKey { .. }
             | ResolvedEffect::Vignette { .. } => input,
+            // TRACK-002 (ADR-0122): the inverse warp resamples within the
+            // node's own coverage; the corrected frame keeps the clip bounds.
+            ResolvedEffect::Stabilize { .. } => input,
             ResolvedEffect::Glow { radius, .. } | ResolvedEffect::Sharpen { radius, .. } => {
                 input.expand(3.0 * radius)?
             }

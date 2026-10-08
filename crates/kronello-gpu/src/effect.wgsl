@@ -294,6 +294,37 @@ fn main(@builtin(global_invocation_id) id:vec3<u32>) {
                 result=bilinear(e-vec2<f32>(0.5));
             }
         }
+    } else if params.config.x==13u {
+        // TRACK-002 (ADR-0122) stabilize inverse warp. weights[0..6] is the
+        // row-major 2x3 `frame` map (output texel center -> corrected source
+        // extent position); weights[6..12] is the 2x3 `unmap` map (resolved
+        // source position -> input raster position); weights[12..13] is the
+        // source extent. config.y selects the border policy (0 fill, 1
+        // replicate, 2 reflect); config.z selects sampling (0 nearest,
+        // 1 bilinear); offset is the premultiplied working-space fill.
+        let f=vec2<f32>(p)+0.5;
+        var s=vec2<f32>(
+            weights[0]*f.x+weights[1]*f.y+weights[2],
+            weights[3]*f.x+weights[4]*f.y+weights[5]);
+        let sz=vec2<f32>(weights[12],weights[13]);
+        let inside=all(s>=vec2<f32>(0.0)) && all(s<=sz);
+        if params.config.y==0u && !inside {
+            result=params.offset;
+        } else {
+            if params.config.y==1u { s=clamp(s,vec2<f32>(0.0),sz); }
+            else if params.config.y==2u {
+                let m=s-2.0*sz*floor(s/(2.0*sz));
+                s=select(m,2.0*sz-m,m>sz);
+            }
+            let r=vec2<f32>(
+                weights[6]*s.x+weights[7]*s.y+weights[8],
+                weights[9]*s.x+weights[10]*s.y+weights[11]);
+            if params.config.z==0u {
+                result=load(vec2<i32>(floor(r)));
+            } else {
+                result=bilinear(r-vec2<f32>(0.5));
+            }
+        }
     } else {
         let s=textureLoad(original,p,0);
         var alpha=0.0;

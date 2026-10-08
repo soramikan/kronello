@@ -2,7 +2,7 @@
 use crate::*;
 use kronello_model::{Asset, ColorSpace, StreamMetadata};
 use kronello_render::{
-    BackendFrame, RenderBackend, RenderCache, RenderDag, RenderError, VideoImage,
+    BackendFrame, DecodedVideoFrame, RenderBackend, RenderCache, RenderDag, RenderError, VideoImage,
 };
 use kronello_time::Time;
 use std::path::Path;
@@ -166,6 +166,7 @@ impl MediaRuntime {
             working,
             hdr,
             false,
+            None,
         )
     }
     #[allow(clippy::too_many_arguments)]
@@ -178,6 +179,7 @@ impl MediaRuntime {
         working: ColorSpace,
         hdr: Option<kronello_render::HdrSettings>,
         reverse_sampling: bool,
+        interpolation: Option<kronello_time::FrameInterpolation>,
     ) -> Result<VideoImage, MediaError> {
         let path = resolve_asset(asset, project_path)?;
         let mut decoder = self.open_video_stream(&path, stream_index)?;
@@ -190,6 +192,7 @@ impl MediaRuntime {
             working,
             hdr,
             reverse_sampling,
+            interpolation,
         )
     }
     #[allow(clippy::too_many_arguments)]
@@ -203,6 +206,7 @@ impl MediaRuntime {
         working: ColorSpace,
         hdr: Option<kronello_render::HdrSettings>,
         reverse_sampling: bool,
+        interpolation: Option<kronello_time::FrameInterpolation>,
     ) -> Result<VideoImage, MediaError> {
         resolve_asset(asset, project_path)?;
         let frame = if reverse_sampling {
@@ -268,6 +272,21 @@ impl MediaRuntime {
                 "decoded video color differs from locked color contract".into(),
             ));
         }
+        // TRACK-003 (ADR-0123): optical-flow synthesis replaces the
+        // nearest-frame sample; v1 restricts it to SDR forward sampling.
+        if interpolation.is_some() {
+            if reverse_sampling {
+                return Err(MediaError::UnsupportedFeature(
+                    "optical-flow interpolation requires forward sampling".into(),
+                ));
+            }
+            if is_hdr || hdr.is_some() {
+                return Err(MediaError::UnsupportedFeature(
+                    "optical-flow interpolation requires an SDR source".into(),
+                ));
+            }
+            return self.flow_image(decoder, &frame, time, interpolation, &policy, working);
+        }
         if hdr.is_some() {
             let rgba = ffi::video_rgba64(&self.native, &frame, policy.range == "pc", is_hdr)?;
             resolve_asset(asset, project_path)?;
@@ -321,39 +340,7 @@ impl MediaRuntime {
         }
         let rgba = ffi::video_rgba(&self.native, &frame, policy.range == "pc")?;
         resolve_asset(asset, project_path)?;
-        let pixels = rgba
-            .chunks_exact(4)
-            .map(|p| {
-                let mut rgb = [0, 1, 2].map(|i| {
-                    let v = f64::from(p[i]) / 255.0;
-                    if policy.transfer == "iec61966-2-1" {
-                        if v <= 0.04045 {
-                            v / 12.92
-                        } else {
-                            ((v + 0.055) / 1.055).powf(2.4)
-                        }
-                    } else if v < 0.081 {
-                        v / 4.5
-                    } else {
-                        ((v + 0.099) / 1.099).powf(1.0 / 0.45)
-                    }
-                });
-                if working == ColorSpace::LinearRec2020 {
-                    rgb = [
-                        0.6274039 * rgb[0] + 0.3292830 * rgb[1] + 0.0433131 * rgb[2],
-                        0.0690973 * rgb[0] + 0.9195404 * rgb[1] + 0.0113623 * rgb[2],
-                        0.0163914 * rgb[0] + 0.0880133 * rgb[1] + 0.8955953 * rgb[2],
-                    ];
-                }
-                let alpha = f64::from(p[3]) / 255.0;
-                [
-                    (rgb[0] * alpha) as f32,
-                    (rgb[1] * alpha) as f32,
-                    (rgb[2] * alpha) as f32,
-                    alpha as f32,
-                ]
-            })
-            .collect();
+        let pixels = sdr_working_pixels(&rgba, &policy, working);
         if working == ColorSpace::Srgb {
             return Err(MediaError::UnsupportedFeature(
                 "nonlinear video working space".into(),
@@ -364,6 +351,142 @@ impl MediaRuntime {
             pixels,
         })
     }
+
+    /// TRACK-003 (ADR-0123): synthesize the exact source instant between the
+    /// two neighboring presented frames by deterministic bidirectional flow
+    /// warping. `frame` is the presented frame containing `time`; when `time`
+    /// lands exactly on its pts or no successor exists, the decoded frame is
+    /// already the exact answer and no flow is estimated.
+    fn flow_image(
+        &self,
+        decoder: &mut VideoDecoder<'_>,
+        frame: &DecodedVideoFrame,
+        time: Time,
+        interpolation: Option<kronello_time::FrameInterpolation>,
+        policy: &VideoColorPolicy,
+        working: ColorSpace,
+    ) -> Result<VideoImage, MediaError> {
+        let Some(kronello_time::FrameInterpolation::OpticalFlow(config)) = interpolation else {
+            return Err(MediaError::InvalidInput(
+                "unsupported frame interpolation mode".into(),
+            ));
+        };
+        config.validate()?;
+        let full_range = policy.range == "pc";
+        let to_pixels = |f: &DecodedVideoFrame| -> Result<Vec<[f32; 4]>, MediaError> {
+            let rgba = ffi::video_rgba(&self.native, f, full_range)?;
+            Ok(sdr_working_pixels(&rgba, policy, working))
+        };
+        if time == frame.pts {
+            return Ok(VideoImage {
+                size: [frame.width, frame.height],
+                pixels: to_pixels(frame)?,
+            });
+        }
+        let next = match decoder.decode_at(frame.end) {
+            Ok(next) => next,
+            // The tail presented frame has no successor to blend with.
+            Err(MediaError::FrameNotFound(_)) => {
+                return Ok(VideoImage {
+                    size: [frame.width, frame.height],
+                    pixels: to_pixels(frame)?,
+                });
+            }
+            Err(e) => return Err(e),
+        };
+        if next.width != frame.width || next.height != frame.height || next.pts != frame.end {
+            return Err(MediaError::Decode(
+                "flow neighbor presentation mismatch".into(),
+            ));
+        }
+        let span = frame.end.checked_sub(frame.pts)?;
+        let offset = time.checked_sub(frame.pts)?;
+        let fraction_r = offset.checked_div(span)?;
+        let fraction = fraction_r.numerator() as f64 / fraction_r.denominator() as f64;
+        // Flow is estimated on fixed-point luma of the packed RGBA8 output;
+        // colors are warped afterwards in working space.
+        let rgba_lo = ffi::video_rgba(&self.native, frame, full_range)?;
+        let rgba_hi = ffi::video_rgba(&self.native, &next, full_range)?;
+        let (width, height) = (frame.width, frame.height);
+        let luma_lo = luma_of_rgba8(&rgba_lo);
+        let luma_hi = luma_of_rgba8(&rgba_hi);
+        let mut fwd = kronello_tracking::estimate_flow(&luma_lo, &luma_hi, width, height, &config)?;
+        let mut bwd = kronello_tracking::estimate_flow(&luma_hi, &luma_lo, width, height, &config)?;
+        kronello_tracking::consistency_combine(&mut fwd, &bwd);
+        kronello_tracking::consistency_combine(&mut bwd, &fwd);
+        let lo = sdr_working_pixels(&rgba_lo, policy, working);
+        let hi = sdr_working_pixels(&rgba_hi, policy, working);
+        let pixels = match kronello_tracking::confidence_gate(&fwd, &bwd, &config) {
+            Ok(_) => kronello_tracking::interpolate_frames(
+                &lo, &hi, width, height, &fwd, &bwd, fraction,
+            )?,
+            // Only the authored fallback policy may downgrade to a crossfade;
+            // otherwise the confidence failure stays a typed error.
+            Err(e) => match config.flow_fallback {
+                Some(kronello_time::FlowFallbackPolicy::Blend) => {
+                    kronello_tracking::blend_frames(&lo, &hi, fraction)?
+                }
+                None => return Err(e.into()),
+            },
+        };
+        Ok(VideoImage {
+            size: [width, height],
+            pixels,
+        })
+    }
+}
+
+/// SDR packed RGBA8 to premultiplied working-space pixels. The transfer
+/// decode and optional Rec.709 -> Rec.2020 matrix match the scalar video path
+/// exactly.
+fn sdr_working_pixels(
+    rgba: &[u8],
+    policy: &VideoColorPolicy,
+    working: ColorSpace,
+) -> Vec<[f32; 4]> {
+    rgba.chunks_exact(4)
+        .map(|p| {
+            let mut rgb = [0, 1, 2].map(|i| {
+                let v = f64::from(p[i]) / 255.0;
+                if policy.transfer == "iec61966-2-1" {
+                    if v <= 0.04045 {
+                        v / 12.92
+                    } else {
+                        ((v + 0.055) / 1.055).powf(2.4)
+                    }
+                } else if v < 0.081 {
+                    v / 4.5
+                } else {
+                    ((v + 0.099) / 1.099).powf(1.0 / 0.45)
+                }
+            });
+            if working == ColorSpace::LinearRec2020 {
+                rgb = [
+                    0.6274039 * rgb[0] + 0.3292830 * rgb[1] + 0.0433131 * rgb[2],
+                    0.0690973 * rgb[0] + 0.9195404 * rgb[1] + 0.0113623 * rgb[2],
+                    0.0163914 * rgb[0] + 0.0880133 * rgb[1] + 0.8955953 * rgb[2],
+                ];
+            }
+            let alpha = f64::from(p[3]) / 255.0;
+            [
+                (rgb[0] * alpha) as f32,
+                (rgb[1] * alpha) as f32,
+                (rgb[2] * alpha) as f32,
+                alpha as f32,
+            ]
+        })
+        .collect()
+}
+
+/// Fixed-point BT.601 luma of packed RGBA8 input; the deterministic flow
+/// estimator consumes these integer samples.
+fn luma_of_rgba8(rgba: &[u8]) -> Vec<u8> {
+    rgba.chunks_exact(4)
+        .map(|p| {
+            ((77u32 * u32::from(p[0]) + 150u32 * u32::from(p[1]) + 25u32 * u32::from(p[2])) >> 8)
+                as u8
+        })
+        .collect()
 }
 
 /// The source project path supplies only a stable locator base. Project state
@@ -438,25 +561,33 @@ impl RenderBackend for VideoRenderBackend<'_> {
         } else {
             None
         };
-        let resolved = dag.resolve_video(|asset, stream, time, working, reverse_sampling| {
-            if asset.kind == kronello_model::AssetKind::Image {
-                return crate::decode_image_asset(asset, self.project_path, stream, working)
-                    .map_err(render_error);
-            }
-            runtime
-                .as_ref()
-                .expect("video runtime")
-                .decode_video_image_with_sampling(
-                    asset,
-                    self.project_path,
-                    stream,
-                    time,
-                    working,
-                    dag.hdr(),
-                    reverse_sampling,
-                )
-                .map_err(render_error)
-        })?;
+        let resolved = dag.resolve_video(
+            |asset, stream, time, working, reverse_sampling, interpolation| {
+                if asset.kind == kronello_model::AssetKind::Image {
+                    if interpolation.is_some() {
+                        return Err(RenderError::UnsupportedFeature(
+                            "frame interpolation requires a video asset".into(),
+                        ));
+                    }
+                    return crate::decode_image_asset(asset, self.project_path, stream, working)
+                        .map_err(render_error);
+                }
+                runtime
+                    .as_ref()
+                    .expect("video runtime")
+                    .decode_video_image_with_sampling(
+                        asset,
+                        self.project_path,
+                        stream,
+                        time,
+                        working,
+                        dag.hdr(),
+                        reverse_sampling,
+                        interpolation,
+                    )
+                    .map_err(render_error)
+            },
+        )?;
         self.backend.execute_with_cache(&resolved, cache)
     }
 }
@@ -550,70 +681,83 @@ impl RenderBackend for SequentialVideoRenderBackend<'_> {
         cache: &mut RenderCache,
     ) -> Result<BackendFrame, RenderError> {
         let _scope = self.begin_observation_scope()?;
-        let resolved = dag.resolve_video(|asset, stream, time, working, reverse_sampling| {
-            if asset.kind == kronello_model::AssetKind::Image {
-                return crate::decode_image_asset(asset, self.base.project_path, stream, working)
+        let resolved = dag.resolve_video(
+            |asset, stream, time, working, reverse_sampling, interpolation| {
+                if asset.kind == kronello_model::AssetKind::Image {
+                    if interpolation.is_some() {
+                        return Err(RenderError::UnsupportedFeature(
+                            "frame interpolation requires a video asset".into(),
+                        ));
+                    }
+                    return crate::decode_image_asset(
+                        asset,
+                        self.base.project_path,
+                        stream,
+                        working,
+                    )
                     .map_err(render_error);
-            }
-            let runtime = self.runtime.map_err(|error| RenderError::Backend {
-                code: error.code(),
-                message: error.to_string(),
-            })?;
-            // Revalidate the local content on every access, including interval hits.
-            let path = resolve_asset(asset, self.base.project_path).map_err(render_error)?;
-            let key = format!(
-                "{}:{stream}:{}",
-                path.display(),
-                serde_json::to_string(asset).map_err(|e| RenderError::Backend {
-                    code: "INVALID_INPUT",
-                    message: e.to_string()
-                })?
-            );
-            let mut pool = self.pool.borrow_mut();
-            let mut stats = self.pool_stats.borrow_mut();
-            let mut entry = if let Some(index) = pool.iter().position(|(k, _)| *k == key) {
-                stats.hits += 1;
-                pool.remove(index)
-            } else {
-                stats.misses += 1;
-                if pool.len() >= 2 {
+                }
+                let runtime = self.runtime.map_err(|error| RenderError::Backend {
+                    code: error.code(),
+                    message: error.to_string(),
+                })?;
+                // Revalidate the local content on every access, including interval hits.
+                let path = resolve_asset(asset, self.base.project_path).map_err(render_error)?;
+                let key = format!(
+                    "{}:{stream}:{}",
+                    path.display(),
+                    serde_json::to_string(asset).map_err(|e| RenderError::Backend {
+                        code: "INVALID_INPUT",
+                        message: e.to_string()
+                    })?
+                );
+                let mut pool = self.pool.borrow_mut();
+                let mut stats = self.pool_stats.borrow_mut();
+                let mut entry = if let Some(index) = pool.iter().position(|(k, _)| *k == key) {
+                    stats.hits += 1;
+                    pool.remove(index)
+                } else {
+                    stats.misses += 1;
+                    if pool.len() >= 2 {
+                        pool.remove(0);
+                        stats.evictions += 1;
+                    }
+                    (
+                        key,
+                        runtime
+                            .open_video_stream(&path, stream)
+                            .map_err(render_error)?,
+                    )
+                };
+                let result = runtime.decode_video_image_from_decoder(
+                    &mut entry.1,
+                    asset,
+                    self.base.project_path,
+                    stream,
+                    time,
+                    working,
+                    dag.hdr(),
+                    reverse_sampling,
+                    interpolation,
+                );
+                pool.push(entry);
+                while pool
+                    .iter()
+                    .map(|(_, d)| d.cached_frame_bytes())
+                    .sum::<usize>()
+                    > 128 * 1024 * 1024
+                {
                     pool.remove(0);
                     stats.evictions += 1;
                 }
-                (
-                    key,
-                    runtime
-                        .open_video_stream(&path, stream)
-                        .map_err(render_error)?,
-                )
-            };
-            let result = runtime.decode_video_image_from_decoder(
-                &mut entry.1,
-                asset,
-                self.base.project_path,
-                stream,
-                time,
-                working,
-                dag.hdr(),
-                reverse_sampling,
-            );
-            pool.push(entry);
-            while pool
-                .iter()
-                .map(|(_, d)| d.cached_frame_bytes())
-                .sum::<usize>()
-                > 128 * 1024 * 1024
-            {
-                pool.remove(0);
-                stats.evictions += 1;
-            }
-            stats.active_decoders = pool.len();
-            stats.retained_frame_bytes = pool.iter().map(|(_, d)| d.cached_frame_bytes()).sum();
-            stats.peak_retained_frame_bytes = stats
-                .peak_retained_frame_bytes
-                .max(stats.retained_frame_bytes);
-            result.map_err(render_error)
-        })?;
+                stats.active_decoders = pool.len();
+                stats.retained_frame_bytes = pool.iter().map(|(_, d)| d.cached_frame_bytes()).sum();
+                stats.peak_retained_frame_bytes = stats
+                    .peak_retained_frame_bytes
+                    .max(stats.retained_frame_bytes);
+                result.map_err(render_error)
+            },
+        )?;
         self.base.backend.execute_with_cache(&resolved, cache)
     }
 }
@@ -744,6 +888,7 @@ impl RenderBackend for ResidentVideoRenderBackend<'_> {
                     stream_index,
                     time,
                     reverse_sampling,
+                    interpolation,
                     extent,
                     crop,
                     output_to_local,
@@ -760,6 +905,12 @@ impl RenderBackend for ResidentVideoRenderBackend<'_> {
                     }
                     if *reverse_sampling {
                         return Err(RenderError::UnsupportedFeature("reverse_grid_v1 requires explicit software presentation-interval decode".into()));
+                    }
+                    if interpolation.is_some() {
+                        return Err(RenderError::UnsupportedFeature(
+                            "resident decode requires explicit software optical-flow interpolation"
+                                .into(),
+                        ));
                     }
                     let metadata = asset
                         .streams

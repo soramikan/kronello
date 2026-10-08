@@ -71,6 +71,29 @@ pub const CORNER_PIN_ID: &str = "kronello.corner_pin";
 /// FX-005/FX-006 supported version is EFFECT_VERSION (1).
 pub const STANDARD_EFFECT_VERSION: u32 = EFFECT_VERSION;
 
+/// TRACK-002 (ADR-0122): tracking-driven stabilization.
+pub const STABILIZE_ID: &str = "kronello.stabilize";
+pub const STABILIZE_VERSION: u32 = 1;
+
+/// TRACK-002: how the stabilized output covers regions the inverse warp maps
+/// outside the source frame. `Fill` paints `fill_color`; `replicate` clamps
+/// to edge texels; `reflect` mirrors the frame at its boundary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum StabilizeBorder {
+    Fill,
+    Replicate,
+    Reflect,
+}
+
+/// TRACK-002: source-frame resampling for the stabilized inverse warp.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum StabilizeSampling {
+    Nearest,
+    Bilinear,
+}
+
 /// Unknown ids, parameters, fields and variants are retained verbatim.
 #[derive(Debug, Clone, PartialEq, Serialize, schemars::JsonSchema)]
 #[serde(untagged)]
@@ -256,6 +279,23 @@ pub enum EffectParameters {
         /// parameter ids, AU native parameter values; ≤1024 rows.
         parameters: PropertyId,
     },
+    /// TRACK-002 (ADR-0122): invert tracked camera motion. `tracking`
+    /// references a `TrackingDataAsset`; the smoothed trajectory uses a
+    /// symmetric window of `2*smoothing_radius+1` tracked samples;
+    /// `max_displacement` (design px), `max_rotation` (degrees) and
+    /// `max_crop` (unit interval of the source frame area) bound the applied
+    /// correction; `border` selects the uncovered-region policy with
+    /// `fill_color` for `fill`; `sampling` picks the resampler.
+    Stabilize {
+        tracking: PropertyId,
+        smoothing_radius: PropertyId,
+        max_displacement: PropertyId,
+        max_rotation: PropertyId,
+        max_crop: PropertyId,
+        border: PropertyId,
+        fill_color: PropertyId,
+        sampling: PropertyId,
+    },
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum ResolvedEffect {
@@ -342,6 +382,23 @@ pub enum ResolvedEffect {
         lut: AssetId,
         intensity: f64,
     },
+    /// TRACK-002 (ADR-0122) resolved effect. `tracking` is the authored
+    /// `TrackingDataAsset` id; `inverse` is the output-frame→source-frame
+    /// inverse correction (2x3 row-major affine, source pixel space) resolved
+    /// per frame by the scene pass. `None` until that pass binds the tracking
+    /// data to the resolved source time.
+    Stabilize {
+        tracking: AssetId,
+        smoothing_radius: u32,
+        max_displacement: f64,
+        max_rotation: f64,
+        max_crop: f64,
+        border: StabilizeBorder,
+        fill_color: Color,
+        sampling: StabilizeSampling,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        inverse: Option<[[f64; 3]; 2]>,
+    },
 }
 /// AUDIO-007/008: one validated parametric EQ band (ADR-0117).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -417,6 +474,7 @@ impl EffectDefinition {
             EffectParameters::CornerPin { .. } => (CORNER_PIN_ID, STANDARD_EFFECT_VERSION),
             EffectParameters::ColorLut { .. } => (COLOR_LUT_ID, COLOR_LUT_VERSION),
             EffectParameters::AudioPlugin { .. } => (AUDIO_PLUGIN_ID, AUDIO_PLUGIN_VERSION),
+            EffectParameters::Stabilize { .. } => (STABILIZE_ID, STABILIZE_VERSION),
         };
         if self.effect_id != id || !(EFFECT_VERSION..=latest).contains(&self.version) {
             return Err(EffectError::UnsupportedFeature);
@@ -569,6 +627,25 @@ impl EffectDefinition {
                 (plugin_version, ValueType::String, Unit::Dimensionless),
                 (parameters, ValueType::DataTable, Unit::Dimensionless),
             ],
+            EffectParameters::Stabilize {
+                tracking,
+                smoothing_radius,
+                max_displacement,
+                max_rotation,
+                max_crop,
+                border,
+                fill_color,
+                sampling,
+            } => vec![
+                (tracking, ValueType::AssetRef, Unit::Dimensionless),
+                (smoothing_radius, ValueType::Scalar, Unit::Dimensionless),
+                (max_displacement, ValueType::Scalar, Unit::DesignPx),
+                (max_rotation, ValueType::Angle, Unit::Degrees),
+                (max_crop, ValueType::Scalar, Unit::Dimensionless),
+                (border, ValueType::Enum, Unit::Dimensionless),
+                (fill_color, ValueType::Color, Unit::Dimensionless),
+                (sampling, ValueType::Enum, Unit::Dimensionless),
+            ],
         }
     }
     pub fn validate(
@@ -624,6 +701,12 @@ impl EffectDefinition {
         ) {
             return self.resolve_standard(values);
         }
+        // TRACK-002 (ADR-0122): stabilize carries the authored tracking
+        // reference and evaluated parameters; the per-frame inverse transform
+        // is bound later by the scene pass.
+        if matches!(self.parameters, EffectParameters::Stabilize { .. }) {
+            return self.resolve_stabilize(values);
+        }
         // AUDIO-007/008: filters and dynamics are executed only by the audio
         // evaluator. The generic resolve still validates parameters so that
         // failures surface as typed errors before the domain rejection.
@@ -660,7 +743,8 @@ impl EffectDefinition {
             | EffectParameters::Sharpen { .. }
             | EffectParameters::Vignette { .. }
             | EffectParameters::CornerPin { .. }
-            | EffectParameters::ColorLut { .. } => unreachable!("handled above"),
+            | EffectParameters::ColorLut { .. }
+            | EffectParameters::Stabilize { .. } => unreachable!("handled above"),
         };
         let sigma = scalar(sigma_id)?;
         if !(0.0..=1_000_000.0).contains(&sigma) {
@@ -835,6 +919,87 @@ impl EffectDefinition {
             }),
             _ => unreachable!("standard resolution is only invoked for FX-005/006 variants"),
         }
+    }
+    /// TRACK-002 (ADR-0122) parameter validation. Enum strings parse into the
+    /// versioned policy enums; numeric parameters share the effect budgets;
+    /// `smoothing_radius` accepts integral scalars only. The inverse warp is
+    /// scene-resolved, so `inverse` starts unset.
+    fn resolve_stabilize(
+        &self,
+        values: &BTreeMap<PropertyId, Value>,
+    ) -> Result<ResolvedEffect, EffectError> {
+        let scalar = |id| match values.get(&id) {
+            Some(Value::Scalar(v)) => Ok(v.get()),
+            _ => Err(EffectError::InvalidParameter(id)),
+        };
+        let EffectParameters::Stabilize {
+            tracking,
+            smoothing_radius,
+            max_displacement,
+            max_rotation,
+            max_crop,
+            border,
+            fill_color,
+            sampling,
+        } = self.parameters
+        else {
+            unreachable!("stabilize resolution is only invoked for the stabilize variant")
+        };
+        let tracking = match values.get(&tracking) {
+            Some(Value::AssetRef(id)) => *id,
+            _ => return Err(EffectError::InvalidParameter(tracking)),
+        };
+        let radius = scalar(smoothing_radius)?;
+        if !(radius.fract() == 0.0 && (0.0..=4096.0).contains(&radius)) {
+            return Err(EffectError::InvalidParameter(smoothing_radius));
+        }
+        let displacement = scalar(max_displacement)?;
+        if !(0.0..=1_000_000.0).contains(&displacement) {
+            return Err(EffectError::InvalidParameter(max_displacement));
+        }
+        let rotation = match values.get(&max_rotation) {
+            Some(Value::Angle(v)) => v.get(),
+            _ => return Err(EffectError::InvalidParameter(max_rotation)),
+        };
+        if !(0.0..=1_000_000.0).contains(&rotation) {
+            return Err(EffectError::InvalidParameter(max_rotation));
+        }
+        let crop = scalar(max_crop)?;
+        if !(0.0..=1.0).contains(&crop) {
+            return Err(EffectError::InvalidParameter(max_crop));
+        }
+        let border = match values.get(&border) {
+            Some(Value::Enum(v)) => match v.as_str() {
+                "fill" => StabilizeBorder::Fill,
+                "replicate" => StabilizeBorder::Replicate,
+                "reflect" => StabilizeBorder::Reflect,
+                _ => return Err(EffectError::InvalidParameter(border)),
+            },
+            _ => return Err(EffectError::InvalidParameter(border)),
+        };
+        let fill_color = match values.get(&fill_color) {
+            Some(Value::Color(v)) => *v,
+            _ => return Err(EffectError::InvalidParameter(fill_color)),
+        };
+        let sampling = match values.get(&sampling) {
+            Some(Value::Enum(v)) => match v.as_str() {
+                "nearest" => StabilizeSampling::Nearest,
+                "bilinear" => StabilizeSampling::Bilinear,
+                _ => return Err(EffectError::InvalidParameter(sampling)),
+            },
+            _ => return Err(EffectError::InvalidParameter(sampling)),
+        };
+        Ok(ResolvedEffect::Stabilize {
+            tracking,
+            smoothing_radius: radius as u32,
+            max_displacement: displacement,
+            max_rotation: rotation,
+            max_crop: crop,
+            border,
+            fill_color,
+            sampling,
+            inverse: None,
+        })
     }
     /// COLOR-002 parameter validation happens here because ranges are
     /// cross-parameter (levels) or structural (curve table). Magnitude bounds
@@ -1565,6 +1730,55 @@ pub fn effect_descriptors() -> Vec<PropertyDescriptor> {
             0xf0000000_0010_4900_8000_000000000006,
             "plugin_parameters",
             plugin_params_default(),
+            Unit::Dimensionless,
+        ),
+        // TRACK-002 stabilize descriptors (ADR-0122).
+        (
+            0xf0000000_0010_4700_8000_000000000001,
+            "tracking",
+            Value::AssetRef(AssetId::from_uuid(uuid::Uuid::nil())),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4700_8000_000000000002,
+            "smoothing_radius",
+            Value::Scalar(f(16.0)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4700_8000_000000000003,
+            "max_displacement",
+            Value::Scalar(f(64.0)),
+            Unit::DesignPx,
+        ),
+        (
+            0xf0000000_0010_4700_8000_000000000004,
+            "max_rotation",
+            Value::Angle(f(5.0)),
+            Unit::Degrees,
+        ),
+        (
+            0xf0000000_0010_4700_8000_000000000005,
+            "max_crop",
+            Value::Scalar(f(0.25)),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4700_8000_000000000006,
+            "border",
+            Value::Enum("replicate".into()),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4700_8000_000000000007,
+            "fill_color",
+            Value::Color(Color::from_srgb8([0; 3], Some(0))),
+            Unit::Dimensionless,
+        ),
+        (
+            0xf0000000_0010_4700_8000_000000000008,
+            "sampling",
+            Value::Enum("bilinear".into()),
             Unit::Dimensionless,
         ),
     ]

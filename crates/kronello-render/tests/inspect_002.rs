@@ -358,6 +358,7 @@ fn resident_graph_input_and_final_boundary_match_counters_without_cpu_image_uplo
         stream_index: 0,
         time: Time::ZERO,
         reverse_sampling: false,
+        interpolation: None,
         extent: scene.design_extent,
         crop: None,
     };

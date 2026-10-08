@@ -8,7 +8,13 @@ Sequence compiler は Composition の独立 instance に加え、動画 Asset �
 
 `VideoRenderBackend` は固定 DAG に入った Asset hash / locator だけを解決する。元 Project を再読込しない。software seek / decode、明示 SDR RGBA8 color conversion / inverse transfer / premultiply、CPU nearest sampling、選択 GPU への明示 RGBA16F upload を通す。未知 format / HDR / 色 tag、asset 欠落 / hash mismatch は typed error。タグ欠落時の明示 default（YUV: BT.709 limited、RGB: sRGB full）は sequence.query に assumptions として見える。native plane decode API の HDR 保持をこの SDR renderer の対応と同一視しない。
 
-clip effects は FX-001 / FX-002 の版付き ordered DAG、affine 契約、halo / backward ROI、raster identity を共有する。`FrameMetadata.input_path` は active video の CPU decode / color / sampling と selected backend の経路を表し、GPU の低層 TransferStats は upload bytes / operations を数える。NLE-002 時点では GPU-resident decode、frame interpolation、tile 間の decode cache は追加していなかった。frame interpolation は現在も未対応。CPU / GPU 比較の実行範囲は [NLE-002 の検証](../testing/nle-002.md)、時間・色・Generator と transition の意味版は [ADR-0062](../adr/0062-video-generator-and-timeline-edits.md) を参照する。
+clip effects は FX-001 / FX-002 の版付き ordered DAG、affine 契約、halo / backward ROI、raster identity を共有する。`FrameMetadata.input_path` は active video の CPU decode / color / sampling と selected backend の経路を表し、GPU の低層 TransferStats は upload bytes / operations を数える。NLE-002 時点では GPU-resident decode、frame interpolation、tile 間の decode cache は追加していなかった。frame interpolation は TRACK-003 で順方向 SDR のみ実装した（下記参照）。CPU / GPU 比較の実行範囲は [NLE-002 の検証](../testing/nle-002.md)、時間・色・Generator と transition の意味版は [ADR-0062](../adr/0062-video-generator-and-timeline-edits.md) を参照する。
+
+### TRACK-002 のスタビライズと TRACK-003 の flow 補間
+
+`kronello.stabilize` v1 は `TrackingDataAsset` を参照する版付き clip/node エフェクトで、Scene IR 構築時に解決された source 時刻に対し `kronello-tracking` が smoothed/raw 相似変換から逆補正 `C^-1` を求め、`PixelEffect::Stabilize` の `frame` 行列へ束縛する。tracking source lock（asset id・stream index・content hash）の不一致は `TRACKING_DATA_STALE`、行欠落は `TRACKING_DATA_MISSING`、点喪失は `TRACKING_INSUFFICIENT`、crop 超過は `STABILIZE_CROP_EXCEEDED` の型付きエラー。境界は `fill`（premultiplied fill 色）/ `replicate` / `reflect`、サンプリングは `nearest` / `bilinear` で、CPU oracle と WGSL（`config.x == 13`）が同一の画素中心座標・OOB tap 規約を共有する。
+
+TRACK-003 の `"optical_flow"` は `SceneContent::Video.interpolation` → `DagNode::VideoDraw.interpolation` → `decode_video_image_with_sampling` へ運ばれ、mapped source 時刻が presentation 中間なら前後 frame を decode して `kronello-tracking` の決定的 block matching（`FlowField` + consistency/confidence）で双方向 warp 合成する。低信頼は `FLOW_CONFIDENCE_LOW`、crossfade は authored `flow_fallback: blend` のみで、HDR・逆方向・画像 asset・stabilize との組合せは型付き拒否。resident decode 経路は flow 非対応で明示拒否する。補間 mode は raster cache key と `semantic_versions.frame_interpolation` に含まれる。検証は [TRACK-002](../testing/track-002.md) / [TRACK-003](../testing/track-003.md) を参照。
 
 ## レンダー要求
 
@@ -277,7 +283,7 @@ RGBA16F の各 component は有限、alpha は `[0,1]`、RGB の絶対値は 65,
 `FrameMetadata` の必須項目は次のとおり。
 
 - `schema_version` / `snapshot_schema_version` / `project_schema_version`、`snapshot_content_hash`、元の `revision`（10進文字列）、選択 `target`。互換フィールド `composition` は Sequence の場合、lower した実行用 root の ID。
-- `semantic_versions`（document / visibility / expression / interpolation / time_map / layout / advanced_text / bounds / vector / path_operations / document_matte / color / coverage / stroke_geometry / gradient_interpolation、effects / generatorsのversion map、video_input / temporal / composition_media / hdr）、`font_locks`（family / PostScript 名 / hash / face index）。
+- `semantic_versions`（document / visibility / expression / interpolation / time_map / layout / advanced_text / bounds / vector / path_operations / document_matte / color / coverage / stroke_geometry / gradient_interpolation、effects / generatorsのversion map、video_input / temporal / composition_media / hdr / frame_interpolation）、`font_locks`（family / PostScript 名 / hash / face index）。
 - 正規化有理数 `time`（num / den は10進文字列）、連番時の `frame_index`（10進文字列）と `sequence_number`。任意時刻の still では後二項目は null。
 - `design_extent`、`region`（origin / extent / pixels）、2×3 の `design_to_pixel`、`working_space`、`flatten_tolerance_px`。
 - `numeric` / `display` の各 `ImageFormat`（color_space、transfer_function、alpha、association_space、pixel_format、channel_order、row_order、byte_order、clipping）。

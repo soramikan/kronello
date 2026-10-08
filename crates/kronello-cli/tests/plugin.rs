@@ -311,14 +311,9 @@ fn plugin_probe_and_process_run_end_to_end() {
     // The published movie decodes to the fixture's 0.5 gain output.
     let runtime = MediaRuntime::load().unwrap();
     let decoded = runtime.decode_audio(&destination, 0).unwrap();
-    assert_eq!(decoded.buffer.frames().len(), fixture.frames.len());
-    for (index, (got, input)) in decoded
-        .buffer
-        .frames()
-        .iter()
-        .zip(&fixture.frames)
-        .enumerate()
-    {
+    assert_eq!(decoded.buffer.frame_count(), fixture.frames.len());
+    for (index, input) in fixture.frames.iter().enumerate() {
+        let got = decoded.buffer.frame(index).expect("decoded frame in range");
         for ch in 0..2 {
             // PCM24 quantization + f32→pcm roundtrip slack.
             assert!(

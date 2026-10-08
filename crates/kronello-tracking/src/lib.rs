@@ -10,6 +10,17 @@ use kronello_model::{
 use kronello_time::{Rational, Time, TimeRange};
 use thiserror::Error;
 
+pub mod flow;
+pub mod interpolate;
+pub mod stabilize;
+
+pub use flow::{
+    FLOW_FIELD_VERSION, FlowError, FlowField, confidence_gate, consistency_combine, estimate_flow,
+    low_confidence_ratio,
+};
+pub use interpolate::{blend_frames, interpolate_frames};
+pub use stabilize::{StabilizeError, StabilizeParams, correction_inverse};
+
 #[derive(Debug, Clone, PartialEq, Error)]
 pub enum TrackingError {
     #[error("invalid tracking request: {0}")]

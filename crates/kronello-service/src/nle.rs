@@ -912,6 +912,31 @@ fn split_owned_objects(clip: &mut Clip) -> Result<(), ServiceError> {
                     remap(id)?;
                 }
             }
+            // TRACK-002 (ADR-0122): the tracking reference stays pointed at
+            // the same TrackingDataAsset on the right side of the split.
+            EffectParameters::Stabilize {
+                tracking,
+                smoothing_radius,
+                max_displacement,
+                max_rotation,
+                max_crop,
+                border,
+                fill_color,
+                sampling,
+            } => {
+                for id in [
+                    tracking,
+                    smoothing_radius,
+                    max_displacement,
+                    max_rotation,
+                    max_crop,
+                    border,
+                    fill_color,
+                    sampling,
+                ] {
+                    remap(id)?;
+                }
+            }
         }
     }
     // FX-004: mask rows are owned by the placement like properties — the

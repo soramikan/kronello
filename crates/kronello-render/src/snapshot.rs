@@ -21,6 +21,9 @@ fn legacy_visibility_version() -> u32 {
     1
 }
 pub const COMPOSITION_MEDIA_VERSION: u32 = 1;
+/// TRACK-003 (ADR-0123): authored optical-flow intermediate-frame synthesis.
+/// Legacy snapshots leave the pin absent and only decode presented frames.
+pub const FRAME_INTERPOLATION_VERSION: u32 = 1;
 pub const TEMPORAL_VERSION: u32 = 1;
 pub const VIDEO_INPUT_VERSION: &str = "nle002-sdr-rgba8-nearest-v1";
 fn initial_video_version() -> String {
@@ -70,6 +73,10 @@ pub struct SemanticVersions {
     pub video_input: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub temporal: Option<u32>,
+    /// TRACK-003 (ADR-0123): pinned whenever the document may author
+    /// `TimeMap::interpolation`; unpinned snapshots reject synthesis.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frame_interpolation: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub composition_media: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -125,10 +132,13 @@ impl SemanticVersions {
                 (VIGNETTE_ID.into(), STANDARD_EFFECT_VERSION),
                 (CORNER_PIN_ID.into(), STANDARD_EFFECT_VERSION),
                 (COLOR_LUT_ID.into(), COLOR_LUT_VERSION),
+                // TRACK-002 versioned id (ADR-0122).
+                (STABILIZE_ID.into(), STABILIZE_VERSION),
             ]),
             generators: generator_versions(),
             video_input: initial_video_version(),
             temporal: Some(TEMPORAL_VERSION),
+            frame_interpolation: Some(FRAME_INTERPOLATION_VERSION),
             composition_media: Some(COMPOSITION_MEDIA_VERSION),
             hdr: Some(crate::HDR_VERSION),
             clip_mask: Some(kronello_model::MASK_VERSION),
@@ -563,6 +573,30 @@ impl RenderSnapshot {
                 .effects
                 .remove(kronello_model::COLOR_LUT_ID);
         }
+        // TRACK-002 (ADR-0122): same pinning contract as COLOR-003 — an
+        // absent `kronello.stabilize` pin rejects execution during scene
+        // construction without invalidating unrelated snapshots.
+        if !self
+            .semantic_versions
+            .effects
+            .contains_key(kronello_model::STABILIZE_ID)
+        {
+            supported_versions
+                .effects
+                .remove(kronello_model::STABILIZE_ID);
+        }
+        // TRACK-003 (ADR-0123): frame interpolation is authored on the time
+        // map. Snapshots pinned before the feature carry no version; they
+        // remain valid only while no authored clip or Media node requests
+        // intermediate frames.
+        let has_frame_interpolation = self.project.sequences.iter().any(|s| {
+            matches!(s, DocumentObject::Known(s) if s.tracks.iter().flat_map(|t| &t.clips).any(|c| c.time_map.interpolation().is_some()))
+        }) || self.project.compositions.iter().any(|c| {
+            matches!(c, DocumentObject::Known(c) if c.nodes.iter().any(|n| matches!(&n.kind, NodeKind::Media(m) if m.time_map.interpolation().is_some())))
+        });
+        if self.semantic_versions.frame_interpolation.is_none() && !has_frame_interpolation {
+            supported_versions.frame_interpolation = None;
+        }
         if self.project.semantic_version != PROJECT_SEMANTIC_VERSION
             || self.semantic_versions != supported_versions
         {
@@ -757,6 +791,9 @@ pub enum SceneContent {
         stream_index: u32,
         time: Time,
         reverse_sampling: bool,
+        /// TRACK-003 (ADR-0123): authored intermediate-frame synthesis for
+        /// this sample; `None` keeps the legacy single-frame decode.
+        interpolation: Option<kronello_time::FrameInterpolation>,
         extent: [f64; 2],
         /// AI-003 (ADR-0126): source-pixel window `[x, y, w, h]`; `extent` is
         /// the window size so layout and bounds reflect the crop.
@@ -1021,7 +1058,7 @@ pub fn build_scene_ir_with_cache(
         if authored.effects.len() > 16 {
             return Err(EffectError::StackBudget.into());
         }
-        let effects = authored
+        let mut effects = authored
             .effects
             .iter()
             .map(|e| {
@@ -1073,6 +1110,9 @@ pub fn build_scene_ir_with_cache(
         // before `values` can move into shape content.
         let node_crop = evaluated_crop(&authored.properties, &values)?;
         let mut evaluated_text = None;
+        // TRACK-002: the authored visual source (asset id + authored stream)
+        // feeding this node's video content, for tracking-data lock checks.
+        let mut video_source: Option<(AssetId, u32)> = None;
         let mut content = match n.kind {
             NodeKind::Shape { content_ref } => {
                 let shape = content(&snapshot.project.shapes, content_ref.as_uuid(), |s| {
@@ -1131,7 +1171,15 @@ pub fn build_scene_ir_with_cache(
                                 n.local_time.checked_sub(authored.active_range.start())?;
                             let source =
                                 media.source_in.checked_add(media.time_map.map(relative)?)?;
-                            media_content(snapshot, asset, media.stream_index, source, node_crop)?
+                            video_source = Some((media.asset, media.stream_index));
+                            media_content(
+                                snapshot,
+                                asset,
+                                media.stream_index,
+                                source,
+                                node_crop,
+                                media.time_map.interpolation(),
+                            )?
                         }
                     }
                     AssetKind::Data => {
@@ -1158,7 +1206,10 @@ pub fn build_scene_ir_with_cache(
                 .start_time
                 .unwrap_or(Time::ZERO)
                 .checked_add(relative)?;
-            content = media_content(snapshot, asset, stream.index, source, node_crop)?;
+            // MediaSlot substitution streams the asset start-time directly;
+            // the slot path never carries authored time-map interpolation.
+            video_source = Some((asset.id, stream.index));
+            content = media_content(snapshot, asset, stream.index, source, node_crop, None)?;
         }
         let mut post_effect_opacity = 1.0;
         let mut transitions = Vec::new();
@@ -1216,11 +1267,17 @@ pub fn build_scene_ir_with_cache(
                             "clip crop window outside source bounds".into(),
                         ));
                     }
+                    let interpolation = clip.time_map.interpolation();
+                    if interpolation.is_some() {
+                        require_frame_interpolation(snapshot)?;
+                    }
+                    video_source = Some((asset.id, *stream_index));
                     SceneContent::Video {
                         asset: decode_asset.clone(),
                         stream_index: decode_stream,
                         time: clip.local_time(time)?,
                         reverse_sampling: clip.reverse_sampling.is_some(),
+                        interpolation,
                         extent: node_crop.map(|c| [c[2], c[3]]).unwrap_or([w, h]),
                         crop: node_crop,
                     }
@@ -1385,6 +1442,10 @@ pub fn build_scene_ir_with_cache(
                 visible: relation.visible,
             });
         }
+        // TRACK-002 (ADR-0122): bind the per-frame inverse correction to
+        // resolved stabilize effects on video nodes. The tracking asset is
+        // content-locked to the authored source; failures are typed.
+        resolve_stabilize(&mut effects, &content, video_source, snapshot)?;
         BlendMode::from_properties(&authored.properties)
             .map_err(|e| RenderError::InvalidInput(e.to_string()))?;
         let blend_mode = if let Some(property) = authored
@@ -1491,17 +1552,126 @@ fn evaluated_crop(
     let origin = lookup("kronello.media.crop_origin")?.unwrap_or([0.0, 0.0]);
     Ok(Some([origin[0], origin[1], w, h]))
 }
+/// TRACK-003 (ADR-0123): the pinned `frame_interpolation` version gates any
+/// authored intermediate-frame synthesis; unpinned snapshots decode only
+/// presented frames.
+fn require_frame_interpolation(snapshot: &RenderSnapshot) -> Result<(), RenderError> {
+    if snapshot.semantic_versions.frame_interpolation != Some(FRAME_INTERPOLATION_VERSION) {
+        return Err(RenderError::UnsupportedFeature(
+            "frame interpolation requires pinned frame_interpolation semantic version 1".into(),
+        ));
+    }
+    Ok(())
+}
+/// TRACK-002 (ADR-0122): resolve `kronello.stabilize` effects to a bound
+/// per-frame inverse correction. The referenced `TrackingDataAsset` must be
+/// known, valid and content-locked to the authored source asset+stream that
+/// feeds this node's video content; every failure is a typed render error.
+fn resolve_stabilize(
+    effects: &mut [kronello_model::ResolvedEffect],
+    content: &SceneContent,
+    video_source: Option<(AssetId, u32)>,
+    snapshot: &RenderSnapshot,
+) -> Result<(), RenderError> {
+    if !effects
+        .iter()
+        .any(|e| matches!(e, kronello_model::ResolvedEffect::Stabilize { .. }))
+    {
+        return Ok(());
+    }
+    let SceneContent::Video {
+        time,
+        extent,
+        interpolation,
+        ..
+    } = content
+    else {
+        return Err(RenderError::InvalidInput(
+            "stabilize requires video clip or media node content".into(),
+        ));
+    };
+    // A synthesized frame has no stable tracked lattice: stabilization binds
+    // to authored presentation samples only.
+    if interpolation.is_some() {
+        return Err(RenderError::UnsupportedFeature(
+            "stabilize cannot combine with frame interpolation".into(),
+        ));
+    }
+    let (source_asset_id, source_stream) = video_source.ok_or_else(|| {
+        RenderError::InvalidInput("stabilize requires an authored video source".into())
+    })?;
+    let authored = content_asset(&snapshot.project, source_asset_id)?;
+    for effect in effects.iter_mut() {
+        let kronello_model::ResolvedEffect::Stabilize {
+            tracking,
+            smoothing_radius,
+            max_displacement,
+            max_rotation,
+            max_crop,
+            inverse,
+            ..
+        } = effect
+        else {
+            continue;
+        };
+        let data = snapshot
+            .project
+            .tracking_data_assets
+            .iter()
+            .find_map(|o| match o {
+                DocumentObject::Known(d) if d.id == *tracking => Some(d),
+                _ => None,
+            })
+            .ok_or_else(|| RenderError::Backend {
+                code: "TRACKING_DATA_MISSING",
+                message: "stabilize tracking data asset is absent or opaque".into(),
+            })?;
+        if data.source.asset != authored.id
+            || data.source.stream_index != source_stream
+            || data.source.content_hash != authored.content_hash
+        {
+            return Err(RenderError::Backend {
+                code: "TRACKING_DATA_STALE",
+                message: "stabilize tracking data is not locked to the clip source".into(),
+            });
+        }
+        let params = kronello_tracking::StabilizeParams {
+            smoothing_radius: *smoothing_radius,
+            max_displacement: *max_displacement,
+            max_rotation: *max_rotation,
+            max_crop: *max_crop,
+        };
+        *inverse = Some(
+            kronello_tracking::correction_inverse(data, *time, &params, *extent).map_err(|e| {
+                RenderError::Backend {
+                    code: e.code(),
+                    message: e.to_string(),
+                }
+            })?,
+        );
+    }
+    Ok(())
+}
 fn media_content(
     snapshot: &RenderSnapshot,
     asset: &Asset,
     stream_index: u32,
     source: Time,
     crop: Option<[f64; 4]>,
+    interpolation: Option<kronello_time::FrameInterpolation>,
 ) -> Result<SceneContent, RenderError> {
     if !matches!(asset.kind, AssetKind::Video | AssetKind::Image) {
         return Err(RenderError::UnsupportedFeature(
             "MediaSlot requires image/video asset".into(),
         ));
+    }
+    if interpolation.is_some() {
+        if asset.kind != AssetKind::Video {
+            return Err(RenderError::UnsupportedFeature(
+                "frame interpolation requires a video asset".into(),
+            ));
+        }
+        require_frame_interpolation(snapshot)?;
     }
     let stream = asset
         .streams
@@ -1554,6 +1724,7 @@ fn media_content(
         asset: decode_asset.clone(),
         stream_index: decode_stream,
         time,
+        interpolation,
         // The layout box is the crop window so bounds and transforms follow
         // the reframed content.
         extent: crop.map(|c| [c[2], c[3]]).unwrap_or(extent),

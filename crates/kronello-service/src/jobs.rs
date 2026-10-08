@@ -502,9 +502,7 @@ impl FixedInput {
             &self.scene,
             &self.plugin,
         ) {
-            (Some(_), Some(_), None, None, None) => {
-                record.output_profile.get("render").is_some()
-            }
+            (Some(_), Some(_), None, None, None) => record.output_profile.get("render").is_some(),
             (None, None, Some(_), None, None) => {
                 record.output_profile.get("proxy_asset_id").is_some()
             }

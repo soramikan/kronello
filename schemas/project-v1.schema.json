@@ -2020,6 +2020,52 @@
             "plugin_version",
             "parameters"
           ]
+        },
+        {
+          "description": "TRACK-002 (ADR-0122): invert tracked camera motion. `tracking`\nreferences a `TrackingDataAsset`; the smoothed trajectory uses a\nsymmetric window of `2*smoothing_radius+1` tracked samples;\n`max_displacement` (design px), `max_rotation` (degrees) and\n`max_crop` (unit interval of the source frame area) bound the applied\ncorrection; `border` selects the uncovered-region policy with\n`fill_color` for `fill`; `sampling` picks the resampler.",
+          "type": "object",
+          "properties": {
+            "border": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "fill_color": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "stabilize"
+            },
+            "max_crop": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "max_displacement": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "max_rotation": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "sampling": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "smoothing_radius": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "tracking": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "tracking",
+            "smoothing_radius",
+            "max_displacement",
+            "max_rotation",
+            "max_crop",
+            "border",
+            "fill_color",
+            "sampling"
+          ]
         }
       ]
     },
@@ -3487,6 +3533,13 @@
       "type": "number",
       "format": "double"
     },
+    "FlowFallbackPolicy": {
+      "description": "TRACK-003 (ADR-0123): the explicit failure policy authored on an\noptical-flow interpolation. There is no silent fallback; `blend` is the\nonly permitted degraded path and must be authored.",
+      "type": "string",
+      "enum": [
+        "blend"
+      ]
+    },
     "FontRef": {
       "description": "File hash plus face index fixes the actual bytes; names are verified too.\nNo family lookup or implicit system-font fallback is permitted.",
       "type": "object",
@@ -3512,6 +3565,67 @@
         "postscript_name",
         "sha256",
         "face_index"
+      ]
+    },
+    "FrameInterpolation": {
+      "description": "TRACK-003 (ADR-0123): intermediate-frame synthesis mode attached to a\npiecewise retime. Absence keeps the legacy nearest-frame sampling.",
+      "oneOf": [
+        {
+          "description": "Bidirectional flow warps the neighboring decoded frames.",
+          "type": "object",
+          "properties": {
+            "block_radius": {
+              "description": "Half-size of the matched block; the block spans `2*r+1` pixels.",
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "confidence_floor": {
+              "description": "Per-cell forward/backward consistency confidence floor in `[0, 1]`.",
+              "$ref": "#/$defs/Rational"
+            },
+            "flow_fallback": {
+              "description": "Explicit degraded-mode policy; `None` rejects on low confidence.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/FlowFallbackPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "levels": {
+              "description": "Pyramid levels including the base image.",
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "max_low_confidence": {
+              "description": "Maximum tolerated fraction of low-confidence cells in `[0, 1]`;\nexceeding it rejects with `FLOW_CONFIDENCE_LOW` (or blends, when\n`flow_fallback` is authored).",
+              "$ref": "#/$defs/Rational"
+            },
+            "mode": {
+              "type": "string",
+              "const": "optical_flow"
+            },
+            "search_radius": {
+              "description": "Half-size of the exhaustive search window at the coarsest level.",
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "block_radius",
+            "search_radius",
+            "levels",
+            "confidence_floor",
+            "max_low_confidence"
+          ]
+        }
       ]
     },
     "FrameRate": {
@@ -6420,6 +6534,17 @@
         {
           "type": "object",
           "properties": {
+            "interpolation": {
+              "description": "TRACK-003: absent keeps the legacy single-frame sample.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/FrameInterpolation"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "kind": {
               "type": "string",
               "const": "piecewise_linear"
