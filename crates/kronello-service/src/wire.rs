@@ -208,6 +208,8 @@ impl<'de> Deserialize<'de> for Request {
             "proxy.clear" => payload(&fields).map(Self::ProxyClear),
             "audio.loudness" => payload(&fields).map(Self::AudioLoudness),
             "audio.normalize" => payload(&fields).map(Self::AudioNormalize),
+            "audio.plugin_probe" => payload(&fields).map(Self::AudioPluginProbe),
+            "audio.plugin_process" => payload(&fields).map(Self::AudioPluginProcess),
             "sequence.query" => payload(&fields).map(Self::SequenceQuery),
             "sequence.create" => payload(&fields).map(Self::SequenceCreate),
             "clip.place" => payload(&fields).map(Self::ClipPlace),
@@ -299,6 +301,7 @@ impl<'de> Deserialize<'de> for ResultData {
             "loudness" => Self::Loudness(take(&mut fields, "value")?),
             "normalize" => Self::Normalize(take(&mut fields, "value")?),
             "scopes" => Self::Scopes(take(&mut fields, "value")?),
+            "plugin_probe" => Self::PluginProbe(take(&mut fields, "value")?),
             _ => return Err(D::Error::custom("unknown result kind")),
         };
         exhausted::<D::Error>(&fields)?;

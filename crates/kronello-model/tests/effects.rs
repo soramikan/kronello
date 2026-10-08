@@ -105,3 +105,197 @@ fn fx002_versions_are_explicit_and_legacy_resolution_is_unchanged() {
         Err(EffectError::UnsupportedFeature)
     ));
 }
+/// AUDIO-011 (ADR-0131): the `kronello.audio.plugin` binding validates as a
+/// document effect and always resolves to typed errors — execution belongs to
+/// the detached plugin worker, never the model/evaluator.
+fn plugin_properties(r: &SchemaRegistry) -> Vec<Property> {
+    let table = Value::DataTable(DataTable {
+        columns: BTreeMap::from([
+            ("param".to_string(), ValueType::Scalar),
+            ("value".to_string(), ValueType::Scalar),
+        ]),
+        rows: vec![BTreeMap::from([
+            (
+                "param".to_string(),
+                Value::Scalar(FiniteF64::new(0.0).unwrap()),
+            ),
+            (
+                "value".to_string(),
+                Value::Scalar(FiniteF64::new(0.5).unwrap()),
+            ),
+        ])],
+    });
+    vec![
+        prop(
+            r,
+            "kronello.effect.plugin_bundle",
+            Value::String("/plugins/Acme.vst3".into()),
+        ),
+        prop(
+            r,
+            "kronello.effect.plugin_format",
+            Value::Enum("vst3".into()),
+        ),
+        prop(
+            r,
+            "kronello.effect.plugin_component",
+            Value::String("6b726f6e656c6c6f746573746761696e".into()),
+        ),
+        prop(
+            r,
+            "kronello.effect.plugin_sha256",
+            Value::String("a".repeat(64)),
+        ),
+        prop(
+            r,
+            "kronello.effect.plugin_version",
+            Value::String("1.0.0".into()),
+        ),
+        prop(r, "kronello.effect.plugin_parameters", table),
+    ]
+}
+fn plugin_definition(properties: &[Property]) -> EffectDefinition {
+    EffectDefinition {
+        effect_id: AUDIO_PLUGIN_ID.into(),
+        version: AUDIO_PLUGIN_VERSION,
+        parameters: EffectParameters::AudioPlugin {
+            bundle: properties[0].id(),
+            format: properties[1].id(),
+            component: properties[2].id(),
+            sha256: properties[3].id(),
+            plugin_version: properties[4].id(),
+            parameters: properties[5].id(),
+        },
+    }
+}
+fn plugin_values(properties: &[Property]) -> BTreeMap<PropertyId, Value> {
+    properties
+        .iter()
+        .map(|p| {
+            let PropertySource::Constant(value) = p.source() else {
+                panic!()
+            };
+            (p.id(), value.clone())
+        })
+        .collect()
+}
+#[test]
+fn audio_plugin_binding_validates_then_resolves_to_typed_errors() {
+    let r = registry();
+    let properties = plugin_properties(&r);
+    let definition = plugin_definition(&properties);
+    definition.validate(&properties, &r).unwrap();
+    assert!(definition.validate(&properties[..5], &r).is_err());
+    assert!(matches!(
+        definition.resolve(&plugin_values(&properties)),
+        Err(EffectError::UnsupportedFeature)
+    ));
+    assert!(matches!(
+        definition.resolve_audio(&plugin_values(&properties)),
+        Err(EffectError::UnsupportedFeature)
+    ));
+    // Wire roundtrip keeps the authored binding shape.
+    let json = serde_json::to_value(&definition).unwrap();
+    assert_eq!(json["effect_id"], "kronello.audio.plugin");
+    assert_eq!(json["parameters"]["kind"], "audio_plugin");
+    let parsed: EffectDefinition = serde_json::from_value(json).unwrap();
+    assert_eq!(parsed, definition);
+    // The six binding descriptors live in the reserved 49xx range.
+    for key in [
+        "plugin_bundle",
+        "plugin_format",
+        "plugin_component",
+        "plugin_sha256",
+        "plugin_version",
+        "plugin_parameters",
+    ] {
+        let d = r
+            .lookup(&SchemaKey::new(format!("kronello.effect.{key}")).unwrap())
+            .unwrap();
+        let digits = d.id().as_uuid().as_u128();
+        assert_eq!((digits >> 64) & 0xff00, 0x4900, "{key} descriptor range");
+    }
+}
+#[test]
+fn audio_plugin_binding_rejects_malformed_values_typed() {
+    let r = registry();
+    let properties = plugin_properties(&r);
+    let definition = plugin_definition(&properties);
+    let mut values = plugin_values(&properties);
+    let set = |values: &mut BTreeMap<PropertyId, Value>, index: usize, value: Value| {
+        values.insert(properties[index].id(), value);
+    };
+    // Bad hash: not 64 lowercase hex.
+    {
+        let mut v = values.clone();
+        set(&mut v, 3, Value::String("not-hex".into()));
+        assert!(matches!(
+            definition.resolve_audio(&v),
+            Err(EffectError::InvalidParameter(id)) if id == properties[3].id()
+        ));
+    }
+    // Unknown format enum.
+    {
+        let mut v = values.clone();
+        set(&mut v, 1, Value::Enum("ladspa".into()));
+        assert!(matches!(
+            definition.resolve_audio(&v),
+            Err(EffectError::InvalidParameter(id)) if id == properties[1].id()
+        ));
+    }
+    // VST3 component ids are 32 hex chars.
+    {
+        let mut v = values.clone();
+        set(&mut v, 2, Value::String("xyz".into()));
+        assert!(matches!(
+            definition.resolve_audio(&v),
+            Err(EffectError::InvalidParameter(id)) if id == properties[2].id()
+        ));
+    }
+    // VST3 normalized parameter values live in 0..=1.
+    {
+        let mut v = values.clone();
+        set(
+            &mut v,
+            5,
+            Value::DataTable(DataTable {
+                columns: BTreeMap::from([
+                    ("param".to_string(), ValueType::Scalar),
+                    ("value".to_string(), ValueType::Scalar),
+                ]),
+                rows: vec![BTreeMap::from([
+                    (
+                        "param".to_string(),
+                        Value::Scalar(FiniteF64::new(0.0).unwrap()),
+                    ),
+                    (
+                        "value".to_string(),
+                        Value::Scalar(FiniteF64::new(1.5).unwrap()),
+                    ),
+                ])],
+            }),
+        );
+        assert!(matches!(
+            definition.resolve_audio(&v),
+            Err(EffectError::InvalidParameter(id)) if id == properties[5].id()
+        ));
+    }
+    // VST3 requires a bundle path.
+    {
+        let mut v = values.clone();
+        set(&mut v, 0, Value::String(String::new()));
+        assert!(matches!(
+            definition.resolve_audio(&v),
+            Err(EffectError::InvalidParameter(id)) if id == properties[0].id()
+        ));
+    }
+    // A wrong value type is rejected by the typed reference contract.
+    values.insert(
+        properties[0].id(),
+        Value::Scalar(FiniteF64::new(1.0).unwrap()),
+    );
+    assert!(matches!(
+        definition.resolve_audio(&values),
+        Err(EffectError::InvalidParameter(id)) if id == properties[0].id()
+    ));
+}

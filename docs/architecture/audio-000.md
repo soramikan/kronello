@@ -234,3 +234,49 @@ Bus は codec block（PCM24:4,096、ALAC: native block）ごとに絶対sample�
   後方互換）を持ち、非 stereo は `profile_version` 3 を要求する。submit・worker の
   双方が同じ `movie_snapshot` / `verify_movie_layout` を通すため、CLI・MCP の
   共有経路は同じ検証を受ける。
+
+## AUDIO-011: VST3 / AU プラグインホスティングの信頼境界
+
+契約は [ADR-0131](../adr/0131-audio-plugin-hosting-trust-boundary.md)、検証は
+[AUDIO-011](../testing/audio-011.md)。サードパーティのプラグインコードは
+UI・service・render・evaluator のいずれのプロセスにもロードしない。
+ロードは detached plugin helper（`kronello-plugin-host`、または各入口 binary の
+`plugin-helper` 再入パス）の中だけで行う。
+
+- 新 crate `kronello-plugin` が spec・hash pin・helper protocol・worker 側
+  orchestration・helper entry・ABI host を持つ。unsafe はこの crate の
+  `abi/` 配下だけに許し、他の純粋層の `unsafe_code = "forbid"` は緩めない。
+- VST3 は `abi::vst3.rs` の手書き COM 互換 ABI（`GetPluginFactory` /
+  `IPluginFactory` / `IComponent` / `IAudioProcessor` / `IEditController`）で
+  読み、Steinberg SDK は vendor しない。非 stereo bus・未知 class・
+  エクスポート欠落・QI 失敗は `UNSUPPORTED_FEATURE` / `PLUGIN_FAILED`。
+- AU は macOS だけ `abi::au.rs` が AudioToolbox / CoreFoundation を
+  直接 link して `AudioComponentInstanceNew` / `AudioUnitRender` を使う。
+  他 OS では `UNSUPPORTED_FEATURE` の型付きエラー。
+- `PluginSpec` は format・path・SHA-256 pin・component・version・
+  最大 1,024 行の parameter 表を持つ。`bundle_manifest_hash` が bundle
+  内の全 entry（sorted path + kind + file hash、symlink は link text）と
+  解決済み module image を pin する。pin 検証は submit・worker 開始・
+  helper の `dlopen` 直前の 3 箇所で行い、bundle byte は project state に
+  入らない。
+- helper protocol は version 付き JSON 1 往復（stdin → stdout）で、
+  音声は little-endian f32 interleaved の stage file を `HelperIo` が指す。
+  helper 自身が watchdog で超過時に abort し、worker 側は
+  stdout/stderr を別 thread で drain して exchange 全体の timeout を強制する。
+  crash・timeout・不正出力・protocol 違反は `PLUGIN_FAILED` /
+  `PLUGIN_TIMEOUT` / `PLUGIN_PROTOCOL`。
+- service は `audio.plugin_probe`（bounded describe 交換）と
+  `audio.plugin_process`（固定入力ジョブ。worker が locked audio stream を
+  decode → helper で処理 → 48 kHz stereo PCM24 `.mov` を receipted
+  publication）を公開する。`capabilities.features` に
+  `audio_plugin_host_v1`、`capabilities.effects` に `kronello.audio.plugin`。
+- model は `EffectParameters::AudioPlugin` と reserved 49xx descriptor
+  （`kronello.effect.plugin_*`）を受理・検証するが、解決は常に
+  `UNSUPPORTED_FEATURE`（`UNSUPPORTED_MODEL_FEATURE`）。audio evaluator と
+  render は同じく型付き拒否し、実行経路は `audio.plugin_process` のみ。
+  NLE split は plugin binding property を従来どおり clip へ remap する。
+- helper 解決順は `KRONELLO_PLUGIN_HELPER` → 同階層の
+  `kronello-plugin-host` → 自 executable の `plugin-helper` 再入。
+  `KRONELLO_PLUGIN_TIMEOUT_MS`（既定 120,000 ms）は helper watchdog、
+  worker 側はさらに 30 秒の margin を持つ。テスト・埋込みは
+  `Service::with_plugin_helper` で注入できる。

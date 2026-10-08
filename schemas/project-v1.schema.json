@@ -1976,6 +1976,50 @@
             "lut",
             "intensity"
           ]
+        },
+        {
+          "description": "AUDIO-011 (ADR-0131): hash-pinned audio plugin binding. The document\ncarries only identity + pin metadata — a bundle path string, format,\ncomponent id, manifest hash and version — never plugin bytes. The\nbinding is processed exclusively by the detached plugin worker; the\naudio evaluator rejects it with `UNSUPPORTED_FEATURE`.",
+          "type": "object",
+          "properties": {
+            "bundle": {
+              "description": "Bundle directory or module file path.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "component": {
+              "description": "VST3 32-hex class id or AU `type:subtype:manufacturer` triplet.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "format": {
+              "description": "`vst3` | `audio_unit`.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "audio_plugin"
+            },
+            "parameters": {
+              "description": "DataTable `{ param: Scalar, value: Scalar }` — VST3 normalized\nparameter ids, AU native parameter values; ≤1024 rows.",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "plugin_version": {
+              "description": "Recorded plugin version pin (AU hex version / VST3 class\nversion string; empty = unpinned).",
+              "$ref": "#/$defs/PropertyId"
+            },
+            "sha256": {
+              "description": "Lowercase hex SHA-256 manifest pin (empty for built-in AUs).",
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "bundle",
+            "format",
+            "component",
+            "sha256",
+            "plugin_version",
+            "parameters"
+          ]
         }
       ]
     },

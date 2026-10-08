@@ -504,3 +504,50 @@ fn audio_effects_require_audio_tracks_and_typed_parameters() {
         "UNSUPPORTED_FEATURE"
     );
 }
+/// AUDIO-011 (ADR-0131): `kronello.audio.plugin` bindings validate as
+/// document effects but never reach the audio evaluator — the detached plugin
+/// worker owns execution, so a planned mix is a typed unsupported error.
+#[test]
+fn audio_plugin_effect_is_rejected_by_the_evaluator() {
+    let (mut p, id) = fixture(TrackKind::Audio, generator_clip());
+    let table = Value::DataTable(DataTable {
+        columns: [
+            ("param".to_owned(), ValueType::Scalar),
+            ("value".to_owned(), ValueType::Scalar),
+        ]
+        .into(),
+        rows: vec![
+            [
+                ("param".to_owned(), scalar(0.0)),
+                ("value".to_owned(), scalar(0.5)),
+            ]
+            .into(),
+        ],
+    });
+    let properties = vec![
+        param("plugin_bundle", Value::String("/plugins/Acme.vst3".into())),
+        param("plugin_format", Value::Enum("vst3".into())),
+        param(
+            "plugin_component",
+            Value::String("6b726f6e656c6c6f746573746761696e".into()),
+        ),
+        param("plugin_sha256", Value::String("a".repeat(64))),
+        param("plugin_version", Value::String("1.0.0".into())),
+        param("plugin_parameters", table),
+    ];
+    let clip = clip_mut(&mut p);
+    clip.effects.push(effect(
+        AUDIO_PLUGIN_ID,
+        EffectParameters::AudioPlugin {
+            bundle: properties[0].id(),
+            format: properties[1].id(),
+            component: properties[2].id(),
+            sha256: properties[3].id(),
+            plugin_version: properties[4].id(),
+            parameters: properties[5].id(),
+        },
+    ));
+    clip.properties.extend(properties);
+    let error = DocumentAudioPlan::compile_version(&p, AudioTarget::Sequence(id), 2).unwrap_err();
+    assert_eq!(error.code(), "UNSUPPORTED_FEATURE");
+}

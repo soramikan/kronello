@@ -893,6 +893,25 @@ fn split_owned_objects(clip: &mut Clip) -> Result<(), ServiceError> {
                     remap(id)?;
                 }
             }
+            EffectParameters::AudioPlugin {
+                bundle,
+                format,
+                component,
+                sha256,
+                plugin_version,
+                parameters,
+            } => {
+                for id in [
+                    bundle,
+                    format,
+                    component,
+                    sha256,
+                    plugin_version,
+                    parameters,
+                ] {
+                    remap(id)?;
+                }
+            }
         }
     }
     // FX-004: mask rows are owned by the placement like properties — the

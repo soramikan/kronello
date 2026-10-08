@@ -71,6 +71,10 @@ GUI・CLI・MCP はそれぞれ別プロセスになりうる。各プロセス�
 独立 worker の状態・FIFO・lease は `kronello-jobs`、Windows の native 起動・生存確認・
 no-clobber publication は `kronello-platform` に置く。安全な API の外に OS handle を出さず、
 model / time / service / jobs の unsafe forbid を維持する。
+サードパーティの VST3 / AU プラグインコードは detached plugin helper
+（`kronello-plugin` の `kronello-plugin-host` / `plugin-helper` 再入）の中だけで
+ロードし、UI・service・render・worker プロセスにはロードしない
+（[ADR-0131](adr/0131-audio-plugin-hosting-trust-boundary.md)）。
 WindowsはMEDIA-003でFFmpeg loaderとfull CLI/MCPの実media・worker CIまで確認済み。
 Windows/Linux GUIとhardware resident decodeは未実装・未保証であり、CLIの成功から保証を広げない
 （[ADR-0074](../adr/0074-windows-job-workers-and-process-evidence.md)、

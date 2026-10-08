@@ -2199,7 +2199,7 @@
    "priority": "P2",
    "area": "audio",
    "title": "VST3/AU プラグインホスティング",
-   "status": "planned",
+   "status": "done",
    "dependencies": [
     "AUDIO-009"
    ],

@@ -4380,6 +4380,50 @@
             "intensity"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "AUDIO-011 (ADR-0131): hash-pinned audio plugin binding. The document\ncarries only identity + pin metadata — a bundle path string, format,\ncomponent id, manifest hash and version — never plugin bytes. The\nbinding is processed exclusively by the detached plugin worker; the\naudio evaluator rejects it with `UNSUPPORTED_FEATURE`.",
+          "properties": {
+            "bundle": {
+              "$ref": "#/$defs/PropertyId",
+              "description": "Bundle directory or module file path."
+            },
+            "component": {
+              "$ref": "#/$defs/PropertyId",
+              "description": "VST3 32-hex class id or AU `type:subtype:manufacturer` triplet."
+            },
+            "format": {
+              "$ref": "#/$defs/PropertyId",
+              "description": "`vst3` | `audio_unit`."
+            },
+            "kind": {
+              "const": "audio_plugin",
+              "type": "string"
+            },
+            "parameters": {
+              "$ref": "#/$defs/PropertyId",
+              "description": "DataTable `{ param: Scalar, value: Scalar }` — VST3 normalized\nparameter ids, AU native parameter values; ≤1024 rows."
+            },
+            "plugin_version": {
+              "$ref": "#/$defs/PropertyId",
+              "description": "Recorded plugin version pin (AU hex version / VST3 class\nversion string; empty = unpinned)."
+            },
+            "sha256": {
+              "$ref": "#/$defs/PropertyId",
+              "description": "Lowercase hex SHA-256 manifest pin (empty for built-in AUs)."
+            }
+          },
+          "required": [
+            "kind",
+            "bundle",
+            "format",
+            "component",
+            "sha256",
+            "plugin_version",
+            "parameters"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -9520,6 +9564,227 @@
       ],
       "type": "object"
     },
+    "PluginClassInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "type": "string"
+        },
+        "class_id": {
+          "description": "VST3 class id hex; AudioUnit component triplet.",
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "class_id",
+        "name",
+        "category"
+      ],
+      "type": "object"
+    },
+    "PluginFormat": {
+      "description": "Host ABI family. `vst3` uses the hand-written COM-compatible loader in\n`abi::vst3`; `audio_unit` uses AudioToolbox through `abi::au` (macOS).",
+      "enum": [
+        "vst3",
+        "audio_unit"
+      ],
+      "type": "string"
+    },
+    "PluginParameter": {
+      "additionalProperties": false,
+      "description": "One plugin parameter assignment. VST3 takes `value` as the normalized\n0..=1 domain of `IEditController::setParamNormalized`; AudioUnit takes the\nunit's native parameter value domain (`AudioUnitSetParameter`, Float32).",
+      "properties": {
+        "id": {
+          "description": "VST3 ParamID or AudioUnit parameter id.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "format": "double",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "value"
+      ],
+      "type": "object"
+    },
+    "PluginProbeRequest": {
+      "additionalProperties": false,
+      "description": "`audio.plugin_probe`: describe the pinned plugin through the detached\nhelper. Plugin code runs only inside the helper; this process receives\none bounded JSON response.",
+      "properties": {
+        "deadline_ms": {
+          "description": "Helper watchdog budget in milliseconds (1000..=600000, default 120000).",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "plugin": {
+          "$ref": "#/$defs/PluginSpec",
+          "description": "Hash-pinned plugin binding; `path` must be a local filesystem locator."
+        }
+      },
+      "required": [
+        "plugin"
+      ],
+      "type": "object"
+    },
+    "PluginProbeResult": {
+      "additionalProperties": false,
+      "properties": {
+        "report": {
+          "$ref": "#/$defs/PluginReport"
+        }
+      },
+      "required": [
+        "report"
+      ],
+      "type": "object"
+    },
+    "PluginProcessRequest": {
+      "additionalProperties": false,
+      "description": "`audio.plugin_process`: submit one fixed-input plugin processing job.",
+      "properties": {
+        "asset": {
+          "$ref": "#/$defs/AssetId",
+          "description": "Locked source asset; must be audio or video carrying an audio stream."
+        },
+        "deadline_ms": {
+          "description": "Helper watchdog budget for the single processing exchange.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "destination": {
+          "description": "Publication destination; the worker writes 48 kHz stereo PCM24 `.mov`.",
+          "type": "string"
+        },
+        "expected_revision": {
+          "description": "Optional fence against changes since the caller inspected the project.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "plugin": {
+          "$ref": "#/$defs/PluginSpec",
+          "description": "Hash-pinned plugin binding carried into the fixed job input."
+        },
+        "project": {
+          "type": "string"
+        },
+        "stream_index": {
+          "description": "Source stream; defaults to the asset's first non-video stream.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "project",
+        "asset",
+        "plugin",
+        "destination"
+      ],
+      "type": "object"
+    },
+    "PluginReport": {
+      "additionalProperties": false,
+      "description": "Host-visible plugin identity returned by describe/process.",
+      "properties": {
+        "classes": {
+          "default": [],
+          "description": "All classes the bundle exports; `component` selects among them.",
+          "items": {
+            "$ref": "#/$defs/PluginClassInfo"
+          },
+          "type": "array"
+        },
+        "latency_samples": {
+          "default": 0,
+          "description": "Declared processing latency (`IAudioProcessor::getLatencySamples`).",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Declared plugin name (PClassInfo2 / AudioComponentCopyName), or the\npinned identity when the ABI cannot report one.",
+          "type": "string"
+        },
+        "vendor": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "vendor",
+        "version"
+      ],
+      "type": "object"
+    },
+    "PluginSpec": {
+      "additionalProperties": false,
+      "description": "Hash-pinned plugin binding. `path` + `sha256` pin the bundle content for\nfile-backed plugins; a built-in (file-less) Audio Unit is pinned by its\nexact component triplet plus `version`.",
+      "properties": {
+        "component": {
+          "description": "VST3: 32-hex component class id (TUID bytes). AudioUnit:\n`type:subtype:manufacturer` as three 4-character codes, e.g.\n`aufx:dely:appl`.",
+          "type": "string"
+        },
+        "format": {
+          "$ref": "#/$defs/PluginFormat"
+        },
+        "parameters": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PluginParameter"
+          },
+          "type": "array"
+        },
+        "path": {
+          "description": "Bundle directory or single-module file (`.vst3`, `.component`,\n`.dylib`/`.so`). Required for `vst3`; optional for `audio_unit`\n(absent selects a built-in system component).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sha256": {
+          "description": "Lowercase hex SHA-256 of [`bundle_manifest_hash`]; required whenever\n`path` is present.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "version": {
+          "description": "Recorded plugin version. AudioUnit pins `AudioComponentGetVersion`\nas hex (e.g. `00010600`); VST3 records the class version string for\naudit when the bundle reports one.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "format",
+        "component"
+      ],
+      "type": "object"
+    },
     "ProcessingNotice": {
       "additionalProperties": false,
       "properties": {
@@ -11624,6 +11889,92 @@
             "sequence",
             "clip",
             "target_lufs"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "`audio.plugin_probe`: describe the pinned plugin through the detached\nhelper. Plugin code runs only inside the helper; this process receives\none bounded JSON response.",
+          "properties": {
+            "deadline_ms": {
+              "description": "Helper watchdog budget in milliseconds (1000..=600000, default 120000).",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "operation": {
+              "const": "audio.plugin_probe",
+              "type": "string"
+            },
+            "plugin": {
+              "$ref": "#/$defs/PluginSpec",
+              "description": "Hash-pinned plugin binding; `path` must be a local filesystem locator."
+            }
+          },
+          "required": [
+            "operation",
+            "plugin"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "`audio.plugin_process`: submit one fixed-input plugin processing job.",
+          "properties": {
+            "asset": {
+              "$ref": "#/$defs/AssetId",
+              "description": "Locked source asset; must be audio or video carrying an audio stream."
+            },
+            "deadline_ms": {
+              "description": "Helper watchdog budget for the single processing exchange.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "destination": {
+              "description": "Publication destination; the worker writes 48 kHz stereo PCM24 `.mov`.",
+              "type": "string"
+            },
+            "expected_revision": {
+              "description": "Optional fence against changes since the caller inspected the project.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "operation": {
+              "const": "audio.plugin_process",
+              "type": "string"
+            },
+            "plugin": {
+              "$ref": "#/$defs/PluginSpec",
+              "description": "Hash-pinned plugin binding carried into the fixed job input."
+            },
+            "project": {
+              "type": "string"
+            },
+            "stream_index": {
+              "description": "Source stream; defaults to the asset's first non-video stream.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "asset",
+            "plugin",
+            "destination"
           ],
           "type": "object"
         },
@@ -14335,6 +14686,24 @@
             },
             "value": {
               "$ref": "#/$defs/InspectScopesResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "AUDIO-011 detached-helper plugin identity report (ADR-0131).",
+          "properties": {
+            "kind": {
+              "const": "plugin_probe",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/PluginProbeResult"
             }
           },
           "required": [

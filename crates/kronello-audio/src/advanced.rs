@@ -265,6 +265,16 @@ impl AdvancedAudioPlan {
                                     }
                                     _ => unsupported("audio effect id / version"),
                                 })?;
+                            // AUDIO-011 (ADR-0131): third-party plugin code
+                            // never runs in the evaluator — only in the
+                            // detached plugin worker via audio.plugin_process.
+                            if matches!(definition.parameters, EffectParameters::AudioPlugin { .. })
+                            {
+                                return Err(unsupported(
+                                    "kronello.audio.plugin executes only through \
+                                     the detached plugin worker (audio.plugin_process)",
+                                ));
+                            }
                             let mut values = BTreeMap::new();
                             for id in audio_parameter_ids(&definition.parameters) {
                                 let property =

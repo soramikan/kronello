@@ -1004,6 +1004,7 @@ dependencies = [
  "kronello-media",
  "kronello-model",
  "kronello-platform",
+ "kronello-plugin",
  "kronello-render",
  "kronello-service",
  "kronello-store",
@@ -1165,6 +1166,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "kronello-plugin"
+version = "0.0.0"
+dependencies = [
+ "nix",
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "kronello-render"
 version = "0.0.0"
 dependencies = [
@@ -1211,6 +1225,7 @@ dependencies = [
  "kronello-jobs",
  "kronello-media",
  "kronello-model",
+ "kronello-plugin",
  "kronello-render",
  "kronello-scene",
  "kronello-store",
