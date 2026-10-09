@@ -72,41 +72,43 @@ fn color_levels(v:f32)->f32 {
     if n<0.0 { g=-pow(-n,1.0/params.offset.z); } else { g=pow(n,1.0/params.offset.z); }
     return params.offset.w+g*(params.color.x-params.offset.w);
 }
+// Knots read straight from the weights storage buffer: FXC rejects dynamic
+// writes into function-local arrays (X3500), so the monotone cubic keeps no
+// scratch arrays and recomputes each tangent from the knots on demand.
+fn curve_xs(i:u32)->f32 { return weights[2u*i]; }
+fn curve_ys(i:u32)->f32 { return weights[2u*i+1u]; }
+fn curve_h(i:u32)->f32 { return curve_xs(i+1u)-curve_xs(i); }
+fn curve_s(i:u32)->f32 { return (curve_ys(i+1u)-curve_ys(i))/curve_h(i); }
+fn curve_tangent(i:u32,n:u32)->f32 {
+    if n==2u { return curve_s(0u); }
+    // Fritsch-Carlson endpoints; mirrors color::monotone_cubic_tangents.
+    if i==0u {
+        var de=((2.0*curve_h(0u)+curve_h(1u))*curve_s(0u)-curve_h(0u)*curve_s(1u))/(curve_h(0u)+curve_h(1u));
+        if sign(de)!=sign(curve_s(0u)) { de=0.0; }
+        else if sign(curve_s(0u))!=sign(curve_s(1u)) && abs(de)>3.0*abs(curve_s(0u)) { de=3.0*curve_s(0u); }
+        return de;
+    }
+    if i+1u==n {
+        var de=((2.0*curve_h(n-2u)+curve_h(n-3u))*curve_s(n-2u)-curve_h(n-2u)*curve_s(n-3u))/(curve_h(n-2u)+curve_h(n-3u));
+        if sign(de)!=sign(curve_s(n-2u)) { de=0.0; }
+        else if sign(curve_s(n-2u))!=sign(curve_s(n-3u)) && abs(de)>3.0*abs(curve_s(n-2u)) { de=3.0*curve_s(n-2u); }
+        return de;
+    }
+    if curve_s(i-1u)*curve_s(i)<=0.0 { return 0.0; }
+    let w1=2.0*curve_h(i)+curve_h(i-1u); let w2=curve_h(i)+2.0*curve_h(i-1u);
+    return (w1+w2)/(w1/curve_s(i-1u)+w2/curve_s(i));
+}
 fn curve_eval(x:f32)->f32 {
     let n=params.config.z;
-    var xs:array<f32,64>; var ys:array<f32,64>; var d:array<f32,64>;
-    var h:array<f32,63>; var s:array<f32,63>;
-    for (var i=0u;i<n;i++) { xs[i]=weights[2u*i]; ys[i]=weights[2u*i+1u]; }
-    for (var i=0u;i+1u<n;i++) { h[i]=xs[i+1u]-xs[i]; s[i]=(ys[i+1u]-ys[i])/h[i]; }
-    if n==2u {
-        d[0]=s[0]; d[1]=s[0];
-    } else {
-        // Fritsch-Carlson endpoints; mirrors color::monotone_cubic_tangents.
-        var de=((2.0*h[0]+h[1])*s[0]-h[0]*s[1])/(h[0]+h[1]);
-        if sign(de)!=sign(s[0]) { de=0.0; }
-        else if sign(s[0])!=sign(s[1]) && abs(de)>3.0*abs(s[0]) { de=3.0*s[0]; }
-        d[0]=de;
-        de=((2.0*h[n-2u]+h[n-3u])*s[n-2u]-h[n-2u]*s[n-3u])/(h[n-2u]+h[n-3u]);
-        if sign(de)!=sign(s[n-2u]) { de=0.0; }
-        else if sign(s[n-2u])!=sign(s[n-3u]) && abs(de)>3.0*abs(s[n-2u]) { de=3.0*s[n-2u]; }
-        d[n-1u]=de;
-        for (var i=1u;i+1u<n;i++) {
-            if s[i-1u]*s[i]<=0.0 { d[i]=0.0; }
-            else {
-                let w1=2.0*h[i]+h[i-1u]; let w2=h[i]+2.0*h[i-1u];
-                d[i]=(w1+w2)/(w1/s[i-1u]+w2/s[i]);
-            }
-        }
-    }
-    if x<=xs[0] { return ys[0]+d[0]*(x-xs[0]); }
-    if x>=xs[n-1u] { return ys[n-1u]+d[n-1u]*(x-xs[n-1u]); }
+    if x<=curve_xs(0u) { return curve_ys(0u)+curve_tangent(0u,n)*(x-curve_xs(0u)); }
+    if x>=curve_xs(n-1u) { return curve_ys(n-1u)+curve_tangent(n-1u,n)*(x-curve_xs(n-1u)); }
     // Segment i satisfies xs[i] <= x < xs[i+1].
     var i=0u;
-    for (var k=1u;k+1u<n;k++) { if x>=xs[k] { i=k; } }
-    let t=(x-xs[i])/h[i];
+    for (var k=1u;k+1u<n;k++) { if x>=curve_xs(k) { i=k; } }
+    let t=(x-curve_xs(i))/curve_h(i);
     let t2=t*t; let t3=t2*t;
     let a=2.0*t3-3.0*t2+1.0; let b=t3-2.0*t2+t; let c=-2.0*t3+3.0*t2; let e=t3-t2;
-    return a*ys[i]+b*h[i]*d[i]+c*ys[i+1u]+e*h[i]*d[i+1u];
+    return a*curve_ys(i)+b*curve_h(i)*curve_tangent(i,n)+c*curve_ys(i+1u)+e*curve_h(i)*curve_tangent(i+1u,n);
 }
 fn rgb_to_hsl(rgb:vec3<f32>)->vec3<f32> {
     let lo=min(rgb.r,min(rgb.g,rgb.b)); let hi=max(rgb.r,max(rgb.g,rgb.b));
@@ -204,9 +206,10 @@ fn main(@builtin(global_invocation_id) id:vec3<u32>) {
     }
     else if params.config.x==0u {
         let radius=i32(params.config.y); var norm=0.0;
-        for (var i=-radius; i<=radius; i++) {
+        for (var t=0; t<=2*radius; t++) {
+            let i=t-radius;
             var delta=vec2<i32>(i,0); if params.config.z==1u {delta=vec2<i32>(0,i);}
-            let w=weights[u32(i+radius)]; result+=load(p+delta)*w; norm+=w;
+            let w=weights[u32(t)]; result+=load(p+delta)*w; norm+=w;
         }
         result/=norm;
     } else if params.config.x==2u {
@@ -245,10 +248,13 @@ fn main(@builtin(global_invocation_id) id:vec3<u32>) {
         else {
             let inner=i32(floor(s)); let fr=s-f32(inner); let outer=inner+1;
             var mi=1e30; var mo=1e30;
-            for (var d=-outer; d<=outer; d++) {
+            for (var t=0; t<=2*outer; t++) {
+                let d=t-outer;
                 var q=p+vec2<i32>(d,0); if params.config.z==1u { q=p+vec2<i32>(0,d); }
                 let a=load(q).a; mo=min(mo,a);
-                if abs(d)<=inner { mi=min(mi,a); }
+                // abs(d)<=inner without i32 abs/negate: FXC flags unsigned
+                // negation inside naga's helper expansions (X3092).
+                if t>=outer-inner && t<=outer+inner { mi=min(mi,a); }
             }
             result=vec4<f32>(0.0,0.0,0.0,mi*(1.0-fr)+mo*fr);
         }
