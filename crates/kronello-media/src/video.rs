@@ -12,8 +12,10 @@ pub struct VideoDecodeStats {
     pub cache_clone_bytes: u64,
     pub returned_clone_bytes: u64,
 }
-pub struct VideoDecoder<'a> {
-    pub(crate) native: ffi::NativeDecoder<'a>,
+/// Owns its native decoder; the shared `Rc` runtime inside `NativeDecoder`
+/// keeps the loaded library alive for the decoder's exact span.
+pub struct VideoDecoder {
+    pub(crate) native: ffi::NativeDecoder,
     pub(crate) report: MediaPathReport,
     pub(crate) stats: VideoDecodeStats,
     pub(crate) current: Option<DecodedVideoFrame>,
@@ -24,7 +26,7 @@ impl MediaRuntime {
     /// Detected camera RAW containers are rejected before FFmpeg sees them:
     /// stills decode through LibRaw, CinemaDNG through the frame sequence,
     /// ProRes RAW through the macOS native path, and BRAW/R3D never decode.
-    pub fn open_video(&self, path: &Path) -> Result<VideoDecoder<'_>, MediaError> {
+    pub fn open_video(&self, path: &Path) -> Result<VideoDecoder, MediaError> {
         let path = path.canonicalize()?;
         if !path.is_file() {
             return Err(MediaError::InvalidInput(
@@ -260,7 +262,7 @@ pub struct EncodeFrame {
     pub pts: Rational,
     pub rgba: Vec<u8>,
 }
-impl VideoDecoder<'_> {
+impl VideoDecoder {
     pub(crate) fn cached_frame_bytes(&self) -> usize {
         self.current.as_ref().map_or(0, |f| f.pixels.len())
             + self.lookahead.as_ref().map_or(0, |f| f.pixels.len())
@@ -440,7 +442,7 @@ pub struct RgbaVideoFrame {
     /// Straight opaque RGBA8, `width * height * 4` bytes.
     pub rgba: Vec<u8>,
 }
-impl VideoDecoder<'_> {
+impl VideoDecoder {
     /// Decode the next presentation-order frame into explicit SDR RGBA8.
     /// Deterministic: integer luma-friendly output, no clock or device input.
     pub fn next_rgba(&mut self) -> Result<Option<RgbaVideoFrame>, MediaError> {
@@ -588,7 +590,7 @@ pub fn scale_rgba8(
     }
     Ok(out)
 }
-impl VideoDecodeBackend for VideoDecoder<'_> {
+impl VideoDecodeBackend for VideoDecoder {
     fn frame_at(&mut self, time: Rational) -> Result<DecodedVideoFrame, RenderError> {
         self.decode_at(time).map_err(|e| RenderError::Backend {
             code: e.code(),

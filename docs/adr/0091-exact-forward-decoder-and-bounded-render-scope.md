@@ -1,6 +1,6 @@
 # ADR-0091: 正確な順方向デコードとレンダー範囲の有限寿命
 
-- 状態: 採用
+- 状態: 部分置換（[ADR-0140](0140-media-session-resident-preview.md) が「毎アクセス hash 検証」を実行時 fingerprint メモ化に、保持 byte budget を 512 MiB に更新）
 - 日付: 2026-10-06
 - 対象: PERF-001 の media decode
 - 部分置換: [ADR-0048](0048-media-native-build-and-asset-verification.md) の毎要求 seek/flush と decoder 寿命の実装方針のみ

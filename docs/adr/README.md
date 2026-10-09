@@ -106,7 +106,7 @@
 | [0088](0088-platform-golden-baselines.md) | GPU golden の環境別基準と software adapter の明示 | 採用 | 2026-10-06 |
 | [0089](0089-budgeted-gpu-and-external-raster-cache.md) | 容量制限付き GPU texture と project 外 raster cache | 採用 | 2026-10-06 |
 | [0090](0090-release-performance-evidence-and-snapshot-policy.md) | release 性能の観測と snapshot 方針の再評価 | 採用（性能目標は0093） | 2026-10-06 |
-| [0091](0091-exact-forward-decoder-and-bounded-render-scope.md) | 正確な順方向デコードとレンダー範囲の有限寿命 | 採用 | 2026-10-06 |
+| [0091](0091-exact-forward-decoder-and-bounded-render-scope.md) | 正確な順方向デコードとレンダー範囲の有限寿命 | 部分置換（0140: 毎アクセス hash 検証と保持 byte budget のみ） | 2026-10-06 |
 | [0092](0092-single-graph-gpu-final-output-and-observations.md) | GPU graph の単一実行と要求単位の観測 | 採用 | 2026-10-06 |
 | [0093](0093-m4-reference-preview-performance-target.md) | M4 基準プレビューの性能目標 | 採用 | 2026-10-06 |
 | [0094](0094-explicit-path-operations-and-bounded-svg.md) | 明示的なPath操作と限定SVG adapter | 採用 | 2026-10-06 |
@@ -156,6 +156,7 @@
 | [0137](0137-remaining-standard-effects.md) | 残エフェクト群の棚卸しと追加方針 | 部分置換（0139: reverb 実装方針のみ） | 2026-10-08 |
 | [0138](0138-workspace-completion.md) | ワークスペース完成の範囲 | 採用 | 2026-10-08 |
 | [0139](0139-reverb-feedback-comb-topology.md) | `kronello.audio.reverb` のフィードバックコム構成 | 採用 | 2026-10-09 |
+| [0140](0140-media-session-resident-preview.md) | メディアセッションの検証メモ化とプレビューの GPU resident デコード | 採用 | 2026-10-09 |
 
 ## 追加と変更の規則
 

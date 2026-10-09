@@ -5,7 +5,7 @@ pub use allocation::{GpuAllocationStats, GpuNodeResourcePeak, GpuResourceUsage};
 pub mod color;
 mod resident;
 mod resource_cache;
-pub use resident::ResidentImage;
+pub use resident::{RESIDENT_MEDIA_SHADER, ResidentImage, ResidentUpload};
 pub use resource_cache::{DiskRasterConfig, GpuCacheConfig, GpuCacheStats, SurfaceLease};
 pub mod render_adapter;
 mod renderer;

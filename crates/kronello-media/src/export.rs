@@ -1021,7 +1021,7 @@ impl MediaRuntime {
         if let Some(detection) = crate::raw::sniff_camera_raw(&path)? {
             return crate::raw::probe_camera_raw(&path, detection);
         }
-        self.native.probe(&path)
+        crate::ffi::NativeRuntime::probe(&self.native, &path)
     }
     /// Packet-copy the selected codecs with rational PTS; publish only after probe.
     pub fn mux_av(

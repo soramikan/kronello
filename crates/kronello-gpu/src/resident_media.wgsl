@@ -19,7 +19,10 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     if m.mode.x == 1u {
         let y = (rgba.r * 255.0 - 16.0)/219.0;
         let uv = (textureLoad(second, p/2, 0).rg * 255.0 - vec2<f32>(128.0))/224.0;
-        rgba = vec4<f32>(y + 1.5748*uv.y, y - 0.187324*uv.x - 0.468124*uv.y, y + 1.8556*uv.x, 1);
+        // The software path clamps at its 8-bit RGB conversion stage, so the
+        // decoded triangle's legal span is [0,1]; out-of-range bitstream
+        // excursions clamp the same way here.
+        rgba = vec4<f32>(clamp(vec3<f32>(y + 1.5748*uv.y, y - 0.187324*uv.x - 0.468124*uv.y, y + 1.8556*uv.x), vec3<f32>(0.0), vec3<f32>(1.0)), 1);
     }
     var rgb = linear(rgba.rgb);
     if m.mode.y == 1u {

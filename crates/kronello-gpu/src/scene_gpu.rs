@@ -1030,16 +1030,23 @@ impl ScenePass<'_> {
                         | wgpu::TextureUsages::COPY_DST
                         | wgpu::TextureUsages::COPY_SRC,
                 )?;
-                let bytes: Vec<_> = pixels
-                    .iter()
-                    .flat_map(|p| {
-                        let mut p = p.map(half::f16::from_f32);
-                        if p[3] == half::f16::ZERO {
-                            p[..3].fill(half::f16::ZERO);
-                        }
-                        p.into_iter().flat_map(|v| v.to_bits().to_le_bytes())
-                    })
-                    .collect();
+                // Zero alpha zeroes the color channels (premultiplied
+                // identity); resize() pre-zeroes so transparent pixels skip
+                // the conversion entirely.
+                let mut bytes = vec![0u8; pixels.len() * 8];
+                for (pixel, dst) in pixels.iter().zip(bytes.chunks_exact_mut(8)) {
+                    let a = half::f16::from_f32(pixel[3]);
+                    if a == half::f16::ZERO {
+                        continue;
+                    }
+                    dst[0..2]
+                        .copy_from_slice(&half::f16::from_f32(pixel[0]).to_bits().to_le_bytes());
+                    dst[2..4]
+                        .copy_from_slice(&half::f16::from_f32(pixel[1]).to_bits().to_le_bytes());
+                    dst[4..6]
+                        .copy_from_slice(&half::f16::from_f32(pixel[2]).to_bits().to_le_bytes());
+                    dst[6..8].copy_from_slice(&a.to_bits().to_le_bytes());
+                }
                 self.gpu.queue.write_texture(
                     wgpu::TexelCopyTextureInfo {
                         texture: texture.texture(),
