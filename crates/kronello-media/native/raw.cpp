@@ -41,7 +41,7 @@ struct KrRawApi {
     decltype(&libraw_close) close;
     decltype(&libraw_strerror) strerror;
     decltype(&libraw_version) version;
-    decltype(&libraw_versionNumber) version_number;
+    decltype(&libraw_versionNumber) versionNumber;
     decltype(&libraw_capabilities) capabilities;
 };
 KrRawApi api;
@@ -59,7 +59,7 @@ struct KrRawStaticLink {
         api.close = &libraw_close;
         api.strerror = &libraw_strerror;
         api.version = &libraw_version;
-        api.version_number = &libraw_versionNumber;
+        api.versionNumber = &libraw_versionNumber;
         api.capabilities = &libraw_capabilities;
         api_ready = 1;
     }
@@ -187,7 +187,7 @@ const char *kr_raw_version(void) {
 }
 
 int kr_raw_version_number(void) {
-    return api_ready ? api.version_number() : 0;
+    return api_ready ? api.versionNumber() : 0;
 }
 
 const char *kr_raw_strerror(int code) {
