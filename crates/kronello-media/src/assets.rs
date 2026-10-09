@@ -64,11 +64,14 @@ impl FileFingerprint {
         #[cfg(windows)]
         {
             use std::os::windows::fs::MetadataExt;
+            // file_index() is unstable (issue #63010); creation time still
+            // distinguishes an atomic replace from an in-place overwrite.
             return Self {
                 len: meta.len(),
                 modified: meta.modified().ok(),
-                unique: meta.file_index().unwrap_or(0),
-                changed_ns: meta.last_write_time() as i128,
+                unique: meta.creation_time(),
+                changed_ns: (meta.last_write_time() as i128) << 32
+                    | i128::from(meta.file_attributes()),
             };
         }
         #[allow(unreachable_code)]
