@@ -272,7 +272,7 @@ fn worker(
                     Work::Resize(slot, w, h) if slot == output::REF_MONITOR_SLOT => {
                         match previews.get(&0) {
                             Some(program) => outputs
-                                .resize_ref_monitor(program.gpu(), w, h)
+                                .resize_ref_monitor(program, w, h)
                                 .map(|()| json!({"status":"success"}))
                                 .unwrap_or_else(|e| error(&e)),
                             None => error(&ServiceError::new(
@@ -299,7 +299,7 @@ fn worker(
                                     .present(&source)
                                     .unwrap_or_else(|e| error(&e));
                                 if outputs.has_active() {
-                                    let report = outputs.present_all(&source, p.gpu());
+                                    let report = outputs.present_all(&source, p);
                                     if let Some(preview) = response
                                         .get_mut("preview")
                                         .and_then(Value::as_object_mut)

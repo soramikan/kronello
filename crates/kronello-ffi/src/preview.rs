@@ -705,11 +705,6 @@ impl Layer {
 #[cfg(not(target_os = "macos"))]
 pub struct FrameSource;
 #[cfg(not(target_os = "macos"))]
-pub enum PresentOutcome {
-    Presented,
-    Skipped(&'static str),
-}
-#[cfg(not(target_os = "macos"))]
 pub struct Presentation;
 #[cfg(not(target_os = "macos"))]
 pub struct Preview;
@@ -728,6 +723,31 @@ impl Preview {
         ))
     }
     pub fn redraw(&mut self, _: &Service<'_>, _: &str) -> Result<Value, ServiceError> {
+        Err(ServiceError::new(
+            "UNSUPPORTED_FEATURE",
+            "native preview requires macOS",
+        ))
+    }
+    /// IO-001 stubs: the FFI worker compiles the same call surface on every
+    /// platform; each entry point still fails with a typed error here.
+    pub fn output_presentation(
+        &self,
+        _: Layer,
+        _: u32,
+        _: u32,
+    ) -> Result<Presentation, ServiceError> {
+        Err(ServiceError::new(
+            "UNSUPPORTED_FEATURE",
+            "external output requires macOS",
+        ))
+    }
+    pub fn render_frame(&mut self, _: &Service<'_>, _: &str) -> Result<FrameSource, ServiceError> {
+        Err(ServiceError::new(
+            "UNSUPPORTED_FEATURE",
+            "native preview requires macOS",
+        ))
+    }
+    pub fn present(&mut self, _: &FrameSource) -> Result<Value, ServiceError> {
         Err(ServiceError::new(
             "UNSUPPORTED_FEATURE",
             "native preview requires macOS",

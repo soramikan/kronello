@@ -8,12 +8,15 @@ use kronello_service::{
     IoOutputEnableRequest, IoOutputListResult, IoOutputStateResult, OutputDeviceKind, ServiceError,
     UnimplementedVendorAdapter, output_device_list, vendor_output_open, with_active,
 };
-use serde_json::{Value, json};
+use serde_json::Value;
+#[cfg(target_os = "macos")]
+use serde_json::json;
 use std::collections::BTreeSet;
 
 /// The format/colorspace/pacing contract one output route honors. Surfaced
 /// through `io.output.list` detail so callers can reason about the route
 /// without platform types leaking across the FFI boundary.
+#[cfg(target_os = "macos")]
 #[derive(Debug, Clone, Copy)]
 pub struct OutputContract {
     pub format: &'static str,
@@ -207,24 +210,28 @@ impl OutputSet {
     #[cfg(not(target_os = "macos"))]
     pub fn attach_ref_monitor(&mut self, _: crate::preview::Presentation) {}
 
+    #[cfg(target_os = "macos")]
     pub fn resize_ref_monitor(
         &mut self,
-        #[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
-        gpu: &kronello_gpu::GpuContext,
+        program: &crate::preview::Preview,
         width: u32,
         height: u32,
     ) -> Result<(), ServiceError> {
-        #[cfg(target_os = "macos")]
-        {
-            let Some(device) = self.ref_monitor.as_mut() else {
-                return Err(ServiceError::new(
-                    "SURFACE_NOT_ATTACHED",
-                    "attach the reference monitor surface first",
-                ));
-            };
-            device.resize(width, height, gpu)
-        }
-        #[cfg(not(target_os = "macos"))]
+        let Some(device) = self.ref_monitor.as_mut() else {
+            return Err(ServiceError::new(
+                "SURFACE_NOT_ATTACHED",
+                "attach the reference monitor surface first",
+            ));
+        };
+        device.resize(width, height, program.gpu())
+    }
+    #[cfg(not(target_os = "macos"))]
+    pub fn resize_ref_monitor(
+        &mut self,
+        _: &crate::preview::Preview,
+        _: u32,
+        _: u32,
+    ) -> Result<(), ServiceError> {
         Err(ServiceError::new(
             "UNSUPPORTED_FEATURE",
             "external output requires macOS",
@@ -334,7 +341,7 @@ impl OutputSet {
     pub fn present_all(
         &mut self,
         source: &crate::preview::FrameSource,
-        gpu: &kronello_gpu::GpuContext,
+        program: &crate::preview::Preview,
     ) -> Value {
         let mut report = serde_json::Map::new();
         for kind in self.active.clone() {
@@ -352,7 +359,7 @@ impl OutputSet {
             let Some(device) = device else {
                 continue;
             };
-            let outcome = match device.present(source, gpu) {
+            let outcome = match device.present(source, program.gpu()) {
                 Ok(crate::preview::PresentOutcome::Presented) => {
                     json!({"presented":true,"contract":contract_json(device.contract())})
                 }
@@ -371,7 +378,7 @@ impl OutputSet {
     pub fn present_all(
         &mut self,
         _: &crate::preview::FrameSource,
-        _: &kronello_gpu::GpuContext,
+        _: &crate::preview::Preview,
     ) -> Value {
         Value::Object(serde_json::Map::new())
     }
