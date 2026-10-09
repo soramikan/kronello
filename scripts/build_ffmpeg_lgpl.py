@@ -127,7 +127,7 @@ def verify(prefix, manifest):
                 raise ValueError(f"pinned FFmpeg version mismatch: {ffmpeg_version}")
         libraries.append({"name": name, "version": version_fn(), "license": license_text, "configuration": configuration})
     probe = subprocess.check_output([str(prefix / "bin/ffmpeg"), "-hide_banner", "-encoders"], text=True, stderr=subprocess.STDOUT)
-    if any(name not in probe for name in ["libsvtav1", "prores_ks", "pcm_s24le", "alac", "aac", "libopus"]):
+    if any(name not in probe for name in ["libsvtav1", "prores_ks", "pcm_s24le", "alac", "aac", "libopus", "libmp3lame"]):
         raise ValueError("required AV1, ProRes and audio encoders missing")
     decoders = subprocess.check_output([str(prefix / "bin/ffmpeg"), "-hide_banner", "-decoders"], text=True, stderr=subprocess.STDOUT)
     if "libdav1d" not in decoders:
@@ -211,6 +211,19 @@ def main():
     dav1d_source = extract(sources["dav1d"], work / "dav1d-source")
     opus_source = extract(sources["opus"], work / "opus-source")
     lame_source = extract(sources["lame"], work / "lame-source")
+    if sys.platform == "win32":
+        # LAME 3.100's include/libmp3lame.sym still exports the deprecated API
+        # (lame_init_old, lame_decode_*, ...), but include/lame.h hardcodes
+        # DEPRECATED_OR_OBSOLETE_CODE_REMOVED to 1, which makes those entry
+        # points static. The generated MinGW .def must resolve every listed
+        # symbol or ld fails ("cannot export lame_init_old"), so keep the
+        # deprecated entry points compiled on Windows.
+        lame_header = lame_source / "include" / "lame.h"
+        needle = "#define DEPRECATED_OR_OBSOLETE_CODE_REMOVED 1"
+        text = lame_header.read_text(encoding="utf-8")
+        if text.count(needle) != 1:
+            raise ValueError("pinned lame.h DEPRECATED_OR_OBSOLETE_CODE_REMOVED define missing")
+        lame_header.write_text(text.replace(needle, "#define DEPRECATED_OR_OBSOLETE_CODE_REMOVED 0"), encoding="utf-8")
     libraw_source = extract(sources["libraw"], work / "libraw-source")
     dav1d_build = work / "dav1d-build"
     run(["meson", "setup", dav1d_build, dav1d_source, *dav1d["meson"], f"--prefix={prefix}", "--libdir=lib"])
