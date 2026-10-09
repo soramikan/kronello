@@ -773,15 +773,28 @@ impl MediaSession {
             .collect()
     }
     fn runtime(&mut self) -> Result<&MediaRuntime, RenderError> {
-        match self
-            .runtime
-            .get_or_insert_with(|| MediaRuntime::load().map_err(|e| (e.code(), e.to_string())))
-        {
-            Ok(runtime) => Ok(runtime),
-            Err((code, message)) => Err(RenderError::Backend {
+        if self.runtime.is_none() {
+            // A failed lazy load is not cached: a transient dlopen failure
+            // must not disable video for the session's lifetime. Errors
+            // seeded through `with_runtime`/`sharing_runtime` stay sticky
+            // because callers injected them deliberately.
+            match MediaRuntime::load() {
+                Ok(runtime) => self.runtime = Some(Ok(runtime)),
+                Err(e) => {
+                    return Err(RenderError::Backend {
+                        code: e.code(),
+                        message: e.to_string(),
+                    });
+                }
+            }
+        }
+        match self.runtime.as_ref() {
+            Some(Ok(runtime)) => Ok(runtime),
+            Some(Err((code, message))) => Err(RenderError::Backend {
                 code,
                 message: message.clone(),
             }),
+            None => unreachable!("runtime slot filled above"),
         }
     }
     /// Pooled software decode to a lazy `VideoSource` plus the decoded image's
@@ -884,7 +897,9 @@ impl MediaSession {
         );
         let mut decoder = self.take_decoder(&runtime, &path, stream_index, key.clone())?;
         let result = (|| {
-            let (frame, policy, is_hdr) = runtime
+            // `hdr.is_none()` here (checked above), so `prepare_video_frame`
+            // already rejects HDR sources; `is_hdr` cannot be true.
+            let (frame, policy, _) = runtime
                 .prepare_video_frame(
                     &mut decoder,
                     asset,
@@ -896,9 +911,6 @@ impl MediaSession {
                     reverse_sampling,
                 )
                 .map_err(render_error)?;
-            if is_hdr {
-                return Ok(None);
-            }
             let rgba;
             let upload = if frame.pixel_format == "yuv420p"
                 && policy.range == "tv"
@@ -942,15 +954,7 @@ impl MediaSession {
                     &mut transfers,
                 )
                 .map_err(|error: kronello_gpu::GpuError| RenderError::Backend {
-                    code: match error {
-                        kronello_gpu::GpuError::UnsupportedFeature(_) => "UNSUPPORTED_FEATURE",
-                        kronello_gpu::GpuError::AdapterUnavailable(_) => "ADAPTER_UNAVAILABLE",
-                        kronello_gpu::GpuError::DeviceUnavailable(_) => "DEVICE_UNAVAILABLE",
-                        kronello_gpu::GpuError::InvalidInput(_) => "INVALID_INPUT",
-                        kronello_gpu::GpuError::Readback(_) => "READBACK_FAILED",
-                        kronello_gpu::GpuError::CacheIo(_) => "CACHE_IO",
-                        kronello_gpu::GpuError::ObservationBusy => "RENDER_BACKEND_BUSY",
-                    },
+                    code: error.code(),
                     message: error.to_string(),
                 })?;
             use sha2::Digest;
@@ -1365,8 +1369,9 @@ impl RenderBackend for VideoRenderBackend<'_> {
         cache: &mut RenderCache,
     ) -> Result<BackendFrame, RenderError> {
         let _scope = self.begin_observation_scope()?;
-        let resolved = resolve_dag_media(dag, self.project_path)?;
-        self.backend.execute_with_cache(&resolved, cache)
+        let resolved = resolve_dag_media_in(dag, self.project_path, &mut MediaSession::new())?;
+        self.backend
+            .execute_with_inputs(&resolved.dag, cache, &resolved.input_identities)
     }
 }
 /// Native handles live only for one service render scope, never in pure caches.
@@ -1453,7 +1458,9 @@ impl RenderBackend for SequentialVideoRenderBackend<'_> {
         let _scope = self.begin_observation_scope()?;
         let resolved =
             resolve_dag_media_in(dag, self.base.project_path, &mut self.session.borrow_mut())?;
-        self.base.backend.execute_with_cache(&resolved.dag, cache)
+        self.base
+            .backend
+            .execute_with_inputs(&resolved.dag, cache, &resolved.input_identities)
     }
 }
 fn render_error(error: MediaError) -> RenderError {

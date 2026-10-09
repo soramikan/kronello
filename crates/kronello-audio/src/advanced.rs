@@ -963,7 +963,7 @@ impl AdvancedAudioPlan {
                         let slot = session
                             .entries
                             .get_mut(entry_index)
-                            .expect("playback session entries");
+                            .ok_or_else(|| invalid("playback session entry missing"))?;
                         if slot.as_ref().is_some_and(|runtime| emit < runtime.next) {
                             *slot = None;
                         }

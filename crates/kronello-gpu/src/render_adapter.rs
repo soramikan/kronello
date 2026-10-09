@@ -9,17 +9,8 @@ use crate::{
 };
 
 fn error(e: GpuError) -> RenderError {
-    let code = match e {
-        GpuError::AdapterUnavailable(_) => "ADAPTER_UNAVAILABLE",
-        GpuError::DeviceUnavailable(_) => "DEVICE_UNAVAILABLE",
-        GpuError::UnsupportedFeature(_) => "UNSUPPORTED_FEATURE",
-        GpuError::InvalidInput(_) => "INVALID_INPUT",
-        GpuError::Readback(_) => "READBACK_FAILED",
-        GpuError::CacheIo(_) => "CACHE_IO",
-        GpuError::ObservationBusy => "RENDER_BACKEND_BUSY",
-    };
     RenderError::Backend {
-        code,
+        code: e.code(),
         message: e.to_string(),
     }
 }
@@ -356,21 +347,7 @@ impl GpuContext {
         input_identities: &std::collections::BTreeMap<usize, String>,
     ) -> Result<wgpu::Texture, RenderError> {
         let namespace = self.cache_namespace().unwrap();
-        let inputs: std::collections::BTreeMap<usize, kronello_render::RasterCacheKey> =
-            input_identities
-                .iter()
-                .map(|(index, identity)| {
-                    Ok((
-                        *index,
-                        kronello_render::RasterCacheKey::external_source(
-                            identity,
-                            dag.execution_region(),
-                            dag.working_space(),
-                            &namespace,
-                        )?,
-                    ))
-                })
-                .collect::<Result<_, RenderError>>()?;
+        let inputs = source_input_keys(dag, &namespace, input_identities)?;
         let (size, scene, working) = lower_with_resident(dag, resident)?;
         let keys = map_scene_keys(
             dag,
@@ -413,21 +390,7 @@ impl GpuContext {
         input_identities: &std::collections::BTreeMap<usize, String>,
     ) -> Result<wgpu::Texture, RenderError> {
         let namespace = self.cache_namespace().unwrap();
-        let inputs: std::collections::BTreeMap<usize, kronello_render::RasterCacheKey> =
-            input_identities
-                .iter()
-                .map(|(index, identity)| {
-                    Ok((
-                        *index,
-                        kronello_render::RasterCacheKey::external_source(
-                            identity,
-                            dag.execution_region(),
-                            dag.working_space(),
-                            &namespace,
-                        )?,
-                    ))
-                })
-                .collect::<Result<_, RenderError>>()?;
+        let inputs = source_input_keys(dag, &namespace, input_identities)?;
         let (size, scene, working) = lower(dag)?;
         let keys = map_scene_keys(
             dag,
@@ -480,9 +443,37 @@ impl RenderBackend for CpuReferenceBackend {
         dag: &RenderDag,
         cache: &mut kronello_render::RenderCache,
     ) -> Result<BackendFrame, RenderError> {
+        self.execute_keyed(dag, cache, None)
+    }
+    fn execute_with_inputs(
+        &self,
+        dag: &RenderDag,
+        cache: &mut kronello_render::RenderCache,
+        input_identities: &std::collections::BTreeMap<usize, String>,
+    ) -> Result<BackendFrame, RenderError> {
+        self.execute_keyed(dag, cache, Some(input_identities))
+    }
+}
+impl CpuReferenceBackend {
+    fn execute_keyed(
+        &self,
+        dag: &RenderDag,
+        cache: &mut kronello_render::RenderCache,
+        input_identities: Option<&std::collections::BTreeMap<usize, String>>,
+    ) -> Result<BackendFrame, RenderError> {
         let (size, scene, working) = lower(dag)?;
         // Keep the exact lowering order; DAG indices are never cache identities.
-        let keys = kronello_render::RasterCacheKey::for_dag(dag, "cpu-reference-f32-v1")?;
+        let keys = match input_identities {
+            Some(identities) => {
+                let inputs = source_input_keys(dag, "cpu-reference-f32-v1", identities)?;
+                kronello_render::RasterCacheKey::for_dag_with_inputs(
+                    dag,
+                    "cpu-reference-f32-v1",
+                    &inputs,
+                )?
+            }
+            None => kronello_render::RasterCacheKey::for_dag(dag, "cpu-reference-f32-v1")?,
+        };
         let keys: Vec<_> = dag
             .nodes()
             .iter()
@@ -592,6 +583,30 @@ impl RenderBackend for GpuContext {
             },
         ))
     }
+    /// Identified inputs key resolved media without hashing pixel buffers;
+    /// the device-side resource cache is internal, so the caller cache stays
+    /// unused exactly as in `execute`.
+    fn execute_with_inputs(
+        &self,
+        dag: &RenderDag,
+        _cache: &mut kronello_render::RenderCache,
+        input_identities: &std::collections::BTreeMap<usize, String>,
+    ) -> Result<BackendFrame, RenderError> {
+        let _scope = self.render_scope().map_err(error)?;
+        let (size, scene, working) = lower(dag)?;
+        let keys = scene_keys_with_inputs(dag, &self.cache_namespace().unwrap(), input_identities)?;
+        let pair = self
+            .render_scene_pair_cached(size, &scene, working, Some(&keys), true, DISPLAY)
+            .map_err(error)?;
+        self.record_transfers(&pair.transfers);
+        Ok(crop(
+            dag,
+            BackendFrame {
+                linear: pair.linear,
+                display: pair.display,
+            },
+        ))
+    }
 }
 
 fn scene_keys(
@@ -601,6 +616,38 @@ fn scene_keys(
     Ok(map_scene_keys(
         dag,
         &kronello_render::RasterCacheKey::for_dag(dag, namespace)?,
+    ))
+}
+/// Convert resolver-supplied serialized identities into per-node source keys.
+fn source_input_keys(
+    dag: &RenderDag,
+    namespace: &str,
+    input_identities: &std::collections::BTreeMap<usize, String>,
+) -> Result<std::collections::BTreeMap<usize, kronello_render::RasterCacheKey>, RenderError> {
+    input_identities
+        .iter()
+        .map(|(index, identity)| {
+            Ok((
+                *index,
+                kronello_render::RasterCacheKey::external_source(
+                    identity,
+                    dag.execution_region(),
+                    dag.working_space(),
+                    namespace,
+                )?,
+            ))
+        })
+        .collect()
+}
+fn scene_keys_with_inputs(
+    dag: &RenderDag,
+    namespace: &str,
+    input_identities: &std::collections::BTreeMap<usize, String>,
+) -> Result<Vec<Option<kronello_render::RasterCacheKey>>, RenderError> {
+    let inputs = source_input_keys(dag, namespace, input_identities)?;
+    Ok(map_scene_keys(
+        dag,
+        &kronello_render::RasterCacheKey::for_dag_with_inputs(dag, namespace, &inputs)?,
     ))
 }
 fn map_scene_keys(

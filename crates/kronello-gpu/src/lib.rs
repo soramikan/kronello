@@ -21,23 +21,33 @@ pub enum GpuError {
     AdapterUnavailable(String),
     DeviceUnavailable(String),
     UnsupportedFeature(&'static str),
+    /// The DAG's estimated intermediate surface footprint exceeded the scene
+    /// budget; callers may retry at a smaller output region.
+    SurfaceBudgetExceeded,
     InvalidInput(&'static str),
     Readback(String),
     CacheIo(String),
     ObservationBusy,
 }
-impl Display for GpuError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let code = match self {
+impl GpuError {
+    /// Stable error code surfaced through `RenderError::Backend` and
+    /// `ServiceError`; single source of truth so all adapters agree.
+    pub fn code(&self) -> &'static str {
+        match self {
             Self::UnsupportedFeature(_) => "UNSUPPORTED_FEATURE",
+            Self::SurfaceBudgetExceeded => "SURFACE_BUDGET_EXCEEDED",
             Self::AdapterUnavailable(_) => "ADAPTER_UNAVAILABLE",
             Self::DeviceUnavailable(_) => "DEVICE_UNAVAILABLE",
             Self::InvalidInput(_) => "INVALID_INPUT",
             Self::Readback(_) => "READBACK_FAILED",
             Self::CacheIo(_) => "CACHE_IO",
             Self::ObservationBusy => "RENDER_BACKEND_BUSY",
-        };
-        write!(f, "{code}: {self:?}")
+        }
+    }
+}
+impl Display for GpuError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {self:?}", self.code())
     }
 }
 impl std::error::Error for GpuError {}
