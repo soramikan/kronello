@@ -856,9 +856,17 @@ pub fn probe_cinemadng_sequence(
 // ---------------------------------------------------------------------------
 // LibRaw decode wrapper.
 
-/// Whether this build links LibRaw (vendored or system probe at build time).
+/// Whether LibRaw is bound: linked at build time on Unix, or runtime-loaded
+/// from the explicit library directory on Windows.
 pub fn libraw_available() -> bool {
-    cfg!(kronello_libraw)
+    #[cfg(kronello_libraw)]
+    {
+        crate::rawffi::ensure_bound()
+    }
+    #[cfg(not(kronello_libraw))]
+    {
+        false
+    }
 }
 /// LibRaw capability bitmask (`LIBRAW_CAPS_*`); 0 when LibRaw is absent.
 pub fn libraw_capabilities() -> u32 {
@@ -875,7 +883,7 @@ pub fn libraw_capabilities() -> u32 {
 pub fn libraw_version() -> Option<String> {
     #[cfg(kronello_libraw)]
     {
-        Some(crate::rawffi::version())
+        crate::rawffi::ensure_bound().then(crate::rawffi::version)
     }
     #[cfg(not(kronello_libraw))]
     {
@@ -945,6 +953,11 @@ pub fn probe_raw_still(path: &Path) -> Result<RawStillInfo, MediaError> {
 
 #[cfg(kronello_libraw)]
 fn probe_raw_still_inner(path: &Path) -> Result<RawStillInfo, MediaError> {
+    if !crate::rawffi::ensure_bound() {
+        return Err(MediaError::UnsupportedFeature(
+            "LibRaw library not bound; camera RAW decode is disabled".into(),
+        ));
+    }
     let (session, code) = crate::rawffi::RawSession::open(path).map_err(MediaError::Decode)?;
     if !session.opened() {
         return Err(libraw_error(code, "LibRaw open"));
@@ -977,6 +990,11 @@ fn probe_raw_still_inner(_path: &Path) -> Result<RawStillInfo, MediaError> {
 
 #[cfg(kronello_libraw)]
 fn decode_raw_frame(path: &Path) -> Result<(RawStillInfo, u32, u32, Vec<u8>), MediaError> {
+    if !crate::rawffi::ensure_bound() {
+        return Err(MediaError::UnsupportedFeature(
+            "LibRaw library not bound; camera RAW decode is disabled".into(),
+        ));
+    }
     let (session, code) = crate::rawffi::RawSession::open(path).map_err(MediaError::Decode)?;
     if !session.opened() {
         return Err(libraw_error(code, "LibRaw open"));

@@ -52,6 +52,7 @@ pub(crate) struct RawImageInfo {
 }
 
 unsafe extern "C" {
+    fn kr_raw_bind(path: *const c_char) -> c_int;
     fn kr_raw_capabilities() -> u32;
     fn kr_raw_version() -> *const c_char;
     fn kr_raw_strerror(code: c_int) -> *const c_char;
@@ -64,18 +65,75 @@ unsafe extern "C" {
     fn kr_raw_close(k: *mut c_void);
 }
 
+/// Bind the shared LibRaw exactly once per process. Unix builds resolve the
+/// symbols at link time; on Windows the vendored MinGW DLL is loaded from an
+/// explicit directory so the process never depends on loader search paths.
+pub(crate) fn ensure_bound() -> bool {
+    static BOUND: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *BOUND.get_or_init(bind)
+}
+
+#[cfg(windows)]
+fn bind() -> bool {
+    let Some(dll) = libraw_dll_path() else {
+        return false;
+    };
+    let Ok(path) = CString::new(dll.as_os_str().as_encoded_bytes()) else {
+        return false;
+    };
+    // SAFETY: NUL-terminated UTF-8 path owned for the call duration.
+    unsafe { kr_raw_bind(path.as_ptr()) == 1 }
+}
+
+#[cfg(not(windows))]
+fn bind() -> bool {
+    // SAFETY: The Unix shim ignores the path and reports link-time binding.
+    unsafe { kr_raw_bind(std::ptr::null()) == 1 }
+}
+
+/// Runtime directory for the vendored `libraw_r*.dll`: explicit
+/// `KRONELLO_LIBRAW_LIB_DIR`, the shared `KRONELLO_FFMPEG_LIB_DIR` runtime
+/// directory, the packaged `lib/` next to a manifest, then the build prefix.
+#[cfg(windows)]
+fn libraw_dll_path() -> Option<std::path::PathBuf> {
+    let dir = std::env::var_os("KRONELLO_LIBRAW_LIB_DIR")
+        .or_else(|| std::env::var_os("KRONELLO_FFMPEG_LIB_DIR"))
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            let executable = std::env::current_exe().ok()?;
+            let root = executable.parent()?.parent()?;
+            root.join("package-manifest.json")
+                .is_file()
+                .then(|| root.join("lib"))
+        })
+        .unwrap_or_else(|| std::path::PathBuf::from(env!("KRONELLO_LIBRAW_BUILD_LIB_DIR")));
+    std::fs::read_dir(dir)
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .find(|p| {
+            let name = p.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+            name.starts_with("libraw_r") && name.ends_with(".dll")
+        })
+}
+
 pub(crate) fn capabilities() -> u32 {
+    if !ensure_bound() {
+        return 0;
+    }
     // SAFETY: Pure C query, no ownership transfer.
     unsafe { kr_raw_capabilities() }
 }
 pub(crate) fn version() -> String {
-    // SAFETY: Returned pointer is a process-lifetime C string.
+    // SAFETY: Returned pointer is a process-lifetime C string; the shim
+    // returns "" when unbound.
     unsafe { CStr::from_ptr(kr_raw_version()) }
         .to_string_lossy()
         .into_owned()
 }
 pub(crate) fn strerror(code: i32) -> String {
-    // SAFETY: Returned pointer is a process-lifetime C string.
+    // SAFETY: Returned pointer is a process-lifetime C string; the shim
+    // returns a static string when unbound.
     unsafe { CStr::from_ptr(kr_raw_strerror(code)) }
         .to_string_lossy()
         .into_owned()
@@ -88,6 +146,9 @@ pub(crate) struct RawSession {
 }
 impl RawSession {
     pub(crate) fn open(path: &Path) -> Result<(Self, i32), String> {
+        if !ensure_bound() {
+            return Err("LibRaw library not bound".to_string());
+        }
         let path = path
             .canonicalize()
             .map_err(|e| format!("raw path canonicalize: {e}"))?;

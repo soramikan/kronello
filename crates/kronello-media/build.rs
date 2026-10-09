@@ -75,8 +75,13 @@ fn build_libraw() {
         } else {
             prefix.join("lib")
         };
-        println!("cargo:rustc-link-search=native={}", lib_dir.display());
-        println!("cargo:rustc-link-lib=raw_r");
+        // The vendored Windows LibRaw is a MinGW build: only its C API is
+        // ABI-compatible with MSVC, so the shim binds the DLL at runtime from
+        // KRONELLO_LIBRAW_BUILD_LIB_DIR instead of linking an import library.
+        if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
+            println!("cargo:rustc-link-search=native={}", lib_dir.display());
+            println!("cargo:rustc-link-lib=raw_r");
+        }
         println!("cargo:rustc-cfg=kronello_libraw");
         println!(
             "cargo:rustc-env=KRONELLO_LIBRAW_BUILD_LIB_DIR={}",
