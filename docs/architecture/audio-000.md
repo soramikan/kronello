@@ -139,8 +139,12 @@ CPU / host の証拠を分けた [MEDIA-002](../testing/media-002.md)。
 
 [ADR-0076](../adr/0076-buffered-device-clock-playback.md)、[検証](../testing/audio-002.md)。
 `kronello-service::PreparedAudio` は revision を照合した owned evaluator-2 plan と immutable
-decoded sources を持つ preview runtime resource。共有 registry の operation ではない。
+decoded sources に加え、producer 専用の `AudioPlaybackSession`（stateful DSP/WSOLA カーソル）
+を持つ preview runtime resource。共有 registry の operation ではない。
 `render_block` は absolute `[start_sample,start_sample+frames)`、最大4096 frames の binary stereo f32。
+順次 block は前回の評価終端から再開し、巻き戻しでは placement 先頭へ戻る。どちらも
+無状態評価器と bit 一致する。`resume_sample` 指定の prepare は有界 block で stateful
+チェーンを再生位置まで事前評価し、シーク直後の1 block が全 placement を再評価しない。
 同じ入力の export evaluator と PCM24 前の bits を比較する。source 合計は既存28800000 frames、
 decode は残 budget を append 前に確認し `AUDIO_BUDGET_EXCEEDED`。
 
@@ -184,6 +188,10 @@ Bus は codec block（PCM24:4,096、ALAC: native block）ごとに絶対sample�
   決定的に導出し、パラメータは Constant source 限定。
 - ステートフルチェーンはプレースメント先頭から評価するため、要求範囲の任意分割は
   連続ミックスと bit 一致する。リアルタイム再生と書き出しは同一コード経路。
+  順次呼び出しでは `AudioPlaybackSession` がエントリごとの DSP/WSOLA 状態を保持し、
+  先行 block の終端から再開する（placement 先頭からの再評価を避けて realtime 供給量を
+  満たす）。順序外の要求は当該エントリのカーソルを placement 先頭へ戻す。いずれの
+  順序でも無状態評価と bit 一致し、呼び出し順が block の意味を変えない。
   非 Constant・映像トラック・範囲外値・不正テーブルは型付きエラー。
 - `audio.loudness` クエリは clip / sequence / asset 対象を共有 plan で render し、
   `loudness.rs` の ITU-R BS.1770-4 K 重み付き integrated / momentary / short-term LUFS と

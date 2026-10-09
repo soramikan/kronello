@@ -1,6 +1,8 @@
 //! Owned preview runtime resources. Not entries in the stateless request registry.
 use crate::ServiceError;
-use kronello_audio::{AudioTarget, ChannelSources, DocumentAudioPlan, MAX_AUDIO_FRAMES};
+use kronello_audio::{
+    AudioPlaybackSession, AudioTarget, ChannelSources, DocumentAudioPlan, MAX_AUDIO_FRAMES,
+};
 use kronello_model::{DocumentObject, TrackId};
 use kronello_render::RenderTarget;
 use kronello_store::{ProjectStore, Snapshot};
@@ -9,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::btree_map::Entry,
     path::{Path, PathBuf},
+    sync::Mutex,
 };
 
 pub const MAX_PLAYBACK_BLOCK_FRAMES: usize = 4096;
@@ -39,6 +42,11 @@ pub struct AudioPrepareRequest {
     pub project: PathBuf,
     pub target: RenderTarget,
     pub expected_revision: String,
+    /// Optional playback resume position: stateful chains pre-evaluate up to
+    /// this sample in bounded blocks during preparation so the first
+    /// streaming render does not replay a whole placement in one call.
+    #[serde(default)]
+    pub resume_sample: Option<i64>,
 }
 
 /// Immutable project input captured by the shared service on the editing thread.
@@ -54,6 +62,7 @@ impl AudioPreparationInput {
             self.request.target,
             &self.request.expected_revision,
             self.stored,
+            self.request.resume_sample,
         )
     }
 }
@@ -83,6 +92,11 @@ pub struct PreparedAudio {
     /// fold down only through the explicit evaluator matrix.
     sources: ChannelSources,
     has_audio: bool,
+    /// Stateful DSP/WSOLA cursors for sequential block renders: later blocks
+    /// resume instead of replaying each placement from its start (ADR-0076).
+    /// The mutex only serializes the producer's own calls; the plan and
+    /// emitted samples stay bit-identical to the stateless evaluator.
+    session: Mutex<AudioPlaybackSession>,
 }
 
 impl PreparedAudio {
@@ -92,15 +106,17 @@ impl PreparedAudio {
         project: &Path,
         target: RenderTarget,
         expected_revision: &str,
+        resume_sample: Option<i64>,
     ) -> Result<Self, ServiceError> {
         let stored = ProjectStore::read_snapshot(project)?;
-        Self::prepare_snapshot(project, target, expected_revision, stored)
+        Self::prepare_snapshot(project, target, expected_revision, stored, resume_sample)
     }
     fn prepare_snapshot(
         project: &Path,
         target: RenderTarget,
         expected_revision: &str,
         stored: Snapshot,
+        resume_sample: Option<i64>,
     ) -> Result<Self, ServiceError> {
         if stored.revision.to_string() != expected_revision {
             return Err(ServiceError::new(
@@ -150,11 +166,14 @@ impl PreparedAudio {
                             offset: resolved.offset,
                         },
                         None => {
+                            let plan = DocumentAudioPlan::default();
+                            let session = Mutex::new(plan.playback_session());
                             return Ok(Self {
                                 revision: stored.revision.to_string(),
-                                plan: DocumentAudioPlan::default(),
+                                plan,
                                 sources: ChannelSources::new(),
                                 has_audio: false,
+                                session,
                             });
                         }
                     }
@@ -198,12 +217,47 @@ impl PreparedAudio {
                 }
             }
         }
-        Ok(Self {
+        let session = Mutex::new(plan.playback_session());
+        let prepared = Self {
             revision: stored.revision.to_string(),
             plan,
             sources,
             has_audio,
-        })
+            session,
+        };
+        if let Some(sample) = resume_sample.filter(|sample| *sample > 0) {
+            prepared.warm(sample)?;
+        }
+        Ok(prepared)
+    }
+    /// Advance stateful chains to `sample` in bounded blocks, on the
+    /// preparation/producer side — never the device callback. Keeps the
+    /// first block after a seek or snapshot swap from replaying a whole
+    /// placement inside one render call.
+    fn warm(&self, sample: i64) -> Result<(), ServiceError> {
+        let limit = self
+            .plan
+            .streaming_warm_limit()
+            .map_err(audio_error)?
+            .min(sample)
+            .max(0);
+        let mut session = self.session.lock().unwrap_or_else(|e| e.into_inner());
+        let mut start = 0_i64;
+        while start < limit {
+            let end = limit.min(start + MAX_PLAYBACK_BLOCK_FRAMES as i64);
+            let range = TimeRange::new(
+                Time::new(start, 48_000)
+                    .map_err(|e| ServiceError::new("TIME_ERROR", e.to_string()))?,
+                Time::new(end, 48_000)
+                    .map_err(|e| ServiceError::new("TIME_ERROR", e.to_string()))?,
+            )
+            .map_err(|e| ServiceError::new("TIME_ERROR", e.to_string()))?;
+            self.plan
+                .mix_streaming(&self.sources, range, &mut session)
+                .map_err(audio_error)?;
+            start = end;
+        }
+        Ok(())
     }
     pub fn revision(&self) -> &str {
         &self.revision
@@ -235,9 +289,10 @@ impl PreparedAudio {
             Time::new(end, 48000).map_err(time_error)?,
         )
         .map_err(time_error)?;
+        let mut session = self.session.lock().unwrap_or_else(|e| e.into_inner());
         let bus = self
             .plan
-            .mix_reader(&self.sources, range)
+            .mix_streaming(&self.sources, range, &mut session)
             .map_err(audio_error)?;
         for (out, frame) in output.chunks_exact_mut(2).zip(bus.buffer().frames()) {
             out.copy_from_slice(frame);
@@ -272,9 +327,10 @@ impl PreparedAudio {
             Time::new(end, 48000).map_err(time_error)?,
         )
         .map_err(time_error)?;
+        let mut session = self.session.lock().unwrap_or_else(|e| e.into_inner());
         let (bus, meters) = self
             .plan
-            .mix_metered(&self.sources, range)
+            .mix_metered_streaming(&self.sources, range, &mut session)
             .map_err(audio_error)?;
         for (out, frame) in output.chunks_exact_mut(2).zip(bus.buffer().frames()) {
             out.copy_from_slice(frame);

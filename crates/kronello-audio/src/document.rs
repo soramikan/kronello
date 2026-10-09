@@ -595,6 +595,62 @@ impl DocumentAudioPlan {
         self.mix_channels_impl(sources, range, ChannelMask::STEREO)?
             .into_stereo_bus()
     }
+    /// Empty streaming state owned by one renderer (realtime `PreparedAudio`,
+    /// sequential export). Sequential block requests resume stateful DSP/WSOLA
+    /// chains where the previous request ended; any other order resets the
+    /// cursor to the placement boundary. Output stays bit-identical to the
+    /// stateless evaluator either way (ADR-0076/ADR-0117).
+    pub fn playback_session(&self) -> crate::AudioPlaybackSession {
+        self.advanced.as_ref().map_or_else(
+            || crate::AudioPlaybackSession::new(0),
+            |plan| plan.playback_session(),
+        )
+    }
+    /// End of the last stateful placement, or 0 when the plan has none —
+    /// streaming warmup past this point evaluates only stateless entries.
+    pub fn streaming_warm_limit(&self) -> Result<i64, AudioError> {
+        match &self.advanced {
+            Some(plan) => plan.stateful_end(),
+            None => Ok(0),
+        }
+    }
+    /// Sequential streaming variant of [`mix_reader`](Self::mix_reader).
+    pub fn mix_streaming(
+        &self,
+        sources: &dyn ChannelSourceReader,
+        range: TimeRange,
+        session: &mut crate::AudioPlaybackSession,
+    ) -> Result<Bus, AudioError> {
+        if let Some(plan) = &self.advanced {
+            return plan.mix_streaming(sources, range, session);
+        }
+        self.mix_reader(sources, range)
+    }
+    /// Sequential streaming variant of [`mix_metered`](Self::mix_metered).
+    pub fn mix_metered_streaming(
+        &self,
+        sources: &dyn ChannelSourceReader,
+        range: TimeRange,
+        session: &mut crate::AudioPlaybackSession,
+    ) -> Result<(Bus, crate::BusMeters), AudioError> {
+        if let Some(plan) = &self.advanced {
+            return plan.mix_metered_streaming(sources, range, session);
+        }
+        self.mix_metered(sources, range)
+    }
+    /// Sequential streaming variant of [`mix_channels`](Self::mix_channels).
+    pub fn mix_channels_streaming(
+        &self,
+        sources: &dyn ChannelSourceReader,
+        range: TimeRange,
+        target: ChannelMask,
+        session: &mut crate::AudioPlaybackSession,
+    ) -> Result<ChannelBus, AudioError> {
+        if let Some(plan) = &self.advanced {
+            return plan.mix_channels_streaming(sources, range, target, session);
+        }
+        self.mix_channels(sources, range, target)
+    }
     fn mix_channels_impl(
         &self,
         sources: &dyn ChannelSourceReader,

@@ -23,8 +23,13 @@ public final class NativePreparedAudio: @unchecked Sendable {
     public let hasAudio: Bool
     // PreparedAudio is immutable Send + Sync Rust data; ARC keeps its allocation
     // live while transferred from the preparation queue to the serial producer.
-    public init(path: String, target: PlaybackTarget, revision: String) throws {
-        let data = try JSONSerialization.data(withJSONObject: ["project": path, "target": target.wire, "expected_revision": revision], options: [.sortedKeys])
+    /// `resumeSample` warms stateful chains up to the resume position in
+    /// bounded blocks during preparation, so the first streaming block after
+    /// a seek or snapshot swap does not replay a whole placement at once.
+    public init(path: String, target: PlaybackTarget, revision: String, resumeSample: Int64? = nil) throws {
+        var request: [String: Any] = ["project": path, "target": target.wire, "expected_revision": revision]
+        if let resumeSample { request["resume_sample"] = NSNumber(value: resumeSample) }
+        let data = try JSONSerialization.data(withJSONObject: request, options: [.sortedKeys])
         var error: UnsafeMutablePointer<CChar>?
         var audible = false
         let resource = data.withUnsafeBytes { kronello_audio_prepare($0.bindMemory(to: UInt8.self).baseAddress, $0.count, &audible, &error) }

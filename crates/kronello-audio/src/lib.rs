@@ -20,7 +20,9 @@ mod dsp;
 mod loudness;
 mod sync;
 mod wsola;
-pub use advanced::{AUDIO_EVALUATION_VERSION, AUDIO_GENERATOR_SILENCE, AUDIO_GENERATOR_TONE};
+pub use advanced::{
+    AUDIO_EVALUATION_VERSION, AUDIO_GENERATOR_SILENCE, AUDIO_GENERATOR_TONE, AudioPlaybackSession,
+};
 pub use channels::{
     ChannelBuffer, ChannelBus, ChannelBusMeters, ChannelMeter, ChannelSourceReader, ChannelSources,
     ChannelTrackMeter, ITU_CENTER_COEFFICIENT, ITU_SURROUND_MONO_COEFFICIENT, LayoutMatrix,

@@ -51,7 +51,9 @@ pub unsafe extern "C" fn kronello_audio_prepare(
         let r: AudioPrepareRequest = serde_json::from_str(&text)?;
         let prepared = match crate::capture_session_audio(r.clone())? {
             Some(input) => input.prepare()?,
-            None => PreparedAudio::prepare(&r.project, r.target, &r.expected_revision)?,
+            None => {
+                PreparedAudio::prepare(&r.project, r.target, &r.expected_revision, r.resume_sample)?
+            }
         };
         Ok::<_, ServiceError>(prepared)
     }))

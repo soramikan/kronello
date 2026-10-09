@@ -7,7 +7,9 @@ import KronelloCore
 /// A serial producer owns Rust resources, allocation and evaluation. The audio
 /// device thread only invokes the preallocated native ring's copy/silence path.
 private final class AudioProducer: @unchecked Sendable {
-    let queue = DispatchQueue(label: "kronello.audio.producer", qos: .userInitiated)
+    // The producer renders ahead of a hard device-callback deadline; give it
+    // interactive QoS so block rendering is not starved by background work.
+    let queue = DispatchQueue(label: "kronello.audio.producer", qos: .userInteractive)
     let preparation = DispatchQueue(label: "kronello.audio.prepare", qos: .userInitiated)
     let ring: NativeAudioRing
     private let buffer = UnsafeMutablePointer<Float>.allocate(capacity: 8192)
@@ -22,10 +24,10 @@ private final class AudioProducer: @unchecked Sendable {
     var meters: (@Sendable (PlaybackMeters, UInt64) -> Void)?
     init(ring: NativeAudioRing) { self.ring = ring }
     deinit { timer?.cancel(); buffer.deallocate() }
-    func prepare(path: String, target: PlaybackTarget, revision: String) async throws -> NativePreparedAudio {
+    func prepare(path: String, target: PlaybackTarget, revision: String, resumeSample: Int64) async throws -> NativePreparedAudio {
         try await withCheckedThrowingContinuation { continuation in
             preparation.async {
-                do { continuation.resume(returning: try NativePreparedAudio(path: path, target: target, revision: revision)) }
+                do { continuation.resume(returning: try NativePreparedAudio(path: path, target: target, revision: revision, resumeSample: resumeSample)) }
                 catch { continuation.resume(throwing: error) }
             }
         }
@@ -146,7 +148,7 @@ private final class AudioProducer: @unchecked Sendable {
         self.muted = muted
         let producer = try ensureProducer()
         do {
-            let snapshot = try await producer.prepare(path: path, target: target, revision: revision)
+            let snapshot = try await producer.prepare(path: path, target: target, revision: revision, resumeSample: sample)
             guard token == generation else { throw CancellationError() }
             self.snapshot = snapshot; pinnedRevision = snapshot.revision
             try await producer.reset(snapshot.hasAudio && !muted ? snapshot : nil, at: sample, epoch: token)
@@ -274,7 +276,7 @@ private final class AudioProducer: @unchecked Sendable {
         while let revision = requestedRevision {
             requestedRevision = nil
             let next: NativePreparedAudio
-            do { next = try await producer.prepare(path: path, target: target, revision: revision) }
+            do { next = try await producer.prepare(path: path, target: target, revision: revision, resumeSample: (try? samplePosition()) ?? position) }
             catch {
                 guard generation == token else { return }
                 if requestedRevision != nil { continue }

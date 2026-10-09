@@ -74,6 +74,7 @@ fn prepared_blocks_match_export_evaluator_bits_and_remain_revision_pinned() {
         &path,
         kronello_service::RenderTarget::Sequence { sequence },
         &rev,
+        None,
     )
     .unwrap();
     assert!(prepared.has_audio());
@@ -119,7 +120,8 @@ fn prepared_blocks_match_export_evaluator_bits_and_remain_revision_pinned() {
         PreparedAudio::prepare(
             &path,
             kronello_service::RenderTarget::Sequence { sequence },
-            &rev
+            &rev,
+            None,
         )
         .err()
         .unwrap()
@@ -130,6 +132,7 @@ fn prepared_blocks_match_export_evaluator_bits_and_remain_revision_pinned() {
         &path,
         kronello_service::RenderTarget::Sequence { sequence },
         &next,
+        None,
     )
     .unwrap();
     let mut old = [0.0; 256];
@@ -159,6 +162,7 @@ fn metered_render_reports_per_track_and_master_levels() {
         &path,
         kronello_service::RenderTarget::Sequence { sequence },
         &rev,
+        None,
     )
     .unwrap();
     let mut block = vec![0.0; 8192];
@@ -204,12 +208,13 @@ fn playback_bounds_errors_and_absent_audio_are_explicit() {
         plan_hash: None,
         idempotency_key: None,
     })));
-    let prepared = PreparedAudio::prepare(&path, composition.into(), &rev).unwrap();
+    let prepared = PreparedAudio::prepare(&path, composition.into(), &rev, None).unwrap();
     assert!(!prepared.has_audio());
     let empty_inheritance = PreparedAudio::prepare(
         &path,
         kronello_service::RenderTarget::Sequence { sequence },
         &rev,
+        None,
     )
     .unwrap();
     assert!(!empty_inheritance.has_audio());
@@ -238,4 +243,102 @@ fn playback_bounds_errors_and_absent_audio_are_explicit() {
         service.execute(Request::ProjectInfo(ProjectRequest { project: path })),
         Response::Success { .. }
     ));
+}
+fn param(key: &str, value: Value) -> Property {
+    let mut registry = SchemaRegistry::with_builtin();
+    for descriptor in effect_descriptors() {
+        registry.register(descriptor).unwrap();
+    }
+    Property::new(
+        PropertyId::new(),
+        DescriptorRef::new(
+            registry
+                .lookup(&SchemaKey::new(format!("kronello.effect.{key}")).unwrap())
+                .unwrap(),
+        ),
+        PropertySource::Constant(value),
+        vec![],
+        &registry,
+    )
+    .unwrap()
+}
+fn scalar(v: f64) -> Value {
+    Value::Scalar(FiniteF64::new(v).unwrap())
+}
+/// A stateful clip (generator + compressor): sequential blocks resume the
+/// DSP chain instead of replaying the placement, and rewinds/jumps stay
+/// bit-identical to the stateless evaluator (ADR-0076/ADR-0117).
+#[test]
+fn stateful_streaming_blocks_match_stateless_bits_and_warm_prepare() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("audio.kronello");
+    let (mut project, sequence) = fixture();
+    let DocumentObject::Known(s) = &mut project.sequences[0] else {
+        panic!()
+    };
+    let params = [
+        param("threshold_db", scalar(-20.0)),
+        param("ratio", scalar(4.0)),
+        param("attack_ms", scalar(5.0)),
+        param("release_ms", scalar(100.0)),
+        param("makeup_db", scalar(0.0)),
+    ];
+    s.tracks[0].clips[0]
+        .effects
+        .push(Effect::Known(EffectDefinition {
+            effect_id: AUDIO_COMPRESSOR_ID.into(),
+            version: 1,
+            parameters: EffectParameters::AudioCompressor {
+                threshold_db: params[0].id(),
+                ratio: params[1].id(),
+                attack_ms: params[2].id(),
+                release_ms: params[3].id(),
+                makeup_db: params[4].id(),
+            },
+        }));
+    s.tracks[0].clips[0].properties.extend(params);
+    let service = Service::new(BackendSelection::CpuReference);
+    let rev = revision(service.execute(Request::ProjectCreate(CreateRequest {
+        project: path.clone(),
+        document: project.clone(),
+        plan_hash: None,
+        idempotency_key: None,
+    })));
+    // Warming to the resume position keeps the first block identical.
+    let prepared = PreparedAudio::prepare(
+        &path,
+        kronello_service::RenderTarget::Sequence { sequence },
+        &rev,
+        Some(24_000),
+    )
+    .unwrap();
+    let plan =
+        DocumentAudioPlan::compile_version(&project, AudioTarget::Sequence(sequence), 2).unwrap();
+    let continuous = plan
+        .mix(
+            &AudioSources::new(),
+            TimeRange::new(Time::ZERO, Time::new(40_960, 48_000).unwrap()).unwrap(),
+        )
+        .unwrap();
+    // Scrambled block order: rewind resets the chain, forward jumps warm up.
+    for start in [8_192_i64, 0, 4096, 36_864, 12_288, 16_384] {
+        let mut block = vec![0.0; 8192];
+        prepared.render_block(start, &mut block).unwrap();
+        let expected: Vec<_> = continuous.buffer().frames()[start as usize..start as usize + 4096]
+            .iter()
+            .flatten()
+            .map(|f| f.to_bits())
+            .collect();
+        assert_eq!(
+            block.iter().map(|f| f.to_bits()).collect::<Vec<_>>(),
+            expected,
+            "block at {start}"
+        );
+    }
+    // The metered producer path shares the same resumed cursor.
+    let mut metered = vec![0.0; 8192];
+    prepared.render_block_metered(20_480, &mut metered).unwrap();
+    let mut plain = vec![0.0; 8192];
+    prepared.render_block(20_480, &mut plain).unwrap();
+    assert_eq!(metered, plain);
 }

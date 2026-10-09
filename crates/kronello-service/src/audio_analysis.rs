@@ -143,6 +143,7 @@ impl crate::Service<'_> {
                     &request.project,
                     *target,
                     &request.base_revision,
+                    Some(samples.start),
                 )?;
                 let mut frames = Vec::with_capacity(length * 2);
                 let mut offset = 0;
