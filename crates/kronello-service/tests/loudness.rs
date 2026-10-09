@@ -45,6 +45,7 @@ fn fixture() -> (Project, SequenceId, TrackId, ClipId) {
                 effects: vec![],
                 markers: vec![],
                 masks: vec![],
+                pan: None,
             }],
         }],
         transitions: vec![],

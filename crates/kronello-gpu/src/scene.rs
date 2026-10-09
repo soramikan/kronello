@@ -124,6 +124,19 @@ pub enum DrawNode {
         source: usize,
         effect: crate::PixelEffect,
     },
+    /// FX-008 (ADR-0137): two-input effect node. `source` is the warped
+    /// content; `map` is the displacement surface sampled at the output
+    /// position. Only `PixelEffect::Displace` is legal here.
+    EffectMap {
+        source: usize,
+        map: usize,
+        effect: crate::PixelEffect,
+    },
+    /// FX-008 (ADR-0137): source-independent procedural raster covering the
+    /// whole output surface. Only `PixelEffect::Generate` is legal here.
+    Generate {
+        effect: crate::PixelEffect,
+    },
     Masked {
         source: usize,
         matte: usize,
@@ -263,6 +276,32 @@ impl DrawScene {
                     }
                     _ => GpuError::InvalidInput("invalid effect parameters"),
                 })?,
+                DrawNode::EffectMap { effect, .. } => {
+                    if !matches!(effect, crate::PixelEffect::Displace { .. }) {
+                        return Err(GpuError::InvalidInput(
+                            "effect-map node requires a displace effect",
+                        ));
+                    }
+                    effect.validate().map_err(|e| match e {
+                        kronello_render::RenderError::UnsupportedFeature(_) => {
+                            GpuError::UnsupportedFeature("effect transform or kernel budget")
+                        }
+                        _ => GpuError::InvalidInput("invalid effect parameters"),
+                    })?
+                }
+                DrawNode::Generate { effect } => {
+                    if !matches!(effect, crate::PixelEffect::Generate { .. }) {
+                        return Err(GpuError::InvalidInput(
+                            "generate node requires a generate effect",
+                        ));
+                    }
+                    effect.validate().map_err(|e| match e {
+                        kronello_render::RenderError::UnsupportedFeature(_) => {
+                            GpuError::UnsupportedFeature("effect transform or kernel budget")
+                        }
+                        _ => GpuError::InvalidInput("invalid effect parameters"),
+                    })?
+                }
                 DrawNode::Masked { .. } | DrawNode::Blend { .. } => {}
             }
         }
@@ -318,9 +357,13 @@ impl DrawScene {
 }
 pub(crate) fn inputs(node: &DrawNode) -> Vec<usize> {
     match node {
-        DrawNode::Path(_) | DrawNode::Raster(_) | DrawNode::GpuRaster(_) => vec![],
+        DrawNode::Path(_)
+        | DrawNode::Raster(_)
+        | DrawNode::GpuRaster(_)
+        | DrawNode::Generate { .. } => vec![],
         DrawNode::Group { children, .. } => children.clone(),
         DrawNode::Effect { source, .. } => vec![*source],
+        DrawNode::EffectMap { source, map, .. } => vec![*source, *map],
         DrawNode::Blend {
             source, backdrop, ..
         } => vec![*source, *backdrop],
@@ -745,6 +788,10 @@ pub(crate) fn scene_surface_count(scene: &DrawScene) -> usize {
                 // intermediates beyond the blur pair (ADR-0115).
                 DrawNode::Effect { effect, .. } if effect.is_standard() => 6,
                 DrawNode::Effect { .. } => 3,
+                // FX-008: the two-input node reads source and map surfaces
+                // already counted in nodes; its single pass keeps one temp.
+                DrawNode::EffectMap { .. } => 3,
+                DrawNode::Generate { .. } => 1,
                 _ => 0,
             })
             .sum::<usize>()
@@ -891,12 +938,29 @@ pub(crate) fn render_scene_reference_with_raster(
     working: WorkingSpace,
     raster: &mut RasterResolver<'_>,
 ) -> Result<Vec<[f32; 4]>, GpuError> {
-    render_scene_reference_with_resolvers(size, scene, working, raster, &mut |_, source, effect| {
-        crate::effect::apply_reference(source, size.output_resolution, effect, working)
-    })
+    render_scene_reference_with_resolvers(
+        size,
+        scene,
+        working,
+        raster,
+        &mut |_, source, map, effect| {
+            crate::effect::apply_reference_mapped(
+                source,
+                map,
+                size.output_resolution,
+                effect,
+                working,
+            )
+        },
+    )
 }
-type EffectResolver<'a> =
-    dyn FnMut(usize, &[[f32; 4]], &crate::PixelEffect) -> Result<Vec<[f32; 4]>, GpuError> + 'a;
+type EffectResolver<'a> = dyn FnMut(
+        usize,
+        &[[f32; 4]],
+        Option<&[[f32; 4]]>,
+        &crate::PixelEffect,
+    ) -> Result<Vec<[f32; 4]>, GpuError>
+    + 'a;
 pub(crate) fn render_scene_reference_with_resolvers(
     size: RenderSize,
     scene: &DrawScene,
@@ -964,7 +1028,20 @@ pub(crate) fn render_scene_reference_with_resolvers(
             }
             DrawNode::Effect { source, effect } => {
                 let source = node(size, scene, *source, working, cache, raster, effects)?;
-                pixels = effects(id, &source, effect)?;
+                pixels = effects(id, &source, None, effect)?;
+            }
+            DrawNode::EffectMap {
+                source,
+                map,
+                effect,
+            } => {
+                let source = node(size, scene, *source, working, cache, raster, effects)?;
+                let map = node(size, scene, *map, working, cache, raster, effects)?;
+                pixels = effects(id, &source, Some(&map), effect)?;
+            }
+            DrawNode::Generate { effect } => {
+                // The procedural leaf ignores any incoming raster entirely.
+                pixels = effects(id, &[], None, effect)?;
             }
             DrawNode::Masked {
                 source,

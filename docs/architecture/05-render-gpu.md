@@ -139,6 +139,8 @@ semantic visual halo は軸別 `3 sigma hypot(A[i][0], A[i][1])`、pixel halo �
 
 `PixelEffect::required_input` が output → input ROI を宣言し、DAG の逆順で Group / mask / 共有入力へ union を伝播する。初期 executor は必要領域の union を元の画素格子で描画し、要求画素へ crop する。`RenderDag::bounds()` の ink / visual は変換と離散 halo を含む output pixel bounds。effect params・意味版・upstream identities・ROI・色・backend namespace を cache key に含める。metadata は effect id ごとの対応版上限（新規 2 / 旧 1）を固定する。各 authored effect の版が algorithm を選び、上限 1 の snapshot に版 2 は入れない。GPU / golden の採用検証は [FX-001 の検証記録](../testing/fx-001.md) に分けて記録する。
 
+FX-008（[ADR-0137](../adr/0137-remaining-standard-effects.md)、reverb は [ADR-0139](../adr/0139-reverb-feedback-comb-topology.md)）は残る標準エフェクトを version 1 で追加する。映像は `grain`（seed 付きセルノイズ、alpha 保存、seed は DAG builder がシーン時刻を畳み込む）・`mosaic`・`invert`・`channel_mixer`・`tint`・`directional_blur`・`radial_blur`・`displace`・`generate` の 9 種。`displace` は変位面を暗黙参照せず、明示 secondary 入力の `DagNode::EffectMap` へ lower し、`SceneIr.displacement_maps` が node → map SceneKey を束縛する。map 欠落・重複・`EffectMap` への Displace 以外の指定は型付き拒否。`generate` は source-free の `DagNode::Generate` 葉で実行面全体を覆う。WGSL は effect op 14–22 と displace map の binding 6 を持ち、CPU oracle と両 working space で画素比較する。音声は `delay`（整数サンプル）・`reverb`（決定的並列フィードバックコム、RT60 換算の feedback）・`pitch`（source-stage の時間保存 WSOLA、rate-strided 窓）・`gate`（threshold / attack / release / hysteresis）の 4 種。pitch の generator ソース・reverse retime 適用は型付き拒否。採用・見送りの棚卸しと検証は [FX-008 の検証記録](../testing/fx-008.md) を参照する。
+
 ## 高解像度
 
 RGBA16F の 3840x2160 は 63.28125 MiB、7680x4320 は 253.125 MiB（画像データのみ）。
@@ -226,6 +228,8 @@ M1 / Metal の追加実測では、wgpu 30.0.1 の同一 MTLDevice による IOS
 
 scene は参照欠落・循環・不正 opacity / 色 / 幾何を型付きエラーで拒否する。保守的な予算は 1,024 nodes、各 group / roots 1,024 references、合計 65,536 edges、深さ 32、座標の絶対値・stroke 幅 1,000,000 以下、GPU 中間面の上限推計 512 MiB（CPU 参照にも float32 の面サイズで同じ予算を適用）。デバイス限界超過もエラー。GPU 不在では skip / CPU fallback しない。CPU upload は幾何と制御データのみで、合成・mask は GPU 常駐。`TransferStats` はこれらを control upload として計上し、最終 GPU copy / image readback と、4 bytes の validation status readback（1 回）を計上する。性能・資源プール・tiling・高品質 AA は今後の検証対象。
 
+IO-001（[ADR-0134](../adr/0134-external-monitor-output.md)）の外部モニタ出力は、この render 経路の上に置く native 側の提示層である。`kronello-ffi` が program monitor 一回の redraw で作った `FrameSource` を、program surface・ref monitor・Syphon の全ルートで同じ SDR sRGB encode（crop / scaled blit）で present し、BGRA8 target の readback が program monitor の変換結果と一致することを GPU 環境の parity テストで検証する。出力先 display の色空間適用・出力の有効化・vendor SDK 境界は [10 デスクトップ GUI](10-desktop-gui.md#io-001-の実装範囲) と [IO-001 の受け入れ記録](../testing/io-001.md) を参照。
+
 ## M1 RENDER-001 の Scene IR / Render DAG と連番出力
 
 `kronello-render` は store / GPU に通常依存しない。`RenderBackend` を呼出側から渡し、`kronello-gpu::GpuContext` の trait 実装で GPU-002 の coverage・隔離合成・mask・出力変換を実行する。`kronello-gpu::render_adapter::CpuReferenceBackend` は明示選択する float32 の参照実装で、通常の意味テストに使う。GPU adapter 不在を CPU で補う動作はない。render → gpu の参照はテスト用 dev-dependency だけとする（ADR-0043）。既存 GPU API は維持する。
@@ -255,6 +259,8 @@ DAG は topological なノード列と明示 input index を持つ。index は�
 | `CoverageDraw` | Geometry / TextLayout を参照し、要求 scale で flatten した contour とタグ付き paint を描画 |
 | `IsolatedComposite` | 順序付きの子を source-over し、局所 opacity を RGB / alpha へ一度だけ適用 |
 | `Mask` | source / matte 参照。alpha または線形 working-space luminance の coverage |
+| `EffectMap` | FX-008 の 2 入力 effect。`source` が変位対象、`map` が出力位置で評価する変位面。`PixelEffect::Displace` のみ有効 |
+| `Generate` | FX-008 の source-free 葉。実行面全体を覆い、`PixelEffect::Generate` のみ有効 |
 | `OutputTransform` | 全 root の隔離合成を入力とし、線形 premultiplied と外部 straight sRGB を生成 |
 
 `OutputRegion { origin, extent, pixels }` は設計座標の矩形を出力画素へ写す。`p = diag(pixels / extent) × (design_position - origin)`、左上原点・+Y 下向き。ROI / 解像度を変えても文書・組版は変えない。異なるアスペクト比を要求したときは、この明示写像で伸縮し、responsive variant の再組版を暗黙に行わない。flatten の最大拡大率は node world transform と ROI 写像を合成した行列の Frobenius norm で保守的に求める。

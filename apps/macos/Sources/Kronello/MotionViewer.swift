@@ -99,9 +99,13 @@ struct MotionViewer: View {
         if model.ui.page != "motion" {
             EmptyView()
         } else if let error = model.previewFailure {
-            KRViewerError(.init(error.code, error.message), copy: {
-                NSPasteboard.general.clearContents(); NSPasteboard.general.setString(error.copyText, forType: .string)
-            }, retry: { model.previewFailure = nil; Task { do { try await model.reload() } catch { model.mapFailure(error) } } }).padding(KRSpace.space4)
+            VStack(spacing: KRSpace.space3) {
+                KRViewerError(.init(error.code, error.message), copy: {
+                    NSPasteboard.general.clearContents(); NSPasteboard.general.setString(error.copyText, forType: .string)
+                }, retry: { model.previewFailure = nil; Task { do { try await model.reload() } catch { model.mapFailure(error) } } })
+                // GUI-012: FONT_MISSING guides to the shared font.pin flow.
+                if error.code == "FONT_MISSING" { FontRecoveryButton(model: model) }
+            }.padding(KRSpace.space4)
         } else if model.current.isEmpty {
             KREmptyState(icon: .layers, title: "Composition がありません", message: "Composition を含むプロジェクトを開いてください。")
         } else {

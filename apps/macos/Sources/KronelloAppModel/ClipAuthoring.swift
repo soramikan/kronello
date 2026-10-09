@@ -339,6 +339,33 @@ extension EditorModel {
         guard let first = gains.first else { return nil }
         return gains.allSatisfy { abs($0 - first) < 0.0001 } ? first : nil
     }
+    /// GUI-012 mixer pan: one undoable edit writes the same constant balance
+    /// (`kronello.audio.pan`, [-1, 1]) into every clip on the audio track. The
+    /// authored model has no track-level pan field, matching the AUDIO-009
+    /// fader contract above.
+    public func setTrackPan(_ track: [String: Any], pan: Double, base: String? = nil) {
+        guard !ui.locked.contains(track.string("id")), track.string("kind") == "audio",
+              pan.isFinite, (-1...1).contains(pan) else { return }
+        var commands: [[String: Any]] = []
+        for clip in track.objects("clips") {
+            let value: [String: Any] = ["id": UUID().uuidString, "descriptor": ["key": "kronello.audio.pan", "version": 1],
+                "source": ["kind": "constant", "value": ["kind": "scalar", "value": pan]], "modifiers": []]
+            commands.append(timelineCommand("clip_set_pan", ["sequence": sequence.string("id"), "clip": clip.string("id"), "pan": value]))
+        }
+        guard !commands.isEmpty else { return }
+        submit(commands, label: "トラックのパン", base: base)
+    }
+    /// Pan knob display value: the shared clip balance when every clip on the
+    /// track agrees, else nil for a mixed state.
+    public func trackPan(_ track: [String: Any]) -> Double? {
+        let pans = track.objects("clips").map { clip -> Double in
+            guard let property = clip["pan"] as? [String: Any],
+                  property.object("source").string("kind") == "constant" else { return 0.0 }
+            return property.object("source").object("value").number("value")
+        }
+        guard let first = pans.first else { return nil }
+        return pans.allSatisfy { abs($0 - first) < 0.0001 } ? first : nil
+    }
 }
 
 extension RationalTime {

@@ -24,6 +24,7 @@ fn clip(start_num: i64, start_den: i64, end_num: i64, end_den: i64, rgb: [f64; 3
         audio_retime: Default::default(),
         reverse_sampling: None,
         volume: None,
+        pan: None,
         links: vec![],
         effects: vec![],
         masks: vec![],

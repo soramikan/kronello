@@ -99,6 +99,7 @@ fn project(parts: Vec<MaskParts>) -> (Project, ClipId) {
         audio_retime: Default::default(),
         reverse_sampling: None,
         volume: None,
+        pan: None,
         links: vec![],
         enabled: true,
         effects: vec![],

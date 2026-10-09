@@ -22,6 +22,11 @@ pub fn decode_image_asset(
         .iter()
         .find(|s| s.index == stream_index)
         .ok_or_else(|| MediaError::InvalidInput("image stream missing".into()))?;
+    // Camera RAW stills take their exclusive LibRaw path (ADR-0136); a locked
+    // RAW codec must never fall through to PNG, and PNG never to LibRaw.
+    if crate::raw::is_raw_still_codec(&stream.codec) {
+        return crate::raw::decode_raw_image_asset(asset, project_path, stream_index, working);
+    }
     if stream.codec != "png" {
         return Err(MediaError::UnsupportedFeature(format!(
             "native image codec {}",

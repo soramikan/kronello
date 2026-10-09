@@ -188,6 +188,20 @@ fn lower_with_resident(
                 source: image(&ids, *source)?,
                 effect: effect.clone(),
             },
+            // FX-008 (ADR-0137): the displacement binding is a real DAG input
+            // lowered like every other image surface.
+            DagNode::EffectMap {
+                source,
+                map,
+                effect,
+            } => DrawNode::EffectMap {
+                source: image(&ids, *source)?,
+                map: image(&ids, *map)?,
+                effect: effect.clone(),
+            },
+            DagNode::Generate { effect, .. } => DrawNode::Generate {
+                effect: effect.clone(),
+            },
             DagNode::Mask {
                 source,
                 matte,
@@ -380,12 +394,13 @@ impl RenderBackend for CpuReferenceBackend {
                         crate::scene::raster_path_reference(size, path, working)
                     })
             },
-            &mut |id, source, effect| {
+            &mut |id, source, map, effect| {
                 cache
                     .borrow_mut()
                     .rasterize(keys[id].expect("effect key"), || {
-                        crate::effect::apply_reference(
+                        crate::effect::apply_reference_mapped(
                             source,
+                            map,
                             size.output_resolution,
                             effect,
                             working,

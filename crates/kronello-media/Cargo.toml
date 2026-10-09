@@ -36,4 +36,5 @@ pkg-config = "0.3"
 
 [dev-dependencies]
 kronello-template = { path = "../kronello-template" }
+kronello-testkit = { path = "../kronello-testkit" }
 uuid = { version = "1", features = ["v4"] }

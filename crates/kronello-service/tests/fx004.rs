@@ -79,6 +79,7 @@ fn clip() -> Clip {
         masks: vec![],
         markers: vec![],
         properties: vec![],
+        pan: None,
     }
 }
 fn sequence(track: Track) -> Sequence {

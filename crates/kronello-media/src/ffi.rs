@@ -87,6 +87,28 @@ unsafe extern "C" {
     fn km_encoder_finish(e: *mut c_void) -> c_int;
     fn km_encoder_frame_size(e: *mut c_void) -> c_int;
     fn km_encoder_format(e: *mut c_void) -> *const c_char;
+    fn km_encoder_open_dnx(
+        k: *mut c_void,
+        path: *const c_char,
+        width: c_int,
+        height: c_int,
+        num: c_int,
+        den: c_int,
+        kind: c_int,
+    ) -> *mut c_void;
+    fn km_gif_open(
+        k: *mut c_void,
+        width: c_int,
+        height: c_int,
+        num: c_int,
+        den: c_int,
+    ) -> *mut c_void;
+    fn km_gif_frame(e: *mut c_void, rgba: *const u8) -> c_int;
+    fn km_gif_palette(e: *mut c_void) -> c_int;
+    fn km_gif_encode_start(e: *mut c_void, path: *const c_char) -> c_int;
+    fn km_gif_encode_frame(e: *mut c_void, rgba: *const u8) -> c_int;
+    fn km_gif_encode_flush(e: *mut c_void) -> c_int;
+    fn km_gif_close(e: *mut c_void);
 }
 fn path_string(path: &Path) -> Result<CString, MediaError> {
     CString::new(path.as_os_str().as_encoded_bytes())
@@ -541,6 +563,53 @@ impl<'a> NativeEncoder<'a> {
             frame_size: unsafe { km_encoder_frame_size(ptr.as_ptr()) }.max(0) as u64,
         })
     }
+    /// MEDIA-004 DNxHD/DNxHR delivery encoder. `kind` indexes the closed C
+    /// `DNX_KINDS` table; the runtime capability check for `dnxhd` is the
+    /// caller's responsibility before opening.
+    pub(crate) fn open_dnx(
+        runtime: &'a NativeRuntime,
+        path: &Path,
+        kind: c_int,
+        width: i32,
+        height: i32,
+        time_base: Rational,
+    ) -> Result<Self, MediaError> {
+        let path = path_string(path)?;
+        let num = i32::try_from(time_base.numerator())
+            .map_err(|_| MediaError::InvalidInput("time base numerator".into()))?;
+        let den = i32::try_from(time_base.denominator())
+            .map_err(|_| MediaError::InvalidInput("time base denominator".into()))?;
+        // SAFETY: runtime/path live through the call; the returned context is owned.
+        let ptr = NonNull::new(unsafe {
+            km_encoder_open_dnx(
+                runtime.0.as_ptr(),
+                path.as_ptr(),
+                width,
+                height,
+                num,
+                den,
+                kind,
+            )
+        })
+        .ok_or_else(|| {
+            let detail = runtime.error_detail();
+            if detail.operation == "encoder unavailable" {
+                MediaError::EncoderUnavailable {
+                    encoder: "dnxhd".into(),
+                    reason: "native encoder initialization failed".into(),
+                    ffmpeg: Some(detail),
+                }
+            } else {
+                MediaError::Encode(runtime.error())
+            }
+        })?;
+        Ok(Self {
+            ptr,
+            runtime,
+            pixel_format: unsafe { string(km_encoder_format(ptr.as_ptr())) },
+            frame_size: unsafe { km_encoder_frame_size(ptr.as_ptr()) }.max(0) as u64,
+        })
+    }
     // Caller validates byte length against the encoder dimensions before this call.
     pub(crate) fn frame(
         &mut self,
@@ -565,6 +634,87 @@ impl<'a> NativeEncoder<'a> {
 impl Drop for NativeEncoder<'_> {
     fn drop(&mut self) {
         unsafe { km_encoder_close(self.ptr.as_ptr()) }
+    }
+}
+
+/// MEDIA-004 deterministic indexed-color GIF session. Phase contract is
+/// enforced natively: `frame` collects the palette histogram for every
+/// rendered frame once, `palette` derives the median-cut table, then
+/// `encode_start`/`encode_frame`/`flush` map the same pixels through the
+/// fixed Bayer-ordered LUT into the gif muxer.
+pub(crate) struct NativeGifEncoder<'a> {
+    ptr: NonNull<c_void>,
+    runtime: &'a NativeRuntime,
+}
+impl<'a> NativeGifEncoder<'a> {
+    pub(crate) fn open(
+        runtime: &'a NativeRuntime,
+        width: u32,
+        height: u32,
+        time_base: Rational,
+    ) -> Result<Self, MediaError> {
+        let width = c_int::try_from(width)
+            .map_err(|_| MediaError::InvalidInput("GIF width overflow".into()))?;
+        let height = c_int::try_from(height)
+            .map_err(|_| MediaError::InvalidInput("GIF height overflow".into()))?;
+        let num = i32::try_from(time_base.numerator())
+            .map_err(|_| MediaError::InvalidInput("time base numerator".into()))?;
+        let den = i32::try_from(time_base.denominator())
+            .map_err(|_| MediaError::InvalidInput("time base denominator".into()))?;
+        // SAFETY: runtime is live; the returned context is uniquely owned.
+        let ptr = NonNull::new(unsafe { km_gif_open(runtime.0.as_ptr(), width, height, num, den) })
+            .ok_or_else(|| MediaError::Encode(runtime.error()))?;
+        Ok(Self { ptr, runtime })
+    }
+    /// Phase 1: fold one rendered RGBA8 frame into the palette histogram.
+    pub(crate) fn frame(&mut self, rgba: &[u8]) -> Result<(), MediaError> {
+        // SAFETY: the shim reads width*height*4 bytes from a live buffer.
+        if unsafe { km_gif_frame(self.ptr.as_ptr(), rgba.as_ptr()) } < 0 {
+            return Err(MediaError::Encode(self.runtime.error()));
+        }
+        Ok(())
+    }
+    /// End phase 1 and derive the fixed 256-color palette.
+    pub(crate) fn palette(&mut self) -> Result<(), MediaError> {
+        if unsafe { km_gif_palette(self.ptr.as_ptr()) } < 0 {
+            return Err(MediaError::Encode(self.runtime.error()));
+        }
+        Ok(())
+    }
+    /// Phase 2: open the gif encoder/muxer at `path` (a staged artifact).
+    pub(crate) fn encode_start(&mut self, path: &Path) -> Result<(), MediaError> {
+        let path = path_string(path)?;
+        if unsafe { km_gif_encode_start(self.ptr.as_ptr(), path.as_ptr()) } < 0 {
+            let detail = self.runtime.error_detail();
+            return Err(if detail.operation == "encoder unavailable" {
+                MediaError::EncoderUnavailable {
+                    encoder: "gif".into(),
+                    reason: "native encoder initialization failed".into(),
+                    ffmpeg: Some(detail),
+                }
+            } else {
+                MediaError::Encode(self.runtime.error())
+            });
+        }
+        Ok(())
+    }
+    pub(crate) fn encode_frame(&mut self, rgba: &[u8]) -> Result<(), MediaError> {
+        // SAFETY: the shim reads width*height*4 bytes from a live buffer.
+        if unsafe { km_gif_encode_frame(self.ptr.as_ptr(), rgba.as_ptr()) } < 0 {
+            return Err(MediaError::Encode(self.runtime.error()));
+        }
+        Ok(())
+    }
+    pub(crate) fn flush(&mut self) -> Result<(), MediaError> {
+        if unsafe { km_gif_encode_flush(self.ptr.as_ptr()) } < 0 {
+            return Err(MediaError::Encode(self.runtime.error()));
+        }
+        Ok(())
+    }
+}
+impl Drop for NativeGifEncoder<'_> {
+    fn drop(&mut self) {
+        unsafe { km_gif_close(self.ptr.as_ptr()) }
     }
 }
 
@@ -717,6 +867,17 @@ unsafe extern "C" {
     #[cfg(test)]
     fn km_mux_video_tag(profile: c_int) -> u32;
     fn km_probe_tag(k: *mut c_void, format: *mut c_void, key: *const c_char) -> *const c_char;
+    fn km_probe_chapter_count(format: *mut c_void) -> c_int;
+    fn km_probe_chapter(
+        format: *mut c_void,
+        index: c_int,
+        id: *mut i64,
+        start: *mut i64,
+        end: *mut i64,
+        num: *mut c_int,
+        den: *mut c_int,
+    );
+    fn km_probe_chapter_title(k: *mut c_void, format: *mut c_void, index: c_int) -> *const c_char;
     fn km_mux_av(
         k: *mut c_void,
         video: *const c_char,
@@ -726,7 +887,18 @@ unsafe extern "C" {
         export_hash: *const c_char,
         profile: c_int,
         audio_channels: c_int,
+        chapters: *const KmChapter,
+        chapter_count: c_int,
     ) -> c_int;
+}
+
+/// Chapter times cross the boundary as ticks of the fixed 1/48000 master
+/// clock; `title` must stay live through the mux call.
+#[repr(C)]
+pub(crate) struct KmChapter {
+    pub start: i64,
+    pub end: i64,
+    pub title: *const c_char,
 }
 
 /// One drained resampler output. `samples` is interleaved f32 in `mask` order
@@ -857,6 +1029,10 @@ pub(crate) enum AudioEncoderKind {
     Alac = 1,
     Aac = 2,
     Opus = 3,
+    /// MEDIA-004: MP3 (libmp3lame CBR) standalone deliverable.
+    Mp3 = 4,
+    /// MEDIA-004: FLAC (native) lossless standalone deliverable.
+    Flac = 5,
 }
 impl AudioEncoderKind {
     /// Registered FFmpeg encoder name, used for capability discovery.
@@ -866,6 +1042,8 @@ impl AudioEncoderKind {
             Self::Alac => "alac",
             Self::Aac => "aac",
             Self::Opus => "libopus",
+            Self::Mp3 => "libmp3lame",
+            Self::Flac => "flac",
         }
     }
     /// Codec name as reported by stream probes.
@@ -875,6 +1053,17 @@ impl AudioEncoderKind {
             Self::Alac => "alac",
             Self::Aac => "aac",
             Self::Opus => "opus",
+            Self::Mp3 => "mp3",
+            Self::Flac => "flac",
+        }
+    }
+    /// Intermediate file suffix while staging a movie output. Standalone MP3
+    /// and FLAC deliveries encode straight to their staged artifact, so this
+    /// is only meaningful for the intermediate kinds.
+    pub(crate) fn intermediate_suffix(self) -> &'static str {
+        match self {
+            Self::Opus => "audio.webm",
+            _ => "audio.mov",
         }
     }
 }
@@ -912,6 +1101,14 @@ impl<'a> NativeAudioEncoder<'a> {
                 MediaError::Audio(kronello_audio::AudioError::UnsupportedChannelLayout(
                     runtime.error(),
                 ))
+            } else if detail.operation == "audio encoder unavailable" {
+                // MEDIA-004: missing closed-profile encoders are a typed
+                // capability failure, never a silent substitution.
+                MediaError::EncoderUnavailable {
+                    encoder: kind.encoder_name().into(),
+                    reason: "native audio encoder is missing".into(),
+                    ffmpeg: Some(detail),
+                }
             } else {
                 MediaError::Encode(runtime.error())
             }
@@ -1096,6 +1293,35 @@ impl NativeRuntime {
                 let key = CString::new(name).expect("constant tag without NUL");
                 string(km_probe_tag(self.0.as_ptr(), ptr.as_ptr(), key.as_ptr()))
             };
+            // MEDIA-004: container chapters, rescaled from each chapter's own
+            // time base into the rational master clock.
+            let chapter_count = km_probe_chapter_count(ptr.as_ptr());
+            if !(0..=1024).contains(&chapter_count) {
+                return Err(MediaError::Decode("chapter budget exceeded".into()));
+            }
+            let mut chapters = Vec::with_capacity(chapter_count as usize);
+            for index in 0..chapter_count {
+                let (mut id, mut start, mut end, mut num, mut den) = (0i64, 0i64, 0i64, 0, 0);
+                km_probe_chapter(
+                    ptr.as_ptr(),
+                    index,
+                    &mut id,
+                    &mut start,
+                    &mut end,
+                    &mut num,
+                    &mut den,
+                );
+                let time_base = Rational::new(i64::from(num), i64::from(den))?;
+                if time_base <= Rational::ZERO {
+                    return Err(MediaError::Decode("invalid chapter time base".into()));
+                }
+                chapters.push(crate::MediaChapter {
+                    id,
+                    start: Rational::from_integer(start).checked_mul(time_base)?,
+                    end: Rational::from_integer(end).checked_mul(time_base)?,
+                    title: string(km_probe_chapter_title(self.0.as_ptr(), ptr.as_ptr(), index)),
+                });
+            }
             let format_duration = km_probe_format_duration(ptr.as_ptr());
             let mut result = MediaProbe {
                 streams,
@@ -1106,6 +1332,7 @@ impl NativeRuntime {
                     .transpose()?,
                 render_snapshot_hash: tag("kronello_render_snapshot_hash"),
                 export_snapshot_hash: tag("kronello_export_snapshot_hash"),
+                chapters,
             };
             drop(probe);
             // MOV nclc does not carry a range flag. Older FFmpeg versions leave
@@ -1133,6 +1360,7 @@ impl NativeRuntime {
         export_hash: &str,
         profile: MovieProfile,
         audio_channels: u32,
+        chapters: &[crate::MediaChapter],
     ) -> Result<(), MediaError> {
         let video = path_string(video)?;
         let audio = path_string(audio)?;
@@ -1143,7 +1371,35 @@ impl NativeRuntime {
             .map_err(|_| MediaError::InvalidInput("hash contains NUL".into()))?;
         let audio_channels = c_int::try_from(audio_channels)
             .map_err(|_| MediaError::InvalidInput("audio channel budget".into()))?;
-        // SAFETY: all strings and the runtime live throughout the synchronous mux.
+        if chapters.len() > 1024 {
+            return Err(MediaError::InvalidInput("chapter budget exceeded".into()));
+        }
+        // Chapter times cross the boundary as ticks of the fixed 1/48000
+        // master clock; titles are borrowed for the synchronous call only.
+        let mut titles = Vec::with_capacity(chapters.len());
+        let mut native = Vec::with_capacity(chapters.len());
+        for chapter in chapters {
+            let title = CString::new(chapter.title.as_str())
+                .map_err(|_| MediaError::InvalidInput("chapter title contains NUL".into()))?;
+            let start = chapter_ticks(chapter.start)?;
+            let end = chapter_ticks(chapter.end)?;
+            if end <= start {
+                return Err(MediaError::InvalidInput(
+                    "chapter collapses below the container time base".into(),
+                ));
+            }
+            titles.push(title);
+            native.push(KmChapter {
+                start,
+                end,
+                title: std::ptr::null(),
+            });
+        }
+        for (entry, title) in native.iter_mut().zip(&titles) {
+            entry.title = title.as_ptr();
+        }
+        // SAFETY: all strings, the chapter array and the runtime live
+        // throughout the synchronous mux; titles outlive the call.
         if unsafe {
             km_mux_av(
                 self.0.as_ptr(),
@@ -1154,6 +1410,8 @@ impl NativeRuntime {
                 export_hash.as_ptr(),
                 profile.native_id(),
                 audio_channels,
+                native.as_ptr(),
+                native.len() as c_int,
             )
         } < 0
         {
@@ -1161,4 +1419,14 @@ impl NativeRuntime {
         }
         Ok(())
     }
+}
+/// Round a nonnegative rational time to 1/48000 master-clock ticks, half up.
+fn chapter_ticks(time: Rational) -> Result<i64, MediaError> {
+    let scaled = time.checked_mul(Rational::from_integer(48_000))?;
+    let n = scaled.numerator();
+    let d = scaled.denominator();
+    if n < 0 {
+        return Err(MediaError::InvalidInput("negative chapter time".into()));
+    }
+    Ok(n.div_euclid(d) + i64::from(n.rem_euclid(d) * 2 >= d))
 }

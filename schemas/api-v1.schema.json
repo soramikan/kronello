@@ -651,6 +651,28 @@
         },
         {
           "additionalProperties": false,
+          "description": "GUI-012 (ADR-0138): one audio track measured in place — every other\ntrack is muted in the measurement snapshot, so the result is the\ntrack's program contribution, not an isolated clip. The measured\nrange is the target track's own clip extent.",
+          "properties": {
+            "kind": {
+              "const": "track",
+              "type": "string"
+            },
+            "sequence": {
+              "$ref": "#/$defs/SequenceId"
+            },
+            "track": {
+              "$ref": "#/$defs/TrackId"
+            }
+          },
+          "required": [
+            "kind",
+            "sequence",
+            "track"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "A verified asset stream, optionally limited to a source range.",
           "properties": {
             "asset": {
@@ -836,10 +858,71 @@
       ],
       "type": "string"
     },
+    "AvExportOutputReport": {
+      "description": "Per-leg result of a multi-output delivery (ADR-0133): each output carries\nits own probe, transfer report and warnings. `chapters` lists the markers\nactually written into the container.",
+      "properties": {
+        "audio": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AudioEncodeReport"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "chapters": {
+          "items": {
+            "$ref": "#/$defs/MediaChapter"
+          },
+          "type": "array"
+        },
+        "output": {
+          "description": "Destination as declared in the request leg.",
+          "type": "string"
+        },
+        "probe": {
+          "$ref": "#/$defs/MediaProbe"
+        },
+        "profile": {
+          "$ref": "#/$defs/MovieProfile"
+        },
+        "video": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MediaPathReport"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "warnings": {
+          "items": {
+            "$ref": "#/$defs/MediaWarning"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "output",
+        "profile",
+        "probe"
+      ],
+      "type": "object"
+    },
     "AvExportReport": {
       "properties": {
         "audio": {
-          "$ref": "#/$defs/AudioEncodeReport"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AudioEncodeReport"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Primary leg audio report; absent for video-only deliveries."
         },
         "audio_profile_version": {
           "default": 1,
@@ -873,6 +956,13 @@
             }
           ]
         },
+        "outputs": {
+          "description": "MEDIA-004: one entry per leg in request order, primary first.",
+          "items": {
+            "$ref": "#/$defs/AvExportOutputReport"
+          },
+          "type": "array"
+        },
         "probe": {
           "$ref": "#/$defs/MediaProbe"
         },
@@ -901,7 +991,15 @@
           ]
         },
         "video": {
-          "$ref": "#/$defs/MediaPathReport"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MediaPathReport"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Primary leg transfer report; absent for audio-only deliveries."
         }
       },
       "required": [
@@ -912,8 +1010,6 @@
         "request",
         "sample_range",
         "frames",
-        "video",
-        "audio",
         "probe"
       ],
       "type": "object"
@@ -930,6 +1026,10 @@
           "minItems": 3,
           "type": "array"
         },
+        "chapters": {
+          "$ref": "#/$defs/ChapterPolicy",
+          "description": "MEDIA-004: chapter transfer policy for the primary leg."
+        },
         "clipping": {
           "$ref": "#/$defs/ClippingPolicy"
         },
@@ -937,7 +1037,15 @@
           "$ref": "#/$defs/FrameRate"
         },
         "output": {
+          "description": "Primary output destination; `movie_profile` comes from the snapshot.",
           "type": "string"
+        },
+        "outputs": {
+          "description": "MEDIA-004 (ADR-0133): additional output legs; empty keeps the\npre-M10 single-output wire shape.",
+          "items": {
+            "$ref": "#/$defs/DeliveryOutput"
+          },
+          "type": "array"
         },
         "range": {
           "$ref": "#/$defs/TimeRange"
@@ -1488,6 +1596,361 @@
       ],
       "type": "object"
     },
+    "CaptureCodec": {
+      "description": "The recorded container/codec contract. `pro_res` is the only codec in v1:\nthe provisional spool is lossless RGBA8 and finalization encodes a BT.709\nProRes MOV through the bounded `kronello-media` encoder.",
+      "enum": [
+        "pro_res"
+      ],
+      "type": "string"
+    },
+    "CaptureColor": {
+      "description": "Recorded signal color tag. `bt709` is the only supported tag in v1; the\nProRes container stream carries the matching `colr` metadata.",
+      "enum": [
+        "bt709"
+      ],
+      "type": "string"
+    },
+    "CaptureDeckProbeRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "device": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DeckDevice"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Restrict the probe to one vendor adapter family."
+        }
+      },
+      "type": "object"
+    },
+    "CaptureFormat": {
+      "additionalProperties": false,
+      "description": "Static output contract fixed at submission. Captured frames are appended in\ndelivery order and container-stamped one tick per frame at `frame_rate` —\nthe record path performs no drops and no re-time correction.",
+      "properties": {
+        "codec": {
+          "$ref": "#/$defs/CaptureCodec"
+        },
+        "color": {
+          "$ref": "#/$defs/CaptureColor"
+        },
+        "frame_rate": {
+          "$ref": "#/$defs/FrameRate"
+        },
+        "height": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "width": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "width",
+        "height",
+        "frame_rate",
+        "codec",
+        "color"
+      ],
+      "type": "object"
+    },
+    "CaptureOrphan": {
+      "additionalProperties": false,
+      "description": "A provisional spool whose owning session ended without publication —\nworker death, failure, or cancellation. Reported, never silently deleted\nand never exposed as a project asset.",
+      "properties": {
+        "bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "job": {
+          "description": "Owning job id when the filename parses as one.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "job_status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JobStatus"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Job status when the record resolves; `interrupted` marks a dead worker."
+        },
+        "provisional": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provisional",
+        "bytes"
+      ],
+      "type": "object"
+    },
+    "CaptureSessionEntry": {
+      "additionalProperties": false,
+      "description": "One capture session observed by `capture.status`; the job record is the\nauthoritative progress/lifecycle source (ADR-0025).",
+      "properties": {
+        "asset": {
+          "$ref": "#/$defs/AssetId"
+        },
+        "asset_registered": {
+          "description": "Whether the document already contains the registered asset.",
+          "type": "boolean"
+        },
+        "job": {
+          "$ref": "#/$defs/JobRecord"
+        },
+        "provisional": {
+          "description": "The live provisional spool path while it exists. It is never a project\nasset; only a finalized, hashed publication registers one.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source": {
+          "$ref": "#/$defs/CaptureSource"
+        },
+        "stop_requested": {
+          "description": "`true` once `capture.stop` was requested while the worker still runs.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "job",
+        "asset",
+        "source",
+        "stop_requested",
+        "asset_registered"
+      ],
+      "type": "object"
+    },
+    "CaptureSource": {
+      "description": "Capture sources. Selection is explicit: a screen/window/app source names\nits target; `synthetic` is the deterministic in-repo adapter used by tests;\n`deck` is the vendor-SDK ingest boundary (ADR-0134 style).",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Deterministic in-repo source: a paced synthetic frame generator.",
+          "properties": {
+            "kind": {
+              "const": "synthetic",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Full-display capture; `display` is a `CGDirectDisplayID`, absent is main.",
+          "properties": {
+            "display": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "kind": {
+              "const": "screen",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A single window by `CGWindowID`.",
+          "properties": {
+            "kind": {
+              "const": "window",
+              "type": "string"
+            },
+            "window": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "window"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Every on-screen window owned by the bundle identifier.",
+          "properties": {
+            "bundle_id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "application",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "bundle_id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Deck ingest through the vendor SDK adapter (DeckLink / RS-422).",
+          "properties": {
+            "device": {
+              "$ref": "#/$defs/DeckDevice"
+            },
+            "device_id": {
+              "description": "Vendor-reported device identity; absent selects the first device.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "kind": {
+              "const": "deck",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "device"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "CaptureStartRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "asset": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AssetId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Caller-pinned asset id; absent mints a fresh one."
+        },
+        "expected_revision": {
+          "description": "Optional fence against changes since the caller inspected the project.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "format": {
+          "$ref": "#/$defs/CaptureFormat"
+        },
+        "idempotency_key": {
+          "description": "FLOW-003-style submission key scoped to the project; replay returns the\nrecorded job without spawning a second recording.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "max_frames": {
+          "description": "Stop and publish automatically after this many frames.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "project": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/CaptureSource"
+        }
+      },
+      "required": [
+        "project",
+        "source",
+        "format"
+      ],
+      "type": "object"
+    },
+    "CaptureStatusRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "job": {
+          "description": "Restrict the session list to one job id. Orphans are always reported\nfor the project-wide capture directory.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "type": "object"
+    },
+    "CaptureStatusResult": {
+      "additionalProperties": false,
+      "properties": {
+        "orphans": {
+          "items": {
+            "$ref": "#/$defs/CaptureOrphan"
+          },
+          "type": "array"
+        },
+        "sessions": {
+          "items": {
+            "$ref": "#/$defs/CaptureSessionEntry"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "sessions",
+        "orphans"
+      ],
+      "type": "object"
+    },
+    "CaptureStopRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "job": {
+          "description": "Capture job id (the session). Stop is a graceful end-of-input signal;\nthe worker still hashes and registers what was recorded.",
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "job"
+      ],
+      "type": "object"
+    },
     "ChangedKey": {
       "oneOf": [
         {
@@ -1542,6 +2005,21 @@
       "format": "uint64",
       "minimum": 0,
       "type": "integer"
+    },
+    "ChapterPolicy": {
+      "description": "Whether chapter markers transfer into a leg that can hold them\n(ADR-0133). Only authored chapter markers in the export range move;\nmarker colors and comments never cross the container boundary.",
+      "oneOf": [
+        {
+          "const": "transfer",
+          "description": "Copy chapters where the container supports them; otherwise record a\ntyped `CHAPTERS_DROPPED` warning on the leg report.",
+          "type": "string"
+        },
+        {
+          "const": "omit",
+          "description": "Explicitly drop chapter markers for this leg without warning.",
+          "type": "string"
+        }
+      ]
     },
     "CharacterAnimation": {
       "additionalProperties": false,
@@ -1761,6 +2239,17 @@
             "$ref": "#/$defs/Mask"
           },
           "type": "array"
+        },
+        "pan": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Property"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "GUI-012 (ADR-0138): constant stereo balance in [-1, 1], absent means\ncenter. Applied to the clip's mixed output after volume, effects and\nfades; the basic (pre-AUDIO-004) mixer rejects it as unsupported."
         },
         "properties": {
           "description": "Placement transform and effect parameters, evaluated in sequence time.",
@@ -2396,6 +2885,49 @@
       ],
       "type": "object"
     },
+    "DeckDevice": {
+      "enum": [
+        "decklink",
+        "rs422"
+      ],
+      "type": "string"
+    },
+    "DeckDeviceEntry": {
+      "additionalProperties": false,
+      "description": "One deck device reported by a linked vendor adapter build.",
+      "properties": {
+        "device": {
+          "$ref": "#/$defs/DeckDevice"
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "device",
+        "id",
+        "label"
+      ],
+      "type": "object"
+    },
+    "DeckProbeResult": {
+      "additionalProperties": false,
+      "properties": {
+        "devices": {
+          "items": {
+            "$ref": "#/$defs/DeckDeviceEntry"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "devices"
+      ],
+      "type": "object"
+    },
     "DeliveryAudioCodec": {
       "enum": [
         "alac",
@@ -2403,6 +2935,40 @@
         "opus"
       ],
       "type": "string"
+    },
+    "DeliveryOutput": {
+      "additionalProperties": false,
+      "description": "MEDIA-004 (ADR-0133): one additional output leg sharing the single render\npass. The leg's movie profile, audio contract and snapshot identity come\nfrom the matching `AvExportSnapshot` in the call, not from this spec.",
+      "properties": {
+        "background": {
+          "description": "Explicit opaque background in the profile's pixel class space.",
+          "items": {
+            "format": "float",
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "chapters": {
+          "$ref": "#/$defs/ChapterPolicy",
+          "default": "transfer"
+        },
+        "output": {
+          "description": "Publish destination; staged and renamed like the primary `output`.",
+          "type": "string"
+        },
+        "profile": {
+          "$ref": "#/$defs/MovieProfile",
+          "description": "Versioned delivery profile for this leg; must equal the companion\nsnapshot's `movie_profile`."
+        }
+      },
+      "required": [
+        "output",
+        "profile",
+        "background"
+      ],
+      "type": "object"
     },
     "DescriptorRef": {
       "additionalProperties": false,
@@ -2487,6 +3053,37 @@
         "color"
       ],
       "type": "object"
+    },
+    "DisplaceChannel": {
+      "description": "FX-008: displacement-map channel for `kronello.displace`.",
+      "enum": [
+        "red",
+        "green",
+        "blue",
+        "alpha",
+        "luminance"
+      ],
+      "type": "string"
+    },
+    "DnxProfile": {
+      "description": "MEDIA-004 (ADR-0133): closed FFmpeg `dnxhd` encoder profile argument for\nthe DNxHD/DNxHR delivery profiles.",
+      "oneOf": [
+        {
+          "enum": [
+            "dnxhr_lb",
+            "dnxhr_sq",
+            "dnxhr_hq",
+            "dnxhr_hqx",
+            "dnxhr444"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "dnxhd",
+          "description": "DNxHD family; the encoder resolves the exact bit profile from the\nraster and frame rate and rejects non-compliant combinations.",
+          "type": "string"
+        }
+      ]
     },
     "DocumentMatteKind": {
       "enum": [
@@ -4679,6 +5276,348 @@
             "sampling"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FX-008 (ADR-0137): deterministic film grain. `amount` scales the\ninjected noise on 0..=1; `size` is the noise cell edge in design_px;\n`monochrome` shares one lattice across RGB; `seed` is a signed 31-bit\ninteger folded with the scene time into the hash lattice.",
+          "properties": {
+            "amount": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "const": "grain",
+              "type": "string"
+            },
+            "monochrome": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "seed": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "size": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "required": [
+            "kind",
+            "amount",
+            "size",
+            "monochrome",
+            "seed"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FX-008: pixelation. `block_size` is the block edge in design_px;\n`basis` selects the sampled texel inside each block.",
+          "properties": {
+            "basis": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "block_size": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "const": "mosaic",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "block_size",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FX-008: straight-color inversion. `channel` selects which channels\ninvert; alpha inversions keep straight RGB and recombine premultiplied.",
+          "properties": {
+            "channel": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "const": "invert",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "channel"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FX-008: 4x4 channel matrix on premultiplied RGBA. `matrix` references\na data table with scalar columns `red`, `green`, `blue`, `alpha` and\nexactly four rows (row = output channel in r,g,b,a order).",
+          "properties": {
+            "kind": {
+              "const": "channel_mixer",
+              "type": "string"
+            },
+            "matrix": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "required": [
+            "kind",
+            "matrix"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FX-008: maps straight working luminance onto the black→white ramp and\nblends by `amount`; alpha is preserved.",
+          "properties": {
+            "amount": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "const": "tint",
+              "type": "string"
+            },
+            "map_black": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "map_white": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "required": [
+            "kind",
+            "map_black",
+            "map_white",
+            "amount"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FX-008: uniform motion blur. `angle` is the direction in degrees,\n`length` the total blur span in design_px.",
+          "properties": {
+            "angle": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "const": "directional_blur",
+              "type": "string"
+            },
+            "length": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "required": [
+            "kind",
+            "angle",
+            "length"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FX-008: spin/zoom radial blur around `center` (node-local design_px).\n`amount` is the total rotation in degrees for `spin` and the inward\nscale extent on 0..=1 for `zoom`.",
+          "properties": {
+            "amount": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "center": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "const": "radial_blur",
+              "type": "string"
+            },
+            "mode": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "required": [
+            "kind",
+            "mode",
+            "amount",
+            "center"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FX-008: displacement-map warp. The map layer is an explicitly bound\nsecondary input (snapshot displacement binding); `channel_x` /\n`channel_y` pick the map channels and `scale_x` / `scale_y` are the\nsigned maximum displacements in node-local design_px.",
+          "properties": {
+            "channel_x": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "channel_y": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "const": "displace",
+              "type": "string"
+            },
+            "scale_x": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "scale_y": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "required": [
+            "kind",
+            "channel_x",
+            "channel_y",
+            "scale_x",
+            "scale_y"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FX-008: source-independent layer synthesis replacing the incoming\nraster at its chain position. `kind` selects gradient/checkerboard/\ngrid; `point_a`/`point_b` are node-local design_px anchors (gradient\nendpoints; radial uses `point_a` as center and `|b-a|` as radius);\n`cell_size` is the checker/grid cell edge and `line_width` the grid\nline width, both design_px.",
+          "properties": {
+            "cell_size": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "color_a": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "color_b": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "generator": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "const": "generate",
+              "type": "string"
+            },
+            "line_width": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "point_a": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "point_b": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "required": [
+            "kind",
+            "generator",
+            "color_a",
+            "color_b",
+            "point_a",
+            "point_b",
+            "cell_size",
+            "line_width"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FX-008: integer-sample echo. `delay_ms` rounds to whole 48 kHz\nsamples; `feedback_db` (<=0) recirculates; `wet`/`dry` mix on 0..=1.",
+          "properties": {
+            "delay_ms": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "dry": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "feedback_db": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "const": "audio_delay",
+              "type": "string"
+            },
+            "wet": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "required": [
+            "kind",
+            "delay_ms",
+            "feedback_db",
+            "wet",
+            "dry"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FX-008 (ADR-0139): deterministic feedback-comb reverb realizing an\nalgorithmically generated room response. `decay_ms` is the RT60\ntarget; `damping` is the in-loop lowpass amount on 0..=1.",
+          "properties": {
+            "damping": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "decay_ms": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "dry": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "const": "audio_reverb",
+              "type": "string"
+            },
+            "wet": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "required": [
+            "kind",
+            "decay_ms",
+            "damping",
+            "wet",
+            "dry"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FX-008: semitone pitch shift executed at the source stage through the\ndeterministic WSOLA rate-resampled window (±AUDIO_PITCH_MAX_SEMITONES).",
+          "properties": {
+            "kind": {
+              "const": "audio_pitch",
+              "type": "string"
+            },
+            "semitones": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "required": [
+            "kind",
+            "semitones"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FX-008: noise gate with hysteresis. `threshold_db` is the open level;\nthe gate closes below `threshold_db - hysteresis_db`; `attack_ms` /\n`release_ms` smooth the open/close gain ramps.",
+          "properties": {
+            "attack_ms": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "hysteresis_db": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "const": "audio_gate",
+              "type": "string"
+            },
+            "release_ms": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "threshold_db": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "required": [
+            "kind",
+            "threshold_db",
+            "attack_ms",
+            "release_ms",
+            "hysteresis_db"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -4862,13 +5801,27 @@
       "type": "string"
     },
     "ExportAudioCodec2": {
-      "enum": [
-        "pcm_s24le",
-        "alac",
-        "aac",
-        "opus"
-      ],
-      "type": "string"
+      "oneOf": [
+        {
+          "enum": [
+            "pcm_s24le",
+            "alac",
+            "aac",
+            "opus"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "mp3",
+          "description": "MEDIA-004: MP3 CBR elementary deliverables (libmp3lame).",
+          "type": "string"
+        },
+        {
+          "const": "flac",
+          "description": "MEDIA-004: FLAC lossless elementary deliverables.",
+          "type": "string"
+        }
+      ]
     },
     "ExportAudioMode": {
       "description": "Mirror of `kronello_audio::AudioSourceMode`.",
@@ -5032,6 +5985,18 @@
       "enum": [
         "avoid_crossing",
         "allow_crossing"
+      ],
+      "type": "string"
+    },
+    "ExportDnxProfile": {
+      "description": "Mirror of `kronello_media::DnxProfile` (MEDIA-004, ADR-0133).",
+      "enum": [
+        "dnxhd",
+        "dnxhr_lb",
+        "dnxhr_sq",
+        "dnxhr_hq",
+        "dnxhr_hqx",
+        "dnxhr444"
       ],
       "type": "string"
     },
@@ -5438,6 +6403,228 @@
             "profile_version",
             "clips",
             "background"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "MEDIA-004: DNxHD/DNxHR + PCM24 in MOV.",
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/ExportAudioMode",
+              "default": "explicit"
+            },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "background": {
+              "items": {
+                "format": "float",
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/ExportAudioClip"
+              },
+              "type": "array"
+            },
+            "dnx_profile": {
+              "$ref": "#/$defs/ExportDnxProfile"
+            },
+            "format": {
+              "const": "dnx_mov",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "dnx_profile",
+            "clips",
+            "background"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "MEDIA-004: DNxHD/DNxHR + PCM24 in MXF.",
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/ExportAudioMode",
+              "default": "explicit"
+            },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "background": {
+              "items": {
+                "format": "float",
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/ExportAudioClip"
+              },
+              "type": "array"
+            },
+            "dnx_profile": {
+              "$ref": "#/$defs/ExportDnxProfile"
+            },
+            "format": {
+              "const": "dnx_mxf",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "dnx_profile",
+            "clips",
+            "background"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "MEDIA-004: deterministic indexed-color GIF (video only).",
+          "properties": {
+            "background": {
+              "items": {
+                "format": "float",
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "format": {
+              "const": "gif",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "background"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "MEDIA-004: MP3 CBR elementary audio (mono/stereo layouts only).",
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/ExportAudioMode",
+              "default": "explicit"
+            },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/ExportAudioClip"
+              },
+              "type": "array"
+            },
+            "format": {
+              "const": "mp3",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "clips"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "MEDIA-004: FLAC lossless elementary audio.",
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/ExportAudioMode",
+              "default": "explicit"
+            },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/ExportAudioClip"
+              },
+              "type": "array"
+            },
+            "format": {
+              "const": "flac",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "clips"
           ],
           "type": "object"
         },
@@ -6963,6 +8150,16 @@
       ],
       "type": "object"
     },
+    "GenerateKind": {
+      "description": "FX-008: synthesized layer kind for `kronello.generate`.",
+      "enum": [
+        "gradient_linear",
+        "gradient_radial",
+        "checkerboard",
+        "grid"
+      ],
+      "type": "string"
+    },
     "Gradient": {
       "oneOf": [
         {
@@ -7760,6 +8957,83 @@
       ],
       "type": "object"
     },
+    "InvertChannel": {
+      "description": "FX-008: channel selection for `kronello.invert`.",
+      "enum": [
+        "rgb",
+        "red",
+        "green",
+        "blue",
+        "alpha"
+      ],
+      "type": "string"
+    },
+    "IoOutputDisableRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/OutputDeviceKind"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "IoOutputEnableRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/OutputDeviceKind"
+        },
+        "name": {
+          "description": "Optional display name for the published output (for example the Syphon\nserver name). Never a locator or an arbitrary command string.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "IoOutputListRequest": {
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "IoOutputListResult": {
+      "additionalProperties": false,
+      "properties": {
+        "devices": {
+          "items": {
+            "$ref": "#/$defs/OutputDeviceInfo"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "devices"
+      ],
+      "type": "object"
+    },
+    "IoOutputStateResult": {
+      "additionalProperties": false,
+      "properties": {
+        "active": {
+          "type": "boolean"
+        },
+        "kind": {
+          "$ref": "#/$defs/OutputDeviceKind"
+        }
+      },
+      "required": [
+        "kind",
+        "active"
+      ],
+      "type": "object"
+    },
     "JobAudioClip": {
       "additionalProperties": false,
       "properties": {
@@ -8214,6 +9488,228 @@
         },
         {
           "additionalProperties": false,
+          "description": "MEDIA-004 (ADR-0133): DNxHD/DNxHR + PCM24 in MOV. `dnx_profile`\nselects the closed `dnxhd` encoder profile.",
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/AudioSourceMode",
+              "default": "explicit"
+            },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "background": {
+              "items": {
+                "format": "float",
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/JobAudioClip"
+              },
+              "type": "array"
+            },
+            "dnx_profile": {
+              "$ref": "#/$defs/DnxProfile"
+            },
+            "format": {
+              "const": "dnx_mov",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "dnx_profile",
+            "clips",
+            "background"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "MEDIA-004: DNxHD/DNxHR + PCM24 in MXF.",
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/AudioSourceMode",
+              "default": "explicit"
+            },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "background": {
+              "items": {
+                "format": "float",
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/JobAudioClip"
+              },
+              "type": "array"
+            },
+            "dnx_profile": {
+              "$ref": "#/$defs/DnxProfile"
+            },
+            "format": {
+              "const": "dnx_mxf",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "dnx_profile",
+            "clips",
+            "background"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "MEDIA-004: deterministic two-phase indexed-color GIF (video only).",
+          "properties": {
+            "background": {
+              "items": {
+                "format": "float",
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "format": {
+              "const": "gif",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "background"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "MEDIA-004: MP3 CBR elementary audio (mono/stereo layouts only).",
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/AudioSourceMode",
+              "default": "explicit"
+            },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/JobAudioClip"
+              },
+              "type": "array"
+            },
+            "format": {
+              "const": "mp3",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "clips"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "MEDIA-004: FLAC lossless elementary audio.",
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/AudioSourceMode",
+              "default": "explicit"
+            },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "clips": {
+              "items": {
+                "$ref": "#/$defs/JobAudioClip"
+              },
+              "type": "array"
+            },
+            "format": {
+              "const": "flac",
+              "type": "string"
+            },
+            "profile_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "profile_version",
+            "clips"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Subtitle sidecar file (`caption_format` selects srt/vtt/itt). The job\nserializes cue documents from the fixed snapshot; no frames render.",
           "properties": {
             "caption_format": {
@@ -8526,8 +10022,19 @@
         "id": {
           "$ref": "#/$defs/MarkerId"
         },
+        "role": {
+          "$ref": "#/$defs/MarkerRole",
+          "description": "MEDIA-004 (ADR-0133): semantic role. `chapter` entries transfer into\nchapter-capable delivery containers; absent in pre-M10 documents."
+        },
         "time": {
           "$ref": "#/$defs/Rational"
+        },
+        "title": {
+          "description": "Chapter display title written to capable containers. `comment` stays\nthe authoring annotation and is never transferred (ADR-0133).",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -8555,6 +10062,21 @@
       "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
       "format": "uuid",
       "type": "string"
+    },
+    "MarkerRole": {
+      "description": "Closed marker roles; transports never infer delivery semantics from text.",
+      "oneOf": [
+        {
+          "const": "standard",
+          "description": "Time annotation without delivery semantics.",
+          "type": "string"
+        },
+        {
+          "const": "chapter",
+          "description": "Output chapter boundary; the marker `title` is the chapter name.",
+          "type": "string"
+        }
+      ]
     },
     "Mask": {
       "additionalProperties": false,
@@ -8814,6 +10336,33 @@
       ],
       "type": "object"
     },
+    "MediaChapter": {
+      "additionalProperties": false,
+      "description": "MEDIA-004 (ADR-0133): one container chapter in output-relative master\ntime. `id` is informational on probes; on write the muxer assigns its own.",
+      "properties": {
+        "end": {
+          "$ref": "#/$defs/Rational",
+          "description": "Exclusive end; strictly greater than `start` at the 1/48000 master\nclock granularity used across the FFI boundary."
+        },
+        "id": {
+          "default": 0,
+          "format": "int64",
+          "type": "integer"
+        },
+        "start": {
+          "$ref": "#/$defs/Rational"
+        },
+        "title": {
+          "description": "Display title copied from the chapter marker; may be empty.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "type": "object"
+    },
     "MediaNode": {
       "additionalProperties": false,
       "description": "Explicit media stream; AUDIO-003 executes audio only.",
@@ -8888,6 +10437,13 @@
     },
     "MediaProbe": {
       "properties": {
+        "chapters": {
+          "description": "MEDIA-004: container chapters in output-relative master time.",
+          "items": {
+            "$ref": "#/$defs/MediaChapter"
+          },
+          "type": "array"
+        },
         "duration": {
           "anyOf": [
             {
@@ -9134,6 +10690,23 @@
       ],
       "type": "object"
     },
+    "MediaWarning": {
+      "additionalProperties": false,
+      "description": "A typed non-fatal delivery notice recorded on a leg report (ADR-0133).",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "type": "object"
+    },
     "Modifier": {
       "additionalProperties": false,
       "description": "Ordered modifier frame only, with semantic parameters and a stable identity.\nNo modifier algorithm or execution capability is implemented here. The\nanimation compiler must resolve kind/version and reject unsupported kinds.",
@@ -9173,21 +10746,60 @@
       "format": "uuid",
       "type": "string"
     },
-    "MovieProfile": {
+    "MosaicBasis": {
+      "description": "FX-008: sampling basis for `kronello.mosaic`. `center` samples the block\ncenter texel; `edge` samples the block's top-left texel.",
       "enum": [
-        "pro_res_pcm24",
-        "av1_mp4_alac_v1",
-        "h264_alac_v1",
-        "hevc_alac_v1",
-        "pro_res_pq_pcm24_v1",
-        "pro_res_hlg_pcm24_v1",
-        "pro_res_sdr_from_hdr_pcm24_v1",
-        "h264_aac_v1",
-        "hevc_aac_v1",
-        "av1_mp4_aac_v1",
-        "av1_webm_opus_v1"
+        "center",
+        "edge"
       ],
       "type": "string"
+    },
+    "MovieProfile": {
+      "oneOf": [
+        {
+          "enum": [
+            "pro_res_pcm24",
+            "av1_mp4_alac_v1",
+            "h264_alac_v1",
+            "hevc_alac_v1",
+            "pro_res_pq_pcm24_v1",
+            "pro_res_hlg_pcm24_v1",
+            "pro_res_sdr_from_hdr_pcm24_v1",
+            "h264_aac_v1",
+            "hevc_aac_v1",
+            "av1_mp4_aac_v1",
+            "av1_webm_opus_v1",
+            "dnxhd_mov_pcm24_v1",
+            "dnxhr_lb_mov_pcm24_v1",
+            "dnxhr_sq_mov_pcm24_v1",
+            "dnxhr_hq_mov_pcm24_v1",
+            "dnxhr_hqx_mov_pcm24_v1",
+            "dnxhr444_mov_pcm24_v1",
+            "dnxhd_mxf_pcm24_v1",
+            "dnxhr_lb_mxf_pcm24_v1",
+            "dnxhr_sq_mxf_pcm24_v1",
+            "dnxhr_hq_mxf_pcm24_v1",
+            "dnxhr_hqx_mxf_pcm24_v1",
+            "dnxhr444_mxf_pcm24_v1"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "gif_v1",
+          "description": "Deterministic two-pass indexed-color GIF (palette LUT + Bayer dither).",
+          "type": "string"
+        },
+        {
+          "const": "mp3_v1",
+          "description": "MP3 CBR 256k mono/stereo elementary output.",
+          "type": "string"
+        },
+        {
+          "const": "flac_v1",
+          "description": "FLAC lossless elementary output.",
+          "type": "string"
+        }
+      ]
     },
     "MulticamAngle": {
       "additionalProperties": false,
@@ -9728,6 +11340,57 @@
       ],
       "type": "object"
     },
+    "OutputDeviceInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "active": {
+          "description": "An output of this kind is currently enabled in this session.",
+          "type": "boolean"
+        },
+        "available": {
+          "description": "This transport can activate the output right now (native session for\nref_monitor/syphon; a contributed adapter for vendor outputs).",
+          "type": "boolean"
+        },
+        "detail": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "detected": {
+          "description": "Runtime probe: the platform/framework/SDK is present. Detection never\nimplies an adapter can be opened.",
+          "type": "boolean"
+        },
+        "kind": {
+          "$ref": "#/$defs/OutputDeviceKind"
+        },
+        "name": {
+          "type": "string"
+        },
+        "transport": {
+          "description": "The contract an activation would use: `native_surface`,\n`syphon`, or `vendor_sdk`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "name",
+        "transport",
+        "detected",
+        "available",
+        "active"
+      ],
+      "type": "object"
+    },
+    "OutputDeviceKind": {
+      "enum": [
+        "ref_monitor",
+        "syphon",
+        "sdi",
+        "ndi"
+      ],
+      "type": "string"
+    },
     "OutputFile": {
       "additionalProperties": false,
       "properties": {
@@ -9786,6 +11449,30 @@
         "origin",
         "extent",
         "pixels"
+      ],
+      "type": "object"
+    },
+    "OutputSpec": {
+      "additionalProperties": false,
+      "description": "MEDIA-004 (ADR-0133): one additional delivery leg of an `export.render`\njob. All legs share the single render pass; each leg has its own frozen\nexport snapshot, staged artifact, probe verification and no-clobber\npublish. Any leg failure fails the whole job.",
+      "properties": {
+        "chapters": {
+          "$ref": "#/$defs/ChapterPolicy",
+          "description": "Chapter transfer policy for this leg; incapable containers produce a\ntyped `CHAPTERS_DROPPED` warning rather than silent loss."
+        },
+        "destination": {
+          "description": "Absolute publish destination; the extension must match the profile's\ncontainer and the path must be free at submission.",
+          "type": "string"
+        },
+        "output": {
+          "$ref": "#/$defs/JobOutput",
+          "default": {
+            "format": "image_sequence"
+          }
+        }
+      },
+      "required": [
+        "destination"
       ],
       "type": "object"
     },
@@ -11087,6 +12774,14 @@
       ],
       "type": "object"
     },
+    "RadialBlurMode": {
+      "description": "FX-008: radial blur shape for `kronello.radial_blur`.",
+      "enum": [
+        "spin",
+        "zoom"
+      ],
+      "type": "string"
+    },
     "Range_of_int64": {
       "properties": {
         "end": {
@@ -11596,6 +13291,10 @@
     "RenderSubmitRequest": {
       "additionalProperties": false,
       "properties": {
+        "chapters": {
+          "$ref": "#/$defs/ChapterPolicy",
+          "description": "MEDIA-004: chapter transfer policy for the primary `output` leg."
+        },
         "expected_revision": {
           "description": "Optional fence against changes since the caller inspected the project.",
           "type": [
@@ -11608,6 +13307,13 @@
           "default": {
             "format": "image_sequence"
           }
+        },
+        "outputs": {
+          "description": "MEDIA-004 (ADR-0133): extra output legs sharing the one render pass.",
+          "items": {
+            "$ref": "#/$defs/OutputSpec"
+          },
+          "type": "array"
         },
         "render": {
           "$ref": "#/$defs/SequenceRenderRequest",
@@ -12360,6 +14066,139 @@
         },
         {
           "additionalProperties": false,
+          "description": "FLOW-004 capture/ingest (ADR-0135): a detached recording session job.",
+          "properties": {
+            "asset": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AssetId"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Caller-pinned asset id; absent mints a fresh one."
+            },
+            "expected_revision": {
+              "description": "Optional fence against changes since the caller inspected the project.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "format": {
+              "$ref": "#/$defs/CaptureFormat"
+            },
+            "idempotency_key": {
+              "description": "FLOW-003-style submission key scoped to the project; replay returns the\nrecorded job without spawning a second recording.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "max_frames": {
+              "description": "Stop and publish automatically after this many frames.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "operation": {
+              "const": "capture.start",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "source": {
+              "$ref": "#/$defs/CaptureSource"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "source",
+            "format"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Graceful end-of-input; the worker finalizes and publishes the recording.",
+          "properties": {
+            "job": {
+              "description": "Capture job id (the session). Stop is a graceful end-of-input signal;\nthe worker still hashes and registers what was recorded.",
+              "type": "string"
+            },
+            "operation": {
+              "const": "capture.stop",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "job"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Session list plus typed orphan reconciliation for the capture area.",
+          "properties": {
+            "job": {
+              "description": "Restrict the session list to one job id. Orphans are always reported\nfor the project-wide capture directory.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "operation": {
+              "const": "capture.status",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Vendor-SDK deck ingest boundary (DeckLink/RS-422); typed\n`UNSUPPORTED_FEATURE` when no adapter is linked.",
+          "properties": {
+            "device": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DeckDevice"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict the probe to one vendor adapter family."
+            },
+            "operation": {
+              "const": "capture.deck_probe",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "properties": {
             "base_revision": {
               "type": "string"
@@ -13039,6 +14878,10 @@
         {
           "additionalProperties": false,
           "properties": {
+            "chapters": {
+              "$ref": "#/$defs/ChapterPolicy",
+              "description": "MEDIA-004: chapter transfer policy for the primary `output` leg."
+            },
             "expected_revision": {
               "description": "Optional fence against changes since the caller inspected the project.",
               "type": [
@@ -13055,6 +14898,13 @@
               "default": {
                 "format": "image_sequence"
               }
+            },
+            "outputs": {
+              "description": "MEDIA-004 (ADR-0133): extra output legs sharing the one render pass.",
+              "items": {
+                "$ref": "#/$defs/OutputSpec"
+              },
+              "type": "array"
             },
             "render": {
               "$ref": "#/$defs/SequenceRenderRequest",
@@ -13077,6 +14927,10 @@
         {
           "additionalProperties": false,
           "properties": {
+            "chapters": {
+              "$ref": "#/$defs/ChapterPolicy",
+              "description": "MEDIA-004: chapter transfer policy for the primary `output` leg."
+            },
             "expected_revision": {
               "description": "Optional fence against changes since the caller inspected the project.",
               "type": [
@@ -13093,6 +14947,13 @@
               "default": {
                 "format": "image_sequence"
               }
+            },
+            "outputs": {
+              "description": "MEDIA-004 (ADR-0133): extra output legs sharing the one render pass.",
+              "items": {
+                "$ref": "#/$defs/OutputSpec"
+              },
+              "type": "array"
             },
             "render": {
               "$ref": "#/$defs/SequenceRenderRequest",
@@ -14370,6 +16231,63 @@
             "time"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "IO-001: external monitor output enumeration (ADR-0134).",
+          "properties": {
+            "operation": {
+              "const": "io.output.list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "IO-001: explicit output enable; native session only.",
+          "properties": {
+            "kind": {
+              "$ref": "#/$defs/OutputDeviceKind"
+            },
+            "name": {
+              "description": "Optional display name for the published output (for example the Syphon\nserver name). Never a locator or an arbitrary command string.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "operation": {
+              "const": "io.output.enable",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "IO-001: explicit output disable; native session only.",
+          "properties": {
+            "kind": {
+              "$ref": "#/$defs/OutputDeviceKind"
+            },
+            "operation": {
+              "const": "io.output.disable",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "kind"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -14952,6 +16870,311 @@
           },
           "required": [
             "Stabilize"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FX-008: `seed` is the resolved signed 31-bit integer; the DAG builder\nfolds the scene time into it so the noise field is temporal.",
+          "properties": {
+            "Grain": {
+              "properties": {
+                "amount": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "monochrome": {
+                  "type": "boolean"
+                },
+                "seed": {
+                  "format": "int64",
+                  "type": "integer"
+                },
+                "size": {
+                  "format": "double",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "amount",
+                "size",
+                "monochrome",
+                "seed"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "Grain"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FX-008: `block_size` is the square block edge in design_px.",
+          "properties": {
+            "Mosaic": {
+              "properties": {
+                "basis": {
+                  "$ref": "#/$defs/MosaicBasis"
+                },
+                "block_size": {
+                  "format": "double",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "block_size",
+                "basis"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "Mosaic"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "Invert": {
+              "properties": {
+                "channel": {
+                  "$ref": "#/$defs/InvertChannel"
+                }
+              },
+              "required": [
+                "channel"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "Invert"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FX-008: row-major premultiplied RGBA matrix (row = output channel).",
+          "properties": {
+            "ChannelMixer": {
+              "properties": {
+                "matrix": {
+                  "items": {
+                    "items": {
+                      "format": "double",
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "maxItems": 4,
+                  "minItems": 4,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "matrix"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "ChannelMixer"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "Tint": {
+              "properties": {
+                "amount": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "map_black": {
+                  "$ref": "#/$defs/Color"
+                },
+                "map_white": {
+                  "$ref": "#/$defs/Color"
+                }
+              },
+              "required": [
+                "map_black",
+                "map_white",
+                "amount"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "Tint"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FX-008: `angle_degrees` in the node's local design space; the DAG\nmapper rotates it into the output lattice with the transform.",
+          "properties": {
+            "DirectionalBlur": {
+              "properties": {
+                "angle_degrees": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "length": {
+                  "format": "double",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "angle_degrees",
+                "length"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "DirectionalBlur"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FX-008: `center` is node-local design_px; `amount` is degrees for\n`spin`, the 0..=1 inward extent for `zoom`.",
+          "properties": {
+            "RadialBlur": {
+              "properties": {
+                "amount": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "center": {
+                  "items": {
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                },
+                "mode": {
+                  "$ref": "#/$defs/RadialBlurMode"
+                }
+              },
+              "required": [
+                "mode",
+                "amount",
+                "center"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "RadialBlur"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FX-008: `displacement` is the design_px offset contributed per unit\nsigned channel value; column 0 maps `channel_x`, column 1 maps\n`channel_y`. Resolution stores `diag(scale_x, scale_y)`; the DAG\nmapper composes the node transform behind it so rotations shear the\ndisplacement axes exactly like drop-shadow offsets.",
+          "properties": {
+            "Displace": {
+              "properties": {
+                "channel_x": {
+                  "$ref": "#/$defs/DisplaceChannel"
+                },
+                "channel_y": {
+                  "$ref": "#/$defs/DisplaceChannel"
+                },
+                "displacement": {
+                  "items": {
+                    "items": {
+                      "format": "double",
+                      "type": "number"
+                    },
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "type": "array"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "channel_x",
+                "channel_y",
+                "displacement"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "Displace"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FX-008: all geometry in node-local design_px; see `EffectParameters`.",
+          "properties": {
+            "Generate": {
+              "properties": {
+                "cell_size": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "color_a": {
+                  "$ref": "#/$defs/Color"
+                },
+                "color_b": {
+                  "$ref": "#/$defs/Color"
+                },
+                "generator": {
+                  "$ref": "#/$defs/GenerateKind"
+                },
+                "line_width": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "point_a": {
+                  "items": {
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                },
+                "point_b": {
+                  "items": {
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "generator",
+                "color_a",
+                "color_b",
+                "point_a",
+                "point_b",
+                "cell_size",
+                "line_width"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "Generate"
           ],
           "type": "object"
         }
@@ -15572,6 +17795,78 @@
             },
             "value": {
               "$ref": "#/$defs/PluginProbeResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "IO-001 external output enumeration (ADR-0134).",
+          "properties": {
+            "kind": {
+              "const": "output_devices",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/IoOutputListResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "IO-001 enable/disable state acknowledgement.",
+          "properties": {
+            "kind": {
+              "const": "output_state",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/IoOutputStateResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FLOW-004 capture session and orphan reconciliation report (ADR-0135).",
+          "properties": {
+            "kind": {
+              "const": "capture",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/CaptureStatusResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "FLOW-004 vendor deck adapter device report (ADR-0135).",
+          "properties": {
+            "kind": {
+              "const": "deck_probe",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/DeckProbeResult"
             }
           },
           "required": [
@@ -20266,6 +22561,42 @@
           },
           "required": [
             "clip_set_volume"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "GUI-012 (ADR-0138): authored stereo balance on one clip\n(`kronello.audio.pan`, constant scalar in [-1, 1]); None restores\ncenter. Same undo/idempotency contract as ClipSetVolume.",
+          "properties": {
+            "clip_set_pan": {
+              "additionalProperties": false,
+              "properties": {
+                "clip": {
+                  "$ref": "#/$defs/ClipId"
+                },
+                "pan": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Property"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "sequence": {
+                  "$ref": "#/$defs/SequenceId"
+                }
+              },
+              "required": [
+                "sequence",
+                "clip"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "clip_set_pan"
           ],
           "type": "object"
         },

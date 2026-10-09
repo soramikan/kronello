@@ -141,6 +141,7 @@ fn clip(asset: AssetId, source_in: Time, start: Time, end: Time) -> Clip {
         masks: vec![],
         properties: vec![],
         markers: vec![],
+        pan: None,
     }
 }
 

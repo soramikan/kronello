@@ -34,6 +34,14 @@ pub enum AudioLoudnessInput {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         range: Option<TimeRange>,
     },
+    /// GUI-012 (ADR-0138): one audio track measured in place — every other
+    /// track is muted in the measurement snapshot, so the result is the
+    /// track's program contribution, not an isolated clip. The measured
+    /// range is the target track's own clip extent.
+    Track {
+        sequence: SequenceId,
+        track: kronello_model::TrackId,
+    },
     /// A verified asset stream, optionally limited to a source range.
     Asset {
         asset: AssetId,
@@ -170,6 +178,68 @@ fn solo_clip_document(document: &Project, sequence: SequenceId, clip: ClipId) ->
     }
     document
 }
+/// GUI-012: isolate one audio track for measurement — every other track is
+/// muted, the target keeps all of its clips, and transitions that touched
+/// dropped clips are removed (same rule as `solo_clip_document`). Returns
+/// the measurement snapshot plus the track's own clip extent.
+fn solo_track_document(
+    document: &Project,
+    sequence: SequenceId,
+    track_id: kronello_model::TrackId,
+) -> Result<(Project, TimeRange), ServiceError> {
+    let seq = document
+        .sequences
+        .iter()
+        .find_map(|s| match s {
+            DocumentObject::Known(s) if s.id == sequence => Some(s),
+            _ => None,
+        })
+        .ok_or_else(|| ServiceError::new("ASSET_MISSING", format!("sequence {sequence}")))?;
+    let target = seq
+        .tracks
+        .iter()
+        .find(|t| t.id == track_id)
+        .ok_or_else(|| ServiceError::new("ASSET_MISSING", format!("track {track_id}")))?;
+    if target.kind != kronello_model::TrackKind::Audio {
+        return Err(ServiceError::new(
+            "INVALID_AUDIO_INPUT",
+            "track loudness requires an audio track",
+        ));
+    }
+    let end = target
+        .clips
+        .iter()
+        .map(|c| c.timeline_range.end())
+        .max()
+        .unwrap_or(Time::ZERO);
+    let range = TimeRange::new(Time::ZERO, end)
+        .map_err(|e| ServiceError::invalid(format!("track extent: {e}")))?;
+    let target_clip_ids: std::collections::BTreeSet<_> =
+        target.clips.iter().map(|c| c.id).collect();
+    let mut document = document.clone();
+    for s in document.sequences.iter_mut() {
+        let DocumentObject::Known(seq) = s else {
+            continue;
+        };
+        if seq.id != sequence {
+            continue;
+        }
+        for track in seq.tracks.iter_mut() {
+            if track.id != track_id {
+                track.state = Some(TrackState {
+                    visible: true,
+                    muted: true,
+                    locked: false,
+                });
+            }
+        }
+        seq.transitions.retain(|transition| {
+            target_clip_ids.contains(&transition.outgoing)
+                && target_clip_ids.contains(&transition.incoming)
+        });
+    }
+    Ok((document, range))
+}
 /// Compile the shared plan for one document and decode its declared sources.
 /// The loudness measurement target is the stereo bus (the AUDIO-008 contract);
 /// multichannel sources fold down through the explicit ADR-0124 matrix.
@@ -266,6 +336,15 @@ impl crate::Service<'_> {
                 render_plan(
                     &r.project,
                     &stored.document,
+                    AudioTarget::Sequence(*sequence),
+                    range,
+                )?
+            }
+            AudioLoudnessInput::Track { sequence, track } => {
+                let (document, range) = solo_track_document(&stored.document, *sequence, *track)?;
+                render_plan(
+                    &r.project,
+                    &document,
                     AudioTarget::Sequence(*sequence),
                     range,
                 )?

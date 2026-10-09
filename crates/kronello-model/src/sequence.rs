@@ -98,6 +98,11 @@ pub struct Clip {
     /// Absent in M2 documents means unity. Evaluated in source-local time.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub volume: Option<Box<Property>>,
+    /// GUI-012 (ADR-0138): constant stereo balance in [-1, 1], absent means
+    /// center. Applied to the clip's mixed output after volume, effects and
+    /// fades; the basic (pre-AUDIO-004) mixer rejects it as unsupported.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pan: Option<Box<Property>>,
     #[serde(default)]
     pub links: Vec<ClipId>,
     #[serde(default)]
@@ -122,8 +127,33 @@ pub struct Marker {
     pub id: MarkerId,
     pub time: Time,
     pub color: MarkerColor,
+    /// MEDIA-004 (ADR-0133): semantic role. `chapter` entries transfer into
+    /// chapter-capable delivery containers; absent in pre-M10 documents.
+    #[serde(default, skip_serializing_if = "MarkerRole::is_standard")]
+    pub role: MarkerRole,
+    /// Chapter display title written to capable containers. `comment` stays
+    /// the authoring annotation and is never transferred (ADR-0133).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub comment: Option<String>,
+}
+/// Closed marker roles; transports never infer delivery semantics from text.
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum MarkerRole {
+    /// Time annotation without delivery semantics.
+    #[default]
+    Standard,
+    /// Output chapter boundary; the marker `title` is the chapter name.
+    Chapter,
+}
+impl MarkerRole {
+    fn is_standard(&self) -> bool {
+        *self == Self::Standard
+    }
 }
 /// Closed set; transports never guess a color from a label.
 #[derive(
@@ -603,6 +633,9 @@ impl Sequence {
                 if let Some(volume) = &clip.volume {
                     validate_volume(volume).map_err(|e| SequenceError::Invalid(e.to_string()))?;
                 }
+                if let Some(pan) = &clip.pan {
+                    validate_pan(pan).map_err(|e| SequenceError::Invalid(e.to_string()))?;
+                }
                 if clip.timeline_range.is_empty()
                     || clip.source_in < Time::ZERO
                     || clip
@@ -728,6 +761,7 @@ impl Sequence {
                             || clip.reverse_sampling.is_some()
                             || clip.audio_retime != AudioRetimePolicy::Reject
                             || clip.volume.is_some()
+                            || clip.pan.is_some()
                         {
                             return Err(SequenceError::Invalid(
                                 "caption clip requires zero source_in and an identity time map without retime, reverse or gain".into(),
@@ -888,6 +922,7 @@ impl Sequence {
                             || clip.reverse_sampling.is_some()
                             || clip.audio_retime != AudioRetimePolicy::Reject
                             || clip.volume.is_some()
+                            || clip.pan.is_some()
                         {
                             return Err(SequenceError::Invalid(
                                 "adjustment clip requires a video track, zero source_in and an identity time map without retime, reverse or gain".into(),
@@ -1007,6 +1042,19 @@ impl Sequence {
 pub fn validate_volume(property: &Property) -> Result<(), ModelError> {
     property.validate(&SchemaRegistry::with_builtin())?;
     if property.descriptor().key.as_str() != "kronello.audio.volume" {
+        return Err(ModelError::SourceNotAllowed);
+    }
+    Ok(())
+}
+/// Shared clip pan contract (GUI-012): constant scalar in [-1, 1]. The
+/// descriptor's capability flags already reject curves, expressions and
+/// modifiers; only a Constant source remains.
+pub fn validate_pan(property: &Property) -> Result<(), ModelError> {
+    property.validate(&SchemaRegistry::with_builtin())?;
+    if property.descriptor().key.as_str() != "kronello.audio.pan" {
+        return Err(ModelError::SourceNotAllowed);
+    }
+    if !matches!(property.source(), PropertySource::Constant(_)) {
         return Err(ModelError::SourceNotAllowed);
     }
     Ok(())

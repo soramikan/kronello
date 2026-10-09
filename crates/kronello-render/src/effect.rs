@@ -158,6 +158,80 @@ pub enum PixelEffect {
         fill: Color,
         sampling: kronello_model::StabilizeSampling,
     },
+    /// FX-008 (ADR-0137): deterministic cell noise on the output lattice.
+    /// `size` is the noise-cell edge in output pixels; `seed` is the signed
+    /// 31-bit authored seed folded with the scene's rational time by the DAG
+    /// builder. The noise perturbs straight working RGB by
+    /// `amount * (noise - 0.5)`; alpha is preserved.
+    Grain {
+        amount: f32,
+        size: f32,
+        monochrome: bool,
+        seed: i64,
+    },
+    /// FX-008: pixelation over axis-aligned `block_size`-pixel blocks on the
+    /// output lattice. `Center` samples the block's center texel, `Edge` the
+    /// block's top-left texel.
+    Mosaic {
+        block_size: f32,
+        basis: kronello_model::MosaicBasis,
+    },
+    /// FX-008: inversion. `Rgb`/`Red`/`Green`/`Blue` invert the selected
+    /// straight working channels and keep alpha; `Alpha` inverts alpha and
+    /// keeps straight RGB.
+    Invert {
+        channel: kronello_model::InvertChannel,
+    },
+    /// FX-008: premultiplied 4x4 channel matrix, row-major (row = output
+    /// channel). Results outside the half-float premultiplied contract are
+    /// caught by surface validation, never clamped.
+    ChannelMixer {
+        matrix: [[f32; 4]; 4],
+    },
+    /// FX-008: straight luminance mapped onto `map_black`..`map_white`,
+    /// blended by `amount` against the straight source; alpha is preserved.
+    /// Colors retain straight tags until execution.
+    Tint {
+        map_black: Color,
+        map_white: Color,
+        amount: f32,
+    },
+    /// FX-008: uniform box blur along `direction` (unit vector on the output
+    /// lattice) spanning `length` output pixels, bilinear midpoint taps.
+    DirectionalBlur {
+        direction: [f32; 2],
+        length: f32,
+    },
+    /// FX-008: deterministic spin/zoom blur around `center` in output
+    /// pixels. `Spin` rotates samples over [-amount/2, +amount/2] degrees;
+    /// `Zoom` scales toward `center` over (1-amount, 1]. Both use the fixed
+    /// [`FX008_RADIAL_TAPS`]-tap midpoint kernel.
+    RadialBlur {
+        mode: kronello_model::RadialBlurMode,
+        amount: f32,
+        center: [f32; 2],
+    },
+    /// FX-008: displacement warp driven by a second input surface
+    /// (`DagNode::EffectMap`). `displacement` column `c` is the output-pixel
+    /// sample offset contributed by channel `c` at unit signed value; a map
+    /// channel value `v` in [0,1] contributes `2v - 1`.
+    Displace {
+        channel_x: kronello_model::DisplaceChannel,
+        channel_y: kronello_model::DisplaceChannel,
+        displacement: [[f32; 2]; 2],
+    },
+    /// FX-008: source-free procedural raster covering the whole execution
+    /// surface (`DagNode::Generate`). Points are output pixels; colors retain
+    /// straight tags until execution.
+    Generate {
+        generator: kronello_model::GenerateKind,
+        color_a: Color,
+        color_b: Color,
+        point_a: [f32; 2],
+        point_b: [f32; 2],
+        cell_size: f32,
+        line_width: f32,
+    },
 }
 /// Kernel tag shared by all COLOR-002 v1 pointwise passes.
 pub const COLOR002_KERNEL_VERSION: &str = "color002-pointwise-f16-v1";
@@ -170,6 +244,50 @@ const STANDARD_KERNEL_MAX_RADIUS: f32 = 1024.0;
 pub const COLOR003_KERNEL_VERSION: &str = "color003-tetrahedral-f16-v1";
 /// Kernel tag for the TRACK-002 stabilize warp pass.
 pub const STABILIZE_KERNEL_VERSION: &str = "track002-stabilize-warp-f16-v1";
+/// Kernel tag shared by all FX-008 v1 passes (ADR-0137).
+pub const FX008_KERNEL_VERSION: &str = "fx008-standard-synthesis-f16-v1";
+/// Fixed midpoint tap count for the FX-008 radial blur kernel, identical on
+/// the CPU reference and WGSL paths.
+pub const FX008_RADIAL_TAPS: usize = 64;
+/// Maximum FX-008 sampling extent in output pixels, matching the shared
+/// Gaussian-class budget: mosaic block edge, grain cell edge, and the
+/// directional blur's half-length.
+const FX008_KERNEL_MAX_RADIUS: f32 = 1024.0;
+/// Deterministic 32-bit integer hash used by `kronello.grain` on both the
+/// CPU reference and the WGSL kernel (WGSL has no u64). `cell` is the
+/// signed 32-bit clamped lattice coordinate plus the channel index;
+/// returns [0, 1).
+pub fn grain_noise(cell: [i32; 3], seed: i64) -> f32 {
+    // lowbias32 (Chris Wellons): three multiply-xorshift rounds, portable
+    // word-for-word to WGSL u32 arithmetic.
+    let mix = |mut h: u32| {
+        h ^= h >> 16;
+        h = h.wrapping_mul(0x7feb_352d);
+        h ^= h >> 15;
+        h = h.wrapping_mul(0x846c_a68b);
+        h ^= h >> 16;
+        h
+    };
+    let mut h = (seed as u64 ^ ((seed >> 32) as u64)) as u32;
+    for v in cell {
+        h = mix(h ^ v as u32);
+    }
+    mix(h) as f32 / 4_294_967_296.0
+}
+/// Cell coordinate clamp shared by the CPU/WGSL grain lattice so signed
+/// 32-bit hashing never hits an out-of-range conversion.
+pub fn grain_cell(position: f64, size: f64) -> i32 {
+    (position / size)
+        .floor()
+        .clamp(-2_147_000_000.0, 2_147_000_000.0) as i32
+}
+/// FX-008: fold the scene's rational sample time into the authored seed so
+/// the grain field is temporal but deterministic.
+pub fn fold_grain_seed(seed: i64, time: kronello_time::Time) -> i64 {
+    let n = time.numerator();
+    let d = time.denominator();
+    seed ^ (n.wrapping_mul(6_364_136_223_846_793_005) ^ d)
+}
 /// Inverse of a row-major 2x3 affine in f64; `None` when degenerate or
 /// non-finite. Used only by stabilize bound estimation.
 fn stabilize_inverse(m: &[[f32; 3]; 2]) -> Option<[[f64; 3]; 2]> {
@@ -214,6 +332,23 @@ impl PixelEffect {
                 | Self::Vignette { .. }
                 | Self::CornerPin { .. }
                 | Self::Stabilize { .. }
+        )
+    }
+    /// FX-008 remaining standard effects (ADR-0137). Grain through
+    /// `DirectionalBlur` are single-input; `Displace` binds a second input
+    /// surface and `Generate` is source-free.
+    pub fn is_fx008(&self) -> bool {
+        matches!(
+            self,
+            Self::Grain { .. }
+                | Self::Mosaic { .. }
+                | Self::Invert { .. }
+                | Self::ChannelMixer { .. }
+                | Self::Tint { .. }
+                | Self::DirectionalBlur { .. }
+                | Self::RadialBlur { .. }
+                | Self::Displace { .. }
+                | Self::Generate { .. }
         )
     }
     /// Scale-only lowering retains the historic meaning: the map is a pure
@@ -315,6 +450,113 @@ impl PixelEffect {
             _ => None,
         };
         if let Some(result) = standard {
+            result.validate()?;
+            return Ok(result);
+        }
+        // FX-008 (ADR-0137): map_effect already rotated/composed the node
+        // transform into these resolved values; the region's design-to-pixel
+        // map now produces output-pixel geometry.
+        let linear = [
+            [design_to_pixel.0[0][0], design_to_pixel.0[0][1]],
+            [design_to_pixel.0[1][0], design_to_pixel.0[1][1]],
+        ];
+        let fx008 = match effect {
+            ResolvedEffect::Grain {
+                amount,
+                size,
+                monochrome,
+                seed,
+            } => Some(Self::Grain {
+                amount: *amount as f32,
+                size: (*size * scale[0]) as f32,
+                monochrome: *monochrome,
+                seed: *seed,
+            }),
+            ResolvedEffect::Mosaic { block_size, basis } => Some(Self::Mosaic {
+                block_size: (*block_size * scale[0]) as f32,
+                basis: *basis,
+            }),
+            ResolvedEffect::Invert { channel } => Some(Self::Invert { channel: *channel }),
+            ResolvedEffect::ChannelMixer { matrix } => Some(Self::ChannelMixer {
+                matrix: matrix.map(|row| row.map(|v| v as f32)),
+            }),
+            ResolvedEffect::Tint {
+                map_black,
+                map_white,
+                amount,
+            } => Some(Self::Tint {
+                map_black: *map_black,
+                map_white: *map_white,
+                amount: *amount as f32,
+            }),
+            ResolvedEffect::DirectionalBlur {
+                angle_degrees,
+                length,
+            } => {
+                // The mapped segment vector through the full linear part, so
+                // non-uniform output scale keeps the true blur direction.
+                let rad = angle_degrees.to_radians();
+                let segment = [rad.cos() * *length, rad.sin() * *length];
+                let v = [0, 1].map(|r| linear[r][0] * segment[0] + linear[r][1] * segment[1]);
+                let len = v[0].hypot(v[1]);
+                let direction = if len > 0.0 {
+                    [(v[0] / len) as f32, (v[1] / len) as f32]
+                } else {
+                    [1.0, 0.0]
+                };
+                Some(Self::DirectionalBlur {
+                    direction,
+                    length: len as f32,
+                })
+            }
+            ResolvedEffect::RadialBlur {
+                mode,
+                amount,
+                center,
+            } => Some(Self::RadialBlur {
+                mode: *mode,
+                amount: *amount as f32,
+                center: design_to_pixel.transform_point(*center).map(|v| v as f32),
+            }),
+            ResolvedEffect::Displace {
+                channel_x,
+                channel_y,
+                displacement,
+            } => {
+                // Rows scale by the output map's linear part: each column's
+                // authored design-px offset becomes an output-pixel offset.
+                let mapped = [0, 1].map(|r| {
+                    [0, 1].map(|c| {
+                        (linear[r][0] * displacement[0][c] + linear[r][1] * displacement[1][c])
+                            as f32
+                    })
+                });
+                Some(Self::Displace {
+                    channel_x: *channel_x,
+                    channel_y: *channel_y,
+                    displacement: mapped,
+                })
+            }
+            ResolvedEffect::Generate {
+                generator,
+                color_a,
+                color_b,
+                point_a,
+                point_b,
+                cell_size,
+                line_width,
+            } => Some(Self::Generate {
+                generator: *generator,
+                color_a: *color_a,
+                color_b: *color_b,
+                point_a: design_to_pixel.transform_point(*point_a).map(|v| v as f32),
+                point_b: design_to_pixel.transform_point(*point_b).map(|v| v as f32),
+                cell_size: (*cell_size * scale[0]) as f32,
+                line_width: (*line_width * scale[0]) as f32,
+            }),
+            _ => None,
+        };
+        if let Some(result) = fx008 {
             result.validate()?;
             return Ok(result);
         }
@@ -495,6 +737,8 @@ impl PixelEffect {
             COLOR002_KERNEL_VERSION
         } else if self.is_standard() {
             STANDARD_KERNEL_VERSION
+        } else if self.is_fx008() {
+            FX008_KERNEL_VERSION
         } else if self.covariance().is_some() {
             AFFINE_EFFECT_KERNEL_VERSION
         } else {
@@ -508,6 +752,8 @@ impl PixelEffect {
             kronello_model::COLOR_EFFECT_VERSION
         } else if self.is_standard() {
             kronello_model::STANDARD_EFFECT_VERSION
+        } else if self.is_fx008() {
+            kronello_model::FX008_EFFECT_VERSION
         } else if self.covariance().is_some() {
             kronello_model::AFFINE_EFFECT_VERSION
         } else {
@@ -536,6 +782,27 @@ impl PixelEffect {
     pub fn halo(&self) -> [f64; 2] {
         if let Some(c) = self.covariance() {
             return [c[0], c[2]].map(|v| (3.0 * v.sqrt()).ceil());
+        }
+        // FX-008 extents are exact, not Gaussian.
+        match self {
+            Self::Mosaic { block_size, .. } => {
+                return [f64::from(block_size.ceil()); 2];
+            }
+            Self::DirectionalBlur {
+                direction, length, ..
+            } => {
+                return [0, 1].map(|i| {
+                    (f64::from(direction[i].abs()) * f64::from(*length) / 2.0).ceil() + 1.0
+                });
+            }
+            Self::Displace { displacement, .. } => {
+                return [0, 1].map(|r| {
+                    (f64::from(displacement[r][0].abs()) + f64::from(displacement[r][1].abs()))
+                        .ceil()
+                        + 1.0
+                });
+            }
+            _ => {}
         }
         let mut halo: [f64; 2] = [0.0; 2];
         for sigma in self.kernel_sigmas() {
@@ -569,6 +836,9 @@ impl PixelEffect {
         }
         if self.is_standard() {
             return self.validate_standard();
+        }
+        if self.is_fx008() {
+            return self.validate_fx008();
         }
         if let Some(covariance) = self.covariance() {
             affine_gaussian_kernel(covariance)?;
@@ -706,6 +976,113 @@ impl PixelEffect {
         }
         Ok(())
     }
+    /// FX-008 parameter contract mirrors the model-side checks plus the
+    /// shared output-pixel kernel budget (ADR-0137).
+    fn validate_fx008(&self) -> Result<(), RenderError> {
+        let invalid = || RenderError::InvalidInput("invalid fx008 effect parameters".into());
+        let unit = |v: f32| v.is_finite() && (0.0..=1.0).contains(&v);
+        match self {
+            Self::Grain { amount, size, .. } => {
+                if !unit(*amount)
+                    || !size.is_finite()
+                    || *size <= 0.0
+                    || *size > FX008_KERNEL_MAX_RADIUS
+                {
+                    return Err(invalid());
+                }
+            }
+            Self::Mosaic { block_size, .. } => {
+                if !block_size.is_finite()
+                    || *block_size <= 0.0
+                    || *block_size > FX008_KERNEL_MAX_RADIUS
+                {
+                    return Err(invalid());
+                }
+            }
+            Self::Invert { .. } => {}
+            Self::ChannelMixer { matrix } => {
+                if !matrix
+                    .iter()
+                    .flatten()
+                    .all(|v| v.is_finite() && v.abs() <= 1_024.0)
+                {
+                    return Err(invalid());
+                }
+            }
+            Self::Tint { amount, .. } => {
+                if !unit(*amount) {
+                    return Err(invalid());
+                }
+            }
+            Self::DirectionalBlur {
+                direction, length, ..
+            } => {
+                if !direction.iter().all(|v| v.is_finite())
+                    || !length.is_finite()
+                    || *length < 0.0
+                    || *length > FX008_KERNEL_MAX_RADIUS * 2.0
+                {
+                    return Err(invalid());
+                }
+                // A nonzero-length blur carries a unit direction; a zero
+                // length collapses to identity and accepts any stored vector.
+                let norm = direction[0].hypot(direction[1]);
+                if *length > 0.0 && (norm - 1.0).abs() > 1e-3 {
+                    return Err(invalid());
+                }
+            }
+            Self::RadialBlur {
+                mode,
+                amount,
+                center,
+            } => {
+                let bounded = match mode {
+                    kronello_model::RadialBlurMode::Spin => amount.abs() <= 1_000_000.0,
+                    kronello_model::RadialBlurMode::Zoom => unit(*amount),
+                };
+                if !amount.is_finite()
+                    || !bounded
+                    || !center
+                        .iter()
+                        .all(|v| v.is_finite() && v.abs() <= 1_000_000.0)
+                {
+                    return Err(invalid());
+                }
+            }
+            Self::Displace { displacement, .. } => {
+                if !displacement
+                    .iter()
+                    .flatten()
+                    .all(|v| v.is_finite() && v.abs() <= 1_000_000.0)
+                {
+                    return Err(invalid());
+                }
+            }
+            Self::Generate {
+                point_a,
+                point_b,
+                cell_size,
+                line_width,
+                ..
+            } => {
+                let point =
+                    |p: &[f32; 2]| p.iter().all(|v| v.is_finite() && v.abs() <= 1_000_000.0);
+                if !point(point_a)
+                    || !point(point_b)
+                    || !cell_size.is_finite()
+                    || *cell_size <= 0.0
+                    || *cell_size > 1_000_000.0
+                    || !line_width.is_finite()
+                    || *line_width < 0.0
+                    || *line_width > 1_000_000.0
+                {
+                    return Err(invalid());
+                }
+            }
+            _ => unreachable!("not an fx008 effect"),
+        }
+        Ok(())
+    }
     /// COLOR-002 parameter contract mirrors the model-side checks.
     fn validate_color(&self) -> Result<(), RenderError> {
         let invalid = || RenderError::InvalidInput("invalid color effect parameters".into());
@@ -821,6 +1198,27 @@ impl PixelEffect {
                 };
                 output.union(shifted.expand(halo))
             }
+            // FX-008: mosaic/directional/displace read their exact extents;
+            // the displacement *map* surface itself is sampled at the output
+            // position, so the EffectMap DAG node requests `output` for it.
+            Self::Mosaic { .. } | Self::DirectionalBlur { .. } | Self::Displace { .. } => {
+                output.expand(halo)
+            }
+            // FX-008 radial blur: every sampled position sits on the segment
+            // between `center` and the output pixel (zoom) or on the same
+            // radius (spin), so the conservative request is the axis-aligned
+            // square covering all output-corner radii around `center`.
+            Self::RadialBlur { center, .. } => {
+                let radius = [0, 1].map(|i| {
+                    (output.min[i] - f64::from(center[i]))
+                        .abs()
+                        .max((output.max[i] - f64::from(center[i])).abs())
+                });
+                PixelBounds {
+                    min: [0, 1].map(|i| f64::from(center[i]) - radius[i] - 1.0),
+                    max: [0, 1].map(|i| f64::from(center[i]) + radius[i] + 1.0),
+                }
+            }
             _ => output,
         }
     }
@@ -887,6 +1285,36 @@ impl PixelEffect {
                     min: shifted.min.map(f64::floor),
                     max: shifted.max.map(f64::ceil),
                 })
+            }
+            Self::DirectionalBlur { .. } | Self::Displace { .. } => input.expand(halo),
+            // FX-008 radial blur: spin keeps ink on its radius around
+            // `center`; zoom projects ink outward by up to 1/(1-amount).
+            // The conservative hull is the axis-aligned square covering the
+            // farthest input corner radius, scaled for zoom.
+            Self::RadialBlur {
+                mode,
+                amount,
+                center,
+            } => {
+                let radius = [0, 1].map(|i| {
+                    (input.min[i] - f64::from(center[i]))
+                        .abs()
+                        .max((input.max[i] - f64::from(center[i])).abs())
+                });
+                let factor = match mode {
+                    kronello_model::RadialBlurMode::Spin => 1.0,
+                    kronello_model::RadialBlurMode::Zoom => {
+                        if f64::from(*amount) >= 1.0 {
+                            16_777_216.0
+                        } else {
+                            1.0 / (1.0 - f64::from(*amount))
+                        }
+                    }
+                };
+                PixelBounds {
+                    min: [0, 1].map(|i| f64::from(center[i]) - radius[i] * factor - 1.0),
+                    max: [0, 1].map(|i| f64::from(center[i]) + radius[i] * factor + 1.0),
+                }
             }
             _ => input,
         }

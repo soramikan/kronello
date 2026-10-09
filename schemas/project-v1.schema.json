@@ -919,6 +919,17 @@
             "$ref": "#/$defs/Mask"
           }
         },
+        "pan": {
+          "description": "GUI-012 (ADR-0138): constant stereo balance in [-1, 1], absent means\ncenter. Applied to the clip's mixed output after volume, effects and\nfades; the basic (pre-AUDIO-004) mixer rejects it as unsupported.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Property"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "properties": {
           "description": "Placement transform and effect parameters, evaluated in sequence time.",
           "type": "array",
@@ -2078,6 +2089,348 @@
             "fill_color",
             "sampling"
           ]
+        },
+        {
+          "description": "FX-008 (ADR-0137): deterministic film grain. `amount` scales the\ninjected noise on 0..=1; `size` is the noise cell edge in design_px;\n`monochrome` shares one lattice across RGB; `seed` is a signed 31-bit\ninteger folded with the scene time into the hash lattice.",
+          "type": "object",
+          "properties": {
+            "amount": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "grain"
+            },
+            "monochrome": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "seed": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "size": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "amount",
+            "size",
+            "monochrome",
+            "seed"
+          ]
+        },
+        {
+          "description": "FX-008: pixelation. `block_size` is the block edge in design_px;\n`basis` selects the sampled texel inside each block.",
+          "type": "object",
+          "properties": {
+            "basis": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "block_size": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "mosaic"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "block_size",
+            "basis"
+          ]
+        },
+        {
+          "description": "FX-008: straight-color inversion. `channel` selects which channels\ninvert; alpha inversions keep straight RGB and recombine premultiplied.",
+          "type": "object",
+          "properties": {
+            "channel": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "invert"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "channel"
+          ]
+        },
+        {
+          "description": "FX-008: 4x4 channel matrix on premultiplied RGBA. `matrix` references\na data table with scalar columns `red`, `green`, `blue`, `alpha` and\nexactly four rows (row = output channel in r,g,b,a order).",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "channel_mixer"
+            },
+            "matrix": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "matrix"
+          ]
+        },
+        {
+          "description": "FX-008: maps straight working luminance onto the black→white ramp and\nblends by `amount`; alpha is preserved.",
+          "type": "object",
+          "properties": {
+            "amount": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "tint"
+            },
+            "map_black": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "map_white": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "map_black",
+            "map_white",
+            "amount"
+          ]
+        },
+        {
+          "description": "FX-008: uniform motion blur. `angle` is the direction in degrees,\n`length` the total blur span in design_px.",
+          "type": "object",
+          "properties": {
+            "angle": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "directional_blur"
+            },
+            "length": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "angle",
+            "length"
+          ]
+        },
+        {
+          "description": "FX-008: spin/zoom radial blur around `center` (node-local design_px).\n`amount` is the total rotation in degrees for `spin` and the inward\nscale extent on 0..=1 for `zoom`.",
+          "type": "object",
+          "properties": {
+            "amount": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "center": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "radial_blur"
+            },
+            "mode": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "mode",
+            "amount",
+            "center"
+          ]
+        },
+        {
+          "description": "FX-008: displacement-map warp. The map layer is an explicitly bound\nsecondary input (snapshot displacement binding); `channel_x` /\n`channel_y` pick the map channels and `scale_x` / `scale_y` are the\nsigned maximum displacements in node-local design_px.",
+          "type": "object",
+          "properties": {
+            "channel_x": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "channel_y": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "displace"
+            },
+            "scale_x": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "scale_y": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "channel_x",
+            "channel_y",
+            "scale_x",
+            "scale_y"
+          ]
+        },
+        {
+          "description": "FX-008: source-independent layer synthesis replacing the incoming\nraster at its chain position. `kind` selects gradient/checkerboard/\ngrid; `point_a`/`point_b` are node-local design_px anchors (gradient\nendpoints; radial uses `point_a` as center and `|b-a|` as radius);\n`cell_size` is the checker/grid cell edge and `line_width` the grid\nline width, both design_px.",
+          "type": "object",
+          "properties": {
+            "cell_size": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "color_a": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "color_b": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "generator": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "generate"
+            },
+            "line_width": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "point_a": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "point_b": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "generator",
+            "color_a",
+            "color_b",
+            "point_a",
+            "point_b",
+            "cell_size",
+            "line_width"
+          ]
+        },
+        {
+          "description": "FX-008: integer-sample echo. `delay_ms` rounds to whole 48 kHz\nsamples; `feedback_db` (<=0) recirculates; `wet`/`dry` mix on 0..=1.",
+          "type": "object",
+          "properties": {
+            "delay_ms": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "dry": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "feedback_db": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "audio_delay"
+            },
+            "wet": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "delay_ms",
+            "feedback_db",
+            "wet",
+            "dry"
+          ]
+        },
+        {
+          "description": "FX-008 (ADR-0139): deterministic feedback-comb reverb realizing an\nalgorithmically generated room response. `decay_ms` is the RT60\ntarget; `damping` is the in-loop lowpass amount on 0..=1.",
+          "type": "object",
+          "properties": {
+            "damping": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "decay_ms": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "dry": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "audio_reverb"
+            },
+            "wet": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "decay_ms",
+            "damping",
+            "wet",
+            "dry"
+          ]
+        },
+        {
+          "description": "FX-008: semitone pitch shift executed at the source stage through the\ndeterministic WSOLA rate-resampled window (±AUDIO_PITCH_MAX_SEMITONES).",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "audio_pitch"
+            },
+            "semitones": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "semitones"
+          ]
+        },
+        {
+          "description": "FX-008: noise gate with hysteresis. `threshold_db` is the open level;\nthe gate closes below `threshold_db - hysteresis_db`; `attack_ms` /\n`release_ms` smooth the open/close gain ramps.",
+          "type": "object",
+          "properties": {
+            "attack_ms": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "hysteresis_db": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "audio_gate"
+            },
+            "release_ms": {
+              "$ref": "#/$defs/PropertyId"
+            },
+            "threshold_db": {
+              "$ref": "#/$defs/PropertyId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "threshold_db",
+            "attack_ms",
+            "release_ms",
+            "hysteresis_db"
+          ]
         }
       ]
     },
@@ -2170,6 +2523,18 @@
       "enum": [
         "avoid_crossing",
         "allow_crossing"
+      ]
+    },
+    "ExportDnxProfile": {
+      "description": "Mirror of `kronello_media::DnxProfile` (MEDIA-004, ADR-0133).",
+      "type": "string",
+      "enum": [
+        "dnxhd",
+        "dnxhr_lb",
+        "dnxhr_sq",
+        "dnxhr_hq",
+        "dnxhr_hqx",
+        "dnxhr444"
       ]
     },
     "ExportHdrSettings": {
@@ -2569,6 +2934,228 @@
             "profile_version",
             "clips",
             "background"
+          ]
+        },
+        {
+          "description": "MEDIA-004: DNxHD/DNxHR + PCM24 in MOV.",
+          "type": "object",
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/ExportAudioMode",
+              "default": "explicit"
+            },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "background": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "format": "float"
+              },
+              "maxItems": 3,
+              "minItems": 3
+            },
+            "clips": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ExportAudioClip"
+              }
+            },
+            "dnx_profile": {
+              "$ref": "#/$defs/ExportDnxProfile"
+            },
+            "format": {
+              "type": "string",
+              "const": "dnx_mov"
+            },
+            "profile_version": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "format",
+            "profile_version",
+            "dnx_profile",
+            "clips",
+            "background"
+          ]
+        },
+        {
+          "description": "MEDIA-004: DNxHD/DNxHR + PCM24 in MXF.",
+          "type": "object",
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/ExportAudioMode",
+              "default": "explicit"
+            },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "background": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "format": "float"
+              },
+              "maxItems": 3,
+              "minItems": 3
+            },
+            "clips": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ExportAudioClip"
+              }
+            },
+            "dnx_profile": {
+              "$ref": "#/$defs/ExportDnxProfile"
+            },
+            "format": {
+              "type": "string",
+              "const": "dnx_mxf"
+            },
+            "profile_version": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "format",
+            "profile_version",
+            "dnx_profile",
+            "clips",
+            "background"
+          ]
+        },
+        {
+          "description": "MEDIA-004: deterministic indexed-color GIF (video only).",
+          "type": "object",
+          "properties": {
+            "background": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "format": "float"
+              },
+              "maxItems": 3,
+              "minItems": 3
+            },
+            "format": {
+              "type": "string",
+              "const": "gif"
+            },
+            "profile_version": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "format",
+            "profile_version",
+            "background"
+          ]
+        },
+        {
+          "description": "MEDIA-004: MP3 CBR elementary audio (mono/stereo layouts only).",
+          "type": "object",
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/ExportAudioMode",
+              "default": "explicit"
+            },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "clips": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ExportAudioClip"
+              }
+            },
+            "format": {
+              "type": "string",
+              "const": "mp3"
+            },
+            "profile_version": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "format",
+            "profile_version",
+            "clips"
+          ]
+        },
+        {
+          "description": "MEDIA-004: FLAC lossless elementary audio.",
+          "type": "object",
+          "properties": {
+            "audio": {
+              "$ref": "#/$defs/ExportAudioMode",
+              "default": "explicit"
+            },
+            "audio_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChannelMask"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "clips": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ExportAudioClip"
+              }
+            },
+            "format": {
+              "type": "string",
+              "const": "flac"
+            },
+            "profile_version": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "format",
+            "profile_version",
+            "clips"
           ]
         },
         {
@@ -4029,8 +4616,19 @@
         "id": {
           "$ref": "#/$defs/MarkerId"
         },
+        "role": {
+          "description": "MEDIA-004 (ADR-0133): semantic role. `chapter` entries transfer into\nchapter-capable delivery containers; absent in pre-M10 documents.",
+          "$ref": "#/$defs/MarkerRole"
+        },
         "time": {
           "$ref": "#/$defs/Rational"
+        },
+        "title": {
+          "description": "Chapter display title written to capable containers. `comment` stays\nthe authoring annotation and is never transferred (ADR-0133).",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false,
@@ -4058,6 +4656,21 @@
       "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
       "type": "string",
       "format": "uuid"
+    },
+    "MarkerRole": {
+      "description": "Closed marker roles; transports never infer delivery semantics from text.",
+      "oneOf": [
+        {
+          "description": "Time annotation without delivery semantics.",
+          "type": "string",
+          "const": "standard"
+        },
+        {
+          "description": "Output chapter boundary; the marker `title` is the chapter name.",
+          "type": "string",
+          "const": "chapter"
+        }
+      ]
     },
     "Mask": {
       "description": "One authored mask row. Every parameter is a Property reference so paths and\nscalars share the existing constant/curve/expression evaluation, evaluated\nin sequence time on the clip's lowered node.",

@@ -556,6 +556,36 @@ impl RasterCacheKey {
                         backend_namespace,
                     ),
                 )?)),
+                // FX-008 (ADR-0137): the two-input variant includes both
+                // dependency image identities in order.
+                crate::DagNode::EffectMap {
+                    source,
+                    map,
+                    effect,
+                } => Some(Self(key(
+                    "effect-map",
+                    (
+                        effect.kernel_version(),
+                        effect.semantic_version(),
+                        keys[*source].map(|k| hex(k.0)),
+                        keys[*map].map(|k| hex(k.0)),
+                        effect,
+                        dag.execution_region(),
+                        dag.working_space(),
+                        backend_namespace,
+                    ),
+                )?)),
+                crate::DagNode::Generate { effect, .. } => Some(Self(key(
+                    "generate",
+                    (
+                        effect.kernel_version(),
+                        effect.semantic_version(),
+                        effect,
+                        dag.execution_region(),
+                        dag.working_space(),
+                        backend_namespace,
+                    ),
+                )?)),
                 crate::DagNode::SolidRect { color, rect } => Some(Self(key(
                     "solid-rect",
                     (

@@ -54,6 +54,17 @@ Windows の修正版 JOB evidence も成功済み。breakaway拒否環境では 
 - 対応する FFmpeg は単一のメジャー版に固定する。
 - 利用者は環境変数で別の FFmpeg に差し替えられる。
 
+### カメラ RAW（LibRaw / VideoToolbox）
+
+[ADR-0136](../adr/0136-camera-raw-decoding.md) による。MEDIA-005 で実装済み。
+
+- LibRaw 0.22.2 を LGPL-2.1 側の共有ライブラリとして vendored build に加える。configure は `--disable-openmp --disable-lcms --disable-jpeg --disable-zlib` で固定し、native dependencies manifest と hash が正本。
+- RAW スチルは `AssetKind::Image` として LibRaw の固定パイプライン（AHD デモザイク・16bit・linear・カメラ WB・auto bright なし）でデコードし、scene-referred のまま working space へ決定的に変換する。LibRaw が見つからない build では全 RAW 経路が `UNSUPPORTED_FEATURE` を返す。
+- CinemaDNG は連番 `.dng` の video 相当 asset（codec `cinemadng`）として frame manifest hash を lock し、FFmpeg を介さない。
+- 圧縮 DNG（JPEG/deflate/JPEG XL）は vendored 構成では `UNSUPPORTED_FEATURE`。system LibRaw に JPEG/zlib があれば decode される。
+- ProRes RAW（`aprn`/`aprh`）は macOS の AVFoundation demux + VideoToolbox hardware decode（`64RGBAHalf`）のみ。`VTIsHardwareDecodeSupported` と session property の両方を確認し、非対応では型付き拒否。FFmpeg の `prores_raw` decoder には流さない。
+- BRAW/R3D は拡張子・magic で先に検出し、proprietary SDK のない環境では常に `UNSUPPORTED_FEATURE`。FFmpeg/LibRaw へ暗黙に渡さない。
+
 ### macOS 配布パッケージの検証
 
 [ADR-0065](../adr/0065-relocatable-macos-distribution.md) の実装は `scripts/package_macos.py` / `scripts/verify_package.py`。

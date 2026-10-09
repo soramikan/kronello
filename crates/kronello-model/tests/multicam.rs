@@ -99,6 +99,7 @@ fn multicam_clip(source: SourceRef, track_range: TimeRange) -> Clip {
         audio_retime: AudioRetimePolicy::Reject,
         reverse_sampling: None,
         volume: None,
+        pan: None,
         links: vec![],
         effects: vec![],
         masks: vec![],

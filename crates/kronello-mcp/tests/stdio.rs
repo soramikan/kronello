@@ -477,13 +477,23 @@ fn versions_negotiate_and_registry_schemas_are_self_contained() {
                 tool["_meta"]["kronello"]["readOnlyProject"],
                 command.read_only
             );
-            if !matches!(
-                command.name.as_str(),
-                "capabilities.get" | "job.list" | "job.prune"
-            ) {
-                let missing = client.call(&command.name, json!({}));
-                assert_error(&missing, "INVALID_REQUEST");
-                validate(tool, &missing);
+            match command.name.as_str() {
+                // io.output.list, like the other parameter-free queries, accepts
+                // an empty request and reports device detection instead of an
+                // INVALID_REQUEST.
+                "capabilities.get" | "job.list" | "job.prune" | "io.output.list" => {}
+                // FLOW-004: an empty deck probe is a valid request; without a
+                // linked vendor adapter the typed boundary is UNSUPPORTED_FEATURE.
+                "capture.deck_probe" => {
+                    let probe = client.call(&command.name, json!({}));
+                    assert_error(&probe, "UNSUPPORTED_FEATURE");
+                    validate(tool, &probe);
+                }
+                _ => {
+                    let missing = client.call(&command.name, json!({}));
+                    assert_error(&missing, "INVALID_REQUEST");
+                    validate(tool, &missing);
+                }
             }
         }
         let capabilities = client.call("capabilities.get", json!({}));

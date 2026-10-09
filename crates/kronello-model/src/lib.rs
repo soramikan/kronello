@@ -28,9 +28,9 @@ mod value;
 mod wire;
 
 pub use builtin::{
-    AUDIO_VOLUME_ID, BLEND_MODE_ID, FILL_COLOR_ID, MEDIA_CROP_ORIGIN_ID, MEDIA_CROP_SIZE_ID,
-    OPACITY_ID, STROKE_WIDTH_ID, TRANSFORM_ANCHOR_ID, TRANSFORM_POSITION_ID, TRANSFORM_ROTATION_ID,
-    TRANSFORM_SCALE_ID, TRANSFORM_SKEW_ID,
+    AUDIO_PAN_ID, AUDIO_VOLUME_ID, BLEND_MODE_ID, FILL_COLOR_ID, MEDIA_CROP_ORIGIN_ID,
+    MEDIA_CROP_SIZE_ID, OPACITY_ID, STROKE_WIDTH_ID, TRANSFORM_ANCHOR_ID, TRANSFORM_POSITION_ID,
+    TRANSFORM_ROTATION_ID, TRANSFORM_SCALE_ID, TRANSFORM_SKEW_ID,
 };
 pub use composition::{
     Composition, CompositionError, CompositionInstance, CompositionReference, DesignExtent,
@@ -117,8 +117,8 @@ pub use bins::Bin;
 mod export_presets;
 pub use export_presets::{
     EXPORT_PRESET_VERSION, ExportAudioClip, ExportAudioCodec, ExportAudioMode, ExportCutPolicy,
-    ExportHdrSettings, ExportOutput, ExportPreset, ExportProfile, ExportRegion, ExportTarget,
-    ExportTemporalSettings, ExportTransfer,
+    ExportDnxProfile, ExportHdrSettings, ExportOutput, ExportPreset, ExportProfile, ExportRegion,
+    ExportTarget, ExportTemporalSettings, ExportTransfer,
 };
 
 mod sequence;

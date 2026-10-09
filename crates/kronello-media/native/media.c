@@ -90,6 +90,9 @@ typedef struct Km {
     __typeof__(&av_interleaved_write_frame) av_interleaved_write_frame;
     __typeof__(&av_write_trailer) av_write_trailer;
     __typeof__(&avformat_free_context) avformat_free_context;
+    __typeof__(&av_mallocz) av_mallocz;
+    __typeof__(&av_realloc_array) av_realloc_array;
+    __typeof__(&av_free) av_free;
     __typeof__(&swscale_version) swscale_version;
     __typeof__(&swscale_license) swscale_license;
     __typeof__(&swscale_configuration) swscale_configuration;
@@ -241,6 +244,9 @@ Km *km_open(const char *directory, char *error, size_t capacity) {
     LOAD(2, av_interleaved_write_frame);
     LOAD(2, av_write_trailer);
     LOAD(2, avformat_free_context);
+    LOAD(0, av_mallocz);
+    LOAD(0, av_realloc_array);
+    LOAD(0, av_free);
     LOAD(3, swscale_version);
     LOAD(3, swscale_license);
     LOAD(3, swscale_configuration);
@@ -329,7 +335,7 @@ static Decoder *decoder_open(Km *k, const char *path, enum AVMediaType kind, int
      * that fetch external resources are outside the public media API. */
     AVDictionary *options=NULL;
     k->av_dict_set(&options,"protocol_whitelist","file",0);
-    k->av_dict_set(&options,"format_whitelist","nut,matroska,webm,mov,avi,mpegts,mpeg,ogg,wav,png_pipe,jpeg_pipe",0);
+    k->av_dict_set(&options,"format_whitelist","nut,matroska,webm,mov,avi,mpegts,mpeg,ogg,wav,png_pipe,jpeg_pipe,mxf,mp3,flac,gif",0);
     int ret=k->avformat_open_input(&d->format,path,NULL,&options);
     k->av_dict_free(&options);
     if(ret<0) { fail(k,ret,"open input"); goto failed; }
@@ -451,6 +457,9 @@ Encoder *km_encoder_open_color(Km *k, const char *path, const char *name, int wi
     Encoder *e=calloc(1,sizeof(*e)); if(!e) {fail(k,AVERROR(ENOMEM),"encoder allocation");return NULL;} e->k=k;
     const AVCodec *codec=k->avcodec_find_encoder_by_name(name);
     if(!codec) {fail(k,AVERROR_ENCODER_NOT_FOUND,"encoder unavailable");goto failed;}
+    /* Closed intermediate shapes: ProRes 422p10 MOV and delivery MP4 yuv420p.
+     * DNx delivery profiles go through km_encoder_open_dnx, which carries the
+     * versioned profile/pixel-format table explicitly. */
     int prores=!strcmp(name,"prores_ks");
     if(hdr && (!prores || (hdr!=1 && hdr!=2))){fail(k,AVERROR(EINVAL),"unsupported HDR encoder/profile");goto failed;}
     e->input_stride=width*(hdr?8:4);
@@ -496,6 +505,59 @@ failed:km_encoder_close(e);return NULL;
 }
 Encoder *km_encoder_open(Km *k,const char *path,const char *name,int width,int height,int num,int den) {
     return km_encoder_open_color(k,path,name,width,height,num,den,0);
+}
+/* MEDIA-004 DNxHD/DNxHR delivery. The closed table pins the FFmpeg encoder
+ * profile and intermediate pixel format per versioned profile; DNxHD family
+ * legality (resolution/frame-rate/bitrate) is enforced by the encoder itself
+ * so non-compliant requests fail open with a typed FFmpeg error. */
+static const struct { const char *profile; enum AVPixelFormat fmt; } DNX_KINDS[6]={
+    {"dnxhd",AV_PIX_FMT_YUV422P},
+    {"dnxhr_lb",AV_PIX_FMT_YUV422P},
+    {"dnxhr_sq",AV_PIX_FMT_YUV422P},
+    {"dnxhr_hq",AV_PIX_FMT_YUV422P},
+    {"dnxhr_hqx",AV_PIX_FMT_YUV422P10LE},
+    {"dnxhr_444",AV_PIX_FMT_YUV444P10LE},
+};
+Encoder *km_encoder_open_dnx(Km *k,const char *path,int width,int height,int num,int den,int kind) {
+    if(kind<0 || kind>5){fail(k,AVERROR(EINVAL),"unknown DNx profile");return NULL;}
+    if(width<=0 || width&1 || height<=0 || height&1){fail(k,AVERROR(EINVAL),"DNx requires positive even dimensions");return NULL;}
+    Encoder *e=calloc(1,sizeof(*e)); if(!e){fail(k,AVERROR(ENOMEM),"encoder allocation");return NULL;} e->k=k;
+    const AVCodec *codec=k->avcodec_find_encoder_by_name("dnxhd");
+    if(!codec){fail(k,AVERROR_ENCODER_NOT_FOUND,"encoder unavailable");goto failed;}
+    e->input_stride=width*4;
+    int ret=k->avformat_alloc_output_context2(&e->format,NULL,"mov",path);
+    if(ret<0 || !e->format){fail(k,ret<0?ret:AVERROR(ENOMEM),"output context");goto failed;}
+    e->codec=k->avcodec_alloc_context3(codec);e->frame=k->av_frame_alloc();e->packet=k->av_packet_alloc();e->stream=k->avformat_new_stream(e->format,NULL);
+    if(!e->codec || !e->frame || !e->packet || !e->stream){fail(k,AVERROR(ENOMEM),"encoder allocation");goto failed;}
+    e->codec->width=width;e->codec->height=height;e->codec->time_base=(AVRational){num,den};e->codec->framerate=(AVRational){den,num};
+    e->codec->pix_fmt=DNX_KINDS[kind].fmt;
+    e->codec->color_primaries=AVCOL_PRI_BT709;e->codec->color_trc=AVCOL_TRC_BT709;e->codec->colorspace=AVCOL_SPC_BT709;e->codec->color_range=AVCOL_RANGE_MPEG;
+    e->codec->thread_count=1;
+    AVDictionary *options=NULL;
+    k->av_dict_set(&options,"profile",DNX_KINDS[kind].profile,0);
+    ret=k->avcodec_open2(e->codec,codec,&options);k->av_dict_free(&options);
+    if(ret<0){
+        char where[256];
+        snprintf(where,sizeof(where),"avcodec_open2(dnxhd, %s, %dx%d, time_base=%d/%d)",DNX_KINDS[kind].profile,width,height,num,den);
+        fail(k,ret,where);goto failed;
+    }
+    e->stream->time_base=e->codec->time_base;
+    ret=k->avcodec_parameters_from_context(e->stream->codecpar,e->codec);if(ret<0){fail(k,ret,"encoder parameters");goto failed;}
+    ret=k->avio_open(&e->format->pb,path,AVIO_FLAG_WRITE);if(ret<0){fail(k,ret,"open output");goto failed;}
+    AVDictionary *mux_options=NULL;
+    char timescale[32];snprintf(timescale,sizeof(timescale),"%d",den);
+    k->av_dict_set(&mux_options,"video_track_timescale",timescale,0);
+    ret=k->avformat_write_header(e->format,&mux_options);k->av_dict_free(&mux_options);if(ret<0){fail(k,ret,"write header");goto failed;}e->header=1;
+    e->frame->format=e->codec->pix_fmt;e->frame->width=width;e->frame->height=height;
+    e->frame->color_primaries=e->codec->color_primaries;e->frame->color_trc=e->codec->color_trc;e->frame->colorspace=e->codec->colorspace;e->frame->color_range=e->codec->color_range;
+    ret=k->av_frame_get_buffer(e->frame,32);if(ret<0){fail(k,ret,"frame buffer");goto failed;}
+    e->sws=k->sws_getContext(width,height,AV_PIX_FMT_RGBA,width,height,e->codec->pix_fmt,SWS_BILINEAR,NULL,NULL,NULL);
+    if(!e->sws){fail(k,AVERROR(ENOMEM),"pixel conversion");goto failed;}
+    const int *coeff=k->sws_getCoefficients(SWS_CS_ITU709);
+    ret=k->sws_setColorspaceDetails(e->sws,coeff,1,coeff,0,0,1<<16,1<<16);
+    if(ret<0){fail(k,ret,"BT.709 pixel conversion");goto failed;}
+    return e;
+failed:km_encoder_close(e);return NULL;
 }
 static int write_packets(Encoder *e) {
     for(;;){
@@ -631,14 +693,18 @@ typedef struct AudioEncoder {
     AVFrame *frame; AVPacket *packet; AVStream *stream;
     int block, kind, partial, channels; int64_t mask, count;
 } AudioEncoder;
-/* Closed delivery audio kinds: PCM24 MOV, ALAC MP4, AAC-LC MP4, Opus WebM. */
+/* Closed delivery audio kinds: PCM24 MOV, ALAC MP4, AAC-LC MP4, Opus WebM,
+ * and the MEDIA-004 standalone deliverables MP3 (libmp3lame CBR 256k,
+ * mono/stereo) and FLAC (native, lossless up to the closed layouts). */
 static const struct {
     const char *encoder,*container;enum AVSampleFormat fmt;int64_t bitrate;
-} AUDIO_KINDS[4]={
+} AUDIO_KINDS[6]={
     {"pcm_s24le","mov",AV_SAMPLE_FMT_S32,0},
     {"alac","mp4",AV_SAMPLE_FMT_S32P,0},
     {"aac","mp4",AV_SAMPLE_FMT_FLTP,192000},
     {"libopus","webm",AV_SAMPLE_FMT_FLT,128000},
+    {"libmp3lame","mp3",AV_SAMPLE_FMT_S32P,256000},
+    {"flac","flac",AV_SAMPLE_FMT_S32,0},
 };
 void km_audio_encoder_close(AudioEncoder *e) {
     if(!e)return;
@@ -651,9 +717,9 @@ AudioEncoder *km_audio_encoder_open(Km *k,const char *path,int kind,
     int channels,int64_t mask) {
     AudioEncoder *e=calloc(1,sizeof(*e));
     if(!e){fail(k,AVERROR(ENOMEM),"audio allocation");return NULL;}
-    if(kind<0 || kind>3){fail(k,AVERROR(EINVAL),"unknown audio kind");free(e);return NULL;}
+    if(kind<0 || kind>5){fail(k,AVERROR(EINVAL),"unknown audio kind");free(e);return NULL;}
     if(mask<0 || !audio_mask_supported((uint64_t)mask) ||
-        channels!=audio_mask_channels((uint64_t)mask)) {
+        channels!=audio_mask_channels((uint64_t)mask) || (kind==4 && channels>2)) {
         fail(k,AVERROR(ENOSYS),"unsupported audio channel layout");free(e);return NULL;
     }
     e->k=k;e->kind=kind;e->channels=channels;e->mask=mask;
@@ -685,11 +751,18 @@ AudioEncoder *km_audio_encoder_open(Km *k,const char *path,int kind,
         !(encoder->capabilities & AV_CODEC_CAP_SMALL_LAST_FRAME))) {
         fail(k,AVERROR_INVALIDDATA,"ALAC requires zero priming and exact partial final frame");goto failed;
     }
-    if(kind>=2 && (e->codec->initial_padding<=0 || e->codec->frame_size<=0 ||
+    /* AAC/Opus carry signalled priming. MP3 stores the encoder delay in the
+     * mp3 muxer's Xing header, so only exact frame blocking and a partial
+     * final frame are required at this boundary. FLAC is lossless. */
+    if((kind==2 || kind==3) && (e->codec->initial_padding<=0 || e->codec->frame_size<=0 ||
         !(encoder->capabilities & AV_CODEC_CAP_SMALL_LAST_FRAME))) {
         fail(k,AVERROR_INVALIDDATA,"lossy audio requires signalled priming and partial final frame");goto failed;
     }
-    e->block=kind?e->codec->frame_size:4096;
+    if(kind==4 && (e->codec->frame_size<=0 ||
+        !(encoder->capabilities & AV_CODEC_CAP_SMALL_LAST_FRAME))) {
+        fail(k,AVERROR_INVALIDDATA,"MP3 requires codec frame blocking and partial final frame");goto failed;
+    }
+    e->block=kind?(e->codec->frame_size>0?e->codec->frame_size:4096):4096;
     if(e->block<=0 || e->block>65536){fail(k,AVERROR_INVALIDDATA,"audio block budget");goto failed;}
     e->stream->time_base=e->codec->time_base;
     ret=k->avcodec_parameters_from_context(e->stream->codecpar,e->codec);if(ret<0){fail(k,ret,"audio parameters");goto failed;}
@@ -770,7 +843,7 @@ int km_audio_encode(Km *k,const char *path,const int32_t *samples,int64_t count,
 AVFormatContext *km_probe_open(Km *k,const char *path) {
     AVFormatContext *format=NULL;AVDictionary *options=NULL;
     k->av_dict_set(&options,"protocol_whitelist","file",0);
-    k->av_dict_set(&options,"format_whitelist","nut,matroska,webm,mov,avi,mpegts,mpeg,ogg,wav",0);
+    k->av_dict_set(&options,"format_whitelist","nut,matroska,webm,mov,avi,mpegts,mpeg,ogg,wav,mxf,mp3,flac,gif",0);
     int ret=k->avformat_open_input(&format,path,NULL,&options);k->av_dict_free(&options);
     if(ret<0){fail(k,ret,"probe open");goto failed;}
     ret=k->avformat_find_stream_info(format,NULL);if(ret<0){fail(k,ret,"probe streams");goto failed;}
@@ -800,6 +873,16 @@ const char *km_probe_tag(Km *k,AVFormatContext *format,const char *key) {
     const AVDictionaryEntry *entry=k->av_dict_get(format->metadata,key,NULL,0);
     return entry?entry->value:"";
 }
+/* MEDIA-004 chapters: count plus per-entry id/start/end/time_base/title. */
+int km_probe_chapter_count(AVFormatContext *format) { return (int)format->nb_chapters; }
+void km_probe_chapter(AVFormatContext *format,int i,int64_t *id,int64_t *start,int64_t *end,int *num,int *den) {
+    AVChapter *c=format->chapters[i];
+    *id=c->id;*start=c->start;*end=c->end;*num=c->time_base.num;*den=c->time_base.den;
+}
+const char *km_probe_chapter_title(Km *k,AVFormatContext *format,int i) {
+    const AVDictionaryEntry *entry=k->av_dict_get(format->chapters[i]->metadata,"title",NULL,0);
+    return entry?entry->value:"";
+}
 static int read_mux_packet(Km *k,AVFormatContext *f,AVPacket *p,int stream) {
     for(;;){
         int ret=k->av_read_frame(f,p);
@@ -815,17 +898,31 @@ static int read_mux_packet(Km *k,AVFormatContext *f,AVPacket *p,int stream) {
 }
 /* HEVC delivery stores parameter sets in hvcC, with a fixed hvc1 sample entry. */
 uint32_t km_mux_video_tag(int profile) { return (profile==3 || profile==5)?MKTAG('h','v','c','1'):0; }
+/* Chapter markers cross the boundary as ticks in the fixed 1/48000 master
+ * clock with a NUL-terminated title; the muxer rescales to each container's
+ * own chapter timebase. */
+typedef struct { int64_t start; int64_t end; const char *title; } KmChapter;
 int km_mux_av(Km *k,const char *video,const char *audio,const char *path,
-    const char *render_hash,const char *export_hash,int profile,int audio_channels) {
+    const char *render_hash,const char *export_hash,int profile,int audio_channels,
+    const KmChapter *chapters,int chapter_count) {
     AVFormatContext *input[2]={NULL,NULL},*out=NULL;AVPacket *packets[2]={NULL,NULL};
     AVStream *streams[2]={NULL,NULL};int index[2]={-1,-1},ready[2]={0,0};
     int ret=0;
-    const enum AVCodecID videos[8]={AV_CODEC_ID_PRORES,AV_CODEC_ID_AV1,AV_CODEC_ID_H264,AV_CODEC_ID_HEVC,
-        AV_CODEC_ID_H264,AV_CODEC_ID_HEVC,AV_CODEC_ID_AV1,AV_CODEC_ID_AV1};
-    const enum AVCodecID audios[8]={AV_CODEC_ID_PCM_S24LE,AV_CODEC_ID_ALAC,AV_CODEC_ID_ALAC,
-        AV_CODEC_ID_ALAC,AV_CODEC_ID_AAC,AV_CODEC_ID_AAC,AV_CODEC_ID_AAC,AV_CODEC_ID_OPUS};
-    const char *containers[8]={"mov","mp4","mov","mov","mov","mov","mp4","webm"};
-    if(profile<0 || profile>7)return fail(k,AVERROR(EINVAL),"unknown movie profile");
+    /* Closed profile matrix: 0-7 are the pre-MEDIA-004 movie profiles,
+     * 8 = DNxHR/PCM24 MOV and 9 = DNxHR/PCM24 MXF delivery remuxes. */
+    const enum AVCodecID videos[10]={AV_CODEC_ID_PRORES,AV_CODEC_ID_AV1,AV_CODEC_ID_H264,AV_CODEC_ID_HEVC,
+        AV_CODEC_ID_H264,AV_CODEC_ID_HEVC,AV_CODEC_ID_AV1,AV_CODEC_ID_AV1,AV_CODEC_ID_DNXHD,AV_CODEC_ID_DNXHD};
+    const enum AVCodecID audios[10]={AV_CODEC_ID_PCM_S24LE,AV_CODEC_ID_ALAC,AV_CODEC_ID_ALAC,
+        AV_CODEC_ID_ALAC,AV_CODEC_ID_AAC,AV_CODEC_ID_AAC,AV_CODEC_ID_AAC,AV_CODEC_ID_OPUS,
+        AV_CODEC_ID_PCM_S24LE,AV_CODEC_ID_PCM_S24LE};
+    const char *containers[10]={"mov","mp4","mov","mov","mov","mov","mp4","webm","mov","mxf"};
+    /* Only mov/mp4/matroska-family outputs can carry chapters (ADR-0133). */
+    const int chapter_ok[10]={1,1,1,1,1,1,1,0,1,0};
+    if(profile<0 || profile>9)return fail(k,AVERROR(EINVAL),"unknown movie profile");
+    if(chapter_count<0 || (chapter_count>0 && !chapters) || chapter_count>1024)
+        return fail(k,AVERROR(EINVAL),"invalid chapter list");
+    if(chapter_count>0 && !chapter_ok[profile])
+        return fail(k,AVERROR(EINVAL),"container cannot carry chapters");
     if(audio_channels<1 || audio_channels>8)
         return fail(k,AVERROR(EINVAL),"mux audio channel budget");
     const char *paths[2]={video,audio};
@@ -852,15 +949,43 @@ int km_mux_av(Km *k,const char *video,const char *audio,const char *path,
         AVStream *s=input[i]->streams[index[i]];
         ret=k->avcodec_parameters_copy(streams[i]->codecpar,s->codecpar);if(ret<0){fail(k,ret,"mux codec parameters");goto done;}
         streams[i]->codecpar->codec_tag=i?0:km_mux_video_tag(profile);streams[i]->time_base=s->time_base;
+        /* MXF requires a concrete frame rate; codecpar copies do not carry
+         * stream rates, so take the probed average or fall back to the
+         * inverse time base. */
+        if(!i) {
+            streams[0]->avg_frame_rate=s->avg_frame_rate.num>0
+                ? s->avg_frame_rate : (AVRational){s->time_base.den,s->time_base.num};
+            streams[0]->r_frame_rate=streams[0]->avg_frame_rate;
+        }
         if(!i && profile==3 && (!streams[i]->codecpar->extradata || streams[i]->codecpar->extradata_size<=0)) {
             ret=fail(k,AVERROR_INVALIDDATA,"hvc1 requires HEVC global-header parameter sets");goto done;
         }
     }
     k->av_dict_set(&out->metadata,"kronello_render_snapshot_hash",render_hash,0);
     k->av_dict_set(&out->metadata,"kronello_export_snapshot_hash",export_hash,0);
+    for(int i=0;i<chapter_count;++i) {
+        if(chapters[i].start<0 || chapters[i].end<=chapters[i].start ||
+            !chapters[i].title || strlen(chapters[i].title)>1024) {
+            ret=fail(k,AVERROR(EINVAL),"invalid chapter entry");goto done;
+        }
+        /* FFmpeg ≥9: chapters are caller-allocated AVChapter structs; the
+         * format context frees the array on avformat_free_context. */
+        AVChapter *chapter=k->av_mallocz(sizeof(*chapter));
+        if(!chapter){ret=fail(k,AVERROR(ENOMEM),"chapter allocation");goto done;}
+        chapter->id=i;chapter->time_base=(AVRational){1,48000};
+        chapter->start=chapters[i].start;chapter->end=chapters[i].end;
+        if(k->av_dict_set(&chapter->metadata,"title",chapters[i].title,0)<0) {
+            k->av_free(chapter);ret=fail(k,AVERROR(ENOMEM),"chapter title");goto done;
+        }
+        AVChapter **grown=k->av_realloc_array(out->chapters,
+            (size_t)out->nb_chapters+1,sizeof(*grown));
+        if(!grown){k->av_dict_free(&chapter->metadata);k->av_free(chapter);
+            ret=fail(k,AVERROR(ENOMEM),"chapter array");goto done;}
+        out->chapters=grown;out->chapters[out->nb_chapters++]=chapter;
+    }
     ret=k->avio_open(&out->pb,path,AVIO_FLAG_WRITE);if(ret<0){fail(k,ret,"mux output open");goto done;}
     AVDictionary *options=NULL;char timescale[32];
-    if(profile!=7) {
+    if(profile!=7 && profile!=9) {
         snprintf(timescale,sizeof(timescale),"%d",streams[0]->time_base.den);
         k->av_dict_set(&options,"video_track_timescale",timescale,0);
         k->av_dict_set(&options,"movflags","use_metadata_tags",0);
@@ -884,4 +1009,204 @@ done:
     for(int i=0;i<2;++i){k->av_packet_free(&packets[i]);k->avformat_close_input(&input[i]);}
     if(out){if(out->pb)k->avio_closep(&out->pb);k->avformat_free_context(out);}
     return ret;
+}
+
+/* MEDIA-004 GIF delivery. Deterministic indexed-color pipeline kept inside
+ * the audited shim instead of an avfilter dependency: phase 1 streams RGBA
+ * frames through a bounded 5-bit-per-channel histogram (128 KiB fixed);
+ * km_gif_palette derives a 256-entry median-cut palette and a nearest-color
+ * LUT; phase 2 applies a fixed 8x8 Bayer ordered dither, emits PAL8 frames
+ * with a per-frame palette, and encodes with the native gif codec/muxer. */
+#define GIF_BINS 32768
+#define GIF_COLORS 256
+#define GIF_FRAME_BUDGET 36000
+typedef struct {
+    Km *k; int width,height,fps_num,fps_den; int phase;
+    uint32_t hist[GIF_BINS]; uint8_t palette[GIF_COLORS][3]; uint8_t lut[GIF_BINS];
+    AVFormatContext *format; AVCodecContext *codec;
+    AVPacket *packet; AVStream *stream; AVFrame *frame;
+    int64_t frames;
+} GifEncoder;
+static const uint8_t GIF_BAYER[8][8]={
+    {0,32,8,40,2,34,10,42},{48,16,56,24,50,18,58,26},
+    {12,44,4,36,14,46,6,38},{60,28,52,20,62,30,54,22},
+    {3,35,11,43,1,33,9,41},{51,19,59,27,49,17,57,25},
+    {15,47,7,39,13,45,5,37},{63,31,55,23,61,29,53,21}};
+GifEncoder *km_gif_open(Km *k,int width,int height,int num,int den) {
+    if(width<=0 || width>8192 || height<=0 || height>8192 ||
+        num<=0 || den<=0 || num>48000 || den>48000) {
+        fail(k,AVERROR(EINVAL),"invalid GIF geometry");return NULL;
+    }
+    GifEncoder *e=calloc(1,sizeof(*e));
+    if(!e){fail(k,AVERROR(ENOMEM),"GIF allocation");return NULL;}
+    e->k=k;e->width=width;e->height=height;e->fps_num=num;e->fps_den=den;
+    return e;
+}
+int km_gif_frame(GifEncoder *e,const uint8_t *rgba) {
+    Km *k=e->k; if(e->phase!=0)return fail(k,AVERROR(EINVAL),"GIF histogram closed");
+    if(e->frames>=GIF_FRAME_BUDGET)return fail(k,AVERROR(ENOSPC),"GIF frame budget");
+    size_t n=(size_t)e->width*e->height;
+    for(size_t i=0;i<n;++i) {
+        const uint8_t *p=rgba+i*4;
+        e->hist[((p[0]>>3)<<10)|((p[1]>>3)<<5)|(p[2]>>3)]++;
+    }
+    e->frames++; return 0;
+}
+/* Median-cut over the histogram: boxes split at population medians along the
+ * widest channel; ties resolve to the lowest index so the palette is a pure
+ * function of the histogram. Sort keys pack the split channel into the high
+ * bits so no comparator state crosses threads. */
+static int gif_key_cmp(const void *a,const void *b) {
+    uint32_t x=*(const uint32_t*)a,y=*(const uint32_t*)b;
+    return x<y?-1:x>y;
+}
+/* Sort order[start..end) by the histogram channel at bit shift `shift`.
+ * `keyed` is caller scratch holding at least GIF_BINS entries. */
+static void gif_sort(uint16_t *order,int start,int end,uint32_t *keyed,int shift) {
+    int n=end-start;
+    for(int i=0;i<n;++i) {
+        uint32_t bin=order[start+i];
+        keyed[i]=(bin>>shift&31)<<15|bin;
+    }
+    qsort(keyed,n,sizeof(*keyed),gif_key_cmp);
+    for(int i=0;i<n;++i)order[start+i]=(uint16_t)(keyed[i]&32767);
+}
+int km_gif_palette(GifEncoder *e) {
+    Km *k=e->k; if(e->phase!=0)return fail(k,AVERROR(EINVAL),"GIF palette already built");
+    if(e->frames==0)return fail(k,AVERROR_INVALIDDATA,"GIF requires at least one frame");
+    uint32_t *keyed=k->av_mallocz(sizeof(*keyed)*GIF_BINS);
+    if(!keyed)return fail(k,AVERROR(ENOMEM),"GIF sort scratch");
+    uint16_t order[GIF_BINS];int unique=0;
+    for(int i=0;i<GIF_BINS;++i)if(e->hist[i])order[unique++]=i;
+    struct {int start,end;} boxes[GIF_COLORS];int nboxes=0;
+    boxes[nboxes++]=(typeof(boxes[0])){0,unique};
+    while(nboxes<GIF_COLORS) {
+        int best=-1;uint32_t bestpop=0;
+        for(int b=0;b<nboxes;++b) {
+            if(boxes[b].end-boxes[b].start<2)continue;
+            uint32_t pop=0;for(int i=boxes[b].start;i<boxes[b].end;++i)pop+=e->hist[order[i]];
+            if(pop>bestpop){bestpop=pop;best=b;}
+        }
+        if(best<0)break;
+        int lo[3]={31,31,31},hi[3]={0,0,0};
+        for(int i=boxes[best].start;i<boxes[best].end;++i) {
+            int bin=order[i];
+            for(int c=0;c<3;++c){int v=(bin>>((2-c)*5))&31;
+                if(v<lo[c])lo[c]=v; if(v>hi[c])hi[c]=v;}
+        }
+        int ch=0,range=-1;
+        for(int c=0;c<3;++c)if(hi[c]-lo[c]>range){range=hi[c]-lo[c];ch=c;}
+        gif_sort(order,boxes[best].start,boxes[best].end,keyed,(2-ch)*5);
+        uint32_t half=bestpop/2,acc=0;int mid=boxes[best].start;
+        while(mid<boxes[best].end-1 && acc+ e->hist[order[mid]]<half)acc+=e->hist[order[mid++]];
+        if(mid<=boxes[best].start)mid=boxes[best].start+1;
+        boxes[nboxes]=(typeof(boxes[0])){mid,boxes[best].end};boxes[best].end=mid;nboxes++;
+    }
+    for(int b=0;b<nboxes;++b) {
+        uint64_t sr=0,sg=0,sb=0,tot=0;
+        for(int i=boxes[b].start;i<boxes[b].end;++i) {
+            int bin=order[i];uint32_t n=e->hist[bin];
+            sr+=(uint64_t)n*(((bin>>10)&31)*8+4);sg+=(uint64_t)n*(((bin>>5)&31)*8+4);
+            sb+=(uint64_t)n*((bin&31)*8+4);tot+=n;
+        }
+        e->palette[b][0]=(uint8_t)((sr+tot/2)/tot);
+        e->palette[b][1]=(uint8_t)((sg+tot/2)/tot);
+        e->palette[b][2]=(uint8_t)((sb+tot/2)/tot);
+    }
+    for(int b=nboxes;b<GIF_COLORS;++b){e->palette[b][0]=e->palette[b][1]=e->palette[b][2]=0;}
+    for(int i=0;i<GIF_BINS;++i) {
+        int r=((i>>10)&31)*8+4,g=((i>>5)&31)*8+4,bl=(i&31)*8+4;
+        int best=0;int64_t bestd=INT64_MAX;
+        for(int c=0;c<GIF_COLORS;++c) {
+            int64_t dr=r-e->palette[c][0],dg=g-e->palette[c][1],db=bl-e->palette[c][2];
+            int64_t d=dr*dr+dg*dg+db*db;if(d<bestd){bestd=d;best=c;}
+        }
+        e->lut[i]=(uint8_t)best;
+    }
+    k->av_free(keyed);
+    e->phase=1; return 0;
+}
+int km_gif_encode_start(GifEncoder *e,const char *path) {
+    Km *k=e->k;
+    if(e->phase!=1)return fail(k,AVERROR(EINVAL),"GIF palette required");
+    const AVCodec *codec=k->avcodec_find_encoder_by_name("gif");
+    if(!codec)return fail(k,AVERROR_ENCODER_NOT_FOUND,"encoder unavailable");
+    int ret=k->avformat_alloc_output_context2(&e->format,NULL,"gif",path);
+    if(ret<0 || !e->format)return fail(k,ret<0?ret:AVERROR(ENOMEM),"output context");
+    e->codec=k->avcodec_alloc_context3(codec);e->packet=k->av_packet_alloc();
+    e->frame=k->av_frame_alloc();e->stream=k->avformat_new_stream(e->format,NULL);
+    if(!e->codec || !e->packet || !e->frame || !e->stream)
+        {fail(k,AVERROR(ENOMEM),"encoder allocation");return -1;}
+    e->codec->width=e->width;e->codec->height=e->height;
+    e->codec->time_base=(AVRational){e->fps_num,e->fps_den};
+    e->codec->framerate=(AVRational){e->fps_den,e->fps_num};
+    e->codec->pix_fmt=AV_PIX_FMT_PAL8;e->codec->thread_count=1;
+    ret=k->avcodec_open2(e->codec,codec,NULL);
+    if(ret<0){fail(k,ret,"open GIF encoder");return -1;}
+    e->stream->time_base=e->codec->time_base;
+    ret=k->avcodec_parameters_from_context(e->stream->codecpar,e->codec);
+    if(ret<0){fail(k,ret,"GIF parameters");return -1;}
+    e->frame->format=AV_PIX_FMT_PAL8;e->frame->width=e->width;e->frame->height=e->height;
+    ret=k->av_frame_get_buffer(e->frame,1);
+    if(ret<0){fail(k,ret,"GIF frame allocation");return -1;}
+    ret=k->avio_open(&e->format->pb,path,AVIO_FLAG_WRITE);
+    if(ret<0){fail(k,ret,"open GIF output");return -1;}
+    AVDictionary *options=NULL;k->av_dict_set(&options,"loop","0",0);
+    ret=k->avformat_write_header(e->format,&options);k->av_dict_free(&options);
+    if(ret<0){fail(k,ret,"GIF header");return -1;}
+    e->frames=0;e->phase=2;return 0;
+}
+static int gif_drain(GifEncoder *e) {
+    Km *k=e->k;int ret;
+    while((ret=k->avcodec_receive_packet(e->codec,e->packet))>=0) {
+        /* The GIF muxer pins the stream time base to 1/100 (centisecond
+         * frame delays); packet times arrive in the codec time base and
+         * must be rescaled or every frame would publish a 1cs delay. */
+        k->av_packet_rescale_ts(e->packet,e->codec->time_base,e->stream->time_base);
+        e->packet->stream_index=e->stream->index;
+        ret=k->av_interleaved_write_frame(e->format,e->packet);
+        k->av_packet_unref(e->packet);
+        if(ret<0)return fail(k,ret,"GIF packet write");
+    }
+    return ret==AVERROR(EAGAIN) || ret==AVERROR_EOF ? 0 : ret;
+}
+int km_gif_encode_frame(GifEncoder *e,const uint8_t *rgba) {
+    Km *k=e->k;int ret;
+    if(e->phase!=2)return fail(k,AVERROR(EINVAL),"GIF encoding not started");
+    if(e->frames>=GIF_FRAME_BUDGET)return fail(k,AVERROR(ENOSPC),"GIF frame budget");
+    ret=k->av_frame_make_writable(e->frame);
+    if(ret<0){fail(k,ret,"GIF frame writable");return ret;}
+    uint8_t *dst=e->frame->data[0];int stride=e->frame->linesize[0];
+    for(int y=0;y<e->height;++y) {
+        const uint8_t *src=rgba+(size_t)y*e->width*4;uint8_t *row=dst+(size_t)y*stride;
+        for(int x=0;x<e->width;++x) {
+            int d=(int)GIF_BAYER[y&7][x&7]-31;
+            int r=src[x*4]+d,g=src[x*4+1]+d,b=src[x*4+2]+d;
+            r=r<0?0:r>255?255:r;g=g<0?0:g>255?255:g;b=b<0?0:b>255?255:b;
+            row[x]=e->lut[((r>>3)<<10)|((g>>3)<<5)|(b>>3)];
+        }
+    }
+    uint32_t *pal=(uint32_t *)e->frame->data[1];
+    for(int i=0;i<GIF_COLORS;++i)
+        pal[i]=0xFF000000u|((uint32_t)e->palette[i][0]<<16)|((uint32_t)e->palette[i][1]<<8)|e->palette[i][2];
+    e->frame->pts=e->frames;e->frame->duration=1;
+    ret=k->avcodec_send_frame(e->codec,e->frame);
+    if(ret<0){fail(k,ret,"GIF frame send");return ret;}
+    e->frames++;return gif_drain(e);
+}
+int km_gif_encode_flush(GifEncoder *e) {
+    Km *k=e->k;int ret;
+    if(e->phase!=2)return fail(k,AVERROR(EINVAL),"GIF encoding not started");
+    ret=k->avcodec_send_frame(e->codec,NULL);
+    if(ret<0){fail(k,ret,"GIF flush");return ret;}
+    ret=gif_drain(e);if(ret<0)return ret;
+    ret=k->av_write_trailer(e->format);if(ret<0){fail(k,ret,"GIF trailer");return ret;}
+    ret=k->avio_closep(&e->format->pb);if(ret<0){fail(k,ret,"GIF output close");return ret;}
+    e->phase=3;return 0;
+}
+void km_gif_close(GifEncoder *e) {
+    if(!e)return;Km *k=e->k;
+    k->av_frame_free(&e->frame);k->av_packet_free(&e->packet);k->avcodec_free_context(&e->codec);
+    if(e->format){if(e->format->pb)k->avio_closep(&e->format->pb);k->avformat_free_context(e->format);}
+    free(e);
 }

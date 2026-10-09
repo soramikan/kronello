@@ -225,6 +225,14 @@ pub enum TimelineCommand {
         clip: ClipId,
         volume: Option<Property>,
     },
+    /// GUI-012 (ADR-0138): authored stereo balance on one clip
+    /// (`kronello.audio.pan`, constant scalar in [-1, 1]); None restores
+    /// center. Same undo/idempotency contract as ClipSetVolume.
+    ClipSetPan {
+        sequence: SequenceId,
+        clip: ClipId,
+        pan: Option<Property>,
+    },
     /// NLE-007 (ADR-0127): repoint one clip's active multicam angle. Only the
     /// addressed clip's `SourceRef::Multicam.angle` changes — the
     /// multicam-local source window is untouched and later clips never
@@ -985,6 +993,98 @@ fn split_owned_objects(clip: &mut Clip) -> Result<(), ServiceError> {
                     fill_color,
                     sampling,
                 ] {
+                    remap(id)?;
+                }
+            }
+            // FX-008 (ADR-0137): every property reference on the split copy
+            // remaps like the older effects.
+            EffectParameters::Grain {
+                amount,
+                size,
+                monochrome,
+                seed,
+            } => {
+                for id in [amount, size, monochrome, seed] {
+                    remap(id)?;
+                }
+            }
+            EffectParameters::Mosaic { block_size, basis } => {
+                remap(block_size)?;
+                remap(basis)?;
+            }
+            EffectParameters::Invert { channel } => remap(channel)?,
+            EffectParameters::ChannelMixer { matrix } => remap(matrix)?,
+            EffectParameters::Tint {
+                map_black,
+                map_white,
+                amount,
+            } => {
+                for id in [map_black, map_white, amount] {
+                    remap(id)?;
+                }
+            }
+            EffectParameters::DirectionalBlur { angle, length } => {
+                remap(angle)?;
+                remap(length)?;
+            }
+            EffectParameters::RadialBlur {
+                mode,
+                amount,
+                center,
+            } => {
+                for id in [mode, amount, center] {
+                    remap(id)?;
+                }
+            }
+            EffectParameters::Displace {
+                channel_x,
+                channel_y,
+                scale_x,
+                scale_y,
+            } => {
+                for id in [channel_x, channel_y, scale_x, scale_y] {
+                    remap(id)?;
+                }
+            }
+            EffectParameters::Generate {
+                generator,
+                color_a,
+                color_b,
+                point_a,
+                point_b,
+                cell_size,
+                line_width,
+            } => {
+                for id in [
+                    generator, color_a, color_b, point_a, point_b, cell_size, line_width,
+                ] {
+                    remap(id)?;
+                }
+            }
+            EffectParameters::AudioDelay {
+                delay_ms,
+                feedback_db,
+                wet,
+                dry,
+            }
+            | EffectParameters::AudioReverb {
+                decay_ms: delay_ms,
+                damping: feedback_db,
+                wet,
+                dry,
+            } => {
+                for id in [delay_ms, feedback_db, wet, dry] {
+                    remap(id)?;
+                }
+            }
+            EffectParameters::AudioPitch { semitones } => remap(semitones)?,
+            EffectParameters::AudioGate {
+                threshold_db,
+                attack_ms,
+                release_ms,
+                hysteresis_db,
+            } => {
+                for id in [threshold_db, attack_ms, release_ms, hysteresis_db] {
                     remap(id)?;
                 }
             }
@@ -2253,6 +2353,27 @@ pub(crate) fn mutate(
             keys.insert(changed(sequence.as_uuid(), project.id));
             keys.insert(changed(clip.as_uuid(), sequence.as_uuid()));
         }
+        TimelineCommand::ClipSetPan {
+            sequence,
+            clip,
+            pan,
+        } => {
+            if let Some(pan) = pan {
+                validate_pan(pan)
+                    .map_err(|e| ServiceError::new("INVALID_AUDIO_INPUT", e.to_string()))?;
+            }
+            let s = sequence_mut(project, *sequence)?;
+            ensure_unlocked(s, &BTreeSet::from([*clip]))?;
+            let c = s
+                .tracks
+                .iter_mut()
+                .flat_map(|t| &mut t.clips)
+                .find(|c| c.id == *clip)
+                .ok_or_else(|| ServiceError::new("SOURCE_MISSING", "clip missing"))?;
+            c.pan = pan.clone().map(Box::new);
+            keys.insert(changed(sequence.as_uuid(), project.id));
+            keys.insert(changed(clip.as_uuid(), sequence.as_uuid()));
+        }
         TimelineCommand::ClipAngleSwitch {
             sequence,
             clip,
@@ -2867,6 +2988,7 @@ fn source_edit_clip(
             audio_retime: AudioRetimePolicy::Reject,
             reverse_sampling: None,
             volume: None,
+            pan: None,
             links: vec![],
             effects: vec![],
             masks: vec![],

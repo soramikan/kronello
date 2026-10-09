@@ -104,6 +104,8 @@ fn request(path: &Path, rate: FrameRate) -> AvExportRequest {
         },
         background: [0.1, 0.2, 0.3],
         clipping: ClippingPolicy::Reject,
+        chapters: kronello_media::ChapterPolicy::Transfer,
+        outputs: Vec::new(),
     }
 }
 /// Expected s16 PCM amplitude at frame/channel of `write_wave_ext`.
@@ -262,7 +264,7 @@ fn export_av_multichannel_layout_reaches_the_mux_and_probe() {
             &request,
         )
         .unwrap();
-    assert_eq!(report.audio.channels, 6);
+    assert_eq!(report.audio.as_ref().unwrap().channels, 6);
     assert_eq!(report.audio_profile_version, 3);
     report
         .probe
@@ -276,7 +278,10 @@ fn export_av_multichannel_layout_reaches_the_mux_and_probe() {
         .unwrap();
     let decoded = runtime.decode_audio(&output, stream.index).unwrap();
     assert_eq!(decoded.buffer.mask(), ChannelMask::SURROUND_5_1);
-    assert_eq!(decoded.buffer.frame_count(), report.audio.frames);
+    assert_eq!(
+        decoded.buffer.frame_count(),
+        report.audio.as_ref().unwrap().frames
+    );
     // The decoded output equals the evaluator's own 5.1 mix within PCM24.
     let source = runtime
         .decode_asset_audio(&a, &dir.path().join("project.kronello"), 0)
@@ -323,7 +328,7 @@ fn export_av_stereo_layout_is_the_documented_explicit_downmix() {
             &request,
         )
         .unwrap();
-    assert_eq!(report.audio.channels, 2);
+    assert_eq!(report.audio.as_ref().unwrap().channels, 2);
     report.probe.verify_av().unwrap();
     let stream = report
         .probe

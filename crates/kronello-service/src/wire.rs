@@ -137,6 +137,79 @@ impl<'de> Deserialize<'de> for crate::JobOutput {
                     },
                 })
             }
+            "dnx_mov" | "dnx_mxf" => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct Dnx {
+                    profile_version: u32,
+                    dnx_profile: kronello_media::DnxProfile,
+                    #[serde(default)]
+                    audio: kronello_audio::AudioSourceMode,
+                    #[serde(default)]
+                    audio_layout: Option<kronello_model::ChannelMask>,
+                    clips: Vec<crate::JobAudioClip>,
+                    background: [f32; 3],
+                }
+                let mov: Dnx = payload(&fields)?;
+                Ok(match format.as_str() {
+                    "dnx_mov" => Self::DnxMov {
+                        profile_version: mov.profile_version,
+                        dnx_profile: mov.dnx_profile,
+                        audio: mov.audio,
+                        audio_layout: mov.audio_layout,
+                        clips: mov.clips,
+                        background: mov.background,
+                    },
+                    _ => Self::DnxMxf {
+                        profile_version: mov.profile_version,
+                        dnx_profile: mov.dnx_profile,
+                        audio: mov.audio,
+                        audio_layout: mov.audio_layout,
+                        clips: mov.clips,
+                        background: mov.background,
+                    },
+                })
+            }
+            "gif" => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct Gif {
+                    profile_version: u32,
+                    background: [f32; 3],
+                }
+                let gif: Gif = payload(&fields)?;
+                Ok(Self::Gif {
+                    profile_version: gif.profile_version,
+                    background: gif.background,
+                })
+            }
+            "mp3" | "flac" => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct ElementaryAudio {
+                    profile_version: u32,
+                    #[serde(default)]
+                    audio: kronello_audio::AudioSourceMode,
+                    #[serde(default)]
+                    audio_layout: Option<kronello_model::ChannelMask>,
+                    clips: Vec<crate::JobAudioClip>,
+                }
+                let leg: ElementaryAudio = payload(&fields)?;
+                Ok(match format.as_str() {
+                    "mp3" => Self::Mp3 {
+                        profile_version: leg.profile_version,
+                        audio: leg.audio,
+                        audio_layout: leg.audio_layout,
+                        clips: leg.clips,
+                    },
+                    _ => Self::Flac {
+                        profile_version: leg.profile_version,
+                        audio: leg.audio,
+                        audio_layout: leg.audio_layout,
+                        clips: leg.clips,
+                    },
+                })
+            }
             "caption_sidecar" => {
                 #[derive(Deserialize)]
                 #[serde(deny_unknown_fields)]
@@ -206,6 +279,10 @@ impl<'de> Deserialize<'de> for Request {
             "proxy.generate" => payload(&fields).map(Self::ProxyGenerate),
             "proxy.status" => payload(&fields).map(Self::ProxyStatus),
             "proxy.clear" => payload(&fields).map(Self::ProxyClear),
+            "capture.start" => payload(&fields).map(Self::CaptureStart),
+            "capture.stop" => payload(&fields).map(Self::CaptureStop),
+            "capture.status" => payload(&fields).map(Self::CaptureStatus),
+            "capture.deck_probe" => payload(&fields).map(Self::CaptureDeckProbe),
             "audio.loudness" => payload(&fields).map(Self::AudioLoudness),
             "audio.normalize" => payload(&fields).map(Self::AudioNormalize),
             "audio.plugin_probe" => payload(&fields).map(Self::AudioPluginProbe),
@@ -263,6 +340,9 @@ impl<'de> Deserialize<'de> for Request {
             "capabilities.get" => payload(&fields).map(Self::CapabilitiesGet),
             "lut.import" => payload(&fields).map(Self::LutImport),
             "inspect.scopes" => payload(&fields).map(Self::InspectScopes),
+            "io.output.list" => payload(&fields).map(Self::IoOutputList),
+            "io.output.enable" => payload(&fields).map(Self::IoOutputEnable),
+            "io.output.disable" => payload(&fields).map(Self::IoOutputDisable),
             _ => Err(D::Error::custom("unknown operation")),
         }
     }
@@ -306,6 +386,10 @@ impl<'de> Deserialize<'de> for ResultData {
             "normalize" => Self::Normalize(take(&mut fields, "value")?),
             "scopes" => Self::Scopes(take(&mut fields, "value")?),
             "plugin_probe" => Self::PluginProbe(take(&mut fields, "value")?),
+            "output_devices" => Self::OutputDevices(take(&mut fields, "value")?),
+            "output_state" => Self::OutputState(take(&mut fields, "value")?),
+            "capture" => Self::Capture(take(&mut fields, "value")?),
+            "deck_probe" => Self::DeckProbe(take(&mut fields, "value")?),
             _ => return Err(D::Error::custom("unknown result kind")),
         };
         exhausted::<D::Error>(&fields)?;

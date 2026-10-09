@@ -116,6 +116,9 @@ impl MediaRuntime {
                 "expected a local regular file".into(),
             ));
         }
+        if let Some(detection) = crate::raw::sniff_camera_raw(&path)? {
+            return Err(detection.unsupported());
+        }
         let native = ffi::NativeDecoder::open_stream(&self.native, &path, Some(stream_index))?;
         if native.stream() != stream_index {
             return Err(MediaError::UnsupportedFeature(
@@ -181,6 +184,39 @@ impl MediaRuntime {
         reverse_sampling: bool,
         interpolation: Option<kronello_time::FrameInterpolation>,
     ) -> Result<VideoImage, MediaError> {
+        // Camera RAW video codecs own their decode boundary (ADR-0136): a
+        // CinemaDNG asset's content hash is a frame manifest, and ProRes RAW
+        // never reaches the FFmpeg decoder.
+        match asset
+            .streams
+            .iter()
+            .find(|s| s.index == stream_index)
+            .map(|s| s.codec.as_str())
+        {
+            Some(crate::raw::CINEMADNG_CODEC) => {
+                return crate::raw::decode_cinemadng_image(
+                    asset,
+                    project_path,
+                    stream_index,
+                    time,
+                    working,
+                    reverse_sampling,
+                    interpolation,
+                );
+            }
+            Some(codec) if crate::raw::PRORES_RAW_CODECS.contains(&codec) => {
+                return crate::raw::decode_prores_raw_image(
+                    asset,
+                    project_path,
+                    stream_index,
+                    time,
+                    working,
+                    reverse_sampling,
+                    interpolation,
+                );
+            }
+            _ => {}
+        }
         let path = resolve_asset(asset, project_path)?;
         let mut decoder = self.open_video_stream(&path, stream_index)?;
         self.decode_video_image_from_decoder(
@@ -497,7 +533,7 @@ pub fn resolve_dag_media(dag: &RenderDag, project_path: &Path) -> Result<RenderD
     let runtime = if dag
         .nodes()
         .iter()
-        .any(|n| matches!(n, kronello_render::DagNode::VideoDraw { asset, .. } if asset.kind == kronello_model::AssetKind::Video))
+        .any(|n| matches!(n, kronello_render::DagNode::VideoDraw { asset, .. } if asset.kind == kronello_model::AssetKind::Video && asset.streams.iter().any(|s| !crate::raw::is_camera_raw_video_codec(&s.codec))))
     {
         Some(MediaRuntime::load().map_err(render_error)?)
     } else {
@@ -513,6 +549,24 @@ pub fn resolve_dag_media(dag: &RenderDag, project_path: &Path) -> Result<RenderD
                 }
                 return crate::decode_image_asset(asset, project_path, stream, working)
                     .map_err(render_error);
+            }
+            if asset
+                .streams
+                .iter()
+                .find(|s| s.index == stream)
+                .is_some_and(|s| crate::raw::is_camera_raw_video_codec(&s.codec))
+            {
+                // Camera RAW paths never need the FFmpeg runtime.
+                return crate::raw::decode_video_dispatch(
+                    asset,
+                    project_path,
+                    stream,
+                    time,
+                    working,
+                    reverse_sampling,
+                    interpolation,
+                )
+                .map_err(render_error);
             }
             runtime
                 .as_ref()
@@ -703,6 +757,41 @@ impl RenderBackend for SequentialVideoRenderBackend<'_> {
                         working,
                     )
                     .map_err(render_error);
+                }
+                // Camera RAW video codecs bypass the FFmpeg decoder pool
+                // (ADR-0136): CinemaDNG verifies a frame manifest, ProRes RAW
+                // uses the macOS native path, both stay typed on failure.
+                match asset
+                    .streams
+                    .iter()
+                    .find(|s| s.index == stream)
+                    .map(|s| s.codec.as_str())
+                {
+                    Some(crate::raw::CINEMADNG_CODEC) => {
+                        return crate::raw::decode_cinemadng_image(
+                            asset,
+                            self.base.project_path,
+                            stream,
+                            time,
+                            working,
+                            reverse_sampling,
+                            interpolation,
+                        )
+                        .map_err(render_error);
+                    }
+                    Some(codec) if crate::raw::PRORES_RAW_CODECS.contains(&codec) => {
+                        return crate::raw::decode_prores_raw_image(
+                            asset,
+                            self.base.project_path,
+                            stream,
+                            time,
+                            working,
+                            reverse_sampling,
+                            interpolation,
+                        )
+                        .map_err(render_error);
+                    }
+                    _ => {}
                 }
                 let runtime = self.runtime.map_err(|error| RenderError::Backend {
                     code: error.code(),

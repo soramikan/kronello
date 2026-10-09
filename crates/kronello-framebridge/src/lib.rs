@@ -1,8 +1,12 @@
 //! Explicit transfer probes and resident decode paths. Native APIs stay on macOS.
 use kronello_gpu::{GpuContext, GpuError, TransferStats};
 use std::time::{Duration, Instant};
+/// FLOW-004 capture boundary (ADR-0135): ScreenCaptureKit on macOS, a typed
+/// vendor-SDK adapter contract for deck ingest, and typed unsupported errors.
+pub mod capture;
 #[cfg(target_os = "macos")]
 mod macos;
+pub mod output;
 #[cfg(target_os = "macos")]
 pub mod resident;
 #[cfg(target_os = "macos")]

@@ -96,6 +96,10 @@ macro_rules! commands {
             ("proxy.generate", true, ProxyGenerateRequest, JobListResult),
             ("proxy.status", true, ProxyStatusRequest, ProxyStatusResult),
             ("proxy.clear", false, ProxyClearRequest, ProjectInfo),
+            ("capture.start", true, CaptureStartRequest, kronello_jobs::JobRecord),
+            ("capture.stop", true, CaptureStopRequest, kronello_jobs::JobRecord),
+            ("capture.status", true, CaptureStatusRequest, CaptureStatusResult),
+            ("capture.deck_probe", true, CaptureDeckProbeRequest, DeckProbeResult),
             ("audio.loudness", true, AudioLoudnessRequest, AudioLoudnessResult),
             ("audio.normalize", false, AudioNormalizeRequest, AudioNormalizeResult),
             ("audio.plugin_probe", true, PluginProbeRequest, PluginProbeResult),
@@ -152,7 +156,10 @@ macro_rules! commands {
             ("captions.import", false, CaptionsImportRequest, kronello_store::Event),
             ("captions.export", true, CaptionsExportRequest, CaptionsExportResult),
             ("lut.import", false, LutImportRequest, kronello_store::Event),
-            ("inspect.scopes", true, InspectScopesRequest, InspectScopesResult)
+            ("inspect.scopes", true, InspectScopesRequest, InspectScopesResult),
+            ("io.output.list", true, IoOutputListRequest, IoOutputListResult),
+            ("io.output.enable", true, IoOutputEnableRequest, IoOutputStateResult),
+            ("io.output.disable", true, IoOutputDisableRequest, IoOutputStateResult)
         }
     };
 }
@@ -230,6 +237,7 @@ impl CapabilitiesResult {
                 "export_batch_v1",
                 "asset_thumbnail_v1",
                 "audio_plugin_host_v1",
+                "capture_ingest_v1",
             ]
             .map(String::from)
             .to_vec(),

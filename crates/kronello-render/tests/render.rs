@@ -2809,6 +2809,15 @@ fn fx_effect_animation_versions_and_cache_identity() {
             (kronello_model::CORNER_PIN_ID.into(), 1),
             (kronello_model::COLOR_LUT_ID.into(), 1),
             (kronello_model::STABILIZE_ID.into(), 1),
+            (kronello_model::GRAIN_ID.into(), 1),
+            (kronello_model::MOSAIC_ID.into(), 1),
+            (kronello_model::INVERT_ID.into(), 1),
+            (kronello_model::CHANNEL_MIXER_ID.into(), 1),
+            (kronello_model::TINT_ID.into(), 1),
+            (kronello_model::DIRECTIONAL_BLUR_ID.into(), 1),
+            (kronello_model::RADIAL_BLUR_ID.into(), 1),
+            (kronello_model::DISPLACE_ID.into(), 1),
+            (kronello_model::GENERATE_ID.into(), 1),
         ])
     );
     let mut cache = RenderCache::new(CacheConfig::default());
@@ -3635,6 +3644,7 @@ fn temporal_cut_sequence() -> (Project, SequenceId) {
         audio_retime: Default::default(),
         reverse_sampling: None,
         volume: None,
+        pan: None,
         links: vec![],
         effects: vec![],
         masks: vec![],
@@ -4569,6 +4579,7 @@ fn gui007_reverse_fixture() -> (Project, Sequence) {
                 audio_retime: AudioRetimePolicy::ReverseResampleV1,
                 reverse_sampling: Some(ReverseSampling::ReverseGridV1),
                 volume: None,
+                pan: None,
                 links: vec![],
                 properties: vec![],
                 effects: vec![],

@@ -1,11 +1,11 @@
 {
   "schema_version": "0.5",
   "created": "2026-10-01",
-  "updated": "2026-10-08",
+  "updated": "2026-10-09",
   "status": "implementation_started",
   "description": "設計と実装の計画・進捗。このファイルがバックログの正本であり、GitHub等へ登録したIssueではない。",
   "specification": "docs/architecture/",
-  "task_count": 142,
+  "task_count": 143,
   "items": [
     {
       "id": "ARC-001",
@@ -1223,6 +1223,23 @@
       ]
     },
     {
+      "id": "INTEGRATION-007",
+      "milestone": "M10",
+      "priority": "P2",
+      "area": "integration",
+      "title": "縦断デモ第5段階: M10 配信・拡張ワークフロー（共同編集を除く）",
+      "status": "done",
+      "dependencies": [
+        "MEDIA-004",
+        "FX-008",
+        "GUI-012"
+      ],
+      "acceptance_criteria": [
+        "チャプター付きマルチ出力書き出し、新エフェクトのタイムライン適用、RAW インジェスト、capture 経路、外部モニタ出力切替を CLI と MCP の両経路で検証する",
+        "プロジェクト export・レンダー出力・型付き拒否の CLI/MCP parity を確認する"
+      ]
+    },
+    {
       "id": "DIM-001",
       "milestone": "M11",
       "priority": "P2",
@@ -2228,7 +2245,7 @@
       "priority": "P2",
       "area": "media",
       "title": "配信拡張: チャプター・マルチ出力・追加コーデック profile",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "AUDIO-005"
       ],
@@ -2242,7 +2259,7 @@
       "priority": "P2",
       "area": "io",
       "title": "外部モニタ出力: SDI/NDI 等のリファレンス出力",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "GPU-003"
       ],
@@ -2299,7 +2316,7 @@
       "priority": "P2",
       "area": "effects",
       "title": "残エフェクト群の拡充",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "FX-006"
       ],
@@ -2313,7 +2330,7 @@
       "priority": "P2",
       "area": "media",
       "title": "キャプチャ/インジェスト: 録画・デッキ取り込み",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "MEDIA-001"
       ],
@@ -2327,7 +2344,7 @@
       "priority": "P2",
       "area": "media",
       "title": "カメラフォーマット: RAW 系（BRAW/R3D/ProRes RAW）",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "MEDIA-001"
       ],
@@ -2341,7 +2358,7 @@
       "priority": "P2",
       "area": "gui",
       "title": "ワークスペース完成: 残 UI の統合と UX ポリッシュ",
-      "status": "planned",
+      "status": "done",
       "dependencies": [
         "GUI-011",
         "FLOW-002"

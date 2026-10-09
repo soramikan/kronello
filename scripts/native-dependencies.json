@@ -23,7 +23,8 @@
         "--disable-debug",
         "--disable-x86asm",
         "--enable-libdav1d",
-        "--enable-libopus"
+        "--enable-libopus",
+        "--enable-libmp3lame"
       ],
       "platform_configure": {
         "darwin": [
@@ -88,8 +89,43 @@
         "--disable-doc",
         "--disable-extra-programs"
       ]
+    },
+    {
+      "name": "lame",
+      "version": "3.100",
+      "url": "https://downloads.sourceforge.net/lame/lame-3.100.tar.gz",
+      "sha256": "ddfe36cab873794038ae2c1210557ad34857a4b6bdc515785d1da9e175b1da1e",
+      "license": "LGPL-2.0-only",
+      "license_files": [
+        "COPYING",
+        "LICENSE"
+      ],
+      "configure": [
+        "--disable-static",
+        "--enable-shared",
+        "--disable-frontend"
+      ]
+    },
+    {
+      "name": "libraw",
+      "version": "0.22.2",
+      "url": "https://www.libraw.org/data/LibRaw-0.22.2.tar.gz",
+      "sha256": "de86b035655accff8d4010f1a221fdf50d353cb7b1422ba26f14a0db92612cfa",
+      "license": "LGPL-2.1-only OR CDDL-1.0",
+      "license_files": [
+        "LICENSE.LGPL",
+        "LICENSE.CDDL"
+      ],
+      "configure": [
+        "--disable-static",
+        "--enable-shared",
+        "--disable-openmp",
+        "--disable-lcms",
+        "--disable-jpeg",
+        "--disable-zlib"
+      ]
     }
   ],
   "hash_provenance": "Pinned upstream release archive hashes cross-checked against locally installed Homebrew source SBOM; downloads must match before extraction.",
-  "distribution": "Shared FFmpeg, SVT-AV1, dav1d and opus libraries only; copy license texts, PATENTS, source URLs and this manifest. GPL/nonfree builds fail verification. System development builds are never distribution input."
+  "distribution": "Shared FFmpeg, SVT-AV1, dav1d, opus, LAME and LibRaw libraries only; copy license texts, PATENTS, source URLs and this manifest. GPL/nonfree builds fail verification. System development builds are never distribution input."
 }

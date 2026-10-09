@@ -5,7 +5,7 @@ mod watch;
 
 use kronello_service::{BackendSelection, Request, Response, Service, ServiceError};
 
-const USAGE: &str = "kronello [--events ndjson] [--backend gpu|cpu-reference|gpu-resident-bgra8|gpu-resident-nv12] [--request-json JSON] [project create|create_plan|import|import_plan|export|info|collect | asset relink|thumbnail | media query | export batch | render frame|sequence|export|submit|explain | node explain | job get|list|cancel|prune | track analyze | audio analyze|loudness|normalize|plugin_probe|plugin_process | proxy generate|status|clear | scene detect|apply | edit plan|apply|undo|insert|overwrite | expression format | history list | scene query | property sample | capabilities get | sequence create|query | clip place|trim|stretch|angle_switch | multicam create | instance retime | template_instance retime | template define|instantiate|set_input|set_duration|preview|migration_plan | captions import_plan|import|export] | watch --project P --directory D --preset ID|NAME --output DIR [--poll-ms N] [--once] | worker --job <id> | plugin-helper; otherwise read a tagged service Request from stdin";
+const USAGE: &str = "kronello [--events ndjson] [--backend gpu|cpu-reference|gpu-resident-bgra8|gpu-resident-nv12] [--request-json JSON] [project create|create_plan|import|import_plan|export|info|collect | asset relink|thumbnail | media query | export batch | render frame|sequence|export|submit|explain | node explain | job get|list|cancel|resume|prune | capture start|stop|status|deck_probe | track analyze | audio analyze|loudness|normalize|plugin_probe|plugin_process | proxy generate|status|clear | scene detect|apply | edit plan|apply|undo|insert|overwrite | expression format | history list | scene query | property sample | capabilities get | sequence create|query | clip place|trim|stretch|angle_switch | multicam create | instance retime | template_instance retime | template define|instantiate|set_input|set_duration|preview|migration_plan | captions import_plan|import|export] | watch --project P --directory D --preset ID|NAME --output DIR [--poll-ms N] [--once] | worker --job <id> | plugin-helper; otherwise read a tagged service Request from stdin";
 fn run(stream: Option<&events::Stream>) -> Result<Response, ServiceError> {
     let mut selection = BackendSelection::Gpu;
     let mut literal = None;
@@ -79,7 +79,14 @@ fn run(stream: Option<&events::Stream>) -> Result<Response, ServiceError> {
             verb @ ("define" | "instantiate" | "set_input" | "set_duration" | "preview"
             | "migration_plan"),
         ] => Some(format!("template.{verb}")),
-        ["job", verb @ ("get" | "list" | "cancel" | "prune")] => Some(format!("job.{verb}")),
+        [
+            "job",
+            verb @ ("get" | "list" | "cancel" | "resume" | "prune"),
+        ] => Some(format!("job.{verb}")),
+        [
+            "capture",
+            verb @ ("start" | "stop" | "status" | "deck_probe"),
+        ] => Some(format!("capture.{verb}")),
         ["track", "analyze"] => Some("track.analyze".into()),
         [
             "audio",
@@ -97,6 +104,10 @@ fn run(stream: Option<&events::Stream>) -> Result<Response, ServiceError> {
         ["export", "batch"] => Some("export.batch".into()),
         ["project", "collect"] => Some("project.collect".into()),
         ["capabilities", "get"] => Some("capabilities.get".into()),
+        // IO-001 (ADR-0134): external output enumeration and explicit enable.
+        ["io", "output", verb @ ("list" | "enable" | "disable")] => {
+            Some(format!("io.output.{verb}"))
+        }
         ["captions", verb @ ("import_plan" | "import" | "export")] => {
             Some(format!("captions.{verb}"))
         }

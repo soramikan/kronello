@@ -125,6 +125,21 @@ pub enum DagNode {
         source: usize,
         effect: crate::PixelEffect,
     },
+    /// FX-008 (ADR-0137): two-input effect node. `source` is the warped
+    /// content; `map` is the displacement surface sampled at the output
+    /// position. Only `PixelEffect::Displace` is legal here.
+    EffectMap {
+        source: usize,
+        map: usize,
+        effect: crate::PixelEffect,
+    },
+    /// FX-008 (ADR-0137): source-independent procedural leaf covering the
+    /// whole execution surface. `bounds` is the full output lattice, so
+    /// downstream bounds consumers see total coverage.
+    Generate {
+        effect: crate::PixelEffect,
+        bounds: crate::PixelBounds,
+    },
     Mask {
         source: usize,
         matte: usize,
@@ -150,10 +165,12 @@ impl DagNode {
             | Self::TextLayout { .. }
             | Self::VideoDraw { .. }
             | Self::RasterInput { .. }
+            | Self::Generate { .. }
             | Self::SolidRect { .. } => vec![],
             Self::CoverageDraw { geometry, .. } => vec![*geometry],
             Self::IsolatedComposite { children, .. } => children.clone(),
             Self::Mask { source, matte, .. } => vec![*source, *matte],
+            Self::EffectMap { source, map, .. } => vec![*source, *map],
             Self::Blend {
                 source, backdrop, ..
             } => vec![*source, *backdrop],
@@ -266,12 +283,13 @@ impl RenderDag {
         for node in &self.nodes {
             surfaces += match node {
                 DagNode::IsolatedComposite { children, .. } => children.len() as u64 + 2,
-                DagNode::Effect { .. } => 4,
+                DagNode::Effect { .. } | DagNode::EffectMap { .. } => 4,
                 DagNode::CoverageDraw { .. }
                 | DagNode::Blend { .. }
                 | DagNode::Mask { .. }
                 | DagNode::VideoDraw { .. }
                 | DagNode::RasterInput { .. }
+                | DagNode::Generate { .. }
                 | DagNode::SolidRect { .. } => 1,
                 _ => 0,
             };
@@ -539,6 +557,134 @@ impl Builder<'_> {
         }
         Ok(source)
     }
+    /// Lower one transform-mapped resolved effect onto `id`. FX-008 (ADR-0137)
+    /// needs two special DAG forms: `kronello.displace` binds a second scene
+    /// input through `scene.displacement_maps`, and `kronello.generate` is a
+    /// source-independent leaf that discards the incoming raster.
+    fn push_effect(
+        &mut self,
+        id: usize,
+        mapped: &kronello_model::ResolvedEffect,
+        n: &crate::SceneNodeIr,
+        transform: Affine2,
+        depth: usize,
+    ) -> Result<usize, RenderError> {
+        if let kronello_model::ResolvedEffect::Displace { .. } = mapped {
+            // The displacement map is a second scene input bound through
+            // `scene.displacement_maps`, mirroring the matte contract. A
+            // missing binding or a missing scene node is a typed error,
+            // never a substituted source.
+            let binding = self
+                .scene
+                .displacement_maps
+                .iter()
+                .find(|b| b.source == n.key)
+                .ok_or_else(|| RenderError::Backend {
+                    code: "DISPLACE_MAP_MISSING",
+                    message: format!("displacement map binding for {:?} was not resolved", n.key),
+                })?;
+            let map_index =
+                self.indices
+                    .get(&binding.map)
+                    .copied()
+                    .ok_or_else(|| RenderError::Backend {
+                        code: "DISPLACE_MAP_MISSING",
+                        message: format!("missing active displacement map {:?}", binding.map),
+                    })?;
+            let map = self.node(map_index, depth + 1)?;
+            let effect =
+                crate::PixelEffect::from_design_mapped(mapped, self.region.design_to_pixel())?;
+            return self.push(DagNode::EffectMap {
+                source: id,
+                map,
+                effect,
+            });
+        }
+        if let kronello_model::ResolvedEffect::Generate { .. } = mapped {
+            // `kronello.generate` discards the incoming raster and synthesizes
+            // over the whole execution surface, so the DAG node is a leaf
+            // rather than an Effect consumer.
+            let effect =
+                crate::PixelEffect::from_design_mapped(mapped, self.region.design_to_pixel())?;
+            return self.push(DagNode::Generate {
+                effect,
+                bounds: crate::PixelBounds {
+                    min: [0.0; 2],
+                    max: self.region.pixels.map(f64::from),
+                },
+            });
+        }
+        let pixel = if let kronello_model::ResolvedEffect::Grain { seed, .. } = mapped {
+            // FX-008: fold the scene's rational sample time into the authored
+            // seed so the noise field is temporal and deterministic.
+            let mut resolved = mapped.clone();
+            if let kronello_model::ResolvedEffect::Grain { seed: s, .. } = &mut resolved {
+                *s = crate::fold_grain_seed(*seed, self.scene.time);
+            }
+            crate::PixelEffect::from_design_mapped(&resolved, self.region.design_to_pixel())?
+        } else if let kronello_model::ResolvedEffect::ColorLut {
+            lut: asset_id,
+            intensity,
+        } = mapped
+        {
+            // COLOR-003: the lattice was bound to this asset during scene
+            // IR construction; absence here is a typed render failure.
+            let lattice = self
+                .scene
+                .luts
+                .get(asset_id)
+                .ok_or_else(|| RenderError::Backend {
+                    code: "LUT_INPUT_MISSING",
+                    message: format!("lut data for asset {asset_id} was not resolved"),
+                })?;
+            let effect = crate::PixelEffect::ColorLut {
+                lut: lattice.clone(),
+                intensity: *intensity as f32,
+            };
+            effect.validate()?;
+            effect
+        } else if let kronello_model::ResolvedEffect::Stabilize {
+            inverse: tracked_inverse,
+            border,
+            fill_color,
+            sampling,
+            ..
+        } = mapped
+        {
+            // TRACK-002 (ADR-0122): the scene pass bound `inverse` — the
+            // source-space inverse correction C^-1 — to this node's video
+            // content. `frame` composes C^-1 behind output→local so the
+            // kernel resolves corrected source-extent positions; `unmap`
+            // is the draw transform re-embedding the border-resolved
+            // position into the input raster where the frame was drawn.
+            let crate::SceneContent::Video { extent, .. } = &n.content else {
+                return Err(RenderError::InvalidInput(
+                    "stabilize requires video content".into(),
+                ));
+            };
+            let Some(frame_inverse) = tracked_inverse else {
+                return Err(RenderError::InvalidInput(
+                    "stabilize tracking data unresolved".into(),
+                ));
+            };
+            let frame = kronello_eval::Affine2(*frame_inverse)
+                .compose(kronello_eval::Affine2(inverse(transform)?));
+            crate::PixelEffect::stabilize(
+                frame,
+                transform,
+                *extent,
+                *border,
+                *fill_color,
+                *sampling,
+            )?
+        } else {
+            crate::PixelEffect::from_design_mapped(mapped, self.region.design_to_pixel())?
+        };
+        self.push(DagNode::Effect {
+            source: id,
+            effect: pixel,
+        })
+    }
     /// FX-007 (ADR-0116): rewrite the accumulated lower composite through the
     /// adjustment node's effect chain. Masks and node opacity bound where the
     /// adjustment applies: `kept` retains the untouched backdrop outside the
@@ -560,13 +706,7 @@ impl Builder<'_> {
             FlattenRequest::new(magnification.max(1.0), self.profile.flatten_tolerance_px)?;
         let mut id = backdrop;
         for effect in &n.effects {
-            id = self.push(DagNode::Effect {
-                source: id,
-                effect: crate::PixelEffect::from_design(
-                    &map_effect(effect, n.world_transform)?,
-                    scale,
-                )?,
-            })?;
+            id = self.push_effect(id, &map_effect(effect, n.world_transform)?, n, transform, 1)?;
         }
         let strength = n.opacity * n.post_effect_opacity;
         if !(strength.is_finite() && (0.0..=1.0).contains(&strength)) {
@@ -984,68 +1124,7 @@ impl Builder<'_> {
         id = self.apply_mask_stack(id, n, transform, flatten, scale)?;
         for effect in &n.effects {
             let mapped = map_effect(effect, n.world_transform)?;
-            let pixel = if let kronello_model::ResolvedEffect::ColorLut {
-                lut: asset_id,
-                intensity,
-            } = &mapped
-            {
-                // COLOR-003: the lattice was bound to this asset during scene
-                // IR construction; absence here is a typed render failure.
-                let lattice =
-                    self.scene
-                        .luts
-                        .get(asset_id)
-                        .ok_or_else(|| RenderError::Backend {
-                            code: "LUT_INPUT_MISSING",
-                            message: format!("lut data for asset {asset_id} was not resolved"),
-                        })?;
-                let effect = crate::PixelEffect::ColorLut {
-                    lut: lattice.clone(),
-                    intensity: *intensity as f32,
-                };
-                effect.validate()?;
-                effect
-            } else if let kronello_model::ResolvedEffect::Stabilize {
-                inverse: tracked_inverse,
-                border,
-                fill_color,
-                sampling,
-                ..
-            } = &mapped
-            {
-                // TRACK-002 (ADR-0122): the scene pass bound `inverse` — the
-                // source-space inverse correction C^-1 — to this node's video
-                // content. `frame` composes C^-1 behind output→local so the
-                // kernel resolves corrected source-extent positions; `unmap`
-                // is the draw transform re-embedding the border-resolved
-                // position into the input raster where the frame was drawn.
-                let crate::SceneContent::Video { extent, .. } = &n.content else {
-                    return Err(RenderError::InvalidInput(
-                        "stabilize requires video content".into(),
-                    ));
-                };
-                let Some(frame_inverse) = tracked_inverse else {
-                    return Err(RenderError::InvalidInput(
-                        "stabilize tracking data unresolved".into(),
-                    ));
-                };
-                let frame = kronello_eval::Affine2(*frame_inverse)
-                    .compose(kronello_eval::Affine2(inverse(transform)?));
-                crate::PixelEffect::stabilize(
-                    frame,
-                    transform,
-                    *extent,
-                    *border,
-                    *fill_color,
-                    *sampling,
-                )?
-            } else {
-                crate::PixelEffect::from_design(&mapped, scale)?
-            };
-            id = self.push(DagNode::Effect {
-                source: id,
-                effect: pixel,
-            })?;
+            id = self.push_effect(id, &mapped, n, transform, depth)?;
         }
         if !n.post_effect_opacity.is_finite() || !(0.0..=1.0).contains(&n.post_effect_opacity) {
             return Err(RenderError::InvalidInput(
@@ -1231,6 +1310,20 @@ fn build_unpadded_dag(
             hidden.insert(m.matte.clone());
         }
     }
+    // FX-008 (ADR-0137): one displacement-map binding per displace source;
+    // both scene keys must resolve.
+    let mut displacement_sources = BTreeSet::new();
+    for binding in &scene.displacement_maps {
+        if !indices.contains_key(&binding.source)
+            || !indices.contains_key(&binding.map)
+            || !displacement_sources.insert(binding.source.clone())
+        {
+            return Err(RenderError::Backend {
+                code: "DISPLACE_MAP_MISSING",
+                message: "duplicate source or missing active displacement map binding".into(),
+            });
+        }
+    }
     let mut b = Builder {
         scene,
         profile,
@@ -1331,6 +1424,20 @@ pub fn build_render_dag_with_cache(
         let Some(output) = requests[i] else { continue };
         let input = match &dag.nodes[i] {
             DagNode::Effect { effect, .. } => effect.required_input(output),
+            DagNode::EffectMap {
+                source,
+                map,
+                effect,
+            } => {
+                // FX-008: the displacement map is sampled at the output
+                // position; only the warped source reads the expanded halo.
+                requests[*map] =
+                    Some(requests[*map].map_or(output, |old: PixelBounds| old.union(output)));
+                let required = effect.required_input(output);
+                requests[*source] =
+                    Some(requests[*source].map_or(required, |old| old.union(required)));
+                required
+            }
             _ => output,
         };
         if input
@@ -1343,8 +1450,13 @@ pub fn build_render_dag_with_cache(
                 "effect ROI budget exceeded".into(),
             ));
         }
-        for id in dag.nodes[i].inputs() {
-            requests[id] = Some(requests[id].map_or(input, |old: PixelBounds| old.union(input)));
+        // EffectMap inputs were assigned above with per-input regions; all
+        // other nodes propagate the same region to every input.
+        if !matches!(&dag.nodes[i], DagNode::EffectMap { .. }) {
+            for id in dag.nodes[i].inputs() {
+                requests[id] =
+                    Some(requests[id].map_or(input, |old: PixelBounds| old.union(input)));
+            }
         }
         union = union.union(input);
     }
@@ -1451,11 +1563,18 @@ fn derive_bounds(nodes: &[DagNode]) -> Vec<crate::NodeBounds> {
                     bounds[*backdrop].visual_bounds,
                 ),
             },
-            DagNode::Effect { source, effect } => NodeBounds {
-                ink_bounds: bounds[*source].ink_bounds,
-                visual_bounds: bounds[*source]
-                    .visual_bounds
-                    .map(|b| effect.output_bounds(b)),
+            DagNode::Effect { source, effect } | DagNode::EffectMap { source, effect, .. } => {
+                NodeBounds {
+                    ink_bounds: bounds[*source].ink_bounds,
+                    visual_bounds: bounds[*source]
+                        .visual_bounds
+                        .map(|b| effect.output_bounds(b)),
+                }
+            }
+            // FX-008: the procedural leaf covers its declared surface.
+            DagNode::Generate { bounds, .. } => NodeBounds {
+                ink_bounds: Some(*bounds),
+                visual_bounds: Some(*bounds),
             },
             DagNode::Mask { source, .. } | DagNode::OutputTransform { source, .. } => {
                 bounds[*source]
@@ -1602,6 +1721,92 @@ pub(crate) fn map_effect(
         ResolvedEffect::Sharpen { amount, radius } => ResolvedEffect::Sharpen {
             amount: *amount,
             radius: length(*radius)?,
+        },
+        // FX-008 (ADR-0137): channel-pointwise operations commute with any
+        // placement transform.
+        ResolvedEffect::Invert { .. }
+        | ResolvedEffect::ChannelMixer { .. }
+        | ResolvedEffect::Tint { .. } => effect.clone(),
+        ResolvedEffect::Grain {
+            amount,
+            size,
+            monochrome,
+            seed,
+        } => ResolvedEffect::Grain {
+            amount: *amount,
+            size: length(*size)?,
+            monochrome: *monochrome,
+            seed: *seed,
+        },
+        ResolvedEffect::Mosaic { block_size, basis } => ResolvedEffect::Mosaic {
+            block_size: length(*block_size)?,
+            basis: *basis,
+        },
+        ResolvedEffect::DirectionalBlur {
+            angle_degrees,
+            length: len,
+        } => {
+            // The blur segment is a direction vector through the linear
+            // part; the mapped direction/length keeps the exact segment.
+            let rad = angle_degrees.to_radians();
+            let segment = [rad.cos() * *len, rad.sin() * *len];
+            let v = [
+                a[0] * segment[0] + a[1] * segment[1],
+                b[0] * segment[0] + b[1] * segment[1],
+            ];
+            let out_len = v[0].hypot(v[1]);
+            ResolvedEffect::DirectionalBlur {
+                angle_degrees: if out_len > 0.0 {
+                    v[1].atan2(v[0]).to_degrees()
+                } else {
+                    *angle_degrees
+                },
+                length: out_len,
+            }
+        }
+        ResolvedEffect::RadialBlur {
+            mode,
+            amount,
+            center,
+        } => ResolvedEffect::RadialBlur {
+            mode: *mode,
+            amount: *amount,
+            center: transform.transform_point(*center),
+        },
+        ResolvedEffect::Displace {
+            channel_x,
+            channel_y,
+            displacement,
+        } => {
+            // Displacement columns map through the linear part exactly like
+            // drop-shadow offsets, so rotated placements rotate the
+            // displacement axes.
+            let mapped = [0, 1].map(|r| {
+                [0, 1]
+                    .map(|c| [a, b][r][0] * displacement[0][c] + [a, b][r][1] * displacement[1][c])
+            });
+            ResolvedEffect::Displace {
+                channel_x: *channel_x,
+                channel_y: *channel_y,
+                displacement: mapped,
+            }
+        }
+        ResolvedEffect::Generate {
+            generator,
+            color_a,
+            color_b,
+            point_a,
+            point_b,
+            cell_size,
+            line_width,
+        } => ResolvedEffect::Generate {
+            generator: *generator,
+            color_a: *color_a,
+            color_b: *color_b,
+            point_a: transform.transform_point(*point_a),
+            point_b: transform.transform_point(*point_b),
+            cell_size: length(*cell_size)?,
+            line_width: length(*line_width)?,
         },
         _ => unreachable!("color and affine variants handled above"),
     })

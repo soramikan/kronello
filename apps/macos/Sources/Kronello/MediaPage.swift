@@ -21,8 +21,8 @@ struct MediaPage: View {
             p.line.frame(width: 1)
             browser
         }
-        .task { await model.refresh() }
-        .onChange(of: editor.refreshToken) { _, _ in Task { await model.refresh() } }
+        .task { await model.refresh(); await model.refreshProxies() }
+        .onChange(of: editor.refreshToken) { _, _ in Task { await model.refresh(); await model.refreshProxies() } }
     }
     var binsPanel: some View {
         KRPanel("ビン") {
@@ -86,7 +86,19 @@ struct MediaPage: View {
             KRSearchField("メディアを検索", text: $model.search)
         }, actions: {
             if let error = model.failure { KRErrorLine(.init(error.code, error.message)) }
-            KRButton(icon: .refreshCw, accessibilityLabel: "メディアを更新") { Task { await model.refresh() } }
+            // GUI-012 (ADR-0119): proxy generation for the selected video
+            // original submits shared fixed-input jobs; the badge and clear
+            // action come from `proxy.status`.
+            if let selected = model.assetSelection,
+               let entry = model.assets.first(where: { $0.string("asset") == selected }),
+               model.proxyEligible(entry) {
+                KRButton("プロキシ生成", icon: .sparkles, variant: .secondary) {
+                    Task { await model.generateProxies(for: [selected]) }
+                }
+            }
+            KRButton("プロジェクトを収集…", icon: .folder, variant: .secondary) { collect() }
+                .disabled(model.collecting)
+            KRButton(icon: .refreshCw, accessibilityLabel: "メディアを更新") { Task { await model.refresh(); await model.refreshProxies() } }
                 .disabled(model.loading)
         }) {
             VStack(spacing: 0) {
@@ -105,6 +117,10 @@ struct MediaPage: View {
                     }
                 }
                 Spacer(minLength: 0)
+                if let result = model.collectResult {
+                    Text(result).krText(KRType.caption).foregroundStyle(p.accentInk)
+                        .padding(.horizontal, KRSpace.space3).padding(.vertical, KRSpace.space1)
+                }
                 if let selected = model.assetSelection, let entry = model.assets.first(where: { $0.string("asset") == selected }) {
                     detail(entry)
                 }
@@ -141,6 +157,11 @@ struct MediaPage: View {
             Text(model.name(of: entry)).krText(KRType.body).foregroundStyle(offline ? p.danger : p.ink).lineLimit(1)
             HStack(spacing: KRSpace.space1) {
                 Text(model.kind(of: entry)).krText(KRType.caption).foregroundStyle(p.inkMuted)
+                if let state = model.proxyStates[id] {
+                    Text(state == "ready" ? "プロキシ" : "プロキシ:\(state)")
+                        .krText(KRType.ruler)
+                        .foregroundStyle(state == "ready" ? p.accentInk : p.danger)
+                }
                 Spacer(minLength: 0)
                 Text(model.sizeText(of: entry)).krText(KRType.ruler).foregroundStyle(p.inkMuted)
             }
@@ -171,6 +192,14 @@ struct MediaPage: View {
         if model.isOffline(entry) {
             Button("再リンク…") { relink(id) }
         }
+        // GUI-012: proxy lifecycle rides the same context menu.
+        if let state = model.proxyStates[id] {
+            Button(state == "ready" ? "プロキシを解除" : "プロキシを解除（\(state)）") {
+                Task { await model.clearProxy(for: id) }
+            }
+        } else if model.proxyEligible(entry) {
+            Button("プロキシを生成") { Task { await model.generateProxies(for: [id]) } }
+        }
     }
     func detail(_ entry: [String: Any]) -> some View {
         let id = entry.string("asset")
@@ -188,6 +217,11 @@ struct MediaPage: View {
                 if let error = model.error(of: entry) {
                     Text(error.message).krText(KRType.caption).foregroundStyle(p.danger).lineLimit(2)
                 }
+                if let state = model.proxyStates[id] {
+                    KRButton("プロキシを解除（\(state)）", variant: .secondary) { Task { await model.clearProxy(for: id) } }
+                } else if model.proxyEligible(entry) {
+                    KRButton("プロキシを生成", variant: .secondary) { Task { await model.generateProxies(for: [id]) } }
+                }
                 if model.isOffline(entry) {
                     KRButton("再リンク…", variant: .secondary) { relink(id) }
                 }
@@ -200,6 +234,17 @@ struct MediaPage: View {
         panel.prompt = "このフォルダから再リンク"
         if panel.runModal() == .OK, let url = panel.url {
             Task { await model.relink(asset, searchDirectory: url.path) }
+        }
+    }
+    /// GUI-012: `project.collect` copies the project file and verified assets
+    /// into a user-picked folder; the result line reports the staged count.
+    func collect() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.allowsMultipleSelection = false
+        panel.prompt = "このフォルダに収集"
+        panel.message = "プロジェクトファイルとすべての素材をコピーします。"
+        if panel.runModal() == .OK, let url = panel.url {
+            Task { await model.collectProject(to: url.path) }
         }
     }
     func mediaKind(of entry: [String: Any]) -> KRMediaKind {

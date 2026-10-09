@@ -33,6 +33,10 @@ pub const STROKE_WIDTH_ID: DescriptorId =
 pub const AUDIO_VOLUME_ID: DescriptorId =
     DescriptorId::from_uuid(Uuid::from_u128(0xe9cf4a80_2b64_4b8e_9e29_dfe6bc119a63));
 
+/// Fixed identity for stereo audio balance (`kronello.audio.pan`, [-1, 1]).
+pub const AUDIO_PAN_ID: DescriptorId =
+    DescriptorId::from_uuid(Uuid::from_u128(0x4c1d7f3e_9a28_4b62_8e51_7f0c2d9a6b34));
+
 /// Fixed identity for authored layer blending.
 pub const BLEND_MODE_ID: DescriptorId =
     DescriptorId::from_uuid(Uuid::from_u128(0x7ba7fae2_3e1d_4bd9_9b84_2e6a6a9fe101));
@@ -145,6 +149,22 @@ pub(crate) fn registry() -> SchemaRegistry {
     }));
     volume.capabilities.expressions = false;
     volume.capabilities.modifiers = false;
+    // GUI-012 (ADR-0138): constant stereo balance on a clip. -1 is hard left,
+    // +1 hard right; the mixer writes one shared value per audio track. A
+    // constant-only contract keeps the mix deterministic per rendered block.
+    let mut pan = definition(
+        AUDIO_PAN_ID,
+        "kronello.audio.pan",
+        "Pan",
+        Unit::Dimensionless,
+        Value::Scalar(zero),
+    );
+    pan.range = Some(ValueRange::Scalar(
+        NumericRange::inclusive(-1.0, 1.0).expect("valid built-in pan range"),
+    ));
+    pan.capabilities.curves = false;
+    pan.capabilities.expressions = false;
+    pan.capabilities.modifiers = false;
     let mut blend = definition(
         BLEND_MODE_ID,
         crate::BLEND_KEY,
@@ -178,6 +198,7 @@ pub(crate) fn registry() -> SchemaRegistry {
     for definition in [
         blend,
         volume,
+        pan,
         position,
         anchor,
         scale,

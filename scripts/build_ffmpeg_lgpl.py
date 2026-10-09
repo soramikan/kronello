@@ -127,7 +127,7 @@ def verify(prefix, manifest):
                 raise ValueError(f"pinned FFmpeg version mismatch: {ffmpeg_version}")
         libraries.append({"name": name, "version": version_fn(), "license": license_text, "configuration": configuration})
     probe = subprocess.check_output([str(prefix / "bin/ffmpeg"), "-hide_banner", "-encoders"], text=True, stderr=subprocess.STDOUT)
-    if any(name not in probe for name in ["libsvtav1", "prores_ks", "pcm_s24le", "alac", "aac", "libopus"]):
+    if any(name not in probe for name in ["libsvtav1", "prores_ks", "pcm_s24le", "alac", "aac", "libopus", "libmp3lame"]):
         raise ValueError("required AV1, ProRes and audio encoders missing")
     decoders = subprocess.check_output([str(prefix / "bin/ffmpeg"), "-hide_banner", "-decoders"], text=True, stderr=subprocess.STDOUT)
     if "libdav1d" not in decoders:
@@ -151,6 +151,20 @@ def verify(prefix, manifest):
         if actual != expected:
             raise ValueError(f"pinned dependency version mismatch: {dependency}: {actual}")
         external_versions[dependency] = actual
+    # LibRaw reports "0.22.2-Release" so compare the leading version field; the
+    # versioned real file is what CDLL must open, not the dev symlinks.
+    pattern = "libraw_r*.dll" if sys.platform == "win32" else ("libraw_r.*.dylib" if sys.platform == "darwin" else "libraw_r.so.*")
+    matches = [p for p in runtime_dir.glob(pattern) if p.is_file() and not p.is_symlink()]
+    if len(matches) != 1:
+        raise ValueError(f"one pinned shared LibRaw required: {pattern}: {[p.name for p in matches]}")
+    library = ctypes.CDLL(str(matches[0]))
+    libraw_version = library.libraw_version
+    libraw_version.restype = ctypes.c_char_p
+    actual = libraw_version().decode().split("-")[0]
+    expected = next(d["version"] for d in manifest["dependencies"] if d["name"] == "libraw")
+    if actual != expected:
+        raise ValueError(f"pinned dependency version mismatch: libraw: {actual}")
+    external_versions["libraw"] = actual
     shared = sorted(p for p in runtime_dir.iterdir() if p.is_file() and not p.is_symlink() and (".so" in p.name or p.suffix in {".dylib", ".dll"}))
     if not shared or any(p.suffix == ".a" and not p.name.endswith(".dll.a") for p in (prefix / "lib").iterdir()):
         raise ValueError("shared libraries only required")
@@ -191,10 +205,26 @@ def main():
     work.mkdir()
     entries = {entry["name"]: entry for entry in manifest["dependencies"]}
     svt, ffmpeg, dav1d, opus = entries["svt-av1"], entries["ffmpeg"], entries["dav1d"], entries["opus"]
+    lame, libraw = entries["lame"], entries["libraw"]
     svt_source = extract(sources["svt-av1"], work / "svt-source")
     ffmpeg_source = extract(sources["ffmpeg"], work / "ffmpeg-source")
     dav1d_source = extract(sources["dav1d"], work / "dav1d-source")
     opus_source = extract(sources["opus"], work / "opus-source")
+    lame_source = extract(sources["lame"], work / "lame-source")
+    if sys.platform == "win32":
+        # LAME 3.100's include/libmp3lame.sym still exports the deprecated API
+        # (lame_init_old, lame_decode_*, ...), but include/lame.h hardcodes
+        # DEPRECATED_OR_OBSOLETE_CODE_REMOVED to 1, which makes those entry
+        # points static. The generated MinGW .def must resolve every listed
+        # symbol or ld fails ("cannot export lame_init_old"), so keep the
+        # deprecated entry points compiled on Windows.
+        lame_header = lame_source / "include" / "lame.h"
+        needle = "#define DEPRECATED_OR_OBSOLETE_CODE_REMOVED 1"
+        text = lame_header.read_text(encoding="utf-8")
+        if text.count(needle) != 1:
+            raise ValueError("pinned lame.h DEPRECATED_OR_OBSOLETE_CODE_REMOVED define missing")
+        lame_header.write_text(text.replace(needle, "#define DEPRECATED_OR_OBSOLETE_CODE_REMOVED 0"), encoding="utf-8")
+    libraw_source = extract(sources["libraw"], work / "libraw-source")
     dav1d_build = work / "dav1d-build"
     run(["meson", "setup", dav1d_build, dav1d_source, *dav1d["meson"], f"--prefix={prefix}", "--libdir=lib"])
     run(["meson", "compile", "-C", dav1d_build, "-j", args.jobs])
@@ -213,10 +243,26 @@ def main():
     run(["cmake", *(["-G", "Ninja"] if sys.platform == "win32" else []), "-S", svt_source, "-B", svt_build, *svt["cmake"], *svt.get("platform_cmake", {}).get(sys.platform, []), f"-DCMAKE_INSTALL_PREFIX={prefix}", "-DCMAKE_INSTALL_LIBDIR=lib"])
     run(["cmake", "--build", svt_build, "--parallel", args.jobs])
     run(["cmake", "--install", svt_build])
+    # LAME must be installed before FFmpeg configure so pkg-config exposes libmp3lame.
+    lame_build = work / "lame-build"
+    lame_build.mkdir()
+    configure = msys2_posix(bash, lame_source / "configure") if bash else (lame_source / "configure").as_posix()
+    run([*([bash] if bash else []), configure,
+         *lame["configure"], *lame.get("platform_configure", {}).get(sys.platform, []),
+         f"--prefix={prefix}", "--libdir=" + str(prefix / "lib")], cwd=lame_build)
+    run(["make", f"-j{args.jobs}"], cwd=lame_build)
+    run(["make", "install"], cwd=lame_build)
     env = dict(os.environ, PKG_CONFIG_PATH=str(prefix / "lib/pkgconfig"), PKG_CONFIG_LIBDIR=str(prefix / "lib/pkgconfig"))
     ffmpeg_build = work / "ffmpeg-build"
     ffmpeg_build.mkdir()
     flags = [*ffmpeg["configure"], f"--prefix={prefix.as_posix()}"]
+    # LAME ships no pkg-config file; FFmpeg's configure probes lame/lame.h and
+    # -lmp3lame, so expose the vendored prefix explicitly on every platform.
+    # MSYS2 configure scripts need /d/a/... paths — a DOS-style -L/-I is split
+    # on ':' or loses its backslashes under shell evaluation.
+    extra_include = msys2_posix(bash, prefix / "include") if bash else (prefix / "include").as_posix()
+    extra_lib = msys2_posix(bash, prefix / "lib") if bash else (prefix / "lib").as_posix()
+    flags += [f"--extra-cflags=-I{extra_include}", f"--extra-ldflags=-L{extra_lib}"]
     if sys.platform == "win32":
         flags += ["--target-os=mingw32", "--arch=x86_64", "--cc=gcc", "--cxx=g++"]
     else:
@@ -226,6 +272,14 @@ def main():
     run([*([bash] if bash else []), (ffmpeg_source / "configure").as_posix(), *flags], cwd=ffmpeg_build, env=env)
     run(["make", f"-j{args.jobs}"], cwd=ffmpeg_build, env=env)
     run(["make", "install"], cwd=ffmpeg_build, env=env)
+    libraw_build = work / "libraw-build"
+    libraw_build.mkdir()
+    configure = msys2_posix(bash, libraw_source / "configure") if bash else (libraw_source / "configure").as_posix()
+    run([*([bash] if bash else []), configure,
+         *libraw["configure"], *libraw.get("platform_configure", {}).get(sys.platform, []),
+         f"--prefix={prefix}", "--libdir=" + str(prefix / "lib")], cwd=libraw_build, env=env)
+    run(["make", f"-j{args.jobs}"], cwd=libraw_build, env=env)
+    run(["make", "install"], cwd=libraw_build, env=env)
     if sys.platform == "win32":
         # Copy only the MinGW runtime DLLs into the explicit runtime directory;
         # loading the finished runtime never depends on MSYS being on PATH.
@@ -236,7 +290,7 @@ def main():
             shutil.copy2(dependency, prefix / "bin" / name)
     licenses = prefix / "licenses"
     licenses.mkdir()
-    for entry, source_dir in [(ffmpeg, ffmpeg_source), (svt, svt_source), (dav1d, dav1d_source), (opus, opus_source)]:
+    for entry, source_dir in [(ffmpeg, ffmpeg_source), (svt, svt_source), (dav1d, dav1d_source), (opus, opus_source), (lame, lame_source), (libraw, libraw_source)]:
         destination = licenses / entry["name"]
         destination.mkdir()
         for name in entry["license_files"]:

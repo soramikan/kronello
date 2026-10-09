@@ -581,6 +581,7 @@ fn captions_trim_and_export_timing_precision() {
         masks: vec![],
         markers: vec![],
         properties: vec![],
+        pan: None,
     };
     // Place the cue at a non-overlapping position: [10s, 10s+1/24s).
     let commands = vec![EditCommand::Timeline(Box::new(
@@ -706,6 +707,8 @@ fn caption_sidecar_output_wire_shape_and_validation() {
             sequence,
             caption_format: CaptionFormat::Srt,
         },
+        chapters: kronello_media::ChapterPolicy::Transfer,
+        outputs: vec![],
         required_features: vec![],
     };
     let error = engine()
@@ -774,6 +777,7 @@ fn captions_lower_above_video_in_scene_ir() {
                 masks: vec![],
                 markers: vec![],
                 properties: vec![],
+                pan: None,
             }],
         },
     );

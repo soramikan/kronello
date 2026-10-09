@@ -25,13 +25,14 @@ struct EditPage: View {
 }
 
 struct EditProjectPanel: View {
+    @Environment(\.krPalette) var p
     @ObservedObject var model: EditorModel
     @State private var tab = "project"
     @State private var search = ""
     var body: some View {
-        KRPanel(header: { KRTabBar([.init("project", "Project"), .init("effects", "Effects")], selection: $tab) }, actions: {}) {
+        KRPanel(header: { KRTabBar([.init("project", "Project"), .init("markers", "マーカー"), .init("effects", "Effects")], selection: $tab) }, actions: {}) {
             VStack(spacing: 0) {
-                KRSearchField("素材を検索", text: $search).padding(KRSpace.space2)
+                if tab != "markers" { KRSearchField("素材を検索", text: $search).padding(KRSpace.space2) }
                 if tab == "effects" {
                     VStack(alignment: .leading, spacing: KRSpace.space3) {
                         VStack(alignment: .leading, spacing: KRSpace.space3) {
@@ -62,6 +63,23 @@ struct EditProjectPanel: View {
                             Text("再生ヘッドに新規映像トラックへ追加し、下の映像全体へ効果をかけます。").krText(KRType.caption)
                         }.disabled(model.sequence.isEmpty || model.busy || model.pendingCandidate != nil)
                     }.padding()
+                }
+                else if tab == "markers" {
+                    // GUI-012: sequence + clip markers in one list; selecting a
+                    // row seeks the playhead and loads the marker into the
+                    // inspector (comment edit lives there).
+                    ScrollView(.vertical) {
+                        VStack(spacing: 0) {
+                            if model.allMarkers.isEmpty {
+                                KREmptyState(icon: .circle, title: "マーカーなし",
+                                    message: "ルーラーのダブルクリックか「再生ヘッドにマーカー」で追加できます。")
+                                    .padding(KRSpace.space4)
+                            }
+                            ForEach(model.allMarkers.filter { search.isEmpty || $0.comment.localizedCaseInsensitiveContains(search) }) { marker in
+                                markerRow(marker)
+                            }
+                        }
+                    }
                 }
                 else {
                     ScrollView(.vertical) {
@@ -96,6 +114,10 @@ struct EditProjectPanel: View {
                     HStack {
                         KRButton("マルチカムを作成…", icon: .clapperboard, variant: .secondary) { multicamDraft = .init() }
                             .disabled(model.busy || model.pendingCandidate != nil)
+                        // GUI-012: sidecar caption import drives the shared
+                        // captions.import_plan → captions.import plan flow.
+                        KRButton("字幕を読み込む…", icon: .captions, variant: .secondary) { importCaptions() }
+                            .disabled(model.busy || model.pendingCandidate != nil || model.ui.sequence == nil)
                         Spacer(minLength: 0)
                     }.padding(KRSpace.space2).overlay(alignment: .top) { Color.primary.opacity(0.001) }
                 }
@@ -107,6 +129,47 @@ struct EditProjectPanel: View {
         }
     }
     @State private var multicamDraft: MulticamCreateSheet.Draft?
+
+    /// Marker list row: diamond + comment + scope + timecode. Tap selects and
+    /// seeks; editing happens in the inspector branch for the selected marker.
+    @ViewBuilder func markerRow(_ marker: EditMarker) -> some View {
+        let selected = model.markerSelection == marker.id
+        Button {
+            model.selectMarker(marker)
+            model.seek(marker.time.frames(rateNum: model.rateNum, rateDen: model.rateDen))
+        } label: {
+            HStack(spacing: KRSpace.space2) {
+                MarkerDiamond(color: SequenceTracks.markerColor(marker.color), selected: selected)
+                    .frame(width: 10, height: 10)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(marker.comment.isEmpty ? "（コメントなし）" : marker.comment)
+                        .krText(KRType.body).foregroundStyle(marker.comment.isEmpty ? p.inkMuted : p.ink).lineLimit(1)
+                    Text(marker.clip == nil ? "シーケンス" : (marker.track.map { model.trackNumber($0) } ?? "クリップ"))
+                        .krText(KRType.caption).foregroundStyle(p.inkMuted).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Text(KRTimecode.format(frames: marker.time.frames(rateNum: model.rateNum, rateDen: model.rateDen), fps: model.nominalFPS))
+                    .krText(KRType.ruler).foregroundStyle(p.inkMuted)
+            }
+            .padding(.horizontal, KRSpace.space3).frame(height: KRSize.rowHeight + 10)
+            .background(selected ? p.selectionBg : .clear)
+            .contentShape(Rectangle())
+        }.buttonStyle(.plain)
+        .contextMenu {
+            Button("削除") { model.removeMarker(marker) }
+        }
+        .accessibilityLabel(marker.comment.isEmpty ? "マーカー" : "マーカー \(marker.comment)")
+    }
+    /// Sidecar picker → `model.importCaptions` (format inferred from extension).
+    func importCaptions() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = EditorModel.captionFormats.flatMap { $0.extensions }.compactMap { UTType(filenameExtension: $0) }
+        panel.allowsMultipleSelection = false; panel.canChooseDirectories = false
+        panel.prompt = "字幕を読み込む"
+        if panel.runModal() == .OK, let url = panel.url {
+            model.importCaptions(sidecarPath: url.path)
+        }
+    }
 }
 
 /// GUI-011 source monitor (ADR-0128): loads bin assets, timeline-clip
@@ -252,6 +315,8 @@ struct SequenceViewer: View {
                      selection: Binding(get: { model.ui.sequence ?? "" }, set: { model.setSequence($0) }))
         }, actions: { HStack {
             if model.usesCPUReference { Text("CPU 参照").krText(KRType.caption).foregroundStyle(p.inkMuted) }
+            // IO-001 (ADR-0134): external output destination + explicit toggle.
+            ExternalOutputControls(model: model, output: model.output)
             KRButton(icon: .scan, accessibilityLabel: "セーフエリア", pressed: safeArea) { safeArea.toggle() }
         } }) {
             VStack(spacing: 0) {
@@ -288,6 +353,9 @@ struct SequenceViewer: View {
                                 KRViewerError(.init(failure.code, failure.message), copy: { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(failure.copyText, forType: .string) },
                                               retry: { model.previewFailure = nil; Task { do { try await model.reload() } catch { model.mapFailure(error) } } })
                                 if model.offersCPUReference { KRButton("CPU 参照で表示", variant: .secondary) { model.chooseCPUReference() } }
+                                // GUI-012: FONT_MISSING guides to font.pin —
+                                // the pinned face persists in user state.
+                                if failure.code == "FONT_MISSING" { FontRecoveryButton(model: model) }
                             }
                         }
                         if model.sequenceLoading || model.busy || model.previewRendering || model.previewStale { VStack { HStack {
@@ -302,6 +370,30 @@ struct SequenceViewer: View {
                     playing: $model.playing, looping: $model.ui.looping, zoom: $model.ui.zoom, resolution: $model.ui.resolution,
                     onStep: { model.seek(model.frame + Int64($0)) }, onBoundary: { model.seek($0 ? model.durationFrames - 1 : 0) })
             }
+        }
+    }
+}
+
+/// GUI-012 guided font recovery: pick the font file the project references
+/// and pin it through the shared `font.pin` operation. The hash-locked
+/// identity lands in `ui.fontSources` (ADR-0033) so reopening the project
+/// restores the face without touching the document.
+struct FontRecoveryButton: View {
+    @ObservedObject var model: EditorModel
+    var body: some View {
+        VStack(spacing: KRSpace.space2) {
+            KRButton("フォントを登録…", icon: .folder, variant: .secondary) { pick() }
+            Text("参照しているフォントファイルを選択すると、内容ハッシュで登録します。代替フォントへの切り替えは行いません。")
+                .krText(KRType.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+        }
+    }
+    func pick() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false; panel.canChooseDirectories = false
+        panel.title = "固定して使うフォントファイルを選択"
+        if panel.runModal() == .OK, let url = panel.url {
+            Task { await model.importFont(path: url.path); model.previewFailure = nil
+                do { try await model.reload() } catch { model.mapFailure(error) } }
         }
     }
 }
@@ -329,6 +421,13 @@ struct ClipInspector: View {
                                     selection: Binding(get: { marker.color }, set: { model.recolorMarker(marker, color: $0) }))
                             }
                         }
+                        // GUI-012: marker comments edit through the shared
+                        // `marker_set` upsert; empty input clears the field.
+                        section("コメント") {
+                            KRTextField("", value: .constant(marker.comment), placeholder: "コメントを入力",
+                                onCommit: { model.setMarkerComment(marker, comment: $0) })
+                                .padding(.horizontal, KRSpace.space3)
+                        }
                         KRButton("マーカーを削除", icon: .trash2, variant: .destructive) { model.removeMarker(marker) }.padding(.horizontal, KRSpace.space3)
                         KRButton("再生ヘッドを移動", icon: .mousePointer2, variant: .secondary) { model.seek(marker.time.frames(rateNum: model.rateNum, rateDen: model.rateDen)) }.padding(.horizontal, KRSpace.space3)
                     }.padding(.vertical, KRSpace.space3)
@@ -338,7 +437,18 @@ struct ClipInspector: View {
                     VStack(alignment: .leading, spacing: KRSpace.space4) {
                         HStack(spacing: KRSpace.space2) { KRIconView(clip.kind.icon).foregroundStyle(clip.kind.color(in: p)); Text(model.clipName(clip)).krText(KRType.heading).lineLimit(1) }.padding(.horizontal, KRSpace.space3)
                         Text("\(clip.kind.rawValue.capitalized) クリップ · \(model.trackNumber(clip.track))").krText(KRType.caption).foregroundStyle(p.inkMuted).padding(.horizontal, KRSpace.space3)
-                        if let missing = model.clipMissing(clip) { KRErrorLine(.init(missing, "参照素材を確認してください。")).padding(.horizontal, KRSpace.space3) }
+                        if let missing = model.clipMissing(clip) {
+                            VStack(alignment: .leading, spacing: KRSpace.space2) {
+                                KRErrorLine(.init(missing, "参照素材を確認してください。"))
+                                // GUI-012: guided recovery — pick the folder
+                                // holding the file, `asset.relink` verifies.
+                                if let asset = model.clipMissingAsset(clip) {
+                                    KRButton("素材を再リンク…", icon: .folder, variant: .secondary) { relinkMissingAsset(asset) }
+                                        .disabled(model.busy || model.pendingCandidate != nil)
+                                    Text("ファイルがあるフォルダを選ぶと、プロジェクト内の参照を検証して再リンクします。").krText(KRType.caption).foregroundStyle(p.inkMuted)
+                                }
+                            }.padding(.horizontal, KRSpace.space3)
+                        }
                         if let reason = clip.query["unsupported_reason"] as? String { KRErrorLine(.init("UNSUPPORTED_FEATURE", reason)).padding(.horizontal, KRSpace.space3) }
                         section("配置") {
                             timeRow("開始", frames: clip.start.frames(rateNum: model.rateNum, rateDen: model.rateDen)) { value in
@@ -388,6 +498,10 @@ struct ClipInspector: View {
                             KRInspectorSettingRow("音量") {
                                 KRNumberField(value: .constant(EditorModel.clipVolume(clip) * 100), unit: "%", step: 1, range: 0...800, accessibilityLabel: "音量", onEditingStart: { draftBases["volume"] = model.revision }, onCommit: { _, value in model.setClipVolume(clip, value: value / 100, base: draftBases.removeValue(forKey: "volume")) })
                             }
+                            // GUI-012: loudness normalize through shared
+                            // `audio.normalize` (one undoable gain effect).
+                            KRButton("-23 LUFS に正規化", variant: .secondary) { model.normalizeClip(clip) }
+                                .disabled(model.busy).padding(.horizontal, KRSpace.space3)
                             Text("kronello.audio.volume の線形ゲイン。100% が等倍です。").krText(KRType.caption).foregroundStyle(p.inkMuted).padding(.horizontal, KRSpace.space3)
                         } }
                         section("合成") {
@@ -492,6 +606,16 @@ struct ClipInspector: View {
             } else { KREmptyState(icon: .mousePointer2, title: "クリップを選択", message: "トラックでクリップを選択してください。") }
         }.onChange(of: model.selectedClip?.id) { _, _ in draftBases.removeAll() }
     }
+    /// GUI-012 guided relink: a directory search verifies and republishes the
+    /// missing asset's locator through `asset.relink`.
+    func relinkMissingAsset(_ asset: String) {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.allowsMultipleSelection = false
+        panel.prompt = "このフォルダから再リンク"
+        if panel.runModal() == .OK, let url = panel.url {
+            Task { await model.relinkAsset(asset, searchDirectory: url.path) }
+        }
+    }
     func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: KRSpace.space1) { Text(title).krText(KRType.heading).padding(.horizontal, KRSpace.space3); content() }
     }
@@ -572,7 +696,11 @@ struct SequenceTracks: View {
     @ObservedObject var model: EditorModel
     let workflow: WorkflowSettings
     @FocusState private var tracksFocused: Bool
-    @State private var showMixer = false
+    /// GUI-012: mixer visibility persists per workspace layout (ADR-0033).
+    private var showMixer: Bool {
+        get { model.ui.layout.mixerVisible }
+        nonmutating set { model.ui.layout.mixerVisible = newValue }
+    }
     var body: some View {
         KRPanel(header: { HStack(spacing: KRSpace.space2) {
             KRPanelTitle("Sequence")
@@ -920,7 +1048,7 @@ struct AudioMixer: View {
                 }
                 MixerMasterStrip(model: model)
             }.padding(KRSpace.space2)
-        }.frame(height: 128).background(p.surface100)
+        }.frame(height: 168).background(p.surface100)
     }
 }
 
@@ -931,15 +1059,32 @@ struct MixerStrip: View {
     var body: some View {
         let id = track.string("id"), muted = track.object("state")["muted"] as? Bool ?? false
         let locked = model.ui.locked.contains(id), meter = model.playbackMeters?.track(id)
+        let pan = model.trackPan(track)
         VStack(spacing: KRSpace.space1) {
             Text(model.trackNumber(id)).krText(KRType.label).foregroundStyle(p.ink)
             KRMeterBar(peak: Double(meter?.stereoPeak ?? 0), rms: Double(meter?.stereoRms ?? 0)).frame(width: 64)
             KRSlider(value: .constant(model.trackVolume(track) ?? 1), range: 0...2, step: 0.05,
                 accessibilityLabel: "\(model.trackNumber(id)) フェーダー",
                 onCommit: { _, value in model.setTrackVolume(track, gain: value) }).frame(width: 64)
+            // GUI-012: constant stereo balance, authored per clip via the
+            // shared clip_set_pan command. nil means mixed clip values.
+            KRSlider(value: .constant(pan ?? 0), range: -1...1, step: 0.05,
+                accessibilityLabel: "\(model.trackNumber(id)) パン",
+                onCommit: { _, value in model.setTrackPan(track, pan: value) }).frame(width: 64)
             HStack(spacing: KRSpace.space1) {
+                Text(pan.map { String(format: "%+.2f", $0) } ?? "混在").krText(KRType.caption).foregroundStyle(p.inkMuted)
                 KRButton(icon: muted ? .volumeX : .volume2, accessibilityLabel: "ミュートを切り替える", pressed: muted, iconSize: 12) { model.setTrackOutput(track) }
                 Text(String(format: "%.0f%%", (model.trackVolume(track) ?? 1) * 100)).krText(KRType.caption).foregroundStyle(p.inkMuted)
+            }
+            // GUI-012: on-demand BS.1770 readout through audio.loudness; the
+            // service soloes this track in a measurement snapshot.
+            HStack(spacing: KRSpace.space1) {
+                Text(model.trackLoudness(track)?.label ?? "LUFS").krText(KRType.caption).foregroundStyle(p.inkMuted)
+                if model.loudnessMeasuring(track) {
+                    ProgressView().controlSize(.mini)
+                } else {
+                    KRButton("測定", variant: .plain) { model.measureTrackLoudness(track) }
+                }
             }
         }.frame(width: 80).padding(.vertical, KRSpace.space1)
             .opacity(locked ? 0.6 : 1)
@@ -955,6 +1100,15 @@ struct MixerMasterStrip: View {
             Text("Master").krText(KRType.label).foregroundStyle(p.ink)
             KRMeterBar(peak: Double(model.playbackMeters?.masterPeak ?? 0), rms: Double(model.playbackMeters?.masterRms ?? 0)).frame(width: 64)
             KRButton(icon: model.playbackMuted ? .volumeX : .volume2, accessibilityLabel: "モニター音量", pressed: model.playbackMuted, iconSize: 12) { model.playbackMuted.toggle() }
+            // GUI-012: program loudness over the full sequence extent.
+            HStack(spacing: KRSpace.space1) {
+                Text(model.sequenceLoudness?.label ?? "LUFS").krText(KRType.caption).foregroundStyle(p.inkMuted)
+                if model.sequenceLoudnessMeasuring {
+                    ProgressView().controlSize(.mini)
+                } else {
+                    KRButton("測定", variant: .plain) { model.measureSequenceLoudness() }
+                }
+            }
         }.frame(width: 80).padding(.vertical, KRSpace.space1)
             .padding(.leading, KRSpace.space2).overlay(alignment: .leading) { p.line.frame(width: 1) }
     }

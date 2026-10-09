@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 ROOT = Path(__file__).resolve().parents[1]
 FFMPEG = {"avutil": 61, "avcodec": 63, "avformat": 63, "swscale": 10, "swresample": 7}
 LIBRARIES = [f"lib{name}.{major}.dylib" for name, major in FFMPEG.items()] + [
-    "libSvtAv1Enc.4.dylib", "libdav1d.7.dylib", "libopus.0.dylib"]
+    "libSvtAv1Enc.4.dylib", "libdav1d.7.dylib", "libopus.0.dylib", "libraw_r.25.dylib"]
 EXECUTABLES = ["bin/kronello", "bin/kronello-mcp", "tools/release_roundtrip"]
 
 

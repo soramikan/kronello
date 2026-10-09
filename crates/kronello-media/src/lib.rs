@@ -2,6 +2,11 @@
 #![deny(unsafe_code)]
 mod image;
 pub use image::*;
+mod raw;
+pub use raw::*;
+#[cfg(kronello_libraw)]
+#[allow(unsafe_code)]
+mod rawffi;
 mod render;
 pub use render::*;
 mod assets;
@@ -157,6 +162,7 @@ impl MediaCapabilities {
             EncodeCodec::ProRes => &["prores_ks"],
             EncodeCodec::H264 => &["h264_videotoolbox"],
             EncodeCodec::Hevc => &["hevc_videotoolbox"],
+            EncodeCodec::Dnx => &["dnxhd"],
         };
         names
             .iter()
@@ -173,6 +179,19 @@ impl MediaCapabilities {
                 ffmpeg: None,
             })
     }
+    /// Registered encoder availability for a closed MEDIA-004 output kind that
+    /// does not pass through [`EncodeCodec`]: `gif`, `libmp3lame`, `flac`.
+    pub fn require_encoder(&self, name: &str) -> Result<(), MediaError> {
+        if self.codecs.iter().any(|c| c.encoder && c.name == name) {
+            Ok(())
+        } else {
+            Err(MediaError::EncoderUnavailable {
+                encoder: name.into(),
+                reason: "closed-profile encoder is not registered".into(),
+                ffmpeg: None,
+            })
+        }
+    }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -181,6 +200,8 @@ pub enum EncodeCodec {
     ProRes,
     H264,
     Hevc,
+    /// MEDIA-004: FFmpeg native DNxHD/DNxHR encoder (all versioned profiles).
+    Dnx,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]

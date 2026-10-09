@@ -8,7 +8,23 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
     public var bottomHeight: Double = 344
     public var tools = KRToolStripPlacement()
     public var valuesVisible = true
+    /// GUI-012: edit-page mixer strip visibility, per workspace layout.
+    public var mixerVisible = false
+    /// GUI-012: monitor scopes panel visibility, per workspace layout.
+    public var scopesVisible = false
     public init() {}
+    /// Persisted files predate GUI-012 keys; absent keys keep defaults instead
+    /// of failing the whole project open.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        leftWidth = try c.decodeIfPresent(Double.self, forKey: .leftWidth) ?? 248
+        rightWidth = try c.decodeIfPresent(Double.self, forKey: .rightWidth) ?? 304
+        bottomHeight = try c.decodeIfPresent(Double.self, forKey: .bottomHeight) ?? 344
+        tools = try c.decodeIfPresent(KRToolStripPlacement.self, forKey: .tools) ?? .init()
+        valuesVisible = try c.decodeIfPresent(Bool.self, forKey: .valuesVisible) ?? true
+        mixerVisible = try c.decodeIfPresent(Bool.self, forKey: .mixerVisible) ?? false
+        scopesVisible = try c.decodeIfPresent(Bool.self, forKey: .scopesVisible) ?? false
+    }
 }
 
 public struct CanvasGuide: Codable, Equatable, Identifiable, Sendable {
@@ -26,7 +42,22 @@ public struct CanvasSettings: Codable, Equatable, Sendable {
 public struct EditViewSettings: Codable, Equatable, Sendable {
     public var panX = 0.0
     public var panY = 0.0
+    /// GUI-012: persisted timeline zoom factor (px per frame relative scale).
+    public var editScale = 1.0
+    /// GUI-012: persisted snapping flag for edit gestures.
+    public var editSnap = true
+    /// GUI-012: last source-monitor destination track override.
+    public var sourceTrack: String?
     public init() {}
+    /// Persisted files predate the GUI-012 keys; decode tolerantly.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        panX = try c.decodeIfPresent(Double.self, forKey: .panX) ?? 0
+        panY = try c.decodeIfPresent(Double.self, forKey: .panY) ?? 0
+        editScale = try c.decodeIfPresent(Double.self, forKey: .editScale) ?? 1
+        editSnap = try c.decodeIfPresent(Bool.self, forKey: .editSnap) ?? true
+        sourceTrack = try c.decodeIfPresent(String.self, forKey: .sourceTrack)
+    }
 }
 public struct LockedFontSource: Codable, Equatable, Sendable {
     public var family: String
@@ -103,7 +134,28 @@ public struct AppPreferences: Codable, Sendable {
     public var light = false
     public var showWelcome = true
     public var recent: [RecentProject] = []
+    /// GUI-012: playback defaults applied when a project session opens.
+    /// Scrub and monitor mute are session flags; looping only seeds projects
+    /// that have no persisted UI state yet.
+    public var playbackScrub = true
+    public var playbackMuted = false
+    public var playbackLooping = false
+    /// GUI-012: raster scratch/cache root, exported to the worker as
+    /// `KRONELLO_RASTER_CACHE_ROOT` before a session opens. Empty keeps the
+    /// platform default (`~/Library/Caches/kronello/raster` on macOS).
+    public var scratchDirectory = ""
     public init() {}
+    /// Persisted files predate the GUI-012 keys; decode tolerantly.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        light = try c.decodeIfPresent(Bool.self, forKey: .light) ?? false
+        showWelcome = try c.decodeIfPresent(Bool.self, forKey: .showWelcome) ?? true
+        recent = try c.decodeIfPresent([RecentProject].self, forKey: .recent) ?? []
+        playbackScrub = try c.decodeIfPresent(Bool.self, forKey: .playbackScrub) ?? true
+        playbackMuted = try c.decodeIfPresent(Bool.self, forKey: .playbackMuted) ?? false
+        playbackLooping = try c.decodeIfPresent(Bool.self, forKey: .playbackLooping) ?? false
+        scratchDirectory = try c.decodeIfPresent(String.self, forKey: .scratchDirectory) ?? ""
+    }
 }
 
 /// This actor has no project path, store connection, or document-writing API.
@@ -119,6 +171,11 @@ public actor UIStateStore {
     }
     public func load(projectID: String) throws -> ProjectUIState {
         try read(ProjectUIState.self, at: stateURL(projectID: projectID)) ?? .init()
+    }
+    /// Whether a persisted state file exists; playback defaults only apply
+    /// when the project has never written UI state (GUI-012).
+    public func hasState(projectID: String) throws -> Bool {
+        FileManager.default.fileExists(atPath: try stateURL(projectID: projectID).path)
     }
     public func save(_ state: ProjectUIState, projectID: String) throws { try write(state, at: stateURL(projectID: projectID)) }
     public func preferences() throws -> AppPreferences { try read(AppPreferences.self, at: root.appendingPathComponent("preferences.json")) ?? .init() }

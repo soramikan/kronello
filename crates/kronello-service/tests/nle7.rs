@@ -96,6 +96,7 @@ fn clip(source: SourceRef, a: Time, b: Time) -> Clip {
         markers: vec![],
         masks: vec![],
         properties: vec![],
+        pan: None,
     }
 }
 fn track(kind: TrackKind, clips: Vec<Clip>) -> Track {

@@ -276,6 +276,458 @@ pub(crate) fn stabilize_fill(effect: &PixelEffect, working: WorkingSpace) -> [f3
         working,
     )
 }
+/// FX-008 (ADR-0137): authored color as straight working-space RGBA — the
+/// channel values are decoded and primary-converted but never premultiplied,
+/// so tint/generate colors keep their straight tags until execution.
+fn straight_working_color(c: &kronello_model::Color, working: WorkingSpace) -> [f32; 4] {
+    let c0 = c.components();
+    let space = match c.space() {
+        kronello_model::ColorSpace::Srgb => crate::InputSpace::Srgb,
+        kronello_model::ColorSpace::LinearRec709 => crate::InputSpace::LinearRec709,
+        kronello_model::ColorSpace::LinearRec2020 => crate::InputSpace::LinearRec2020,
+    };
+    let rgba = color::to_working(
+        [c0.r.get() as f32, c0.g.get() as f32, c0.b.get() as f32, 1.0],
+        space,
+        working,
+    );
+    [rgba[0], rgba[1], rgba[2], c0.alpha.get() as f32]
+}
+/// Signed lattice cell clamp shared by the CPU/WGSL grain and mosaic paths.
+fn lattice(v: f32) -> i32 {
+    v.floor().clamp(-2_147_000_000.0, 2_147_000_000.0) as i32
+}
+/// FX-008 displacement-map channel value at the output position. Red/Green/
+/// Blue/Alpha read the stored surface component; Luminance reads the map's
+/// straight working luma (ADR-0137).
+fn map_channel_value(m: [f32; 4], channel: kronello_model::DisplaceChannel, w: [f32; 3]) -> f32 {
+    match channel {
+        kronello_model::DisplaceChannel::Red => m[0],
+        kronello_model::DisplaceChannel::Green => m[1],
+        kronello_model::DisplaceChannel::Blue => m[2],
+        kronello_model::DisplaceChannel::Alpha => m[3],
+        kronello_model::DisplaceChannel::Luminance => {
+            let s = straight(m);
+            s[0] * w[0] + s[1] * w[1] + s[2] * w[2]
+        }
+    }
+}
+/// FX-008 CPU oracle, matching WGSL ops 14-22 one-to-one. `map` is the
+/// displacement-map surface for `PixelEffect::Displace`; `Generate` ignores
+/// the source buffer entirely.
+fn apply_fx008(
+    source: &[[f32; 4]],
+    map: Option<&[[f32; 4]]>,
+    size: [u32; 2],
+    effect: &PixelEffect,
+    working: WorkingSpace,
+) -> Result<Vec<[f32; 4]>, GpuError> {
+    let w = luma_weights(working);
+    let mut output = vec![[0.0; 4]; pixel_count_total(size)?];
+    match effect {
+        PixelEffect::Grain {
+            amount,
+            size: cell,
+            monochrome,
+            seed,
+        } => {
+            for y in 0..size[1] as i32 {
+                for x in 0..size[0] as i32 {
+                    let p = load(source, size, x, y);
+                    let s = straight(p);
+                    let a = p[3];
+                    let cx = lattice((x as f32 + 0.5) / cell);
+                    let cy = lattice((y as f32 + 0.5) / cell);
+                    let rgb: [f32; 3] = if *monochrome {
+                        let n = kronello_render::grain_noise([cx, cy, 0], *seed);
+                        s.map(|v| v + amount * (n - 0.5))
+                    } else {
+                        std::array::from_fn(|c| {
+                            s[c] + amount
+                                * (kronello_render::grain_noise([cx, cy, c as i32], *seed) - 0.5)
+                        })
+                    };
+                    output[(y as u32 * size[0] + x as u32) as usize] =
+                        [rgb[0] * a, rgb[1] * a, rgb[2] * a, a];
+                }
+            }
+        }
+        PixelEffect::Mosaic { block_size, basis } => {
+            for y in 0..size[1] as i32 {
+                for x in 0..size[0] as i32 {
+                    let bx = (x as f32 / block_size).floor();
+                    let by = (y as f32 / block_size).floor();
+                    let (sx, sy) = match basis {
+                        kronello_model::MosaicBasis::Center => (
+                            lattice(bx * block_size + block_size * 0.5),
+                            lattice(by * block_size + block_size * 0.5),
+                        ),
+                        kronello_model::MosaicBasis::Edge => {
+                            (lattice(bx * block_size), lattice(by * block_size))
+                        }
+                    };
+                    output[(y as u32 * size[0] + x as u32) as usize] = load(source, size, sx, sy);
+                }
+            }
+        }
+        PixelEffect::Invert { channel } => {
+            for (o, &p) in output.iter_mut().zip(source) {
+                let s = straight(p);
+                let a = p[3];
+                *o = match channel {
+                    kronello_model::InvertChannel::Alpha => [
+                        s[0] * (1.0 - a),
+                        s[1] * (1.0 - a),
+                        s[2] * (1.0 - a),
+                        1.0 - a,
+                    ],
+                    _ => {
+                        let mut s = s;
+                        match channel {
+                            kronello_model::InvertChannel::Rgb => s = s.map(|v| 1.0 - v),
+                            kronello_model::InvertChannel::Red => s[0] = 1.0 - s[0],
+                            kronello_model::InvertChannel::Green => s[1] = 1.0 - s[1],
+                            kronello_model::InvertChannel::Blue => s[2] = 1.0 - s[2],
+                            kronello_model::InvertChannel::Alpha => unreachable!(),
+                        }
+                        [s[0] * a, s[1] * a, s[2] * a, a]
+                    }
+                };
+            }
+        }
+        PixelEffect::ChannelMixer { matrix } => {
+            for (o, &p) in output.iter_mut().zip(source) {
+                *o = std::array::from_fn(|r: usize| {
+                    matrix[r][0] * p[0]
+                        + matrix[r][1] * p[1]
+                        + matrix[r][2] * p[2]
+                        + matrix[r][3] * p[3]
+                });
+            }
+        }
+        PixelEffect::Tint {
+            map_black,
+            map_white,
+            amount,
+        } => {
+            let mb = straight_working_color(map_black, working);
+            let mw = straight_working_color(map_white, working);
+            for (o, &p) in output.iter_mut().zip(source) {
+                let s = straight(p);
+                let a = p[3];
+                let l = s[0] * w[0] + s[1] * w[1] + s[2] * w[2];
+                let mapped: [f32; 3] = std::array::from_fn(|c| mb[c] + l * (mw[c] - mb[c]));
+                let os: [f32; 3] = std::array::from_fn(|c| s[c] + (mapped[c] - s[c]) * amount);
+                *o = [os[0] * a, os[1] * a, os[2] * a, a];
+            }
+        }
+        PixelEffect::DirectionalBlur { direction, length } => {
+            let taps = (length.ceil() as i64).max(1);
+            for y in 0..size[1] as i32 {
+                for x in 0..size[0] as i32 {
+                    let mut acc = [0.0; 4];
+                    for i in 0..taps {
+                        let t = -length / 2.0 + (i as f32 + 0.5) * length / taps as f32;
+                        let sample = bilinear(
+                            source,
+                            size,
+                            [x as f32 + direction[0] * t, y as f32 + direction[1] * t],
+                        );
+                        for c in 0..4 {
+                            acc[c] += sample[c];
+                        }
+                    }
+                    output[(y as u32 * size[0] + x as u32) as usize] = acc.map(|v| v / taps as f32);
+                }
+            }
+        }
+        PixelEffect::RadialBlur {
+            mode,
+            amount,
+            center,
+        } => {
+            let taps = kronello_render::FX008_RADIAL_TAPS as f32;
+            for y in 0..size[1] as i32 {
+                for x in 0..size[0] as i32 {
+                    let rel = [x as f32 + 0.5 - center[0], y as f32 + 0.5 - center[1]];
+                    let mut acc = [0.0; 4];
+                    for i in 0..kronello_render::FX008_RADIAL_TAPS {
+                        let t = (i as f32 + 0.5) / taps;
+                        let pos = match mode {
+                            kronello_model::RadialBlurMode::Spin => {
+                                let angle =
+                                    (-amount / 2.0 + amount * t) * (std::f32::consts::PI / 180.0);
+                                let (s, c) = angle.sin_cos();
+                                [
+                                    center[0] + rel[0] * c - rel[1] * s,
+                                    center[1] + rel[0] * s + rel[1] * c,
+                                ]
+                            }
+                            kronello_model::RadialBlurMode::Zoom => {
+                                let scale = (1.0 - amount) + amount * t;
+                                [center[0] + rel[0] * scale, center[1] + rel[1] * scale]
+                            }
+                        };
+                        let sample = bilinear(source, size, [pos[0] - 0.5, pos[1] - 0.5]);
+                        for c in 0..4 {
+                            acc[c] += sample[c];
+                        }
+                    }
+                    output[(y as u32 * size[0] + x as u32) as usize] = acc.map(|v| v / taps);
+                }
+            }
+        }
+        PixelEffect::Displace {
+            channel_x,
+            channel_y,
+            displacement,
+        } => {
+            let Some(map) = map else {
+                return Err(GpuError::InvalidInput(
+                    "displace requires a displacement-map surface",
+                ));
+            };
+            let map = surface_pixels(map)?;
+            if map.len() != output.len() {
+                return Err(GpuError::InvalidInput("displacement map dimensions"));
+            }
+            for y in 0..size[1] as i32 {
+                for x in 0..size[0] as i32 {
+                    let m = load(&map, size, x, y);
+                    let vx = map_channel_value(m, *channel_x, w);
+                    let vy = map_channel_value(m, *channel_y, w);
+                    let offset = [
+                        (2.0 * vx - 1.0) * displacement[0][0]
+                            + (2.0 * vy - 1.0) * displacement[0][1],
+                        (2.0 * vx - 1.0) * displacement[1][0]
+                            + (2.0 * vy - 1.0) * displacement[1][1],
+                    ];
+                    output[(y as u32 * size[0] + x as u32) as usize] =
+                        bilinear(source, size, [x as f32 + offset[0], y as f32 + offset[1]]);
+                }
+            }
+        }
+        PixelEffect::Generate {
+            generator,
+            color_a,
+            color_b,
+            point_a,
+            point_b,
+            cell_size,
+            line_width,
+        } => {
+            let ca = straight_working_color(color_a, working);
+            let cb = straight_working_color(color_b, working);
+            for y in 0..size[1] as i32 {
+                for x in 0..size[0] as i32 {
+                    let f = [x as f32 + 0.5, y as f32 + 0.5];
+                    let t = match generator {
+                        kronello_model::GenerateKind::GradientLinear => {
+                            let d = [point_b[0] - point_a[0], point_b[1] - point_a[1]];
+                            let dd = d[0] * d[0] + d[1] * d[1];
+                            if dd > 0.0 {
+                                (((f[0] - point_a[0]) * d[0] + (f[1] - point_a[1]) * d[1]) / dd)
+                                    .clamp(0.0, 1.0)
+                            } else {
+                                0.0
+                            }
+                        }
+                        kronello_model::GenerateKind::GradientRadial => {
+                            let r = (point_b[0] - point_a[0]).hypot(point_b[1] - point_a[1]);
+                            if r > 0.0 {
+                                ((f[0] - point_a[0]).hypot(f[1] - point_a[1]) / r).clamp(0.0, 1.0)
+                            } else {
+                                1.0
+                            }
+                        }
+                        kronello_model::GenerateKind::Checkerboard => {
+                            let cx = lattice(f[0] / cell_size);
+                            let cy = lattice(f[1] / cell_size);
+                            (cx.wrapping_add(cy) & 1) as f32
+                        }
+                        kronello_model::GenerateKind::Grid => {
+                            let dx =
+                                (f[0] - (f[0] / cell_size).round_ties_even() * cell_size).abs();
+                            let dy =
+                                (f[1] - (f[1] / cell_size).round_ties_even() * cell_size).abs();
+                            if dx * 2.0 <= *line_width || dy * 2.0 <= *line_width {
+                                1.0
+                            } else {
+                                0.0
+                            }
+                        }
+                    };
+                    let s: [f32; 4] = std::array::from_fn(|c| ca[c] + (cb[c] - ca[c]) * t);
+                    output[(y as u32 * size[0] + x as u32) as usize] =
+                        [s[0] * s[3], s[1] * s[3], s[2] * s[3], s[3]];
+                }
+            }
+        }
+        _ => unreachable!("not an fx008 effect"),
+    }
+    surface_pixels(&output)
+}
+fn pixel_count_total(size: [u32; 2]) -> Result<usize, GpuError> {
+    crate::pixel_count(size[0], size[1])
+}
+/// FX-008 WGSL uniform/weights packing shared with the scene pass (ops
+/// 14-22). `Displace` additionally binds its map surface at binding 6; the
+/// grain seed arrives as a bitcast u32 because WGSL has no i64.
+pub(crate) fn fx008_params(
+    effect: &PixelEffect,
+    working: WorkingSpace,
+) -> Option<([u32; 4], [f32; 8], Vec<f32>)> {
+    let w = luma_weights(working);
+    let seed_u32 = |seed: i64| (seed as u64 ^ ((seed >> 32) as u64)) as u32;
+    let params = match effect {
+        PixelEffect::Grain {
+            amount,
+            size,
+            monochrome,
+            seed,
+        } => (
+            [14, u32::from(*monochrome), 0, 0],
+            [
+                *amount,
+                *size,
+                f32::from_bits(seed_u32(*seed)),
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+            ],
+            vec![],
+        ),
+        PixelEffect::Mosaic { block_size, basis } => (
+            [
+                15,
+                match basis {
+                    kronello_model::MosaicBasis::Center => 0,
+                    kronello_model::MosaicBasis::Edge => 1,
+                },
+                0,
+                0,
+            ],
+            [*block_size, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            vec![],
+        ),
+        PixelEffect::Invert { channel } => (
+            [
+                16,
+                match channel {
+                    kronello_model::InvertChannel::Rgb => 0,
+                    kronello_model::InvertChannel::Red => 1,
+                    kronello_model::InvertChannel::Green => 2,
+                    kronello_model::InvertChannel::Blue => 3,
+                    kronello_model::InvertChannel::Alpha => 4,
+                },
+                0,
+                0,
+            ],
+            [0.0; 8],
+            vec![],
+        ),
+        PixelEffect::ChannelMixer { matrix } => (
+            [17, 0, 0, 0],
+            [0.0; 8],
+            matrix.iter().flatten().copied().collect(),
+        ),
+        PixelEffect::Tint {
+            map_black,
+            map_white,
+            amount,
+        } => {
+            let mb = straight_working_color(map_black, working);
+            let mw = straight_working_color(map_white, working);
+            (
+                [18, 0, 0, 0],
+                [*amount, w[0], w[1], w[2], mb[0], mb[1], mb[2], 0.0],
+                mw[..3].to_vec(),
+            )
+        }
+        PixelEffect::DirectionalBlur { direction, length } => (
+            [19, 0, 0, 0],
+            [direction[0], direction[1], *length, 0.0, 0.0, 0.0, 0.0, 0.0],
+            vec![],
+        ),
+        PixelEffect::RadialBlur {
+            mode,
+            amount,
+            center,
+        } => (
+            [
+                20,
+                match mode {
+                    kronello_model::RadialBlurMode::Spin => 0,
+                    kronello_model::RadialBlurMode::Zoom => 1,
+                },
+                0,
+                0,
+            ],
+            [*amount, center[0], center[1], 0.0, 0.0, 0.0, 0.0, 0.0],
+            vec![],
+        ),
+        PixelEffect::Displace {
+            channel_x,
+            channel_y,
+            displacement,
+        } => {
+            let ch = |c: &kronello_model::DisplaceChannel| match c {
+                kronello_model::DisplaceChannel::Red => 0,
+                kronello_model::DisplaceChannel::Green => 1,
+                kronello_model::DisplaceChannel::Blue => 2,
+                kronello_model::DisplaceChannel::Alpha => 3,
+                kronello_model::DisplaceChannel::Luminance => 4,
+            };
+            (
+                [21, ch(channel_x), ch(channel_y), 0],
+                [0.0; 8],
+                [
+                    displacement[0][0],
+                    displacement[0][1],
+                    displacement[1][0],
+                    displacement[1][1],
+                    w[0],
+                    w[1],
+                    w[2],
+                ]
+                .to_vec(),
+            )
+        }
+        PixelEffect::Generate {
+            generator,
+            color_a,
+            color_b,
+            point_a,
+            point_b,
+            cell_size,
+            line_width,
+        } => {
+            let ca = straight_working_color(color_a, working);
+            let cb = straight_working_color(color_b, working);
+            (
+                [
+                    22,
+                    match generator {
+                        kronello_model::GenerateKind::GradientLinear => 0,
+                        kronello_model::GenerateKind::GradientRadial => 1,
+                        kronello_model::GenerateKind::Checkerboard => 2,
+                        kronello_model::GenerateKind::Grid => 3,
+                    },
+                    0,
+                    0,
+                ],
+                [
+                    point_a[0], point_a[1], point_b[0], point_b[1], ca[0], ca[1], ca[2], ca[3],
+                ],
+                [cb[0], cb[1], cb[2], cb[3], *cell_size, *line_width].to_vec(),
+            )
+        }
+        _ => return None,
+    };
+    Some(params)
+}
 /// FX-005/FX-006 CPU oracle chains, matching the WGSL ops one-to-one
 /// (ADR-0115). Every intermediate is rounded to binary16 like the surfaces.
 fn apply_standard(
@@ -467,8 +919,21 @@ fn apply_standard(
         _ => unreachable!("not a standard effect"),
     }
 }
-pub(crate) fn apply_reference(
+#[cfg(test)]
+fn apply_reference(
     source: &[[f32; 4]],
+    size: [u32; 2],
+    effect: &PixelEffect,
+    working: WorkingSpace,
+) -> Result<Vec<[f32; 4]>, GpuError> {
+    apply_reference_mapped(source, None, size, effect, working)
+}
+/// CPU oracle with the optional FX-008 second input. `map` is required by
+/// `PixelEffect::Displace` and rejected for every other effect so an
+/// unsupported lowering can never silently drop it.
+pub(crate) fn apply_reference_mapped(
+    source: &[[f32; 4]],
+    map: Option<&[[f32; 4]]>,
     size: [u32; 2],
     effect: &PixelEffect,
     working: WorkingSpace,
@@ -491,6 +956,16 @@ pub(crate) fn apply_reference(
     // FX-005/FX-006 multi-pass chains (ADR-0115).
     if effect.is_standard() {
         return apply_standard(source, size, effect, working);
+    }
+    // FX-008 remaining standard effects (ADR-0137): displace consumes `map`;
+    // generate ignores `source` and covers the surface procedurally.
+    if effect.is_fx008() {
+        return apply_fx008(&source, map, size, effect, working);
+    }
+    if map.is_some() {
+        return Err(GpuError::InvalidInput(
+            "map input requires a displace effect",
+        ));
     }
     let blurred = if let Some(c) = effect.covariance() {
         let taps = kronello_render::affine_gaussian_kernel(c).map_err(|_| {

@@ -645,10 +645,27 @@ pub(crate) fn encode() -> Result<(Vec<SampleToken>, Vec<u8>), NativeError> {
     }
     Ok((frames, expected))
 }
+/// Explicit decoder output contract. `Raw` admits only ProRes RAW/RAW-HQ
+/// compressed formats and requests linear half-float RGBA64 pixel buffers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DecodeMode {
+    SdrNv12,
+    SdrBgra8,
+    ProResRaw,
+}
+/// Runtime capability probe per ADR-0081: true only when VideoToolbox reports
+/// ProRes RAW or RAW-HQ hardware decode support on this system.
+pub(crate) fn prores_raw_supported() -> bool {
+    // SAFETY: Pure capability query on process-lifetime codec constants.
+    unsafe {
+        VTIsHardwareDecodeSupported(kCMVideoCodecType_AppleProResRAW)
+            || VTIsHardwareDecodeSupported(kCMVideoCodecType_AppleProResRAWHQ)
+    }
+}
 type DecodedFrames = (Vec<PixelToken>, Option<bool>, i32, Vec<CMTime>);
 pub(crate) fn decode(
     samples: &[SampleToken],
-    nv12: bool,
+    mode: DecodeMode,
     require_hardware: bool,
     selection: Option<(i64, i64)>,
 ) -> Result<DecodedFrames, NativeError> {
@@ -664,16 +681,30 @@ pub(crate) fn decode(
     })?;
     // SAFETY: Retained format description is valid for this completed sample.
     let codec = unsafe { format.media_sub_type() };
-    if require_hardware && codec != kCMVideoCodecType_H264 && codec != kCMVideoCodecType_HEVC {
-        return Err(error(
-            NativeStage::FormatDescription,
-            "resident decoder accepts actual H.264/HEVC compressed formats only",
-        ));
+    match mode {
+        DecodeMode::ProResRaw => {
+            if codec != kCMVideoCodecType_AppleProResRAW
+                && codec != kCMVideoCodecType_AppleProResRAWHQ
+            {
+                return Err(error(
+                    NativeStage::FormatDescription,
+                    "resident decoder accepts actual ProRes RAW compressed formats only",
+                ));
+            }
+        }
+        _ => {
+            if codec != kCMVideoCodecType_H264 && codec != kCMVideoCodecType_HEVC {
+                return Err(error(
+                    NativeStage::FormatDescription,
+                    "resident decoder accepts actual H.264/HEVC compressed formats only",
+                ));
+            }
+        }
     }
-    let pixel_format = if nv12 {
-        kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
-    } else {
-        kCVPixelFormatType_32BGRA
+    let pixel_format = match mode {
+        DecodeMode::SdrNv12 => kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+        DecodeMode::SdrBgra8 => kCVPixelFormatType_32BGRA,
+        DecodeMode::ProResRaw => kCVPixelFormatType_64RGBAHalf,
     };
     let attributes = attrs(pixel_format);
     let mut state = Box::new(Decoded {
@@ -806,6 +837,17 @@ pub(crate) fn decode(
         let image =
             image.ok_or_else(|| error(NativeStage::Decode, "null decoded CVPixelBuffer"))?;
         verify_surface(&image.0)?;
+        if mode == DecodeMode::ProResRaw
+            && CVPixelBufferGetPixelFormatType(&image.0) != kCVPixelFormatType_64RGBAHalf
+        {
+            return Err(error(
+                NativeStage::Decode,
+                format!(
+                    "ProRes RAW decoder output format {:#x}, expected 64RGBAHalf",
+                    CVPixelBufferGetPixelFormatType(&image.0)
+                ),
+            ));
+        }
         frames.push(image);
     }
     if selection.is_none() && frames.len() != samples.len() {
@@ -894,7 +936,16 @@ fn import_decoded(
     nv12: bool,
 ) -> Result<Measurement, NativeError> {
     let start = Instant::now();
-    let (frames, hardware, query, _) = decode(samples, nv12, false, None)?;
+    let (frames, hardware, query, _) = decode(
+        samples,
+        if nv12 {
+            DecodeMode::SdrNv12
+        } else {
+            DecodeMode::SdrBgra8
+        },
+        false,
+        None,
+    )?;
     let cache = cache(gpu)?;
     let mut transfers = TransferStats::default();
     let mut max_error = 0u8;

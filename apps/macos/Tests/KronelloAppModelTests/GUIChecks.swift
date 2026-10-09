@@ -189,6 +189,40 @@ func require(_ value: @autoclosure () -> Bool, _ message: String) throws {
         try require(editor.durationFrames == 73, "Half-open fractional duration includes its final valid frame")
         await editor.close()
     }
+    /// GUI-012 regression: preference and ui-state files written before the
+    /// GUI-012 keys existed must decode with defaults instead of failing the
+    /// whole project open with `GUI_STATE_ERROR`.
+    func verifyLegacyStateDecoding() async throws {
+        let folder = try temporary(); defer { try? FileManager.default.removeItem(at: folder) }
+        let store = UIStateStore(root: folder)
+        let id = UUID().uuidString
+        let legacyState = """
+        {"page":"edit","workspace":"standard","layouts":{"standard":{"leftWidth":240,"rightWidth":300,
+        "bottomHeight":320,"tools":{"location":{"viewerLeft":{}},"collapsed":true},"valuesVisible":false}},
+        "zoom":"fit","panX":0,"panY":0,"tool":"select","bounds":"layout","resolution":"full",
+        "looping":false,"time":{"num":"0","den":"1"},"locked":[],"collapsed":[],
+        "editView":{"panX":1.5,"panY":-2}}
+        """
+        let url = try await store.stateURL(projectID: id)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data(legacyState.utf8).write(to: url)
+        let state = try await store.load(projectID: id)
+        try require(state.page == "edit" && state.layout.tools.collapsed && !state.layout.valuesVisible,
+                    "Legacy ui-state keeps authored keys")
+        try require(state.layout.mixerVisible == false && state.layout.scopesVisible == false,
+                    "Missing GUI-012 workspace keys default to hidden")
+        try require(state.editView?.panX == 1.5 && state.editView?.editScale == 1.0 &&
+                    state.editView?.editSnap == true && state.editView?.sourceTrack == nil,
+                    "Missing GUI-012 edit view keys keep defaults")
+        let legacyPrefs = """
+        {"light":false,"showWelcome":true,"recent":[{"path":"/tmp/a.kronello","name":"a","opened":0}]}
+        """
+        try Data(legacyPrefs.utf8).write(to: folder.appendingPathComponent("preferences.json"))
+        let prefs = try await store.preferences()
+        try require(prefs.recent.count == 1 && prefs.playbackScrub && !prefs.playbackMuted &&
+                    !prefs.playbackLooping && prefs.scratchDirectory.isEmpty,
+                    "Missing GUI-012 preference keys keep defaults")
+    }
     func verifyNumberCommitOnce() async throws {
         let folder = try temporary(); defer { try? FileManager.default.removeItem(at: folder) }
         let fake = FakeTransport(), editor = model(fake, folder: folder)

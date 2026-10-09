@@ -41,6 +41,12 @@ mod tracking;
 pub use tracking::TrackAnalyzeRequest;
 mod scene;
 pub use scene::{SceneApplyMode, SceneApplyRequest, SceneDetectRequest, SceneJobInput};
+mod capture;
+pub use capture::{
+    CaptureCodec, CaptureColor, CaptureDeckProbeRequest, CaptureFormat, CaptureJobInput,
+    CaptureOrphan, CaptureSessionEntry, CaptureSource, CaptureStartRequest, CaptureStatusRequest,
+    CaptureStatusResult, CaptureStopRequest, DeckDevice, DeckDeviceEntry, DeckProbeResult,
+};
 mod loudness;
 pub use loudness::{
     AudioLoudnessInput, AudioLoudnessRequest, AudioLoudnessResult, AudioNormalizeRequest,
@@ -77,6 +83,8 @@ pub use media::{
     AssetThumbnailRequest, AssetThumbnailResult, CollectRequest, LutImportRequest, MediaAssetEntry,
     MediaQueryRequest, MediaQueryResult, RelinkRequest,
 };
+mod output;
+pub use output::*;
 mod control;
 pub use control::ExecutionControl;
 
@@ -120,6 +128,19 @@ pub enum Request {
     ProxyStatus(ProxyStatusRequest),
     #[serde(rename = "proxy.clear")]
     ProxyClear(ProxyClearRequest),
+    /// FLOW-004 capture/ingest (ADR-0135): a detached recording session job.
+    #[serde(rename = "capture.start")]
+    CaptureStart(CaptureStartRequest),
+    /// Graceful end-of-input; the worker finalizes and publishes the recording.
+    #[serde(rename = "capture.stop")]
+    CaptureStop(CaptureStopRequest),
+    /// Session list plus typed orphan reconciliation for the capture area.
+    #[serde(rename = "capture.status")]
+    CaptureStatus(CaptureStatusRequest),
+    /// Vendor-SDK deck ingest boundary (DeckLink/RS-422); typed
+    /// `UNSUPPORTED_FEATURE` when no adapter is linked.
+    #[serde(rename = "capture.deck_probe")]
+    CaptureDeckProbe(CaptureDeckProbeRequest),
     #[serde(rename = "audio.loudness")]
     AudioLoudness(AudioLoudnessRequest),
     #[serde(rename = "audio.normalize")]
@@ -237,6 +258,15 @@ pub enum Request {
     LutImport(LutImportRequest),
     #[serde(rename = "inspect.scopes")]
     InspectScopes(InspectScopesRequest),
+    /// IO-001: external monitor output enumeration (ADR-0134).
+    #[serde(rename = "io.output.list")]
+    IoOutputList(IoOutputListRequest),
+    /// IO-001: explicit output enable; native session only.
+    #[serde(rename = "io.output.enable")]
+    IoOutputEnable(IoOutputEnableRequest),
+    /// IO-001: explicit output disable; native session only.
+    #[serde(rename = "io.output.disable")]
+    IoOutputDisable(IoOutputDisableRequest),
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -399,6 +429,14 @@ pub enum ResultData {
     Scopes(Box<InspectScopesResult>),
     /// AUDIO-011 detached-helper plugin identity report (ADR-0131).
     PluginProbe(PluginProbeResult),
+    /// IO-001 external output enumeration (ADR-0134).
+    OutputDevices(IoOutputListResult),
+    /// IO-001 enable/disable state acknowledgement.
+    OutputState(IoOutputStateResult),
+    /// FLOW-004 capture session and orphan reconciliation report (ADR-0135).
+    Capture(Box<CaptureStatusResult>),
+    /// FLOW-004 vendor deck adapter device report (ADR-0135).
+    DeckProbe(DeckProbeResult),
 }
 #[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
 #[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
@@ -666,6 +704,12 @@ impl<'a> Service<'a> {
             Request::ProxyGenerate(r) => self.generate_proxies(r).map(ResultData::Jobs),
             Request::ProxyStatus(r) => self.proxy_status(r).map(ResultData::Proxies),
             Request::ProxyClear(r) => self.proxy_clear(r).map(ResultData::Project),
+            Request::CaptureStart(r) => self.capture_start(r).map(|r| ResultData::Job(Box::new(r))),
+            Request::CaptureStop(r) => self.capture_stop(r).map(|r| ResultData::Job(Box::new(r))),
+            Request::CaptureStatus(r) => self
+                .capture_status(r)
+                .map(|r| ResultData::Capture(Box::new(r))),
+            Request::CaptureDeckProbe(r) => self.capture_deck_probe(r).map(ResultData::DeckProbe),
             Request::AudioLoudness(r) => self.loudness(r).map(ResultData::Loudness),
             Request::AudioNormalize(r) => self
                 .normalize_audio(r)
@@ -772,6 +816,11 @@ impl<'a> Service<'a> {
             Request::InspectScopes(r) => {
                 inspect::scopes(r, self).map(|result| ResultData::Scopes(Box::new(result)))
             }
+            Request::IoOutputList(_) => Ok(ResultData::OutputDevices(output_device_list(false))),
+            // IO-001: activation requires the FFI output session. Headless
+            // transports reject typed; there is no silent no-op.
+            Request::IoOutputEnable(r) => Err(external_output_requires_native_session(r.kind)),
+            Request::IoOutputDisable(r) => Err(external_output_requires_native_session(r.kind)),
             Request::ProjectInfo(r) => {
                 if self.read_only_inspection {
                     Ok(ResultData::Project(snapshot_info(
@@ -818,11 +867,40 @@ impl<'a> Service<'a> {
                                 &r.render.output_directory,
                                 &r.output,
                             )?;
-                            let av = jobs::movie_snapshot(snapshot, &r.output)?;
+                            let mut snapshots = vec![jobs::movie_snapshot(snapshot, &r.output)?];
+                            // MEDIA-004: extra legs share this render pass and
+                            // write to their own declared destinations.
+                            let mut outputs = Vec::with_capacity(r.outputs.len());
+                            let mut destinations = std::collections::BTreeSet::new();
+                            destinations.insert(r.render.output_directory.clone());
+                            for spec in &r.outputs {
+                                jobs::validate_movie_destination(&spec.destination, &spec.output)?;
+                                if spec.destination.exists() {
+                                    return Err(ServiceError::new(
+                                        "OUTPUT_EXISTS",
+                                        "delivery destination already exists",
+                                    ));
+                                }
+                                if !destinations.insert(spec.destination.clone()) {
+                                    return Err(ServiceError::invalid(
+                                        "delivery outputs must be distinct",
+                                    ));
+                                }
+                                let settings = spec.output.movie_settings()?;
+                                outputs.push(kronello_media::DeliveryOutput {
+                                    output: spec.destination.clone(),
+                                    profile: settings.profile,
+                                    background: settings.background,
+                                    chapters: spec.chapters,
+                                });
+                                snapshots.push(jobs::movie_snapshot(snapshot, &spec.output)?);
+                            }
                             let settings = r.output.movie_settings()?;
                             let runtime = kronello_media::MediaRuntime::load()?;
-                            let report = runtime.export_av(
-                                &av,
+                            let snapshot_refs: Vec<&kronello_media::AvExportSnapshot> =
+                                snapshots.iter().collect();
+                            let report = runtime.export_delivery(
+                                &snapshot_refs,
                                 &r.render.input.project,
                                 fonts,
                                 backend,
@@ -833,6 +911,8 @@ impl<'a> Service<'a> {
                                     region: r.render.input.region,
                                     background: settings.background,
                                     clipping: kronello_audio::ClippingPolicy::Reject,
+                                    chapters: r.chapters,
+                                    outputs,
                                 },
                             )?;
                             Ok(ResultData::Movie(Box::new(report)))
@@ -1527,6 +1607,10 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
         Request::ProxyGenerate(r) => local_locator(&r.project),
         Request::ProxyStatus(r) => local_locator(&r.project),
         Request::ProxyClear(r) => local_locator(&r.project),
+        Request::CaptureStart(r) => local_locator(&r.project),
+        Request::CaptureStop(r) => local_locator(&r.project),
+        Request::CaptureStatus(r) => local_locator(&r.project),
+        Request::CaptureDeckProbe(_) => Ok(()),
         Request::AudioLoudness(r) => local_locator(&r.project),
         Request::AudioNormalize(r) => local_locator(&r.project),
         Request::AudioPluginProbe(r) => match &r.plugin.path {
@@ -1549,6 +1633,9 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
             local_locator(&r.path)
         }
         Request::InspectScopes(r) => render_locators(&r.input),
+        Request::IoOutputList(_) | Request::IoOutputEnable(_) | Request::IoOutputDisable(_) => {
+            Ok(())
+        }
     }
 }
 fn render_locators(input: &RenderInput) -> Result<(), ServiceError> {
