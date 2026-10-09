@@ -3,6 +3,7 @@
 //! the Syphon publish boundary must reject typed when the framework or its
 //! prerequisites are absent.
 use kronello_framebridge::output;
+#[cfg(target_os = "macos")]
 use kronello_gpu::GpuContext;
 
 #[test]
