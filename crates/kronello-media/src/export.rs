@@ -261,8 +261,12 @@ impl MovieProfile {
         match self {
             Self::H264AacV1 | Self::HevcAacV1 | Self::Av1Mp4AacV1 => 1024,
             Self::Av1WebmOpusV1 => 960,
-            // MPEG Layer III frame at 48 kHz.
-            Self::Mp3V1 => 1152,
+            // MPEG Layer III frames are 1152 samples at 48 kHz. Demuxers that
+            // do not trim the LAME/Xing metadata report the raw frame count,
+            // so the probed duration can exceed the input by the encoder
+            // delay plus final padding plus the Xing header frame — three
+            // codec frames bound that quantization.
+            Self::Mp3V1 => 3 * 1152,
             _ => 0,
         }
     }

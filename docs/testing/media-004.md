@@ -38,8 +38,10 @@
   真のコンテナだけに適用し、MXF/elementary レッグは probe shape と receipt の
   バイト hash で認証する（service 側の再検証も同じ述語を使う）。
 - MP3 の Xing ヘッダはエンコーダ遅延を正の stream start として報告する。
-  AudioOnly 検証は `audio_frame_slack`（1 codec フレーム）以内の signalled
-  priming を許し、lossless profile では厳密なゼロ起点を維持する。
+  AudioOnly 検証は `audio_frame_slack` 以内の signalled priming を許し、
+  lossless profile では厳密なゼロ起点を維持する。Xing を trim しない
+  demuxer はエンコーダ遅延・末尾 padding・Xing フレームを含む生フレーム数の
+  duration を報告するため、MP3 の duration slack は 3 codec フレームとする。
 - GIF は muxer が stream time base を 1/100（センチ秒遅延）に固定するため、
   パケット時刻を codec time base から rescale してから書き込む。
 - MXF muxer は video stream の frame rate を要求するため、remux 時に probed
