@@ -552,3 +552,78 @@ fn audio_plugin_effect_is_rejected_by_the_evaluator() {
     let error = DocumentAudioPlan::compile_version(&p, AudioTarget::Sequence(id), 2).unwrap_err();
     assert_eq!(error.code(), "UNSUPPORTED_FEATURE");
 }
+/// Sequential streaming requests resume a stateful chain where the previous
+/// block ended; rewinds restart at the placement boundary; forward jumps
+/// evaluate the skipped span as warm-up. Every emitted block stays
+/// bit-identical to the stateless evaluator (ADR-0117/ADR-0076).
+#[test]
+fn streaming_session_resumes_and_rewinds_bit_identically() {
+    let range = r(Time::ZERO, t(2, 1));
+    let (mut p, id) = fixture(TrackKind::Audio, generator_clip());
+    let (threshold, ratio, attack, release, makeup) = (
+        param("threshold_db", scalar(-20.0)),
+        param("ratio", scalar(4.0)),
+        param("attack_ms", scalar(5.0)),
+        param("release_ms", scalar(100.0)),
+        param("makeup_db", scalar(0.0)),
+    );
+    let clip = clip_mut(&mut p);
+    clip.effects.push(effect(
+        AUDIO_COMPRESSOR_ID,
+        EffectParameters::AudioCompressor {
+            threshold_db: threshold.id(),
+            ratio: ratio.id(),
+            attack_ms: attack.id(),
+            release_ms: release.id(),
+            makeup_db: makeup.id(),
+        },
+    ));
+    clip.properties
+        .extend([threshold, ratio, attack, release, makeup]);
+    let plan = advanced(&p, id);
+    let src = AudioSources::new();
+    let continuous = plan.mix(&src, range).unwrap();
+    let at = |sample: i64| Time::new(sample, 48_000).unwrap();
+    // Sequential 4096-sample blocks reproduce the continuous bus exactly.
+    let mut session = plan.playback_session();
+    let mut joined: Vec<[f32; 2]> = Vec::new();
+    let mut start = 0_i64;
+    while start < 96_000 {
+        let end = (start + 4096).min(96_000);
+        joined.extend_from_slice(
+            plan.mix_streaming(&src, r(at(start), at(end)), &mut session)
+                .unwrap()
+                .buffer()
+                .frames(),
+        );
+        start = end;
+    }
+    assert_eq!(joined, continuous.buffer().frames());
+    // A rewind restarts the compressor at the placement boundary.
+    let rewound = plan
+        .mix_streaming(&src, r(at(4096), at(8192)), &mut session)
+        .unwrap();
+    let stateless = plan.mix(&src, r(at(4096), at(8192))).unwrap();
+    assert_eq!(rewound.buffer().frames(), stateless.buffer().frames());
+    // A forward jump evaluates the skipped span as warm-up; emitted samples
+    // still match a fresh evaluation.
+    let jumped = plan
+        .mix_streaming(&src, r(at(49_152), at(53_248)), &mut session)
+        .unwrap();
+    let expected = plan.mix(&src, r(at(49_152), at(53_248))).unwrap();
+    assert_eq!(jumped.buffer().frames(), expected.buffer().frames());
+    // The metered streaming path renders identical samples and meters.
+    let (metered_bus, meters) = plan
+        .mix_metered_streaming(&src, r(at(53_248), at(57_344)), &mut session)
+        .unwrap();
+    let (expected_bus, expected_meters) =
+        plan.mix_metered(&src, r(at(53_248), at(57_344))).unwrap();
+    assert_eq!(
+        metered_bus.buffer().frames(),
+        expected_bus.buffer().frames()
+    );
+    assert_eq!(meters.master.peak, expected_meters.master.peak);
+    assert_eq!(meters.master.rms, expected_meters.master.rms);
+    // Warm limit reports the stateful placement end.
+    assert_eq!(plan.streaming_warm_limit().unwrap(), 96_000);
+}

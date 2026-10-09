@@ -1529,6 +1529,10 @@ impl MediaRuntime {
                 None
             };
             let mut clipped_samples = 0_usize;
+            // Sequential encoder blocks resume stateful DSP/WSOLA chains
+            // instead of replaying each placement from its start; output is
+            // bit-identical to the stateless evaluator (ADR-0117).
+            let mut session = plan.as_ref().map(|plan| plan.playback_session());
             let mut start = samples.start;
             while start < samples.end {
                 checkpoint(0)?;
@@ -1541,9 +1545,12 @@ impl MediaRuntime {
                     SAMPLE_RATE.sample_to_time(start)?,
                     SAMPLE_RATE.sample_to_time(end)?,
                 )?;
-                let bus = match &plan {
-                    Some(plan) => plan.mix_channels(&sources, range, layout)?,
-                    None => {
+                let bus = match (&plan, session.as_mut()) {
+                    (Some(plan), Some(session)) => {
+                        plan.mix_channels_streaming(&sources, range, layout, session)?
+                    }
+                    (Some(plan), None) => plan.mix_channels(&sources, range, layout)?,
+                    (None, _) => {
                         kronello_audio::mix_channels(&leg.snapshot.clips, &sources, range, layout)?
                     }
                 };
