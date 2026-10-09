@@ -1,6 +1,6 @@
 # GPU 画素の golden 比較
 
-FX-008 は 9 シーン（`fx008-grain` / `fx008-mosaic` / `fx008-channel-mixer` / `fx008-invert` / `fx008-tint` / `fx008-directional-blur` / `fx008-radial-blur` / `fx008-displace` / `fx008-generate`）を追加し、現在は **65 シーン・65 comparison frames**。apple-silicon-metal の候補生成・CPU oracle 検証・明示採用・通常比較（全シーン mismatch 0）は lane B の revision `f230eea` で実施した（[FX-008](fx-008.md)）。linux-vulkan / windows-dx12 の 65 シーン基準は実 adapter 候補の採用待ちで、56 シーン基準のままである。
+FX-008 は 9 シーン（`fx008-grain` / `fx008-mosaic` / `fx008-channel-mixer` / `fx008-invert` / `fx008-tint` / `fx008-directional-blur` / `fx008-radial-blur` / `fx008-displace` / `fx008-generate`）を追加し、現在は **65 シーン・65 comparison frames**。apple-silicon-metal の候補生成・CPU oracle 検証・明示採用・通常比較（全シーン mismatch 0）は lane B の revision `f230eea` で実施した（[FX-008](fx-008.md)）。linux-vulkan / windows-dx12 の 65 シーン基準は CI run 37867694718 の実 adapter 候補から採用した（候補生成 revision `f3e8f55`、採用コミット `9d30ad5` / `bdc877c`）。
 
 FX-005 / FX-006 は 7 シーン（`fx005-chroma-key` / `fx005-chroma-key-edges` / `fx005-luma-key` / `fx006-glow` / `fx006-sharpen` / `fx006-vignette` / `fx006-corner-pin`）を追加し、追加時のカタログは **56 シーン・56 comparison frames**。apple-silicon-metal の候補生成・CPU oracle 検証・明示採用は lane C の revision `47ed7ec` で、linux-vulkan / windows-dx12 の基準採用は CI run 37711522980 の実 adapter 候補から revision `d6f9848` で実施した（[QA-004](qa-004.md) の M8 節）。
 
