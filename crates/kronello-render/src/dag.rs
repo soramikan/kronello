@@ -79,6 +79,15 @@ pub struct LocalStrokeGeometry {
     pub dash_array: Vec<f64>,
     pub dash_offset: f64,
 }
+/// Per-node outcome of `RenderDag::resolve_video_selective`.
+#[derive(Debug)]
+pub enum VideoResolution {
+    /// Sample the decoded source into a `RasterInput` on the CPU.
+    Source(crate::VideoSource),
+    /// Keep the `VideoDraw` node unresolved; the caller owns a device-resident
+    /// image keyed through the backend's input-identity map.
+    Deferred,
+}
 #[derive(Debug, Clone, PartialEq)]
 pub enum DagNode {
     VideoDraw {
@@ -195,19 +204,48 @@ impl RenderDag {
     /// Sampling is nearest, at the output pixel center; an authored
     /// `interpolation` mode lets the backend synthesize the exact source
     /// instant from the neighboring decoded frames (TRACK-003, ADR-0123).
+    /// The callback returns a lazy `VideoSource` sampler so backends can
+    /// skip materializing full-resolution working-space frames when the
+    /// mapped window is smaller or the output is downscaled. The callback's
+    /// first argument is the node index in this DAG so the backend can
+    /// attach a content-addressed raster identity per node.
     pub fn resolve_video(
         &self,
         mut decode: impl FnMut(
+            usize,
             &kronello_model::Asset,
             u32,
             kronello_time::Time,
             ColorSpace,
             bool,
             Option<kronello_time::FrameInterpolation>,
-        ) -> Result<crate::VideoImage, RenderError>,
+        ) -> Result<crate::VideoSource, RenderError>,
+    ) -> Result<Self, RenderError> {
+        self.resolve_video_selective(
+            |index, asset, stream, time, working, reverse, interpolation| {
+                decode(index, asset, stream, time, working, reverse, interpolation)
+                    .map(VideoResolution::Source)
+            },
+        )
+    }
+    /// `resolve_video` variant whose callback may keep a `VideoDraw` node
+    /// unresolved (`Deferred`) for device-resident presentation instead of
+    /// sampling it into a `RasterInput`. Deferred nodes still require the
+    /// caller to supply their identity through the backend input map.
+    pub fn resolve_video_selective(
+        &self,
+        mut decode: impl FnMut(
+            usize,
+            &kronello_model::Asset,
+            u32,
+            kronello_time::Time,
+            ColorSpace,
+            bool,
+            Option<kronello_time::FrameInterpolation>,
+        ) -> Result<VideoResolution, RenderError>,
     ) -> Result<Self, RenderError> {
         let mut dag = self.clone();
-        for node in &mut dag.nodes {
+        for (index, node) in dag.nodes.iter_mut().enumerate() {
             if let DagNode::VideoDraw {
                 asset,
                 stream_index,
@@ -220,17 +258,19 @@ impl RenderDag {
                 ..
             } = node
             {
-                let image = decode(
+                let image = match decode(
+                    index,
                     asset,
                     *stream_index,
                     *time,
                     dag.working_space,
                     *reverse_sampling,
                     *interpolation,
-                )?;
-                if image.size.contains(&0)
-                    || image.size[0] as usize * image.size[1] as usize != image.pixels.len()
-                {
+                )? {
+                    VideoResolution::Source(image) => image,
+                    VideoResolution::Deferred => continue,
+                };
+                if image.size.contains(&0) {
                     return Err(RenderError::InvalidInput("invalid video image size".into()));
                 }
                 // AI-003 (ADR-0126): the crop window is a source-pixel
@@ -251,6 +291,9 @@ impl RenderDag {
                 }
                 let [w, h] = dag.execution_region.pixels;
                 let mapping = kronello_eval::Affine2(*output_to_local);
+                let timing = std::env::var_os("KRONELLO_MEDIA_TIMING")
+                    .is_some()
+                    .then(std::time::Instant::now);
                 let mut pixels = Vec::with_capacity(w as usize * h as usize);
                 for y in 0..h {
                     for x in 0..w {
@@ -263,12 +306,20 @@ impl RenderDag {
                                     as usize;
                                 let sy = (fy.floor() as i64).clamp(0, i64::from(image.size[1]) - 1)
                                     as usize;
-                                image.pixels[sy * image.size[0] as usize + sx]
+                                image.sample(sx, sy)
                             } else {
                                 [0.0; 4]
                             },
                         );
                     }
+                }
+                if let Some(t) = timing {
+                    eprintln!(
+                        "  resolve_sample: {:.2}ms {}x{}",
+                        t.elapsed().as_secs_f64() * 1000.0,
+                        w,
+                        h
+                    );
                 }
                 *node = DagNode::RasterInput { pixels };
             }

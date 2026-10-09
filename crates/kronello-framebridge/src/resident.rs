@@ -116,7 +116,7 @@ impl HardwareFrame {
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some("resident BT709 media conversion"),
-                source: wgpu::ShaderSource::Wgsl(include_str!("resident.wgsl").into()),
+                source: wgpu::ShaderSource::Wgsl(kronello_gpu::RESIDENT_MEDIA_SHADER.into()),
             });
         let pipeline = gpu
             .device

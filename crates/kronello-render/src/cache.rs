@@ -485,15 +485,29 @@ impl RasterCacheKey {
                         ),
                     )?))
                 }
-                crate::DagNode::RasterInput { pixels } => Some(Self(key(
-                    "video-raster",
-                    (
-                        pixels,
-                        dag.execution_region(),
-                        dag.working_space(),
-                        backend_namespace,
-                    ),
-                )?)),
+                // A media resolver may attach a content-addressed identity to
+                // the produced RasterInput; hashing it avoids serializing and
+                // hashing the full pixel vector on every key build.
+                crate::DagNode::RasterInput { pixels } => Some(match inputs.get(&index) {
+                    Some(input) => Self(key(
+                        "video-raster",
+                        (
+                            input.digest(),
+                            dag.execution_region(),
+                            dag.working_space(),
+                            backend_namespace,
+                        ),
+                    )?),
+                    None => Self(key(
+                        "video-raster",
+                        (
+                            pixels,
+                            dag.execution_region(),
+                            dag.working_space(),
+                            backend_namespace,
+                        ),
+                    )?),
+                }),
                 crate::DagNode::Geometry { .. } | crate::DagNode::TextLayout { .. } => None,
                 crate::DagNode::CoverageDraw { path, .. } => Some(Self::new(
                     path,

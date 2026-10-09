@@ -37,11 +37,59 @@ pub fn resolve_asset(asset: &Asset, project_path: &Path) -> Result<PathBuf, Medi
     Ok(located.path)
 }
 
+/// Stat-level rewrite detector for a located file. Any metadata-visible change
+/// (size, mtime, ctime, or inode/file-index replacement) produces a different
+/// fingerprint; it detects ordinary overwrites and atomic replaces but is not
+/// a substitute for the content hash itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct FileFingerprint {
+    len: u64,
+    modified: Option<std::time::SystemTime>,
+    unique: u64,
+    changed_ns: i128,
+}
+impl FileFingerprint {
+    pub(crate) fn of(meta: &fs::Metadata) -> Self {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            return Self {
+                len: meta.len(),
+                modified: meta.modified().ok(),
+                unique: meta.ino(),
+                changed_ns: i128::from(meta.ctime()) * 1_000_000_000
+                    + i128::from(meta.ctime_nsec()),
+            };
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::MetadataExt;
+            // file_index() is unstable (issue #63010); creation time still
+            // distinguishes an atomic replace from an in-place overwrite.
+            return Self {
+                len: meta.len(),
+                modified: meta.modified().ok(),
+                unique: meta.creation_time(),
+                changed_ns: (meta.last_write_time() as i128) << 32
+                    | i128::from(meta.file_attributes()),
+            };
+        }
+        #[allow(unreachable_code)]
+        Self {
+            len: meta.len(),
+            modified: meta.modified().ok(),
+            unique: 0,
+            changed_ns: 0,
+        }
+    }
+}
+
 /// Cheap availability only. A located regular file is not a verified hash match.
 /// Rendering and collection must continue to use `resolve_asset`.
 pub struct LocatedAsset {
     pub path: PathBuf,
     pub size_bytes: u64,
+    pub(crate) fingerprint: FileFingerprint,
 }
 pub fn locate_asset(asset: &Asset, project_path: &Path) -> Result<LocatedAsset, MediaError> {
     asset.validate()?;
@@ -58,6 +106,7 @@ pub fn locate_asset(asset: &Asset, project_path: &Path) -> Result<LocatedAsset, 
                 return Ok(LocatedAsset {
                     path: path.canonicalize()?,
                     size_bytes: meta.len(),
+                    fingerprint: FileFingerprint::of(&meta),
                 });
             }
             Ok(_) => {

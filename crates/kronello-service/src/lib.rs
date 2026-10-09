@@ -11,6 +11,7 @@ pub use font_authoring::FontPinRequest;
 mod multicam;
 mod nle;
 mod playback;
+pub use kronello_media::{MediaSession, ResolvedResidentMedia};
 pub use kronello_render::RenderTarget;
 pub use multicam::*;
 pub use nle::*;
@@ -596,6 +597,17 @@ impl<'a> Service<'a> {
         &self,
         request: &FrameRenderRequest,
     ) -> Result<(String, kronello_render::RenderDag), ServiceError> {
+        let (revision, resolved, _) =
+            self.preview_dag_media(request, &mut kronello_media::MediaSession::new())?;
+        Ok((revision, resolved))
+    }
+    /// Snapshot policy + scene IR + DAG construction without external media
+    /// resolution. Budget-fit retries size against this DAG and resolve media
+    /// once at the accepted output size.
+    pub fn preview_dag_unresolved(
+        &self,
+        request: &FrameRenderRequest,
+    ) -> Result<(String, kronello_render::RenderDag), ServiceError> {
         self.with_render_input(&request.input, None, |snapshot, fonts| {
             if snapshot.profile().hdr.is_some() {
                 return Err(RenderError::UnsupportedFeature("native single DAG preview has no HDR display conversion; use render.frame SDR display artifact".into()).into());
@@ -613,9 +625,44 @@ impl<'a> Service<'a> {
                 snapshot.profile(),
                 request.input.region,
             )?;
-            let dag = kronello_media::resolve_dag_media(&dag, &request.input.project)?;
             Ok((snapshot.revision().to_string(), dag))
         })
+    }
+    /// `preview_dag` with a caller-owned `MediaSession` so successive redraws
+    /// reuse pooled decoders and decoded source identity. The returned
+    /// `input_identities` map (`DAG node index` → content address) feeds
+    /// `preview_texture_with_inputs` so raster cache keys hash identities
+    /// rather than pixel payloads.
+    pub fn preview_dag_media(
+        &self,
+        request: &FrameRenderRequest,
+        media: &mut kronello_media::MediaSession,
+    ) -> Result<
+        (
+            String,
+            kronello_render::RenderDag,
+            std::collections::BTreeMap<usize, String>,
+        ),
+        ServiceError,
+    > {
+        let (revision, dag) = self.preview_dag_unresolved(request)?;
+        let resolved = kronello_media::resolve_dag_media_in(&dag, &request.input.project, media)?;
+        Ok((revision, resolved.dag, resolved.input_identities))
+    }
+    /// Media resolution for `preview_texture_resident` on an already-built
+    /// preview DAG: eligible `VideoDraw` nodes keep their node and come back
+    /// as resident images; ineligible nodes resolve through the same explicit
+    /// software path as `preview_dag_media`.
+    pub fn resolve_dag_resident(
+        &self,
+        dag: &kronello_render::RenderDag,
+        project: &std::path::Path,
+        media: &mut kronello_media::MediaSession,
+        gpu: &GpuContext,
+    ) -> Result<kronello_media::ResolvedResidentMedia, ServiceError> {
+        Ok(kronello_media::resolve_dag_media_resident(
+            dag, gpu, project, media,
+        )?)
     }
     pub fn with_backend(backend: &'a dyn RenderBackend) -> Self {
         Self {

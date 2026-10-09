@@ -469,6 +469,10 @@ mod metal {
         adapter: wgpu::Adapter,
         gpu: kronello_gpu::GpuContext,
         presentation: Presentation,
+        /// Persistent software-decode session: successive `render_frame` calls
+        /// reuse pooled decoders so playback decodes sequentially instead of
+        /// reopening and seeking every frame.
+        media: kronello_service::MediaSession,
     }
     impl Preview {
         pub fn attach(layer: Layer, width: u32, height: u32) -> Result<Self, ServiceError> {
@@ -491,6 +495,7 @@ mod metal {
                 adapter,
                 gpu,
                 presentation,
+                media: kronello_service::MediaSession::new(),
             })
         }
         /// The shared device every external output of this session renders
@@ -625,11 +630,15 @@ mod metal {
                     }
                 }
             } else {
+                // Budget-fit sizes against the unresolved DAG so retries never
+                // re-decode media; resolution happens once at the accepted
+                // output size.
                 let mut request = request;
                 let mut attempts = 0;
                 let (revision, dag) = loop {
-                    let (revision, dag) = service.preview_dag(&request)?;
-                    let (rendered, surfaces) = self.gpu.preview_surface_estimate(&dag)?;
+                    let (revision, dag) = service.preview_dag_unresolved(&request)?;
+                    let (rendered, surfaces) =
+                        self.gpu.preview_surface_estimate_unresolved(&dag)?;
                     let budget = u64::from(rendered[0]) * u64::from(rendered[1]) * 8 * surfaces;
                     if budget <= SURFACE_BUDGET
                         || attempts >= MAX_FIT_ATTEMPTS
@@ -640,7 +649,20 @@ mod metal {
                     request.input.region.pixels = halve(request.input.region.pixels);
                     attempts += 1;
                 };
-                let texture = self.gpu.preview_texture(&dag)?;
+                let resolved = service.resolve_dag_resident(
+                    &dag,
+                    &request.input.project,
+                    &mut self.media,
+                    &self.gpu,
+                )?;
+                let kronello_service::ResolvedResidentMedia {
+                    dag,
+                    resident,
+                    input_identities: identities,
+                } = resolved;
+                let texture = self
+                    .gpu
+                    .preview_texture_resident(&dag, &resident, &identities)?;
                 (
                     revision,
                     texture,

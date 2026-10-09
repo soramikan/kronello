@@ -58,11 +58,22 @@ fn elided_output_root(dag: &RenderDag) -> Option<usize> {
     }
 }
 fn lower(dag: &RenderDag) -> Result<(RenderSize, DrawScene, WorkingSpace), RenderError> {
-    lower_with_resident(dag, &std::collections::BTreeMap::new())
+    lower_impl(dag, Some(&std::collections::BTreeMap::new()))
 }
 fn lower_with_resident(
     dag: &RenderDag,
     resident: &std::collections::BTreeMap<usize, crate::ResidentImage>,
+) -> Result<(RenderSize, DrawScene, WorkingSpace), RenderError> {
+    lower_impl(dag, Some(resident))
+}
+/// Lowering used only for surface-count estimates before media resolution:
+/// unresolved `VideoDraw` nodes count as one raster surface each.
+fn lower_estimate(dag: &RenderDag) -> Result<(RenderSize, DrawScene, WorkingSpace), RenderError> {
+    lower_impl(dag, None)
+}
+fn lower_impl(
+    dag: &RenderDag,
+    resident: Option<&std::collections::BTreeMap<usize, crate::ResidentImage>>,
 ) -> Result<(RenderSize, DrawScene, WorkingSpace), RenderError> {
     let mut scene = DrawScene {
         nodes: vec![],
@@ -84,11 +95,16 @@ fn lower_with_resident(
             continue;
         }
         let draw = match node {
-            DagNode::VideoDraw { .. } => {
-                DrawNode::GpuRaster(resident.get(&index).cloned().ok_or_else(|| {
-                    RenderError::UnsupportedFeature("video requires explicit media backend".into())
-                })?)
-            }
+            DagNode::VideoDraw { .. } => match resident {
+                Some(resident) => {
+                    DrawNode::GpuRaster(resident.get(&index).cloned().ok_or_else(|| {
+                        RenderError::UnsupportedFeature(
+                            "video requires explicit media backend".into(),
+                        )
+                    })?)
+                }
+                None => DrawNode::Raster(Vec::new()),
+            },
             DagNode::RasterInput { pixels } => DrawNode::Raster(pixels.clone()),
             DagNode::Geometry { .. } | DagNode::TextLayout { .. } => continue,
             DagNode::CoverageDraw { path, .. } => DrawNode::Path(PathDraw {
@@ -317,10 +333,106 @@ impl GpuContext {
             crate::scene::scene_surface_count(&scene) as u64,
         ))
     }
+    /// Surface estimate on an unresolved DAG for the budget-fit loop; media
+    /// resolution happens once at the accepted size, not per retry.
+    pub fn preview_surface_estimate_unresolved(
+        &self,
+        dag: &RenderDag,
+    ) -> Result<([u32; 2], u64), RenderError> {
+        let (size, scene, _) = lower_estimate(dag)?;
+        Ok((
+            size.output_resolution,
+            crate::scene::scene_surface_count(&scene) as u64,
+        ))
+    }
+    /// `preview_texture_with_inputs` for DAGs whose `VideoDraw` nodes stay
+    /// unresolved and render from device-resident images (`resident` keyed by
+    /// DAG node index) produced by `sample_upload_to_working`. Mixed scenes
+    /// are supported: `RasterInput` nodes keep the software-raster path.
+    pub fn preview_texture_resident(
+        &self,
+        dag: &RenderDag,
+        resident: &std::collections::BTreeMap<usize, crate::ResidentImage>,
+        input_identities: &std::collections::BTreeMap<usize, String>,
+    ) -> Result<wgpu::Texture, RenderError> {
+        let namespace = self.cache_namespace().unwrap();
+        let inputs: std::collections::BTreeMap<usize, kronello_render::RasterCacheKey> =
+            input_identities
+                .iter()
+                .map(|(index, identity)| {
+                    Ok((
+                        *index,
+                        kronello_render::RasterCacheKey::external_source(
+                            identity,
+                            dag.execution_region(),
+                            dag.working_space(),
+                            &namespace,
+                        )?,
+                    ))
+                })
+                .collect::<Result<_, RenderError>>()?;
+        let (size, scene, working) = lower_with_resident(dag, resident)?;
+        let keys = map_scene_keys(
+            dag,
+            &kronello_render::RasterCacheKey::for_dag_with_inputs(dag, &namespace, &inputs)?,
+        );
+        self.render_scene_texture_cached(
+            size,
+            &scene,
+            working,
+            &keys,
+            OutputTransform {
+                space: InputSpace::LinearRec709,
+                alpha: OutputAlpha::Premultiplied,
+            },
+        )
+        .map_err(error)
+    }
     /// Uses the same DAG lowering as export without image readback.
     pub fn preview_texture(&self, dag: &RenderDag) -> Result<wgpu::Texture, RenderError> {
         let (size, scene, working) = lower(dag)?;
         let keys = scene_keys(dag, &self.cache_namespace().unwrap())?;
+        self.render_scene_texture_cached(
+            size,
+            &scene,
+            working,
+            &keys,
+            OutputTransform {
+                space: InputSpace::LinearRec709,
+                alpha: OutputAlpha::Premultiplied,
+            },
+        )
+        .map_err(error)
+    }
+    /// `preview_texture` with content-addressed source identities from the
+    /// media resolver (`DAG node index` → serialized identity). Identified
+    /// `RasterInput` nodes key on the identity instead of hashing pixel data.
+    pub fn preview_texture_with_inputs(
+        &self,
+        dag: &RenderDag,
+        input_identities: &std::collections::BTreeMap<usize, String>,
+    ) -> Result<wgpu::Texture, RenderError> {
+        let namespace = self.cache_namespace().unwrap();
+        let inputs: std::collections::BTreeMap<usize, kronello_render::RasterCacheKey> =
+            input_identities
+                .iter()
+                .map(|(index, identity)| {
+                    Ok((
+                        *index,
+                        kronello_render::RasterCacheKey::external_source(
+                            identity,
+                            dag.execution_region(),
+                            dag.working_space(),
+                            &namespace,
+                        )?,
+                    ))
+                })
+                .collect::<Result<_, RenderError>>()?;
+        let (size, scene, working) = lower(dag)?;
+        let keys = map_scene_keys(
+            dag,
+            &kronello_render::RasterCacheKey::for_dag_with_inputs(dag, &namespace, &inputs)?,
+        );
         self.render_scene_texture_cached(
             size,
             &scene,

@@ -6,6 +6,7 @@ use kronello_time::Rational;
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use std::path::Path;
 use std::ptr::NonNull;
+use std::rc::Rc;
 #[repr(C)]
 #[derive(Default)]
 struct FrameInfo {
@@ -229,6 +230,12 @@ pub(crate) struct RawFrame {
     pub labels: [String; 5],
     pub pixels: Vec<u8>,
 }
+/// Decoded-plane safety bounds: 64 Mi pixels covers DCI 8K (8192x4320) with
+/// headroom while still rejecting corrupt or unreasonable streams, and the
+/// byte bound covers the largest supported native layout (yuv444p16) at that
+/// size. Neither bound permits unbounded allocation from untrusted input.
+const DECODED_VIDEO_PIXEL_BUDGET: u64 = 67_108_864;
+const DECODED_VIDEO_BYTE_BUDGET: i64 = 536_870_912;
 fn needs_prores_range_verification(stream: &MediaStream) -> bool {
     stream.kind == StreamKind::Video
         && stream.codec == "prores"
@@ -298,19 +305,21 @@ mod prores_probe_tests {
         }
     }
 }
-pub(crate) struct NativeDecoder<'a> {
+/// Owns the shared loaded runtime so a pooled decoder outlives any caller
+/// scope; `Rc` keeps the dlopen handle alive for exactly the decoder's span.
+pub(crate) struct NativeDecoder {
     path: std::path::PathBuf,
     ptr: NonNull<c_void>,
-    runtime: &'a NativeRuntime,
+    runtime: Rc<NativeRuntime>,
     pub time_base: Rational,
     pub name: String,
 }
-impl<'a> NativeDecoder<'a> {
-    pub(crate) fn open(runtime: &'a NativeRuntime, path: &Path) -> Result<Self, MediaError> {
+impl NativeDecoder {
+    pub(crate) fn open(runtime: &Rc<NativeRuntime>, path: &Path) -> Result<Self, MediaError> {
         Self::open_stream(runtime, path, None)
     }
     pub(crate) fn open_stream(
-        runtime: &'a NativeRuntime,
+        runtime: &Rc<NativeRuntime>,
         path: &Path,
         stream: Option<u32>,
     ) -> Result<Self, MediaError> {
@@ -337,7 +346,7 @@ impl<'a> NativeDecoder<'a> {
         Ok(Self {
             path: source_path,
             ptr,
-            runtime,
+            runtime: runtime.clone(),
             time_base,
             name: unsafe { string(km_decoder_name(ptr.as_ptr())) },
         })
@@ -358,14 +367,14 @@ impl<'a> NativeDecoder<'a> {
             ))
         }
     }
-    pub(crate) fn runtime(&self) -> &'a NativeRuntime {
-        self.runtime
+    pub(crate) fn runtime(&self) -> &NativeRuntime {
+        &self.runtime
     }
     pub(crate) fn restart_origin(&mut self) -> Result<(), MediaError> {
         if self.origin() < 0 {
             // Timestamp seeking cannot reliably rewind negative-origin TS.
             // Reopening the same stream starts from its exact first packet.
-            let replacement = Self::open_stream(self.runtime, &self.path, Some(self.stream()))?;
+            let replacement = Self::open_stream(&self.runtime, &self.path, Some(self.stream()))?;
             *self = replacement;
             Ok(())
         } else {
@@ -394,7 +403,7 @@ impl<'a> NativeDecoder<'a> {
                 "missing PTS or invalid frame metadata".into(),
             ));
         }
-        if i64::from(info.width) * i64::from(info.height) > 16_777_216 {
+        if i64::from(info.width) * i64::from(info.height) > DECODED_VIDEO_PIXEL_BUDGET as i64 {
             return Err(MediaError::UnsupportedFeature(
                 "decoded video pixel budget".into(),
             ));
@@ -403,7 +412,7 @@ impl<'a> NativeDecoder<'a> {
         if size < 0 {
             return Err(MediaError::Decode("unsupported native pixel layout".into()));
         }
-        if size > 134_217_728 {
+        if i64::from(size) > DECODED_VIDEO_BYTE_BUDGET {
             return Err(MediaError::UnsupportedFeature(
                 "decoded video byte budget".into(),
             ));
@@ -432,7 +441,7 @@ pub(crate) fn video_rgba(
 ) -> Result<Vec<u8>, MediaError> {
     if frame.width == 0
         || frame.height == 0
-        || u64::from(frame.width) * u64::from(frame.height) > 16_777_216
+        || u64::from(frame.width) * u64::from(frame.height) > DECODED_VIDEO_PIXEL_BUDGET
     {
         return Err(MediaError::InvalidInput(
             "video frame dimensions/budget".into(),
@@ -470,7 +479,7 @@ pub(crate) fn video_rgba64(
 ) -> Result<Vec<u8>, MediaError> {
     if frame.width == 0
         || frame.height == 0
-        || u64::from(frame.width) * u64::from(frame.height) > 16_777_216
+        || u64::from(frame.width) * u64::from(frame.height) > DECODED_VIDEO_PIXEL_BUDGET
     {
         return Err(MediaError::InvalidInput(
             "video frame dimensions/budget".into(),
@@ -501,7 +510,7 @@ pub(crate) fn video_rgba64(
     }
     Ok(output)
 }
-impl Drop for NativeDecoder<'_> {
+impl Drop for NativeDecoder {
     fn drop(&mut self) {
         unsafe { km_decoder_close(self.ptr.as_ptr()) }
     }
@@ -1233,15 +1242,15 @@ impl NativeRuntime {
         }
         Ok(())
     }
-    pub(crate) fn probe(&self, path: &Path) -> Result<MediaProbe, MediaError> {
+    pub(crate) fn probe(this: &Rc<NativeRuntime>, path: &Path) -> Result<MediaProbe, MediaError> {
         let source_path = path;
         let path = path_string(path)?;
         // SAFETY: all native stream accesses are bounded by the queried count;
         // strings are copied while the probe is live. RAII frees on every error.
         unsafe {
-            let ptr = NonNull::new(km_probe_open(self.0.as_ptr(), path.as_ptr()))
-                .ok_or_else(|| MediaError::Decode(self.error()))?;
-            let probe = NativeProbe { ptr, runtime: self };
+            let ptr = NonNull::new(km_probe_open(this.0.as_ptr(), path.as_ptr()))
+                .ok_or_else(|| MediaError::Decode(this.error()))?;
+            let probe = NativeProbe { ptr, runtime: this };
             let count = km_probe_count(ptr.as_ptr());
             if !(0..=1024).contains(&count) {
                 return Err(MediaError::Decode("stream budget exceeded".into()));
@@ -1268,7 +1277,7 @@ impl NativeRuntime {
                         1 => StreamKind::Audio,
                         _ => StreamKind::Other,
                     },
-                    codec: string(km_probe_codec(self.0.as_ptr(), ptr.as_ptr(), index)),
+                    codec: string(km_probe_codec(this.0.as_ptr(), ptr.as_ptr(), index)),
                     time_base,
                     start: time(info.start)?,
                     duration: time(info.duration)?,
@@ -1278,20 +1287,20 @@ impl NativeRuntime {
                     width: u32::try_from(info.width).ok().filter(|v| *v != 0),
                     height: u32::try_from(info.height).ok().filter(|v| *v != 0),
                     pixel_format: (info.kind == 0)
-                        .then(|| string(km_probe_color(self.0.as_ptr(), ptr.as_ptr(), index, 0))),
+                        .then(|| string(km_probe_color(this.0.as_ptr(), ptr.as_ptr(), index, 0))),
                     color_primaries: (info.kind == 0)
-                        .then(|| string(km_probe_color(self.0.as_ptr(), ptr.as_ptr(), index, 1))),
+                        .then(|| string(km_probe_color(this.0.as_ptr(), ptr.as_ptr(), index, 1))),
                     color_transfer: (info.kind == 0)
-                        .then(|| string(km_probe_color(self.0.as_ptr(), ptr.as_ptr(), index, 2))),
+                        .then(|| string(km_probe_color(this.0.as_ptr(), ptr.as_ptr(), index, 2))),
                     color_matrix: (info.kind == 0)
-                        .then(|| string(km_probe_color(self.0.as_ptr(), ptr.as_ptr(), index, 3))),
+                        .then(|| string(km_probe_color(this.0.as_ptr(), ptr.as_ptr(), index, 3))),
                     color_range: (info.kind == 0)
-                        .then(|| string(km_probe_color(self.0.as_ptr(), ptr.as_ptr(), index, 4))),
+                        .then(|| string(km_probe_color(this.0.as_ptr(), ptr.as_ptr(), index, 4))),
                 });
             }
             let tag = |name: &str| {
                 let key = CString::new(name).expect("constant tag without NUL");
-                string(km_probe_tag(self.0.as_ptr(), ptr.as_ptr(), key.as_ptr()))
+                string(km_probe_tag(this.0.as_ptr(), ptr.as_ptr(), key.as_ptr()))
             };
             // MEDIA-004: container chapters, rescaled from each chapter's own
             // time base into the rational master clock.
@@ -1319,7 +1328,7 @@ impl NativeRuntime {
                     id,
                     start: Rational::from_integer(start).checked_mul(time_base)?,
                     end: Rational::from_integer(end).checked_mul(time_base)?,
-                    title: string(km_probe_chapter_title(self.0.as_ptr(), ptr.as_ptr(), index)),
+                    title: string(km_probe_chapter_title(this.0.as_ptr(), ptr.as_ptr(), index)),
                 });
             }
             let format_duration = km_probe_format_duration(ptr.as_ptr());
@@ -1341,7 +1350,7 @@ impl NativeRuntime {
             for stream in &mut result.streams {
                 if needs_prores_range_verification(stream)
                     && let Ok(mut decoder) =
-                        NativeDecoder::open_stream(self, source_path, Some(stream.index))
+                        NativeDecoder::open_stream(this, source_path, Some(stream.index))
                     && let Ok(Some(frame)) = decoder.next()
                 {
                     verify_prores_range(stream, &frame);

@@ -230,9 +230,20 @@ pub struct MediaPathReport {
 }
 /// Each instance owns its dynamic libraries. Runtime override does not mutate
 /// process-global loader search paths or silently fall back to system libraries.
+/// `Arc` lets pooled decoders hold the loaded library without a borrow, and
+/// `Clone` lets a media session share one loaded runtime.
+#[derive(Clone)]
 pub struct MediaRuntime {
-    native: ffi::NativeRuntime,
+    native: std::rc::Rc<ffi::NativeRuntime>,
     capabilities: MediaCapabilities,
+    /// Canonical paths whose full content-hash verification succeeded at the
+    /// recorded stat fingerprint. An unchanged fingerprint reuses the completed
+    /// verification; any metadata-visible rewrite forces a new full hash. The
+    /// map is scoped to the loaded runtime and shared by its clones (e.g. a
+    /// media session and the backends it serves), never process-global.
+    verified: std::sync::Arc<
+        std::sync::Mutex<std::collections::BTreeMap<std::path::PathBuf, assets::FileFingerprint>>,
+    >,
 }
 impl MediaRuntime {
     pub fn load() -> Result<Self, MediaError> {
@@ -255,15 +266,44 @@ impl MediaRuntime {
         let path = path
             .canonicalize()
             .map_err(|e| MediaError::FfmpegUnavailable(e.to_string()))?;
-        let native = ffi::NativeRuntime::open(&path)?;
+        let native = std::rc::Rc::new(ffi::NativeRuntime::open(&path)?);
         let capabilities = native.capabilities(path, substituted);
         Ok(Self {
             native,
             capabilities,
+            verified: std::sync::Arc::default(),
         })
     }
     pub fn capabilities(&self) -> &MediaCapabilities {
         &self.capabilities
+    }
+    /// Verified resolve with runtime-scoped memoization: the located file is
+    /// content-hashed whenever its stat fingerprint differs from the last
+    /// verified one, so unchanged sources cost a `stat` rather than a full
+    /// re-hash per access. Any observed rewrite (size, mtime, ctime, inode)
+    /// re-hashes before use. `assets::resolve_asset` remains the strict
+    /// entry point for one-shot callers outside the runtime.
+    pub(crate) fn resolve_verified(
+        &self,
+        asset: &kronello_model::Asset,
+        project_path: &std::path::Path,
+    ) -> Result<std::path::PathBuf, MediaError> {
+        let located = assets::locate_asset(asset, project_path)?;
+        {
+            let verified = self.verified.lock().unwrap_or_else(|e| e.into_inner());
+            if verified.get(&located.path) == Some(&located.fingerprint) {
+                return Ok(located.path);
+            }
+        }
+        let path = assets::resolve_asset(asset, project_path)?;
+        let fingerprint = std::fs::metadata(&path)
+            .map(|meta| assets::FileFingerprint::of(&meta))
+            .unwrap_or(located.fingerprint);
+        self.verified
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(path.clone(), fingerprint);
+        Ok(path)
     }
 }
 

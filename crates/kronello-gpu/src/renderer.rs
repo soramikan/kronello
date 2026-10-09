@@ -21,6 +21,7 @@ pub struct GpuContext {
     // once and shared across every render call.
     pub(crate) scene_pipelines: std::sync::OnceLock<crate::scene_gpu::ScenePipelines>,
     pub(crate) opacity_pipeline: std::sync::OnceLock<wgpu::ComputePipeline>,
+    pub(crate) resident_pipeline: std::sync::OnceLock<wgpu::ComputePipeline>,
 }
 #[derive(Debug)]
 pub struct RenderOutput {
@@ -148,6 +149,7 @@ impl GpuContext {
             pipeline,
             scene_pipelines: Default::default(),
             opacity_pipeline: Default::default(),
+            resident_pipeline: Default::default(),
             identity: std::sync::Arc::new(()),
         })
     }

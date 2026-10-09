@@ -287,7 +287,7 @@ pub trait RenderBackend {
 }
 
 mod media;
-pub use media::{DecodedVideoFrame, VideoDecodeBackend, VideoImage};
+pub use media::{DecodedVideoFrame, VideoDecodeBackend, VideoImage, VideoSource};
 
 mod sequence;
 pub use sequence::{RenderTarget, lower_sequence};

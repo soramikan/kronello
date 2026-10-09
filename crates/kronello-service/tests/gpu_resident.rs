@@ -491,3 +491,108 @@ fn actual_hdr_ten_bit_full_range_reject_forged_sdr_locks() {
         }
     }
 }
+/// PERF-001 follow-up: the preview software-decode upload path must match the
+/// explicit software `RasterInput` path pixel-for-pixel within f16 storage
+/// tolerance, and must actually take the resident branch.
+#[test]
+#[ignore = "requires LGPL FFmpeg fixtures, Metal and a generated movie"]
+fn service_software_upload_resident_matches_software_preview() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let temp = tempfile::tempdir().unwrap();
+    let movie = temp.path().join("upload-resident.mov");
+    let status = std::process::Command::new(root.join("target/native/ffmpeg-lgpl/bin/ffmpeg"))
+        .args(["-v", "error", "-nostdin", "-i"])
+        .arg(root.join("target/fixtures/generated/media/cfr-24-1.nut"))
+        .args([
+            "-an",
+            "-vf",
+            "scale=64:64,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=limited",
+            "-c:v",
+            "ffv1",
+            "-pix_fmt",
+            "yuv420p",
+            "-movflags",
+            "write_colr",
+            "-color_primaries",
+            "bt709",
+            "-color_trc",
+            "bt709",
+            "-colorspace",
+            "bt709",
+            "-color_range",
+            "tv",
+        ])
+        .arg(&movie)
+        .status()
+        .unwrap();
+    assert!(status.success(), "software fixture creation");
+    let project = temp.path().join("upload-resident.kronello");
+    let (id, origin, _duration) = create_project(&movie, &project);
+    let gpu = kronello_gpu::GpuContext::new().unwrap();
+    let service = Service::with_backend(&gpu);
+    let mut session = MediaSession::new();
+    let mut readback = kronello_gpu::TransferStats::default();
+    for frame_index in [3, 0, 2, 1, 3] {
+        let time = origin
+            .checked_add(Rational::new(frame_index, 24).unwrap())
+            .unwrap();
+        let request = FrameRenderRequest {
+            input: RenderInput {
+                project: project.clone(),
+                composition: None,
+                target: Some(RenderTarget::Sequence { sequence: id }),
+                region: OutputRegion {
+                    origin: [0.0; 2],
+                    extent: [64.0; 2],
+                    pixels: [64; 2],
+                },
+                profile: Default::default(),
+                fonts: vec![],
+                media_proxies: kronello_render::MediaProxyMode::Off,
+                luts: vec![],
+            },
+            time,
+            backend: Some(BackendSelection::Gpu),
+        };
+        let (_revision, unresolved) = service.preview_dag_unresolved(&request).unwrap();
+        let resolved = service
+            .resolve_dag_resident(&unresolved, &project, &mut session, &gpu)
+            .unwrap();
+        assert!(
+            !resolved.resident.is_empty(),
+            "eligible video node must take the upload-resident branch"
+        );
+        let actual_texture = gpu
+            .preview_texture_resident(
+                &resolved.dag,
+                &resolved.resident,
+                &resolved.input_identities,
+            )
+            .unwrap();
+        let actual = kronello_gpu::decode_rgba16f(
+            &gpu.read_texture(&actual_texture, 8, &mut readback).unwrap(),
+        )
+        .unwrap();
+        let (_revision, dag, identities) =
+            service.preview_dag_media(&request, &mut session).unwrap();
+        let expected_texture = gpu.preview_texture_with_inputs(&dag, &identities).unwrap();
+        let expected = kronello_gpu::decode_rgba16f(
+            &gpu.read_texture(&expected_texture, 8, &mut readback)
+                .unwrap(),
+        )
+        .unwrap();
+        let max = actual
+            .iter()
+            .zip(&expected)
+            .flat_map(|(a, b)| a.iter().zip(b.iter()).map(|(a, b)| (a - b).abs()))
+            .fold(0.0f32, f32::max);
+        eprintln!(
+            "upload-resident vs software preview frame={frame_index} max={max} actual0={:?} expected0={:?}",
+            actual[0], expected[0]
+        );
+        assert!(
+            max < 0.02,
+            "upload-resident/software preview mismatch frame={frame_index} max={max}"
+        );
+    }
+}

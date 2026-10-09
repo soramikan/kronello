@@ -1751,15 +1751,16 @@ fn gpu_nle2_clip_effects_and_explicit_video_upload_match_cpu() {
     let scene = build_scene_ir(&snap, t(2, 1), &[]).unwrap();
     let dag = build_render_dag(&scene, snap.profile(), region())
         .unwrap()
-        .resolve_video(|a, i, t, w, reverse, interpolation| {
+        .resolve_video(|_index, a, i, t, w, reverse, interpolation| {
             assert!(!reverse);
             assert!(interpolation.is_none());
-            runtime.decode_video_image(a, &path, i, t, w).map_err(|e| {
-                kronello_render::RenderError::Backend {
+            runtime
+                .decode_video_image(a, &path, i, t, w)
+                .map(kronello_render::VideoSource::from_image)
+                .map_err(|e| kronello_render::RenderError::Backend {
                     code: e.code(),
                     message: e.to_string(),
-                }
-            })
+                })
         })
         .unwrap();
     let pixels = dag.execution_region().pixels;

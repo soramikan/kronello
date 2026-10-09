@@ -4,6 +4,7 @@
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/imgutils.h>
+#include <libavutil/opt.h>
 #include <libavutil/pixdesc.h>
 #include <libavutil/hwcontext.h>
 #include <libswscale/swscale.h>
@@ -97,6 +98,8 @@ typedef struct Km {
     __typeof__(&swscale_license) swscale_license;
     __typeof__(&swscale_configuration) swscale_configuration;
     __typeof__(&sws_getContext) sws_getContext;
+    __typeof__(&sws_alloc_context) sws_alloc_context;
+    __typeof__(&sws_init_context) sws_init_context;
     __typeof__(&sws_getCoefficients) sws_getCoefficients;
     __typeof__(&sws_setColorspaceDetails) sws_setColorspaceDetails;
     __typeof__(&sws_scale) sws_scale;
@@ -107,6 +110,7 @@ typedef struct Km {
     __typeof__(&av_rescale_rnd) av_rescale_rnd;
     __typeof__(&av_compare_ts) av_compare_ts;
     __typeof__(&av_dict_get) av_dict_get;
+    __typeof__(&av_opt_set_int) av_opt_set_int;
     __typeof__(&avcodec_parameters_copy) avcodec_parameters_copy;
     __typeof__(&avcodec_get_name) avcodec_get_name;
     __typeof__(&swresample_version) swresample_version;
@@ -251,6 +255,8 @@ Km *km_open(const char *directory, char *error, size_t capacity) {
     LOAD(3, swscale_license);
     LOAD(3, swscale_configuration);
     LOAD(3, sws_getContext);
+    LOAD(3, sws_alloc_context);
+    LOAD(3, sws_init_context);
     LOAD(3, sws_getCoefficients);
     LOAD(3, sws_setColorspaceDetails);
     LOAD(3, sws_scale);
@@ -261,6 +267,7 @@ Km *km_open(const char *directory, char *error, size_t capacity) {
     LOAD(0, av_rescale_rnd);
     LOAD(0, av_compare_ts);
     LOAD(0, av_dict_get);
+    LOAD(0, av_opt_set_int);
     LOAD(1, avcodec_parameters_copy);
     LOAD(1, avcodec_get_name);
     LOAD(4, swresample_version);
@@ -355,7 +362,10 @@ static Decoder *decoder_open(Km *k, const char *path, enum AVMediaType kind, int
     if(!d->codec || !d->packet || !d->frame) goto alloc_failed;
     ret=k->avcodec_parameters_to_context(d->codec,d->format->streams[d->stream]->codecpar);
     if(ret<0) { fail(k,ret,"codec parameters"); goto failed; }
-    d->codec->thread_count=1;
+    /* 0 = FFmpeg auto thread count. Frame/slice threading changes decode
+     * scheduling only; decoded frame output is identical, so determinism
+     * holds while long-GOP and slice-parallel codecs scale across cores. */
+    d->codec->thread_count=0;
     ret=k->avcodec_open2(d->codec,codec,NULL);
     if(ret<0) { fail(k,ret,"open decoder"); goto failed; }
     return d;
@@ -406,6 +416,25 @@ int km_frame_copy(Decoder *d, uint8_t *buffer, int size) {
 }
 /* Explicit SDR BT.709 matrix/range conversion. Rust validates source tags and
  * inverse-transfers RGB; this shim does not tone-map or guess color semantics. */
+/* Allocate a conversion context before init so the `threads` option applies.
+ * Row-partitioned scaling is deterministic; 0 selects the host CPU count and
+ * libswscale builds without the option keep their single thread. */
+static struct SwsContext *video_converter(Km *k, int width, int height,
+        enum AVPixelFormat fmt, enum AVPixelFormat dst_fmt, const char *label) {
+    struct SwsContext *sws=k->sws_alloc_context();
+    if(!sws){fail(k,AVERROR(ENOMEM),label);return NULL;}
+    k->av_opt_set_int(sws,"srcw",width,0);
+    k->av_opt_set_int(sws,"srch",height,0);
+    k->av_opt_set_int(sws,"src_format",fmt,0);
+    k->av_opt_set_int(sws,"dstw",width,0);
+    k->av_opt_set_int(sws,"dsth",height,0);
+    k->av_opt_set_int(sws,"dst_format",dst_fmt,0);
+    k->av_opt_set_int(sws,"sws_flags",SWS_BILINEAR,0);
+    k->av_opt_set_int(sws,"threads",0,0);
+    if(k->sws_init_context(sws,NULL,NULL)<0){k->sws_freeContext(sws);fail(k,AVERROR(EINVAL),label);return NULL;}
+    return sws;
+}
+
 int km_video_rgba(Km *k, const uint8_t *input, int input_size, const char *format,
                   int width, int height, int full_range, uint8_t *output) {
     enum AVPixelFormat fmt=k->av_get_pix_fmt(format);
@@ -414,7 +443,7 @@ int km_video_rgba(Km *k, const uint8_t *input, int input_size, const char *forma
     uint8_t *planes[4]={0}; int strides[4]={0};
     int ret=k->av_image_fill_arrays(planes,strides,input,fmt,width,height,1);
     if(ret<0)return fail(k,ret,"video planes");
-    struct SwsContext *sws=k->sws_getContext(width,height,fmt,width,height,AV_PIX_FMT_RGBA,SWS_BILINEAR,NULL,NULL,NULL);
+    struct SwsContext *sws=video_converter(k,width,height,fmt,AV_PIX_FMT_RGBA,"video RGBA converter");
     if(!sws)return fail(k,AVERROR(EINVAL),"video RGBA converter");
     const int *coeff=k->sws_getCoefficients(SWS_CS_ITU709);
     ret=k->sws_setColorspaceDetails(sws,coeff,full_range,coeff,1,0,1<<16,1<<16);
@@ -432,7 +461,7 @@ int km_video_rgba64(Km *k, const uint8_t *input, int input_size, const char *for
     uint8_t *planes[4]={0}; int strides[4]={0};
     int ret=k->av_image_fill_arrays(planes,strides,input,fmt,width,height,1);
     if(ret<0)return fail(k,ret,"HDR video planes");
-    struct SwsContext *sws=k->sws_getContext(width,height,fmt,width,height,AV_PIX_FMT_RGBA64LE,SWS_BILINEAR,NULL,NULL,NULL);
+    struct SwsContext *sws=video_converter(k,width,height,fmt,AV_PIX_FMT_RGBA64LE,"HDR RGBA64 converter");
     if(!sws)return fail(k,AVERROR(EINVAL),"HDR RGBA64 converter");
     const int *coeff=k->sws_getCoefficients(bt2020?SWS_CS_BT2020:SWS_CS_ITU709);
     ret=k->sws_setColorspaceDetails(sws,coeff,full_range,coeff,1,0,1<<16,1<<16);
