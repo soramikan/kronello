@@ -258,7 +258,11 @@ def main():
     flags = [*ffmpeg["configure"], f"--prefix={prefix.as_posix()}"]
     # LAME ships no pkg-config file; FFmpeg's configure probes lame/lame.h and
     # -lmp3lame, so expose the vendored prefix explicitly on every platform.
-    flags += [f"--extra-cflags=-I{prefix / 'include'}", f"--extra-ldflags=-L{prefix / 'lib'}"]
+    # MSYS2 configure scripts need /d/a/... paths — a DOS-style -L/-I is split
+    # on ':' or loses its backslashes under shell evaluation.
+    extra_include = msys2_posix(bash, prefix / "include") if bash else (prefix / "include").as_posix()
+    extra_lib = msys2_posix(bash, prefix / "lib") if bash else (prefix / "lib").as_posix()
+    flags += [f"--extra-cflags=-I{extra_include}", f"--extra-ldflags=-L{extra_lib}"]
     if sys.platform == "win32":
         flags += ["--target-os=mingw32", "--arch=x86_64", "--cc=gcc", "--cxx=g++"]
     else:
