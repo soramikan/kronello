@@ -5,10 +5,9 @@
 #![allow(unsafe_code)]
 use kronello_ffi::*;
 use serde_json::{Value, json};
-use std::{
-    ffi::c_void,
-    time::{Duration, Instant},
-};
+#[cfg(target_os = "macos")]
+use std::ffi::c_void;
+use std::time::{Duration, Instant};
 
 fn wait(handle: u64, id: u64) -> Value {
     let deadline = Instant::now() + Duration::from_secs(10);

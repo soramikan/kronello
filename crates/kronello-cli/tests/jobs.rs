@@ -2125,6 +2125,12 @@ fn multi_output_fixed_job_publishes_and_authenticates_every_leg() {
     assert_eq!(probe.streams.len(), 1);
     assert_eq!(probe.streams[0].codec, "mp3");
     assert_eq!(probe.streams[0].sample_rate, Some(48_000));
+    // Terminal state is committed before the detached process has fully
+    // exited. Wait and reap the actual worker before resuming, or the
+    // resume liveness gate sees a still-alive owner.
+    f.cleanup
+        .wait_for_exit(finished.worker_pid.unwrap(), f.wait_timeout)
+        .unwrap();
     // Resume reconciles the renamed-but-uncommitted path in reverse: every
     // declared destination byte-verifies against the receipt, so the record
     // returns to Succeeded without a re-render.
