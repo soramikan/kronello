@@ -3,8 +3,6 @@
 //! bundled or linked; detection is a runtime `dlopen` probe so callers can
 //! answer with typed `UNSUPPORTED_FEATURE` instead of a silent no-op.
 
-use std::ffi::c_void;
-
 #[cfg(target_os = "macos")]
 mod native {
     use std::ffi::{c_char, c_void};
@@ -68,7 +66,7 @@ mod imp {
         MTLCommandQueue, MTLDevice, MTLPixelFormat, MTLStorageMode, MTLTexture,
         MTLTextureDescriptor, MTLTextureType, MTLTextureUsage,
     };
-    use std::ffi::CString;
+    use std::ffi::{CString, c_void};
 
     /// Lifetime token only: retain/release are thread-safe and the token
     /// carries no texture access. Same contract as `macos.rs::SurfaceLifetime`.

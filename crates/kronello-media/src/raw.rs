@@ -23,6 +23,7 @@ pub const RAW_PIXEL_FORMAT_LINEAR: &str = "raw16";
 /// Decoded ProRes RAW pixel buffer format (half-float RGBA64).
 pub const PRORES_RAW_PIXEL_FORMAT: &str = "rgba64h";
 /// Decoded RAW surface budget: 512 MiB of RGB48 output (~89 MP).
+#[cfg(kronello_libraw)]
 const RAW_MAX_DECODED_BYTES: u64 = 512 * 1024 * 1024;
 const CINEMADNG_MAX_FRAMES: usize = 1 << 20;
 const LIBRAW_CAPS_ZLIB: u32 = 1 << 6;
@@ -894,6 +895,7 @@ pub struct RawStillInfo {
     pub flip: i32,
 }
 
+#[cfg(kronello_libraw)]
 fn raw_pixel_format(filters: u32, is_foveon: bool) -> &'static str {
     if filters == 9 {
         RAW_PIXEL_FORMAT_XTRANS
@@ -1031,6 +1033,7 @@ fn decode_raw_frame(path: &Path) -> Result<(RawStillInfo, u32, u32, Vec<u8>), Me
 }
 
 /// sRGB/Rec.709 primaries -> Rec.2020, exact matrix shared with the PNG path.
+#[cfg(any(kronello_libraw, target_os = "macos"))]
 fn rec709_to_rec2020(rgb: [f64; 3]) -> [f64; 3] {
     [
         0.6274039 * rgb[0] + 0.3292830 * rgb[1] + 0.0433131 * rgb[2],
@@ -1038,6 +1041,7 @@ fn rec709_to_rec2020(rgb: [f64; 3]) -> [f64; 3] {
         0.0163914 * rgb[0] + 0.0880133 * rgb[1] + 0.8955953 * rgb[2],
     ]
 }
+#[cfg(any(kronello_libraw, target_os = "macos"))]
 fn rec2020_to_rec709(rgb: [f64; 3]) -> [f64; 3] {
     [
         1.6604910 * rgb[0] - 0.5876411 * rgb[1] - 0.0728499 * rgb[2],
@@ -1048,6 +1052,7 @@ fn rec2020_to_rec709(rgb: [f64; 3]) -> [f64; 3] {
 
 /// Convert pinned LibRaw RGB48 output into premultiplied linear working space.
 /// The LibRaw pipeline outputs linear-light sRGB-primaries samples (ADR-0136).
+#[cfg(kronello_libraw)]
 fn rgb48_to_working(rgb48: &[u8], working: ColorSpace) -> Result<Vec<[f32; 4]>, MediaError> {
     Ok(rgb48
         .chunks_exact(6)
