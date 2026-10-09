@@ -153,7 +153,7 @@ def verify(prefix, manifest):
         external_versions[dependency] = actual
     # LibRaw reports "0.22.2-Release" so compare the leading version field; the
     # versioned real file is what CDLL must open, not the dev symlinks.
-    pattern = "*raw*.dll" if sys.platform == "win32" else ("libraw_r.*.dylib" if sys.platform == "darwin" else "libraw_r.so.*")
+    pattern = "libraw_r*.dll" if sys.platform == "win32" else ("libraw_r.*.dylib" if sys.platform == "darwin" else "libraw_r.so.*")
     matches = [p for p in runtime_dir.glob(pattern) if p.is_file() and not p.is_symlink()]
     if len(matches) != 1:
         raise ValueError(f"one pinned shared LibRaw required: {pattern}: {[p.name for p in matches]}")
