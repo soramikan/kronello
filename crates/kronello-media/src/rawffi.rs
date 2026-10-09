@@ -21,8 +21,6 @@ pub(crate) struct RawInfo {
     pub dng_version: u32,
     pub raw_count: u32,
     pub flip: i32,
-    pub tiff_compression: u32,
-    pub tiff_bps: u32,
     pub is_foveon: u32,
     pub as_shot_neutral: [f32; 4],
     pub cam_mul: [f32; 4],

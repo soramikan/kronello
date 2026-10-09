@@ -20,7 +20,6 @@
 #include <new>
 
 #include <libraw/libraw.h>
-#include <libraw/libraw_internal.h>
 
 #if defined(_WIN32)
 #ifndef WIN32_LEAN_AND_MEAN
@@ -154,8 +153,6 @@ typedef struct KrRawInfo {
     uint32_t dng_version;
     uint32_t raw_count;
     int32_t flip;
-    uint32_t tiff_compression;
-    uint32_t tiff_bps;
     uint32_t is_foveon;
     float as_shot_neutral[4];
     float cam_mul[4];
@@ -251,13 +248,6 @@ int kr_raw_info(void *ptr, KrRawInfo *out) {
     out->raw_count = d.idata.raw_count;
     out->flip = d.sizes.flip;
     out->is_foveon = d.idata.is_foveon;
-    // get_internal_data_pointer is a public inline accessor, so no LibRaw
-    // symbol is referenced by this read.
-    LibRaw *owner = static_cast<LibRaw *>(d.parent_class);
-    const unpacker_data_t *unpacker =
-        owner ? &owner->get_internal_data_pointer()->unpacker_data : nullptr;
-    out->tiff_compression = unpacker ? unpacker->tiff_compress : 0;
-    out->tiff_bps = unpacker ? unpacker->tiff_bps : 0;
     for (int i = 0; i < 4; i++) {
         out->as_shot_neutral[i] = d.color.dng_levels.asshotneutral[i];
         out->cam_mul[i] = d.color.cam_mul[i];
