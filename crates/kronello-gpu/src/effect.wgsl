@@ -378,9 +378,12 @@ fn main(@builtin(global_invocation_id) id:vec3<u32>) {
             let n=grain_noise(cell,seed);
             rgb=s+vec3<f32>(params.offset.x*(n-0.5));
         } else {
-            for (var c=0;c<3;c++) {
-                rgb[c]=s[c]+params.offset.x*(grain_noise(cell+vec3<i32>(0,0,c),seed)-0.5);
-            }
+            // Per-channel writes are unrolled: FXC cannot store into a
+            // dynamically indexed vector element (X3500).
+            rgb=vec3<f32>(
+                s.x+params.offset.x*(grain_noise(cell,seed)-0.5),
+                s.y+params.offset.x*(grain_noise(cell+vec3<i32>(0,0,1),seed)-0.5),
+                s.z+params.offset.x*(grain_noise(cell+vec3<i32>(0,0,2),seed)-0.5));
         }
         result=vec4<f32>(rgb*v.a,v.a);
     } else if params.config.x==15u {
@@ -404,18 +407,24 @@ fn main(@builtin(global_invocation_id) id:vec3<u32>) {
         } else {
             var o=s;
             if params.config.y==0u { o=vec3<f32>(1.0)-s; }
-            else { o[params.config.y-1u]=1.0-s[params.config.y-1u]; }
+            else {
+                // select() instead of a dynamically indexed element write:
+                // FXC rejects those as non-addressable l-values (X3500).
+                let ch=params.config.y-1u;
+                o=select(s,vec3<f32>(1.0)-s,vec3<bool>(ch==0u,ch==1u,ch==2u));
+            }
             result=vec4<f32>(o*v.a,v.a);
         }
     } else if params.config.x==17u {
         // Channel mixer: the premultiplied vec4 passes through the row-major
         // 4x4 matrix held in weights[0..16].
         let v=textureLoad(source,p,0);
-        var o=vec4<f32>(0.0);
-        for (var r=0u;r<4u;r++) {
-            o[r]=weights[4u*r]*v.x+weights[4u*r+1u]*v.y+weights[4u*r+2u]*v.z+weights[4u*r+3u]*v.w;
-        }
-        result=o;
+        // Row dot products keep FXC-addressable storage only (X3500).
+        result=vec4<f32>(
+            dot(vec4<f32>(weights[0],weights[1],weights[2],weights[3]),v),
+            dot(vec4<f32>(weights[4],weights[5],weights[6],weights[7]),v),
+            dot(vec4<f32>(weights[8],weights[9],weights[10],weights[11]),v),
+            dot(vec4<f32>(weights[12],weights[13],weights[14],weights[15]),v));
     } else if params.config.x==18u {
         // Tint: straight working luma maps between the authored black/white
         // colors, blended by amount; alpha is preserved.
