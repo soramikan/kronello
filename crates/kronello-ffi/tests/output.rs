@@ -70,7 +70,9 @@ fn io_output_list_and_typed_rejects_cross_the_worker() {
         // Disable of a never-active kind still answers typed state.
         assert_eq!(response["result"]["value"]["active"], false, "{kind}");
     }
-    // The reference monitor needs its attached surface first.
+    // The reference monitor needs its attached surface first; platforms
+    // without the native output session reject at the earlier typed
+    // UNSUPPORTED_FEATURE boundary instead.
     let response = wait(
         h,
         call(
@@ -78,7 +80,11 @@ fn io_output_list_and_typed_rejects_cross_the_worker() {
             r#"{"operation":"io.output.enable","kind":"ref_monitor"}"#,
         ),
     );
-    assert_eq!(response["error"]["code"], "SURFACE_UNAVAILABLE");
+    let code = response["error"]["code"].as_str().unwrap_or("");
+    assert!(
+        code == "SURFACE_UNAVAILABLE" || code == "UNSUPPORTED_FEATURE",
+        "unexpected code {code}: {response}"
+    );
     kronello_close(h);
 }
 
