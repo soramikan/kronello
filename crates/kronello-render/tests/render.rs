@@ -2522,11 +2522,7 @@ fn inspect_path_reports_halos_budgets_and_preserves_the_live_render_cache() {
     );
     assert_eq!(live.stats().raster.misses, before.raster.misses);
     let mut heavy = scene.clone();
-    for _ in 0..180 {
-        let mut n = heavy.nodes[0].clone();
-        n.key.node = NodeId::new();
-        heavy.nodes.push(n);
-    }
+    heavy.nodes[0].effects = vec![ResolvedEffect::GaussianBlur { sigma: 20.0 }; 16];
     let large = OutputRegion {
         origin: [0.0; 2],
         extent: [512.0; 2],
@@ -3437,6 +3433,15 @@ fn vec005_restore(wire: &serde_json::Value) -> Result<RenderSnapshot, RenderErro
 
 #[test]
 fn streaming_rejects_cumulative_halo_before_backend_allocation() {
+    struct NoAllocation;
+    impl RenderBackend for NoAllocation {
+        fn name(&self) -> &str {
+            "must-not-execute"
+        }
+        fn execute(&self, _: &RenderDag) -> Result<BackendFrame, RenderError> {
+            panic!("excessive surfaces must be rejected before backend allocation")
+        }
+    }
     let (mut project, id) = fx_project();
     let c = comp_mut(&mut project);
     let sigma = c.nodes[0]
@@ -3471,7 +3476,7 @@ fn streaming_rejects_cumulative_halo_before_backend_allocation() {
     let error = render_frame_tiles(
         &snap,
         &[],
-        &CpuReferenceBackend,
+        &NoAllocation,
         FrameRequest {
             time: t(0, 1),
             region,
@@ -3485,6 +3490,18 @@ fn streaming_rejects_cumulative_halo_before_backend_allocation() {
     assert_eq!(error.code(), "UNSUPPORTED_FEATURE", "{error:?}");
     assert!(error.to_string().contains("streaming tile surface budget"));
     assert_eq!(tiles, 0);
+    let error = render_frame(
+        &snap,
+        &[],
+        &NoAllocation,
+        FrameRequest {
+            time: Time::ZERO,
+            region,
+        },
+    )
+    .unwrap_err();
+    assert!(matches!(error, RenderError::UnsupportedFeature(_)));
+    assert!(error.to_string().contains("tile surface budget exceeded"));
 }
 
 fn temporal_settings() -> TemporalSettings {
@@ -4834,4 +4851,163 @@ fn gui007_reverse_temporal_boundaries_and_nested_maps_preserve_exact_source_grid
         )
         .unwrap()
     );
+}
+
+fn text_heavy_snapshot(characters: usize) -> RenderSnapshot {
+    let mut project = Project::default();
+    let mut nodes = Vec::new();
+    for row in 0..4 {
+        let size = constant("kronello.text.font_size", scalar(20.0));
+        let fill = constant(
+            "kronello.fill_color",
+            Value::Color(Color::from_srgb8([255; 3], None)),
+        );
+        let wrap = constant("kronello.text.wrap_width", scalar(5000.0));
+        let line = constant("kronello.text.line_height", scalar(28.0));
+        let alignment = constant("kronello.text.alignment", Value::Enum("start".into()));
+        let text = "あ".repeat(characters);
+        let document = TextDocument {
+            id: ContentId::new(),
+            layout_version: TEXT_LAYOUT_VERSION,
+            styles: vec![TextStyleSpan {
+                gradient: None,
+                range: TextRange {
+                    start: 0,
+                    end: text.len(),
+                },
+                font: font().1.clone(),
+                size: size.id(),
+                fill: fill.id(),
+            }],
+            text,
+            direction: TextDirection::Horizontal,
+            ruby: vec![],
+            character_animations: vec![],
+            wrap_width: wrap.id(),
+            line_height: line.id(),
+            alignment: alignment.id(),
+            path: None,
+        };
+        nodes.push(node(
+            NodeKind::Text {
+                content_ref: document.id,
+            },
+            vec![
+                size,
+                fill,
+                wrap,
+                line,
+                alignment,
+                constant(
+                    "kronello.transform.position",
+                    v2(30.0, 50.0 + f64::from(row) * 200.0),
+                ),
+            ],
+        ));
+        project.texts.push(DocumentObject::Known(document));
+    }
+    for row in 0..3 {
+        let (mut n, shape) = rectangle([80.0, 40.0], Color::from_srgb8([30, 70, 120], None));
+        n.properties.push(constant(
+            "kronello.transform.position",
+            v2(10.0, 850.0 + f64::from(row) * 60.0),
+        ));
+        nodes.push(n);
+        project.shapes.push(DocumentObject::Known(shape));
+    }
+    let mut c = composition(nodes);
+    c.design_extent = DesignExtent::new(1920.0, 1080.0).unwrap();
+    let id = c.id;
+    project.compositions.push(DocumentObject::Known(c));
+    snapshot(&project, id)
+}
+
+#[test]
+fn text_heavy_tile_budget_is_peak_residency_at_preview_and_full_hd() {
+    // Pure admission probe: exercise both public paths without allocating GPU
+    // resources or spending hundreds of millions of CPU coverage samples.
+    struct Admission;
+    impl RenderBackend for Admission {
+        fn name(&self) -> &str {
+            "surface-admission-probe"
+        }
+        fn execute(&self, dag: &RenderDag) -> Result<BackendFrame, RenderError> {
+            assert_eq!(
+                dag.nodes()
+                    .iter()
+                    .filter(|n| matches!(n, DagNode::CoverageDraw { .. }))
+                    .count(),
+                323
+            );
+            assert!(dag.tile_surface_count() < 32);
+            assert!(dag.tile_surface_bytes(16)? <= 512 * 1024 * 1024);
+            let count = dag.region().pixels.iter().map(|n| *n as usize).product();
+            Ok(BackendFrame {
+                linear: vec![[0.0; 4]; count],
+                display: vec![[0.0; 4]; count],
+            })
+        }
+    }
+    let snap = text_heavy_snapshot(80);
+    let scene = build_scene_ir(&snap, Time::ZERO, &fonts()).unwrap();
+    let small = text_heavy_snapshot(1);
+    let small_scene = build_scene_ir(&small, Time::ZERO, &fonts()).unwrap();
+    for pixels in [[640, 360], [1920, 1080]] {
+        let region = OutputRegion {
+            origin: [0.0; 2],
+            extent: [1920.0, 1080.0],
+            pixels,
+        };
+        for (_, tile) in frame_tiles(region) {
+            let dag = build_render_dag(&scene, snap.profile(), tile).unwrap();
+            let few = build_render_dag(&small_scene, small.profile(), tile).unwrap();
+            assert_eq!(
+                dag.tile_surface_bytes(16).unwrap(),
+                few.tile_surface_bytes(16).unwrap()
+            );
+            assert_eq!(
+                dag.tile_surface_bytes(u64::MAX).unwrap_err().code(),
+                "UNSUPPORTED_FEATURE"
+            );
+        }
+        let request = FrameRequest {
+            time: Time::ZERO,
+            region,
+        };
+        render_frame(&snap, &fonts(), &Admission, request).unwrap();
+        let mut tiles = 0;
+        render_frame_tiles(&snap, &fonts(), &Admission, request, &mut |_, _, _| {
+            tiles += 1;
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(tiles, frame_tiles(region).len());
+    }
+}
+
+#[test]
+fn text_heavy_cpu_reference_matches_streaming_pixels() {
+    let snap = text_heavy_snapshot(80);
+    let request = FrameRequest {
+        time: Time::ZERO,
+        region: OutputRegion {
+            origin: [0.0; 2],
+            extent: [1920.0, 1080.0],
+            pixels: [64, 36],
+        },
+    };
+    let expected = render_frame(&snap, &fonts(), &CpuReferenceBackend, request).unwrap();
+    assert!(expected.pixels.linear.iter().any(|p| p[3] > 0.0));
+    render_frame_tiles(
+        &snap,
+        &fonts(),
+        &CpuReferenceBackend,
+        request,
+        &mut |_, _, output| {
+            assert_eq!(expected.pixels.linear, output.linear);
+            assert_eq!(expected.pixels.display, output.display);
+            Ok(())
+        },
+    )
+    .unwrap();
 }

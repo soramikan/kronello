@@ -41,6 +41,8 @@ JSON の作品入力は共有 `project.create` API に渡して独立した `.kr
 
 10ms sampling の OS RSS/physical footprint は process 全体の観測 peak であり、取り逃しのない allocator peak ではない。GPU の counted descriptor payload は [GPU fusion 測定](perf-001-gpu-fusion.md)の実所有 guard が計数する graph/cache surfaces、control/readback buffers、resident input、output copy と node別 peak を使う。driver private/native codec 内部の未公開 bytes を0と置かない。host linear/display Vec の capacity bytes は別に記録する。これらをそのまま加算して物理メモリーと呼ばない。
 
+2026-10-10追記: 以下は測定当時の累積式。現在は [ADR-0141](../adr/0141-peak-live-render-surfaces.md) の同時保持上界との小さい方を採る。`perf_001_render` の診断も実際の backend の事前推定へ更新し、過去の測定値は再測定値として扱わない。[RENDER-005](render-005.md) を参照。
+
 native preview の512MiB guardは `nodes + roots + group extra + effect extra + 3` に execution pixels とRGBA16Fの8bytesを掛ける **保守的な admission surface estimate** である。同時 live allocation の実測値ではない。最終 OutputTransform が指す直前の singleton・opacity=1 の synthetic root は GPU と同じ限定条件で elideし、その nodeとgroup extra2を除く。basic/complex の admission、実際の counted peak、OS観測値を別に比較する。final は512px tile の有限寿命であり、native preview の whole graph と同じ admission 経路ではない。
 
 lower-third/basic には video がなく、text は vector outline を描くため独立した bitmap atlas を使わない。decode current/lookahead、変換 temporary、movie encoder frontend、および codecを含む process RSS は media 製品測定に記録する。single-sample still の accumulation と、temporal/HDRのより大きな資源要求を混同しない。

@@ -1,11 +1,11 @@
 {
   "schema_version": "0.5",
   "created": "2026-10-01",
-  "updated": "2026-10-09",
+  "updated": "2026-10-10",
   "status": "implementation_started",
   "description": "設計と実装の計画・進捗。このファイルがバックログの正本であり、GitHub等へ登録したIssueではない。",
   "specification": "docs/architecture/",
-  "task_count": 143,
+  "task_count": 144,
   "items": [
     {
       "id": "ARC-001",
@@ -2402,6 +2402,22 @@
       "acceptance_criteria": [
         "シーン検出→マーカー/分割、マルチカム、二画面モニタの insert/overwrite、スタビライズ、export batch を CLI と MCP の両経路で検証する",
         "プロジェクト export・レンダー出力・型付き拒否の CLI/MCP parity を確認する"
+      ]
+    },
+    {
+      "id": "RENDER-005",
+      "milestone": "M10",
+      "priority": "P0",
+      "area": "render",
+      "title": "文字主体フレームの同時保持サーフェス予算と解放",
+      "status": "done",
+      "dependencies": [
+        "RENDER-003"
+      ],
+      "acceptance_criteria": [
+        "320字と図形を含む640×360・1920×1080の通常/streaming予算を純粋テストで検証する",
+        "単一参照面の解放・共有面保持と過大haloのallocation前型付き拒否をCPU参照テストで検証する",
+        "ADR・設計・検証記録を更新し、GPU環境依存の未検証範囲を明記する"
       ]
     }
   ]

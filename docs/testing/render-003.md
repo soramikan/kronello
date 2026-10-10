@@ -5,6 +5,8 @@
 最終統合後の必須 workspace gate も成功し、backlog は `done` とした（末尾の統合検証記録）。
 設計は [ADR-0079](../adr/0079-bounded-streaming-movie-export.md)。
 
+2026-10-10追記: 下表の旧node allocation累積式は [ADR-0141](../adr/0141-peak-live-render-surfaces.md) の同時保持面上界に置換した。16段sigma20のallocation前拒否は維持する。新しい検証は [RENDER-005](render-005.md) を参照し、下表の過去のRSS測定を新方式の測定とは扱わない。
+
 ## 受け入れ条件との対応
 
 | 条件 | 証拠 |

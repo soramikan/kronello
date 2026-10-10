@@ -788,6 +788,8 @@ mod output_root_tests {
         let (_, lowered, _) = lower(&dag).unwrap();
         let keys = scene_keys(&dag, "root-elision-test").unwrap();
         assert_eq!(keys.len(), lowered.nodes.len());
+        // Admission remains pure even when this host has no Metal adapter.
+        crate::scene::check_scene_budget(RenderSize::pixels(3840, 2160), &lowered, 8).unwrap();
         // The actual composition child remains isolated; only synthetic root goes.
         assert!(
             lowered

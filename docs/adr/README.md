@@ -94,7 +94,7 @@
 | [0076](0076-buffered-device-clock-playback.md) | lock-free buffer と音声デバイス時計による再生 | 採用 | 2026-10-05 |
 | [0077](0077-template-instance-read-only-inspection.md) | テンプレート内部の評価値を停止時の読み取り検査として表示する | 採用 | 2026-10-05 |
 | [0078](0078-template-export-pages-and-inspected-snapshot.md) | テンプレート比較と検査した revision の書き出し | 採用 | 2026-10-05 |
-| [0079](0079-bounded-streaming-movie-export.md) | movie export の payload を有界 streaming で処理する | 採用 | 2026-10-06 |
+| [0079](0079-bounded-streaming-movie-export.md) | movie export の payload を有界 streaming で処理する | 部分置換（0141: tile面計算のみ） | 2026-10-06 |
 | [0080](0080-root-temporal-integration.md) | root scope の有理数露光積分と temporal cache | 採用 | 2026-10-06 |
 | [0081](0081-guaranteed-metal-hardware-video-decode.md) | Metal / VideoToolbox の明示 GPU 常駐デコード | 採用 | 2026-10-06 |
 | [0082](0082-windows-ffmpeg-runtime.md) | Windows の FFmpeg runtime と実 worker の検証 | 採用 | 2026-10-06 |
@@ -157,6 +157,8 @@
 | [0138](0138-workspace-completion.md) | ワークスペース完成の範囲 | 採用 | 2026-10-08 |
 | [0139](0139-reverb-feedback-comb-topology.md) | `kronello.audio.reverb` のフィードバックコム構成 | 採用 | 2026-10-09 |
 | [0140](0140-media-session-resident-preview.md) | メディアセッションの検証メモ化とプレビューの GPU resident デコード | 採用 | 2026-10-09 |
+
+| [0141](0141-peak-live-render-surfaces.md) | レンダー面予算を同時保持寿命に合わせる | 採用 | 2026-10-10 |
 
 ## 追加と変更の規則
 

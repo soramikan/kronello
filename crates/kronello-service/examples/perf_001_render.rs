@@ -33,7 +33,7 @@ fn gpu() -> GpuContext {
     context.configure_cache(GpuCacheConfig::default()).unwrap();
     context
 }
-fn native_budget(dag: &kronello_render::RenderDag) -> Value {
+fn native_budget(context: &GpuContext, dag: &kronello_render::RenderDag) -> Value {
     let elided_root = dag.nodes().len().checked_sub(2).filter(|&root| {
         matches!(
             (&dag.nodes()[root], dag.nodes().last()),
@@ -52,15 +52,15 @@ fn native_budget(dag: &kronello_render::RenderDag) -> Value {
             DagNode::Geometry { .. }
             | DagNode::TextLayout { .. }
             | DagNode::OutputTransform { .. } => continue,
-            DagNode::IsolatedComposite { children, .. } => groups += children.len() + 1,
-            DagNode::Effect { .. } => effects += 3,
+            DagNode::IsolatedComposite { .. } => groups += 1,
+            DagNode::Effect { .. } | DagNode::EffectMap { .. } => effects += 1,
             _ => {}
         }
         nodes += 1;
     }
-    let surfaces = nodes + 1 + groups + effects + 3;
+    let (_, surfaces) = context.preview_surface_estimate_unresolved(dag).unwrap();
     let pixels = dag.execution_region().pixels;
-    json!({"dag_nodes":dag.nodes().len(),"draw_nodes":nodes,"elided_output_root":elided_root,"scene_roots":1,"group_extra_surfaces":groups,"effect_extra_surfaces":effects,"surface_count":surfaces,"execution_pixels":pixels,"rgba16f_bytes_per_pixel":8,"admission_surface_estimate_bytes":u64::from(pixels[0])*u64::from(pixels[1])*8*surfaces as u64,"limit_bytes":512*1024*1024})
+    json!({"dag_nodes":dag.nodes().len(),"draw_nodes":nodes,"elided_output_root":elided_root,"scene_roots":1,"group_nodes":groups,"effect_nodes":effects,"surface_count":surfaces,"execution_pixels":pixels,"rgba16f_bytes_per_pixel":8,"admission_surface_estimate_bytes":u64::from(pixels[0])*u64::from(pixels[1])*8*surfaces,"limit_bytes":512*1024*1024})
 }
 fn report_case(name: &str, report: &mut Value, source_hash: &str, target: &Value) {
     report["source_document_sha256"] = json!(source_hash);
@@ -240,7 +240,7 @@ fn main() {
                                 if code == "UNSUPPORTED_FEATURE" =>
                             {
                                 failure = Some(
-                                    json!({"status":"unsupported","n":0,"error":{"code":code,"message":message},"dag_budget":native_budget(&dag)}),
+                                    json!({"status":"unsupported","n":0,"error":{"code":code,"message":message},"dag_budget":native_budget(context, &dag)}),
                                 );
                                 break;
                             }
@@ -390,11 +390,13 @@ fn main() {
         let service = Service::with_backend(&context);
         let (_, dag) = service.preview_dag(&request).unwrap();
         let mut boundary = match context.preview_texture(&dag) {
-            Ok(_) => json!({"status":"supported_untimed","dag_budget":native_budget(&dag)}),
+            Ok(_) => {
+                json!({"status":"supported_untimed","dag_budget":native_budget(&context, &dag)})
+            }
             Err(kronello_render::RenderError::Backend { code, message })
                 if code == "UNSUPPORTED_FEATURE" =>
             {
-                json!({"status":"unsupported","n":0,"error":{"code":code,"message":message},"dag_budget":native_budget(&dag)})
+                json!({"status":"unsupported","n":0,"error":{"code":code,"message":message},"dag_budget":native_budget(&context, &dag)})
             }
             Err(error) => panic!("native preview boundary failed: {error}"),
         };

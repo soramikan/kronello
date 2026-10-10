@@ -6,6 +6,8 @@ mod bounds;
 mod cache;
 pub use bounds::{DesignBounds, LayoutValue};
 mod dag;
+mod surface;
+pub use surface::*;
 mod effect;
 mod inspect;
 pub use inspect::*;
