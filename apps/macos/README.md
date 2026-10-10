@@ -144,7 +144,7 @@ gallery と ImageRenderer smoke は `.environment(\.krStaticRendering, true)` �
 |---|---|
 | コマンド | `KRButton` / `KRButtonStyle`。`KRButtonVariant` の 4 種、アイコン、`pressed`、action。無効化は `.disabled(true)` |
 | 選択 | `KRSegmentedControl` + `KRSegment`、`KRPopupButton` + `KRPopupOption`。安定した ID と selection の Binding、変更 callback |
-| メニュー | `KRMenu` + `KRMenuItem`。見出し、区切り、チェック、無効、破壊的操作、子項目。`KRMenuPresenter.present(_:anchoredTo:theme:current:onDismiss:)` は borderless child `NSPanel` を使う。SwiftUI の global frame（content view の左上原点）を渡す `present(_:anchoredTo:in:theme:current:onDismiss:)` もある。`KRMenu.onSubmenu` は行の global CGRect を通知する |
+| メニュー | `KRMenu` + `KRMenuItem`。見出し、区切り、チェック、無効、破壊的操作、子項目。`KRMenuPresenter.present(_:anchoredTo:theme:current:onDismiss:)` は borderless child `NSPanel` を使い、アンカーには実際の `NSView` を渡す（`KRAnchorTracker` で backing view を取得する）。`KRMenu.onSubmenu` は行の `NSView` を通知する |
 | 数値 | `KRNumberField`。value の Binding、unit、step、range、precision、`onPreview`、`onCommit(from,to)`。`KRNumberEdit` はスクラブ・入力の独立したトランザクションモデル |
 | 文字 | `KRTextFieldStyle`、`KRTextField`、`KRSearchField`。文字入力は IME を扱う標準 TextField を使い、`KRTextField` はローカル draft を Return / フォーカス移動で確定。検索は UI 状態の live Binding |
 | チェック | `KRCheckbox` / `KRCheckboxStyle` の off / on / mixed、`KRRadio` / `KRRadioStyle` の排他選択。radio とツールはネイティブ radio の accessibility representation を持つ |
