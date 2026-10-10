@@ -29,6 +29,13 @@ struct InspectorPanel: View {
                             property(layer, key: "kronello.transform.rotation", label: "Rotation", unit: "°")
                             property(layer, key: "kronello.opacity", label: "Opacity", unit: "%", multiplier: 100)
                         }
+                        if layer.kind == "shape" {
+                            section("Shape") {
+                                property(layer, key: "kronello.shape.size", label: "Size", unit: "px")
+                                property(layer, key: "kronello.shape.corner_radius", label: "Corner radius", unit: "px")
+                                property(layer, key: "kronello.fill_color", label: "Fill")
+                            }
+                        }
                         if layer.kind == "text" {
                             section("Text") {
                                 TextStyleInspector(model: model, layer: layer)
@@ -90,10 +97,11 @@ struct InspectorPanel: View {
     }
     func section<Content: View>(_ name: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            KRButton(name, icon: collapsed.contains(name) ? .chevronRight : .chevronDown, variant: .plain) {
+            p.line.frame(height: 1)
+            KRSectionHeader(name, expanded: !collapsed.contains(name)) {
                 if collapsed.contains(name) { collapsed.remove(name) } else { collapsed.insert(name) }
-            }.padding(.horizontal, KRSpace.space2).padding(.top, KRSpace.space3)
-            if !collapsed.contains(name) { content() }
+            }
+            if !collapsed.contains(name) { content().padding(.bottom, KRSpace.space2) }
         }
     }
     @ViewBuilder func property(_ layer: Layer, key: String, label: String, unit: String = "", multiplier: Double = 1) -> some View {

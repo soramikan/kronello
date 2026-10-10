@@ -68,7 +68,7 @@ public enum EditPresentation {
     public static func rateLabel(num: Int64, den: Int64) -> String {
         num % den == 0 ? "\(num / den) fps" : String(format: "%.3f fps", Double(num) / Double(den))
     }
-    public static func rulerLabel(frame: Int64, fps: Int) -> String { "\(frame / Int64(fps))s\(frame % Int64(fps))f" }
+    public static func rulerLabel(frame: Int64, fps: Int) -> String { KRRulerScale.label(frame: frame, fps: fps) }
 }
 
 public struct TimelineCandidate {
@@ -138,7 +138,7 @@ extension EditorModel {
                 sourceIn: window?.start ?? .init(num: 0, den: 1), meta: "\(group.angles.count) 角度", missing: missing)
         }
         return media + multicam + compositions.enumerated().map { index, comp in
-            EditAsset(id: comp.string("id"), name: "Composition \(index + 1)", kind: .composition,
+            EditAsset(id: comp.string("id"), name: compositionLabel(comp.string("id")), kind: .composition,
                 source: ["kind": "composition", "composition": comp.string("id")], duration: .wire(comp.object("duration")),
                 sourceIn: .init(num: 0, den: 1), meta: "\(comp.objects("nodes").count) 件", missing: nil)
         }

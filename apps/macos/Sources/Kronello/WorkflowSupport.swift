@@ -142,7 +142,7 @@ struct ShortcutSettings: View {
             Text(action.title).krText(KRType.body)
             Spacer(minLength: 0)
             Text(workflow.binding(for: action).display).krText(KRType.timecode).foregroundStyle(p.inkMuted)
-            KRButton(capture.target == action ? "入力待ち…" : "割当", variant: capture.target == action ? .primary : .secondary) {
+            KRButton(capture.target == action ? "キーを入力…" : "変更…", variant: capture.target == action ? .primary : .secondary) {
                 if capture.target == action { capture.stop() } else { capture.begin(action) }
             }
         }.frame(minHeight: KRSize.rowHeight)
@@ -171,13 +171,19 @@ private struct PanelEditor: View {
     let page: String
     var body: some View {
         let layout = workflow.layout(for: page)
+        // One row per panel: visibility, then its size beside it (px).
         VStack(alignment: .leading, spacing: KRSpace.space2) {
-            KRCheckbox("左パネル", isOn: flag(\.leadingPanel))
-            if layout.leadingPanel { width("左パネル幅", \.leadingWidth) }
-            KRCheckbox("右パネル", isOn: flag(\.trailingPanel))
-            if layout.trailingPanel { width("右パネル幅", \.trailingWidth) }
-            KRCheckbox("下パネル", isOn: flag(\.bottomPanel))
-            if layout.bottomPanel { width("下パネル高さ", \.bottomHeight) }
+            row("左パネル", flag: \.leadingPanel, size: \.leadingWidth, sizeLabel: "左パネル幅", enabled: layout.leadingPanel)
+            row("右パネル", flag: \.trailingPanel, size: \.trailingWidth, sizeLabel: "右パネル幅", enabled: layout.trailingPanel)
+            row("下パネル", flag: \.bottomPanel, size: \.bottomHeight, sizeLabel: "下パネル高さ", enabled: layout.bottomPanel)
+        }
+    }
+    func row(_ title: String, flag keyPath: WritableKeyPath<PageLayout, Bool>, size: WritableKeyPath<PageLayout, Double>, sizeLabel: String, enabled: Bool) -> some View {
+        KRFormRow(title, labelWidth: 120) {
+            HStack(spacing: KRSpace.space3) {
+                KRCheckbox("表示", isOn: flag(keyPath))
+                width(sizeLabel, size).disabled(!enabled)
+            }
         }
     }
     func flag(_ keyPath: WritableKeyPath<PageLayout, Bool>) -> Binding<Bool> {
@@ -185,11 +191,10 @@ private struct PanelEditor: View {
                 set: { value in var layout = workflow.layout(for: page); layout[keyPath: keyPath] = value; workflow.setLayout(layout, for: page) })
     }
     func width(_ label: String, _ keyPath: WritableKeyPath<PageLayout, Double>) -> some View {
-        KRPopoverRow(label) {
-            KRNumberField(value: Binding(get: { workflow.layout(for: page)[keyPath: keyPath] },
-                                         set: { value in var layout = workflow.layout(for: page); layout[keyPath: keyPath] = value; workflow.setLayout(layout, for: page) }),
-                          step: 8, range: 120 ... 800, precision: 0, accessibilityLabel: label) { _, _ in }
-        }
+        KRNumberField(value: Binding(get: { workflow.layout(for: page)[keyPath: keyPath] },
+                                     set: { value in var layout = workflow.layout(for: page); layout[keyPath: keyPath] = value; workflow.setLayout(layout, for: page) }),
+                      unit: "px", step: 8, range: 120 ... 800, precision: 0, accessibilityLabel: label) { _, _ in }
+            .frame(width: KRWindowMetrics.scalarWidth)
     }
 }
 

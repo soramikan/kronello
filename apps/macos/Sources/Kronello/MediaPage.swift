@@ -45,6 +45,7 @@ struct MediaPage: View {
                 VStack(spacing: KRSpace.space2) {
                     KRTextField(model.binSelection == nil ? "新しいビンの名前" : "ビンの名前", value: $binName)
                     HStack(spacing: KRSpace.space2) {
+                        Spacer(minLength: 0)
                         if let bin = model.binSelection {
                             KRButton("名前変更", variant: .secondary) {
                                 Task {
@@ -92,11 +93,11 @@ struct MediaPage: View {
             if let selected = model.assetSelection,
                let entry = model.assets.first(where: { $0.string("asset") == selected }),
                model.proxyEligible(entry) {
-                KRButton("プロキシ生成", icon: .sparkles, variant: .secondary) {
+                KRButton("プロキシを生成", icon: .fileVideoCamera, variant: .secondary) {
                     Task { await model.generateProxies(for: [selected]) }
                 }
             }
-            KRButton("プロジェクトを収集…", icon: .folder, variant: .secondary) { collect() }
+            KRButton("プロジェクトを収集…", icon: .folderInput, variant: .secondary) { collect() }
                 .disabled(model.collecting)
             KRButton(icon: .refreshCw, accessibilityLabel: "メディアを更新") { Task { await model.refresh(); await model.refreshProxies() } }
                 .disabled(model.loading)
@@ -118,7 +119,10 @@ struct MediaPage: View {
                 }
                 Spacer(minLength: 0)
                 if let result = model.collectResult {
-                    Text(result).krText(KRType.caption).foregroundStyle(p.accentInk)
+                    HStack(spacing: KRSpace.space1) {
+                        KRIconView(.circleCheck, size: 12)
+                        Text(result).krText(KRType.caption)
+                    }.foregroundStyle(p.inkMuted).frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, KRSpace.space3).padding(.vertical, KRSpace.space1)
                 }
                 if let selected = model.assetSelection, let entry = model.assets.first(where: { $0.string("asset") == selected }) {
@@ -156,11 +160,14 @@ struct MediaPage: View {
             }.frame(height: 96).clipped()
             Text(model.name(of: entry)).krText(KRType.body).foregroundStyle(offline ? p.danger : p.ink).lineLimit(1)
             HStack(spacing: KRSpace.space1) {
-                Text(model.kind(of: entry)).krText(KRType.caption).foregroundStyle(p.inkMuted)
+                KRIconView(mediaKind(of: entry).icon, size: 12).foregroundStyle(mediaKind(of: entry).color(in: p))
+                Text(kindLabel(entry)).krText(KRType.caption).foregroundStyle(p.inkMuted)
                 if let state = model.proxyStates[id] {
-                    Text(state == "ready" ? "プロキシ" : "プロキシ:\(state)")
-                        .krText(KRType.ruler)
-                        .foregroundStyle(state == "ready" ? p.accentInk : p.danger)
+                    // A neutral badge: amber is reserved for "now" and the brand.
+                    Text(state == "ready" ? "プロキシ" : "プロキシ · \(state)")
+                        .krText(KRType.caption).foregroundStyle(state == "ready" ? p.inkMuted : p.danger)
+                        .padding(.horizontal, KRSpace.space1)
+                        .overlay { RoundedRectangle(cornerRadius: KRRadius.radiusSm).strokeBorder(state == "ready" ? p.lineStrong : p.danger, lineWidth: 1) }
                 }
                 Spacer(minLength: 0)
                 Text(model.sizeText(of: entry)).krText(KRType.ruler).foregroundStyle(p.inkMuted)
@@ -211,7 +218,7 @@ struct MediaPage: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(model.name(of: entry)).krText(KRType.heading)
                     Text(file).krText(KRType.caption).foregroundStyle(p.inkMuted).lineLimit(1).truncationMode(.middle)
-                    Text("\(id) · \(model.kind(of: entry)) · \(model.availability(of: entry))").krText(KRType.ruler).foregroundStyle(p.inkMuted)
+                    Text("\(id) · \(kindLabel(entry)) · \(model.availability(of: entry))").krText(KRType.ruler).foregroundStyle(p.inkMuted)
                 }
                 Spacer(minLength: 0)
                 if let error = model.error(of: entry) {
@@ -252,7 +259,17 @@ struct MediaPage: View {
         case "video": return .video
         case "image": return .image
         case "audio": return .audio
-        default: return .generator
+        // LUTs and other data assets drive grading, shown with the adjustment glyph.
+        default: return .adjustment
+        }
+    }
+    func kindLabel(_ entry: [String: Any]) -> String {
+        switch model.kind(of: entry) {
+        case "video": return "映像"
+        case "image": return "静止画"
+        case "audio": return "音声"
+        case "data": return "データ"
+        case let other: return other
         }
     }
 }

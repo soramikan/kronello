@@ -29,4 +29,3 @@ public struct KRColorSwatchButton: View {
             .onHover { hover = $0 }.accessibilityLabel(label)
     }
 }
-

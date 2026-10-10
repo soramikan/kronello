@@ -11,7 +11,19 @@ struct TemplatePage: View {
     @State private var migrationOpen = false
     init(model: EditorModel) { editor = model; _model = StateObject(wrappedValue: TemplatePageModel(editor: model)) }
     var body: some View {
-        KRTemplatePageLayout(templates: { templates }, comparison: { comparison }, policy: { policy }, inputs: { inputs })
+        Group {
+            // Without definitions the comparison, policy and input panels have
+            // nothing to act on; one empty state says what to do instead.
+            if model.definitions.isEmpty && !model.loading {
+                KRPanel("Templates") {
+                    KREmptyState(icon: .layoutTemplate, title: "テンプレートがありません",
+                        message: "CLI / MCP の template.define でテンプレートを定義すると、ここで variant の比較・公開入力・尺のポリシーを編集できます。")
+                        .frame(maxWidth: 420).frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            } else {
+                KRTemplatePageLayout(templates: { templates }, comparison: { comparison }, policy: { policy }, inputs: { inputs })
+            }
+        }
             .task(id: editor.revision) { await model.load() }
             .sheet(isPresented: $migrationOpen) { migrationSheet.krTheme(theme) }
     }
@@ -24,15 +36,18 @@ struct TemplatePage: View {
                         Button {
                             model.selectEdition(definition.string("id")); Task { await model.refresh() }
                         } label: {
+                            // template.md: name, a counts line, and the version badge at the trailing edge.
                             HStack(spacing: KRSpace.space2) {
-                                KRIconView(.layoutTemplate)
-                                VStack(alignment: .leading, spacing: KRSpace.space1) {
-                                    Text(definition.string("template_id")).krText(KRType.ruler).lineLimit(1)
+                                KRIconView(.layoutTemplate).foregroundStyle(p.inkMuted)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(editor.compositionLabel(definition.string("composition_ref"))).krText(KRType.body).foregroundStyle(p.ink).lineLimit(1)
                                     Text("公開入力 \(definition.object("public_inputs").count) · 配置 \(model.placements.filter { $0.string("definition_ref") == definition.string("id") }.count)")
                                         .krText(KRType.caption).foregroundStyle(p.inkMuted)
-                                    Text(definition.string("version")).krText(KRType.ruler).padding(3).overlay { Rectangle().strokeBorder(p.lineStrong, lineWidth: 1) }
-                                }
-                            }.padding(KRSpace.space3).frame(maxWidth: .infinity, alignment: .leading)
+                                }.frame(maxWidth: .infinity, alignment: .leading)
+                                Text(definition.string("version")).krText(KRType.ruler).foregroundStyle(p.ink).padding(.horizontal, KRSpace.space1).padding(.vertical, 2)
+                                    .overlay { RoundedRectangle(cornerRadius: KRRadius.radiusSm).strokeBorder(p.lineStrong, lineWidth: 1) }
+                            }.padding(.horizontal, KRSpace.space3).padding(.vertical, KRSpace.space2).frame(maxWidth: .infinity, alignment: .leading)
+                                .help("template_id " + definition.string("template_id"))
                                 .background(model.editionID == definition.string("id") ? p.selectionBg : .clear)
                         }.buttonStyle(.plain).krControlFocusRing().krBottomLine()
                     }
@@ -51,7 +66,7 @@ struct TemplatePage: View {
                 if let conflict = editor.revisionConflict { KRConflictBanner(.init(conflict.code,conflict.message), discard: { model.discardCandidate(); Task { await model.refresh() } }, reapply: { Task { await model.retryCandidate() } }) }
                 if model.loading { HStack { KRActivityIndicator(); Text("比較を読み込み中").krText(KRType.caption) }.padding(KRSpace.space2) }
                 if let failure = model.failure { KRErrorLine(.init(failure.code, failure.message)).padding(KRSpace.space2) }
-                HStack { Text("比較時刻").krText(KRType.label); WorkflowFrameField(Double(model.compareFrame), step: 1, range: 0...Double(max(0, model.durationFrames-1)), unit: "f", width: 96, accessibilityLabel: "比較時刻", onCommit: { _, value in model.compareFrame = Int64(value); Task { await model.refresh() } }) }.padding(.horizontal, KRSpace.space3)
+                HStack { Spacer(minLength: 0); Text("比較時刻").krText(KRType.label); WorkflowFrameField(Double(model.compareFrame), step: 1, range: 0...Double(max(0, model.durationFrames-1)), unit: "f", width: 96, accessibilityLabel: "比較時刻", onCommit: { _, value in model.compareFrame = Int64(value); Task { await model.refresh() } }) }.padding(.horizontal, KRSpace.space3)
                 ScrollView(.horizontal) {
                     HStack(alignment: .top, spacing: KRSpace.space3) {
                         ForEach(model.previews) { preview in
@@ -105,16 +120,22 @@ struct TemplatePage: View {
                 KRDurationPolicyBands(authoring: rational(model.sourceComposition.object("duration")), placement: KRTimecode.format(frames: model.durationFrames, fps: model.nominalFPS),
                     intro: rational(model.definition.object("duration_policy").object("intro")), outro: rational(model.definition.object("duration_policy").object("outro")), mode: model.definition.object("duration_policy").string("middle_mode"),
                     authoringSeconds: seconds(model.sourceComposition.object("duration")), placementSeconds: seconds(model.time(model.durationFrames)),
-                    introSeconds: seconds(model.definition.object("duration_policy").object("intro")), outroSeconds: seconds(model.definition.object("duration_policy").object("outro")))
+                    introSeconds: seconds(model.definition.object("duration_policy").object("intro")), outroSeconds: seconds(model.definition.object("duration_policy").object("outro")),
+                    fps: model.nominalFPS)
                 Text("intro + outro + minimum_middle 未満は DURATION_TOO_SHORT。上の下書きポリシーは「新版として公開…」で保存し、配置は明示した版移行で変えます。")
                     .krText(KRType.caption).foregroundStyle(p.inkMuted).padding(.horizontal, KRSpace.space3)
             }.padding(.vertical, KRSpace.space1)
         }
     }
     func seconds(_ raw: [String:Any]) -> Double { (Double(raw.string("num")) ?? 0) / max(1,Double(raw.string("den")) ?? 1) }
+    /// A rational duration shown in seconds + frames at the template rate (`1s`, `9f`),
+    /// never as a raw fraction or floating seconds.
     func rational(_ raw: [String: Any]) -> String {
-        let num = raw.string("num"), den = raw.string("den")
-        return (num.isEmpty || den.isEmpty) ? "—" : num + "/" + den + "s"
+        guard let num = Int64(raw.string("num")), let den = Int64(raw.string("den")), den > 0 else { return "—" }
+        let top = num.multipliedReportingOverflow(by: model.fps), bottom = den.multipliedReportingOverflow(by: max(1, model.fpsDen))
+        guard !top.overflow, !bottom.overflow, bottom.partialValue > 0 else { return "—" }
+        let frames = (top.partialValue + bottom.partialValue / 2) / bottom.partialValue
+        return KRRulerScale.label(frame: frames, fps: model.nominalFPS)
     }
     var migrationSheet: some View {
         let raw = model.migration ?? [:]

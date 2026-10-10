@@ -20,7 +20,7 @@ struct MotionViewer: View {
     @FocusState private var viewerFocused: Bool
     var body: some View {
         KRPanel(header: {
-            KRTabBar(model.compositions.map { .init($0.string("id"), "Composition") }, selection: Binding(get: { model.ui.composition ?? "" }, set: model.setComposition))
+            KRTabBar(model.compositions.map { .init($0.string("id"), model.compositionLabel($0.string("id"))) }, selection: Binding(get: { model.ui.composition ?? "" }, set: model.setComposition))
         }, actions: {
             KRButton(icon: .magnet, accessibilityLabel: "スナップ", pressed: model.canvasSettings.snap) { var settings = model.canvasSettings; settings.snap.toggle(); model.canvasSettings = settings }.help("端・中心・ガイドにスナップ。Option で一時解除")
             KRButton(icon: .grid3x3, accessibilityLabel: "ガイド") { guidesOpen.toggle() }.popover(isPresented: $guidesOpen) { CanvasGuideEditor(model: model) }
@@ -194,17 +194,31 @@ struct MotionViewer: View {
 }
 
 private struct CanvasGuideEditor: View {
+    @Environment(\.krPalette) var p
     @ObservedObject var model: EditorModel
     @State private var axis = "x"
     @State private var position = 0.0
     var body: some View {
         VStack(alignment: .leading, spacing: KRSpace.space3) {
-            Toggle("ガイドを表示", isOn: Binding(get: { model.canvasSettings.guidesVisible }, set: { value in var settings = model.canvasSettings; settings.guidesVisible = value; model.canvasSettings = settings }))
-            Picker("方向", selection: $axis) { Text("垂直 X").tag("x"); Text("水平 Y").tag("y") }.pickerStyle(.segmented)
-            KRNumberField(value: $position, unit: "px", accessibilityLabel: "ガイド位置", onCommit: { _, value in position = value })
-            Button("追加") { model.addGuide(axis: axis, position: position) }
-            ForEach(model.canvasSettings.guides) { guide in HStack { Text("\(guide.axis.uppercased()) \(guide.position.formatted()) px"); Spacer(); Button("削除") { model.removeGuide(guide.id) } } }
-            Text("ガイドは表示設定として保存されます。").font(.caption)
-        }.padding().frame(width: 280)
+            KRCheckbox("ガイドを表示", isOn: Binding(get: { model.canvasSettings.guidesVisible }, set: { value in var settings = model.canvasSettings; settings.guidesVisible = value; model.canvasSettings = settings }))
+            HStack(spacing: KRSpace.space2) {
+                KRSegmentedControl([.init("x", "垂直 X"), .init("y", "水平 Y")], selection: $axis).fixedSize()
+                KRNumberField(value: $position, unit: "px", accessibilityLabel: "ガイド位置", onCommit: { _, value in position = value }).frame(width: KRWindowMetrics.scalarWidth)
+                KRButton("追加", icon: .plus) { model.addGuide(axis: axis, position: position) }
+            }
+            if !model.canvasSettings.guides.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(model.canvasSettings.guides) { guide in
+                        HStack(spacing: KRSpace.space2) {
+                            Text(guide.axis.uppercased()).krText(KRType.label).foregroundStyle(p.inkMuted).frame(width: 16, alignment: .leading)
+                            Text("\(guide.position.formatted()) px").krText(KRType.timecode).foregroundStyle(p.ink)
+                            Spacer(minLength: 0)
+                            KRButton(icon: .trash2, accessibilityLabel: "ガイドを削除") { model.removeGuide(guide.id) }
+                        }.frame(height: KRSize.rowHeight)
+                    }
+                }
+            }
+            Text("ガイドは表示設定として保存され、作品には書き込みません。").krText(KRType.caption).foregroundStyle(p.inkMuted)
+        }.padding(KRSpace.space4).frame(width: 300, alignment: .leading)
     }
 }

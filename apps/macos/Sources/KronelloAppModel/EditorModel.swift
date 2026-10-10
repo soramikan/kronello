@@ -365,12 +365,16 @@ public struct EditCandidate {
             let info = try await request("project.info")
             let export = try await request("project.export")
             projectID = info.string("project_id"); name = info.string("name"); safeMode = info.string("open_mode") == "safe"
+            let firstLoad = !loadedUI
             if !loadedUI {
                 restoredUIState = (try? await stateStore.hasState(projectID: projectID)) ?? false
                 ui = try await stateStore.load(projectID: projectID); loadedUI = true
                 for source in ui.fontSources ?? [] { if !fonts.contains(where: { $0.object("identity").string("sha256") == source.sha256 && Int($0.object("identity").number("face_index")) == source.faceIndex }) { fonts.append(["identity": source.identity, "path": source.path]) } }
             }
             let comps = export.object("document").objects("compositions")
+            // A first open of a cut-only project lands on the Edit page instead
+            // of an empty Motion page; saved UI state always wins.
+            if firstLoad, !restoredUIState, comps.isEmpty, !export.object("document").objects("sequences").isEmpty { ui.page = "edit" }
             if !comps.contains(where: { $0.string("id") == ui.composition }) { ui.composition = comps.first?.string("id") }
             var scene: [String: Any] = [:]
             var sceneFailure: ServiceFailure?
@@ -694,6 +698,14 @@ public struct EditCandidate {
         if let numbers = value["value"] as? [Double] { return numbers }
         if let scalar = value["value"] as? NSNumber { return [scalar.doubleValue] }
         return []
+    }
+    /// Display name of a composition: its name when authored, else `Composition N`
+    /// in document order (the same fallback as the Edit page's project list).
+    public func compositionLabel(_ id: String) -> String {
+        let all = document.objects("compositions")
+        guard let index = all.firstIndex(where: { $0.string("id") == id }) else { return "Composition" }
+        let name = all[index].string("name")
+        return name.isEmpty ? "Composition \(index + 1)" : name
     }
     public func transformProperty(_ layer: Layer, key: String) -> [String: Any]? {
         if let property = layer.property(key) { return property }

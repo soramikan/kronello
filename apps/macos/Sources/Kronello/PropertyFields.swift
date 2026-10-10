@@ -31,9 +31,8 @@ struct PropertyValue: View {
                 if value.string("kind") == "color" {
                     PropertyColorEditor(model: model, layer: layer, property: property)
                 } else if value.string("kind") == "bool" {
-                    Toggle("", isOn: Binding(get: { (layer.value(property)["value"] as? Bool) ?? false },
+                    KRCheckbox("", isOn: Binding(get: { (layer.value(property)["value"] as? Bool) ?? false },
                         set: { model.setBool(layer, property: property, to: $0, base: model.revision) }))
-                        .toggleStyle(.checkbox)
                         .accessibilityLabel(presentation.label)
                         .disabled(property.object("source").string("kind") != "constant")
                 } else if value.string("kind") == "enum" {
@@ -59,10 +58,11 @@ struct PropertyValue: View {
                     Text("fx").krText(KRType.caption).foregroundStyle(p.inkMuted)
                         .padding(.horizontal, 3).padding(.vertical, 1)
                         .overlay { RoundedRectangle(cornerRadius: 2).strokeBorder(p.lineStrong, lineWidth: 1) }
+                        .fixedSize()
                 }.buttonStyle(.plain).focused($attachFocused).krFocusRing(attachFocused, cornerRadius: 2)
                     .accessibilityLabel("式を追加").help("式で値を駆動します")
             }
-        }.disabled(disabled)
+        }.fixedSize(horizontal: true, vertical: false).disabled(disabled)
     }
     func field(axis: Int, number: Double, unit: String, presentation: PropertyPresentation) -> some View {
         KRNumberField(value: .constant(number * presentation.multiplier), unit: unit,

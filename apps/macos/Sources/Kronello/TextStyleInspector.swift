@@ -102,10 +102,14 @@ struct PropertyColorEditor: View {
         let bytes = EditorModel.srgbComponents(value).map { Int((min(1, max(0, $0)) * 255).rounded()) }
         return String(format: "#%02X%02X%02X%02X", bytes[0], bytes[1], bytes[2], bytes[3])
     }
+    static func color(_ c: [Double]) -> Color {
+        guard c.count >= 4 else { return .clear }
+        return Color(.sRGB, red: min(1, max(0, c[0])), green: min(1, max(0, c[1])), blue: min(1, max(0, c[2])), opacity: min(1, max(0, c[3])))
+    }
     var value: [String: Any] { layer.value(property) }
     var body: some View {
         HStack(spacing: KRSpace.space2) {
-            KRButton(icon: .circle, accessibilityLabel: "色を選択") {
+            KRColorSwatchButton(Self.color(EditorModel.srgbComponents(value))) {
                 let c = EditorModel.srgbComponents(value)
                 draft = Color(.sRGB, red: min(1, max(0, c[0])), green: min(1, max(0, c[1])), blue: min(1, max(0, c[2])), opacity: c[3])
                 base = model.revision; time = model.ui.time; open = true
@@ -117,10 +121,11 @@ struct PropertyColorEditor: View {
                             panel.show(NSColor(draft)) { draft = Color(nsColor: $0) }
                         }
                     }
-                    Text("sRGB Color").krText(KRType.caption)
+                    Text("sRGB Color").krText(KRType.caption).foregroundStyle(p.inkMuted)
                     HStack {
+                        Spacer(minLength: 0)
                         KRButton("キャンセル", variant: .secondary) { panel.close(); open = false }
-                        KRButton("適用", variant: .secondary) {
+                        KRButton("適用", variant: .primary) {
                             guard let color = NSColor(draft).usingColorSpace(.sRGB) else { return }
                             let hex = String(format: "#%02X%02X%02X%02X", Int((color.redComponent * 255).rounded()), Int((color.greenComponent * 255).rounded()), Int((color.blueComponent * 255).rounded()), Int((color.alphaComponent * 255).rounded()))
                             panel.close(); model.setColor(layer, property: property, hex: hex, base: base, time: time); open = false
@@ -128,7 +133,7 @@ struct PropertyColorEditor: View {
                     }
                 }.padding(KRSpace.space4).frame(width: 240).onDisappear { panel.close() }
             }
-            KRTextField("", value: .constant(Self.hex(value)), onEditingStart: { base = model.revision; time = model.ui.time }, onCommit: { model.setColor(layer, property: property, hex: $0, base: base.isEmpty ? nil : base, time: time) }).frame(width: 108)
+            KRTextField("", value: .constant(Self.hex(value)), monospaced: true, onEditingStart: { base = model.revision; time = model.ui.time }, onCommit: { model.setColor(layer, property: property, hex: $0, base: base.isEmpty ? nil : base, time: time) }).frame(width: 108)
         }.disabled(property.object("source").string("kind") == "expression")
             .help("sRGB 色を設定。Curve は現在時刻に一つの key を更新し、Expression は直接編集しません")
     }
@@ -154,7 +159,7 @@ struct ClipEffectColorEditor: View {
     }
     var body: some View {
         HStack(spacing: KRSpace.space2) {
-            KRButton(icon: .circle, accessibilityLabel: "色を選択") {
+            KRColorSwatchButton(PropertyColorEditor.color(components)) {
                 let c = components
                 draft = Color(.sRGB, red: min(1, max(0, c[0])), green: min(1, max(0, c[1])), blue: min(1, max(0, c[2])), opacity: c[3])
                 base = model.revision; open = true
@@ -166,10 +171,11 @@ struct ClipEffectColorEditor: View {
                             panel.show(NSColor(draft)) { draft = Color(nsColor: $0) }
                         }
                     }
-                    Text("sRGB Color").krText(KRType.caption)
+                    Text("sRGB Color").krText(KRType.caption).foregroundStyle(p.inkMuted)
                     HStack {
+                        Spacer(minLength: 0)
                         KRButton("キャンセル", variant: .secondary) { panel.close(); open = false }
-                        KRButton("適用", variant: .secondary) {
+                        KRButton("適用", variant: .primary) {
                             guard let color = NSColor(draft).usingColorSpace(.sRGB) else { return }
                             let hex = String(format: "#%02X%02X%02X%02X", Int((color.redComponent * 255).rounded()), Int((color.greenComponent * 255).rounded()), Int((color.blueComponent * 255).rounded()), Int((color.alphaComponent * 255).rounded()))
                             panel.close(); commit(hex); open = false
@@ -177,7 +183,7 @@ struct ClipEffectColorEditor: View {
                     }
                 }.padding(KRSpace.space4).frame(width: 240).onDisappear { panel.close() }
             }
-            KRTextField("", value: .constant(hex), onEditingStart: { base = model.revision }, onCommit: { commit($0) }).frame(width: 108)
+            KRTextField("", value: .constant(hex), monospaced: true, onEditingStart: { base = model.revision }, onCommit: { commit($0) }).frame(width: 108)
         }.disabled(!EditorModel.colorParameterIsConstant(clip, effect: effect, parameter: parameter))
             .help("sRGB 色を設定。アニメーション付きパラメータは読み取り専用です")
     }

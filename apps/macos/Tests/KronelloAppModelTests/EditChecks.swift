@@ -205,7 +205,10 @@ import KronelloDesign
         let reverse = EditClip(query: ["clip": clip])
         try require(reverse.speedLabel == "150.0%" && reverse.reversed, "Reverse flag shows the exact rational magnitude")
         try require(EditPresentation.rateLabel(num: 24, den: 1) == "24 fps" && EditPresentation.rateLabel(num: 24000, den: 1001) == "23.976 fps", "Integer and NTSC header format")
-        try require(EditPresentation.rulerLabel(frame: 12, fps: 24) == "0s12f" && EditPresentation.rulerLabel(frame: 24, fps: 24) == "1s0f", "Ruler keeps subsecond frame units")
+        try require(EditPresentation.rulerLabel(frame: 12, fps: 24) == "12f" && EditPresentation.rulerLabel(frame: 24, fps: 24) == "1s"
+            && EditPresentation.rulerLabel(frame: 36, fps: 24) == "1s12f" && EditPresentation.rulerLabel(frame: 0, fps: 24) == "0f", "Ruler keeps subsecond frame units")
+        try require(KRRulerScale.majorStep(pointsPerFrame: 4, fps: 24) == 24 && KRRulerScale.majorStep(pointsPerFrame: 20, fps: 24) == 4 && KRRulerScale.majorStep(pointsPerFrame: 12, fps: 24) == 6
+            && KRRulerScale.majorStep(pointsPerFrame: 0.5, fps: 24) == 240, "Ruler steps snap to readable units")
         let old = e.previewIdentity
         e.reportPreviewFailure(.init(code: "UNSUPPORTED_FEATURE", message: "video requires explicit media backend"), for: old)
         try require(e.offersCPUReference && !e.usesCPUReference, "Video unsupported offers explicit action without silent fallback")

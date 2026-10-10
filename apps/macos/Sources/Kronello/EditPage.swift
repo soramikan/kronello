@@ -36,17 +36,17 @@ struct EditProjectPanel: View {
                 if tab == "effects" {
                     VStack(alignment: .leading, spacing: KRSpace.space3) {
                         VStack(alignment: .leading, spacing: KRSpace.space3) {
-                            KRButton("Gaussian Blur", icon: .sparkles) { model.addClipEffect("blur") }
-                            KRButton("Drop Shadow", icon: .layers) { model.addClipEffect("shadow") }
-                            KRButton("Chroma Key", icon: .sparkles) { model.addClipEffect("chroma_key") }
-                            KRButton("Luma Key", icon: .sparkles) { model.addClipEffect("luma_key") }
-                            KRButton("Glow", icon: .sparkles) { model.addClipEffect("glow") }
-                            KRButton("Sharpen", icon: .sparkles) { model.addClipEffect("sharpen") }
-                            KRButton("Vignette", icon: .sparkles) { model.addClipEffect("vignette") }
-                            KRButton("Corner Pin", icon: .sparkles) { model.addClipEffect("corner_pin") }
+                            KRButton("Gaussian Blur", icon: .wandSparkles) { model.addClipEffect("blur") }
+                            KRButton("Drop Shadow", icon: .wandSparkles) { model.addClipEffect("shadow") }
+                            KRButton("Chroma Key", icon: .pipette) { model.addClipEffect("chroma_key") }
+                            KRButton("Luma Key", icon: .contrast) { model.addClipEffect("luma_key") }
+                            KRButton("Glow", icon: .sun) { model.addClipEffect("glow") }
+                            KRButton("Sharpen", icon: .wandSparkles) { model.addClipEffect("sharpen") }
+                            KRButton("Vignette", icon: .aperture) { model.addClipEffect("vignette") }
+                            KRButton("Corner Pin", icon: .crop) { model.addClipEffect("corner_pin") }
                             // TRACK-002: analyze the clip's media, then bind
                             // kronello.stabilize to the committed tracking asset.
-                            KRButton("スタビライズ", icon: .crosshair) { if let clip = model.selectedClip { model.stabilizeClip(clip) } }
+                            KRButton("スタビライズ", icon: .vibrateOff) { if let clip = model.selectedClip { model.stabilizeClip(clip) } }
                                 .disabled(model.selectedClip.map { clip in
                                     model.stabilizePending.contains(clip.id) || clip.timeMapKind != "linear"
                                         || (clip.kind != .video && clip.kind != .multicam)
@@ -57,9 +57,9 @@ struct EditProjectPanel: View {
                             }
                             Text("選択中の映像クリップに追加します。").krText(KRType.caption)
                         }.disabled(model.selectedClip == nil || model.selectedClip?.kind == .audio || model.busy || model.pendingCandidate != nil)
-                        Divider()
+                        p.line.frame(height: 1)
                         VStack(alignment: .leading, spacing: KRSpace.space3) {
-                            KRButton("アジャストメントクリップを追加", icon: .sparkles) { model.addAdjustmentClip() }
+                            KRButton("アジャストメントクリップを追加", icon: .slidersHorizontal) { model.addAdjustmentClip() }
                             Text("再生ヘッドに新規映像トラックへ追加し、下の映像全体へ効果をかけます。").krText(KRType.caption)
                         }.disabled(model.sequence.isEmpty || model.busy || model.pendingCandidate != nil)
                     }.padding()
@@ -71,7 +71,7 @@ struct EditProjectPanel: View {
                     ScrollView(.vertical) {
                         VStack(spacing: 0) {
                             if model.allMarkers.isEmpty {
-                                KREmptyState(icon: .circle, title: "マーカーなし",
+                                KREmptyState(icon: .bookmark, title: "マーカーなし",
                                     message: "ルーラーのダブルクリックか「再生ヘッドにマーカー」で追加できます。")
                                     .padding(KRSpace.space4)
                             }
@@ -112,7 +112,7 @@ struct EditProjectPanel: View {
                     // NLE-007: multicam groups are authored through the shared
                     // `multicam.create` operation (timecode/audio/manual sync).
                     HStack {
-                        KRButton("マルチカムを作成…", icon: .clapperboard, variant: .secondary) { multicamDraft = .init() }
+                        KRButton("マルチカムを作成…", icon: .grid2x2, variant: .secondary) { multicamDraft = .init() }
                             .disabled(model.busy || model.pendingCandidate != nil)
                         // GUI-012: sidecar caption import drives the shared
                         // captions.import_plan → captions.import plan flow.
@@ -304,9 +304,9 @@ struct SequenceViewer: View {
     static let tools: [KRTool] = [
         .init("select", icon: .mousePointer2, name: "選択", shortcut: "V"),
         .init("blade", icon: .scissors, name: "ブレード", shortcut: "B"),
-        .init("slip", icon: .slidersHorizontal, name: "スリップ", shortcut: "Y", separatorBefore: true),
-        .init("slide", icon: .chevronsUpDown, name: "スライド", shortcut: "U"),
-        .init("roll", icon: .repeat, name: "ロール", shortcut: "N"),
+        .init("slip", icon: .arrowLeftRight, name: "スリップ", shortcut: "Y", separatorBefore: true),
+        .init("slide", icon: .moveHorizontal, name: "スライド", shortcut: "U"),
+        .init("roll", icon: .unfoldHorizontal, name: "ロール", shortcut: "N"),
         .init("hand", icon: .hand, name: "手のひら", shortcut: "H", separatorBefore: true),
         .init("zoom", icon: .zoomIn, name: "ズーム", shortcut: "Z", unavailableReason: "表示倍率は下の欄で変更します")]
     var body: some View {
@@ -317,7 +317,7 @@ struct SequenceViewer: View {
             if model.usesCPUReference { Text("CPU 参照").krText(KRType.caption).foregroundStyle(p.inkMuted) }
             // IO-001 (ADR-0134): external output destination + explicit toggle.
             ExternalOutputControls(model: model, output: model.output)
-            KRButton(icon: .scan, accessibilityLabel: "セーフエリア", pressed: safeArea) { safeArea.toggle() }
+            KRButton(icon: .squareDashed, accessibilityLabel: "セーフエリア", pressed: safeArea) { safeArea.toggle() }
         } }) {
             VStack(spacing: 0) {
                 if let conflict = model.revisionConflict { KRConflictBanner(.init(conflict.code, conflict.message), discard: model.discardCandidate, reapply: model.reapply) }
@@ -379,12 +379,13 @@ struct SequenceViewer: View {
 /// identity lands in `ui.fontSources` (ADR-0033) so reopening the project
 /// restores the face without touching the document.
 struct FontRecoveryButton: View {
+    @Environment(\.krPalette) var p
     @ObservedObject var model: EditorModel
     var body: some View {
         VStack(spacing: KRSpace.space2) {
-            KRButton("フォントを登録…", icon: .folder, variant: .secondary) { pick() }
+            KRButton("フォントを登録…", icon: .folderOpen, variant: .secondary) { pick() }
             Text("参照しているフォントファイルを選択すると、内容ハッシュで登録します。代替フォントへの切り替えは行いません。")
-                .krText(KRType.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                .krText(KRType.caption).foregroundStyle(p.inkMuted).multilineTextAlignment(.center)
         }
     }
     func pick() {
@@ -429,21 +430,27 @@ struct ClipInspector: View {
                                 .padding(.horizontal, KRSpace.space3)
                         }
                         KRButton("マーカーを削除", icon: .trash2, variant: .destructive) { model.removeMarker(marker) }.padding(.horizontal, KRSpace.space3)
-                        KRButton("再生ヘッドを移動", icon: .mousePointer2, variant: .secondary) { model.seek(marker.time.frames(rateNum: model.rateNum, rateDen: model.rateDen)) }.padding(.horizontal, KRSpace.space3)
+                        KRButton("再生ヘッドを移動", icon: .locateFixed, variant: .secondary) { model.seek(marker.time.frames(rateNum: model.rateNum, rateDen: model.rateDen)) }.padding(.horizontal, KRSpace.space3)
                     }.padding(.vertical, KRSpace.space3)
                 }
             } else if let clip = model.selectedClip {
                 ScrollView {
                     VStack(alignment: .leading, spacing: KRSpace.space4) {
-                        HStack(spacing: KRSpace.space2) { KRIconView(clip.kind.icon).foregroundStyle(clip.kind.color(in: p)); Text(model.clipName(clip)).krText(KRType.heading).lineLimit(1) }.padding(.horizontal, KRSpace.space3)
-                        Text("\(clip.kind.rawValue.capitalized) クリップ · \(model.trackNumber(clip.track))").krText(KRType.caption).foregroundStyle(p.inkMuted).padding(.horizontal, KRSpace.space3)
+                        // edit.md: kind icon, clip name, then kind and track (`Composition クリップ · V2`).
+                        HStack(alignment: .top, spacing: KRSpace.space2) {
+                            KRIconView(clip.kind.icon).foregroundStyle(clip.kind.color(in: p)).padding(.top, 2)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(model.clipName(clip)).krText(KRType.heading).lineLimit(1)
+                                Text("\(Self.kindLabel(clip.kind)) クリップ · \(model.trackNumber(clip.track))").krText(KRType.caption).foregroundStyle(p.inkMuted)
+                            }
+                        }.padding(.horizontal, KRSpace.space3)
                         if let missing = model.clipMissing(clip) {
                             VStack(alignment: .leading, spacing: KRSpace.space2) {
                                 KRErrorLine(.init(missing, "参照素材を確認してください。"))
                                 // GUI-012: guided recovery — pick the folder
                                 // holding the file, `asset.relink` verifies.
                                 if let asset = model.clipMissingAsset(clip) {
-                                    KRButton("素材を再リンク…", icon: .folder, variant: .secondary) { relinkMissingAsset(asset) }
+                                    KRButton("素材を再リンク…", icon: .refreshCw, variant: .secondary) { relinkMissingAsset(asset) }
                                         .disabled(model.busy || model.pendingCandidate != nil)
                                     Text("ファイルがあるフォルダを選ぶと、プロジェクト内の参照を検証して再リンクします。").krText(KRType.caption).foregroundStyle(p.inkMuted)
                                 }
@@ -506,7 +513,8 @@ struct ClipInspector: View {
                         } }
                         section("合成") {
                             KRInspectorSettingRow("不透明度") {
-                                KRNumberField(value: .constant(clip.authored.objects("properties").first { $0.object("descriptor").string("key") == "kronello.opacity" }?.object("source").object("value").number("value") ?? 1), unit: "", step: 0.01, range: 0...1, precision: 2, accessibilityLabel: "不透明度", onEditingStart: { draftBases["opacity"] = model.revision }, onCommit: { _, value in model.setClipProperty(clip, key: "kronello.opacity", kind: "scalar", value: value, base: draftBases.removeValue(forKey: "opacity")) })
+                                // Shown in percent like the Motion inspector; stored as 0...1.
+                                KRNumberField(value: .constant((clip.authored.objects("properties").first { $0.object("descriptor").string("key") == "kronello.opacity" }?.object("source").object("value").number("value") ?? 1) * 100), unit: "%", step: 1, range: 0...100, precision: 1, accessibilityLabel: "不透明度", onEditingStart: { draftBases["opacity"] = model.revision }, onCommit: { _, value in model.setClipProperty(clip, key: "kronello.opacity", kind: "scalar", value: value / 100, base: draftBases.removeValue(forKey: "opacity")) })
                             }
                             KRInspectorSettingRow("描画モード") {
                                 KRPopupButton("描画モード", options: EditPresentation.blendModes.map { .init($0.wire, $0.label) }, selection: Binding(get: { clip.authored.objects("properties").first { $0.object("descriptor").string("key") == "kronello.blend_mode" }?.object("source").object("value").string("value") ?? "normal" }, set: { model.setClipProperty(clip, key: "kronello.blend_mode", kind: "enum", value: $0, base: draftBases.removeValue(forKey: "blend")) }), onEditingStart: { draftBases["blend"] = model.revision })
@@ -566,13 +574,13 @@ struct ClipInspector: View {
                             }
                             Text("無効なクリップは区間を保ったまま映像・音声・字幕・トランジションに寄与しません。").krText(KRType.caption).foregroundStyle(p.inkMuted).padding(.horizontal, KRSpace.space3)
                             if clip.kind != .subtitle {
-                                KRButton("再生ヘッドでフリーズ", icon: .pause, variant: .secondary) { model.freezeClipAtPlayhead(clip) }
+                                KRButton("再生ヘッドでフリーズ", icon: .snowflake, variant: .secondary) { model.freezeClipAtPlayhead(clip) }
                                     .disabled(model.busy || model.pendingCandidate != nil || model.trackLocked(clip.track)
                                         || !(model.frame > clip.start.frames(rateNum: model.rateNum, rateDen: model.rateDen)
                                             && model.frame < clip.end.frames(rateNum: model.rateNum, rateDen: model.rateDen)))
                                     .padding(.horizontal, KRSpace.space3)
                             }
-                            KRButton("再生ヘッドにクリップマーカー", icon: .circle, variant: .secondary) { model.addClipMarker(clip) }
+                            KRButton("再生ヘッドにクリップマーカー", icon: .bookmarkPlus, variant: .secondary) { model.addClipMarker(clip) }
                                 .disabled(model.busy || model.pendingCandidate != nil)
                                 .padding(.horizontal, KRSpace.space3)
                             KRButton("クリップを削除", icon: .trash2, variant: .destructive) { model.deleteSelectedClip() }
@@ -589,14 +597,14 @@ struct ClipInspector: View {
                         if model.sceneDetectEligible(clip) { section("シーン") {
                             if let boundaries = model.sceneBoundaryAssets(for: clip).last {
                                 let count = boundaries.objects("boundaries").count
-                                KRButton("境界をマーカーに追加（\(count) 件）", icon: .circle, variant: .secondary) { model.applySceneBoundaries(clip, asset: boundaries.string("id"), split: false) }
+                                KRButton("境界をマーカーに追加（\(count) 件）", icon: .bookmarkPlus, variant: .secondary) { model.applySceneBoundaries(clip, asset: boundaries.string("id"), split: false) }
                                     .disabled(model.busy || model.pendingCandidate != nil || model.trackLocked(clip.track))
                                     .padding(.horizontal, KRSpace.space3)
                                 KRButton("境界でクリップを分割", icon: .scissors, variant: .secondary) { model.applySceneBoundaries(clip, asset: boundaries.string("id"), split: true) }
                                     .disabled(model.busy || model.pendingCandidate != nil || model.trackLocked(clip.track))
                                     .padding(.horizontal, KRSpace.space3)
                             }
-                            KRButton("シーンを検出", icon: .scan, variant: .secondary) { model.detectScenes(clip) }
+                            KRButton("シーンを検出", icon: .scanSearch, variant: .secondary) { model.detectScenes(clip) }
                                 .disabled(model.busy || model.pendingCandidate != nil)
                                 .padding(.horizontal, KRSpace.space3)
                             Text("検出はジョブとして実行され、完了した境界がここに反映されます。シーン分割はクリップの素材範囲内の境界に適用されます。").krText(KRType.caption).foregroundStyle(p.inkMuted).padding(.horizontal, KRSpace.space3)
@@ -604,7 +612,8 @@ struct ClipInspector: View {
                     }.padding(.vertical, KRSpace.space3)
                 }
             } else { KREmptyState(icon: .mousePointer2, title: "クリップを選択", message: "トラックでクリップを選択してください。") }
-        }.onChange(of: model.selectedClip?.id) { _, _ in draftBases.removeAll() }
+        }.environment(\.krInspectorNavigatorColumn, false)
+            .onChange(of: model.selectedClip?.id) { _, _ in draftBases.removeAll() }
     }
     /// GUI-012 guided relink: a directory search verifies and republishes the
     /// missing asset's locator through `asset.relink`.
@@ -614,6 +623,18 @@ struct ClipInspector: View {
         panel.prompt = "このフォルダから再リンク"
         if panel.runModal() == .OK, let url = panel.url {
             Task { await model.relinkAsset(asset, searchDirectory: url.path) }
+        }
+    }
+    static func kindLabel(_ kind: KRMediaKind) -> String {
+        switch kind {
+        case .video: return "映像"
+        case .image: return "静止画"
+        case .audio: return "音声"
+        case .composition: return "Composition"
+        case .subtitle: return "字幕"
+        case .generator: return "Generator"
+        case .adjustment: return "調整"
+        case .multicam: return "マルチカム"
         }
     }
     func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
@@ -710,19 +731,19 @@ struct SequenceTracks: View {
             KRButton(icon: .captions, accessibilityLabel: "字幕を追加") { model.addCaption() }
                 .disabled(model.busy || model.pendingCandidate != nil || model.ui.sequence == nil)
             KRButton(icon: .magnet, accessibilityLabel: "スナップ", pressed: model.editSnap) { model.editSnap.toggle() }
-            KRButton(icon: .circle, accessibilityLabel: "再生ヘッドにマーカーを追加") { model.addSequenceMarker() }
+            KRButton(icon: .bookmarkPlus, accessibilityLabel: "再生ヘッドにマーカーを追加") { model.addSequenceMarker() }
             KRButton("In", variant: .plain) { model.setInPoint() }
                 .disabled(model.busy || model.pendingCandidate != nil)
             KRButton("Out", variant: .plain) { model.setOutPoint() }
                 .disabled(model.busy || model.pendingCandidate != nil)
             KRButton(icon: .x, accessibilityLabel: "In/Out を解除") { model.clearWorkArea() }
                 .disabled(model.workArea == nil)
-            KRButton(icon: .audioLines, accessibilityLabel: "オーディオスクラブ", pressed: model.audioScrubEnabled) { model.audioScrubEnabled.toggle() }
+            KRButton(icon: .audioWaveform, accessibilityLabel: "オーディオスクラブ", pressed: model.audioScrubEnabled) { model.audioScrubEnabled.toggle() }
                 .disabled(model.ui.sequence == nil || model.playbackMuted)
-            KRButton(icon: .slidersHorizontal, accessibilityLabel: "ミキサー", pressed: showMixer) { showMixer.toggle() }
+            KRButton(icon: .slidersVertical, accessibilityLabel: "ミキサー", pressed: showMixer) { showMixer.toggle() }
                 .disabled(model.ui.sequence == nil)
-            KRButton(icon: .chevronsLeft, accessibilityLabel: "時間軸を縮小") { model.editScale = max(1, model.editScale / 2) }
-            KRButton(icon: .plus, accessibilityLabel: "時間軸を拡大") { model.editScale = min(16, model.editScale * 2) }
+            KRButton(icon: .zoomOut, accessibilityLabel: "時間軸を縮小") { model.editScale = max(1, model.editScale / 2) }
+            KRButton(icon: .zoomIn, accessibilityLabel: "時間軸を拡大") { model.editScale = min(16, model.editScale * 2) }
         }) {
             VStack(spacing: 0) {
                 if showMixer { AudioMixer(model: model).krBottomLine() }
@@ -868,12 +889,7 @@ struct SequenceTracks: View {
     }
     func rulerTicks(width: Double) -> [KRRulerTick] {
         let total = Double(max(model.durationFrames, Int64(model.nominalFPS * 5)))
-        return (0...8).map { index in
-            let fraction = Double(index) / 8
-            let x = KRSpace.space2 + (width - KRSpace.space2 * 2) * fraction
-            let label = index == 8 ? nil : EditPresentation.rulerLabel(frame: Int64(total * fraction), fps: model.nominalFPS)
-            return KRRulerTick("\(index)", x: x, label: label)
-        }
+        return KRRulerScale.ticks(frames: 0...total, fps: model.nominalFPS, width: width)
     }
     func lane(_ track: [String: Any], width: Double, frameWidth: Double) -> some View {
         let id = track.string("id"), kind = track.string("kind"), locked = model.trackLocked(id)
@@ -943,7 +959,8 @@ struct SequenceTracks: View {
             .overlay(alignment: .topLeading) { clipMarkers(clip, start: start, frameWidth: frameWidth) }
             // NLE-006: a piecewise map carries a speed ramp or freeze hold; mark it on the lane.
             .overlay(alignment: .topTrailing) { if clip.timeMapKind == "piecewise_linear" {
-                KRIconView(.slidersHorizontal).foregroundStyle(p.accentInk).padding(2)
+                // Neutral ink: amber is reserved for "now" and the brand.
+                KRIconView(.gauge, size: 12).foregroundStyle(p.inkMuted).padding(2).help("速度変化・フリーズを含むリタイム")
             } }
             // A cue has no source window: splitting is not a caption operation.
             .overlay { if model.editTool == "blade" && clip.kind != .subtitle {
@@ -1081,7 +1098,7 @@ struct MixerStrip: View {
             HStack(spacing: KRSpace.space1) {
                 Text(model.trackLoudness(track)?.label ?? "LUFS").krText(KRType.caption).foregroundStyle(p.inkMuted)
                 if model.loudnessMeasuring(track) {
-                    ProgressView().controlSize(.mini)
+                    KRActivityIndicator()
                 } else {
                     KRButton("測定", variant: .plain) { model.measureTrackLoudness(track) }
                 }
@@ -1104,7 +1121,7 @@ struct MixerMasterStrip: View {
             HStack(spacing: KRSpace.space1) {
                 Text(model.sequenceLoudness?.label ?? "LUFS").krText(KRType.caption).foregroundStyle(p.inkMuted)
                 if model.sequenceLoudnessMeasuring {
-                    ProgressView().controlSize(.mini)
+                    KRActivityIndicator()
                 } else {
                     KRButton("測定", variant: .plain) { model.measureSequenceLoudness() }
                 }

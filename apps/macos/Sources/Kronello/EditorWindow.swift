@@ -20,8 +20,9 @@ struct EditorWindow: View {
             else if model.ui.page == "template" { TemplatePage(model: model) }
             else if model.ui.page == "media" { MediaPage(model: model) }
             else { ExportPage(model: model) }
-            KRStatusBar(saved: (model.busy ? "保存中" : "保存済み") + (model.safeMode ? " · 安全モード" : "") + " · " + model.playbackStatus, revision: "rev " + model.revision,
+            KRStatusBar(saved: (model.busy ? "保存中" : "保存済み") + (model.safeMode ? " · 安全モード" : ""), revision: "rev " + model.revision,
                 externalChange: model.externalChange, error: diagnostic, job: jobSummary,
+                activity: model.playing || model.playbackStatus.hasPrefix("ホストクロック") ? model.playbackStatus : nil,
                 onError: { if model.undoConflict != nil {} else if model.revisionConflict == nil { model.failure = model.previewFailure ?? model.playbackFailure } }, onJobs: { jobsOpen = true })
         }.frame(minWidth: KRWindowMetrics.width, minHeight: KRWindowMetrics.height)
             .onChange(of: model.ui.page) { _, _ in
@@ -57,16 +58,25 @@ struct EditorWindow: View {
         HStack(spacing: KRSpace.space2) {
             VStack(alignment: .leading, spacing: 0) {
                 Text(model.name).krText(KRType.heading).lineLimit(1)
-                Text(URL(fileURLWithPath: model.path).deletingLastPathComponent().path).krText(KRType.caption).foregroundStyle(p.inkMuted).lineLimit(1)
-            }.padding(.leading, KRSpace.space4 * 4).frame(maxWidth: KRWindowMetrics.left + KRSpace.space4 * 6, alignment: .leading)
+                Text(EditorWindow.displayLocation(model.path)).krText(KRType.caption).foregroundStyle(p.inkMuted).lineLimit(1).truncationMode(.middle)
+            }.help(model.path)
+                // Clear the window buttons that live inside this toolbar.
+                .padding(.leading, KRSpace.space4 * 4 + KRSpace.space1).frame(maxWidth: KRWindowMetrics.left + KRSpace.space4 * 6, alignment: .leading)
             Spacer(minLength: 0)
             KRButton(icon: .undo2, accessibilityLabel: "取り消す") { Task { await model.undo() } }.disabled(!model.canUndo)
             KRButton(icon: .redo2, accessibilityLabel: "やり直す") { Task { await model.undo(redo: true) } }.disabled(!model.canRedo)
             p.line.frame(width: 1, height: KRSize.controlHeight)
             KRPopupButton("ワークスペース", options: [.init("standard", "標準", icon: .layoutPanelLeft)], selection: $model.ui.workspace).fixedSize()
         }.padding(.horizontal, KRSpace.space3).frame(height: KRWindowMetrics.toolbar)
+            .background(WindowDragArea())
             .overlay { KRSegmentedControl([.init("edit", "編集"), .init("motion", "モーション"), .init("template", "テンプレート"), .init("media", "メディア"), .init("export", "書き出し")], selection: $model.ui.page) }
             .overlay(alignment: .bottom) { p.line.frame(height: 1) }
+    }
+    /// Folder of the project with the home directory shown as `~`.
+    static func displayLocation(_ path: String) -> String {
+        let folder = URL(fileURLWithPath: path).deletingLastPathComponent().path
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return folder == home ? "~" : folder.hasPrefix(home + "/") ? "~" + folder.dropFirst(home.count) : folder
     }
     var diagnostic: KRDiagnostic? {
         let failures = [model.failure, model.undoConflict, model.revisionConflict, model.previewFailure, model.sequenceFailure, model.playbackFailure].compactMap { $0 }
@@ -174,7 +184,9 @@ struct LayersPanel: View {
                             }
                         } else {
                             ForEach(model.compositions, id: \.selfID) { composition in
-                                KRAssetRow("Composition", kind: .composition, meta: composition.string("id"), duration: model.durationCode,
+                                KRAssetRow(model.compositionLabel(composition.string("id")), kind: .composition,
+                                    meta: "\(Int(composition.object("design_extent").number("width")))×\(Int(composition.object("design_extent").number("height")))",
+                                    duration: model.durationCode, selected: model.ui.composition == composition.string("id"),
                                     onSelect: { model.setComposition(composition.string("id")) })
                             }
                         }
