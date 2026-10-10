@@ -24,7 +24,7 @@ public struct KRPopupButton: View {
     private let onEditingStart: () -> Void
     private let onSelect: (String) -> Void
     @StateObject private var presenter = KRMenuPresenter()
-    @State private var anchor: CGRect = .zero
+    @State private var anchorView: NSView?
     @State private var hover = false
     @FocusState private var focused: Bool
     public init(_ label: String, options: [KRPopupOption], selection: Binding<String>, appearance: KRControlAppearance = .resting,
@@ -34,14 +34,14 @@ public struct KRPopupButton: View {
     public var body: some View {
         Button {
             if presenter.isPresented { presenter.dismiss(); return }
-            guard let window = NSApp.keyWindow ?? NSApp.mainWindow else { return }
+            guard let anchorView else { return }
             onEditingStart()
             let items = options.map { option in
                 KRMenuItem(option.id, option.label, icon: option.icon, checked: option.id == selection, disabled: option.disabled) {
                     selection = option.id; onSelect(option.id)
                 }
             }
-            presenter.present(items, anchoredTo: anchor, in: window, theme: theme, current: selection)
+            presenter.present(items, anchoredTo: anchorView, theme: theme, current: selection)
         } label: {
             HStack(spacing: KRSpace.space2) {
                 if let icon = options.first(where: { $0.id == selection })?.icon { KRIconView(icon, size: 12).foregroundStyle(p.inkMuted) }
@@ -54,11 +54,10 @@ public struct KRPopupButton: View {
                             in: RoundedRectangle(cornerRadius: KRRadius.radiusMd))
                 .overlay { RoundedRectangle(cornerRadius: KRRadius.radiusMd).strokeBorder(p.lineStrong, lineWidth: 1) }
         }.buttonStyle(.plain).focused($focused).krFocusRing(focused || appearance == .focused, cornerRadius: KRRadius.radiusMd)
-            .background {
-                GeometryReader { geometry in
-                    Color.clear.preference(key: KRMenuAnchorKey.self, value: geometry.frame(in: .global))
-                }
-            }.onPreferenceChange(KRMenuAnchorKey.self) { anchor = $0 }
+            // The menu anchors to the backing NSView itself: `.frame(in: .global)`
+            // is not reliable inside a nested window/title-bar scene, and a
+            // real view makes the conversion the system's problem.
+            .background { KRAnchorTracker(view: $anchorView) }
             .onHover { hover = $0 }.opacity(enabled ? 1 : 0.45)
             .onDisappear { presenter.dismiss() }.accessibilityLabel(label).accessibilityValue(selection)
     }

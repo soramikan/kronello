@@ -61,7 +61,7 @@ mod metal {
     const SURFACE_BUDGET: u64 = 512 * 1024 * 1024;
     const MAX_FIT_ATTEMPTS: u32 = 8;
     fn is_surface_budget(e: &ServiceError) -> bool {
-        e.code == "UNSUPPORTED_FEATURE" && e.message.contains("surface budget")
+        e.code == "SURFACE_BUDGET_EXCEEDED"
     }
     fn halve(pixels: [u32; 2]) -> [u32; 2] {
         [(pixels[0] / 2).max(1), (pixels[1] / 2).max(1)]

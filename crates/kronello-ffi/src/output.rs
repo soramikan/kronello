@@ -130,16 +130,7 @@ mod native {
         }
     }
     fn gpu_error(e: kronello_gpu::GpuError) -> ServiceError {
-        let code = match &e {
-            kronello_gpu::GpuError::AdapterUnavailable(_) => "ADAPTER_UNAVAILABLE",
-            kronello_gpu::GpuError::DeviceUnavailable(_) => "DEVICE_UNAVAILABLE",
-            kronello_gpu::GpuError::UnsupportedFeature(_) => "UNSUPPORTED_FEATURE",
-            kronello_gpu::GpuError::InvalidInput(_) => "INVALID_INPUT",
-            kronello_gpu::GpuError::Readback(_) => "READBACK_FAILED",
-            kronello_gpu::GpuError::CacheIo(_) => "CACHE_IO",
-            kronello_gpu::GpuError::ObservationBusy => "RENDER_BACKEND_BUSY",
-        };
-        ServiceError::new(code, e.to_string())
+        ServiceError::new(e.code(), e.to_string())
     }
     impl OutputDevice for SyphonOutput {
         fn kind(&self) -> OutputDeviceKind {

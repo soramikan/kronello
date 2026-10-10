@@ -206,7 +206,7 @@ fn cpu_invalid_references_cycles_geometry_and_depth_are_typed() {
             },
             WorkingSpace::LinearRec709
         ),
-        Err(GpuError::UnsupportedFeature(_))
+        Err(GpuError::SurfaceBudgetExceeded)
     ));
 }
 #[test]
@@ -535,7 +535,7 @@ fn gpu_negative_hdr_rgb_and_alpha_underflow_have_explicit_semantics() {
             &isolated(),
             WorkingSpace::LinearRec709
         ),
-        Err(GpuError::UnsupportedFeature(_))
+        Err(GpuError::SurfaceBudgetExceeded)
     ));
 }
 

@@ -1108,14 +1108,8 @@ impl<'a> Service<'a> {
                 | BackendSelection::GpuResidentBgra8
                 | BackendSelection::GpuResidentNv12,
             ) => {
-                let gpu = (self.gpu_factory)().map_err(|e| {
-                    let code = match e {
-                        GpuError::AdapterUnavailable(_) => "ADAPTER_UNAVAILABLE",
-                        GpuError::DeviceUnavailable(_) => "DEVICE_UNAVAILABLE",
-                        _ => "GPU_ERROR",
-                    };
-                    ServiceError::new(code, e.to_string())
-                })?;
+                let gpu =
+                    (self.gpu_factory)().map_err(|e| ServiceError::new(e.code(), e.to_string()))?;
                 if matches!(self.backend, Backend::Selected(BackendSelection::Gpu)) {
                     configure_external_raster_cache(&gpu, project_path)?;
                 }

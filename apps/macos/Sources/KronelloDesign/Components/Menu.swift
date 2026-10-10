@@ -28,14 +28,16 @@ public struct KRMenu: View {
     @Environment(\.krPalette) private var p
     public let items: [KRMenuItem]
     private let onDismiss: () -> Void
-    private let onSubmenu: ((KRMenuItem, CGRect) -> Void)?
+    private let onSubmenu: ((KRMenuItem, NSView) -> Void)?
+    private let onLeafHover: (() -> Void)?
     @State private var current: String?
-    @State private var anchors: [String: CGRect] = [:]
+    @State private var anchors: [String: KRMenuAnchorBox] = [:]
     @FocusState private var focused: Bool
-    /// Submenu callbacks receive the row's frame in SwiftUI global coordinates.
+    /// Submenu callbacks receive the row's backing NSView for exact anchoring.
     public init(_ items: [KRMenuItem], current: String? = nil, onDismiss: @escaping () -> Void = {},
-                onSubmenu: ((KRMenuItem, CGRect) -> Void)? = nil) {
-        self.items = items; _current = State(initialValue: current); self.onDismiss = onDismiss; self.onSubmenu = onSubmenu
+                onSubmenu: ((KRMenuItem, NSView) -> Void)? = nil, onLeafHover: (() -> Void)? = nil) {
+        self.items = items; _current = State(initialValue: current); self.onDismiss = onDismiss
+        self.onSubmenu = onSubmenu; self.onLeafHover = onLeafHover
     }
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -48,7 +50,8 @@ public struct KRMenu: View {
                         .padding(.horizontal, KRSpace.space2).padding(.top, KRSpace.space1).padding(.bottom, 2)
                 case .action:
                     KRMenuEntry(item: item, active: current == item.id, activate: { current = item.id },
-                                dismiss: onDismiss, submenu: onSubmenu, registerAnchor: { anchors[item.id] = $0 })
+                                dismiss: onDismiss, submenu: onSubmenu, closeSubmenus: onLeafHover,
+                                registerAnchor: { anchors[item.id] = KRMenuAnchorBox($0) })
                 }
             }
         }.padding(KRSpace.space1).frame(minWidth: 220)
@@ -65,12 +68,15 @@ public struct KRMenu: View {
             }
             .onKeyPress(.return) {
                 guard let item = items.first(where: { $0.id == current && !$0.disabled }) else { return .ignored }
-                if !item.children.isEmpty, let anchor = anchors[item.id] { onSubmenu?(item, anchor); return .handled }
+                if !item.children.isEmpty {
+                    if let anchor = anchors[item.id]?.view { onSubmenu?(item, anchor) }
+                    return .handled
+                }
                 onDismiss(); item.action(); return .handled
             }
             .onKeyPress(.rightArrow) {
                 guard let item = items.first(where: { $0.id == current && !$0.disabled }), !item.children.isEmpty,
-                      let anchor = anchors[item.id] else { return .ignored }
+                      let anchor = anchors[item.id]?.view else { return .ignored }
                 onSubmenu?(item, anchor); return .handled
             }
             .onKeyPress(.escape) { onDismiss(); return .handled }
@@ -78,21 +84,29 @@ public struct KRMenu: View {
     }
 }
 
+/// Weak box so menu rows never keep their backing NSView alive past dismissal.
+final class KRMenuAnchorBox {
+    weak var view: NSView?
+    init(_ view: NSView) { self.view = view }
+}
+
 private struct KRMenuEntry: View {
     @Environment(\.krPalette) var p
-    @State private var anchor: CGRect = .zero
+    @State private var anchor: NSView?
+    @State private var hoverToken = UUID()
     let item: KRMenuItem
     let active: Bool
     let activate: () -> Void
     let dismiss: () -> Void
-    let submenu: ((KRMenuItem, CGRect) -> Void)?
-    let registerAnchor: (CGRect) -> Void
+    let submenu: ((KRMenuItem, NSView) -> Void)?
+    let closeSubmenus: (() -> Void)?
+    let registerAnchor: (NSView) -> Void
     var foreground: Color { active ? p.onSelection : item.destructive ? p.danger : p.ink }
     var auxiliary: Color { active ? p.onSelection : item.destructive ? p.danger : p.inkMuted }
     var body: some View {
         Button {
-            if !item.children.isEmpty { submenu?(item, anchor) }
-            else { dismiss(); item.action() }
+            if !item.children.isEmpty, let anchor { submenu?(item, anchor) }
+            else if item.children.isEmpty { dismiss(); item.action() }
         } label: {
             HStack(spacing: KRSpace.space2) {
                 Group { if let icon = item.checked ? KRIcon.check : item.icon { KRIconView(icon) } else { Color.clear } }
@@ -105,29 +119,68 @@ private struct KRMenuEntry: View {
                 .background(active ? p.selection : .clear, in: RoundedRectangle(cornerRadius: 4))
         }.buttonStyle(.plain).disabled(item.disabled).opacity(item.disabled ? 0.45 : 1)
             .krControlFocusRing(cornerRadius: 4).background {
-                GeometryReader { geometry in
-                    Color.clear.preference(key: KRMenuAnchorKey.self, value: geometry.frame(in: .global))
+                KRAnchorTracker { view in anchor = view; registerAnchor(view) }
+            }
+            .onHover { inside in
+                hoverToken = UUID()
+                guard inside, !item.disabled else { return }
+                activate()
+                // Match macOS menus: hovering a parent row opens its submenu
+                // and hovering a leaf row closes it, each after a short delay
+                // so diagonal movement toward the panel is not punished.
+                let token = hoverToken
+                if !item.children.isEmpty, let anchor, let submenu {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        if hoverToken == token { submenu(item, anchor) }
+                    }
+                } else if item.children.isEmpty, let closeSubmenus {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        if hoverToken == token { closeSubmenus() }
+                    }
                 }
-            }.onPreferenceChange(KRMenuAnchorKey.self) { rect in anchor = rect; registerAnchor(rect) }
-            .onHover { inside in if inside && !item.disabled { activate() } }
-            .onKeyPress(.rightArrow) { if !item.children.isEmpty { submenu?(item, anchor); return .handled }; return .ignored }
+            }
+            .onKeyPress(.rightArrow) {
+                if !item.children.isEmpty, let anchor { submenu?(item, anchor); return .handled }
+                return .ignored
+            }
             .accessibilityLabel(item.label).accessibilityValue(item.checked ? "選択中" : "")
     }
 }
 
-struct KRMenuAnchorKey: PreferenceKey {
-    static let defaultValue: CGRect = .zero
-    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
+/// Tracks the backing NSView filling the modified view so callers can anchor
+/// AppKit chrome (menus, popovers) to the exact on-screen position without
+/// relying on `.frame(in: .global)`, which is not reliable inside nested
+/// window scenes.
+struct KRAnchorTracker: NSViewRepresentable {
+    var report: (NSView) -> Void
+    init(view: Binding<NSView?>) {
+        report = { view.wrappedValue = $0 }
+    }
+    init(report: @escaping (NSView) -> Void) { self.report = report }
+    func makeNSView(context: Context) -> KRPassthroughView {
+        let view = KRPassthroughView()
+        DispatchQueue.main.async { report(view) }
+        return view
+    }
+    func updateNSView(_ nsView: KRPassthroughView, context: Context) {
+        DispatchQueue.main.async { self.report(nsView) }
+    }
+}
+final class KRPassthroughView: NSView {
+    // Never claims hits: the tracker is a pure geometry anchor layered behind
+    // the control it measures.
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 /// Presents Kronello menus in borderless child panels; no system NSMenu is used.
 @MainActor
 public final class KRMenuPresenter: ObservableObject {
     @Published public private(set) var isPresented = false
-    private var panels: [NSPanel] = []
+    private var panels: [KRMenuPanel] = []
     private var monitor: Any?
     private var resignation: NSObjectProtocol?
     private var onDismiss: (() -> Void)?
+    private var anchorView: NSView?
     public init() {}
 
     /// Anchors the menu below an AppKit view and constrains it to the visible screen.
@@ -135,27 +188,12 @@ public final class KRMenuPresenter: ObservableObject {
                         onDismiss: (() -> Void)? = nil) {
         guard let window = anchor.window else { return }
         let rect = window.convertToScreen(anchor.convert(anchor.bounds, to: nil))
-        present(items, screenRect: rect, in: window, theme: theme, current: current, onDismiss: onDismiss)
-    }
-
-    /// Anchors below a SwiftUI global frame measured in the window's content view, with a top-left origin.
-    public func present(_ items: [KRMenuItem], anchoredTo frame: CGRect, in window: NSWindow, theme: KRTheme,
-                        current: String? = nil, onDismiss: (() -> Void)? = nil) {
-        guard let content = window.contentView else { return }
-        present(items, screenRect: Self.screenRect(frame, in: content), in: window,
-                theme: theme, current: current, onDismiss: onDismiss)
-    }
-
-    private static func screenRect(_ frame: CGRect, in view: NSView) -> CGRect {
-        guard let window = view.window else { return .zero }
-        let local = view.isFlipped ? frame : CGRect(x: frame.minX, y: view.bounds.height - frame.maxY,
-                                                   width: frame.width, height: frame.height)
-        return window.convertToScreen(view.convert(local, to: nil))
+        present(items, screenRect: rect, in: window, theme: theme, anchor: anchor, current: current, onDismiss: onDismiss)
     }
 
     private func present(_ items: [KRMenuItem], screenRect: CGRect, in window: NSWindow, theme: KRTheme,
-                         current: String?, onDismiss: (() -> Void)?) {
-        dismiss(); self.onDismiss = onDismiss
+                         anchor: NSView? = nil, current: String?, onDismiss: (() -> Void)?) {
+        dismiss(); self.onDismiss = onDismiss; self.anchorView = anchor
         show(items, rect: screenRect, parent: window, theme: theme, current: current, submenu: false)
         isPresented = true
         monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown]) { [weak self] event in
@@ -165,7 +203,15 @@ public final class KRMenuPresenter: ObservableObject {
                 let child = self.panels.removeLast(); child.parent?.removeChildWindow(child); child.close()
                 self.panels.last?.makeKeyAndOrderFront(nil); return nil
             }
-            if event.type != .keyDown && !self.panels.contains(where: { $0.frame.contains(NSEvent.mouseLocation) }) { self.dismiss() }
+            if event.type != .keyDown {
+                let point = NSEvent.mouseLocation
+                // Pressing the anchor again toggles closed; swallow the event
+                // so the button's own action cannot re-present the menu.
+                if self.mouseDownOnAnchor() { self.dismiss(); return nil }
+                // Only the visible card counts as inside; the transparent
+                // padding strip exists for the shadow, not for hit testing.
+                if !self.panels.contains(where: { self.cardRect($0).contains(point) }) { self.dismiss() }
+            }
             return event
         }
         resignation = NotificationCenter.default.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
@@ -179,32 +225,55 @@ public final class KRMenuPresenter: ObservableObject {
         let panel = KRMenuPanel(contentRect: .zero, styleMask: [.borderless], backing: .buffered, defer: false)
         panel.isReleasedWhenClosed = false; panel.isOpaque = false; panel.backgroundColor = .clear
         panel.hasShadow = false; panel.appearance = theme.appearance; panel.level = .popUpMenu
+        let pad = submenu
+            ? NSEdgeInsets(top: KRSpace.space4, left: KRSpace.space1, bottom: KRSpace.space4, right: KRSpace.space4)
+            : NSEdgeInsets(top: KRSpace.space1, left: KRSpace.space4, bottom: KRSpace.space4, right: KRSpace.space4)
+        panel.cardInset = pad
         let menu = KRMenu(items, current: current, onDismiss: { [weak self] in self?.dismiss() }, onSubmenu: { [weak self, weak panel] item, row in
-            guard !submenu, let panel, let content = panel.contentView else { return }
-            self?.show(item.children, rect: Self.screenRect(row, in: content), parent: panel, theme: theme, current: nil, submenu: true)
-        }).padding(KRSpace.space4).krTheme(theme)
+            guard !submenu, let panel, let window = row.window else { return }
+            let rect = window.convertToScreen(row.convert(row.bounds, to: nil))
+            self?.show(item.children, rect: rect, parent: panel, theme: theme, current: nil, submenu: true)
+        }, onLeafHover: submenu ? nil : { [weak self] in self?.closeSubmenus() })
+            .padding(EdgeInsets(top: pad.top, leading: pad.left, bottom: pad.bottom, trailing: pad.right)).krTheme(theme)
         let hosting = NSHostingView(rootView: menu)
         panel.contentView = hosting
         let size = hosting.fittingSize
         let visible = screen.visibleFrame
-        var origin = CGPoint(x: submenu ? rect.maxX - KRSpace.space4 : rect.minX - KRSpace.space4,
-                             y: submenu ? rect.maxY - size.height + KRSpace.space4 : rect.minY - size.height + KRSpace.space4)
+        var origin = CGPoint(x: submenu ? rect.maxX - pad.left : rect.minX - pad.left,
+                             y: submenu ? rect.maxY - size.height + pad.top : rect.minY - size.height + pad.top)
         origin.x = min(max(origin.x, visible.minX), visible.maxX - size.width)
         origin.y = min(max(origin.y, visible.minY), visible.maxY - size.height)
         panel.setFrame(CGRect(origin: origin, size: size), display: false)
         parent.addChildWindow(panel, ordered: .above); panels.append(panel); panel.makeKeyAndOrderFront(nil)
+    }
+    /// Closes only submenu panels, leaving the root menu open.
+    private func closeSubmenus() {
+        while panels.count > 1 { let old = panels.removeLast(); old.parent?.removeChildWindow(old); old.close() }
+    }
+    private func cardRect(_ panel: KRMenuPanel) -> CGRect {
+        let frame = panel.frame, inset = panel.cardInset
+        return CGRect(x: frame.minX + inset.left, y: frame.minY + inset.bottom,
+                      width: frame.width - inset.left - inset.right, height: frame.height - inset.top - inset.bottom)
     }
     /// Closes all child panels and removes event monitors.
     public func dismiss() {
         if let monitor { NSEvent.removeMonitor(monitor); self.monitor = nil }
         if let resignation { NotificationCenter.default.removeObserver(resignation); self.resignation = nil }
         for panel in panels.reversed() { panel.parent?.removeChildWindow(panel); panel.close() }
-        panels.removeAll(); isPresented = false
+        panels.removeAll(); isPresented = false; anchorView = nil
         let callback = onDismiss; onDismiss = nil; callback?()
+    }
+
+    /// Clicks on the anchor itself must not dismiss: the button re-presents or
+    /// toggles on mouse-up, which matches NSPopUpButton behaviour.
+    private func mouseDownOnAnchor() -> Bool {
+        guard let anchorView, let window = anchorView.window else { return false }
+        return window.convertToScreen(anchorView.convert(anchorView.bounds, to: nil)).contains(NSEvent.mouseLocation)
     }
 }
 
 private final class KRMenuPanel: NSPanel {
+    var cardInset = NSEdgeInsetsZero
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 }
