@@ -4,7 +4,48 @@ use kronello_time::{Rational, Time, TimeMap};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+/// Legacy persisted meaning; never silently upgrade existing assets.
 pub const AUDIO_ANALYSIS_VERSION: u32 = 1;
+pub const AUDIO_ANALYSIS_SUPPORTED_VERSION: u32 = 2;
+pub const AUDIO_ANALYSIS_MAX_SAMPLES: usize = 28_800_000;
+pub const AUDIO_ANALYSIS_MAX_WINDOWS: usize = 65_536;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, thiserror::Error)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum AudioAnalysisError {
+    #[error("audio analysis version {actual} is unsupported; allowed versions: 1..=2")]
+    Version { actual: u32 },
+    #[error("audio analysis sample_rate must be 48000 Hz; got {actual}")]
+    SampleRate { actual: u32 },
+    #[error("audio analysis window must be a power of two in 32..=8192 samples; got {actual}")]
+    Window { actual: u32 },
+    #[error("audio analysis hop must be in 1..={allowed} samples for this version; got {actual}")]
+    Hop { actual: u32, allowed: u32 },
+    #[error("audio analysis bands must contain 0..=32 entries; got {actual}")]
+    Bands { actual: usize },
+    #[error(
+        "audio analysis bands[{index}] must satisfy 0 <= low < high <= 24000 Hz; got [{low}, {high}]"
+    )]
+    Band { index: usize, low: u32, high: u32 },
+    #[error(
+        "audio analysis {resource} budget exceeded: required {required}, allowed {allowed}; increase hop, reduce window/bands or shorten input (version 2 supports full songs)"
+    )]
+    Budget {
+        resource: String,
+        required: usize,
+        allowed: usize,
+    },
+}
+impl AudioAnalysisError {
+    pub fn is_budget(&self) -> bool {
+        matches!(self, Self::Budget { .. })
+    }
+}
+impl From<AudioAnalysisError> for ProjectError {
+    fn from(error: AudioAnalysisError) -> Self {
+        Self::InvalidDocument(error.to_string())
+    }
+}
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct AudioAnalysisConfig {
@@ -18,24 +59,84 @@ pub struct AudioAnalysisConfig {
     pub time_map: TimeMap,
 }
 impl AudioAnalysisConfig {
-    pub fn validate(&self) -> Result<(), ProjectError> {
-        if self.version != AUDIO_ANALYSIS_VERSION
-            || self.sample_rate != 48000
-            || !(32..=8192).contains(&self.window)
-            || !self.window.is_power_of_two()
-            || self.hop == 0
-            || self.hop > self.window
-            || self.bands.len() > 32
-            || self
-                .bands
-                .iter()
-                .any(|[a, b]| a >= b || *b > self.sample_rate / 2)
-        {
-            return Err(ProjectError::InvalidDocument(
-                "invalid audio analysis config".into(),
-            ));
+    pub fn supported_version(&self) -> bool {
+        matches!(
+            self.version,
+            AUDIO_ANALYSIS_VERSION..=AUDIO_ANALYSIS_SUPPORTED_VERSION
+        )
+    }
+    pub fn validate(&self) -> Result<(), AudioAnalysisError> {
+        if !self.supported_version() {
+            return Err(AudioAnalysisError::Version {
+                actual: self.version,
+            });
+        }
+        if self.sample_rate != 48000 {
+            return Err(AudioAnalysisError::SampleRate {
+                actual: self.sample_rate,
+            });
+        }
+        if !(32..=8192).contains(&self.window) || !self.window.is_power_of_two() {
+            return Err(AudioAnalysisError::Window {
+                actual: self.window,
+            });
+        }
+        let allowed = if self.version == 1 {
+            self.window
+        } else {
+            AUDIO_ANALYSIS_MAX_SAMPLES as u32
+        };
+        if self.hop == 0 || self.hop > allowed {
+            return Err(AudioAnalysisError::Hop {
+                actual: self.hop,
+                allowed,
+            });
+        }
+        if self.bands.len() > 32 {
+            return Err(AudioAnalysisError::Bands {
+                actual: self.bands.len(),
+            });
+        }
+        for (index, &[low, high]) in self.bands.iter().enumerate() {
+            if low >= high || high > 24000 {
+                return Err(AudioAnalysisError::Band { index, low, high });
+            }
         }
         Ok(())
+    }
+    /// Shared preflight for producers and persisted assets, before output allocation.
+    pub fn validate_samples(&self, samples: usize) -> Result<(), AudioAnalysisError> {
+        self.validate()?;
+        let check = |resource: &str, required, allowed| {
+            if required > allowed {
+                Err(AudioAnalysisError::Budget {
+                    resource: resource.into(),
+                    required,
+                    allowed,
+                })
+            } else {
+                Ok(())
+            }
+        };
+        check("sample_count", samples, AUDIO_ANALYSIS_MAX_SAMPLES)?;
+        check(
+            "windows",
+            samples.div_ceil(self.hop as usize),
+            AUDIO_ANALYSIS_MAX_WINDOWS,
+        )?;
+        // Validated dimensions and bounded sample count make this arithmetic fit usize.
+        let work = self
+            .work_for_samples(samples)
+            .expect("bounded analysis work");
+        check(
+            "work",
+            work,
+            if self.version == 1 {
+                100_000_000
+            } else {
+                1_500_000_000
+            },
+        )
     }
     /// Both channel FFTs and all band/bin membership operations, charged before allocation.
     pub fn work_for_samples(&self, samples: usize) -> Option<usize> {
@@ -99,7 +200,7 @@ pub enum AudioFeature {
 }
 impl AudioAnalysisDataAsset {
     pub fn validate(&self) -> Result<(), ProjectError> {
-        self.config.validate()?;
+        self.config.validate_samples(self.sample_count as usize)?;
         let hash = match &self.source {
             AudioAnalysisSource::Asset { content_hash, .. } => content_hash,
             AudioAnalysisSource::Bus {
@@ -121,12 +222,6 @@ impl AudioAnalysisDataAsset {
                 .bytes()
                 .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
             || self.start_sample < 0
-            || count > 65536
-            || self
-                .config
-                .work_for_samples(self.sample_count as usize)
-                .is_none_or(|w| w > 100_000_000)
-            || self.sample_count > 28_800_000
             || self.frames.len() as u64 != count
         {
             return Err(ProjectError::InvalidDocument(

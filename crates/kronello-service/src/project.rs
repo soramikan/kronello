@@ -262,6 +262,13 @@ pub(crate) fn import_with_payload(
     r: ImportRequest,
     payload: Value,
 ) -> Result<ProjectInfo, ServiceError> {
+    import_with_payload_session(r, payload, None)
+}
+pub(crate) fn import_with_payload_session(
+    r: ImportRequest,
+    payload: Value,
+    session_id: Option<Uuid>,
+) -> Result<ProjectInfo, ServiceError> {
     key(r.idempotency_key.as_deref())?;
     let path = target(&r.project)?;
     let base = parse_revision(&r.base_revision)?;
@@ -290,7 +297,7 @@ pub(crate) fn import_with_payload(
         )?;
         store.import_json_with_receipt_checked::<ServiceError>(
             base,
-            Uuid::new_v4(),
+            session_id.unwrap_or_else(Uuid::new_v4),
             &serde_json::to_string(&r.document)?,
             receipt(r.idempotency_key.clone(), payload.clone(), &result)?,
             |previous| {

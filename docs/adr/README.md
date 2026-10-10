@@ -111,7 +111,7 @@
 | [0093](0093-m4-reference-preview-performance-target.md) | M4 基準プレビューの性能目標 | 採用 | 2026-10-06 |
 | [0094](0094-explicit-path-operations-and-bounded-svg.md) | 明示的なPath操作と限定SVG adapter | 採用 | 2026-10-06 |
 | [0095](0095-logical-text-selectors-and-vertical-ruby.md) | 論理文字selectorと縦書き・ルビ | 採用 | 2026-10-06 |
-| [0096](0096-offline-audio-feature-assets.md) | 不変の事前音声特徴量を版付きDataAssetとして保存 | 採用 | 2026-10-06 |
+| [0096](0096-offline-audio-feature-assets.md) | 不変の事前音声特徴量を版付きDataAssetとして保存 | 部分置換（0142） | 2026-10-06 |
 | [0097](0097-read-only-single-graph-render-plans.md) | 読み取り専用の単一graph実行計画 | 採用 | 2026-10-06 |
 | [0098](0098-explicit-framebridge-path-inventory.md) | FrameBridgeの具体経路一覧とgeneric VideoToolbox拒否 | 採用 | 2026-10-06 |
 | [0099](0099-authored-matte-relations.md) | 保存するMatte関係 | 採用 | 2026-10-06 |
@@ -159,6 +159,8 @@
 | [0140](0140-media-session-resident-preview.md) | メディアセッションの検証メモ化とプレビューの GPU resident デコード | 採用 | 2026-10-09 |
 
 | [0141](0141-peak-live-render-surfaces.md) | レンダー面予算を同時保持寿命に合わせる | 採用 | 2026-10-10 |
+
+| [0142](0142-full-song-audio-analysis.md) | 楽曲全体を扱う音声解析版2と具体的な診断 | 採用 | 2026-10-10 |
 
 ## 追加と変更の規則
 

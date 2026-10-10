@@ -16,6 +16,9 @@ pub fn analyze_audio_channels(
     start_sample: i64,
     buffer: &ChannelBuffer,
 ) -> Result<AudioAnalysisDataAsset, AudioError> {
+    config
+        .validate_samples(buffer.frame_count())
+        .map_err(analysis_error)?;
     let buffer = match buffer.stereo_frames() {
         Some(frames) => AudioBuffer::new(frames)?,
         None => AudioBuffer::new(
@@ -45,15 +48,9 @@ pub fn analyze_audio(
     let n = config.window as usize;
     let hop = config.hop as usize;
     let count = buffer.frames().len().div_ceil(hop);
-    if count > 65536
-        || config
-            .work_for_samples(buffer.frames().len())
-            .is_none_or(|w| w > 100_000_000)
-    {
-        return Err(AudioError::BudgetExceeded(
-            "analysis FFT operation budget".into(),
-        ));
-    }
+    config
+        .validate_samples(buffer.frames().len())
+        .map_err(analysis_error)?;
     let mut frames = Vec::with_capacity(count);
     let mut previous_rms = 0.0;
     let mut last_beat: Option<usize> = None;
@@ -142,5 +139,13 @@ fn fft(re: &mut [f64], im: &mut [f64]) {
             }
         }
         length *= 2;
+    }
+}
+
+fn analysis_error(error: kronello_model::AudioAnalysisError) -> AudioError {
+    if error.is_budget() {
+        AudioError::BudgetExceeded(error.to_string())
+    } else {
+        AudioError::InvalidInput(error.to_string())
     }
 }

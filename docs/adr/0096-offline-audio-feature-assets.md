@@ -1,6 +1,6 @@
 # ADR-0096: 不変の事前音声特徴量を版付き DataAsset として保存する
 
-- 状態: 採用
+- 状態: 部分置換（[ADR-0142](0142-full-song-audio-analysis.md): 新規解析の版2・hop/work上限・session指定。以下の版1契約と特徴量の意味は維持）
 - 日付: 2026-10-06
 - 対象: AUDIO-001
 

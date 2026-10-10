@@ -25,6 +25,9 @@ pub enum AudioAnalyzeInput {
 pub struct AudioAnalyzeRequest {
     pub project: PathBuf,
     pub base_revision: String,
+    /// Persisted event author; omission retains the legacy generated session.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<uuid::Uuid>,
     pub id: AssetId,
     pub input: AudioAnalyzeInput,
     pub config: AudioAnalysisConfig,
@@ -60,10 +63,7 @@ impl crate::Service<'_> {
             })?;
             return Ok(ResultData::Project(serde_json::from_value(result)?));
         }
-        request
-            .config
-            .validate()
-            .map_err(|e| ServiceError::invalid(e.to_string()))?;
+        request.config.validate().map_err(analysis_error)?;
         let stored = kronello_store::ProjectStore::read_snapshot(&request.project)?;
         if stored.revision.to_string() != request.base_revision {
             return Err(ServiceError::new(
@@ -121,21 +121,13 @@ impl crate::Service<'_> {
                     .end
                     .checked_sub(samples.start)
                     .and_then(|n| usize::try_from(n).ok())
-                    .filter(|n| *n <= MAX_AUDIO_FRAMES)
                     .ok_or_else(|| {
                         ServiceError::new("AUDIO_BUDGET_EXCEEDED", "analysis bus frames")
                     })?;
-                if length.div_ceil(request.config.hop as usize) > 65536
-                    || request
-                        .config
-                        .work_for_samples(length)
-                        .is_none_or(|w| w > 100_000_000)
-                {
-                    return Err(ServiceError::new(
-                        "AUDIO_BUDGET_EXCEEDED",
-                        "analysis work budget",
-                    ));
-                }
+                request
+                    .config
+                    .validate_samples(length)
+                    .map_err(analysis_error)?;
                 if samples.start < 0 {
                     return Err(ServiceError::invalid("negative bus start"));
                 }
@@ -169,6 +161,10 @@ impl crate::Service<'_> {
                 )
             }
         };
+        request
+            .config
+            .validate_samples(buffer.frame_count())
+            .map_err(analysis_error)?;
         let data = kronello_audio::analyze_audio_channels(
             request.id,
             source,
@@ -179,7 +175,7 @@ impl crate::Service<'_> {
         .map_err(audio_error)?;
         let mut document = stored.document;
         document.audio_analyses.push(DocumentObject::Known(data));
-        crate::project::import_with_payload(
+        crate::project::import_with_payload_session(
             ImportRequest {
                 project: request.project,
                 base_revision: request.base_revision,
@@ -188,10 +184,24 @@ impl crate::Service<'_> {
                 plan_hash: None,
             },
             payload,
+            request.session_id,
         )
         .map(ResultData::Project)
     }
 }
 fn audio_error(e: kronello_audio::AudioError) -> ServiceError {
     ServiceError::new(e.code(), e.to_string())
+}
+
+fn analysis_error(error: kronello_model::AudioAnalysisError) -> ServiceError {
+    let mut result = ServiceError::new(
+        if error.is_budget() {
+            "AUDIO_BUDGET_EXCEEDED"
+        } else {
+            "INVALID_REQUEST"
+        },
+        error.to_string(),
+    );
+    result.details = Some(serde_json::to_value(error).expect("serializable analysis diagnostic"));
+    result
 }

@@ -488,6 +488,14 @@
         },
         "project": {
           "type": "string"
+        },
+        "session_id": {
+          "description": "Persisted event author; omission retains the legacy generated session.",
+          "format": "uuid",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -13748,6 +13756,14 @@
             },
             "project": {
               "type": "string"
+            },
+            "session_id": {
+              "description": "Persisted event author; omission retains the legacy generated session.",
+              "format": "uuid",
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
           "required": [
