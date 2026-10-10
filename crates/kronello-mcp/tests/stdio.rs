@@ -8,6 +8,34 @@ use kronello_mcp::LEGACY_PROTOCOL_VERSIONS as SUPPORTED_PROTOCOL_VERSIONS;
 use serde_json::{Value, json};
 
 #[test]
+fn media_import_is_discovered_and_dispatches_typed_errors() {
+    let mut client = Client::spawn(&[], false);
+    client.ready(SUPPORTED_PROTOCOL_VERSIONS[0]);
+    let tools = client.schemas();
+    assert_eq!(
+        tools["media.import"]["_meta"]["kronello"]["readOnlyProject"],
+        false
+    );
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("import.kronello");
+    let doc: Value =
+        serde_json::from_str(include_str!("../../../examples/m1-demo.project.json")).unwrap();
+    client.call("project.create", json!({"project":path,"document":doc}));
+    let request = json!({"project":path,"base_revision":"1","session_id":uuid::Uuid::new_v4(),
+        "idempotency_key":"import","asset":uuid::Uuid::new_v4(),"path":dir.path().join("missing.mov")});
+    jsonschema::validator_for(&tools["media.import"]["inputSchema"])
+        .unwrap()
+        .validate(&request)
+        .unwrap();
+    let result = client.call("media.import", request);
+    validate(&tools["media.import"], &result);
+    assert_eq!(
+        result["structuredContent"]["error"]["code"],
+        "ASSET_MISSING"
+    );
+}
+
+#[test]
 fn search_paging_and_tag_commands_are_discovered_and_schema_validated() {
     let mut client = Client::spawn(&[], false);
     client.ready(SUPPORTED_PROTOCOL_VERSIONS[0]);

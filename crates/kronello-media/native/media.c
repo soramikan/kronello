@@ -872,12 +872,35 @@ int km_audio_encode(Km *k,const char *path,const int32_t *samples,int64_t count,
 AVFormatContext *km_probe_open(Km *k,const char *path) {
     AVFormatContext *format=NULL;AVDictionary *options=NULL;
     k->av_dict_set(&options,"protocol_whitelist","file",0);
-    k->av_dict_set(&options,"format_whitelist","nut,matroska,webm,mov,avi,mpegts,mpeg,ogg,wav,mxf,mp3,flac,gif",0);
+    k->av_dict_set(&options,"format_whitelist","nut,matroska,webm,mov,avi,mpegts,mpeg,ogg,wav,png_pipe,jpeg_pipe,mxf,mp3,flac,gif",0);
     int ret=k->avformat_open_input(&format,path,NULL,&options);k->av_dict_free(&options);
     if(ret<0){fail(k,ret,"probe open");goto failed;}
     ret=k->avformat_find_stream_info(format,NULL);if(ret<0){fail(k,ret,"probe streams");goto failed;}
     return format;
 failed:k->avformat_close_input(&format);return NULL;
+}
+/* Import validates the first decoded frame of each A/V stream. The demuxer,
+ * not the filename extension or a missing duration, identifies still images. */
+int km_probe_import_kind(Km *k,const char *path) {
+    AVFormatContext *format=km_probe_open(k,path);
+    if(!format)return -1;
+    int kind=-1;
+    if(format->nb_streams>1024){fail(k,AVERROR_INVALIDDATA,"stream budget exceeded");goto done;}
+    for(unsigned i=0;i<format->nb_streams;++i) {
+        AVStream *s=format->streams[i];
+        enum AVMediaType type=s->codecpar->codec_type;
+        if(type!=AVMEDIA_TYPE_VIDEO && type!=AVMEDIA_TYPE_AUDIO)continue;
+        Decoder *d=decoder_open(k,path,type,(int)i);
+        if(!d){kind=-1;goto done;}
+        int ret=km_decoder_next(d);
+        km_decoder_close(d);
+        if(ret<=0){if(ret==0)fail(k,AVERROR_INVALIDDATA,"empty media stream");kind=-1;goto done;}
+        if(type==AVMEDIA_TYPE_VIDEO && !(s->disposition & AV_DISPOSITION_ATTACHED_PIC))kind=0;
+        else if(kind<0 && type==AVMEDIA_TYPE_AUDIO)kind=1;
+    }
+    if(kind==0 && (!strcmp(format->iformat->name,"png_pipe") || !strcmp(format->iformat->name,"jpeg_pipe")))kind=2;
+    if(kind<0)fail(k,AVERROR_INVALIDDATA,"no video or audio stream");
+done:k->avformat_close_input(&format);return kind;
 }
 void km_probe_close(Km *k,AVFormatContext *format) { k->avformat_close_input(&format); }
 int km_probe_count(AVFormatContext *format) { return (int)format->nb_streams; }

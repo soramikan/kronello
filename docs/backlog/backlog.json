@@ -5,7 +5,7 @@
   "status": "implementation_started",
   "description": "設計と実装の計画・進捗。このファイルがバックログの正本であり、GitHub等へ登録したIssueではない。",
   "specification": "docs/architecture/",
-  "task_count": 145,
+  "task_count": 146,
   "items": [
     {
       "id": "ARC-001",
@@ -2435,6 +2435,24 @@
         "約4分の生成PCMを共有audio.analyzeで解析・保存し複数時刻の式から参照できる",
         "設定の各不正値と予算超過を具体的な型付き診断で返し、session_idを保存イベントと冪等再送に反映する",
         "ADR・設計・検証記録・公開schema・Swift APIを更新し指定検証を記録する"
+      ]
+    },
+    {
+      "id": "MEDIA-006",
+      "milestone": "M10",
+      "priority": "P0",
+      "area": "media",
+      "title": "共有 media.import と GUI のメディア読み込み",
+      "status": "in_progress",
+      "dependencies": [
+        "MEDIA-001",
+        "FLOW-002"
+      ],
+      "acceptance_criteria": [
+        "ローカルファイルを native probe・hash 検証して共有 AssetSet で登録し、revision・再送・Undo と型付き失敗を検証する",
+        "CLI・MCP・公開 schema・Swift API に公開する",
+        "Media / Edit の選択・複数選択・Finder drop を共有 API へ接続する",
+        "Rust・Swift・生成物・バックログの検証結果を docs/testing/media-006.md に記録する"
       ]
     }
   ]

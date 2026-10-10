@@ -338,6 +338,7 @@ impl<'de> Deserialize<'de> for Request {
             "render.explain" => payload(&fields).map(Self::RenderExplain),
             "property.sample" => payload(&fields).map(Self::PropertySample),
             "capabilities.get" => payload(&fields).map(Self::CapabilitiesGet),
+            "media.import" => payload(&fields).map(Self::MediaImport),
             "lut.import" => payload(&fields).map(Self::LutImport),
             "inspect.scopes" => payload(&fields).map(Self::InspectScopes),
             "io.output.list" => payload(&fields).map(Self::IoOutputList),

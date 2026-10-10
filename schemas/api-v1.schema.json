@@ -10371,6 +10371,42 @@
       ],
       "type": "object"
     },
+    "MediaImportRequest": {
+      "additionalProperties": false,
+      "description": "Register a local media file using service-probed metadata and content hash.",
+      "properties": {
+        "asset": {
+          "$ref": "#/$defs/AssetId",
+          "description": "Id of the probed media record the import upserts."
+        },
+        "base_revision": {
+          "type": "string"
+        },
+        "idempotency_key": {
+          "type": "string"
+        },
+        "path": {
+          "description": "Local media locator; stored relative to the project directory when it\nlives inside it, otherwise absolute (the relink/search convention).",
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "session_id": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "base_revision",
+        "session_id",
+        "idempotency_key",
+        "path",
+        "asset"
+      ],
+      "type": "object"
+    },
     "MediaNode": {
       "additionalProperties": false,
       "description": "Explicit media stream; AUDIO-003 executes audio only.",
@@ -16182,6 +16218,47 @@
             "project",
             "sequence",
             "format"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Register a local media file using service-probed metadata and content hash.",
+          "properties": {
+            "asset": {
+              "$ref": "#/$defs/AssetId",
+              "description": "Id of the probed media record the import upserts."
+            },
+            "base_revision": {
+              "type": "string"
+            },
+            "idempotency_key": {
+              "type": "string"
+            },
+            "operation": {
+              "const": "media.import",
+              "type": "string"
+            },
+            "path": {
+              "description": "Local media locator; stored relative to the project directory when it\nlives inside it, otherwise absolute (the relink/search convention).",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "session_id": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "project",
+            "base_revision",
+            "session_id",
+            "idempotency_key",
+            "path",
+            "asset"
           ],
           "type": "object"
         },

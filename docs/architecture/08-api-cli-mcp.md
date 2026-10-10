@@ -691,3 +691,31 @@ evaluator / render は常に `UNSUPPORTED_FEATURE` で拒否し、実行入口�
 helper の起動失敗・crash・timeout・protocol 違反は `PLUGIN_FAILED` /
 `PLUGIN_TIMEOUT` / `PLUGIN_PROTOCOL` / `INVALID_REQUEST` の型付きエラー。
 検証は [AUDIO-011](../testing/audio-011.md) を参照。
+
+## MEDIA-006: ローカルメディアの取り込み
+
+`media.import` は `{project, base_revision, session_id, idempotency_key, asset, path}` を受け、
+`lut.import` と同じ `ResultData::Edit(Event)` を返す。`asset` は呼び出し側が割り当てる UUID。
+service がファイルの canonical path・SHA-256・native FFmpeg probe から Asset を作り、
+共有 `AssetSet` の plan/apply で保存する。同じ ID は既存 AssetSet と同じ置換動作となる。
+相対 locator はプロジェクトのディレクトリ内にある場合だけ保存し、絶対 locator も保持する。
+stream index・codec・有理数 time_base/duration/start・画像サイズ・色タグを保存する。
+コンテナの duration は stream duration がない場合だけ補う。
+
+種類は demuxer と A/V stream から判定する。映像付き素材は video、音声のみは audio、
+静止画 demuxer は image。各 A/V stream の先頭フレームをデコードして空 stream・デコーダ不在を拒否する。
+全フレームの完全性検査ではない。静止画は既存 image decoder の契約（PNG、対応色情報）も検証し、
+JPEG・アニメーション・未対応 ICC 等は `UNSUPPORTED_FEATURE`。カメラ RAW の自動登録は未対応。
+非メディア・破損入力は `DECODE_ERROR`、欠落は `ASSET_MISSING`、ディレクトリは
+`INVALID_MEDIA_INPUT`、読み取り中の変更は `ASSET_HASH_MISMATCH`。失敗時は編集しない。
+URL・任意 FFmpeg 引数・shell は既存の local locator / strict wire 境界で拒否する。
+
+同じ要求・key の再送は保存済み receipt を先に読み、後続編集や素材の削除後も元の Event を返す。
+異なる要求で同じ key は `IDEMPOTENCY_KEY_REUSED`、未適用の古い revision は `REVISION_CONFLICT`。
+Undo は通常の `edit.undo` を使う。
+
+CLI は `kronello media import --project P --asset UUID --path FILE`。
+省略した `--base-revision` は直前の `project.info`、`--session-id` / `--idempotency-key` は新規 UUID。
+明示した値も利用できる。`media import --request-json '{...}'`、tag 付き JSON / stdin も同じ API を使う。
+フラグと JSON の混在・重複フラグは拒否する。MCP は共有 registry から同名 tool を公開する。
+検証は [MEDIA-006](../testing/media-006.md)。

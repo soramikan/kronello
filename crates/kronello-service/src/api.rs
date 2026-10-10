@@ -155,6 +155,7 @@ macro_rules! commands {
             ("captions.import_plan", true, CaptionsImportPlanRequest, EditPlan),
             ("captions.import", false, CaptionsImportRequest, kronello_store::Event),
             ("captions.export", true, CaptionsExportRequest, CaptionsExportResult),
+            ("media.import", false, MediaImportRequest, kronello_store::Event),
             ("lut.import", false, LutImportRequest, kronello_store::Event),
             ("inspect.scopes", true, InspectScopesRequest, InspectScopesResult),
             ("io.output.list", true, IoOutputListRequest, IoOutputListResult),
