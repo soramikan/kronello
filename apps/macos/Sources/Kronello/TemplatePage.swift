@@ -112,7 +112,10 @@ struct TemplatePage: View {
         }
     }
     func seconds(_ raw: [String:Any]) -> Double { (Double(raw.string("num")) ?? 0) / max(1,Double(raw.string("den")) ?? 1) }
-    func rational(_ raw: [String: Any]) -> String { raw.string("num") + "/" + raw.string("den") + "s" }
+    func rational(_ raw: [String: Any]) -> String {
+        let num = raw.string("num"), den = raw.string("den")
+        return (num.isEmpty || den.isEmpty) ? "—" : num + "/" + den + "s"
+    }
     var migrationSheet: some View {
         let raw = model.migration ?? [:]
         return KRDialog("移行計画", body: "差分を確認して適用してください。既存の配置は明示した適用まで変わりません。",
