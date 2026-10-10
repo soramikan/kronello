@@ -1,25 +1,36 @@
 #!/usr/bin/env python3
-"""Generate SwiftUI shapes for the vendored Lucide icons.
+"""Vendor the full Lucide set and generate the SwiftUI icon table.
 
 Reads third_party/lucide/icons/*.svg (24x24 stroke icons) and writes
-apps/macos/Sources/KronelloDesign/Generated/Icons.swift. Elliptical arcs are
-converted to cubic Béziers here so the Swift side only needs lines, curves,
-ellipses and rounded rectangles.
+apps/macos/Sources/KronelloDesign/Generated/Icons.swift. Every outline is
+reduced to absolute moves, lines, cubic Béziers, ellipses and rounded
+rectangles (arcs and quadratic curves become cubics) and stored as a compact
+path string that KRIcon decodes at draw time.
 
-Usage: gen_lucide_icons.py [--check]
+`KRIcon.documented` lists the icons named in docs/design-system/icons.md, in
+table order; generation fails if the table names an icon that is not vendored.
+
+Usage:
+    gen_lucide_icons.py            # regenerate Icons.swift
+    gen_lucide_icons.py --check    # fail when Icons.swift is out of date
+    gen_lucide_icons.py --vendor   # replace third_party/lucide with every icon of the pinned lucide-static
 """
 
 from __future__ import annotations
 
+import io
 import math
 import re
+import shutil
 import sys
+import tarfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 ICONS = ROOT / "third_party" / "lucide" / "icons"
 OUT = ROOT / "apps" / "macos" / "Sources" / "KronelloDesign" / "Generated" / "Icons.swift"
+ICON_DOC = ROOT / "docs" / "design-system" / "icons.md"
 NS = "{http://www.w3.org/2000/svg}"
 
 TOKEN = re.compile(r"[A-Za-z]|-?(?:\d+\.\d*|\.\d+|\d+)(?:[eE][-+]?\d+)?")
@@ -30,8 +41,8 @@ def fmt(v: float) -> str:
     return "0" if s in ("-0", "") else s
 
 
-def pt(x: float, y: float) -> str:
-    return f"CGPoint(x: {fmt(x)}, y: {fmt(y)})"
+def op(code: str, *values: float) -> str:
+    return " ".join([code, *(fmt(v) for v in values)])
 
 
 def arc_to_cubics(x1, y1, rx, ry, phi_deg, fa, fs, x2, y2):
@@ -94,6 +105,8 @@ def path_ops(d: str) -> list[str]:
     toks = TOKEN.findall(d)
     i, cmd = 0, None
     x = y = sx = sy = 0.0
+    # Last control point of the previous curve, for the S / T reflections.
+    last_cubic = last_quad = None
     ops: list[str] = []
 
     def num():
@@ -102,57 +115,96 @@ def path_ops(d: str) -> list[str]:
         i += 1
         return v
 
+    def flag():
+        # Arc flags are single digits and may be packed with what follows ("011.5").
+        nonlocal i
+        tok = toks[i]
+        if len(tok) > 1:
+            toks[i] = tok[1:]
+        else:
+            i += 1
+        return int(tok[0])
+
+    def quad(qx, qy, ex, ey):
+        # A quadratic segment as the equivalent cubic.
+        c1 = (x + 2 / 3 * (qx - x), y + 2 / 3 * (qy - y))
+        c2 = (ex + 2 / 3 * (qx - ex), ey + 2 / 3 * (qy - ey))
+        ops.append(op("C", *c1, *c2, ex, ey))
+
     while i < len(toks):
         if re.fullmatch(r"[A-Za-z]", toks[i]):
             cmd = toks[i]
             i += 1
         rel = cmd.islower()
         c = cmd.upper()
+        cubic = quadratic = None
         if c == "Z":
-            ops.append("p.closeSubpath()")
+            ops.append("Z")
             x, y = sx, sy
-            continue
-        if c == "M":
+        elif c == "M":
             nx, ny = num(), num()
             if rel:
                 nx, ny = x + nx, y + ny
             x, y, sx, sy = nx, ny, nx, ny
-            ops.append(f"p.move(to: {pt(x, y)})")
+            ops.append(op("M", x, y))
             cmd = "l" if rel else "L"
         elif c == "L":
             nx, ny = num(), num()
             if rel:
                 nx, ny = x + nx, y + ny
             x, y = nx, ny
-            ops.append(f"p.addLine(to: {pt(x, y)})")
-        elif c == "H":
-            nx = num()
-            x = x + nx if rel else nx
-            ops.append(f"p.addLine(to: {pt(x, y)})")
-        elif c == "V":
-            ny = num()
-            y = y + ny if rel else ny
-            ops.append(f"p.addLine(to: {pt(x, y)})")
-        elif c == "C":
-            v = [num() for _ in range(6)]
-            if rel:
-                v = [v[0] + x, v[1] + y, v[2] + x, v[3] + y, v[4] + x, v[5] + y]
-            ops.append(f"p.addCurve(to: {pt(v[4], v[5])}, control1: {pt(v[0], v[1])}, control2: {pt(v[2], v[3])})")
+            ops.append(op("L", x, y))
+        elif c in "HV":
+            v = num()
+            if c == "H":
+                x = x + v if rel else v
+            else:
+                y = y + v if rel else v
+            ops.append(op("L", x, y))
+        elif c in "CS":
+            if c == "C":
+                v = [num() for _ in range(6)]
+                if rel:
+                    v = [v[0] + x, v[1] + y, v[2] + x, v[3] + y, v[4] + x, v[5] + y]
+            else:
+                v = [num() for _ in range(4)]
+                if rel:
+                    v = [v[0] + x, v[1] + y, v[2] + x, v[3] + y]
+                rx1, ry1 = (2 * x - last_cubic[0], 2 * y - last_cubic[1]) if last_cubic else (x, y)
+                v = [rx1, ry1, *v]
+            ops.append(op("C", *v))
+            cubic = (v[2], v[3])
             x, y = v[4], v[5]
+        elif c in "QT":
+            if c == "Q":
+                qx, qy, ex, ey = (num() for _ in range(4))
+                if rel:
+                    qx, qy, ex, ey = qx + x, qy + y, ex + x, ey + y
+            else:
+                ex, ey = num(), num()
+                if rel:
+                    ex, ey = ex + x, ey + y
+                qx, qy = (2 * x - last_quad[0], 2 * y - last_quad[1]) if last_quad else (x, y)
+            quad(qx, qy, ex, ey)
+            quadratic = (qx, qy)
+            x, y = ex, ey
         elif c == "A":
-            rx, ry, rot, fa, fs, ex, ey = (num() for _ in range(7))
+            rx, ry, rot = num(), num(), num()
+            fa, fs = flag(), flag()
+            ex, ey = num(), num()
             if rel:
                 ex, ey = x + ex, y + ey
             for seg in arc_to_cubics(x, y, rx, ry, rot, int(fa), int(fs), ex, ey):
-                if seg[0] == "L":
-                    ops.append(f"p.addLine(to: {pt(seg[1], seg[2])})")
-                else:
-                    _, a, b, cc, dd, e, f = seg
-                    ops.append(f"p.addCurve(to: {pt(e, f)}, control1: {pt(a, b)}, control2: {pt(cc, dd)})")
+                ops.append(op("L", seg[1], seg[2]) if seg[0] == "L" else op("C", *seg[1:]))
             x, y = ex, ey
         else:
             raise ValueError(f"unsupported path command {cmd!r} in {d!r}")
+        last_cubic, last_quad = cubic, quadratic
     return ops
+
+
+def points(text: str) -> list[float]:
+    return [float(v) for v in TOKEN.findall(text)]
 
 
 def element_ops(el: ET.Element) -> list[str]:
@@ -163,24 +215,50 @@ def element_ops(el: ET.Element) -> list[str]:
         return path_ops(a["d"])
     if tag == "circle":
         cx, cy, r = g("cx"), g("cy"), g("r")
-        return [f"p.addEllipse(in: CGRect(x: {fmt(cx - r)}, y: {fmt(cy - r)}, width: {fmt(2 * r)}, height: {fmt(2 * r)}))"]
+        return [op("E", cx - r, cy - r, 2 * r, 2 * r)]
+    if tag == "ellipse":
+        cx, cy, rx, ry = g("cx"), g("cy"), g("rx"), g("ry")
+        return [op("E", cx - rx, cy - ry, 2 * rx, 2 * ry)]
     if tag == "line":
-        return [f"p.move(to: {pt(g('x1'), g('y1'))})", f"p.addLine(to: {pt(g('x2'), g('y2'))})"]
+        return [op("M", g("x1"), g("y1")), op("L", g("x2"), g("y2"))]
+    if tag in ("polyline", "polygon"):
+        v = points(a["points"])
+        ops = [op("M", v[0], v[1])] + [op("L", v[k], v[k + 1]) for k in range(2, len(v) - 1, 2)]
+        return ops + (["Z"] if tag == "polygon" else [])
     if tag == "rect":
         x, y, w, h = g("x"), g("y"), g("width"), g("height")
         rx = g("rx", a.get("ry", 0))
         ry = g("ry", a.get("rx", 0))
-        rect = f"CGRect(x: {fmt(x)}, y: {fmt(y)}, width: {fmt(w)}, height: {fmt(h)})"
-        if rx or ry:
-            return [f"p.addRoundedRect(in: {rect}, cornerSize: CGSize(width: {fmt(rx)}, height: {fmt(ry)}))"]
-        return [f"p.addRect({rect})"]
+        return [op("R", x, y, w, h, rx, ry)]
     raise ValueError(f"unsupported element {tag}")
 
 
 def case_name(stem: str) -> str:
     parts = stem.split("-")
-    name = parts[0] + "".join(p[:1].upper() + p[1:] for p in parts[1:])
-    return f"`{name}`" if name in {"repeat", "type", "import", "case", "default"} else name
+    name = parts[0]
+    for part in parts[1:]:
+        # Keep digit groups apart: arrow-down-1-0 → arrowDown1_0, not arrow-down-10's arrowDown10.
+        name += ("_" if name[-1].isdigit() and part[:1].isdigit() else "") + part[:1].upper() + part[1:]
+    return f"`{name}`" if name in {"repeat", "type", "import", "case", "default", "subscript"} else name
+
+
+def documented_icons(available: set[str]) -> list[str]:
+    """Icon names from the usage table of icons.md, in first-use order."""
+    names: list[str] = []
+    for line in ICON_DOC.read_text().splitlines():
+        if not line.startswith("|") or line.startswith("|---"):
+            continue
+        cells = line.strip("|").split("|")
+        if len(cells) < 2:
+            continue
+        for name in re.findall(r"`([a-z0-9-]+)`", cells[1]):
+            if name.startswith("kind-") or name in ("danger",):
+                continue
+            if name not in available:
+                raise SystemExit(f"icons.md names {name!r}, which is not in {ICONS.relative_to(ROOT)}")
+            if name not in names:
+                names.append(name)
+    return names
 
 
 def generate() -> str:
@@ -200,32 +278,61 @@ def generate() -> str:
             ops.extend(element_ops(el))
         name = case_name(f.stem)
         cases.append(f'    case {name} = "{f.stem}"')
-        body = "\n".join(f"            {o}" for o in ops)
-        bodies.append(f"        case .{name.strip('`')}:\n{body}")
+        bodies.append(f'        case .{name.strip("`")}: "{" ".join(ops)}"')
+    documented = documented_icons({f.stem for f in files})
+    listed = ", ".join("." + case_name(n).strip("`") for n in documented)
     return f'''// Generated by scripts/gen_lucide_icons.py from third_party/lucide (lucide-static {version}, ISC). Do not edit.
 
 import CoreGraphics
 import SwiftUI
 
-/// The Lucide icons Kronello uses (docs/design-system/icons.md).
+/// Every Lucide icon. Pick one for a new use from this set and record the use in
+/// docs/design-system/icons.md; `documented` lists the icons that table names.
 public enum KRIcon: String, CaseIterable, Sendable {{
 {chr(10).join(cases)}
 }}
 
 extension KRIcon {{
+    /// The icons named in docs/design-system/icons.md, in table order.
+    public static let documented: [KRIcon] = [{listed}]
+
     /// The icon's outline in Lucide's 24×24 coordinate space.
-    public var path: Path {{
-        var p = Path()
+    public var path: Path {{ KRIconPath.decode(encodedPath) }}
+
+    /// Absolute `M` / `L` / `C` / `Z` commands plus `E` (ellipse in x y w h) and
+    /// `R` (rounded rect in x y w h rx ry), space separated.
+    var encodedPath: String {{
         switch self {{
 {chr(10).join(bodies)}
         }}
-        return p
     }}
 }}
 '''
 
 
+def cmd_vendor() -> int:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from design_preview import LUCIDE, download  # pinned URL and SHA-256 shared with the preview
+
+    data = download(LUCIDE["url"], LUCIDE["sha256"], f"lucide-static-{LUCIDE['version']}.tgz")
+    with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as archive:
+        members = [m for m in archive.getmembers()
+                   if m.isfile() and re.fullmatch(r"package/icons/[a-z0-9-]+\.svg", m.name)]
+        if not members:
+            raise SystemExit("no icons in the lucide-static archive")
+        if ICONS.exists():
+            shutil.rmtree(ICONS)
+        ICONS.mkdir(parents=True)
+        for member in members:
+            (ICONS / Path(member.name).name).write_bytes(archive.extractfile(member).read())
+        (ICONS.parent / "LICENSE").write_bytes(archive.extractfile("package/LICENSE").read())
+    print(f"vendored {len(members)} icons from lucide-static {LUCIDE['version']}")
+    return 0
+
+
 def main() -> int:
+    if "--vendor" in sys.argv:
+        cmd_vendor()
     out = generate()
     if "--check" in sys.argv:
         if not OUT.exists() or OUT.read_text() != out:

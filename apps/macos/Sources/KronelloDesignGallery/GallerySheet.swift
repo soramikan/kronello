@@ -33,9 +33,10 @@ struct IconSheet: View {
     @Environment(\.krPalette) var p
     var body: some View {
         VStack(spacing: KRSpace.space3) {
-            ForEach(0..<8) { row in
+            // The documented uses (icons.md), not all of the vendored Lucide set.
+            ForEach(0..<(KRIcon.documented.count + 7) / 8, id: \.self) { row in
                 HStack(spacing: KRSpace.space2) {
-                    ForEach(Array(KRIcon.allCases.dropFirst(row * 8).prefix(8)), id: \.self) { icon in
+                    ForEach(Array(KRIcon.documented.dropFirst(row * 8).prefix(8)), id: \.self) { icon in
                         VStack(spacing: KRSpace.space1) {
                             KRIconView(icon, size: 24)
                             HStack(spacing: KRSpace.space1) { KRIconView(icon); KRIconView(icon, size: 12) }
