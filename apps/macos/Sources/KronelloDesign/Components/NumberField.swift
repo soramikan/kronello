@@ -90,7 +90,9 @@ public struct KRNumberField: View {
     private var failed: Bool { error || invalid || appearance == .error }
     private func format(_ value: Double) -> String { String(format: "%.*f", precision, value) }
     public var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 2) {
+        // The native editor has no text baseline; aligning it by baseline would
+        // drop the value below the field, so the edit state centres instead.
+        HStack(alignment: editing && !staticRendering ? .center : .firstTextBaseline, spacing: 2) {
             if editing && !staticRendering {
                 KRCommittedTextInput(value: text, label: label, placeholder: "", muted: NSColor(p.inkMuted), ink: NSColor(p.ink), selection: NSColor(p.selection), enabled: enabled,
                     onCommit: { text = $0; commitText() }, onFocus: { inputFocused = $0; if !$0 && editing && !invalid { cancel() } },

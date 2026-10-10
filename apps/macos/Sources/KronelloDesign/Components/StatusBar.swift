@@ -16,16 +16,20 @@ public struct KRStatusBar: View {
     public let externalChange: String?
     public let error: KRDiagnostic?
     public let job: KRJobSummary?
+    /// Transient activity such as the playback clock; omitted while idle.
+    public let activity: String?
     private let onError: () -> Void
     private let onJobs: () -> Void
     public init(saved: String = "保存済み", revision: String, externalChange: String? = nil, error: KRDiagnostic? = nil,
-                job: KRJobSummary? = nil, onError: @escaping () -> Void = {}, onJobs: @escaping () -> Void = {}) {
+                job: KRJobSummary? = nil, activity: String? = nil, onError: @escaping () -> Void = {}, onJobs: @escaping () -> Void = {}) {
+        self.activity = activity
         self.saved = saved; self.revision = revision; self.externalChange = externalChange; self.error = error; self.job = job
         self.onError = onError; self.onJobs = onJobs
     }
     public var body: some View {
         HStack(spacing: KRSpace.space4) {
-            HStack(spacing: KRSpace.space1) { KRIconView(.circleCheck, size: 12); Text(saved); Text(revision).krText(KRMono.label) }
+            HStack(spacing: KRSpace.space1) { KRIconView(.history, size: 12); Text(saved + " ·"); Text(revision).krText(KRMono.label) }
+            if let activity { HStack(spacing: KRSpace.space1) { KRIconView(.play, size: 12); Text(activity) } }
             if let externalChange { HStack(spacing: KRSpace.space1) { KRIconView(.refreshCw, size: 12); Text(externalChange) } }
             if let error { Button(action: onError) { KRErrorLine(error) }.buttonStyle(.plain).krControlFocusRing() }
             Spacer(minLength: 0)

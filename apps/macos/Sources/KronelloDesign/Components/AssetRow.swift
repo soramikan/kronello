@@ -14,7 +14,7 @@ public enum KRMediaKind: String, CaseIterable, Codable, Sendable {
         case .subtitle: return .captions
         case .generator: return .sparkles
         case .adjustment: return .slidersHorizontal
-        case .multicam: return .clapperboard
+        case .multicam: return .grid2x2
         }
     }
     public func color(in palette: KRPalette) -> Color {
@@ -53,9 +53,10 @@ public struct KRAssetRow: View {
                 KRIconView(missing == nil ? kind.icon : .triangleAlert).foregroundStyle(missing == nil ? kind.color(in: p) : p.danger)
                 Text(name).krText(KRType.body).foregroundStyle(missing == nil ? p.ink : p.danger).lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                if let missing { Text(missing).krText(KRMono.caption).foregroundStyle(p.danger) }
-                else { Text(meta).krText(KRType.caption).foregroundStyle(p.inkMuted).lineLimit(1) }
-                Text(duration).krText(KRType.timecode).foregroundStyle(p.inkMuted).frame(minWidth: 76, alignment: .trailing)
+                // Spec and duration never truncate; only the name gives way.
+                if let missing { Text(missing).krText(KRMono.caption).foregroundStyle(p.danger).fixedSize() }
+                else { Text(meta).krText(KRType.caption).foregroundStyle(p.inkMuted).lineLimit(1).fixedSize() }
+                Text(duration).krText(KRType.timecode).foregroundStyle(p.inkMuted).fixedSize().frame(minWidth: 76, alignment: .trailing)
             }.padding(.horizontal, KRSpace.space3).frame(height: KRSize.rowHeight)
                 .background(selected ? p.selectionBg : hover || appearance == .hover ? p.controlHover : .clear)
         }.buttonStyle(.plain).krControlFocusRing(appearance == .focused).onHover { hover = $0 }

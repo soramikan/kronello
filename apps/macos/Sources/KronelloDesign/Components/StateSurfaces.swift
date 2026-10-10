@@ -38,21 +38,28 @@ public struct KRConflictBanner: View {
 public struct KRViewerError: View {
     @Environment(\.krPalette) private var p
     public let diagnostic: KRDiagnostic
+    public let title: String
     public let copy: () -> Void
     public let retry: () -> Void
-    public init(_ diagnostic: KRDiagnostic, copy: @escaping () -> Void, retry: @escaping () -> Void) {
-        self.diagnostic = diagnostic; self.copy = copy; self.retry = retry
+    public init(_ diagnostic: KRDiagnostic, title: String = "プレビューを描画できません", copy: @escaping () -> Void, retry: @escaping () -> Void) {
+        self.diagnostic = diagnostic; self.title = title; self.copy = copy; self.retry = retry
     }
     public var body: some View {
+        // states.md: icon, heading, then the code (mono, danger) leading the message.
         VStack(spacing: KRSpace.space3) {
             KRIconView(.triangleAlert, size: 24).foregroundStyle(p.danger)
-            KRErrorLine(diagnostic)
+            Text(title).krText(KRType.heading).foregroundStyle(p.ink)
+            (Text(diagnostic.code).font(KRMono.label.font()).foregroundStyle(p.danger)
+                + Text(" " + diagnostic.message).font(KRType.body.font()).foregroundStyle(p.inkMuted))
+                .multilineTextAlignment(.center).lineSpacing(4).frame(maxWidth: 400)
+                .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: KRSpace.space2) {
-                KRButton("詳細をコピー", variant: .secondary, action: copy)
-                KRButton("再試行", variant: .secondary, action: retry)
+                KRButton("詳細をコピー", variant: .plain, action: copy)
+                KRButton("再試行", icon: .refreshCw, variant: .secondary, action: retry)
             }
         }.padding(KRSpace.space4).frame(maxWidth: .infinity, maxHeight: .infinity).background(p.surface0)
             .overlay { Rectangle().strokeBorder(p.danger, style: StrokeStyle(lineWidth: 1, dash: [4, 4])) }
+            .accessibilityElement(children: .contain)
     }
 }
 
