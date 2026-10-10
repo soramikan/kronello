@@ -30,7 +30,9 @@ struct EditProjectPanel: View {
     @State private var tab = "project"
     @State private var search = ""
     var body: some View {
-        KRPanel(header: { KRTabBar([.init("project", "Project"), .init("markers", "マーカー"), .init("effects", "Effects")], selection: $tab) }, actions: {}) {
+        KRPanel(header: { KRTabBar([.init("project", "Project"), .init("markers", "マーカー"), .init("effects", "Effects")], selection: $tab) }, actions: {
+            if tab == "project" { MediaImportButton(model: model) }
+        }) {
             VStack(spacing: 0) {
                 if tab != "markers" { KRSearchField("素材を検索", text: $search).padding(KRSpace.space2) }
                 if tab == "effects" {
@@ -107,6 +109,7 @@ struct EditProjectPanel: View {
                                 }
                             }
                     }
+                    .mediaFileDrop(model: model)
                 }
                 if tab == "project" {
                     // NLE-007: multicam groups are authored through the shared

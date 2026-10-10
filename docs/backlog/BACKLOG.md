@@ -19,7 +19,7 @@
 | M7 | 0 | 0 | 11 | 0 | 11 |
 | M8 | 0 | 0 | 16 | 0 | 16 |
 | M9 | 2 | 0 | 11 | 0 | 13 |
-| M10 | 1 | 1 | 9 | 0 | 11 |
+| M10 | 1 | 0 | 10 | 0 | 11 |
 | M11 | 14 | 0 | 0 | 0 | 14 |
 
 ## M0
@@ -1181,6 +1181,16 @@
 - 受け入れ条件:
   - 残る UI 要素を統合しワークスペースとして完成させる
 
+### MEDIA-006 共有 media.import と GUI のメディア読み込み
+
+- 優先度: P0 / 領域: media / 状態: done
+- 依存: MEDIA-001, FLOW-002
+- 受け入れ条件:
+  - ローカルファイルを native probe・hash 検証して共有 AssetSet で登録し、revision・再送・Undo と型付き失敗を検証する
+  - CLI・MCP・公開 schema・Swift API に公開する
+  - Media / Edit の選択・複数選択・Finder drop を共有 API へ接続する
+  - Rust・Swift・生成物・バックログの検証結果を docs/testing/media-006.md に記録する
+
 ### RENDER-005 文字主体フレームの同時保持サーフェス予算と解放
 
 - 優先度: P0 / 領域: render / 状態: done
@@ -1199,16 +1209,6 @@
   - 約4分の生成PCMを共有audio.analyzeで解析・保存し複数時刻の式から参照できる
   - 設定の各不正値と予算超過を具体的な型付き診断で返し、session_idを保存イベントと冪等再送に反映する
   - ADR・設計・検証記録・公開schema・Swift APIを更新し指定検証を記録する
-
-### MEDIA-006 共有 media.import と GUI のメディア読み込み
-
-- 優先度: P0 / 領域: media / 状態: in_progress
-- 依存: MEDIA-001, FLOW-002
-- 受け入れ条件:
-  - ローカルファイルを native probe・hash 検証して共有 AssetSet で登録し、revision・再送・Undo と型付き失敗を検証する
-  - CLI・MCP・公開 schema・Swift API に公開する
-  - Media / Edit の選択・複数選択・Finder drop を共有 API へ接続する
-  - Rust・Swift・生成物・バックログの検証結果を docs/testing/media-006.md に記録する
 
 
 ## M11

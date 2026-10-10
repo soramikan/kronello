@@ -86,6 +86,7 @@ struct MediaPage: View {
             KRPanelTitle("メディア")
             KRSearchField("メディアを検索", text: $model.search)
         }, actions: {
+            MediaImportButton(model: editor)
             if let error = model.failure { KRErrorLine(.init(error.code, error.message)) }
             // GUI-012 (ADR-0119): proxy generation for the selected video
             // original submits shared fixed-input jobs; the badge and clear
@@ -108,7 +109,7 @@ struct MediaPage: View {
                         KREmptyState(icon: .film,
                             title: model.assets.isEmpty ? "メディアがありません" : "このビンは空です",
                             message: model.assets.isEmpty
-                                ? "クリップや .cube LUT を読み込むとここに表示されます。"
+                                ? "「メディアを読み込む…」で素材を選ぶか、ここにファイルをドロップしてください。"
                                 : "コンテキストメニューからアセットをこのビンに割り当てられます。")
                             .padding(KRSpace.space4)
                     } else {
@@ -117,6 +118,7 @@ struct MediaPage: View {
                         }.padding(KRSpace.space3)
                     }
                 }
+                .mediaFileDrop(model: editor)
                 Spacer(minLength: 0)
                 if let result = model.collectResult {
                     HStack(spacing: KRSpace.space1) {

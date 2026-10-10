@@ -45,7 +45,7 @@ python3 scripts/build_macos_app.py --release
 target/macos/Kronello.app/Contents/MacOS/Kronello
 ```
 
-スクリプトは FFI / CLI、UI fonts、`swift build -j 3` を実行する。`--release` は Rust FFI / CLI と Swift の両方を最適化し、`--show-bin-path` にも同じ configuration を渡す。既存 build のみ使う場合は `--skip-build`。release の既存成果物を組み立てる場合は `--skip-build --release` を指定する。
+スクリプトは FFI / CLI、UI fonts、`swift build -j 3` を実行する。`--release`はRust FFI / CLIを最適化し、Swiftは開発buildを使う。既存buildのみ使う場合は `--skip-build`。
 M3の最終受け入れ・実機証拠と保証範囲は [統合検証記録](../../docs/testing/m3-acceptance.md)。
 Xcodeのtoolchainを使用する環境では `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` を設定する。
 LGPL FFmpegを別途用意し、必要に応じて `PKG_CONFIG_PATH` と `KRONELLO_FFMPEG_LIB_DIR` をその開発 / runtimeディレクトリに設定する。

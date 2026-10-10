@@ -1,10 +1,39 @@
 import Foundation
 import KronelloAppModel
+import KronelloCore
 
 /// FLOW-002/FLOW-003 GUI checks (ADR-0129/0130): the media browser and export
 /// presets must ride the shared document/commands/query surface — FakeTransport
 /// asserts the exact wire operations rather than any GUI-only state.
 @MainActor struct MediaFlowChecks {
+    func verifyMediaImport() async throws {
+        let folder = try GUIChecks().temporary(); defer { try? FileManager.default.removeItem(at: folder) }
+        let fake = FakeTransport(), editor = model(fake, folder: folder)
+        fake.extraHandler = { request in
+            guard request.string("operation") == "media.import" else { return nil }
+            // Validate the generated transport type, including the new operation.
+            _ = try NativeProjectTransport.request(request)
+            if request.string("path").hasSuffix("bad.mov") {
+                throw ServiceFailure(code: "DECODE_ERROR", message: "Invalid media")
+            }
+            try require(request.string("base_revision") == fake.revision, "Each file uses the latest revision")
+            fake.revision = String(Int(fake.revision)! + 1)
+            return ["id": UUID().uuidString, "revision": Int(fake.revision)!]
+        }
+        try await editor.start()
+        let urls = ["one.mov", "two.wav"].map { folder.appendingPathComponent($0) }
+        await editor.importMedia(urls: urls)
+        let imports = fake.requests.filter { $0.string("operation") == "media.import" }
+        try require(imports.count == 2 && editor.revision == "3", "One shared import per file advances the revision")
+        try require(Set(imports.map { $0.string("asset") }).count == 2, "Each asset has a fresh UUID")
+        try require(Set(imports.map { $0.string("idempotency_key") }).count == 2, "Each request has a fresh receipt key")
+        try require(editor.undoState.undo.count == 2 && !editor.busy, "Both events join undo history")
+        await editor.undo()
+        try require(fake.requests.contains { $0.string("operation") == "edit.undo" }, "Import uses shared Undo")
+        await editor.importMedia(urls: [folder.appendingPathComponent("bad.mov")])
+        try require(editor.failure?.code == "DECODE_ERROR" && !editor.busy, "Typed import failures reach the existing error UI")
+        await editor.close()
+    }
     func model(_ transport: FakeTransport, folder: URL) -> EditorModel {
         GUIChecks().model(transport, folder: folder)
     }
