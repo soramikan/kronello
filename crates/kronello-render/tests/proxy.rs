@@ -219,3 +219,148 @@ fn stale_missing_or_stream_mismatched_links_fall_back_to_original() {
         fixture.original
     );
 }
+
+fn crop_properties() -> Vec<Property> {
+    let registry = render_registry();
+    [
+        ("kronello.media.crop_origin", [80.0, 40.0]),
+        ("kronello.media.crop_size", [160.0, 120.0]),
+    ]
+    .into_iter()
+    .map(|(key, values)| {
+        Property::new(
+            PropertyId::new(),
+            DescriptorRef::new(registry.lookup(&SchemaKey::new(key).unwrap()).unwrap()),
+            PropertySource::Constant(Value::Vec2(values.map(finite))),
+            vec![],
+            &registry,
+        )
+        .unwrap()
+    })
+    .collect()
+}
+
+#[test]
+fn prefer_maps_stream_clocks_and_crop_for_composition_sequence_and_multicam() {
+    for (source_start, proxy_start) in [(r(2, 1), Time::ZERO), (r(-2, 1), r(1, 1))] {
+        for target_kind in ["composition", "sequence", "multicam"] {
+            let mut fixture = build_fixture();
+            for (index, start) in [(0, source_start), (1, proxy_start)] {
+                let DocumentObject::Known(asset) = &mut fixture.project.assets[index] else {
+                    panic!()
+                };
+                asset.streams[0].start_time = Some(start);
+            }
+            let source_in = if source_start < Time::ZERO {
+                r(3, 4)
+            } else {
+                source_start.checked_add(r(1, 4)).unwrap()
+            };
+            let target = if target_kind == "composition" {
+                let DocumentObject::Known(root) = &mut fixture.project.compositions[0] else {
+                    panic!()
+                };
+                let NodeKind::Media(media) = &mut root.nodes[0].kind else {
+                    panic!()
+                };
+                media.source_in = source_in;
+                root.nodes[0].properties.extend(crop_properties());
+                RenderTarget::Composition {
+                    composition: fixture.composition,
+                }
+            } else {
+                let mut document: serde_json::Value =
+                    serde_json::from_str(include_str!("../../../examples/nle-001.project.json"))
+                        .unwrap();
+                document["sequences"][0]["tracks"]
+                    .as_array_mut()
+                    .unwrap()
+                    .truncate(1);
+                document["sequences"][0]["tracks"][0]["clips"]
+                    .as_array_mut()
+                    .unwrap()
+                    .truncate(1);
+                let clip = &mut document["sequences"][0]["tracks"][0]["clips"][0];
+                clip["properties"] = serde_json::to_value(crop_properties()).unwrap();
+                clip["source_in"] = serde_json::to_value(source_in).unwrap();
+                clip["timeline_range"] =
+                    serde_json::json!({"start":{"num":"0","den":"1"},"end":{"num":"1","den":"1"}});
+                if target_kind == "multicam" {
+                    let group = MulticamId::new();
+                    let angle = AngleId::new();
+                    fixture.project.multicams.push(MulticamAsset {
+                        id: group,
+                        name: "Camera".into(),
+                        angles: vec![MulticamAngle {
+                            id: angle,
+                            asset: fixture.original,
+                            stream_index: 0,
+                            sync_offset: r(1, 2),
+                            name: "A".into(),
+                        }],
+                    });
+                    clip["source_ref"] =
+                        serde_json::json!({"kind":"multicam","multicam":group,"angle":angle});
+                    clip["source_in"] =
+                        serde_json::to_value(source_in.checked_sub(r(1, 2)).unwrap()).unwrap();
+                } else {
+                    clip["source_ref"] = serde_json::json!({"kind":"asset","asset":fixture.original,"stream_index":0});
+                }
+                let sequence: Sequence =
+                    serde_json::from_value(document["sequences"][0].clone()).unwrap();
+                let id = sequence.id;
+                fixture
+                    .project
+                    .sequences
+                    .push(DocumentObject::Known(sequence));
+                RenderTarget::Sequence { sequence: id }
+            };
+            let project_before = fixture.project.clone();
+            for mode in [MediaProxyMode::Off, MediaProxyMode::Prefer] {
+                let snapshot = RenderSnapshot::for_target(
+                    &fixture.project,
+                    target,
+                    1,
+                    RenderProfile::default(),
+                )
+                .unwrap()
+                .with_media_proxies(mode);
+                let scene = build_scene_ir(&snapshot, r(1, 4), &[]).unwrap();
+                let video = scene
+                    .nodes
+                    .iter()
+                    .find_map(|node| match &node.content {
+                        SceneContent::Video {
+                            asset,
+                            time,
+                            crop,
+                            extent,
+                            ..
+                        } => Some((asset.id, *time, *crop, *extent)),
+                        _ => None,
+                    })
+                    .unwrap();
+                if mode == MediaProxyMode::Prefer {
+                    assert_eq!(video.0, fixture.proxy);
+                    assert_eq!(
+                        video.1,
+                        source_in
+                            .checked_add(r(1, 4))
+                            .unwrap()
+                            .checked_sub(source_start)
+                            .unwrap()
+                            .checked_add(proxy_start)
+                            .unwrap()
+                    );
+                    assert_eq!(video.2, Some([40.0, 20.0, 80.0, 60.0]));
+                } else {
+                    assert_eq!(video.0, fixture.original);
+                    assert_eq!(video.1, source_in.checked_add(r(1, 4)).unwrap());
+                    assert_eq!(video.2, Some([80.0, 40.0, 160.0, 120.0]));
+                }
+                assert_eq!(video.3, [160.0, 120.0]);
+            }
+            assert_eq!(fixture.project, project_before);
+        }
+    }
+}

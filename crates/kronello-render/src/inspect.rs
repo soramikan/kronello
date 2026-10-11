@@ -110,7 +110,12 @@ pub fn explain_render_path(
         executed: false,
         tiles: vec![],
         transfers: vec![],
-        output_boundary: "final_linear_display_cpu_readback".into(),
+        output_boundary: if profile.temporal.is_some() {
+            "linear_sample_cpu_readback_final_cpu_linear_display"
+        } else {
+            "final_linear_display_cpu_readback"
+        }
+        .into(),
         native_preview_transfers: vec![],
         native_preview_supported: matches!(
             backend,
@@ -167,7 +172,9 @@ pub fn explain_render_path(
                     ("RASTER_INPUT", None, true)
                 }
             };
-            let execution = if !image && code != "OUTPUT_TRANSFORM" {
+            let execution = if (!image && code != "OUTPUT_TRANSFORM")
+                || (code == "OUTPUT_TRANSFORM" && profile.temporal.is_some())
+            {
                 "cpu"
             } else {
                 match backend {
@@ -221,10 +228,12 @@ pub fn explain_render_path(
                 limit: None,
             });
         }
-        // A single graph generates linear/display outputs. Each padded image
-        // crosses its final boundary, then sticky status crosses once.
+        // Temporal samples need only numeric pixels; the final display
+        // transform runs once on the CPU after accumulation. Status stays.
+        let image_planes = if profile.temporal.is_some() { 1 } else { 2 };
         readback_bytes +=
-            (u64::from(pixels[0]) * 8).div_ceil(256) * 256 * u64::from(pixels[1]) * 2 + 4;
+            (u64::from(pixels[0]) * 8).div_ceil(256) * 256 * u64::from(pixels[1]) * image_planes
+                + 4;
         result.tiles.push(RenderTilePlan {
             sample_time: None,
             requested: tile,
@@ -254,7 +263,12 @@ pub fn explain_render_path(
         ExplainBackend::Gpu | ExplainBackend::GpuResidentBgra8 | ExplainBackend::GpuResidentNv12
     ) {
         result.notices.push(ProcessingNotice {
-            code: "SINGLE_GRAPH_LINEAR_DISPLAY_OUTPUT".into(),
+            code: if profile.temporal.is_some() {
+                "SINGLE_GRAPH_LINEAR_SAMPLE_OUTPUT"
+            } else {
+                "SINGLE_GRAPH_LINEAR_DISPLAY_OUTPUT"
+            }
+            .into(),
             tile: None,
             actual_estimate: Some(1),
             limit: None,
@@ -332,7 +346,7 @@ pub fn explain_render_path(
         "gpu_to_cpu",
         known.then_some(if gpu { readback_bytes } else { 0 }),
         known.then_some(if gpu {
-            result.tiles.len() as u64 * 3
+            result.tiles.len() as u64 * if profile.temporal.is_some() { 2 } else { 3 }
         } else {
             0
         }),

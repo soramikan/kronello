@@ -207,7 +207,7 @@ fn perf001_request_transfers_sum_tiles_samples_and_zero_work_hits() {
             .transfer_stats
             .unwrap()
             .gpu_readback_operations,
-        samples * 3
+        samples * 2
     );
     let warm = render_frame_with_cache(&snapshot, &[], &gpu, request, &mut cache).unwrap();
     assert_eq!(warm.pixels, temporal.pixels);

@@ -602,7 +602,7 @@ impl DocumentAudioPlan {
     /// stateless evaluator either way (ADR-0076/ADR-0117).
     pub fn playback_session(&self) -> crate::AudioPlaybackSession {
         self.advanced.as_ref().map_or_else(
-            || crate::AudioPlaybackSession::new(0),
+            || crate::AudioPlaybackSession::new(0, std::sync::Arc::new(())),
             |plan| plan.playback_session(),
         )
     }

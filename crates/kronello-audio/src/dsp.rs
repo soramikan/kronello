@@ -457,6 +457,56 @@ pub(crate) enum Processor {
     Gate(Gate),
 }
 impl Processor {
+    /// Heap copied by an exact checkpoint. Inline state is charged by its
+    /// enclosing ChainStep; Vec clones allocate their logical length.
+    pub(crate) fn heap_bytes(&self) -> usize {
+        match self {
+            Self::Filters(stages) => stages.iter().fold(
+                stages.len().saturating_mul(std::mem::size_of::<Biquad>()),
+                |bytes, stage| {
+                    bytes.saturating_add(
+                        stage
+                            .z
+                            .len()
+                            .saturating_mul(std::mem::size_of::<[f64; 2]>()),
+                    )
+                },
+            ),
+            Self::Compressor(_) => std::mem::size_of::<Compressor>(),
+            Self::Limiter(_) | Self::Gate(_) => 0,
+            Self::Delay(delay) => delay.rings.iter().fold(
+                std::mem::size_of::<Delay>().saturating_add(
+                    delay
+                        .rings
+                        .len()
+                        .saturating_mul(std::mem::size_of::<Vec<f64>>()),
+                ),
+                |bytes, ring| {
+                    bytes.saturating_add(ring.len().saturating_mul(std::mem::size_of::<f64>()))
+                },
+            ),
+            Self::Reverb(reverb) => reverb.combs.iter().fold(
+                std::mem::size_of::<Reverb>().saturating_add(
+                    reverb
+                        .combs
+                        .len()
+                        .saturating_mul(std::mem::size_of::<Vec<Comb>>()),
+                ),
+                |bytes, combs| {
+                    combs.iter().fold(
+                        bytes.saturating_add(
+                            combs.len().saturating_mul(std::mem::size_of::<Comb>()),
+                        ),
+                        |bytes, comb| {
+                            bytes.saturating_add(
+                                comb.ring.len().saturating_mul(std::mem::size_of::<f64>()),
+                            )
+                        },
+                    )
+                },
+            ),
+        }
+    }
     pub(crate) fn process(&mut self, frame: &mut [f32]) {
         match self {
             Self::Filters(stages) => {

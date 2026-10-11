@@ -1,0 +1,11 @@
+{
+  "date": "2026-10-11",
+  "old_binary_sha256": "237e2298a6cc3e6f99c617f15fe74b3d21550ddbd094ca8563d6d41457b2964c",
+  "new_binary_sha256": "511880e32024d7904eb085f03648e11cce4ebea4bf032b1c6dd15da164e4dec0",
+  "old_metadata_frames": 3,
+  "logical_frames": 3,
+  "completed_frames": 3,
+  "status": "succeeded",
+  "audio_file_sha256": "6b31a7c772bb64ab4e6b9465e2864a9b9c0598ffbb67f7c370d995a6c6636b0e",
+  "procedure": "Old saved release CLI creates and runs fixed FLAC job. Current debug CLI resumes same authenticated receipt after worker exit. Original report carries three discarded video frame metadata records."
+}

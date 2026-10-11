@@ -111,7 +111,7 @@ struct MetalPreview: NSViewRepresentable {
             if cpuReference && model.playing { needsRender = false; scheduledKey = ""; return }
             let time = monitorTime
             let key = [surface == 0 ? "program" : "source", source?.key ?? "", model.ui.page, model.revision, "\(model.refreshToken)", model.ui.sequence ?? "", model.ui.composition ?? "", time.num, time.den,
-                       model.ui.resolution, source == nil ? model.ui.zoom : "fit", cpuReference ? "cpu_reference" : "gpu", "\(surfaceView.bounds.size)", "\(surfaceView.window?.backingScaleFactor ?? 1)"].joined(separator: ":")
+                       model.ui.resolution, model.previewProxyMode, source == nil ? model.ui.zoom : "fit", cpuReference ? "cpu_reference" : "gpu", "\(surfaceView.bounds.size)", "\(surfaceView.window?.backingScaleFactor ?? 1)"].joined(separator: ":")
             guard force || key != scheduledKey else { return }
             scheduledKey = key
             trace("schedule force=\(force) revision=\(model.revision) time=\(time.num)/\(time.den)")
@@ -153,6 +153,7 @@ struct MetalPreview: NSViewRepresentable {
                         }
                         if source == nil { model.previewRendering = true } else { model.sourcePreviewRendering = true }
                         var input: [String: Any] = ["project": model.path, "fonts": model.snapshotFonts, "luts": model.lutInputs,
+                            "media_proxies": model.previewProxyMode,
                             "region": ["origin": [0, 0], "extent": [extent.width, extent.height], "pixels": [width, height]]]
                         input.merge(target) { _, value in value }
                         var request: [String: Any] = ["operation": "render.frame", "input": input, "time": time.wire]

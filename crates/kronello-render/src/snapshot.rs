@@ -742,8 +742,11 @@ impl RenderSnapshot {
                     "sequence working space mismatch".into(),
                 ));
             }
+            let mut validated = BTreeSet::new();
             for node in root.nodes {
-                if let NodeKind::CompositionInstance(i) = node.kind {
+                if let NodeKind::CompositionInstance(i) = node.kind
+                    && validated.insert(i.definition_ref)
+                {
                     kronello_template::validate_reachable(&self.project, i.definition_ref)?;
                 }
             }
@@ -777,6 +780,13 @@ impl RenderSnapshot {
         &self,
         time: Option<Time>,
     ) -> Result<Vec<Composition>, RenderError> {
+        self.definitions_at_prepared(time, None)
+    }
+    pub(crate) fn definitions_at_prepared(
+        &self,
+        time: Option<Time>,
+        sequence_root: Option<&Composition>,
+    ) -> Result<Vec<Composition>, RenderError> {
         let mut definitions = Vec::new();
         let mut pending = vec![self.composition];
         let mut seen = BTreeSet::new();
@@ -791,11 +801,18 @@ impl RenderSnapshot {
             }
             let lowered;
             let c = if let Some(sequence) = self.sequence.filter(|_| id == self.composition) {
-                lowered = match time {
-                    Some(time) => {
+                lowered = match (time, sequence_root) {
+                    (Some(time), Some(root)) => crate::sequence::sample_sequence_at(
+                        &self.project,
+                        sequence,
+                        time,
+                        root.clone(),
+                    )?,
+                    (None, Some(root)) => root.clone(),
+                    (Some(time), None) => {
                         crate::sequence::lower_sequence_at(&self.project, sequence, time)?
                     }
-                    None => crate::sequence::lower_sequence(&self.project, sequence)?,
+                    (None, None) => crate::sequence::lower_sequence(&self.project, sequence)?,
                 };
                 &lowered
             } else if let Some(source) =
@@ -868,30 +885,72 @@ pub(crate) fn content_asset(project: &Project, id: AssetId) -> Result<&Asset, Re
         }
     })
 }
-/// Transient preview substitution (ADR-0119): in `Prefer` mode a valid
-/// `ProxyLink` retargets decode to the proxy asset/stream. Any absent, stale
-/// or inconsistent link falls back to the authored stream at full quality —
-/// substitution never errors and never changes authored media identity.
+/// Transient preview substitution (ADR-0119). Authored layout remains in
+/// original pixels; decode time and crop follow the selected stream's clock
+/// and dimensions. Invalid links keep the original decode input.
+struct MediaDecodeInput<'a> {
+    asset: &'a Asset,
+    stream_index: u32,
+    time: Time,
+    crop: Option<[f64; 4]>,
+}
 fn render_media<'a>(
     snapshot: &'a RenderSnapshot,
     asset: &'a Asset,
     stream_index: u32,
-) -> (&'a Asset, u32) {
+    time: Time,
+    crop: Option<[f64; 4]>,
+) -> Result<MediaDecodeInput<'a>, RenderError> {
+    let original = MediaDecodeInput {
+        asset,
+        stream_index,
+        time,
+        crop,
+    };
     if snapshot.media_proxies != MediaProxyMode::Prefer || asset.kind != AssetKind::Video {
-        return (asset, stream_index);
+        return Ok(original);
     }
     let Some(link) = snapshot.project.proxy_link(asset.id) else {
-        return (asset, stream_index);
+        return Ok(original);
     };
     if link.original_stream_index != stream_index
         || snapshot.project.proxy_link_state(link).is_err()
     {
-        return (asset, stream_index);
+        return Ok(original);
     }
-    match content_asset(&snapshot.project, link.proxy) {
-        Ok(proxy) => (proxy, link.proxy_stream_index),
-        Err(_) => (asset, stream_index),
+    let Ok(proxy) = content_asset(&snapshot.project, link.proxy) else {
+        return Ok(original);
+    };
+    let Some(source) = asset.streams.iter().find(|s| s.index == stream_index) else {
+        return Ok(original);
+    };
+    let Some(target) = proxy
+        .streams
+        .iter()
+        .find(|s| s.index == link.proxy_stream_index)
+    else {
+        return Ok(original);
+    };
+    let (Some(sw), Some(sh), Some(tw), Some(th)) =
+        (source.width, source.height, target.width, target.height)
+    else {
+        return Ok(original);
+    };
+    if sw == 0 || sh == 0 || tw == 0 || th == 0 {
+        return Ok(original);
     }
+    Ok(MediaDecodeInput {
+        asset: proxy,
+        stream_index: link.proxy_stream_index,
+        time: time
+            .checked_sub(source.start_time.unwrap_or(Time::ZERO))?
+            .checked_add(target.start_time.unwrap_or(Time::ZERO))?,
+        crop: crop.map(|[x, y, w, h]| {
+            let sx = f64::from(tw) / f64::from(sw);
+            let sy = f64::from(th) / f64::from(sh);
+            [x * sx, y * sy, w * sx, h * sy]
+        }),
+    })
 }
 
 /// Resolved caption draw input: laid-out glyphs plus cue-level attributes that
@@ -986,6 +1045,45 @@ pub struct SceneIr {
     pub luts: BTreeMap<AssetId, kronello_model::CubeLut>,
 }
 
+/// An owned immutable snapshot whose full semantic validation has succeeded.
+/// No mutable access or deserialization can manufacture this proof; changing
+/// a snapshot requires constructing and validating a new value.
+#[derive(Debug)]
+pub struct ValidatedRenderSnapshot {
+    snapshot: RenderSnapshot,
+    sequence_root: Option<Composition>,
+}
+impl ValidatedRenderSnapshot {
+    pub fn new(snapshot: RenderSnapshot) -> Result<Self, RenderError> {
+        snapshot.validate()?;
+        let sequence_root = snapshot
+            .sequence
+            .map(|id| crate::sequence::lower_sequence(&snapshot.project, id))
+            .transpose()?;
+        Ok(Self {
+            snapshot,
+            sequence_root,
+        })
+    }
+    /// Serialized retained payload, excluding allocator/device overhead.
+    pub fn retained_payload_bytes(&self) -> Result<usize, serde_json::Error> {
+        let snapshot = serde_json::to_vec(&self.snapshot)?.len();
+        let root = self
+            .sequence_root
+            .as_ref()
+            .map(serde_json::to_vec)
+            .transpose()?
+            .map_or(0, |bytes| bytes.len());
+        Ok(snapshot.saturating_add(root))
+    }
+}
+impl std::ops::Deref for ValidatedRenderSnapshot {
+    type Target = RenderSnapshot;
+    fn deref(&self) -> &Self::Target {
+        &self.snapshot
+    }
+}
+
 pub fn build_scene_ir(
     snapshot: &RenderSnapshot,
     time: Time,
@@ -1006,7 +1104,35 @@ pub fn build_scene_ir_with_cache(
     cache: &mut crate::RenderCache,
 ) -> Result<SceneIr, RenderError> {
     snapshot.validate()?;
-    let (definitions, simulation_proof) = crate::simulation::lower(snapshot, time, fonts, cache)?;
+    build_scene_ir_validated_inner(snapshot, time, fonts, cache, None)
+}
+
+/// Time-dependent scene evaluation from a validation proof. The caller owns
+/// both the immutable input and bounded semantic cache; no DAG is frozen by
+/// document revision alone.
+pub fn build_scene_ir_prevalidated(
+    snapshot: &ValidatedRenderSnapshot,
+    time: Time,
+    fonts: &[FontData<'_>],
+    cache: &mut crate::RenderCache,
+) -> Result<SceneIr, RenderError> {
+    build_scene_ir_validated_inner(
+        snapshot,
+        time,
+        fonts,
+        cache,
+        snapshot.sequence_root.as_ref(),
+    )
+}
+fn build_scene_ir_validated_inner(
+    snapshot: &RenderSnapshot,
+    time: Time,
+    fonts: &[FontData<'_>],
+    cache: &mut crate::RenderCache,
+    sequence_root: Option<&Composition>,
+) -> Result<SceneIr, RenderError> {
+    let (definitions, simulation_proof) =
+        crate::simulation::lower(snapshot, time, fonts, cache, sequence_root)?;
     let registry = render_registry();
     let mut used_curves = BTreeSet::new();
     for c in &definitions {
@@ -1387,8 +1513,6 @@ pub fn build_scene_ir_with_cache(
                             "video dimensions unavailable".into(),
                         ));
                     };
-                    let (decode_asset, decode_stream) =
-                        render_media(snapshot, asset, *stream_index);
                     // The lowered node clones clip properties one-to-one, so
                     // `authored`/`values` already carry the crop descriptors.
                     if let Some([x, y, cw, ch]) = node_crop
@@ -1408,14 +1532,21 @@ pub fn build_scene_ir_with_cache(
                         require_frame_interpolation(snapshot)?;
                     }
                     video_source = Some((asset.id, *stream_index));
+                    let decode = render_media(
+                        snapshot,
+                        asset,
+                        *stream_index,
+                        clip.local_time(time)?,
+                        node_crop,
+                    )?;
                     SceneContent::Video {
-                        asset: decode_asset.clone(),
-                        stream_index: decode_stream,
-                        time: clip.local_time(time)?,
+                        asset: decode.asset.clone(),
+                        stream_index: decode.stream_index,
+                        time: decode.time,
                         reverse_sampling: clip.reverse_sampling.is_some(),
                         interpolation,
                         extent: node_crop.map(|c| [c[2], c[3]]).unwrap_or([w, h]),
-                        crop: node_crop,
+                        crop: decode.crop,
                     }
                 }
                 SourceRef::Generator { color, .. } => {
@@ -1474,8 +1605,6 @@ pub fn build_scene_ir_with_cache(
                             "video dimensions unavailable".into(),
                         ));
                     };
-                    let (decode_asset, decode_stream) =
-                        render_media(snapshot, asset, resolved.stream_index);
                     if let Some([x, y, cw, ch]) = node_crop
                         && (x < 0.0
                             || y < 0.0
@@ -1493,14 +1622,21 @@ pub fn build_scene_ir_with_cache(
                         require_frame_interpolation(snapshot)?;
                     }
                     video_source = Some((resolved.asset, resolved.stream_index));
+                    let decode = render_media(
+                        snapshot,
+                        asset,
+                        resolved.stream_index,
+                        clip.local_time(time)?.checked_add(resolved.offset)?,
+                        node_crop,
+                    )?;
                     SceneContent::Video {
-                        asset: decode_asset.clone(),
-                        stream_index: decode_stream,
-                        time: clip.local_time(time)?.checked_add(resolved.offset)?,
+                        asset: decode.asset.clone(),
+                        stream_index: decode.stream_index,
+                        time: decode.time,
                         reverse_sampling: clip.reverse_sampling.is_some(),
                         interpolation,
                         extent: node_crop.map(|c| [c[2], c[3]]).unwrap_or([w, h]),
-                        crop: node_crop,
+                        crop: decode.crop,
                     }
                 }
                 _ => content,
@@ -1905,16 +2041,16 @@ fn media_content(
         source
     };
     // Authored extent and bounds are validated above; only decode swaps.
-    let (decode_asset, decode_stream) = render_media(snapshot, asset, stream_index);
+    let decode = render_media(snapshot, asset, stream_index, time, crop)?;
     Ok(SceneContent::Video {
         reverse_sampling: false,
-        asset: decode_asset.clone(),
-        stream_index: decode_stream,
-        time,
+        asset: decode.asset.clone(),
+        stream_index: decode.stream_index,
+        time: decode.time,
         interpolation,
         // The layout box is the crop window so bounds and transforms follow
         // the reframed content.
         extent: crop.map(|c| [c[2], c[3]]).unwrap_or(extent),
-        crop,
+        crop: decode.crop,
     })
 }

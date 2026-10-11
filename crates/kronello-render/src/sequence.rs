@@ -210,7 +210,16 @@ pub(crate) fn lower_sequence_at(
     id: SequenceId,
     time: Time,
 ) -> Result<Composition, RenderError> {
-    let mut lowered = lower_sequence(project, id)?;
+    sample_sequence_at(project, id, time, lower_sequence(project, id)?)
+}
+/// Apply only time-dependent reverse sampling to an already validated static
+/// lowering. All authored envelopes and ordering stay in the caller's value.
+pub(crate) fn sample_sequence_at(
+    project: &Project,
+    id: SequenceId,
+    time: Time,
+    mut lowered: Composition,
+) -> Result<Composition, RenderError> {
     let sequence = project
         .sequences
         .iter()

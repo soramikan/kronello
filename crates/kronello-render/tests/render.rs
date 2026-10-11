@@ -4622,6 +4622,44 @@ fn gui007_reverse_fixture() -> (Project, Sequence) {
 }
 
 #[test]
+fn perf003_prevalidated_sequence_preserves_reverse_boundaries_and_request_order() {
+    let (project, sequence) = gui007_reverse_fixture();
+    let step = sequence.frame_rate.frame_to_time(1).unwrap();
+    let end = sequence.frame_rate.frame_to_time(2).unwrap();
+    let snapshot = RenderSnapshot::for_target(
+        &project,
+        RenderTarget::Sequence {
+            sequence: sequence.id,
+        },
+        1,
+        Default::default(),
+    )
+    .unwrap();
+    let validated = ValidatedRenderSnapshot::new(snapshot.clone()).unwrap();
+    let mut cache = RenderCache::default();
+    let region = OutputRegion {
+        origin: [0.0; 2],
+        extent: [64.0, 32.0],
+        pixels: [64, 32],
+    };
+    for time in [
+        Time::ZERO,
+        step,
+        step.checked_div(t(2, 1)).unwrap(),
+        end,
+        step,
+        Time::ZERO,
+    ] {
+        let reference = build_scene_ir(&snapshot, time, &[]).unwrap();
+        let prepared = build_scene_ir_prevalidated(&validated, time, &[], &mut cache).unwrap();
+        assert_eq!(
+            build_render_dag(&reference, snapshot.profile(), region).unwrap(),
+            build_render_dag(&prepared, snapshot.profile(), region).unwrap()
+        );
+    }
+}
+
+#[test]
 fn gui007_reverse_composition_renders_first_and_last_ntsc_source_frames() {
     let (project, sequence) = gui007_reverse_fixture();
     let rate = sequence.frame_rate;

@@ -151,6 +151,11 @@ fn cpu_unknown_and_temporal_tile_plans_respect_execution_boundaries() {
     assert_eq!(plan.tiles.len(), 6);
     assert_eq!(plan.graph_executions_estimate, Some(6));
     assert!(!plan.native_preview_supported);
+    assert_eq!(
+        plan.output_boundary,
+        "linear_sample_cpu_readback_final_cpu_linear_display"
+    );
+    assert_eq!(readback(&plan).operations_estimate, Some(12));
     let measured = render_frame_with_cache(
         &snapshot,
         &[],
@@ -398,9 +403,36 @@ fn resident_graph_input_and_final_boundary_match_counters_without_cpu_image_uplo
                 )
             })
             .collect();
-        let (_, measured) = gpu
+        let (both, measured) = gpu
             .execute_resident_video_with_stats(&dag, &inputs)
             .unwrap();
+        let source_keys = inputs
+            .keys()
+            .map(|index| {
+                (
+                    *index,
+                    RasterCacheKey::external_source(
+                        "resident-linear-boundary",
+                        dag.execution_region(),
+                        dag.working_space(),
+                        &gpu.cache_namespace().unwrap(),
+                    )
+                    .unwrap(),
+                )
+            })
+            .collect();
+        let (linear, linear_transfers) = gpu
+            .execute_resident_video_linear_cached_with_stats(&dag, &inputs, &source_keys)
+            .unwrap();
+        assert_eq!(linear, both.linear);
+        assert_eq!(linear_transfers.cpu_upload_pixel_bytes, 0);
+        assert_eq!(linear_transfers.gpu_copy_bytes, 0);
+        assert_eq!(linear_transfers.gpu_readback_operations, 2);
+        assert_eq!(linear_transfers.gpu_wait_operations, 2);
+        assert_eq!(
+            linear_transfers.gpu_readback_bytes,
+            (measured.gpu_readback_bytes - 4) / 2 + 4
+        );
         assert_eq!(
             readback(&plan).bytes_estimate,
             Some(measured.gpu_readback_bytes)

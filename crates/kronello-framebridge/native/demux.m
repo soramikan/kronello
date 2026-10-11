@@ -184,3 +184,79 @@ int kronello_fb_read_samples_raw(const char *path, uint32_t stream, int64_t time
     return read_samples(path, stream, time_num, time_den, canonical_origin, 1,
                         samples, capacity, count, error, error_size);
 }
+
+// A caller-owned compressed cursor. ARC releases reader/output/asset only after
+// Rust closes the cursor; every returned sample has separate +1 CF ownership.
+@interface KronelloCompressedCursor : NSObject
+@property(nonatomic, strong) AVAssetReader *reader;
+@property(nonatomic, strong) AVAssetReaderTrackOutput *output;
+@end
+@implementation KronelloCompressedCursor
+@end
+
+int kronello_fb_cursor_open(const char *path, uint32_t stream, void **cursor,
+                            char *error, size_t error_size) {
+    @autoreleasepool {
+        *cursor = NULL;
+        NSURL *url = [NSURL fileURLWithPath:[NSString stringWithUTF8String:path]];
+        AVURLAsset *asset = [AVURLAsset URLAssetWithURL:url options:nil];
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+        NSArray<AVAssetTrack *> *tracks = asset.tracks;
+#pragma clang diagnostic pop
+        if (stream >= tracks.count || ![tracks[stream].mediaType isEqualToString:AVMediaTypeVideo]) {
+            snprintf(error,error_size,"AVFoundation track index does not select video"); return -1;
+        }
+        NSError *failure=nil;
+        AVAssetReader *reader=[[AVAssetReader alloc] initWithAsset:asset error:&failure];
+        AVAssetReaderTrackOutput *output=[[AVAssetReaderTrackOutput alloc] initWithTrack:tracks[stream] outputSettings:nil];
+        output.alwaysCopiesSampleData=NO;
+        if (!reader || ![reader canAddOutput:output]) {
+            snprintf(error,error_size,"compressed asset reader unavailable"); return -2;
+        }
+        [reader addOutput:output];
+        if (![reader startReading]) {
+            snprintf(error,error_size,"%s",reader.error.localizedDescription.UTF8String ?: "compressed reader failed"); return -3;
+        }
+        KronelloCompressedCursor *owner=[KronelloCompressedCursor new];
+        owner.reader=reader; owner.output=output;
+        *cursor=(__bridge_retained void *)owner;
+        return 0;
+    }
+}
+
+// One nonempty compressed sample at a time, including edit-marker skipping.
+// No total clip byte/frame budget: only the currently retained sample is bounded.
+int kronello_fb_cursor_next(void *cursor, void **result, size_t *sample_bytes,
+                            char *error, size_t error_size) {
+    @autoreleasepool {
+        *result=NULL; *sample_bytes=0;
+        KronelloCompressedCursor *owner=(__bridge KronelloCompressedCursor *)cursor;
+        CMSampleBufferRef sample;
+        while ((sample=[owner.output copyNextSampleBuffer])) {
+            if (CMSampleBufferGetNumSamples(sample)==0) { CFRelease(sample); continue; }
+            CMFormatDescriptionRef format=CMSampleBufferGetFormatDescription(sample);
+            if (!format || !CMSampleBufferGetDataBuffer(sample) || !resident_format_supported(format)) {
+                CFRelease(sample); [owner.reader cancelReading];
+                snprintf(error,error_size,"actual compressed color/range/chroma/bit depth unsupported or unverified; require tagged SDR BT709 8-bit 420"); return -8;
+            }
+            size_t bytes=CMSampleBufferGetTotalSampleSize(sample);
+            if (bytes>128*1024*1024 || CMSampleBufferGetNumSamples(sample)!=1) {
+                CFRelease(sample); [owner.reader cancelReading];
+                snprintf(error,error_size,"compressed single-sample byte/count budget exceeded"); return -4;
+            }
+            *result=(void *)sample; *sample_bytes=bytes; return 1;
+        }
+        if (owner.reader.status!=AVAssetReaderStatusCompleted) {
+            snprintf(error,error_size,"%s",owner.reader.error.localizedDescription.UTF8String ?: "compressed reader did not complete"); return -5;
+        }
+        return 0;
+    }
+}
+
+void kronello_fb_cursor_close(void *cursor) {
+    @autoreleasepool {
+        KronelloCompressedCursor *owner=(__bridge_transfer KronelloCompressedCursor *)cursor;
+        [owner.reader cancelReading];
+    }
+}

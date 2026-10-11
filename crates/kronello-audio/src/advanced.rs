@@ -2,6 +2,7 @@
 //! AUDIO-010 adds pitch-preserved (WSOLA) sources and channel-masked mixing.
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Range;
+use std::sync::Arc;
 
 use kronello_model::*;
 use kronello_time::{Time, TimeMap, TimeRange};
@@ -46,7 +47,7 @@ enum Source {
 /// filters/dynamics carry deterministic state from the placement boundary.
 #[derive(Debug, Clone)]
 enum EntryEffect {
-    Gain(Property),
+    Gain(Arc<Property>),
     Dsp(ResolvedAudioEffect),
 }
 #[derive(Debug, Clone)]
@@ -83,8 +84,9 @@ impl Entry {
 }
 /// A live processing step inside one mix request. Gains keep evaluated
 /// values; DSP stages own the zero-initialized per-call state.
+#[derive(Clone)]
 enum ChainStep {
-    Gain(Property),
+    Gain(Arc<Property>),
     Dsp(crate::dsp::Processor),
 }
 impl ChainStep {
@@ -103,6 +105,7 @@ impl ChainStep {
 /// stopped, while a rewind (or a request the cursor already passed) resets
 /// to the placement boundary. Both paths stay bit-identical to a fresh
 /// stateless evaluation from `placement.start` (ADR-0117).
+#[derive(Clone)]
 struct EntryRuntime {
     next: i64,
     chain: Vec<ChainStep>,
@@ -152,22 +155,111 @@ impl EntryRuntime {
 /// DSP/WSOLA chains instead of replaying each placement from its start;
 /// any other order resets the affected cursor to the placement boundary.
 /// Either way every emitted sample stays bit-identical to the stateless
-/// evaluator (ADR-0117/ADR-0076). The session never crosses callers: it is
-/// created empty per prepared snapshot and dropped with it.
+/// evaluator (ADR-0117/ADR-0076). Each renderer owns independent mutable
+/// state, created empty or copied from an exact checkpoint for the same
+/// immutable plan/sources/layout.
 pub struct AudioPlaybackSession {
     entries: Vec<Option<EntryRuntime>>,
+    identity: Arc<()>,
+    target: Option<ChannelMask>,
+}
+/// Opaque exact DSP/WSOLA state for one immutable plan, source set and layout.
+/// Never serialized into an authored document. Restoration creates independent
+/// mutable cursors; the caller must retain the identical immutable source set.
+pub struct AudioPlaybackCheckpoint {
+    session: AudioPlaybackSession,
+    boundary_sample: i64,
+    payload_bytes: usize,
+}
+impl AudioPlaybackCheckpoint {
+    pub fn boundary_sample(&self) -> i64 {
+        self.boundary_sample
+    }
+    /// Logical copied state, excluding shared immutable properties, allocator
+    /// overhead, compiled plan, source PCM and active restored sessions.
+    pub fn payload_bytes(&self) -> usize {
+        self.payload_bytes
+    }
+    pub fn playback_session(&self) -> AudioPlaybackSession {
+        self.session.duplicate()
+    }
 }
 impl AudioPlaybackSession {
-    pub(crate) fn new(entry_count: usize) -> Self {
+    pub(crate) fn new(entry_count: usize, identity: Arc<()>) -> Self {
         Self {
             entries: std::iter::repeat_with(|| None).take(entry_count).collect(),
+            identity,
+            target: None,
         }
+    }
+    fn duplicate(&self) -> Self {
+        Self {
+            entries: self.entries.clone(),
+            identity: self.identity.clone(),
+            target: self.target,
+        }
+    }
+    /// Inspect without allocating, so the owner can evict retained state
+    /// before copying. A cursor beyond the boundary (including a poisoned
+    /// failed pass) cannot certify this earlier checkpoint.
+    pub fn checkpoint_payload_bytes(&self, boundary_sample: i64) -> Option<usize> {
+        if boundary_sample < 0
+            || self.target.is_none()
+            || self
+                .entries
+                .iter()
+                .flatten()
+                .any(|runtime| runtime.next == i64::MAX || runtime.next > boundary_sample)
+        {
+            return None;
+        }
+        let mut bytes = std::mem::size_of::<AudioPlaybackCheckpoint>().saturating_add(
+            self.entries
+                .len()
+                .saturating_mul(std::mem::size_of::<Option<EntryRuntime>>()),
+        );
+        for runtime in self.entries.iter().flatten() {
+            bytes = bytes.saturating_add(
+                runtime
+                    .chain
+                    .len()
+                    .saturating_mul(std::mem::size_of::<ChainStep>()),
+            );
+            for step in &runtime.chain {
+                if let ChainStep::Dsp(processor) = step {
+                    bytes = bytes.saturating_add(processor.heap_bytes());
+                }
+            }
+            if let Some(wsola) = &runtime.wsola {
+                bytes = bytes.saturating_add(wsola.heap_bytes());
+            }
+        }
+        Some(bytes)
+    }
+    /// Copy exact state only after checking the supplied payload budget.
+    /// `boundary_sample` must be an endpoint traversed successfully by this
+    /// renderer, with the same immutable source set used during restoration.
+    pub fn checkpoint(
+        &self,
+        boundary_sample: i64,
+        max_payload_bytes: usize,
+    ) -> Option<AudioPlaybackCheckpoint> {
+        let bytes = self.checkpoint_payload_bytes(boundary_sample)?;
+        if bytes > max_payload_bytes {
+            return None;
+        }
+        Some(AudioPlaybackCheckpoint {
+            session: self.duplicate(),
+            boundary_sample,
+            payload_bytes: bytes,
+        })
     }
 }
 #[derive(Debug, Clone)]
 pub(crate) struct AdvancedAudioPlan {
     entries: Vec<Entry>,
     curves: BTreeMap<CurveId, AnimationCurve>,
+    identity: Arc<()>,
 }
 fn invalid(message: &str) -> AudioError {
     AudioError::InvalidInput(message.into())
@@ -306,6 +398,7 @@ impl AdvancedAudioPlan {
         let mut plan = Self {
             entries: vec![],
             curves: BTreeMap::new(),
+            identity: Arc::new(()),
         };
         let mut flattened_count = 0;
         let mut legacy_curve_keys = 0;
@@ -351,7 +444,7 @@ impl AdvancedAudioPlan {
                                 .ok_or_else(|| invalid("audio effect gain Property missing"))?;
                             plan.capture_property(project, property)?;
                             referenced.insert(*gain);
-                            effects.push(EntryEffect::Gain(property.clone()));
+                            effects.push(EntryEffect::Gain(Arc::new(property.clone())));
                         }
                         _ => {
                             // AUDIO-007/008: constant-parameter filters and
@@ -681,7 +774,7 @@ impl AdvancedAudioPlan {
     }
     /// Empty streaming state for sequential requests against this plan.
     pub(crate) fn playback_session(&self) -> AudioPlaybackSession {
-        AudioPlaybackSession::new(self.entries.len())
+        AudioPlaybackSession::new(self.entries.len(), self.identity.clone())
     }
     /// End of the last stateful placement (or 0): warming a session beyond
     /// this sample evaluates only stateless entries and buys nothing.
@@ -755,6 +848,14 @@ impl AdvancedAudioPlan {
         metered: bool,
         mut session: Option<&mut AudioPlaybackSession>,
     ) -> Result<(ChannelBus, crate::ChannelBusMeters), AudioError> {
+        if let Some(session) = session.as_deref_mut() {
+            if !Arc::ptr_eq(&session.identity, &self.identity)
+                || session.target.is_some_and(|layout| layout != target)
+            {
+                return Err(invalid("playback session plan or layout differs"));
+            }
+            session.target = Some(target);
+        }
         let output = sample_range(range)?;
         let length = output
             .end

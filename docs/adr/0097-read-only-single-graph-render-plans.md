@@ -1,6 +1,6 @@
 # ADR-0097: 読み取り専用の単一 graph 実行計画
 
-- 状態: 採用
+- 状態: 部分置換（[ADR-0150](0150-linear-only-delivery-and-temporal-samples.md)。temporal sampleの二面readbackを一面+statusへ変更。通常frame・native preview・読み取り専用Query・推定と実測の区別は維持）
 - 日付: 2026-10-06
 - 対象: INSPECT-002
 

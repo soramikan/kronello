@@ -91,6 +91,8 @@ pub enum VideoResolution {
 #[derive(Debug, Clone, PartialEq)]
 pub enum DagNode {
     VideoDraw {
+        /// Stable authored node/instance identity for an independent media cursor.
+        cursor: SceneKey,
         asset: kronello_model::Asset,
         stream_index: u32,
         time: kronello_time::Time,
@@ -891,6 +893,7 @@ impl Builder<'_> {
             } => {
                 let b = crate::DesignBounds::checked([0.0; 2], *extent)?.transform(transform)?;
                 children.push(self.push(DagNode::VideoDraw {
+                    cursor: n.key.clone(),
                     asset: asset.clone(),
                     stream_index: *stream_index,
                     time: *time,

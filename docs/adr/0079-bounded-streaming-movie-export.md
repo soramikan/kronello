@@ -1,6 +1,6 @@
 # ADR-0079: movie export の payload を有界 streaming で処理する
 
-- 状態: 部分置換（[ADR-0141](0141-peak-live-render-surfaces.md): tile 面の累積加算のみ。同時保持寿命へ変更し、512 MiB・union ROI・streaming・音声等の条項は維持）
+- 状態: 部分置換（[ADR-0141](0141-peak-live-render-surfaces.md): tile 面の累積加算を同時保持寿命へ変更。[ADR-0148](0148-audio-only-delivery-without-video.md): 音声単独の映像処理・metadata生成を省略。[ADR-0152](0152-two-frame-delivery-pipeline.md): 二組のbufferによるrender/encode pipeline。512 MiB・union ROI・streaming・音声等の条項は維持）
 - 日付: 2026-10-06
 - 対象: RENDER-003
 - 部分置換: ADR-0049 の export 全 source / Bus 10 分・映像 256 MiB 制限、ADR-0050 の同制限の継承、ADR-0053 の movie export 最終面保持。その他の時間・色・codec・publication・通常 frame / image sequence 契約は維持する。

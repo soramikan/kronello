@@ -13,3 +13,6 @@
 *.otf binary
 *.woff2 binary
 *.kronello binary
+
+# Keep machine-generated performance receipts collapsible in GitHub reviews.
+docs/testing/perf-00[2-5]*.json linguist-generated=true

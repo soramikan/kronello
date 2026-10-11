@@ -19,6 +19,7 @@ pub struct GpuContext {
     // Pipelines are device-wide and immutable once compiled; FXC/DXIL
     // translation is expensive on software adapters, so each entry is built
     // once and shared across every render call.
+    pub(crate) scene_surface_mode: crate::scene_gpu::SceneSurfaceMode,
     pub(crate) scene_pipelines: std::sync::OnceLock<crate::scene_gpu::ScenePipelines>,
     pub(crate) opacity_pipeline: std::sync::OnceLock<wgpu::ComputePipeline>,
     pub(crate) resident_pipeline: std::sync::OnceLock<wgpu::ComputePipeline>,
@@ -147,6 +148,7 @@ impl GpuContext {
             queue,
             adapter_info,
             pipeline,
+            scene_surface_mode: Default::default(),
             scene_pipelines: Default::default(),
             opacity_pipeline: Default::default(),
             resident_pipeline: Default::default(),

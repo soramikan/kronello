@@ -191,6 +191,20 @@ fn verify_codec(encoder: &str, filter: &str) {
             BackendSelection::GpuResidentBgra8,
             BackendSelection::GpuResidentNv12,
         ] {
+            let format = if selection == BackendSelection::GpuResidentBgra8 {
+                kronello_framebridge::resident::ResidentFormat::Bgra8
+            } else {
+                kronello_framebridge::resident::ResidentFormat::Nv12VideoRange
+            };
+            let end = origin.checked_add(duration).unwrap();
+            let interval = [
+                (origin.numerator(), origin.denominator()),
+                (end.numerator(), end.denominator()),
+            ];
+            let mut cursor = kronello_framebridge::resident::ResidentFileDecoder::open(
+                &movie, 0, format, interval,
+            )
+            .unwrap();
             for i in [3, 0, 2, 1, 3] {
                 let actual = frame(&project, id, times[i], selection);
                 let expected = frame(&project, id, times[i], BackendSelection::CpuReference);
@@ -229,6 +243,30 @@ fn verify_codec(encoder: &str, filter: &str) {
                     ],
                 )
                 .unwrap();
+                let requested = times[i].checked_add(origin).unwrap();
+                let continued = cursor
+                    .decode_at((requested.numerator(), requested.denominator()))
+                    .unwrap();
+                let continued_validation = continued
+                    .read_for_validation(
+                        kronello_gpu::WorkingSpace::LinearRec709,
+                        kronello_framebridge::resident::VideoTransfer::Bt709,
+                    )
+                    .unwrap();
+                let fresh_validation = native
+                    .read_for_validation(
+                        kronello_gpu::WorkingSpace::LinearRec709,
+                        kronello_framebridge::resident::VideoTransfer::Bt709,
+                    )
+                    .unwrap();
+                assert_eq!(
+                    continued_validation.planes, fresh_validation.planes,
+                    "persistent/fresh native planes differ {source} {selection:?} query={i}"
+                );
+                assert_eq!(
+                    continued.presentation_time, native.presentation_time,
+                    "persistent/fresh exact native PTS"
+                );
                 let reference = native
                     .read_for_validation(
                         kronello_gpu::WorkingSpace::LinearRec709,
@@ -357,6 +395,123 @@ fn verify_codec(encoder: &str, filter: &str) {
                     times[i]
                 );
             }
+            assert!(cursor.stats().metadata_samples > 0);
+            assert!(
+                cursor.stats().sessions_created < 5,
+                "forward requests reuse their hardware session"
+            );
+            assert!(cursor.stats().origin_restarts > 0);
+            for relative in &times {
+                let requested = relative.checked_add(origin).unwrap();
+                let actual = cursor
+                    .decode_at((requested.numerator(), requested.denominator()))
+                    .unwrap();
+                let expected = kronello_framebridge::resident::decode_file_with_interval(
+                    &movie,
+                    0,
+                    (requested.numerator(), requested.denominator()),
+                    format,
+                    interval,
+                )
+                .unwrap();
+                assert_eq!(actual.presentation_time, expected.presentation_time);
+                assert_eq!(
+                    actual
+                        .read_for_validation(
+                            kronello_gpu::WorkingSpace::LinearRec709,
+                            kronello_framebridge::resident::VideoTransfer::Bt709
+                        )
+                        .unwrap()
+                        .planes,
+                    expected
+                        .read_for_validation(
+                            kronello_gpu::WorkingSpace::LinearRec709,
+                            kronello_framebridge::resident::VideoTransfer::Bt709
+                        )
+                        .unwrap()
+                        .planes
+                );
+            }
+            let sessions = cursor.stats().sessions_created;
+            let repeated = times.last().unwrap().checked_add(origin).unwrap();
+            cursor
+                .decode_at((repeated.numerator(), repeated.denominator()))
+                .unwrap();
+            assert_eq!(cursor.stats().sessions_created, sessions);
+            assert!(cursor.stats().peak_outputs <= 64);
+            assert!(cursor.stats().peak_output_bytes <= 512 * 1024 * 1024);
+            assert_eq!(
+                cursor
+                    .decode_at((end.numerator(), end.denominator()))
+                    .err()
+                    .unwrap()
+                    .code(),
+                "FRAME_NOT_FOUND"
+            );
+            assert_eq!(cursor.stats().retained_outputs, 0);
+            cursor
+                .decode_at((origin.numerator(), origin.denominator()))
+                .unwrap();
+            let bytes = std::fs::read(&movie).unwrap();
+            std::fs::write(&movie, &bytes).unwrap();
+            let changed = cursor
+                .decode_at((origin.numerator(), origin.denominator()))
+                .err()
+                .unwrap();
+            assert!(changed.detail.contains("fingerprint changed"));
+            assert_eq!(cursor.stats().retained_outputs, 0);
+        }
+        // The canonical origin may be negative even if AVFoundation normalizes
+        // MOV edit-list output to zero. Both paths must preserve the exact shift.
+        let negative = time(-7, 24);
+        let end = negative.checked_add(duration).unwrap();
+        let interval = [
+            (negative.numerator(), negative.denominator()),
+            (end.numerator(), end.denominator()),
+        ];
+        let format = kronello_framebridge::resident::ResidentFormat::Nv12VideoRange;
+        let mut cursor =
+            kronello_framebridge::resident::ResidentFileDecoder::open(&movie, 0, format, interval)
+                .unwrap();
+        for i in [0, 3, 1, 4] {
+            let requested = negative.checked_add(times[i]).unwrap();
+            let actual = cursor
+                .decode_at((requested.numerator(), requested.denominator()))
+                .unwrap();
+            let expected = kronello_framebridge::resident::decode_file_with_interval(
+                &movie,
+                0,
+                (requested.numerator(), requested.denominator()),
+                format,
+                interval,
+            )
+            .unwrap();
+            assert_eq!(actual.presentation_time, expected.presentation_time);
+            let working = kronello_gpu::WorkingSpace::LinearRec709;
+            let transfer = kronello_framebridge::resident::VideoTransfer::Bt709;
+            let bits = actual
+                .read_for_validation(working, transfer)
+                .unwrap()
+                .planes;
+            assert_eq!(
+                bits,
+                expected
+                    .read_for_validation(working, transfer)
+                    .unwrap()
+                    .planes
+            );
+            // Returned ownership remains valid after native state retirement.
+            cursor
+                .decode_at((end.numerator(), end.denominator()))
+                .err()
+                .unwrap();
+            assert_eq!(
+                actual
+                    .read_for_validation(working, transfer)
+                    .unwrap()
+                    .planes,
+                bits
+            );
         }
         let runtime = MediaRuntime::load().unwrap();
         let mut decoder = runtime.open_video(&movie).unwrap();
@@ -595,4 +750,171 @@ fn service_software_upload_resident_matches_software_preview() {
             "upload-resident/software preview mismatch frame={frame_index} max={max}"
         );
     }
+}
+
+#[test]
+#[ignore = "requires actual VideoToolbox encoder/decoder and Metal"]
+fn retained_hardware_backend_keeps_authored_cursors_bounded_and_revalidates_assets() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let temp = tempfile::tempdir().unwrap();
+    let movie = temp.path().join("cursor-pool.mov");
+    let status = std::process::Command::new(root.join("target/native/ffmpeg-lgpl/bin/ffmpeg"))
+        .args(["-v", "error", "-nostdin", "-i"])
+        .arg(root.join("target/fixtures/generated/media/cfr-24-1.nut"))
+        .args([
+            "-an",
+            "-vf",
+            "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=limited",
+            "-c:v",
+            "h264_videotoolbox",
+            "-allow_sw",
+            "0",
+            "-tag:v",
+            "avc1",
+            "-movflags",
+            "write_colr",
+            "-b:v",
+            "10000000",
+        ])
+        .arg(&movie)
+        .status()
+        .unwrap();
+    assert!(status.success());
+    let project_path = temp.path().join("cursor-pool.kronello");
+    let (sequence_id, origin, duration) = create_project(&movie, &project_path);
+    let mut document = kronello_store::ProjectStore::read_snapshot(&project_path)
+        .unwrap()
+        .document;
+    let DocumentObject::Known(sequence) = &mut document.sequences[0] else {
+        panic!()
+    };
+    let template = sequence.tracks[0].clone();
+    let range = TimeRange::new(Time::ZERO, duration.checked_sub(time(3, 24)).unwrap()).unwrap();
+    let tracks: Vec<_> = (0..10)
+        .map(|index| {
+            let mut track = template.clone();
+            track.id = TrackId::new();
+            let clip = &mut track.clips[0];
+            clip.id = ClipId::new();
+            clip.timeline_range = range;
+            clip.source_in = origin.checked_add(time(index % 3, 24)).unwrap();
+            track
+        })
+        .collect();
+    sequence.tracks = tracks[..2].to_vec();
+    let gpu = kronello_gpu::GpuContext::new().unwrap();
+    let backend = kronello_media::ResidentVideoRenderBackend::new(
+        &gpu,
+        &project_path,
+        kronello_media::ResidentVideoFormat::Nv12VideoRange,
+    );
+    let snapshot = kronello_render::RenderSnapshot::for_target(
+        &document,
+        RenderTarget::Sequence {
+            sequence: sequence_id,
+        },
+        1,
+        Default::default(),
+    )
+    .unwrap();
+    let region = OutputRegion {
+        origin: [0.0; 2],
+        extent: [64.0; 2],
+        pixels: [64; 2],
+    };
+    for at in [Time::ZERO, time(1, 24), time(2, 24)] {
+        let request = kronello_render::FrameRequest { time: at, region };
+        let actual = kronello_render::render_frame(&snapshot, &[], &backend, request).unwrap();
+        let fresh = kronello_media::ResidentVideoRenderBackend::new(
+            &gpu,
+            &project_path,
+            kronello_media::ResidentVideoFormat::Nv12VideoRange,
+        );
+        let expected = kronello_render::render_frame(&snapshot, &[], &fresh, request).unwrap();
+        assert_eq!(actual.pixels.linear, expected.pixels.linear);
+        assert_eq!(actual.pixels.display, expected.pixels.display);
+        assert_eq!(
+            actual
+                .metadata
+                .transfer_stats
+                .unwrap()
+                .cpu_upload_pixel_bytes,
+            0
+        );
+        let stats = backend.resident_cursor_stats();
+        assert_eq!(stats.len(), 2);
+        assert!(
+            stats
+                .iter()
+                .all(|stats| stats.sessions_created == 1 && stats.origin_restarts == 0)
+        );
+    }
+    // Both authored cursors must be freshly admitted after a same-content file
+    // rewrite. Asset bytes still match, but old native readers cannot survive it.
+    let bytes = std::fs::read(&movie).unwrap();
+    std::fs::write(&movie, &bytes).unwrap();
+    let request = kronello_render::FrameRequest {
+        time: time(2, 24),
+        region,
+    };
+    kronello_render::render_frame(&snapshot, &[], &backend, request).unwrap();
+    assert!(
+        backend
+            .resident_cursor_stats()
+            .iter()
+            .all(|s| s.sessions_created == 1)
+    );
+    let mut invalid = document.clone();
+    let DocumentObject::Known(asset) = &mut invalid.assets[0] else {
+        panic!()
+    };
+    asset.content_hash = "0".repeat(64);
+    let invalid = kronello_render::RenderSnapshot::for_target(
+        &invalid,
+        RenderTarget::Sequence {
+            sequence: sequence_id,
+        },
+        1,
+        Default::default(),
+    )
+    .unwrap();
+    assert_eq!(
+        kronello_render::render_frame(&invalid, &[], &backend, request)
+            .unwrap_err()
+            .code(),
+        "ASSET_HASH_MISMATCH"
+    );
+    std::fs::remove_file(&movie).unwrap();
+    assert_eq!(
+        kronello_render::render_frame(&snapshot, &[], &backend, request)
+            .unwrap_err()
+            .code(),
+        "ASSET_MISSING"
+    );
+    std::fs::write(&movie, &bytes).unwrap();
+    let DocumentObject::Known(sequence) = &mut document.sequences[0] else {
+        panic!()
+    };
+    sequence.tracks = tracks;
+    let many = kronello_render::RenderSnapshot::for_target(
+        &document,
+        RenderTarget::Sequence {
+            sequence: sequence_id,
+        },
+        1,
+        Default::default(),
+    )
+    .unwrap();
+    let actual = kronello_render::render_frame(&many, &[], &backend, request).unwrap();
+    let fresh = kronello_media::ResidentVideoRenderBackend::new(
+        &gpu,
+        &project_path,
+        kronello_media::ResidentVideoFormat::Nv12VideoRange,
+    );
+    let expected = kronello_render::render_frame(&many, &[], &fresh, request).unwrap();
+    assert_eq!(actual.pixels.linear, expected.pixels.linear);
+    assert_eq!(actual.pixels.display, expected.pixels.display);
+    let stats = backend.resident_cursor_stats();
+    assert_eq!(stats.len(), 8);
+    assert!(stats.iter().map(|s| s.retained_output_bytes).sum::<u64>() <= 512 * 1024 * 1024);
 }

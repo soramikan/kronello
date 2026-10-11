@@ -1,6 +1,6 @@
 # ADR-0092: GPU graph の単一実行と要求単位の観測
 
-- 状態: 採用
+- 状態: 部分置換（[ADR-0150](0150-linear-only-delivery-and-temporal-samples.md)。常時二面生成を必要な出力planeの選択へ変更。通常両面出力・単一graph・validation・cache公開・観測と所有権の条項は維持）
 - 日付: 2026-10-06
 
 ## 決定

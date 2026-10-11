@@ -370,6 +370,25 @@ impl NativeDecoder {
     pub(crate) fn runtime(&self) -> &NativeRuntime {
         &self.runtime
     }
+    pub(crate) fn file_fingerprint(&self) -> Result<assets::FileFingerprint, MediaError> {
+        let metadata = std::fs::metadata(&self.path)?;
+        if !metadata.is_file() {
+            return Err(MediaError::InvalidInput(
+                "video source is not a regular file".into(),
+            ));
+        }
+        Ok(assets::FileFingerprint::of(&metadata))
+    }
+    pub(crate) fn fresh_origin(&mut self) -> Result<(), MediaError> {
+        let mut replacement = Self::open_stream(&self.runtime, &self.path, Some(self.stream()))?;
+        // Preserve the canonical indexed origin contract, including the
+        // negative-origin TS rule which must start at the exact first packet.
+        if replacement.origin() >= 0 {
+            replacement.seek(replacement.origin())?;
+        }
+        *self = replacement;
+        Ok(())
+    }
     pub(crate) fn restart_origin(&mut self) -> Result<(), MediaError> {
         if self.origin() < 0 {
             // Timestamp seeking cannot reliably rewind negative-origin TS.

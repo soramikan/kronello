@@ -1,6 +1,6 @@
 # ADR-0076: 固定文書音声を SPSC buffer で再生し、出力デバイスのクロックへ映像を合わせる
 
-- 状態: 採用
+- 状態: 部分置換（[ADR-0155](0155-exact-bounded-audio-checkpoints.md) が正確なDSP checkpointと派生compiled plan一件を追加。ADR-0151: 再生プランとは別の有界PCM cache保持。source合計frame上限、プラン数、producer/device/clock契約は維持）
 - 日付: 2026-10-05
 - 対象: AUDIO-002
 - 決定者: supervisor。実デバイス / Metal の受け入れは pending host run。

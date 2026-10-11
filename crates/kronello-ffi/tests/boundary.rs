@@ -211,6 +211,29 @@ fn invalid_inputs_backpressure_and_handle_lifetime() {
 
 #[test]
 fn subscription_detects_external_revision_and_job_snapshot() {
+    // Notifications are compared against another service's job.list. Keep
+    // unrelated user jobs out of that comparison without mutating the test
+    // process environment while other ABI tests run on parallel threads.
+    if std::env::var_os("KRONELLO_TEST_ISOLATED_NOTIFICATION").is_none() {
+        let state = tempfile::tempdir().unwrap();
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "subscription_detects_external_revision_and_job_snapshot",
+                "--nocapture",
+            ])
+            .env("KRONELLO_TEST_ISOLATED_NOTIFICATION", "1")
+            .env("KRONELLO_STATE_ROOT", state.path())
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "isolated notification test failed: {} {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        return;
+    }
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("notify.kronello");
     let path = path.to_str().unwrap();
@@ -233,8 +256,18 @@ fn subscription_detects_external_revision_and_job_snapshot() {
     let deadline = Instant::now() + Duration::from_secs(10);
     let mut revision = false;
     let mut jobs = false;
+    let mut outstanding = 0;
     while !(revision && jobs) {
+        // Keep the worker busy: periodic checks must not rely on recv_timeout
+        // returning Timeout after an idle period.
+        if outstanding < 8 {
+            call(h, "{}");
+            outstanding += 1;
+        }
         if let Some(v) = poll_json(h) {
+            if v.get("request_id").is_some() {
+                outstanding -= 1;
+            }
             if v["notification"] == "revision_changed" {
                 assert_eq!(
                     v["response"],

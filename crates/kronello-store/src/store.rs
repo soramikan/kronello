@@ -458,6 +458,16 @@ impl ProjectStore {
     pub fn snapshot(&self) -> Result<Snapshot, StoreError> {
         read_snapshot(&self.connection)
     }
+    /// Current committed revision without deserializing the document. A later
+    /// snapshot may observe a newer commit; use its returned revision as the
+    /// identity of that immutable snapshot.
+    pub fn revision(&self) -> Result<Revision, StoreError> {
+        Ok(self.connection.query_row(
+            "SELECT revision FROM project WHERE singleton=1",
+            [],
+            |row| read_u64(row, 0),
+        )?)
+    }
     pub fn snapshot_at(&self, revision: Revision) -> Result<Snapshot, StoreError> {
         // Keep the base, range and events in one SQLite read view even when a
         // different connection compacts or commits concurrently.

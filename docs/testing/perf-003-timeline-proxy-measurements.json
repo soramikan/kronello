@@ -1,0 +1,1559 @@
+{
+  "date": "2026-10-11",
+  "quiet_host": false,
+  "build": "release",
+  "timeline": {
+    "path": "MainActor derived presentation getters; no service, rendering, or SwiftUI layout",
+    "before": {
+      "cases": [
+        {
+          "checksums": [
+            5763,
+            5763,
+            5763,
+            5763,
+            5763,
+            5763,
+            5763,
+            5763,
+            5763,
+            5763,
+            5763,
+            5763
+          ],
+          "clips": 100,
+          "cold_ms": 23.276792,
+          "samples_ms": [
+            23.276792,
+            19.832166,
+            19.096792,
+            19.044458,
+            18.925041,
+            18.83175,
+            18.936208,
+            18.925334,
+            18.884083,
+            18.926334,
+            19.02325,
+            18.715
+          ],
+          "warm_p50_ms": 18.926334,
+          "warm_p95_ms": 19.096792
+        },
+        {
+          "checksums": [
+            57227,
+            57227,
+            57227,
+            57227,
+            57227,
+            57227,
+            57227,
+            57227,
+            57227,
+            57227,
+            57227,
+            57227
+          ],
+          "clips": 1000,
+          "cold_ms": 190.586625,
+          "samples_ms": [
+            190.586625,
+            191.275375,
+            196.639791,
+            193.4375,
+            196.076916,
+            190.223667,
+            188.504208,
+            189.158042,
+            189.954625,
+            189.799375,
+            188.94475,
+            187.235042
+          ],
+          "warm_p50_ms": 189.954625,
+          "warm_p95_ms": 196.076916
+        },
+        {
+          "checksums": [
+            285977,
+            285977,
+            285977,
+            285977,
+            285977,
+            285977,
+            285977,
+            285977,
+            285977,
+            285977,
+            285977,
+            285977
+          ],
+          "clips": 5000,
+          "cold_ms": 945.256625,
+          "samples_ms": [
+            945.256625,
+            945.499041,
+            953.669541,
+            948.512042,
+            953.679583,
+            954.177167,
+            951.15425,
+            956.403125,
+            943.099833,
+            942.957541,
+            946.558209,
+            940.457291
+          ],
+          "warm_p50_ms": 948.512042,
+          "warm_p95_ms": 954.177167
+        }
+      ],
+      "path": "MainActor timeline presentation getters; no service, rendering or SwiftUI layout"
+    },
+    "initial_after": {
+      "cases": [
+        {
+          "checksums": [
+            5763,
+            5763,
+            5763,
+            5763,
+            5763,
+            5763,
+            5763,
+            5763,
+            5763,
+            5763,
+            5763,
+            5763
+          ],
+          "clips": 100,
+          "cold_ms": 0.395208,
+          "samples_ms": [
+            0.395208,
+            0.040042,
+            0.038375,
+            0.03825,
+            0.038333,
+            0.038208,
+            0.038208,
+            0.07475,
+            0.101458,
+            0.082667,
+            0.08075,
+            0.080875
+          ],
+          "warm_p50_ms": 0.040042,
+          "warm_p95_ms": 0.082667
+        },
+        {
+          "checksums": [
+            57227,
+            57227,
+            57227,
+            57227,
+            57227,
+            57227,
+            57227,
+            57227,
+            57227,
+            57227,
+            57227,
+            57227
+          ],
+          "clips": 1000,
+          "cold_ms": 3.126625,
+          "samples_ms": [
+            3.126625,
+            0.787458,
+            0.76975,
+            0.845375,
+            0.796125,
+            0.359708,
+            0.351708,
+            0.352042,
+            0.352166,
+            0.352417,
+            0.351416,
+            0.350958
+          ],
+          "warm_p50_ms": 0.352417,
+          "warm_p95_ms": 0.796125
+        },
+        {
+          "checksums": [
+            285977,
+            285977,
+            285977,
+            285977,
+            285977,
+            285977,
+            285977,
+            285977,
+            285977,
+            285977,
+            285977,
+            285977
+          ],
+          "clips": 5000,
+          "cold_ms": 6.727209,
+          "samples_ms": [
+            6.727209,
+            1.763916,
+            1.762541,
+            2.825208,
+            4.28875,
+            4.91075,
+            2.739667,
+            1.803792,
+            1.789209,
+            3.666042,
+            4.081083,
+            3.648625
+          ],
+          "warm_p50_ms": 2.825208,
+          "warm_p95_ms": 4.28875
+        }
+      ],
+      "path": "MainActor timeline presentation getters; no service, rendering or SwiftUI layout"
+    },
+    "final_after": {
+      "cases": [
+        {
+          "checksums": [
+            5763,
+            5763,
+            5763,
+            5763,
+            5763,
+            5763,
+            5763,
+            5763,
+            5763,
+            5763,
+            5763,
+            5763
+          ],
+          "clips": 100,
+          "cold_ms": 0.56675,
+          "query_update_ms": 0.178,
+          "samples_ms": [
+            0.56675,
+            0.044917,
+            0.040292,
+            0.039833,
+            0.037458,
+            0.037209,
+            0.037042,
+            0.037208,
+            0.037083,
+            0.037,
+            0.037,
+            0.036959
+          ],
+          "warm_p50_ms": 0.037208,
+          "warm_p95_ms": 0.040292
+        },
+        {
+          "checksums": [
+            57227,
+            57227,
+            57227,
+            57227,
+            57227,
+            57227,
+            57227,
+            57227,
+            57227,
+            57227,
+            57227,
+            57227
+          ],
+          "clips": 1000,
+          "cold_ms": 1.381041,
+          "query_update_ms": 1.369625,
+          "samples_ms": [
+            1.381041,
+            0.3555,
+            0.353334,
+            0.352625,
+            0.351834,
+            0.352208,
+            0.35275,
+            0.353,
+            0.377083,
+            0.401542,
+            0.35525,
+            0.3525
+          ],
+          "warm_p50_ms": 0.353,
+          "warm_p95_ms": 0.377083
+        },
+        {
+          "checksums": [
+            285977,
+            285977,
+            285977,
+            285977,
+            285977,
+            285977,
+            285977,
+            285977,
+            285977,
+            285977,
+            285977,
+            285977
+          ],
+          "clips": 5000,
+          "cold_ms": 6.900125,
+          "query_update_ms": 4.356167,
+          "samples_ms": [
+            6.900125,
+            1.766875,
+            1.783875,
+            1.757792,
+            1.789,
+            2.479916,
+            4.162208,
+            1.799,
+            1.7835,
+            1.747666,
+            1.773458,
+            1.745583
+          ],
+          "warm_p50_ms": 1.7835,
+          "warm_p95_ms": 2.479916
+        }
+      ],
+      "path": "MainActor timeline presentation getters; no service, rendering or SwiftUI layout"
+    },
+    "baseline_binary_sha256": "8365a261b71b5be5b1821f8f5fb51e29c3c5b4e586078f8dea4a4456cd45deba",
+    "final_binary_sha256": "e8acbfd3e8014bdca6597f0a538e4c6a3bb131d1d551ab2e5e636fa4791d6a28"
+  },
+  "proxy": {
+    "path": "revision-scoped DAG preparation and software decode; no GPU or GUI",
+    "measurement": {
+      "cases": [
+        {
+          "decode_convert_sample": {
+            "cold_ms": 121.577334,
+            "samples_ms": [
+              121.577334,
+              25.007542,
+              10.055,
+              12.789874999999999,
+              16.251749999999998,
+              11.000875,
+              10.426875,
+              34.661667,
+              18.068125000000002,
+              33.318583,
+              20.208707999999998,
+              28.825667,
+              24.035207999999997,
+              15.280999999999999,
+              12.926791,
+              13.180709,
+              25.620125,
+              24.203374999999998,
+              24.259375,
+              25.6375,
+              17.105083,
+              21.583666
+            ],
+            "warm_p50_ms": 20.208707999999998,
+            "warm_p95_ms": 33.318583
+          },
+          "decoder_pool": {
+            "active_decoders": 1,
+            "evictions": 0,
+            "hits": 21,
+            "misses": 1,
+            "peak_retained_frame_bytes": 24883200,
+            "retained_frame_bytes": 24883200
+          },
+          "decoder_totals": {
+            "cache_clone_bytes": 273715200,
+            "decoded_frames": 23,
+            "interval_hits": 0,
+            "peak_cached_frame_bytes": 24883200,
+            "returned_clone_bytes": 0,
+            "seeks": 1
+          },
+          "hits_cumulative": 21,
+          "mode": "off",
+          "preparations_cumulative": 1,
+          "prepare": {
+            "cold_ms": 1.759666,
+            "samples_ms": [
+              1.759666,
+              0.424041,
+              0.39633399999999996,
+              0.585417,
+              0.357459,
+              0.4435,
+              0.323459,
+              0.870833,
+              1.151542,
+              0.798084,
+              0.505125,
+              0.9805,
+              0.965208,
+              0.6384169999999999,
+              0.7993330000000001,
+              0.38587499999999997,
+              0.636,
+              0.37308399999999997,
+              0.625125,
+              0.4075,
+              0.568583,
+              0.37274999999999997
+            ],
+            "warm_p50_ms": 0.568583,
+            "warm_p95_ms": 0.9805
+          },
+          "raster_hashes": [
+            "66a6988283630a7aad5e0607bf13bb1e224b82f148af3eface5f48ecdcbcd885",
+            "9c6b3e463a90dc59475b331348930d817a7d6e0f109423ff4c0c091112f1327f",
+            "ca2a9a55d317cb9a2939cdee4adbc7fb9390c35cd11e7714eb8fdd5eb0a07642",
+            "2a59b213ceadb37a2e1779bab487de6d56047e95c3d44e83655756fb14dd7d5f",
+            "2596b255b0d3653fff73cea63acdf36e75e3837978ebde5dfe652df1e718a02c",
+            "03fad24ef823808239eff900222075f7ff86cb27f3011e4f39fad706e0235862",
+            "b3872366f716dfe97d47a8f0f4683ca9adc94bca8bc547bf5b9af88e1c4332a0",
+            "c4ff986e88de135839bfa06b44b19fa906e984276165061d6eb3ceacf99de51b",
+            "85c3b1136a7d08f09e0e1fc518758cec3c48b3eaa14a67856f24028cac8d41f9",
+            "f2898d87840ff0877219d58c3526a73dc74d590dc144252d711ebd81204f07f5",
+            "90844d0c33eb6963f5e06f71f0246c9193dc93d5a5dd16fbe1846b4e060f2ab1",
+            "7a19b6d7514bfd3111b5428a5537ad3b854c7a619283d2bdeaaadb75334337ac",
+            "3f86616a0e1b34a628d011870f0d85ad3e3433a2a4f4a52ad36c0b4f8dabe223",
+            "a79ee7d8bbb4f038325b5c40905df195b56add274bb61afd4bd757873a8cebf4",
+            "01c533d5a94842debdfc1cd879710d42339d6a67b0cbdeede047ca394a6367d9",
+            "b187758bbcb256d1f26eaf0ab9acf8230bbf93193dd053e339b8cace36487ff9",
+            "1820cc03093293bdd57e902bf75cf6d1e4698b97889bdb6f55e5fd2fc896cb71",
+            "1fb58e63244c24a106a9d7e0e1529b3e50949ba19a05ed93d829268a6e3a99d2",
+            "23857fbf613f33811a4ba0411cf7bb27cfe7c9f466915a96e499cb1c8222596a",
+            "658d0c22f97c6e44bd120cfd51351f2efc7d01d40dcf929a9d255dccf6595306",
+            "24a34326868d72b6c3dd17d01096a18c9563f0e73c0d377fb854d5559f106340",
+            "f2a1d21000b5ae66d2b50ba98ea7e7cea31b9d9e58489f5b018b62f58566812a"
+          ],
+          "source_sizes": [
+            [
+              [
+                3840,
+                2160
+              ]
+            ],
+            [
+              [
+                3840,
+                2160
+              ]
+            ],
+            [
+              [
+                3840,
+                2160
+              ]
+            ],
+            [
+              [
+                3840,
+                2160
+              ]
+            ],
+            [
+              [
+                3840,
+                2160
+              ]
+            ],
+            [
+              [
+                3840,
+                2160
+              ]
+            ],
+            [
+              [
+                3840,
+                2160
+              ]
+            ],
+            [
+              [
+                3840,
+                2160
+              ]
+            ],
+            [
+              [
+                3840,
+                2160
+              ]
+            ],
+            [
+              [
+                3840,
+                2160
+              ]
+            ],
+            [
+              [
+                3840,
+                2160
+              ]
+            ],
+            [
+              [
+                3840,
+                2160
+              ]
+            ],
+            [
+              [
+                3840,
+                2160
+              ]
+            ],
+            [
+              [
+                3840,
+                2160
+              ]
+            ],
+            [
+              [
+                3840,
+                2160
+              ]
+            ],
+            [
+              [
+                3840,
+                2160
+              ]
+            ],
+            [
+              [
+                3840,
+                2160
+              ]
+            ],
+            [
+              [
+                3840,
+                2160
+              ]
+            ],
+            [
+              [
+                3840,
+                2160
+              ]
+            ],
+            [
+              [
+                3840,
+                2160
+              ]
+            ],
+            [
+              [
+                3840,
+                2160
+              ]
+            ],
+            [
+              [
+                3840,
+                2160
+              ]
+            ]
+          ]
+        },
+        {
+          "decode_convert_sample": {
+            "cold_ms": 121.398292,
+            "samples_ms": [
+              121.398292,
+              17.629875,
+              17.633667,
+              20.611333,
+              17.788999999999998,
+              19.217125000000003,
+              17.473667,
+              15.150458,
+              15.245916999999999,
+              15.232249999999999,
+              17.407125,
+              17.844709,
+              16.487875,
+              16.301792,
+              17.202624999999998,
+              17.431459,
+              14.824208,
+              12.181417,
+              14.673709,
+              13.10875,
+              18.609875000000002,
+              18.591165999999998
+            ],
+            "warm_p50_ms": 17.407125,
+            "warm_p95_ms": 19.217125000000003
+          },
+          "decoder_pool": {
+            "active_decoders": 1,
+            "evictions": 0,
+            "hits": 21,
+            "misses": 1,
+            "peak_retained_frame_bytes": 16588800,
+            "retained_frame_bytes": 16588800
+          },
+          "decoder_totals": {
+            "cache_clone_bytes": 182476800,
+            "decoded_frames": 23,
+            "interval_hits": 0,
+            "peak_cached_frame_bytes": 16588800,
+            "returned_clone_bytes": 0,
+            "seeks": 1
+          },
+          "hits_cumulative": 42,
+          "mode": "prefer",
+          "preparations_cumulative": 2,
+          "prepare": {
+            "cold_ms": 61.241541,
+            "samples_ms": [
+              61.241541,
+              0.487584,
+              0.443125,
+              0.6054590000000001,
+              0.640416,
+              0.49291700000000005,
+              0.651792,
+              0.7775,
+              0.9819169999999999,
+              0.7479169999999999,
+              0.447041,
+              0.521166,
+              0.473792,
+              0.549375,
+              0.6547919999999999,
+              0.509125,
+              0.570167,
+              0.525875,
+              0.455959,
+              0.38412500000000005,
+              0.410542,
+              0.76125
+            ],
+            "warm_p50_ms": 0.525875,
+            "warm_p95_ms": 0.7775
+          },
+          "raster_hashes": [
+            "081408c7e31c666875546cf1e119a7fb5a897c3f4d6db6a56f580d2e1fec2544",
+            "ca0669512ee3d5f7a6df709732bea143ae8595b307fb2ef983f16ce835180952",
+            "9e8ba73f51616ea78c8068e18f8579c2387665b0b6e597301b6a25fbceae2410",
+            "f1ed597c8635790b805e9522a9ef155ae7d98e809d0d8cb602514ed30ecd598e",
+            "d6c09862aa79dba61e08e5d72f72555156a9aa3e6eaa1d61276440260b13de96",
+            "4d922d199f051ece73815490d9111f581770e5260eccbf5a6eb26896bc1f928f",
+            "5811af2199f294bc51543aba66a6ce5194aa4f4b333d5c82617f3f12bd3b3584",
+            "6c8fa41b3d69f57e5523f78cefaa4d59ae94c5adecb108ac5fa19307eef32608",
+            "8d412495049941734adb0310ffb7b2307f23992468c2a900271f74dc81f11571",
+            "b0f58d7173e7ca328dd8126f7fbcd0098994e2dc819c57333afd02535a15e290",
+            "a5a99835dac826bad61abcacd8adc22ad2ffa2b67ccb377c886683efb90e9249",
+            "8f93a7cce8a6dd8b91c61d4fa0f70aff0c8b4d5e007933ba796f0882405dd6bd",
+            "b32549090dd499235e242276fd5401694c8dab7434c1ec53dfbf8cf478114364",
+            "b42d0d58a0612b99902082812643eb52ef9e8aef40bffaffc2fa413ceb425c8f",
+            "c303eba469a89340510177e59b1aeb5302a6262e8381b6727b2ace968a3f6749",
+            "188cdb6d320db7802f14d536cfb1252191e0458f1bae6dd58c02f5ef59d17772",
+            "d14d40975d67fc5a9fb8e0f16205d14373ffa7b270df554e2051e0fc67a9ef2a",
+            "2899087ef92467045306b3007ebc772fc3af9a25141a0839b2598125ebf9032d",
+            "0363709737b67ed8f19e7342a9c1bf421703ddfc946fb11d6a558a94cc7376c0",
+            "7cd7804ac7bf3f166cafca3d8a773c16a3338dae93a4818e8552903e46350672",
+            "3575cdee32e8fd100d6986b706e0cc70b254cc981019611edc058d02b0b8a013",
+            "65607f8280edd51aba278ee1050f0b0765d1131639396f1aadb08a0964f1385a"
+          ],
+          "source_sizes": [
+            [
+              [
+                1920,
+                1080
+              ]
+            ],
+            [
+              [
+                1920,
+                1080
+              ]
+            ],
+            [
+              [
+                1920,
+                1080
+              ]
+            ],
+            [
+              [
+                1920,
+                1080
+              ]
+            ],
+            [
+              [
+                1920,
+                1080
+              ]
+            ],
+            [
+              [
+                1920,
+                1080
+              ]
+            ],
+            [
+              [
+                1920,
+                1080
+              ]
+            ],
+            [
+              [
+                1920,
+                1080
+              ]
+            ],
+            [
+              [
+                1920,
+                1080
+              ]
+            ],
+            [
+              [
+                1920,
+                1080
+              ]
+            ],
+            [
+              [
+                1920,
+                1080
+              ]
+            ],
+            [
+              [
+                1920,
+                1080
+              ]
+            ],
+            [
+              [
+                1920,
+                1080
+              ]
+            ],
+            [
+              [
+                1920,
+                1080
+              ]
+            ],
+            [
+              [
+                1920,
+                1080
+              ]
+            ],
+            [
+              [
+                1920,
+                1080
+              ]
+            ],
+            [
+              [
+                1920,
+                1080
+              ]
+            ],
+            [
+              [
+                1920,
+                1080
+              ]
+            ],
+            [
+              [
+                1920,
+                1080
+              ]
+            ],
+            [
+              [
+                1920,
+                1080
+              ]
+            ],
+            [
+              [
+                1920,
+                1080
+              ]
+            ],
+            [
+              [
+                1920,
+                1080
+              ]
+            ]
+          ]
+        }
+      ],
+      "encoded_proxy": {
+        "content_hash": "512961dc72340f6c66bc3f2c0f2143d6c1bfb192ca36ea09274f6244494a3136",
+        "duration": {
+          "den": "1",
+          "num": "2"
+        },
+        "frames": 60,
+        "height": 1080,
+        "probe": {
+          "duration": {
+            "den": "1",
+            "num": "2"
+          },
+          "export_snapshot_hash": "",
+          "render_snapshot_hash": "",
+          "streams": [
+            {
+              "channels": null,
+              "codec": "prores",
+              "color_matrix": "bt709",
+              "color_primaries": "bt709",
+              "color_range": "tv",
+              "color_transfer": "bt709",
+              "duration": {
+                "den": "1",
+                "num": "2"
+              },
+              "height": 1080,
+              "index": 0,
+              "kind": "video",
+              "pixel_format": "yuv422p10le",
+              "sample_rate": null,
+              "start": {
+                "den": "1",
+                "num": "0"
+              },
+              "time_base": {
+                "den": "15360",
+                "num": "1"
+              },
+              "width": 1920
+            }
+          ]
+        },
+        "time_base": {
+          "den": "15360",
+          "num": "1"
+        },
+        "width": 1920
+      },
+      "original": {
+        "content_hash": "6e1321f834aad4f7e1fbb971b5355b684fd1a8e30fd65c766cd9c0e6ddb472be",
+        "id": "964d494b-0a80-45d3-9d85-763117b51824",
+        "kind": "video",
+        "locator": {
+          "absolute": "/Users/sora/Repositories/soramikan/kronello/target/perf-improvements/proxy-source-4k.mov",
+          "relative": null
+        },
+        "streams": [
+          {
+            "codec": "hevc",
+            "color_matrix": "bt709",
+            "color_primaries": "unknown",
+            "color_range": "tv",
+            "color_transfer": "unknown",
+            "duration": {
+              "den": "1",
+              "num": "2"
+            },
+            "height": 2160,
+            "index": 0,
+            "pixel_format": "yuv420p",
+            "start_time": {
+              "den": "1",
+              "num": "0"
+            },
+            "time_base": {
+              "den": "15360",
+              "num": "1"
+            },
+            "width": 3840
+          }
+        ]
+      },
+      "path": "same shared service snapshot and 320x180 output; software resolution, no GPU/GUI",
+      "proxy": {
+        "content_hash": "512961dc72340f6c66bc3f2c0f2143d6c1bfb192ca36ea09274f6244494a3136",
+        "id": "ec0933ff-8202-487f-b80c-05f38d7e6719",
+        "kind": "video",
+        "locator": {
+          "absolute": "/Users/sora/Repositories/soramikan/kronello/target/perf-improvements/proxy-4k-compare/proxy.mov",
+          "relative": null
+        },
+        "streams": [
+          {
+            "codec": "prores",
+            "color_matrix": "bt709",
+            "color_primaries": "bt709",
+            "color_range": "tv",
+            "color_transfer": "bt709",
+            "duration": {
+              "den": "1",
+              "num": "2"
+            },
+            "height": 1080,
+            "index": 0,
+            "pixel_format": "yuv422p10le",
+            "start_time": {
+              "den": "1",
+              "num": "0"
+            },
+            "time_base": {
+              "den": "15360",
+              "num": "1"
+            },
+            "width": 1920
+          }
+        ]
+      }
+    },
+    "source_file_bytes": 7066799,
+    "source_file_sha256": "6e1321f834aad4f7e1fbb971b5355b684fd1a8e30fd65c766cd9c0e6ddb472be",
+    "source_command": "ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=size=3840x2160:rate=30:duration=2 -c:v hevc_videotoolbox -allow_sw 0 -pix_fmt yuv420p -color_primaries bt709 -color_trc bt709 -colorspace bt709 -color_range tv target/perf-improvements/proxy-source-4k.mov",
+    "run_command": "target/release/examples/perf_proxy_preview target/perf-improvements/proxy-source-4k.mov target/perf-improvements/proxy-4k-compare",
+    "binary_sha256": "31ef67c85da40ffc935f623bd9740dd6daf8ec8450646a6153a64d37f63cd001",
+    "note": "Measured before the subsequent proxy clock/crop correction; this source and its proxy both start at zero and have no crop, so that correction does not change the measured mapping."
+  },
+  "swift_build_command": "DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer CLANG_MODULE_CACHE_PATH=/tmp/kronello-perf-clang-cache SWIFTPM_MODULECACHE_OVERRIDE=/tmp/kronello-perf-swift-cache swift build --package-path apps/macos --disable-sandbox -c release -j 3 --cache-path /tmp/kronello-perf-spm-cache -debug-info-format none",
+  "sources_at_recording": {
+    "apps/macos/Sources/KronelloTimelineBenchmark/main.swift": "47c81a6678d77c505965c2bc8641f9b760b6ef929c9c8349881f07c7925a2e94",
+    "apps/macos/Sources/KronelloAppModel/TimelineIndex.swift": "b05db8041c6a9f291f56d43156d674f44e9e561f89ba96f487af0bc77e8d512e",
+    "apps/macos/Sources/KronelloAppModel/EditorModel.swift": "555495daff8eb7bf9ea05f2486c1aabc7c93a40091213fe22b21a29eb33afe54",
+    "crates/kronello-service/examples/perf_proxy_preview.rs": "904a89670d4b6d3675ad60c421dbd8ad2a59d2ae223fcffff9530c81133977e3"
+  },
+  "proxy_clock_regression": {
+    "purpose": "end-to-end correctness, timings are not performance acceptance",
+    "source_start_seconds": 2,
+    "source_duration_seconds": 2,
+    "dimensions": [
+      640,
+      360
+    ],
+    "command": "ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=size=640x360:rate=30:duration=2 -vf setpts=PTS+2/TB -fps_mode passthrough -c:v mpeg4 -q:v 4 -g 12 -pix_fmt yuv420p -color_primaries bt709 -color_trc bt709 -colorspace bt709 -color_range tv -threads 2 target/perf-improvements/proxy-source-offset.mov",
+    "measurement": {
+      "cases": [
+        {
+          "decode_convert_sample": {
+            "cold_ms": 96.08541600000001,
+            "samples_ms": [
+              96.08541600000001,
+              4.108458,
+              1.9114589999999998,
+              2.8732919999999997,
+              3.776708,
+              3.908542,
+              34.366667,
+              44.222042,
+              14.524458000000001,
+              4.0668750000000005,
+              3.0679589999999997,
+              4.3477500000000004,
+              2.968375,
+              4.174209,
+              3.7269170000000003,
+              3.546042,
+              5.621208,
+              4.18,
+              4.8722080000000005,
+              2.672667,
+              3.9209580000000006,
+              2.7712079999999997
+            ],
+            "warm_p50_ms": 3.9209580000000006,
+            "warm_p95_ms": 34.366667
+          },
+          "decoder_pool": {
+            "active_decoders": 1,
+            "evictions": 0,
+            "hits": 21,
+            "misses": 1,
+            "peak_retained_frame_bytes": 691200,
+            "retained_frame_bytes": 691200
+          },
+          "decoder_totals": {
+            "cache_clone_bytes": 7603200,
+            "decoded_frames": 23,
+            "interval_hits": 0,
+            "peak_cached_frame_bytes": 691200,
+            "returned_clone_bytes": 0,
+            "seeks": 1
+          },
+          "hits_cumulative": 21,
+          "mode": "off",
+          "preparations_cumulative": 1,
+          "prepare": {
+            "cold_ms": 1.621334,
+            "samples_ms": [
+              1.621334,
+              0.6825,
+              0.429416,
+              0.31033299999999997,
+              0.741625,
+              0.703,
+              0.72275,
+              0.409666,
+              0.982917,
+              0.39795899999999995,
+              0.697583,
+              0.725959,
+              0.8355,
+              0.652292,
+              0.363958,
+              0.708042,
+              0.6835829999999999,
+              0.676625,
+              0.35762499999999997,
+              0.367167,
+              0.7259169999999999,
+              0.69575
+            ],
+            "warm_p50_ms": 0.6835829999999999,
+            "warm_p95_ms": 0.8355
+          },
+          "raster_hashes": [
+            "bf87d4913e4c5924d09ddd1deacf9033b0842d255ca981fb22520c1580b50de9",
+            "4f2f5138be5920b2425211507aa08b18ef12fecdaece6e3c8de060eae272afaf",
+            "836f116c40ee43fc66d63395373933fea1c84b6fcc84302c343ef7becb390794",
+            "331f2ddad6d0303780c5286650479f64a8aac7024eb6abbbf15ae8fb42caf4f3",
+            "1237fb25caa993ac88168c0ed5dd25ca72f78754bbf7d0db580ca2eabcc87984",
+            "7446573776df4bd033da8a7890da7e9814aa748bd4ff9e52b5280b93ca1594b3",
+            "9938d517c4c5289517912359400be52d434f99bec3b3f88822e0a1ffec43d27a",
+            "8941ba1e776a770890e73f6cedb26ceb7a7bd2fbd3473c3fba23b7ec3686fee4",
+            "df92218ec295cf76596d87fce9d901a106a727157384878b2b1fe824a3402382",
+            "9a2cccd53ca7c26f22ab97911706d1b34b8318616af2337cd6f3a5702d6330b2",
+            "1a60970aa4912fede1df67662c5b8481a58b167dbe6efbe79d74fbc05652df06",
+            "04f3e726dcd313f2d82268b76470c4feb5bfc81d265383e7c03fb9fffe01c2bf",
+            "ac2076a62de033b705aa92f7954d6ea4b47656f0494a9a665c29faa2a6de636e",
+            "d29ae349c78a7ff6ea9fa350f3aab89afc42076705a202cf0cc4fc8a35b4f081",
+            "636dabcdba1a43ddfd81b2442f8e0f7720d4761f403f4a376ee3b36f6071689c",
+            "b87cdd9633c943c6b9502e04f41cbe401deae001b1d5013bdcfedbda528b4c97",
+            "79cf89f99187e82c08f732a9bf177e0e43ffbc9672f012f9d911b830df4d303e",
+            "62c912ec156128a8eccf65d33f6869ec3faf45f09131fb5d544ac19778656f94",
+            "d9971d223b140a21996a515c7ef927c586bc06b2b565ce2e4c5cf95b02cd4bed",
+            "0629c258b211a632b7582a20a7be3c0a4c70ef35ac8681dc9a851a80e51d0c8a",
+            "243fb6bfd6be5953fddb92e031ab71afa29a95c1d1bb2b61a20176d5b2d17eba",
+            "09eb732ab4d6a3e1bb0a8341de6cff6e2c50940c72b926b2a584468639170620"
+          ],
+          "source_sizes": [
+            [
+              [
+                640,
+                360
+              ]
+            ],
+            [
+              [
+                640,
+                360
+              ]
+            ],
+            [
+              [
+                640,
+                360
+              ]
+            ],
+            [
+              [
+                640,
+                360
+              ]
+            ],
+            [
+              [
+                640,
+                360
+              ]
+            ],
+            [
+              [
+                640,
+                360
+              ]
+            ],
+            [
+              [
+                640,
+                360
+              ]
+            ],
+            [
+              [
+                640,
+                360
+              ]
+            ],
+            [
+              [
+                640,
+                360
+              ]
+            ],
+            [
+              [
+                640,
+                360
+              ]
+            ],
+            [
+              [
+                640,
+                360
+              ]
+            ],
+            [
+              [
+                640,
+                360
+              ]
+            ],
+            [
+              [
+                640,
+                360
+              ]
+            ],
+            [
+              [
+                640,
+                360
+              ]
+            ],
+            [
+              [
+                640,
+                360
+              ]
+            ],
+            [
+              [
+                640,
+                360
+              ]
+            ],
+            [
+              [
+                640,
+                360
+              ]
+            ],
+            [
+              [
+                640,
+                360
+              ]
+            ],
+            [
+              [
+                640,
+                360
+              ]
+            ],
+            [
+              [
+                640,
+                360
+              ]
+            ],
+            [
+              [
+                640,
+                360
+              ]
+            ],
+            [
+              [
+                640,
+                360
+              ]
+            ]
+          ]
+        },
+        {
+          "decode_convert_sample": {
+            "cold_ms": 49.728208,
+            "samples_ms": [
+              49.728208,
+              2.21,
+              2.615625,
+              5.239916,
+              3.2362089999999997,
+              4.677167000000001,
+              2.887208,
+              3.766417,
+              3.122083,
+              1.916208,
+              3.5084169999999997,
+              5.850250000000001,
+              3.609292,
+              4.2924169999999995,
+              65.967916,
+              48.99,
+              6.967208,
+              24.628417,
+              8.362625,
+              66.957458,
+              19.124083,
+              40.459375
+            ],
+            "warm_p50_ms": 4.677167000000001,
+            "warm_p95_ms": 65.967916
+          },
+          "decoder_pool": {
+            "active_decoders": 1,
+            "evictions": 0,
+            "hits": 21,
+            "misses": 1,
+            "peak_retained_frame_bytes": 460800,
+            "retained_frame_bytes": 460800
+          },
+          "decoder_totals": {
+            "cache_clone_bytes": 5068800,
+            "decoded_frames": 23,
+            "interval_hits": 0,
+            "peak_cached_frame_bytes": 460800,
+            "returned_clone_bytes": 0,
+            "seeks": 1
+          },
+          "hits_cumulative": 42,
+          "mode": "prefer",
+          "preparations_cumulative": 2,
+          "prepare": {
+            "cold_ms": 4.982125,
+            "samples_ms": [
+              4.982125,
+              0.437042,
+              0.7305,
+              0.440125,
+              0.444792,
+              0.7458750000000001,
+              1.1920419999999998,
+              0.423875,
+              0.77925,
+              0.408709,
+              0.369667,
+              0.414291,
+              0.7442920000000001,
+              0.830833,
+              0.46558299999999997,
+              0.44379199999999996,
+              0.451584,
+              0.47354199999999996,
+              0.445834,
+              0.77875,
+              0.431875,
+              1.869917
+            ],
+            "warm_p50_ms": 0.451584,
+            "warm_p95_ms": 1.1920419999999998
+          },
+          "raster_hashes": [
+            "ac03fbdb5b3e2a279bc2f2b45d014578ee5ccd6b7010c9ddf09fea8cf57d889b",
+            "c8b8ae8dd4ebe6cb4eb2f6aaff5a930938677550f3768a034b3c1406c7c124f1",
+            "17cf86d17544eb5eb113b625495fb3d087e01249178b21c3063e2dc7d34b4af6",
+            "8300a8d84d1896a054da5e266ef72c8ae761f5c6a8ae696e9665f497dc6d0bbb",
+            "d74afe0d1465c70e63708a38836e83b1631b835016953b2cd048386add82ed17",
+            "699d175a06bbee9b33223b1b262bdcae01b19e5d218db020effaf1f88fd38ee2",
+            "e43ce7551161a61748e47108e24b4e45e3dddb4ec67fd2bc61f3bbc88f3a7077",
+            "4180ef00339de257db08c5f77ac19f3f3efc6471158a9d1ba53d650242511c65",
+            "da9beec800b0ad7ef196d53e4ec633eddae23bcf65f26d04c2db68fd43c49aa2",
+            "1967340d4df6d8acaf6da7e8ae6ce2c7a8ac8864db2083ea277a3e5e9dd7ea57",
+            "ede7a33f1bb84cf6f52909eb07f8bd52248c80b0c7b8939f4cdfbafa5c8f85fb",
+            "ba3ebcf2963370096f3ef9d0c5fe2741972f9d747c51d1fe9270045d36a3e9d9",
+            "158a80677db4eced1ae05d5288bed1a79660923fb9ecfaf6cc8f84e5d5bceaa6",
+            "043d6da40ad7e1a4762d3ca933468262b987937456883ed06d764a52187aba31",
+            "8b7d0e309b5c44bcc19d4eb174b22e5686fcba266c01df45c534ce284f40d214",
+            "6037b50688aa2cad075917422fb8f5a1da37f5ab1559ea18d1ae54e42bb72d40",
+            "1801d6471db837e836b4886cdaf91d9da0ea214e026e72c0112ccae41de79c6f",
+            "ff8628e40a9d145c335845e992131af627e3d9564ccfd2dbb1a7509b99d7c7ed",
+            "302aa9e6ff0d0896cfecd23967f12b07e44ddec2ee8316e04e9a2178816603df",
+            "edc100195d17d43aeaec72dc0d25835fdaf12a50109bfa3ca310046c023c2d18",
+            "e75d3cffbe26ed37a7f8e5f7e9589fe78129d48ab71a9186ab50afbdda4165b0",
+            "0a44aff74230ec1fecaed57bb531097c0f4dc557fe04653bf2e8f66f259c8543"
+          ],
+          "source_sizes": [
+            [
+              [
+                320,
+                180
+              ]
+            ],
+            [
+              [
+                320,
+                180
+              ]
+            ],
+            [
+              [
+                320,
+                180
+              ]
+            ],
+            [
+              [
+                320,
+                180
+              ]
+            ],
+            [
+              [
+                320,
+                180
+              ]
+            ],
+            [
+              [
+                320,
+                180
+              ]
+            ],
+            [
+              [
+                320,
+                180
+              ]
+            ],
+            [
+              [
+                320,
+                180
+              ]
+            ],
+            [
+              [
+                320,
+                180
+              ]
+            ],
+            [
+              [
+                320,
+                180
+              ]
+            ],
+            [
+              [
+                320,
+                180
+              ]
+            ],
+            [
+              [
+                320,
+                180
+              ]
+            ],
+            [
+              [
+                320,
+                180
+              ]
+            ],
+            [
+              [
+                320,
+                180
+              ]
+            ],
+            [
+              [
+                320,
+                180
+              ]
+            ],
+            [
+              [
+                320,
+                180
+              ]
+            ],
+            [
+              [
+                320,
+                180
+              ]
+            ],
+            [
+              [
+                320,
+                180
+              ]
+            ],
+            [
+              [
+                320,
+                180
+              ]
+            ],
+            [
+              [
+                320,
+                180
+              ]
+            ],
+            [
+              [
+                320,
+                180
+              ]
+            ],
+            [
+              [
+                320,
+                180
+              ]
+            ]
+          ]
+        }
+      ],
+      "encoded_proxy": {
+        "content_hash": "d5f7ca82992b42f3d6e84ae1f49485730cef45c5f1ba1c2dc72dae523514a173",
+        "duration": {
+          "den": "1",
+          "num": "2"
+        },
+        "frames": 60,
+        "height": 180,
+        "probe": {
+          "duration": {
+            "den": "1",
+            "num": "2"
+          },
+          "export_snapshot_hash": "",
+          "render_snapshot_hash": "",
+          "streams": [
+            {
+              "channels": null,
+              "codec": "prores",
+              "color_matrix": "bt709",
+              "color_primaries": "bt709",
+              "color_range": "tv",
+              "color_transfer": "bt709",
+              "duration": {
+                "den": "1",
+                "num": "2"
+              },
+              "height": 180,
+              "index": 0,
+              "kind": "video",
+              "pixel_format": "yuv422p10le",
+              "sample_rate": null,
+              "start": {
+                "den": "1",
+                "num": "0"
+              },
+              "time_base": {
+                "den": "15360",
+                "num": "1"
+              },
+              "width": 320
+            }
+          ]
+        },
+        "time_base": {
+          "den": "15360",
+          "num": "1"
+        },
+        "width": 320
+      },
+      "original": {
+        "content_hash": "25a7ee31495de97e222f86c1764be343392a2957d3b8b12331116e3db0f7c93b",
+        "id": "9c7b7c58-682f-4337-b074-c29fcf174a73",
+        "kind": "video",
+        "locator": {
+          "absolute": "/Users/sora/Repositories/soramikan/kronello/target/perf-improvements/proxy-source-offset.mov",
+          "relative": null
+        },
+        "streams": [
+          {
+            "codec": "mpeg4",
+            "color_matrix": "unknown",
+            "color_primaries": "unknown",
+            "color_range": "unknown",
+            "color_transfer": "unknown",
+            "duration": {
+              "den": "1",
+              "num": "2"
+            },
+            "height": 360,
+            "index": 0,
+            "pixel_format": "yuv420p",
+            "start_time": {
+              "den": "1",
+              "num": "2"
+            },
+            "time_base": {
+              "den": "15360",
+              "num": "1"
+            },
+            "width": 640
+          }
+        ]
+      },
+      "path": "same shared service snapshot and 320x180 output; software resolution, no GPU/GUI",
+      "proxy": {
+        "content_hash": "d5f7ca82992b42f3d6e84ae1f49485730cef45c5f1ba1c2dc72dae523514a173",
+        "id": "a29a6890-faf5-41d8-93de-1ec2f39f1c5e",
+        "kind": "video",
+        "locator": {
+          "absolute": "/Users/sora/Repositories/soramikan/kronello/target/perf-improvements/proxy-offset-compare/proxy.mov",
+          "relative": null
+        },
+        "streams": [
+          {
+            "codec": "prores",
+            "color_matrix": "bt709",
+            "color_primaries": "bt709",
+            "color_range": "tv",
+            "color_transfer": "bt709",
+            "duration": {
+              "den": "1",
+              "num": "2"
+            },
+            "height": 180,
+            "index": 0,
+            "pixel_format": "yuv422p10le",
+            "start_time": {
+              "den": "1",
+              "num": "0"
+            },
+            "time_base": {
+              "den": "15360",
+              "num": "1"
+            },
+            "width": 320
+          }
+        ]
+      }
+    },
+    "binary_sha256": "04d4b6875bc6d4a15164dfab8a6daec87b063935af7d883e4055326f8be4fc6e",
+    "sources_sha256": {
+      "crates/kronello-render/src/snapshot.rs": "34f7a1d0c532c48742562c794717156b5c0bae6eaa4b614470b194843d52add2",
+      "crates/kronello-render/tests/proxy.rs": "45859821668d3e997ec7c79d41788caa9bad7b478ac49df4ce43c38dfb165e62"
+    }
+  }
+}

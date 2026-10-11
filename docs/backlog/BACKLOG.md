@@ -3,8 +3,8 @@
 <!-- このファイルは scripts/backlog.py render が生成する。直接編集しない。正本は backlog.json。 -->
 
 - schema_version: 0.5
-- 更新日: 2026-10-10
-- タスク数: 146
+- 更新日: 2026-10-11
+- タスク数: 150
 
 ## 集計
 
@@ -19,7 +19,7 @@
 | M7 | 0 | 0 | 11 | 0 | 11 |
 | M8 | 0 | 0 | 16 | 0 | 16 |
 | M9 | 2 | 0 | 11 | 0 | 13 |
-| M10 | 1 | 0 | 10 | 0 | 11 |
+| M10 | 1 | 0 | 14 | 0 | 15 |
 | M11 | 14 | 0 | 0 | 0 | 14 |
 
 ## M0
@@ -1209,6 +1209,42 @@
   - 約4分の生成PCMを共有audio.analyzeで解析・保存し複数時刻の式から参照できる
   - 設定の各不正値と予算超過を具体的な型付き診断で返し、session_idを保存イベントと冪等再送に反映する
   - ADR・設計・検証記録・公開schema・Swift APIを更新し指定検証を記録する
+
+### PERF-002 描画頻度から独立した通知確認と最適化ビルド
+
+- 優先度: P1 / 領域: performance / 状態: done
+- 依存: FFI-002, PERF-001
+- 受け入れ条件:
+  - 100/1000/5000クリップのrelease FFI連続要求を購読あり/なしで計測しp50/p95を記録する
+  - 通知確認を250msの期限で実行し、編集・購読開始時には即時確認する。外部revisionとjob通知を維持する
+  - macOS --releaseでSwift buildとbin pathの両方にreleaseを選び、ビルドを確認する
+
+### PERF-003 revision単位のプレビュー準備再利用と複数動画カーソル
+
+- 優先度: P1 / 領域: performance / 状態: done
+- 依存: PERF-002
+- 受け入れ条件:
+  - snapshot/font/LUT準備をrevisionと入力identityで再利用し外部編集・資産変更の型付き診断を維持する
+  - 独立したclip/instanceのdecoder cursorと個数/byte予算を整備し1/2/3/4/8素材と同一素材の異時刻配置を計測する
+  - GUIのproxy選択とtimeline索引化を接続し同一作品の原本/proxyと100/1000/5000クリップを比較する
+
+### PERF-004 書き出し転送削減と音声素材共有
+
+- 優先度: P1 / 領域: performance / 状態: done
+- 依存: PERF-003
+- 受け入れ条件:
+  - 音声単独出力で映像backendを呼ばず音声sample数/内容/時刻と進捗を保つ
+  - linear-only exportとcodec別並列設定を実測し出力の正しさと転送量を比較する
+  - 有界pipelineと音声source共有を計測しメモリーと開始待ちを記録する
+
+### PERF-005 長尺シークとresident処理の性能改善
+
+- 優先度: P1 / 領域: performance / 状態: done
+- 依存: PERF-004
+- 受け入れ条件:
+  - 正確なseek index/DSP checkpointを導入しCFR/VFR/B-frame/負のstartと長尺前後scrubを照合する
+  - 永続VideoToolboxと有界demuxを計測し対応formatと寿命を検証する
+  - GPU面の範囲/寿命を最適化しhalo/精度/異常値検査を維持して複雑な作品の性能とpeak memoryを記録する
 
 
 ## M11

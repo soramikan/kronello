@@ -453,6 +453,23 @@ impl RenderBackend for CpuReferenceBackend {
     ) -> Result<BackendFrame, RenderError> {
         self.execute_keyed(dag, cache, Some(input_identities))
     }
+    fn execute_linear_with_cache(
+        &self,
+        dag: &RenderDag,
+        cache: &mut kronello_render::RenderCache,
+    ) -> Result<Vec<[f32; 4]>, RenderError> {
+        self.execute_keyed_linear(dag, cache, None)
+            .map(|pixels| crop_pixels(dag, pixels))
+    }
+    fn execute_linear_with_inputs(
+        &self,
+        dag: &RenderDag,
+        cache: &mut kronello_render::RenderCache,
+        input_identities: &std::collections::BTreeMap<usize, String>,
+    ) -> Result<Vec<[f32; 4]>, RenderError> {
+        self.execute_keyed_linear(dag, cache, Some(input_identities))
+            .map(|pixels| crop_pixels(dag, pixels))
+    }
 }
 impl CpuReferenceBackend {
     fn execute_keyed(
@@ -461,6 +478,16 @@ impl CpuReferenceBackend {
         cache: &mut kronello_render::RenderCache,
         input_identities: Option<&std::collections::BTreeMap<usize, String>>,
     ) -> Result<BackendFrame, RenderError> {
+        let linear = self.execute_keyed_linear(dag, cache, input_identities)?;
+        let display = self.display_from_linear(&linear, dag.working_space())?;
+        Ok(crop(dag, BackendFrame { linear, display }))
+    }
+    fn execute_keyed_linear(
+        &self,
+        dag: &RenderDag,
+        cache: &mut kronello_render::RenderCache,
+        input_identities: Option<&std::collections::BTreeMap<usize, String>>,
+    ) -> Result<Vec<[f32; 4]>, RenderError> {
         let (size, scene, working) = lower(dag)?;
         // Keep the exact lowering order; DAG indices are never cache identities.
         let keys = match input_identities {
@@ -512,11 +539,7 @@ impl CpuReferenceBackend {
             },
         )
         .map_err(error)?;
-        let display = linear
-            .iter()
-            .map(|p| convert_output_reference(*p, working, DISPLAY).map_err(error))
-            .collect::<Result<_, _>>()?;
-        Ok(crop(dag, BackendFrame { linear, display }))
+        Ok(linear)
     }
 }
 impl RenderBackend for GpuContext {
@@ -528,7 +551,8 @@ impl RenderBackend for GpuContext {
 
     fn cache_namespace(&self) -> Option<String> {
         Some(format!(
-            "wgpu-rgba16f-v1:{}:{:?}:{:?}:{:?}",
+            "wgpu-rgba16f-local-coverage-v2:{:?}:{}:{:?}:{:?}:{:?}",
+            self.scene_surface_mode,
             self.strict_namespace(),
             self.adapter_info,
             self.device.features(),
@@ -606,6 +630,59 @@ impl RenderBackend for GpuContext {
                 display: pair.display,
             },
         ))
+    }
+    fn execute_linear_with_cache(
+        &self,
+        dag: &RenderDag,
+        _cache: &mut kronello_render::RenderCache,
+    ) -> Result<Vec<[f32; 4]>, RenderError> {
+        self.execute_keyed_linear(dag, None)
+    }
+    fn execute_linear_with_inputs(
+        &self,
+        dag: &RenderDag,
+        _cache: &mut kronello_render::RenderCache,
+        input_identities: &std::collections::BTreeMap<usize, String>,
+    ) -> Result<Vec<[f32; 4]>, RenderError> {
+        self.execute_keyed_linear(dag, Some(input_identities))
+    }
+}
+impl GpuContext {
+    fn execute_keyed_linear(
+        &self,
+        dag: &RenderDag,
+        input_identities: Option<&std::collections::BTreeMap<usize, String>>,
+    ) -> Result<Vec<[f32; 4]>, RenderError> {
+        let _scope = self.render_scope().map_err(error)?;
+        let (size, scene, working) = lower(dag)?;
+        let namespace = self.cache_namespace().unwrap();
+        let keys = match input_identities {
+            Some(inputs) => scene_keys_with_inputs(dag, &namespace, inputs)?,
+            None => scene_keys(dag, &namespace)?,
+        };
+        let (linear, stats) = self
+            .render_scene_linear_cached(size, &scene, working, &keys, true)
+            .map_err(error)?;
+        self.record_transfers(&stats);
+        Ok(crop_pixels(dag, linear))
+    }
+    pub fn execute_resident_video_linear_cached_with_stats(
+        &self,
+        dag: &RenderDag,
+        resident: &std::collections::BTreeMap<usize, crate::ResidentImage>,
+        inputs: &std::collections::BTreeMap<usize, kronello_render::RasterCacheKey>,
+    ) -> Result<(Vec<[f32; 4]>, crate::TransferStats), RenderError> {
+        let (size, scene, working) = lower_with_resident(dag, resident)?;
+        let keys = kronello_render::RasterCacheKey::for_dag_with_inputs(
+            dag,
+            &self.cache_namespace().unwrap(),
+            inputs,
+        )?;
+        let keys = map_scene_keys(dag, &keys);
+        let (linear, stats) = self
+            .render_scene_linear_cached(size, &scene, working, &keys, false)
+            .map_err(error)?;
+        Ok((crop_pixels(dag, linear), stats))
     }
 }
 
@@ -736,22 +813,22 @@ fn gradient(g: &kronello_model::ResolvedGradient) -> crate::GradientPaint {
     }
 }
 
-fn crop(dag: &RenderDag, frame: BackendFrame) -> BackendFrame {
+fn crop_pixels(dag: &RenderDag, pixels: Vec<[f32; 4]>) -> Vec<[f32; 4]> {
     let [x, y] = dag.crop_origin();
     let [w, h] = dag.region().pixels;
     let stride = dag.execution_region().pixels[0] as usize;
-    let extract = |pixels: Vec<[f32; 4]>| {
-        (0..h as usize)
-            .flat_map(|row| {
-                pixels[(row + y) * stride + x..(row + y) * stride + x + w as usize]
-                    .iter()
-                    .copied()
-            })
-            .collect()
-    };
+    (0..h as usize)
+        .flat_map(|row| {
+            pixels[(row + y) * stride + x..(row + y) * stride + x + w as usize]
+                .iter()
+                .copied()
+        })
+        .collect()
+}
+fn crop(dag: &RenderDag, frame: BackendFrame) -> BackendFrame {
     BackendFrame {
-        linear: extract(frame.linear),
-        display: extract(frame.display),
+        linear: crop_pixels(dag, frame.linear),
+        display: crop_pixels(dag, frame.display),
     }
 }
 

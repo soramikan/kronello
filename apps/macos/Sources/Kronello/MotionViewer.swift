@@ -48,6 +48,7 @@ struct MotionViewer: View {
                 }.padding(.horizontal, KRSpace.space2)
                 KRTransportBar(frames: Binding(get: { model.frame }, set: { _ in }), fps: model.nominalFPS, duration: model.durationCode,
                     playing: $model.playing, looping: $model.ui.looping, zoom: $model.ui.zoom, resolution: $model.ui.resolution,
+                    proxyMode: Binding(get: { model.previewProxyMode }, set: { model.previewProxyMode = $0 }),
                     onSeek: model.seek, onStep: { model.seek(model.frame + Int64($0)) }, onBoundary: { model.seek($0 ? model.durationFrames - 1 : 0) })
                 }
             }

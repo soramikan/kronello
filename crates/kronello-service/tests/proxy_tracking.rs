@@ -257,6 +257,81 @@ fn proxy_linked_project(dir: &Path) -> (PathBuf, ProjectInfo, AssetId, AssetId) 
     (path, info, original, proxy)
 }
 
+#[cfg(unix)]
+#[test]
+fn perf003_prepared_proxy_fences_missing_reappearing_and_changed_files() {
+    let temp = tempfile::tempdir().unwrap();
+    let (path, _, original, proxy) = proxy_linked_project(temp.path());
+    let proxy_path = temp.path().join("proxy.mov");
+    let original_bytes = std::fs::read(&proxy_path).unwrap();
+    let render = |mode| FrameRenderRequest {
+        input: RenderInput {
+            project: path.clone(),
+            composition: None,
+            target: Some(kronello_render::RenderTarget::Source {
+                source: kronello_render::SourcePreviewRef::Asset {
+                    asset: original,
+                    stream_index: 0,
+                },
+            }),
+            region: kronello_render::OutputRegion {
+                origin: [0.0; 2],
+                extent: [32.0, 24.0],
+                pixels: [32, 24],
+            },
+            profile: Default::default(),
+            fonts: vec![],
+            luts: vec![],
+            media_proxies: mode,
+        },
+        time: Time::ZERO,
+        backend: None,
+    };
+    let session = ProjectSession::open(&path).unwrap();
+    let prefer = render(kronello_render::MediaProxyMode::Prefer);
+    let check = |request: &FrameRenderRequest, expected| {
+        let run = || service().preview_dag_unresolved(request);
+        let (_, prepared) = session.scope(run).unwrap();
+        let (_, direct) = run().unwrap();
+        assert_eq!(prepared, direct);
+        let assets: Vec<_> = prepared
+            .nodes()
+            .iter()
+            .filter_map(|node| match node {
+                kronello_render::DagNode::VideoDraw { asset, .. } => Some(asset.id),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(assets, vec![expected]);
+    };
+    check(&prefer, proxy);
+    check(&prefer, proxy);
+    assert_eq!(session.preparation_stats().preparations, 1);
+    assert_eq!(session.preparation_stats().hits, 1);
+    std::fs::remove_file(&proxy_path).unwrap();
+    check(&prefer, original);
+    check(&prefer, original);
+    assert_eq!(session.preparation_stats().preparations, 2);
+    std::fs::write(&proxy_path, &original_bytes).unwrap();
+    check(&prefer, proxy);
+    let metadata = std::fs::metadata(&proxy_path).unwrap();
+    let mut corrupted = original_bytes.clone();
+    corrupted[0] ^= 1;
+    std::fs::write(&proxy_path, corrupted).unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(&proxy_path)
+        .unwrap()
+        .set_times(std::fs::FileTimes::new().set_modified(metadata.modified().unwrap()))
+        .unwrap();
+    check(&prefer, original);
+    assert_eq!(session.preparation_stats().preparations, 4);
+    std::fs::write(&proxy_path, original_bytes).unwrap();
+    check(&prefer, proxy);
+    check(&render(kronello_render::MediaProxyMode::Off), original);
+    assert_eq!(session.preparation_stats().preparations, 6);
+}
+
 #[test]
 fn proxy_status_and_clear_manage_link_state() {
     let temp = tempfile::tempdir().unwrap();

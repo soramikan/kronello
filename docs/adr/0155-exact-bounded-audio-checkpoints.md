@@ -1,0 +1,25 @@
+# ADR-0155: 再検証済みsourceへの正確な有界音声チェックポイント
+
+- 状態: 採用（PERF-005受け入れ済み）
+- 日付: 2026-10-11
+- 部分置換: [ADR-0076](0076-buffered-device-clock-playback.md) のseek準備を常にplacementから行う方針と、active current/candidateの外に派生compiled planを持たない保持範囲。[ADR-0151](0151-bounded-playback-pcm-sharing.md) の毎回compileする方針。device clock、callback/ring境界、sourceの検証・PCM予算、active planの独立状態、正確なsample bitsは維持する。
+
+## 決定
+
+AudioPlaybackCheckpointは同じimmutable compiled plan・source集合・bus layoutの正確な状態を、producer上で独立コピーする。entryごとのnext、ordered DSP chain、filter/dynamicsの全状態、delay/reverbのring/position、gate状態、WSOLAのwindow/tail/input/out/out_pos/next_anchorを省略しない。Gain Propertyはcompiled planとimmutable Arcを共有する。保存・hash正本・作品schemaへ加えず、近似的なpreroll省略やsampleの再量子化をしない。planの実行時identityと最初のbus layoutをsessionに結び付け、別plan/layoutのmixはINVALID_AUDIO_INPUTで拒否する。同じplanのcloneはidentityを保つ。
+
+sessionのcheckpoint payloadをallocationなしで数え、過去のboundaryを既に超えたcursorや失敗でpoisonされたcursorを拒否する。cacheはentry/byte admissionでLRUを先にevictしてからcopyする。コピーは成功済みrenderer endpointから作る。source・plan・layoutが同じでも、復元後のDSP cursorはcaller間で共有しない。generator、inactive/未来のentry、reverse/jumpの処理も既存stateless評価と同じsampleを返す。
+
+native ProjectSession（session外はService）がArc<Mutex<AudioCheckpointCache>>を持ち、editor側のcaptureがimmutable snapshotとcanonical project identityをproducerへ渡す。capture後にprojectをclose/deleteしても、prepareはDB/canonicalizeを再実行しない。assetの検証は従来通りprepareする。standalone PreparedAudio::prepareはsource/checkpoint保持なしであり、process-global作品状態を作らない。
+
+cacheはcaptured canonical project path、revision、元のRenderTargetごとに一つのcompiled DocumentAudioPlanを保持する。compilerの構造予算を維持し、mutable作品・store・native codec・deviceをplanへ入れない。毎prepareで必要な全sourceの通常のlocator/content hash/stream/ABI検証を通し、同じimmutable DecodedAudioのArc bindingだけがcheckpoint復元を許可する。cache内のPCM参照はWeakで、PCMの128MiB予算を別のstrong ownerで迂回しない。byte/entry制限によりPCMが保持されない場合やnon-Unix fresh decodeでは保守的にcheckpoint missとなる。sourceがないpure generatorは同じcompiled planで復元できる。
+
+key/plan/source binding変更時は全checkpointを捨て、generationを更新する。以前のPreparedAudioが後から旧状態をsaveしても、新しいgenerationへ入れない。active old snapshotのPCM/DSPは従来通り独立して有効である。前後どちらの近いboundaryとも2秒未満なら新しいcopyを作らず、実際に処理した疎なboundaryだけを保持する。既定は128件・コピー状態payload32MiB・96000samples間隔。診断用上限は4096件/256MiB、間隔は正のsample整数。0件または0bytesはcompiled plan/checkpoint保持を無効にする。作品/requestへ保存しない。
+
+resume時はmin(resume_sample,last_stateful_end)以前の最新checkpointから開始し、残区間を4096以下のblockで正確に評価する。prepare中はcapture間隔の整数境界でblockを分割できる。最初の未訪問やeviction後の部分prerollは残る。render_block/meteredもproducer上の成功済みendpointから疎にsaveし、device callbackへlock、allocation、file/native操作を加えない。
+
+32MiBはコピー状態だけの保持予算である。cache map/key/allocator、共有immutable Property、一つの構造予算付きcompiled plan、PCM、active restored sessionとnative/driverは別に数える。RSS上限やメモリ削減と呼ばず、実測RSSの増加も記録する。active current/candidateの上限は維持し、派生compiled planの一件保持を追加する。
+
+## 検証
+
+[PERF-005](../testing/perf-005.md)に、保存済み変更前binaryと同じbinaryの無効化対照、180秒配置の90〜165秒seek、全sampled f32 bits/meter、copy payload/RSSを保存する。純粋coreで全DSPとWSOLAの非hop境界からの復元をcontinuous/stateless oracleと比較し、独立cursor、jump/rewind、layout/plan拒否、copy前の予算を確認する。共有serviceでrevision/generation、ctimeが変わった同内容source、新PCM binding、hash mismatch/recovery/missing、弱参照、tiny budget、native capture/producer/project closeを検証する。実device/長尺全音声出力/縦断の受け入れをsampled probeだけで完了にしない。

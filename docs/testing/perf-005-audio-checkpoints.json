@@ -1,0 +1,3125 @@
+{
+  "status": "DSP checkpoint component measured; PERF-005 in_progress; native VT/GPU and final workspace validation pending",
+  "run_date": "2026-10-11",
+  "quiet_host": false,
+  "raw": {
+    "before": {
+      "cases": [
+        {
+          "case": "dsp",
+          "document_sha256": "ae88d757991328cd642c41a29f3fa6869e711b73bcd31ffee837f23fd7c584b4",
+          "project": "target/perf-improvements/audio-seek-fixtures-v1/dsp/seek.kronello",
+          "revision": "1",
+          "source_sha256": "51ca7fd5218d4b1b47b19b62955319911ad3a8c3a6e39d40cc83c8f697252dd0",
+          "trials": [
+            {
+              "capture_ms": 1.0273750000000001,
+              "first_block_ms": 1.225333,
+              "iteration": 0,
+              "meters": {
+                "master_peak": [
+                  0.11606049,
+                  0.11606049
+                ],
+                "master_rms": [
+                  0.0821823,
+                  0.0821823
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.0821823,
+                      0.0821823
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 4237.326125,
+              "resume_sample": 6576017,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 0,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 4239.579124999999,
+              "three_blocks_f32_bits_sha256": "5b75ed526ba660a6589e72cca56e6afcbf6e31e79466f4cb4aa66e69e865614d"
+            },
+            {
+              "capture_ms": 1.266958,
+              "first_block_ms": 1.2654999999999998,
+              "iteration": 1,
+              "meters": {
+                "master_peak": [
+                  0.11606049,
+                  0.11606049
+                ],
+                "master_rms": [
+                  0.0821122,
+                  0.0821122
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.0821122,
+                      0.0821122
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 4188.91075,
+              "resume_sample": 7248031,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 1,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 4191.4435,
+              "three_blocks_f32_bits_sha256": "d8ac44d4087fe3a1e872fb71e853e88a66bbb7c29e86f7b2b2a56b2c2f368b54"
+            },
+            {
+              "capture_ms": 1.6256249999999999,
+              "first_block_ms": 1.235208,
+              "iteration": 2,
+              "meters": {
+                "master_peak": [
+                  0.11606049,
+                  0.11606049
+                ],
+                "master_rms": [
+                  0.0821823,
+                  0.0821823
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.0821823,
+                      0.0821823
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 3939.559125,
+              "resume_sample": 6576017,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 2,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 3942.4203330000005,
+              "three_blocks_f32_bits_sha256": "5b75ed526ba660a6589e72cca56e6afcbf6e31e79466f4cb4aa66e69e865614d"
+            },
+            {
+              "capture_ms": 1.470875,
+              "first_block_ms": 2.468375,
+              "iteration": 3,
+              "meters": {
+                "master_peak": [
+                  0.23212098,
+                  0.23212098
+                ],
+                "master_rms": [
+                  0.16441262,
+                  0.16441262
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.08220631,
+                      0.08220631
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  },
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.08220631,
+                      0.08220631
+                    ],
+                    "track": "781c91a2-6b71-4ddb-8876-c61b4d7ea00a"
+                  }
+                ]
+              },
+              "prepare_ms": 3041.350458,
+              "resume_sample": 4320007,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 3,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 3045.29,
+              "three_blocks_f32_bits_sha256": "c4bcb84e4e6512cd17de8619fdd6cfe6f6c4cf60df0689f04f267fca81d1461b"
+            },
+            {
+              "capture_ms": 1.622334,
+              "first_block_ms": 1.389834,
+              "iteration": 4,
+              "meters": {
+                "master_peak": [
+                  0.11606049,
+                  0.11606049
+                ],
+                "master_rms": [
+                  0.08217936,
+                  0.08217936
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.08217936,
+                      0.08217936
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 4432.780583,
+              "resume_sample": 7920053,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 4,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 4435.7932089999995,
+              "three_blocks_f32_bits_sha256": "5093ddf228e77cab2a02e2005d11bb0cb911d6a9b1e0b8fa520fa836e4de59f3"
+            },
+            {
+              "capture_ms": 1.4829590000000001,
+              "first_block_ms": 1.430666,
+              "iteration": 5,
+              "meters": {
+                "master_peak": [
+                  0.11606049,
+                  0.11606049
+                ],
+                "master_rms": [
+                  0.0821122,
+                  0.0821122
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.0821122,
+                      0.0821122
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 4177.715875,
+              "resume_sample": 7248031,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 5,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 4180.630542,
+              "three_blocks_f32_bits_sha256": "d8ac44d4087fe3a1e872fb71e853e88a66bbb7c29e86f7b2b2a56b2c2f368b54"
+            },
+            {
+              "capture_ms": 1.7517500000000001,
+              "first_block_ms": 1.268417,
+              "iteration": 6,
+              "meters": {
+                "master_peak": [
+                  0.11606049,
+                  0.11606049
+                ],
+                "master_rms": [
+                  0.0821823,
+                  0.0821823
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.0821823,
+                      0.0821823
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 3953.866375,
+              "resume_sample": 6576017,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 6,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 3956.887,
+              "three_blocks_f32_bits_sha256": "5b75ed526ba660a6589e72cca56e6afcbf6e31e79466f4cb4aa66e69e865614d"
+            },
+            {
+              "capture_ms": 1.715875,
+              "first_block_ms": 2.551042,
+              "iteration": 7,
+              "meters": {
+                "master_peak": [
+                  0.23212098,
+                  0.23212098
+                ],
+                "master_rms": [
+                  0.16441262,
+                  0.16441262
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.08220631,
+                      0.08220631
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  },
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.08220631,
+                      0.08220631
+                    ],
+                    "track": "781c91a2-6b71-4ddb-8876-c61b4d7ea00a"
+                  }
+                ]
+              },
+              "prepare_ms": 3057.403,
+              "resume_sample": 4320007,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 7,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 3061.670584,
+              "three_blocks_f32_bits_sha256": "c4bcb84e4e6512cd17de8619fdd6cfe6f6c4cf60df0689f04f267fca81d1461b"
+            },
+            {
+              "capture_ms": 1.23725,
+              "first_block_ms": 1.2798749999999999,
+              "iteration": 8,
+              "meters": {
+                "master_peak": [
+                  0.11606049,
+                  0.11606049
+                ],
+                "master_rms": [
+                  0.08217936,
+                  0.08217936
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.08217936,
+                      0.08217936
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 4522.965458,
+              "resume_sample": 7920053,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 8,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 4525.483208,
+              "three_blocks_f32_bits_sha256": "5093ddf228e77cab2a02e2005d11bb0cb911d6a9b1e0b8fa520fa836e4de59f3"
+            }
+          ],
+          "warm_p50_ms": 4180.630542,
+          "warm_p95_ms": 4525.483208
+        },
+        {
+          "case": "wsola",
+          "document_sha256": "2f261f68de39139441ed12d4ba0d4f7f961421f21cae8bc382acfda3c3398494",
+          "project": "target/perf-improvements/audio-seek-fixtures-v1/wsola/seek.kronello",
+          "revision": "1",
+          "source_sha256": "51ca7fd5218d4b1b47b19b62955319911ad3a8c3a6e39d40cc83c8f697252dd0",
+          "trials": [
+            {
+              "capture_ms": 1.475042,
+              "first_block_ms": 3.026709,
+              "iteration": 0,
+              "meters": {
+                "master_peak": [
+                  0.11671141,
+                  0.11671141
+                ],
+                "master_rms": [
+                  0.08186145,
+                  0.08186145
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11671141,
+                      0.11671141
+                    ],
+                    "rms": [
+                      0.08186145,
+                      0.08186145
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 5136.5185,
+              "resume_sample": 6576017,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 0,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 5141.020834,
+              "three_blocks_f32_bits_sha256": "92a427e10608634d8ed7fa49ccdd4f9809ab90b1c39852c7a30af422d5cff58a"
+            },
+            {
+              "capture_ms": 1.8370000000000002,
+              "first_block_ms": 2.929875,
+              "iteration": 1,
+              "meters": {
+                "master_peak": [
+                  0.11820237,
+                  0.11820237
+                ],
+                "master_rms": [
+                  0.08268399,
+                  0.08268399
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11820237,
+                      0.11820237
+                    ],
+                    "rms": [
+                      0.08268399,
+                      0.08268399
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 5336.267083,
+              "resume_sample": 7248031,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 1,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 5341.03425,
+              "three_blocks_f32_bits_sha256": "99dcfe645f462ff37dfad53a3b6ea085169b63d5460b70724310f2e10170f434"
+            },
+            {
+              "capture_ms": 1.573709,
+              "first_block_ms": 3.018,
+              "iteration": 2,
+              "meters": {
+                "master_peak": [
+                  0.11671141,
+                  0.11671141
+                ],
+                "master_rms": [
+                  0.08186145,
+                  0.08186145
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11671141,
+                      0.11671141
+                    ],
+                    "rms": [
+                      0.08186145,
+                      0.08186145
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 4821.248957999999,
+              "resume_sample": 6576017,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 2,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 4825.841209,
+              "three_blocks_f32_bits_sha256": "92a427e10608634d8ed7fa49ccdd4f9809ab90b1c39852c7a30af422d5cff58a"
+            },
+            {
+              "capture_ms": 1.255958,
+              "first_block_ms": 2.885834,
+              "iteration": 3,
+              "meters": {
+                "master_peak": [
+                  0.11704669,
+                  0.11704669
+                ],
+                "master_rms": [
+                  0.08236484,
+                  0.08236484
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11704669,
+                      0.11704669
+                    ],
+                    "rms": [
+                      0.08236484,
+                      0.08236484
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 3178.9402499999997,
+              "resume_sample": 4320007,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 3,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 3183.0821669999996,
+              "three_blocks_f32_bits_sha256": "d38d7b4e3fc5290e7fe3b269d145600d1f78ad90e05375022a5546c261ce3786"
+            },
+            {
+              "capture_ms": 1.3107920000000002,
+              "first_block_ms": 4.516,
+              "iteration": 4,
+              "meters": {
+                "master_peak": [
+                  0.11671141,
+                  0.11671141
+                ],
+                "master_rms": [
+                  0.08186394,
+                  0.08186394
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11671141,
+                      0.11671141
+                    ],
+                    "rms": [
+                      0.08186394,
+                      0.08186394
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 7195.488583,
+              "resume_sample": 7920053,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 4,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 7201.316084,
+              "three_blocks_f32_bits_sha256": "38be258f270d504ca81f354a50d85bf6ef76c0acfc107c11ba9c919f1795c6e9"
+            },
+            {
+              "capture_ms": 1.424208,
+              "first_block_ms": 4.366542,
+              "iteration": 5,
+              "meters": {
+                "master_peak": [
+                  0.11820237,
+                  0.11820237
+                ],
+                "master_rms": [
+                  0.08268399,
+                  0.08268399
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11820237,
+                      0.11820237
+                    ],
+                    "rms": [
+                      0.08268399,
+                      0.08268399
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 6334.816417,
+              "resume_sample": 7248031,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 5,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 6340.6075,
+              "three_blocks_f32_bits_sha256": "99dcfe645f462ff37dfad53a3b6ea085169b63d5460b70724310f2e10170f434"
+            },
+            {
+              "capture_ms": 1.936583,
+              "first_block_ms": 3.0907500000000003,
+              "iteration": 6,
+              "meters": {
+                "master_peak": [
+                  0.11671141,
+                  0.11671141
+                ],
+                "master_rms": [
+                  0.08186145,
+                  0.08186145
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11671141,
+                      0.11671141
+                    ],
+                    "rms": [
+                      0.08186145,
+                      0.08186145
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 5184.670417,
+              "resume_sample": 6576017,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 6,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 5189.698333,
+              "three_blocks_f32_bits_sha256": "92a427e10608634d8ed7fa49ccdd4f9809ab90b1c39852c7a30af422d5cff58a"
+            },
+            {
+              "capture_ms": 1.160458,
+              "first_block_ms": 2.857459,
+              "iteration": 7,
+              "meters": {
+                "master_peak": [
+                  0.11704669,
+                  0.11704669
+                ],
+                "master_rms": [
+                  0.08236484,
+                  0.08236484
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11704669,
+                      0.11704669
+                    ],
+                    "rms": [
+                      0.08236484,
+                      0.08236484
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 3185.082709,
+              "resume_sample": 4320007,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 7,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 3189.100917,
+              "three_blocks_f32_bits_sha256": "d38d7b4e3fc5290e7fe3b269d145600d1f78ad90e05375022a5546c261ce3786"
+            },
+            {
+              "capture_ms": 1.446834,
+              "first_block_ms": 2.934917,
+              "iteration": 8,
+              "meters": {
+                "master_peak": [
+                  0.11671141,
+                  0.11671141
+                ],
+                "master_rms": [
+                  0.08186394,
+                  0.08186394
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11671141,
+                      0.11671141
+                    ],
+                    "rms": [
+                      0.08186394,
+                      0.08186394
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 5815.529166,
+              "resume_sample": 7920053,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 8,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 5819.911375000001,
+              "three_blocks_f32_bits_sha256": "38be258f270d504ca81f354a50d85bf6ef76c0acfc107c11ba9c919f1795c6e9"
+            }
+          ],
+          "warm_p50_ms": 5341.03425,
+          "warm_p95_ms": 7201.316084
+        }
+      ],
+      "phase": "before",
+      "quiet_host": false,
+      "scope": "capture + producer preparation through first 4096 stereo frames; 180s stateful placements over 300s PCM; cold1/warm8; subsequent two blocks and meters verified outside start timing; runtime/state cache counters and full source hashes outside timing",
+      "source_sha256": {
+        "advanced.rs": "e7f4466aa3342b9b76fe2e9decdc9d7211a41b383835161cfeef7cb4eaf01225",
+        "dsp.rs": "aca62e01cc224070fc985595529975eeb55b2faeb815718f5e4407ed740cb1cc",
+        "playback.rs": "dad7683ab51ac2dc910d292b39832ee5d8315e57f441a0442496d5055b3d59ca",
+        "wsola.rs": "7af681318069b4117eb095abd5dad9bbd3e6ac805f243411adf5f2dd566fbcb5"
+      }
+    },
+    "enabled": {
+      "cases": [
+        {
+          "case": "dsp",
+          "document_sha256": "ae88d757991328cd642c41a29f3fa6869e711b73bcd31ffee837f23fd7c584b4",
+          "project": "target/perf-improvements/audio-seek-fixtures-v1/dsp/seek.kronello",
+          "revision": "1",
+          "source_sha256": "51ca7fd5218d4b1b47b19b62955319911ad3a8c3a6e39d40cc83c8f697252dd0",
+          "trials": [
+            {
+              "capture_ms": 2.1233340000000003,
+              "checkpoint_cache": {
+                "bypasses": 0,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 1,
+                "peak_retained_state_bytes": 20707184,
+                "plan_compilations": 1,
+                "plan_hits": 0,
+                "restores": 0,
+                "retained_checkpoints": 68,
+                "retained_plans": 1,
+                "retained_state_bytes": 20707184,
+                "saves": 68
+              },
+              "first_block_ms": 1.267625,
+              "iteration": 0,
+              "meters": {
+                "master_peak": [
+                  0.11606049,
+                  0.11606049
+                ],
+                "master_rms": [
+                  0.0821823,
+                  0.0821823
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.0821823,
+                      0.0821823
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 4382.550125,
+              "resume_sample": 6576017,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 0,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 4385.943125,
+              "three_blocks_f32_bits_sha256": "5b75ed526ba660a6589e72cca56e6afcbf6e31e79466f4cb4aa66e69e865614d",
+              "warm_evaluated_frames": 6576017,
+              "warm_start_sample": 0
+            },
+            {
+              "capture_ms": 1.3470419999999999,
+              "checkpoint_cache": {
+                "bypasses": 0,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 1,
+                "peak_retained_state_bytes": 22870576,
+                "plan_compilations": 1,
+                "plan_hits": 1,
+                "restores": 1,
+                "retained_checkpoints": 75,
+                "retained_plans": 1,
+                "retained_state_bytes": 22870576,
+                "saves": 75
+              },
+              "first_block_ms": 1.355125,
+              "iteration": 1,
+              "meters": {
+                "master_peak": [
+                  0.11606049,
+                  0.11606049
+                ],
+                "master_rms": [
+                  0.0821122,
+                  0.0821122
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.0821122,
+                      0.0821122
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 302.628417,
+              "resume_sample": 7248031,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 1,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 305.331125,
+              "three_blocks_f32_bits_sha256": "d8ac44d4087fe3a1e872fb71e853e88a66bbb7c29e86f7b2b2a56b2c2f368b54",
+              "warm_evaluated_frames": 720031,
+              "warm_start_sample": 6528000
+            },
+            {
+              "capture_ms": 1.454,
+              "checkpoint_cache": {
+                "bypasses": 0,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 1,
+                "peak_retained_state_bytes": 22870576,
+                "plan_compilations": 1,
+                "plan_hits": 2,
+                "restores": 2,
+                "retained_checkpoints": 75,
+                "retained_plans": 1,
+                "retained_state_bytes": 22870576,
+                "saves": 75
+              },
+              "first_block_ms": 1.265084,
+              "iteration": 2,
+              "meters": {
+                "master_peak": [
+                  0.11606049,
+                  0.11606049
+                ],
+                "master_rms": [
+                  0.0821823,
+                  0.0821823
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.0821823,
+                      0.0821823
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 42.568332999999996,
+              "resume_sample": 6576017,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 2,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 45.287792,
+              "three_blocks_f32_bits_sha256": "5b75ed526ba660a6589e72cca56e6afcbf6e31e79466f4cb4aa66e69e865614d",
+              "warm_evaluated_frames": 48017,
+              "warm_start_sample": 6528000
+            },
+            {
+              "capture_ms": 1.869667,
+              "checkpoint_cache": {
+                "bypasses": 0,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 1,
+                "peak_retained_state_bytes": 22870576,
+                "plan_compilations": 1,
+                "plan_hits": 3,
+                "restores": 3,
+                "retained_checkpoints": 75,
+                "retained_plans": 1,
+                "retained_state_bytes": 22870576,
+                "saves": 75
+              },
+              "first_block_ms": 2.470583,
+              "iteration": 3,
+              "meters": {
+                "master_peak": [
+                  0.23212098,
+                  0.23212098
+                ],
+                "master_rms": [
+                  0.16441262,
+                  0.16441262
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.08220631,
+                      0.08220631
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  },
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.08220631,
+                      0.08220631
+                    ],
+                    "track": "781c91a2-6b71-4ddb-8876-c61b4d7ea00a"
+                  }
+                ]
+              },
+              "prepare_ms": 23.49975,
+              "resume_sample": 4320007,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 3,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 27.840667,
+              "three_blocks_f32_bits_sha256": "c4bcb84e4e6512cd17de8619fdd6cfe6f6c4cf60df0689f04f267fca81d1461b",
+              "warm_evaluated_frames": 7,
+              "warm_start_sample": 4320000
+            },
+            {
+              "capture_ms": 1.196375,
+              "checkpoint_cache": {
+                "bypasses": 0,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 1,
+                "peak_retained_state_bytes": 25033968,
+                "plan_compilations": 1,
+                "plan_hits": 4,
+                "restores": 4,
+                "retained_checkpoints": 82,
+                "retained_plans": 1,
+                "retained_state_bytes": 25033968,
+                "saves": 82
+              },
+              "first_block_ms": 1.2585000000000002,
+              "iteration": 4,
+              "meters": {
+                "master_peak": [
+                  0.11606049,
+                  0.11606049
+                ],
+                "master_rms": [
+                  0.08217936,
+                  0.08217936
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.08217936,
+                      0.08217936
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 290.300042,
+              "resume_sample": 7920053,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 4,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 292.755417,
+              "three_blocks_f32_bits_sha256": "5093ddf228e77cab2a02e2005d11bb0cb911d6a9b1e0b8fa520fa836e4de59f3",
+              "warm_evaluated_frames": 720053,
+              "warm_start_sample": 7200000
+            },
+            {
+              "capture_ms": 1.30975,
+              "checkpoint_cache": {
+                "bypasses": 0,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 1,
+                "peak_retained_state_bytes": 25033968,
+                "plan_compilations": 1,
+                "plan_hits": 5,
+                "restores": 5,
+                "retained_checkpoints": 82,
+                "retained_plans": 1,
+                "retained_state_bytes": 25033968,
+                "saves": 82
+              },
+              "first_block_ms": 1.267333,
+              "iteration": 5,
+              "meters": {
+                "master_peak": [
+                  0.11606049,
+                  0.11606049
+                ],
+                "master_rms": [
+                  0.0821122,
+                  0.0821122
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.0821122,
+                      0.0821122
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 40.567958,
+              "resume_sample": 7248031,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 5,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 43.146708,
+              "three_blocks_f32_bits_sha256": "d8ac44d4087fe3a1e872fb71e853e88a66bbb7c29e86f7b2b2a56b2c2f368b54",
+              "warm_evaluated_frames": 48031,
+              "warm_start_sample": 7200000
+            },
+            {
+              "capture_ms": 1.294292,
+              "checkpoint_cache": {
+                "bypasses": 0,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 1,
+                "peak_retained_state_bytes": 25033968,
+                "plan_compilations": 1,
+                "plan_hits": 6,
+                "restores": 6,
+                "retained_checkpoints": 82,
+                "retained_plans": 1,
+                "retained_state_bytes": 25033968,
+                "saves": 82
+              },
+              "first_block_ms": 1.256167,
+              "iteration": 6,
+              "meters": {
+                "master_peak": [
+                  0.11606049,
+                  0.11606049
+                ],
+                "master_rms": [
+                  0.0821823,
+                  0.0821823
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.0821823,
+                      0.0821823
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 44.225542000000004,
+              "resume_sample": 6576017,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 6,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 46.776667,
+              "three_blocks_f32_bits_sha256": "5b75ed526ba660a6589e72cca56e6afcbf6e31e79466f4cb4aa66e69e865614d",
+              "warm_evaluated_frames": 48017,
+              "warm_start_sample": 6528000
+            },
+            {
+              "capture_ms": 1.241792,
+              "checkpoint_cache": {
+                "bypasses": 0,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 1,
+                "peak_retained_state_bytes": 25033968,
+                "plan_compilations": 1,
+                "plan_hits": 7,
+                "restores": 7,
+                "retained_checkpoints": 82,
+                "retained_plans": 1,
+                "retained_state_bytes": 25033968,
+                "saves": 82
+              },
+              "first_block_ms": 2.553833,
+              "iteration": 7,
+              "meters": {
+                "master_peak": [
+                  0.23212098,
+                  0.23212098
+                ],
+                "master_rms": [
+                  0.16441262,
+                  0.16441262
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.08220631,
+                      0.08220631
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  },
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.08220631,
+                      0.08220631
+                    ],
+                    "track": "781c91a2-6b71-4ddb-8876-c61b4d7ea00a"
+                  }
+                ]
+              },
+              "prepare_ms": 24.119166999999997,
+              "resume_sample": 4320007,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 7,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 27.915042,
+              "three_blocks_f32_bits_sha256": "c4bcb84e4e6512cd17de8619fdd6cfe6f6c4cf60df0689f04f267fca81d1461b",
+              "warm_evaluated_frames": 7,
+              "warm_start_sample": 4320000
+            },
+            {
+              "capture_ms": 1.2444579999999998,
+              "checkpoint_cache": {
+                "bypasses": 0,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 1,
+                "peak_retained_state_bytes": 25033968,
+                "plan_compilations": 1,
+                "plan_hits": 8,
+                "restores": 8,
+                "retained_checkpoints": 82,
+                "retained_plans": 1,
+                "retained_state_bytes": 25033968,
+                "saves": 82
+              },
+              "first_block_ms": 1.279417,
+              "iteration": 8,
+              "meters": {
+                "master_peak": [
+                  0.11606049,
+                  0.11606049
+                ],
+                "master_rms": [
+                  0.08217936,
+                  0.08217936
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.08217936,
+                      0.08217936
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 41.460291999999995,
+              "resume_sample": 7920053,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 8,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 43.984500000000004,
+              "three_blocks_f32_bits_sha256": "5093ddf228e77cab2a02e2005d11bb0cb911d6a9b1e0b8fa520fa836e4de59f3",
+              "warm_evaluated_frames": 48053,
+              "warm_start_sample": 7872000
+            }
+          ],
+          "warm_p50_ms": 45.287792,
+          "warm_p95_ms": 305.331125
+        },
+        {
+          "case": "wsola",
+          "document_sha256": "2f261f68de39139441ed12d4ba0d4f7f961421f21cae8bc382acfda3c3398494",
+          "project": "target/perf-improvements/audio-seek-fixtures-v1/wsola/seek.kronello",
+          "revision": "1",
+          "source_sha256": "51ca7fd5218d4b1b47b19b62955319911ad3a8c3a6e39d40cc83c8f697252dd0",
+          "trials": [
+            {
+              "capture_ms": 0.908083,
+              "checkpoint_cache": {
+                "bypasses": 0,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 1,
+                "peak_retained_state_bytes": 20258560,
+                "plan_compilations": 1,
+                "plan_hits": 0,
+                "restores": 0,
+                "retained_checkpoints": 68,
+                "retained_plans": 1,
+                "retained_state_bytes": 20258560,
+                "saves": 68
+              },
+              "first_block_ms": 2.9515420000000003,
+              "iteration": 0,
+              "meters": {
+                "master_peak": [
+                  0.11671141,
+                  0.11671141
+                ],
+                "master_rms": [
+                  0.08186145,
+                  0.08186145
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11671141,
+                      0.11671141
+                    ],
+                    "rms": [
+                      0.08186145,
+                      0.08186145
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 5331.553583,
+              "resume_sample": 6576017,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 0,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 5335.41375,
+              "three_blocks_f32_bits_sha256": "92a427e10608634d8ed7fa49ccdd4f9809ab90b1c39852c7a30af422d5cff58a",
+              "warm_evaluated_frames": 6576017,
+              "warm_start_sample": 0
+            },
+            {
+              "capture_ms": 1.4930830000000002,
+              "checkpoint_cache": {
+                "bypasses": 0,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 1,
+                "peak_retained_state_bytes": 22344000,
+                "plan_compilations": 1,
+                "plan_hits": 1,
+                "restores": 1,
+                "retained_checkpoints": 75,
+                "retained_plans": 1,
+                "retained_state_bytes": 22344000,
+                "saves": 75
+              },
+              "first_block_ms": 2.9381670000000004,
+              "iteration": 1,
+              "meters": {
+                "master_peak": [
+                  0.11820237,
+                  0.11820237
+                ],
+                "master_rms": [
+                  0.08268399,
+                  0.08268399
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11820237,
+                      0.11820237
+                    ],
+                    "rms": [
+                      0.08268399,
+                      0.08268399
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 671.192709,
+              "resume_sample": 7248031,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 1,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 675.624417,
+              "three_blocks_f32_bits_sha256": "99dcfe645f462ff37dfad53a3b6ea085169b63d5460b70724310f2e10170f434",
+              "warm_evaluated_frames": 720031,
+              "warm_start_sample": 6528000
+            },
+            {
+              "capture_ms": 1.217125,
+              "checkpoint_cache": {
+                "bypasses": 0,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 1,
+                "peak_retained_state_bytes": 22344000,
+                "plan_compilations": 1,
+                "plan_hits": 2,
+                "restores": 2,
+                "retained_checkpoints": 75,
+                "retained_plans": 1,
+                "retained_state_bytes": 22344000,
+                "saves": 75
+              },
+              "first_block_ms": 3.249667,
+              "iteration": 2,
+              "meters": {
+                "master_peak": [
+                  0.11671141,
+                  0.11671141
+                ],
+                "master_rms": [
+                  0.08186145,
+                  0.08186145
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11671141,
+                      0.11671141
+                    ],
+                    "rms": [
+                      0.08186145,
+                      0.08186145
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 66.792167,
+              "resume_sample": 6576017,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 2,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 71.259583,
+              "three_blocks_f32_bits_sha256": "92a427e10608634d8ed7fa49ccdd4f9809ab90b1c39852c7a30af422d5cff58a",
+              "warm_evaluated_frames": 48017,
+              "warm_start_sample": 6528000
+            },
+            {
+              "capture_ms": 1.274084,
+              "checkpoint_cache": {
+                "bypasses": 0,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 1,
+                "peak_retained_state_bytes": 22344000,
+                "plan_compilations": 1,
+                "plan_hits": 3,
+                "restores": 3,
+                "retained_checkpoints": 75,
+                "retained_plans": 1,
+                "retained_state_bytes": 22344000,
+                "saves": 75
+              },
+              "first_block_ms": 2.9801670000000002,
+              "iteration": 3,
+              "meters": {
+                "master_peak": [
+                  0.11704669,
+                  0.11704669
+                ],
+                "master_rms": [
+                  0.08236484,
+                  0.08236484
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11704669,
+                      0.11704669
+                    ],
+                    "rms": [
+                      0.08236484,
+                      0.08236484
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 30.661208,
+              "resume_sample": 4320007,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 3,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 34.915959,
+              "three_blocks_f32_bits_sha256": "d38d7b4e3fc5290e7fe3b269d145600d1f78ad90e05375022a5546c261ce3786",
+              "warm_evaluated_frames": 7,
+              "warm_start_sample": 4320000
+            },
+            {
+              "capture_ms": 1.165166,
+              "checkpoint_cache": {
+                "bypasses": 0,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 1,
+                "peak_retained_state_bytes": 24429440,
+                "plan_compilations": 1,
+                "plan_hits": 4,
+                "restores": 4,
+                "retained_checkpoints": 82,
+                "retained_plans": 1,
+                "retained_state_bytes": 24429440,
+                "saves": 82
+              },
+              "first_block_ms": 3.280667,
+              "iteration": 4,
+              "meters": {
+                "master_peak": [
+                  0.11671141,
+                  0.11671141
+                ],
+                "master_rms": [
+                  0.08186394,
+                  0.08186394
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11671141,
+                      0.11671141
+                    ],
+                    "rms": [
+                      0.08186394,
+                      0.08186394
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 635.536334,
+              "resume_sample": 7920053,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 4,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 639.982916,
+              "three_blocks_f32_bits_sha256": "38be258f270d504ca81f354a50d85bf6ef76c0acfc107c11ba9c919f1795c6e9",
+              "warm_evaluated_frames": 720053,
+              "warm_start_sample": 7200000
+            },
+            {
+              "capture_ms": 1.1728750000000001,
+              "checkpoint_cache": {
+                "bypasses": 0,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 1,
+                "peak_retained_state_bytes": 24429440,
+                "plan_compilations": 1,
+                "plan_hits": 5,
+                "restores": 5,
+                "retained_checkpoints": 82,
+                "retained_plans": 1,
+                "retained_state_bytes": 24429440,
+                "saves": 82
+              },
+              "first_block_ms": 2.9372920000000002,
+              "iteration": 5,
+              "meters": {
+                "master_peak": [
+                  0.11820237,
+                  0.11820237
+                ],
+                "master_rms": [
+                  0.08268399,
+                  0.08268399
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11820237,
+                      0.11820237
+                    ],
+                    "rms": [
+                      0.08268399,
+                      0.08268399
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 66.62620799999999,
+              "resume_sample": 7248031,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 5,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 70.73675,
+              "three_blocks_f32_bits_sha256": "99dcfe645f462ff37dfad53a3b6ea085169b63d5460b70724310f2e10170f434",
+              "warm_evaluated_frames": 48031,
+              "warm_start_sample": 7200000
+            },
+            {
+              "capture_ms": 1.1666249999999998,
+              "checkpoint_cache": {
+                "bypasses": 0,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 1,
+                "peak_retained_state_bytes": 24429440,
+                "plan_compilations": 1,
+                "plan_hits": 6,
+                "restores": 6,
+                "retained_checkpoints": 82,
+                "retained_plans": 1,
+                "retained_state_bytes": 24429440,
+                "saves": 82
+              },
+              "first_block_ms": 2.928958,
+              "iteration": 6,
+              "meters": {
+                "master_peak": [
+                  0.11671141,
+                  0.11671141
+                ],
+                "master_rms": [
+                  0.08186145,
+                  0.08186145
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11671141,
+                      0.11671141
+                    ],
+                    "rms": [
+                      0.08186145,
+                      0.08186145
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 61.41275,
+              "resume_sample": 6576017,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 6,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 65.508667,
+              "three_blocks_f32_bits_sha256": "92a427e10608634d8ed7fa49ccdd4f9809ab90b1c39852c7a30af422d5cff58a",
+              "warm_evaluated_frames": 48017,
+              "warm_start_sample": 6528000
+            },
+            {
+              "capture_ms": 1.1802080000000001,
+              "checkpoint_cache": {
+                "bypasses": 0,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 1,
+                "peak_retained_state_bytes": 24429440,
+                "plan_compilations": 1,
+                "plan_hits": 7,
+                "restores": 7,
+                "retained_checkpoints": 82,
+                "retained_plans": 1,
+                "retained_state_bytes": 24429440,
+                "saves": 82
+              },
+              "first_block_ms": 2.974875,
+              "iteration": 7,
+              "meters": {
+                "master_peak": [
+                  0.11704669,
+                  0.11704669
+                ],
+                "master_rms": [
+                  0.08236484,
+                  0.08236484
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11704669,
+                      0.11704669
+                    ],
+                    "rms": [
+                      0.08236484,
+                      0.08236484
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 26.285958,
+              "resume_sample": 4320007,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 7,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 30.441416,
+              "three_blocks_f32_bits_sha256": "d38d7b4e3fc5290e7fe3b269d145600d1f78ad90e05375022a5546c261ce3786",
+              "warm_evaluated_frames": 7,
+              "warm_start_sample": 4320000
+            },
+            {
+              "capture_ms": 1.211541,
+              "checkpoint_cache": {
+                "bypasses": 0,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 1,
+                "peak_retained_state_bytes": 24429440,
+                "plan_compilations": 1,
+                "plan_hits": 8,
+                "restores": 8,
+                "retained_checkpoints": 82,
+                "retained_plans": 1,
+                "retained_state_bytes": 24429440,
+                "saves": 82
+              },
+              "first_block_ms": 2.996209,
+              "iteration": 8,
+              "meters": {
+                "master_peak": [
+                  0.11671141,
+                  0.11671141
+                ],
+                "master_rms": [
+                  0.08186394,
+                  0.08186394
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11671141,
+                      0.11671141
+                    ],
+                    "rms": [
+                      0.08186394,
+                      0.08186394
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 75.087792,
+              "resume_sample": 7920053,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 8,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 79.296416,
+              "three_blocks_f32_bits_sha256": "38be258f270d504ca81f354a50d85bf6ef76c0acfc107c11ba9c919f1795c6e9",
+              "warm_evaluated_frames": 48053,
+              "warm_start_sample": 7872000
+            }
+          ],
+          "warm_p50_ms": 71.259583,
+          "warm_p95_ms": 675.624417
+        }
+      ],
+      "phase": "after",
+      "quiet_host": false,
+      "scope": "capture + producer preparation through first 4096 stereo frames; 180s stateful placements over 300s PCM; cold1/warm8; subsequent two blocks and meters verified outside start timing; runtime/state cache counters and full source hashes outside timing",
+      "source_sha256": {
+        "advanced.rs": "8f6419337d3a9284bddce72834917d0a0c68018e829320f3c9fa255ba78bb32c",
+        "audio_checkpoints.rs": "5e601cc3ad1742371319143c57d8c911310023b5608cb89390d0260418a22935",
+        "dsp.rs": "ecba66c6d7bd9113b18becedb4cb80f6954bddb583095a282886ee1e9043e841",
+        "playback.rs": "c046bb0a1f0579eccfea1afaab04de135ba7d90b0e1948f07324a6720064e0b1",
+        "wsola.rs": "3c67be60dfe0d1a6ce9a6f46dc95e65171b3047c9e5c5d7be232e440a4f74759"
+      }
+    },
+    "disabled": {
+      "cases": [
+        {
+          "case": "dsp",
+          "document_sha256": "ae88d757991328cd642c41a29f3fa6869e711b73bcd31ffee837f23fd7c584b4",
+          "project": "target/perf-improvements/audio-seek-fixtures-v1/dsp/seek.kronello",
+          "revision": "1",
+          "source_sha256": "51ca7fd5218d4b1b47b19b62955319911ad3a8c3a6e39d40cc83c8f697252dd0",
+          "trials": [
+            {
+              "capture_ms": 2.100209,
+              "checkpoint_cache": {
+                "bypasses": 1,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 0,
+                "peak_retained_state_bytes": 0,
+                "plan_compilations": 1,
+                "plan_hits": 0,
+                "restores": 0,
+                "retained_checkpoints": 0,
+                "retained_plans": 0,
+                "retained_state_bytes": 0,
+                "saves": 0
+              },
+              "first_block_ms": 1.282375,
+              "iteration": 0,
+              "meters": {
+                "master_peak": [
+                  0.11606049,
+                  0.11606049
+                ],
+                "master_rms": [
+                  0.0821823,
+                  0.0821823
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.0821823,
+                      0.0821823
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 4712.880125,
+              "resume_sample": 6576017,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 0,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 4716.263417,
+              "three_blocks_f32_bits_sha256": "5b75ed526ba660a6589e72cca56e6afcbf6e31e79466f4cb4aa66e69e865614d",
+              "warm_evaluated_frames": 6576017,
+              "warm_start_sample": 0
+            },
+            {
+              "capture_ms": 1.4146670000000001,
+              "checkpoint_cache": {
+                "bypasses": 2,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 0,
+                "peak_retained_state_bytes": 0,
+                "plan_compilations": 2,
+                "plan_hits": 0,
+                "restores": 0,
+                "retained_checkpoints": 0,
+                "retained_plans": 0,
+                "retained_state_bytes": 0,
+                "saves": 0
+              },
+              "first_block_ms": 1.2748329999999999,
+              "iteration": 1,
+              "meters": {
+                "master_peak": [
+                  0.11606049,
+                  0.11606049
+                ],
+                "master_rms": [
+                  0.0821122,
+                  0.0821122
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.0821122,
+                      0.0821122
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 4576.834000000001,
+              "resume_sample": 7248031,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 1,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 4579.523709,
+              "three_blocks_f32_bits_sha256": "d8ac44d4087fe3a1e872fb71e853e88a66bbb7c29e86f7b2b2a56b2c2f368b54",
+              "warm_evaluated_frames": 7248031,
+              "warm_start_sample": 0
+            },
+            {
+              "capture_ms": 1.5070000000000001,
+              "checkpoint_cache": {
+                "bypasses": 3,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 0,
+                "peak_retained_state_bytes": 0,
+                "plan_compilations": 3,
+                "plan_hits": 0,
+                "restores": 0,
+                "retained_checkpoints": 0,
+                "retained_plans": 0,
+                "retained_state_bytes": 0,
+                "saves": 0
+              },
+              "first_block_ms": 1.268667,
+              "iteration": 2,
+              "meters": {
+                "master_peak": [
+                  0.11606049,
+                  0.11606049
+                ],
+                "master_rms": [
+                  0.0821823,
+                  0.0821823
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.0821823,
+                      0.0821823
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 4126.3198330000005,
+              "resume_sample": 6576017,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 2,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 4129.095916,
+              "three_blocks_f32_bits_sha256": "5b75ed526ba660a6589e72cca56e6afcbf6e31e79466f4cb4aa66e69e865614d",
+              "warm_evaluated_frames": 6576017,
+              "warm_start_sample": 0
+            },
+            {
+              "capture_ms": 1.8277079999999999,
+              "checkpoint_cache": {
+                "bypasses": 4,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 0,
+                "peak_retained_state_bytes": 0,
+                "plan_compilations": 4,
+                "plan_hits": 0,
+                "restores": 0,
+                "retained_checkpoints": 0,
+                "retained_plans": 0,
+                "retained_state_bytes": 0,
+                "saves": 0
+              },
+              "first_block_ms": 2.673208,
+              "iteration": 3,
+              "meters": {
+                "master_peak": [
+                  0.23212098,
+                  0.23212098
+                ],
+                "master_rms": [
+                  0.16441262,
+                  0.16441262
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.08220631,
+                      0.08220631
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  },
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.08220631,
+                      0.08220631
+                    ],
+                    "track": "781c91a2-6b71-4ddb-8876-c61b4d7ea00a"
+                  }
+                ]
+              },
+              "prepare_ms": 3269.681458,
+              "resume_sample": 4320007,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 3,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 3274.182958,
+              "three_blocks_f32_bits_sha256": "c4bcb84e4e6512cd17de8619fdd6cfe6f6c4cf60df0689f04f267fca81d1461b",
+              "warm_evaluated_frames": 4320007,
+              "warm_start_sample": 0
+            },
+            {
+              "capture_ms": 1.624625,
+              "checkpoint_cache": {
+                "bypasses": 5,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 0,
+                "peak_retained_state_bytes": 0,
+                "plan_compilations": 5,
+                "plan_hits": 0,
+                "restores": 0,
+                "retained_checkpoints": 0,
+                "retained_plans": 0,
+                "retained_state_bytes": 0,
+                "saves": 0
+              },
+              "first_block_ms": 1.282916,
+              "iteration": 4,
+              "meters": {
+                "master_peak": [
+                  0.11606049,
+                  0.11606049
+                ],
+                "master_rms": [
+                  0.08217936,
+                  0.08217936
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.08217936,
+                      0.08217936
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 4666.6768329999995,
+              "resume_sample": 7920053,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 4,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 4669.584708,
+              "three_blocks_f32_bits_sha256": "5093ddf228e77cab2a02e2005d11bb0cb911d6a9b1e0b8fa520fa836e4de59f3",
+              "warm_evaluated_frames": 7920053,
+              "warm_start_sample": 0
+            },
+            {
+              "capture_ms": 1.552875,
+              "checkpoint_cache": {
+                "bypasses": 6,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 0,
+                "peak_retained_state_bytes": 0,
+                "plan_compilations": 6,
+                "plan_hits": 0,
+                "restores": 0,
+                "retained_checkpoints": 0,
+                "retained_plans": 0,
+                "retained_state_bytes": 0,
+                "saves": 0
+              },
+              "first_block_ms": 1.292084,
+              "iteration": 5,
+              "meters": {
+                "master_peak": [
+                  0.11606049,
+                  0.11606049
+                ],
+                "master_rms": [
+                  0.0821122,
+                  0.0821122
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.0821122,
+                      0.0821122
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 4837.772,
+              "resume_sample": 7248031,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 5,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 4840.617209,
+              "three_blocks_f32_bits_sha256": "d8ac44d4087fe3a1e872fb71e853e88a66bbb7c29e86f7b2b2a56b2c2f368b54",
+              "warm_evaluated_frames": 7248031,
+              "warm_start_sample": 0
+            },
+            {
+              "capture_ms": 1.604917,
+              "checkpoint_cache": {
+                "bypasses": 7,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 0,
+                "peak_retained_state_bytes": 0,
+                "plan_compilations": 7,
+                "plan_hits": 0,
+                "restores": 0,
+                "retained_checkpoints": 0,
+                "retained_plans": 0,
+                "retained_state_bytes": 0,
+                "saves": 0
+              },
+              "first_block_ms": 1.2685000000000002,
+              "iteration": 6,
+              "meters": {
+                "master_peak": [
+                  0.11606049,
+                  0.11606049
+                ],
+                "master_rms": [
+                  0.0821823,
+                  0.0821823
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.0821823,
+                      0.0821823
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 4047.4281249999995,
+              "resume_sample": 6576017,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 6,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 4050.3020420000003,
+              "three_blocks_f32_bits_sha256": "5b75ed526ba660a6589e72cca56e6afcbf6e31e79466f4cb4aa66e69e865614d",
+              "warm_evaluated_frames": 6576017,
+              "warm_start_sample": 0
+            },
+            {
+              "capture_ms": 1.585375,
+              "checkpoint_cache": {
+                "bypasses": 8,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 0,
+                "peak_retained_state_bytes": 0,
+                "plan_compilations": 8,
+                "plan_hits": 0,
+                "restores": 0,
+                "retained_checkpoints": 0,
+                "retained_plans": 0,
+                "retained_state_bytes": 0,
+                "saves": 0
+              },
+              "first_block_ms": 2.4896670000000003,
+              "iteration": 7,
+              "meters": {
+                "master_peak": [
+                  0.23212098,
+                  0.23212098
+                ],
+                "master_rms": [
+                  0.16441262,
+                  0.16441262
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.08220631,
+                      0.08220631
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  },
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.08220631,
+                      0.08220631
+                    ],
+                    "track": "781c91a2-6b71-4ddb-8876-c61b4d7ea00a"
+                  }
+                ]
+              },
+              "prepare_ms": 3105.151125,
+              "resume_sample": 4320007,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 7,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 3109.226584,
+              "three_blocks_f32_bits_sha256": "c4bcb84e4e6512cd17de8619fdd6cfe6f6c4cf60df0689f04f267fca81d1461b",
+              "warm_evaluated_frames": 4320007,
+              "warm_start_sample": 0
+            },
+            {
+              "capture_ms": 1.565583,
+              "checkpoint_cache": {
+                "bypasses": 9,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 0,
+                "peak_retained_state_bytes": 0,
+                "plan_compilations": 9,
+                "plan_hits": 0,
+                "restores": 0,
+                "retained_checkpoints": 0,
+                "retained_plans": 0,
+                "retained_state_bytes": 0,
+                "saves": 0
+              },
+              "first_block_ms": 1.2811249999999998,
+              "iteration": 8,
+              "meters": {
+                "master_peak": [
+                  0.11606049,
+                  0.11606049
+                ],
+                "master_rms": [
+                  0.08217936,
+                  0.08217936
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11606049,
+                      0.11606049
+                    ],
+                    "rms": [
+                      0.08217936,
+                      0.08217936
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 4532.2025,
+              "resume_sample": 7920053,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 8,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 4535.049499999999,
+              "three_blocks_f32_bits_sha256": "5093ddf228e77cab2a02e2005d11bb0cb911d6a9b1e0b8fa520fa836e4de59f3",
+              "warm_evaluated_frames": 7920053,
+              "warm_start_sample": 0
+            }
+          ],
+          "warm_p50_ms": 4535.049499999999,
+          "warm_p95_ms": 4840.617209
+        },
+        {
+          "case": "wsola",
+          "document_sha256": "2f261f68de39139441ed12d4ba0d4f7f961421f21cae8bc382acfda3c3398494",
+          "project": "target/perf-improvements/audio-seek-fixtures-v1/wsola/seek.kronello",
+          "revision": "1",
+          "source_sha256": "51ca7fd5218d4b1b47b19b62955319911ad3a8c3a6e39d40cc83c8f697252dd0",
+          "trials": [
+            {
+              "capture_ms": 1.135292,
+              "checkpoint_cache": {
+                "bypasses": 1,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 0,
+                "peak_retained_state_bytes": 0,
+                "plan_compilations": 1,
+                "plan_hits": 0,
+                "restores": 0,
+                "retained_checkpoints": 0,
+                "retained_plans": 0,
+                "retained_state_bytes": 0,
+                "saves": 0
+              },
+              "first_block_ms": 2.941292,
+              "iteration": 0,
+              "meters": {
+                "master_peak": [
+                  0.11671141,
+                  0.11671141
+                ],
+                "master_rms": [
+                  0.08186145,
+                  0.08186145
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11671141,
+                      0.11671141
+                    ],
+                    "rms": [
+                      0.08186145,
+                      0.08186145
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 5173.459583000001,
+              "resume_sample": 6576017,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 0,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 5177.536542000001,
+              "three_blocks_f32_bits_sha256": "92a427e10608634d8ed7fa49ccdd4f9809ab90b1c39852c7a30af422d5cff58a",
+              "warm_evaluated_frames": 6576017,
+              "warm_start_sample": 0
+            },
+            {
+              "capture_ms": 1.217792,
+              "checkpoint_cache": {
+                "bypasses": 2,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 0,
+                "peak_retained_state_bytes": 0,
+                "plan_compilations": 2,
+                "plan_hits": 0,
+                "restores": 0,
+                "retained_checkpoints": 0,
+                "retained_plans": 0,
+                "retained_state_bytes": 0,
+                "saves": 0
+              },
+              "first_block_ms": 2.938875,
+              "iteration": 1,
+              "meters": {
+                "master_peak": [
+                  0.11820237,
+                  0.11820237
+                ],
+                "master_rms": [
+                  0.08268399,
+                  0.08268399
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11820237,
+                      0.11820237
+                    ],
+                    "rms": [
+                      0.08268399,
+                      0.08268399
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 5399.290416,
+              "resume_sample": 7248031,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 1,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 5403.447375,
+              "three_blocks_f32_bits_sha256": "99dcfe645f462ff37dfad53a3b6ea085169b63d5460b70724310f2e10170f434",
+              "warm_evaluated_frames": 7248031,
+              "warm_start_sample": 0
+            },
+            {
+              "capture_ms": 1.304792,
+              "checkpoint_cache": {
+                "bypasses": 3,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 0,
+                "peak_retained_state_bytes": 0,
+                "plan_compilations": 3,
+                "plan_hits": 0,
+                "restores": 0,
+                "retained_checkpoints": 0,
+                "retained_plans": 0,
+                "retained_state_bytes": 0,
+                "saves": 0
+              },
+              "first_block_ms": 3.075459,
+              "iteration": 2,
+              "meters": {
+                "master_peak": [
+                  0.11671141,
+                  0.11671141
+                ],
+                "master_rms": [
+                  0.08186145,
+                  0.08186145
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11671141,
+                      0.11671141
+                    ],
+                    "rms": [
+                      0.08186145,
+                      0.08186145
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 4893.174042000001,
+              "resume_sample": 6576017,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 2,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 4897.5549169999995,
+              "three_blocks_f32_bits_sha256": "92a427e10608634d8ed7fa49ccdd4f9809ab90b1c39852c7a30af422d5cff58a",
+              "warm_evaluated_frames": 6576017,
+              "warm_start_sample": 0
+            },
+            {
+              "capture_ms": 1.103459,
+              "checkpoint_cache": {
+                "bypasses": 4,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 0,
+                "peak_retained_state_bytes": 0,
+                "plan_compilations": 4,
+                "plan_hits": 0,
+                "restores": 0,
+                "retained_checkpoints": 0,
+                "retained_plans": 0,
+                "retained_state_bytes": 0,
+                "saves": 0
+              },
+              "first_block_ms": 2.9434169999999997,
+              "iteration": 3,
+              "meters": {
+                "master_peak": [
+                  0.11704669,
+                  0.11704669
+                ],
+                "master_rms": [
+                  0.08236484,
+                  0.08236484
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11704669,
+                      0.11704669
+                    ],
+                    "rms": [
+                      0.08236484,
+                      0.08236484
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 3226.0100410000005,
+              "resume_sample": 4320007,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 3,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 3230.057334,
+              "three_blocks_f32_bits_sha256": "d38d7b4e3fc5290e7fe3b269d145600d1f78ad90e05375022a5546c261ce3786",
+              "warm_evaluated_frames": 4320007,
+              "warm_start_sample": 0
+            },
+            {
+              "capture_ms": 1.3783750000000001,
+              "checkpoint_cache": {
+                "bypasses": 5,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 0,
+                "peak_retained_state_bytes": 0,
+                "plan_compilations": 5,
+                "plan_hits": 0,
+                "restores": 0,
+                "retained_checkpoints": 0,
+                "retained_plans": 0,
+                "retained_state_bytes": 0,
+                "saves": 0
+              },
+              "first_block_ms": 2.957291,
+              "iteration": 4,
+              "meters": {
+                "master_peak": [
+                  0.11671141,
+                  0.11671141
+                ],
+                "master_rms": [
+                  0.08186394,
+                  0.08186394
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11671141,
+                      0.11671141
+                    ],
+                    "rms": [
+                      0.08186394,
+                      0.08186394
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 5890.1037910000005,
+              "resume_sample": 7920053,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 4,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 5894.439915999999,
+              "three_blocks_f32_bits_sha256": "38be258f270d504ca81f354a50d85bf6ef76c0acfc107c11ba9c919f1795c6e9",
+              "warm_evaluated_frames": 7920053,
+              "warm_start_sample": 0
+            },
+            {
+              "capture_ms": 1.2404169999999999,
+              "checkpoint_cache": {
+                "bypasses": 6,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 0,
+                "peak_retained_state_bytes": 0,
+                "plan_compilations": 6,
+                "plan_hits": 0,
+                "restores": 0,
+                "retained_checkpoints": 0,
+                "retained_plans": 0,
+                "retained_state_bytes": 0,
+                "saves": 0
+              },
+              "first_block_ms": 3.049166,
+              "iteration": 5,
+              "meters": {
+                "master_peak": [
+                  0.11820237,
+                  0.11820237
+                ],
+                "master_rms": [
+                  0.08268399,
+                  0.08268399
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11820237,
+                      0.11820237
+                    ],
+                    "rms": [
+                      0.08268399,
+                      0.08268399
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 5453.5091250000005,
+              "resume_sample": 7248031,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 5,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 5457.799,
+              "three_blocks_f32_bits_sha256": "99dcfe645f462ff37dfad53a3b6ea085169b63d5460b70724310f2e10170f434",
+              "warm_evaluated_frames": 7248031,
+              "warm_start_sample": 0
+            },
+            {
+              "capture_ms": 1.337291,
+              "checkpoint_cache": {
+                "bypasses": 7,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 0,
+                "peak_retained_state_bytes": 0,
+                "plan_compilations": 7,
+                "plan_hits": 0,
+                "restores": 0,
+                "retained_checkpoints": 0,
+                "retained_plans": 0,
+                "retained_state_bytes": 0,
+                "saves": 0
+              },
+              "first_block_ms": 2.935041,
+              "iteration": 6,
+              "meters": {
+                "master_peak": [
+                  0.11671141,
+                  0.11671141
+                ],
+                "master_rms": [
+                  0.08186145,
+                  0.08186145
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11671141,
+                      0.11671141
+                    ],
+                    "rms": [
+                      0.08186145,
+                      0.08186145
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 4896.1741250000005,
+              "resume_sample": 6576017,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 6,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 4900.447040999999,
+              "three_blocks_f32_bits_sha256": "92a427e10608634d8ed7fa49ccdd4f9809ab90b1c39852c7a30af422d5cff58a",
+              "warm_evaluated_frames": 6576017,
+              "warm_start_sample": 0
+            },
+            {
+              "capture_ms": 1.3911660000000001,
+              "checkpoint_cache": {
+                "bypasses": 8,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 0,
+                "peak_retained_state_bytes": 0,
+                "plan_compilations": 8,
+                "plan_hits": 0,
+                "restores": 0,
+                "retained_checkpoints": 0,
+                "retained_plans": 0,
+                "retained_state_bytes": 0,
+                "saves": 0
+              },
+              "first_block_ms": 3.013917,
+              "iteration": 7,
+              "meters": {
+                "master_peak": [
+                  0.11704669,
+                  0.11704669
+                ],
+                "master_rms": [
+                  0.08236484,
+                  0.08236484
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11704669,
+                      0.11704669
+                    ],
+                    "rms": [
+                      0.08236484,
+                      0.08236484
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 3221.802959,
+              "resume_sample": 4320007,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 7,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 3226.208375,
+              "three_blocks_f32_bits_sha256": "d38d7b4e3fc5290e7fe3b269d145600d1f78ad90e05375022a5546c261ce3786",
+              "warm_evaluated_frames": 4320007,
+              "warm_start_sample": 0
+            },
+            {
+              "capture_ms": 1.2921250000000002,
+              "checkpoint_cache": {
+                "bypasses": 9,
+                "evictions": 0,
+                "invalidations": 0,
+                "misses": 0,
+                "peak_retained_state_bytes": 0,
+                "plan_compilations": 9,
+                "plan_hits": 0,
+                "restores": 0,
+                "retained_checkpoints": 0,
+                "retained_plans": 0,
+                "retained_state_bytes": 0,
+                "saves": 0
+              },
+              "first_block_ms": 3.0052920000000003,
+              "iteration": 8,
+              "meters": {
+                "master_peak": [
+                  0.11671141,
+                  0.11671141
+                ],
+                "master_rms": [
+                  0.08186394,
+                  0.08186394
+                ],
+                "tracks": [
+                  {
+                    "peak": [
+                      0.11671141,
+                      0.11671141
+                    ],
+                    "rms": [
+                      0.08186394,
+                      0.08186394
+                    ],
+                    "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                  }
+                ]
+              },
+              "prepare_ms": 5885.009,
+              "resume_sample": 7920053,
+              "source_cache": {
+                "bypasses": 0,
+                "decoded_sources": 1,
+                "evictions": 0,
+                "hits": 8,
+                "misses": 1,
+                "peak_retained_pcm_bytes": 115200000,
+                "retained_pcm_bytes": 115200000,
+                "retained_sources": 1
+              },
+              "start_to_first_block_ms": 5889.307374999999,
+              "three_blocks_f32_bits_sha256": "38be258f270d504ca81f354a50d85bf6ef76c0acfc107c11ba9c919f1795c6e9",
+              "warm_evaluated_frames": 7920053,
+              "warm_start_sample": 0
+            }
+          ],
+          "warm_p50_ms": 5403.447375,
+          "warm_p95_ms": 5894.439915999999
+        }
+      ],
+      "phase": "disabled",
+      "quiet_host": false,
+      "scope": "capture + producer preparation through first 4096 stereo frames; 180s stateful placements over 300s PCM; cold1/warm8; subsequent two blocks and meters verified outside start timing; runtime/state cache counters and full source hashes outside timing",
+      "source_sha256": {
+        "advanced.rs": "8f6419337d3a9284bddce72834917d0a0c68018e829320f3c9fa255ba78bb32c",
+        "audio_checkpoints.rs": "5e601cc3ad1742371319143c57d8c911310023b5608cb89390d0260418a22935",
+        "dsp.rs": "ecba66c6d7bd9113b18becedb4cb80f6954bddb583095a282886ee1e9043e841",
+        "playback.rs": "c046bb0a1f0579eccfea1afaab04de135ba7d90b0e1948f07324a6720064e0b1",
+        "wsola.rs": "3c67be60dfe0d1a6ce9a6f46dc95e65171b3047c9e5c5d7be232e440a4f74759"
+      }
+    }
+  },
+  "resources": {
+    "before": {
+      "log": "/tmp/kronello-perf005-audio-seek-before-time.log",
+      "sha256": "28910a9cb3a0e83177f78f24d20f5280eeb0f5ad62bb7ce98d0981f07cb7ae30",
+      "max_rss_bytes": 263503872,
+      "peak_footprint_bytes": 243991272
+    },
+    "enabled": {
+      "log": "/tmp/kronello-perf005-audio-seek-after-v2-time.log",
+      "sha256": "e205c2c87e5679ae2f9c9c67a7bb2c61f25be9770bdac602fc9064a4d69d7c86",
+      "max_rss_bytes": 287801344,
+      "peak_footprint_bytes": 271123200
+    },
+    "disabled": {
+      "log": "/tmp/kronello-perf005-audio-seek-disabled-v2-time.log",
+      "sha256": "bec94879aa9d2f7321e16d7368959faf668de0c039a644f00fbf4f26caffd7e0",
+      "max_rss_bytes": 258392064,
+      "peak_footprint_bytes": 241812200
+    }
+  },
+  "validation": {
+    "audio_all": {
+      "exit_code": 0,
+      "log": "/tmp/kronello-perf005-checkpoint-audio-all.log",
+      "scope": "87 audio tests before nonallocating checkpoint payload preflight refactor",
+      "log_sha256": "3ad5643870dc7eb2ec8902c3b2752339b68efe0460c90722ca32da656005299d",
+      "passed": 87,
+      "ignored": 0
+    },
+    "exact_core": {
+      "exit_code": 0,
+      "log": "/tmp/kronello-perf005-checkpoint-core-tests-v3.log",
+      "scope": "same final checkpoint production sources",
+      "log_sha256": "7a13d09af9d38b74903f565197c4c7721c1823f6d00edcde1a753cba477d0b43",
+      "passed": 1,
+      "ignored": 0
+    },
+    "playback": {
+      "exit_code": 0,
+      "log": "/tmp/kronello-perf005-checkpoint-playback-tests-v6.log",
+      "scope": "same final checkpoint production sources; additional byte-driven eviction assertion with entry capacity 8 and byte capacity 2 actual states",
+      "log_sha256": "e2176440623725fb3a1ee0c0bff07d7ef9aa64ac916019d5c400c34b3a2e2152",
+      "passed": 10,
+      "ignored": 0
+    },
+    "clippy": {
+      "exit_code": 0,
+      "log": "/tmp/kronello-perf005-checkpoint-clippy.log",
+      "scope": "audio/service all-targets, same final checkpoint sources",
+      "log_sha256": "d7a9229aa194a480735b6b1e18f8c51b1d2336a996e3047054b494977e06ab19",
+      "passed": 0,
+      "ignored": 0
+    }
+  },
+  "provenance": {
+    "before": {
+      "crates/kronello-audio/src/advanced.rs": "e7f4466aa3342b9b76fe2e9decdc9d7211a41b383835161cfeef7cb4eaf01225",
+      "crates/kronello-audio/src/dsp.rs": "aca62e01cc224070fc985595529975eeb55b2faeb815718f5e4407ed740cb1cc",
+      "crates/kronello-audio/src/wsola.rs": "7af681318069b4117eb095abd5dad9bbd3e6ac805f243411adf5f2dd566fbcb5",
+      "crates/kronello-audio/src/document.rs": "77dc16dc50bdf5a77f174b1a1ee21de792ad3a90629fb892a9eeaf713c4fc63c",
+      "crates/kronello-service/src/playback.rs": "dad7683ab51ac2dc910d292b39832ee5d8315e57f441a0442496d5055b3d59ca",
+      "crates/kronello-service/src/session.rs": "45121953015aba43b6363aa2a56ced5dc735c4d0d3d552873a00c2d571902f8a",
+      "crates/kronello-service/src/lib.rs": "e331430778dc026fc40b97aba1b7f12081210784b6e34294b597b5965858f37a",
+      "binary": "471d81856c07b63eac4d47174f40fb75ddb5adad251da646bf0cb6469f2b0170"
+    },
+    "candidate": {
+      "crates/kronello-audio/src/advanced.rs": "8f6419337d3a9284bddce72834917d0a0c68018e829320f3c9fa255ba78bb32c",
+      "crates/kronello-audio/src/document.rs": "fdc6b0ff2473a93a755b669bccd9b9d6034a06fb0e509a2fac16b9f5161bde84",
+      "crates/kronello-audio/src/dsp.rs": "ecba66c6d7bd9113b18becedb4cb80f6954bddb583095a282886ee1e9043e841",
+      "crates/kronello-audio/src/wsola.rs": "3c67be60dfe0d1a6ce9a6f46dc95e65171b3047c9e5c5d7be232e440a4f74759",
+      "crates/kronello-audio/src/lib.rs": "fad3a70ae10c6f11ab9d1c46d9731697b230e3ad975e3baff7d7d1a49a3a4148",
+      "crates/kronello-service/src/playback.rs": "c046bb0a1f0579eccfea1afaab04de135ba7d90b0e1948f07324a6720064e0b1",
+      "crates/kronello-service/src/audio_checkpoints.rs": "5e601cc3ad1742371319143c57d8c911310023b5608cb89390d0260418a22935",
+      "crates/kronello-service/src/session.rs": "fbc851692e21aab02f706c981f2e877433e2f1dc1fd4c79b77c0f164af7b8576",
+      "crates/kronello-service/src/lib.rs": "f93ec72323debae3307917432b8493c891425df1a1675496f6c906074e7067bb",
+      "crates/kronello-service/examples/perf_audio_seek.rs": "e44acc4c1702c085e9a547a3479b9278ef97ea5fe291c083ab504dd03abfae2f",
+      "binary": "64512fb72eb3ca56643d391473c08e345d7eb1f153f40d246ec0e2392af4a613"
+    }
+  },
+  "verification": {
+    "same_source_and_document_across_modes": true,
+    "trial_pairs": 18,
+    "f32_bits_three_4096_stereo_blocks_and_meter_equal": true
+  },
+  "limits": {
+    "checkpoints": 128,
+    "copied_state_bytes": 33554432,
+    "interval_samples": 96000,
+    "compiled_plan_count": 1,
+    "pcm_bindings": "Weak refs; revalidated immutable Arc identity before every restore"
+  },
+  "limitations": [
+    "Only sampled 3 blocks per requested position; pure regression additionally compares awkward WSOLA restore/jumps/rewinds/meters with whole continuous/stateless short oracle.",
+    "p95 includes newly extended 15-second preroll at151/165s; never claim free first visit or <33.3ms start bound.",
+    "More copied state increases memory: max RSS observed enabled287801344 vs original263503872 and samebinary disabled258392064.",
+    "Copied-state budget excludes shared immutable properties, one structurally bounded compiled plan, cache map/allocator, PCM and independently active restored cursors/native/driver resources. It is not whole-process RAM budget.",
+    "No byte evictions in these default-budget probes (82 points ~25MB); count/bypass/weak-source tests separately exercise small limits.",
+    "Independent processes run enabled then disabled, no quiet host/randomized pairing/confidence interval/device loopback/real-time latency test yet.",
+    "Initial core test duplicate mutable reference array failed compile, fixed selector loop before accepted run. Captured project identity moved to editor capture to preserve already-existing project-close/delete test contract.",
+    "Final one-source-fence workspace/Swift/native validation will cover checkpoint changes later; PERF-004 final validation does not."
+  ]
+}

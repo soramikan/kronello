@@ -1,0 +1,835 @@
+{
+  "status": "PERF-005 DSP baseline only; checkpoints not implemented/accepted yet",
+  "quiet_host": false,
+  "raw": {
+    "cases": [
+      {
+        "case": "dsp",
+        "document_sha256": "ae88d757991328cd642c41a29f3fa6869e711b73bcd31ffee837f23fd7c584b4",
+        "project": "target/perf-improvements/audio-seek-fixtures-v1/dsp/seek.kronello",
+        "revision": "1",
+        "source_sha256": "51ca7fd5218d4b1b47b19b62955319911ad3a8c3a6e39d40cc83c8f697252dd0",
+        "trials": [
+          {
+            "capture_ms": 1.0273750000000001,
+            "first_block_ms": 1.225333,
+            "iteration": 0,
+            "meters": {
+              "master_peak": [
+                0.11606049,
+                0.11606049
+              ],
+              "master_rms": [
+                0.0821823,
+                0.0821823
+              ],
+              "tracks": [
+                {
+                  "peak": [
+                    0.11606049,
+                    0.11606049
+                  ],
+                  "rms": [
+                    0.0821823,
+                    0.0821823
+                  ],
+                  "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                }
+              ]
+            },
+            "prepare_ms": 4237.326125,
+            "resume_sample": 6576017,
+            "source_cache": {
+              "bypasses": 0,
+              "decoded_sources": 1,
+              "evictions": 0,
+              "hits": 0,
+              "misses": 1,
+              "peak_retained_pcm_bytes": 115200000,
+              "retained_pcm_bytes": 115200000,
+              "retained_sources": 1
+            },
+            "start_to_first_block_ms": 4239.579124999999,
+            "three_blocks_f32_bits_sha256": "5b75ed526ba660a6589e72cca56e6afcbf6e31e79466f4cb4aa66e69e865614d"
+          },
+          {
+            "capture_ms": 1.266958,
+            "first_block_ms": 1.2654999999999998,
+            "iteration": 1,
+            "meters": {
+              "master_peak": [
+                0.11606049,
+                0.11606049
+              ],
+              "master_rms": [
+                0.0821122,
+                0.0821122
+              ],
+              "tracks": [
+                {
+                  "peak": [
+                    0.11606049,
+                    0.11606049
+                  ],
+                  "rms": [
+                    0.0821122,
+                    0.0821122
+                  ],
+                  "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                }
+              ]
+            },
+            "prepare_ms": 4188.91075,
+            "resume_sample": 7248031,
+            "source_cache": {
+              "bypasses": 0,
+              "decoded_sources": 1,
+              "evictions": 0,
+              "hits": 1,
+              "misses": 1,
+              "peak_retained_pcm_bytes": 115200000,
+              "retained_pcm_bytes": 115200000,
+              "retained_sources": 1
+            },
+            "start_to_first_block_ms": 4191.4435,
+            "three_blocks_f32_bits_sha256": "d8ac44d4087fe3a1e872fb71e853e88a66bbb7c29e86f7b2b2a56b2c2f368b54"
+          },
+          {
+            "capture_ms": 1.6256249999999999,
+            "first_block_ms": 1.235208,
+            "iteration": 2,
+            "meters": {
+              "master_peak": [
+                0.11606049,
+                0.11606049
+              ],
+              "master_rms": [
+                0.0821823,
+                0.0821823
+              ],
+              "tracks": [
+                {
+                  "peak": [
+                    0.11606049,
+                    0.11606049
+                  ],
+                  "rms": [
+                    0.0821823,
+                    0.0821823
+                  ],
+                  "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                }
+              ]
+            },
+            "prepare_ms": 3939.559125,
+            "resume_sample": 6576017,
+            "source_cache": {
+              "bypasses": 0,
+              "decoded_sources": 1,
+              "evictions": 0,
+              "hits": 2,
+              "misses": 1,
+              "peak_retained_pcm_bytes": 115200000,
+              "retained_pcm_bytes": 115200000,
+              "retained_sources": 1
+            },
+            "start_to_first_block_ms": 3942.4203330000005,
+            "three_blocks_f32_bits_sha256": "5b75ed526ba660a6589e72cca56e6afcbf6e31e79466f4cb4aa66e69e865614d"
+          },
+          {
+            "capture_ms": 1.470875,
+            "first_block_ms": 2.468375,
+            "iteration": 3,
+            "meters": {
+              "master_peak": [
+                0.23212098,
+                0.23212098
+              ],
+              "master_rms": [
+                0.16441262,
+                0.16441262
+              ],
+              "tracks": [
+                {
+                  "peak": [
+                    0.11606049,
+                    0.11606049
+                  ],
+                  "rms": [
+                    0.08220631,
+                    0.08220631
+                  ],
+                  "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                },
+                {
+                  "peak": [
+                    0.11606049,
+                    0.11606049
+                  ],
+                  "rms": [
+                    0.08220631,
+                    0.08220631
+                  ],
+                  "track": "781c91a2-6b71-4ddb-8876-c61b4d7ea00a"
+                }
+              ]
+            },
+            "prepare_ms": 3041.350458,
+            "resume_sample": 4320007,
+            "source_cache": {
+              "bypasses": 0,
+              "decoded_sources": 1,
+              "evictions": 0,
+              "hits": 3,
+              "misses": 1,
+              "peak_retained_pcm_bytes": 115200000,
+              "retained_pcm_bytes": 115200000,
+              "retained_sources": 1
+            },
+            "start_to_first_block_ms": 3045.29,
+            "three_blocks_f32_bits_sha256": "c4bcb84e4e6512cd17de8619fdd6cfe6f6c4cf60df0689f04f267fca81d1461b"
+          },
+          {
+            "capture_ms": 1.622334,
+            "first_block_ms": 1.389834,
+            "iteration": 4,
+            "meters": {
+              "master_peak": [
+                0.11606049,
+                0.11606049
+              ],
+              "master_rms": [
+                0.08217936,
+                0.08217936
+              ],
+              "tracks": [
+                {
+                  "peak": [
+                    0.11606049,
+                    0.11606049
+                  ],
+                  "rms": [
+                    0.08217936,
+                    0.08217936
+                  ],
+                  "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                }
+              ]
+            },
+            "prepare_ms": 4432.780583,
+            "resume_sample": 7920053,
+            "source_cache": {
+              "bypasses": 0,
+              "decoded_sources": 1,
+              "evictions": 0,
+              "hits": 4,
+              "misses": 1,
+              "peak_retained_pcm_bytes": 115200000,
+              "retained_pcm_bytes": 115200000,
+              "retained_sources": 1
+            },
+            "start_to_first_block_ms": 4435.7932089999995,
+            "three_blocks_f32_bits_sha256": "5093ddf228e77cab2a02e2005d11bb0cb911d6a9b1e0b8fa520fa836e4de59f3"
+          },
+          {
+            "capture_ms": 1.4829590000000001,
+            "first_block_ms": 1.430666,
+            "iteration": 5,
+            "meters": {
+              "master_peak": [
+                0.11606049,
+                0.11606049
+              ],
+              "master_rms": [
+                0.0821122,
+                0.0821122
+              ],
+              "tracks": [
+                {
+                  "peak": [
+                    0.11606049,
+                    0.11606049
+                  ],
+                  "rms": [
+                    0.0821122,
+                    0.0821122
+                  ],
+                  "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                }
+              ]
+            },
+            "prepare_ms": 4177.715875,
+            "resume_sample": 7248031,
+            "source_cache": {
+              "bypasses": 0,
+              "decoded_sources": 1,
+              "evictions": 0,
+              "hits": 5,
+              "misses": 1,
+              "peak_retained_pcm_bytes": 115200000,
+              "retained_pcm_bytes": 115200000,
+              "retained_sources": 1
+            },
+            "start_to_first_block_ms": 4180.630542,
+            "three_blocks_f32_bits_sha256": "d8ac44d4087fe3a1e872fb71e853e88a66bbb7c29e86f7b2b2a56b2c2f368b54"
+          },
+          {
+            "capture_ms": 1.7517500000000001,
+            "first_block_ms": 1.268417,
+            "iteration": 6,
+            "meters": {
+              "master_peak": [
+                0.11606049,
+                0.11606049
+              ],
+              "master_rms": [
+                0.0821823,
+                0.0821823
+              ],
+              "tracks": [
+                {
+                  "peak": [
+                    0.11606049,
+                    0.11606049
+                  ],
+                  "rms": [
+                    0.0821823,
+                    0.0821823
+                  ],
+                  "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                }
+              ]
+            },
+            "prepare_ms": 3953.866375,
+            "resume_sample": 6576017,
+            "source_cache": {
+              "bypasses": 0,
+              "decoded_sources": 1,
+              "evictions": 0,
+              "hits": 6,
+              "misses": 1,
+              "peak_retained_pcm_bytes": 115200000,
+              "retained_pcm_bytes": 115200000,
+              "retained_sources": 1
+            },
+            "start_to_first_block_ms": 3956.887,
+            "three_blocks_f32_bits_sha256": "5b75ed526ba660a6589e72cca56e6afcbf6e31e79466f4cb4aa66e69e865614d"
+          },
+          {
+            "capture_ms": 1.715875,
+            "first_block_ms": 2.551042,
+            "iteration": 7,
+            "meters": {
+              "master_peak": [
+                0.23212098,
+                0.23212098
+              ],
+              "master_rms": [
+                0.16441262,
+                0.16441262
+              ],
+              "tracks": [
+                {
+                  "peak": [
+                    0.11606049,
+                    0.11606049
+                  ],
+                  "rms": [
+                    0.08220631,
+                    0.08220631
+                  ],
+                  "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                },
+                {
+                  "peak": [
+                    0.11606049,
+                    0.11606049
+                  ],
+                  "rms": [
+                    0.08220631,
+                    0.08220631
+                  ],
+                  "track": "781c91a2-6b71-4ddb-8876-c61b4d7ea00a"
+                }
+              ]
+            },
+            "prepare_ms": 3057.403,
+            "resume_sample": 4320007,
+            "source_cache": {
+              "bypasses": 0,
+              "decoded_sources": 1,
+              "evictions": 0,
+              "hits": 7,
+              "misses": 1,
+              "peak_retained_pcm_bytes": 115200000,
+              "retained_pcm_bytes": 115200000,
+              "retained_sources": 1
+            },
+            "start_to_first_block_ms": 3061.670584,
+            "three_blocks_f32_bits_sha256": "c4bcb84e4e6512cd17de8619fdd6cfe6f6c4cf60df0689f04f267fca81d1461b"
+          },
+          {
+            "capture_ms": 1.23725,
+            "first_block_ms": 1.2798749999999999,
+            "iteration": 8,
+            "meters": {
+              "master_peak": [
+                0.11606049,
+                0.11606049
+              ],
+              "master_rms": [
+                0.08217936,
+                0.08217936
+              ],
+              "tracks": [
+                {
+                  "peak": [
+                    0.11606049,
+                    0.11606049
+                  ],
+                  "rms": [
+                    0.08217936,
+                    0.08217936
+                  ],
+                  "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                }
+              ]
+            },
+            "prepare_ms": 4522.965458,
+            "resume_sample": 7920053,
+            "source_cache": {
+              "bypasses": 0,
+              "decoded_sources": 1,
+              "evictions": 0,
+              "hits": 8,
+              "misses": 1,
+              "peak_retained_pcm_bytes": 115200000,
+              "retained_pcm_bytes": 115200000,
+              "retained_sources": 1
+            },
+            "start_to_first_block_ms": 4525.483208,
+            "three_blocks_f32_bits_sha256": "5093ddf228e77cab2a02e2005d11bb0cb911d6a9b1e0b8fa520fa836e4de59f3"
+          }
+        ],
+        "warm_p50_ms": 4180.630542,
+        "warm_p95_ms": 4525.483208
+      },
+      {
+        "case": "wsola",
+        "document_sha256": "2f261f68de39139441ed12d4ba0d4f7f961421f21cae8bc382acfda3c3398494",
+        "project": "target/perf-improvements/audio-seek-fixtures-v1/wsola/seek.kronello",
+        "revision": "1",
+        "source_sha256": "51ca7fd5218d4b1b47b19b62955319911ad3a8c3a6e39d40cc83c8f697252dd0",
+        "trials": [
+          {
+            "capture_ms": 1.475042,
+            "first_block_ms": 3.026709,
+            "iteration": 0,
+            "meters": {
+              "master_peak": [
+                0.11671141,
+                0.11671141
+              ],
+              "master_rms": [
+                0.08186145,
+                0.08186145
+              ],
+              "tracks": [
+                {
+                  "peak": [
+                    0.11671141,
+                    0.11671141
+                  ],
+                  "rms": [
+                    0.08186145,
+                    0.08186145
+                  ],
+                  "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                }
+              ]
+            },
+            "prepare_ms": 5136.5185,
+            "resume_sample": 6576017,
+            "source_cache": {
+              "bypasses": 0,
+              "decoded_sources": 1,
+              "evictions": 0,
+              "hits": 0,
+              "misses": 1,
+              "peak_retained_pcm_bytes": 115200000,
+              "retained_pcm_bytes": 115200000,
+              "retained_sources": 1
+            },
+            "start_to_first_block_ms": 5141.020834,
+            "three_blocks_f32_bits_sha256": "92a427e10608634d8ed7fa49ccdd4f9809ab90b1c39852c7a30af422d5cff58a"
+          },
+          {
+            "capture_ms": 1.8370000000000002,
+            "first_block_ms": 2.929875,
+            "iteration": 1,
+            "meters": {
+              "master_peak": [
+                0.11820237,
+                0.11820237
+              ],
+              "master_rms": [
+                0.08268399,
+                0.08268399
+              ],
+              "tracks": [
+                {
+                  "peak": [
+                    0.11820237,
+                    0.11820237
+                  ],
+                  "rms": [
+                    0.08268399,
+                    0.08268399
+                  ],
+                  "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                }
+              ]
+            },
+            "prepare_ms": 5336.267083,
+            "resume_sample": 7248031,
+            "source_cache": {
+              "bypasses": 0,
+              "decoded_sources": 1,
+              "evictions": 0,
+              "hits": 1,
+              "misses": 1,
+              "peak_retained_pcm_bytes": 115200000,
+              "retained_pcm_bytes": 115200000,
+              "retained_sources": 1
+            },
+            "start_to_first_block_ms": 5341.03425,
+            "three_blocks_f32_bits_sha256": "99dcfe645f462ff37dfad53a3b6ea085169b63d5460b70724310f2e10170f434"
+          },
+          {
+            "capture_ms": 1.573709,
+            "first_block_ms": 3.018,
+            "iteration": 2,
+            "meters": {
+              "master_peak": [
+                0.11671141,
+                0.11671141
+              ],
+              "master_rms": [
+                0.08186145,
+                0.08186145
+              ],
+              "tracks": [
+                {
+                  "peak": [
+                    0.11671141,
+                    0.11671141
+                  ],
+                  "rms": [
+                    0.08186145,
+                    0.08186145
+                  ],
+                  "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                }
+              ]
+            },
+            "prepare_ms": 4821.248957999999,
+            "resume_sample": 6576017,
+            "source_cache": {
+              "bypasses": 0,
+              "decoded_sources": 1,
+              "evictions": 0,
+              "hits": 2,
+              "misses": 1,
+              "peak_retained_pcm_bytes": 115200000,
+              "retained_pcm_bytes": 115200000,
+              "retained_sources": 1
+            },
+            "start_to_first_block_ms": 4825.841209,
+            "three_blocks_f32_bits_sha256": "92a427e10608634d8ed7fa49ccdd4f9809ab90b1c39852c7a30af422d5cff58a"
+          },
+          {
+            "capture_ms": 1.255958,
+            "first_block_ms": 2.885834,
+            "iteration": 3,
+            "meters": {
+              "master_peak": [
+                0.11704669,
+                0.11704669
+              ],
+              "master_rms": [
+                0.08236484,
+                0.08236484
+              ],
+              "tracks": [
+                {
+                  "peak": [
+                    0.11704669,
+                    0.11704669
+                  ],
+                  "rms": [
+                    0.08236484,
+                    0.08236484
+                  ],
+                  "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                }
+              ]
+            },
+            "prepare_ms": 3178.9402499999997,
+            "resume_sample": 4320007,
+            "source_cache": {
+              "bypasses": 0,
+              "decoded_sources": 1,
+              "evictions": 0,
+              "hits": 3,
+              "misses": 1,
+              "peak_retained_pcm_bytes": 115200000,
+              "retained_pcm_bytes": 115200000,
+              "retained_sources": 1
+            },
+            "start_to_first_block_ms": 3183.0821669999996,
+            "three_blocks_f32_bits_sha256": "d38d7b4e3fc5290e7fe3b269d145600d1f78ad90e05375022a5546c261ce3786"
+          },
+          {
+            "capture_ms": 1.3107920000000002,
+            "first_block_ms": 4.516,
+            "iteration": 4,
+            "meters": {
+              "master_peak": [
+                0.11671141,
+                0.11671141
+              ],
+              "master_rms": [
+                0.08186394,
+                0.08186394
+              ],
+              "tracks": [
+                {
+                  "peak": [
+                    0.11671141,
+                    0.11671141
+                  ],
+                  "rms": [
+                    0.08186394,
+                    0.08186394
+                  ],
+                  "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                }
+              ]
+            },
+            "prepare_ms": 7195.488583,
+            "resume_sample": 7920053,
+            "source_cache": {
+              "bypasses": 0,
+              "decoded_sources": 1,
+              "evictions": 0,
+              "hits": 4,
+              "misses": 1,
+              "peak_retained_pcm_bytes": 115200000,
+              "retained_pcm_bytes": 115200000,
+              "retained_sources": 1
+            },
+            "start_to_first_block_ms": 7201.316084,
+            "three_blocks_f32_bits_sha256": "38be258f270d504ca81f354a50d85bf6ef76c0acfc107c11ba9c919f1795c6e9"
+          },
+          {
+            "capture_ms": 1.424208,
+            "first_block_ms": 4.366542,
+            "iteration": 5,
+            "meters": {
+              "master_peak": [
+                0.11820237,
+                0.11820237
+              ],
+              "master_rms": [
+                0.08268399,
+                0.08268399
+              ],
+              "tracks": [
+                {
+                  "peak": [
+                    0.11820237,
+                    0.11820237
+                  ],
+                  "rms": [
+                    0.08268399,
+                    0.08268399
+                  ],
+                  "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                }
+              ]
+            },
+            "prepare_ms": 6334.816417,
+            "resume_sample": 7248031,
+            "source_cache": {
+              "bypasses": 0,
+              "decoded_sources": 1,
+              "evictions": 0,
+              "hits": 5,
+              "misses": 1,
+              "peak_retained_pcm_bytes": 115200000,
+              "retained_pcm_bytes": 115200000,
+              "retained_sources": 1
+            },
+            "start_to_first_block_ms": 6340.6075,
+            "three_blocks_f32_bits_sha256": "99dcfe645f462ff37dfad53a3b6ea085169b63d5460b70724310f2e10170f434"
+          },
+          {
+            "capture_ms": 1.936583,
+            "first_block_ms": 3.0907500000000003,
+            "iteration": 6,
+            "meters": {
+              "master_peak": [
+                0.11671141,
+                0.11671141
+              ],
+              "master_rms": [
+                0.08186145,
+                0.08186145
+              ],
+              "tracks": [
+                {
+                  "peak": [
+                    0.11671141,
+                    0.11671141
+                  ],
+                  "rms": [
+                    0.08186145,
+                    0.08186145
+                  ],
+                  "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                }
+              ]
+            },
+            "prepare_ms": 5184.670417,
+            "resume_sample": 6576017,
+            "source_cache": {
+              "bypasses": 0,
+              "decoded_sources": 1,
+              "evictions": 0,
+              "hits": 6,
+              "misses": 1,
+              "peak_retained_pcm_bytes": 115200000,
+              "retained_pcm_bytes": 115200000,
+              "retained_sources": 1
+            },
+            "start_to_first_block_ms": 5189.698333,
+            "three_blocks_f32_bits_sha256": "92a427e10608634d8ed7fa49ccdd4f9809ab90b1c39852c7a30af422d5cff58a"
+          },
+          {
+            "capture_ms": 1.160458,
+            "first_block_ms": 2.857459,
+            "iteration": 7,
+            "meters": {
+              "master_peak": [
+                0.11704669,
+                0.11704669
+              ],
+              "master_rms": [
+                0.08236484,
+                0.08236484
+              ],
+              "tracks": [
+                {
+                  "peak": [
+                    0.11704669,
+                    0.11704669
+                  ],
+                  "rms": [
+                    0.08236484,
+                    0.08236484
+                  ],
+                  "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                }
+              ]
+            },
+            "prepare_ms": 3185.082709,
+            "resume_sample": 4320007,
+            "source_cache": {
+              "bypasses": 0,
+              "decoded_sources": 1,
+              "evictions": 0,
+              "hits": 7,
+              "misses": 1,
+              "peak_retained_pcm_bytes": 115200000,
+              "retained_pcm_bytes": 115200000,
+              "retained_sources": 1
+            },
+            "start_to_first_block_ms": 3189.100917,
+            "three_blocks_f32_bits_sha256": "d38d7b4e3fc5290e7fe3b269d145600d1f78ad90e05375022a5546c261ce3786"
+          },
+          {
+            "capture_ms": 1.446834,
+            "first_block_ms": 2.934917,
+            "iteration": 8,
+            "meters": {
+              "master_peak": [
+                0.11671141,
+                0.11671141
+              ],
+              "master_rms": [
+                0.08186394,
+                0.08186394
+              ],
+              "tracks": [
+                {
+                  "peak": [
+                    0.11671141,
+                    0.11671141
+                  ],
+                  "rms": [
+                    0.08186394,
+                    0.08186394
+                  ],
+                  "track": "75c03daf-6e2b-4ff4-89f4-d917114aa38f"
+                }
+              ]
+            },
+            "prepare_ms": 5815.529166,
+            "resume_sample": 7920053,
+            "source_cache": {
+              "bypasses": 0,
+              "decoded_sources": 1,
+              "evictions": 0,
+              "hits": 8,
+              "misses": 1,
+              "peak_retained_pcm_bytes": 115200000,
+              "retained_pcm_bytes": 115200000,
+              "retained_sources": 1
+            },
+            "start_to_first_block_ms": 5819.911375000001,
+            "three_blocks_f32_bits_sha256": "38be258f270d504ca81f354a50d85bf6ef76c0acfc107c11ba9c919f1795c6e9"
+          }
+        ],
+        "warm_p50_ms": 5341.03425,
+        "warm_p95_ms": 7201.316084
+      }
+    ],
+    "phase": "before",
+    "quiet_host": false,
+    "scope": "capture + producer preparation through first 4096 stereo frames; 180s stateful placements over 300s PCM; cold1/warm8; subsequent two blocks and meters verified outside start timing; runtime/state cache counters and full source hashes outside timing",
+    "source_sha256": {
+      "advanced.rs": "e7f4466aa3342b9b76fe2e9decdc9d7211a41b383835161cfeef7cb4eaf01225",
+      "dsp.rs": "aca62e01cc224070fc985595529975eeb55b2faeb815718f5e4407ed740cb1cc",
+      "playback.rs": "dad7683ab51ac2dc910d292b39832ee5d8315e57f441a0442496d5055b3d59ca",
+      "wsola.rs": "7af681318069b4117eb095abd5dad9bbd3e6ac805f243411adf5f2dd566fbcb5"
+    }
+  },
+  "binary_provenance": {
+    "crates/kronello-audio/src/advanced.rs": "e7f4466aa3342b9b76fe2e9decdc9d7211a41b383835161cfeef7cb4eaf01225",
+    "crates/kronello-audio/src/dsp.rs": "aca62e01cc224070fc985595529975eeb55b2faeb815718f5e4407ed740cb1cc",
+    "crates/kronello-audio/src/wsola.rs": "7af681318069b4117eb095abd5dad9bbd3e6ac805f243411adf5f2dd566fbcb5",
+    "crates/kronello-audio/src/document.rs": "77dc16dc50bdf5a77f174b1a1ee21de792ad3a90629fb892a9eeaf713c4fc63c",
+    "crates/kronello-service/src/playback.rs": "dad7683ab51ac2dc910d292b39832ee5d8315e57f441a0442496d5055b3d59ca",
+    "crates/kronello-service/src/session.rs": "45121953015aba43b6363aa2a56ced5dc735c4d0d3d552873a00c2d571902f8a",
+    "crates/kronello-service/src/lib.rs": "e331430778dc026fc40b97aba1b7f12081210784b6e34294b597b5965858f37a",
+    "binary": "471d81856c07b63eac4d47174f40fb75ddb5adad251da646bf0cb6469f2b0170"
+  },
+  "resource_log": "       82.94 real        80.24 user         0.95 sys\n           263503872  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n               27159  page reclaims\n                  12  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                  56  voluntary context switches\n              119708  involuntary context switches\n       1225909606244  instructions retired\n        316426528502  cycles elapsed\n           243991272  peak memory footprint\n",
+  "measurement_sha256": "c0cb1004d7968b8cbbbdcb5831c55149af00643e8739840f593611060f8ed202",
+  "limitations": [
+    "Capture+prepare+first 4096 stereo frames; subsequent two blocks and meters hashed outside timing. Only sampled 3 blocks per requested position, not whole 180s output.",
+    "Same source and document fixtures will be reused for after measurements. First cold trial includes PCM decode; remaining 8 hit shared115200000-byte PCM and still replay DSP from placement start.",
+    "Two staggered DSP placements, one 3/2 pitch-preserving WSOLA placement; fixed built-in effects, no live device/loopback or subjective audio test.",
+    "No quiet-host or FPS guarantee."
+  ]
+}

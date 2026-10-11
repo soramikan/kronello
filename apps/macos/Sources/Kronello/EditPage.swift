@@ -371,6 +371,7 @@ struct SequenceViewer: View {
                 if model.ui.sequence != nil { ScopesPanel(model: model) }
                 KRTransportBar(frames: Binding(get: { model.frame }, set: { model.seek($0) }), fps: model.nominalFPS, duration: model.durationCode,
                     playing: $model.playing, looping: $model.ui.looping, zoom: $model.ui.zoom, resolution: $model.ui.resolution,
+                    proxyMode: Binding(get: { model.previewProxyMode }, set: { model.previewProxyMode = $0 }),
                     onStep: { model.seek(model.frame + Int64($0)) }, onBoundary: { model.seek($0 ? model.durationFrames - 1 : 0) })
             }
         }
@@ -902,7 +903,7 @@ struct SequenceTracks: View {
             onVisibility: { model.setTrackOutput(track) }, onLock: { model.setTrackLocked(track) }, onTarget: { model.setTrackTarget(track) }), headerWidth: 200, locked: locked) {
             ZStack(alignment: .leading) {
                 Color.clear.contentShape(Rectangle()).onTapGesture { tracksFocused = true; model.selectClip(nil) }
-                ForEach(model.editClips.filter { $0.track == id }) { clip in
+                ForEach(model.clips(in: id)) { clip in
                     clipView(clip, frameWidth: frameWidth, locked: locked)
                 }
                 if let candidate = model.timelineCandidate, candidate.track == id {

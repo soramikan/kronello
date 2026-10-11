@@ -7,7 +7,7 @@ use kronello_audio::{
 use kronello_model::{ColorSpace, DocumentObject};
 use kronello_render::{
     FrameMetadata, FrameRequest, OutputRegion, RenderBackend, RenderSnapshot, frame_samples,
-    render_frame_tiles,
+    render_frame_linear_tiles,
 };
 use kronello_text::FontData;
 use kronello_time::{FrameRate, Rational, TimeRange};
@@ -15,6 +15,25 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::audio::{publish_file, stage_file};
+#[path = "export_pipeline.rs"]
+mod pipeline;
+
+#[derive(Debug, Clone, Copy, Default)]
+pub enum VideoPipelineMode {
+    /// Diagnostic serial boundary: wait for each frame before reusing it.
+    Serial,
+    /// Default: overlap rendering and encoding with two reusable bundles.
+    #[default]
+    TwoFrames,
+}
+impl VideoPipelineMode {
+    fn bundles(self) -> usize {
+        match self {
+            Self::Serial => 1,
+            Self::TwoFrames => 2,
+        }
+    }
+}
 use crate::{
     AudioEncodeReport, EncodeCodec, ExecutionKind, MediaError, MediaPathReport, MediaRuntime,
     MediaTransferStats,
@@ -1428,16 +1447,14 @@ impl MediaRuntime {
                         || leg.profile.sdr_delivery_conversion()
                 }
             };
-            if !space_ok {
+            if leg.profile.has_video() && !space_ok {
                 return Err(MediaError::UnsupportedFeature(
                     "A/V working space must match explicit SDR/HDR movie profile".into(),
                 ));
             }
-            if leg
-                .background
-                .iter()
-                .any(|v| !v.is_finite() || !(0.0..=background_peak).contains(v))
-            {
+            if leg.background.iter().any(|v| {
+                !v.is_finite() || (leg.profile.has_video() && !(0.0..=background_peak).contains(v))
+            }) {
                 return Err(MediaError::InvalidInput(
                     "background must be finite nonnegative linear RGB within the explicit transfer range".into(),
                 ));
@@ -1602,274 +1619,135 @@ impl MediaRuntime {
         let audio_spool_write_bytes = sources.decoded_bytes;
         let audio_window_read_bytes = sources.read_bytes();
         drop(sources);
-        // Video pass: render each frame once, convert into every video leg's
-        // pixel class and feed its encoder. GIF legs additionally fold the
-        // palette histogram and spool the RGBA8 frame for phase 2.
+        // Render on the caller's thread while a separate runtime encodes.
+        // Two reusable bundles bound producer, queued and consumer frames.
         let width = request.region.pixels[0] as usize;
-        let height = request.region.pixels[1] as usize;
         let time_base = request.frame_rate.frame_to_time(1)?;
-        let mut sinks: Vec<Option<VideoSink>> = Vec::with_capacity(legs.len());
-        let mut video_files: Vec<Option<PathBuf>> = Vec::with_capacity(legs.len());
-        for (index, leg) in legs.iter().enumerate() {
-            match leg.profile.shape() {
-                DeliveryShape::AudioOnly => {
-                    sinks.push(None);
-                    video_files.push(None);
-                }
-                DeliveryShape::VideoOnly => {
-                    let spool_path = stage.path().join(format!("gif_{index}.rgba"));
-                    let spool = std::io::BufWriter::new(std::fs::File::create(&spool_path)?);
-                    let encoder = crate::ffi::NativeGifEncoder::open(
-                        &self.native,
-                        request.region.pixels[0],
-                        request.region.pixels[1],
-                        time_base,
-                    )?;
-                    sinks.push(Some(VideoSink::Gif(GifSink {
-                        encoder,
-                        spool,
-                        spool_path,
-                        buffer: vec![0; width * height * 4],
-                        profile: leg.profile,
-                        background: leg.background,
-                    })));
-                    video_files.push(None);
-                }
-                DeliveryShape::Movie => {
-                    let video_file = stage.path().join(format!("video_{index}.mov"));
-                    let (encoder, name, hardware) =
-                        if let Some((dnx, _)) = leg.profile.dnx_profile() {
-                            let encoder = crate::ffi::NativeEncoder::open_dnx(
-                                &self.native,
-                                &video_file,
-                                dnx.kind(),
-                                request.region.pixels[0] as i32,
-                                request.region.pixels[1] as i32,
-                                time_base,
-                            )?;
-                            (encoder, "dnxhd".to_string(), false)
-                        } else {
-                            let codec = self.capabilities.select_encoder(
-                                leg.profile.video_codec().unwrap_or(EncodeCodec::ProRes),
-                            )?;
-                            let name = codec.name.clone();
-                            let hardware = codec.hardware;
-                            let encoder = crate::ffi::NativeEncoder::open_color(
-                                &self.native,
-                                &video_file,
-                                codec,
-                                request.region.pixels[0] as i32,
-                                request.region.pixels[1] as i32,
-                                time_base,
-                                leg.profile.hdr_transfer(),
-                            )?;
-                            (encoder, name, hardware)
-                        };
-                    let stride = if leg.profile.hdr_transfer().is_some() {
-                        8
-                    } else {
-                        4
-                    };
-                    sinks.push(Some(VideoSink::Color(ColorSink {
-                        encoder,
-                        encoder_name: name,
-                        hardware,
-                        stride,
-                        buffer: vec![0; width * height * stride],
-                        pending: None,
-                        last_span: 1,
-                        profile: leg.profile,
-                        background: leg.background,
-                    })));
-                    video_files.push(Some(video_file));
-                }
-            }
-        }
-        let mut metadata = Vec::new();
-        for (number, (index, time)) in times.iter().enumerate() {
-            checkpoint(number as u64)?;
-            let mut frame_metadata = render_frame_tiles(
-                &snapshot.render,
-                fonts,
-                backend,
-                FrameRequest {
-                    time: *time,
-                    region: request.region,
-                },
-                &mut |[x, y], tile, output| {
-                    // The sole full-frame buffers are per-leg RGBA8 or HDR
-                    // RGBA64. No full-frame linear or display surface is
-                    // allocated by this movie path.
-                    for sink in sinks.iter_mut().flatten() {
-                        let (buffer, stride, profile, background) = sink.conversion_target();
-                        if buffer.len() != width * height * stride {
-                            buffer.resize(width * height * stride, 0);
-                        }
-                        let bytes = if let Some(transfer) = profile.hdr_transfer() {
-                            hdr_rgba(&output.linear, background, transfer)
-                        } else if render_hdr.is_some() && profile.sdr_delivery_conversion() {
-                            let mapped: Vec<_> = output
-                                .linear
-                                .iter()
-                                .map(|p| {
-                                    let opaque = [
-                                        p[0] + background[0] * (1.0 - p[3]),
-                                        p[1] + background[1] * (1.0 - p[3]),
-                                        p[2] + background[2] * (1.0 - p[3]),
-                                        1.0,
-                                    ];
-                                    kronello_render::hdr_to_sdr_linear(opaque)
-                                })
-                                .collect();
-                            bt709_rgba(&mapped, [0.0; 3])
-                        } else {
-                            bt709_rgba(&output.linear, background)
-                        }
-                        .map_err(|e| {
-                            kronello_render::RenderError::UnsupportedFeature(e.to_string())
-                        })?;
-                        for row in 0..tile.pixels[1] as usize {
-                            let destination = ((y as usize + row) * width + x as usize) * stride;
-                            let source = row * tile.pixels[0] as usize * stride;
-                            let row_bytes = tile.pixels[0] as usize * stride;
-                            buffer[destination..destination + row_bytes]
-                                .copy_from_slice(&bytes[source..source + row_bytes]);
-                        }
-                    }
-                    Ok(())
-                },
-            )?;
-            if frame_metadata.snapshot_content_hash != render_hash {
-                return Err(MediaError::Encode(
-                    "video snapshot identity mismatch".into(),
-                ));
-            }
-            frame_metadata.frame_index = Some(index.to_string());
-            frame_metadata.sequence_number = Some(number as u64);
-            metadata.push(frame_metadata);
-            let pts = time.checked_sub(request.range.start())?;
-            let tick = pts.checked_div(time_base)?;
-            if tick.denominator() != 1 || tick.numerator() < 0 {
-                return Err(MediaError::InvalidInput(
-                    "integral nonnegative frame PTS required".into(),
-                ));
-            }
-            let tick = tick.numerator();
-            for sink in sinks.iter_mut().flatten() {
-                sink.deliver(tick)?;
-            }
-        }
-        let mut video_reports: Vec<Option<MediaPathReport>> = Vec::with_capacity(legs.len());
         let expected_video = request.range.end().checked_sub(request.range.start())?;
         let expected_audio = SAMPLE_RATE.sample_to_time(samples.end - samples.start)?;
-        // Staged publish artifacts per leg (movie mux results, GIF/elementary
-        // encodes); publishing happens only after every leg verifies.
-        let mut staged: Vec<Option<tempfile::NamedTempFile>> = Vec::with_capacity(legs.len());
-        let mut probes: Vec<Option<MediaProbe>> = Vec::with_capacity(legs.len());
-        for (index, leg) in legs.iter().enumerate() {
-            match sinks[index].take() {
-                Some(VideoSink::Color(mut sink)) => {
-                    if let Some((frame, pts)) = sink.pending.take() {
-                        sink.encoder.frame(&frame, pts, sink.last_span)?;
+        let video_legs: Vec<_> = legs
+            .iter()
+            .map(|leg| pipeline::VideoLeg {
+                profile: leg.profile,
+                background: leg.background,
+                output: leg.output.clone(),
+                audio_layout: leg.snapshot.audio_layout,
+            })
+            .collect();
+        let mut metadata = Vec::new();
+        let pipeline::ResultData {
+            files: video_files,
+            reports: mut video_reports,
+            mut staged,
+            mut probes,
+        } = if video_legs.iter().any(|leg| leg.profile.has_video()) {
+            let ticks: Vec<_> = times
+                .iter()
+                .map(|(_, time)| {
+                    let tick = time
+                        .checked_sub(request.range.start())?
+                        .checked_div(time_base)?;
+                    if tick.denominator() != 1 || tick.numerator() < 0 {
+                        return Err(MediaError::InvalidInput(
+                            "integral nonnegative frame PTS required".into(),
+                        ));
                     }
-                    sink.encoder.finish()?;
-                    let pixel_format = sink.encoder.pixel_format.clone();
-                    let converted = sink
-                        .encoder
-                        .frame_size
-                        .checked_mul(times.len() as u64)
-                        .ok_or_else(|| {
-                            MediaError::InvalidInput("transfer counter overflow".into())
-                        })?;
-                    let input_bytes = ((width * height * sink.stride) as u64)
-                        .checked_mul(times.len() as u64)
-                        .ok_or_else(|| {
-                            MediaError::InvalidInput("transfer counter overflow".into())
-                        })?;
-                    drop(sink.encoder);
-                    video_reports.push(Some(MediaPathReport {
-                        decoder: None,
-                        encoder: Some(sink.encoder_name),
-                        execution: if sink.hardware {
-                            ExecutionKind::Hardware
-                        } else {
-                            ExecutionKind::Software
+                    Ok(tick.numerator())
+                })
+                .collect::<Result<_, MediaError>>()?;
+            let config = pipeline::Config {
+                capabilities: self.capabilities.clone(),
+                stage: stage.path().into(),
+                pixels: request.region.pixels,
+                time_base,
+                frames: times.len(),
+                bundles: self.video_pipeline_mode.bundles(),
+                duration: expected_video,
+                legs: video_legs.clone(),
+            };
+            let (frames, result) = pipeline::run(config, checkpoint, |producer, checkpoint| {
+                let mut frames = Vec::with_capacity(times.len());
+                for (number, (index, time)) in times.iter().enumerate() {
+                    checkpoint(number as u64)?;
+                    let mut bundle = producer.acquire()?;
+                    let mut frame_metadata = render_frame_linear_tiles(
+                        &snapshot.render,
+                        fonts,
+                        backend,
+                        FrameRequest {
+                            time: *time,
+                            region: request.region,
                         },
-                        input_pixel_format: if sink.stride == 8 { "rgba64le" } else { "rgba" }
-                            .into(),
-                        output_pixel_format: pixel_format,
-                        transfer_path: if sink.stride == 8 {
-                            "cpu_rec2100_rgba64_to_prores_10bit"
-                        } else if sink.hardware {
-                            "cpu_rgba_to_hardware_encoder"
-                        } else {
-                            "cpu_rgba_to_software_encoder"
-                        }
-                        .into(),
-                        transfers: MediaTransferStats {
-                            cpu_copy_bytes: 0,
-                            cpu_conversion_input_bytes: input_bytes,
-                            cpu_conversion_output_bytes: converted,
-                            cpu_upload_bytes: if sink.hardware { converted } else { 0 },
-                            ..Default::default()
+                        &mut |[x, y], tile, output| {
+                            for (leg, buffer) in video_legs.iter().zip(&mut bundle) {
+                                let stride = leg.stride();
+                                if stride == 0 {
+                                    continue;
+                                }
+                                let bytes = if let Some(transfer) = leg.profile.hdr_transfer() {
+                                    hdr_rgba(&output, leg.background, transfer)
+                                } else if render_hdr.is_some()
+                                    && leg.profile.sdr_delivery_conversion()
+                                {
+                                    let mapped: Vec<_> = output
+                                        .iter()
+                                        .map(|p| {
+                                            kronello_render::hdr_to_sdr_linear([
+                                                p[0] + leg.background[0] * (1.0 - p[3]),
+                                                p[1] + leg.background[1] * (1.0 - p[3]),
+                                                p[2] + leg.background[2] * (1.0 - p[3]),
+                                                1.0,
+                                            ])
+                                        })
+                                        .collect();
+                                    bt709_rgba(&mapped, [0.0; 3])
+                                } else {
+                                    bt709_rgba(&output, leg.background)
+                                }
+                                .map_err(|e| {
+                                    kronello_render::RenderError::UnsupportedFeature(e.to_string())
+                                })?;
+                                for row in 0..tile.pixels[1] as usize {
+                                    let destination =
+                                        ((y as usize + row) * width + x as usize) * stride;
+                                    let source = row * tile.pixels[0] as usize * stride;
+                                    let row_bytes = tile.pixels[0] as usize * stride;
+                                    buffer[destination..destination + row_bytes]
+                                        .copy_from_slice(&bytes[source..source + row_bytes]);
+                                }
+                            }
+                            Ok(())
                         },
-                    }));
-                    staged.push(None);
-                    probes.push(None);
-                }
-                Some(VideoSink::Gif(mut sink)) => {
-                    sink.encoder.palette()?;
-                    use std::io::{Read, Write};
-                    sink.spool.flush()?;
-                    let mut spool = std::fs::File::open(&sink.spool_path)?;
-                    let temp = stage_file(&leg.output)?;
-                    sink.encoder.encode_start(temp.path())?;
-                    let frame_bytes = width * height * 4;
-                    let mut rgba = vec![0_u8; frame_bytes];
-                    for _ in 0..times.len() {
-                        checkpoint(0)?;
-                        spool.read_exact(&mut rgba)?;
-                        sink.encoder.encode_frame(&rgba)?;
+                    )?;
+                    if frame_metadata.snapshot_content_hash != render_hash {
+                        return Err(MediaError::Encode(
+                            "video snapshot identity mismatch".into(),
+                        ));
                     }
-                    sink.encoder.flush()?;
-                    drop(sink);
-                    let probe = self.probe(temp.path())?;
-                    probe.verify_delivery(leg.profile, leg.snapshot.audio_layout)?;
-                    // GIF stores frame delays in centiseconds; the container
-                    // duration may drift by under one delay quantum per frame.
-                    let tolerance = Rational::new(times.len() as i64 + 1, 100)?;
-                    let duration = probe
-                        .duration
-                        .or_else(|| probe.streams[0].duration)
-                        .ok_or_else(|| MediaError::Encode("missing GIF duration".into()))?;
-                    let drift = duration.checked_sub(expected_video)?;
-                    if drift >= tolerance || drift <= tolerance.checked_neg()? {
-                        return Err(MediaError::Encode(format!(
-                            "GIF duration differs from the export range: probed {duration:?} vs expected {expected_video:?}"
-                        )));
-                    }
-                    video_reports.push(Some(MediaPathReport {
-                        decoder: None,
-                        encoder: Some("gif".into()),
-                        execution: ExecutionKind::Software,
-                        input_pixel_format: "rgba".into(),
-                        output_pixel_format: "pal8".into(),
-                        transfer_path: "cpu_rgba_to_indexed_gif".into(),
-                        transfers: MediaTransferStats {
-                            cpu_conversion_input_bytes: (frame_bytes * times.len()) as u64,
-                            ..Default::default()
-                        },
-                    }));
-                    staged.push(Some(temp));
-                    probes.push(Some(probe));
+                    frame_metadata.frame_index = Some(index.to_string());
+                    frame_metadata.sequence_number = Some(number as u64);
+                    frames.push(frame_metadata);
+                    let span = if let Some(next) = ticks.get(number + 1) {
+                        next - ticks[number]
+                    } else if number > 0 {
+                        ticks[number] - ticks[number - 1]
+                    } else {
+                        1
+                    };
+                    producer.frame(bundle, ticks[number], span)?;
                 }
-                None => {
-                    video_reports.push(None);
-                    staged.push(None);
-                    probes.push(None);
-                }
+                Ok(frames)
+            })?;
+            metadata = frames;
+            result
+        } else {
+            pipeline::ResultData {
+                files: (0..legs.len()).map(|_| None).collect(),
+                reports: (0..legs.len()).map(|_| None).collect(),
+                staged: (0..legs.len()).map(|_| None).collect(),
+                probes: (0..legs.len()).map(|_| None).collect(),
             }
-        }
+        };
         // Elementary audio legs already wrote into their staged artifacts;
         // probe and verify each against its declared shape.
         let mut audio_stage_bytes = 0_u64;
@@ -1962,7 +1840,7 @@ impl MediaRuntime {
                 DeliveryShape::VideoOnly => {}
             }
         }
-        checkpoint(metadata.len() as u64)?;
+        checkpoint(times.len() as u64)?;
         // All legs verified; publish in request order. A failure here is still
         // atomic per destination and never reports partial success.
         let mut reports = Vec::with_capacity(legs.len());
@@ -2031,70 +1909,6 @@ impl LegStage {
         match self {
             Self::Intermediate(path) => path.as_path(),
             Self::Publish(temp) => temp.path(),
-        }
-    }
-}
-/// A video leg's encoder plus its converted-frame state. Each sink owns one
-/// full-frame buffer; the render pass fills it once per frame.
-enum VideoSink<'a> {
-    /// Movie intermediate encoder (`prores_ks`/`libsvtav1`/videotoolbox/dnxhd).
-    Color(ColorSink<'a>),
-    /// Two-phase indexed-color GIF path (ADR-0133).
-    Gif(GifSink<'a>),
-}
-struct ColorSink<'a> {
-    encoder: crate::ffi::NativeEncoder<'a>,
-    encoder_name: String,
-    hardware: bool,
-    stride: usize,
-    buffer: Vec<u8>,
-    /// Previous frame held back so packet spans equal the distance to the
-    /// next submitted tick; the final frame inherits the last observed span.
-    pending: Option<(Vec<u8>, i64)>,
-    last_span: i64,
-    profile: MovieProfile,
-    background: [f32; 3],
-}
-struct GifSink<'a> {
-    encoder: crate::ffi::NativeGifEncoder<'a>,
-    /// Phase-2 input: the same RGBA8 frames spooled to the destination volume.
-    spool: std::io::BufWriter<std::fs::File>,
-    spool_path: PathBuf,
-    buffer: Vec<u8>,
-    profile: MovieProfile,
-    background: [f32; 3],
-}
-impl VideoSink<'_> {
-    /// The full-frame buffer the tile callback fills plus this leg's pixel
-    /// contract for the conversion.
-    fn conversion_target(&mut self) -> (&mut Vec<u8>, usize, MovieProfile, [f32; 3]) {
-        match self {
-            Self::Color(sink) => (&mut sink.buffer, sink.stride, sink.profile, sink.background),
-            Self::Gif(sink) => (&mut sink.buffer, 4, sink.profile, sink.background),
-        }
-    }
-    /// Hand one converted frame to the encoder. Color encoders receive packet
-    /// spans as the distance to the next submitted tick; GIF phase 1 folds the
-    /// histogram and spools the frame for the deterministic second pass.
-    fn deliver(&mut self, tick: i64) -> Result<(), MediaError> {
-        use std::io::Write;
-        match self {
-            Self::Color(sink) => {
-                let frame = std::mem::take(&mut sink.buffer);
-                if let Some((mut previous, pts)) = sink.pending.replace((frame, tick)) {
-                    sink.last_span = tick - pts;
-                    sink.encoder.frame(&previous, pts, sink.last_span)?;
-                    // Recycle the delivered allocation as the next buffer.
-                    previous.clear();
-                    sink.buffer = previous;
-                }
-                Ok(())
-            }
-            Self::Gif(sink) => {
-                sink.encoder.frame(&sink.buffer)?;
-                sink.spool.write_all(&sink.buffer)?;
-                Ok(())
-            }
         }
     }
 }

@@ -256,6 +256,48 @@ fn rejects_invalid_pts_alpha_and_preserves_output() {
 }
 
 #[test]
+fn encoder_flush_preserves_nonuniform_frame_spans() {
+    let runtime = MediaRuntime::load().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let ticks = [0, 1, 3, 6, 10];
+    let ends = [1, 3, 6, 10, 14];
+    let frames: Vec<_> = ticks
+        .iter()
+        .enumerate()
+        .map(|(i, tick)| EncodeFrame {
+            pts: r(*tick, 24),
+            rgba: [16 + i as u8 * 32, 80, 160, 255].repeat(64 * 64),
+        })
+        .collect();
+    for codec in [EncodeCodec::ProRes, EncodeCodec::Av1] {
+        let request = EncodeRequest {
+            output: dir.path().join(format!("nonuniform-{codec:?}.media")),
+            codec,
+            width: 64,
+            height: 64,
+            time_base: r(1, 24),
+        };
+        runtime.encode_video(&request, &frames).unwrap();
+        let mut decoder = runtime.open_video(&request.output).unwrap();
+        for (tick, end) in ticks.into_iter().zip(ends) {
+            let frame = decoder.decode_at(r(tick, 24)).unwrap();
+            assert_eq!(frame.pts, r(tick, 24), "{codec:?}");
+            assert_eq!(frame.end, r(end, 24), "{codec:?} at {tick}");
+            assert_eq!(
+                decoder.decode_at(r(tick + end, 48)).unwrap().pts,
+                r(tick, 24),
+                "{codec:?}"
+            );
+        }
+        assert_eq!(
+            runtime.probe(&request.output).unwrap().streams[0].duration,
+            Some(r(7, 12)),
+            "{codec:?}"
+        );
+    }
+}
+
+#[test]
 fn runtime_environment_override_is_used_without_fallback() {
     match std::env::var("KRONELLO_MEDIA_OVERRIDE_CHILD").as_deref() {
         Ok("invalid") => assert_eq!(

@@ -560,7 +560,11 @@ fn sequential_product_backend_reuses_exact_decoder_and_revalidates_hash() {
     media.source_in = Time::ZERO;
     media.time_map = TimeMap::linear(Time::ZERO, Time::ONE).unwrap();
     let snapshot = RenderSnapshot::new(&project, id, 1, RenderProfile::default()).unwrap();
-    let backend = SequentialVideoRenderBackend::new(&CpuReferenceBackend, dir.path(), Ok(&runtime));
+    let backend = SequentialVideoRenderBackend::new(&CpuReferenceBackend, dir.path(), Ok(&runtime))
+        .with_decoder_limits(DecoderPoolLimits {
+            max_decoders: 2,
+            retained_frame_bytes: 128 * 1024 * 1024,
+        });
     for time in (0..6)
         .map(|i| t(i * 1001, 30000))
         .chain([t(4004, 30000); 3])
@@ -616,6 +620,45 @@ fn sequential_product_backend_reuses_exact_decoder_and_revalidates_hash() {
     assert_eq!(backend.pool_stats().evictions, 1);
     assert_eq!(backend.pool_stats().retained_frame_bytes, 1536);
     assert!(backend.pool_stats().peak_retained_frame_bytes <= 128 * 1024 * 1024);
+    let mut wrong_hash = project.clone();
+    let DocumentObject::Known(asset) = &mut wrong_hash.assets[0] else {
+        unreachable!()
+    };
+    asset.content_hash = "0".repeat(64);
+    let wrong_snapshot = RenderSnapshot::new(&wrong_hash, id, 1, RenderProfile::default()).unwrap();
+    let pool_before = backend.pool_stats();
+    let error = render_frame(
+        &wrong_snapshot,
+        &[],
+        &backend,
+        FrameRequest {
+            time: Time::ZERO,
+            region: OutputRegion {
+                origin: [0.0; 2],
+                extent: [2.0; 2],
+                pixels: [2; 2],
+            },
+        },
+    )
+    .unwrap_err();
+    assert_eq!(error.code(), "ASSET_HASH_MISMATCH");
+    assert_eq!(backend.pool_stats().hits, pool_before.hits);
+    assert_eq!(backend.pool_stats().misses, pool_before.misses);
+    assert_eq!(backend.pool_stats().evictions, pool_before.evictions);
+    let request = FrameRequest {
+        time: Time::ZERO,
+        region: OutputRegion {
+            origin: [0.0; 2],
+            extent: [2.0; 2],
+            pixels: [2; 2],
+        },
+    };
+    assert_eq!(
+        render_frame(&snapshot, &[], &backend, request)
+            .unwrap()
+            .pixels,
+        frame(&snapshot, dir.path(), &CpuReferenceBackend, Time::ZERO).pixels
+    );
     std::fs::write(&copy, b"changed").unwrap();
     let error = render_frame(
         &snapshot,
@@ -632,4 +675,142 @@ fn sequential_product_backend_reuses_exact_decoder_and_revalidates_hash() {
     )
     .unwrap_err();
     assert_eq!(error.code(), "ASSET_HASH_MISMATCH");
+}
+
+#[test]
+fn perf003_nested_media_cursors_survive_order_changes_and_retention_limits() {
+    let runtime = MediaRuntime::load().unwrap();
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/fixtures/generated/media/cfr-30000-1001.nut")
+        .canonicalize()
+        .unwrap();
+    let metadata = runtime
+        .open_video(&path)
+        .unwrap()
+        .stream_metadata()
+        .unwrap();
+    let asset = Asset {
+        id: AssetId::new(),
+        kind: AssetKind::Video,
+        content_hash: content_hash(&path).unwrap(),
+        locator: AssetLocator {
+            relative: None,
+            absolute: Some(path.to_str().unwrap().into()),
+        },
+        streams: vec![metadata],
+    };
+    let (mut project, definition) = media_project(asset);
+    let DocumentObject::Known(c) = &mut project.compositions[0] else {
+        unreachable!()
+    };
+    let NodeKind::Media(media) = &mut c.nodes[0].kind else {
+        unreachable!()
+    };
+    media.source_in = Time::ZERO;
+    media.time_map = TimeMap::linear(Time::ZERO, Time::ONE).unwrap();
+    let mut root = composition(
+        [Time::ZERO, t(1001, 30000)]
+            .into_iter()
+            .map(|offset| {
+                node(
+                    NodeKind::CompositionInstance(CompositionInstance {
+                        id: CompositionInstanceId::new(),
+                        definition_ref: definition,
+                        input_bindings: BTreeMap::new(),
+                        local_time_map: TimeMap::linear(offset, Time::ONE).unwrap(),
+                        seed: 0,
+                    }),
+                    vec![],
+                )
+            })
+            .collect(),
+    );
+    let target = root.id;
+    project
+        .compositions
+        .push(DocumentObject::Known(root.clone()));
+    let make_dag = |project: &Project, time| {
+        let snapshot = RenderSnapshot::new(project, target, 1, Default::default()).unwrap();
+        build_render_dag(
+            &build_scene_ir(&snapshot, time, &[]).unwrap(),
+            Default::default(),
+            OutputRegion {
+                origin: [0.0; 2],
+                extent: [2.0; 2],
+                pixels: [2; 2],
+            },
+        )
+        .unwrap()
+    };
+    let mut session = MediaSession::sharing_runtime(Ok(&runtime));
+    let mut keys = None;
+    for frame in 0..5 {
+        root.root_nodes.reverse();
+        project.compositions[1] = DocumentObject::Known(root.clone());
+        let dag = make_dag(&project, t(frame * 1001, 30000));
+        let cursors: std::collections::BTreeSet<_> = dag
+            .nodes()
+            .iter()
+            .filter_map(|node| match node {
+                DagNode::VideoDraw { cursor, .. } => Some(cursor.clone()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(cursors.len(), 2);
+        let a = cursors.first().unwrap();
+        let b = cursors.last().unwrap();
+        assert_eq!(a.node, b.node);
+        assert_ne!(a.instance_path, b.instance_path);
+        if let Some(previous) = &keys {
+            assert_eq!(previous, &cursors);
+        }
+        keys = Some(cursors);
+        let expected = resolve_dag_media_in(
+            &dag,
+            &path,
+            &mut MediaSession::sharing_runtime(Ok(&runtime)),
+        )
+        .unwrap();
+        let actual = resolve_dag_media_in(&dag, &path, &mut session).unwrap();
+        assert_eq!(actual.dag, expected.dag);
+        assert_eq!(actual.input_identities, expected.input_identities);
+    }
+    assert_eq!(session.decoder_pool_stats().misses, 2);
+    assert_eq!(session.decoder_pool_stats().hits, 8);
+    assert_eq!(session.decoder_stats_total().seeks, 2);
+
+    let dag = make_dag(&project, Time::ZERO);
+    let expected = resolve_dag_media_in(&dag, &path, &mut MediaSession::new()).unwrap();
+    for limits in [
+        DecoderPoolLimits {
+            max_decoders: 1,
+            retained_frame_bytes: 512 * 1024 * 1024,
+        },
+        DecoderPoolLimits {
+            max_decoders: 8,
+            retained_frame_bytes: 1,
+        },
+        DecoderPoolLimits {
+            max_decoders: 0,
+            retained_frame_bytes: 512 * 1024 * 1024,
+        },
+        DecoderPoolLimits {
+            max_decoders: 8,
+            retained_frame_bytes: 0,
+        },
+    ] {
+        let mut bounded = MediaSession::sharing_runtime(Ok(&runtime)).with_decoder_limits(limits);
+        for _ in 0..2 {
+            let actual = resolve_dag_media_in(&dag, &path, &mut bounded).unwrap();
+            assert_eq!(actual.dag, expected.dag);
+            assert_eq!(actual.input_identities, expected.input_identities);
+            let stats = bounded.decoder_pool_stats();
+            assert!(stats.active_decoders <= limits.max_decoders);
+            assert!(stats.retained_frame_bytes <= limits.retained_frame_bytes);
+            assert!(stats.peak_retained_frame_bytes <= limits.retained_frame_bytes);
+        }
+        assert_eq!(bounded.decoder_stats_total().seeks, 4);
+        assert_eq!(bounded.decoder_pool_stats().misses, 4);
+        assert!(bounded.decoder_pool_stats().evictions >= 3);
+    }
 }

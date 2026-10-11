@@ -11,6 +11,40 @@ pub struct VideoDecodeStats {
     pub peak_cached_frame_bytes: u64,
     pub cache_clone_bytes: u64,
     pub returned_clone_bytes: u64,
+    pub indexed_seek_attempts: u64,
+    pub verified_seek_hits: u64,
+    pub indexed_seek_fallbacks: u64,
+    pub indexed_seek_prerolls: u64,
+    pub native_reopens: u64,
+}
+impl VideoDecodeStats {
+    pub(crate) fn merge(&mut self, other: Self) {
+        self.seeks = self.seeks.saturating_add(other.seeks);
+        self.decoded_frames = self.decoded_frames.saturating_add(other.decoded_frames);
+        self.interval_hits = self.interval_hits.saturating_add(other.interval_hits);
+        self.peak_cached_frame_bytes = self
+            .peak_cached_frame_bytes
+            .max(other.peak_cached_frame_bytes);
+        self.cache_clone_bytes = self
+            .cache_clone_bytes
+            .saturating_add(other.cache_clone_bytes);
+        self.returned_clone_bytes = self
+            .returned_clone_bytes
+            .saturating_add(other.returned_clone_bytes);
+        self.indexed_seek_attempts = self
+            .indexed_seek_attempts
+            .saturating_add(other.indexed_seek_attempts);
+        self.verified_seek_hits = self
+            .verified_seek_hits
+            .saturating_add(other.verified_seek_hits);
+        self.indexed_seek_fallbacks = self
+            .indexed_seek_fallbacks
+            .saturating_add(other.indexed_seek_fallbacks);
+        self.indexed_seek_prerolls = self
+            .indexed_seek_prerolls
+            .saturating_add(other.indexed_seek_prerolls);
+        self.native_reopens = self.native_reopens.saturating_add(other.native_reopens);
+    }
 }
 /// Owns its native decoder; the shared `Rc` runtime inside `NativeDecoder`
 /// keeps the loaded library alive for the decoder's exact span.
@@ -20,6 +54,10 @@ pub struct VideoDecoder {
     pub(crate) stats: VideoDecodeStats,
     pub(crate) current: Option<DecodedVideoFrame>,
     pub(crate) lookahead: Option<ffi::RawFrame>,
+    pub(crate) seek_index: crate::video_seek::VideoSeekIndex,
+    pub(crate) canonical: bool,
+    pub(crate) at_origin: bool,
+    pub(crate) source_fingerprint: Option<assets::FileFingerprint>,
 }
 impl MediaRuntime {
     /// Open a canonical local file. URL and playlist sources are rejected.
@@ -36,7 +74,13 @@ impl MediaRuntime {
         if let Some(detection) = crate::raw::sniff_camera_raw(&path)? {
             return Err(detection.unsupported());
         }
+        let fingerprint = assets::FileFingerprint::of(&std::fs::metadata(&path)?);
         let native = ffi::NativeDecoder::open(&self.native, &path)?;
+        if native.file_fingerprint()? != fingerprint {
+            return Err(MediaError::Decode(
+                "video source changed during open".into(),
+            ));
+        }
         let report = MediaPathReport {
             decoder: Some(native.name.clone()),
             encoder: None,
@@ -52,6 +96,10 @@ impl MediaRuntime {
             stats: VideoDecodeStats::default(),
             current: None,
             lookahead: None,
+            seek_index: Default::default(),
+            canonical: true,
+            at_origin: false,
+            source_fingerprint: Some(fingerprint),
         })
     }
     /// Explicit SDR BT.709 RGBA8 straight input. HDR/linear input belongs to the
@@ -258,11 +306,23 @@ pub struct EncodeRequest {
 }
 #[derive(Debug, Clone)]
 pub struct EncodeFrame {
-    /// Exact presentation time; each frame spans one EncodeRequest.time_base tick.
+    /// Exact presentation time. The span reaches the next PTS; the final
+    /// frame repeats the last span (one time-base tick for a single frame).
     pub pts: Rational,
     pub rgba: Vec<u8>,
 }
 impl VideoDecoder {
+    /// Zero entries selects the original origin-based diagnostic policy.
+    pub fn with_seek_index_limits(
+        mut self,
+        limits: VideoSeekIndexLimits,
+    ) -> Result<Self, MediaError> {
+        self.seek_index = crate::video_seek::VideoSeekIndex::new(limits)?;
+        Ok(self)
+    }
+    pub fn seek_index_stats(&self) -> VideoSeekIndexStats {
+        self.seek_index.stats()
+    }
     pub(crate) fn cached_frame_bytes(&self) -> usize {
         self.current.as_ref().map_or(0, |f| f.pixels.len())
             + self.lookahead.as_ref().map_or(0, |f| f.pixels.len())
@@ -271,9 +331,19 @@ impl VideoDecoder {
         self.stats
     }
     fn seek_origin(&mut self) -> Result<(), MediaError> {
+        let fresh = self.seek_index.enabled() && (!self.canonical || self.current.is_some());
         self.current = None;
         self.lookahead = None;
-        self.native.restart_origin()?;
+        if fresh {
+            self.native.fresh_origin()?;
+        } else {
+            self.native.restart_origin()?;
+        }
+        if fresh || self.native.origin() < 0 {
+            self.stats.native_reopens += 1;
+        }
+        self.canonical = true;
+        self.at_origin = true;
         self.stats.seeks += 1;
         Ok(())
     }
@@ -307,30 +377,150 @@ impl VideoDecoder {
     pub fn path_report(&self) -> &MediaPathReport {
         &self.report
     }
-    /// Exact presentation intervals with bounded forward state. Backward requests
-    /// restart at the indexed origin; no GOP or VFR duration approximation is used.
+    /// Exact presentation intervals with bounded forward state. Certified
+    /// presentations may restart near their PTS, with full native-frame digest
+    /// verification and explicit origin fallback. No CFR/VFR approximation.
     pub fn decode_at(&mut self, time: Rational) -> Result<DecodedVideoFrame, MediaError> {
-        let result = self.decode_at_inner(time, false);
-        if result.is_err() {
-            self.current = None;
-            self.lookahead = None;
-        }
-        result
+        self.decode_requested(time, false)
     }
     /// Reverse endpoint selection uses the exact presentation interval (pts, end].
     /// No nominal frame rate or epsilon is used, including variable-rate media.
     pub fn decode_at_reverse(&mut self, time: Rational) -> Result<DecodedVideoFrame, MediaError> {
-        let result = self.decode_at_inner(time, true);
+        self.decode_requested(time, true)
+    }
+    fn decode_requested(
+        &mut self,
+        time: Rational,
+        reverse: bool,
+    ) -> Result<DecodedVideoFrame, MediaError> {
+        let result = self.decode_verified(time, reverse);
         if result.is_err() {
             self.current = None;
             self.lookahead = None;
+            self.canonical = false;
+            self.at_origin = false;
         }
         result
+    }
+    fn invalidate_source(&mut self) {
+        self.seek_index.clear();
+        self.source_fingerprint = None;
+        self.current = None;
+        self.lookahead = None;
+        self.canonical = false;
+        self.at_origin = false;
+    }
+    fn check_source(&mut self) -> Result<(), MediaError> {
+        if !self.seek_index.enabled() {
+            return Ok(());
+        }
+        let fingerprint = self.native.file_fingerprint()?;
+        if let Some(previous) = self.source_fingerprint {
+            if fingerprint != previous {
+                self.invalidate_source();
+                return Err(MediaError::Decode(
+                    "video source identity changed; revalidation required".into(),
+                ));
+            }
+        } else {
+            self.seek_origin()?;
+            if self.native.file_fingerprint()? != fingerprint {
+                self.invalidate_source();
+                return Err(MediaError::Decode(
+                    "video source changed during restart".into(),
+                ));
+            }
+            self.source_fingerprint = Some(fingerprint);
+        }
+        Ok(())
+    }
+    fn check_source_after(&mut self) -> Result<(), MediaError> {
+        if self.seek_index.enabled()
+            && Some(self.native.file_fingerprint()?) != self.source_fingerprint
+        {
+            self.invalidate_source();
+            return Err(MediaError::Decode(
+                "video source changed during decode".into(),
+            ));
+        }
+        Ok(())
+    }
+    fn decode_verified(
+        &mut self,
+        time: Rational,
+        reverse: bool,
+    ) -> Result<DecodedVideoFrame, MediaError> {
+        self.check_source()?;
+        let interval_hit = self.current.as_ref().is_some_and(|frame| {
+            if reverse {
+                time > frame.pts && time <= frame.end
+            } else {
+                time >= frame.pts && time < frame.end
+            }
+        });
+        if !interval_hit && let Some((pts, reference)) = self.seek_index.find(time, reverse) {
+            self.stats.indexed_seek_attempts += 1;
+            let attempt = self.decode_index_candidate(reference.seek_pts, time, reverse);
+            self.check_source_after()?;
+            if let Ok(frame) = attempt
+                && reference.matches(pts, &frame)
+            {
+                self.stats.verified_seek_hits += 1;
+                return Ok(frame);
+            }
+            // Some demuxers land after the requested presentation. One bounded
+            // earlier anchor is a search candidate only, never an assumed GOP
+            // boundary; the complete canonical digest still decides success.
+            if reference.seek_pts == pts
+                && let Ok(earlier) = pts.checked_sub(Rational::ONE)
+            {
+                self.stats.indexed_seek_prerolls += 1;
+                let attempt = self.decode_index_candidate(earlier, time, reverse);
+                self.check_source_after()?;
+                if let Ok(frame) = attempt
+                    && reference.matches(pts, &frame)
+                {
+                    self.seek_index.verified_anchor(pts, earlier);
+                    self.stats.verified_seek_hits += 1;
+                    return Ok(frame);
+                }
+            }
+            // The same file/codec is decoded from its canonical origin. A
+            // guessed key packet or unverified frame never becomes a reference.
+            self.seek_index.reject(pts);
+            self.stats.indexed_seek_fallbacks += 1;
+            self.current = None;
+            self.lookahead = None;
+        }
+        let start_frames = self.stats.decoded_frames;
+        let frame = self.decode_at_inner(time, reverse, true)?;
+        self.check_source_after()?;
+        if self.canonical && !interval_hit {
+            self.seek_index
+                .insert(&frame, self.stats.decoded_frames - start_frames);
+        }
+        Ok(frame)
+    }
+    fn decode_index_candidate(
+        &mut self,
+        anchor: Rational,
+        time: Rational,
+        reverse: bool,
+    ) -> Result<DecodedVideoFrame, MediaError> {
+        self.current = None;
+        self.lookahead = None;
+        self.canonical = false;
+        self.at_origin = false;
+        let tick = anchor.checked_div(self.native.time_base)?;
+        self.native.seek(tick.floor())?;
+        self.stats.seeks += 1;
+        self.decode_at_inner(time, reverse, false)
     }
     fn decode_at_inner(
         &mut self,
         time: Rational,
         reverse: bool,
+        canonical_scan: bool,
     ) -> Result<DecodedVideoFrame, MediaError> {
         if let Some(frame) = &self.current {
             if if reverse {
@@ -345,10 +535,12 @@ impl VideoDecoder {
                 self.record_copy(bytes)?;
                 return Ok(cloned);
             }
-            if time < frame.pts || (reverse && time == frame.pts) {
+            if canonical_scan
+                && (!self.canonical || time < frame.pts || (reverse && time == frame.pts))
+            {
                 self.seek_origin()?;
             }
-        } else {
+        } else if canonical_scan && (!self.canonical || !self.at_origin) {
             self.seek_origin()?;
         }
         let mut current = if self.current.take().is_some() {
@@ -420,6 +612,7 @@ impl VideoDecoder {
         Ok(())
     }
     fn next(&mut self) -> Result<Option<ffi::RawFrame>, MediaError> {
+        self.at_origin = false;
         let frame = self.native.next()?;
         if let Some(f) = &frame {
             self.stats.decoded_frames += 1;
@@ -446,6 +639,11 @@ impl VideoDecoder {
     /// Decode the next presentation-order frame into explicit SDR RGBA8.
     /// Deterministic: integer luma-friendly output, no clock or device input.
     pub fn next_rgba(&mut self) -> Result<Option<RgbaVideoFrame>, MediaError> {
+        // Raw sequential consumption invalidates the presentation lookahead.
+        // It cannot certify unseen presentations after an arbitrary seek.
+        self.current = None;
+        self.lookahead = None;
+        self.canonical = false;
         let frame = self.next()?;
         let Some(frame) = frame else {
             return Ok(None);

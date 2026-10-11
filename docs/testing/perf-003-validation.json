@@ -1,0 +1,57 @@
+{
+  "date": "2026-10-11",
+  "workspace_command": "KRONELLO_STATE_ROOT=/tmp/kronello-perf-tests-perf003-accepted cargo test --workspace --locked",
+  "exit_code": 0,
+  "regular": {
+    "batches": 176,
+    "passed": 1301,
+    "failed": 0,
+    "ignored": 44
+  },
+  "doctests": {
+    "batches": 23,
+    "passed": 2,
+    "failed": 0,
+    "ignored": 0
+  },
+  "source_fence": {
+    "extensions": [
+      ".rs",
+      ".c",
+      ".h",
+      "Cargo.toml",
+      "Cargo.lock"
+    ],
+    "files": 391,
+    "aggregate_sha256": "2b487331241353636c4890fc142c0f783d7320e8c47e5a40a7df44a623cad1ee",
+    "changed_files": []
+  },
+  "checks": {
+    "fmt": "cargo fmt --all --check: success",
+    "clippy": "cargo clippy --workspace --all-targets --locked -- -D warnings: success",
+    "swift_release": {
+      "passed": 28,
+      "failed": 0,
+      "classes": [
+        "EditEditorTests",
+        "PrecisionEditTests",
+        "SourceMonitorTests",
+        "TimelineIndexTests"
+      ],
+      "isolated_process_workers": 3,
+      "state_root": "/tmp/kronello-perf003-swift-state"
+    },
+    "gpu_explicit_ignored_test": {
+      "name": "service_software_upload_resident_matches_software_preview",
+      "passed": 1,
+      "max_delta": 0.0087890625,
+      "tolerance": 0.02
+    }
+  },
+  "release_products_sha256": {
+    "target/release/kronello": "237e2298a6cc3e6f99c617f15fe74b3d21550ddbd094ca8563d6d41457b2964c",
+    "target/release/libkronello_ffi.dylib": "26dd68bbb929f869c0c74cdbcae1ed89d2badd6b5fb205d6ed9ebaab6580336c",
+    "target/release/examples/perf_proxy_preview": "04d4b6875bc6d4a15164dfab8a6daec87b063935af7d883e4055326f8be4fc6e",
+    "apps/macos/.build/out/Products/Release/KronelloTimelineBenchmark": "0a6a0bc65fbedb1838986716edb493e529b049882526919d35d21547e69b4a33"
+  }
+}
