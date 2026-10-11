@@ -88,6 +88,42 @@ fn detection_claims_camera_raw_formats_only() {
 }
 
 #[test]
+fn generic_import_rejects_raw_before_any_decoder() {
+    let dir = tempfile::tempdir().unwrap();
+    let runtime = MediaRuntime::load().unwrap();
+    for (name, bytes, reason) in [
+        ("clip.braw", rawmedia::braw_fixture(), "Blackmagic SDK"),
+        ("clip.r3d", rawmedia::r3d_fixture(), "RED SDK"),
+        (
+            "still.dng",
+            rawmedia::dng_bayer16(32, 32),
+            "RAW registration",
+        ),
+        // Invalid decoder payloads still receive the import workflow diagnostic.
+        (
+            "broken.dng",
+            b"not a decodable RAW image".to_vec(),
+            "RAW registration",
+        ),
+        (
+            "broken.cr2",
+            b"not a decodable RAW image".to_vec(),
+            "RAW registration",
+        ),
+        (
+            "clip.mov",
+            rawmedia::prores_raw_mov(b"aprn", 64, 64, 24, 1, 24),
+            "RAW registration",
+        ),
+    ] {
+        let path = write(dir.path(), name, &bytes);
+        let error = runtime.probe_for_import(&path).unwrap_err();
+        assert_eq!(error.code(), "UNSUPPORTED_FEATURE", "{name}: {error}");
+        assert!(error.to_string().contains(reason), "{name}: {error}");
+    }
+}
+
+#[test]
 fn vendor_formats_are_typed_rejections_everywhere() {
     let dir = tempfile::tempdir().unwrap();
     for (name, bytes) in [
