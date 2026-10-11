@@ -1,6 +1,6 @@
 # ADR-0046: 保存の外枠・安全モード判定・履歴警告を固定する
 
-- 状態: 採用
+- 状態: 部分置換（[ADR-0145](0145-invalid-document-diagnostics-and-css-easing.md): decode 失敗時の無条件 opaque 保存のみ）
 - 日付: 2026-10-03
 - 対象: STORE-001 / STORE-002
 
@@ -34,3 +34,5 @@ ADR-0027 / ADR-0030 / ADR-0045 が STORE-001 に委ねた、保存場所の判�
 - [09 保存と同時編集](../architecture/09-storage-concurrency.md)
 - [STORE-001 の検証](../testing/store-001.md)
 - [STORE-002 の検証](../testing/store-002.md)
+
+ADR-0145 は既知不正 object の拒否と診断を定める。未知種類・フィールド・意味版の lossless 保持、保存外枠・SQLite・履歴・場所判定の条項は維持する。

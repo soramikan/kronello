@@ -243,7 +243,7 @@ fn json_order_invalid_payloads_remain_rejected() {
     );
     assert!(
         serde_json::from_str::<CurveInterpolation>(
-            r#"{"value":{"control1":[0.75,0.25],"control2":[0.25,0.75]},"kind":"cubic"}"#
+            r#"{"value":{"control1":[1.25,0.25],"control2":[0.25,0.75]},"kind":"cubic"}"#
         )
         .is_err()
     );

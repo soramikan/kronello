@@ -727,6 +727,26 @@ impl Shape {
             .into_iter()
             .collect()
     }
+    /// Validate known intrinsic geometry without resolving node properties.
+    pub fn validate_structure(&self) -> Result<(), ShapeError> {
+        if let Some(options) = self.stroke.as_ref().and_then(|s| s.options.as_ref())
+            && options.geometry_version == EXTENDED_STROKE_VERSION
+        {
+            options.validate()?;
+        }
+        for gradient in self
+            .fill
+            .as_ref()
+            .and_then(|f| f.gradient.as_ref())
+            .into_iter()
+            .chain(self.stroke.as_ref().and_then(|s| s.gradient.as_ref()))
+        {
+            if gradient.options().interpolation_version == 1 {
+                gradient.validate_geometry()?;
+            }
+        }
+        Ok(())
+    }
     /// Checks node-local reference closure, descriptor types/units/coordinates,
     /// and final constant values. Curves/expressions/modifiers are not evaluated.
     pub fn validate(

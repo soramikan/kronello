@@ -85,7 +85,7 @@ RenderSnapshot は公開 `schema_version` を持ち、`semantic_versions` に文
 
 未知の機能は保存時に失わない設計にするが、必要な機能が不足している場合の最終レンダーは `UNSUPPORTED_FEATURE` で拒否する（[ADR-0010](../adr/0010-unsupported-features-fail-final-render.md)）。
 
-対応する外枠内の未知内容は opaque に保持する。構造を安全に保持できない版は原本を変更せず型付き互換性エラーで拒否し、未知の意味に依存する変更は許さない。保存可能性と実行可能性の判定は ADR-0045 に従う。
+対応する外枠内の未知種類・フィールド・意味版は opaque に保持する。対応版の既知構造が不正な場合は保存前に `INVALID_DOCUMENT_OBJECT`（`collection` / `id` / `reason`）で拒否し、opaque 保存へ逃がさない。編集不可診断は対象 object をすべて列挙する（[ADR-0145](../adr/0145-invalid-document-diagnostics-and-css-easing.md)）。構造を安全に保持できない版は原本を変更せず型付き互換性エラーで拒否し、未知の意味に依存する変更は許さない。保存可能性と実行可能性の判定は ADR-0045 に従う。
 
 保存の具体的な形態（`.kronello`、イベント、スナップショット）は [09 保存と同時編集](09-storage-concurrency.md) を参照。
 

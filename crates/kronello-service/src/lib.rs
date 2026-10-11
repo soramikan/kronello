@@ -477,7 +477,15 @@ impl std::fmt::Display for ServiceError {
 impl std::error::Error for ServiceError {}
 impl From<StoreError> for ServiceError {
     fn from(e: StoreError) -> Self {
-        Self::new(e.code(), e.to_string())
+        let mut result = Self::new(e.code(), e.to_string());
+        result.details = match &e {
+            StoreError::InvalidDocumentObject(diagnostic) => Some(serde_json::json!(diagnostic)),
+            StoreError::UnsupportedObjects(diagnostics) => {
+                Some(serde_json::json!({"objects": diagnostics}))
+            }
+            _ => None,
+        };
+        result
     }
 }
 impl From<RenderError> for ServiceError {

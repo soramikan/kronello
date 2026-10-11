@@ -10,7 +10,7 @@ pub const INTERPOLATION_VERSION: u32 = 1;
 pub enum CurveError {
     #[error(transparent)]
     Value(#[from] ModelError),
-    #[error("time handles must satisfy 0 <= x1 <= x2 <= 1")]
+    #[error("time handles must satisfy 0 <= x1 <= 1 and 0 <= x2 <= 1")]
     NonMonotonicHandles,
     #[error("duplicate key time: {time:?}")]
     DuplicateKeyTime { time: Time },
@@ -23,7 +23,8 @@ pub enum CurveError {
 }
 
 /// Normalized time/value-progress handles between (0, 0) and (1, 1).
-/// Ordered x handles guarantee monotonic time. Finite y handles may overshoot.
+/// Each x handle in [0, 1] guarantees monotonic time, in either order.
+/// Finite y handles may overshoot.
 /// These are dimensionless progress values, never stored timestamps.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(try_from = "BezierWire", into = "BezierWire")]
@@ -44,7 +45,7 @@ impl TimeBezier {
         let control1 = [FiniteF64::new(control1[0])?, FiniteF64::new(control1[1])?];
         let control2 = [FiniteF64::new(control2[0])?, FiniteF64::new(control2[1])?];
         let (x1, x2) = (control1[0].get(), control2[0].get());
-        if !(0.0 <= x1 && x1 <= x2 && x2 <= 1.0) {
+        if !((0.0..=1.0).contains(&x1) && (0.0..=1.0).contains(&x2)) {
             return Err(CurveError::NonMonotonicHandles);
         }
         Ok(Self { control1, control2 })

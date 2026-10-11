@@ -381,7 +381,7 @@ fn unknown_shape_fields_variants_and_large_numbers_are_preserved_opaque() {
         assert!(matches!(decoded.shapes[0], DocumentObject::Opaque(_)));
         assert!(matches!(
             decoded.ensure_editable(),
-            Err(ProjectError::UnsupportedMeaning)
+            Err(ProjectError::UnsupportedObjects(_))
         ));
         assert_eq!(
             validate_shape_contents(&decoded, &registry),

@@ -199,6 +199,24 @@ fn region() -> OutputRegion {
 fn snapshot(p: &Project, c: CompositionId) -> RenderSnapshot {
     RenderSnapshot::new(p, c, 7, RenderProfile::default()).unwrap()
 }
+// Known malformed objects are now rejected before scene evaluation (MODEL-004).
+fn assert_invalid_object_snapshot(
+    project: &Project,
+    composition: CompositionId,
+    collection: &str,
+    object: uuid::Uuid,
+) {
+    let Err(ProjectError::InvalidObject(diagnostic)) = project.validate_storage() else {
+        panic!("expected a typed invalid-object diagnostic");
+    };
+    assert_eq!(diagnostic.collection, collection);
+    assert_eq!(diagnostic.id, object);
+    assert!(!diagnostic.reason.is_empty());
+    let error = RenderSnapshot::new(project, composition, 7, RenderProfile::default()).unwrap_err();
+    assert_eq!(error.code(), "RENDER_ERROR");
+    assert!(matches!(error, RenderError::InvalidInput(_)));
+}
+
 fn frame(s: &RenderSnapshot, time: Time) -> RenderedFrame {
     render_frame(
         s,
@@ -2311,10 +2329,12 @@ fn invalid_gradient_stops_and_geometry_fail_with_typed_shape_errors() {
             panic!()
         };
         shape.fill.as_mut().unwrap().gradient = Some(Box::new(geometry));
+        let shape_id = shape.id.as_uuid();
         assert!(matches!(
-            build_scene_ir(&snapshot(&bad, id), t(0, 1), &[]),
-            Err(RenderError::Shape(ShapeError::InvalidGradient))
+            shape.validate_structure(),
+            Err(ShapeError::InvalidGradient)
         ));
+        assert_invalid_object_snapshot(&bad, id, "shapes", shape_id);
     }
 }
 #[test]
@@ -2417,13 +2437,10 @@ fn malformed_text_gradient_is_preserved_as_opaque_and_snapshot_refuses_it() {
     value["texts"][0]["styles"][0]["gradient"] = serde_json::json!({"kind":"linear","stops":[{"offset":0,"color":"red"},{"offset":1,"color":"blue"}]});
     let imported: Project = serde_json::from_value(value.clone()).unwrap();
     assert_eq!(serde_json::to_value(&imported).unwrap(), value);
-    assert!(matches!(imported.texts[0], DocumentObject::Opaque(_)));
-    assert_eq!(
-        RenderSnapshot::new(&imported, id, 1, RenderProfile::default())
-            .unwrap_err()
-            .code(),
-        "UNSUPPORTED_FEATURE"
-    );
+    let DocumentObject::Opaque(opaque) = &imported.texts[0] else {
+        panic!()
+    };
+    assert_invalid_object_snapshot(&imported, id, "texts", opaque.id);
 }
 
 fn fx_project() -> (Project, CompositionId) {
@@ -3419,9 +3436,20 @@ fn vec005_invalid_dash_open_alignment_budget_and_version_are_typed() {
             2 => options.dash_array = vec![f(1e-9), f(1e-9)],
             _ => options.geometry_version = "future".into(),
         }
-        let result = build_scene_ir(&snapshot(&p, id), Time::ZERO, &[])
-            .and_then(|ir| build_render_dag(&ir, RenderProfile::default(), region()));
-        assert_eq!(result.unwrap_err().code(), code);
+        if kind == 0 {
+            let DocumentObject::Known(shape) = &p.shapes[0] else {
+                panic!()
+            };
+            assert!(matches!(
+                shape.validate_structure(),
+                Err(ShapeError::InvalidDashArray)
+            ));
+            assert_invalid_object_snapshot(&p, id, "shapes", shape.id.as_uuid());
+        } else {
+            let result = build_scene_ir(&snapshot(&p, id), Time::ZERO, &[])
+                .and_then(|ir| build_render_dag(&ir, RenderProfile::default(), region()));
+            assert_eq!(result.unwrap_err().code(), code);
+        }
     }
 }
 

@@ -61,7 +61,7 @@
 | [0043](0043-semantic-dependencies-and-units.md) | 編集モデル・評価・レンダーの依存境界と単位を固定する | 採用 | 2026-10-03 |
 | [0044](0044-color-and-alpha-contracts.md) | 作業用線形色と alpha の入出力契約を固定する | 採用 | 2026-10-03 |
 | [0045](0045-snapshot-compatibility-boundaries.md) | 保存・意味・実行能力の互換性を分けて判定する | 採用 | 2026-10-03 |
-| [0046](0046-store-format-and-location-policy.md) | 保存の外枠・安全モード判定・履歴警告を固定する | 採用 | 2026-10-03 |
+| [0046](0046-store-format-and-location-policy.md) | 保存の外枠・安全モード判定・履歴警告を固定する | 部分置換（0145） | 2026-10-03 |
 | [0047](0047-apple-silicon-metal-golden.md) | GPU golden は Apple Silicon + Metal の共通基準で比較する | 部分置換（0088） | 2026-10-03 |
 | [0048](0048-media-native-build-and-asset-verification.md) | FFmpeg ABI 境界・同梱ビルド・素材検証を固定する | 部分置換（0062 / 0091） | 2026-10-03 |
 | [0049](0049-audio-bus-timing-and-codec.md) | 音声 Bus・サンプル格子・PCM24 の書き出しを固定する | 部分置換（0079） | 2026-10-04 |
@@ -85,7 +85,7 @@
 | [0067](0067-affine-gaussian-effects.md) | 非一様 affine の Gaussian / shadow を明示した意味版 2 で扱う | 採用 | 2026-10-05 |
 | [0068](0068-versioned-delivery-movie-profiles.md) | 版付き配信映像と ALAC 音声の出力契約 | 部分置換（0106） | 2026-10-05 |
 | [0069](0069-versioned-stateless-audio.md) | リタイム・effect・Generator・crossfade 音声を明示 profile に固定する | 採用 | 2026-10-05 |
-| [0070](0070-motion-keyframe-authoring.md) | Dope sheet と時間イージングの編集 | 採用 | 2026-10-05 |
+| [0070](0070-motion-keyframe-authoring.md) | Dope sheet と時間イージングの編集 | 部分置換（0145） | 2026-10-05 |
 | [0071](0071-project-change-plans-and-modifier-edits.md) | Project 作成・import の計画と再送、Modifier の型付き編集 | 採用 | 2026-10-05 |
 | [0072](0072-scene-search-fixed-cursors-and-cli-events.md) | Scene 検索・固定 revision cursor・CLI event framing | 採用 | 2026-10-05 |
 | [0073](0073-local-stroke-extensions.md) | 破線・線位置・affine 線幅を明示したローカル幾何版で扱う | 採用 | 2026-10-05 |
@@ -166,6 +166,7 @@
 
 | [0144](0144-revision-scoped-preview-preparation.md) | revision単位の検証済みプレビュー準備 | 部分置換（0147） | 2026-10-11 |
 
+| [0145](0145-invalid-document-diagnostics-and-css-easing.md) | 既知不正文書の診断と CSS 時間イージング | 採用 | 2026-10-11 |
 
 | [0146](0146-independent-bounded-media-cursors.md) | 独立した動画カーソルと二つの保持予算 | 採用 | 2026-10-11 |
 

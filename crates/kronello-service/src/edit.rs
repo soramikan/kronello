@@ -342,10 +342,35 @@ impl SourceResolver for Catalog<'_> {
         })
     }
 }
+fn shape_edit_error(e: kronello_model::ShapeError) -> ServiceError {
+    match e {
+        kronello_model::ShapeError::MorphCorrespondence { .. }
+        | kronello_model::ShapeError::InvalidTrimRange
+        | kronello_model::ShapeError::UnsupportedStrokeVersion
+        | kronello_model::ShapeError::InvalidDashArray
+        | kronello_model::ShapeError::StrokeBudgetExceeded
+        | kronello_model::ShapeError::OpenStrokeAlignment => {
+            ServiceError::from(kronello_render::RenderError::Shape(e))
+        }
+        _ => invalid(e),
+    }
+}
 pub(crate) fn validate(project: &Project) -> Result<(), ServiceError> {
     for s in &project.sequences {
         if let DocumentObject::Known(s) = s {
             s.validate(project)?;
+        }
+    }
+    // Preserve domain-specific edit errors before the stricter storage boundary.
+    // Opaque contents still go through the addressed compatibility check below.
+    for shape in &project.shapes {
+        if let DocumentObject::Known(shape) = shape {
+            shape.validate_structure().map_err(shape_edit_error)?;
+        }
+    }
+    for text in &project.texts {
+        if let DocumentObject::Known(text) = text {
+            text.validate_structure().map_err(invalid)?;
         }
     }
     project.ensure_editable().map_err(StoreError::from)?;
@@ -447,17 +472,7 @@ pub(crate) fn validate(project: &Project) -> Result<(), ServiceError> {
     project
         .validate_mattes()
         .map_err(|e| ServiceError::new(e.code(), e.to_string()))?;
-    kronello_model::validate_shape_contents(project, &r).map_err(|e| match e {
-        kronello_model::ShapeError::MorphCorrespondence { .. }
-        | kronello_model::ShapeError::InvalidTrimRange
-        | kronello_model::ShapeError::UnsupportedStrokeVersion
-        | kronello_model::ShapeError::InvalidDashArray
-        | kronello_model::ShapeError::StrokeBudgetExceeded
-        | kronello_model::ShapeError::OpenStrokeAlignment => {
-            ServiceError::from(kronello_render::RenderError::Shape(e))
-        }
-        _ => invalid(e),
-    })?;
+    kronello_model::validate_shape_contents(project, &r).map_err(shape_edit_error)?;
     kronello_model::validate_text_contents(project, &r).map_err(invalid)?;
     kronello_model::validate_caption_contents(project)
         .map_err(|e| ServiceError::new(e.code(), e.to_string()))?;

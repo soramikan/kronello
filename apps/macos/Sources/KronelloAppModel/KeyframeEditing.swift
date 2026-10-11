@@ -64,11 +64,16 @@ public enum CurveDisplay {
         if kind == "hold" { t = 0 }
         if kind == "cubic" {
             let (c1, c2) = controls(keys[i]); var low = 0.0, high = 1.0
-            for _ in 0..<64 {
-                let m = (low + high) / 2
-                if bezier(c1.x, c2.x, m) < t { low = m } else { high = m }
+            if c1.x == 1 && c2.x == 0 {
+                let parameter = 0.5 + cbrt((t - 0.5) / 4)
+                t = bezier(c1.y, c2.y, parameter)
+            } else {
+                for _ in 0..<64 {
+                    let m = (low + high) / 2
+                    if bezier(c1.x, c2.x, m) < t { low = m } else { high = m }
+                }
+                t = bezier(c1.y, c2.y, (low + high) / 2)
             }
-            t = bezier(c1.y, c2.y, (low + high) / 2)
         }
         return zip(a, b).map { (1 - t) * $0 + t * $1 }
     }
@@ -232,8 +237,8 @@ extension EditorModel {
         var replacements: [Int: [String: Any]] = [:]
         func replace(_ i: Int, incoming: Bool, control: CGPoint) {
             var key = keys[i]; var (a, b) = CurveDisplay.controls(key)
-            if incoming { b = CGPoint(x: min(1, max(a.x, control.x)), y: control.y) }
-            else { a = CGPoint(x: max(0, min(b.x, control.x)), y: control.y) }
+            if incoming { b = CGPoint(x: min(1, max(0, control.x)), y: control.y) }
+            else { a = CGPoint(x: max(0, min(1, control.x)), y: control.y) }
             key["interpolation"] = ["kind": "cubic", "value": ["control1": [Double(a.x), Double(a.y)], "control2": [Double(b.x), Double(b.y)]]]; replacements[i] = key
         }
         replace(segment, incoming: incoming, control: control)

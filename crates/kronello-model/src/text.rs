@@ -362,11 +362,11 @@ impl TextDocument {
             .into_iter()
             .collect()
     }
-    pub fn validate(
-        &self,
-        properties: &[Property],
-        registry: &SchemaRegistry,
-    ) -> Result<(), TextError> {
+    /// Validate authored text independently of property resolution.
+    pub fn validate_structure(&self) -> Result<(), TextError> {
+        if !matches!(self.layout_version, 1 | 2) {
+            return Ok(()); // Future layout semantics remain preservable.
+        }
         validate_ranges(
             &self.text,
             self.styles.iter().map(|s| (s.range, &s.font)),
@@ -390,6 +390,14 @@ impl TextDocument {
         {
             return Err(TextError::InvalidCharacterAnimation);
         }
+        Ok(())
+    }
+    pub fn validate(
+        &self,
+        properties: &[Property],
+        registry: &SchemaRegistry,
+    ) -> Result<(), TextError> {
+        self.validate_structure()?;
         let mut by_id = BTreeMap::new();
         for property in properties {
             if by_id.insert(property.id(), property).is_some() {

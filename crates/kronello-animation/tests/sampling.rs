@@ -467,3 +467,44 @@ fn generated_curve_property_evaluation_order_and_json_roundtrip_do_not_change_re
         }
     }
 }
+
+#[test]
+fn crossed_css_handles_match_reference_and_remain_monotonic() {
+    // Independent Bernstein-polynomial inversion; the stationary edge has an
+    // exact centered cubic inverse, avoiding floating-point cancellation.
+    fn reference(x1: f64, x2: f64, u: f64) -> f64 {
+        if u == 0.0 || u == 1.0 {
+            return u;
+        }
+        let t = if x1 == 1.0 && x2 == 0.0 {
+            0.5 + ((u - 0.5) / 4.0).cbrt()
+        } else {
+            let (mut lo, mut hi) = (0.0_f64, 1.0_f64);
+            for _ in 0..100 {
+                let t = (lo + hi) / 2.0;
+                let x = 3.0 * (1.0 - t).powi(2) * t * x1 + 3.0 * (1.0 - t) * t * t * x2 + t * t * t;
+                if x < u { lo = t } else { hi = t }
+            }
+            (lo + hi) / 2.0
+        };
+        3.0 * t * t - 2.0 * t * t * t
+    }
+    for (x1, x2) in [(0.65, 0.35), (0.83, 0.17), (1.0, 0.0)] {
+        let c = curve(scalar(0.0), scalar(1.0), cubic([x1, 0.0], [x2, 1.0]));
+        let wire = serde_json::to_string(&c).unwrap();
+        assert_eq!(serde_json::from_str::<AnimationCurve>(&wire).unwrap(), c);
+        let mut previous = -1.0;
+        for tick in 0..=1000 {
+            let u = tick as f64 / 1000.0;
+            let actual = number(sample(&c, Time::new(tick, 1000).unwrap()).unwrap());
+            assert!(actual >= previous, "{x1}, {x2}, {u}: {actual} < {previous}");
+            assert_close(actual, reference(x1, x2, u));
+            previous = actual;
+        }
+        assert_close(number(sample(&c, Time::new(1, 2).unwrap()).unwrap()), 0.5);
+        for tick in [499_999_999, 500_000_001] {
+            let actual = number(sample(&c, Time::new(tick, 1_000_000_000).unwrap()).unwrap());
+            assert_close(actual, reference(x1, x2, tick as f64 / 1_000_000_000.0));
+        }
+    }
+}
