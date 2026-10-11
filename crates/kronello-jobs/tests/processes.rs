@@ -28,7 +28,21 @@ impl Fixture {
         config.heartbeat_timeout = heartbeat_timeout;
         config.retention = Duration::ZERO;
         config.slots = slots;
-        let store = JobStore::open(config).unwrap();
+        // Parallel process tests can occupy the process-wide SQLite gate.
+        // Like workers, retry only typed contention and retain a deadline.
+        let start = Instant::now();
+        let store = loop {
+            match JobStore::open(config.clone()) {
+                Ok(store) => break store,
+                Err(error)
+                    if error.is_retryable_contention()
+                        && start.elapsed() < Duration::from_secs(30) =>
+                {
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                Err(error) => panic!("fixture initialization failed: {error}"),
+            }
+        };
         Self {
             cleanup,
             temp,

@@ -62,7 +62,10 @@ mod metal {
     const MAX_FIT_ATTEMPTS: u32 = 8;
     fn is_surface_budget(e: &ServiceError) -> bool {
         e.code == "SURFACE_BUDGET_EXCEEDED"
+            // CPU DAG limits predate the GPU's typed budget error.
+            || (e.code == "UNSUPPORTED_FEATURE" && e.message.contains("surface budget"))
     }
+
     fn halve(pixels: [u32; 2]) -> [u32; 2] {
         [(pixels[0] / 2).max(1), (pixels[1] / 2).max(1)]
     }
@@ -709,6 +712,36 @@ mod metal {
         pub fn redraw(&mut self, service: &Service<'_>, json: &str) -> Result<Value, ServiceError> {
             let source = self.render_frame(service, json)?;
             self.present(&source)
+        }
+    }
+    #[cfg(test)]
+    mod budget_tests {
+        use super::*;
+
+        #[test]
+        fn cpu_dag_budget_errors_fit_without_retrying_unrelated_failures() {
+            for message in [
+                "tile surface budget exceeded",
+                "full-frame CPU surface budget exceeded; use streaming tiles/movie export for 8K",
+                "streaming tile surface budget exceeded: 536870920 bytes > 536870912",
+            ] {
+                assert!(is_surface_budget(&ServiceError::new(
+                    "UNSUPPORTED_FEATURE",
+                    message
+                )));
+            }
+            assert!(is_surface_budget(&ServiceError::new(
+                "SURFACE_BUDGET_EXCEEDED",
+                "scene"
+            )));
+            assert!(!is_surface_budget(&ServiceError::new(
+                "UNSUPPORTED_FEATURE",
+                "unsupported effect"
+            )));
+            assert!(!is_surface_budget(&ServiceError::new(
+                "IO_ERROR",
+                "surface budget"
+            )));
         }
     }
 }
