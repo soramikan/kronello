@@ -362,6 +362,8 @@ static Decoder *decoder_open(Km *k, const char *path, enum AVMediaType kind, int
     if(!d->codec || !d->packet || !d->frame) goto alloc_failed;
     ret=k->avcodec_parameters_to_context(d->codec,d->format->streams[d->stream]->codecpar);
     if(ret<0) { fail(k,ret,"codec parameters"); goto failed; }
+    /* Decoder delay/skip-sample timestamp adjustments use packet units. */
+    d->codec->pkt_timebase=d->format->streams[d->stream]->time_base;
     /* 0 = FFmpeg auto thread count. Frame/slice threading changes decode
      * scheduling only; decoded frame output is identical, so determinism
      * holds while long-GOP and slice-parallel codecs scale across cores. */
@@ -472,7 +474,10 @@ int km_video_rgba64(Km *k, const uint8_t *input, int input_size, const char *for
 
 typedef struct Encoder {
     Km *k; AVFormatContext *format; AVCodecContext *codec; AVFrame *frame; AVPacket *packet;
-    struct SwsContext *sws; AVStream *stream; int header, input_stride; int64_t duration;
+    struct SwsContext *sws; AVStream *stream; int header, input_stride;
+    /* Bounded metadata for delayed packets, not retained image frames. */
+    struct { int64_t pts, duration; } spans[256];
+    int span_count;
 } Encoder;
 void km_encoder_close(Encoder *e) {
     if(!e)return;
@@ -500,7 +505,9 @@ Encoder *km_encoder_open_color(Km *k, const char *path, const char *name, int wi
     e->codec->pix_fmt=prores?AV_PIX_FMT_YUV422P10LE:AV_PIX_FMT_YUV420P;
     e->codec->color_primaries=AVCOL_PRI_BT709;e->codec->color_trc=AVCOL_TRC_BT709;e->codec->colorspace=AVCOL_SPC_BT709;e->codec->color_range=AVCOL_RANGE_MPEG;
     if(hdr){e->codec->color_primaries=AVCOL_PRI_BT2020;e->codec->color_trc=hdr==1?AVCOL_TRC_SMPTE2084:AVCOL_TRC_ARIB_STD_B67;e->codec->colorspace=AVCOL_SPC_BT2020_NCL;}
-    e->codec->thread_count=1;e->codec->bit_rate=2000000;
+    /* ProRes frame threading preserves the encoded output in the measured
+     * native oracle. Other codecs keep the existing deterministic policy. */
+    e->codec->thread_count=prores?4:1;e->codec->bit_rate=2000000;
     if(e->format->oformat->flags & AVFMT_GLOBALHEADER)e->codec->flags|=AV_CODEC_FLAG_GLOBAL_HEADER;
     AVDictionary *options=NULL;
     if(hdr){k->av_dict_set(&options,"profile","3",0);}
@@ -561,7 +568,7 @@ Encoder *km_encoder_open_dnx(Km *k,const char *path,int width,int height,int num
     e->codec->width=width;e->codec->height=height;e->codec->time_base=(AVRational){num,den};e->codec->framerate=(AVRational){den,num};
     e->codec->pix_fmt=DNX_KINDS[kind].fmt;
     e->codec->color_primaries=AVCOL_PRI_BT709;e->codec->color_trc=AVCOL_TRC_BT709;e->codec->colorspace=AVCOL_SPC_BT709;e->codec->color_range=AVCOL_RANGE_MPEG;
-    e->codec->thread_count=1;
+    e->codec->thread_count=2;
     AVDictionary *options=NULL;
     k->av_dict_set(&options,"profile",DNX_KINDS[kind].profile,0);
     ret=k->avcodec_open2(e->codec,codec,&options);k->av_dict_free(&options);
@@ -593,10 +600,18 @@ static int write_packets(Encoder *e) {
         int ret=e->k->avcodec_receive_packet(e->codec,e->packet);
         if(ret==AVERROR(EAGAIN)||ret==AVERROR_EOF)return 0;
         if(ret<0)return fail(e->k,ret,"receive packet");
-        /* Input contract: callers report each submitted frame's span in
-         * time_base ticks; packets delayed by the encoder reuse the last
-         * submitted span, which is exact for the low-delay codecs used here. */
-        e->packet->duration=e->duration;
+        /* Packet PTS identifies its own input span before mux rescaling.
+         * Frame threading and flush may return it after later submissions. */
+        int span=0;
+        while(span<e->span_count && e->spans[span].pts!=e->packet->pts)++span;
+        if(span==e->span_count) {
+            e->k->av_packet_unref(e->packet);
+            return fail(e->k,AVERROR(EINVAL),"encoder packet has no submitted PTS span");
+        }
+        e->packet->duration=e->spans[span].duration;
+        memmove(e->spans+span,e->spans+span+1,
+                (size_t)(e->span_count-span-1)*sizeof(e->spans[0]));
+        --e->span_count;
         e->k->av_packet_rescale_ts(e->packet,e->codec->time_base,e->stream->time_base);e->packet->stream_index=e->stream->index;
         ret=e->k->av_interleaved_write_frame(e->format,e->packet);e->k->av_packet_unref(e->packet);
         if(ret<0)return fail(e->k,ret,"write packet");
@@ -604,16 +619,21 @@ static int write_packets(Encoder *e) {
 }
 int km_encoder_frame(Encoder *e,const uint8_t *rgba,int64_t pts,int64_t duration) {
     if(duration<=0)return fail(e->k,AVERROR(EINVAL),"non-positive frame duration");
+    if(e->span_count==256)return fail(e->k,AVERROR(ENOSPC),"encoder delayed span budget exceeded");
     int ret=e->k->av_frame_make_writable(e->frame);if(ret<0)return fail(e->k,ret,"writable frame");
     const uint8_t *data[4]={rgba,NULL,NULL,NULL};int stride[4]={e->input_stride,0,0,0};
     ret=e->k->sws_scale(e->sws,data,stride,0,e->codec->height,e->frame->data,e->frame->linesize);
     if(ret!=e->codec->height)return fail(e->k,AVERROR_INVALIDDATA,"pixel conversion");
-    e->frame->pts=pts; e->frame->duration=duration; e->duration=duration;
+    e->frame->pts=pts; e->frame->duration=duration;
+    e->spans[e->span_count].pts=pts;
+    e->spans[e->span_count].duration=duration;
+    ++e->span_count;
     ret=e->k->avcodec_send_frame(e->codec,e->frame);if(ret<0)return fail(e->k,ret,"send frame");return write_packets(e);
 }
 int km_encoder_finish(Encoder *e) {
     int ret=e->k->avcodec_send_frame(e->codec,NULL);if(ret<0)return fail(e->k,ret,"flush encoder");
     ret=write_packets(e);if(ret<0)return ret;
+    if(e->span_count)return fail(e->k,AVERROR(EINVAL),"encoder flush omitted submitted frames");
     ret=e->k->av_write_trailer(e->format);if(ret<0)return fail(e->k,ret,"write trailer");
     ret=e->k->avio_closep(&e->format->pb);if(ret<0)return fail(e->k,ret,"close output");return 0;
 }

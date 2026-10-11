@@ -2159,6 +2159,44 @@ fn multi_output_fixed_job_publishes_and_authenticates_every_leg() {
 }
 
 #[test]
+fn audio_only_fixed_job_completes_and_authenticates_without_video_metadata() {
+    let f = Fixture::new();
+    let output = f.temp.path().join("audio.flac");
+    let submitted = f.submit_request(
+        json!({"operation":"render.submit",
+        "render":f.render(&output),
+        "output":{"format":"flac","profile_version":1,"audio":"silence","clips":[]}}),
+        None,
+        false,
+    );
+    let finished = f.wait(&submitted.id, JobStatus::Succeeded);
+    assert_eq!(finished.completed_frames, 3);
+    assert_eq!(finished.total_frames, 3);
+    let report = &finished.result.as_ref().unwrap()["report"];
+    assert_eq!(report["frames"].as_array().unwrap().len(), 0);
+    assert_eq!(report["audio"]["frames"], 6000);
+    let runtime = kronello_media::MediaRuntime::load().unwrap();
+    let decoded = runtime.decode_audio(&output, 0).unwrap();
+    assert_eq!(decoded.buffer.frame_count(), 6000);
+    assert!(decoded.buffer.samples().iter().all(|s| *s == 0.0));
+    f.cleanup
+        .wait_for_exit(finished.worker_pid.unwrap(), f.wait_timeout)
+        .unwrap();
+    let resumed: JobRecord =
+        serde_json::from_value(f.service(json!({"operation":"job.resume","job":submitted.id})))
+            .unwrap();
+    assert_eq!(resumed.status, JobStatus::Succeeded);
+    let mut bytes = std::fs::read(&output).unwrap();
+    let flip = bytes.len() / 2;
+    bytes[flip] ^= 0x55;
+    std::fs::write(&output, bytes).unwrap();
+    assert_eq!(
+        f.service_error(json!({"operation":"job.resume","job":submitted.id}))["code"],
+        "OUTPUT_VALIDATION_FAILED"
+    );
+}
+
+#[test]
 fn multi_output_submission_rejects_invalid_leg_destinations() {
     let f = Fixture::new();
     let render = f.render(&f.temp.path().join("primary.mov"));

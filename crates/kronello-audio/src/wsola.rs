@@ -68,6 +68,7 @@ fn map_slope(clip: &Clip, sample: i64) -> Result<Rational, AudioError> {
 /// Streaming WSOLA cursor for one asset entry inside one mix call. State is
 /// recreated per evaluation; hops anchor at `placement_start` so a partitioned
 /// render reproduces the exact continuous-render samples (ADR-0117/0124).
+#[derive(Clone)]
 pub(crate) struct Wsola {
     channels: usize,
     asset: AssetId,
@@ -89,6 +90,22 @@ pub(crate) struct Wsola {
     next_anchor: i64,
 }
 impl Wsola {
+    pub(crate) fn heap_bytes(&self) -> usize {
+        self.window
+            .len()
+            .saturating_mul(std::mem::size_of::<f64>())
+            .saturating_add(
+                self.tail
+                    .len()
+                    .saturating_mul(std::mem::size_of::<[f64; MAX_CHANNELS]>()),
+            )
+            .saturating_add(
+                self.input
+                    .len()
+                    .saturating_mul(std::mem::size_of::<[f64; MAX_CHANNELS]>()),
+            )
+            .saturating_add(self.out.len().saturating_mul(std::mem::size_of::<f32>()))
+    }
     pub(crate) fn new(
         clip: &Clip,
         asset: AssetId,

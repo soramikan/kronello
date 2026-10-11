@@ -417,3 +417,199 @@ fn fx008_pitch_requires_an_asset_source_and_forward_retime() {
     let error = plan_error(&p, id);
     assert_eq!(error.code(), "UNSUPPORTED_FEATURE");
 }
+
+#[test]
+fn exact_checkpoints_preserve_all_dsp_and_pending_wsola_state() {
+    for preserve_pitch in [false, true] {
+        let (mut project, id, asset) = asset_fixture();
+        let clip = clip_mut(&mut project);
+        clip.time_map = TimeMap::linear(Time::ZERO, t(3, 2)).unwrap();
+        if preserve_pitch {
+            clip.audio_retime = AudioRetimePolicy::PitchPreserveV1;
+        }
+        let mut attach = |effect_id: &str,
+                          values: &[(&str, f64)],
+                          build: fn(&[Property]) -> EffectParameters| {
+            let parameters: Vec<_> = values
+                .iter()
+                .map(|(key, value)| param(key, scalar(*value)))
+                .collect();
+            clip.effects.push(Effect::Known(EffectDefinition {
+                effect_id: effect_id.into(),
+                version: 1,
+                parameters: build(&parameters),
+            }));
+            clip.properties.extend(parameters);
+        };
+        attach(AUDIO_HPF_ID, &[("cutoff_hz", 80.0), ("order", 4.0)], |p| {
+            EffectParameters::AudioHpf {
+                cutoff_hz: p[0].id(),
+                order: p[1].id(),
+            }
+        });
+        attach(
+            AUDIO_COMPRESSOR_ID,
+            &[
+                ("threshold_db", -18.0),
+                ("ratio", 4.0),
+                ("attack_ms", 5.0),
+                ("release_ms", 100.0),
+                ("makeup_db", 1.0),
+            ],
+            |p| EffectParameters::AudioCompressor {
+                threshold_db: p[0].id(),
+                ratio: p[1].id(),
+                attack_ms: p[2].id(),
+                release_ms: p[3].id(),
+                makeup_db: p[4].id(),
+            },
+        );
+        attach(
+            AUDIO_LIMITER_ID,
+            &[("ceiling_db", -3.0), ("release_ms", 80.0)],
+            |p| EffectParameters::AudioLimiter {
+                ceiling_db: p[0].id(),
+                release_ms: p[1].id(),
+            },
+        );
+        attach(
+            AUDIO_DELAY_ID,
+            &[
+                ("delay_ms", 31.0),
+                ("feedback_db", -9.0),
+                ("wet", 0.3),
+                ("dry", 0.7),
+            ],
+            |p| EffectParameters::AudioDelay {
+                delay_ms: p[0].id(),
+                feedback_db: p[1].id(),
+                wet: p[2].id(),
+                dry: p[3].id(),
+            },
+        );
+        attach(
+            AUDIO_REVERB_ID,
+            &[
+                ("decay_ms", 800.0),
+                ("damping", 0.3),
+                ("wet", 0.25),
+                ("dry", 0.75),
+            ],
+            |p| EffectParameters::AudioReverb {
+                decay_ms: p[0].id(),
+                damping: p[1].id(),
+                wet: p[2].id(),
+                dry: p[3].id(),
+            },
+        );
+        attach(
+            AUDIO_GATE_ID,
+            &[
+                ("threshold_db", -45.0),
+                ("attack_ms", 3.0),
+                ("release_ms", 100.0),
+                ("hysteresis_db", 6.0),
+            ],
+            |p| EffectParameters::AudioGate {
+                threshold_db: p[0].id(),
+                attack_ms: p[1].id(),
+                release_ms: p[2].id(),
+                hysteresis_db: p[3].id(),
+            },
+        );
+        let registry = SchemaRegistry::with_builtin();
+        let gain = Property::new(
+            PropertyId::new(),
+            DescriptorRef::new(
+                registry
+                    .lookup(&SchemaKey::new("kronello.audio.volume").unwrap())
+                    .unwrap(),
+            ),
+            PropertySource::Constant(scalar(0.8)),
+            vec![],
+            &registry,
+        )
+        .unwrap();
+        clip.effects.push(Effect::Known(EffectDefinition {
+            effect_id: AUDIO_GAIN_ID.into(),
+            version: 1,
+            parameters: EffectParameters::AudioGain { gain: gain.id() },
+        }));
+        clip.properties.push(gain);
+        let compiled = plan(&project, id);
+        let sources = AudioSources::from([((asset, 0), sine(96_000))]);
+        let at = |sample| t(sample, 48_000);
+        let continuous = compiled.mix(&sources, r(Time::ZERO, at(24_000))).unwrap();
+        let mut live = compiled.playback_session();
+        assert!(live.checkpoint(0, usize::MAX).is_none());
+        for (start, end) in [(0, 113), (113, 4096), (4096, 12_173)] {
+            compiled
+                .mix_streaming(&sources, r(at(start), at(end)), &mut live)
+                .unwrap();
+        }
+        assert!(live.checkpoint(12_172, usize::MAX).is_none());
+        assert!(live.checkpoint(12_173, 0).is_none());
+        let checkpoint = live.checkpoint(12_173, usize::MAX).unwrap();
+        assert_eq!(checkpoint.boundary_sample(), 12_173);
+        assert!(checkpoint.payload_bytes() > 100_000);
+        assert!(
+            live.checkpoint(12_173, checkpoint.payload_bytes() - 1)
+                .is_none()
+        );
+        assert!(
+            live.checkpoint(12_173, checkpoint.payload_bytes())
+                .is_some()
+        );
+        let mut a = checkpoint.playback_session();
+        let mut b = checkpoint.playback_session();
+        for (second, start, end) in [
+            (false, 12_173, 16_384),
+            (true, 14_019, 18_371),
+            (false, 19_173, 24_000),
+            (true, 4001, 7333),
+        ] {
+            let session = if second { &mut b } else { &mut a };
+            let (actual, meters) = compiled
+                .mix_metered_streaming(&sources, r(at(start), at(end)), session)
+                .unwrap();
+            let (expected, expected_meters) = compiled
+                .mix_metered(&sources, r(at(start), at(end)))
+                .unwrap();
+            assert_eq!(
+                actual.buffer().frames(),
+                &continuous.buffer().frames()[start as usize..end as usize]
+            );
+            assert_eq!(actual.buffer().frames(), expected.buffer().frames());
+            assert_eq!(meters.master.peak, expected_meters.master.peak);
+            assert_eq!(meters.master.rms, expected_meters.master.rms);
+        }
+        let mut mismatched = checkpoint.playback_session();
+        assert_eq!(
+            plan(&project, id)
+                .mix_streaming(&sources, r(at(12_173), at(12_174)), &mut mismatched)
+                .unwrap_err()
+                .code(),
+            "INVALID_AUDIO_INPUT"
+        );
+        assert_eq!(
+            compiled
+                .mix_channels_streaming(
+                    &sources,
+                    r(at(12_173), at(12_174)),
+                    ChannelMask::MONO,
+                    &mut mismatched
+                )
+                .unwrap_err()
+                .code(),
+            "INVALID_AUDIO_INPUT"
+        );
+        // Cloning the same immutable plan preserves its identity; compiling a
+        // separate plan never authorizes reuse of opaque state.
+        assert!(
+            compiled
+                .clone()
+                .mix_streaming(&sources, r(at(12_173), at(12_174)), &mut mismatched)
+                .is_ok()
+        );
+    }
+}

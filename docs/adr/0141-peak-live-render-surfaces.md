@@ -1,6 +1,6 @@
 # ADR-0141: レンダー面予算を同時保持寿命に合わせる
 
-- 状態: 採用
+- 状態: 部分置換（[ADR-0157](0157-local-coverage-and-last-consumer-surfaces.md): GPU coverage allocation / shared memo寿命。事前予算の上界は維持）
 - 日付: 2026-10-10
 - 対象: RENDER-005
 - 部分置換: [ADR-0079](0079-bounded-streaming-movie-export.md) の全 image stage・全 Group children・全 effect temporary の累積加算だけを置換する。512 MiB、union execution ROI、最大512×512 tile、型付き拒否、backend 選択、音声・出力契約は維持する。

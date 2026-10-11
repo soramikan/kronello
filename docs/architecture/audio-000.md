@@ -148,6 +148,17 @@ decoded sources に加え、producer 専用の `AudioPlaybackSession`（stateful
 同じ入力の export evaluator と PCM24 前の bits を比較する。source 合計は既存28800000 frames、
 decode は残 budget を append 前に確認し `AUDIO_BUDGET_EXCEEDED`。
 
+[ADR-0151](../adr/0151-bounded-playback-pcm-sharing.md)に従いnative ProjectSession（session外ではService）は
+32entry・128 MiBのcaller-owned PCM cacheを別に保持する。captureしたsnapshot/revisionのplanを固定し、PERF-005では同じidentityのcompiled planを有界に再利用する。
+immutable `Arc<DecodedAudio>`を共有し、mutable cursorは独立所有とする。AssetIdや映像だけのrevisionはPCM identityに含めず、
+canonical locator/content hash/stream metadata/実decoder構成を含める。cold decodeの前後full hashを維持し、
+Unix warmはsize/mtime/ctime/inodeを二度照合する。他OSはfresh decode。削除/差し替え/誤ったrelative候補はtyped拒否する。
+cache hitにも残frame budgetを適用し、entry/byte上限を超えた素材は保持せず、active planのArcはeviction後も有効。
+retained payloadはRSSやcurrent/candidateの全ownership量ではない。cache lock/native decode/FSはpreparationに限定し、
+producerのDSP/WSOLA cursorはplanごとに独立させる。standalone `PreparedAudio::prepare` は保持なし。
+
+PERF-005は[ADR-0155](../adr/0155-exact-bounded-audio-checkpoints.md)に従い、同じcanonical project identity/revision/RenderTargetのcompiled planを一件だけ保持する。全sourceを毎prepare再検証し、同じimmutable PCM ArcのbindingだけでDSP/WSOLA checkpointを復元する。cacheのPCM参照はWeak。各rendererのmutable sessionは独立し、plan/layout不一致を拒否する。全filter/dynamics/delay/reverb/gateとWSOLAのpending buffers/anchorをコピーし、128件・state payload32MiB・96000samplesの疎な境界でLRU保持する。コピー前にpayloadを数え、必要なevictionを先に行う。source/key変更でgenerationを変え、旧PreparedAudioのsaveを拒否する。editor capture後のproject close/deleteでもproducerはsnapshotを使い、DBを再読込しない。近いcheckpoint以降の残prerollは4096以下のblockで正確に評価する。callback契約とPCM予算は維持する。compiled plan/immutable props、map/allocator、PCM/active cursorはコピー状態予算外で、RSS増加を別に測る（[PERF-005](../testing/perf-005.md)）。
+
 macOS の preparation / producer queues は作品・Metal worker と別。`AVAudioSourceNode` callback は
 32768-frame C11 lock-free SPSC ring の copy / silence だけ。Rust FFI / JSON / disk / evaluator を
 callback に入れない。snapshot 変更は producer block 境界で公開する。buffer の編集待ちは最大
@@ -171,6 +182,15 @@ Bus は codec block（PCM24:4,096、ALAC: native block）ごとに絶対sample�
 最後の partial blockだけを許し、sample count とzero-origin PTSを従来と一致させる。
 `AudioSources` を使う既存 `mix` / `DocumentAudioPlan::mix` は同じ reader経路の互換wrapper。
 [ADR-0079](../adr/0079-bounded-streaming-movie-export.md)、[検証](../testing/render-003.md)。
+
+PERF-004では、全legがMP3/FLACの音声単独deliveryなら映像backendを作成せず、
+tile描画・画素変換を省く。`AvExportReport.frames` は空配列になる。
+frame格子による論理総数と最終checkpointは維持し、固定workerのprogress・cancel・
+復旧は同じreceipt/hash/probe検証を通る。旧workerの音声単独metadata付きreceiptも
+論理総数と一致する場合に復旧対象にする。HDR作品からの音声単独ではpixel spaceと
+background範囲の制約を適用しないが、finite入力とsnapshot/資産検証は維持する。
+映像legがあるfan-outは従来の描画とbackend選択を使う。
+[ADR-0148](../adr/0148-audio-only-delivery-without-video.md)、[検証](../testing/perf-004.md)。
 
 ## AUDIO-007/008/009: フィルタ・ダイナミクス・LUFS・再生メーター
 

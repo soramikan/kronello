@@ -1,5 +1,7 @@
 # 10 デスクトップ GUI
 
+PERF-003のmacOS timeline表示は共有 `sequence.query` のclip/track/asset statusをID索引へ変換し、Queryまたは文書が変わる時に派生cacheを更新する。Motion/Programの「原本」/「Proxy優先」はUI-onlyのoptional stateで、source monitorを含むnative previewの入力と再描画keyへ送る。旧stateと書き出しは原本を使う。狭いviewerのtransportは2段にする（[ADR-0147](../adr/0147-indexed-timeline-and-proxy-preparation.md)）。
+
 GUI は OS ごとのネイティブフレームワークで実装する（[ADR-0014](../adr/0014-native-gui-in-process-ffi.md)）。macOS の GUI-001 実装を M3 で追加した。画面の受け入れはホストでの検証を要する。
 
 ## 構成
@@ -92,7 +94,8 @@ CLI / MCP（エージェント）が同じプロジェクトを編集してい�
 FFI-002 は安全モードの store を native session の生存中保持し、同じ project の共有要求へ貸し出す。
 他プロセスの通常 Command / Query は `PROJECT_LOCKED` となる。32px の band に安全モードを表示する。
 close 後は受け付け済み処理の終了時に解放し、異常終了では OS が lock を解放する。
-通常モードの外部編集と通知は要求ごとの store を維持する。
+Unix の通常モードも store 接続を session の寿命で保持し、要求ごとに path の device/inode と committed revision を確認する。置換は `PROJECT_REPLACED` として再openを必要とする。その他のOSの通常モードは transient open を維持する（[ADR-0144](../adr/0144-revision-scoped-preview-preparation.md)）。
+外部状態確認は前回確認終了から250msの期限で行い、描画や読み取り要求のたびには実行しない。購読開始と成功した文書・ジョブ変更の後は即時確認する（[ADR-0143](../adr/0143-deadline-driven-native-notifications.md)）。
 設計は [ADR-0083](../adr/0083-native-safe-project-session.md)、確認範囲は [FFI-002](../testing/ffi-002.md) を参照する。
 
 ## GUI-001 の実装範囲

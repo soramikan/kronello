@@ -1,0 +1,2066 @@
+{
+  "date": "2026-10-11",
+  "status": "exploratory prototype only; production encoder settings unchanged",
+  "quiet_host": false,
+  "scope": "Copied native media.c encoder shim. Only color/DNx thread_count and SVT lp changed per process to 1/2/4/8. Same 640x360,12 frames,24fps moving RGBA pattern,bitrate2M,preset12 for SVT. Native encode open/frame/flush/close timed; generation,library load,oracle outside timing. Cold1,warm8,p50 upper-middle index4,p95 max index7. Native-only costs do not imply full export speed.",
+  "native_library_directory": "/opt/homebrew/Cellar/ffmpeg/9.0.2/lib",
+  "provenance": {
+    "production_c_sha256": "54cdd59f9fb5acd4b8a05c1fd18aec97290bde6b2bb71745392732f9463383eb",
+    "candidate_c_sha256": "e6522d1a9fc77a57e844b5d42d00f842894dd03f3612f53a633dd9498d14ada6",
+    "main_c_sha256": "66f2c5e9175dde075afb19b897cfe00b08fa99735019b131f5cd8c29115621e2",
+    "binary_sha256": "198bd1c546dd5c97c06cf32da45e443666da4cf760b2a103f8c81888a5250800",
+    "compile_command": "clang -O3 -std=gnu11 -I/opt/homebrew/Cellar/ffmpeg/9.0.2/include main.c -o probe",
+    "changes": "Benchmark-local checked perf_threads int; replace only color/DNx thread_count=1; svtav1-params lp=perf_threads. GIF and decoder thread policy unchanged.",
+    "prototype_files": "target/perf-improvements/codec-prototype (ignored local evidence); production source unmodified"
+  },
+  "cases": [
+    {
+      "name": "prores_ks-1",
+      "exit_code": 0,
+      "wall_seconds": 1.1431493749842048,
+      "probe": {
+        "threads_requested": 1,
+        "codec": "prores_ks",
+        "width": 640,
+        "height": 360,
+        "frames": 12,
+        "runs": [
+          {
+            "ms": 146.391,
+            "context_threads": 1,
+            "active_thread_type": 0,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 115.598,
+            "context_threads": 1,
+            "active_thread_type": 0,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 103.181,
+            "context_threads": 1,
+            "active_thread_type": 0,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 139.793,
+            "context_threads": 1,
+            "active_thread_type": 0,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 130.784,
+            "context_threads": 1,
+            "active_thread_type": 0,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 108.597,
+            "context_threads": 1,
+            "active_thread_type": 0,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 120.648,
+            "context_threads": 1,
+            "active_thread_type": 0,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 119.964,
+            "context_threads": 1,
+            "active_thread_type": 0,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 124.416,
+            "context_threads": 1,
+            "active_thread_type": 0,
+            "codec_caps": 1060864
+          }
+        ]
+      },
+      "warm_p50_ms": 120.648,
+      "warm_p95_ms": 139.793,
+      "encoded_sha256": {
+        "4.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "5.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "7.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "6.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "2.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "3.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "1.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "0.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "8.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e"
+      }
+    },
+    {
+      "name": "dnxhr_hqx-1",
+      "exit_code": 0,
+      "wall_seconds": 0.5471499160048552,
+      "probe": {
+        "threads_requested": 1,
+        "codec": "dnxhr_hqx",
+        "width": 640,
+        "height": 360,
+        "frames": 12,
+        "runs": [
+          {
+            "ms": 62.871,
+            "context_threads": 1,
+            "active_thread_type": 0,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 54.264,
+            "context_threads": 1,
+            "active_thread_type": 0,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 52.164,
+            "context_threads": 1,
+            "active_thread_type": 0,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 61.812,
+            "context_threads": 1,
+            "active_thread_type": 0,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 57.728,
+            "context_threads": 1,
+            "active_thread_type": 0,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 55.345,
+            "context_threads": 1,
+            "active_thread_type": 0,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 56.367,
+            "context_threads": 1,
+            "active_thread_type": 0,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 58.864,
+            "context_threads": 1,
+            "active_thread_type": 0,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 54.774,
+            "context_threads": 1,
+            "active_thread_type": 0,
+            "codec_caps": 1060866
+          }
+        ]
+      },
+      "warm_p50_ms": 56.367,
+      "warm_p95_ms": 61.812,
+      "encoded_sha256": {
+        "4.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "5.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "7.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "6.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "2.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "3.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "1.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "0.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "8.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef"
+      }
+    },
+    {
+      "name": "libaom-av1-1",
+      "exit_code": 5,
+      "wall_seconds": 0.022210834024008363,
+      "failure_detail": "encoder unavailable: Encoder not found (-1129203192)\n"
+    },
+    {
+      "name": "libsvtav1-1",
+      "exit_code": 0,
+      "wall_seconds": 0.4678429159685038,
+      "probe": {
+        "threads_requested": 1,
+        "codec": "libsvtav1",
+        "width": 640,
+        "height": 360,
+        "frames": 12,
+        "runs": [
+          {
+            "ms": 56.024,
+            "context_threads": 1,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 56.133,
+            "context_threads": 1,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 52.527,
+            "context_threads": 1,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 44.525,
+            "context_threads": 1,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 47.407,
+            "context_threads": 1,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 45.111,
+            "context_threads": 1,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 46.673,
+            "context_threads": 1,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 42.916,
+            "context_threads": 1,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 47.721,
+            "context_threads": 1,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          }
+        ]
+      },
+      "warm_p50_ms": 47.407,
+      "warm_p95_ms": 56.133,
+      "encoded_sha256": {
+        "7.mp4": "ef1fff45278c697ea9ed7b3086e9de139a1decd37f9c4d7a42f169ceb422c930",
+        "6.mp4": "ef1fff45278c697ea9ed7b3086e9de139a1decd37f9c4d7a42f169ceb422c930",
+        "4.mp4": "ef1fff45278c697ea9ed7b3086e9de139a1decd37f9c4d7a42f169ceb422c930",
+        "5.mp4": "ef1fff45278c697ea9ed7b3086e9de139a1decd37f9c4d7a42f169ceb422c930",
+        "1.mp4": "ef1fff45278c697ea9ed7b3086e9de139a1decd37f9c4d7a42f169ceb422c930",
+        "0.mp4": "ef1fff45278c697ea9ed7b3086e9de139a1decd37f9c4d7a42f169ceb422c930",
+        "2.mp4": "ef1fff45278c697ea9ed7b3086e9de139a1decd37f9c4d7a42f169ceb422c930",
+        "3.mp4": "ef1fff45278c697ea9ed7b3086e9de139a1decd37f9c4d7a42f169ceb422c930",
+        "8.mp4": "ef1fff45278c697ea9ed7b3086e9de139a1decd37f9c4d7a42f169ceb422c930"
+      }
+    },
+    {
+      "name": "prores_ks-2",
+      "exit_code": 0,
+      "wall_seconds": 0.4523118340293877,
+      "probe": {
+        "threads_requested": 2,
+        "codec": "prores_ks",
+        "width": 640,
+        "height": 360,
+        "frames": 12,
+        "runs": [
+          {
+            "ms": 55.193,
+            "context_threads": 2,
+            "active_thread_type": 1,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 53.94,
+            "context_threads": 2,
+            "active_thread_type": 1,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 46.831,
+            "context_threads": 2,
+            "active_thread_type": 1,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 51.738,
+            "context_threads": 2,
+            "active_thread_type": 1,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 46.031,
+            "context_threads": 2,
+            "active_thread_type": 1,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 45.978,
+            "context_threads": 2,
+            "active_thread_type": 1,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 41.694,
+            "context_threads": 2,
+            "active_thread_type": 1,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 42.678,
+            "context_threads": 2,
+            "active_thread_type": 1,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 42.221,
+            "context_threads": 2,
+            "active_thread_type": 1,
+            "codec_caps": 1060864
+          }
+        ]
+      },
+      "warm_p50_ms": 46.031,
+      "warm_p95_ms": 53.94,
+      "encoded_sha256": {
+        "4.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "5.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "7.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "6.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "2.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "3.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "1.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "0.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "8.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e"
+      }
+    },
+    {
+      "name": "dnxhr_hqx-2",
+      "exit_code": 0,
+      "wall_seconds": 0.26477549999253824,
+      "probe": {
+        "threads_requested": 2,
+        "codec": "dnxhr_hqx",
+        "width": 640,
+        "height": 360,
+        "frames": 12,
+        "runs": [
+          {
+            "ms": 29.35,
+            "context_threads": 2,
+            "active_thread_type": 1,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 26.834,
+            "context_threads": 2,
+            "active_thread_type": 1,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 25.165,
+            "context_threads": 2,
+            "active_thread_type": 1,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 27.55,
+            "context_threads": 2,
+            "active_thread_type": 1,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 26.667,
+            "context_threads": 2,
+            "active_thread_type": 1,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 27.47,
+            "context_threads": 2,
+            "active_thread_type": 1,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 25.976,
+            "context_threads": 2,
+            "active_thread_type": 1,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 27.788,
+            "context_threads": 2,
+            "active_thread_type": 1,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 26.744,
+            "context_threads": 2,
+            "active_thread_type": 1,
+            "codec_caps": 1060866
+          }
+        ]
+      },
+      "warm_p50_ms": 26.834,
+      "warm_p95_ms": 27.788,
+      "encoded_sha256": {
+        "4.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "5.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "7.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "6.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "2.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "3.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "1.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "0.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "8.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef"
+      }
+    },
+    {
+      "name": "libaom-av1-2",
+      "exit_code": 5,
+      "wall_seconds": 0.019839374988805503,
+      "failure_detail": "encoder unavailable: Encoder not found (-1129203192)\n"
+    },
+    {
+      "name": "libsvtav1-2",
+      "exit_code": 0,
+      "wall_seconds": 0.2532080829842016,
+      "probe": {
+        "threads_requested": 2,
+        "codec": "libsvtav1",
+        "width": 640,
+        "height": 360,
+        "frames": 12,
+        "runs": [
+          {
+            "ms": 25.065,
+            "context_threads": 2,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 27.611,
+            "context_threads": 2,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 24.178,
+            "context_threads": 2,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 24.493,
+            "context_threads": 2,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 26.018,
+            "context_threads": 2,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 26.876,
+            "context_threads": 2,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 26.557,
+            "context_threads": 2,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 24.956,
+            "context_threads": 2,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 25.172,
+            "context_threads": 2,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          }
+        ]
+      },
+      "warm_p50_ms": 26.018,
+      "warm_p95_ms": 27.611,
+      "encoded_sha256": {
+        "7.mp4": "0275922ac6da77c8d50397ccecdedc1138483526493d43591b88a2c557968dda",
+        "6.mp4": "0275922ac6da77c8d50397ccecdedc1138483526493d43591b88a2c557968dda",
+        "4.mp4": "d7f9474155dc4d907a79696ab36891573fab5b8bd4e8ddce37833c85699304ec",
+        "5.mp4": "0275922ac6da77c8d50397ccecdedc1138483526493d43591b88a2c557968dda",
+        "1.mp4": "0275922ac6da77c8d50397ccecdedc1138483526493d43591b88a2c557968dda",
+        "0.mp4": "0275922ac6da77c8d50397ccecdedc1138483526493d43591b88a2c557968dda",
+        "2.mp4": "0275922ac6da77c8d50397ccecdedc1138483526493d43591b88a2c557968dda",
+        "3.mp4": "0275922ac6da77c8d50397ccecdedc1138483526493d43591b88a2c557968dda",
+        "8.mp4": "0275922ac6da77c8d50397ccecdedc1138483526493d43591b88a2c557968dda"
+      }
+    },
+    {
+      "name": "prores_ks-4",
+      "exit_code": 0,
+      "wall_seconds": 0.34249591699335724,
+      "probe": {
+        "threads_requested": 4,
+        "codec": "prores_ks",
+        "width": 640,
+        "height": 360,
+        "frames": 12,
+        "runs": [
+          {
+            "ms": 35.365,
+            "context_threads": 4,
+            "active_thread_type": 1,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 38.755,
+            "context_threads": 4,
+            "active_thread_type": 1,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 34.691,
+            "context_threads": 4,
+            "active_thread_type": 1,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 35.942,
+            "context_threads": 4,
+            "active_thread_type": 1,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 30.832,
+            "context_threads": 4,
+            "active_thread_type": 1,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 30.423,
+            "context_threads": 4,
+            "active_thread_type": 1,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 34.18,
+            "context_threads": 4,
+            "active_thread_type": 1,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 42.21,
+            "context_threads": 4,
+            "active_thread_type": 1,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 37.945,
+            "context_threads": 4,
+            "active_thread_type": 1,
+            "codec_caps": 1060864
+          }
+        ]
+      },
+      "warm_p50_ms": 35.942,
+      "warm_p95_ms": 42.21,
+      "encoded_sha256": {
+        "4.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "5.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "7.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "6.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "2.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "3.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "1.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "0.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "8.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e"
+      }
+    },
+    {
+      "name": "dnxhr_hqx-4",
+      "exit_code": 0,
+      "wall_seconds": 0.2924754580017179,
+      "probe": {
+        "threads_requested": 4,
+        "codec": "dnxhr_hqx",
+        "width": 640,
+        "height": 360,
+        "frames": 12,
+        "runs": [
+          {
+            "ms": 31.632,
+            "context_threads": 4,
+            "active_thread_type": 1,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 32.349,
+            "context_threads": 4,
+            "active_thread_type": 1,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 29.273,
+            "context_threads": 4,
+            "active_thread_type": 1,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 32.35,
+            "context_threads": 4,
+            "active_thread_type": 1,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 32.299,
+            "context_threads": 4,
+            "active_thread_type": 1,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 29.39,
+            "context_threads": 4,
+            "active_thread_type": 1,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 29.786,
+            "context_threads": 4,
+            "active_thread_type": 1,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 28.117,
+            "context_threads": 4,
+            "active_thread_type": 1,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 25.641,
+            "context_threads": 4,
+            "active_thread_type": 1,
+            "codec_caps": 1060866
+          }
+        ]
+      },
+      "warm_p50_ms": 29.786,
+      "warm_p95_ms": 32.35,
+      "encoded_sha256": {
+        "4.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "5.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "7.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "6.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "2.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "3.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "1.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "0.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "8.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef"
+      }
+    },
+    {
+      "name": "libaom-av1-4",
+      "exit_code": 5,
+      "wall_seconds": 0.020568667037878186,
+      "failure_detail": "encoder unavailable: Encoder not found (-1129203192)\n"
+    },
+    {
+      "name": "libsvtav1-4",
+      "exit_code": 0,
+      "wall_seconds": 0.3117178339743987,
+      "probe": {
+        "threads_requested": 4,
+        "codec": "libsvtav1",
+        "width": 640,
+        "height": 360,
+        "frames": 12,
+        "runs": [
+          {
+            "ms": 33.525,
+            "context_threads": 4,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 28.779,
+            "context_threads": 4,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 26.033,
+            "context_threads": 4,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 27.204,
+            "context_threads": 4,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 30.962,
+            "context_threads": 4,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 37.006,
+            "context_threads": 4,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 38.629,
+            "context_threads": 4,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 30.953,
+            "context_threads": 4,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 30.991,
+            "context_threads": 4,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          }
+        ]
+      },
+      "warm_p50_ms": 30.962,
+      "warm_p95_ms": 38.629,
+      "encoded_sha256": {
+        "7.mp4": "38b9f7e6533329267569f4ed19b42eded621216baea31d1de72e271047dfd53e",
+        "6.mp4": "38b9f7e6533329267569f4ed19b42eded621216baea31d1de72e271047dfd53e",
+        "4.mp4": "622d6298d3001abab18ad685696c8b04768df3ed2d4f58835887a44ee791326a",
+        "5.mp4": "38b9f7e6533329267569f4ed19b42eded621216baea31d1de72e271047dfd53e",
+        "1.mp4": "aadee3fbccf71d1397da4b02bddf386d7bd1e323d192b76da3737574c9724d33",
+        "0.mp4": "38b9f7e6533329267569f4ed19b42eded621216baea31d1de72e271047dfd53e",
+        "2.mp4": "38b9f7e6533329267569f4ed19b42eded621216baea31d1de72e271047dfd53e",
+        "3.mp4": "38b9f7e6533329267569f4ed19b42eded621216baea31d1de72e271047dfd53e",
+        "8.mp4": "38b9f7e6533329267569f4ed19b42eded621216baea31d1de72e271047dfd53e"
+      }
+    },
+    {
+      "name": "prores_ks-8",
+      "exit_code": 0,
+      "wall_seconds": 0.33293429197510704,
+      "probe": {
+        "threads_requested": 8,
+        "codec": "prores_ks",
+        "width": 640,
+        "height": 360,
+        "frames": 12,
+        "runs": [
+          {
+            "ms": 36.418,
+            "context_threads": 8,
+            "active_thread_type": 1,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 32.407,
+            "context_threads": 8,
+            "active_thread_type": 1,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 28.664,
+            "context_threads": 8,
+            "active_thread_type": 1,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 36.19,
+            "context_threads": 8,
+            "active_thread_type": 1,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 36.194,
+            "context_threads": 8,
+            "active_thread_type": 1,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 35.716,
+            "context_threads": 8,
+            "active_thread_type": 1,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 32.908,
+            "context_threads": 8,
+            "active_thread_type": 1,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 38.741,
+            "context_threads": 8,
+            "active_thread_type": 1,
+            "codec_caps": 1060864
+          },
+          {
+            "ms": 32.817,
+            "context_threads": 8,
+            "active_thread_type": 1,
+            "codec_caps": 1060864
+          }
+        ]
+      },
+      "warm_p50_ms": 35.716,
+      "warm_p95_ms": 38.741,
+      "encoded_sha256": {
+        "4.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "5.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "7.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "6.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "2.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "3.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "1.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "0.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e",
+        "8.mov": "f30030b9bc7bce77e0b73dd9299ac3e606c78ffcd02757e2568c6eb2bb7c3e7e"
+      }
+    },
+    {
+      "name": "dnxhr_hqx-8",
+      "exit_code": 0,
+      "wall_seconds": 0.6224551249761134,
+      "probe": {
+        "threads_requested": 8,
+        "codec": "dnxhr_hqx",
+        "width": 640,
+        "height": 360,
+        "frames": 12,
+        "runs": [
+          {
+            "ms": 47.025,
+            "context_threads": 8,
+            "active_thread_type": 1,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 65.884,
+            "context_threads": 8,
+            "active_thread_type": 1,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 84.566,
+            "context_threads": 8,
+            "active_thread_type": 1,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 79.448,
+            "context_threads": 8,
+            "active_thread_type": 1,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 55.004,
+            "context_threads": 8,
+            "active_thread_type": 1,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 56.486,
+            "context_threads": 8,
+            "active_thread_type": 1,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 53.628,
+            "context_threads": 8,
+            "active_thread_type": 1,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 69.132,
+            "context_threads": 8,
+            "active_thread_type": 1,
+            "codec_caps": 1060866
+          },
+          {
+            "ms": 82.995,
+            "context_threads": 8,
+            "active_thread_type": 1,
+            "codec_caps": 1060866
+          }
+        ]
+      },
+      "warm_p50_ms": 69.132,
+      "warm_p95_ms": 84.566,
+      "encoded_sha256": {
+        "4.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "5.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "7.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "6.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "2.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "3.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "1.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "0.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef",
+        "8.mov": "9eb46c0f2484bee4cc1e96ae3d338fed7d26426d08363b3863db05a2258550ef"
+      }
+    },
+    {
+      "name": "libaom-av1-8",
+      "exit_code": 5,
+      "wall_seconds": 0.041203917004168034,
+      "failure_detail": "encoder unavailable: Encoder not found (-1129203192)\n"
+    },
+    {
+      "name": "libsvtav1-8",
+      "exit_code": 0,
+      "wall_seconds": 0.9347872919752263,
+      "probe": {
+        "threads_requested": 8,
+        "codec": "libsvtav1",
+        "width": 640,
+        "height": 360,
+        "frames": 12,
+        "runs": [
+          {
+            "ms": 120.625,
+            "context_threads": 8,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 86.844,
+            "context_threads": 8,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 98.383,
+            "context_threads": 8,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 139.935,
+            "context_threads": 8,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 74.891,
+            "context_threads": 8,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 79.395,
+            "context_threads": 8,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 121.89,
+            "context_threads": 8,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 98.047,
+            "context_threads": 8,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          },
+          {
+            "ms": 72.269,
+            "context_threads": 8,
+            "active_thread_type": 0,
+            "codec_caps": 32800
+          }
+        ]
+      },
+      "warm_p50_ms": 98.047,
+      "warm_p95_ms": 139.935,
+      "encoded_sha256": {
+        "7.mp4": "38b9f7e6533329267569f4ed19b42eded621216baea31d1de72e271047dfd53e",
+        "6.mp4": "38b9f7e6533329267569f4ed19b42eded621216baea31d1de72e271047dfd53e",
+        "4.mp4": "622d6298d3001abab18ad685696c8b04768df3ed2d4f58835887a44ee791326a",
+        "5.mp4": "38b9f7e6533329267569f4ed19b42eded621216baea31d1de72e271047dfd53e",
+        "1.mp4": "38b9f7e6533329267569f4ed19b42eded621216baea31d1de72e271047dfd53e",
+        "0.mp4": "38b9f7e6533329267569f4ed19b42eded621216baea31d1de72e271047dfd53e",
+        "2.mp4": "aadee3fbccf71d1397da4b02bddf386d7bd1e323d192b76da3737574c9724d33",
+        "3.mp4": "38b9f7e6533329267569f4ed19b42eded621216baea31d1de72e271047dfd53e",
+        "8.mp4": "aadee3fbccf71d1397da4b02bddf386d7bd1e323d192b76da3737574c9724d33"
+      }
+    }
+  ],
+  "oracle": {
+    "kind": "independent FFmpeg CLI packet/raw-frame oracle outside native timing",
+    "results": [
+      {
+        "name": "prores_ks-1",
+        "all_nine_encoded_files_identical": true,
+        "decoded_sha256": "b7b57a22bc3da4e45c25d671ed323a484a0f220f74fd7d50ca30978a8e5c618d",
+        "decoded_raw_bytes": 11059200,
+        "raw_pixel_format": "yuv422p10le",
+        "bit_equal_single_thread": true,
+        "max_raw_byte_difference": 0,
+        "packet_pts_duration_verified": true,
+        "probe": {
+          "packets": [
+            {
+              "pts": 0,
+              "dts": 0,
+              "duration": 1
+            },
+            {
+              "pts": 1,
+              "dts": 1,
+              "duration": 1
+            },
+            {
+              "pts": 2,
+              "dts": 2,
+              "duration": 1
+            },
+            {
+              "pts": 3,
+              "dts": 3,
+              "duration": 1
+            },
+            {
+              "pts": 4,
+              "dts": 4,
+              "duration": 1
+            },
+            {
+              "pts": 5,
+              "dts": 5,
+              "duration": 1
+            },
+            {
+              "pts": 6,
+              "dts": 6,
+              "duration": 1
+            },
+            {
+              "pts": 7,
+              "dts": 7,
+              "duration": 1
+            },
+            {
+              "pts": 8,
+              "dts": 8,
+              "duration": 1
+            },
+            {
+              "pts": 9,
+              "dts": 9,
+              "duration": 1
+            },
+            {
+              "pts": 10,
+              "dts": 10,
+              "duration": 1
+            },
+            {
+              "pts": 11,
+              "dts": 11,
+              "duration": 1
+            }
+          ],
+          "programs": [],
+          "stream_groups": [],
+          "streams": [
+            {
+              "codec_name": "prores",
+              "pix_fmt": "yuv422p10le",
+              "time_base": "1/24",
+              "start_time": "0.000000",
+              "duration": "0.500000",
+              "nb_frames": "12"
+            }
+          ]
+        },
+        "first_encoded_equal_single_thread": true
+      },
+      {
+        "name": "dnxhr_hqx-1",
+        "all_nine_encoded_files_identical": true,
+        "decoded_sha256": "cd7acff974ef4cd7c7e54032f69818f942eaa327381ca23a1a2b9548b7c747b6",
+        "decoded_raw_bytes": 11059200,
+        "raw_pixel_format": "yuv422p10le",
+        "bit_equal_single_thread": true,
+        "max_raw_byte_difference": 0,
+        "packet_pts_duration_verified": true,
+        "probe": {
+          "packets": [
+            {
+              "pts": 0,
+              "dts": 0,
+              "duration": 1
+            },
+            {
+              "pts": 1,
+              "dts": 1,
+              "duration": 1
+            },
+            {
+              "pts": 2,
+              "dts": 2,
+              "duration": 1
+            },
+            {
+              "pts": 3,
+              "dts": 3,
+              "duration": 1
+            },
+            {
+              "pts": 4,
+              "dts": 4,
+              "duration": 1
+            },
+            {
+              "pts": 5,
+              "dts": 5,
+              "duration": 1
+            },
+            {
+              "pts": 6,
+              "dts": 6,
+              "duration": 1
+            },
+            {
+              "pts": 7,
+              "dts": 7,
+              "duration": 1
+            },
+            {
+              "pts": 8,
+              "dts": 8,
+              "duration": 1
+            },
+            {
+              "pts": 9,
+              "dts": 9,
+              "duration": 1
+            },
+            {
+              "pts": 10,
+              "dts": 10,
+              "duration": 1
+            },
+            {
+              "pts": 11,
+              "dts": 11,
+              "duration": 1
+            }
+          ],
+          "programs": [],
+          "stream_groups": [],
+          "streams": [
+            {
+              "codec_name": "dnxhd",
+              "pix_fmt": "yuv422p10le",
+              "time_base": "1/24",
+              "start_time": "0.000000",
+              "duration": "0.500000",
+              "nb_frames": "12"
+            }
+          ]
+        },
+        "first_encoded_equal_single_thread": true
+      },
+      {
+        "name": "libsvtav1-1",
+        "all_nine_encoded_files_identical": true,
+        "decoded_sha256": "be48291080e5a002f9681925b87356fb440c6d055942ece28e66940fd8bd5c36",
+        "decoded_raw_bytes": 4147200,
+        "raw_pixel_format": "yuv420p",
+        "bit_equal_single_thread": true,
+        "max_raw_byte_difference": 0,
+        "packet_pts_duration_verified": true,
+        "probe": {
+          "packets": [
+            {
+              "pts": 0,
+              "dts": 0,
+              "duration": 1
+            },
+            {
+              "pts": 1,
+              "dts": 1,
+              "duration": 1
+            },
+            {
+              "pts": 2,
+              "dts": 2,
+              "duration": 1
+            },
+            {
+              "pts": 3,
+              "dts": 3,
+              "duration": 1
+            },
+            {
+              "pts": 4,
+              "dts": 4,
+              "duration": 1
+            },
+            {
+              "pts": 5,
+              "dts": 5,
+              "duration": 1
+            },
+            {
+              "pts": 6,
+              "dts": 6,
+              "duration": 1
+            },
+            {
+              "pts": 7,
+              "dts": 7,
+              "duration": 1
+            },
+            {
+              "pts": 8,
+              "dts": 8,
+              "duration": 1
+            },
+            {
+              "pts": 9,
+              "dts": 9,
+              "duration": 1
+            },
+            {
+              "pts": 10,
+              "dts": 10,
+              "duration": 1
+            },
+            {
+              "pts": 11,
+              "dts": 11,
+              "duration": 1
+            }
+          ],
+          "programs": [],
+          "stream_groups": [],
+          "streams": [
+            {
+              "codec_name": "av1",
+              "pix_fmt": "yuv420p",
+              "time_base": "1/24",
+              "start_time": "0.000000",
+              "duration": "0.500000",
+              "nb_frames": "12"
+            }
+          ]
+        },
+        "first_encoded_equal_single_thread": true
+      },
+      {
+        "name": "prores_ks-2",
+        "all_nine_encoded_files_identical": true,
+        "decoded_sha256": "b7b57a22bc3da4e45c25d671ed323a484a0f220f74fd7d50ca30978a8e5c618d",
+        "decoded_raw_bytes": 11059200,
+        "raw_pixel_format": "yuv422p10le",
+        "bit_equal_single_thread": true,
+        "max_raw_byte_difference": 0,
+        "packet_pts_duration_verified": true,
+        "probe": {
+          "packets": [
+            {
+              "pts": 0,
+              "dts": 0,
+              "duration": 1
+            },
+            {
+              "pts": 1,
+              "dts": 1,
+              "duration": 1
+            },
+            {
+              "pts": 2,
+              "dts": 2,
+              "duration": 1
+            },
+            {
+              "pts": 3,
+              "dts": 3,
+              "duration": 1
+            },
+            {
+              "pts": 4,
+              "dts": 4,
+              "duration": 1
+            },
+            {
+              "pts": 5,
+              "dts": 5,
+              "duration": 1
+            },
+            {
+              "pts": 6,
+              "dts": 6,
+              "duration": 1
+            },
+            {
+              "pts": 7,
+              "dts": 7,
+              "duration": 1
+            },
+            {
+              "pts": 8,
+              "dts": 8,
+              "duration": 1
+            },
+            {
+              "pts": 9,
+              "dts": 9,
+              "duration": 1
+            },
+            {
+              "pts": 10,
+              "dts": 10,
+              "duration": 1
+            },
+            {
+              "pts": 11,
+              "dts": 11,
+              "duration": 1
+            }
+          ],
+          "programs": [],
+          "stream_groups": [],
+          "streams": [
+            {
+              "codec_name": "prores",
+              "pix_fmt": "yuv422p10le",
+              "time_base": "1/24",
+              "start_time": "0.000000",
+              "duration": "0.500000",
+              "nb_frames": "12"
+            }
+          ]
+        },
+        "first_encoded_equal_single_thread": true
+      },
+      {
+        "name": "dnxhr_hqx-2",
+        "all_nine_encoded_files_identical": true,
+        "decoded_sha256": "cd7acff974ef4cd7c7e54032f69818f942eaa327381ca23a1a2b9548b7c747b6",
+        "decoded_raw_bytes": 11059200,
+        "raw_pixel_format": "yuv422p10le",
+        "bit_equal_single_thread": true,
+        "max_raw_byte_difference": 0,
+        "packet_pts_duration_verified": true,
+        "probe": {
+          "packets": [
+            {
+              "pts": 0,
+              "dts": 0,
+              "duration": 1
+            },
+            {
+              "pts": 1,
+              "dts": 1,
+              "duration": 1
+            },
+            {
+              "pts": 2,
+              "dts": 2,
+              "duration": 1
+            },
+            {
+              "pts": 3,
+              "dts": 3,
+              "duration": 1
+            },
+            {
+              "pts": 4,
+              "dts": 4,
+              "duration": 1
+            },
+            {
+              "pts": 5,
+              "dts": 5,
+              "duration": 1
+            },
+            {
+              "pts": 6,
+              "dts": 6,
+              "duration": 1
+            },
+            {
+              "pts": 7,
+              "dts": 7,
+              "duration": 1
+            },
+            {
+              "pts": 8,
+              "dts": 8,
+              "duration": 1
+            },
+            {
+              "pts": 9,
+              "dts": 9,
+              "duration": 1
+            },
+            {
+              "pts": 10,
+              "dts": 10,
+              "duration": 1
+            },
+            {
+              "pts": 11,
+              "dts": 11,
+              "duration": 1
+            }
+          ],
+          "programs": [],
+          "stream_groups": [],
+          "streams": [
+            {
+              "codec_name": "dnxhd",
+              "pix_fmt": "yuv422p10le",
+              "time_base": "1/24",
+              "start_time": "0.000000",
+              "duration": "0.500000",
+              "nb_frames": "12"
+            }
+          ]
+        },
+        "first_encoded_equal_single_thread": true
+      },
+      {
+        "name": "libsvtav1-2",
+        "all_nine_encoded_files_identical": false,
+        "decoded_sha256": "11f549888c1b4ee80a8832e2a54b216cbb4884f71e5f92fc8e36dac5a336962e",
+        "decoded_raw_bytes": 4147200,
+        "raw_pixel_format": "yuv420p",
+        "bit_equal_single_thread": false,
+        "max_raw_byte_difference": 52,
+        "packet_pts_duration_verified": true,
+        "probe": {
+          "packets": [
+            {
+              "pts": 0,
+              "dts": 0,
+              "duration": 1
+            },
+            {
+              "pts": 1,
+              "dts": 1,
+              "duration": 1
+            },
+            {
+              "pts": 2,
+              "dts": 2,
+              "duration": 1
+            },
+            {
+              "pts": 3,
+              "dts": 3,
+              "duration": 1
+            },
+            {
+              "pts": 4,
+              "dts": 4,
+              "duration": 1
+            },
+            {
+              "pts": 5,
+              "dts": 5,
+              "duration": 1
+            },
+            {
+              "pts": 6,
+              "dts": 6,
+              "duration": 1
+            },
+            {
+              "pts": 7,
+              "dts": 7,
+              "duration": 1
+            },
+            {
+              "pts": 8,
+              "dts": 8,
+              "duration": 1
+            },
+            {
+              "pts": 9,
+              "dts": 9,
+              "duration": 1
+            },
+            {
+              "pts": 10,
+              "dts": 10,
+              "duration": 1
+            },
+            {
+              "pts": 11,
+              "dts": 11,
+              "duration": 1
+            }
+          ],
+          "programs": [],
+          "stream_groups": [],
+          "streams": [
+            {
+              "codec_name": "av1",
+              "pix_fmt": "yuv420p",
+              "time_base": "1/24",
+              "start_time": "0.000000",
+              "duration": "0.500000",
+              "nb_frames": "12"
+            }
+          ]
+        },
+        "first_encoded_equal_single_thread": false
+      },
+      {
+        "name": "prores_ks-4",
+        "all_nine_encoded_files_identical": true,
+        "decoded_sha256": "b7b57a22bc3da4e45c25d671ed323a484a0f220f74fd7d50ca30978a8e5c618d",
+        "decoded_raw_bytes": 11059200,
+        "raw_pixel_format": "yuv422p10le",
+        "bit_equal_single_thread": true,
+        "max_raw_byte_difference": 0,
+        "packet_pts_duration_verified": true,
+        "probe": {
+          "packets": [
+            {
+              "pts": 0,
+              "dts": 0,
+              "duration": 1
+            },
+            {
+              "pts": 1,
+              "dts": 1,
+              "duration": 1
+            },
+            {
+              "pts": 2,
+              "dts": 2,
+              "duration": 1
+            },
+            {
+              "pts": 3,
+              "dts": 3,
+              "duration": 1
+            },
+            {
+              "pts": 4,
+              "dts": 4,
+              "duration": 1
+            },
+            {
+              "pts": 5,
+              "dts": 5,
+              "duration": 1
+            },
+            {
+              "pts": 6,
+              "dts": 6,
+              "duration": 1
+            },
+            {
+              "pts": 7,
+              "dts": 7,
+              "duration": 1
+            },
+            {
+              "pts": 8,
+              "dts": 8,
+              "duration": 1
+            },
+            {
+              "pts": 9,
+              "dts": 9,
+              "duration": 1
+            },
+            {
+              "pts": 10,
+              "dts": 10,
+              "duration": 1
+            },
+            {
+              "pts": 11,
+              "dts": 11,
+              "duration": 1
+            }
+          ],
+          "programs": [],
+          "stream_groups": [],
+          "streams": [
+            {
+              "codec_name": "prores",
+              "pix_fmt": "yuv422p10le",
+              "time_base": "1/24",
+              "start_time": "0.000000",
+              "duration": "0.500000",
+              "nb_frames": "12"
+            }
+          ]
+        },
+        "first_encoded_equal_single_thread": true
+      },
+      {
+        "name": "dnxhr_hqx-4",
+        "all_nine_encoded_files_identical": true,
+        "decoded_sha256": "cd7acff974ef4cd7c7e54032f69818f942eaa327381ca23a1a2b9548b7c747b6",
+        "decoded_raw_bytes": 11059200,
+        "raw_pixel_format": "yuv422p10le",
+        "bit_equal_single_thread": true,
+        "max_raw_byte_difference": 0,
+        "packet_pts_duration_verified": true,
+        "probe": {
+          "packets": [
+            {
+              "pts": 0,
+              "dts": 0,
+              "duration": 1
+            },
+            {
+              "pts": 1,
+              "dts": 1,
+              "duration": 1
+            },
+            {
+              "pts": 2,
+              "dts": 2,
+              "duration": 1
+            },
+            {
+              "pts": 3,
+              "dts": 3,
+              "duration": 1
+            },
+            {
+              "pts": 4,
+              "dts": 4,
+              "duration": 1
+            },
+            {
+              "pts": 5,
+              "dts": 5,
+              "duration": 1
+            },
+            {
+              "pts": 6,
+              "dts": 6,
+              "duration": 1
+            },
+            {
+              "pts": 7,
+              "dts": 7,
+              "duration": 1
+            },
+            {
+              "pts": 8,
+              "dts": 8,
+              "duration": 1
+            },
+            {
+              "pts": 9,
+              "dts": 9,
+              "duration": 1
+            },
+            {
+              "pts": 10,
+              "dts": 10,
+              "duration": 1
+            },
+            {
+              "pts": 11,
+              "dts": 11,
+              "duration": 1
+            }
+          ],
+          "programs": [],
+          "stream_groups": [],
+          "streams": [
+            {
+              "codec_name": "dnxhd",
+              "pix_fmt": "yuv422p10le",
+              "time_base": "1/24",
+              "start_time": "0.000000",
+              "duration": "0.500000",
+              "nb_frames": "12"
+            }
+          ]
+        },
+        "first_encoded_equal_single_thread": true
+      },
+      {
+        "name": "libsvtav1-4",
+        "all_nine_encoded_files_identical": false,
+        "decoded_sha256": "362125d340d6967a55eb3f59312e3211284924bc6557ffac540063a4ab5bfa7b",
+        "decoded_raw_bytes": 4147200,
+        "raw_pixel_format": "yuv420p",
+        "bit_equal_single_thread": false,
+        "max_raw_byte_difference": 52,
+        "packet_pts_duration_verified": true,
+        "probe": {
+          "packets": [
+            {
+              "pts": 0,
+              "dts": 0,
+              "duration": 1
+            },
+            {
+              "pts": 1,
+              "dts": 1,
+              "duration": 1
+            },
+            {
+              "pts": 2,
+              "dts": 2,
+              "duration": 1
+            },
+            {
+              "pts": 3,
+              "dts": 3,
+              "duration": 1
+            },
+            {
+              "pts": 4,
+              "dts": 4,
+              "duration": 1
+            },
+            {
+              "pts": 5,
+              "dts": 5,
+              "duration": 1
+            },
+            {
+              "pts": 6,
+              "dts": 6,
+              "duration": 1
+            },
+            {
+              "pts": 7,
+              "dts": 7,
+              "duration": 1
+            },
+            {
+              "pts": 8,
+              "dts": 8,
+              "duration": 1
+            },
+            {
+              "pts": 9,
+              "dts": 9,
+              "duration": 1
+            },
+            {
+              "pts": 10,
+              "dts": 10,
+              "duration": 1
+            },
+            {
+              "pts": 11,
+              "dts": 11,
+              "duration": 1
+            }
+          ],
+          "programs": [],
+          "stream_groups": [],
+          "streams": [
+            {
+              "codec_name": "av1",
+              "pix_fmt": "yuv420p",
+              "time_base": "1/24",
+              "start_time": "0.000000",
+              "duration": "0.500000",
+              "nb_frames": "12"
+            }
+          ]
+        },
+        "first_encoded_equal_single_thread": false
+      },
+      {
+        "name": "prores_ks-8",
+        "all_nine_encoded_files_identical": true,
+        "decoded_sha256": "b7b57a22bc3da4e45c25d671ed323a484a0f220f74fd7d50ca30978a8e5c618d",
+        "decoded_raw_bytes": 11059200,
+        "raw_pixel_format": "yuv422p10le",
+        "bit_equal_single_thread": true,
+        "max_raw_byte_difference": 0,
+        "packet_pts_duration_verified": true,
+        "probe": {
+          "packets": [
+            {
+              "pts": 0,
+              "dts": 0,
+              "duration": 1
+            },
+            {
+              "pts": 1,
+              "dts": 1,
+              "duration": 1
+            },
+            {
+              "pts": 2,
+              "dts": 2,
+              "duration": 1
+            },
+            {
+              "pts": 3,
+              "dts": 3,
+              "duration": 1
+            },
+            {
+              "pts": 4,
+              "dts": 4,
+              "duration": 1
+            },
+            {
+              "pts": 5,
+              "dts": 5,
+              "duration": 1
+            },
+            {
+              "pts": 6,
+              "dts": 6,
+              "duration": 1
+            },
+            {
+              "pts": 7,
+              "dts": 7,
+              "duration": 1
+            },
+            {
+              "pts": 8,
+              "dts": 8,
+              "duration": 1
+            },
+            {
+              "pts": 9,
+              "dts": 9,
+              "duration": 1
+            },
+            {
+              "pts": 10,
+              "dts": 10,
+              "duration": 1
+            },
+            {
+              "pts": 11,
+              "dts": 11,
+              "duration": 1
+            }
+          ],
+          "programs": [],
+          "stream_groups": [],
+          "streams": [
+            {
+              "codec_name": "prores",
+              "pix_fmt": "yuv422p10le",
+              "time_base": "1/24",
+              "start_time": "0.000000",
+              "duration": "0.500000",
+              "nb_frames": "12"
+            }
+          ]
+        },
+        "first_encoded_equal_single_thread": true
+      },
+      {
+        "name": "dnxhr_hqx-8",
+        "all_nine_encoded_files_identical": true,
+        "decoded_sha256": "cd7acff974ef4cd7c7e54032f69818f942eaa327381ca23a1a2b9548b7c747b6",
+        "decoded_raw_bytes": 11059200,
+        "raw_pixel_format": "yuv422p10le",
+        "bit_equal_single_thread": true,
+        "max_raw_byte_difference": 0,
+        "packet_pts_duration_verified": true,
+        "probe": {
+          "packets": [
+            {
+              "pts": 0,
+              "dts": 0,
+              "duration": 1
+            },
+            {
+              "pts": 1,
+              "dts": 1,
+              "duration": 1
+            },
+            {
+              "pts": 2,
+              "dts": 2,
+              "duration": 1
+            },
+            {
+              "pts": 3,
+              "dts": 3,
+              "duration": 1
+            },
+            {
+              "pts": 4,
+              "dts": 4,
+              "duration": 1
+            },
+            {
+              "pts": 5,
+              "dts": 5,
+              "duration": 1
+            },
+            {
+              "pts": 6,
+              "dts": 6,
+              "duration": 1
+            },
+            {
+              "pts": 7,
+              "dts": 7,
+              "duration": 1
+            },
+            {
+              "pts": 8,
+              "dts": 8,
+              "duration": 1
+            },
+            {
+              "pts": 9,
+              "dts": 9,
+              "duration": 1
+            },
+            {
+              "pts": 10,
+              "dts": 10,
+              "duration": 1
+            },
+            {
+              "pts": 11,
+              "dts": 11,
+              "duration": 1
+            }
+          ],
+          "programs": [],
+          "stream_groups": [],
+          "streams": [
+            {
+              "codec_name": "dnxhd",
+              "pix_fmt": "yuv422p10le",
+              "time_base": "1/24",
+              "start_time": "0.000000",
+              "duration": "0.500000",
+              "nb_frames": "12"
+            }
+          ]
+        },
+        "first_encoded_equal_single_thread": true
+      },
+      {
+        "name": "libsvtav1-8",
+        "all_nine_encoded_files_identical": false,
+        "decoded_sha256": "362125d340d6967a55eb3f59312e3211284924bc6557ffac540063a4ab5bfa7b",
+        "decoded_raw_bytes": 4147200,
+        "raw_pixel_format": "yuv420p",
+        "bit_equal_single_thread": false,
+        "max_raw_byte_difference": 52,
+        "packet_pts_duration_verified": true,
+        "probe": {
+          "packets": [
+            {
+              "pts": 0,
+              "dts": 0,
+              "duration": 1
+            },
+            {
+              "pts": 1,
+              "dts": 1,
+              "duration": 1
+            },
+            {
+              "pts": 2,
+              "dts": 2,
+              "duration": 1
+            },
+            {
+              "pts": 3,
+              "dts": 3,
+              "duration": 1
+            },
+            {
+              "pts": 4,
+              "dts": 4,
+              "duration": 1
+            },
+            {
+              "pts": 5,
+              "dts": 5,
+              "duration": 1
+            },
+            {
+              "pts": 6,
+              "dts": 6,
+              "duration": 1
+            },
+            {
+              "pts": 7,
+              "dts": 7,
+              "duration": 1
+            },
+            {
+              "pts": 8,
+              "dts": 8,
+              "duration": 1
+            },
+            {
+              "pts": 9,
+              "dts": 9,
+              "duration": 1
+            },
+            {
+              "pts": 10,
+              "dts": 10,
+              "duration": 1
+            },
+            {
+              "pts": 11,
+              "dts": 11,
+              "duration": 1
+            }
+          ],
+          "programs": [],
+          "stream_groups": [],
+          "streams": [
+            {
+              "codec_name": "av1",
+              "pix_fmt": "yuv420p",
+              "time_base": "1/24",
+              "start_time": "0.000000",
+              "duration": "0.500000",
+              "nb_frames": "12"
+            }
+          ]
+        },
+        "first_encoded_equal_single_thread": false
+      }
+    ]
+  },
+  "decision": "ProRes 4 and DNx 2 are candidates for production-path verification. Keep SVT-AV1 lp=1: threads2/4/8 have non-identical repeat files and first-trial decoded raw samples differ from threads1. libaom-av1 is unavailable in this runtime; no fallback in probe.",
+  "effective_svt_preset": 11,
+  "requested_svt_preset": 12
+}

@@ -4,7 +4,7 @@ use kronello_eval::{DependencyDeclarations, DependencyGraph, NodeKey, RuntimePro
 use kronello_model::*;
 use kronello_text::{FontData, LayoutResult};
 use kronello_time::Time;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Default)]
 pub(crate) struct TemplateRuntime {
@@ -67,14 +67,15 @@ impl TemplateRuntime {
                 .iter()
                 .find(|c| c.id == root)
                 .ok_or_else(|| RenderError::InvalidInput("missing root".into()))?;
+            let mut validated = BTreeSet::new();
             for node in &lowered.nodes {
                 if let NodeKind::CompositionInstance(i) = &node.kind {
-                    kronello_template::validate_reachable(
-                        project,
-                        origins
-                            .get(&i.definition_ref)
-                            .map_or(i.definition_ref, |info| info.authored),
-                    )?;
+                    let authored = origins
+                        .get(&i.definition_ref)
+                        .map_or(i.definition_ref, |info| info.authored);
+                    if validated.insert(authored) {
+                        kronello_template::validate_reachable(project, authored)?;
+                    }
                 }
             }
         }

@@ -1,0 +1,3250 @@
+{
+  "deliveries": [],
+  "delivery_timing": "production export including audio, rendering, native encoder, mux, validation and publication; output hashes excluded",
+  "frame_cases": [
+    {
+      "adapter": "AdapterInfo { name: \"Apple M4\", vendor: 0, device: 0, device_type: IntegratedGpu, device_pci_bus_id: \"\", driver: \"\", driver_info: \"\", backend: Metal, subgroup_min_size: 4, subgroup_max_size: 64, transient_saves_memory: Some(true), limit_bucket: None }",
+      "linear": {
+        "cold_ms": 39.497664,
+        "warm_p50_ms": 39.241084,
+        "warm_p95_ms": 53.455166999999996
+      },
+      "linear_init_ms": 10.793209,
+      "linear_trials": [
+        {
+          "iteration": 0,
+          "linear_sha256": "13df367a3307a2745c7ff7f9b05545af27e4cc13cd2e7e3edacf63951f52e721",
+          "metadata": {
+            "backend": "wgpu_rgba16f",
+            "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+            "design_extent": [
+              64.0,
+              32.0
+            ],
+            "design_to_pixel": [
+              [
+                30.0,
+                0.0,
+                -0.0
+              ],
+              [
+                0.0,
+                33.75,
+                -0.0
+              ]
+            ],
+            "display": {
+              "alpha": "straight",
+              "association_space": "srgb",
+              "byte_order": "big_endian",
+              "channel_order": "RGBA",
+              "clipping": "unit_interval_after_output_transform; no_tone_mapping",
+              "color_space": "srgb",
+              "pixel_format": "rgba16_unorm_png",
+              "row_order": "top_to_bottom",
+              "transfer_function": "srgb"
+            },
+            "flatten_tolerance_px": 0.02,
+            "font_locks": [],
+            "frame_index": null,
+            "input_path": "semantic_scene",
+            "numeric": {
+              "alpha": "premultiplied",
+              "association_space": "linear_rec709",
+              "byte_order": "little_endian",
+              "channel_order": "RGBA",
+              "clipping": "none",
+              "color_space": "linear_rec709",
+              "pixel_format": "rgba16f",
+              "row_order": "top_to_bottom",
+              "transfer_function": "linear"
+            },
+            "project_schema_version": 1,
+            "region": {
+              "extent": [
+                64.0,
+                32.0
+              ],
+              "origin": [
+                0.0,
+                0.0
+              ],
+              "pixels": [
+                1920,
+                1080
+              ]
+            },
+            "resource_cache_stats": {
+              "disk_raster": {
+                "bytes": 0,
+                "entries": 0,
+                "evictions": 0,
+                "hits": 0,
+                "inserts": 0,
+                "misses": 0
+              },
+              "gpu_pool": {
+                "bytes": 12214272,
+                "entries": 12,
+                "evictions": 0,
+                "hits": 60,
+                "inserts": 72,
+                "misses": 36
+              },
+              "gpu_textures": {
+                "bytes": 33177600,
+                "entries": 24,
+                "evictions": 0,
+                "hits": 12,
+                "inserts": 24,
+                "misses": 24
+              },
+              "persistent_disk_policy": "memory_only",
+              "rejected_disk_entries": 0
+            },
+            "revision": "1",
+            "schema_version": 1,
+            "semantic_versions": {
+              "adjustment_clip": 1,
+              "advanced_text": 2,
+              "blend": 1,
+              "bounds": 1,
+              "clip_mask": 1,
+              "color": "gpu002-color-v1",
+              "composition_media": 1,
+              "coverage": "vec003-grid4-v2",
+              "document": 1,
+              "document_matte": 1,
+              "effects": {
+                "kronello.channel_mixer": 1,
+                "kronello.color.curves": 1,
+                "kronello.color.exposure": 1,
+                "kronello.color.hsl": 1,
+                "kronello.color.levels": 1,
+                "kronello.color.lut": 1,
+                "kronello.corner_pin": 1,
+                "kronello.directional_blur": 1,
+                "kronello.displace": 1,
+                "kronello.drop_shadow": 2,
+                "kronello.gaussian_blur": 2,
+                "kronello.generate": 1,
+                "kronello.glow": 1,
+                "kronello.grain": 1,
+                "kronello.invert": 1,
+                "kronello.keying.chroma": 1,
+                "kronello.keying.luma": 1,
+                "kronello.mosaic": 1,
+                "kronello.radial_blur": 1,
+                "kronello.sharpen": 1,
+                "kronello.stabilize": 1,
+                "kronello.tint": 1,
+                "kronello.vignette": 1
+              },
+              "expression": 3,
+              "frame_interpolation": 1,
+              "generators": {
+                "kronello.solid": 1
+              },
+              "gradient_interpolation": "vec004-explicit-interpolation-v1",
+              "hdr": 1,
+              "interpolation": 1,
+              "layout": 1,
+              "path_operations": 1,
+              "repeater": 1,
+              "reverse_sampling": 1,
+              "simulation": 1,
+              "stroke_geometry": "vec005-local-stroke-v2",
+              "temporal": 1,
+              "time_map": 1,
+              "vector": "render001-kurbo-flatten-v1",
+              "video_input": "nle002-sdr-rgba8-nearest-v1",
+              "visibility": 2
+            },
+            "sequence_number": null,
+            "snapshot_content_hash": "fdb8916e2d0119f737821e6df2d2fd9e38e0f2d51ed4a72afe6db9d3f10d959e",
+            "snapshot_schema_version": 1,
+            "target": {
+              "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+              "kind": "composition"
+            },
+            "time": {
+              "den": "2",
+              "num": "1"
+            },
+            "transfer_stats": {
+              "cpu_upload_control_bytes": 5040,
+              "cpu_upload_control_operations": 48,
+              "cpu_upload_pixel_bytes": 0,
+              "cpu_upload_pixel_operations": 0,
+              "gpu_compute_dispatches": 12,
+              "gpu_copy_bytes": 0,
+              "gpu_copy_operations": 0,
+              "gpu_readback_bytes": 16588848,
+              "gpu_readback_operations": 24,
+              "gpu_wait_operations": 24
+            },
+            "working_space": "linear_rec709"
+          },
+          "render_ms": 39.497664,
+          "sink_ms": 62.57550200000001,
+          "wall_ms": 102.073166
+        },
+        {
+          "iteration": 1,
+          "linear_sha256": "13df367a3307a2745c7ff7f9b05545af27e4cc13cd2e7e3edacf63951f52e721",
+          "metadata": {
+            "backend": "wgpu_rgba16f",
+            "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+            "design_extent": [
+              64.0,
+              32.0
+            ],
+            "design_to_pixel": [
+              [
+                30.0,
+                0.0,
+                -0.0
+              ],
+              [
+                0.0,
+                33.75,
+                -0.0
+              ]
+            ],
+            "display": {
+              "alpha": "straight",
+              "association_space": "srgb",
+              "byte_order": "big_endian",
+              "channel_order": "RGBA",
+              "clipping": "unit_interval_after_output_transform; no_tone_mapping",
+              "color_space": "srgb",
+              "pixel_format": "rgba16_unorm_png",
+              "row_order": "top_to_bottom",
+              "transfer_function": "srgb"
+            },
+            "flatten_tolerance_px": 0.02,
+            "font_locks": [],
+            "frame_index": null,
+            "input_path": "semantic_scene",
+            "numeric": {
+              "alpha": "premultiplied",
+              "association_space": "linear_rec709",
+              "byte_order": "little_endian",
+              "channel_order": "RGBA",
+              "clipping": "none",
+              "color_space": "linear_rec709",
+              "pixel_format": "rgba16f",
+              "row_order": "top_to_bottom",
+              "transfer_function": "linear"
+            },
+            "project_schema_version": 1,
+            "region": {
+              "extent": [
+                64.0,
+                32.0
+              ],
+              "origin": [
+                0.0,
+                0.0
+              ],
+              "pixels": [
+                1920,
+                1080
+              ]
+            },
+            "resource_cache_stats": {
+              "disk_raster": {
+                "bytes": 0,
+                "entries": 0,
+                "evictions": 0,
+                "hits": 0,
+                "inserts": 0,
+                "misses": 0
+              },
+              "gpu_pool": {
+                "bytes": 12214272,
+                "entries": 12,
+                "evictions": 0,
+                "hits": 84,
+                "inserts": 96,
+                "misses": 36
+              },
+              "gpu_textures": {
+                "bytes": 33177600,
+                "entries": 24,
+                "evictions": 0,
+                "hits": 24,
+                "inserts": 24,
+                "misses": 24
+              },
+              "persistent_disk_policy": "memory_only",
+              "rejected_disk_entries": 0
+            },
+            "revision": "1",
+            "schema_version": 1,
+            "semantic_versions": {
+              "adjustment_clip": 1,
+              "advanced_text": 2,
+              "blend": 1,
+              "bounds": 1,
+              "clip_mask": 1,
+              "color": "gpu002-color-v1",
+              "composition_media": 1,
+              "coverage": "vec003-grid4-v2",
+              "document": 1,
+              "document_matte": 1,
+              "effects": {
+                "kronello.channel_mixer": 1,
+                "kronello.color.curves": 1,
+                "kronello.color.exposure": 1,
+                "kronello.color.hsl": 1,
+                "kronello.color.levels": 1,
+                "kronello.color.lut": 1,
+                "kronello.corner_pin": 1,
+                "kronello.directional_blur": 1,
+                "kronello.displace": 1,
+                "kronello.drop_shadow": 2,
+                "kronello.gaussian_blur": 2,
+                "kronello.generate": 1,
+                "kronello.glow": 1,
+                "kronello.grain": 1,
+                "kronello.invert": 1,
+                "kronello.keying.chroma": 1,
+                "kronello.keying.luma": 1,
+                "kronello.mosaic": 1,
+                "kronello.radial_blur": 1,
+                "kronello.sharpen": 1,
+                "kronello.stabilize": 1,
+                "kronello.tint": 1,
+                "kronello.vignette": 1
+              },
+              "expression": 3,
+              "frame_interpolation": 1,
+              "generators": {
+                "kronello.solid": 1
+              },
+              "gradient_interpolation": "vec004-explicit-interpolation-v1",
+              "hdr": 1,
+              "interpolation": 1,
+              "layout": 1,
+              "path_operations": 1,
+              "repeater": 1,
+              "reverse_sampling": 1,
+              "simulation": 1,
+              "stroke_geometry": "vec005-local-stroke-v2",
+              "temporal": 1,
+              "time_map": 1,
+              "vector": "render001-kurbo-flatten-v1",
+              "video_input": "nle002-sdr-rgba8-nearest-v1",
+              "visibility": 2
+            },
+            "sequence_number": null,
+            "snapshot_content_hash": "fdb8916e2d0119f737821e6df2d2fd9e38e0f2d51ed4a72afe6db9d3f10d959e",
+            "snapshot_schema_version": 1,
+            "target": {
+              "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+              "kind": "composition"
+            },
+            "time": {
+              "den": "2",
+              "num": "1"
+            },
+            "transfer_stats": {
+              "cpu_upload_control_bytes": 5040,
+              "cpu_upload_control_operations": 48,
+              "cpu_upload_pixel_bytes": 0,
+              "cpu_upload_pixel_operations": 0,
+              "gpu_compute_dispatches": 12,
+              "gpu_copy_bytes": 0,
+              "gpu_copy_operations": 0,
+              "gpu_readback_bytes": 16588848,
+              "gpu_readback_operations": 24,
+              "gpu_wait_operations": 24
+            },
+            "working_space": "linear_rec709"
+          },
+          "render_ms": 38.312126,
+          "sink_ms": 60.504249,
+          "wall_ms": 98.816375
+        },
+        {
+          "iteration": 2,
+          "linear_sha256": "13df367a3307a2745c7ff7f9b05545af27e4cc13cd2e7e3edacf63951f52e721",
+          "metadata": {
+            "backend": "wgpu_rgba16f",
+            "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+            "design_extent": [
+              64.0,
+              32.0
+            ],
+            "design_to_pixel": [
+              [
+                30.0,
+                0.0,
+                -0.0
+              ],
+              [
+                0.0,
+                33.75,
+                -0.0
+              ]
+            ],
+            "display": {
+              "alpha": "straight",
+              "association_space": "srgb",
+              "byte_order": "big_endian",
+              "channel_order": "RGBA",
+              "clipping": "unit_interval_after_output_transform; no_tone_mapping",
+              "color_space": "srgb",
+              "pixel_format": "rgba16_unorm_png",
+              "row_order": "top_to_bottom",
+              "transfer_function": "srgb"
+            },
+            "flatten_tolerance_px": 0.02,
+            "font_locks": [],
+            "frame_index": null,
+            "input_path": "semantic_scene",
+            "numeric": {
+              "alpha": "premultiplied",
+              "association_space": "linear_rec709",
+              "byte_order": "little_endian",
+              "channel_order": "RGBA",
+              "clipping": "none",
+              "color_space": "linear_rec709",
+              "pixel_format": "rgba16f",
+              "row_order": "top_to_bottom",
+              "transfer_function": "linear"
+            },
+            "project_schema_version": 1,
+            "region": {
+              "extent": [
+                64.0,
+                32.0
+              ],
+              "origin": [
+                0.0,
+                0.0
+              ],
+              "pixels": [
+                1920,
+                1080
+              ]
+            },
+            "resource_cache_stats": {
+              "disk_raster": {
+                "bytes": 0,
+                "entries": 0,
+                "evictions": 0,
+                "hits": 0,
+                "inserts": 0,
+                "misses": 0
+              },
+              "gpu_pool": {
+                "bytes": 12214272,
+                "entries": 12,
+                "evictions": 0,
+                "hits": 180,
+                "inserts": 192,
+                "misses": 36
+              },
+              "gpu_textures": {
+                "bytes": 33177600,
+                "entries": 24,
+                "evictions": 0,
+                "hits": 60,
+                "inserts": 24,
+                "misses": 24
+              },
+              "persistent_disk_policy": "memory_only",
+              "rejected_disk_entries": 0
+            },
+            "revision": "1",
+            "schema_version": 1,
+            "semantic_versions": {
+              "adjustment_clip": 1,
+              "advanced_text": 2,
+              "blend": 1,
+              "bounds": 1,
+              "clip_mask": 1,
+              "color": "gpu002-color-v1",
+              "composition_media": 1,
+              "coverage": "vec003-grid4-v2",
+              "document": 1,
+              "document_matte": 1,
+              "effects": {
+                "kronello.channel_mixer": 1,
+                "kronello.color.curves": 1,
+                "kronello.color.exposure": 1,
+                "kronello.color.hsl": 1,
+                "kronello.color.levels": 1,
+                "kronello.color.lut": 1,
+                "kronello.corner_pin": 1,
+                "kronello.directional_blur": 1,
+                "kronello.displace": 1,
+                "kronello.drop_shadow": 2,
+                "kronello.gaussian_blur": 2,
+                "kronello.generate": 1,
+                "kronello.glow": 1,
+                "kronello.grain": 1,
+                "kronello.invert": 1,
+                "kronello.keying.chroma": 1,
+                "kronello.keying.luma": 1,
+                "kronello.mosaic": 1,
+                "kronello.radial_blur": 1,
+                "kronello.sharpen": 1,
+                "kronello.stabilize": 1,
+                "kronello.tint": 1,
+                "kronello.vignette": 1
+              },
+              "expression": 3,
+              "frame_interpolation": 1,
+              "generators": {
+                "kronello.solid": 1
+              },
+              "gradient_interpolation": "vec004-explicit-interpolation-v1",
+              "hdr": 1,
+              "interpolation": 1,
+              "layout": 1,
+              "path_operations": 1,
+              "repeater": 1,
+              "reverse_sampling": 1,
+              "simulation": 1,
+              "stroke_geometry": "vec005-local-stroke-v2",
+              "temporal": 1,
+              "time_map": 1,
+              "vector": "render001-kurbo-flatten-v1",
+              "video_input": "nle002-sdr-rgba8-nearest-v1",
+              "visibility": 2
+            },
+            "sequence_number": null,
+            "snapshot_content_hash": "fdb8916e2d0119f737821e6df2d2fd9e38e0f2d51ed4a72afe6db9d3f10d959e",
+            "snapshot_schema_version": 1,
+            "target": {
+              "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+              "kind": "composition"
+            },
+            "time": {
+              "den": "2",
+              "num": "1"
+            },
+            "transfer_stats": {
+              "cpu_upload_control_bytes": 5040,
+              "cpu_upload_control_operations": 48,
+              "cpu_upload_pixel_bytes": 0,
+              "cpu_upload_pixel_operations": 0,
+              "gpu_compute_dispatches": 12,
+              "gpu_copy_bytes": 0,
+              "gpu_copy_operations": 0,
+              "gpu_readback_bytes": 16588848,
+              "gpu_readback_operations": 24,
+              "gpu_wait_operations": 24
+            },
+            "working_space": "linear_rec709"
+          },
+          "render_ms": 36.462455,
+          "sink_ms": 60.453753,
+          "wall_ms": 96.916208
+        },
+        {
+          "iteration": 3,
+          "linear_sha256": "13df367a3307a2745c7ff7f9b05545af27e4cc13cd2e7e3edacf63951f52e721",
+          "metadata": {
+            "backend": "wgpu_rgba16f",
+            "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+            "design_extent": [
+              64.0,
+              32.0
+            ],
+            "design_to_pixel": [
+              [
+                30.0,
+                0.0,
+                -0.0
+              ],
+              [
+                0.0,
+                33.75,
+                -0.0
+              ]
+            ],
+            "display": {
+              "alpha": "straight",
+              "association_space": "srgb",
+              "byte_order": "big_endian",
+              "channel_order": "RGBA",
+              "clipping": "unit_interval_after_output_transform; no_tone_mapping",
+              "color_space": "srgb",
+              "pixel_format": "rgba16_unorm_png",
+              "row_order": "top_to_bottom",
+              "transfer_function": "srgb"
+            },
+            "flatten_tolerance_px": 0.02,
+            "font_locks": [],
+            "frame_index": null,
+            "input_path": "semantic_scene",
+            "numeric": {
+              "alpha": "premultiplied",
+              "association_space": "linear_rec709",
+              "byte_order": "little_endian",
+              "channel_order": "RGBA",
+              "clipping": "none",
+              "color_space": "linear_rec709",
+              "pixel_format": "rgba16f",
+              "row_order": "top_to_bottom",
+              "transfer_function": "linear"
+            },
+            "project_schema_version": 1,
+            "region": {
+              "extent": [
+                64.0,
+                32.0
+              ],
+              "origin": [
+                0.0,
+                0.0
+              ],
+              "pixels": [
+                1920,
+                1080
+              ]
+            },
+            "resource_cache_stats": {
+              "disk_raster": {
+                "bytes": 0,
+                "entries": 0,
+                "evictions": 0,
+                "hits": 0,
+                "inserts": 0,
+                "misses": 0
+              },
+              "gpu_pool": {
+                "bytes": 12214272,
+                "entries": 12,
+                "evictions": 0,
+                "hits": 204,
+                "inserts": 216,
+                "misses": 36
+              },
+              "gpu_textures": {
+                "bytes": 33177600,
+                "entries": 24,
+                "evictions": 0,
+                "hits": 72,
+                "inserts": 24,
+                "misses": 24
+              },
+              "persistent_disk_policy": "memory_only",
+              "rejected_disk_entries": 0
+            },
+            "revision": "1",
+            "schema_version": 1,
+            "semantic_versions": {
+              "adjustment_clip": 1,
+              "advanced_text": 2,
+              "blend": 1,
+              "bounds": 1,
+              "clip_mask": 1,
+              "color": "gpu002-color-v1",
+              "composition_media": 1,
+              "coverage": "vec003-grid4-v2",
+              "document": 1,
+              "document_matte": 1,
+              "effects": {
+                "kronello.channel_mixer": 1,
+                "kronello.color.curves": 1,
+                "kronello.color.exposure": 1,
+                "kronello.color.hsl": 1,
+                "kronello.color.levels": 1,
+                "kronello.color.lut": 1,
+                "kronello.corner_pin": 1,
+                "kronello.directional_blur": 1,
+                "kronello.displace": 1,
+                "kronello.drop_shadow": 2,
+                "kronello.gaussian_blur": 2,
+                "kronello.generate": 1,
+                "kronello.glow": 1,
+                "kronello.grain": 1,
+                "kronello.invert": 1,
+                "kronello.keying.chroma": 1,
+                "kronello.keying.luma": 1,
+                "kronello.mosaic": 1,
+                "kronello.radial_blur": 1,
+                "kronello.sharpen": 1,
+                "kronello.stabilize": 1,
+                "kronello.tint": 1,
+                "kronello.vignette": 1
+              },
+              "expression": 3,
+              "frame_interpolation": 1,
+              "generators": {
+                "kronello.solid": 1
+              },
+              "gradient_interpolation": "vec004-explicit-interpolation-v1",
+              "hdr": 1,
+              "interpolation": 1,
+              "layout": 1,
+              "path_operations": 1,
+              "repeater": 1,
+              "reverse_sampling": 1,
+              "simulation": 1,
+              "stroke_geometry": "vec005-local-stroke-v2",
+              "temporal": 1,
+              "time_map": 1,
+              "vector": "render001-kurbo-flatten-v1",
+              "video_input": "nle002-sdr-rgba8-nearest-v1",
+              "visibility": 2
+            },
+            "sequence_number": null,
+            "snapshot_content_hash": "fdb8916e2d0119f737821e6df2d2fd9e38e0f2d51ed4a72afe6db9d3f10d959e",
+            "snapshot_schema_version": 1,
+            "target": {
+              "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+              "kind": "composition"
+            },
+            "time": {
+              "den": "2",
+              "num": "1"
+            },
+            "transfer_stats": {
+              "cpu_upload_control_bytes": 5040,
+              "cpu_upload_control_operations": 48,
+              "cpu_upload_pixel_bytes": 0,
+              "cpu_upload_pixel_operations": 0,
+              "gpu_compute_dispatches": 12,
+              "gpu_copy_bytes": 0,
+              "gpu_copy_operations": 0,
+              "gpu_readback_bytes": 16588848,
+              "gpu_readback_operations": 24,
+              "gpu_wait_operations": 24
+            },
+            "working_space": "linear_rec709"
+          },
+          "render_ms": 39.818000999999995,
+          "sink_ms": 60.260332,
+          "wall_ms": 100.078333
+        },
+        {
+          "iteration": 4,
+          "linear_sha256": "13df367a3307a2745c7ff7f9b05545af27e4cc13cd2e7e3edacf63951f52e721",
+          "metadata": {
+            "backend": "wgpu_rgba16f",
+            "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+            "design_extent": [
+              64.0,
+              32.0
+            ],
+            "design_to_pixel": [
+              [
+                30.0,
+                0.0,
+                -0.0
+              ],
+              [
+                0.0,
+                33.75,
+                -0.0
+              ]
+            ],
+            "display": {
+              "alpha": "straight",
+              "association_space": "srgb",
+              "byte_order": "big_endian",
+              "channel_order": "RGBA",
+              "clipping": "unit_interval_after_output_transform; no_tone_mapping",
+              "color_space": "srgb",
+              "pixel_format": "rgba16_unorm_png",
+              "row_order": "top_to_bottom",
+              "transfer_function": "srgb"
+            },
+            "flatten_tolerance_px": 0.02,
+            "font_locks": [],
+            "frame_index": null,
+            "input_path": "semantic_scene",
+            "numeric": {
+              "alpha": "premultiplied",
+              "association_space": "linear_rec709",
+              "byte_order": "little_endian",
+              "channel_order": "RGBA",
+              "clipping": "none",
+              "color_space": "linear_rec709",
+              "pixel_format": "rgba16f",
+              "row_order": "top_to_bottom",
+              "transfer_function": "linear"
+            },
+            "project_schema_version": 1,
+            "region": {
+              "extent": [
+                64.0,
+                32.0
+              ],
+              "origin": [
+                0.0,
+                0.0
+              ],
+              "pixels": [
+                1920,
+                1080
+              ]
+            },
+            "resource_cache_stats": {
+              "disk_raster": {
+                "bytes": 0,
+                "entries": 0,
+                "evictions": 0,
+                "hits": 0,
+                "inserts": 0,
+                "misses": 0
+              },
+              "gpu_pool": {
+                "bytes": 12214272,
+                "entries": 12,
+                "evictions": 0,
+                "hits": 300,
+                "inserts": 312,
+                "misses": 36
+              },
+              "gpu_textures": {
+                "bytes": 33177600,
+                "entries": 24,
+                "evictions": 0,
+                "hits": 108,
+                "inserts": 24,
+                "misses": 24
+              },
+              "persistent_disk_policy": "memory_only",
+              "rejected_disk_entries": 0
+            },
+            "revision": "1",
+            "schema_version": 1,
+            "semantic_versions": {
+              "adjustment_clip": 1,
+              "advanced_text": 2,
+              "blend": 1,
+              "bounds": 1,
+              "clip_mask": 1,
+              "color": "gpu002-color-v1",
+              "composition_media": 1,
+              "coverage": "vec003-grid4-v2",
+              "document": 1,
+              "document_matte": 1,
+              "effects": {
+                "kronello.channel_mixer": 1,
+                "kronello.color.curves": 1,
+                "kronello.color.exposure": 1,
+                "kronello.color.hsl": 1,
+                "kronello.color.levels": 1,
+                "kronello.color.lut": 1,
+                "kronello.corner_pin": 1,
+                "kronello.directional_blur": 1,
+                "kronello.displace": 1,
+                "kronello.drop_shadow": 2,
+                "kronello.gaussian_blur": 2,
+                "kronello.generate": 1,
+                "kronello.glow": 1,
+                "kronello.grain": 1,
+                "kronello.invert": 1,
+                "kronello.keying.chroma": 1,
+                "kronello.keying.luma": 1,
+                "kronello.mosaic": 1,
+                "kronello.radial_blur": 1,
+                "kronello.sharpen": 1,
+                "kronello.stabilize": 1,
+                "kronello.tint": 1,
+                "kronello.vignette": 1
+              },
+              "expression": 3,
+              "frame_interpolation": 1,
+              "generators": {
+                "kronello.solid": 1
+              },
+              "gradient_interpolation": "vec004-explicit-interpolation-v1",
+              "hdr": 1,
+              "interpolation": 1,
+              "layout": 1,
+              "path_operations": 1,
+              "repeater": 1,
+              "reverse_sampling": 1,
+              "simulation": 1,
+              "stroke_geometry": "vec005-local-stroke-v2",
+              "temporal": 1,
+              "time_map": 1,
+              "vector": "render001-kurbo-flatten-v1",
+              "video_input": "nle002-sdr-rgba8-nearest-v1",
+              "visibility": 2
+            },
+            "sequence_number": null,
+            "snapshot_content_hash": "fdb8916e2d0119f737821e6df2d2fd9e38e0f2d51ed4a72afe6db9d3f10d959e",
+            "snapshot_schema_version": 1,
+            "target": {
+              "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+              "kind": "composition"
+            },
+            "time": {
+              "den": "2",
+              "num": "1"
+            },
+            "transfer_stats": {
+              "cpu_upload_control_bytes": 5040,
+              "cpu_upload_control_operations": 48,
+              "cpu_upload_pixel_bytes": 0,
+              "cpu_upload_pixel_operations": 0,
+              "gpu_compute_dispatches": 12,
+              "gpu_copy_bytes": 0,
+              "gpu_copy_operations": 0,
+              "gpu_readback_bytes": 16588848,
+              "gpu_readback_operations": 24,
+              "gpu_wait_operations": 24
+            },
+            "working_space": "linear_rec709"
+          },
+          "render_ms": 40.413209,
+          "sink_ms": 60.744791,
+          "wall_ms": 101.158
+        },
+        {
+          "iteration": 5,
+          "linear_sha256": "13df367a3307a2745c7ff7f9b05545af27e4cc13cd2e7e3edacf63951f52e721",
+          "metadata": {
+            "backend": "wgpu_rgba16f",
+            "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+            "design_extent": [
+              64.0,
+              32.0
+            ],
+            "design_to_pixel": [
+              [
+                30.0,
+                0.0,
+                -0.0
+              ],
+              [
+                0.0,
+                33.75,
+                -0.0
+              ]
+            ],
+            "display": {
+              "alpha": "straight",
+              "association_space": "srgb",
+              "byte_order": "big_endian",
+              "channel_order": "RGBA",
+              "clipping": "unit_interval_after_output_transform; no_tone_mapping",
+              "color_space": "srgb",
+              "pixel_format": "rgba16_unorm_png",
+              "row_order": "top_to_bottom",
+              "transfer_function": "srgb"
+            },
+            "flatten_tolerance_px": 0.02,
+            "font_locks": [],
+            "frame_index": null,
+            "input_path": "semantic_scene",
+            "numeric": {
+              "alpha": "premultiplied",
+              "association_space": "linear_rec709",
+              "byte_order": "little_endian",
+              "channel_order": "RGBA",
+              "clipping": "none",
+              "color_space": "linear_rec709",
+              "pixel_format": "rgba16f",
+              "row_order": "top_to_bottom",
+              "transfer_function": "linear"
+            },
+            "project_schema_version": 1,
+            "region": {
+              "extent": [
+                64.0,
+                32.0
+              ],
+              "origin": [
+                0.0,
+                0.0
+              ],
+              "pixels": [
+                1920,
+                1080
+              ]
+            },
+            "resource_cache_stats": {
+              "disk_raster": {
+                "bytes": 0,
+                "entries": 0,
+                "evictions": 0,
+                "hits": 0,
+                "inserts": 0,
+                "misses": 0
+              },
+              "gpu_pool": {
+                "bytes": 12214272,
+                "entries": 12,
+                "evictions": 0,
+                "hits": 324,
+                "inserts": 336,
+                "misses": 36
+              },
+              "gpu_textures": {
+                "bytes": 33177600,
+                "entries": 24,
+                "evictions": 0,
+                "hits": 120,
+                "inserts": 24,
+                "misses": 24
+              },
+              "persistent_disk_policy": "memory_only",
+              "rejected_disk_entries": 0
+            },
+            "revision": "1",
+            "schema_version": 1,
+            "semantic_versions": {
+              "adjustment_clip": 1,
+              "advanced_text": 2,
+              "blend": 1,
+              "bounds": 1,
+              "clip_mask": 1,
+              "color": "gpu002-color-v1",
+              "composition_media": 1,
+              "coverage": "vec003-grid4-v2",
+              "document": 1,
+              "document_matte": 1,
+              "effects": {
+                "kronello.channel_mixer": 1,
+                "kronello.color.curves": 1,
+                "kronello.color.exposure": 1,
+                "kronello.color.hsl": 1,
+                "kronello.color.levels": 1,
+                "kronello.color.lut": 1,
+                "kronello.corner_pin": 1,
+                "kronello.directional_blur": 1,
+                "kronello.displace": 1,
+                "kronello.drop_shadow": 2,
+                "kronello.gaussian_blur": 2,
+                "kronello.generate": 1,
+                "kronello.glow": 1,
+                "kronello.grain": 1,
+                "kronello.invert": 1,
+                "kronello.keying.chroma": 1,
+                "kronello.keying.luma": 1,
+                "kronello.mosaic": 1,
+                "kronello.radial_blur": 1,
+                "kronello.sharpen": 1,
+                "kronello.stabilize": 1,
+                "kronello.tint": 1,
+                "kronello.vignette": 1
+              },
+              "expression": 3,
+              "frame_interpolation": 1,
+              "generators": {
+                "kronello.solid": 1
+              },
+              "gradient_interpolation": "vec004-explicit-interpolation-v1",
+              "hdr": 1,
+              "interpolation": 1,
+              "layout": 1,
+              "path_operations": 1,
+              "repeater": 1,
+              "reverse_sampling": 1,
+              "simulation": 1,
+              "stroke_geometry": "vec005-local-stroke-v2",
+              "temporal": 1,
+              "time_map": 1,
+              "vector": "render001-kurbo-flatten-v1",
+              "video_input": "nle002-sdr-rgba8-nearest-v1",
+              "visibility": 2
+            },
+            "sequence_number": null,
+            "snapshot_content_hash": "fdb8916e2d0119f737821e6df2d2fd9e38e0f2d51ed4a72afe6db9d3f10d959e",
+            "snapshot_schema_version": 1,
+            "target": {
+              "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+              "kind": "composition"
+            },
+            "time": {
+              "den": "2",
+              "num": "1"
+            },
+            "transfer_stats": {
+              "cpu_upload_control_bytes": 5040,
+              "cpu_upload_control_operations": 48,
+              "cpu_upload_pixel_bytes": 0,
+              "cpu_upload_pixel_operations": 0,
+              "gpu_compute_dispatches": 12,
+              "gpu_copy_bytes": 0,
+              "gpu_copy_operations": 0,
+              "gpu_readback_bytes": 16588848,
+              "gpu_readback_operations": 24,
+              "gpu_wait_operations": 24
+            },
+            "working_space": "linear_rec709"
+          },
+          "render_ms": 32.732873000000005,
+          "sink_ms": 61.523877,
+          "wall_ms": 94.25675
+        },
+        {
+          "iteration": 6,
+          "linear_sha256": "13df367a3307a2745c7ff7f9b05545af27e4cc13cd2e7e3edacf63951f52e721",
+          "metadata": {
+            "backend": "wgpu_rgba16f",
+            "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+            "design_extent": [
+              64.0,
+              32.0
+            ],
+            "design_to_pixel": [
+              [
+                30.0,
+                0.0,
+                -0.0
+              ],
+              [
+                0.0,
+                33.75,
+                -0.0
+              ]
+            ],
+            "display": {
+              "alpha": "straight",
+              "association_space": "srgb",
+              "byte_order": "big_endian",
+              "channel_order": "RGBA",
+              "clipping": "unit_interval_after_output_transform; no_tone_mapping",
+              "color_space": "srgb",
+              "pixel_format": "rgba16_unorm_png",
+              "row_order": "top_to_bottom",
+              "transfer_function": "srgb"
+            },
+            "flatten_tolerance_px": 0.02,
+            "font_locks": [],
+            "frame_index": null,
+            "input_path": "semantic_scene",
+            "numeric": {
+              "alpha": "premultiplied",
+              "association_space": "linear_rec709",
+              "byte_order": "little_endian",
+              "channel_order": "RGBA",
+              "clipping": "none",
+              "color_space": "linear_rec709",
+              "pixel_format": "rgba16f",
+              "row_order": "top_to_bottom",
+              "transfer_function": "linear"
+            },
+            "project_schema_version": 1,
+            "region": {
+              "extent": [
+                64.0,
+                32.0
+              ],
+              "origin": [
+                0.0,
+                0.0
+              ],
+              "pixels": [
+                1920,
+                1080
+              ]
+            },
+            "resource_cache_stats": {
+              "disk_raster": {
+                "bytes": 0,
+                "entries": 0,
+                "evictions": 0,
+                "hits": 0,
+                "inserts": 0,
+                "misses": 0
+              },
+              "gpu_pool": {
+                "bytes": 12214272,
+                "entries": 12,
+                "evictions": 0,
+                "hits": 420,
+                "inserts": 432,
+                "misses": 36
+              },
+              "gpu_textures": {
+                "bytes": 33177600,
+                "entries": 24,
+                "evictions": 0,
+                "hits": 156,
+                "inserts": 24,
+                "misses": 24
+              },
+              "persistent_disk_policy": "memory_only",
+              "rejected_disk_entries": 0
+            },
+            "revision": "1",
+            "schema_version": 1,
+            "semantic_versions": {
+              "adjustment_clip": 1,
+              "advanced_text": 2,
+              "blend": 1,
+              "bounds": 1,
+              "clip_mask": 1,
+              "color": "gpu002-color-v1",
+              "composition_media": 1,
+              "coverage": "vec003-grid4-v2",
+              "document": 1,
+              "document_matte": 1,
+              "effects": {
+                "kronello.channel_mixer": 1,
+                "kronello.color.curves": 1,
+                "kronello.color.exposure": 1,
+                "kronello.color.hsl": 1,
+                "kronello.color.levels": 1,
+                "kronello.color.lut": 1,
+                "kronello.corner_pin": 1,
+                "kronello.directional_blur": 1,
+                "kronello.displace": 1,
+                "kronello.drop_shadow": 2,
+                "kronello.gaussian_blur": 2,
+                "kronello.generate": 1,
+                "kronello.glow": 1,
+                "kronello.grain": 1,
+                "kronello.invert": 1,
+                "kronello.keying.chroma": 1,
+                "kronello.keying.luma": 1,
+                "kronello.mosaic": 1,
+                "kronello.radial_blur": 1,
+                "kronello.sharpen": 1,
+                "kronello.stabilize": 1,
+                "kronello.tint": 1,
+                "kronello.vignette": 1
+              },
+              "expression": 3,
+              "frame_interpolation": 1,
+              "generators": {
+                "kronello.solid": 1
+              },
+              "gradient_interpolation": "vec004-explicit-interpolation-v1",
+              "hdr": 1,
+              "interpolation": 1,
+              "layout": 1,
+              "path_operations": 1,
+              "repeater": 1,
+              "reverse_sampling": 1,
+              "simulation": 1,
+              "stroke_geometry": "vec005-local-stroke-v2",
+              "temporal": 1,
+              "time_map": 1,
+              "vector": "render001-kurbo-flatten-v1",
+              "video_input": "nle002-sdr-rgba8-nearest-v1",
+              "visibility": 2
+            },
+            "sequence_number": null,
+            "snapshot_content_hash": "fdb8916e2d0119f737821e6df2d2fd9e38e0f2d51ed4a72afe6db9d3f10d959e",
+            "snapshot_schema_version": 1,
+            "target": {
+              "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+              "kind": "composition"
+            },
+            "time": {
+              "den": "2",
+              "num": "1"
+            },
+            "transfer_stats": {
+              "cpu_upload_control_bytes": 5040,
+              "cpu_upload_control_operations": 48,
+              "cpu_upload_pixel_bytes": 0,
+              "cpu_upload_pixel_operations": 0,
+              "gpu_compute_dispatches": 12,
+              "gpu_copy_bytes": 0,
+              "gpu_copy_operations": 0,
+              "gpu_readback_bytes": 16588848,
+              "gpu_readback_operations": 24,
+              "gpu_wait_operations": 24
+            },
+            "working_space": "linear_rec709"
+          },
+          "render_ms": 53.455166999999996,
+          "sink_ms": 63.99479099999999,
+          "wall_ms": 117.449958
+        },
+        {
+          "iteration": 7,
+          "linear_sha256": "13df367a3307a2745c7ff7f9b05545af27e4cc13cd2e7e3edacf63951f52e721",
+          "metadata": {
+            "backend": "wgpu_rgba16f",
+            "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+            "design_extent": [
+              64.0,
+              32.0
+            ],
+            "design_to_pixel": [
+              [
+                30.0,
+                0.0,
+                -0.0
+              ],
+              [
+                0.0,
+                33.75,
+                -0.0
+              ]
+            ],
+            "display": {
+              "alpha": "straight",
+              "association_space": "srgb",
+              "byte_order": "big_endian",
+              "channel_order": "RGBA",
+              "clipping": "unit_interval_after_output_transform; no_tone_mapping",
+              "color_space": "srgb",
+              "pixel_format": "rgba16_unorm_png",
+              "row_order": "top_to_bottom",
+              "transfer_function": "srgb"
+            },
+            "flatten_tolerance_px": 0.02,
+            "font_locks": [],
+            "frame_index": null,
+            "input_path": "semantic_scene",
+            "numeric": {
+              "alpha": "premultiplied",
+              "association_space": "linear_rec709",
+              "byte_order": "little_endian",
+              "channel_order": "RGBA",
+              "clipping": "none",
+              "color_space": "linear_rec709",
+              "pixel_format": "rgba16f",
+              "row_order": "top_to_bottom",
+              "transfer_function": "linear"
+            },
+            "project_schema_version": 1,
+            "region": {
+              "extent": [
+                64.0,
+                32.0
+              ],
+              "origin": [
+                0.0,
+                0.0
+              ],
+              "pixels": [
+                1920,
+                1080
+              ]
+            },
+            "resource_cache_stats": {
+              "disk_raster": {
+                "bytes": 0,
+                "entries": 0,
+                "evictions": 0,
+                "hits": 0,
+                "inserts": 0,
+                "misses": 0
+              },
+              "gpu_pool": {
+                "bytes": 12214272,
+                "entries": 12,
+                "evictions": 0,
+                "hits": 444,
+                "inserts": 456,
+                "misses": 36
+              },
+              "gpu_textures": {
+                "bytes": 33177600,
+                "entries": 24,
+                "evictions": 0,
+                "hits": 168,
+                "inserts": 24,
+                "misses": 24
+              },
+              "persistent_disk_policy": "memory_only",
+              "rejected_disk_entries": 0
+            },
+            "revision": "1",
+            "schema_version": 1,
+            "semantic_versions": {
+              "adjustment_clip": 1,
+              "advanced_text": 2,
+              "blend": 1,
+              "bounds": 1,
+              "clip_mask": 1,
+              "color": "gpu002-color-v1",
+              "composition_media": 1,
+              "coverage": "vec003-grid4-v2",
+              "document": 1,
+              "document_matte": 1,
+              "effects": {
+                "kronello.channel_mixer": 1,
+                "kronello.color.curves": 1,
+                "kronello.color.exposure": 1,
+                "kronello.color.hsl": 1,
+                "kronello.color.levels": 1,
+                "kronello.color.lut": 1,
+                "kronello.corner_pin": 1,
+                "kronello.directional_blur": 1,
+                "kronello.displace": 1,
+                "kronello.drop_shadow": 2,
+                "kronello.gaussian_blur": 2,
+                "kronello.generate": 1,
+                "kronello.glow": 1,
+                "kronello.grain": 1,
+                "kronello.invert": 1,
+                "kronello.keying.chroma": 1,
+                "kronello.keying.luma": 1,
+                "kronello.mosaic": 1,
+                "kronello.radial_blur": 1,
+                "kronello.sharpen": 1,
+                "kronello.stabilize": 1,
+                "kronello.tint": 1,
+                "kronello.vignette": 1
+              },
+              "expression": 3,
+              "frame_interpolation": 1,
+              "generators": {
+                "kronello.solid": 1
+              },
+              "gradient_interpolation": "vec004-explicit-interpolation-v1",
+              "hdr": 1,
+              "interpolation": 1,
+              "layout": 1,
+              "path_operations": 1,
+              "repeater": 1,
+              "reverse_sampling": 1,
+              "simulation": 1,
+              "stroke_geometry": "vec005-local-stroke-v2",
+              "temporal": 1,
+              "time_map": 1,
+              "vector": "render001-kurbo-flatten-v1",
+              "video_input": "nle002-sdr-rgba8-nearest-v1",
+              "visibility": 2
+            },
+            "sequence_number": null,
+            "snapshot_content_hash": "fdb8916e2d0119f737821e6df2d2fd9e38e0f2d51ed4a72afe6db9d3f10d959e",
+            "snapshot_schema_version": 1,
+            "target": {
+              "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+              "kind": "composition"
+            },
+            "time": {
+              "den": "2",
+              "num": "1"
+            },
+            "transfer_stats": {
+              "cpu_upload_control_bytes": 5040,
+              "cpu_upload_control_operations": 48,
+              "cpu_upload_pixel_bytes": 0,
+              "cpu_upload_pixel_operations": 0,
+              "gpu_compute_dispatches": 12,
+              "gpu_copy_bytes": 0,
+              "gpu_copy_operations": 0,
+              "gpu_readback_bytes": 16588848,
+              "gpu_readback_operations": 24,
+              "gpu_wait_operations": 24
+            },
+            "working_space": "linear_rec709"
+          },
+          "render_ms": 39.241084,
+          "sink_ms": 62.304916,
+          "wall_ms": 101.54599999999999
+        },
+        {
+          "iteration": 8,
+          "linear_sha256": "13df367a3307a2745c7ff7f9b05545af27e4cc13cd2e7e3edacf63951f52e721",
+          "metadata": {
+            "backend": "wgpu_rgba16f",
+            "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+            "design_extent": [
+              64.0,
+              32.0
+            ],
+            "design_to_pixel": [
+              [
+                30.0,
+                0.0,
+                -0.0
+              ],
+              [
+                0.0,
+                33.75,
+                -0.0
+              ]
+            ],
+            "display": {
+              "alpha": "straight",
+              "association_space": "srgb",
+              "byte_order": "big_endian",
+              "channel_order": "RGBA",
+              "clipping": "unit_interval_after_output_transform; no_tone_mapping",
+              "color_space": "srgb",
+              "pixel_format": "rgba16_unorm_png",
+              "row_order": "top_to_bottom",
+              "transfer_function": "srgb"
+            },
+            "flatten_tolerance_px": 0.02,
+            "font_locks": [],
+            "frame_index": null,
+            "input_path": "semantic_scene",
+            "numeric": {
+              "alpha": "premultiplied",
+              "association_space": "linear_rec709",
+              "byte_order": "little_endian",
+              "channel_order": "RGBA",
+              "clipping": "none",
+              "color_space": "linear_rec709",
+              "pixel_format": "rgba16f",
+              "row_order": "top_to_bottom",
+              "transfer_function": "linear"
+            },
+            "project_schema_version": 1,
+            "region": {
+              "extent": [
+                64.0,
+                32.0
+              ],
+              "origin": [
+                0.0,
+                0.0
+              ],
+              "pixels": [
+                1920,
+                1080
+              ]
+            },
+            "resource_cache_stats": {
+              "disk_raster": {
+                "bytes": 0,
+                "entries": 0,
+                "evictions": 0,
+                "hits": 0,
+                "inserts": 0,
+                "misses": 0
+              },
+              "gpu_pool": {
+                "bytes": 12214272,
+                "entries": 12,
+                "evictions": 0,
+                "hits": 540,
+                "inserts": 552,
+                "misses": 36
+              },
+              "gpu_textures": {
+                "bytes": 33177600,
+                "entries": 24,
+                "evictions": 0,
+                "hits": 204,
+                "inserts": 24,
+                "misses": 24
+              },
+              "persistent_disk_policy": "memory_only",
+              "rejected_disk_entries": 0
+            },
+            "revision": "1",
+            "schema_version": 1,
+            "semantic_versions": {
+              "adjustment_clip": 1,
+              "advanced_text": 2,
+              "blend": 1,
+              "bounds": 1,
+              "clip_mask": 1,
+              "color": "gpu002-color-v1",
+              "composition_media": 1,
+              "coverage": "vec003-grid4-v2",
+              "document": 1,
+              "document_matte": 1,
+              "effects": {
+                "kronello.channel_mixer": 1,
+                "kronello.color.curves": 1,
+                "kronello.color.exposure": 1,
+                "kronello.color.hsl": 1,
+                "kronello.color.levels": 1,
+                "kronello.color.lut": 1,
+                "kronello.corner_pin": 1,
+                "kronello.directional_blur": 1,
+                "kronello.displace": 1,
+                "kronello.drop_shadow": 2,
+                "kronello.gaussian_blur": 2,
+                "kronello.generate": 1,
+                "kronello.glow": 1,
+                "kronello.grain": 1,
+                "kronello.invert": 1,
+                "kronello.keying.chroma": 1,
+                "kronello.keying.luma": 1,
+                "kronello.mosaic": 1,
+                "kronello.radial_blur": 1,
+                "kronello.sharpen": 1,
+                "kronello.stabilize": 1,
+                "kronello.tint": 1,
+                "kronello.vignette": 1
+              },
+              "expression": 3,
+              "frame_interpolation": 1,
+              "generators": {
+                "kronello.solid": 1
+              },
+              "gradient_interpolation": "vec004-explicit-interpolation-v1",
+              "hdr": 1,
+              "interpolation": 1,
+              "layout": 1,
+              "path_operations": 1,
+              "repeater": 1,
+              "reverse_sampling": 1,
+              "simulation": 1,
+              "stroke_geometry": "vec005-local-stroke-v2",
+              "temporal": 1,
+              "time_map": 1,
+              "vector": "render001-kurbo-flatten-v1",
+              "video_input": "nle002-sdr-rgba8-nearest-v1",
+              "visibility": 2
+            },
+            "sequence_number": null,
+            "snapshot_content_hash": "fdb8916e2d0119f737821e6df2d2fd9e38e0f2d51ed4a72afe6db9d3f10d959e",
+            "snapshot_schema_version": 1,
+            "target": {
+              "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+              "kind": "composition"
+            },
+            "time": {
+              "den": "2",
+              "num": "1"
+            },
+            "transfer_stats": {
+              "cpu_upload_control_bytes": 5040,
+              "cpu_upload_control_operations": 48,
+              "cpu_upload_pixel_bytes": 0,
+              "cpu_upload_pixel_operations": 0,
+              "gpu_compute_dispatches": 12,
+              "gpu_copy_bytes": 0,
+              "gpu_copy_operations": 0,
+              "gpu_readback_bytes": 16588848,
+              "gpu_readback_operations": 24,
+              "gpu_wait_operations": 24
+            },
+            "working_space": "linear_rec709"
+          },
+          "render_ms": 32.83908,
+          "sink_ms": 60.473711,
+          "wall_ms": 93.312791
+        }
+      ],
+      "paired": {
+        "cold_ms": 274.25233399999996,
+        "warm_p50_ms": 202.873583,
+        "warm_p95_ms": 282.805125
+      },
+      "paired_init_ms": 19.60025,
+      "paired_trials": [
+        {
+          "iteration": 0,
+          "linear_sha256": "13df367a3307a2745c7ff7f9b05545af27e4cc13cd2e7e3edacf63951f52e721",
+          "metadata": {
+            "backend": "wgpu_rgba16f",
+            "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+            "design_extent": [
+              64.0,
+              32.0
+            ],
+            "design_to_pixel": [
+              [
+                30.0,
+                0.0,
+                -0.0
+              ],
+              [
+                0.0,
+                33.75,
+                -0.0
+              ]
+            ],
+            "display": {
+              "alpha": "straight",
+              "association_space": "srgb",
+              "byte_order": "big_endian",
+              "channel_order": "RGBA",
+              "clipping": "unit_interval_after_output_transform; no_tone_mapping",
+              "color_space": "srgb",
+              "pixel_format": "rgba16_unorm_png",
+              "row_order": "top_to_bottom",
+              "transfer_function": "srgb"
+            },
+            "flatten_tolerance_px": 0.02,
+            "font_locks": [],
+            "frame_index": null,
+            "input_path": "semantic_scene",
+            "numeric": {
+              "alpha": "premultiplied",
+              "association_space": "linear_rec709",
+              "byte_order": "little_endian",
+              "channel_order": "RGBA",
+              "clipping": "none",
+              "color_space": "linear_rec709",
+              "pixel_format": "rgba16f",
+              "row_order": "top_to_bottom",
+              "transfer_function": "linear"
+            },
+            "project_schema_version": 1,
+            "region": {
+              "extent": [
+                64.0,
+                32.0
+              ],
+              "origin": [
+                0.0,
+                0.0
+              ],
+              "pixels": [
+                1920,
+                1080
+              ]
+            },
+            "resource_cache_stats": {
+              "disk_raster": {
+                "bytes": 0,
+                "entries": 0,
+                "evictions": 0,
+                "hits": 0,
+                "inserts": 0,
+                "misses": 0
+              },
+              "gpu_pool": {
+                "bytes": 12214272,
+                "entries": 12,
+                "evictions": 0,
+                "hits": 36,
+                "inserts": 48,
+                "misses": 36
+              },
+              "gpu_textures": {
+                "bytes": 33177600,
+                "entries": 24,
+                "evictions": 0,
+                "hits": 0,
+                "inserts": 24,
+                "misses": 24
+              },
+              "persistent_disk_policy": "memory_only",
+              "rejected_disk_entries": 0
+            },
+            "revision": "1",
+            "schema_version": 1,
+            "semantic_versions": {
+              "adjustment_clip": 1,
+              "advanced_text": 2,
+              "blend": 1,
+              "bounds": 1,
+              "clip_mask": 1,
+              "color": "gpu002-color-v1",
+              "composition_media": 1,
+              "coverage": "vec003-grid4-v2",
+              "document": 1,
+              "document_matte": 1,
+              "effects": {
+                "kronello.channel_mixer": 1,
+                "kronello.color.curves": 1,
+                "kronello.color.exposure": 1,
+                "kronello.color.hsl": 1,
+                "kronello.color.levels": 1,
+                "kronello.color.lut": 1,
+                "kronello.corner_pin": 1,
+                "kronello.directional_blur": 1,
+                "kronello.displace": 1,
+                "kronello.drop_shadow": 2,
+                "kronello.gaussian_blur": 2,
+                "kronello.generate": 1,
+                "kronello.glow": 1,
+                "kronello.grain": 1,
+                "kronello.invert": 1,
+                "kronello.keying.chroma": 1,
+                "kronello.keying.luma": 1,
+                "kronello.mosaic": 1,
+                "kronello.radial_blur": 1,
+                "kronello.sharpen": 1,
+                "kronello.stabilize": 1,
+                "kronello.tint": 1,
+                "kronello.vignette": 1
+              },
+              "expression": 3,
+              "frame_interpolation": 1,
+              "generators": {
+                "kronello.solid": 1
+              },
+              "gradient_interpolation": "vec004-explicit-interpolation-v1",
+              "hdr": 1,
+              "interpolation": 1,
+              "layout": 1,
+              "path_operations": 1,
+              "repeater": 1,
+              "reverse_sampling": 1,
+              "simulation": 1,
+              "stroke_geometry": "vec005-local-stroke-v2",
+              "temporal": 1,
+              "time_map": 1,
+              "vector": "render001-kurbo-flatten-v1",
+              "video_input": "nle002-sdr-rgba8-nearest-v1",
+              "visibility": 2
+            },
+            "sequence_number": null,
+            "snapshot_content_hash": "fdb8916e2d0119f737821e6df2d2fd9e38e0f2d51ed4a72afe6db9d3f10d959e",
+            "snapshot_schema_version": 1,
+            "target": {
+              "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+              "kind": "composition"
+            },
+            "time": {
+              "den": "2",
+              "num": "1"
+            },
+            "transfer_stats": {
+              "cpu_upload_control_bytes": 29040,
+              "cpu_upload_control_operations": 192,
+              "cpu_upload_pixel_bytes": 0,
+              "cpu_upload_pixel_operations": 0,
+              "gpu_compute_dispatches": 60,
+              "gpu_copy_bytes": 0,
+              "gpu_copy_operations": 0,
+              "gpu_readback_bytes": 33177648,
+              "gpu_readback_operations": 36,
+              "gpu_wait_operations": 36
+            },
+            "working_space": "linear_rec709"
+          },
+          "render_ms": 274.25233399999996,
+          "sink_ms": 60.602416,
+          "wall_ms": 334.85474999999997
+        },
+        {
+          "iteration": 1,
+          "linear_sha256": "13df367a3307a2745c7ff7f9b05545af27e4cc13cd2e7e3edacf63951f52e721",
+          "metadata": {
+            "backend": "wgpu_rgba16f",
+            "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+            "design_extent": [
+              64.0,
+              32.0
+            ],
+            "design_to_pixel": [
+              [
+                30.0,
+                0.0,
+                -0.0
+              ],
+              [
+                0.0,
+                33.75,
+                -0.0
+              ]
+            ],
+            "display": {
+              "alpha": "straight",
+              "association_space": "srgb",
+              "byte_order": "big_endian",
+              "channel_order": "RGBA",
+              "clipping": "unit_interval_after_output_transform; no_tone_mapping",
+              "color_space": "srgb",
+              "pixel_format": "rgba16_unorm_png",
+              "row_order": "top_to_bottom",
+              "transfer_function": "srgb"
+            },
+            "flatten_tolerance_px": 0.02,
+            "font_locks": [],
+            "frame_index": null,
+            "input_path": "semantic_scene",
+            "numeric": {
+              "alpha": "premultiplied",
+              "association_space": "linear_rec709",
+              "byte_order": "little_endian",
+              "channel_order": "RGBA",
+              "clipping": "none",
+              "color_space": "linear_rec709",
+              "pixel_format": "rgba16f",
+              "row_order": "top_to_bottom",
+              "transfer_function": "linear"
+            },
+            "project_schema_version": 1,
+            "region": {
+              "extent": [
+                64.0,
+                32.0
+              ],
+              "origin": [
+                0.0,
+                0.0
+              ],
+              "pixels": [
+                1920,
+                1080
+              ]
+            },
+            "resource_cache_stats": {
+              "disk_raster": {
+                "bytes": 0,
+                "entries": 0,
+                "evictions": 0,
+                "hits": 0,
+                "inserts": 0,
+                "misses": 0
+              },
+              "gpu_pool": {
+                "bytes": 12214272,
+                "entries": 12,
+                "evictions": 0,
+                "hits": 120,
+                "inserts": 132,
+                "misses": 36
+              },
+              "gpu_textures": {
+                "bytes": 33177600,
+                "entries": 24,
+                "evictions": 0,
+                "hits": 36,
+                "inserts": 24,
+                "misses": 24
+              },
+              "persistent_disk_policy": "memory_only",
+              "rejected_disk_entries": 0
+            },
+            "revision": "1",
+            "schema_version": 1,
+            "semantic_versions": {
+              "adjustment_clip": 1,
+              "advanced_text": 2,
+              "blend": 1,
+              "bounds": 1,
+              "clip_mask": 1,
+              "color": "gpu002-color-v1",
+              "composition_media": 1,
+              "coverage": "vec003-grid4-v2",
+              "document": 1,
+              "document_matte": 1,
+              "effects": {
+                "kronello.channel_mixer": 1,
+                "kronello.color.curves": 1,
+                "kronello.color.exposure": 1,
+                "kronello.color.hsl": 1,
+                "kronello.color.levels": 1,
+                "kronello.color.lut": 1,
+                "kronello.corner_pin": 1,
+                "kronello.directional_blur": 1,
+                "kronello.displace": 1,
+                "kronello.drop_shadow": 2,
+                "kronello.gaussian_blur": 2,
+                "kronello.generate": 1,
+                "kronello.glow": 1,
+                "kronello.grain": 1,
+                "kronello.invert": 1,
+                "kronello.keying.chroma": 1,
+                "kronello.keying.luma": 1,
+                "kronello.mosaic": 1,
+                "kronello.radial_blur": 1,
+                "kronello.sharpen": 1,
+                "kronello.stabilize": 1,
+                "kronello.tint": 1,
+                "kronello.vignette": 1
+              },
+              "expression": 3,
+              "frame_interpolation": 1,
+              "generators": {
+                "kronello.solid": 1
+              },
+              "gradient_interpolation": "vec004-explicit-interpolation-v1",
+              "hdr": 1,
+              "interpolation": 1,
+              "layout": 1,
+              "path_operations": 1,
+              "repeater": 1,
+              "reverse_sampling": 1,
+              "simulation": 1,
+              "stroke_geometry": "vec005-local-stroke-v2",
+              "temporal": 1,
+              "time_map": 1,
+              "vector": "render001-kurbo-flatten-v1",
+              "video_input": "nle002-sdr-rgba8-nearest-v1",
+              "visibility": 2
+            },
+            "sequence_number": null,
+            "snapshot_content_hash": "fdb8916e2d0119f737821e6df2d2fd9e38e0f2d51ed4a72afe6db9d3f10d959e",
+            "snapshot_schema_version": 1,
+            "target": {
+              "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+              "kind": "composition"
+            },
+            "time": {
+              "den": "2",
+              "num": "1"
+            },
+            "transfer_stats": {
+              "cpu_upload_control_bytes": 10032,
+              "cpu_upload_control_operations": 84,
+              "cpu_upload_pixel_bytes": 0,
+              "cpu_upload_pixel_operations": 0,
+              "gpu_compute_dispatches": 24,
+              "gpu_copy_bytes": 0,
+              "gpu_copy_operations": 0,
+              "gpu_readback_bytes": 33177648,
+              "gpu_readback_operations": 36,
+              "gpu_wait_operations": 36
+            },
+            "working_space": "linear_rec709"
+          },
+          "render_ms": 64.723086,
+          "sink_ms": 60.442289,
+          "wall_ms": 125.165375
+        },
+        {
+          "iteration": 2,
+          "linear_sha256": "13df367a3307a2745c7ff7f9b05545af27e4cc13cd2e7e3edacf63951f52e721",
+          "metadata": {
+            "backend": "wgpu_rgba16f",
+            "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+            "design_extent": [
+              64.0,
+              32.0
+            ],
+            "design_to_pixel": [
+              [
+                30.0,
+                0.0,
+                -0.0
+              ],
+              [
+                0.0,
+                33.75,
+                -0.0
+              ]
+            ],
+            "display": {
+              "alpha": "straight",
+              "association_space": "srgb",
+              "byte_order": "big_endian",
+              "channel_order": "RGBA",
+              "clipping": "unit_interval_after_output_transform; no_tone_mapping",
+              "color_space": "srgb",
+              "pixel_format": "rgba16_unorm_png",
+              "row_order": "top_to_bottom",
+              "transfer_function": "srgb"
+            },
+            "flatten_tolerance_px": 0.02,
+            "font_locks": [],
+            "frame_index": null,
+            "input_path": "semantic_scene",
+            "numeric": {
+              "alpha": "premultiplied",
+              "association_space": "linear_rec709",
+              "byte_order": "little_endian",
+              "channel_order": "RGBA",
+              "clipping": "none",
+              "color_space": "linear_rec709",
+              "pixel_format": "rgba16f",
+              "row_order": "top_to_bottom",
+              "transfer_function": "linear"
+            },
+            "project_schema_version": 1,
+            "region": {
+              "extent": [
+                64.0,
+                32.0
+              ],
+              "origin": [
+                0.0,
+                0.0
+              ],
+              "pixels": [
+                1920,
+                1080
+              ]
+            },
+            "resource_cache_stats": {
+              "disk_raster": {
+                "bytes": 0,
+                "entries": 0,
+                "evictions": 0,
+                "hits": 0,
+                "inserts": 0,
+                "misses": 0
+              },
+              "gpu_pool": {
+                "bytes": 12214272,
+                "entries": 12,
+                "evictions": 0,
+                "hits": 156,
+                "inserts": 168,
+                "misses": 36
+              },
+              "gpu_textures": {
+                "bytes": 33177600,
+                "entries": 24,
+                "evictions": 0,
+                "hits": 48,
+                "inserts": 24,
+                "misses": 24
+              },
+              "persistent_disk_policy": "memory_only",
+              "rejected_disk_entries": 0
+            },
+            "revision": "1",
+            "schema_version": 1,
+            "semantic_versions": {
+              "adjustment_clip": 1,
+              "advanced_text": 2,
+              "blend": 1,
+              "bounds": 1,
+              "clip_mask": 1,
+              "color": "gpu002-color-v1",
+              "composition_media": 1,
+              "coverage": "vec003-grid4-v2",
+              "document": 1,
+              "document_matte": 1,
+              "effects": {
+                "kronello.channel_mixer": 1,
+                "kronello.color.curves": 1,
+                "kronello.color.exposure": 1,
+                "kronello.color.hsl": 1,
+                "kronello.color.levels": 1,
+                "kronello.color.lut": 1,
+                "kronello.corner_pin": 1,
+                "kronello.directional_blur": 1,
+                "kronello.displace": 1,
+                "kronello.drop_shadow": 2,
+                "kronello.gaussian_blur": 2,
+                "kronello.generate": 1,
+                "kronello.glow": 1,
+                "kronello.grain": 1,
+                "kronello.invert": 1,
+                "kronello.keying.chroma": 1,
+                "kronello.keying.luma": 1,
+                "kronello.mosaic": 1,
+                "kronello.radial_blur": 1,
+                "kronello.sharpen": 1,
+                "kronello.stabilize": 1,
+                "kronello.tint": 1,
+                "kronello.vignette": 1
+              },
+              "expression": 3,
+              "frame_interpolation": 1,
+              "generators": {
+                "kronello.solid": 1
+              },
+              "gradient_interpolation": "vec004-explicit-interpolation-v1",
+              "hdr": 1,
+              "interpolation": 1,
+              "layout": 1,
+              "path_operations": 1,
+              "repeater": 1,
+              "reverse_sampling": 1,
+              "simulation": 1,
+              "stroke_geometry": "vec005-local-stroke-v2",
+              "temporal": 1,
+              "time_map": 1,
+              "vector": "render001-kurbo-flatten-v1",
+              "video_input": "nle002-sdr-rgba8-nearest-v1",
+              "visibility": 2
+            },
+            "sequence_number": null,
+            "snapshot_content_hash": "fdb8916e2d0119f737821e6df2d2fd9e38e0f2d51ed4a72afe6db9d3f10d959e",
+            "snapshot_schema_version": 1,
+            "target": {
+              "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+              "kind": "composition"
+            },
+            "time": {
+              "den": "2",
+              "num": "1"
+            },
+            "transfer_stats": {
+              "cpu_upload_control_bytes": 10032,
+              "cpu_upload_control_operations": 84,
+              "cpu_upload_pixel_bytes": 0,
+              "cpu_upload_pixel_operations": 0,
+              "gpu_compute_dispatches": 24,
+              "gpu_copy_bytes": 0,
+              "gpu_copy_operations": 0,
+              "gpu_readback_bytes": 33177648,
+              "gpu_readback_operations": 36,
+              "gpu_wait_operations": 36
+            },
+            "working_space": "linear_rec709"
+          },
+          "render_ms": 231.964458,
+          "sink_ms": 61.154459,
+          "wall_ms": 293.11891699999995
+        },
+        {
+          "iteration": 3,
+          "linear_sha256": "13df367a3307a2745c7ff7f9b05545af27e4cc13cd2e7e3edacf63951f52e721",
+          "metadata": {
+            "backend": "wgpu_rgba16f",
+            "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+            "design_extent": [
+              64.0,
+              32.0
+            ],
+            "design_to_pixel": [
+              [
+                30.0,
+                0.0,
+                -0.0
+              ],
+              [
+                0.0,
+                33.75,
+                -0.0
+              ]
+            ],
+            "display": {
+              "alpha": "straight",
+              "association_space": "srgb",
+              "byte_order": "big_endian",
+              "channel_order": "RGBA",
+              "clipping": "unit_interval_after_output_transform; no_tone_mapping",
+              "color_space": "srgb",
+              "pixel_format": "rgba16_unorm_png",
+              "row_order": "top_to_bottom",
+              "transfer_function": "srgb"
+            },
+            "flatten_tolerance_px": 0.02,
+            "font_locks": [],
+            "frame_index": null,
+            "input_path": "semantic_scene",
+            "numeric": {
+              "alpha": "premultiplied",
+              "association_space": "linear_rec709",
+              "byte_order": "little_endian",
+              "channel_order": "RGBA",
+              "clipping": "none",
+              "color_space": "linear_rec709",
+              "pixel_format": "rgba16f",
+              "row_order": "top_to_bottom",
+              "transfer_function": "linear"
+            },
+            "project_schema_version": 1,
+            "region": {
+              "extent": [
+                64.0,
+                32.0
+              ],
+              "origin": [
+                0.0,
+                0.0
+              ],
+              "pixels": [
+                1920,
+                1080
+              ]
+            },
+            "resource_cache_stats": {
+              "disk_raster": {
+                "bytes": 0,
+                "entries": 0,
+                "evictions": 0,
+                "hits": 0,
+                "inserts": 0,
+                "misses": 0
+              },
+              "gpu_pool": {
+                "bytes": 12214272,
+                "entries": 12,
+                "evictions": 0,
+                "hits": 240,
+                "inserts": 252,
+                "misses": 36
+              },
+              "gpu_textures": {
+                "bytes": 33177600,
+                "entries": 24,
+                "evictions": 0,
+                "hits": 84,
+                "inserts": 24,
+                "misses": 24
+              },
+              "persistent_disk_policy": "memory_only",
+              "rejected_disk_entries": 0
+            },
+            "revision": "1",
+            "schema_version": 1,
+            "semantic_versions": {
+              "adjustment_clip": 1,
+              "advanced_text": 2,
+              "blend": 1,
+              "bounds": 1,
+              "clip_mask": 1,
+              "color": "gpu002-color-v1",
+              "composition_media": 1,
+              "coverage": "vec003-grid4-v2",
+              "document": 1,
+              "document_matte": 1,
+              "effects": {
+                "kronello.channel_mixer": 1,
+                "kronello.color.curves": 1,
+                "kronello.color.exposure": 1,
+                "kronello.color.hsl": 1,
+                "kronello.color.levels": 1,
+                "kronello.color.lut": 1,
+                "kronello.corner_pin": 1,
+                "kronello.directional_blur": 1,
+                "kronello.displace": 1,
+                "kronello.drop_shadow": 2,
+                "kronello.gaussian_blur": 2,
+                "kronello.generate": 1,
+                "kronello.glow": 1,
+                "kronello.grain": 1,
+                "kronello.invert": 1,
+                "kronello.keying.chroma": 1,
+                "kronello.keying.luma": 1,
+                "kronello.mosaic": 1,
+                "kronello.radial_blur": 1,
+                "kronello.sharpen": 1,
+                "kronello.stabilize": 1,
+                "kronello.tint": 1,
+                "kronello.vignette": 1
+              },
+              "expression": 3,
+              "frame_interpolation": 1,
+              "generators": {
+                "kronello.solid": 1
+              },
+              "gradient_interpolation": "vec004-explicit-interpolation-v1",
+              "hdr": 1,
+              "interpolation": 1,
+              "layout": 1,
+              "path_operations": 1,
+              "repeater": 1,
+              "reverse_sampling": 1,
+              "simulation": 1,
+              "stroke_geometry": "vec005-local-stroke-v2",
+              "temporal": 1,
+              "time_map": 1,
+              "vector": "render001-kurbo-flatten-v1",
+              "video_input": "nle002-sdr-rgba8-nearest-v1",
+              "visibility": 2
+            },
+            "sequence_number": null,
+            "snapshot_content_hash": "fdb8916e2d0119f737821e6df2d2fd9e38e0f2d51ed4a72afe6db9d3f10d959e",
+            "snapshot_schema_version": 1,
+            "target": {
+              "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+              "kind": "composition"
+            },
+            "time": {
+              "den": "2",
+              "num": "1"
+            },
+            "transfer_stats": {
+              "cpu_upload_control_bytes": 10032,
+              "cpu_upload_control_operations": 84,
+              "cpu_upload_pixel_bytes": 0,
+              "cpu_upload_pixel_operations": 0,
+              "gpu_compute_dispatches": 24,
+              "gpu_copy_bytes": 0,
+              "gpu_copy_operations": 0,
+              "gpu_readback_bytes": 33177648,
+              "gpu_readback_operations": 36,
+              "gpu_wait_operations": 36
+            },
+            "working_space": "linear_rec709"
+          },
+          "render_ms": 112.251376,
+          "sink_ms": 60.580374,
+          "wall_ms": 172.83175
+        },
+        {
+          "iteration": 4,
+          "linear_sha256": "13df367a3307a2745c7ff7f9b05545af27e4cc13cd2e7e3edacf63951f52e721",
+          "metadata": {
+            "backend": "wgpu_rgba16f",
+            "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+            "design_extent": [
+              64.0,
+              32.0
+            ],
+            "design_to_pixel": [
+              [
+                30.0,
+                0.0,
+                -0.0
+              ],
+              [
+                0.0,
+                33.75,
+                -0.0
+              ]
+            ],
+            "display": {
+              "alpha": "straight",
+              "association_space": "srgb",
+              "byte_order": "big_endian",
+              "channel_order": "RGBA",
+              "clipping": "unit_interval_after_output_transform; no_tone_mapping",
+              "color_space": "srgb",
+              "pixel_format": "rgba16_unorm_png",
+              "row_order": "top_to_bottom",
+              "transfer_function": "srgb"
+            },
+            "flatten_tolerance_px": 0.02,
+            "font_locks": [],
+            "frame_index": null,
+            "input_path": "semantic_scene",
+            "numeric": {
+              "alpha": "premultiplied",
+              "association_space": "linear_rec709",
+              "byte_order": "little_endian",
+              "channel_order": "RGBA",
+              "clipping": "none",
+              "color_space": "linear_rec709",
+              "pixel_format": "rgba16f",
+              "row_order": "top_to_bottom",
+              "transfer_function": "linear"
+            },
+            "project_schema_version": 1,
+            "region": {
+              "extent": [
+                64.0,
+                32.0
+              ],
+              "origin": [
+                0.0,
+                0.0
+              ],
+              "pixels": [
+                1920,
+                1080
+              ]
+            },
+            "resource_cache_stats": {
+              "disk_raster": {
+                "bytes": 0,
+                "entries": 0,
+                "evictions": 0,
+                "hits": 0,
+                "inserts": 0,
+                "misses": 0
+              },
+              "gpu_pool": {
+                "bytes": 12214272,
+                "entries": 12,
+                "evictions": 0,
+                "hits": 276,
+                "inserts": 288,
+                "misses": 36
+              },
+              "gpu_textures": {
+                "bytes": 33177600,
+                "entries": 24,
+                "evictions": 0,
+                "hits": 96,
+                "inserts": 24,
+                "misses": 24
+              },
+              "persistent_disk_policy": "memory_only",
+              "rejected_disk_entries": 0
+            },
+            "revision": "1",
+            "schema_version": 1,
+            "semantic_versions": {
+              "adjustment_clip": 1,
+              "advanced_text": 2,
+              "blend": 1,
+              "bounds": 1,
+              "clip_mask": 1,
+              "color": "gpu002-color-v1",
+              "composition_media": 1,
+              "coverage": "vec003-grid4-v2",
+              "document": 1,
+              "document_matte": 1,
+              "effects": {
+                "kronello.channel_mixer": 1,
+                "kronello.color.curves": 1,
+                "kronello.color.exposure": 1,
+                "kronello.color.hsl": 1,
+                "kronello.color.levels": 1,
+                "kronello.color.lut": 1,
+                "kronello.corner_pin": 1,
+                "kronello.directional_blur": 1,
+                "kronello.displace": 1,
+                "kronello.drop_shadow": 2,
+                "kronello.gaussian_blur": 2,
+                "kronello.generate": 1,
+                "kronello.glow": 1,
+                "kronello.grain": 1,
+                "kronello.invert": 1,
+                "kronello.keying.chroma": 1,
+                "kronello.keying.luma": 1,
+                "kronello.mosaic": 1,
+                "kronello.radial_blur": 1,
+                "kronello.sharpen": 1,
+                "kronello.stabilize": 1,
+                "kronello.tint": 1,
+                "kronello.vignette": 1
+              },
+              "expression": 3,
+              "frame_interpolation": 1,
+              "generators": {
+                "kronello.solid": 1
+              },
+              "gradient_interpolation": "vec004-explicit-interpolation-v1",
+              "hdr": 1,
+              "interpolation": 1,
+              "layout": 1,
+              "path_operations": 1,
+              "repeater": 1,
+              "reverse_sampling": 1,
+              "simulation": 1,
+              "stroke_geometry": "vec005-local-stroke-v2",
+              "temporal": 1,
+              "time_map": 1,
+              "vector": "render001-kurbo-flatten-v1",
+              "video_input": "nle002-sdr-rgba8-nearest-v1",
+              "visibility": 2
+            },
+            "sequence_number": null,
+            "snapshot_content_hash": "fdb8916e2d0119f737821e6df2d2fd9e38e0f2d51ed4a72afe6db9d3f10d959e",
+            "snapshot_schema_version": 1,
+            "target": {
+              "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+              "kind": "composition"
+            },
+            "time": {
+              "den": "2",
+              "num": "1"
+            },
+            "transfer_stats": {
+              "cpu_upload_control_bytes": 10032,
+              "cpu_upload_control_operations": 84,
+              "cpu_upload_pixel_bytes": 0,
+              "cpu_upload_pixel_operations": 0,
+              "gpu_compute_dispatches": 24,
+              "gpu_copy_bytes": 0,
+              "gpu_copy_operations": 0,
+              "gpu_readback_bytes": 33177648,
+              "gpu_readback_operations": 36,
+              "gpu_wait_operations": 36
+            },
+            "working_space": "linear_rec709"
+          },
+          "render_ms": 202.873583,
+          "sink_ms": 61.016042,
+          "wall_ms": 263.889625
+        },
+        {
+          "iteration": 5,
+          "linear_sha256": "13df367a3307a2745c7ff7f9b05545af27e4cc13cd2e7e3edacf63951f52e721",
+          "metadata": {
+            "backend": "wgpu_rgba16f",
+            "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+            "design_extent": [
+              64.0,
+              32.0
+            ],
+            "design_to_pixel": [
+              [
+                30.0,
+                0.0,
+                -0.0
+              ],
+              [
+                0.0,
+                33.75,
+                -0.0
+              ]
+            ],
+            "display": {
+              "alpha": "straight",
+              "association_space": "srgb",
+              "byte_order": "big_endian",
+              "channel_order": "RGBA",
+              "clipping": "unit_interval_after_output_transform; no_tone_mapping",
+              "color_space": "srgb",
+              "pixel_format": "rgba16_unorm_png",
+              "row_order": "top_to_bottom",
+              "transfer_function": "srgb"
+            },
+            "flatten_tolerance_px": 0.02,
+            "font_locks": [],
+            "frame_index": null,
+            "input_path": "semantic_scene",
+            "numeric": {
+              "alpha": "premultiplied",
+              "association_space": "linear_rec709",
+              "byte_order": "little_endian",
+              "channel_order": "RGBA",
+              "clipping": "none",
+              "color_space": "linear_rec709",
+              "pixel_format": "rgba16f",
+              "row_order": "top_to_bottom",
+              "transfer_function": "linear"
+            },
+            "project_schema_version": 1,
+            "region": {
+              "extent": [
+                64.0,
+                32.0
+              ],
+              "origin": [
+                0.0,
+                0.0
+              ],
+              "pixels": [
+                1920,
+                1080
+              ]
+            },
+            "resource_cache_stats": {
+              "disk_raster": {
+                "bytes": 0,
+                "entries": 0,
+                "evictions": 0,
+                "hits": 0,
+                "inserts": 0,
+                "misses": 0
+              },
+              "gpu_pool": {
+                "bytes": 12214272,
+                "entries": 12,
+                "evictions": 0,
+                "hits": 360,
+                "inserts": 372,
+                "misses": 36
+              },
+              "gpu_textures": {
+                "bytes": 33177600,
+                "entries": 24,
+                "evictions": 0,
+                "hits": 132,
+                "inserts": 24,
+                "misses": 24
+              },
+              "persistent_disk_policy": "memory_only",
+              "rejected_disk_entries": 0
+            },
+            "revision": "1",
+            "schema_version": 1,
+            "semantic_versions": {
+              "adjustment_clip": 1,
+              "advanced_text": 2,
+              "blend": 1,
+              "bounds": 1,
+              "clip_mask": 1,
+              "color": "gpu002-color-v1",
+              "composition_media": 1,
+              "coverage": "vec003-grid4-v2",
+              "document": 1,
+              "document_matte": 1,
+              "effects": {
+                "kronello.channel_mixer": 1,
+                "kronello.color.curves": 1,
+                "kronello.color.exposure": 1,
+                "kronello.color.hsl": 1,
+                "kronello.color.levels": 1,
+                "kronello.color.lut": 1,
+                "kronello.corner_pin": 1,
+                "kronello.directional_blur": 1,
+                "kronello.displace": 1,
+                "kronello.drop_shadow": 2,
+                "kronello.gaussian_blur": 2,
+                "kronello.generate": 1,
+                "kronello.glow": 1,
+                "kronello.grain": 1,
+                "kronello.invert": 1,
+                "kronello.keying.chroma": 1,
+                "kronello.keying.luma": 1,
+                "kronello.mosaic": 1,
+                "kronello.radial_blur": 1,
+                "kronello.sharpen": 1,
+                "kronello.stabilize": 1,
+                "kronello.tint": 1,
+                "kronello.vignette": 1
+              },
+              "expression": 3,
+              "frame_interpolation": 1,
+              "generators": {
+                "kronello.solid": 1
+              },
+              "gradient_interpolation": "vec004-explicit-interpolation-v1",
+              "hdr": 1,
+              "interpolation": 1,
+              "layout": 1,
+              "path_operations": 1,
+              "repeater": 1,
+              "reverse_sampling": 1,
+              "simulation": 1,
+              "stroke_geometry": "vec005-local-stroke-v2",
+              "temporal": 1,
+              "time_map": 1,
+              "vector": "render001-kurbo-flatten-v1",
+              "video_input": "nle002-sdr-rgba8-nearest-v1",
+              "visibility": 2
+            },
+            "sequence_number": null,
+            "snapshot_content_hash": "fdb8916e2d0119f737821e6df2d2fd9e38e0f2d51ed4a72afe6db9d3f10d959e",
+            "snapshot_schema_version": 1,
+            "target": {
+              "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+              "kind": "composition"
+            },
+            "time": {
+              "den": "2",
+              "num": "1"
+            },
+            "transfer_stats": {
+              "cpu_upload_control_bytes": 10032,
+              "cpu_upload_control_operations": 84,
+              "cpu_upload_pixel_bytes": 0,
+              "cpu_upload_pixel_operations": 0,
+              "gpu_compute_dispatches": 24,
+              "gpu_copy_bytes": 0,
+              "gpu_copy_operations": 0,
+              "gpu_readback_bytes": 33177648,
+              "gpu_readback_operations": 36,
+              "gpu_wait_operations": 36
+            },
+            "working_space": "linear_rec709"
+          },
+          "render_ms": 282.805125,
+          "sink_ms": 61.017666999999996,
+          "wall_ms": 343.822792
+        },
+        {
+          "iteration": 6,
+          "linear_sha256": "13df367a3307a2745c7ff7f9b05545af27e4cc13cd2e7e3edacf63951f52e721",
+          "metadata": {
+            "backend": "wgpu_rgba16f",
+            "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+            "design_extent": [
+              64.0,
+              32.0
+            ],
+            "design_to_pixel": [
+              [
+                30.0,
+                0.0,
+                -0.0
+              ],
+              [
+                0.0,
+                33.75,
+                -0.0
+              ]
+            ],
+            "display": {
+              "alpha": "straight",
+              "association_space": "srgb",
+              "byte_order": "big_endian",
+              "channel_order": "RGBA",
+              "clipping": "unit_interval_after_output_transform; no_tone_mapping",
+              "color_space": "srgb",
+              "pixel_format": "rgba16_unorm_png",
+              "row_order": "top_to_bottom",
+              "transfer_function": "srgb"
+            },
+            "flatten_tolerance_px": 0.02,
+            "font_locks": [],
+            "frame_index": null,
+            "input_path": "semantic_scene",
+            "numeric": {
+              "alpha": "premultiplied",
+              "association_space": "linear_rec709",
+              "byte_order": "little_endian",
+              "channel_order": "RGBA",
+              "clipping": "none",
+              "color_space": "linear_rec709",
+              "pixel_format": "rgba16f",
+              "row_order": "top_to_bottom",
+              "transfer_function": "linear"
+            },
+            "project_schema_version": 1,
+            "region": {
+              "extent": [
+                64.0,
+                32.0
+              ],
+              "origin": [
+                0.0,
+                0.0
+              ],
+              "pixels": [
+                1920,
+                1080
+              ]
+            },
+            "resource_cache_stats": {
+              "disk_raster": {
+                "bytes": 0,
+                "entries": 0,
+                "evictions": 0,
+                "hits": 0,
+                "inserts": 0,
+                "misses": 0
+              },
+              "gpu_pool": {
+                "bytes": 12214272,
+                "entries": 12,
+                "evictions": 0,
+                "hits": 396,
+                "inserts": 408,
+                "misses": 36
+              },
+              "gpu_textures": {
+                "bytes": 33177600,
+                "entries": 24,
+                "evictions": 0,
+                "hits": 144,
+                "inserts": 24,
+                "misses": 24
+              },
+              "persistent_disk_policy": "memory_only",
+              "rejected_disk_entries": 0
+            },
+            "revision": "1",
+            "schema_version": 1,
+            "semantic_versions": {
+              "adjustment_clip": 1,
+              "advanced_text": 2,
+              "blend": 1,
+              "bounds": 1,
+              "clip_mask": 1,
+              "color": "gpu002-color-v1",
+              "composition_media": 1,
+              "coverage": "vec003-grid4-v2",
+              "document": 1,
+              "document_matte": 1,
+              "effects": {
+                "kronello.channel_mixer": 1,
+                "kronello.color.curves": 1,
+                "kronello.color.exposure": 1,
+                "kronello.color.hsl": 1,
+                "kronello.color.levels": 1,
+                "kronello.color.lut": 1,
+                "kronello.corner_pin": 1,
+                "kronello.directional_blur": 1,
+                "kronello.displace": 1,
+                "kronello.drop_shadow": 2,
+                "kronello.gaussian_blur": 2,
+                "kronello.generate": 1,
+                "kronello.glow": 1,
+                "kronello.grain": 1,
+                "kronello.invert": 1,
+                "kronello.keying.chroma": 1,
+                "kronello.keying.luma": 1,
+                "kronello.mosaic": 1,
+                "kronello.radial_blur": 1,
+                "kronello.sharpen": 1,
+                "kronello.stabilize": 1,
+                "kronello.tint": 1,
+                "kronello.vignette": 1
+              },
+              "expression": 3,
+              "frame_interpolation": 1,
+              "generators": {
+                "kronello.solid": 1
+              },
+              "gradient_interpolation": "vec004-explicit-interpolation-v1",
+              "hdr": 1,
+              "interpolation": 1,
+              "layout": 1,
+              "path_operations": 1,
+              "repeater": 1,
+              "reverse_sampling": 1,
+              "simulation": 1,
+              "stroke_geometry": "vec005-local-stroke-v2",
+              "temporal": 1,
+              "time_map": 1,
+              "vector": "render001-kurbo-flatten-v1",
+              "video_input": "nle002-sdr-rgba8-nearest-v1",
+              "visibility": 2
+            },
+            "sequence_number": null,
+            "snapshot_content_hash": "fdb8916e2d0119f737821e6df2d2fd9e38e0f2d51ed4a72afe6db9d3f10d959e",
+            "snapshot_schema_version": 1,
+            "target": {
+              "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+              "kind": "composition"
+            },
+            "time": {
+              "den": "2",
+              "num": "1"
+            },
+            "transfer_stats": {
+              "cpu_upload_control_bytes": 10032,
+              "cpu_upload_control_operations": 84,
+              "cpu_upload_pixel_bytes": 0,
+              "cpu_upload_pixel_operations": 0,
+              "gpu_compute_dispatches": 24,
+              "gpu_copy_bytes": 0,
+              "gpu_copy_operations": 0,
+              "gpu_readback_bytes": 33177648,
+              "gpu_readback_operations": 36,
+              "gpu_wait_operations": 36
+            },
+            "working_space": "linear_rec709"
+          },
+          "render_ms": 59.783001,
+          "sink_ms": 60.661208,
+          "wall_ms": 120.444209
+        },
+        {
+          "iteration": 7,
+          "linear_sha256": "13df367a3307a2745c7ff7f9b05545af27e4cc13cd2e7e3edacf63951f52e721",
+          "metadata": {
+            "backend": "wgpu_rgba16f",
+            "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+            "design_extent": [
+              64.0,
+              32.0
+            ],
+            "design_to_pixel": [
+              [
+                30.0,
+                0.0,
+                -0.0
+              ],
+              [
+                0.0,
+                33.75,
+                -0.0
+              ]
+            ],
+            "display": {
+              "alpha": "straight",
+              "association_space": "srgb",
+              "byte_order": "big_endian",
+              "channel_order": "RGBA",
+              "clipping": "unit_interval_after_output_transform; no_tone_mapping",
+              "color_space": "srgb",
+              "pixel_format": "rgba16_unorm_png",
+              "row_order": "top_to_bottom",
+              "transfer_function": "srgb"
+            },
+            "flatten_tolerance_px": 0.02,
+            "font_locks": [],
+            "frame_index": null,
+            "input_path": "semantic_scene",
+            "numeric": {
+              "alpha": "premultiplied",
+              "association_space": "linear_rec709",
+              "byte_order": "little_endian",
+              "channel_order": "RGBA",
+              "clipping": "none",
+              "color_space": "linear_rec709",
+              "pixel_format": "rgba16f",
+              "row_order": "top_to_bottom",
+              "transfer_function": "linear"
+            },
+            "project_schema_version": 1,
+            "region": {
+              "extent": [
+                64.0,
+                32.0
+              ],
+              "origin": [
+                0.0,
+                0.0
+              ],
+              "pixels": [
+                1920,
+                1080
+              ]
+            },
+            "resource_cache_stats": {
+              "disk_raster": {
+                "bytes": 0,
+                "entries": 0,
+                "evictions": 0,
+                "hits": 0,
+                "inserts": 0,
+                "misses": 0
+              },
+              "gpu_pool": {
+                "bytes": 12214272,
+                "entries": 12,
+                "evictions": 0,
+                "hits": 480,
+                "inserts": 492,
+                "misses": 36
+              },
+              "gpu_textures": {
+                "bytes": 33177600,
+                "entries": 24,
+                "evictions": 0,
+                "hits": 180,
+                "inserts": 24,
+                "misses": 24
+              },
+              "persistent_disk_policy": "memory_only",
+              "rejected_disk_entries": 0
+            },
+            "revision": "1",
+            "schema_version": 1,
+            "semantic_versions": {
+              "adjustment_clip": 1,
+              "advanced_text": 2,
+              "blend": 1,
+              "bounds": 1,
+              "clip_mask": 1,
+              "color": "gpu002-color-v1",
+              "composition_media": 1,
+              "coverage": "vec003-grid4-v2",
+              "document": 1,
+              "document_matte": 1,
+              "effects": {
+                "kronello.channel_mixer": 1,
+                "kronello.color.curves": 1,
+                "kronello.color.exposure": 1,
+                "kronello.color.hsl": 1,
+                "kronello.color.levels": 1,
+                "kronello.color.lut": 1,
+                "kronello.corner_pin": 1,
+                "kronello.directional_blur": 1,
+                "kronello.displace": 1,
+                "kronello.drop_shadow": 2,
+                "kronello.gaussian_blur": 2,
+                "kronello.generate": 1,
+                "kronello.glow": 1,
+                "kronello.grain": 1,
+                "kronello.invert": 1,
+                "kronello.keying.chroma": 1,
+                "kronello.keying.luma": 1,
+                "kronello.mosaic": 1,
+                "kronello.radial_blur": 1,
+                "kronello.sharpen": 1,
+                "kronello.stabilize": 1,
+                "kronello.tint": 1,
+                "kronello.vignette": 1
+              },
+              "expression": 3,
+              "frame_interpolation": 1,
+              "generators": {
+                "kronello.solid": 1
+              },
+              "gradient_interpolation": "vec004-explicit-interpolation-v1",
+              "hdr": 1,
+              "interpolation": 1,
+              "layout": 1,
+              "path_operations": 1,
+              "repeater": 1,
+              "reverse_sampling": 1,
+              "simulation": 1,
+              "stroke_geometry": "vec005-local-stroke-v2",
+              "temporal": 1,
+              "time_map": 1,
+              "vector": "render001-kurbo-flatten-v1",
+              "video_input": "nle002-sdr-rgba8-nearest-v1",
+              "visibility": 2
+            },
+            "sequence_number": null,
+            "snapshot_content_hash": "fdb8916e2d0119f737821e6df2d2fd9e38e0f2d51ed4a72afe6db9d3f10d959e",
+            "snapshot_schema_version": 1,
+            "target": {
+              "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+              "kind": "composition"
+            },
+            "time": {
+              "den": "2",
+              "num": "1"
+            },
+            "transfer_stats": {
+              "cpu_upload_control_bytes": 10032,
+              "cpu_upload_control_operations": 84,
+              "cpu_upload_pixel_bytes": 0,
+              "cpu_upload_pixel_operations": 0,
+              "gpu_compute_dispatches": 24,
+              "gpu_copy_bytes": 0,
+              "gpu_copy_operations": 0,
+              "gpu_readback_bytes": 33177648,
+              "gpu_readback_operations": 36,
+              "gpu_wait_operations": 36
+            },
+            "working_space": "linear_rec709"
+          },
+          "render_ms": 234.866125,
+          "sink_ms": 60.495875,
+          "wall_ms": 295.362
+        },
+        {
+          "iteration": 8,
+          "linear_sha256": "13df367a3307a2745c7ff7f9b05545af27e4cc13cd2e7e3edacf63951f52e721",
+          "metadata": {
+            "backend": "wgpu_rgba16f",
+            "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+            "design_extent": [
+              64.0,
+              32.0
+            ],
+            "design_to_pixel": [
+              [
+                30.0,
+                0.0,
+                -0.0
+              ],
+              [
+                0.0,
+                33.75,
+                -0.0
+              ]
+            ],
+            "display": {
+              "alpha": "straight",
+              "association_space": "srgb",
+              "byte_order": "big_endian",
+              "channel_order": "RGBA",
+              "clipping": "unit_interval_after_output_transform; no_tone_mapping",
+              "color_space": "srgb",
+              "pixel_format": "rgba16_unorm_png",
+              "row_order": "top_to_bottom",
+              "transfer_function": "srgb"
+            },
+            "flatten_tolerance_px": 0.02,
+            "font_locks": [],
+            "frame_index": null,
+            "input_path": "semantic_scene",
+            "numeric": {
+              "alpha": "premultiplied",
+              "association_space": "linear_rec709",
+              "byte_order": "little_endian",
+              "channel_order": "RGBA",
+              "clipping": "none",
+              "color_space": "linear_rec709",
+              "pixel_format": "rgba16f",
+              "row_order": "top_to_bottom",
+              "transfer_function": "linear"
+            },
+            "project_schema_version": 1,
+            "region": {
+              "extent": [
+                64.0,
+                32.0
+              ],
+              "origin": [
+                0.0,
+                0.0
+              ],
+              "pixels": [
+                1920,
+                1080
+              ]
+            },
+            "resource_cache_stats": {
+              "disk_raster": {
+                "bytes": 0,
+                "entries": 0,
+                "evictions": 0,
+                "hits": 0,
+                "inserts": 0,
+                "misses": 0
+              },
+              "gpu_pool": {
+                "bytes": 12214272,
+                "entries": 12,
+                "evictions": 0,
+                "hits": 516,
+                "inserts": 528,
+                "misses": 36
+              },
+              "gpu_textures": {
+                "bytes": 33177600,
+                "entries": 24,
+                "evictions": 0,
+                "hits": 192,
+                "inserts": 24,
+                "misses": 24
+              },
+              "persistent_disk_policy": "memory_only",
+              "rejected_disk_entries": 0
+            },
+            "revision": "1",
+            "schema_version": 1,
+            "semantic_versions": {
+              "adjustment_clip": 1,
+              "advanced_text": 2,
+              "blend": 1,
+              "bounds": 1,
+              "clip_mask": 1,
+              "color": "gpu002-color-v1",
+              "composition_media": 1,
+              "coverage": "vec003-grid4-v2",
+              "document": 1,
+              "document_matte": 1,
+              "effects": {
+                "kronello.channel_mixer": 1,
+                "kronello.color.curves": 1,
+                "kronello.color.exposure": 1,
+                "kronello.color.hsl": 1,
+                "kronello.color.levels": 1,
+                "kronello.color.lut": 1,
+                "kronello.corner_pin": 1,
+                "kronello.directional_blur": 1,
+                "kronello.displace": 1,
+                "kronello.drop_shadow": 2,
+                "kronello.gaussian_blur": 2,
+                "kronello.generate": 1,
+                "kronello.glow": 1,
+                "kronello.grain": 1,
+                "kronello.invert": 1,
+                "kronello.keying.chroma": 1,
+                "kronello.keying.luma": 1,
+                "kronello.mosaic": 1,
+                "kronello.radial_blur": 1,
+                "kronello.sharpen": 1,
+                "kronello.stabilize": 1,
+                "kronello.tint": 1,
+                "kronello.vignette": 1
+              },
+              "expression": 3,
+              "frame_interpolation": 1,
+              "generators": {
+                "kronello.solid": 1
+              },
+              "gradient_interpolation": "vec004-explicit-interpolation-v1",
+              "hdr": 1,
+              "interpolation": 1,
+              "layout": 1,
+              "path_operations": 1,
+              "repeater": 1,
+              "reverse_sampling": 1,
+              "simulation": 1,
+              "stroke_geometry": "vec005-local-stroke-v2",
+              "temporal": 1,
+              "time_map": 1,
+              "vector": "render001-kurbo-flatten-v1",
+              "video_input": "nle002-sdr-rgba8-nearest-v1",
+              "visibility": 2
+            },
+            "sequence_number": null,
+            "snapshot_content_hash": "fdb8916e2d0119f737821e6df2d2fd9e38e0f2d51ed4a72afe6db9d3f10d959e",
+            "snapshot_schema_version": 1,
+            "target": {
+              "composition": "e706c050-13fa-4654-9350-dcef30f1d792",
+              "kind": "composition"
+            },
+            "time": {
+              "den": "2",
+              "num": "1"
+            },
+            "transfer_stats": {
+              "cpu_upload_control_bytes": 10032,
+              "cpu_upload_control_operations": 84,
+              "cpu_upload_pixel_bytes": 0,
+              "cpu_upload_pixel_operations": 0,
+              "gpu_compute_dispatches": 24,
+              "gpu_copy_bytes": 0,
+              "gpu_copy_operations": 0,
+              "gpu_readback_bytes": 33177648,
+              "gpu_readback_operations": 36,
+              "gpu_wait_operations": 36
+            },
+            "working_space": "linear_rec709"
+          },
+          "render_ms": 75.743959,
+          "sink_ms": 60.438375,
+          "wall_ms": 136.182334
+        }
+      ],
+      "size": [
+        1920,
+        1080
+      ],
+      "temporal": false
+    }
+  ],
+  "frame_timing": "render and waits excluding sink hash time; GPU creation separately; compilation included in first call",
+  "order": "alternating paired/linear per iteration; independent GPU contexts per case",
+  "quiet_host": false,
+  "same_binary": true,
+  "shared_diagnostic": true,
+  "diagnostic_conditions": {
+    "gpu_context_shared": true,
+    "paired_init_context_unused": true,
+    "first_linear_call_after_paired_has_warm_scene_cache": true,
+    "cold_times_not_comparable": true,
+    "compiler_vs_context_vs_os_scheduling_cause_not_identified": true
+  },
+  "provenance": {
+    "binary_sha256": "318cbb95d069c1e735f6894cfb287d867cb0e996517675e1ce37d3f535ca3a49",
+    "example_sha256": "07493ccff554d378ae53b74e855347251d7617dd001d9339c6f251366c57ebd8"
+  }
+}

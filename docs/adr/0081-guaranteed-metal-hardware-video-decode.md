@@ -1,6 +1,6 @@
 # ADR-0081: Metal / VideoToolbox の hardware decode 保証経路
 
-- 状態: 採用
+- 状態: 部分置換（[ADR-0156](0156-bounded-persistent-hardware-cursor.md)がSDR strict backendの全clip保持と毎要求sessionを有界永続cursorへ更新。一発oracle/ProRes RAWとhardware/color/import契約を維持）
 - 日付: 2026-10-06
 
 ## 背景

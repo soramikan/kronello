@@ -22,10 +22,16 @@ public struct EditAsset: Identifiable {
 
 public struct EditClip: Identifiable {
     public let query: [String: Any]
-    public init(query: [String: Any]) { self.query = query }
-    public var authored: [String: Any] { query.object("clip") }
-    public var id: String { authored.string("id") }
-    public var track: String { query.string("track") }
+    private let record: [String: Any]
+    public let id: String
+    public let track: String
+    let sourceKey: TimelineSourceKey?
+    public init(query: [String: Any]) {
+        self.query = query; record = query.object("clip")
+        id = record.string("id"); track = query.string("track")
+        sourceKey = TimelineSourceKey(record.object("source_ref"))
+    }
+    public var authored: [String: Any] { record }
     /// The shared ClipKind `caption` presents as the design `subtitle` kind.
     public var kind: KRMediaKind {
         query.string("kind") == "caption" ? .subtitle : (KRMediaKind(rawValue: query.string("kind")) ?? .generator)
@@ -98,14 +104,35 @@ extension RationalTime {
 }
 
 extension EditorModel {
+    public var previewProxyMode: String {
+        get { ui.mediaProxies == "prefer" ? "prefer" : "off" }
+        set { ui.mediaProxies = newValue == "prefer" ? "prefer" : "off" }
+    }
     public var sequence: [String: Any] { sequenceResult.object("sequence") }
     public var activeRate: [String: Any] { ui.page == "edit" ? sequence.object("frame_rate") : current.object("edit_rate") }
     public var activeExtent: [String: Any] { ui.page == "edit" ? sequence.object("extent") : current.object("design_extent") }
-    public var editClips: [EditClip] { sequenceResult.objects("clips").map { EditClip(query: $0) } }
-    public var selectedClip: EditClip? { editClips.first { $0.id == ui.clipSelection } }
-    public var sequenceDurationFrames: Int64 { max(1, editClips.map { $0.end.frames(rateNum: rateNum, rateDen: rateDen) }.max() ?? Int64(nominalFPS * 5)) }
+    public var editClips: [EditClip] { timelineIndex.clips }
+    public func clips(in track: String) -> [EditClip] { timelineIndex.clipsByTrack[track] ?? [] }
+    public var selectedClip: EditClip? { ui.clipSelection.flatMap { timelineIndex.clipsByID[$0] } }
+    public var sequenceDurationFrames: Int64 {
+        let key = TimelineRateKey(num: rateNum, den: rateDen)
+        if let frames = timelineDurationFrames[key] { return frames }
+        let frames = max(1, editClips.map { $0.end.frames(rateNum: key.num, rateDen: key.den) }.max() ?? Int64(nominalFPS * 5))
+        if timelineDurationFrames.count >= 8 { timelineDurationFrames.removeAll() }
+        timelineDurationFrames[key] = frames
+        return frames
+    }
     public func frameTime(_ frame: Int64) -> RationalTime { .init(num: frame * rateDen, den: rateNum) }
     public var editAssets: [EditAsset] {
+        assetIndex.assets
+    }
+    private var assetIndex: TimelineAssetIndex {
+        if let cached = timelineAssetIndex { return cached }
+        let value = TimelineAssetIndex(makeEditAssets())
+        timelineAssetIndex = value
+        return value
+    }
+    private func makeEditAssets() -> [EditAsset] {
         let media = document.objects("assets").flatMap { asset -> [EditAsset] in
             let kind = KRMediaKind(rawValue: asset.string("kind")) ?? .video
             let locator = asset.object("locator")
@@ -118,7 +145,7 @@ extension EditorModel {
                     source: ["kind": "asset", "asset": asset.string("id"), "stream_index": Int(index) ?? 0],
                     duration: .wire(stream.object("duration")), sourceIn: video ? .wire(stream.object("start_time")) : .init(num: 0, den: 1),
                     meta: video ? "\(Int(stream.number("width")))×\(Int(stream.number("height")))" : stream.string("codec"),
-                    missing: sequenceResult.objects("asset_status").first { $0.string("asset") == asset.string("id") }?.object("error")["code"] as? String)
+                    missing: timelineIndex.assetStatus[asset.string("id")]?.object("error")["code"] as? String)
             }
         }
         // NLE-007: each multicam group is one placeable clip whose source_ref
@@ -129,9 +156,9 @@ extension EditorModel {
             let window = sourceWindow(.multicam(group.id, first.id))
             let length = window.flatMap { w in w.end.flatMap { try? $0.checkedSubtracting(w.start) } }
             let missing = group.angles.first { angle in
-                sequenceResult.objects("asset_status").contains { $0.string("asset") == angle.asset }
+                timelineIndex.assetStatus[angle.asset] != nil
             }.flatMap { angle in
-                sequenceResult.objects("asset_status").first { $0.string("asset") == angle.asset }?.object("error")["code"] as? String
+                timelineIndex.assetStatus[angle.asset]?.object("error")["code"] as? String
             }
             return EditAsset(id: "multicam:" + group.id, name: group.name.isEmpty ? "マルチカム" : group.name,
                 kind: .multicam, source: source, duration: length ?? .init(num: 0, den: 1),
@@ -156,23 +183,22 @@ extension EditorModel {
             let base = group.name.isEmpty ? "マルチカム" : group.name
             return angle.map { base + " · " + $0.displayName } ?? base
         }
-        return editAssets.first { NSDictionary(dictionary: $0.source) == NSDictionary(dictionary: source) }?.name ?? source.string("generator")
+        return clip.sourceKey.flatMap { assetIndex.bySource[$0] }?.name ?? source.string("generator")
     }
     public func clipMissing(_ clip: EditClip) -> String? {
-        let source = clip.authored.object("source_ref")
         // NLE-007: a multicam clip is missing when its active angle's asset
         // stream is (asset_status is keyed by asset, one diagnostic per row).
         if let multicam = clip.multicam {
             guard let angle = multicamGroup(multicam.group)?.angles.first(where: { $0.id == multicam.angle }) else {
                 return "SOURCE_MISSING"
             }
-            return sequenceResult.objects("asset_status").first { $0.string("asset") == angle.asset }?.object("error")["code"] as? String
+            return timelineIndex.assetStatus[angle.asset]?.object("error")["code"] as? String
         }
-        return editAssets.first { NSDictionary(dictionary: $0.source) == NSDictionary(dictionary: source) }?.missing
+        return clip.sourceKey.flatMap { assetIndex.bySource[$0] }?.missing
     }
     public func validateClipSelection(actor: String) {
         guard ui.page == "edit", sequenceFailure == nil, let id = ui.clipSelection else { return }
-        if !editClips.contains(where: { $0.id == id }) {
+        if timelineIndex.clipsByID[id] == nil {
             ui.clipSelection = nil
             setDeletedSelection("選択していたクリップは削除されました。\(actor) · rev \(revision)")
         }
@@ -400,14 +426,12 @@ extension EditorModel {
             + tracks.filter { $0.string("kind") == "audio" }
     }
     public func trackNumber(_ id: String) -> String {
-        let tracks = sequence.objects("tracks"), kind = tracks.first { $0.string("id") == id }?.string("kind") ?? "video"
-        let prefix = kind == "audio" ? "A" : kind == "caption" ? "C" : "V"
-        return prefix + String((tracks.filter { $0.string("kind") == kind }.firstIndex { $0.string("id") == id } ?? 0) + 1)
+        timelineIndex.trackNumbers[id] ?? "V1"
     }
     /// NLE-005 persisted track lock. This reads the document through the
     /// sequence query, not `ui.locked` (which now covers motion layers only).
     public func trackLocked(_ id: String) -> Bool {
-        sequence.objects("tracks").first { $0.string("id") == id }?.object("state")["locked"] as? Bool ?? false
+        timelineIndex.tracksByID[id]?.object("state")["locked"] as? Bool ?? false
     }
     /// TrackStateSet replaces the whole state, so the toggle re-emits the
     /// persisted visibility/mute values alongside the flipped lock.

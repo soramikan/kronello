@@ -1,6 +1,6 @@
 # ADR-0056: native FFI の非同期 worker と SwiftPM 境界
 
-- 状態: 部分置換（[ADR-0083](0083-native-safe-project-session.md): 安全モード store の session 寿命保持）
+- 状態: 部分置換（[ADR-0083](0083-native-safe-project-session.md): 安全モード store の session 寿命保持、[ADR-0143](0143-deadline-driven-native-notifications.md): 外部状態確認の期限、[ADR-0144](0144-revision-scoped-preview-preparation.md): Unix通常モードの接続保持）
 - 日付: 2026-10-04
 
 ## 背景

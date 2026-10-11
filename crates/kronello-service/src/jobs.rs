@@ -493,6 +493,35 @@ pub struct RenderSubmitRequest {
     #[serde(default)]
     pub required_features: Vec<String>,
 }
+impl RenderSubmitRequest {
+    pub(crate) fn renders_video(&self) -> Result<bool, ServiceError> {
+        let needs_video = |output: &JobOutput| -> Result<bool, ServiceError> {
+            match output {
+                JobOutput::ImageSequence => Ok(true),
+                JobOutput::CaptionSidecar { .. } => Ok(false),
+                output => Ok(output.movie_settings()?.profile.has_video()),
+            }
+        };
+        self.outputs
+            .iter()
+            .try_fold(needs_video(&self.output)?, |any, spec| {
+                Ok(any | needs_video(&spec.output)?)
+            })
+    }
+    fn report_video_count_matches(
+        &self,
+        actual: u64,
+        logical: u64,
+        legacy: bool,
+    ) -> Result<bool, ServiceError> {
+        Ok(if self.renders_video()? {
+            actual == logical
+        } else {
+            actual == 0 || (legacy && actual == logical)
+        })
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct JobRequest {
@@ -1369,7 +1398,11 @@ impl Service<'_> {
                     if (embeds
                         && (probe.render_snapshot_hash != record.snapshot_hash
                             || probe.export_snapshot_hash != expected.content_hash()?))
-                        || report.frames.len() as u64 != record.total_frames
+                        || !request.report_video_count_matches(
+                            report.frames.len() as u64,
+                            record.total_frames,
+                            true,
+                        )?
                         || report.render_snapshot_hash != record.snapshot_hash
                         || report
                             .frames
@@ -1657,134 +1690,146 @@ impl Service<'_> {
                 "render_snapshot_hash": record.snapshot_hash,
             }))
         } else {
-            self.with_video_backend(&request.render.input.project, |backend| {
-                let render = &request.render;
-                let result = match &request.output {
-                    JobOutput::ImageSequence => {
-                        let metadata = kronello_render::render_sequence_with_checkpoint(
-                            snapshot,
-                            &fonts,
-                            backend,
-                            SequenceRequest {
-                                range: render.range,
-                                frame_rate: render.frame_rate,
-                                region: render.input.region,
-                            },
-                            &stage_path,
-                            &mut |n| {
-                                checkpoint(n).map_err(kronello_render::RenderError::InvalidInput)
-                            },
-                        )?;
-                        #[cfg(all(feature = "test-job-control", debug_assertions))]
-                        if std::env::var_os("KRONELLO_TEST_JOB_CORRUPT_OUTPUT").as_deref()
-                            == Some(std::ffi::OsStr::new("1"))
-                        {
-                            std::fs::write(
-                                stage_path.join(&metadata.frames[0].display.name),
-                                b"corrupt",
+            self.with_delivery_backend(
+                &request.render.input.project,
+                request.renders_video()?,
+                |backend| {
+                    let render = &request.render;
+                    let result = match &request.output {
+                        JobOutput::ImageSequence => {
+                            let metadata = kronello_render::render_sequence_with_checkpoint(
+                                snapshot,
+                                &fonts,
+                                backend,
+                                SequenceRequest {
+                                    range: render.range,
+                                    frame_rate: render.frame_rate,
+                                    region: render.input.region,
+                                },
+                                &stage_path,
+                                &mut |n| {
+                                    checkpoint(n)
+                                        .map_err(kronello_render::RenderError::InvalidInput)
+                                },
                             )?;
-                        }
-                        validate_sequence(
-                            &stage_path,
-                            &metadata,
-                            record.total_frames,
-                            &record.snapshot_hash,
-                        )?;
-                        serde_json::to_value(metadata)?
-                    }
-                    output => {
-                        let settings = output.movie_settings()?;
-                        let runtime = MediaRuntime::load()?;
-                        let primary_av = movie_snapshot(snapshot, &request.output)?;
-                        // MEDIA-004 (ADR-0133): extra legs stage beside the
-                        // primary artifact inside a directory-shaped output
-                        // staging path, then publish per leg.
-                        let multi = !request.outputs.is_empty();
-                        if multi {
-                            std::fs::create_dir(&stage_path)?;
-                        }
-                        let leg_path = |index: usize, container: &str| -> PathBuf {
-                            if multi {
-                                stage_path.join(format!("leg_{index}.{container}"))
-                            } else {
-                                // The single staged artifact still carries its
-                                // container extension: media validates every
-                                // leg path against the profile's container.
-                                stage_path.with_extension(container)
+                            #[cfg(all(feature = "test-job-control", debug_assertions))]
+                            if std::env::var_os("KRONELLO_TEST_JOB_CORRUPT_OUTPUT").as_deref()
+                                == Some(std::ffi::OsStr::new("1"))
+                            {
+                                std::fs::write(
+                                    stage_path.join(&metadata.frames[0].display.name),
+                                    b"corrupt",
+                                )?;
                             }
-                        };
-                        let mut av_snapshots = vec![primary_av];
-                        let mut delivery_outputs = Vec::with_capacity(request.outputs.len());
-                        for (index, spec) in request.outputs.iter().enumerate() {
-                            let leg_settings = spec.output.movie_settings()?;
-                            delivery_outputs.push(kronello_media::DeliveryOutput {
-                                output: leg_path(index + 1, leg_settings.profile.container()),
-                                profile: leg_settings.profile,
-                                background: leg_settings.background,
-                                chapters: spec.chapters,
-                            });
-                            av_snapshots.push(movie_snapshot(snapshot, &spec.output)?);
+                            validate_sequence(
+                                &stage_path,
+                                &metadata,
+                                record.total_frames,
+                                &record.snapshot_hash,
+                            )?;
+                            serde_json::to_value(metadata)?
                         }
-                        let leg0 = leg_path(0, settings.profile.container());
-                        let av_refs: Vec<&AvExportSnapshot> = av_snapshots.iter().collect();
-                        let report = runtime.export_delivery_with_checkpoint(
-                            &av_refs,
-                            &render.input.project,
-                            &fonts,
-                            backend,
-                            &AvExportRequest {
-                                output: leg0.clone(),
-                                range: render.range,
-                                frame_rate: render.frame_rate,
-                                region: render.input.region,
-                                background: settings.background,
-                                clipping: kronello_audio::ClippingPolicy::Reject,
-                                chapters: request.chapters,
-                                outputs: delivery_outputs,
-                            },
-                            &mut |n| {
-                                checkpoint(n).map_err(kronello_media::MediaError::InvalidInput)
-                            },
-                        )?;
-                        #[cfg(all(feature = "test-job-control", debug_assertions))]
-                        if std::env::var_os("KRONELLO_TEST_JOB_CORRUPT_OUTPUT").as_deref()
-                            == Some(std::ffi::OsStr::new("1"))
-                        {
-                            std::fs::write(&leg0, b"corrupt")?;
-                        }
-                        // Every leg verifies independently; movie legs also
-                        // bind snapshot identities embedded by the muxer.
-                        for (index, leg) in report.outputs.iter().enumerate() {
-                            let probe = runtime.probe(&leg.output).map_err(|e| {
-                                ServiceError::new("OUTPUT_VALIDATION_FAILED", e.to_string())
-                            })?;
-                            probe
-                                .verify_delivery(leg.profile, av_snapshots[index].audio_layout())
-                                .map_err(|e| {
+                        output => {
+                            let settings = output.movie_settings()?;
+                            let runtime = MediaRuntime::load()?;
+                            let primary_av = movie_snapshot(snapshot, &request.output)?;
+                            // MEDIA-004 (ADR-0133): extra legs stage beside the
+                            // primary artifact inside a directory-shaped output
+                            // staging path, then publish per leg.
+                            let multi = !request.outputs.is_empty();
+                            if multi {
+                                std::fs::create_dir(&stage_path)?;
+                            }
+                            let leg_path = |index: usize, container: &str| -> PathBuf {
+                                if multi {
+                                    stage_path.join(format!("leg_{index}.{container}"))
+                                } else {
+                                    // The single staged artifact still carries its
+                                    // container extension: media validates every
+                                    // leg path against the profile's container.
+                                    stage_path.with_extension(container)
+                                }
+                            };
+                            let mut av_snapshots = vec![primary_av];
+                            let mut delivery_outputs = Vec::with_capacity(request.outputs.len());
+                            for (index, spec) in request.outputs.iter().enumerate() {
+                                let leg_settings = spec.output.movie_settings()?;
+                                delivery_outputs.push(kronello_media::DeliveryOutput {
+                                    output: leg_path(index + 1, leg_settings.profile.container()),
+                                    profile: leg_settings.profile,
+                                    background: leg_settings.background,
+                                    chapters: spec.chapters,
+                                });
+                                av_snapshots.push(movie_snapshot(snapshot, &spec.output)?);
+                            }
+                            let leg0 = leg_path(0, settings.profile.container());
+                            let av_refs: Vec<&AvExportSnapshot> = av_snapshots.iter().collect();
+                            let report = runtime.export_delivery_with_checkpoint(
+                                &av_refs,
+                                &render.input.project,
+                                &fonts,
+                                backend,
+                                &AvExportRequest {
+                                    output: leg0.clone(),
+                                    range: render.range,
+                                    frame_rate: render.frame_rate,
+                                    region: render.input.region,
+                                    background: settings.background,
+                                    clipping: kronello_audio::ClippingPolicy::Reject,
+                                    chapters: request.chapters,
+                                    outputs: delivery_outputs,
+                                },
+                                &mut |n| {
+                                    checkpoint(n).map_err(kronello_media::MediaError::InvalidInput)
+                                },
+                            )?;
+                            #[cfg(all(feature = "test-job-control", debug_assertions))]
+                            if std::env::var_os("KRONELLO_TEST_JOB_CORRUPT_OUTPUT").as_deref()
+                                == Some(std::ffi::OsStr::new("1"))
+                            {
+                                std::fs::write(&leg0, b"corrupt")?;
+                            }
+                            // Every leg verifies independently; movie legs also
+                            // bind snapshot identities embedded by the muxer.
+                            for (index, leg) in report.outputs.iter().enumerate() {
+                                let probe = runtime.probe(&leg.output).map_err(|e| {
                                     ServiceError::new("OUTPUT_VALIDATION_FAILED", e.to_string())
                                 })?;
-                            if leg.profile.embeds_snapshot_identity()
-                                && (probe.render_snapshot_hash != record.snapshot_hash
-                                    || probe.export_snapshot_hash
-                                        != av_snapshots[index].content_hash()?)
-                            {
+                                probe
+                                    .verify_delivery(
+                                        leg.profile,
+                                        av_snapshots[index].audio_layout(),
+                                    )
+                                    .map_err(|e| {
+                                        ServiceError::new("OUTPUT_VALIDATION_FAILED", e.to_string())
+                                    })?;
+                                if leg.profile.embeds_snapshot_identity()
+                                    && (probe.render_snapshot_hash != record.snapshot_hash
+                                        || probe.export_snapshot_hash
+                                            != av_snapshots[index].content_hash()?)
+                                {
+                                    return Err(ServiceError::new(
+                                        "OUTPUT_VALIDATION_FAILED",
+                                        "published leg snapshot identity differs",
+                                    ));
+                                }
+                            }
+                            if !request.report_video_count_matches(
+                                report.frames.len() as u64,
+                                record.total_frames,
+                                false,
+                            )? {
                                 return Err(ServiceError::new(
                                     "OUTPUT_VALIDATION_FAILED",
-                                    "published leg snapshot identity differs",
+                                    "MOV frame count or snapshot identity differs",
                                 ));
                             }
+                            serde_json::to_value(report)?
                         }
-                        if report.frames.len() as u64 != record.total_frames {
-                            return Err(ServiceError::new(
-                                "OUTPUT_VALIDATION_FAILED",
-                                "MOV frame count or snapshot identity differs",
-                            ));
-                        }
-                        serde_json::to_value(report)?
-                    }
-                };
-                Ok(result)
-            })
+                    };
+                    Ok(result)
+                },
+            )
         };
         if let Some(error) = failure {
             return Err(error.into());

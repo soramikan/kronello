@@ -1,4 +1,8 @@
 //! Guaranteed Metal/VideoToolbox decode, import, and GPU-only color/sampling.
+#[path = "resident_cursor.rs"]
+mod cursor;
+pub use cursor::{ResidentCursorStats, ResidentFileDecoder};
+
 use crate::videotoolbox::{self, NativeError, NativeStage, PixelToken, SampleToken};
 use kronello_gpu::{GpuContext, ResidentImage, TransferStats, WorkingSpace};
 use objc2_core_foundation::CFRetained;
@@ -530,7 +534,16 @@ impl HardwareFrame {
                             1.0,
                         )
                     };
-                    let mut rgb = rgb.map(inverse);
+                    // Match the resident SDR shader's encoded RGB conversion
+                    // boundary before inverse transfer. Native planes above stay
+                    // byte-exact and expose all out-of-range YCbCr excursions.
+                    let mut rgb = rgb.map(|value| {
+                        inverse(if self.format == ResidentFormat::Nv12VideoRange {
+                            value.clamp(0.0, 1.0)
+                        } else {
+                            value
+                        })
+                    });
                     if working == WorkingSpace::LinearRec2020 {
                         let v = rgb;
                         rgb = [

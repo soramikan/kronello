@@ -404,12 +404,13 @@ pub(crate) fn lower(
     time: Time,
     fonts: &[FontData<'_>],
     cache: &mut RenderCache,
+    sequence_root: Option<&Composition>,
 ) -> Result<(Vec<Composition>, Option<Proof>), RenderError> {
-    let actual = snapshot.definitions_at(Some(time))?;
+    let actual = snapshot.definitions_at_prepared(Some(time), sequence_root)?;
     if snapshot.project().simulations.is_empty() {
         return Ok((actual, None));
     }
-    let authored = snapshot.definitions()?;
+    let authored = snapshot.definitions_at_prepared(None, sequence_root)?;
     let mut proof = Proof {
         authored: actual.clone(),
         definitions: BTreeMap::new(),

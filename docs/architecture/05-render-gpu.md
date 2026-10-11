@@ -1,5 +1,16 @@
 # 05 レンダラーと GPU
 
+## PERF-004: 二組のframeによるdelivery pipeline
+
+[ADR-0152](../adr/0152-two-frame-delivery-pipeline.md)に従い、Movie/GIFのtile render・色変換はcaller thread、
+native encodeとGIF第二段階は専用threadで行う。per-leg RGBA8/RGBA64を二組だけ循環させ、
+queue・consumer・recycle・finishを含めて追加pending frameを持たない。固定frame gridからPTS/spanを先に決める。
+専用threadは同一directoryの独立Runtimeを開きcapability一致を確認し、native handle/error bufferやRcをthread間で渡さない。
+GIF第二段階はpooled bufferを再利用し、callerのcheckpoint gateを待つ。全失敗でdisconnect/join後にstageを回収する。
+全legの検査・最終cancel/no-clobber publicationはcallerが維持し、音声単独ではpipelineを作らない。
+`VideoPipelineMode::Serial` は一組のcontrolled測定用で、defaultは `TwoFrames`。作品/requestへ保存しない。
+bundle payloadとtile scratch・codec内部frame・metadata・GPU/driver/RSSを区別し、queue容量だけをmemory上限と呼ばない。
+
 ## NLE-002 の動画 / Generator / clip effects
 
 以下の SDR software 経路は NLE-002 の初期契約。M4 では COLOR-001 の明示 HDR profile、GPU-003 の strict resident 経路、PERF-001 の bounded sequential decode を追加した。各経路の制限は本章末尾と各検証記録に従う。
@@ -7,6 +18,16 @@
 Sequence compiler は Composition の独立 instance に加え、動画 Asset の明示 stream / rational PTS 要求と `kronello.solid` version 1 を同じ Scene IR / Render DAG へ lowering する。Clip.properties は配置 transform / effects を Sequence time で評価する。動画は native dimensions、Generator は Sequence extent を local rectangle とする。track 順は下→上、transition の同一 track 内は開始時刻順。effects の後に crossfade incoming の opacity を掛ける。
 
 `VideoRenderBackend` は固定 DAG に入った Asset hash / locator だけを解決する。元 Project を再読込しない。software seek / decode、明示 SDR RGBA8 color conversion / inverse transfer / premultiply、CPU nearest sampling、選択 GPU への明示 RGBA16F upload を通す。未知 format / HDR / 色 tag、asset 欠落 / hash mismatch は typed error。タグ欠落時の明示 default（YUV: BT.709 limited、RGB: sRGB full）は sequence.query に assumptions として見える。native plane decode API の HDR 保持をこの SDR renderer の対応と同一視しない。
+
+PERF-003の `MediaSession` は `VideoDraw.cursor` にSceneKey（NodeId + InstancePath）を渡し、同じ素材の異時刻配置でも独立したdecoderを保持する。keyはcanonical path / stream / locked Asset / SceneKey。既定の保持上限は8個・presentation bytes合計512MiBで、個数/byteのどちらかを超えればLRU破棄する。codec内部・変換中の配列・戻り値・GPU面を含むRSS上限ではない。source再検証、exact PTSとreverse restart、rasterの内容identity、実行スコープの寿命を維持する（[ADR-0146](../adr/0146-independent-bounded-media-cursors.md)）。
+
+PERF-005のsoftware VideoDecoderは、要求中に128以上のnative framesをcanonical originから正確に復号した終点だけを、PTS/end・dimensions/format/colorと全native planesのdigestで証明する。各cursor最大4096件のFIFO索引を持ち、再訪問のnative seek候補を完全検証してから公開する。一度だけ1秒前の候補も探索でき、失敗時は候補面を捨て同一file/stream/codecのfresh originへ戻す。負originは先頭packetを維持する。未証明位置のorigin work、reverse端点、typed errorsを維持し、通常の短い連続再生では証明用hashを計算しない。Unix source fingerprintを要求前後でfenceし、変更時は索引/提示面を無効化する。他OSは索引を無効にする。索引の有界metadataはpresentation budget・native codec/RSSと別に観測する（[ADR-0154](../adr/0154-verified-sparse-presentation-seek.md)、[測定](../testing/perf-005.md)）。
+
+PERF-004のnative encode初期設定はProRes KSのthread_count=4、DNxの2とする。SVT-AV1のlp=1とその他codecの設定、preset/bitrate/pixel classは維持する。packetのcodec PTSを最大256件のsubmit済みspanと照合してからrescaleし、遅延/flushで最後のframe spanを別packetへ流用しない。codec内部のframe buffersはshimの1frame/packet所有と区別し、RSSを別に測る（[ADR-0149](../adr/0149-codec-parallelism-and-packet-spans.md)、[測定](../testing/perf-004.md)）。
+
+runtime内の資産検証メモはcanonical pathごとに検証前FileFingerprintと期待content hashを保持し、両方が一致した時だけ全量hashの成功を再利用する。期待hashだけの変更も再検証する。warm再利用はUnixのctime/inode fenceへ限定し、その他OSは各アクセスの全量hashを維持する。失敗を成功として保持せず、別AssetIdから同一内容への参照は許容する（[ADR-0153](../adr/0153-expected-hash-verification-memo.md)）。
+
+preview準備はPreferでも、proxy locatorのcanonical path/fingerprint・欠落状態を追加依存として検証済みsnapshotを再利用する。proxyの変更/復帰で再検証し、従来の原本へのfallbackを維持する。Offの書き出し規約は変えない（[ADR-0147](../adr/0147-indexed-timeline-and-proxy-preparation.md)）。
 
 clip effects は FX-001 / FX-002 の版付き ordered DAG、affine 契約、halo / backward ROI、raster identity を共有する。`FrameMetadata.input_path` は active video の CPU decode / color / sampling と selected backend の経路を表し、GPU の低層 TransferStats は upload bytes / operations を数える。NLE-002 時点では GPU-resident decode、frame interpolation、tile 間の decode cache は追加していなかった。frame interpolation は TRACK-003 で順方向 SDR のみ実装した（下記参照）。CPU / GPU 比較の実行範囲は [NLE-002 の検証](../testing/nle-002.md)、時間・色・Generator と transition の意味版は [ADR-0062](../adr/0062-video-generator-and-timeline-edits.md) を参照する。
 
@@ -172,7 +193,7 @@ M1 / M2 は互換経路でも実装を進め、転送コストを明示する。
 
 共通 Query `render.explain` は Composition / Sequence の snapshot、Scene IR、tile ごとの Render DAG を組立て、stage code / inputs / SceneKey、要求・halo 実行領域、面数・メモリ・転送の推定を返す。frame executor と同じ `frame_tiles` を使う。`executed:false` であり、GPU の可用性や転送時間の実測ではない。失敗時は `plan:null` と型付き diagnostics を返し、代替 backend を選ばない。
 
-control upload / image upload / GPU image copy / image・status readback を分ける。INSPECT-002 の推定は tile ごとに一回 graph、linear / display の二つの RGBA16F image（256-byte row padding）、一つの4-byte status readback を数える（3 operations）。native preview の代替境界は全領域一回 graph、画像 readback なし、status 4 byte / 一操作であり final tile path に加算しない。実際の転送は `FrameMetadata.transfer_stats` で確認する。control upload の bytes / operations は未推定の null。CPU の GPU 転送は0。注入 backend の未知使用量も null とする。
+control upload / image upload / GPU image copy / image・status readback を分ける。INSPECT-002の推定は通常frameではtileごとに一回graph、linear/display二つのRGBA16F image（256-byte row padding）と4-byte statusを数える（3 operations）。temporalではsampleごとにlinear一面+status（2 operations）を数え、最終displayをCPUで一回変換する（[ADR-0150](../adr/0150-linear-only-delivery-and-temporal-samples.md)）。native preview の代替境界は全領域一回 graph、画像 readback なし、status 4 byte / 一操作であり final tile path に加算しない。実際の転送は `FrameMetadata.transfer_stats` で確認する。control upload の bytes / operations は未推定の null。CPU の GPU 転送は0。注入 backend の未知使用量も null とする。
 
 RGBA16F 面は8 bytes/pixel、CPU 参照面は16 bytes/pixel、最終 host の linear / display は合計32 bytes/pixel。中間面は既存 backend の保守的な安全予算式による `_estimate` で、allocator / driver / geometry / font / RSS / 実測 peak を含まない。`SINGLE_GRAPH_LINEAR_DISPLAY_OUTPUT`、`ZERO_OPACITY_STILL_PROCESSED`、`EFFECT_HALO_EXPANSION`、`SURFACE_BUDGET_EXCEEDED` は処理・安全予算上の notice。OQ-14 の性能合否を決めない。
 
@@ -269,9 +290,9 @@ Shape の単色 / linear・radial・focal_radial・conic gradient fill / stroke 
 
 M5のMATTE-001では `Project.mattes` と共有 `MatteSet` / `MatteRemove`、Undo、Inspectorを実装し、M5作業ツリーで受け入れ済みである（[ADR-0099](../adr/0099-authored-matte-relations.md)、[検証記録](../testing/matte-001.md)）。既存の `MatteBinding` は引き続き transient な `RenderSnapshot` 入力であり、保存される文書関係と区別する。同じsourceへの重複指定は拒否する。source / matte とも stable SceneKey。matte は表示 root / children から除外し、`visible = true` の場合だけ表示する。source ごとの binding は一つ、共有 matte の DAG は再利用する。欠落・非アクティブ参照・containment / matte を合わせた循環は失敗する。
 
-scene 1,024 node、DAG 4,096 node、containment / matte recursion 24、出力 16,777,216 pixel の保守的上限を設ける。backend は GPU-002 の 1,024 draw node・32 depth・65,536 edge・512 MiB 面予算をさらに適用し、限界を超えた要求はエラーにする。INTEGRATION-001 / [ADR-0053](../adr/0053-integration-evaluated-queries-and-render-tiles.md) で幅または高さが512 pixelsを超える出力を最大512×512のtileへ分け、元画素格子と既存effect ROI haloを保って同じbackendで実行する。metadataは元のregion、最終linear / display面は全画面のまま。movie export は RENDER-003 の tile sink から1枚の RGBA8 buffer に組み立てて即 encode し、全画面 linear / display と全 frames payload を保持しない。巨大 cumulative halo は同時保持面の保守的上界512 MiBで backend allocation 前に拒否する（ADR-0141）。M4 CACHE-003 では GPU texture LRU・資源 pool・外部 disk cache を実装した。性能の測定範囲と制限は PERF-001 の記録に従い、一般的な性能保証にはしない。CACHE-001 の初期インメモリ cache は下記の範囲で実装した。
+scene 1,024 node、DAG 4,096 node、containment / matte recursion 24、出力 16,777,216 pixel の保守的上限を設ける。backend は GPU-002 の 1,024 draw node・32 depth・65,536 edge・512 MiB 面予算をさらに適用し、限界を超えた要求はエラーにする。INTEGRATION-001 / [ADR-0053](../adr/0053-integration-evaluated-queries-and-render-tiles.md) で幅または高さが512 pixelsを超える出力を最大512×512のtileへ分け、元画素格子と既存effect ROI haloを保って同じbackendで実行する。metadataは元のregion、最終linear / display面は全画面のまま。movie export は RENDER-003 のlinear tile sinkから各legのRGBA8/RGBA64 bufferへ組み立て、ADR-0152の最大二組をproducer/encoder consumer間で循環させる。全画面linear/displayと全frames payloadは保持しない。巨大 cumulative halo は同時保持面の保守的上界512 MiBで backend allocation 前に拒否する（ADR-0141）。M4 CACHE-003 では GPU texture LRU・資源 pool・外部 disk cache を実装した。性能の測定範囲と制限は PERF-001 の記録に従い、一般的な性能保証にはしない。CACHE-001 の初期インメモリ cache は下記の範囲で実装した。
 
-M1 の GPU adapter は linear / display 用に同じ DrawScene を二回実行していた。現在の M4 PERF-001 は一回の graph 実行から linear / display を GPU 上で生成し、二つの image と一つの validation status を readback する。renderer API の actual 転送統計は要求単位で集約する。詳細は [GPU fusion 検証](../testing/perf-001-gpu-fusion.md) を参照する。
+M1 の GPU adapter は linear / display 用に同じ DrawScene を二回実行していた。M4 PERF-001は一回のgraphから両面を生成する通常frame経路へ統合した。PERF-004はMovie/GIFとtemporal中間sampleをlinear専用とし、不要なdisplay dispatch/readbackを省く。通常frameは両面、専用境界はlinear一面とvalidation statusをreadbackし、意味key・sticky validation・cache公開順を維持する。linear tileは両面temporal cacheへentryを作らない（[ADR-0150](../adr/0150-linear-only-delivery-and-temporal-samples.md)）。renderer API の actual 転送統計は要求単位で集約する。詳細は [GPU fusion 検証](../testing/perf-001-gpu-fusion.md) を参照する。
 
 ### 連番・ファイル・metadata schema 1
 
@@ -335,7 +356,7 @@ layout の取得後に、その時刻の各 style の fill を `style_index` で
 
 ## RENDER-003 の movie export
 
-[ADR-0079](../adr/0079-bounded-streaming-movie-export.md) の `render_frame_tiles` は
+[ADR-0079](../adr/0079-bounded-streaming-movie-export.md) と [ADR-0150](../adr/0150-linear-only-delivery-and-temporal-samples.md) の `render_frame_linear_tiles` は
 512×512 tile を同期 sink に渡し、sink の処理完了まで次の tile を作らない。
 ROI / halo は従来の backwards compiler と絶対画素格子を共有する。
 [ADR-0141](../adr/0141-peak-live-render-surfaces.md) により、`RenderDag::tile_surface_bytes(16)` は
@@ -344,14 +365,16 @@ Group は accumulator と処理中の子だけを保持する。多入力ノー�
 次の入力の評価を数え、effect は入力・出力と同時 temporary（標準6面、その他3面）の最大を取る。
 複数参照の memo は pass 全期間、外部 raster のコピーは2面/入力として安全側に数える。
 blank・最終変換/crop/readback の4面と、検証待ち GPU cache の最大8面（候補ノード数以下）を加える。
-字形ごとの面数を全字形分加算しない。ROI 縮小 allocation は導入せず、halo を含む全面積を維持する。
+字形ごとの面数を全字形分加算しない。事前推定はhaloを含むunion全面積の上界を維持する。
+実GPUでは[ADR-0157](../adr/0157-local-coverage-and-last-consumer-surfaces.md)により、trusted fill-only leafをguard付き整数pixelの局所面（32以上の2の冪bucket、canvas内）で確保する。global sample格子は不変、面外はtransparent。Effect/EffectMapの直接入力、stroke/gradient、不確実なboundは全面を維持し、halo/filterの変更や全面復元copyを行わない。shared memoはoriginal consumer数に従って最後の利用後に解放する。cache hitで省略した下流の参照数は安全側に残す。局所keyはorigin/extent/寸法/working spaceを含み、既存sticky検査後だけ公開する。runtime namespaceを更新し、従来の上界と実descriptor peakを区別する。
 `SurfaceLifetime` / `peak_surface_count` を DAG・CPU/GPU backend・render.explain で共有し、
 通常 frame / movie streaming は同じ事前検査を通す。backend は従来の全結果保持上界との小さい方を採り、小規模 graph の cache publication の二重課金を避ける。
 synthetic root 省略分も安全側の差になる。
 永続 cache・pool・geometry・font・driver の予算/実測はこの中間面 payload 推定と区別する。
 512 MiB超過は `UNSUPPORTED_FEATURE`。backend 固有の安全予算も適用する。
 一般 frame / image sequence の最終2面と render.explain の host 面推定は従来のまま。
-SDR movie は RGBA8 1面だけを全画面保持し、1 frame ごとに native encoderへ渡す。
+Movie/GIFは [ADR-0152](../adr/0152-two-frame-delivery-pipeline.md) の二組のper-leg RGBA8/RGBA64を循環させ、
+callerのtile render・変換と独立Runtimeのnative encodeを重ねる。追加pending frameや全画面float32面は保持しない。
 音声の spool / bounded Bus、I/O report、実測 RSS と検証範囲は
 [RENDER-003](../testing/render-003.md) を参照する。
 
@@ -413,3 +436,11 @@ GPU-003 の保証は macOS Metal の H.264 / HEVC `hvc1` MOV、BT.709 limited-ra
 `kronello-framebridge::PathKind::VideoToolbox` は generic な spike selector で、現在も typed `UnsupportedFeature` を返す。具体的な `VideoToolboxDecodeBgra8` / `VideoToolboxDecodeNv12Biplanar` の probe と `resident::decode_file`、共有 service の strict resident backend は別の API である。FRAMEBRIDGE-001ではgenericを互換用の拒否selectorに限定し、具体8経路の一覧から除外した。BGRA8明示probeがNV12へfallbackしないことも実機で確認した（[ADR-0098](../adr/0098-explicit-framebridge-path-inventory.md)、[検証記録](../testing/framebridge-001.md)）。最終統合検証とタスク受け入れは別に管理する。
 
 INSPECT-002 は旧二重実行見積もりを単一 graph と status 一回に整合し、固定 snapshot の rational shutter sample / tile を計画する。cold execution / raster persistence なしの見積もりと actual request counters、native decode / control upload の未知範囲を区別する。共有 Query は GPU / raster を実行せず、strict resident + temporal は実 renderer と同じ未対応を返す。[ADR-0097](../adr/0097-read-only-single-graph-render-plans.md) と [検証記録](../testing/inspect-002.md) の確認範囲を参照する。
+
+## revision単位のプレビュー準備
+
+Unixのnative sessionは共有serviceのsnapshot・font bytes・parsed LUTをrevisionと入力identityで再利用する。`ValidatedRenderSnapshot` が全体検証とstatic sequence loweringを保持し、時刻変更では有理数のreverse sampling・Scene IR/DAGを毎回構築する。semantic `RenderCache` は既存の意味keyとbudgetを使ってsession内で保持する。region/timeは準備keyに固定せず、proxy Preferは資産ready状態のkeyが整うまで既存の準備経路を使う。型付きエラー、派生cacheのserialized payload予算とOS差は [ADR-0144](../adr/0144-revision-scoped-preview-preparation.md) と [PERF-003](../testing/perf-003.md) を参照する。
+
+### PERF-005 の有界hardware cursor
+
+strict resident backendはlocal fileの圧縮decode-order metadataを一度走査し、実測PTSのglobal reorder gapによるwatermarkとVT waitを使って正確な提示を証明する。圧縮sampleは一つずつ読み、順方向はhardware sessionと有界future outputを再利用する。backwardは同じoriginから再openする。node/instance・全asset lock・streamごとの最大8cursor、保持output合計512MiB、各cursor/callback64outputsとsingle compressed sample128MiBを超える場合は型付き失敗またはpool退避とする。返却frameとGPU import、native codec/AVFoundation内部は保持payload予算外で、RSS上限を主張しない。source fingerprintと既存前後asset hash/color/dimensions検査を維持する。一発native oracleとProRes RAWは既存全clip上限の経路を維持する。詳細とCPU検証oracleのSDR clamp修正は[ADR-0156](../adr/0156-bounded-persistent-hardware-cursor.md)。最終受け入れとGPU範囲/寿命最適化は[PERF-005](../testing/perf-005.md)で別に確認する。

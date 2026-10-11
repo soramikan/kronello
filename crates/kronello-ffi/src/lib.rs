@@ -19,13 +19,14 @@ use std::{
         atomic::{AtomicU64, Ordering},
         mpsc,
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 const MAX_JSON: usize = 16 * 1024 * 1024;
 const CAPACITY: usize = 64;
+const NOTIFICATION_INTERVAL: Duration = Duration::from_millis(250);
 struct Session {
     path: std::path::PathBuf,
-    sender: mpsc::SyncSender<(u64, Work)>,
+    sender: mpsc::SyncSender<(u64, Instant, Work)>,
     output: Arc<Mutex<VecDeque<Value>>>,
     outstanding: Mutex<usize>,
 }
@@ -84,7 +85,7 @@ fn enqueue(handle: u64, work: Work) -> u64 {
         return 0;
     }
     let id = NEXT.fetch_add(1, Ordering::Relaxed);
-    if s.sender.try_send((id, work)).is_err() {
+    if s.sender.try_send((id, Instant::now(), work)).is_err() {
         return 0;
     }
     *outstanding += 1;
@@ -124,7 +125,7 @@ fn capture_session_audio(
     };
     let (reply, result) = mpsc::sync_channel(1);
     sender
-        .try_send((0, Work::CaptureAudio(request, reply)))
+        .try_send((0, Instant::now(), Work::CaptureAudio(request, reply)))
         .map_err(|_| ServiceError::new("BACKPRESSURE", "audio snapshot queue unavailable"))?;
     result
         .recv_timeout(Duration::from_secs(30))
@@ -142,7 +143,7 @@ fn with_session<T>(session: &Option<ProjectSession>, operation: impl FnOnce() ->
 fn worker(
     path: String,
     executable: Option<String>,
-    receiver: mpsc::Receiver<(u64, Work)>,
+    receiver: mpsc::Receiver<(u64, Instant, Work)>,
     output: Arc<Mutex<VecDeque<Value>>>,
 ) {
     let mut service = Service::new(BackendSelection::Gpu);
@@ -166,13 +167,24 @@ fn worker(
     );
     let mut previous_jobs = Value::Null;
     let mut subscribed = false;
+    let mut next_notification = Instant::now() + NOTIFICATION_INTERVAL;
+    let commands = kronello_service::command_registry();
+    let timing = std::env::var_os("KRONELLO_FFI_TIMING").is_some();
     let mut previews: HashMap<u32, preview::Preview> = HashMap::new();
     // IO-001: external output devices bound to this session's program GPU
     // context. Empty until the caller attaches/enables a route explicitly.
     let mut outputs = output::OutputSet::default();
     loop {
-        match receiver.recv_timeout(Duration::from_millis(250)) {
-            Ok((id, work)) => {
+        let mut refresh_notifications = false;
+        let timeout = if subscribed {
+            next_notification.saturating_duration_since(Instant::now())
+        } else {
+            NOTIFICATION_INTERVAL
+        };
+        match receiver.recv_timeout(timeout) {
+            Ok((id, queued_at, work)) => {
+                let started = Instant::now();
+                let queue_wait_ms = started.duration_since(queued_at).as_secs_f64() * 1000.0;
                 if let Work::CaptureAudio(request, reply) = work {
                     let result = if let Some(value) = &open_error {
                         Err(
@@ -191,21 +203,26 @@ fn worker(
                         })
                     };
                     let _ = reply.send(result);
-                    continue;
-                }
-                // A session created before project.create adopts its store on
-                // the next request. An initially locked/failed session remains
-                // failed even after an external holder releases its lock.
-                if session.is_none()
-                    && open_error.is_none()
-                    && std::path::Path::new(&path).is_file()
-                {
-                    match ProjectSession::open(std::path::Path::new(&path)) {
-                        Ok(value) => session = Some(value),
-                        Err(e) => open_error = Some(error(&e)),
+                    if timing {
+                        eprintln!(
+                            "ffi_timing {}",
+                            json!({"request_id":id,"queue_wait_ms":queue_wait_ms,"request_ms":started.elapsed().as_secs_f64()*1000.0,"kind":"audio_capture"})
+                        );
                     }
-                }
-                let result = open_error.clone().unwrap_or_else(|| {
+                } else {
+                    // A session created before project.create adopts its store on
+                    // the next request. An initially locked/failed session remains
+                    // failed even after an external holder releases its lock.
+                    if session.is_none()
+                        && open_error.is_none()
+                        && std::path::Path::new(&path).is_file()
+                    {
+                        match ProjectSession::open(std::path::Path::new(&path)) {
+                            Ok(value) => session = Some(value),
+                            Err(e) => open_error = Some(error(&e)),
+                        }
+                    }
+                    let result = open_error.clone().unwrap_or_else(|| {
                     with_session(&session, || {
                         catch_unwind(AssertUnwindSafe(|| match work {
                     Work::CaptureAudio(..) => unreachable!("capture handled separately"),
@@ -213,6 +230,11 @@ fn worker(
                         // Use the exact shared strict Request decoder. The embedder
                         // must provide the CLI worker; a Swift executable cannot
                         // implement the service's detached worker_entry protocol.
+                        let changes_state = serde_json::from_str::<Value>(&json).ok()
+                            .and_then(|value| value["operation"].as_str().map(str::to_owned))
+                            .is_some_and(|name| commands.iter().any(|command|
+                                command.name == name && (!command.read_only
+                                    || matches!(name.as_str(), "job.cancel" | "job.resume" | "job.prune" | "render.submit" | "render.export" | "proxy.generate" | "scene.detect" | "capture.start" | "capture.stop" | "export.batch"))));
                         let response = match serde_json::from_str::<Request>(&json) {
                             Ok(Request::RenderSubmit(_)) if !has_worker => Response::Error {
                                 error: ServiceError::new(
@@ -236,10 +258,12 @@ fn worker(
                             Ok(request) => service.execute(request),
                             Err(e) => Response::Error { error: e.into() },
                         };
+                        refresh_notifications = changes_state && matches!(&response, Response::Success { .. });
                         serde_json::to_value(response).expect("response JSON")
                     }
                     Work::Subscribe(enable) => {
                         subscribed = enable;
+                        refresh_notifications = enable;
                         json!({"status":"success"})
                     }
                     // IO-001: the reference-monitor slot binds its surface to
@@ -323,15 +347,23 @@ fn worker(
                 .unwrap_or_else(|_| error(&ServiceError::new("FFI_PANIC", "native worker panicked; request failed")))
                     })
                 });
-                publish(
-                    &output,
-                    json!({"request_id":id,"response_json":result.to_string()}),
-                );
+                    publish(
+                        &output,
+                        json!({"request_id":id,"response_json":result.to_string()}),
+                    );
+                    if timing {
+                        eprintln!(
+                            "ffi_timing {}",
+                            json!({"request_id":id,"queue_wait_ms":queue_wait_ms,"request_ms":started.elapsed().as_secs_f64()*1000.0})
+                        );
+                    }
+                }
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
             Err(mpsc::RecvTimeoutError::Timeout) => (),
         }
-        if subscribed {
+        if subscribed && (refresh_notifications || Instant::now() >= next_notification) {
+            let started = Instant::now();
             let current = open_error
                 .clone()
                 .unwrap_or_else(|| with_session(&session, || info(&service, &path)));
@@ -346,6 +378,15 @@ fn worker(
             if jobs != previous_jobs {
                 notify(&output, "job_progress", jobs.clone());
                 previous_jobs = jobs;
+            }
+            // Start a new deadline after the queries finish. A long query must
+            // not trigger another immediate poll ahead of queued redraws.
+            next_notification = Instant::now() + NOTIFICATION_INTERVAL;
+            if timing {
+                eprintln!(
+                    "ffi_timing {}",
+                    json!({"notification_ms":started.elapsed().as_secs_f64()*1000.0,"immediate":refresh_notifications})
+                );
             }
         }
     }
@@ -422,7 +463,8 @@ pub unsafe extern "C" fn kronello_call(handle: u64, json: *const u8, len: usize)
     })
 }
 /// Poll subscription: coalesced revision/job snapshots at idle 250ms intervals
-/// and after requests. All notifications include the shared response JSON.
+/// and successful state-changing calls. Redraws and queries do not restart the
+/// deadline. All notifications include the shared response JSON.
 #[unsafe(no_mangle)]
 pub extern "C" fn kronello_subscribe(handle: u64, enable: bool) -> u64 {
     guard(|| enqueue(handle, Work::Subscribe(enable)))

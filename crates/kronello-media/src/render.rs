@@ -119,7 +119,13 @@ impl MediaRuntime {
         if let Some(detection) = crate::raw::sniff_camera_raw(&path)? {
             return Err(detection.unsupported());
         }
+        let fingerprint = assets::FileFingerprint::of(&std::fs::metadata(&path)?);
         let native = ffi::NativeDecoder::open_stream(&self.native, &path, Some(stream_index))?;
+        if native.file_fingerprint()? != fingerprint {
+            return Err(MediaError::Decode(
+                "video source changed during open".into(),
+            ));
+        }
         if native.stream() != stream_index {
             return Err(MediaError::UnsupportedFeature(
                 "requested video stream was not selected".into(),
@@ -140,6 +146,10 @@ impl MediaRuntime {
             stats: VideoDecodeStats::default(),
             current: None,
             lookahead: None,
+            seek_index: Default::default(),
+            canonical: true,
+            at_origin: false,
+            source_fingerprint: Some(fingerprint),
         })
     }
     pub fn decode_video_image(
@@ -731,21 +741,47 @@ pub struct ResolvedDagMedia {
     pub input_identities: std::collections::BTreeMap<usize, String>,
 }
 /// Stateful media resolution context shared across frames. It owns the lazily
-/// loaded FFmpeg runtime and a bounded pool of open decoders keyed by resolved
-/// path + stream + locked asset, so sequential redraws decode forward instead
-/// of reopening and re-seeking per frame. The pool bound covers 8K 10-bit
-/// sources: at most two decoders and 512 MiB of retained presentation buffers
-/// survive calls (two current+lookahead pairs at ~100 MiB each). A session is
-/// not `Sync`; hosts serialize redraws.
+/// loaded FFmpeg runtime and independent authored node/instance cursors. Both
+/// decoder count and retained presentation bytes are bounded; codec-internal
+/// buffers and transient conversions are outside the retained-byte budget.
+/// A session is not `Sync`; hosts serialize redraws.
 #[derive(Default)]
 pub struct MediaSession {
     runtime: Option<Result<MediaRuntime, (&'static str, String)>>,
-    decoders: Vec<(String, VideoDecoder)>,
+    decoders: Vec<(DecoderKey, VideoDecoder)>,
+    limits: DecoderPoolLimits,
     stats: DecoderPoolStats,
+    retired_stats: VideoDecodeStats,
+}
+#[derive(PartialEq, Eq)]
+struct DecoderKey {
+    path: std::path::PathBuf,
+    stream_index: u32,
+    asset: Asset,
+    cursor: kronello_render::SceneKey,
+}
+/// Runtime retention policy; a zero count or byte budget disables retention.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DecoderPoolLimits {
+    pub max_decoders: usize,
+    pub retained_frame_bytes: usize,
+}
+impl Default for DecoderPoolLimits {
+    fn default() -> Self {
+        Self {
+            max_decoders: 8,
+            retained_frame_bytes: 512 * 1024 * 1024,
+        }
+    }
 }
 impl MediaSession {
     pub fn new() -> Self {
         Self::default()
+    }
+    pub fn with_decoder_limits(mut self, limits: DecoderPoolLimits) -> Self {
+        self.limits = limits;
+        self.enforce_limits();
+        self
     }
     /// Seed the session with an already-attempted runtime load; the error form
     /// keeps the typed `(code, message)` pair the render surface reports.
@@ -771,6 +807,15 @@ impl MediaSession {
             .iter()
             .map(|(_, d)| d.decode_stats())
             .collect()
+    }
+    /// Includes retired/evicted cursors. The peak field is the largest single
+    /// decoder's cached-frame peak, not a simultaneous process-memory peak.
+    pub fn decoder_stats_total(&self) -> VideoDecodeStats {
+        let mut total = self.retired_stats;
+        for (_, decoder) in &self.decoders {
+            total.merge(decoder.decode_stats());
+        }
+        total
     }
     fn runtime(&mut self) -> Result<&MediaRuntime, RenderError> {
         if self.runtime.is_none() {
@@ -803,6 +848,7 @@ impl MediaSession {
     #[allow(clippy::too_many_arguments)]
     fn video_source(
         &mut self,
+        cursor: &kronello_render::SceneKey,
         asset: &Asset,
         project_path: &Path,
         stream_index: u32,
@@ -818,15 +864,13 @@ impl MediaSession {
         let path = runtime
             .resolve_verified(asset, project_path)
             .map_err(render_error)?;
-        let key = format!(
-            "{}:{stream_index}:{}",
-            path.display(),
-            serde_json::to_string(asset).map_err(|e| RenderError::Backend {
-                code: "INVALID_INPUT",
-                message: e.to_string()
-            })?
-        );
-        let mut decoder = self.take_decoder(&runtime, &path, stream_index, key.clone())?;
+        let key = DecoderKey {
+            path: path.clone(),
+            stream_index,
+            asset: asset.clone(),
+            cursor: cursor.clone(),
+        };
+        let mut decoder = self.take_decoder(&runtime, &path, stream_index, &key)?;
         let timing = std::env::var_os("KRONELLO_MEDIA_TIMING").is_some();
         let t0 = timing.then(std::time::Instant::now);
         let result = runtime.decode_video_source_from_decoder(
@@ -861,6 +905,7 @@ impl MediaSession {
     fn video_resident(
         &mut self,
         gpu: &kronello_gpu::GpuContext,
+        cursor: &kronello_render::SceneKey,
         asset: &Asset,
         project_path: &Path,
         stream_index: u32,
@@ -887,15 +932,13 @@ impl MediaSession {
         let path = runtime
             .resolve_verified(asset, project_path)
             .map_err(render_error)?;
-        let key = format!(
-            "{}:{stream_index}:{}",
-            path.display(),
-            serde_json::to_string(asset).map_err(|e| RenderError::Backend {
-                code: "INVALID_INPUT",
-                message: e.to_string()
-            })?
-        );
-        let mut decoder = self.take_decoder(&runtime, &path, stream_index, key.clone())?;
+        let key = DecoderKey {
+            path: path.clone(),
+            stream_index,
+            asset: asset.clone(),
+            cursor: cursor.clone(),
+        };
+        let mut decoder = self.take_decoder(&runtime, &path, stream_index, &key)?;
         let result = (|| {
             // `hdr.is_none()` here (checked above), so `prepare_video_frame`
             // already rejects HDR sources; `is_hdr` cannot be true.
@@ -988,40 +1031,49 @@ impl MediaSession {
         runtime: &MediaRuntime,
         path: &Path,
         stream_index: u32,
-        key: String,
+        key: &DecoderKey,
     ) -> Result<VideoDecoder, RenderError> {
-        if let Some(index) = self.decoders.iter().position(|(k, _)| *k == key) {
+        if let Some(index) = self.decoders.iter().position(|(k, _)| k == key) {
             self.stats.hits += 1;
             Ok(self.decoders.remove(index).1)
         } else {
             self.stats.misses += 1;
-            if self.decoders.len() >= 2 {
-                self.decoders.remove(0);
-                self.stats.evictions += 1;
+            if !self.decoders.is_empty() && self.decoders.len() >= self.limits.max_decoders {
+                self.evict_oldest();
             }
             runtime
                 .open_video_stream(path, stream_index)
                 .map_err(render_error)
         }
     }
-    fn return_decoder(&mut self, key: String, decoder: VideoDecoder) {
-        self.decoders.push((key, decoder));
-        while self
-            .decoders
-            .iter()
-            .map(|(_, d)| d.cached_frame_bytes())
-            .sum::<usize>()
-            > 512 * 1024 * 1024
-        {
-            self.decoders.remove(0);
-            self.stats.evictions += 1;
-        }
+    fn evict_oldest(&mut self) {
+        let (_, decoder) = self.decoders.remove(0);
+        self.retired_stats.merge(decoder.decode_stats());
+        self.stats.evictions += 1;
         self.stats.active_decoders = self.decoders.len();
-        self.stats.retained_frame_bytes = self
-            .decoders
-            .iter()
-            .map(|(_, d)| d.cached_frame_bytes())
-            .sum();
+        self.stats.retained_frame_bytes = self.retained_frame_bytes();
+    }
+    fn return_decoder(&mut self, key: DecoderKey, decoder: VideoDecoder) {
+        self.decoders.push((key, decoder));
+        self.enforce_limits();
+    }
+    fn enforce_limits(&mut self) {
+        while self.decoders.len() > self.limits.max_decoders
+            || (self.limits.retained_frame_bytes == 0 && !self.decoders.is_empty())
+            || self.retained_frame_bytes() > self.limits.retained_frame_bytes
+        {
+            self.evict_oldest();
+        }
+        self.update_pool_stats();
+    }
+    fn retained_frame_bytes(&self) -> usize {
+        self.decoders.iter().fold(0usize, |bytes, (_, d)| {
+            bytes.saturating_add(d.cached_frame_bytes())
+        })
+    }
+    fn update_pool_stats(&mut self) {
+        self.stats.active_decoders = self.decoders.len();
+        self.stats.retained_frame_bytes = self.retained_frame_bytes();
         self.stats.peak_retained_frame_bytes = self
             .stats
             .peak_retained_frame_bytes
@@ -1057,13 +1109,14 @@ pub fn resolve_dag_media_in(
     let mut input_identities = std::collections::BTreeMap::new();
     let resolved = dag.resolve_video(
         |index, asset, stream, time, working, reverse_sampling, interpolation| {
-            let (extent, crop, output_to_local) = match dag.nodes().get(index) {
+            let (cursor, extent, crop, output_to_local) = match dag.nodes().get(index) {
                 Some(kronello_render::DagNode::VideoDraw {
+                    cursor,
                     extent,
                     crop,
                     output_to_local,
                     ..
-                }) => (*extent, *crop, *output_to_local),
+                }) => (cursor, *extent, *crop, *output_to_local),
                 _ => {
                     return Err(RenderError::InvalidInput(
                         "video resolve index outside VideoDraw".into(),
@@ -1131,6 +1184,7 @@ pub fn resolve_dag_media_in(
                 return Ok(kronello_render::VideoSource::from_image(image));
             }
             let sourced = session.video_source(
+                cursor,
                 asset,
                 project_path,
                 stream,
@@ -1177,13 +1231,14 @@ pub fn resolve_dag_media_resident(
     let mut input_identities = std::collections::BTreeMap::new();
     let resolved = dag.resolve_video_selective(
         |index, asset, stream, time, working, reverse_sampling, interpolation| {
-            let (extent, crop, output_to_local) = match dag.nodes().get(index) {
+            let (cursor, extent, crop, output_to_local) = match dag.nodes().get(index) {
                 Some(kronello_render::DagNode::VideoDraw {
+                    cursor,
                     extent,
                     crop,
                     output_to_local,
                     ..
-                }) => (*extent, *crop, *output_to_local),
+                }) => (cursor, *extent, *crop, *output_to_local),
                 _ => {
                     return Err(RenderError::InvalidInput(
                         "video resolve index outside VideoDraw".into(),
@@ -1256,6 +1311,7 @@ pub fn resolve_dag_media_resident(
             if crop.is_none()
                 && let Some((image, identity)) = session.video_resident(
                     gpu,
+                    cursor,
                     asset,
                     project_path,
                     stream,
@@ -1277,6 +1333,7 @@ pub fn resolve_dag_media_resident(
                 return Ok(kronello_render::VideoResolution::Deferred);
             }
             let sourced = session.video_source(
+                cursor,
                 asset,
                 project_path,
                 stream,
@@ -1373,9 +1430,19 @@ impl RenderBackend for VideoRenderBackend<'_> {
         self.backend
             .execute_with_inputs(&resolved.dag, cache, &resolved.input_identities)
     }
+    fn execute_linear_with_cache(
+        &self,
+        dag: &RenderDag,
+        cache: &mut RenderCache,
+    ) -> Result<Vec<[f32; 4]>, RenderError> {
+        let _scope = self.begin_observation_scope()?;
+        let resolved = resolve_dag_media_in(dag, self.project_path, &mut MediaSession::new())?;
+        self.backend
+            .execute_linear_with_inputs(&resolved.dag, cache, &resolved.input_identities)
+    }
 }
 /// Native handles live only for one service render scope, never in pure caches.
-/// At most two decoders and 512 MiB of retained presentation buffers survive calls.
+/// Retention follows the owning session's count and presentation-byte limits.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub struct DecoderPoolStats {
     pub hits: u64,
@@ -1406,8 +1473,17 @@ impl<'a> SequentialVideoRenderBackend<'a> {
     pub fn pool_stats(&self) -> DecoderPoolStats {
         self.session.borrow().decoder_pool_stats()
     }
+    pub fn with_decoder_limits(self, limits: DecoderPoolLimits) -> Self {
+        Self {
+            base: self.base,
+            session: std::cell::RefCell::new(self.session.into_inner().with_decoder_limits(limits)),
+        }
+    }
     pub fn decoder_stats(&self) -> Vec<VideoDecodeStats> {
         self.session.borrow().decoder_stats()
+    }
+    pub fn decoder_stats_total(&self) -> VideoDecodeStats {
+        self.session.borrow().decoder_stats_total()
     }
 }
 impl RenderBackend for SequentialVideoRenderBackend<'_> {
@@ -1462,6 +1538,20 @@ impl RenderBackend for SequentialVideoRenderBackend<'_> {
             .backend
             .execute_with_inputs(&resolved.dag, cache, &resolved.input_identities)
     }
+    fn execute_linear_with_cache(
+        &self,
+        dag: &RenderDag,
+        cache: &mut RenderCache,
+    ) -> Result<Vec<[f32; 4]>, RenderError> {
+        let _scope = self.begin_observation_scope()?;
+        let resolved =
+            resolve_dag_media_in(dag, self.base.project_path, &mut self.session.borrow_mut())?;
+        self.base.backend.execute_linear_with_inputs(
+            &resolved.dag,
+            cache,
+            &resolved.input_identities,
+        )
+    }
 }
 fn render_error(error: MediaError) -> RenderError {
     RenderError::Backend {
@@ -1494,7 +1584,17 @@ pub struct ResidentVideoRenderBackend<'a> {
     pub gpu: &'a kronello_gpu::GpuContext,
     pub project_path: &'a Path,
     pub format: ResidentVideoFormat,
+    #[cfg(target_os = "macos")]
+    resident_cursors: std::cell::RefCell<Vec<ResidentDecoderEntry>>,
     transfers: std::cell::RefCell<kronello_gpu::TransferStats>,
+}
+#[cfg(target_os = "macos")]
+struct ResidentDecoderEntry {
+    path: std::path::PathBuf,
+    stream: u32,
+    asset: kronello_model::Asset,
+    cursor: kronello_render::SceneKey,
+    decoder: kronello_framebridge::resident::ResidentFileDecoder,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResidentVideoFormat {
@@ -1502,6 +1602,18 @@ pub enum ResidentVideoFormat {
     Nv12VideoRange,
 }
 impl<'a> ResidentVideoRenderBackend<'a> {
+    /// Diagnostics for currently retained native cursors, in LRU order. Retired
+    /// sessions and native codec/AVFoundation internal allocations are excluded.
+    #[cfg(target_os = "macos")]
+    pub fn resident_cursor_stats(
+        &self,
+    ) -> Vec<kronello_framebridge::resident::ResidentCursorStats> {
+        self.resident_cursors
+            .borrow()
+            .iter()
+            .map(|entry| entry.decoder.stats())
+            .collect()
+    }
     pub fn new(
         gpu: &'a kronello_gpu::GpuContext,
         project_path: &'a Path,
@@ -1511,6 +1623,8 @@ impl<'a> ResidentVideoRenderBackend<'a> {
             gpu,
             project_path,
             format,
+            #[cfg(target_os = "macos")]
+            resident_cursors: Default::default(),
             transfers: Default::default(),
         }
     }
@@ -1534,7 +1648,7 @@ impl RenderBackend for ResidentVideoRenderBackend<'_> {
     fn cache_namespace(&self) -> Option<String> {
         self.gpu
             .cache_namespace()
-            .map(|n| format!("hardware-video-{:?}-v1:{n}", self.format))
+            .map(|n| format!("hardware-video-{:?}-v2:{n}", self.format))
     }
 
     fn name(&self) -> &str {
@@ -1564,16 +1678,32 @@ impl RenderBackend for ResidentVideoRenderBackend<'_> {
         Some(stats)
     }
     fn execute(&self, dag: &RenderDag) -> Result<BackendFrame, RenderError> {
+        self.execute_planes(dag, false)
+    }
+    fn execute_linear_with_cache(
+        &self,
+        dag: &RenderDag,
+        _cache: &mut RenderCache,
+    ) -> Result<Vec<[f32; 4]>, RenderError> {
+        Ok(self.execute_planes(dag, true)?.linear)
+    }
+}
+impl ResidentVideoRenderBackend<'_> {
+    fn execute_planes(
+        &self,
+        dag: &RenderDag,
+        linear_only: bool,
+    ) -> Result<BackendFrame, RenderError> {
         let _scope = self.begin_observation_scope()?;
         #[cfg(not(target_os = "macos"))]
         {
-            let _ = dag;
+            let _ = (dag, linear_only);
             Err(RenderError::UnsupportedFeature("require_gpu_resident Metal/VideoToolbox requires macOS; select explicit software backend".into()))
         }
         #[cfg(target_os = "macos")]
         {
             use kronello_framebridge::resident::{
-                ResidentFormat, VideoTransfer, decode_file_with_interval,
+                ResidentFileDecoder, ResidentFormat, VideoTransfer,
             };
             use kronello_gpu::{TransferStats, WorkingSpace};
             let native_error =
@@ -1586,6 +1716,7 @@ impl RenderBackend for ResidentVideoRenderBackend<'_> {
             let mut stats = TransferStats::default();
             for (index, node) in dag.nodes().iter().enumerate() {
                 if let kronello_render::DagNode::VideoDraw {
+                    cursor,
                     asset,
                     stream_index,
                     time,
@@ -1639,20 +1770,71 @@ impl RenderBackend for ResidentVideoRenderBackend<'_> {
                     let end = start
                         .checked_add(metadata.duration.expect("validated resident duration"))
                         .map_err(|e| RenderError::InvalidInput(e.to_string()))?;
-                    let frame = decode_file_with_interval(
-                        &path,
-                        *stream_index,
-                        (time.numerator(), time.denominator()),
-                        match self.format {
-                            ResidentVideoFormat::Bgra8 => ResidentFormat::Bgra8,
-                            ResidentVideoFormat::Nv12VideoRange => ResidentFormat::Nv12VideoRange,
-                        },
-                        [
-                            (start.numerator(), start.denominator()),
-                            (end.numerator(), end.denominator()),
-                        ],
-                    )
-                    .map_err(native_error)?;
+                    let mut cursors = self.resident_cursors.borrow_mut();
+                    let existing = cursors.iter().position(|entry| {
+                        entry.path == path
+                            && entry.stream == *stream_index
+                            && entry.asset == *asset
+                            && entry.cursor == *cursor
+                    });
+                    let existing = if let Some(index) = existing {
+                        if cursors[index]
+                            .decoder
+                            .source_fingerprint_matches()
+                            .map_err(native_error)?
+                        {
+                            Some(index)
+                        } else {
+                            cursors.remove(index);
+                            None
+                        }
+                    } else {
+                        None
+                    };
+                    let mut entry = if let Some(index) = existing {
+                        cursors.remove(index)
+                    } else {
+                        if cursors.len() == 8 {
+                            cursors.remove(0);
+                        }
+                        ResidentDecoderEntry {
+                            path: path.clone(),
+                            stream: *stream_index,
+                            asset: asset.clone(),
+                            cursor: cursor.clone(),
+                            decoder: ResidentFileDecoder::open(
+                                &path,
+                                *stream_index,
+                                match self.format {
+                                    ResidentVideoFormat::Bgra8 => ResidentFormat::Bgra8,
+                                    ResidentVideoFormat::Nv12VideoRange => {
+                                        ResidentFormat::Nv12VideoRange
+                                    }
+                                },
+                                [
+                                    (start.numerator(), start.denominator()),
+                                    (end.numerator(), end.denominator()),
+                                ],
+                            )
+                            .map_err(native_error)?,
+                        }
+                    };
+                    // A failed or changed-source cursor is dropped, and the next
+                    // request must repeat admission instead of reusing native state.
+                    let frame = entry
+                        .decoder
+                        .decode_at((time.numerator(), time.denominator()))
+                        .map_err(native_error)?;
+                    cursors.push(entry);
+                    while cursors
+                        .iter()
+                        .map(|entry| entry.decoder.stats().retained_output_bytes)
+                        .sum::<u64>()
+                        > 512 * 1024 * 1024
+                    {
+                        cursors.remove(0);
+                    }
+                    drop(cursors);
                     if metadata.width != Some(frame.size()[0])
                         || metadata.height != Some(frame.size()[1])
                     {
@@ -1689,7 +1871,7 @@ impl RenderBackend for ResidentVideoRenderBackend<'_> {
                         "../../kronello-gpu/src/resident_media.wgsl"
                     ));
                     let identity = format!(
-                        "native-video-source-v1:{}:{metadata:?}:{:?}:{conversion:x}",
+                        "native-video-source-v2:{}:{metadata:?}:{:?}:{conversion:x}",
                         asset.content_hash, self.format
                     );
                     source_keys.insert(
@@ -1704,9 +1886,23 @@ impl RenderBackend for ResidentVideoRenderBackend<'_> {
                     resident.insert(index, image);
                 }
             }
-            let (frame, final_stats) =
+            let (frame, final_stats) = if linear_only {
+                let (linear, stats) = self.gpu.execute_resident_video_linear_cached_with_stats(
+                    dag,
+                    &resident,
+                    &source_keys,
+                )?;
+                (
+                    BackendFrame {
+                        linear,
+                        display: Vec::new(),
+                    },
+                    stats,
+                )
+            } else {
                 self.gpu
-                    .execute_resident_video_cached_with_stats(dag, &resident, &source_keys)?;
+                    .execute_resident_video_cached_with_stats(dag, &resident, &source_keys)?
+            };
             stats.accumulate(&final_stats);
             self.transfers.borrow_mut().accumulate(&stats);
             Ok(frame)

@@ -1,0 +1,11 @@
+{
+  "date": "2026-10-11",
+  "binary_sha256": "9326ef26b51aa105824ba395cbabc8a0dcfb8b244ce58a8617fc1c85b0f4ccaa",
+  "fixed_backend": "gpu",
+  "injected_adapter_unavailable": true,
+  "status": "succeeded",
+  "logical_frames": 3,
+  "completed_frames": 3,
+  "actual_video_metadata_frames": 0,
+  "procedure": "Current debug CLI with test-adapter-unavailable feature selects gpu and sets KRONELLO_TEST_ADAPTER_UNAVAILABLE=1 in submit subprocess. Fixed worker inherits injection and still publishes FLAC without constructing GPU."
+}

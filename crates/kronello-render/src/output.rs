@@ -179,6 +179,102 @@ pub fn render_frame_tiles(
     Ok(metadata)
 }
 
+/// Movie conversion consumes numeric pixels directly. Display transforms and
+/// display image readbacks are unnecessary at this boundary. Normal still and
+/// preview execution retains both planes. Linear tiles are never stored in the
+/// temporal cache of complete linear/display frames.
+pub fn render_frame_linear_tiles(
+    snapshot: &RenderSnapshot,
+    fonts: &[FontData<'_>],
+    backend: &dyn RenderBackend,
+    request: FrameRequest,
+    sink: &mut dyn FnMut([u32; 2], OutputRegion, Vec<[f32; 4]>) -> Result<(), RenderError>,
+) -> Result<FrameMetadata, RenderError> {
+    let _scope = backend.begin_observation_scope()?;
+    let before = backend.transfer_stats_total();
+    request.region.validate()?;
+    let mut cache = crate::RenderCache::new(crate::CacheConfig::disabled());
+    let scene = crate::build_scene_ir_with_cache(snapshot, request.time, fonts, &mut cache)?;
+    let mut metadata = frame_metadata(snapshot, &scene, backend, request)?;
+    if let Some(settings) = snapshot.profile().temporal {
+        metadata.temporal = Some(crate::render_temporal_linear_tiles(
+            snapshot, fonts, backend, request, settings, sink,
+        )?);
+    } else {
+        for (offset, tile) in frame_tiles(request.region) {
+            let dag =
+                crate::build_render_dag_with_cache(&scene, snapshot.profile(), tile, &mut cache)?;
+            check_tile_surface_budget(&dag, true)?;
+            let linear = backend.execute_linear_with_cache(&dag, &mut cache)?;
+            if linear.len() != tile.pixels[0] as usize * tile.pixels[1] as usize {
+                return Err(RenderError::InvalidInput(
+                    "backend returned wrong linear tile pixel count".into(),
+                ));
+            }
+            validate_pixels(&linear, true)?;
+            sink(offset, tile, linear)?;
+        }
+    }
+    metadata.resource_cache_stats = backend.resource_cache_stats();
+    apply_transfer_delta(&mut metadata, backend, before);
+    Ok(metadata)
+}
+
+pub(crate) fn render_single_linear_with_cache(
+    snapshot: &RenderSnapshot,
+    fonts: &[FontData<'_>],
+    backend: &dyn RenderBackend,
+    request: FrameRequest,
+    cache: &mut crate::RenderCache,
+) -> Result<(Vec<[f32; 4]>, FrameMetadata), RenderError> {
+    let _scope = backend.begin_observation_scope()?;
+    let before = backend.transfer_stats_total();
+    request.region.validate()?;
+    let scene = crate::build_scene_ir_with_cache(snapshot, request.time, fonts, cache)?;
+    let count = u64::from(request.region.pixels[0]) * u64::from(request.region.pixels[1]);
+    if count * 16 > 512 * 1024 * 1024 {
+        return Err(RenderError::UnsupportedFeature(
+            "full-frame linear surface budget exceeded; use streaming tiles".into(),
+        ));
+    }
+    if request.region.pixels.iter().all(|value| *value <= 512) {
+        let dag =
+            crate::build_render_dag_with_cache(&scene, snapshot.profile(), request.region, cache)?;
+        check_tile_surface_budget(&dag, false)?;
+        let linear = backend.execute_linear_with_cache(&dag, cache)?;
+        if linear.len() as u64 != count {
+            return Err(RenderError::InvalidInput(
+                "backend returned wrong linear tile pixel count".into(),
+            ));
+        }
+        validate_pixels(&linear, true)?;
+        let mut metadata = frame_metadata(snapshot, &scene, backend, request)?;
+        apply_transfer_delta(&mut metadata, backend, before);
+        return Ok((linear, metadata));
+    }
+    let mut linear = vec![[0.0; 4]; count as usize];
+    for ([x, y], tile) in frame_tiles(request.region) {
+        let dag = crate::build_render_dag_with_cache(&scene, snapshot.profile(), tile, cache)?;
+        check_tile_surface_budget(&dag, false)?;
+        let pixels = backend.execute_linear_with_cache(&dag, cache)?;
+        if pixels.len() != tile.pixels[0] as usize * tile.pixels[1] as usize {
+            return Err(RenderError::InvalidInput(
+                "backend returned wrong linear tile pixel count".into(),
+            ));
+        }
+        validate_pixels(&pixels, true)?;
+        for row in 0..tile.pixels[1] as usize {
+            let start = (y as usize + row) * request.region.pixels[0] as usize + x as usize;
+            let source = row * tile.pixels[0] as usize;
+            let width = tile.pixels[0] as usize;
+            linear[start..start + width].copy_from_slice(&pixels[source..source + width]);
+        }
+    }
+    let mut metadata = frame_metadata(snapshot, &scene, backend, request)?;
+    apply_transfer_delta(&mut metadata, backend, before);
+    Ok((linear, metadata))
+}
+
 pub(crate) fn apply_transfer_delta(
     metadata: &mut FrameMetadata,
     backend: &dyn RenderBackend,

@@ -1,6 +1,6 @@
 # ADR-0083 native セッション中の安全モード排他
 
-- 状態: 採用
+- 状態: 部分置換（[ADR-0144](0144-revision-scoped-preview-preparation.md): Unix通常モードの接続保持と派生準備cache）
 - 日付: 2026-10-06
 - 対象: FFI-002
 - 部分置換: ADR-0056 の各 request で store を開閉する範囲。非同期 FIFO・明示 project path・worker 契約は維持する。

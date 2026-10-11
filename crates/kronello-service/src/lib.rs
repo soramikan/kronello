@@ -1,7 +1,7 @@
 //! Shared synchronous Command/Query boundary for headless rendering and edits.
 //! Entry points own transport only; storage, fonts and rendering compose here.
 mod session;
-pub use session::ProjectSession;
+pub use session::{PreparationStats, ProjectSession};
 mod export_profiles;
 pub use export_profiles::{
     DeviceAvailability, ExportAudioCodec, ExportExecution, ExportProfileCapability,
@@ -26,7 +26,9 @@ mod repeater;
 mod vector;
 pub use vector::*;
 mod audio_analysis;
+mod audio_checkpoints;
 pub use audio_analysis::{AudioAnalyzeInput, AudioAnalyzeRequest};
+pub use audio_checkpoints::{AudioCheckpointCacheLimits, AudioCheckpointCacheStats};
 mod proxy;
 pub use proxy::{
     ProxyClearRequest, ProxyGenerateRequest, ProxyJobInput, ProxyState, ProxyStatusEntry,
@@ -575,6 +577,8 @@ pub struct Service<'a> {
     worker_executable: Option<PathBuf>,
     plugin_helper: Option<kronello_plugin::HelperCommand>,
     read_only_inspection: bool,
+    audio_sources: std::sync::Arc<std::sync::Mutex<kronello_media::AudioSourceCache>>,
+    audio_checkpoints: std::sync::Arc<std::sync::Mutex<audio_checkpoints::AudioCheckpointCache>>,
 }
 impl Service<'_> {
     pub fn new(selection: BackendSelection) -> Self {
@@ -586,6 +590,8 @@ impl Service<'_> {
             worker_executable: None,
             plugin_helper: None,
             read_only_inspection: false,
+            audio_sources: Default::default(),
+            audio_checkpoints: Default::default(),
         }
     }
 }
@@ -610,25 +616,57 @@ impl<'a> Service<'a> {
         &self,
         request: &FrameRenderRequest,
     ) -> Result<(String, kronello_render::RenderDag), ServiceError> {
-        self.with_render_input(&request.input, None, |snapshot, fonts| {
-            if snapshot.profile().hdr.is_some() {
-                return Err(RenderError::UnsupportedFeature("native single DAG preview has no HDR display conversion; use render.frame SDR display artifact".into()).into());
-            }
-            if snapshot.profile().temporal.is_some() {
-                return Err(RenderError::UnsupportedFeature(
+        let build =
+            |snapshot: &RenderSnapshot,
+             fonts: &[FontData<'_>],
+             validated: Option<&kronello_render::ValidatedRenderSnapshot>| {
+                if snapshot.profile().hdr.is_some() {
+                    return Err(RenderError::UnsupportedFeature("native single DAG preview has no HDR display conversion; use render.frame SDR display artifact".into()).into());
+                }
+                if snapshot.profile().temporal.is_some() {
+                    return Err(RenderError::UnsupportedFeature(
                     "single DAG native preview cannot integrate temporal samples; use render.frame"
                         .into(),
                 )
                 .into());
-            }
-            let scene = kronello_render::build_scene_ir(snapshot, request.time, fonts)?;
-            let dag = kronello_render::build_render_dag(
-                &scene,
-                snapshot.profile(),
-                request.input.region,
-            )?;
-            Ok((snapshot.revision().to_string(), dag))
-        })
+                }
+                let scene =
+                    session::with_render_cache(&request.input.project, |cache| match validated {
+                        Some(validated) => kronello_render::build_scene_ir_prevalidated(
+                            validated,
+                            request.time,
+                            fonts,
+                            cache,
+                        ),
+                        None => kronello_render::build_scene_ir_with_cache(
+                            snapshot,
+                            request.time,
+                            fonts,
+                            cache,
+                        ),
+                    })??;
+                let dag = kronello_render::build_render_dag(
+                    &scene,
+                    snapshot.profile(),
+                    request.input.region,
+                )?;
+                Ok((snapshot.revision().to_string(), dag))
+            };
+        request.input.region.validate()?;
+        if let Some(prepared) = session::prepare_input(&request.input, None)? {
+            let fonts: Vec<_> = prepared
+                .snapshot
+                .font_locks()
+                .iter()
+                .zip(&prepared.bytes)
+                .map(|(identity, bytes)| FontData { identity, bytes })
+                .collect();
+            build(&prepared.snapshot, &fonts, Some(&prepared.snapshot))
+        } else {
+            self.with_render_input(&request.input, None, |snapshot, fonts| {
+                build(snapshot, fonts, None)
+            })
+        }
     }
     /// `preview_dag` with a caller-owned `MediaSession` so successive redraws
     /// reuse pooled decoders and decoded source identity. The returned
@@ -675,6 +713,8 @@ impl<'a> Service<'a> {
             worker_executable: None,
             plugin_helper: None,
             read_only_inspection: false,
+            audio_sources: Default::default(),
+            audio_checkpoints: Default::default(),
         }
     }
     pub fn with_media_capabilities(mut self, capabilities: MediaCapabilities) -> Self {
@@ -878,6 +918,9 @@ impl<'a> Service<'a> {
                         ProjectOpenMode::ReadOnlySnapshot,
                     )?))
                 } else {
+                    if let Some(info) = session::project_info(&r.project)? {
+                        return Ok(ResultData::Project(info));
+                    }
                     let store = open_existing(&r.project)?;
                     let info = info(&store)?;
                     store.close()?;
@@ -912,61 +955,69 @@ impl<'a> Service<'a> {
                     &r.render.input,
                     r.expected_revision.as_deref(),
                     |snapshot, fonts| {
-                        self.with_video_backend(&r.render.input.project, |backend| {
-                            jobs::validate_movie_destination(
-                                &r.render.output_directory,
-                                &r.output,
-                            )?;
-                            let mut snapshots = vec![jobs::movie_snapshot(snapshot, &r.output)?];
-                            // MEDIA-004: extra legs share this render pass and
-                            // write to their own declared destinations.
-                            let mut outputs = Vec::with_capacity(r.outputs.len());
-                            let mut destinations = std::collections::BTreeSet::new();
-                            destinations.insert(r.render.output_directory.clone());
-                            for spec in &r.outputs {
-                                jobs::validate_movie_destination(&spec.destination, &spec.output)?;
-                                if spec.destination.exists() {
-                                    return Err(ServiceError::new(
-                                        "OUTPUT_EXISTS",
-                                        "delivery destination already exists",
-                                    ));
+                        self.with_delivery_backend(
+                            &r.render.input.project,
+                            r.renders_video()?,
+                            |backend| {
+                                jobs::validate_movie_destination(
+                                    &r.render.output_directory,
+                                    &r.output,
+                                )?;
+                                let mut snapshots =
+                                    vec![jobs::movie_snapshot(snapshot, &r.output)?];
+                                // MEDIA-004: extra legs share this render pass and
+                                // write to their own declared destinations.
+                                let mut outputs = Vec::with_capacity(r.outputs.len());
+                                let mut destinations = std::collections::BTreeSet::new();
+                                destinations.insert(r.render.output_directory.clone());
+                                for spec in &r.outputs {
+                                    jobs::validate_movie_destination(
+                                        &spec.destination,
+                                        &spec.output,
+                                    )?;
+                                    if spec.destination.exists() {
+                                        return Err(ServiceError::new(
+                                            "OUTPUT_EXISTS",
+                                            "delivery destination already exists",
+                                        ));
+                                    }
+                                    if !destinations.insert(spec.destination.clone()) {
+                                        return Err(ServiceError::invalid(
+                                            "delivery outputs must be distinct",
+                                        ));
+                                    }
+                                    let settings = spec.output.movie_settings()?;
+                                    outputs.push(kronello_media::DeliveryOutput {
+                                        output: spec.destination.clone(),
+                                        profile: settings.profile,
+                                        background: settings.background,
+                                        chapters: spec.chapters,
+                                    });
+                                    snapshots.push(jobs::movie_snapshot(snapshot, &spec.output)?);
                                 }
-                                if !destinations.insert(spec.destination.clone()) {
-                                    return Err(ServiceError::invalid(
-                                        "delivery outputs must be distinct",
-                                    ));
-                                }
-                                let settings = spec.output.movie_settings()?;
-                                outputs.push(kronello_media::DeliveryOutput {
-                                    output: spec.destination.clone(),
-                                    profile: settings.profile,
-                                    background: settings.background,
-                                    chapters: spec.chapters,
-                                });
-                                snapshots.push(jobs::movie_snapshot(snapshot, &spec.output)?);
-                            }
-                            let settings = r.output.movie_settings()?;
-                            let runtime = kronello_media::MediaRuntime::load()?;
-                            let snapshot_refs: Vec<&kronello_media::AvExportSnapshot> =
-                                snapshots.iter().collect();
-                            let report = runtime.export_delivery(
-                                &snapshot_refs,
-                                &r.render.input.project,
-                                fonts,
-                                backend,
-                                &kronello_media::AvExportRequest {
-                                    output: r.render.output_directory.clone(),
-                                    range: r.render.range,
-                                    frame_rate: r.render.frame_rate,
-                                    region: r.render.input.region,
-                                    background: settings.background,
-                                    clipping: kronello_audio::ClippingPolicy::Reject,
-                                    chapters: r.chapters,
-                                    outputs,
-                                },
-                            )?;
-                            Ok(ResultData::Movie(Box::new(report)))
-                        })
+                                let settings = r.output.movie_settings()?;
+                                let runtime = kronello_media::MediaRuntime::load()?;
+                                let snapshot_refs: Vec<&kronello_media::AvExportSnapshot> =
+                                    snapshots.iter().collect();
+                                let report = runtime.export_delivery(
+                                    &snapshot_refs,
+                                    &r.render.input.project,
+                                    fonts,
+                                    backend,
+                                    &kronello_media::AvExportRequest {
+                                        output: r.render.output_directory.clone(),
+                                        range: r.render.range,
+                                        frame_rate: r.render.frame_rate,
+                                        region: r.render.input.region,
+                                        background: settings.background,
+                                        clipping: kronello_audio::ClippingPolicy::Reject,
+                                        chapters: r.chapters,
+                                        outputs,
+                                    },
+                                )?;
+                                Ok(ResultData::Movie(Box::new(report)))
+                            },
+                        )
                     },
                 )
             }
@@ -1052,6 +1103,16 @@ impl<'a> Service<'a> {
         run: impl FnOnce(&RenderSnapshot, &[FontData<'_>]) -> Result<T, ServiceError>,
     ) -> Result<T, ServiceError> {
         input.region.validate()?;
+        if let Some(prepared) = session::prepare_input(input, expected_revision)? {
+            let fonts: Vec<_> = prepared
+                .snapshot
+                .font_locks()
+                .iter()
+                .zip(&prepared.bytes)
+                .map(|(identity, bytes)| FontData { identity, bytes })
+                .collect();
+            return run(&prepared.snapshot, &fonts);
+        }
         let store = open_existing(&input.project)?;
         let stored = store.snapshot()?;
         store.close()?;
@@ -1065,6 +1126,32 @@ impl<'a> Service<'a> {
             .map(|(identity, bytes)| FontData { identity, bytes })
             .collect();
         run(&snapshot, &fonts)
+    }
+    pub(crate) fn with_delivery_backend<T>(
+        &self,
+        project_path: &Path,
+        renders_video: bool,
+        run: impl FnOnce(&dyn RenderBackend) -> Result<T, ServiceError>,
+    ) -> Result<T, ServiceError> {
+        if renders_video {
+            self.with_video_backend(project_path, run)
+        } else {
+            struct UnusedVideoBackend;
+            impl RenderBackend for UnusedVideoBackend {
+                fn name(&self) -> &str {
+                    "unused_audio_only"
+                }
+                fn execute(
+                    &self,
+                    _: &kronello_render::RenderDag,
+                ) -> Result<kronello_render::BackendFrame, RenderError> {
+                    Err(RenderError::InvalidInput(
+                        "audio-only delivery must not execute a video backend".into(),
+                    ))
+                }
+            }
+            run(&UnusedVideoBackend)
+        }
     }
     pub(crate) fn with_video_backend<T>(
         &self,
@@ -1699,6 +1786,59 @@ fn render_locators(input: &RenderInput) -> Result<(), ServiceError> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn audio_export_does_not_construct_an_unavailable_gpu() {
+        let dir = tempfile::tempdir().unwrap();
+        let project = dir.path().join("audio.kronello");
+        let mut document: serde_json::Value =
+            serde_json::from_str(include_str!("../../../examples/m1-demo.project.json")).unwrap();
+        document["compositions"][0]["root_nodes"] = serde_json::json!([]);
+        document["compositions"][0]["nodes"] = serde_json::json!([]);
+        document["texts"] = serde_json::json!([]);
+        let composition = document["compositions"][0]["id"].clone();
+        let mut service = Service::new(BackendSelection::default());
+        service
+            .dispatch(Request::ProjectCreate(CreateRequest {
+                plan_hash: None,
+                idempotency_key: None,
+                project: project.clone(),
+                document: serde_json::from_value(document).unwrap(),
+            }))
+            .unwrap();
+        service.gpu_factory = || Err(GpuError::AdapterUnavailable("audio-test factory".into()));
+        let output = dir.path().join("audio.flac");
+        let mut request = serde_json::json!({
+            "operation":"render.export",
+            "render":{
+                "input":{"project":project,"composition":composition,
+                    "region":{"origin":[0,0],"extent":[64,32],"pixels":[64,32]},
+                    "profile":RenderProfile::default(),"fonts":[]},
+                "range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"8"}},
+                "frame_rate":{"num":"24","den":"1"},"output_directory":output},
+            "output":{"format":"flac","profile_version":1,"audio":"silence","clips":[]}
+        });
+        let ResultData::Movie(report) = service
+            .dispatch(serde_json::from_value(request.clone()).unwrap())
+            .unwrap()
+        else {
+            panic!("audio delivery required");
+        };
+        assert!(report.frames.is_empty());
+        assert_eq!(report.audio.as_ref().unwrap().frames, 6000);
+        assert!(output.is_file());
+        request["render"]["output_directory"] = serde_json::json!(dir.path().join("mixed.flac"));
+        request["outputs"] = serde_json::json!([{
+            "destination":dir.path().join("mixed.mov"),
+            "output":{"format":"pro_res_mov","profile_version":3,"audio":"silence","clips":[],"background":[0,0,0]}
+        }]);
+        let Response::Error { error } = service.execute(serde_json::from_value(request).unwrap())
+        else {
+            panic!("mixed output must require the selected video backend");
+        };
+        assert_eq!(error.code, "ADAPTER_UNAVAILABLE");
+        assert!(!dir.path().join("mixed.flac").exists());
+        assert!(!dir.path().join("mixed.mov").exists());
+    }
     #[test]
     fn project_info_reports_actual_normal_and_safe_open_mode() {
         let folder = tempfile::tempdir().unwrap();

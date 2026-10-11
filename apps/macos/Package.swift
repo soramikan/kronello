@@ -14,6 +14,7 @@ let package = Package(
         .library(name: "KronelloDesign", targets: ["KronelloDesign"]),
         .executable(name: "KronelloPreviewHarness", targets: ["KronelloPreviewHarness"]),
         .executable(name: "KronelloJSONBenchmark", targets: ["KronelloJSONBenchmark"]),
+        .executable(name: "KronelloTimelineBenchmark", targets: ["KronelloTimelineBenchmark"]),
         .executable(name: "KronelloAudioHarness", targets: ["KronelloAudioHarness"])
     ],
     targets: [
@@ -27,6 +28,7 @@ let package = Package(
                 linkerSettings: [.unsafeFlags(["-L", libraryPath, "-lkronello_ffi", "-Xlinker", "-rpath", "-Xlinker", libraryPath])]),
         .executableTarget(name: "KronelloPreviewHarness", dependencies: ["KronelloCore"]),
         .executableTarget(name: "KronelloJSONBenchmark", dependencies: ["KronelloCore"]),
+        .executableTarget(name: "KronelloTimelineBenchmark", dependencies: ["KronelloAppModel", "KronelloDesign"]),
         .executableTarget(name: "KronelloAudioHarness", dependencies: ["KronelloCore", "KronelloAppModel"]),
         .testTarget(name: "KronelloCoreTests", dependencies: ["KronelloCore", "CKronelloFFI"]),
         // Design system: generated tokens and icons, fonts, and SwiftUI components.

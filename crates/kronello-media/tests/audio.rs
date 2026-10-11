@@ -117,6 +117,189 @@ fn bounded_decode_rejects_before_exceeding_remaining_source_budget() {
     assert_eq!(decoded.buffer, legacy.buffer);
 }
 #[test]
+fn audio_source_cache_shares_verified_pcm_and_preserves_source_budget() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("shared.wav");
+    write_wave(&path, 44100, 1, 4410);
+    let asset = asset(&path);
+    let project = dir.path().join("project.kronello");
+    let runtime = MediaRuntime::load().unwrap();
+    let mut cache = AudioSourceCache::default();
+    let first = cache.decode(&runtime, &asset, &project, 0, 4800).unwrap();
+    let mut alias = asset.clone();
+    alias.id = AssetId::new();
+    let second = cache.decode(&runtime, &alias, &project, 0, 4800).unwrap();
+    assert_eq!(first.buffer, second.buffer);
+    assert_eq!(second.source_rate, 44100);
+    assert_eq!(second.source_channels, 1);
+    assert_eq!(second.source_start, first.source_start);
+    assert_eq!(second.stream_index, first.stream_index);
+    if cfg!(unix) {
+        assert!(std::sync::Arc::ptr_eq(&first, &second));
+        assert_eq!(cache.stats().hits, 1);
+        assert_eq!(cache.stats().decoded_sources, 1);
+        assert_eq!(cache.stats().retained_pcm_bytes, 4800 * 4);
+    }
+    assert_eq!(
+        cache
+            .decode(&runtime, &asset, &project, 0, 4799)
+            .unwrap_err()
+            .code(),
+        "AUDIO_BUDGET_EXCEEDED"
+    );
+    // Stream selection remains part of the identity and the native validator.
+    assert!(cache.decode(&runtime, &asset, &project, 1, 4800).is_err());
+    cache.clear();
+    assert_eq!(cache.stats().retained_sources, 0);
+    assert_eq!(cache.stats().retained_pcm_bytes, 0);
+    // An active plan owns its PCM independently of retained cache entries.
+    assert_eq!(first.buffer.frame_count(), 4800);
+}
+#[test]
+fn audio_source_cache_enforces_entry_and_pcm_limits_without_mutating_owners() {
+    let dir = tempfile::tempdir().unwrap();
+    let runtime = MediaRuntime::load().unwrap();
+    let project = dir.path().join("project.kronello");
+    let assets: Vec<_> = (0..3)
+        .map(|i| {
+            let path = dir.path().join(format!("{i}.wav"));
+            write_wave(&path, 48000, 2, 128 + i);
+            asset(&path)
+        })
+        .collect();
+    for limits in [
+        AudioSourceCacheLimits {
+            entries: 1,
+            pcm_bytes: 4096,
+        },
+        AudioSourceCacheLimits {
+            entries: 3,
+            pcm_bytes: 1040,
+        },
+    ] {
+        let mut cache = AudioSourceCache::new(limits);
+        let owner = cache
+            .decode(&runtime, &assets[0], &project, 0, 1000)
+            .unwrap();
+        for asset in &assets[1..] {
+            cache.decode(&runtime, asset, &project, 0, 1000).unwrap();
+            assert!(cache.stats().retained_pcm_bytes <= limits.pcm_bytes);
+            assert!(cache.stats().retained_sources <= limits.entries);
+        }
+        assert_eq!(owner.buffer.frame_count(), 128);
+        if cfg!(unix) {
+            assert_eq!(cache.stats().evictions, 2);
+        }
+        let reloaded = cache
+            .decode(&runtime, &assets[0], &project, 0, 1000)
+            .unwrap();
+        assert!(!std::sync::Arc::ptr_eq(&owner, &reloaded));
+        assert_eq!(owner.buffer, reloaded.buffer);
+    }
+    for limits in [
+        AudioSourceCacheLimits {
+            entries: 0,
+            pcm_bytes: 4096,
+        },
+        AudioSourceCacheLimits {
+            entries: 3,
+            pcm_bytes: 1023,
+        },
+    ] {
+        let mut cache = AudioSourceCache::new(limits);
+        let first = cache
+            .decode(&runtime, &assets[0], &project, 0, 128)
+            .unwrap();
+        let second = cache
+            .decode(&runtime, &assets[0], &project, 0, 128)
+            .unwrap();
+        assert!(!std::sync::Arc::ptr_eq(&first, &second));
+        assert_eq!(cache.stats().retained_pcm_bytes, 0);
+        assert_eq!(cache.stats().bypasses, 2);
+    }
+}
+#[test]
+fn audio_source_cache_rejects_rewrites_replacements_missing_and_wrong_relative_assets() {
+    let dir = tempfile::tempdir().unwrap();
+    let runtime = MediaRuntime::load().unwrap();
+    let path = dir.path().join("original.wav");
+    write_wave(&path, 48000, 2, 128);
+    let original = std::fs::read(&path).unwrap();
+    let asset = asset(&path);
+    let project = dir.path().join("project.kronello");
+    let mut cache = AudioSourceCache::default();
+    let owner = cache.decode(&runtime, &asset, &project, 0, 128).unwrap();
+    let modified = path.metadata().unwrap().modified().unwrap();
+    let mut wrong = original.clone();
+    wrong[50] ^= 1;
+    std::fs::write(&path, &wrong).unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_times(std::fs::FileTimes::new().set_modified(modified))
+        .unwrap();
+    assert_eq!(path.metadata().unwrap().len(), original.len() as u64);
+    assert_eq!(path.metadata().unwrap().modified().unwrap(), modified);
+    assert_eq!(
+        cache
+            .decode(&runtime, &asset, &project, 0, 128)
+            .unwrap_err()
+            .code(),
+        "ASSET_HASH_MISMATCH"
+    );
+    std::fs::write(&path, &original).unwrap();
+    let restored = cache.decode(&runtime, &asset, &project, 0, 128).unwrap();
+    assert!(!std::sync::Arc::ptr_eq(&owner, &restored));
+    let replacement = dir.path().join("replacement.wav");
+    std::fs::write(&replacement, &wrong).unwrap();
+    std::fs::rename(&replacement, &path).unwrap();
+    assert_eq!(
+        cache
+            .decode(&runtime, &asset, &project, 0, 128)
+            .unwrap_err()
+            .code(),
+        "ASSET_HASH_MISMATCH"
+    );
+    std::fs::remove_file(&path).unwrap();
+    assert_eq!(
+        cache
+            .decode(&runtime, &asset, &project, 0, 128)
+            .unwrap_err()
+            .code(),
+        "ASSET_MISSING"
+    );
+    std::fs::create_dir(&path).unwrap();
+    assert_eq!(
+        cache
+            .decode(&runtime, &asset, &project, 0, 128)
+            .unwrap_err()
+            .code(),
+        "INVALID_MEDIA_INPUT"
+    );
+    std::fs::remove_dir(&path).unwrap();
+    std::fs::write(&path, &original).unwrap();
+    assert_eq!(
+        cache
+            .decode(&runtime, &asset, &project, 0, 128)
+            .unwrap()
+            .buffer,
+        owner.buffer
+    );
+    let relative = dir.path().join("relative.wav");
+    std::fs::write(relative, &wrong).unwrap();
+    let mut redirected = asset.clone();
+    redirected.locator.relative = Some("relative.wav".into());
+    assert_eq!(
+        cache
+            .decode(&runtime, &redirected, &project, 0, 128)
+            .unwrap_err()
+            .code(),
+        "ASSET_HASH_MISMATCH"
+    );
+    assert_eq!(owner.buffer.frame_count(), 128);
+}
+#[test]
 fn bundled_pcm_fixture_decodes_exact_stereo_samples() {
     let runtime = MediaRuntime::load().unwrap();
     let bytes = std::fs::read(fixture()).unwrap();
@@ -287,6 +470,54 @@ fn pcm24_roundtrip_quantization_clipping_policy_and_output_rollback() {
         .encode_audio(&bus, ClippingPolicy::Saturate, &output)
         .unwrap();
     assert_eq!(report.clipped_samples, 2);
+}
+
+#[test]
+fn mp3_gapless_decode_keeps_nonzero_samples_and_exact_trimmed_length() {
+    let runtime = MediaRuntime::load().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("source.wav");
+    write_wave(&source, 48_000, 2, 96_000);
+    let a = asset(&source);
+    let decoded = runtime.decode_audio(&source, 0).unwrap();
+    let range = TimeRange::new(t(1, 4), t(3, 4)).unwrap();
+    let sources = AudioSources::from([(
+        (a.id, 0),
+        AudioBuffer::new(decoded.buffer.stereo_frames().unwrap()).unwrap(),
+    )]);
+    let c = clip(&a, TimeRange::new(Time::ZERO, t(1, 1)).unwrap(), 0.6);
+    let bus = mix(std::slice::from_ref(&c), &sources, range).unwrap();
+    let output = dir.path().join("trim.mp3");
+    let (project, composition) = project(a);
+    let render = RenderSnapshot::new(&project, composition, 0, RenderProfile::default()).unwrap();
+    let snapshot = AvExportSnapshot::with_movie_profile(
+        &render,
+        AudioSourceMode::Explicit,
+        vec![c],
+        MovieProfile::Mp3V1,
+    )
+    .unwrap();
+    let mut req = request(&output, FrameRate::new(24, 1).unwrap());
+    req.range = range;
+    runtime
+        .export_delivery(&[&snapshot], dir.path(), &[], &CpuReferenceBackend, &req)
+        .unwrap();
+    let actual = runtime.decode_audio(&output, 0).unwrap();
+    assert_eq!(actual.buffer.frame_count(), 24_000);
+    assert_eq!(
+        Some(actual.source_start),
+        runtime.probe(&output).unwrap().streams[0].start
+    );
+    let expected: Vec<_> = bus.buffer().frames().iter().flatten().copied().collect();
+    let actual_samples = actual.buffer.samples();
+    assert_eq!(actual_samples.len(), expected.len());
+    let max_error = actual_samples
+        .iter()
+        .zip(&expected)
+        .map(|(a, b)| (a - b).abs())
+        .fold(0.0_f32, f32::max);
+    assert!(max_error < 0.02, "lossy MP3 error {max_error}");
+    assert!(actual_samples.iter().any(|s| s.abs() > 0.1));
 }
 #[test]
 fn export_fixed_snapshot_muxes_av_with_exact_pts_and_sample_precision_at_three_rates() {

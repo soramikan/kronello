@@ -45,7 +45,7 @@ python3 scripts/build_macos_app.py --release
 target/macos/Kronello.app/Contents/MacOS/Kronello
 ```
 
-スクリプトは FFI / CLI、UI fonts、`swift build -j 3` を実行する。`--release`はRust FFI / CLIを最適化し、Swiftは開発buildを使う。既存buildのみ使う場合は `--skip-build`。
+スクリプトは FFI / CLI、UI fonts、`swift build -j 3` を実行する。`--release` は Rust FFI / CLI と Swift の両方を最適化し、`--show-bin-path` にも同じ configuration を渡す。既存 build のみ使う場合は `--skip-build`。release の既存成果物を組み立てる場合は `--skip-build --release` を指定する。
 M3の最終受け入れ・実機証拠と保証範囲は [統合検証記録](../../docs/testing/m3-acceptance.md)。
 Xcodeのtoolchainを使用する環境では `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` を設定する。
 LGPL FFmpegを別途用意し、必要に応じて `PKG_CONFIG_PATH` と `KRONELLO_FFMPEG_LIB_DIR` をその開発 / runtimeディレクトリに設定する。
@@ -89,7 +89,7 @@ schema の数値範囲・文字列 pattern・配列長・RenderInput の排他�
 
 要求は一つの専用 Rust thread で FIFO 実行する。最大64件の未回収 completion。
 キューが満杯なら enqueue は0を返し、Swift は `NativeError.rejected` とする。
-revision / job notification は250 msの idle interval と要求完了後に検査し、最新 snapshot に集約する。
+revision / job notification は前回検査終了から250 msの期限、および購読開始・成功した文書/ジョブ変更の後に検査し、最新 snapshot に集約する。描画・読み取り要求ごとには検査しない。
 `subscribe()` と `onNotification` を使い、idle 時は AppKit timer 等から `poll()` を呼ぶ。
 Swift wrapper は待機中にも poll し、30秒で timeout する。
 Task の cancel / timeout は待機を終了するが、既に受け付けた編集は取り消さない。

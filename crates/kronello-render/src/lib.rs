@@ -299,6 +299,26 @@ pub trait RenderBackend {
         let _ = input_identities;
         self.execute_with_cache(dag, cache)
     }
+    /// Working-space premultiplied pixels only. The compatibility default
+    /// preserves injected backends; production backends skip display work.
+    fn execute_linear_with_cache(
+        &self,
+        dag: &RenderDag,
+        cache: &mut RenderCache,
+    ) -> Result<Vec<[f32; 4]>, RenderError> {
+        Ok(self.execute_with_cache(dag, cache)?.linear)
+    }
+    /// Linear execution with the same locked media input identities.
+    fn execute_linear_with_inputs(
+        &self,
+        dag: &RenderDag,
+        cache: &mut RenderCache,
+        input_identities: &std::collections::BTreeMap<usize, String>,
+    ) -> Result<Vec<[f32; 4]>, RenderError> {
+        Ok(self
+            .execute_with_inputs(dag, cache, input_identities)?
+            .linear)
+    }
 }
 
 mod media;

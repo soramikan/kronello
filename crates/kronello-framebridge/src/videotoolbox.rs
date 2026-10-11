@@ -457,6 +457,7 @@ struct Decoded {
     frames: Mutex<Vec<(i32, Option<PixelToken>, CMTime)>>,
     selection: Option<(i64, i64)>,
     failure: Mutex<Option<i32>>,
+    bounded_outputs: Option<(usize, u64)>,
 }
 unsafe extern "C-unwind" fn encoded_callback(
     context: *mut c_void,
@@ -509,6 +510,27 @@ unsafe extern "C-unwind" fn decoded_callback(
             return;
         }
         frames.clear();
+    }
+    if let Some((count_limit, byte_limit)) = state.bounded_outputs {
+        let bytes = frames
+            .iter()
+            .filter_map(|(_, image, _)| image.as_ref())
+            .map(|image| CVPixelBufferGetDataSize(&image.0) as u64)
+            .sum::<u64>()
+            .saturating_add(
+                image
+                    .as_ref()
+                    .map_or(0, |image| CVPixelBufferGetDataSize(&image.0) as u64),
+            );
+        if image
+            .as_ref()
+            .is_some_and(|image| CVPixelBufferGetDataSize(&image.0) == 0)
+            || frames.len() >= count_limit
+            || bytes > byte_limit
+        {
+            *state.failure.lock().unwrap_or_else(|e| e.into_inner()) = Some(-12909);
+            return;
+        }
     }
     frames.push((code, image, pts));
 }
@@ -662,16 +684,13 @@ pub(crate) fn prores_raw_supported() -> bool {
             || VTIsHardwareDecodeSupported(kCMVideoCodecType_AppleProResRAWHQ)
     }
 }
-type DecodedFrames = (Vec<PixelToken>, Option<bool>, i32, Vec<CMTime>);
-pub(crate) fn decode(
-    samples: &[SampleToken],
+fn create_decoder(
+    first: &SampleToken,
     mode: DecodeMode,
     require_hardware: bool,
     selection: Option<(i64, i64)>,
-) -> Result<DecodedFrames, NativeError> {
-    let first = samples
-        .first()
-        .ok_or_else(|| error(NativeStage::FormatDescription, "no sample"))?;
+    bounded_outputs: Option<(usize, u64)>,
+) -> Result<Decoder, NativeError> {
     // SAFETY: Retained valid compressed sample from completed encoder.
     let format = unsafe { first.0.format_description() }.ok_or_else(|| {
         error(
@@ -709,6 +728,7 @@ pub(crate) fn decode(
     let attributes = attrs(pixel_format);
     let mut state = Box::new(Decoded {
         selection,
+        bounded_outputs,
         ..Decoded::default()
     });
     let mut raw = ptr::null_mut();
@@ -742,40 +762,15 @@ pub(crate) fn decode(
         },
         "VTDecompressionSessionCreate",
     )?;
-    let decoder = Decoder {
+    Ok(Decoder {
         session: owned(raw, NativeStage::DecoderCreate)?,
         state,
-    };
-    for sample in samples {
-        // SAFETY: Samples retained for all asynchronous decoder work; no frame
-        // refcon, and callback records every status and retained pixel buffer.
-        status(
-            NativeStage::Decode,
-            unsafe {
-                VTDecompressionSession::decode_frame(
-                    &decoder.session,
-                    &sample.0,
-                    VTDecodeFrameFlags::empty(),
-                    ptr::null_mut(),
-                    ptr::null_mut(),
-                )
-            },
-            "VTDecompressionSessionDecodeFrame",
-        )?;
-    }
-    // SAFETY: Flush and wait before inspecting retained callback outputs.
-    status(
-        NativeStage::DecoderWait,
-        unsafe { VTDecompressionSession::finish_delayed_frames(&decoder.session) },
-        "finish delayed frames",
-    )?;
-    // SAFETY: The decoder guard still owns the live session and callback context;
-    // all compressed samples remain retained until pending output has completed.
-    status(
-        NativeStage::DecoderWait,
-        unsafe { VTDecompressionSession::wait_for_asynchronous_frames(&decoder.session) },
-        "wait asynchronous frames",
-    )?;
+    })
+}
+fn hardware_property(
+    decoder: &Decoder,
+    require_hardware: bool,
+) -> Result<(Option<bool>, i32), NativeError> {
     let mut property: *mut CFType = ptr::null_mut();
     // SAFETY: Correct VT session/property; Copy writes a +1 CFType to output.
     let query = unsafe {
@@ -810,6 +805,50 @@ pub(crate) fn decode(
             ),
         ));
     }
+    Ok((hardware, query))
+}
+type DecodedFrames = (Vec<PixelToken>, Option<bool>, i32, Vec<CMTime>);
+pub(crate) fn decode(
+    samples: &[SampleToken],
+    mode: DecodeMode,
+    require_hardware: bool,
+    selection: Option<(i64, i64)>,
+) -> Result<DecodedFrames, NativeError> {
+    let first = samples
+        .first()
+        .ok_or_else(|| error(NativeStage::FormatDescription, "no sample"))?;
+    let decoder = create_decoder(first, mode, require_hardware, selection, None)?;
+    for sample in samples {
+        // SAFETY: Samples retained for all asynchronous decoder work; no frame
+        // refcon, and callback records every status and retained pixel buffer.
+        status(
+            NativeStage::Decode,
+            unsafe {
+                VTDecompressionSession::decode_frame(
+                    &decoder.session,
+                    &sample.0,
+                    VTDecodeFrameFlags::empty(),
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                )
+            },
+            "VTDecompressionSessionDecodeFrame",
+        )?;
+    }
+    // SAFETY: Flush and wait before inspecting retained callback outputs.
+    status(
+        NativeStage::DecoderWait,
+        unsafe { VTDecompressionSession::finish_delayed_frames(&decoder.session) },
+        "finish delayed frames",
+    )?;
+    // SAFETY: The decoder guard still owns the live session and callback context;
+    // all compressed samples remain retained until pending output has completed.
+    status(
+        NativeStage::DecoderWait,
+        unsafe { VTDecompressionSession::wait_for_asynchronous_frames(&decoder.session) },
+        "wait asynchronous frames",
+    )?;
+    let (hardware, query) = hardware_property(&decoder, require_hardware)?;
     if let Some(code) = *decoder
         .state
         .failure
@@ -1047,6 +1086,105 @@ pub fn probe_videotoolbox_decode(
             }
         }
         Err(error) => Err(error),
+    }
+}
+
+/// A hardware session that survives forward requests on its owning thread.
+pub(crate) struct StreamingDecoder {
+    decoder: Decoder,
+    pixel_format: u32,
+    _owner: std::marker::PhantomData<std::rc::Rc<()>>,
+}
+impl StreamingDecoder {
+    pub(crate) fn new(first: &SampleToken, mode: DecodeMode) -> Result<Self, NativeError> {
+        let decoder = create_decoder(first, mode, true, None, Some((64, 512 * 1024 * 1024)))?;
+        hardware_property(&decoder, true)?;
+        Ok(Self {
+            decoder,
+            pixel_format: match mode {
+                DecodeMode::SdrNv12 => kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+                DecodeMode::SdrBgra8 => kCVPixelFormatType_32BGRA,
+                DecodeMode::ProResRaw => kCVPixelFormatType_64RGBAHalf,
+            },
+            _owner: std::marker::PhantomData,
+        })
+    }
+    pub(crate) fn submit(&self, sample: &SampleToken) -> Result<(), NativeError> {
+        // SAFETY: A retained immutable sample and the owner's live session; the
+        // callback Box survives wait/invalidate. No sample escapes the wait.
+        unsafe {
+            let format = sample.0.format_description().ok_or_else(|| {
+                error(
+                    NativeStage::FormatDescription,
+                    "missing compressed description",
+                )
+            })?;
+            if !VTDecompressionSession::can_accept_format_description(
+                &self.decoder.session,
+                &format,
+            ) {
+                return Err(error(
+                    NativeStage::FormatDescription,
+                    "persistent hardware session cannot accept compressed format change",
+                ));
+            }
+            status(
+                NativeStage::Decode,
+                VTDecompressionSession::decode_frame(
+                    &self.decoder.session,
+                    &sample.0,
+                    VTDecodeFrameFlags::empty(),
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                ),
+                "streaming VT decode",
+            )?;
+            status(
+                NativeStage::DecoderWait,
+                VTDecompressionSession::wait_for_asynchronous_frames(&self.decoder.session),
+                "streaming VT wait",
+            )?;
+        }
+        if let Some(code) = *self
+            .decoder
+            .state
+            .failure
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+        {
+            status(
+                NativeStage::Decode,
+                code,
+                "sticky streaming callback error or retained output budget",
+            )?;
+        }
+        Ok(())
+    }
+    pub(crate) fn take_frames(&self) -> Result<Vec<(PixelToken, CMTime)>, NativeError> {
+        let results = std::mem::take(
+            &mut *self
+                .decoder
+                .state
+                .frames
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()),
+        );
+        results
+            .into_iter()
+            .map(|(code, image, pts)| {
+                status(NativeStage::Decode, code, "streaming output")?;
+                let image =
+                    image.ok_or_else(|| error(NativeStage::Decode, "null streaming output"))?;
+                verify_surface(&image.0)?;
+                if CVPixelBufferGetPixelFormatType(&image.0) != self.pixel_format {
+                    return Err(error(
+                        NativeStage::Decode,
+                        "streaming output pixel format mismatch",
+                    ));
+                }
+                Ok((image, pts))
+            })
+            .collect()
     }
 }
 

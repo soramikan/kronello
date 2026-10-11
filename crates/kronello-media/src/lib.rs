@@ -11,16 +11,20 @@ mod render;
 pub use render::*;
 mod assets;
 mod audio;
+mod audio_cache;
 mod export;
 #[allow(unsafe_code)]
 mod ffi;
 mod proxy;
 mod video;
+mod video_seek;
 pub use assets::*;
 pub use audio::*;
+pub use audio_cache::*;
 pub use export::*;
 pub use proxy::*;
 pub use video::*;
+pub use video_seek::{VideoSeekIndexLimits, VideoSeekIndexStats};
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -228,21 +232,29 @@ pub struct MediaPathReport {
     pub transfer_path: String,
     pub transfers: MediaTransferStats,
 }
+#[derive(Clone)]
+struct VerifiedAsset {
+    fingerprint: assets::FileFingerprint,
+    content_hash: String,
+}
+
 /// Each instance owns its dynamic libraries. Runtime override does not mutate
 /// process-global loader search paths or silently fall back to system libraries.
-/// `Arc` lets pooled decoders hold the loaded library without a borrow, and
+/// `Rc` lets pooled decoders hold the loaded library without a borrow, and
 /// `Clone` lets a media session share one loaded runtime.
 #[derive(Clone)]
 pub struct MediaRuntime {
     native: std::rc::Rc<ffi::NativeRuntime>,
     capabilities: MediaCapabilities,
+    video_pipeline_mode: VideoPipelineMode,
     /// Canonical paths whose full content-hash verification succeeded at the
-    /// recorded stat fingerprint. An unchanged fingerprint reuses the completed
-    /// verification; any metadata-visible rewrite forces a new full hash. The
-    /// map is scoped to the loaded runtime and shared by its clones (e.g. a
+    /// recorded stat fingerprint and expected content hash. Both must match to
+    /// reuse verification; any metadata-visible rewrite or expected hash change
+    /// forces a new full hash. The map is scoped to the loaded runtime and
+    /// shared by its clones (e.g. a
     /// media session and the backends it serves), never process-global.
     verified: std::sync::Arc<
-        std::sync::Mutex<std::collections::BTreeMap<std::path::PathBuf, assets::FileFingerprint>>,
+        std::sync::Mutex<std::collections::BTreeMap<std::path::PathBuf, VerifiedAsset>>,
     >,
 }
 impl MediaRuntime {
@@ -271,27 +283,37 @@ impl MediaRuntime {
         Ok(Self {
             native,
             capabilities,
+            video_pipeline_mode: VideoPipelineMode::TwoFrames,
             verified: std::sync::Arc::default(),
         })
     }
     pub fn capabilities(&self) -> &MediaCapabilities {
         &self.capabilities
     }
+    /// Execution policy for controlled serial/overlap comparisons. It changes
+    /// no authored state, codec, timestamps or publication policy.
+    pub fn with_video_pipeline_mode(mut self, mode: VideoPipelineMode) -> Self {
+        self.video_pipeline_mode = mode;
+        self
+    }
     /// Verified resolve with runtime-scoped memoization: the located file is
-    /// content-hashed whenever its stat fingerprint differs from the last
+    /// content-hashed whenever its stat fingerprint or expected hash differs from the last
     /// verified one, so unchanged sources cost a `stat` rather than a full
     /// re-hash per access. Any observed rewrite (size, mtime, ctime, inode)
     /// re-hashes before use. `assets::resolve_asset` remains the strict
-    /// entry point for one-shot callers outside the runtime.
+    /// entry point for one-shot callers outside the runtime. Platforms without
+    /// the Unix ctime/inode fence retain full verification on every access.
     pub(crate) fn resolve_verified(
         &self,
         asset: &kronello_model::Asset,
         project_path: &std::path::Path,
     ) -> Result<std::path::PathBuf, MediaError> {
         let located = assets::locate_asset(asset, project_path)?;
-        {
+        if cfg!(unix) {
             let verified = self.verified.lock().unwrap_or_else(|e| e.into_inner());
-            if verified.get(&located.path) == Some(&located.fingerprint) {
+            if verified.get(&located.path).is_some_and(|entry| {
+                entry.fingerprint == located.fingerprint && entry.content_hash == asset.content_hash
+            }) {
                 return Ok(located.path);
             }
         }
@@ -300,10 +322,18 @@ impl MediaRuntime {
         // rewrite landing between hashing and stat must not be recorded as
         // verified, and any change after `located.fingerprint` re-hashes on
         // the next access.
-        self.verified
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .insert(path.clone(), located.fingerprint);
+        if cfg!(unix) {
+            self.verified
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(
+                    path.clone(),
+                    VerifiedAsset {
+                        fingerprint: located.fingerprint,
+                        content_hash: asset.content_hash.clone(),
+                    },
+                );
+        }
         Ok(path)
     }
 }

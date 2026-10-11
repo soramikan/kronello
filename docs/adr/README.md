@@ -91,14 +91,14 @@
 | [0073](0073-local-stroke-extensions.md) | 破線・線位置・affine 線幅を明示したローカル幾何版で扱う | 採用 | 2026-10-05 |
 | [0074](0074-windows-job-workers-and-process-evidence.md) | Windows worker の独立起動・確定と実プロセス検証 | 部分置換（0082） | 2026-10-05 |
 | [0075](0075-sequence-edit-page-and-clip-split.md) | Sequence 編集ページと共有 Clip 分割 | 採用 | 2026-10-05 |
-| [0076](0076-buffered-device-clock-playback.md) | lock-free buffer と音声デバイス時計による再生 | 採用 | 2026-10-05 |
+| [0076](0076-buffered-device-clock-playback.md) | lock-free buffer と音声デバイス時計による再生 | 部分置換（0151 / 0155） | 2026-10-05 |
 | [0077](0077-template-instance-read-only-inspection.md) | テンプレート内部の評価値を停止時の読み取り検査として表示する | 採用 | 2026-10-05 |
 | [0078](0078-template-export-pages-and-inspected-snapshot.md) | テンプレート比較と検査した revision の書き出し | 採用 | 2026-10-05 |
-| [0079](0079-bounded-streaming-movie-export.md) | movie export の payload を有界 streaming で処理する | 部分置換（0141: tile面計算のみ） | 2026-10-06 |
+| [0079](0079-bounded-streaming-movie-export.md) | movie export の payload を有界 streaming で処理する | 部分置換（0141: tile面計算 / 0148: 音声単独metadata / 0152: 二組pipeline） | 2026-10-06 |
 | [0080](0080-root-temporal-integration.md) | root scope の有理数露光積分と temporal cache | 採用 | 2026-10-06 |
-| [0081](0081-guaranteed-metal-hardware-video-decode.md) | Metal / VideoToolbox の明示 GPU 常駐デコード | 採用 | 2026-10-06 |
+| [0081](0081-guaranteed-metal-hardware-video-decode.md) | Metal / VideoToolbox の明示 GPU 常駐デコード | 部分置換（ADR-0156） | 2026-10-06 |
 | [0082](0082-windows-ffmpeg-runtime.md) | Windows の FFmpeg runtime と実 worker の検証 | 採用 | 2026-10-06 |
-| [0083](0083-native-safe-project-session.md) | native セッション中の安全モード排他 | 採用 | 2026-10-06 |
+| [0083](0083-native-safe-project-session.md) | native セッション中の安全モード排他 | 部分置換（0144） | 2026-10-06 |
 | [0084](0084-per-request-mcp-2026.md) | MCP の要求ごとの版指定と stateless HTTP | 採用 | 2026-10-06 |
 | [0085](0085-composition-media-and-template-slots.md) | Composition の視覚 Media と Template MediaSlot | 採用 | 2026-10-06 |
 | [0086](0086-rec2100-native-precision-and-fixed-hdr-output.md) | Rec.2100 の native 精度と固定 HDR 出力 | 採用 | 2026-10-06 |
@@ -106,13 +106,13 @@
 | [0088](0088-platform-golden-baselines.md) | GPU golden の環境別基準と software adapter の明示 | 採用 | 2026-10-06 |
 | [0089](0089-budgeted-gpu-and-external-raster-cache.md) | 容量制限付き GPU texture と project 外 raster cache | 採用 | 2026-10-06 |
 | [0090](0090-release-performance-evidence-and-snapshot-policy.md) | release 性能の観測と snapshot 方針の再評価 | 採用（性能目標は0093） | 2026-10-06 |
-| [0091](0091-exact-forward-decoder-and-bounded-render-scope.md) | 正確な順方向デコードとレンダー範囲の有限寿命 | 部分置換（0140: 毎アクセス hash 検証と保持 byte budget のみ） | 2026-10-06 |
-| [0092](0092-single-graph-gpu-final-output-and-observations.md) | GPU graph の単一実行と要求単位の観測 | 採用 | 2026-10-06 |
+| [0091](0091-exact-forward-decoder-and-bounded-render-scope.md) | 正確な順方向デコードとレンダー範囲の有限寿命 | 部分置換（0140: hash/byte budget、0154: 検証済み疎なseek索引） | 2026-10-06 |
+| [0092](0092-single-graph-gpu-final-output-and-observations.md) | GPU graph の単一実行と要求単位の観測 | 部分置換（ADR-0150） | 2026-10-06 |
 | [0093](0093-m4-reference-preview-performance-target.md) | M4 基準プレビューの性能目標 | 採用 | 2026-10-06 |
 | [0094](0094-explicit-path-operations-and-bounded-svg.md) | 明示的なPath操作と限定SVG adapter | 採用 | 2026-10-06 |
 | [0095](0095-logical-text-selectors-and-vertical-ruby.md) | 論理文字selectorと縦書き・ルビ | 採用 | 2026-10-06 |
 | [0096](0096-offline-audio-feature-assets.md) | 不変の事前音声特徴量を版付きDataAssetとして保存 | 部分置換（0142） | 2026-10-06 |
-| [0097](0097-read-only-single-graph-render-plans.md) | 読み取り専用の単一graph実行計画 | 採用 | 2026-10-06 |
+| [0097](0097-read-only-single-graph-render-plans.md) | 読み取り専用の単一graph実行計画 | 部分置換（ADR-0150） | 2026-10-06 |
 | [0098](0098-explicit-framebridge-path-inventory.md) | FrameBridgeの具体経路一覧とgeneric VideoToolbox拒否 | 採用 | 2026-10-06 |
 | [0099](0099-authored-matte-relations.md) | 保存するMatte関係 | 採用 | 2026-10-06 |
 | [0100](0100-shared-edit-controls-and-explicit-reverse-sampling.md) | 編集コントロールと明示した逆方向source sampling | 採用（実装受け入れ中） | 2026-10-06 |
@@ -156,11 +156,32 @@
 | [0137](0137-remaining-standard-effects.md) | 残エフェクト群の棚卸しと追加方針 | 部分置換（0139: reverb 実装方針のみ） | 2026-10-08 |
 | [0138](0138-workspace-completion.md) | ワークスペース完成の範囲 | 採用 | 2026-10-08 |
 | [0139](0139-reverb-feedback-comb-topology.md) | `kronello.audio.reverb` のフィードバックコム構成 | 採用 | 2026-10-09 |
-| [0140](0140-media-session-resident-preview.md) | メディアセッションの検証メモ化とプレビューの GPU resident デコード | 採用 | 2026-10-09 |
+| [0140](0140-media-session-resident-preview.md) | メディアセッションの検証メモ化とプレビューの GPU resident デコード | 部分置換（0146 / 0153） | 2026-10-09 |
 
-| [0141](0141-peak-live-render-surfaces.md) | レンダー面予算を同時保持寿命に合わせる | 採用 | 2026-10-10 |
+| [0141](0141-peak-live-render-surfaces.md) | レンダー面予算を同時保持寿命に合わせる | 部分置換（ADR-0157） | 2026-10-10 |
 
 | [0142](0142-full-song-audio-analysis.md) | 楽曲全体を扱う音声解析版2と具体的な診断 | 採用 | 2026-10-10 |
+
+| [0143](0143-deadline-driven-native-notifications.md) | native の外部状態確認を描画頻度から分離する | 採用 | 2026-10-11 |
+
+| [0144](0144-revision-scoped-preview-preparation.md) | revision単位の検証済みプレビュー準備 | 部分置換（0147） | 2026-10-11 |
+
+
+| [0146](0146-independent-bounded-media-cursors.md) | 独立した動画カーソルと二つの保持予算 | 採用 | 2026-10-11 |
+
+| [0147](0147-indexed-timeline-and-proxy-preparation.md) | タイムラインの派生索引とproxy準備再利用 | 採用 | 2026-10-11 |
+| [0148](0148-audio-only-delivery-without-video.md) | 音声単独出力の映像処理省略 | 採用 | 2026-10-11 |
+| [0149](0149-codec-parallelism-and-packet-spans.md) | Codec別並列度と遅延packetのspan | 採用 | 2026-10-11 |
+| [0150](0150-linear-only-delivery-and-temporal-samples.md) | 書き出しとshutter sampleのlinear専用境界 | 採用 | 2026-10-11 |
+| [0151](0151-bounded-playback-pcm-sharing.md) | 再生準備の有界PCM共有 | 部分置換（0155） | 2026-10-11 |
+| [0152](0152-two-frame-delivery-pipeline.md) | 二組のframeでrenderとencodeを重ねる | 採用 | 2026-10-11 |
+| [0153](0153-expected-hash-verification-memo.md) | 資産検証メモを期待hashへ結び付ける | 採用 | 2026-10-11 |
+
+| [0154](0154-verified-sparse-presentation-seek.md) | 検証済み提示区間による有界の疎なシーク索引 | 採用（PERF-005受け入れ済み） | 2026-10-11 |
+
+| [0155](0155-exact-bounded-audio-checkpoints.md) | 再検証済みsourceへの正確な有界音声チェックポイント | 採用（PERF-005受け入れ済み） | 2026-10-11 |
+| [0156](0156-bounded-persistent-hardware-cursor.md) | 有界圧縮demuxと永続hardware cursor | 採用 | 2026-10-11 |
+| [0157](0157-local-coverage-and-last-consumer-surfaces.md) | 保守的な局所coverage面と最終consumerでの解放 | 採用 | 2026-10-11 |
 
 ## 追加と変更の規則
 

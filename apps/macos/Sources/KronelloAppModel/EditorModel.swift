@@ -75,7 +75,13 @@ public struct EditCandidate {
     @Published public private(set) var revision = "0"
     @Published public private(set) var safeMode = false
     @Published public private(set) var compositions: [[String: Any]] = []
-    @Published public var sequenceResult: [String: Any] = [:]
+    @Published public var sequenceResult: [String: Any] = [:] { didSet {
+        timelineIndex = TimelineIndex(sequenceResult)
+        timelineAssetIndex = nil; timelineDurationFrames.removeAll()
+    } }
+    var timelineIndex = TimelineIndex()
+    var timelineAssetIndex: TimelineAssetIndex?
+    var timelineDurationFrames: [TimelineRateKey: Int64] = [:]
     @Published public var timelineCandidate: TimelineCandidate?
     @Published public var sequenceLoading = false
     @Published public var sequenceFailure: ServiceFailure?
@@ -105,7 +111,7 @@ public struct EditCandidate {
         set { var view = editViewSettings; view.editScale = newValue.isFinite && newValue > 0 ? newValue : 1; ui.editView = view }
     }
     @Published public private(set) var layers: [Layer] = []
-    @Published public private(set) var document: [String: Any] = [:]
+    @Published public private(set) var document: [String: Any] = [:] { didSet { timelineAssetIndex = nil } }
     @Published public private(set) var scene: [String: Any] = [:]
     @Published public private(set) var history: [[String: Any]] = [] { didSet { stampHistory() } }
     /// Rows for the undo history panel (FLOW-001), newest first. `history`

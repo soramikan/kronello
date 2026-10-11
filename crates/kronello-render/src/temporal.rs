@@ -224,32 +224,8 @@ pub fn render_temporal_frame_with_cache(
             },
         });
     }
-    let mut accumulation = vec![[0.0_f64; 4]; count as usize];
-    let mut metadata: Option<FrameMetadata> = None;
-    for sample in &samples {
-        let frame = crate::output::render_single_frame_with_cache(
-            snapshot,
-            fonts,
-            backend,
-            FrameRequest {
-                time: sample.time,
-                region: request.region,
-            },
-            cache,
-        )?;
-        let weight = sample.weight.numerator() as f64 / sample.weight.denominator() as f64;
-        for (sum, pixel) in accumulation.iter_mut().zip(frame.pixels.linear) {
-            for channel in 0..4 {
-                sum[channel] += f64::from(pixel[channel]) * weight;
-            }
-        }
-        metadata.get_or_insert(frame.metadata);
-    }
-    let linear: Vec<_> = accumulation
-        .into_iter()
-        .map(|p| p.map(|v| v as f32))
-        .collect();
-    crate::output::validate_pixels(&linear, true)?;
+    let (linear, metadata) =
+        accumulate_temporal(snapshot, fonts, backend, request, &samples, cache)?;
     let display = if snapshot.profile().hdr.is_some() {
         crate::hdr::hdr_sdr_display(&linear)
     } else {
@@ -270,7 +246,7 @@ pub fn render_temporal_frame_with_cache(
             },
         )?;
     }
-    let mut metadata = metadata.expect("nonempty sample plan");
+    let mut metadata = metadata;
     metadata.time = request.time;
     metadata.transfer_stats = backend.transfer_stats();
     metadata.resource_cache_stats = backend.resource_cache_stats();
@@ -290,6 +266,90 @@ pub fn render_temporal_frame_with_cache(
             samples,
             sampling_scope: "root_composition".into(),
         },
+    })
+}
+
+fn accumulate_temporal(
+    snapshot: &RenderSnapshot,
+    fonts: &[FontData<'_>],
+    backend: &dyn RenderBackend,
+    request: FrameRequest,
+    samples: &[TemporalSample],
+    cache: &mut RenderCache,
+) -> Result<(Vec<[f32; 4]>, FrameMetadata), RenderError> {
+    let count = u64::from(request.region.pixels[0]) * u64::from(request.region.pixels[1]);
+    if count
+        .checked_mul(96)
+        .is_none_or(|bytes| bytes > 512 * 1024 * 1024)
+    {
+        return Err(RenderError::UnsupportedFeature(
+            "temporal accumulation budget exceeded; use temporal tile streaming".into(),
+        ));
+    }
+    let mut accumulation = vec![[0.0_f64; 4]; count as usize];
+    let mut metadata: Option<FrameMetadata> = None;
+    for sample in samples {
+        let (pixels, frame_metadata) = crate::output::render_single_linear_with_cache(
+            snapshot,
+            fonts,
+            backend,
+            FrameRequest {
+                time: sample.time,
+                region: request.region,
+            },
+            cache,
+        )?;
+        let weight = sample.weight.numerator() as f64 / sample.weight.denominator() as f64;
+        for (sum, pixel) in accumulation.iter_mut().zip(pixels) {
+            for channel in 0..4 {
+                sum[channel] += f64::from(pixel[channel]) * weight;
+            }
+        }
+        metadata.get_or_insert(frame_metadata);
+    }
+    let linear: Vec<_> = accumulation
+        .into_iter()
+        .map(|p| p.map(|v| v as f32))
+        .collect();
+    crate::output::validate_pixels(&linear, true)?;
+    Ok((linear, metadata.expect("nonempty sample plan")))
+}
+
+/// Linear temporal tiles have no complete-frame cache entry and never perform
+/// a display transform, including intermediate shutter samples.
+pub(crate) fn render_temporal_linear_tiles(
+    snapshot: &RenderSnapshot,
+    fonts: &[FontData<'_>],
+    backend: &dyn RenderBackend,
+    request: FrameRequest,
+    settings: TemporalSettings,
+    sink: &mut dyn FnMut([u32; 2], crate::OutputRegion, Vec<[f32; 4]>) -> Result<(), RenderError>,
+) -> Result<TemporalMetadata, RenderError> {
+    let _scope = backend.begin_observation_scope()?;
+    if backend.requires_gpu_resident() {
+        return Err(RenderError::UnsupportedFeature("require_gpu_resident rejects CPU temporal accumulation; select explicit nonresident backend".into()));
+    }
+    request.region.validate()?;
+    let samples = temporal_samples(snapshot, request.time, settings)?;
+    let mut cache = RenderCache::new(crate::CacheConfig::disabled());
+    for (offset, region) in crate::frame_tiles(request.region) {
+        let (linear, _) = accumulate_temporal(
+            snapshot,
+            fonts,
+            backend,
+            FrameRequest {
+                time: request.time,
+                region,
+            },
+            &samples,
+            &mut cache,
+        )?;
+        sink(offset, region, linear)?;
+    }
+    Ok(TemporalMetadata {
+        settings,
+        samples,
+        sampling_scope: "root_composition".into(),
     })
 }
 

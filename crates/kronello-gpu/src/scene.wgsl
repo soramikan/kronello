@@ -19,6 +19,9 @@ struct Params {
     paint_y: vec4<f32>,
     local_stroke_x: vec4<f32>,
     local_stroke_y: vec4<f32>,
+    source_origin: vec4<u32>,
+    previous_origin: vec4<u32>,
+    output_origin: vec4<u32>,
 }
 struct Edge { points: vec4<f32>, flags: vec4<u32>, extra: vec4<f32> }
 struct Stop { rgba: vec4<f32>, offset: vec4<f32>, space: vec4<u32> }
@@ -193,25 +196,39 @@ fn gradient_paint(solid:vec4<f32>,space:u32,g:vec4<u32>,geometry:vec4<f32>,extra
     }
     return gradient_finish(gradient_prepare(previous,mode),mode);
 }
+fn source_at(position:vec2<i32>)->vec4<f32> {
+    if params.source_origin.z==1u {return textureLoad(source,position,0);}
+    let pixel=position-vec2<i32>(params.source_origin.xy);
+    if any(pixel<vec2<i32>(0)) || any(pixel>=vec2<i32>(textureDimensions(source))) {return vec4<f32>(0.0);}
+    return textureLoad(source,pixel,0);
+}
+fn previous_at(position:vec2<i32>)->vec4<f32> {
+    if params.previous_origin.z==1u {return textureLoad(previous,position,0);}
+    let pixel=position-vec2<i32>(params.previous_origin.xy);
+    if any(pixel<vec2<i32>(0)) || any(pixel>=vec2<i32>(textureDimensions(previous))) {return vec4<f32>(0.0);}
+    return textureLoad(previous,pixel,0);
+}
 @compute @workgroup_size(8,8)
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     if any(id.xy >= textureDimensions(output)) { return; }
-    let position = vec2<i32>(id.xy);
+    let local_position=vec2<i32>(id.xy);
+    let global_pixel=id.xy+params.output_origin.xy;
+    let position=vec2<i32>(global_pixel);
     var result = vec4<f32>(0.0);
     switch params.config.x {
         case 0u: {
             // Write every pixel, including pooled surface pixels outside the path.
             // Bounds are conservative; uncertain inputs keep the legacy loop.
-            let origin=vec2<f32>(id.xy)*params.scale.xy;
+            let origin=vec2<f32>(global_pixel)*params.scale.xy;
             if params.boundary.w==1u && (any(origin<params.fill_extra.xy) || any(origin>params.fill_extra.zw)) {
-                textureStore(output,position,vec4<f32>(0.0));
+                textureStore(output,local_position,vec4<f32>(0.0));
                 return;
             }
             var fill_color=vec4<f32>(0.0);
             var stroke_color=vec4<f32>(0.0);
             for (var sy=0u; sy<4u; sy++) {
                 for (var sx=0u; sx<4u; sx++) {
-                    let p = (vec2<f32>(id.xy)+(vec2<f32>(f32(sx),f32(sy))+0.5)/4.0)*params.scale.xy;
+                    let p = (vec2<f32>(global_pixel)+(vec2<f32>(f32(sx),f32(sy))+0.5)/4.0)*params.scale.xy;
                     var winding = 0i;
                     var stroked = false;
                     let stroke_p = vec2<f32>(dot(params.local_stroke_x.xy,p)+params.local_stroke_x.z,dot(params.local_stroke_y.xy,p)+params.local_stroke_y.z);
@@ -233,10 +250,10 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
             }
             result=over(stroke_color,fill_color);
         }
-        case 1u: { result=over(textureLoad(source,position,0),textureLoad(previous,position,0)); }
+        case 1u: { result=over(source_at(position),previous_at(position)); }
         case 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u, 14u, 15u, 16u, 17u, 18u, 19u, 20u, 21u, 22u, 23u: {
-            let s=textureLoad(source,position,0);
-            let d=textureLoad(previous,position,0);
+            let s=source_at(position);
+            let d=previous_at(position);
             // Straight operands; zero alpha defines its color as zero.
             var cb=vec3<f32>(0.0);
             var cs=vec3<f32>(0.0);
@@ -245,9 +262,9 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
             let b=blend_rgb(cb,cs,params.config.x);
             result=vec4<f32>(s.rgb*(1.0-d.a)+d.rgb*(1.0-s.a)+s.a*d.a*b,s.a+d.a*(1.0-s.a));
         }
-        case 2u: { result=textureLoad(source,position,0)*params.scale.z; }
+        case 2u: { result=source_at(position)*params.scale.z; }
         case 3u: {
-            let matte=textureLoad(previous,position,0);
+            let matte=previous_at(position);
             var coverage=matte.a;
             if params.spaces.z==1u || params.spaces.z==3u {
                 var weights=vec3<f32>(0.2126,0.7152,0.0722);
@@ -255,10 +272,10 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
                 coverage=clamp(dot(matte.rgb,weights),0.0,1.0);
             }
             if params.spaces.z>=2u { coverage=1.0-coverage; }
-            result=textureLoad(source,position,0)*coverage;
+            result=source_at(position)*coverage;
         }
         case 4u: {
-            let p=textureLoad(source,position,0);
+            let p=source_at(position);
             var rgb=vec3<f32>(0.0);
             if p.a>1.0/65536.0 { rgb=p.rgb/p.a; }
             rgb=primaries(rgb,params.config.w==1u,params.spaces.w==2u);
@@ -276,5 +293,5 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     // Normalize RGB if binary16 alpha underflows, without applying the external
     // epsilon to positive internal alpha. No RGB clamp in this pipeline.
     if result.a<=1.0/33554432.0 { result=vec4<f32>(0.0); }
-    textureStore(output,position,result);
+    textureStore(output,local_position,result);
 }

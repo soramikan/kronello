@@ -340,3 +340,5 @@ impl TransferStats {
 
 #[cfg(test)]
 mod perf_tests;
+
+pub use scene_gpu::SceneSurfaceMode;

@@ -79,13 +79,14 @@ def assemble(bin_path, output):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--skip-build", action="store_true", help="Use previously built FFI and Swift artifacts")
-    parser.add_argument("--release", action="store_true", help="Build the FFI and helper CLI optimized (use for review and timing)")
+    parser.add_argument("--release", action="store_true", help="Build Rust and Swift optimized (use for review and timing)")
     args = parser.parse_args()
+    configuration = "release" if args.release else "debug"
     if not args.skip_build:
         run("python3", "scripts/build_ffi.py", *(["--release"] if args.release else []))
         run("python3", "scripts/fetch_ui_fonts.py")
-        run("swift", "build", "--package-path", PACKAGE, "-j", "3")
-    bin_path = Path(run("swift", "build", "--package-path", PACKAGE, "--show-bin-path").strip())
+        run("swift", "build", "--package-path", PACKAGE, "-c", configuration, "-j", "3")
+    bin_path = Path(run("swift", "build", "--package-path", PACKAGE, "-c", configuration, "--show-bin-path").strip())
     output = ROOT / "target/macos/Kronello.app"
     output.parent.mkdir(parents=True, exist_ok=True)
     print(assemble(bin_path, output))

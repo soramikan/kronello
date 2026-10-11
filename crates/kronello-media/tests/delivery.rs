@@ -8,6 +8,16 @@ use kronello_render::*;
 use kronello_time::{FrameRate, Rational, SampleRate, Time, TimeMap, TimeRange};
 use std::path::{Path, PathBuf};
 
+struct NoVideo;
+impl RenderBackend for NoVideo {
+    fn name(&self) -> &str {
+        panic!("audio delivery must not inspect a video backend")
+    }
+    fn execute(&self, _: &RenderDag) -> Result<BackendFrame, RenderError> {
+        panic!("audio delivery must not render video")
+    }
+}
+
 fn t(n: i64, d: i64) -> Time {
     Time::new(n, d).unwrap()
 }
@@ -451,13 +461,18 @@ fn mp3_and_flac_elementary_deliveries_probe_and_verify() {
     ] {
         let snapshot = leg_snapshot(&render, profile);
         let output = dir.path().join(name);
+        let mut checkpoints = Vec::new();
         let report = runtime
-            .export_delivery(
+            .export_delivery_with_checkpoint(
                 &[&snapshot],
                 Path::new("absent.kronello"),
                 &[],
-                &CpuReferenceBackend,
+                &NoVideo,
                 &request(output.clone(), ChapterPolicy::Transfer, vec![]),
+                &mut |n| {
+                    checkpoints.push(n);
+                    Ok(())
+                },
             )
             .unwrap();
         report
@@ -470,6 +485,12 @@ fn mp3_and_flac_elementary_deliveries_probe_and_verify() {
         assert_eq!(report.probe.streams[0].channels, Some(2));
         assert!(report.outputs[0].video.is_none());
         assert!(report.outputs[0].audio.is_some());
+        assert!(report.frames.is_empty());
+        assert_eq!(checkpoints.last(), Some(&48));
+        let decoded = runtime.decode_audio(&output, 0).unwrap();
+        assert_eq!(decoded.buffer.frame_count(), 96_000);
+        assert_eq!(Some(decoded.source_start), report.probe.streams[0].start);
+        assert!(decoded.buffer.samples().iter().all(|s| s.abs() < 1e-6));
     }
     // MP3 is mono/stereo only; a 5.1 layout is a typed rejection.
     let wide = AvExportSnapshot::with_audio_layout(
@@ -515,6 +536,77 @@ fn mp3_and_flac_elementary_deliveries_probe_and_verify() {
         .probe
         .verify_delivery(MovieProfile::FlacV1, ChannelMask::SURROUND_5_1)
         .unwrap();
+}
+
+#[test]
+fn hdr_audio_delivery_cancels_before_publication_without_pixel_conversion() {
+    let runtime = MediaRuntime::load().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut project, sequence) = project(64, 64);
+    let DocumentObject::Known(sequence_def) = &mut project.sequences[0] else {
+        unreachable!()
+    };
+    sequence_def.working_space = ColorSpace::LinearRec2020;
+    let render = RenderSnapshot::for_target(
+        &project,
+        RenderTarget::Sequence { sequence },
+        0,
+        RenderProfile {
+            hdr: Some(HdrSettings {
+                transfer: HdrTransfer::Pq,
+            }),
+            ..RenderProfile::default()
+        },
+    )
+    .unwrap();
+    let snapshot = leg_snapshot(&render, MovieProfile::FlacV1);
+    let mut req = request(dir.path().join("hdr.flac"), ChapterPolicy::Omit, vec![]);
+    req.background = [10.0, -1.0, 100.0]; // No pixel contract in an audio-only leg.
+    let error = runtime
+        .export_delivery_with_checkpoint(
+            &[&snapshot],
+            Path::new("absent.kronello"),
+            &[],
+            &NoVideo,
+            &req,
+            &mut |n| {
+                if n == 48 {
+                    Err(MediaError::Encode("injected final cancellation".into()))
+                } else {
+                    Ok(())
+                }
+            },
+        )
+        .unwrap_err();
+    assert_eq!(error.code(), "ENCODE_ERROR");
+    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+    let report = runtime
+        .export_delivery(
+            &[&snapshot],
+            Path::new("absent.kronello"),
+            &[],
+            &NoVideo,
+            &req,
+        )
+        .unwrap();
+    assert!(report.frames.is_empty());
+    assert_eq!(report.audio.as_ref().unwrap().frames, 96_000);
+    req.output = dir.path().join("invalid.flac");
+    req.background[0] = f32::NAN;
+    assert_eq!(
+        runtime
+            .export_delivery(
+                &[&snapshot],
+                Path::new("absent.kronello"),
+                &[],
+                &NoVideo,
+                &req
+            )
+            .unwrap_err()
+            .code(),
+        "INVALID_MEDIA_INPUT"
+    );
+    assert!(!req.output.exists());
 }
 
 #[test]

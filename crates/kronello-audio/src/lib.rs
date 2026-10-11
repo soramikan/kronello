@@ -21,7 +21,8 @@ mod loudness;
 mod sync;
 mod wsola;
 pub use advanced::{
-    AUDIO_EVALUATION_VERSION, AUDIO_GENERATOR_SILENCE, AUDIO_GENERATOR_TONE, AudioPlaybackSession,
+    AUDIO_EVALUATION_VERSION, AUDIO_GENERATOR_SILENCE, AUDIO_GENERATOR_TONE,
+    AudioPlaybackCheckpoint, AudioPlaybackSession,
 };
 pub use channels::{
     ChannelBuffer, ChannelBus, ChannelBusMeters, ChannelMeter, ChannelSourceReader, ChannelSources,

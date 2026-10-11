@@ -92,6 +92,8 @@ public struct ProjectUIState: Codable, Equatable, Sendable {
     public var tool = "select"
     public var bounds = "layout"
     public var resolution = "full"
+    /// Optional for compatibility with UI state saved before proxy selection.
+    public var mediaProxies: String?
     public var looping = false
     public var time = RationalTime(num: 0, den: 1)
     public init() {}

@@ -1,6 +1,6 @@
 # ADR-0140: メディアセッションの検証メモ化とプレビューの GPU resident デコード
 
-- 状態: 採用
+- 状態: 部分置換（[ADR-0146](0146-independent-bounded-media-cursors.md) がpool keyと個数上限を更新。[ADR-0153](0153-expected-hash-verification-memo.md) が検証メモの期待hashと対応OSを更新。512MiB保持予算とその他の条項を維持）
 - 日付: 2026-10-09
 - 対象: PERF-001 の preview/export 実行時経路
 - 部分置換: [ADR-0091](0091-exact-forward-decoder-and-bounded-render-scope.md) の「区間命中時も毎回ファイルの hash を検証する」条項と保持 byte budget のみ
