@@ -132,3 +132,72 @@ fn unknown_map_payloads_are_preserved_but_known_invalid_map_payloads_are_rejecte
     assert_eq!(diagnostic.id.to_string(), invalid["id"].as_str().unwrap());
     assert!(!diagnostic.reason.is_empty());
 }
+
+#[test]
+fn future_track_and_expression_union_variants_remain_lossless() {
+    let fixture: Value =
+        serde_json::from_str(include_str!("../../../examples/nle-001.project.json")).unwrap();
+    for kind in [json!("future_track"), json!(42)] {
+        let mut raw = fixture.clone();
+        raw["sequences"][0]["tracks"][0]["kind"] = kind.clone();
+        let project: Project = serde_json::from_value(raw.clone()).unwrap();
+        if kind.is_string() {
+            project.validate_storage().unwrap();
+            assert!(matches!(project.sequences[0], DocumentObject::Opaque(_)));
+            assert_eq!(
+                serde_json::to_value(&project).unwrap()["sequences"],
+                raw["sequences"]
+            );
+        } else {
+            assert!(matches!(
+                project.validate_storage(),
+                Err(ProjectError::InvalidObject(_))
+            ));
+        }
+    }
+    let id = Uuid::new_v4();
+    for node in [json!("future_node"), json!({"future_node":{"payload":42}})] {
+        let object = json!({"id":id,"version":1,"value_type":"scalar","nodes":[node]});
+        let project = raw_object("expressions", object.clone());
+        project.validate_storage().unwrap();
+        assert!(matches!(project.expressions[0], DocumentObject::Opaque(_)));
+        assert_eq!(
+            serde_json::to_value(&project).unwrap()["expressions"][0],
+            object
+        );
+    }
+    for node in [
+        json!(42),
+        json!({"literal":{"kind":"scalar","value":"bad number"}}),
+    ] {
+        let project = raw_object(
+            "expressions",
+            json!({"id":id,"version":1,"value_type":"scalar","nodes":[node]}),
+        );
+        assert!(matches!(
+            project.validate_storage(),
+            Err(ProjectError::InvalidObject(_))
+        ));
+    }
+}
+
+#[test]
+fn future_marker_and_tracking_string_literals_remain_lossless() {
+    let mut raw: Value =
+        serde_json::from_str(include_str!("../../../examples/nle-001.project.json")).unwrap();
+    raw["sequences"][0]["markers"] = json!([{"id":Uuid::new_v4(),"time":{"num":"0","den":"1"},"color":"red","role":"future_role"}]);
+    let project: Project = serde_json::from_value(raw.clone()).unwrap();
+    project.validate_storage().unwrap();
+    assert_eq!(
+        serde_json::to_value(&project).unwrap()["sequences"],
+        raw["sequences"]
+    );
+
+    let object = json!({"id":Uuid::new_v4(),"version":1,"mode":"future_mode"});
+    let project = raw_object("tracking_data_assets", object.clone());
+    project.validate_storage().unwrap();
+    assert_eq!(
+        serde_json::to_value(&project).unwrap()["tracking_data_assets"][0],
+        object
+    );
+}

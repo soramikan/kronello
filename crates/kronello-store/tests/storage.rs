@@ -1529,3 +1529,31 @@ fn invalid_known_opaque_import_returns_addressed_error_without_writing() {
     assert_eq!(after.document, before.document);
     assert!(store.events_since(0).unwrap().is_empty());
 }
+
+#[test]
+fn future_expression_union_variants_survive_store_and_history_reads() {
+    let (_dir, path, mut store) = fixture();
+    let mut raw = serde_json::to_value(store.snapshot().unwrap().document).unwrap();
+    let objects = json!([
+        {"id":Uuid::new_v4(),"version":1,"value_type":"scalar","nodes":["future_node"]},
+        {"id":Uuid::new_v4(),"version":1,"value_type":"scalar","nodes":[{"future_node":{"payload":42}}]}
+    ]);
+    raw["expressions"] = objects.clone();
+    store
+        .import_json(0, Uuid::new_v4(), &raw.to_string())
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(store.snapshot_at(1).unwrap().document).unwrap()["expressions"],
+        objects
+    );
+    store.close().unwrap();
+    assert_eq!(
+        serde_json::to_value(ProjectStore::read_snapshot(&path).unwrap().document).unwrap()["expressions"],
+        objects
+    );
+    let reopened = open(&path);
+    assert_eq!(
+        serde_json::to_value(reopened.snapshot_at(1).unwrap().document).unwrap()["expressions"],
+        objects
+    );
+}

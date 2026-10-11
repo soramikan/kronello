@@ -882,20 +882,25 @@ fn has_unknown_content(raw: &Value, schema: &Value, root: &Value) -> bool {
                 .iter()
                 .filter(|branch| {
                     if let Some(properties) = branch.get("properties").and_then(Value::as_object) {
-                        return properties.iter().all(|(key, constraint)| {
-                            raw.get(key).is_none_or(|value| {
-                                constraint.get("const").is_none_or(|c| c == value)
-                                    && constraint
-                                        .get("enum")
-                                        .and_then(Value::as_array)
-                                        .is_none_or(|values| values.contains(value))
-                            })
-                        });
+                        return raw.is_object()
+                            && properties.iter().all(|(key, constraint)| {
+                                raw.get(key).is_none_or(|value| {
+                                    constraint.get("const").is_none_or(|c| c == value)
+                                        && constraint
+                                            .get("enum")
+                                            .and_then(Value::as_array)
+                                            .is_none_or(|values| values.contains(value))
+                                })
+                            });
                     }
                     match branch.get("type").and_then(Value::as_str) {
                         Some("null") => raw.is_null(),
                         Some("object") => raw.is_object(),
                         Some("array") => raw.is_array(),
+                        Some("string") => raw.is_string(),
+                        Some("boolean") => raw.is_boolean(),
+                        Some("integer") => raw.is_i64() || raw.is_u64(),
+                        Some("number") => raw.is_number(),
                         _ => true,
                     }
                 })
@@ -918,11 +923,15 @@ fn has_unknown_content(raw: &Value, schema: &Value, root: &Value) -> bool {
             return compatible.iter().all(|s| has_unknown_content(raw, s, root));
         }
     }
-    if raw.is_string()
-        && let Some(values) = schema.get("enum").and_then(Value::as_array)
-        && !values.contains(raw)
-    {
-        return true;
+    if raw.is_string() {
+        if schema.get("const").is_some_and(|literal| literal != raw) {
+            return true;
+        }
+        if let Some(values) = schema.get("enum").and_then(Value::as_array)
+            && !values.contains(raw)
+        {
+            return true;
+        }
     }
     if let Some(object) = raw.as_object() {
         let properties = schema.get("properties").and_then(Value::as_object);
@@ -1211,4 +1220,37 @@ pub(crate) fn unique_fields<'de, D: Deserializer<'de>>(
         }
     }
     deserializer.deserialize_map(FieldsVisitor)
+}
+
+#[cfg(test)]
+mod extension_schema_tests {
+    use super::*;
+
+    #[test]
+    fn string_literal_unions_distinguish_extensions_from_wrong_types() {
+        for (schema, known) in [
+            (schemars::schema_for!(crate::TrackKind), "caption"),
+            (schemars::schema_for!(crate::TrackingMode), "points"),
+            (schemars::schema_for!(crate::MarkerRole), "standard"),
+            (schemars::schema_for!(crate::ReframeEasing), "linear"),
+            (schemars::schema_for!(crate::ExpressionNode), "time"),
+        ] {
+            let schema = serde_json::to_value(schema).unwrap();
+            assert!(has_unknown_content(
+                &Value::String("future_variant".into()),
+                &schema,
+                &schema
+            ));
+            assert!(!has_unknown_content(
+                &Value::String(known.into()),
+                &schema,
+                &schema
+            ));
+            assert!(!has_unknown_content(
+                &serde_json::json!(42),
+                &schema,
+                &schema
+            ));
+        }
+    }
 }
