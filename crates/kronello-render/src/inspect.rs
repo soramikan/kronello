@@ -139,31 +139,15 @@ pub fn explain_render_path(
     for (tile_id, (_, tile)) in crate::frame_tiles(region).into_iter().enumerate() {
         let dag = crate::build_render_dag_with_cache(scene, profile, tile, cache)?;
         let mut stages = Vec::new();
-        let mut surfaces = 4; // one root + backend reserve
-        let elided_root = if backend != ExplainBackend::CpuReference {
-            dag.nodes().len().checked_sub(2).filter(|root| matches!((&dag.nodes()[*root], dag.nodes().last()), (DagNode::IsolatedComposite { children, opacity }, Some(DagNode::OutputTransform { source, .. })) if *source == *root && children.len() == 1 && *opacity == 1.0))
-        } else {
-            None
-        };
+        let surfaces = dag.tile_surface_count() as u64;
         for (index, node) in dag.nodes().iter().enumerate() {
             let (code, key, image) = match node {
                 DagNode::Geometry { key, .. } => ("GEOMETRY", Some(key.clone()), false),
                 DagNode::TextLayout { key, .. } => ("TEXT_LAYOUT", Some(key.clone()), false),
                 DagNode::CoverageDraw { .. } => ("COVERAGE_DRAW", None, true),
-                DagNode::IsolatedComposite { children, .. } => {
-                    if Some(index) != elided_root {
-                        surfaces += children.len() as u64 + 1;
-                    }
-                    ("ISOLATED_COMPOSITE", None, true)
-                }
-                DagNode::Effect { .. } => {
-                    surfaces += 3;
-                    ("EFFECT", None, true)
-                }
-                DagNode::EffectMap { .. } => {
-                    surfaces += 3;
-                    ("EFFECT_MAP", None, true)
-                }
+                DagNode::IsolatedComposite { .. } => ("ISOLATED_COMPOSITE", None, true),
+                DagNode::Effect { .. } => ("EFFECT", None, true),
+                DagNode::EffectMap { .. } => ("EFFECT_MAP", None, true),
                 DagNode::Generate { .. } => ("GENERATE", None, true),
                 DagNode::Blend { .. } => ("BLEND", None, true),
                 DagNode::Mask { .. } => ("MASK", None, true),
@@ -183,9 +167,6 @@ pub fn explain_render_path(
                     ("RASTER_INPUT", None, true)
                 }
             };
-            if image && Some(index) != elided_root {
-                surfaces += 1;
-            }
             let execution = if !image && code != "OUTPUT_TRANSFORM" {
                 "cpu"
             } else {

@@ -159,14 +159,7 @@ pub fn render_frame_tiles(
     let scene = crate::build_scene_ir_with_cache(snapshot, request.time, fonts, &mut cache)?;
     for (offset, tile) in frame_tiles(request.region) {
         let dag = crate::build_render_dag_with_cache(&scene, snapshot.profile(), tile, &mut cache)?;
-        // Reserve the larger float32 CPU payload even for an injected backend.
-        // This rejects huge cumulative halos before backend allocation.
-        let bytes = dag.tile_surface_bytes(16)?;
-        if bytes > 512 * 1024 * 1024 {
-            return Err(RenderError::UnsupportedFeature(format!(
-                "streaming tile surface budget exceeded: {bytes} bytes > 536870912"
-            )));
-        }
+        check_tile_surface_budget(&dag, true)?;
         let mut output = backend.execute_with_cache(&dag, &mut cache)?;
         if snapshot.profile().hdr.is_some() {
             output.display = crate::hdr::hdr_sdr_display(&output.linear);
@@ -263,6 +256,20 @@ pub(crate) fn frame_metadata(
     Ok(metadata)
 }
 
+/// Both frame assembly and movie streaming reserve the float32 peak before
+/// entering the selected backend, including the full cumulative halo.
+fn check_tile_surface_budget(dag: &crate::RenderDag, streaming: bool) -> Result<(), RenderError> {
+    const LIMIT: u64 = 512 * 1024 * 1024;
+    let bytes = dag.tile_surface_bytes(16)?;
+    if bytes > LIMIT {
+        let prefix = if streaming { "streaming " } else { "" };
+        return Err(RenderError::UnsupportedFeature(format!(
+            "{prefix}tile surface budget exceeded: {bytes} bytes > {LIMIT}"
+        )));
+    }
+    Ok(())
+}
+
 /// Bound intermediate surfaces while retaining the output's absolute sample
 /// lattice. Each tile uses the existing backwards ROI/halo compiler and the
 /// same selected backend; failures never retry on another execution path.
@@ -276,11 +283,7 @@ fn execute_tiles(
     const EDGE: u32 = 512;
     if region.pixels.iter().all(|v| *v <= EDGE) {
         let dag = crate::build_render_dag_with_cache(scene, profile, region, cache)?;
-        if dag.tile_surface_bytes(16)? > 512 * 1024 * 1024 {
-            return Err(RenderError::UnsupportedFeature(
-                "tile surface budget exceeded".into(),
-            ));
-        }
+        check_tile_surface_budget(&dag, false)?;
         return backend.execute_with_cache(&dag, cache);
     }
     let count = region.pixels[0] as usize * region.pixels[1] as usize;
@@ -297,11 +300,7 @@ fn execute_tiles(
     for ([x, y], tile) in frame_tiles(region) {
         let pixels = tile.pixels;
         let dag = crate::build_render_dag_with_cache(scene, profile, tile, cache)?;
-        if dag.tile_surface_bytes(16)? > 512 * 1024 * 1024 {
-            return Err(RenderError::UnsupportedFeature(
-                "tile surface budget exceeded".into(),
-            ));
-        }
+        check_tile_surface_budget(&dag, false)?;
         let output = backend.execute_with_cache(&dag, cache)?;
         let tile_count = pixels[0] as usize * pixels[1] as usize;
         if output.linear.len() != tile_count || output.display.len() != tile_count {

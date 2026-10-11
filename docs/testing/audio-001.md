@@ -2,6 +2,20 @@
 
 状態: `done`。設計は [ADR-0096](../adr/0096-offline-audio-feature-assets.md)。rootが固有条件と統合checkpointを確認して受け入れ済み。[M5統合記録](m5-acceptance.md)を参照。
 
+## 楽曲全体を解析する場合（2026-10-10追補）
+
+版1の100,000,000 workでは通常の楽曲全体を解析できない。以下の旧記録の「PCMは10分上限」は
+入力メモリ上限であり、あらゆる設定で10分を解析できる保証ではない。
+[AUDIO-012](audio-012.md) / [ADR-0142](../adr/0142-full-song-audio-analysis.md) の版2を使う。
+48 kHz・30 fps向けの例は次のとおり（`time_map`は従来の有理数写像を指定する）。
+
+```json
+{"version":2,"sample_rate":48000,"window":2048,"hop":1600,"bands":[[0,200],[200,2000],[2000,24000]],"time_map":{"kind":"linear","offset":{"num":"0","den":"1"},"speed":{"num":"1","den":"1"}}}
+```
+
+版2は同設定の最大8帯域まで10分の解析予算に収まる。`session_id`も任意のUUIDとして受理する。
+旧版1の数値・制限・保存互換性は維持する。新規検証結果はAUDIO-012を参照し、以下は旧checkpointの記録として残す。
+
 ## 再現可能な検証
 
 - `cargo test -p kronello-audio --test analysis --locked`: 固定FFT binの937.5 Hz・amplitude0.5の

@@ -105,7 +105,7 @@ import UniformTypeIdentifiers
             let formatter = RelativeDateTimeFormatter(); formatter.locale = Locale(identifier: "ja_JP")
             let stamp = recentDates[$0.path] ?? $0.opened
             let date = Date().timeIntervalSince(stamp) > 604800 ? stamp.formatted(date: .numeric, time: .omitted) : formatter.localizedString(for: stamp, relativeTo: Date())
-            return KRRecentProject(id: $0.path, name: $0.name, location: URL(fileURLWithPath: $0.path).deletingLastPathComponent().path,
+            return KRRecentProject(id: $0.path, name: $0.name, location: EditorWindow.displayLocation($0.path),
                 date: date, missing: missingRecent.contains($0.path))
         }
     }
@@ -127,6 +127,7 @@ struct WindowSizing: NSViewRepresentable {
                 window.contentMinSize = minimum; window.setContentSize(minimum); window.center()
             }
             window.title = "Kronello"
+            TrafficLights.layout(window)
         }
     }
     @MainActor final class Coordinator {
@@ -142,7 +143,64 @@ struct WindowSizing: NSViewRepresentable {
                 guard let self else { return }
                 Task { @MainActor in self.onClose() }
             }
+            // AppKit re-lays the title bar out on these events and would put the
+            // window buttons back at the stock 28pt title-bar position.
+            let relayout: [Notification.Name] = [NSWindow.didResizeNotification, NSWindow.didEndLiveResizeNotification,
+                NSWindow.didExitFullScreenNotification, NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification,
+                NSWindow.didChangeScreenNotification]
+            layoutTokens = relayout.map { name in
+                NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { notification in
+                    guard let window = notification.object as? NSWindow else { return }
+                    MainActor.assumeIsolated { TrafficLights.layout(window) }
+                }
+            }
         }
-        deinit { if let token { NotificationCenter.default.removeObserver(token) } }
+        private var layoutTokens: [NSObjectProtocol] = []
+        deinit {
+            if let token { NotificationCenter.default.removeObserver(token) }
+            layoutTokens.forEach(NotificationCenter.default.removeObserver)
+        }
     }
+}
+
+/// window.md: the OS window buttons sit inside the 44pt toolbar, vertically
+/// centred, instead of on a separate 28pt title-bar strip above it.
+@MainActor enum TrafficLights {
+    static let leading: CGFloat = 14
+    static func layout(_ window: NSWindow) {
+        guard !window.styleMask.contains(.fullScreen),
+              let close = window.standardWindowButton(.closeButton),
+              let miniaturize = window.standardWindowButton(.miniaturizeButton),
+              let zoom = window.standardWindowButton(.zoomButton),
+              let container = close.superview?.superview else { return }
+        let height = KRWindowMetrics.toolbar
+        var frame = container.frame
+        if frame.height != height || frame.minY != window.frame.height - height {
+            frame.size.height = height; frame.origin.y = window.frame.height - height
+            container.frame = frame
+        }
+        let spacing = miniaturize.frame.minX - close.frame.minX
+        for (index, button) in [close, miniaturize, zoom].enumerated() {
+            button.setFrameOrigin(NSPoint(x: leading + CGFloat(index) * spacing, y: ((height - button.frame.height) / 2).rounded()))
+        }
+    }
+}
+
+/// Empty toolbar area that moves the window like a title bar; a double-click
+/// follows the user's "double-click a window's title bar" preference.
+struct WindowDragArea: NSViewRepresentable {
+    final class DragView: NSView {
+        override var mouseDownCanMoveWindow: Bool { true }
+        override func mouseDown(with event: NSEvent) {
+            guard let window else { return }
+            if event.clickCount == 2 {
+                let action = UserDefaults.standard.string(forKey: "AppleActionOnDoubleClick") ?? "Maximize"
+                if action == "Minimize" { window.performMiniaturize(nil) } else if action != "None" { window.performZoom(nil) }
+                return
+            }
+            window.performDrag(with: event)
+        }
+    }
+    func makeNSView(context: Context) -> NSView { DragView() }
+    func updateNSView(_ view: NSView, context: Context) {}
 }

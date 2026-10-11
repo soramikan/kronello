@@ -1023,6 +1023,32 @@ impl MediaRuntime {
         }
         crate::ffi::NativeRuntime::probe(&self.native, &path)
     }
+    /// Import uses the same local-file probe and validates that every A/V
+    /// stream yields a decoded frame. This is not a full-file integrity scan.
+    pub fn probe_for_import(
+        &self,
+        path: &Path,
+    ) -> Result<(MediaProbe, kronello_model::AssetKind), MediaError> {
+        let path = path.canonicalize()?;
+        if !path.is_file() {
+            return Err(MediaError::InvalidInput("expected local file".into()));
+        }
+        // Import rejects RAW before either the RAW decoder or generic probe.
+        // Unsupported vendor formats retain their more specific boundary error.
+        if let Some(detection) = crate::raw::sniff_camera_raw(&path)? {
+            return Err(match detection {
+                crate::raw::CameraRawDetection::Braw | crate::raw::CameraRawDetection::R3d => {
+                    detection.unsupported()
+                }
+                _ => MediaError::UnsupportedFeature(
+                    "camera RAW import requires an explicit RAW registration workflow".into(),
+                ),
+            });
+        }
+        let probe = crate::ffi::NativeRuntime::probe(&self.native, &path)?;
+        let kind = self.native.probe_import_kind(&path)?;
+        Ok((probe, kind))
+    }
     /// Packet-copy the selected codecs with rational PTS; publish only after probe.
     pub fn mux_av(
         &self,

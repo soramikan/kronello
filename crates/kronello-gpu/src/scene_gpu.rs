@@ -38,6 +38,7 @@ struct ScenePass<'a> {
     blank: SurfaceLease,
     semantic_keys: Option<&'a [Option<kronello_render::RasterCacheKey>]>,
     allow_disk: bool,
+    shared: Vec<bool>,
     pending_cache: Vec<(kronello_render::RasterCacheKey, SurfaceLease)>,
     stats: TransferStats,
     validation: wgpu::Buffer,
@@ -1006,7 +1007,9 @@ impl ScenePass<'_> {
                 self.allow_disk,
             )?
         {
-            cache[id] = Some(surface.clone());
+            if self.shared[id] {
+                cache[id] = Some(surface.clone());
+            }
             return Ok(surface);
         }
         let blank = self.blank.clone();
@@ -1123,9 +1126,16 @@ impl ScenePass<'_> {
             }
         };
         if let Some(key) = self.semantic_keys.and_then(|keys| keys[id]) {
+            // Keep the most recently computed results (including the root),
+            // bounded before sticky validation permits cache publication.
+            if self.pending_cache.len() == kronello_render::PENDING_SURFACE_LIMIT {
+                self.pending_cache.remove(0);
+            }
             self.pending_cache.push((key, t.clone()));
         }
-        cache[id] = Some(t.clone());
+        if self.shared[id] {
+            cache[id] = Some(t.clone());
+        }
         Ok(t)
     }
     fn composite(
@@ -1208,6 +1218,13 @@ impl GpuContext {
             gpu: self,
             semantic_keys: None,
             allow_disk: false,
+            shared: kronello_render::surface_references(
+                &crate::scene::surface_lifetimes(scene),
+                &scene.roots,
+            )
+            .into_iter()
+            .map(|count| count > 1)
+            .collect(),
             pending_cache: vec![],
             controls: vec![],
             size,

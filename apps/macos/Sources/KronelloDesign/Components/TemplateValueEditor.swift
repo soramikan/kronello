@@ -44,19 +44,30 @@ public struct KRTemplateValueEditor: View {
         guard let minimum = schema["minimum"] as? Double, let maximum = schema["maximum"] as? Double, minimum <= maximum else { return nil }
         return minimum...maximum
     }
+    /// template.md: a color input is its swatch and the mono value (`#RRGGBBAA`).
     var color: some View {
         let raw = value.krObject("value"), c = raw.krObject("components")
-        return VStack(alignment:.leading,spacing:KRSpace.space1) {
-            HStack(spacing:KRSpace.space2) {
-                Rectangle().fill(Color(.sRGB,red:c.krNumber("r"),green:c.krNumber("g"),blue:c.krNumber("b"),opacity:c.krNumber("alpha"))).frame(width:16,height:16).overlay { Rectangle().strokeBorder(p.lineStrong,lineWidth:1) }
-                Text(raw.krString("space")).krText(KRType.ruler).foregroundStyle(p.inkMuted)
-            }
-            ForEach(["r","g","b","alpha"],id:\.self) { channel in
-                KRInspectorSettingRow(channel) {
-                    KRNumberField(value:.constant(c.krNumber(channel)),step:0.01,range:0...1,precision:2,accessibilityLabel:channel,onCommit:{ _,next in var changed = c; changed[channel] = next; var updated = raw; updated["components"] = changed; commit(["kind":"color","value":updated]) }).frame(width:88)
-                }
-            }
-        }
+        let hex = String(format: "#%02X%02X%02X%02X", channel(c, "r"), channel(c, "g"), channel(c, "b"), channel(c, "alpha"))
+        return HStack(spacing: KRSpace.space2) {
+            ZStack {
+                KRCheckerboard(cell: 4)
+                Rectangle().fill(Color(.sRGB, red: c.krNumber("r"), green: c.krNumber("g"), blue: c.krNumber("b"), opacity: c.krNumber("alpha")))
+            }.frame(width: 14, height: 14).clipShape(RoundedRectangle(cornerRadius: 2))
+                .overlay { RoundedRectangle(cornerRadius: 2).strokeBorder(p.lineStrong, lineWidth: 1) }
+            KRTextField("", value: .constant(hex), help: raw.krString("space") == "srgb" ? nil : raw.krString("space"), monospaced: true, onCommit: { text in
+                guard let parsed = Self.parseHex(text) else { return }
+                var updated = raw; updated["components"] = parsed
+                commit(["kind": "color", "value": updated])
+            })
+        }.help("sRGB · #RRGGBB または #RRGGBBAA")
+    }
+    private func channel(_ c: [String: Any], _ key: String) -> Int { Int((min(1, max(0, c.krNumber(key))) * 255).rounded()) }
+    static func parseHex(_ text: String) -> [String: Double]? {
+        let digits = text.trimmingCharacters(in: .whitespaces).drop { $0 == "#" }
+        guard digits.count == 6 || digits.count == 8, let value = UInt64(digits, radix: 16) else { return nil }
+        let rgba = digits.count == 6 ? value << 8 | 0xFF : value
+        return ["r": Double(rgba >> 24 & 255) / 255, "g": Double(rgba >> 16 & 255) / 255,
+                "b": Double(rgba >> 8 & 255) / 255, "alpha": Double(rgba & 255) / 255]
     }
     var table: some View {
         let raw = value.krObject("value"), columns = raw.krObject("columns").keys.sorted(), rows = raw.krObjects("rows")

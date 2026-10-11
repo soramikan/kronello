@@ -112,8 +112,11 @@ public struct KRDurationPolicyBands: View {
     public let placementSeconds: Double
     public let introSeconds: Double
     public let outroSeconds: Double
+    /// Nominal rate for ruler labels (`1s`, `12f`); 0 keeps plain seconds.
+    public let fps: Int
     public init(authoring: String, placement: String, intro: String, outro: String, mode: String,
-                authoringSeconds: Double, placementSeconds: Double, introSeconds: Double, outroSeconds: Double) {
+                authoringSeconds: Double, placementSeconds: Double, introSeconds: Double, outroSeconds: Double, fps: Int = 0) {
+        self.fps = fps
         self.authoring = authoring; self.placement = placement; self.intro = intro; self.outro = outro; self.mode = mode
         self.authoringSeconds = authoringSeconds; self.placementSeconds = placementSeconds; self.introSeconds = introSeconds; self.outroSeconds = outroSeconds
     }
@@ -122,20 +125,23 @@ public struct KRDurationPolicyBands: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: KRSpace.space1) {
             HStack(spacing: KRSpace.space2) {
-                Text("秒").krText(KRMono.caption).foregroundStyle(p.inkMuted).frame(width: 180, alignment: .leading)
+                Color.clear.frame(width: 180, height: 1)
                 Canvas { context, size in
                     for index in 0...4 {
                         let x = CGFloat(index) / 4 * size.width
                         context.stroke(Path { path in path.move(to: CGPoint(x:x,y:11)); path.addLine(to:CGPoint(x:x,y:16)) },with:.color(p.lineStrong),lineWidth:1)
-                        context.draw(Text(String(format:"%.2g",Double(index) / 4 * scale)).font(KRMono.caption.font()).foregroundColor(p.inkMuted),at:CGPoint(x:x,y:4),anchor:index == 0 ? .leading : index == 4 ? .trailing : .center)
+                        context.draw(Text(tickLabel(Double(index) / 4 * scale)).font(KRMono.caption.font()).foregroundColor(p.inkMuted),at:CGPoint(x:x,y:4),anchor:index == 0 ? .leading : index == 4 ? .trailing : .center)
                     }
                 }.frame(height:16)
             }
-            band("Authoring · " + authoring, duration:authoringSeconds)
-            band("配置 · " + placement, duration:placementSeconds)
-            Text("intro · \(intro)（保護）  /  中間 · \(mode.isEmpty ? "—" : mode)  /  outro · \(outro)（保護）")
-                .krText(KRMono.caption).foregroundStyle(p.inkMuted)
+            band("Authoring  " + authoring, duration:authoringSeconds)
+            band("配置  " + placement, duration:placementSeconds)
+            Text("intro \(intro)・outro \(outro) は長さを保ち、中間区間（\(mode.isEmpty ? "—" : mode)）だけを伸縮します。")
+                .krText(KRType.caption).foregroundStyle(p.inkMuted)
         }.padding(.horizontal, KRSpace.space3)
+    }
+    private func tickLabel(_ seconds: Double) -> String {
+        fps > 0 ? KRRulerScale.label(frame: Int64((seconds * Double(fps)).rounded()), fps: fps) : String(format: "%.2gs", seconds)
     }
     private func band(_ label: String, duration: Double) -> some View {
         HStack(spacing: KRSpace.space2) {
@@ -145,16 +151,25 @@ public struct KRDurationPolicyBands: View {
                 let tail = min(max(0,outroSeconds),max(0,total-head)), middle = max(0,total-head-tail)
                 let unit = geometry.size.width / scale
                 HStack(spacing:0) {
-                    segment("",protected:true).frame(width:head * unit)
+                    segment("intro " + intro,protected:true).frame(width:head * unit)
                     segment(mode,protected:false).frame(width:middle * unit)
-                    segment("",protected:true).frame(width:tail * unit)
+                    segment("outro " + outro,protected:true).frame(width:tail * unit)
                 }.frame(width:total * unit,height:24).accessibilityLabel(label + " · intro " + intro + " · " + mode + " · outro " + outro)
             }
         }.frame(height:24)
     }
     private func segment(_ label: String, protected: Bool) -> some View {
-        Group { if protected { KRIconView(.lock,size:12) } else { Text(label).krText(KRMono.caption) } }
-            .frame(maxWidth:.infinity,maxHeight:.infinity).background(protected ? p.clip : p.surface200)
+        // Narrow protected segments keep only the lock rather than a clipped label.
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: KRSpace.space1) {
+                if protected { KRIconView(.lock,size:12).foregroundStyle(p.inkMuted) }
+                Text(label).krText(KRType.label).lineLimit(1).fixedSize()
+            }
+            if protected { KRIconView(.lock,size:12).foregroundStyle(p.inkMuted) }
+            Color.clear.frame(width: 0)
+        }.padding(.horizontal, KRSpace.space1)
+            .frame(maxWidth:.infinity,maxHeight:.infinity, alignment: protected ? .center : .leading)
+            .help(label).background(protected ? p.clip : p.surface200)
             .overlay { Rectangle().strokeBorder(p.lineStrong,lineWidth:1) }.clipped()
     }
 }

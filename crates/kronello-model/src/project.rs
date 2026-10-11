@@ -378,7 +378,7 @@ impl Project {
         for object in &self.audio_analyses {
             let (id, fields) = match object {
                 DocumentObject::Known(value) => {
-                    if value.config.version == crate::AUDIO_ANALYSIS_VERSION {
+                    if value.config.supported_version() {
                         value.validate()?;
                     }
                     (value.id.as_uuid(), None)
@@ -628,7 +628,7 @@ impl Project {
             || self.assets.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
             || self.templates.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
             || self.template_instances.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
-            || self.audio_analyses.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(a) if a.config.version != crate::AUDIO_ANALYSIS_VERSION))
+            || self.audio_analyses.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(a) if !a.config.supported_version()))
             || self.tracking_data_assets.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(a) if a.version != crate::TRACKING_VERSION))
             || self.scene_boundary_assets.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(a) if a.version != crate::SCENE_BOUNDARY_VERSION))
             || self.expression_data_assets.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(a) if a.version != crate::EXPRESSION_DATA_VERSION))

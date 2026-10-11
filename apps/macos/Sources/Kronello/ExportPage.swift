@@ -30,40 +30,51 @@ struct ExportPage: View {
         KRPanel("書き出し設定") {
             VStack(alignment: .leading, spacing: KRSpace.space3) {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: KRSpace.space3) {
-                        KRPopupButton("対象", options: model.targets.map { .init($0.string("id"), $0.string("kind") + " · " + ($0.object("value").string("name").isEmpty ? String($0.object("value").string("id").prefix(8)) : $0.object("value").string("name"))) }, selection: $model.target)
-                        KRInspectorSettingRow("範囲") { KRPopupButton("範囲", options: [.init("all", "全体"), .init("inout", "イン〜アウト")], selection: $model.rangeMode).frame(width: 144) }
-                        if model.rangeMode == "inout" {
-                            KRInspectorSettingRow("In") { WorkflowFrameField(Double(model.startFrame), step: 1, range: 0...Double(max(0,model.totalFrames-1)), unit: "f", width: 120, accessibilityLabel: "書き出し開始フレーム", onCommit: { _, v in model.startFrame = Int64(v) }) }
-                            KRInspectorSettingRow("Out (exclusive)") { WorkflowFrameField(Double(model.endFrame), step: 1, range: 1...Double(max(1,model.totalFrames)), unit: "f", width: 120, accessibilityLabel: "書き出し終了フレーム（排他的）", onCommit: { _, v in model.endFrame = Int64(v) }) }
+                    VStack(alignment: .leading, spacing: KRSpace.space2) {
+                        KRFormRow("対象") {
+                            KRPopupButton("対象", options: model.targets.map { .init($0.string("id"), targetLabel($0)) }, selection: $model.target)
                         }
+                        KRFormRow("範囲") {
+                            KRSegmentedControl([.init("all", "全体"), .init("inout", "イン〜アウト")], selection: $model.rangeMode).fixedSize()
+                        }
+                        if model.rangeMode == "inout" {
+                            KRFormRow("イン") { WorkflowFrameField(Double(model.startFrame), step: 1, range: 0...Double(max(0,model.totalFrames-1)), unit: "f", width: 120, accessibilityLabel: "書き出し開始フレーム", onCommit: { _, v in model.startFrame = Int64(v) }) }
+                            KRFormRow("アウト") { WorkflowFrameField(Double(model.endFrame), step: 1, range: 1...Double(max(1,model.totalFrames)), unit: "f", width: 120, accessibilityLabel: "書き出し終了フレーム（含まない）", onCommit: { _, v in model.endFrame = Int64(v) }) }
+                            Text("アウトのフレームは書き出しに含まれません。").krText(KRType.caption).foregroundStyle(p.inkMuted)
+                        }
+                        KRFormSectionLabel("プリセット")
                         KRPopupButton("プリセット", options: model.profiles.map { .init($0.string("format"), profileLabel($0), disabled: $0.string("device_availability") == "unavailable") }, selection: $model.format, onSelect: { _ in model.selectProfile() })
                         ForEach(model.profiles.filter { $0.string("device_availability") == "unavailable" }, id: \.formatID) { profile in
                             KRErrorLine(.init(profile.object("reason").string("code"), profileLabel(profile) + " は利用できません"))
                         }
+                        if model.selectedProfile.string("execution") == "hardware" { Text("ハードウェアエンコーダーが必要です。利用可否は投入時に確認し、ソフトウェアへ自動で切り替えません。").krText(KRType.caption).foregroundStyle(p.inkMuted) }
+                        KRFormSectionLabel("詳細")
                         if model.format == "caption_sidecar" {
-                            KRInspectorSettingRow("字幕形式") { KRPopupButton("字幕形式", options: [.init("srt", "SRT"), .init("vtt", "VTT"), .init("itt", "ITT")], selection: $model.captionFormat).frame(width: 144) }
-                            Text("対象 sequence のキューをサイドカー化します。フレームは描画しません。").krText(KRType.caption).foregroundStyle(p.inkMuted)
+                            KRFormRow("字幕形式") { KRPopupButton("字幕形式", options: [.init("srt", "SRT"), .init("vtt", "VTT"), .init("itt", "ITT")], selection: $model.captionFormat).frame(width: KRWindowMetrics.settingWidth) }
+                            Text("対象 Sequence のキューをサイドカーとして書き出します。フレームは描画しません。").krText(KRType.caption).foregroundStyle(p.inkMuted)
                         } else {
-                            KRInspectorSettingRow("Profile version") { KRPopupButton("Profile version", options: (model.selectedProfile["profile_versions"] as? [Int] ?? []).map { .init(String($0), String($0)) }, selection: $model.version).frame(width: 96) }
-                            Text("\(String(format:"%.0f",model.extent[0]))×\(String(format:"%.0f",model.extent[1])) · \(model.fpsNum)/\(model.fpsDen) fps · 対象に従う").krText(KRType.ruler).foregroundStyle(p.inkMuted)
-                            Text(model.format == "pro_res_hdr_mov" ? "HDR · Rec.2100" : "SDR · Rec.709").krText(KRType.body)
-                        }
-                        if model.format == "pro_res_hdr_mov" {
-                            KRInspectorSettingRow("Transfer") { KRPopupButton("Transfer", options: [.init("pq", "PQ (SMPTE 2084)"), .init("hlg", "HLG")], selection: $model.transfer).frame(width: 160) }
+                            KRFormRow("解像度") { detail("\(String(format:"%.0f",model.extent[0]))×\(String(format:"%.0f",model.extent[1]))", note: "対象に従う") }
+                            KRFormRow("フレームレート") { detail(frameRateLabel, note: "対象に従う") }
+                            KRFormRow("色") { detail(model.format == "pro_res_hdr_mov" ? "HDR · Rec.2100" : "SDR · Rec.709") }
+                            if model.format == "pro_res_hdr_mov" {
+                                KRFormRow("伝達特性") { KRPopupButton("伝達特性", options: [.init("pq", "PQ (SMPTE 2084)"), .init("hlg", "HLG")], selection: $model.transfer).frame(width: 160) }
+                            }
+                            KRFormRow("プロファイル版") { KRPopupButton("プロファイル版", options: (model.selectedProfile["profile_versions"] as? [Int] ?? []).map { .init(String($0), String($0)) }, selection: $model.version).frame(width: 96) }
                         }
                         if model.format != "image_sequence" && model.format != "caption_sidecar" {
-                            KRInspectorSettingRow("Background") { KRPopupButton("Background", options: [.init("black", "黒（明示）"), .init("white", "白（明示）")], selection: $model.background).frame(width: 144) }
-                            KRInspectorSettingRow("Audio") { KRPopupButton("Audio", options: (model.selectedProfile["audio_modes"] as? [String] ?? []).map { .init($0, $0 == "document" ? "作品のミックス" : $0 == "silence" ? "無音" : "明示 clips（空）", disabled: model.format == "pro_res_mov" && model.version == "1" && $0 != "explicit") }, selection: $model.audio).frame(width: 160) }
-                            Text((model.selectedProfile["audio_codecs"] as? [String] ?? []).joined(separator: " · ") + " · 48 kHz · stereo\nクリッピングは worker が型付きエラーで停止します。")
+                            KRFormRow("背景") { KRPopupButton("背景", options: [.init("black", "黒（明示）"), .init("white", "白（明示）")], selection: $model.background) }
+                            KRFormRow("音声") { KRPopupButton("音声", options: (model.selectedProfile["audio_modes"] as? [String] ?? []).map { .init($0, $0 == "document" ? "作品のミックス" : $0 == "silence" ? "無音" : "明示 clips（空）", disabled: model.format == "pro_res_mov" && model.version == "1" && $0 != "explicit") }, selection: $model.audio) }
+                            Text((model.selectedProfile["audio_codecs"] as? [String] ?? []).joined(separator: " · ") + " · 48 kHz · stereo。クリッピングすると書き出しを型付きエラーで止めます。")
                                 .krText(KRType.caption).foregroundStyle(p.inkMuted)
                         } else if model.format == "image_sequence" { Text("PNG + RGBA16F + JSON · 音声なし").krText(KRType.caption).foregroundStyle(p.inkMuted) }
-                        if model.selectedProfile.string("execution") == "hardware" { Text("hardware 必須 · device の利用可否は投入時に確認します。software へ自動代替しません。").krText(KRType.caption).foregroundStyle(p.inkMuted) }
-                        KRTextField("出力先", value: $model.destination)
-                        KRButton("選択…", variant: .secondary) { chooseDestination() }
+                        KRFormSectionLabel("出力先")
+                        HStack(spacing: KRSpace.space2) {
+                            KRTextField("", value: $model.destination, placeholder: "書き出し先を選択してください")
+                            KRButton("選択…", variant: .secondary) { chooseDestination() }
+                        }
+                        p.line.frame(height: 1).padding(.top, KRSpace.space2)
                         // FLOW-003 (ADR-0130): shared document presets.
-                        p.line.frame(height: 1)
-                        Text("書き出しプリセット").krText(KRType.label)
+                        KRFormSectionLabel("書き出しプリセット")
                         Text("現在の設定を作品に保存すると、GUI / CLI / MCP と watch フォルダから同じ設定で書き出せます。")
                             .krText(KRType.caption).foregroundStyle(p.inkMuted)
                         HStack(spacing: KRSpace.space2) {
@@ -141,7 +152,7 @@ struct ExportPage: View {
         }
     }
     var check: some View {
-        KRPanel("書き出し前の確認", actions: { KRButton(icon: .refreshCw, accessibilityLabel: "もう一度確認") { Task { await model.check() } }.disabled(model.checking) }) {
+        KRPanel("書き出し前の確認", actions: { KRButton("もう一度確認", icon: .refreshCw, variant: .plain) { Task { await model.check() } }.disabled(model.checking) }) {
             ScrollView {
                 VStack(alignment: .leading, spacing: KRSpace.space3) {
                     if let conflict = model.diagnostics.first(where: { $0.code == "REVISION_CONFLICT" }) {
@@ -149,14 +160,19 @@ struct ExportPage: View {
                     }
                     if model.checking { HStack { KRActivityIndicator(); Text("意味的検査中").krText(KRType.body) } }
                     if !model.errors.isEmpty {
-                        HStack(alignment: .top) { KRIconView(.triangleAlert).foregroundStyle(p.danger); Text("エラーが \(model.errors.count) 件あります。解消するまで書き出せません。").krText(KRType.body) }.padding(KRSpace.space2).background(p.surface200)
+                        HStack(alignment: .top) { KRIconView(.triangleAlert).foregroundStyle(p.danger); Text("エラーが \(model.errors.count) 件あります。解消するまで書き出せません。").krText(KRType.body) }
+                            .padding(KRSpace.space3).frame(maxWidth: .infinity, alignment: .leading).background(p.surface200, in: RoundedRectangle(cornerRadius: KRRadius.radiusMd))
                         ForEach(Array(model.errors.enumerated()), id: \.offset) { _, error in KRErrorLine(.init(error.code,error.message)) }
                     } else if model.canSubmit { HStack { KRIconView(.circleCheck); Text("確認した時刻に意味的エラーはありません").krText(KRType.body) }.foregroundStyle(p.inkMuted) }
                     Text("範囲の先頭時刻で render.explain を実行します。全フレーム・音声のクリッピング・encoder の起動を保証する検査ではありません。")
                         .krText(KRType.caption).foregroundStyle(p.inkMuted)
                     Text("フォントは作品の版固定と明示したローカル入力を使用します。代替フォントは使いません。").krText(KRType.caption).foregroundStyle(p.inkMuted)
-                    Text("\(max(0,model.exclusiveFrame-model.firstFrame)) frames · ファイルサイズは未測定").krText(KRType.ruler).foregroundStyle(p.inkMuted)
-                    if !model.canSubmit && !model.checking { KRButton("再確認", variant: .secondary) { Task { await model.check() } } }
+                    KRFormSectionLabel("見積もり")
+                    KRFormRow("尺", labelWidth: 56) {
+                        Text("\(max(0,model.exclusiveFrame-model.firstFrame)) フレーム · " + KRTimecode.format(frames: max(0,model.exclusiveFrame-model.firstFrame), fps: model.nominalFPS))
+                            .krText(KRType.timecode).foregroundStyle(p.ink)
+                    }
+                    KRFormRow("サイズ", labelWidth: 56) { Text("未測定").krText(KRType.body).foregroundStyle(p.inkMuted) }
                 }.padding(KRSpace.space3)
             }
         }
@@ -189,6 +205,28 @@ struct ExportPage: View {
                     }
                 }
             }
+        }
+    }
+    /// Target names match the Edit page tabs: the document name or `Sequence N`.
+    func targetLabel(_ target: [String: Any]) -> String {
+        let kind = target.string("kind"), value = target.object("value")
+        let name = value.string("name")
+        if !name.isEmpty { return (kind == "sequence" ? "Sequence: " : "Composition: ") + name }
+        let siblings = model.targets.filter { $0.string("kind") == kind }
+        let index = (siblings.firstIndex { $0.string("id") == target.string("id") } ?? 0) + 1
+        return (kind == "sequence" ? "Sequence " : "Composition ") + "\(index)"
+    }
+    var frameRateLabel: String {
+        let den = max(1, model.fpsDen)
+        if model.fpsNum % den == 0 { return "\(model.fpsNum / den) fps" }
+        var text = String(format: "%.3f", Double(model.fpsNum) / Double(den))
+        while text.hasSuffix("0") { text.removeLast() }
+        return text + " fps"
+    }
+    func detail(_ value: String, note: String? = nil) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: KRSpace.space1) {
+            Text(value).krText(KRType.body).foregroundStyle(p.ink)
+            if let note { Text(note).krText(KRType.caption).foregroundStyle(p.inkMuted) }
         }
     }
     func profileLabel(_ profile: [String: Any]) -> String {

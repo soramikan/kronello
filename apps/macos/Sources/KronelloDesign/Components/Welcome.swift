@@ -48,17 +48,21 @@ public struct KRWelcome: View {
     }
     public var body: some View {
         HStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: KRSpace.space4) {
+            VStack(alignment: .leading, spacing: 0) {
                 Text("Kronello").krText(.init(name: "welcome-brand", family: KRFontFamily.sans, size: 28, lineHeight: 36, weight: 600, tracking: 0))
-                Text("いま、時間を編む。").krText(KRType.body).foregroundStyle(p.inkMuted)
-                KRButton("新規プロジェクト…", icon: .filePlus, variant: .primary, action: onNew)
-                KRButton("開く…", icon: .folderOpen, variant: .secondary, action: onOpen)
+                Text("動画編集とモーショングラフィックス").krText(KRType.body).foregroundStyle(p.inkMuted).padding(.top, KRSpace.space1)
+                VStack(spacing: KRSpace.space2) {
+                    KRButton("新規プロジェクト…", icon: .filePlus, variant: .primary, fullWidth: true, action: onNew)
+                    KRButton("開く…", icon: .folderOpen, variant: .secondary, fullWidth: true, action: onOpen)
+                }.padding(.top, KRSpace.space4 + KRSpace.space2)
                 Spacer(minLength: KRSpace.space4)
                 KRCheckbox("起動時に表示", isOn: $showAtLaunch)
-            }.padding(KRSpace.space4).frame(width: KRWindowMetrics.left)
+            }.padding(.horizontal, KRSpace.space4).padding(.top, KRSpace.space4 * 2 + KRSpace.space1).padding(.bottom, KRSpace.space4)
+                .frame(width: KRWindowMetrics.left, alignment: .leading).frame(maxHeight: .infinity, alignment: .top)
             p.line.frame(width: 1)
             VStack(alignment: .leading, spacing: KRSpace.space2) {
-                Text("最近のプロジェクト").krText(KRType.caption, weight: 600).foregroundStyle(p.inkMuted).padding(KRSpace.space3)
+                Text("最近のプロジェクト").krText(KRType.caption, weight: 600).foregroundStyle(p.inkMuted)
+                    .padding(.horizontal, KRSpace.space3).padding(.top, KRSpace.space4)
                 ScrollView {
                     VStack(spacing: 0) {
                         ForEach(recent) { project in
@@ -68,7 +72,8 @@ public struct KRWelcome: View {
                     }
                 }
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
-        }.frame(width: KRWindowMetrics.welcomeWidth, height: KRWindowMetrics.welcomeHeight)
+        // The height may grow to fill a window whose content runs under the title bar.
+        }.frame(width: KRWindowMetrics.welcomeWidth).frame(minHeight: KRWindowMetrics.welcomeHeight, maxHeight: .infinity)
             .background(p.surface100, in: RoundedRectangle(cornerRadius: KRRadius.radiusLg))
             .foregroundStyle(p.ink).krShadow(p.shadowPopover, cornerRadius: KRRadius.radiusLg)
     }
@@ -81,15 +86,18 @@ private struct KRRecentRow: View {
     let action: () -> Void
     var body: some View {
         Button(action: action) {
-            HStack(alignment: .top, spacing: KRSpace.space2) {
+            HStack(alignment: .center, spacing: KRSpace.space2) {
                 KRIconView(project.missing ? .triangleAlert : .clapperboard).foregroundStyle(project.missing ? p.danger : p.inkMuted)
-                VStack(alignment: .leading, spacing: KRSpace.space1) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(project.name).krText(KRType.body, weight: 500).foregroundStyle(p.ink)
                     Text(project.missing ? "PROJECT_NOT_FOUND · 見つかりません · " + project.location : project.location)
-                        .krText(KRType.caption).foregroundStyle(project.missing ? p.danger : p.inkMuted).lineLimit(2)
+                        .krText(KRType.caption).foregroundStyle(project.missing ? p.danger : p.inkMuted).lineLimit(1).truncationMode(.middle)
                 }.frame(maxWidth: .infinity, alignment: .leading)
-                Text(project.date).krText(KRType.caption).foregroundStyle(p.inkMuted)
-            }.padding(KRSpace.space3).background(hover ? p.controlHover : p.surface100)
-        }.buttonStyle(.plain).krControlFocusRing().onHover { hover = $0 }.accessibilityLabel(project.name)
+                Text(project.date).krText(KRType.caption).foregroundStyle(p.inkMuted).fixedSize()
+                    .frame(maxHeight: .infinity, alignment: .top)
+            }.padding(.horizontal, KRSpace.space2).padding(.vertical, KRSpace.space2)
+                .background(hover ? p.controlHover : .clear, in: RoundedRectangle(cornerRadius: KRRadius.radiusMd))
+                .contentShape(RoundedRectangle(cornerRadius: KRRadius.radiusMd))
+        }.buttonStyle(.plain).krControlFocusRing(cornerRadius: KRRadius.radiusMd).padding(.horizontal, KRSpace.space2).onHover { hover = $0 }.accessibilityLabel(project.name)
     }
 }

@@ -2,7 +2,8 @@
 
 Kronello の UI は [Lucide](https://lucide.dev/) のアイコンだけを使う（[ADR-0054](../adr/0054-gui-design-system.md)）。
 
-- 版: `lucide-static` 1.51.0 を基準とする。アプリへは SVG を改変せずに同梱し、版を上げるときは使用中のアイコンの形が変わっていないか確認する。
+- 版: `lucide-static` 1.51.0 を基準とする。全アイコンの SVG を改変せずに `third_party/lucide/icons/` に置き（`python3 scripts/gen_lucide_icons.py --vendor`）、そこから `KRIcon` を生成する。版を上げるときは使用中のアイコンの形が変わっていないか確認する。
+- 実装はどの Lucide アイコンも使えるが、使うときはこの表に用途を書く。`KRIcon.documented` はこの表から生成され、ギャラリーの一覧に使う。表に載っていない名前があると生成が失敗する。
 - ライセンス: ISC。Feather 由来の一部のアイコンは MIT。配布物には Lucide の LICENSE 全文を同梱する。いずれも GPL ではない。
 
 ## 描き方
@@ -36,6 +37,17 @@ Kronello の UI は [Lucide](https://lucide.dev/) のアイコンだけを使う
 | チェック（Menu・PopupButton） | `check` |
 | 再生操作 | `play` / `pause` / `skip-back` / `skip-forward` / `step-back` / `step-forward` / `repeat` |
 | 編集 | `scissors` / `copy` / `clipboard-paste` / `trash-2` |
+| 種類: マルチカム | `grid-2x2`（`kind-video`） |
+| 効果: 汎用（Blur・Shadow・Sharpen） / Chroma Key / Luma Key / Glow / Vignette / Corner Pin | `wand-sparkles` / `pipette` / `contrast` / `sun` / `aperture` / `crop` |
+| スタビライズ / フリーズ / リタイムの印 | `vibrate-off` / `snowflake` / `gauge` |
+| マーカー / マーカーを追加 / 再生ヘッドをマーカーへ | `bookmark` / `bookmark-plus` / `locate-fixed` |
+| シーン検出 / セーフエリア | `scan-search` / `square-dashed` |
+| トリム道具: スリップ / スライド / ロール | `arrow-left-right` / `move-horizontal` / `unfold-horizontal` |
+| ターゲットトラック | `target` |
+| 時間軸の縮小 / 拡大 | `zoom-out` / `zoom-in` |
+| ミキサー / オーディオスクラブ | `sliders-vertical` / `audio-waveform` |
+| 外部出力 / プロキシ生成 / メディア・LUT の読み込み / プロジェクトの収集 | `monitor-up` / `file-video-camera` / `file-input` / `folder-input` |
+| Curve editor の空状態: 式 / チャンネル未選択 | `square-function` / `chart-spline` |
 | 再読込・再リンク / 保存と revision | `refresh-cw` / `history` |
 | ジョブ: 実行中 / 待機 / 完了 / 中止 | `loader-circle` / `clock` / `circle-check` / `circle-x` |
 | プロジェクト / 新規 / 開く | `clapperboard` / `file-plus` / `folder-open` |
@@ -48,4 +60,4 @@ Kronello の UI は [Lucide](https://lucide.dev/) のアイコンだけを使う
 | 全体を表示（Curve editor） | `scan` |
 | 文字揃え | `align-left` / `align-center` |
 
-ここにないアイコンが必要になったら Lucide から選び、この表に追加する。他のアイコンセットや絵文字を混ぜない。
+ここにないアイコンが必要になったら同梱済みの Lucide から選び、この表に追加する。「種類:」の行のアイコンは種類の表示専用で、操作のアイコンに流用しない。他のアイコンセットや絵文字を混ぜない。

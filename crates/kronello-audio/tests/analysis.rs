@@ -126,3 +126,43 @@ fn feature_count_and_stereo_band_work_are_bounded_before_analysis() {
     invalid.hop = 0;
     assert_eq!(invalid.work_for_samples(8192), None);
 }
+
+#[test]
+fn v2_skips_gaps_and_preserves_v1_feature_bits() {
+    let buffer = AudioBuffer::new(vec![[0.25; 2]; 4096]).unwrap();
+    let id = AssetId::new();
+    let source = source();
+    let legacy = analyze_audio(id, source.clone(), config(), 0, &buffer).unwrap();
+    let mut v2 = config();
+    v2.version = 2;
+    let current = analyze_audio(id, source.clone(), v2.clone(), 0, &buffer).unwrap();
+    assert_eq!(legacy.frames, current.frames);
+    v2.window = 32;
+    v2.hop = 1600;
+    let mut frames = vec![[0.0; 2]; 3201];
+    frames[..32].fill([0.5; 2]);
+    frames[32..1600].fill([1.0; 2]); // Unobserved gap must not enter either window.
+    frames[3200] = [0.25; 2];
+    let result = analyze_audio(id, source, v2, 0, &AudioBuffer::new(frames).unwrap()).unwrap();
+    assert_eq!(result.frames.len(), 3);
+    assert_eq!(result.frames[0].rms, 0.5);
+    assert_eq!(result.frames[1].rms, 0.0);
+    assert_eq!(result.frames[2].rms, (0.25_f64.powi(2) / 32.0).sqrt());
+    assert_eq!(
+        result
+            .sample(Time::new(1599, 48000).unwrap(), AudioFeature::Rms)
+            .unwrap(),
+        0.5
+    );
+    assert_eq!(
+        result
+            .sample(Time::new(1600, 48000).unwrap(), AudioFeature::Rms)
+            .unwrap(),
+        0.0
+    );
+    assert!(
+        result
+            .sample(Time::new(3201, 48000).unwrap(), AudioFeature::Rms)
+            .is_err()
+    );
+}

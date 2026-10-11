@@ -74,18 +74,21 @@ public struct KRButton: View {
     private let iconOnly: Bool
     private let style: KRButtonStyle
     private let iconSize: CGFloat
+    private let fullWidth: Bool
     private let action: () -> Void
     @FocusState private var focused: Bool
 
+    /// `fullWidth` stretches the button to its container with the label kept leading
+    /// (stacked commands such as the Welcome window's).
     public init(_ label: String, icon: KRIcon? = nil, variant: KRButtonVariant = .secondary,
-                pressed: Bool = false, appearance: KRControlAppearance = .resting, action: @escaping () -> Void) {
-        self.label = label; self.icon = icon; iconOnly = false; iconSize = 14
+                pressed: Bool = false, appearance: KRControlAppearance = .resting, fullWidth: Bool = false, action: @escaping () -> Void) {
+        self.label = label; self.icon = icon; iconOnly = false; iconSize = 14; self.fullWidth = fullWidth
         style = KRButtonStyle(variant, pressed: pressed, appearance: appearance); self.action = action
     }
     public init(icon: KRIcon, accessibilityLabel: String, variant: KRButtonVariant = .plain,
                 pressed: Bool = false, appearance: KRControlAppearance = .resting,
                 size: CGFloat = KRSize.controlHeight, iconSize: CGFloat = 14, action: @escaping () -> Void) {
-        label = accessibilityLabel; self.icon = icon; iconOnly = true; self.iconSize = iconSize
+        label = accessibilityLabel; self.icon = icon; iconOnly = true; self.iconSize = iconSize; fullWidth = false
         style = KRButtonStyle(variant, iconOnly: true, pressed: pressed, appearance: appearance, size: size)
         self.action = action
     }
@@ -94,7 +97,7 @@ public struct KRButton: View {
             HStack(spacing: KRSpace.space1) {
                 if let icon { KRIconView(icon, size: iconSize) }
                 if !iconOnly { Text(label) }
-            }
+            }.frame(maxWidth: fullWidth ? .infinity : nil, alignment: .leading)
         }.buttonStyle(style).focused($focused).krFocusRing(focused, cornerRadius: KRRadius.radiusMd)
             .accessibilityLabel(label).accessibilityAddTraits(style.pressed ? .isSelected : [])
     }

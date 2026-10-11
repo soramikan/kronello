@@ -50,6 +50,23 @@ AUDIO-001 は `done`。不変の `Project.audio_analyses`、共有 `audio.analyz
 - ミックス後音声の特徴量を使う場合は対象 Bus と mix snapshot を固定する。
 - 声の速度を自動変更せず、テンプレート SE は intro / outro marker へ配置する方式を優先する。
 
+### 楽曲全体の解析（AUDIO-012）
+
+[ADR-0142](../adr/0142-full-song-audio-analysis.md) により `config.version = 2` を追加する。
+版1は従来の100,000,000 workとhop <= windowを維持する。版2は1,500,000,000 work、
+hopは1..=28,800,000 sample。hop > windowでは間のsampleを読み飛ばし、特徴量のholdは
+次の窓まで続ける。両版とも48 kHz、power-of-twoのwindow 32..=8192、0..=32帯域、
+28,800,000 PCM frames・65,536窓が上限。workは
+`ceil(samples/hop) * window * 2 * (log2(window) + bands + 1)`で、10分・window 2048 /
+hop 1600（30 fps）/ 8帯域は1,474,560,000となり版2で受理する。
+FFT・RMS・onset・beat・padding・時刻写像は版1と同じで、既存DataAssetを自動更新しない。
+
+modelの共通preflightを保存検証とproducerに使い、BusのPCM確保前、Assetの有界decode後・
+stereo変換/解析出力の確保前に予算を検証する。共有APIは設定に `INVALID_REQUEST`、
+予算に `AUDIO_BUDGET_EXCEEDED` を返し、messageにfield/許容範囲、detailsに型付き理由や
+resource / required / allowedを含める。`session_id`は任意UUIDで、指定時に保存イベントへ渡す。
+省略時の自動生成・旧receipt再送互換性を維持する。[検証記録](../testing/audio-012.md)。
+
 ## 2.5D / 3D
 
 - 当初は 2D。次に平面、奥行き、カメラの 2.5D を Scene3D サブグラフで実装する。

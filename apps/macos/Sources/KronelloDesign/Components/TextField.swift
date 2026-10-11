@@ -50,21 +50,23 @@ public struct KRTextField: View {
     private let appearance: KRControlAppearance
     private let onEditingStart: () -> Void
     private let onCommit: (String) -> Void
+    private let monospaced: Bool
     @State private var draftStarted = false
     @State private var submitted = false
     @State private var focused = false
     @Environment(\.isEnabled) private var enabled
+    /// `monospaced` sets values such as hex colors in the mono `timecode` face.
     public init(_ label: String, value: Binding<String>, placeholder: String = "", help: String? = nil,
-                error: KRDiagnostic? = nil, appearance: KRControlAppearance = .resting,
+                error: KRDiagnostic? = nil, appearance: KRControlAppearance = .resting, monospaced: Bool = false,
                 onEditingStart: @escaping () -> Void = {}, onCommit: @escaping (String) -> Void = { _ in }) {
-        self.label = label; _value = value; self.placeholder = placeholder; self.help = help
+        self.label = label; _value = value; self.placeholder = placeholder; self.help = help; self.monospaced = monospaced
         self.error = error; self.appearance = appearance; self.onEditingStart = onEditingStart; self.onCommit = onCommit
     }
     public var body: some View {
         VStack(alignment: .leading, spacing: KRSpace.space1) {
             if !label.isEmpty { Text(label).krText(KRType.label).foregroundStyle(p.ink) }
             if staticRendering {
-                Text(value.isEmpty ? placeholder : value).krText(KRType.body)
+                Text(value.isEmpty ? placeholder : value).krText(monospaced ? KRType.timecode : KRType.body)
                     .foregroundStyle(value.isEmpty ? p.inkMuted : p.ink)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .modifier(KRTextFieldChrome(invalid: error != nil, focused: appearance == .focused))
@@ -72,7 +74,7 @@ public struct KRTextField: View {
             } else {
                 KRCommittedTextInput(value: value, label: label, placeholder: placeholder, muted: NSColor(p.inkMuted), ink: NSColor(p.ink), selection: NSColor(p.selection), enabled: enabled,
                     onCommit: { value = $0; submitted = true; onCommit($0); draftStarted = false },
-                    onFocus: { focused = $0; if $0 { submitted = false; if !draftStarted { onEditingStart(); draftStarted = true } } }, onCancel: { draftStarted = false }, onDraftChange: { submitted = false; if !draftStarted { onEditingStart(); draftStarted = true } })
+                    onFocus: { focused = $0; if $0 { submitted = false; if !draftStarted { onEditingStart(); draftStarted = true } } }, font: (monospaced ? KRType.timecode : KRType.body).nsFont(), onCancel: { draftStarted = false }, onDraftChange: { submitted = false; if !draftStarted { onEditingStart(); draftStarted = true } })
                     .frame(height: KRSize.controlHeight - 8)
                     .modifier(KRTextFieldChrome(invalid: error != nil && (!focused || submitted), focused: focused || appearance == .focused))
             }

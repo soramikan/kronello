@@ -96,7 +96,7 @@ struct ExternalOutputControls: View {
                                             disabled: !device.detected && !device.available)
                           },
                           selection: $output.destination)
-            KRButton(icon: .film, accessibilityLabel: "外部出力",
+            KRButton(icon: .monitorUp, accessibilityLabel: "外部出力",
                      pressed: output.enabled) {
                 output.setEnabled(!output.enabled)
             }

@@ -226,7 +226,7 @@ M1 / Metal の追加実測では、wgpu 30.0.1 の同一 MTLDevice による IOS
 
 `GpuContext::render_scene` は作業用線形 premultiplied `RenderOutput` を返す。`render_scene_output` は `OutputTransform`（sRGB / linear Rec.709 / linear Rec.2020、straight / premultiplied）を必須とし、外部 epsilon に従う unpremultiply → 原色変換 → 必要なら sRGB encode → 指定空間で再 premultiply の順で処理する。`ExternalFrame` に関連付け空間を明示し、encoded premultiplied を内部画像と混同しない。alpha の破棄・背景の推測・HDR の PQ/HLG・tone mapping は提供しない。RGB は clamp せず、各 RGBA16F 面への書き込み前に有限・alpha 範囲・RGB の絶対値 65,504 以下を検証する。GPU は全 pass で共有する sticky status に失敗を記録し、Metal 等が範囲超過値を有限最大値へ飽和させても型付きエラーを返す。後の不透明描画や group opacity で隠れる中間 overflow も拒否する。CPU 参照も各面境界で同じ範囲を検証する。binary16 alpha がゼロへ丸められるときだけ RGB もゼロに正規化し、正の内部 alpha に外部 epsilon を適用しない。
 
-scene は参照欠落・循環・不正 opacity / 色 / 幾何を型付きエラーで拒否する。保守的な予算は 1,024 nodes、各 group / roots 1,024 references、合計 65,536 edges、深さ 32、座標の絶対値・stroke 幅 1,000,000 以下、GPU 中間面の上限推計 512 MiB（CPU 参照にも float32 の面サイズで同じ予算を適用）。デバイス限界超過もエラー。GPU 不在では skip / CPU fallback しない。CPU upload は幾何と制御データのみで、合成・mask は GPU 常駐。`TransferStats` はこれらを control upload として計上し、最終 GPU copy / image readback と、4 bytes の validation status readback（1 回）を計上する。性能・資源プール・tiling・高品質 AA は今後の検証対象。
+scene は参照欠落・循環・不正 opacity / 色 / 幾何を型付きエラーで拒否する。保守的な予算は 1,024 nodes、各 group / roots 1,024 references、合計 65,536 edges、深さ 32、座標の絶対値・stroke 幅 1,000,000 以下、GPU 中間面の上限推計 512 MiB（同時保持面の規則は ADR-0141、CPU 参照にも float32 の面サイズで同じ予算を適用）。デバイス限界超過もエラー。GPU 不在では skip / CPU fallback しない。CPU upload は幾何と制御データのみで、合成・mask は GPU 常駐。`TransferStats` はこれらを control upload として計上し、最終 GPU copy / image readback と、4 bytes の validation status readback（1 回）を計上する。性能・資源プール・tiling・高品質 AA は今後の検証対象。
 
 IO-001（[ADR-0134](../adr/0134-external-monitor-output.md)）の外部モニタ出力は、この render 経路の上に置く native 側の提示層である。`kronello-ffi` が program monitor 一回の redraw で作った `FrameSource` を、program surface・ref monitor・Syphon の全ルートで同じ SDR sRGB encode（crop / scaled blit）で present し、BGRA8 target の readback が program monitor の変換結果と一致することを GPU 環境の parity テストで検証する。出力先 display の色空間適用・出力の有効化・vendor SDK 境界は [10 デスクトップ GUI](10-desktop-gui.md#io-001-の実装範囲) と [IO-001 の受け入れ記録](../testing/io-001.md) を参照。
 
@@ -269,7 +269,7 @@ Shape の単色 / linear・radial・focal_radial・conic gradient fill / stroke 
 
 M5のMATTE-001では `Project.mattes` と共有 `MatteSet` / `MatteRemove`、Undo、Inspectorを実装し、M5作業ツリーで受け入れ済みである（[ADR-0099](../adr/0099-authored-matte-relations.md)、[検証記録](../testing/matte-001.md)）。既存の `MatteBinding` は引き続き transient な `RenderSnapshot` 入力であり、保存される文書関係と区別する。同じsourceへの重複指定は拒否する。source / matte とも stable SceneKey。matte は表示 root / children から除外し、`visible = true` の場合だけ表示する。source ごとの binding は一つ、共有 matte の DAG は再利用する。欠落・非アクティブ参照・containment / matte を合わせた循環は失敗する。
 
-scene 1,024 node、DAG 4,096 node、containment / matte recursion 24、出力 16,777,216 pixel の保守的上限を設ける。backend は GPU-002 の 1,024 draw node・32 depth・65,536 edge・512 MiB 面予算をさらに適用し、限界を超えた要求はエラーにする。INTEGRATION-001 / [ADR-0053](../adr/0053-integration-evaluated-queries-and-render-tiles.md) で幅または高さが512 pixelsを超える出力を最大512×512のtileへ分け、元画素格子と既存effect ROI haloを保って同じbackendで実行する。metadataは元のregion、最終linear / display面は全画面のまま。movie export は RENDER-003 の tile sink から1枚の RGBA8 buffer に組み立てて即 encode し、全画面 linear / display と全 frames payload を保持しない。巨大 cumulative halo は node 別の保守的 allocation 総額512 MiBで backend allocation 前に拒否する。M4 CACHE-003 では GPU texture LRU・資源 pool・外部 disk cache を実装した。性能の測定範囲と制限は PERF-001 の記録に従い、一般的な性能保証にはしない。CACHE-001 の初期インメモリ cache は下記の範囲で実装した。
+scene 1,024 node、DAG 4,096 node、containment / matte recursion 24、出力 16,777,216 pixel の保守的上限を設ける。backend は GPU-002 の 1,024 draw node・32 depth・65,536 edge・512 MiB 面予算をさらに適用し、限界を超えた要求はエラーにする。INTEGRATION-001 / [ADR-0053](../adr/0053-integration-evaluated-queries-and-render-tiles.md) で幅または高さが512 pixelsを超える出力を最大512×512のtileへ分け、元画素格子と既存effect ROI haloを保って同じbackendで実行する。metadataは元のregion、最終linear / display面は全画面のまま。movie export は RENDER-003 の tile sink から1枚の RGBA8 buffer に組み立てて即 encode し、全画面 linear / display と全 frames payload を保持しない。巨大 cumulative halo は同時保持面の保守的上界512 MiBで backend allocation 前に拒否する（ADR-0141）。M4 CACHE-003 では GPU texture LRU・資源 pool・外部 disk cache を実装した。性能の測定範囲と制限は PERF-001 の記録に従い、一般的な性能保証にはしない。CACHE-001 の初期インメモリ cache は下記の範囲で実装した。
 
 M1 の GPU adapter は linear / display 用に同じ DrawScene を二回実行していた。現在の M4 PERF-001 は一回の graph 実行から linear / display を GPU 上で生成し、二つの image と一つの validation status を readback する。renderer API の actual 転送統計は要求単位で集約する。詳細は [GPU fusion 検証](../testing/perf-001-gpu-fusion.md) を参照する。
 
@@ -338,8 +338,17 @@ layout の取得後に、その時刻の各 style の fill を `style_index` で
 [ADR-0079](../adr/0079-bounded-streaming-movie-export.md) の `render_frame_tiles` は
 512×512 tile を同期 sink に渡し、sink の処理完了まで次の tile を作らない。
 ROI / halo は従来の backwards compiler と絶対画素格子を共有する。
-`RenderDag::tile_surface_bytes(16)` は全 image stage の output、Group の children / accumulator、
-effect の3 temporaryと root reserveを execution ROI union で数える。
+[ADR-0141](../adr/0141-peak-live-render-surfaces.md) により、`RenderDag::tile_surface_bytes(16)` は
+同時保持面の上界を execution ROI union の全面積で数える。単一参照の子は合成後に解放し、
+Group は accumulator と処理中の子だけを保持する。多入力ノードは先行入力・destinationを保持した
+次の入力の評価を数え、effect は入力・出力と同時 temporary（標準6面、その他3面）の最大を取る。
+複数参照の memo は pass 全期間、外部 raster のコピーは2面/入力として安全側に数える。
+blank・最終変換/crop/readback の4面と、検証待ち GPU cache の最大8面（候補ノード数以下）を加える。
+字形ごとの面数を全字形分加算しない。ROI 縮小 allocation は導入せず、halo を含む全面積を維持する。
+`SurfaceLifetime` / `peak_surface_count` を DAG・CPU/GPU backend・render.explain で共有し、
+通常 frame / movie streaming は同じ事前検査を通す。backend は従来の全結果保持上界との小さい方を採り、小規模 graph の cache publication の二重課金を避ける。
+synthetic root 省略分も安全側の差になる。
+永続 cache・pool・geometry・font・driver の予算/実測はこの中間面 payload 推定と区別する。
 512 MiB超過は `UNSUPPORTED_FEATURE`。backend 固有の安全予算も適用する。
 一般 frame / image sequence の最終2面と render.explain の host 面推定は従来のまま。
 SDR movie は RGBA8 1面だけを全画面保持し、1 frame ごとに native encoderへ渡す。

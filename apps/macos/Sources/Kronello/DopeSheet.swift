@@ -158,9 +158,7 @@ struct DopeSheet: View {
     func glyph(_ key: [String: Any]) -> KRInterpolation { KRInterpolation(rawValue: key.object("interpolation").string("kind")) ?? .linear }
     func x(_ frame: Double, width: CGFloat) -> CGFloat { KRSpace.space2 + (frame - frames.lowerBound) / (frames.upperBound - frames.lowerBound) * max(1, width - KRSpace.space2 * 2) }
     func frameAt(_ x: CGFloat, width: CGFloat) -> Double { frames.lowerBound + Double((x - KRSpace.space2) / max(1, width - KRSpace.space2 * 2)) * (frames.upperBound - frames.lowerBound) }
-    func ticks(width: CGFloat) -> [KRRulerTick] {
-        (0...10).map { i in let frame = Int64(frames.lowerBound + Double(i) / 10 * (frames.upperBound - frames.lowerBound)); return .init("tick-\(i)", x: x(Double(frame), width: width), label: i == 10 ? nil : "\(frame / Int64(model.nominalFPS))s\(frame % Int64(model.nominalFPS))f") }
-    }
+    func ticks(width: CGFloat) -> [KRRulerTick] { KRRulerScale.ticks(frames: frames, fps: model.nominalFPS, width: width) }
     func endGesture() { gesture = nil; delta = 0; gestureRows = nil; gestureCurves = [:] }
     func nudge(_ delta: Int64) { guard editor == "dope" || graphMode == "value" else { return }; if let gesture = model.beginKeyGesture() { model.commitKeyMove(gesture, delta: delta) } }
     func toggle(_ id: String) { if model.ui.collapsed.contains(id) { model.ui.collapsed.remove(id) } else { model.ui.collapsed.insert(id) } }

@@ -326,29 +326,46 @@ impl RenderDag {
         }
         Ok(dag)
     }
-    /// Conservative tile allocation including one surface per image stage,
-    /// Group child/accumulator surfaces, three effect temporaries and reserves.
-    /// Every stage currently uses the union execution ROI, including its halo.
+    /// Peak simultaneously owned full union-ROI surfaces. Single-use draws
+    /// are released by their consumer; shared results remain memoized.
+    pub fn tile_surface_count(&self) -> usize {
+        use crate::SurfaceLifetime;
+        let nodes: Vec<_> = self
+            .nodes
+            .iter()
+            .map(|node| {
+                let mut lifetime = SurfaceLifetime {
+                    inputs: node.inputs(),
+                    ..Default::default()
+                };
+                match node {
+                    DagNode::CoverageDraw { .. } => {
+                        lifetime.inputs.clear(); // Geometry is not an image.
+                        lifetime.scratch = 1;
+                    }
+                    DagNode::IsolatedComposite { .. } => lifetime.streaming = true,
+                    DagNode::Effect { effect, .. } => {
+                        lifetime.scratch = if effect.is_standard() { 6 } else { 3 };
+                    }
+                    DagNode::EffectMap { .. } => lifetime.scratch = 3,
+                    DagNode::Generate { .. } => lifetime.scratch = 1,
+                    DagNode::VideoDraw { .. } | DagNode::RasterInput { .. } => {
+                        lifetime.resident = 2;
+                        lifetime.scratch = 1;
+                    }
+                    DagNode::OutputTransform { .. } => lifetime.scratch = 2,
+                    _ => {}
+                }
+                lifetime
+            })
+            .collect();
+        crate::peak_surface_count(&nodes, &[self.output()])
+    }
     pub fn tile_surface_bytes(&self, pixel_bytes: u64) -> Result<u64, RenderError> {
-        let mut surfaces = 4_u64;
-        for node in &self.nodes {
-            surfaces += match node {
-                DagNode::IsolatedComposite { children, .. } => children.len() as u64 + 2,
-                DagNode::Effect { .. } | DagNode::EffectMap { .. } => 4,
-                DagNode::CoverageDraw { .. }
-                | DagNode::Blend { .. }
-                | DagNode::Mask { .. }
-                | DagNode::VideoDraw { .. }
-                | DagNode::RasterInput { .. }
-                | DagNode::Generate { .. }
-                | DagNode::SolidRect { .. } => 1,
-                _ => 0,
-            };
-        }
         u64::from(self.execution_region.pixels[0])
             .checked_mul(u64::from(self.execution_region.pixels[1]))
             .and_then(|v| v.checked_mul(pixel_bytes))
-            .and_then(|v| v.checked_mul(surfaces))
+            .and_then(|v| v.checked_mul(self.tile_surface_count() as u64))
             .ok_or_else(|| RenderError::UnsupportedFeature("tile surface budget overflow".into()))
     }
     pub fn nodes(&self) -> &[DagNode] {

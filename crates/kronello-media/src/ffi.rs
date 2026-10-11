@@ -862,6 +862,7 @@ unsafe extern "C" {
     ) -> c_int;
     fn km_probe_open(k: *mut c_void, path: *const c_char) -> *mut c_void;
     fn km_probe_close(k: *mut c_void, format: *mut c_void);
+    fn km_probe_import_kind(k: *mut c_void, path: *const c_char) -> c_int;
     fn km_probe_count(format: *mut c_void) -> c_int;
     fn km_probe_format_duration(format: *mut c_void) -> i64;
     fn km_probe_stream(format: *mut c_void, index: c_int, out: *mut NativeStreamInfo);
@@ -1178,6 +1179,20 @@ impl Drop for NativeProbe<'_> {
     }
 }
 impl NativeRuntime {
+    pub(crate) fn probe_import_kind(
+        &self,
+        path: &Path,
+    ) -> Result<kronello_model::AssetKind, MediaError> {
+        let path = path_string(path)?;
+        // SAFETY: the path is NUL terminated; the live runtime owns all native
+        // allocations and the C function closes every probe and decoder.
+        match unsafe { km_probe_import_kind(self.0.as_ptr(), path.as_ptr()) } {
+            0 => Ok(kronello_model::AssetKind::Video),
+            1 => Ok(kronello_model::AssetKind::Audio),
+            2 => Ok(kronello_model::AssetKind::Image),
+            _ => Err(MediaError::Decode(self.error())),
+        }
+    }
     pub(crate) fn probe_codec_tag(
         &self,
         path: &Path,

@@ -7,6 +7,21 @@ use kronello_store::{OpenOptions, ProjectStore};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
+/// Register a local media file using service-probed metadata and content hash.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MediaImportRequest {
+    pub project: PathBuf,
+    pub base_revision: String,
+    pub session_id: uuid::Uuid,
+    pub idempotency_key: String,
+    /// Local media locator; stored relative to the project directory when it
+    /// lives inside it, otherwise absolute (the relink/search convention).
+    pub path: PathBuf,
+    /// Id of the probed media record the import upserts.
+    pub asset: AssetId,
+}
+
 /// COLOR-003 `.cube` import request (ADR-0113). The caller-allocated asset id
 /// names the record; the content hash is computed from file bytes here and
 /// recorded as `content_hash`, never trusted from the request.
@@ -191,6 +206,119 @@ pub(crate) fn lut_import(request: LutImportRequest) -> Result<kronello_store::Ev
         commands,
     })
 }
+/// Probe local media and persist an undoable asset edit with receipt replay.
+pub(crate) fn media_import(
+    request: MediaImportRequest,
+) -> Result<kronello_store::Event, ServiceError> {
+    let base_revision = parse_revision(&request.base_revision)?;
+    let payload = serde_json::json!({"operation":"media.import", "request":request});
+    let store = open_existing(&request.project)?;
+    let replay = crate::edit::retry(&store, &request.idempotency_key, &payload);
+    let snapshot = store.snapshot()?;
+    store.close()?;
+    if let Some(event) = replay? {
+        return Ok(event);
+    }
+    if snapshot.revision != base_revision {
+        return Err(kronello_store::StoreError::RevisionConflict {
+            base: base_revision,
+            current: snapshot.revision,
+        }
+        .into());
+    }
+    let canonical = request.path.canonicalize().map_err(|e| {
+        ServiceError::new(
+            if e.kind() == std::io::ErrorKind::NotFound {
+                "ASSET_MISSING"
+            } else {
+                "IO_ERROR"
+            },
+            e.to_string(),
+        )
+    })?;
+    if !canonical.is_file() {
+        return Err(ServiceError::new(
+            "INVALID_MEDIA_INPUT",
+            "expected a local media file",
+        ));
+    }
+    let hash = kronello_media::content_hash(&canonical)?;
+    let (probe, kind) = MediaRuntime::load()?.probe_for_import(&canonical)?;
+    if kronello_media::content_hash(&canonical)? != hash {
+        return Err(ServiceError::new(
+            "ASSET_HASH_MISMATCH",
+            "media changed during import",
+        ));
+    }
+    let base = request
+        .project
+        .canonicalize()?
+        .parent()
+        .unwrap_or(Path::new("."))
+        .to_path_buf();
+    let asset = kronello_model::Asset {
+        id: request.asset,
+        content_hash: hash,
+        kind,
+        streams: probe
+            .streams
+            .into_iter()
+            .filter(|s| s.kind != kronello_media::StreamKind::Other)
+            .map(|s| kronello_model::StreamMetadata {
+                index: s.index,
+                codec: s.codec,
+                time_base: s.time_base,
+                duration: s.duration.or(probe.duration),
+                start_time: s.start,
+                width: s.width,
+                height: s.height,
+                pixel_format: s.pixel_format,
+                color_primaries: s.color_primaries,
+                color_transfer: s.color_transfer,
+                color_matrix: s.color_matrix,
+                color_range: s.color_range,
+            })
+            .collect(),
+        locator: kronello_model::AssetLocator {
+            relative: canonical
+                .strip_prefix(base)
+                .ok()
+                .map(|p| p.to_string_lossy().into_owned()),
+            absolute: Some(canonical.to_string_lossy().into_owned()),
+        },
+    };
+    asset
+        .validate()
+        .map_err(|e| ServiceError::new("INVALID_DOCUMENT", e.to_string()))?;
+    // Still images must be usable by the existing native image contract;
+    // unsupported codecs, animation and color profiles fail before persistence.
+    if kind == kronello_model::AssetKind::Image {
+        let stream = asset
+            .streams
+            .first()
+            .ok_or_else(|| ServiceError::new("DECODE_ERROR", "image stream missing"))?;
+        kronello_media::decode_image_asset(
+            &asset,
+            &request.project,
+            stream.index,
+            kronello_model::ColorSpace::LinearRec709,
+        )?;
+    }
+    let commands = vec![crate::EditCommand::AssetSet { asset }];
+    let plan = crate::edit::build(snapshot.document, base_revision, commands.clone())?;
+    crate::edit::apply_template(
+        crate::EditApplyRequest {
+            project: request.project,
+            base_revision: request.base_revision,
+            session_id: request.session_id,
+            idempotency_key: request.idempotency_key,
+            plan_hash: plan.plan_hash,
+            commands,
+        },
+        payload,
+    )
+}
+
 pub(crate) fn collect(request: CollectRequest) -> Result<CollectedProject, ServiceError> {
     let store = open_existing(&request.project)?;
     let document = store.snapshot()?.document;

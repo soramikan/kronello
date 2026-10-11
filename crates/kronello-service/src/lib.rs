@@ -82,7 +82,7 @@ pub use template::{
 mod media;
 pub use media::{
     AssetThumbnailRequest, AssetThumbnailResult, CollectRequest, LutImportRequest, MediaAssetEntry,
-    MediaQueryRequest, MediaQueryResult, RelinkRequest,
+    MediaImportRequest, MediaQueryRequest, MediaQueryResult, RelinkRequest,
 };
 mod output;
 pub use output::*;
@@ -255,6 +255,8 @@ pub enum Request {
     CaptionsImport(CaptionsImportRequest),
     #[serde(rename = "captions.export")]
     CaptionsExport(CaptionsExportRequest),
+    #[serde(rename = "media.import")]
+    MediaImport(MediaImportRequest),
     #[serde(rename = "lut.import")]
     LutImport(LutImportRequest),
     #[serde(rename = "inspect.scopes")]
@@ -859,6 +861,7 @@ impl<'a> Service<'a> {
             }
             Request::CaptionsImport(r) => captions::import(r).map(ResultData::Edit),
             Request::CaptionsExport(r) => captions::export(r).map(ResultData::Captions),
+            Request::MediaImport(r) => media::media_import(r).map(ResultData::Edit),
             Request::LutImport(r) => media::lut_import(r).map(ResultData::Edit),
             Request::InspectScopes(r) => {
                 inspect::scopes(r, self).map(|result| ResultData::Scopes(Box::new(result)))
@@ -1669,6 +1672,10 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
         Request::CaptionsImportPlan(r) => local_locator(&r.project),
         Request::CaptionsImport(r) => local_locator(&r.plan.project),
         Request::CaptionsExport(r) => local_locator(&r.project),
+        Request::MediaImport(r) => {
+            local_locator(&r.project)?;
+            local_locator(&r.path)
+        }
         Request::LutImport(r) => {
             local_locator(&r.project)?;
             local_locator(&r.path)

@@ -341,6 +341,7 @@ fn capabilities_registry_media_extension_without_device_initialization() {
             "template.set_input",
             "template.set_duration",
             "captions.import",
+            "media.import",
             "lut.import"
         ]
     );
@@ -734,6 +735,7 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
             "input":{"kind":"sequence","sequence":uuid}}),
         json!({"operation":"audio.normalize","project":path,"base_revision":"1",
             "session_id":uuid,"idempotency_key":"normalize","sequence":uuid,"clip":uuid,"target_lufs":-16.0}),
+        json!({"operation":"media.import","project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"media","path":"a.mov","asset":uuid}),
         json!({"operation":"lut.import","project":path,"base_revision":"1","session_id":uuid,"idempotency_key":"lut","path":"a.cube","asset":uuid}),
         json!({"operation":"inspect.scopes","input":input,"time":time}),
         json!({"operation":"audio.plugin_probe","plugin":{"format":"vst3","path":"plugins/Acme.vst3",
@@ -1513,6 +1515,12 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
     execute(
         json!({"operation":"edit.overwrite","project":video_path,"base_revision":"9","session_id":session,"idempotency_key":"overwrite-clip","sequence":mc_sequence,"clip":Uuid::new_v4(),
             "source":{"kind":"asset","asset":video_id,"stream_index":0},"source_range":{"start":{"num":"0","den":"1"},"end":{"num":"1","den":"24"}},"at":{"num":"0","den":"1"},"track":mc_track}),
+    );
+    let revision =
+        execute(json!({"operation":"project.export","project":path}))["revision"].clone();
+    execute(
+        json!({"operation":"media.import","project":path,"base_revision":revision,
+        "session_id":session,"idempotency_key":"media-import","path":clip_path,"asset":Uuid::new_v4()}),
     );
     // COLOR-003/004: import a `.cube` as a hash-pinned Data asset, then query
     // deterministic scope bins over the composited frame.

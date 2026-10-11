@@ -31,7 +31,7 @@ public struct KRTrackHeader: View {
             Text(number).krText(KRType.ruler).foregroundStyle(p.inkMuted)
             Text(name).krText(KRType.label).foregroundStyle(p.ink).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
             if kind == .video || kind == .audio {
-                KRButton(icon: .crosshair, accessibilityLabel: "ターゲットトラックを切り替える", pressed: targeted, iconSize: 12, action: target)
+                KRButton(icon: .target, accessibilityLabel: "ターゲットトラックを切り替える", pressed: targeted, iconSize: 12, action: target)
                     .help("暗黙の編集先トラック")
             }
             if let meter, kind == .audio { KRMeterBar(peak: meter.peak, rms: meter.rms, height: 4).frame(width: 48) }

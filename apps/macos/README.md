@@ -142,7 +142,7 @@ gallery と ImageRenderer smoke は `.environment(\.krStaticRendering, true)` �
 
 | 用途 | API と利用側の入力 |
 |---|---|
-| コマンド | `KRButton` / `KRButtonStyle`。`KRButtonVariant` の 4 種、アイコン、`pressed`、action。無効化は `.disabled(true)` |
+| コマンド | `KRButton` / `KRButtonStyle`。`KRButtonVariant` の 4 種、アイコン、`pressed`、`fullWidth`（縦に積む幅いっぱいのボタン）、action。無効化は `.disabled(true)` |
 | 選択 | `KRSegmentedControl` + `KRSegment`、`KRPopupButton` + `KRPopupOption`。安定した ID と selection の Binding、変更 callback |
 | メニュー | `KRMenu` + `KRMenuItem`。見出し、区切り、チェック、無効、破壊的操作、子項目。`KRMenuPresenter.present(_:anchoredTo:theme:current:onDismiss:)` は borderless child `NSPanel` を使い、アンカーには実際の `NSView` を渡す（`KRAnchorTracker` で backing view を取得する）。`KRMenu.onSubmenu` は行の `NSView` を通知する |
 | 数値 | `KRNumberField`。value の Binding、unit、step、range、precision、`onPreview`、`onCommit(from,to)`。`KRNumberEdit` はスクラブ・入力の独立したトランザクションモデル |
@@ -159,6 +159,7 @@ gallery と ImageRenderer smoke は `.environment(\.krStaticRendering, true)` �
 | Viewer | `KRViewerFrame` + `KRViewerSelection`。aspectRatio、描画内容、正規化された選択 bounds と整形済み label。`fittingSize` は幅と高さの両方に収める |
 | 状態 | `KRStatusBar` + `KRJobSummary`、`KRProgressBar`、`KRActivityIndicator`、`KRJobRow` + `KRJobState`。状態と文字列、error / job を開く callback、行の actions |
 | 判断・編集面 | `KRDialog` + `KRDialogAction`（最大 3 ボタン、primary は最大 1 個・右端）、`KRPopover` / `KRPopoverRow`、`KREmptyState`。シート・popover の presentation と外側クリック / Esc の dismissal、drop の受け付けは利用側が行う |
+| 書式 | `KRFormRow`（固定幅のラベル列 + 操作）、`KRFormSectionLabel`（パネル内の小見出し）、`KRSectionHeader`（Inspector の `heading` 見出しと開閉）、`KRColorSwatchButton`（色見本のボタン）、`KRRulerScale`（読みやすい刻みのルーラー目盛りと `0f` / `12f` / `1s12f` 表記） |
 | 共通 | `KRFocusRing` / `.krFocusRing()`、`KRDiagnostic` / `KRErrorLine`。フォーカスは selection の 2px 実線。タブだけは仕様に従い内側に置く |
 | GUI 状態面 | `KRWelcome` / `KRRecentProject`、32px `KRStateBand`、`KRConflictBanner`、`KRViewerError`、7px handle の `KRManipulationOverlay`。`KRWindowMetrics` は画面仕様寸法 |
 

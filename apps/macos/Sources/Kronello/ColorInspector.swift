@@ -54,7 +54,7 @@ struct ClipColorInspector: View {
                     HStack(spacing: KRSpace.space1) {
                         KRPopupButton("LUT を追加", options: model.lutAssets.map { .init($0.id, $0.name) },
                             selection: .constant(""), onSelect: { model.addClipLutEffect(clip, asset: $0) })
-                        KRButton(icon: .plus, accessibilityLabel: ".cube を読み込む") {
+                        KRButton(icon: .fileInput, accessibilityLabel: ".cube を読み込む") {
                             let panel = NSOpenPanel()
                             panel.allowedContentTypes = [UTType(filenameExtension: "cube") ?? .data]
                             panel.allowsMultipleSelection = false; panel.canChooseDirectories = false

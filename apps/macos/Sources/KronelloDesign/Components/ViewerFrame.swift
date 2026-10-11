@@ -43,15 +43,16 @@ extension KRViewerFrame where Content == EmptyView {
     }
 }
 
-private struct KRCheckerboard: View {
+struct KRCheckerboard: View {
     @Environment(\.krPalette) var p
+    /// The viewer's CSS tile is 16px, with four 8px quadrants; swatches use smaller cells.
+    var cell: CGFloat = 8
     var body: some View {
         Canvas { context, size in
             context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(p.surface200))
-            // The CSS tile is 16px, with four 8px quadrants.
-            for row in 0..<Int(ceil(size.height / 8)) {
-                for column in 0..<Int(ceil(size.width / 8)) where (row + column) % 2 == 1 {
-                    context.fill(Path(CGRect(x: column * 8, y: row * 8, width: 8, height: 8)), with: .color(p.controlHover))
+            for row in 0..<Int(ceil(size.height / cell)) {
+                for column in 0..<Int(ceil(size.width / cell)) where (row + column) % 2 == 1 {
+                    context.fill(Path(CGRect(x: CGFloat(column) * cell, y: CGFloat(row) * cell, width: cell, height: cell)), with: .color(p.controlHover))
                 }
             }
         }.accessibilityHidden(true)

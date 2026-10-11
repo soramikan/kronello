@@ -8,6 +8,8 @@ import KronelloAppModel
     var body: some Scene {
         Window("Kronello", id: "main") {
             AppRoot(controller: controller).krTheme(controller.theme)
+                // The toolbar / Welcome card own the title-bar region (window.md).
+                .ignoresSafeArea(.container, edges: .top)
                 .background(WindowSizing(editing: controller.editor != nil, onClose: controller.closeProject))
                 .task { await controller.launch() }
                 .onOpenURL { url in if url.isFileURL { Task { await controller.open(url.path) } } }
@@ -15,7 +17,8 @@ import KronelloAppModel
             .defaultSize(width: KRWindowMetrics.welcomeWidth, height: KRWindowMetrics.welcomeHeight)
             .commands { KronelloCommands(controller: controller, workflow: controller.workflow) }
         Settings {
-            KRPanel("設定") {
+            // The OS title bar already names the window; no second panel heading.
+            Group {
                 VStack(alignment: .leading, spacing: KRSpace.space3) {
                     KRSegmentedControl([
                         .init("general", "一般"), .init("playback", "再生"),
@@ -24,9 +27,12 @@ import KronelloAppModel
                     ScrollView {
                         VStack(alignment: .leading, spacing: KRSpace.space4) {
                             if settingsTab == "general" {
-                                KRCheckbox("Light テーマ", isOn: $controller.preferences.light)
+                                KRFormRow("テーマ", labelWidth: 120) {
+                                    KRSegmentedControl([.init("dark", "Dark"), .init("light", "Light")], selection: Binding(
+                                        get: { controller.preferences.light ? "light" : "dark" }, set: { controller.preferences.light = $0 == "light" })).fixedSize()
+                                }
                                 KRCheckbox("起動時に Welcome を表示", isOn: $controller.preferences.showWelcome)
-                                Divider()
+                                KRPalette.of(controller.theme).line.frame(height: 1)
                                 // GUI-012: scratch/cache location routes to the
                                 // worker through KRONELLO_RASTER_CACHE_ROOT on
                                 // the next project open.
@@ -48,7 +54,7 @@ import KronelloAppModel
                                 KRCheckbox("モニター音量をミュートで開始", isOn: $controller.preferences.playbackMuted)
                                 KRCheckbox("ループ再生を既定で有効", isOn: $controller.preferences.playbackLooping)
                                 Text("スクラブとミュートはプロジェクトを開くたびに適用されます。ループは UI 状態が未保存のプロジェクトのみ初期値になります。")
-                                    .krText(KRType.caption).foregroundStyle(.secondary)
+                                    .krText(KRType.caption).foregroundStyle(KRPalette.of(controller.theme).inkMuted)
                             } else if settingsTab == "workspace" {
                                 LayoutSettings(workflow: controller.workflow)
                             } else {
@@ -57,7 +63,8 @@ import KronelloAppModel
                         }.padding(.vertical, KRSpace.space2).frame(width: 460, alignment: .leading)
                     }
                 }.padding(KRSpace.space4)
-            }.frame(maxHeight: 720).fixedSize(horizontal: true, vertical: false).krTheme(controller.theme)
+            }.background(KRPalette.of(controller.theme).surface100).foregroundStyle(KRPalette.of(controller.theme).ink)
+                .frame(maxHeight: 720).fixedSize(horizontal: true, vertical: false).krTheme(controller.theme)
                 .onChange(of: controller.preferences.light) { _, _ in controller.savePreferences() }
                 .onChange(of: controller.preferences.showWelcome) { _, _ in controller.savePreferences() }
                 .onChange(of: controller.preferences.playbackScrub) { _, _ in controller.savePreferences() }

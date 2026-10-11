@@ -53,7 +53,7 @@ struct ScopesPanel: View {
     }
     var body: some View {
         VStack(spacing: 0) {
-            Divider().overlay(p.surface200)
+            p.line.frame(height: 1)
             Button { expanded.toggle() } label: {
                 HStack(spacing: KRSpace.space2) {
                     KRIconView(expanded ? .chevronDown : .chevronRight, size: 12).foregroundStyle(p.inkMuted)

@@ -774,28 +774,56 @@ pub(crate) fn luma_weights(working: WorkingSpace) -> [f32; 3] {
         WorkingSpace::LinearRec2020 => [0.2627, 0.6780, 0.0593],
     }
 }
-/// Conservative upper bound on full-resolution surfaces a scene pass may hold
-/// at once. Shared by the budget check and the native preview's fit estimate.
+/// Shared allocation model used by admission and pass-local memo ownership.
+pub(crate) fn surface_lifetimes(scene: &DrawScene) -> Vec<kronello_render::SurfaceLifetime> {
+    scene
+        .nodes
+        .iter()
+        .map(|node| {
+            let mut lifetime = kronello_render::SurfaceLifetime {
+                inputs: inputs(node),
+                ..Default::default()
+            };
+            match node {
+                DrawNode::Group { .. } => lifetime.streaming = true,
+                DrawNode::Effect { effect, .. } => {
+                    lifetime.scratch = if effect.is_standard() { 6 } else { 3 };
+                }
+                DrawNode::EffectMap { .. } => lifetime.scratch = 3,
+                DrawNode::Raster(_) | DrawNode::GpuRaster(_) => {
+                    lifetime.resident = 2;
+                    lifetime.scratch = 1;
+                }
+                DrawNode::Path(_) | DrawNode::Generate { .. } => lifetime.scratch = 1,
+                _ => {}
+            }
+            lifetime
+        })
+        .collect()
+}
 pub(crate) fn scene_surface_count(scene: &DrawScene) -> usize {
-    scene.nodes.len()
+    let lifetimes = surface_lifetimes(scene);
+    let live = kronello_render::peak_surface_count(&lifetimes, &scene.roots);
+    // The all-results-retained bound is independently conservative and can be
+    // tighter for tiny graphs: pending cache leases alias those same results.
+    // Keep admitting small native 4K scenes without double-charging publication.
+    let all = scene.nodes.len()
         + scene.roots.len()
-        + scene
-            .nodes
-            .iter()
-            .map(|n| match n {
-                DrawNode::Group { children, .. } => children.len() + 1,
-                // FX-005/FX-006 chains hold matte/extract + shaped + composite
-                // intermediates beyond the blur pair (ADR-0115).
-                DrawNode::Effect { effect, .. } if effect.is_standard() => 6,
-                DrawNode::Effect { .. } => 3,
-                // FX-008: the two-input node reads source and map surfaces
-                // already counted in nodes; its single pass keeps one temp.
-                DrawNode::EffectMap { .. } => 3,
-                DrawNode::Generate { .. } => 1,
-                _ => 0,
-            })
-            .sum::<usize>()
         + 3
+        + lifetimes
+            .iter()
+            .zip(&scene.nodes)
+            .map(|(n, node)| {
+                n.resident
+                    + match node {
+                        DrawNode::Group { children, .. } => children.len() + 1,
+                        DrawNode::Effect { .. } | DrawNode::EffectMap { .. } => n.scratch,
+                        DrawNode::Generate { .. } => 1,
+                        _ => 0,
+                    }
+            })
+            .sum::<usize>();
+    live.min(all)
 }
 pub(crate) fn check_scene_budget(
     size: RenderSize,
@@ -969,16 +997,20 @@ pub(crate) fn render_scene_reference_with_resolvers(
     size.validate()?;
     scene.validate()?;
     check_scene_budget(size, scene, 16)?;
+    struct Memo {
+        surfaces: Vec<Option<Vec<[f32; 4]>>>,
+        shared: Vec<bool>,
+    }
     fn node(
         size: RenderSize,
         scene: &DrawScene,
         id: usize,
         working: WorkingSpace,
-        cache: &mut [Option<Vec<[f32; 4]>>],
+        cache: &mut Memo,
         raster: &mut RasterResolver<'_>,
         effects: &mut EffectResolver<'_>,
     ) -> Result<Vec<[f32; 4]>, GpuError> {
-        if let Some(p) = &cache[id] {
+        if let Some(p) = &cache.surfaces[id] {
             return Ok(p.clone());
         }
         let [w, h] = size.output_resolution;
@@ -1067,10 +1099,20 @@ pub(crate) fn render_scene_reference_with_resolvers(
             }
         }
         validate_surface_pixels(&pixels)?;
-        cache[id] = Some(pixels.clone());
+        if cache.shared[id] {
+            cache.surfaces[id] = Some(pixels.clone());
+        }
         Ok(pixels)
     }
-    let mut cache = vec![None; scene.nodes.len()];
+    let shared: Vec<_> =
+        kronello_render::surface_references(&surface_lifetimes(scene), &scene.roots)
+            .into_iter()
+            .map(|count| count > 1)
+            .collect();
+    let mut cache = Memo {
+        surfaces: vec![None; scene.nodes.len()],
+        shared,
+    };
     let mut pixels =
         vec![[0.0; 4]; pixel_count(size.output_resolution[0], size.output_resolution[1])?];
     for &id in &scene.roots {
@@ -1322,5 +1364,61 @@ mod vec005_tests {
             ),
             Err(GpuError::InvalidInput(_))
         ));
+    }
+}
+
+#[cfg(test)]
+mod surface_budget_tests {
+    use super::*;
+
+    fn leaf() -> DrawNode {
+        DrawNode::Path(PathDraw {
+            contours: vec![],
+            fill: None,
+            stroke: None,
+            fill_gradient: None,
+            stroke_gradient: None,
+            stroke_geometry: None,
+            paint_transform: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+        })
+    }
+
+    #[test]
+    fn surface_budget_streams_hundreds_of_draws_and_retains_shared_results() {
+        let mut scene = DrawScene {
+            nodes: vec![leaf(); 400],
+            roots: vec![400],
+        };
+        scene.nodes.push(DrawNode::Group {
+            children: (0..400).collect(),
+            opacity: 1.0,
+        });
+        scene.validate().unwrap();
+        assert!(scene_surface_count(&scene) < 32);
+        for bytes in [8, 16] {
+            check_scene_budget(RenderSize::pixels(512, 512), &scene, bytes).unwrap();
+        }
+        let DrawNode::Group { children, .. } = &mut scene.nodes[400] else {
+            unreachable!()
+        };
+        children.extend(0..400);
+        assert!(matches!(
+            check_scene_budget(RenderSize::pixels(512, 512), &scene, 16),
+            Err(GpuError::SurfaceBudgetExceeded)
+        ));
+        let mut calls = 0;
+        let pixels = render_scene_reference_with_raster(
+            RenderSize::pixels(1, 1),
+            &scene,
+            WorkingSpace::LinearRec709,
+            &mut |_, _| {
+                calls += 1;
+                Ok(vec![[0.1, 0.0, 0.0, 0.5]])
+            },
+        )
+        .unwrap();
+        assert_eq!(calls, 400); // Each shared leaf executes once, not twice.
+        assert!((pixels[0][0] - 0.2).abs() < 1e-6);
+        assert_eq!(&pixels[0][1..], &[0.0, 0.0, 1.0]);
     }
 }

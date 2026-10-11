@@ -94,7 +94,7 @@
 | [0076](0076-buffered-device-clock-playback.md) | lock-free buffer と音声デバイス時計による再生 | 採用 | 2026-10-05 |
 | [0077](0077-template-instance-read-only-inspection.md) | テンプレート内部の評価値を停止時の読み取り検査として表示する | 採用 | 2026-10-05 |
 | [0078](0078-template-export-pages-and-inspected-snapshot.md) | テンプレート比較と検査した revision の書き出し | 採用 | 2026-10-05 |
-| [0079](0079-bounded-streaming-movie-export.md) | movie export の payload を有界 streaming で処理する | 採用 | 2026-10-06 |
+| [0079](0079-bounded-streaming-movie-export.md) | movie export の payload を有界 streaming で処理する | 部分置換（0141: tile面計算のみ） | 2026-10-06 |
 | [0080](0080-root-temporal-integration.md) | root scope の有理数露光積分と temporal cache | 採用 | 2026-10-06 |
 | [0081](0081-guaranteed-metal-hardware-video-decode.md) | Metal / VideoToolbox の明示 GPU 常駐デコード | 採用 | 2026-10-06 |
 | [0082](0082-windows-ffmpeg-runtime.md) | Windows の FFmpeg runtime と実 worker の検証 | 採用 | 2026-10-06 |
@@ -111,7 +111,7 @@
 | [0093](0093-m4-reference-preview-performance-target.md) | M4 基準プレビューの性能目標 | 採用 | 2026-10-06 |
 | [0094](0094-explicit-path-operations-and-bounded-svg.md) | 明示的なPath操作と限定SVG adapter | 採用 | 2026-10-06 |
 | [0095](0095-logical-text-selectors-and-vertical-ruby.md) | 論理文字selectorと縦書き・ルビ | 採用 | 2026-10-06 |
-| [0096](0096-offline-audio-feature-assets.md) | 不変の事前音声特徴量を版付きDataAssetとして保存 | 採用 | 2026-10-06 |
+| [0096](0096-offline-audio-feature-assets.md) | 不変の事前音声特徴量を版付きDataAssetとして保存 | 部分置換（0142） | 2026-10-06 |
 | [0097](0097-read-only-single-graph-render-plans.md) | 読み取り専用の単一graph実行計画 | 採用 | 2026-10-06 |
 | [0098](0098-explicit-framebridge-path-inventory.md) | FrameBridgeの具体経路一覧とgeneric VideoToolbox拒否 | 採用 | 2026-10-06 |
 | [0099](0099-authored-matte-relations.md) | 保存するMatte関係 | 採用 | 2026-10-06 |
@@ -157,6 +157,10 @@
 | [0138](0138-workspace-completion.md) | ワークスペース完成の範囲 | 採用 | 2026-10-08 |
 | [0139](0139-reverb-feedback-comb-topology.md) | `kronello.audio.reverb` のフィードバックコム構成 | 採用 | 2026-10-09 |
 | [0140](0140-media-session-resident-preview.md) | メディアセッションの検証メモ化とプレビューの GPU resident デコード | 採用 | 2026-10-09 |
+
+| [0141](0141-peak-live-render-surfaces.md) | レンダー面予算を同時保持寿命に合わせる | 採用 | 2026-10-10 |
+
+| [0142](0142-full-song-audio-analysis.md) | 楽曲全体を扱う音声解析版2と具体的な診断 | 採用 | 2026-10-10 |
 
 ## 追加と変更の規則
 

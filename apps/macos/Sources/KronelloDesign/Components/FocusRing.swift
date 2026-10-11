@@ -69,9 +69,9 @@ public struct KRErrorLine: View {
     public var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: KRSpace.space1) {
             KRIconView(.triangleAlert, size: 12)
-            Text(error.code).krText(KRMono.caption)
-            Text(error.message).krText(KRType.caption)
-        }.foregroundStyle(p.danger).accessibilityElement(children: .combine)
+            Text(error.code).krText(KRMono.caption).fixedSize()
+            Text(error.message).krText(KRType.caption).fixedSize(horizontal: false, vertical: true)
+        }.multilineTextAlignment(.leading).foregroundStyle(p.danger).accessibilityElement(children: .combine)
     }
 }
 

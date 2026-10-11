@@ -62,9 +62,9 @@ struct CurvePanel: View {
                 channels.frame(width: KRWindowMetrics.valuesCollapsed).overlay(alignment: .trailing) { p.line.frame(width: 1) }
                 GeometryReader { proxy in
                     if target?.1.object("source").string("kind") == "expression" {
-                        KREmptyState(icon: .slidersHorizontal, title: "式のため編集不可", message: "式で決まる Property に編集用の曲線はありません。")
+                        KREmptyState(icon: .squareFunction, title: "式のため編集不可", message: "式で決まる Property に編集用の曲線はありません。")
                     } else if keys.isEmpty || count == 0 {
-                        KREmptyState(icon: .slidersHorizontal, title: "チャンネルを選択", message: "数値の AnimationCurve を選択してください。")
+                        KREmptyState(icon: .chartSpline, title: "チャンネルを選択", message: "数値の AnimationCurve を選択してください。")
                     } else {
                         KRCurveEditor(channels: graphChannels, keys: graphKeys, tangents: graphTangents, frames: frames, values: valueRange,
                             ticks: ticks(proxy.size.width), playhead: model.currentFramePosition, readOnly: graphMode == "velocity",
@@ -208,8 +208,6 @@ struct CurvePanel: View {
     func finishGesture() {
         frozenKeys = nil; frozenCurve = nil; frozenSelection = nil; frozenPresentation = nil; frozenValues = nil
     }
-    func ticks(_ width: CGFloat) -> [KRRulerTick] {
-        (0...10).map { i in let f = Int64(frames.lowerBound + Double(i) / 10 * (frames.upperBound - frames.lowerBound)); return .init("\(i)", x: KRSpace.space2 + Double(i) / 10 * max(1, width - KRSpace.space2 * 2), label: i == 10 ? nil : "\(f / Int64(model.nominalFPS))s\(f % Int64(model.nominalFPS))f") }
-    }
+    func ticks(_ width: CGFloat) -> [KRRulerTick] { KRRulerScale.ticks(frames: frames, fps: model.nominalFPS, width: width) }
 }
 private extension Dictionary where Key == String, Value == Any { var idString: String { string("id") } }

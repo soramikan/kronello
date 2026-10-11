@@ -66,7 +66,7 @@ struct CaptionInspector: View {
                 KRInspectorSettingRow("文字色") {
                     HStack(spacing: KRSpace.space1) {
                         Rectangle().fill(Self.swatch(style.object("fill"))).frame(width: 16, height: 16).border(p.lineStrong)
-                        KRTextField("", value: .constant(Self.hex(style.object("fill"))),
+                        KRTextField("", value: .constant(Self.hex(style.object("fill"))), monospaced: true,
                             onEditingStart: { draftBases["fill"] = model.revision },
                             onCommit: { model.setCaptionFill(clip, hex: $0, base: draftBases.removeValue(forKey: "fill")) })
                             .frame(width: 100)
@@ -89,7 +89,7 @@ struct CaptionInspector: View {
                     KRInspectorSettingRow("縁の色") {
                         HStack(spacing: KRSpace.space1) {
                             Rectangle().fill(Self.swatch(outline.object("color"))).frame(width: 16, height: 16).border(p.lineStrong)
-                            KRTextField("", value: .constant(Self.hex(outline.object("color"))),
+                            KRTextField("", value: .constant(Self.hex(outline.object("color"))), monospaced: true,
                                 onEditingStart: { draftBases["outline.color"] = model.revision },
                                 onCommit: { model.setCaptionOutline(clip, width: outline.number("width"), hex: $0, base: draftBases.removeValue(forKey: "outline.color")) })
                                 .frame(width: 100)
@@ -106,7 +106,7 @@ struct CaptionInspector: View {
                     KRInspectorSettingRow("背景色") {
                         HStack(spacing: KRSpace.space1) {
                             Rectangle().fill(Self.swatch(background)).frame(width: 16, height: 16).border(p.lineStrong)
-                            KRTextField("", value: .constant(Self.hex(background)),
+                            KRTextField("", value: .constant(Self.hex(background)), monospaced: true,
                                 onEditingStart: { draftBases["background"] = model.revision },
                                 onCommit: { model.setCaptionBackground(clip, hex: $0, base: draftBases.removeValue(forKey: "background")) })
                                 .frame(width: 100)

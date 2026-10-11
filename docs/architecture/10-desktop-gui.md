@@ -246,3 +246,15 @@ GUI は Program monitor ヘッダの `ExternalOutputControls`（destination pick
 ## 未接続の編集操作の追跡
 
 GUI-001〜004の完了は、すべての設計上のコントロールが編集可能という意味ではない。EditのEffects追加・速度/ソース開始/逆再生・合成設定・トラック表示/ミュート、Motionのガイド/スナップ、色・書体/ウェイト・複数Text style spanなど、監査時に無効化または表示専用だった操作をGUI-007（M5）で追跡する。M5作業ツリーでは一部のUIと共有APIを追加中であり、実装済みの操作と未完の受け入れを区別する。根拠とAPI/UIの区別は [現在の実装範囲と残件](../roadmap/implementation-status.md#macos-gui-で残る明示的な制限) を参照する。
+
+### MEDIA-006 のファイル取り込み
+
+Media ヘッダーと Edit の Project パネルに、`file-input` アイコン付き secondary
+「メディアを読み込む…」を置く。NSOpenPanel は動画・音声・画像の複数選択に対応し、
+Media グリッドと Project リストは Finder の file URL drop を受け付ける。
+どちらも EditorModel の `media.import` を経由し、1ファイルにつき新規 AssetId / key、
+現在 revision で順次適用する。各 Event はセッション Undo 履歴へ追加し、一覧を共有 query で更新する。
+取り込み中・競合候補の確認中・safe mode は受け付けない。失敗時は残りのファイルを停止し、
+既存の型付きエラー UI に表示する。成功済みファイルは個別に Undo できる。
+空状態は読み込みボタンとファイル drop を案内する。対応形式の制約は
+[共有 API](08-api-cli-mcp.md#media-006-ローカルメディアの取り込み)に従う。
