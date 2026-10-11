@@ -284,6 +284,19 @@ pub trait RenderBackend {
     ) -> Result<BackendFrame, RenderError> {
         self.execute(dag)
     }
+    /// `execute_with_cache` with content-addressed input identities
+    /// (`DAG node index` → serialized identity) from a media resolver.
+    /// Backends key identified `RasterInput`/`VideoDraw` nodes on the
+    /// identity instead of hashing pixel buffers. The default ignores them.
+    fn execute_with_inputs(
+        &self,
+        dag: &RenderDag,
+        cache: &mut RenderCache,
+        input_identities: &std::collections::BTreeMap<usize, String>,
+    ) -> Result<BackendFrame, RenderError> {
+        let _ = input_identities;
+        self.execute_with_cache(dag, cache)
+    }
 }
 
 mod media;

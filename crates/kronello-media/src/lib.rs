@@ -296,13 +296,14 @@ impl MediaRuntime {
             }
         }
         let path = assets::resolve_asset(asset, project_path)?;
-        let fingerprint = std::fs::metadata(&path)
-            .map(|meta| assets::FileFingerprint::of(&meta))
-            .unwrap_or(located.fingerprint);
+        // Record the pre-hash stat rather than a fresh post-hash one: a
+        // rewrite landing between hashing and stat must not be recorded as
+        // verified, and any change after `located.fingerprint` re-hashes on
+        // the next access.
         self.verified
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .insert(path.clone(), fingerprint);
+            .insert(path.clone(), located.fingerprint);
         Ok(path)
     }
 }

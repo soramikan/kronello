@@ -230,16 +230,7 @@ fn provisional_path(capture_dir: &Path, job: &str) -> PathBuf {
 }
 
 fn gpu_error(error: kronello_gpu::GpuError) -> ServiceError {
-    let code = match &error {
-        kronello_gpu::GpuError::UnsupportedFeature(_) => "UNSUPPORTED_FEATURE",
-        kronello_gpu::GpuError::AdapterUnavailable(_) => "ADAPTER_UNAVAILABLE",
-        kronello_gpu::GpuError::DeviceUnavailable(_) => "DEVICE_UNAVAILABLE",
-        kronello_gpu::GpuError::InvalidInput(_) => "INVALID_INPUT",
-        kronello_gpu::GpuError::Readback(_) => "READBACK_FAILED",
-        kronello_gpu::GpuError::CacheIo(_) => "CACHE_IO",
-        kronello_gpu::GpuError::ObservationBusy => "RENDER_BACKEND_BUSY",
-    };
-    ServiceError::new(code, error.to_string())
+    ServiceError::new(error.code(), error.to_string())
 }
 
 impl DeckDevice {

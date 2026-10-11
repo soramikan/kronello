@@ -808,9 +808,7 @@ pub(crate) fn check_scene_budget(
         .and_then(|b| b.checked_mul(pixel_bytes))
         .and_then(|b| b.checked_mul(surfaces as u64));
     if bytes.is_none_or(|b| b > 512 * 1024 * 1024) {
-        return Err(GpuError::UnsupportedFeature(
-            "scene surface budget exceeds 512 MiB",
-        ));
+        return Err(GpuError::SurfaceBudgetExceeded);
     }
     // Bound every inverse-map intermediate over the complete sampling domain.
     // Finite coefficients alone do not prevent f32 multiplication overflow.

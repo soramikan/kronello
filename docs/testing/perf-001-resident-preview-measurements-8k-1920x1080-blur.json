@@ -1,0 +1,75 @@
+{
+  "blur": true,
+  "decoder_pool_stats": {
+    "active_decoders": 1,
+    "evictions": 0,
+    "hits": 23,
+    "misses": 1,
+    "peak_retained_frame_bytes": 99532800,
+    "retained_frame_bytes": 99532800
+  },
+  "fresh_decode_video_image_ms": {
+    "max_ms": 752.629958,
+    "mean_ms": 624.4979062083333,
+    "n": 24,
+    "p50_ms": 636.6625
+  },
+  "fresh_open_decode_at_ms": {
+    "max_ms": 374.678458,
+    "mean_ms": 246.782041625,
+    "n": 24,
+    "p50_ms": 262.104125
+  },
+  "gpu_wait_ms": {
+    "max_ms": 0.002,
+    "mean_ms": 0.0010329583333333336,
+    "n": 24,
+    "p50_ms": 0.001042
+  },
+  "media_runtime_load_ms": {
+    "max_ms": 0.5171250000000001,
+    "mean_ms": 0.3691422083333333,
+    "n": 24,
+    "p50_ms": 0.362958
+  },
+  "persistent_decode_at_ms": {
+    "max_ms": 90.571625,
+    "mean_ms": 9.686381916666667,
+    "n": 24,
+    "p50_ms": 6.654541
+  },
+  "pixels": [
+    1920,
+    1080
+  ],
+  "preview_dag_ms": {
+    "max_ms": 1.9772079999999999,
+    "mean_ms": 1.2962447499999998,
+    "n": 24,
+    "p50_ms": 1.168417
+  },
+  "preview_resolve_ms": {
+    "max_ms": 355.935833,
+    "mean_ms": 24.786986208333335,
+    "n": 24,
+    "p50_ms": 9.819666
+  },
+  "preview_texture_ms": {
+    "max_ms": 13.767916999999999,
+    "mean_ms": 9.172208375,
+    "n": 24,
+    "p50_ms": 8.729000000000001
+  },
+  "redraw_total_ms": {
+    "max_ms": 371.69350000000003,
+    "mean_ms": 35.26056420833333,
+    "n": 24,
+    "p50_ms": 19.823207999999997
+  },
+  "store_open_snapshot_ms": {
+    "max_ms": 0.738292,
+    "mean_ms": 0.5657552499999999,
+    "n": 8,
+    "p50_ms": 0.564417
+  }
+}

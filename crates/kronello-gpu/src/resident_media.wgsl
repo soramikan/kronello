@@ -14,11 +14,19 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     let local = vec2<f32>(dot(m.x.xyz, center), dot(m.y.xyz, center));
     let extent = vec2<f32>(m.x.w, m.y.w);
     if any(local < vec2<f32>(0)) || any(local >= extent) { textureStore(output, vec2<i32>(id.xy), vec4<f32>(0)); return; }
-    let p = vec2<i32>(floor(local * vec2<f32>(textureDimensions(first)) / extent));
+    let dims = vec2<i32>(textureDimensions(first));
+    // Clamp to the last valid texel: f32 rounding at the edge can otherwise
+    // produce p == dims, which loads an indeterminate texel while the CPU
+    // sampler clamps (see dag.rs coordinate clamping).
+    let p = min(vec2<i32>(floor(local * vec2<f32>(dims) / extent)), dims - vec2<i32>(1));
     var rgba = textureLoad(first, p, 0);
     if m.mode.x == 1u {
         let y = (rgba.r * 255.0 - 16.0)/219.0;
-        let uv = (textureLoad(second, p/2, 0).rg * 255.0 - vec2<f32>(128.0))/224.0;
+        // Chroma uses nearest at p/2; the software path upsamples bilinearly
+        // (sws SWS_BILINEAR). Documented, bounded difference on saturated
+        // color edges — see ADR-0140.
+        let cdims = vec2<i32>(textureDimensions(second));
+        let uv = (textureLoad(second, min(p/2, cdims - vec2<i32>(1)), 0).rg * 255.0 - vec2<f32>(128.0))/224.0;
         // The software path clamps at its 8-bit RGB conversion stage, so the
         // decoded triangle's legal span is [0,1]; out-of-range bitstream
         // excursions clamp the same way here.

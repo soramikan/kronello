@@ -21,6 +21,8 @@
 
 この緩和で残る脅威は「size・mtime・ctime・inode をすべて保存した書き換え」（権限を持つローカルプロセスによる細工）が同一 runtime の寿命内で検出を免れる場合に限られる。受け入れ根拠は、(a) 素材はローカルの大容量ファイルで通常の編集・置換・再 mux は mtime/ctime/inode のいずれかを必ず変える、(b) メモ化は runtime 寿命に限定され import/publish 等の一発経路は依然全量検証、(c) 検出不能な書き換えはすでに同一プロセス権限の行為であり OS 境界上の追加防御を提供しない、の3点。
 
+検証済みとして記録する fingerprint は hash 完了後ではなく hash 前の `locate_asset` の stat から取る。hash から記録の間に着地した書き換えは新しい fingerprint で記録されると以後の照合をすり抜けるため、この順序は fingerprint ↔ 検証済みバイト列の対応を保つ上で必須である。
+
 ### 永続 decoder pool
 
 `MediaSession` が `(canonical path, stream index, asset)` をキーに最大 2 個の `VideoDecoder` を LRU 保持する。呼び出しをまたいだ保持 native planes の合計上限を 128 MiB から 512 MiB に引き上げ、8K の current/lookahead 2 フレームが常に破棄されないようにする。順方向デコード・exact restart・統計の意味は ADR-0091 のまま変更しない。
@@ -38,6 +40,7 @@
 ネイティブプレビュー（FFI `preview.render_frame`）は DAG を未解決のまま構築し、budget-fit の再試行はサーフェス見積もりだけを繰り返す。受け入れた出力サイズで `resolve_dag_media_resident` が各 `VideoDraw` ノードを振り分ける。
 
 - 適格ノード（順方向・補間なし・HDR なし・smart-reframe crop なし・LinearRec709/2020 working space）は `VideoResolution::Deferred` のまま残し、pooled decoder が提示したフレームを `GpuContext::sample_upload_to_working` でテクスチャへ送る。BT.709 tv-range の `yuv420p` は Y 平面と U/V インターリーブ RG8 の planar upload、その他は既存の swscale RGBA8 を upload する。共通シェーダー `resident_media.wgsl` が出力解像度でサンプリング・逆伝達・working space 行列・premultiply を実行する。
+- 既知の制限: YUV420P 経路の chroma は `p/2` の nearest でサンプリングし、ソフトウェア経路（swscale の `SWS_BILINEAR` アップサンプル）とは飽和色エッジで最大 ~2LSB/8bit 相当の差が出得る。等価テストの閾値 0.02（実測 ~0.0088）内だが、厳密な bit 一致経路が必要になった場合はシェーダーに bilinear chroma を実装する。
 - 不適格ノードと画像・カメラ RAW は従来の明示的ソフトウェア経路（`RasterInput`/`VideoSource`）へノード単位で戻す。fallback は同一意味の実装差であり黙った品質変更ではない。
 - キャッシュ識別は decoder 実装バージョン・資産 content hash・stream index・時刻・提示フレームの PTS/end・format/color タグ・シェーダー内容 hash を含む `input_identities` で、`RasterCacheKey::external_source` 経由で既存のキー体系に乗る。
 
