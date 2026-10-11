@@ -8,6 +8,7 @@
 
 macOS のローカル検証:
 
+- `cargo fmt --all --check` と FFI / jobs の all-targets clippy（`test-worker` 有効、`-D warnings`）: exit 0。
 - `cargo test --locked -p kronello-ffi cpu_dag_budget_errors_fit --lib`: 1 passed。
 - `cargo test --locked -p kronello-jobs --features test-worker --test processes`: 8 passed / 1 ignored（別 volume を指定する既存条件付き試験）。
 - `swift test --disable-sandbox --package-path apps/macos -c release --filter MenuAnchorTests`: 1 passed。繰り返し update と backing view の置換を確認。
