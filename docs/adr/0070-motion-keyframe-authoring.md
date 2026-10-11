@@ -1,6 +1,6 @@
 # ADR-0070: Dope sheet と時間イージングの編集
 
-- 状態: 採用
+- 状態: 部分置換（[ADR-0145](0145-invalid-document-diagnostics-and-css-easing.md): 時間ハンドルの x 順序制約のみ）
 - 日付: 2026-10-05
 
 ## 背景
@@ -27,3 +27,5 @@ GUI-002 は GUI-001 の共有 Command / Query、候補表示、ADR-0061 のセ�
 新しいコア API / 永続フィールド / 補間意味版は不要。選択、接線モード、表示・ドラッグ候補は UI のみ。
 数値 Curve の描画用サンプルは Swift の presentation geometry であり、作品への適用・最後のキーの値・空間パスの評価は共有 Rust サービスを使う。
 実装検査とホストでの SwiftPM / Metal / 画面受け入れを区別する。受け入れ条件と手順は [GUI-002 の検証](../testing/gui-002.md)。
+
+ADR-0145 により各 x を独立に `[0,1]` に制限する。接線の揃える/分ける、垂直接線の拒否、共有 API、Undo とその他の編集規約は維持する。

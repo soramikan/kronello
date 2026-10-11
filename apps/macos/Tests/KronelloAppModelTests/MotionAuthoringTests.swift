@@ -3,6 +3,32 @@ import XCTest
 
 final class MotionAuthoringTests: XCTestCase {
     @MainActor
+    func testCrossedTimeHandlesRemainIndependentDuringTangentEditing() throws {
+        let checks = GUIChecks(), folder = try checks.temporary()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let editor = checks.model(FakeTransport(), folder: folder)
+        let keys: [[String: Any]] = [
+            ["time": RationalTime(num: 0, den: 1).wire, "value": ["kind": "scalar", "value": 0.0],
+             "interpolation": ["kind": "cubic", "value": ["control1": [0.65, 0.0], "control2": [0.35, 1.0]]]],
+            ["time": RationalTime(num: 1, den: 1).wire, "value": ["kind": "scalar", "value": 1.0]]
+        ]
+        let outgoing = try editor.tangentCandidate(curve: "curve", index: 0, incoming: false,
+            control: .init(x: 0.83, y: -0.2), aligned: false, axis: 0, keys: keys, base: "1")
+        let outgoingKey = outgoing.commands[0].object("keyframe_replace").object("key")
+        XCTAssertEqual(CurveDisplay.controls(outgoingKey).0.x, 0.83, accuracy: 1e-12)
+        XCTAssertEqual(CurveDisplay.controls(outgoingKey).1.x, 0.35, accuracy: 1e-12)
+        let incoming = try editor.tangentCandidate(curve: "curve", index: 1, incoming: true,
+            control: .init(x: 0.17, y: 1.2), aligned: false, axis: 0, keys: keys, base: "1")
+        let incomingKey = incoming.commands[0].object("keyframe_replace").object("key")
+        XCTAssertEqual(CurveDisplay.controls(incomingKey).0.x, 0.65, accuracy: 1e-12)
+        XCTAssertEqual(CurveDisplay.controls(incomingKey).1.x, 0.17, accuracy: 1e-12)
+        XCTAssertEqual(CurveDisplay.controls(incomingKey).1.y, 1.2, accuracy: 1e-12)
+        XCTAssertEqual(CurveDisplay.sample(keys, frame: 0.5, positions: [0, 1])[0], 0.5, accuracy: 1e-12)
+        var edge = keys
+        edge[0]["interpolation"] = ["kind": "cubic", "value": ["control1": [1.0, 0.0], "control2": [0.0, 1.0]]]
+        XCTAssertEqual(CurveDisplay.sample(edge, frame: 0.5, positions: [0, 1])[0], 0.5, accuracy: 1e-12)
+    }
+    @MainActor
     func testCanvasGuideSnappingAndOptionBypassDoNotAuthorState() throws {
         let checks = GUIChecks(), folder = try checks.temporary()
         defer { try? FileManager.default.removeItem(at: folder) }

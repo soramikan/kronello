@@ -273,7 +273,14 @@ fn tags_are_validated_round_tripped_and_selectively_undoable() {
     let mut doc = f.doc.clone();
     doc["compositions"][0]["nodes"][0]["tags"] = json!([""]);
     let response = Service::new(BackendSelection::CpuReference).execute_json(&json!({"operation":"project.create","project":f._dir.path().join("bad.kronello"),"document":doc}).to_string());
-    assert!(matches!(response, Response::Error { error } if error.code == "INVALID_MUTATION"));
+    let Response::Error { error } = response else {
+        panic!("invalid tags were stored")
+    };
+    assert_eq!(error.code, "INVALID_DOCUMENT_OBJECT");
+    let details = error.details.unwrap();
+    assert_eq!(details["collection"], "compositions");
+    assert_eq!(details["id"], doc["compositions"][0]["id"]);
+    assert_eq!(details["reason"], "invalid node tags");
 }
 
 #[test]

@@ -1,0 +1,43 @@
+{
+  "date": "2026-10-11",
+  "scope": "MODEL-004のPR取り込み。Rust/Swift/native/GPUコードは既存の全体検証時と同一。今回コード変更は行わない。",
+  "base_branch": "codex/measured-performance",
+  "source_reference": "perf-005-final-validation.json",
+  "verified_source_count": 589,
+  "all_current_sources_match_reference": true,
+  "reference_source_map_sha256": "5cbfa1f465d031f57544ce152581df39418b1a93e6165427764bba98749df29e",
+  "historical_workspace_validation": {
+    "normal_passed": 1325,
+    "doctests_passed": 2,
+    "ignored_not_counted_as_passed": 47,
+    "reexecuted_in_this_packaging_step": false,
+    "reason": "検証済みsource hashの完全一致を確認したため、同一ソースの全体テスト再実行を省略した。"
+  },
+  "packaging_checks": [
+    {
+      "command": "cargo fmt --all --check",
+      "exit_code": 0
+    },
+    {
+      "command": "python3 scripts/generate_swift_api.py --check",
+      "exit_code": 0
+    },
+    {
+      "command": "python3 scripts/backlog.py render / check",
+      "exit_code": 0,
+      "tasks": 151
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "swift_regression": {
+    "command": "DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer KRONELLO_STATE_ROOT=/private/tmp/kronello-model-pr-state xcrun xctest -XCTest KronelloAppModelTests.MotionAuthoringTests/testCrossedTimeHandlesRemainIndependentDuringTangentEditing apps/macos/.build/out/Products/Release/KronelloAppModelTests.xctest",
+    "exit_code": 0,
+    "passed": 1,
+    "failed": 0,
+    "log_sha256": "ad8fd8a4d12d7bde20f3642b69f009b8eea77bcac3c997914ccf8d6627ed7115",
+    "test_binary_sha256": "b6c39120156e7f6e07f996c3fb3e3593e775e73ab51218488a086bc518b3b6bd"
+  }
+}

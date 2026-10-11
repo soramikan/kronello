@@ -130,3 +130,134 @@ fn project_plans_preserve_opaque_data_and_reject_client_history_and_invalid_keys
     }
     assert_eq!(std::fs::read(&path).unwrap(), before);
 }
+
+#[test]
+fn known_invalid_objects_are_rejected_by_create_import_and_plans_atomically() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("valid.kronello");
+    let original = Project::default();
+    ok(json!({"operation":"project.create", "project":path,"document":original}));
+    let id = uuid::Uuid::new_v4();
+    for (collection, object) in [
+        (
+            "curves",
+            json!({"id":id,"interpolation_version":1,"value_type":"scalar","keys":[
+                {"time":{"num":"0","den":"1"},"value":{"kind":"scalar","value":0},
+                 "interpolation":{"kind":"cubic","value":{"control1":[1.1,0],"control2":[0.35,1]}}}
+            ]}),
+        ),
+        (
+            "shapes",
+            json!({"id":id,"geometry":{"kind":"ellipse","value":{}},"fill":null,"stroke":null}),
+        ),
+        ("texts", json!({"id":id,"layout_version":1,"text":42})),
+        // Decodable text with invalid coverage must also fail before storage.
+        (
+            "texts",
+            json!({"id":id,"layout_version":1,"text":"invalid coverage","styles":[],
+            "direction":"horizontal","wrap_width":uuid::Uuid::new_v4(),
+            "line_height":uuid::Uuid::new_v4(),"alignment":uuid::Uuid::new_v4()}),
+        ),
+    ] {
+        let mut document = serde_json::to_value(&original).unwrap();
+        document[collection] = json!([object]);
+        for operation in [
+            "project.create",
+            "project.create_plan",
+            "project.import",
+            "project.import_plan",
+        ] {
+            let target = if operation.starts_with("project.create") {
+                dir.path().join("rejected.kronello")
+            } else {
+                path.clone()
+            };
+            let mut request = json!({"operation":operation,"project":target,"document":document});
+            if operation.starts_with("project.import") {
+                request["base_revision"] = json!("1")
+            }
+            let Response::Error { error } = execute(request) else {
+                panic!("{operation} accepted {collection}")
+            };
+            assert_eq!(error.code, "INVALID_DOCUMENT_OBJECT", "{error:?}");
+            let details = error.details.unwrap();
+            assert_eq!(details["collection"], collection);
+            assert_eq!(details["id"], id.to_string());
+            assert!(!details["reason"].as_str().unwrap().is_empty());
+            assert!(error.message.contains(collection));
+            assert!(error.message.contains(&id.to_string()));
+            if operation.starts_with("project.create") {
+                assert!(!target.exists())
+            }
+            let info = ok(json!({"operation":"project.info","project":path}));
+            assert_eq!(info["revision"], "1");
+            assert_eq!(
+                ok(json!({"operation":"project.export","project":path}))["document"],
+                serde_json::to_value(&original).unwrap()
+            );
+        }
+    }
+}
+
+#[test]
+fn future_version_opaque_import_is_lossless_and_edit_error_names_object() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("future.kronello");
+    let id = uuid::Uuid::new_v4();
+    let mut document = serde_json::to_value(Project::default()).unwrap();
+    document["curves"] = json!([{"id":id,"interpolation_version":99,"keys":"future format"}]);
+    let plan = ok(json!({"operation":"project.create_plan","project":path,"document":document}));
+    assert_eq!(plan["candidate"], document);
+    ok(json!({"operation":"project.create","project":path,"document":document}));
+    ok(
+        json!({"operation":"project.import_plan","project":path,"base_revision":"1","document":document}),
+    );
+    ok(
+        json!({"operation":"project.import","project":path,"base_revision":"1","document":document}),
+    );
+    assert_eq!(
+        ok(json!({"operation":"project.export","project":path}))["document"],
+        document
+    );
+    let Response::Error { error } = execute(
+        json!({"operation":"edit.plan","project":path,"base_revision":"2",
+        "commands":[{"node_rename":{"composition":uuid::Uuid::new_v4(),"node":uuid::Uuid::new_v4(),"name":"changed"}}]}),
+    ) else {
+        panic!()
+    };
+    assert_eq!(error.code, "UNSUPPORTED_FEATURE", "{error:?}");
+    assert!(error.message.contains("curves"));
+    assert!(error.message.contains(&id.to_string()));
+    let details = error.details.unwrap();
+    assert_eq!(details["objects"][0]["collection"], "curves");
+    assert_eq!(details["objects"][0]["id"], id.to_string());
+}
+
+#[test]
+fn css_crossed_easing_survives_create_import_and_remains_editable() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("css.kronello");
+    let id = uuid::Uuid::new_v4();
+    let mut document = serde_json::to_value(Project::default()).unwrap();
+    let key = json!({"time":{"num":"0","den":"1"},"value":{"kind":"scalar","value":0},
+        "interpolation":{"kind":"cubic","value":{"control1":[0.65,0],"control2":[0.35,1]}}});
+    document["curves"] =
+        json!([{"id":id,"interpolation_version":1,"value_type":"scalar","keys":[key]}]);
+    ok(json!({"operation":"project.create_plan","project":path,"document":document}));
+    ok(json!({"operation":"project.create","project":path,"document":document}));
+    ok(
+        json!({"operation":"project.import_plan","project":path,"base_revision":"1","document":document}),
+    );
+    ok(
+        json!({"operation":"project.import","project":path,"base_revision":"1","document":document}),
+    );
+    ok(
+        json!({"operation":"edit.plan","project":path,"base_revision":"2",
+        "commands":[{"keyframe_replace":{"curve":id,"key":key}}]}),
+    );
+    let stored: Project = serde_json::from_value(
+        ok(json!({"operation":"project.export","project":path}))["document"].clone(),
+    )
+    .unwrap();
+    stored.ensure_editable().unwrap();
+}

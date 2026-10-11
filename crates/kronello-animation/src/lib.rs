@@ -108,9 +108,16 @@ fn eased_progress(handles: TimeBezier, progress: f64) -> Result<f64, AnimationEr
     }
     let [x1, y1] = handles.control1();
     let [x2, y2] = handles.control2();
+    // This newly accepted edge has x(t) = 0.5 + 4*(t - 0.5)^3.
+    // Invert analytically to avoid the rounded plateau at its stationary point.
+    // Keep the existing bisection path identical for previously valid handles.
+    if x1 == 1.0 && x2 == 0.0 {
+        let parameter = 0.5 + ((progress - 0.5) * 0.25).cbrt();
+        return Ok(FiniteF64::new(bezier(y1, y2, parameter))?.get());
+    }
     let (mut low, mut high) = (0.0, 1.0);
     // Fixed iteration count is independent of evaluation order or prior samples.
-    // Bisection also handles a zero endpoint derivative without Newton failure.
+    // Bisection also handles a zero derivative without Newton failure.
     for _ in 0..64 {
         let mid = (low + high) * 0.5;
         if bezier(x1, x2, mid) < progress {

@@ -72,8 +72,8 @@ pub use repeater::{
 };
 mod project;
 pub use project::{
-    DocumentObject, OpaqueObject, PROJECT_SCHEMA_VERSION, PROJECT_SEMANTIC_VERSION, Project,
-    ProjectError, project_json_schema,
+    DocumentObject, ObjectDiagnostic, OpaqueObject, PROJECT_SCHEMA_VERSION,
+    PROJECT_SEMANTIC_VERSION, Project, ProjectError, project_json_schema,
 };
 
 mod shape;

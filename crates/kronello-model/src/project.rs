@@ -15,8 +15,9 @@ use crate::{
 pub const PROJECT_SCHEMA_VERSION: u32 = 1;
 pub const PROJECT_SEMANTIC_VERSION: u32 = 1;
 
-/// The entire object is retained when its known interpretation cannot be decoded.
-/// This includes nested unknown fields and unknown enum variants.
+/// Decode candidates retain the whole object on failure, including nested
+/// unknown fields and enum variants. Storage validation rejects known-invalid
+/// candidates; only unknown content may remain opaque in a stored project.
 #[derive(Debug, Clone, PartialEq, Serialize, JsonSchema)]
 #[serde(untagged)]
 pub enum DocumentObject<T> {
@@ -97,8 +98,25 @@ pub enum ProjectError {
     UnsupportedSchemaVersion(u32),
     #[error("unknown meaning or opaque content cannot be edited safely")]
     UnsupportedMeaning,
+    #[error("invalid document object: {0}")]
+    InvalidObject(ObjectDiagnostic),
+    #[error("unsupported document objects: {0:?}")]
+    UnsupportedObjects(Vec<ObjectDiagnostic>),
     #[error("invalid document: {0}")]
     InvalidDocument(String),
+}
+
+/// A stable object address and its decoding or compatibility failure.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ObjectDiagnostic {
+    pub collection: String,
+    pub id: Uuid,
+    pub reason: String,
+}
+impl std::fmt::Display for ObjectDiagnostic {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}/{}: {}", self.collection, self.id, self.reason)
+    }
 }
 
 impl Default for Project {
@@ -140,6 +158,23 @@ impl Project {
         if self.schema_version != PROJECT_SCHEMA_VERSION {
             return Err(ProjectError::UnsupportedSchemaVersion(self.schema_version));
         }
+        validate_objects("compositions", &self.compositions)?;
+        validate_objects("curves", &self.curves)?;
+        validate_objects("expressions", &self.expressions)?;
+        validate_objects("shapes", &self.shapes)?;
+        validate_objects("texts", &self.texts)?;
+        validate_objects("captions", &self.captions)?;
+        validate_objects("templates", &self.templates)?;
+        validate_objects("template_instances", &self.template_instances)?;
+        validate_objects("assets", &self.assets)?;
+        validate_objects("audio_analyses", &self.audio_analyses)?;
+        validate_objects("tracking_data_assets", &self.tracking_data_assets)?;
+        validate_objects("scene_boundary_assets", &self.scene_boundary_assets)?;
+        validate_objects("expression_data_assets", &self.expression_data_assets)?;
+        validate_objects("sequences", &self.sequences)?;
+        validate_objects("mattes", &self.mattes)?;
+        validate_objects("repeaters", &self.repeaters)?;
+        validate_objects("simulations", &self.simulations)?;
         if self.unknown_fields.keys().any(|key| {
             matches!(
                 key.as_str(),
@@ -207,7 +242,11 @@ impl Project {
             if let DocumentObject::Known(c) = object
                 && c.nodes.iter().any(|n| !crate::valid_node_tags(&n.tags))
             {
-                return Err(ProjectError::InvalidDocument("invalid node tags".into()));
+                return Err(invalid_object(
+                    "compositions",
+                    c.id.as_uuid(),
+                    "invalid node tags",
+                ));
             }
             let id = match object {
                 DocumentObject::Known(value) => value.id.as_uuid(),
@@ -277,7 +316,16 @@ impl Project {
         }
         for object in &self.shapes {
             let id = match object {
-                DocumentObject::Known(value) => value.id.as_uuid(),
+                DocumentObject::Known(value) => {
+                    value.validate_structure().map_err(|e| {
+                        ProjectError::InvalidObject(ObjectDiagnostic {
+                            collection: "shapes".into(),
+                            id: value.id.as_uuid(),
+                            reason: e.to_string(),
+                        })
+                    })?;
+                    value.id.as_uuid()
+                }
                 DocumentObject::Opaque(value) => value.id,
             };
             if !ids.insert(id) {
@@ -286,7 +334,16 @@ impl Project {
         }
         for object in &self.texts {
             let id = match object {
-                DocumentObject::Known(value) => value.id.as_uuid(),
+                DocumentObject::Known(value) => {
+                    value.validate_structure().map_err(|e| {
+                        ProjectError::InvalidObject(ObjectDiagnostic {
+                            collection: "texts".into(),
+                            id: value.id.as_uuid(),
+                            reason: e.to_string(),
+                        })
+                    })?;
+                    value.id.as_uuid()
+                }
                 DocumentObject::Opaque(value) => value.id,
             };
             if !ids.insert(id) {
@@ -299,7 +356,7 @@ impl Project {
                     if caption.version == crate::CAPTION_VERSION {
                         caption
                             .validate()
-                            .map_err(|e| ProjectError::InvalidDocument(e.to_string()))?;
+                            .map_err(|e| invalid_object("captions", caption.id.as_uuid(), e))?;
                     }
                     caption.id.as_uuid()
                 }
@@ -343,7 +400,9 @@ impl Project {
         for object in &self.assets {
             let id = match object {
                 DocumentObject::Known(asset) => {
-                    asset.validate()?;
+                    asset
+                        .validate()
+                        .map_err(|e| invalid_object("assets", asset.id.as_uuid(), e))?;
                     asset.id.as_uuid()
                 }
                 DocumentObject::Opaque(value) => {
@@ -363,7 +422,9 @@ impl Project {
             let (id, fields) = match object {
                 DocumentObject::Known(value) => {
                     if value.version == crate::EXPRESSION_DATA_VERSION {
-                        value.validate()?;
+                        value.validate().map_err(|e| {
+                            invalid_object("expression_data_assets", value.id.as_uuid(), e)
+                        })?;
                     }
                     (value.id.as_uuid(), None)
                 }
@@ -379,7 +440,9 @@ impl Project {
             let (id, fields) = match object {
                 DocumentObject::Known(value) => {
                     if value.config.supported_version() {
-                        value.validate()?;
+                        value
+                            .validate()
+                            .map_err(|e| invalid_object("audio_analyses", value.id.as_uuid(), e))?;
                     }
                     (value.id.as_uuid(), None)
                 }
@@ -395,7 +458,9 @@ impl Project {
             let (id, fields) = match object {
                 DocumentObject::Known(value) => {
                     if value.version == crate::TRACKING_VERSION {
-                        value.validate()?;
+                        value.validate().map_err(|e| {
+                            invalid_object("tracking_data_assets", value.id.as_uuid(), e)
+                        })?;
                     }
                     (value.id.as_uuid(), None)
                 }
@@ -411,7 +476,9 @@ impl Project {
             let (id, fields) = match object {
                 DocumentObject::Known(value) => {
                     if value.version == crate::SCENE_BOUNDARY_VERSION {
-                        value.validate()?;
+                        value.validate().map_err(|e| {
+                            invalid_object("scene_boundary_assets", value.id.as_uuid(), e)
+                        })?;
                     }
                     (value.id.as_uuid(), None)
                 }
@@ -462,7 +529,7 @@ impl Project {
                 DocumentObject::Known(sequence) => {
                     sequence
                         .validate(self)
-                        .map_err(|e| ProjectError::InvalidDocument(e.to_string()))?;
+                        .map_err(|e| invalid_object("sequences", sequence.id.as_uuid(), e))?;
                     for track in &sequence.tracks {
                         if !ids.insert(track.id.as_uuid()) {
                             return Err(ProjectError::InvalidDocument("duplicate track id".into()));
@@ -607,45 +674,369 @@ impl Project {
     /// Conservative until SERVICE-001 can prove edits independent of opaque data.
     pub fn ensure_editable(&self) -> Result<(), ProjectError> {
         self.validate_storage()?;
-        if self.semantic_version != PROJECT_SEMANTIC_VERSION
-            || !self.unknown_fields.is_empty()
-            || self
-                .compositions
-                .iter()
-                .any(|v| matches!(v, DocumentObject::Opaque(_)))
-            || self.compositions.iter().any(|v| matches!(v, DocumentObject::Known(c) if c.nodes.iter().flat_map(|n| &n.effects).any(|e| e.definition().is_err())))
-            || self
-                .curves
-                .iter()
-                .any(|v| matches!(v, DocumentObject::Opaque(_)))
-            || self.expressions.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(e) if !matches!(e.version, 1..=crate::EXPRESSION_SUPPORTED_VERSION)))
-            || self
-                .shapes
-                .iter()
-                .any(|v| matches!(v, DocumentObject::Opaque(_)))
-            || self.sequences.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
-            || self.sequences.iter().any(|v| matches!(v, DocumentObject::Known(s) if s.tracks.iter().flat_map(|t| &t.clips).flat_map(|c| &c.effects).any(|e| e.definition().is_err())))
-            || self.assets.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
-            || self.templates.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
-            || self.template_instances.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
-            || self.audio_analyses.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(a) if !a.config.supported_version()))
-            || self.tracking_data_assets.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(a) if a.version != crate::TRACKING_VERSION))
-            || self.scene_boundary_assets.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(a) if a.version != crate::SCENE_BOUNDARY_VERSION))
-            || self.expression_data_assets.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(a) if a.version != crate::EXPRESSION_DATA_VERSION))
-            || self.simulations.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(s) if s.version != crate::SIMULATION_VERSION))
-            || self.repeaters.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(r) if r.version != crate::REPEATER_VERSION))
-            || self.mattes.iter().any(|v| matches!(v, DocumentObject::Opaque(_)) || matches!(v, DocumentObject::Known(m) if m.version != crate::DOCUMENT_MATTE_VERSION))
-            || self.texts.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
-            || self.texts.iter().any(|v| matches!(v, DocumentObject::Known(t) if !matches!(t.layout_version, 1 | 2)))
-            || self.captions.iter().any(|v| matches!(v, DocumentObject::Opaque(_)))
-            || self.captions.iter().any(|v| matches!(v, DocumentObject::Known(c) if c.version != crate::CAPTION_VERSION))
-            || self.curves.iter().any(
-                |v| matches!(v, DocumentObject::Known(c) if c.ensure_supported_version().is_err()),
-            )
-        {
-            return Err(ProjectError::UnsupportedMeaning);
+        let mut diagnostics = Vec::new();
+        if self.semantic_version != PROJECT_SEMANTIC_VERSION {
+            diagnostics.push(ObjectDiagnostic {
+                collection: "project".into(),
+                id: self.id,
+                reason: format!("unsupported semantic_version: {}", self.semantic_version),
+            });
+        }
+        if !self.unknown_fields.is_empty() {
+            diagnostics.push(ObjectDiagnostic {
+                collection: "project".into(),
+                id: self.id,
+                reason: format!(
+                    "unknown fields: {:?}",
+                    self.unknown_fields.keys().collect::<Vec<_>>()
+                ),
+            });
+        }
+        collect_unsupported(
+            "compositions",
+            &self.compositions,
+            |v| v.id.as_uuid(),
+            |v| {
+                v.nodes
+                    .iter()
+                    .flat_map(|n| &n.effects)
+                    .find_map(|e| e.definition().err().map(|e| e.to_string()))
+            },
+            &mut diagnostics,
+        );
+        collect_unsupported(
+            "curves",
+            &self.curves,
+            |v| v.id().as_uuid(),
+            |v| v.ensure_supported_version().err().map(|e| e.to_string()),
+            &mut diagnostics,
+        );
+        collect_unsupported(
+            "expressions",
+            &self.expressions,
+            |v| v.id.as_uuid(),
+            |v| {
+                (!matches!(v.version, 1..=crate::EXPRESSION_SUPPORTED_VERSION))
+                    .then(|| format!("unsupported expression version: {}", v.version))
+            },
+            &mut diagnostics,
+        );
+        collect_unsupported(
+            "shapes",
+            &self.shapes,
+            |v| v.id.as_uuid(),
+            |_| None,
+            &mut diagnostics,
+        );
+        collect_unsupported(
+            "texts",
+            &self.texts,
+            |v| v.id.as_uuid(),
+            |v| {
+                (!matches!(v.layout_version, 1 | 2))
+                    .then(|| format!("unsupported layout_version: {}", v.layout_version))
+            },
+            &mut diagnostics,
+        );
+        collect_unsupported(
+            "captions",
+            &self.captions,
+            |v| v.id.as_uuid(),
+            |v| {
+                (v.version != crate::CAPTION_VERSION)
+                    .then(|| format!("unsupported caption version: {}", v.version))
+            },
+            &mut diagnostics,
+        );
+        collect_unsupported(
+            "templates",
+            &self.templates,
+            |v| v.id,
+            |_| None,
+            &mut diagnostics,
+        );
+        collect_unsupported(
+            "template_instances",
+            &self.template_instances,
+            |v| v.id.as_uuid(),
+            |_| None,
+            &mut diagnostics,
+        );
+        collect_unsupported(
+            "assets",
+            &self.assets,
+            |v| v.id.as_uuid(),
+            |_| None,
+            &mut diagnostics,
+        );
+        collect_unsupported(
+            "audio_analyses",
+            &self.audio_analyses,
+            |v| v.id.as_uuid(),
+            |v| {
+                (!v.config.supported_version()).then(|| "unsupported audio analysis version".into())
+            },
+            &mut diagnostics,
+        );
+        collect_unsupported(
+            "tracking_data_assets",
+            &self.tracking_data_assets,
+            |v| v.id.as_uuid(),
+            |v| {
+                (v.version != crate::TRACKING_VERSION)
+                    .then(|| format!("unsupported version: {}", v.version))
+            },
+            &mut diagnostics,
+        );
+        collect_unsupported(
+            "scene_boundary_assets",
+            &self.scene_boundary_assets,
+            |v| v.id.as_uuid(),
+            |v| {
+                (v.version != crate::SCENE_BOUNDARY_VERSION)
+                    .then(|| format!("unsupported version: {}", v.version))
+            },
+            &mut diagnostics,
+        );
+        collect_unsupported(
+            "expression_data_assets",
+            &self.expression_data_assets,
+            |v| v.id.as_uuid(),
+            |v| {
+                (v.version != crate::EXPRESSION_DATA_VERSION)
+                    .then(|| format!("unsupported version: {}", v.version))
+            },
+            &mut diagnostics,
+        );
+        collect_unsupported(
+            "sequences",
+            &self.sequences,
+            |v| v.id.as_uuid(),
+            |v| {
+                v.tracks
+                    .iter()
+                    .flat_map(|t| &t.clips)
+                    .flat_map(|c| &c.effects)
+                    .find_map(|e| e.definition().err().map(|e| e.to_string()))
+            },
+            &mut diagnostics,
+        );
+        collect_unsupported(
+            "mattes",
+            &self.mattes,
+            |v| v.id,
+            |v| {
+                (v.version != crate::DOCUMENT_MATTE_VERSION)
+                    .then(|| format!("unsupported matte version: {}", v.version))
+            },
+            &mut diagnostics,
+        );
+        collect_unsupported(
+            "repeaters",
+            &self.repeaters,
+            |v| v.id.as_uuid(),
+            |v| {
+                (v.version != crate::REPEATER_VERSION)
+                    .then(|| format!("unsupported version: {}", v.version))
+            },
+            &mut diagnostics,
+        );
+        collect_unsupported(
+            "simulations",
+            &self.simulations,
+            |v| v.id.as_uuid(),
+            |v| {
+                (v.version != crate::SIMULATION_VERSION)
+                    .then(|| format!("unsupported version: {}", v.version))
+            },
+            &mut diagnostics,
+        );
+        if !diagnostics.is_empty() {
+            return Err(ProjectError::UnsupportedObjects(diagnostics));
         }
         Ok(())
+    }
+}
+
+fn invalid_object(collection: &str, id: Uuid, reason: impl std::fmt::Display) -> ProjectError {
+    ProjectError::InvalidObject(ObjectDiagnostic {
+        collection: collection.into(),
+        id,
+        reason: reason.to_string(),
+    })
+}
+
+// Classify extensions using the public type schema, not decoder error wording.
+// This only detects unknown structure; missing fields, types and ranges remain
+// the strict Rust decoder's responsibility.
+fn has_unknown_content(raw: &Value, schema: &Value, root: &Value) -> bool {
+    if let Some(reference) = schema.get("$ref").and_then(Value::as_str)
+        && let Some(target) = reference.strip_prefix('#').and_then(|p| root.pointer(p))
+    {
+        return has_unknown_content(raw, target, root);
+    }
+    for union in ["anyOf", "oneOf"] {
+        if let Some(branches) = schema.get(union).and_then(Value::as_array) {
+            // Select tagged alternatives before inspecting their payload fields.
+            let compatible: Vec<_> = branches
+                .iter()
+                .filter(|branch| {
+                    if let Some(properties) = branch.get("properties").and_then(Value::as_object) {
+                        return properties.iter().all(|(key, constraint)| {
+                            raw.get(key).is_none_or(|value| {
+                                constraint.get("const").is_none_or(|c| c == value)
+                                    && constraint
+                                        .get("enum")
+                                        .and_then(Value::as_array)
+                                        .is_none_or(|values| values.contains(value))
+                            })
+                        });
+                    }
+                    match branch.get("type").and_then(Value::as_str) {
+                        Some("null") => raw.is_null(),
+                        Some("object") => raw.is_object(),
+                        Some("array") => raw.is_array(),
+                        _ => true,
+                    }
+                })
+                .collect();
+            if compatible.is_empty() {
+                return raw.as_object().is_some_and(|object| {
+                    object.iter().any(|(key, value)| {
+                        value.is_string()
+                            && branches.iter().any(|branch| {
+                                branch
+                                    .get("properties")
+                                    .and_then(|p| p.get(key))
+                                    .is_some_and(|p| {
+                                        p.get("const").is_some() || p.get("enum").is_some()
+                                    })
+                            })
+                    })
+                }); // Unknown string tag, not a malformed tag type.
+            }
+            return compatible.iter().all(|s| has_unknown_content(raw, s, root));
+        }
+    }
+    if raw.is_string()
+        && let Some(values) = schema.get("enum").and_then(Value::as_array)
+        && !values.contains(raw)
+    {
+        return true;
+    }
+    if let Some(object) = raw.as_object() {
+        let properties = schema.get("properties").and_then(Value::as_object);
+        for (key, value) in object {
+            if let Some(child) = properties.and_then(|p| p.get(key)) {
+                if has_unknown_content(value, child, root) {
+                    return true;
+                }
+            } else if schema.get("additionalProperties") == Some(&Value::Bool(false)) {
+                return true;
+            } else if let Some(child) = schema.get("additionalProperties").filter(|s| s.is_object())
+                && has_unknown_content(value, child, root)
+            {
+                return true;
+            }
+        }
+    }
+    if let Some(items) = raw.as_array()
+        && let Some(item_schema) = schema.get("items")
+    {
+        return items
+            .iter()
+            .any(|item| has_unknown_content(item, item_schema, root));
+    }
+    false
+}
+
+fn unsupported_version(collection: &str, raw: &Value) -> Option<String> {
+    let (field, supported): (&str, &[u64]) = match collection {
+        "curves" => ("interpolation_version", &[1]),
+        "texts" => ("layout_version", &[1, 2]),
+        "expressions" => ("version", &[1, 2, 3]),
+        "captions"
+        | "tracking_data_assets"
+        | "scene_boundary_assets"
+        | "expression_data_assets"
+        | "simulations"
+        | "repeaters"
+        | "mattes" => ("version", &[1]),
+        "audio_analyses" => {
+            return unsupported_version("audio_analysis_config", &raw["config"]);
+        }
+        "audio_analysis_config" => ("version", &[1, 2]),
+        _ => return None,
+    };
+    raw.get(field)
+        .and_then(Value::as_u64)
+        .filter(|v| !supported.contains(v))
+        .map(|v| format!("unsupported {field}: {v}"))
+}
+
+fn validate_objects<T: DeserializeOwned + JsonSchema>(
+    collection: &str,
+    objects: &[DocumentObject<T>],
+) -> Result<(), ProjectError> {
+    // Generate the schema only when the strict decoder failed.
+    let mut schema = None;
+    for object in objects {
+        let DocumentObject::Opaque(opaque) = object else {
+            continue;
+        };
+        let raw = serde_json::to_value(opaque)
+            .map_err(|e| ProjectError::InvalidDocument(e.to_string()))?;
+        if unsupported_version(collection, &raw).is_some() {
+            continue;
+        }
+        let schema = schema.get_or_insert_with(|| {
+            serde_json::to_value(schemars::schema_for!(T)).expect("serializable model schema")
+        });
+        if has_unknown_content(&raw, schema, schema) {
+            continue;
+        }
+        let encoded = serde_json::to_string(&raw)
+            .map_err(|e| ProjectError::InvalidDocument(e.to_string()))?;
+        // Even explicitly constructed Opaque objects cannot bypass validation.
+        if let Err(error) = serde_json::from_str::<T>(&encoded) {
+            return Err(ProjectError::InvalidObject(ObjectDiagnostic {
+                collection: collection.into(),
+                id: opaque.id,
+                reason: error.to_string(),
+            }));
+        }
+    }
+    Ok(())
+}
+
+fn collect_unsupported<T: Serialize + DeserializeOwned>(
+    collection: &str,
+    objects: &[DocumentObject<T>],
+    known_id: impl Fn(&T) -> Uuid,
+    known_reason: impl Fn(&T) -> Option<String>,
+    diagnostics: &mut Vec<ObjectDiagnostic>,
+) {
+    for object in objects {
+        let (id, reason) = match object {
+            DocumentObject::Known(value) => (known_id(value), known_reason(value)),
+            DocumentObject::Opaque(value) => {
+                let raw = serde_json::to_value(value).expect("serializable opaque object");
+                let reason = unsupported_version(collection, &raw).unwrap_or_else(|| {
+                    let encoded = serde_json::to_string(&raw).expect("serializable opaque object");
+                    serde_json::from_str::<T>(&encoded)
+                        .err()
+                        .map_or_else(|| "opaque object".into(), |e| e.to_string())
+                });
+                (value.id, Some(reason))
+            }
+        };
+        if let Some(reason) = reason {
+            diagnostics.push(ObjectDiagnostic {
+                collection: collection.into(),
+                id,
+                reason,
+            });
+        }
     }
 }
 

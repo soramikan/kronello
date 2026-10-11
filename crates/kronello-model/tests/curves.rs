@@ -102,11 +102,7 @@ fn construction_and_import_reject_duplicate_unordered_or_mismatched_keys() {
 
 #[test]
 fn handles_validate_monotonic_time_finite_values_and_allow_value_overshoot() {
-    for (a, b) in [
-        ([-0.1, 0.0], [0.5, 1.0]),
-        ([0.8, 0.0], [0.2, 1.0]),
-        ([0.5, 0.0], [1.1, 1.0]),
-    ] {
+    for (a, b) in [([-0.1, 0.0], [0.5, 1.0]), ([0.5, 0.0], [1.1, 1.0])] {
         assert_eq!(TimeBezier::new(a, b), Err(CurveError::NonMonotonicHandles));
     }
     for (a, b) in [
@@ -123,8 +119,10 @@ fn handles_validate_monotonic_time_finite_values_and_allow_value_overshoot() {
     assert!(TimeBezier::new([0.5, 0.0], [0.5, 1.0]).is_ok());
     assert!(
         serde_json::from_value::<TimeBezier>(json!({"control1":[0.8,0.0],"control2":[0.2,1.0]}))
-            .is_err()
+            .is_ok()
     );
+    assert!(TimeBezier::new([1.0, 0.0], [0.0, 1.0]).is_ok());
+    assert!(TimeBezier::new([0.83, -3.0], [0.17, 4.0]).is_ok());
 }
 
 #[test]

@@ -3109,7 +3109,7 @@
           "$ref": "#/$defs/OpaqueObject"
         }
       ],
-      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
+      "description": "Decode candidates retain the whole object on failure, including nested\nunknown fields and enum variants. Storage validation rejects known-invalid\ncandidates; only unknown content may remain opaque in a stored project."
     },
     "DocumentObject10": {
       "anyOf": [
@@ -3120,7 +3120,7 @@
           "$ref": "#/$defs/OpaqueObject"
         }
       ],
-      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
+      "description": "Decode candidates retain the whole object on failure, including nested\nunknown fields and enum variants. Storage validation rejects known-invalid\ncandidates; only unknown content may remain opaque in a stored project."
     },
     "DocumentObject11": {
       "anyOf": [
@@ -3131,7 +3131,7 @@
           "$ref": "#/$defs/OpaqueObject"
         }
       ],
-      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
+      "description": "Decode candidates retain the whole object on failure, including nested\nunknown fields and enum variants. Storage validation rejects known-invalid\ncandidates; only unknown content may remain opaque in a stored project."
     },
     "DocumentObject12": {
       "anyOf": [
@@ -3142,7 +3142,7 @@
           "$ref": "#/$defs/OpaqueObject"
         }
       ],
-      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
+      "description": "Decode candidates retain the whole object on failure, including nested\nunknown fields and enum variants. Storage validation rejects known-invalid\ncandidates; only unknown content may remain opaque in a stored project."
     },
     "DocumentObject13": {
       "anyOf": [
@@ -3153,7 +3153,7 @@
           "$ref": "#/$defs/OpaqueObject"
         }
       ],
-      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
+      "description": "Decode candidates retain the whole object on failure, including nested\nunknown fields and enum variants. Storage validation rejects known-invalid\ncandidates; only unknown content may remain opaque in a stored project."
     },
     "DocumentObject14": {
       "anyOf": [
@@ -3164,7 +3164,7 @@
           "$ref": "#/$defs/OpaqueObject"
         }
       ],
-      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
+      "description": "Decode candidates retain the whole object on failure, including nested\nunknown fields and enum variants. Storage validation rejects known-invalid\ncandidates; only unknown content may remain opaque in a stored project."
     },
     "DocumentObject15": {
       "anyOf": [
@@ -3175,7 +3175,7 @@
           "$ref": "#/$defs/OpaqueObject"
         }
       ],
-      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
+      "description": "Decode candidates retain the whole object on failure, including nested\nunknown fields and enum variants. Storage validation rejects known-invalid\ncandidates; only unknown content may remain opaque in a stored project."
     },
     "DocumentObject16": {
       "anyOf": [
@@ -3186,7 +3186,7 @@
           "$ref": "#/$defs/OpaqueObject"
         }
       ],
-      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
+      "description": "Decode candidates retain the whole object on failure, including nested\nunknown fields and enum variants. Storage validation rejects known-invalid\ncandidates; only unknown content may remain opaque in a stored project."
     },
     "DocumentObject17": {
       "anyOf": [
@@ -3197,7 +3197,7 @@
           "$ref": "#/$defs/OpaqueObject"
         }
       ],
-      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
+      "description": "Decode candidates retain the whole object on failure, including nested\nunknown fields and enum variants. Storage validation rejects known-invalid\ncandidates; only unknown content may remain opaque in a stored project."
     },
     "DocumentObject2": {
       "anyOf": [
@@ -3208,7 +3208,7 @@
           "$ref": "#/$defs/OpaqueObject"
         }
       ],
-      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
+      "description": "Decode candidates retain the whole object on failure, including nested\nunknown fields and enum variants. Storage validation rejects known-invalid\ncandidates; only unknown content may remain opaque in a stored project."
     },
     "DocumentObject3": {
       "anyOf": [
@@ -3219,7 +3219,7 @@
           "$ref": "#/$defs/OpaqueObject"
         }
       ],
-      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
+      "description": "Decode candidates retain the whole object on failure, including nested\nunknown fields and enum variants. Storage validation rejects known-invalid\ncandidates; only unknown content may remain opaque in a stored project."
     },
     "DocumentObject4": {
       "anyOf": [
@@ -3230,7 +3230,7 @@
           "$ref": "#/$defs/OpaqueObject"
         }
       ],
-      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
+      "description": "Decode candidates retain the whole object on failure, including nested\nunknown fields and enum variants. Storage validation rejects known-invalid\ncandidates; only unknown content may remain opaque in a stored project."
     },
     "DocumentObject5": {
       "anyOf": [
@@ -3241,7 +3241,7 @@
           "$ref": "#/$defs/OpaqueObject"
         }
       ],
-      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
+      "description": "Decode candidates retain the whole object on failure, including nested\nunknown fields and enum variants. Storage validation rejects known-invalid\ncandidates; only unknown content may remain opaque in a stored project."
     },
     "DocumentObject6": {
       "anyOf": [
@@ -3252,7 +3252,7 @@
           "$ref": "#/$defs/OpaqueObject"
         }
       ],
-      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
+      "description": "Decode candidates retain the whole object on failure, including nested\nunknown fields and enum variants. Storage validation rejects known-invalid\ncandidates; only unknown content may remain opaque in a stored project."
     },
     "DocumentObject7": {
       "anyOf": [
@@ -3263,7 +3263,7 @@
           "$ref": "#/$defs/OpaqueObject"
         }
       ],
-      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
+      "description": "Decode candidates retain the whole object on failure, including nested\nunknown fields and enum variants. Storage validation rejects known-invalid\ncandidates; only unknown content may remain opaque in a stored project."
     },
     "DocumentObject8": {
       "anyOf": [
@@ -3274,7 +3274,7 @@
           "$ref": "#/$defs/OpaqueObject"
         }
       ],
-      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
+      "description": "Decode candidates retain the whole object on failure, including nested\nunknown fields and enum variants. Storage validation rejects known-invalid\ncandidates; only unknown content may remain opaque in a stored project."
     },
     "DocumentObject9": {
       "anyOf": [
@@ -3285,7 +3285,7 @@
           "$ref": "#/$defs/OpaqueObject"
         }
       ],
-      "description": "The entire object is retained when its known interpretation cannot be decoded.\nThis includes nested unknown fields and unknown enum variants."
+      "description": "Decode candidates retain the whole object on failure, including nested\nunknown fields and enum variants. Storage validation rejects known-invalid\ncandidates; only unknown content may remain opaque in a stored project."
     },
     "Duration": {
       "additionalProperties": false,
@@ -21507,7 +21507,7 @@
     },
     "TimeBezier": {
       "additionalProperties": false,
-      "description": "Normalized time/value-progress handles between (0, 0) and (1, 1).\nOrdered x handles guarantee monotonic time. Finite y handles may overshoot.\nThese are dimensionless progress values, never stored timestamps.",
+      "description": "Normalized time/value-progress handles between (0, 0) and (1, 1).\nEach x handle in [0, 1] guarantees monotonic time, in either order.\nFinite y handles may overshoot.\nThese are dimensionless progress values, never stored timestamps.",
       "properties": {
         "control1": {
           "items": {

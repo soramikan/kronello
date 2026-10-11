@@ -25,8 +25,12 @@ pub enum StoreError {
     MigrationFailed(String),
     #[error("unsupported schema version: {0}")]
     UnsupportedSchemaVersion(u32),
-    #[error("unsupported meaning or opaque content")]
-    UnsupportedFeature,
+    #[error("unsupported meaning or opaque content: {0}")]
+    UnsupportedFeature(String),
+    #[error("invalid document object: {0}")]
+    InvalidDocumentObject(kronello_model::ObjectDiagnostic),
+    #[error("unsupported document objects: {0:?}")]
+    UnsupportedObjects(Vec<kronello_model::ObjectDiagnostic>),
     #[error("invalid mutation: {0}")]
     InvalidMutation(String),
     #[error("snapshot not found: {0}")]
@@ -53,7 +57,8 @@ impl StoreError {
             Self::ProjectLocked => "PROJECT_LOCKED",
             Self::MigrationFailed(_) => "MIGRATION_FAILED",
             Self::UnsupportedSchemaVersion(_) => "UNSUPPORTED_SCHEMA_VERSION",
-            Self::UnsupportedFeature => "UNSUPPORTED_FEATURE",
+            Self::UnsupportedFeature(_) | Self::UnsupportedObjects(_) => "UNSUPPORTED_FEATURE",
+            Self::InvalidDocumentObject(_) => "INVALID_DOCUMENT_OBJECT",
             Self::InvalidMutation(_) => "INVALID_MUTATION",
             Self::SnapshotNotFound(_) => "SNAPSHOT_NOT_FOUND",
             Self::HistoryReplayFailed { .. } => "HISTORY_REPLAY_FAILED",
@@ -72,7 +77,9 @@ impl From<ProjectError> for StoreError {
             ProjectError::UnsupportedSchemaVersion(version) => {
                 Self::UnsupportedSchemaVersion(version)
             }
-            ProjectError::UnsupportedMeaning => Self::UnsupportedFeature,
+            ProjectError::UnsupportedMeaning => Self::UnsupportedFeature(value.to_string()),
+            ProjectError::InvalidObject(diagnostic) => Self::InvalidDocumentObject(diagnostic),
+            ProjectError::UnsupportedObjects(diagnostics) => Self::UnsupportedObjects(diagnostics),
             ProjectError::InvalidDocument(reason) => Self::InvalidMutation(reason),
         }
     }

@@ -1505,3 +1505,27 @@ fn json_order_unknown_number_spelling_and_hash_survive_reopen_and_replay() {
     check(&serde_json::to_value(store.snapshot_at(1).unwrap().document).unwrap());
     store.close().unwrap();
 }
+
+#[test]
+fn invalid_known_opaque_import_returns_addressed_error_without_writing() {
+    let (_dir, _path, mut store) = fixture();
+    let before = store.snapshot().unwrap();
+    let id = Uuid::new_v4();
+    let mut raw = serde_json::to_value(&before.document).unwrap();
+    raw["shapes"] =
+        json!([{"id":id,"geometry":{"kind":"ellipse","value":{}},"fill":null,"stroke":null}]);
+    let error = store
+        .import_json(before.revision, Uuid::new_v4(), &raw.to_string())
+        .unwrap_err();
+    assert_eq!(error.code(), "INVALID_DOCUMENT_OBJECT");
+    let StoreError::InvalidDocumentObject(diagnostic) = error else {
+        panic!()
+    };
+    assert_eq!(diagnostic.collection, "shapes");
+    assert_eq!(diagnostic.id, id);
+    assert!(diagnostic.reason.contains("size"));
+    let after = store.snapshot().unwrap();
+    assert_eq!(after.revision, before.revision);
+    assert_eq!(after.document, before.document);
+    assert!(store.events_since(0).unwrap().is_empty());
+}
