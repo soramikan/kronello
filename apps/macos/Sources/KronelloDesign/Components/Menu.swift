@@ -157,13 +157,23 @@ struct KRAnchorTracker: NSViewRepresentable {
         report = { view.wrappedValue = $0 }
     }
     init(report: @escaping (NSView) -> Void) { self.report = report }
+    @MainActor
+    final class Coordinator {
+        private weak var reportedView: NSView?
+        func report(_ view: NSView, using callback: @escaping (NSView) -> Void) {
+            guard reportedView !== view else { return }
+            reportedView = view
+            DispatchQueue.main.async { callback(view) }
+        }
+    }
+    func makeCoordinator() -> Coordinator { Coordinator() }
     func makeNSView(context: Context) -> KRPassthroughView {
         let view = KRPassthroughView()
-        DispatchQueue.main.async { report(view) }
+        context.coordinator.report(view, using: report)
         return view
     }
     func updateNSView(_ nsView: KRPassthroughView, context: Context) {
-        DispatchQueue.main.async { self.report(nsView) }
+        context.coordinator.report(nsView, using: report)
     }
 }
 final class KRPassthroughView: NSView {

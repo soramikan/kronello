@@ -140,6 +140,31 @@ fn with_session<T>(session: &Option<ProjectSession>, operation: impl FnOnce() ->
         None => operation(),
     }
 }
+fn changes_state(json: &str, commands: &[kronello_service::CommandDescriptor]) -> bool {
+    serde_json::from_str::<Value>(json)
+        .ok()
+        .and_then(|value| value["operation"].as_str().map(str::to_owned))
+        .is_some_and(|name| {
+            commands.iter().any(|command| {
+                command.name == name
+                    && (!command.read_only
+                        || matches!(
+                            name.as_str(),
+                            "job.cancel"
+                                | "job.resume"
+                                | "job.prune"
+                                | "render.submit"
+                                | "render.export"
+                                | "proxy.generate"
+                                | "scene.detect"
+                                | "capture.start"
+                                | "capture.stop"
+                                | "export.batch"
+                                | "audio.plugin_process"
+                        ))
+            })
+        })
+}
 fn worker(
     path: String,
     executable: Option<String>,
@@ -230,11 +255,7 @@ fn worker(
                         // Use the exact shared strict Request decoder. The embedder
                         // must provide the CLI worker; a Swift executable cannot
                         // implement the service's detached worker_entry protocol.
-                        let changes_state = serde_json::from_str::<Value>(&json).ok()
-                            .and_then(|value| value["operation"].as_str().map(str::to_owned))
-                            .is_some_and(|name| commands.iter().any(|command|
-                                command.name == name && (!command.read_only
-                                    || matches!(name.as_str(), "job.cancel" | "job.resume" | "job.prune" | "render.submit" | "render.export" | "proxy.generate" | "scene.detect" | "capture.start" | "capture.stop" | "export.batch"))));
+                        let changes_state = changes_state(&json, &commands);
                         let response = match serde_json::from_str::<Request>(&json) {
                             Ok(Request::RenderSubmit(_)) if !has_worker => Response::Error {
                                 error: ServiceError::new(
@@ -599,4 +620,33 @@ pub fn poll_json(handle: u64) -> Option<Value> {
         serde_json::from_str(value["response_json"].as_str().expect("response text"))
             .expect("response JSON");
     Some(value)
+}
+
+#[cfg(test)]
+mod notification_tests {
+    use super::*;
+
+    #[test]
+    fn plugin_job_submission_refreshes_notifications_despite_read_only_project() {
+        let commands = kronello_service::command_registry();
+        let plugin = commands
+            .iter()
+            .find(|c| c.name == "audio.plugin_process")
+            .unwrap();
+        assert!(
+            plugin.read_only,
+            "the exception concerns execution state, not project edits"
+        );
+        assert!(changes_state(
+            r#"{"operation":"audio.plugin_process"}"#,
+            &commands
+        ));
+        for operation in ["project.info", "job.list", "unknown.operation"] {
+            assert!(!changes_state(
+                &json!({"operation": operation}).to_string(),
+                &commands
+            ));
+        }
+        assert!(!changes_state("invalid JSON", &commands));
+    }
 }
