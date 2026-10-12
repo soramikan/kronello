@@ -177,7 +177,12 @@ impl crate::GpuContext {
         };
         drop(state);
         GpuAllocationStats {
-            idle_pool_payload_bytes: self.cache_stats().pool.bytes as u64,
+            idle_pool_payload_bytes: self.cache_stats().pool.bytes as u64
+                + self
+                    .readback_pool
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .idle_bytes(),
             ..result
         }
     }

@@ -173,7 +173,7 @@
 | [0147](0147-indexed-timeline-and-proxy-preparation.md) | タイムラインの派生索引とproxy準備再利用 | 採用 | 2026-10-11 |
 | [0148](0148-audio-only-delivery-without-video.md) | 音声単独出力の映像処理省略 | 採用 | 2026-10-11 |
 | [0149](0149-codec-parallelism-and-packet-spans.md) | Codec別並列度と遅延packetのspan | 採用 | 2026-10-11 |
-| [0150](0150-linear-only-delivery-and-temporal-samples.md) | 書き出しとshutter sampleのlinear専用境界 | 部分置換（0159） | 2026-10-11 |
+| [0150](0150-linear-only-delivery-and-temporal-samples.md) | 書き出しとshutter sampleのlinear専用境界 | 部分置換（0159 / 0164） | 2026-10-11 |
 | [0151](0151-bounded-playback-pcm-sharing.md) | 再生準備の有界PCM共有 | 部分置換（0155） | 2026-10-11 |
 | [0152](0152-two-frame-delivery-pipeline.md) | 二組のframeでrenderとencodeを重ねる | 部分置換（0162） | 2026-10-11 |
 | [0153](0153-expected-hash-verification-memo.md) | 資産検証メモを期待hashへ結び付ける | 採用 | 2026-10-11 |
@@ -193,6 +193,7 @@
 | [0161](0161-time-based-worker-progress-and-control-gates.md) | worker制御確認と時間駆動の進捗保存 | 採用（PERF-009受け入れ済み） | 2026-10-12 |
 | [0162](0162-direct-color-and-shared-video-delivery.md) | 直接色変換と同条件の動画delivery共有 | 採用（PERF-010受け入れ済み） | 2026-10-12 |
 | [0163](0163-shared-export-audio-and-verified-spools.md) | 書き出し音声mix共有と検証済みspoolの任意再利用 | 採用（PERF-011受け入れ進行中） | 2026-10-12 |
+| [0164](0164-unified-linear-readback-and-bounded-staging.md) | linear status/画像の待機統合と有界staging | 採用（PERF-012受け入れ進行中） | 2026-10-12 |
 
 ## 追加と変更の規則
 

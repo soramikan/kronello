@@ -19,7 +19,7 @@
 | M7 | 0 | 0 | 11 | 0 | 11 |
 | M8 | 0 | 0 | 16 | 0 | 16 |
 | M9 | 2 | 0 | 11 | 0 | 13 |
-| M10 | 4 | 1 | 20 | 0 | 25 |
+| M10 | 3 | 2 | 20 | 0 | 25 |
 | M11 | 14 | 0 | 0 | 0 | 14 |
 
 ## M0
@@ -1313,7 +1313,7 @@
 
 ### PERF-012 GPU statusと画像待機統合・staging再利用
 
-- 優先度: P1 / 領域: performance / 状態: planned
+- 優先度: P1 / 領域: performance / 状態: in_progress
 - 依存: PERF-010
 - 受け入れ条件:
   - status/画像copyと両map開始を同じ完了単位へまとめ4Kのwaitを80→40、3 samplesで240→120に減らす。readback回数/bytesとは区別する

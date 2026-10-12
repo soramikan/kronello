@@ -1,5 +1,9 @@
 # 05 レンダラーと GPU
 
+## PERF-012: linear待機統合とstaging pool
+
+[ADR-0164](../adr/0164-unified-linear-readback-and-bounded-staging.md)に従い、Movie/GIF/shutter sampleのlinear画像とsticky statusを同時copy/mapし、一回の完了待ちとstatus正常確認後に画素とcacheを公開する。deviceのmanaged stagingは貸出/idle合計4件/16MiB、完了・view解放・unmap・buffer consumer終了後だけ再利用する。大きい/競合時は従来の一回限りのbufferで、queue/in-flight数を増やさない。通常frame/displayとresident境界、disk保存の追加転送、f64 temporal積算は維持する。[PERF-012](../testing/perf-012.md)はbytes/回数/wait/allocation/RSSと適用条件を区別して追跡する。
+
 ## PERF-010: 直接色変換と動画出力共有
 
 [ADR-0162](../adr/0162-direct-color-and-shared-video-delivery.md)に従い、SDR/HDR/tone-mapの演算順と丸め境界を保ってtileからpacked bundleのstride/offsetへ直接書く。同じ背景bit列・transfer・tone-map・packed formatのlegはowner bufferを共有し、Movieのnative constructor設定と共通raster/PTS/bitrate/runtimeまで一致する場合はvideo stageも共有する。二組のframe ownership・独立native runtime threadを維持し、container/音声/chapters/export hashと最終検証・publicationは各legに残す。GIFは色変換だけ共有し二段階を維持する。追加workerや変換threads2/4の採否と受け入れは[PERF-010](../testing/perf-010.md)で追跡する。

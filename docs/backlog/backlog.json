@@ -2645,7 +2645,7 @@
       "priority": "P1",
       "area": "performance",
       "title": "GPU statusと画像待機統合・staging再利用",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "PERF-010"
       ],

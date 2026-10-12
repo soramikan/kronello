@@ -1,0 +1,734 @@
+{
+  "schema_version": 1,
+  "videotoolbox_private_sei_normalization_enabled": false,
+  "records": [
+    {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/pooled-samples0/evidence.json",
+      "raw_sha256": "a5a0f7a6e3112b56fd4c669fa9ad24c2d53adfe82a3aed39527a2ac5b6f771a8",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": true,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/pooled-samples0/0-before/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/pooled-samples0/0-after/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/pooled-samples0/1-after/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/pooled-samples0/1-before/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/pooled-samples0/2-before/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/pooled-samples0/2-after/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/pooled-samples3/evidence.json",
+      "raw_sha256": "094e9fffe865d67eb13d571b69ac5dd5c068fd9b66ed2b1b6ea194f6779e3c28",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": true,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/pooled-samples3/0-before/movie.mov",
+              "encoded_sha256": "58cffd0f5e4d02c853dd2f7a1a2b68d743cd02d4e1b828496798a6999e907eb6",
+              "packet_metadata_sha256": "947717162fe582e1dbaf0bf1fc5e911a9eb6c5ec0e52289f787d6ff00f523221",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/pooled-samples3/0-after/movie.mov",
+              "encoded_sha256": "58cffd0f5e4d02c853dd2f7a1a2b68d743cd02d4e1b828496798a6999e907eb6",
+              "packet_metadata_sha256": "947717162fe582e1dbaf0bf1fc5e911a9eb6c5ec0e52289f787d6ff00f523221",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/pooled-samples3/1-after/movie.mov",
+              "encoded_sha256": "58cffd0f5e4d02c853dd2f7a1a2b68d743cd02d4e1b828496798a6999e907eb6",
+              "packet_metadata_sha256": "947717162fe582e1dbaf0bf1fc5e911a9eb6c5ec0e52289f787d6ff00f523221",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/pooled-samples3/1-before/movie.mov",
+              "encoded_sha256": "58cffd0f5e4d02c853dd2f7a1a2b68d743cd02d4e1b828496798a6999e907eb6",
+              "packet_metadata_sha256": "947717162fe582e1dbaf0bf1fc5e911a9eb6c5ec0e52289f787d6ff00f523221",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/pooled-samples3/2-before/movie.mov",
+              "encoded_sha256": "58cffd0f5e4d02c853dd2f7a1a2b68d743cd02d4e1b828496798a6999e907eb6",
+              "packet_metadata_sha256": "947717162fe582e1dbaf0bf1fc5e911a9eb6c5ec0e52289f787d6ff00f523221",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/pooled-samples3/2-after/movie.mov",
+              "encoded_sha256": "58cffd0f5e4d02c853dd2f7a1a2b68d743cd02d4e1b828496798a6999e907eb6",
+              "packet_metadata_sha256": "947717162fe582e1dbaf0bf1fc5e911a9eb6c5ec0e52289f787d6ff00f523221",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/pooled-samples8/evidence.json",
+      "raw_sha256": "e5c205f91381a55acdd30d585d13285f7288ac26dcc521b1568f23b5f3e7d3ac",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": true,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/pooled-samples8/0-before/movie.mov",
+              "encoded_sha256": "b37925b78cf55b4851e104e97f6baa9402c3dfbfe4de99532e309813b77562f1",
+              "packet_metadata_sha256": "e5e062b5adc9f1d1d41d5be7fb58091f4b33fed189b243f7a153108b5e1795b6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/pooled-samples8/0-after/movie.mov",
+              "encoded_sha256": "b37925b78cf55b4851e104e97f6baa9402c3dfbfe4de99532e309813b77562f1",
+              "packet_metadata_sha256": "e5e062b5adc9f1d1d41d5be7fb58091f4b33fed189b243f7a153108b5e1795b6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/pooled-samples8/1-after/movie.mov",
+              "encoded_sha256": "b37925b78cf55b4851e104e97f6baa9402c3dfbfe4de99532e309813b77562f1",
+              "packet_metadata_sha256": "e5e062b5adc9f1d1d41d5be7fb58091f4b33fed189b243f7a153108b5e1795b6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/pooled-samples8/1-before/movie.mov",
+              "encoded_sha256": "b37925b78cf55b4851e104e97f6baa9402c3dfbfe4de99532e309813b77562f1",
+              "packet_metadata_sha256": "e5e062b5adc9f1d1d41d5be7fb58091f4b33fed189b243f7a153108b5e1795b6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/pooled-samples8/2-before/movie.mov",
+              "encoded_sha256": "b37925b78cf55b4851e104e97f6baa9402c3dfbfe4de99532e309813b77562f1",
+              "packet_metadata_sha256": "e5e062b5adc9f1d1d41d5be7fb58091f4b33fed189b243f7a153108b5e1795b6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/pooled-samples8/2-after/movie.mov",
+              "encoded_sha256": "b37925b78cf55b4851e104e97f6baa9402c3dfbfe4de99532e309813b77562f1",
+              "packet_metadata_sha256": "e5e062b5adc9f1d1d41d5be7fb58091f4b33fed189b243f7a153108b5e1795b6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/unified-samples0/evidence.json",
+      "raw_sha256": "c0fdcc9ddf2bb255c1b0ffc3af826930b39f577cdedb2b16d882d981162fb588",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": true,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/unified-samples0/0-before/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/unified-samples0/0-after/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/unified-samples0/1-after/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/unified-samples0/1-before/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/unified-samples0/2-before/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/unified-samples0/2-after/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/unified-samples3/evidence.json",
+      "raw_sha256": "428bf22b503736b83edccc138e9f4359b666df487faf5966d87ef627d1865c23",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": true,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/unified-samples3/0-before/movie.mov",
+              "encoded_sha256": "58cffd0f5e4d02c853dd2f7a1a2b68d743cd02d4e1b828496798a6999e907eb6",
+              "packet_metadata_sha256": "947717162fe582e1dbaf0bf1fc5e911a9eb6c5ec0e52289f787d6ff00f523221",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/unified-samples3/0-after/movie.mov",
+              "encoded_sha256": "58cffd0f5e4d02c853dd2f7a1a2b68d743cd02d4e1b828496798a6999e907eb6",
+              "packet_metadata_sha256": "947717162fe582e1dbaf0bf1fc5e911a9eb6c5ec0e52289f787d6ff00f523221",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/unified-samples3/1-after/movie.mov",
+              "encoded_sha256": "58cffd0f5e4d02c853dd2f7a1a2b68d743cd02d4e1b828496798a6999e907eb6",
+              "packet_metadata_sha256": "947717162fe582e1dbaf0bf1fc5e911a9eb6c5ec0e52289f787d6ff00f523221",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/unified-samples3/1-before/movie.mov",
+              "encoded_sha256": "58cffd0f5e4d02c853dd2f7a1a2b68d743cd02d4e1b828496798a6999e907eb6",
+              "packet_metadata_sha256": "947717162fe582e1dbaf0bf1fc5e911a9eb6c5ec0e52289f787d6ff00f523221",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/unified-samples3/2-before/movie.mov",
+              "encoded_sha256": "58cffd0f5e4d02c853dd2f7a1a2b68d743cd02d4e1b828496798a6999e907eb6",
+              "packet_metadata_sha256": "947717162fe582e1dbaf0bf1fc5e911a9eb6c5ec0e52289f787d6ff00f523221",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/unified-samples3/2-after/movie.mov",
+              "encoded_sha256": "58cffd0f5e4d02c853dd2f7a1a2b68d743cd02d4e1b828496798a6999e907eb6",
+              "packet_metadata_sha256": "947717162fe582e1dbaf0bf1fc5e911a9eb6c5ec0e52289f787d6ff00f523221",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/unified-samples8/evidence.json",
+      "raw_sha256": "e613e63497caf9a125d3a318572f6076f50be7723ae1be4862e41f0d4edcf755",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": true,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/unified-samples8/0-before/movie.mov",
+              "encoded_sha256": "b37925b78cf55b4851e104e97f6baa9402c3dfbfe4de99532e309813b77562f1",
+              "packet_metadata_sha256": "e5e062b5adc9f1d1d41d5be7fb58091f4b33fed189b243f7a153108b5e1795b6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/unified-samples8/0-after/movie.mov",
+              "encoded_sha256": "b37925b78cf55b4851e104e97f6baa9402c3dfbfe4de99532e309813b77562f1",
+              "packet_metadata_sha256": "e5e062b5adc9f1d1d41d5be7fb58091f4b33fed189b243f7a153108b5e1795b6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/unified-samples8/1-after/movie.mov",
+              "encoded_sha256": "b37925b78cf55b4851e104e97f6baa9402c3dfbfe4de99532e309813b77562f1",
+              "packet_metadata_sha256": "e5e062b5adc9f1d1d41d5be7fb58091f4b33fed189b243f7a153108b5e1795b6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/unified-samples8/1-before/movie.mov",
+              "encoded_sha256": "b37925b78cf55b4851e104e97f6baa9402c3dfbfe4de99532e309813b77562f1",
+              "packet_metadata_sha256": "e5e062b5adc9f1d1d41d5be7fb58091f4b33fed189b243f7a153108b5e1795b6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/unified-samples8/2-before/movie.mov",
+              "encoded_sha256": "b37925b78cf55b4851e104e97f6baa9402c3dfbfe4de99532e309813b77562f1",
+              "packet_metadata_sha256": "e5e062b5adc9f1d1d41d5be7fb58091f4b33fed189b243f7a153108b5e1795b6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/unified-samples8/2-after/movie.mov",
+              "encoded_sha256": "b37925b78cf55b4851e104e97f6baa9402c3dfbfe4de99532e309813b77562f1",
+              "packet_metadata_sha256": "e5e062b5adc9f1d1d41d5be7fb58091f4b33fed189b243f7a153108b5e1795b6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/fixed-samples3/evidence.json",
+      "raw_sha256": "58f627f7c3f1b6f88959387104bc4338d103d83f25ed64bf29a4e2ba499b3073",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": true,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/fixed-samples3/0-before/movie.mov",
+              "encoded_sha256": "58cffd0f5e4d02c853dd2f7a1a2b68d743cd02d4e1b828496798a6999e907eb6",
+              "packet_metadata_sha256": "947717162fe582e1dbaf0bf1fc5e911a9eb6c5ec0e52289f787d6ff00f523221",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/fixed-samples3/0-after/movie.mov",
+              "encoded_sha256": "58cffd0f5e4d02c853dd2f7a1a2b68d743cd02d4e1b828496798a6999e907eb6",
+              "packet_metadata_sha256": "947717162fe582e1dbaf0bf1fc5e911a9eb6c5ec0e52289f787d6ff00f523221",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/fixed-samples3/1-after/movie.mov",
+              "encoded_sha256": "58cffd0f5e4d02c853dd2f7a1a2b68d743cd02d4e1b828496798a6999e907eb6",
+              "packet_metadata_sha256": "947717162fe582e1dbaf0bf1fc5e911a9eb6c5ec0e52289f787d6ff00f523221",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/fixed-samples3/1-before/movie.mov",
+              "encoded_sha256": "58cffd0f5e4d02c853dd2f7a1a2b68d743cd02d4e1b828496798a6999e907eb6",
+              "packet_metadata_sha256": "947717162fe582e1dbaf0bf1fc5e911a9eb6c5ec0e52289f787d6ff00f523221",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/fixed-samples3/2-before/movie.mov",
+              "encoded_sha256": "58cffd0f5e4d02c853dd2f7a1a2b68d743cd02d4e1b828496798a6999e907eb6",
+              "packet_metadata_sha256": "947717162fe582e1dbaf0bf1fc5e911a9eb6c5ec0e52289f787d6ff00f523221",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/fixed-samples3/2-after/movie.mov",
+              "encoded_sha256": "58cffd0f5e4d02c853dd2f7a1a2b68d743cd02d4e1b828496798a6999e907eb6",
+              "packet_metadata_sha256": "947717162fe582e1dbaf0bf1fc5e911a9eb6c5ec0e52289f787d6ff00f523221",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

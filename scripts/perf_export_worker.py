@@ -132,7 +132,7 @@ def semantic_streams(oracle):
     return result
 
 
-def run_trial(binary, case, project, directory, backend, timeout, ffmpeg, ffprobe, diagnostics=True, progress_ms=None, audio_spool_cache=None):
+def run_trial(binary, case, project, directory, backend, timeout, ffmpeg, ffprobe, diagnostics=True, progress_ms=None, audio_spool_cache=None, raster_cache=True):
     for source in case.get("sources", []):
         if digest(source["path"]) != source["sha256"]:
             raise RuntimeError(f"fixture hash mismatch: {source['path']}")
@@ -147,6 +147,9 @@ def run_trial(binary, case, project, directory, backend, timeout, ffmpeg, ffprob
         if key.startswith("KRONELLO_TEST_") or key.startswith("KRONELLO_JOB_"):
             env.pop(key)
     env.pop("KRONELLO_PROGRESS_INTERVAL_MS", None)
+    env.pop('KRONELLO_RASTER_CACHE_DISABLE', None)
+    if not raster_cache:
+        env['KRONELLO_RASTER_CACHE_DISABLE'] = '1'
     env.pop("KRONELLO_AUDIO_SPOOL_CACHE_ROOT", None)
     if audio_spool_cache is not None:
         env['KRONELLO_AUDIO_SPOOL_CACHE_ROOT'] = str(audio_spool_cache.resolve())
@@ -270,6 +273,7 @@ def main():
     parser.add_argument("--after-progress-ms", type=int, choices=[100, 200, 250])
     parser.add_argument('--before-audio-spool-cache', type=Path)
     parser.add_argument('--after-audio-spool-cache', type=Path)
+    parser.add_argument('--disable-raster-cache', action='store_true')
     parser.add_argument("--ffmpeg", default="ffmpeg")
     parser.add_argument("--ffprobe", default="ffprobe")
     args = parser.parse_args()
@@ -298,6 +302,7 @@ def main():
                 "audio_spool_cache_roots": {"before": str(args.before_audio_spool_cache) if args.before_audio_spool_cache else None,
                                              "after": str(args.after_audio_spool_cache) if args.after_audio_spool_cache else None},
                 "quiet_host": False, "case": case, "trials": [],
+                "raster_cache_enabled": not args.disable_raster_cache,
                 "notes": ["Each trial launches a fresh real worker; first/subsequent trials are not a warm persistent GPU process.",
                           "Wall includes CLI freeze/submit, queue, worker and terminal result loading; independent oracle excluded.",
                           "RSS is sampled from the worker every 100ms, not kernel maximum RSS, payload or GPU memory.",
@@ -315,7 +320,8 @@ def main():
                                diagnostics=(args.before_diagnostics if mode == "before"
                                             else args.after_diagnostics) == "enabled",
                                progress_ms=args.before_progress_ms if mode == "before" else args.after_progress_ms,
-                               audio_spool_cache=args.before_audio_spool_cache if mode == 'before' else args.after_audio_spool_cache)
+                               audio_spool_cache=args.before_audio_spool_cache if mode == 'before' else args.after_audio_spool_cache,
+                               raster_cache=not args.disable_raster_cache)
             if digest(binaries[mode]) != evidence["binary_sha256"][mode]:
                 raise RuntimeError("benchmark binary changed during measurement")
             evidence["trials"].append({"pair": pair, "mode": mode, **result})

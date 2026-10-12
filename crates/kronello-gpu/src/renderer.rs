@@ -4,6 +4,53 @@ use std::time::Duration;
 use wgpu::util::DeviceExt;
 pub const SHADER: &str = include_str!("composite.wgsl");
 
+struct PendingReadback {
+    buffer: wgpu::Buffer,
+    _allocation: crate::allocation::AllocationGuard,
+    pool: std::sync::Arc<std::sync::Mutex<ReadbackPool>>,
+    managed: bool,
+    completed: bool,
+}
+#[derive(Default)]
+pub(crate) struct ReadbackPool {
+    idle: Vec<(wgpu::Buffer, crate::allocation::AllocationGuard)>,
+    owned_bytes: u64,
+    owned_count: usize,
+}
+impl ReadbackPool {
+    pub(crate) fn idle_bytes(&self) -> u64 {
+        self.idle.iter().map(|(buffer, _)| buffer.size()).sum()
+    }
+    pub(crate) fn clear_idle(&mut self) {
+        self.owned_bytes -= self.idle_bytes();
+        self.owned_count -= self.idle.len();
+        self.idle.clear();
+    }
+}
+impl Drop for PendingReadback {
+    fn drop(&mut self) {
+        if self.completed {
+            self.buffer.unmap();
+        } else {
+            // A lease may fail before mapping, during mapping, or after a map
+            // error. Destroying cancels pending maps without unmapping an idle
+            // buffer, and prevents an unfinished allocation from being reused.
+            self.buffer.destroy();
+        }
+        if self.managed {
+            let mut pool = self.pool.lock().unwrap_or_else(|e| e.into_inner());
+            if self.completed {
+                pool.idle
+                    .push((self.buffer.clone(), self._allocation.clone()));
+            } else {
+                pool.owned_bytes -= self.buffer.size();
+                pool.owned_count -= 1;
+            }
+            kronello_render::observe_execution_payload("gpu_staging_pool", pool.owned_bytes);
+        }
+    }
+}
+
 pub struct GpuContext {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
@@ -12,6 +59,7 @@ pub struct GpuContext {
     pub(crate) identity: std::sync::Arc<()>,
     pub(crate) resources: std::sync::Mutex<crate::resource_cache::ResourceCache>,
     pub(crate) surface_pool: std::sync::Arc<std::sync::Mutex<crate::resource_cache::PoolState>>,
+    pub(crate) readback_pool: std::sync::Arc<std::sync::Mutex<ReadbackPool>>,
     pub(crate) last_transfers: std::sync::Mutex<TransferStats>,
     pub(crate) total_transfers: std::sync::Mutex<TransferStats>,
     pub(crate) observation: std::sync::Arc<crate::observation::ObservationState>,
@@ -140,6 +188,7 @@ impl GpuContext {
                 fingerprint,
             )),
             surface_pool: Self::create_pool(),
+            readback_pool: Default::default(),
             last_transfers: std::sync::Mutex::new(TransferStats::default()),
             total_transfers: std::sync::Mutex::new(TransferStats::default()),
             allocations: Default::default(),
@@ -459,6 +508,167 @@ impl GpuContext {
             .map_err(|e| GpuError::Readback(e.to_string()))?;
         Ok(())
     }
+    fn acquire_readback(&self, size: u64, label: &str) -> PendingReadback {
+        const BYTES: u64 = 16 * 1024 * 1024;
+        const BUFFERS: usize = 4;
+        let mut pool = self.readback_pool.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(index) = pool
+            .idle
+            .iter()
+            .position(|(buffer, _)| buffer.size() == size)
+        {
+            let (buffer, allocation) = pool.idle.remove(index);
+            kronello_render::count_execution("gpu_staging_buffer_reuses", 1);
+            return PendingReadback {
+                buffer,
+                _allocation: allocation,
+                pool: self.readback_pool.clone(),
+                managed: true,
+                completed: false,
+            };
+        }
+        while !pool.idle.is_empty()
+            && (pool.owned_count >= BUFFERS || pool.owned_bytes.saturating_add(size) > BYTES)
+        {
+            let (old, _) = pool.idle.remove(0);
+            pool.owned_bytes -= old.size();
+            pool.owned_count -= 1;
+        }
+        let managed = size <= BYTES
+            && pool.owned_count < BUFFERS
+            && pool.owned_bytes.saturating_add(size) <= BYTES;
+        if managed {
+            pool.owned_bytes += size;
+            pool.owned_count += 1;
+        }
+        drop(pool);
+        kronello_render::count_execution("gpu_staging_buffer_allocations", 1);
+        PendingReadback {
+            buffer: self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some(label),
+                size,
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                mapped_at_creation: false,
+            }),
+            _allocation: self.track_resource(crate::allocation::ResourceKind::Readback, size),
+            pool: self.readback_pool.clone(),
+            managed,
+            completed: false,
+        }
+    }
+    /// Copy/map sticky status and numeric boundaries in one completion unit.
+    /// No pixels are returned before status validation, including error paths.
+    pub(crate) fn read_textures_validated(
+        &self,
+        textures: &[&wgpu::Texture],
+        validation: &wgpu::Buffer,
+        stats: &mut TransferStats,
+    ) -> Result<Vec<Vec<u8>>, GpuError> {
+        if !(1..=2).contains(&textures.len()) {
+            return Err(GpuError::InvalidInput("readback boundary count"));
+        }
+        let mut encoder = self.device.create_command_encoder(&Default::default());
+        let make = |size, label| self.acquire_readback(size, label);
+        let mut buffers = vec![make(4, "sticky validation readback")];
+        encoder.copy_buffer_to_buffer(validation, 0, &buffers[0].buffer, 0, 4);
+        let mut rows = Vec::new();
+        let mut total_bytes = 4;
+        for texture in textures {
+            if texture.format() != wgpu::TextureFormat::Rgba16Float
+                || !texture.usage().contains(wgpu::TextureUsages::COPY_SRC)
+            {
+                return Err(GpuError::InvalidInput(
+                    "numeric readback format or usage mismatch",
+                ));
+            }
+            let row = texture
+                .width()
+                .checked_mul(8)
+                .ok_or(GpuError::InvalidInput("readback row overflow"))?;
+            let aligned = row
+                .div_ceil(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT)
+                .checked_mul(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT)
+                .ok_or(GpuError::InvalidInput("readback alignment overflow"))?;
+            let size = u64::from(aligned) * u64::from(texture.height());
+            if size == 0 || size > self.device.limits().max_buffer_size {
+                return Err(GpuError::UnsupportedFeature(
+                    "readback exceeds buffer limit",
+                ));
+            }
+            let buffer = make(size, "numeric boundary readback");
+            encoder.copy_texture_to_buffer(
+                texture.as_image_copy(),
+                wgpu::TexelCopyBufferInfo {
+                    buffer: &buffer.buffer,
+                    layout: wgpu::TexelCopyBufferLayout {
+                        offset: 0,
+                        bytes_per_row: Some(aligned),
+                        rows_per_image: Some(texture.height()),
+                    },
+                },
+                texture.size(),
+            );
+            buffers.push(buffer);
+            rows.push((row, aligned));
+            total_bytes += size;
+        }
+        {
+            let _measure = kronello_render::measure_execution_stage("gpu_command_submit_host");
+            self.queue.submit([encoder.finish()]);
+        }
+        let (send, receive) = std::sync::mpsc::channel();
+        for buffer in &buffers {
+            let send = send.clone();
+            buffer
+                .buffer
+                .slice(..)
+                .map_async(wgpu::MapMode::Read, move |result| {
+                    let _ = send.send(result);
+                });
+        }
+        drop(send);
+        self.wait()?;
+        for _ in &buffers {
+            receive
+                .recv_timeout(Duration::from_secs(1))
+                .map_err(|e| GpuError::Readback(e.to_string()))?
+                .map_err(|e| GpuError::Readback(e.to_string()))?;
+        }
+        for buffer in &mut buffers {
+            buffer.completed = true;
+        }
+        stats.gpu_readback_bytes += total_bytes;
+        stats.gpu_readback_operations += buffers.len() as u64;
+        stats.gpu_wait_operations += 1;
+        {
+            let status = buffers[0]
+                .buffer
+                .slice(..)
+                .get_mapped_range()
+                .map_err(|e| GpuError::Readback(e.to_string()))?;
+            if status[..4] != [0; 4] {
+                return Err(GpuError::InvalidInput(
+                    "RGBA16F surface value outside finite representable range",
+                ));
+            }
+        }
+        let mut outputs = Vec::new();
+        for (buffer, (row, aligned)) in buffers.iter().skip(1).zip(rows) {
+            let mapped = buffer
+                .buffer
+                .slice(..)
+                .get_mapped_range()
+                .map_err(|e| GpuError::Readback(e.to_string()))?;
+            outputs.push(
+                mapped
+                    .chunks_exact(aligned as usize)
+                    .flat_map(|row_data| row_data[..row as usize].iter().copied())
+                    .collect(),
+            );
+        }
+        // Every mapped view has been released before Drop unmaps all buffers.
+        Ok(outputs)
+    }
     /// Readback includes alignment padding in TransferStats but strips it in the result.
     pub fn read_texture(
         &self,
@@ -566,4 +776,77 @@ pub fn decode_rgba16f(bytes: &[u8]) -> Result<Vec<[f32; 4]>, GpuError> {
             }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod staging_lifetime_tests {
+    use super::*;
+    #[test]
+    #[ignore = "actual GPU pending map ownership and staging budget"]
+    fn unfinished_readbacks_and_invalid_boundary_never_enter_idle_pool() {
+        let gpu = GpuContext::new().unwrap();
+        let pending: Vec<_> = (0..5)
+            .map(|_| gpu.acquire_readback(4, "pending lease test"))
+            .collect();
+        {
+            let pool = gpu.readback_pool.lock().unwrap();
+            assert_eq!(pool.owned_count, 4);
+            assert_eq!(pool.owned_bytes, 16);
+            assert!(pool.idle.is_empty());
+        }
+        assert!(!pending[4].managed);
+        drop(pending);
+        assert_eq!(gpu.readback_pool.lock().unwrap().owned_count, 0);
+        assert_eq!(
+            gpu.allocation_stats().readback_buffers.live_payload_bytes,
+            0
+        );
+        let pending = gpu.acquire_readback(4, "cancelled map lease test");
+        let (send, receive) = std::sync::mpsc::channel();
+        pending
+            .buffer
+            .slice(..)
+            .map_async(wgpu::MapMode::Read, move |result| {
+                let _ = send.send(result);
+            });
+        drop(pending);
+        gpu.wait().unwrap();
+        assert!(
+            receive
+                .recv_timeout(Duration::from_secs(1))
+                .unwrap()
+                .is_err()
+        );
+        assert_eq!(gpu.readback_pool.lock().unwrap().owned_count, 0);
+        assert!(gpu.readback_pool.lock().unwrap().idle.is_empty());
+        let oversized = gpu.acquire_readback(16 * 1024 * 1024 + 4, "unpooled byte budget test");
+        assert!(!oversized.managed);
+        assert_eq!(gpu.readback_pool.lock().unwrap().owned_bytes, 0);
+        drop(oversized);
+        let invalid = gpu
+            .texture(
+                1,
+                1,
+                wgpu::TextureFormat::Bgra8Unorm,
+                wgpu::TextureUsages::COPY_SRC,
+            )
+            .unwrap();
+        let status = gpu
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("validation"),
+                contents: &[0; 4],
+                usage: wgpu::BufferUsages::COPY_SRC,
+            });
+        assert!(matches!(
+            gpu.read_textures_validated(&[&invalid], &status, &mut TransferStats::default()),
+            Err(GpuError::InvalidInput(_))
+        ));
+        assert_eq!(gpu.readback_pool.lock().unwrap().owned_count, 0);
+        assert!(gpu.readback_pool.lock().unwrap().idle.is_empty());
+        assert_eq!(
+            gpu.allocation_stats().readback_buffers.live_payload_bytes,
+            0
+        );
+    }
 }
