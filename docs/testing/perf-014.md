@@ -1,6 +1,6 @@
 # PERF-014: GPU/encoder surfaceと直接packet muxの試作
 
-状態: `in_progress`。依頼計画の最終タスクであり、試作だけで受け入れ済みとしない。GPU入力surfaceの実装・比較、対象形式の全体時間改善と色/時刻/寿命/失敗回収、採用範囲の判断が必要である。
+状態: `in_progress`。依頼計画の最終タスクであり、試作だけで受け入れ済みとしない。対象fixtureの試作・比較・色/時刻/寿命/失敗回収と採用判断を完了し、最終workspace/CIを検証中である。
 
 ## 先行改善後の対象
 
@@ -14,7 +14,7 @@
 
 初期2件の試験は32×16/48framesの既存中間file経路と全decoded RGBA frame/PTS/duration・全PCM・probe/snapshot hashの一致、取消時の全private stage回収、公開直前に生じた競合fileの保護を確認した（`target/perf-014-direct-tests-fixed.log`、2 passed、0.11秒）。初回は試験が存在しないdecoder APIを呼ぶコンパイル失敗で、成功扱いにしない。固定generator・同一binaryの交互3組を使う`perf_packet_mux`を実装し、release buildとClippyを検証中である。
 
-このprototypeはまだ章転送を受け付けず、固定silence音声だけを生成する。通常の共通exportへ未採用であり、非空chapters、audio primingのあるcodec、複数output/実worker、GPU入力surfaceの条件が未確認である。これらを省略してPERF-014をdoneにしない。将来の対応範囲/採用可否は実測と契約比較を根拠に記録する。
+このprototypeはまだ章転送を受け付けず、固定silence音声だけを生成する。通常の共通exportへ未採用であり、非空chapters、audio primingのあるcodec、複数output/実worker、GPU入力surfaceの条件が未確認である。これらの標準exportへの統合を受け入れ済みにはしない。将来の対応範囲/採用可否は実測と契約比較を根拠に記録する。
 
 ## 初期実測とcontainer metadata修正
 
@@ -32,11 +32,11 @@
 
 [同じ修正後binaryの4K/24frame・交互9pairs](perf-014-packet-uncontended.json)は、このagentのcompile/Clippy/testを並行実行しなかった比較である。host全体の静穏を保証せず、user/OSの処理を除外したという意味ではない。全18試行で全decoded pixels/PCM・時刻・packet payload・snapshot metadata・最終file bytesが一致した。後続p50は1208.954→1176.189ms、p95は1254.193→1192.783ms。各試行のvideo intermediate 42,079,665bytesの保存/再読込が不要になった。小さな差の一般保証や、GPU/renderer/source decodeを含む実worker全体の速度改善へ拡張しない。非空chapters・実音声・複数出力/worker・GPU surface比較はなお残り、標準exportへは未採用である。
 
-## Metal encoder surfaceの実装と最終実測
+## Metal encoder surfaceの初期比較（Annex B）
 
 `kronello-framebridge/encoder-prototypes`を明示したmacOS buildにだけ、native MetalのRGBA16F fixture生成・GPU BT.709色変換・BGRA8 IOSurface・hardware VideoToolbox H.264入力を実装した。対照は同じMetal sourceをCPUへ読み、同じhalf→f32 transfer/rounding LUTを使って同じCVPixelBufferへ書く経路である。productionのwgpu renderer/workerを通した測定ではない。範囲と採用判断は[ADR-0167](../adr/0167-experimental-export-delivery.md)を正本とする。
 
-[4K/24frame・交互9pairsの最終記録](perf-014-surface.json)はmacOS 27.0.1/arm64、固定binary `502144bfbb2ab1d8fbc44ad53c42089c8d07fb375a24e5ff1718b86c9c9dcbfa`、固定fixture hash `3d780c44195b284fd13c03c9f41df8d5c6f26dad38687201daf3d317f8cb5160`。各試行は新しいMetal/VT資源を作り、LUT準備、source生成、変換、GPU完了、encoder完了、file syncとno-clobber公開までを計時する。独立oracleとこのagentのcompile/testを計時に重ねていない。host全体の静穏は保証しない。process起動時間とprivate stage destructorの後片付け時間は計時に含めない。
+[4K/24frame・交互9pairsの初期記録](perf-014-surface.json)はmacOS 27.0.1/arm64、固定binary `502144bfbb2ab1d8fbc44ad53c42089c8d07fb375a24e5ff1718b86c9c9dcbfa`、固定fixture hash `3d780c44195b284fd13c03c9f41df8d5c6f26dad38687201daf3d317f8cb5160`。各試行は新しいMetal/VT資源を作り、LUT準備、source生成、変換、GPU完了、encoder完了、file syncとno-clobber公開までを計時する。独立oracleとこのagentのcompile/testを計時に重ねていない。host全体の静穏は保証しない。process起動時間とprivate stage destructorの後片付け時間は計時に含めない。
 
 | 計測 | CPU読戻し | GPU surface |
 |---|---:|---:|
@@ -57,3 +57,20 @@
 ## 採用判断と受け入れ範囲
 
 依頼計画の「backend/formatを絞った後段の試作」として、GPU経路は上記SDR/H.264 fixture、直接muxはSDR ProRes/生成silence PCM24/MOV fixtureで全体時間改善を確認した。標準exportへの採用は保留する。非空chapters・実音声・priming codec・複数leg/worker、wgpu renderer/tile/temporal/HDR/他背景/他OSを今回の対応範囲へ広げない。本文の先行段階に残していたこれらの条件は、既定経路への統合・対応範囲拡張に必要な検証であり、済ませた扱いにしない。PERF-014の受け入れは試作・比較・範囲/採用判断の完了を指し、これらの製品機能の完了を指さない。
+
+## 保存時刻の追加監査とMOV版
+
+初期Annex Bのoracleは各A/Bのpacket duration一致を確認したが、個々のdurationが1/24かは要求していなかった。追加監査で、raw H.264にはauthored PTS/DTSがなく、FFmpegが25fpsを仮定して各packetを1/25と読むことを確認した。この初期結果を最終出力の24fps時刻契約の成功扱いにしない。
+
+圧縮CMSampleBufferをAVAssetWriterへ渡して時刻を保持するMOV版へ変更した。writerのbackpressureはqueueへ無制限に蓄積せず型付き失敗にし、64MiB超の圧縮frameを拒否する。compressed sampleにimage bufferがないことを確認し、writerがpixel面を参照している状態で再利用しない。取消前にstartWritingしていない場合も含めて安全に回収する。Metalのsafe math設定を明示し、CPU/GPU両方のNaN/Inf/負数/1超過/alpha NaN/負subnormal、0/3frame後取消、非UTF-8 pathのnative前拒否、全stage回収・既存file保護を3件の実機/unit試験で確認した（`target/perf-014-surface-final-tests.log`）。
+
+[最終MOV版4K/24frame・交互9pairs](perf-014-surface-mov.json)の固定binaryは`db58357870da0aec663ed5e476696d056b8127b1bba55fa51d7ddcb7ff7d30e5`。計時中にcompile/testを重ねず、全18試行を後から独立decodeした。全decoded画素、YUV420/video range/BT.709、全432packetのPTS/DTS=`index/24`・duration=`1/24`を確認した。全picture/SPS/PPS NALは一致し、圧縮差は既知private SEIとして実bytesを記録した。最終MOV file bytes一致とは主張しない。AVAssetWriter/VT内部保持量は未測定であり、callback側のframe上限とRSSを同一視しない。
+
+| 全体計時 | CPU読戻し | GPU surface |
+|---|---:|---:|
+| first | 1013.135ms | 609.113ms |
+| 後続p50 | 954.527ms | 632.037ms |
+| 後続p95 | 993.198ms | 643.842ms |
+| source生成/変換/完了の後続p50 | 437.350ms | 85.419ms |
+
+最終binaryは非UTF-8 path拒否guardの追加前に固定したが、accepted UTF-8 fixtureの色/encoder/MOV/timeコードは同じである。guard追加後の現在のsourceは別の実機試験とClippyで検証する。compileと重なった別の9pairsは`target/perf-014/surface-mov-4k`へ保持し、速度採用判断は上記単独比較に限定する。既定経路への未採用と対象外条件はADR-0167のままである。

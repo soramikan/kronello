@@ -1,6 +1,7 @@
 // PERF-014 isolated Metal -> IOSurface -> VideoToolbox experiment.
 // No production renderer/encoder selection is changed by this optional build.
 #import <Foundation/Foundation.h>
+#import <AVFoundation/AVFoundation.h>
 #import <Metal/Metal.h>
 #import <CoreVideo/CoreVideo.h>
 #import <VideoToolbox/VideoToolbox.h>
@@ -14,10 +15,7 @@ struct kr_surface_result {
     double total_ms, prepare_ms, conversion_ms, encode_ms;
     uint64_t readback_bytes, surface_hash, encoded_frames;
 };
-struct kr_sink { FILE *file; OSStatus status; uint64_t frames; };
-static int kr_write(FILE *file, const void *bytes, size_t count) {
-    return fwrite(bytes, 1, count, file) == count ? 0 : -1;
-}
+struct kr_sink { void *writer; void *input; OSStatus status; uint64_t frames; };
 static void kr_encoded(void *context, void *source, OSStatus status,
                        VTEncodeInfoFlags flags, CMSampleBufferRef sample) {
     (void)source; (void)flags;
@@ -28,42 +26,27 @@ static void kr_encoded(void *context, void *source, OSStatus status,
         CMTimeCompare(CMSampleBufferGetDuration(sample), CMTimeMake(1, 24)) != 0) {
         sink->status = -2; return;
     }
-    const uint8_t start[] = {0,0,0,1};
-    CMFormatDescriptionRef format = CMSampleBufferGetFormatDescription(sample);
-    int length_size = 0; size_t parameter_count = 0;
-    const uint8_t *parameter = NULL; size_t parameter_size = 0;
-    status = CMVideoFormatDescriptionGetH264ParameterSetAtIndex(format, 0,
-        &parameter, &parameter_size, &parameter_count, &length_size);
-    if (status || length_size != 4) { sink->status = -3; return; }
-    if (sink->frames == 0) {
-        for (size_t i = 0; i < parameter_count; i++) {
-            if (CMVideoFormatDescriptionGetH264ParameterSetAtIndex(format, i,
-                &parameter, &parameter_size, NULL, NULL) ||
-                kr_write(sink->file, start, 4) || kr_write(sink->file, parameter, parameter_size)) {
-                sink->status = -4; return;
-            }
-        }
-    }
     CMBlockBufferRef block = CMSampleBufferGetDataBuffer(sample);
-    size_t size = CMBlockBufferGetDataLength(block);
-    // A single compressed frame is retained only until this callback returns.
-    if (size > 64 * 1024 * 1024) { sink->status = -5; return; }
-    uint8_t *bytes = malloc(size);
-    if (!bytes || CMBlockBufferCopyDataBytes(block, 0, size, bytes)) {
-        free(bytes); sink->status = -6; return;
+    if (!block || CMSampleBufferGetImageBuffer(sample) || CMBlockBufferGetDataLength(block) > 64*1024*1024) {
+        sink->status=-6; return;
     }
-    size_t offset = 0;
-    while (offset + 4 <= size) {
-        uint32_t n = ((uint32_t)bytes[offset]<<24) | ((uint32_t)bytes[offset+1]<<16) |
-                     ((uint32_t)bytes[offset+2]<<8) | bytes[offset+3];
-        offset += 4;
-        if (n > size - offset || kr_write(sink->file, start, 4) || kr_write(sink->file, bytes+offset, n)) {
-            sink->status = -7; break;
-        }
-        offset += n;
+    AVAssetWriter *writer = (__bridge AVAssetWriter *)sink->writer;
+    AVAssetWriterInput *input = (__bridge AVAssetWriterInput *)sink->input;
+    if (!input) {
+        input = [AVAssetWriterInput assetWriterInputWithMediaType:AVMediaTypeVideo
+            outputSettings:nil sourceFormatHint:CMSampleBufferGetFormatDescription(sample)];
+        input.expectsMediaDataInRealTime = NO;
+        if (![writer canAddInput:input]) { sink->status=-3; return; }
+        [writer addInput:input];
+        // Writer retains input until completion/cancellation; context borrows it.
+        sink->input = (__bridge void *)input;
+        if (![writer startWriting]) { sink->status=-4; return; }
+        [writer startSessionAtSourceTime:kCMTimeZero];
     }
-    if (offset != size) sink->status = -8;
-    free(bytes);
+    // Reject framework backpressure rather than accumulating a user queue.
+    if (!input.readyForMoreMediaData || ![input appendSampleBuffer:sample]) {
+        sink->status=-5; return;
+    }
     sink->frames++;
 }
 static double kr_ms(uint64_t start) {
@@ -76,7 +59,7 @@ static const char *kr_shader =
 "if(p.x>=dst.get_width()||p.y>=dst.get_height())return;"
 "half a=((p.x/32+p.y/32+arg.x)%2)?half(0.5):half(1.0);"
 "half3 rgb=half3(half((p.x+arg.x*3)%256)/half(256),half((p.y+arg.x*5)%256)/half(256),half((p.x+p.y+arg.x)%256)/half(256))*a;"
-"if(arg.y && all(p==uint2(0)))rgb.x=as_type<half>(ushort(0x7e00)); dst.write(half4(rgb,a),p); }\n"
+"if(all(p==uint2(0))){switch(arg.y){case 1:rgb.x=as_type<half>(ushort(0x7e00));break;case 2:rgb.x=as_type<half>(ushort(0x7c00));break;case 3:rgb.x=half(-0.5);break;case 4:rgb.x=half(2);break;case 5:a=as_type<half>(ushort(0x7e00));break;case 6:rgb.x=as_type<half>(ushort(0x8001));break;}} dst.write(half4(rgb,a),p); }\n"
 "kernel void convert(texture2d<half,access::read> src [[texture(0)]],texture2d<float,access::write> dst [[texture(1)]],"
 "device const ushort *lut [[buffer(0)]], device atomic_uint *status [[buffer(1)]], uint2 p [[thread_position_in_grid]]) {"
 "if(p.x>=src.get_width()||p.y>=src.get_height())return; half4 v=src.read(p); ushort4 bits=as_type<ushort4>(v);"
@@ -92,9 +75,11 @@ int kr_surface_probe(const char *path, uint32_t width, uint32_t height,
     @autoreleasepool {
         uint64_t begin = mach_absolute_time();
         int failure = -10;
-        FILE *file = fopen(path, "wbx");
-        if (!file) return -11;
-        struct kr_sink sink = {file, 0, 0};
+        NSError *writer_error = nil;
+        AVAssetWriter *writer = [[AVAssetWriter alloc] initWithURL:[NSURL fileURLWithPath:@(path)]
+            fileType:AVFileTypeQuickTimeMovie error:&writer_error];
+        if (!writer) return -11;
+        struct kr_sink sink = {(__bridge void *)writer, NULL, 0, 0};
         VTCompressionSessionRef encoder = NULL;
         CVMetalTextureCacheRef cache = NULL;
         CVPixelBufferRef pixels = NULL;
@@ -103,7 +88,20 @@ int kr_surface_probe(const char *path, uint32_t width, uint32_t height,
         id<MTLDevice> device = MTLCreateSystemDefaultDevice();
         id<MTLCommandQueue> queue = [device newCommandQueue];
         NSError *error = nil;
-        id<MTLLibrary> library = [device newLibraryWithSource:@(kr_shader) options:nil error:&error];
+        MTLCompileOptions *options = [MTLCompileOptions new];
+#if __MAC_OS_X_VERSION_MAX_ALLOWED >= 150000
+        if (@available(macOS 15.0, *)) {
+            options.mathMode = MTLMathModeSafe;
+        } else
+#endif
+        {
+            // Preserve the same numerical policy on the older supported SDK.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+            options.fastMathEnabled = NO;
+#pragma clang diagnostic pop
+        }
+        id<MTLLibrary> library = [device newLibraryWithSource:@(kr_shader) options:options error:&error];
         id<MTLComputePipelineState> fixture = [device newComputePipelineStateWithFunction:[library newFunctionWithName:@"fixture"] error:&error];
         id<MTLComputePipelineState> convert = [device newComputePipelineStateWithFunction:[library newFunctionWithName:@"convert"] error:&error];
         id<MTLBuffer> table = [device newBufferWithBytes:lut length:65536*sizeof(uint16_t) options:MTLResourceStorageModeShared];
@@ -191,6 +189,13 @@ int kr_surface_probe(const char *path, uint32_t width, uint32_t height,
                 result->encode_ms+=kr_ms(encode_start);
             }
         }
+        [(__bridge AVAssetWriterInput *)sink.input markAsFinished];
+        {
+            dispatch_semaphore_t done=dispatch_semaphore_create(0);
+            [writer finishWritingWithCompletionHandler:^{dispatch_semaphore_signal(done);}];
+            dispatch_semaphore_wait(done,DISPATCH_TIME_FOREVER);
+        }
+        if(writer.status != AVAssetWriterStatusCompleted)goto cleanup;
         failure=0;
 cleanup:
         // Even error/cancel paths invalidate the session before callback context,
@@ -199,8 +204,7 @@ cleanup:
         if(cv_texture)CFRelease(cv_texture);
         if(pixels)CFRelease(pixels);
         if(cache)CFRelease(cache);
-        if(fclose(file))failure=-22;
-        if(failure)remove(path);
+        if(failure){if(writer.status == AVAssetWriterStatusWriting)[writer cancelWriting];remove(path);}
         result->encoded_frames=sink.frames;
         result->total_ms=kr_ms(begin);
         return failure;

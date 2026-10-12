@@ -1,6 +1,6 @@
 #[cfg(target_os = "macos")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    use kronello_framebridge::encoder_prototype::probe;
+    use kronello_framebridge::encoder_prototype::{SurfaceFault, probe};
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 6 {
         return Err("usage: perf_encoder_surface NEW_DIRECTORY WIDTH HEIGHT FRAMES PAIRS".into());
@@ -24,8 +24,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             [true, false]
         } {
             let mode = if gpu { "gpu" } else { "cpu" };
-            let file = root.join(format!("{pair}-{mode}.h264"));
-            let m = probe(&file, [width, height], frames, gpu, false, None, false)?;
+            let file = root.join(format!("{pair}-{mode}.mov"));
+            let m = probe(
+                &file,
+                [width, height],
+                frames,
+                gpu,
+                false,
+                None,
+                SurfaceFault::None,
+            )?;
             evidence.push_str(&format!(
                 "{pair},{mode},{},{},{},{},{},{}\n",
                 m.total_ms,

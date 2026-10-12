@@ -13,7 +13,7 @@
 
 1. `kronello-framebridge/encoder-prototypes`を明示したmacOS buildだけに、Metal RGBA16F→BT.709 BGRA8 IOSurface→hardware VideoToolbox H.264の比較入口を含める。CPU比較も同じMetal fixtureと同じencoder設定を使う。これは独立したnative backend試作であり、wgpuのproduction rendererや公開exportの入力経路を置換しない。
 2. 対象は有限のSDR linear Rec.709 premultiplied、opaque black matte、24fps、正の偶数寸法・最大4K、最大2400frames。CPUとGPUは同じ65,536件のhalf→f32 BT.709 transfer/rounding tableを使う。NaN/範囲外は成功前に拒否する。GPU完了とVT callback完了の両方を待って一枚のsurfaceを再利用し、失敗でもsessionをinvalidateしてから所有物を解放する。
-3. 比較の出力はAnnex B H.264で、全CMSampleBufferのPTS/durationを1/24の有理数と照合する。containerに保存されたtimestampの検証と混同しない。YUV420/video range/BT.709を独立decodeで確認する。VT private SEIを含む圧縮bytes差はそのまま報告し、decoded一致へ読み替えない。
+3. 比較の出力はvideo-only H.264/MOVで、全CMSampleBufferと保存後の全packetのPTS/DTS/durationを1/24の有理数と照合する。初期Annex Bでcontainer時刻を保持できなかった結果も記録する。YUV420/video range/BT.709を独立decodeで確認する。VT private SEIを含む圧縮bytes差はそのまま報告し、decoded一致へ読み替えない。
 4. `kronello-media/export-prototypes`の直接mux対象は、既存SDR ProRes/stereo PCM24/48k/MOV、zero-origin・整数audio sample span、生成silence・chaptersなしの比較とする。最終probe/metadata/時刻と全file bytesを比較する。対象外の入力を受け取って無視するAPIを作らない。
 5. 両試作ともprivate stageとno-clobber publicationを使う。既定の公開export/worker/capabilitiesには採用しない。GPU試作はwgpu renderer/tile/temporal/HDR/他matteとの接続、直接muxは実音声・nonempty chapters・priming codec・複数leg・実workerの統合検証が必要である。今回の速度は測定fixture内の全体時間であり、全作品の速度保証ではない。
 

@@ -35,6 +35,18 @@ impl Drop for Stage {
     }
 }
 
+/// Explicit fixture fault injection; never supplied to a product render.
+#[derive(Debug, Clone, Copy)]
+#[repr(i32)]
+pub enum SurfaceFault {
+    None,
+    NaN,
+    Infinity,
+    Negative,
+    AboveOne,
+    AlphaNaN,
+    NegativeSubnormal,
+}
 #[derive(Debug, Default, Clone, Copy)]
 #[repr(C)]
 pub struct SurfaceMeasurement {
@@ -93,7 +105,7 @@ fn transfer_table() -> Vec<u16> {
         })
         .collect()
 }
-/// Creates a fresh Annex B stream. Existing destinations are preserved. The
+/// Creates a fresh MOV stream. Existing destinations are preserved. The
 /// generated half-float fixture uses exact 24 fps spans and alternating alpha.
 /// Verification reads BGRA surfaces and must be disabled for transfer timings.
 pub fn probe(
@@ -103,7 +115,7 @@ pub fn probe(
     gpu: bool,
     verify: bool,
     cancel_after: Option<u32>,
-    invalid: bool,
+    fault: SurfaceFault,
 ) -> Result<SurfaceMeasurement, SurfaceError> {
     let start = Instant::now();
     let [width, height] = dimensions;
@@ -119,7 +131,7 @@ pub fn probe(
     {
         return Err(SurfaceError::InvalidInput);
     }
-    if path.as_os_str().as_encoded_bytes().contains(&0) {
+    if path.to_str().is_none() || path.as_os_str().as_encoded_bytes().contains(&0) {
         return Err(SurfaceError::InvalidInput);
     }
     static NEXT: AtomicU64 = AtomicU64::new(0);
@@ -130,7 +142,7 @@ pub fn probe(
     ));
     std::fs::create_dir(&stage)?;
     let stage = Stage(stage);
-    let file = stage.0.join("video.h264");
+    let file = stage.0.join("video.mov");
     let native_path = CString::new(file.as_os_str().as_encoded_bytes())
         .map_err(|_| SurfaceError::InvalidInput)?;
     let table = transfer_table();
@@ -146,7 +158,7 @@ pub fn probe(
             i32::from(gpu),
             i32::from(verify),
             cancel_after.map_or(-1, |n| n as i32),
-            i32::from(invalid),
+            fault as i32,
             table.as_ptr(),
             &mut result,
         )
@@ -164,6 +176,15 @@ pub fn probe(
 mod tests {
     use super::*;
     #[test]
+    fn invalid_native_path_is_rejected_before_stage_creation() {
+        use std::os::unix::ffi::OsStringExt;
+        let path = PathBuf::from(std::ffi::OsString::from_vec(b"invalid-\xff.mov".to_vec()));
+        assert!(matches!(
+            probe(&path, [66, 18], 8, true, false, None, SurfaceFault::None),
+            Err(SurfaceError::InvalidInput)
+        ));
+    }
+    #[test]
     fn half_transfer_contract() {
         let table = transfer_table();
         assert_eq!(table.len(), 65536);
@@ -180,43 +201,96 @@ mod tests {
         let root = std::env::temp_dir().join(format!("kronello-surface-{}", std::process::id()));
         std::fs::create_dir(&root).unwrap();
         let cpu = probe(
-            &root.join("cpu.h264"),
+            &root.join("cpu.mov"),
             [66, 18],
             8,
             false,
             true,
             None,
-            false,
+            SurfaceFault::None,
         )
         .unwrap();
-        let gpu = probe(&root.join("gpu.h264"), [66, 18], 8, true, true, None, false).unwrap();
+        let gpu = probe(
+            &root.join("gpu.mov"),
+            [66, 18],
+            8,
+            true,
+            true,
+            None,
+            SurfaceFault::None,
+        )
+        .unwrap();
         assert_eq!(cpu.surface_hash, gpu.surface_hash);
         assert_eq!(cpu.encoded_frames, 8);
         assert_eq!(gpu.encoded_frames, 8);
         assert_eq!(cpu.readback_bytes, 66 * 18 * 8 * 8);
         assert_eq!(gpu.readback_bytes, 0);
         for gpu in [false, true] {
-            let cancel = root.join(format!("cancel-{gpu}.h264"));
+            let cancel = root.join(format!("cancel-{gpu}.mov"));
             assert!(
-                probe(&cancel, [66, 18], 8, gpu, false, Some(3), false)
-                    .unwrap_err()
-                    .to_string()
-                    .ends_with("-20")
+                probe(
+                    &cancel,
+                    [66, 18],
+                    8,
+                    gpu,
+                    false,
+                    Some(3),
+                    SurfaceFault::None
+                )
+                .unwrap_err()
+                .to_string()
+                .ends_with("-20")
             );
             assert!(!cancel.exists());
-            let invalid = root.join(format!("invalid-{gpu}.h264"));
+            for fault in [
+                SurfaceFault::NaN,
+                SurfaceFault::Infinity,
+                SurfaceFault::Negative,
+                SurfaceFault::AboveOne,
+                SurfaceFault::AlphaNaN,
+                SurfaceFault::NegativeSubnormal,
+            ] {
+                let invalid = root.join(format!("invalid-{gpu}-{fault:?}.mov"));
+                assert!(
+                    probe(&invalid, [66, 18], 8, gpu, false, None, fault)
+                        .unwrap_err()
+                        .to_string()
+                        .ends_with("-21"),
+                    "{fault:?}"
+                );
+                assert!(!invalid.exists());
+            }
+            let cancel_zero = root.join(format!("cancel-zero-{gpu}.mov"));
             assert!(
-                probe(&invalid, [66, 18], 8, gpu, false, None, true)
-                    .unwrap_err()
-                    .to_string()
-                    .ends_with("-21")
+                probe(
+                    &cancel_zero,
+                    [66, 18],
+                    8,
+                    gpu,
+                    false,
+                    Some(0),
+                    SurfaceFault::None
+                )
+                .is_err()
             );
-            assert!(!invalid.exists());
+            assert!(!cancel_zero.exists());
         }
-        let existing = root.join("cpu.h264");
+        let existing = root.join("cpu.mov");
         let saved = std::fs::read(&existing).unwrap();
-        assert!(probe(&existing, [66, 18], 8, true, false, None, false).is_err());
+        assert!(
+            probe(
+                &existing,
+                [66, 18],
+                8,
+                true,
+                false,
+                None,
+                SurfaceFault::None
+            )
+            .is_err()
+        );
         assert_eq!(std::fs::read(existing).unwrap(), saved);
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 2);
         std::fs::remove_dir_all(root).unwrap();
     }
 }

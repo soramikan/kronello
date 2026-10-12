@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import re
+import subprocess
 from pathlib import Path
 from perf_export_worker import digest, independent_oracle, percentile, semantic_streams
 
@@ -21,13 +22,18 @@ def main():
             trial[key] = float(trial[key])
         for key in ('pair', 'readback_bytes', 'frames'):
             trial[key] = int(trial[key])
-        file = args.directory / f"{trial['pair']}-{trial['mode']}.h264"
+        file = args.directory / f"{trial['pair']}-{trial['mode']}.mov"
         trial['oracle'] = independent_oracle(file, 'ffmpeg', 'ffprobe')
         stream, = trial['oracle']['streams']
         assert stream['codec'] == 'h264' and stream['pixel_format'] == 'yuv420p'
         assert stream['color_range'] == 'tv'
         assert all(stream[k] == 'bt709' for k in ('color_primaries', 'color_transfer', 'color_matrix'))
         assert len(stream['packets']) == trial['frames']
+        for index, packet in enumerate(stream['packets']):
+            from fractions import Fraction
+            assert packet['pts'] == str(Fraction(index, 24))
+            assert packet['dts'] == str(Fraction(index, 24))
+            assert packet['duration'] == '1/24'
         assert stream['decoded_bytes'] == stream['width'] * stream['height'] * 3 // 2 * trial['frames']
         expected = 0 if trial['mode'] == 'gpu' else stream['width'] * stream['height'] * 8 * trial['frames']
         assert trial['readback_bytes'] == expected
@@ -36,7 +42,7 @@ def main():
         cpu, = [t for t in trials if t['pair'] == pair and t['mode'] == 'cpu']
         gpu, = [t for t in trials if t['pair'] == pair and t['mode'] == 'gpu']
         assert semantic_streams(cpu['oracle']) == semantic_streams(gpu['oracle']), f'decoded/time/color pair {pair}'
-        nals = [re.split(rb'\x00\x00\x00?\x01', (args.directory / f'{pair}-{mode}.h264').read_bytes())[1:] for mode in ('cpu', 'gpu')]
+        nals = [re.split(rb'\x00\x00\x00?\x01', subprocess.check_output(['ffmpeg', '-v', 'error', '-i', str(args.directory / f'{pair}-{mode}.mov'), '-c:v', 'copy', '-bsf:v', 'h264_mp4toannexb', '-f', 'h264', '-']))[1:] for mode in ('cpu', 'gpu')]
         assert len(nals[0]) == len(nals[1])
         differences = []
         for index, (left, right) in enumerate(zip(*nals)):
@@ -63,7 +69,7 @@ def main():
     evidence = {'trials': trials, 'comparisons': comparisons, 'summary': summary,
                 'provenance': {'binary_sha256': digest(args.binary),
                                'source_evidence_sha256': digest(args.directory / 'evidence.csv'),
-                               'scope': 'Same binary, generated Metal RGBA16F fixture, SDR premultiplied black matte, H.264 hardware encoder, 24 fps. Fresh native objects per trial. Compile/test excluded. Independent decode excluded. Annex B has no authored container timestamps; native callback checks every exact 1/24 PTS and duration. Not the product renderer or worker.'}}
+                               'scope': 'Same binary, generated Metal RGBA16F fixture, SDR premultiplied black matte, H.264 hardware encoder, 24 fps. Fresh native objects per trial. Compile/test excluded. Independent decode excluded. MOV preserves CMSampleBuffer times; native callback and independent demux check every exact 1/24 PTS/DTS/duration. Not the product renderer or worker.'}}
     args.output.write_text(json.dumps(evidence, indent=2) + '\n')
     print(json.dumps(summary, indent=2))
     print(json.dumps(comparisons, indent=2))
