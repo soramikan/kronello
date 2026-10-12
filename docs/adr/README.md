@@ -188,7 +188,7 @@
 
 | [0159](0159-prepared-export-and-bounded-sample-scenes.md) | 書き出し準備と有界sample SceneIR共有 | 採用（PERF-007受け入れ済み） | 2026-10-12 |
 
-| [0160](0160-shared-presentations-and-converted-source-cache.md) | 不変presentation共有と変換前source cache | 採用（PERF-008受け入れ進行中） | 2026-10-12 |
+| [0160](0160-shared-presentations-and-converted-source-cache.md) | 不変presentation共有と変換前source cache | 採用（PERF-008受け入れ済み） | 2026-10-12 |
 
 ## 追加と変更の規則
 

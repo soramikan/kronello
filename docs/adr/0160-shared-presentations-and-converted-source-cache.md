@@ -1,6 +1,6 @@
 # ADR-0160: 不変presentation共有と変換前source cache
 
-状態: 採用（PERF-008受け入れ進行中）
+状態: 採用（PERF-008受け入れ済み）
 日付: 2026-10-12
 部分置換: ADR-0146のpresentation bufferの所有を不変共有へ変更する。独立cursor key、個数/byte予算、資産再検証、正確なPTS/endとreverse/flow/HDR契約は維持する。
 

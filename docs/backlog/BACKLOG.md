@@ -19,7 +19,7 @@
 | M7 | 0 | 0 | 11 | 0 | 11 |
 | M8 | 0 | 0 | 16 | 0 | 16 |
 | M9 | 2 | 0 | 11 | 0 | 13 |
-| M10 | 7 | 1 | 17 | 0 | 25 |
+| M10 | 6 | 1 | 18 | 0 | 25 |
 | M11 | 14 | 0 | 0 | 0 | 14 |
 
 ## M0
@@ -1277,7 +1277,7 @@
 
 ### PERF-008 素材frame共有と変換cache・SwsContext保持
 
-- 優先度: P0 / 領域: performance / 状態: in_progress
+- 優先度: P0 / 領域: performance / 状態: done
 - 依存: PERF-006
 - 受け入れ条件:
   - 素材変換前に容量制限付きcacheを判定し同じ素材/sampleのnative/packed RGBAを読み取り専用所有でtile間共有する。SwsContextを入力/出力形式・size・matrix/range/filterの一致中保持する
@@ -1286,7 +1286,7 @@
 
 ### PERF-009 worker進捗保存と取消・heartbeatの分離
 
-- 優先度: P0 / 領域: performance / 状態: planned
+- 優先度: P0 / 領域: performance / 状態: in_progress
 - 依存: PERF-006
 - 受け入れ条件:
   - 取消/lease確認と表示進捗永続化を分離し100〜250msの保存間隔と同値抑制を比較する。専用heartbeatと最終確定前fenceを維持する
