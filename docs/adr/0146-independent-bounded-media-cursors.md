@@ -1,6 +1,6 @@
 # ADR-0146: 独立した動画カーソルと二つの保持予算
 
-- 状態: 採用
+- 状態: 部分置換（[ADR-0160](0160-shared-presentations-and-converted-source-cache.md): 不変presentation共有と独立の変換source予算。cursor key/検証/PTSは維持）
 - 日付: 2026-10-11
 - 対象: PERF-003 の media session / sequential render backend
 - 部分置換: [ADR-0140](0140-media-session-resident-preview.md) のdecoder pool key・個数上限。512MiBの保持byte予算、資産fingerprint検証、SDR/HDR契約を維持する。[ADR-0091](0091-exact-forward-decoder-and-bounded-render-scope.md) のexact presentation interval・reverse restart・型付き失敗・native資源の実行スコープを維持する。

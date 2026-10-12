@@ -51,6 +51,7 @@ unsafe extern "C" {
         full_range: c_int,
         output: *mut u8,
     ) -> c_int;
+    fn km_video_converter_creations(k: *mut c_void) -> u64;
     fn km_video_rgba64(
         k: *mut c_void,
         input: *const u8,
@@ -474,6 +475,8 @@ pub(crate) fn video_rgba(
     let size = c_int::try_from(frame.pixels.len())
         .map_err(|_| MediaError::InvalidInput("video pixel budget".into()))?;
     let mut output = vec![0; frame.width as usize * frame.height as usize * 4];
+    // SAFETY: runtime remains live and is confined to the calling thread.
+    let before = unsafe { km_video_converter_creations(runtime.0.as_ptr()) };
     // SAFETY: dimensions and exact packed input size are verified by the shim;
     // the RGBA output allocation covers width*height*4 and lives through the call.
     if unsafe {
@@ -492,6 +495,10 @@ pub(crate) fn video_rgba(
         return Err(MediaError::Decode(runtime.error()));
     }
     kronello_render::count_execution("source_rgba8_conversions", 1);
+    // SAFETY: the same live thread-confined runtime owns these converter slots.
+    let created = unsafe { km_video_converter_creations(runtime.0.as_ptr()) } - before;
+    kronello_render::count_execution("source_sws_context_creations", created);
+    kronello_render::count_execution("source_sws_context_reuses", u64::from(created == 0));
     kronello_render::count_execution("source_rgba8_bytes", output.len() as u64);
     kronello_render::observe_execution_payload("source_rgba8_buffer", output.len() as u64);
     Ok(output)
@@ -515,6 +522,8 @@ pub(crate) fn video_rgba64(
     let size = c_int::try_from(frame.pixels.len())
         .map_err(|_| MediaError::InvalidInput("video pixel budget".into()))?;
     let mut output = vec![0; frame.width as usize * frame.height as usize * 8];
+    // SAFETY: runtime remains live and is confined to the calling thread.
+    let before = unsafe { km_video_converter_creations(runtime.0.as_ptr()) };
     // SAFETY: dimensions and exact packed input size are verified by the shim;
     // the RGBA64 output allocation covers width*height*8 and lives through the call.
     if unsafe {
@@ -533,6 +542,12 @@ pub(crate) fn video_rgba64(
     {
         return Err(MediaError::Decode(runtime.error()));
     }
+    // SAFETY: the same live thread-confined runtime owns these converter slots.
+    let created = unsafe { km_video_converter_creations(runtime.0.as_ptr()) } - before;
+    kronello_render::count_execution("source_sws_context_creations", created);
+    kronello_render::count_execution("source_sws_context_reuses", u64::from(created == 0));
+    kronello_render::count_execution("source_rgba64_conversions", 1);
+    kronello_render::observe_execution_payload("source_rgba64_buffer", output.len() as u64);
     Ok(output)
 }
 impl Drop for NativeDecoder {
@@ -806,6 +821,50 @@ impl Drop for NativeGifEncoder<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn source_converter_reuse_matches_fresh_contexts_across_formats_ranges_and_sizes() {
+        let runtime = crate::MediaRuntime::load().unwrap();
+        for (width, height, format, bytes) in [
+            (16, 16, "yuv420p", vec![113; 384]),
+            (16, 16, "yuv420p10le", 451_u16.to_le_bytes().repeat(384)),
+            (8, 4, "rgba", [17, 129, 231, 127].repeat(32)),
+            (16, 16, "yuv420p", vec![151; 384]),
+        ] {
+            let frame = kronello_render::DecodedVideoFrame {
+                pts: Rational::ZERO,
+                end: Rational::ONE,
+                width,
+                height,
+                pixel_format: format.into(),
+                color_primaries: "bt709".into(),
+                color_transfer: "bt709".into(),
+                color_matrix: "bt709".into(),
+                color_range: "tv".into(),
+                pixels: bytes,
+            };
+            for full_range in [false, true, false] {
+                let fresh = crate::MediaRuntime::load().unwrap();
+                let expected = video_rgba(&fresh.native, &frame, full_range).unwrap();
+                for _ in 0..3 {
+                    assert_eq!(
+                        video_rgba(&runtime.native, &frame, full_range).unwrap(),
+                        expected
+                    );
+                }
+                for bt2020 in [false, true, false] {
+                    let fresh = crate::MediaRuntime::load().unwrap();
+                    let expected = video_rgba64(&fresh.native, &frame, full_range, bt2020).unwrap();
+                    for _ in 0..3 {
+                        assert_eq!(
+                            video_rgba64(&runtime.native, &frame, full_range, bt2020).unwrap(),
+                            expected
+                        );
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn hevc_delivery_mux_configuration_requires_hvc1() {

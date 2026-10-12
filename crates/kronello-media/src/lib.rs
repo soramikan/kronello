@@ -9,6 +9,8 @@ pub use raw::*;
 mod rawffi;
 mod render;
 pub use render::*;
+mod source_cache;
+pub use source_cache::{SourceFrameCacheLimits, SourceFrameCacheStats};
 mod assets;
 mod audio;
 mod audio_cache;

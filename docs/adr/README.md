@@ -168,7 +168,7 @@
 
 | [0145](0145-invalid-document-diagnostics-and-css-easing.md) | 既知不正文書の診断と CSS 時間イージング | 採用 | 2026-10-11 |
 
-| [0146](0146-independent-bounded-media-cursors.md) | 独立した動画カーソルと二つの保持予算 | 採用 | 2026-10-11 |
+| [0146](0146-independent-bounded-media-cursors.md) | 独立した動画カーソルと二つの保持予算 | 部分置換（0160） | 2026-10-11 |
 
 | [0147](0147-indexed-timeline-and-proxy-preparation.md) | タイムラインの派生索引とproxy準備再利用 | 採用 | 2026-10-11 |
 | [0148](0148-audio-only-delivery-without-video.md) | 音声単独出力の映像処理省略 | 採用 | 2026-10-11 |
@@ -187,6 +187,8 @@
 | [0158](0158-scoped-export-execution-measurements.md) | 固定workerの有界な工程観測 | 採用（PERF-006受け入れ進行中） | 2026-10-12 |
 
 | [0159](0159-prepared-export-and-bounded-sample-scenes.md) | 書き出し準備と有界sample SceneIR共有 | 採用（PERF-007受け入れ済み） | 2026-10-12 |
+
+| [0160](0160-shared-presentations-and-converted-source-cache.md) | 不変presentation共有と変換前source cache | 採用（PERF-008受け入れ進行中） | 2026-10-12 |
 
 ## 追加と変更の規則
 

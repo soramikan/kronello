@@ -309,6 +309,41 @@ fn track003_snapshot_binds_interpolation_and_renders_synthesis() {
 }
 
 #[test]
+fn converted_flow_sources_distinguish_synthesis_times_with_warm_shared_cache() {
+    let (_dir, project_path, _path, asset) = red_blue_asset();
+    let (project, id) = project_with(asset, interpolated_map(Some(default_flow())));
+    let snapshot = RenderSnapshot::new(&project, id, 1, Default::default()).unwrap();
+    let runtime = MediaRuntime::load().unwrap();
+    let cached =
+        SequentialVideoRenderBackend::new(&CpuReferenceBackend, &project_path, Ok(&runtime));
+    let plain =
+        SequentialVideoRenderBackend::new(&CpuReferenceBackend, &project_path, Ok(&runtime))
+            .with_source_frame_limits(SourceFrameCacheLimits {
+                entries: 0,
+                bytes: 0,
+            });
+    let mut frames = Vec::new();
+    for time in [t(1, 2), t(1, 1), t(3, 2), t(1, 2), t(1, 1), t(3, 2)] {
+        let request = FrameRequest {
+            time,
+            region: OutputRegion {
+                origin: [0.0; 2],
+                extent: [16.0; 2],
+                pixels: [16; 2],
+            },
+        };
+        let actual = render_frame(&snapshot, &[], &cached, request).unwrap();
+        let expected = render_frame(&snapshot, &[], &plain, request).unwrap();
+        assert_eq!(actual.pixels, expected.pixels);
+        frames.push(actual.pixels.linear);
+    }
+    assert_ne!(frames[0], frames[1]);
+    assert_ne!(frames[1], frames[2]);
+    assert_eq!(cached.source_frame_cache_stats().misses, 3);
+    assert_eq!(cached.source_frame_cache_stats().hits, 3);
+}
+
+#[test]
 fn track003_unpinned_snapshot_rejects_authored_interpolation() {
     let (_dir, _project, _p, asset) = red_blue_asset();
     let (p, id) = project_with(asset.clone(), interpolated_map(Some(default_flow())));

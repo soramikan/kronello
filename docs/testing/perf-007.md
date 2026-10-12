@@ -25,7 +25,7 @@ hostは非静穏で、Clippy/workspaceテストを並行実行した。速度値
 
 `prepared_export`の5件は成功した（`/private/tmp/kronello-perf007-unit-final.log`）。日本語全画素bit、frame数によらない不変処理、3/8 samplesのタイル間共有、cut/halo、HDR/zero shutter、4096 samplesの件数/byte上限、巨大sceneの非保持fallback、font所有とmissing/hash mismatch、sink失敗を確認した。LUTの全画素bit・欠落/破損拒否の追加1件も成功した（`/private/tmp/kronello-perf007-lut.log`）。
 
-workspace Clippy（warnings denied）、fmt、生成Swift checkは成功した。全workspaceテストは`/private/tmp/kronello-perf007-workspace.log`で進行中。追加テストを含む最終検証と、受け入れ条件の最終照合までは`in_progress`を維持する。
+workspace Clippy（warnings denied）、fmt、生成Swift checkは成功した。全workspaceテストの結果と追加テストの範囲は次節に記録する。
 
 ## 最終受け入れ
 

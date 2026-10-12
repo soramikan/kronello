@@ -22,7 +22,15 @@
 
 #define STR_(x) #x
 #define STR(x) STR_(x)
+typedef struct VideoConverter {
+    struct SwsContext *context;
+    int width,height,format,dst_format,full_range,matrix,filter;
+} VideoConverter;
 typedef struct Km {
+    /* Runtime is thread-confined by Rust Rc. Each output format has one
+     * converter slot; all pixel-affecting configuration is keyed explicitly. */
+    VideoConverter video_converters[2];
+    uint64_t video_converter_creations;
     void *libs[5];
     char error[512];
     int error_code;
@@ -135,6 +143,8 @@ static int fail(Km *k, int code, const char *where) {
 }
 void km_close(Km *k) {
     if (!k) return;
+    for(int i=0;i<2;++i)if(k->video_converters[i].context && k->sws_freeContext)
+        k->sws_freeContext(k->video_converters[i].context);
     for (int i=4; i>=0; --i) if (k->libs[i]) {
 #ifdef _WIN32
         FreeLibrary((HMODULE)k->libs[i]);
@@ -425,7 +435,15 @@ int km_frame_copy(Decoder *d, uint8_t *buffer, int size) {
  * Row-partitioned scaling is deterministic; 0 selects the host CPU count and
  * libswscale builds without the option keep their single thread. */
 static struct SwsContext *video_converter(Km *k, int width, int height,
-        enum AVPixelFormat fmt, enum AVPixelFormat dst_fmt, const char *label) {
+        enum AVPixelFormat fmt, enum AVPixelFormat dst_fmt, int full_range,
+        int matrix, const char *label) {
+    VideoConverter *slot=&k->video_converters[dst_fmt==AV_PIX_FMT_RGBA64LE?1:0];
+    if(slot->context && slot->width==width && slot->height==height &&
+       slot->format==fmt && slot->dst_format==dst_fmt &&
+       slot->full_range==full_range && slot->matrix==matrix && slot->filter==SWS_BILINEAR)
+        return slot->context;
+    if(slot->context)k->sws_freeContext(slot->context);
+    slot->context=NULL;
     struct SwsContext *sws=k->sws_alloc_context();
     if(!sws){fail(k,AVERROR(ENOMEM),label);return NULL;}
     k->av_opt_set_int(sws,"srcw",width,0);
@@ -437,8 +455,15 @@ static struct SwsContext *video_converter(Km *k, int width, int height,
     k->av_opt_set_int(sws,"sws_flags",SWS_BILINEAR,0);
     k->av_opt_set_int(sws,"threads",0,0);
     if(k->sws_init_context(sws,NULL,NULL)<0){k->sws_freeContext(sws);fail(k,AVERROR(EINVAL),label);return NULL;}
+    const int *coeff=k->sws_getCoefficients(matrix);
+    if(k->sws_setColorspaceDetails(sws,coeff,full_range,coeff,1,0,1<<16,1<<16)<0){
+        k->sws_freeContext(sws);fail(k,AVERROR(EINVAL),label);return NULL;
+    }
+    *slot=(VideoConverter){sws,width,height,fmt,dst_fmt,full_range,matrix,SWS_BILINEAR};
+    ++k->video_converter_creations;
     return sws;
 }
+uint64_t km_video_converter_creations(Km *k) { return k->video_converter_creations; }
 
 int km_video_rgba(Km *k, const uint8_t *input, int input_size, const char *format,
                   int width, int height, int full_range, uint8_t *output) {
@@ -448,12 +473,9 @@ int km_video_rgba(Km *k, const uint8_t *input, int input_size, const char *forma
     uint8_t *planes[4]={0}; int strides[4]={0};
     int ret=k->av_image_fill_arrays(planes,strides,input,fmt,width,height,1);
     if(ret<0)return fail(k,ret,"video planes");
-    struct SwsContext *sws=video_converter(k,width,height,fmt,AV_PIX_FMT_RGBA,"video RGBA converter");
+    struct SwsContext *sws=video_converter(k,width,height,fmt,AV_PIX_FMT_RGBA,full_range,SWS_CS_ITU709,"video RGBA converter");
     if(!sws)return fail(k,AVERROR(EINVAL),"video RGBA converter");
-    const int *coeff=k->sws_getCoefficients(SWS_CS_ITU709);
-    ret=k->sws_setColorspaceDetails(sws,coeff,full_range,coeff,1,0,1<<16,1<<16);
-    if(ret>=0) { uint8_t *dst[4]={output,NULL,NULL,NULL};int dst_stride[4]={width*4,0,0,0};ret=k->sws_scale(sws,(const uint8_t *const *)planes,strides,0,height,dst,dst_stride); }
-    k->sws_freeContext(sws);
+    { uint8_t *dst[4]={output,NULL,NULL,NULL};int dst_stride[4]={width*4,0,0,0};ret=k->sws_scale(sws,(const uint8_t *const *)planes,strides,0,height,dst,dst_stride); }
     return ret==height ? 0 : fail(k,ret<0?ret:AVERROR(EINVAL),"video RGBA conversion");
 }
 
@@ -466,12 +488,9 @@ int km_video_rgba64(Km *k, const uint8_t *input, int input_size, const char *for
     uint8_t *planes[4]={0}; int strides[4]={0};
     int ret=k->av_image_fill_arrays(planes,strides,input,fmt,width,height,1);
     if(ret<0)return fail(k,ret,"HDR video planes");
-    struct SwsContext *sws=video_converter(k,width,height,fmt,AV_PIX_FMT_RGBA64LE,"HDR RGBA64 converter");
+    struct SwsContext *sws=video_converter(k,width,height,fmt,AV_PIX_FMT_RGBA64LE,full_range,bt2020?SWS_CS_BT2020:SWS_CS_ITU709,"HDR RGBA64 converter");
     if(!sws)return fail(k,AVERROR(EINVAL),"HDR RGBA64 converter");
-    const int *coeff=k->sws_getCoefficients(bt2020?SWS_CS_BT2020:SWS_CS_ITU709);
-    ret=k->sws_setColorspaceDetails(sws,coeff,full_range,coeff,1,0,1<<16,1<<16);
-    if(ret>=0) { uint8_t *dst[4]={output,NULL,NULL,NULL};int dst_stride[4]={width*8,0,0,0};ret=k->sws_scale(sws,(const uint8_t *const *)planes,strides,0,height,dst,dst_stride); }
-    k->sws_freeContext(sws);
+    { uint8_t *dst[4]={output,NULL,NULL,NULL};int dst_stride[4]={width*8,0,0,0};ret=k->sws_scale(sws,(const uint8_t *const *)planes,strides,0,height,dst,dst_stride); }
     return ret==height ? 0 : fail(k,ret<0?ret:AVERROR(EINVAL),"HDR RGBA64 conversion");
 }
 

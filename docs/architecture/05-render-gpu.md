@@ -1,5 +1,9 @@
 # 05 レンダラーと GPU
 
+## PERF-008: 不変presentationと変換source共有
+
+[ADR-0160](../adr/0160-shared-presentations-and-converted-source-cache.md)に従い、MediaSessionのSceneKey別cursorは維持し、検証後の実presentationをRGBA変換前に共有する。source cacheは8件/256MiBのpixel・sampler/LUT・key payload、native presentationは既存のcursor個数/512MiB予算。不変sourceはArcで共有する。SDRのfull-source f32展開を行わず、HDR/flowは既存のlinear imageを共有する。各アクセス前後の資産検証とcolor/stream lockを維持し、flowの要求時刻・reverse・HDR/working spaceを区別する。native converterは各formatの1slotを設定一致中保持する。受け入れは[PERF-008](../testing/perf-008.md)で追跡する。
+
 ## PERF-007: 書き出し準備とsample SceneIR共有
 
 [ADR-0159](../adr/0159-prepared-export-and-bounded-sample-scenes.md)に従い、同期exportと固定workerが使うmedia export入口で、検証済みsnapshot・static lowering・canonical/evaluation hash・不変font/LUT入力とmetadata共通情報を保持する。通常raw入力の検証は維持する。一意な有理数sample時刻のSceneIRを最大16件/64MiBのlogical payloadで共有し、DAGはtile ROI/haloごとに構築する。大きいsample数や巨大sceneは再評価を許し、先行保持を無制限に増やさない。f64積算順とlinear-only境界は維持する。受け入れは[PERF-007](../testing/perf-007.md)で追跡する。
