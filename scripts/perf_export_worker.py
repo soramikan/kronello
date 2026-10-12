@@ -88,6 +88,38 @@ def process_usage(pid):
     return {"method": "ps_rss", "rss_bytes": int(result.stdout.strip()) * 1024} if result.stdout.strip() else None
 
 
+def frame_metadata_digest(binary, backend, env, job, report):
+    """Stream semantic metadata independently of inline/manifest storage."""
+    manifest = report.get("frame_metadata")
+    total = manifest["identity"]["frame_count"] if manifest else len(report["frames"])
+    sha = hashlib.sha256()
+    count = 0
+    first = last = None
+    offset = 0
+    while offset < total:
+        if manifest:
+            page = call(binary, backend, env, "job.frames", job=job, offset=offset, limit=64)
+            frames = page["frames"]
+            assert page["total_frames"] == total and page["offset"] == offset
+        else:
+            frames = report["frames"][offset:offset + 64]
+        assert frames
+        for frame in frames:
+            # Execution observations can change while numeric/time/locks stay
+            # identical; they are not authored or semantic metadata identity.
+            semantic = {k: v for k, v in frame.items()
+                        if k not in ("transfer_stats", "resource_cache_stats", "backend", "input_path")}
+            data = canonical(semantic)
+            sha.update(len(data).to_bytes(8, "little"))
+            sha.update(data)
+            first = first or semantic
+            last = semantic
+            count += 1
+        offset += len(frames)
+    assert count == total
+    return {"count": count, "sha256": sha.hexdigest(), "first": first, "last": last}
+
+
 def independent_oracle(path, ffmpeg, ffprobe):
     result = subprocess.run([ffprobe, "-v", "error", "-show_streams",
                              "-show_packets", "-show_data_hash", "sha256", "-show_format", "-show_chapters", "-of", "json", str(path)],
@@ -247,7 +279,8 @@ def run_trial(binary, case, project, directory, backend, timeout, ffmpeg, ffprob
         report = terminal["result"]["report"]
         assert terminal["completed_frames"] == terminal["total_frames"]
         assert terminal["total_frames"] == case["expected_frames"]
-        assert len(report["frames"]) == case.get("expected_rendered_frames", case["expected_frames"])
+        reported_frames = report.get("frame_metadata", {}).get("identity", {}).get("frame_count", len(report["frames"]))
+        assert reported_frames == case.get("expected_rendered_frames", case["expected_frames"])
         worker = None
         if diagnostics:
             performance_path = state / "jobs" / job / "performance-attempt-0.json"
@@ -268,6 +301,7 @@ def run_trial(binary, case, project, directory, backend, timeout, ffmpeg, ffprob
                 "sampled_worker_peak_rss_bytes": max_rss or None,
                 "sampled_worker_rss_progress_windows": rss_windows,
                 "sampled_worker_usage_last": usage_last,
+                "frame_metadata_semantic": frame_metadata_digest(binary, backend, env, job, report),
                 "output_paths": [str(p) for p in paths],
                 "oracles": [independent_oracle(p, ffmpeg, ffprobe) for p in paths] if verify_outputs else []}
     except BaseException:
@@ -383,11 +417,13 @@ def main():
         for identity in ("render_snapshot_hash", "export_snapshot_hash"):
             assert pair[0]["report"][identity] == pair[1]["report"][identity], identity
         assert pair[0]["report"]["sample_range"] == pair[1]["report"]["sample_range"]
+        assert pair[0]["frame_metadata_semantic"] == pair[1]["frame_metadata_semantic"], "semantic frame metadata"
         for left, right in zip(pair[0]["oracles"], pair[1]["oracles"], strict=True):
             assert semantic_streams(left) == semantic_streams(right), "decoded bits / PTS / layout / color / priming"
             assert left["snapshot_tags"] == right["snapshot_tags"], "container identity"
             assert left["chapters"] == right["chapters"], "chapters"
     evidence["comparison"] = {"all_decoded_bits_pts_layout_equal": True,
+                              "all_semantic_frame_metadata_equal": True,
                               "all_snapshot_hashes_equal": True,
                               "all_chapters_and_packet_side_data_equal": True,
                               "all_packet_payload_equal": all(

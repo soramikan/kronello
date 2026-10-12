@@ -305,6 +305,7 @@ impl<'de> Deserialize<'de> for Request {
             "render.export" => payload(&fields).map(Self::RenderExport),
             "render.submit" => payload(&fields).map(Self::RenderSubmit),
             "job.get" => payload(&fields).map(Self::JobGet),
+            "job.frames" => payload(&fields).map(Self::JobFrames),
             "job.list" => payload(&fields).map(Self::JobList),
             "job.cancel" => payload(&fields).map(Self::JobCancel),
             "job.resume" => payload(&fields).map(Self::JobResume),

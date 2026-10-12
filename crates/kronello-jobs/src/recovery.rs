@@ -37,6 +37,113 @@ mod tests {
         (temp, store, record)
     }
     #[test]
+    fn indexed_bundle_recovers_primary_and_nested_metadata_without_large_root_receipt() {
+        let (temp, store, original) = fixture();
+        let queued = store.resume(&original.id).unwrap();
+        assert!(store.claim(&queued.id).unwrap());
+        let record = store.get(&queued.id).unwrap();
+        let stage = store.staging(&record).unwrap();
+        let primary = stage.output().with_extension("mov");
+        std::fs::write(&primary, b"movie").unwrap();
+        let metadata = stage.output().with_extension("frames");
+        std::fs::create_dir(&metadata).unwrap();
+        std::fs::create_dir(metadata.join("chunks")).unwrap();
+        for n in 0..512 {
+            std::fs::write(
+                metadata.join("chunks").join(format!("{n:06}.json")),
+                b"data",
+            )
+            .unwrap();
+        }
+        let destination = temp.path().join("metadata.frames");
+        let roots = vec![
+            (primary.clone(), record.destination.clone()),
+            (metadata.clone(), destination.clone()),
+        ];
+        store
+            .prepare_publication_bundle(&record, &roots, serde_json::json!({"summary":true}))
+            .unwrap();
+        let receipt_path = store.receipt_path(&record).unwrap();
+        assert!(std::fs::metadata(&receipt_path).unwrap().len() < 4096);
+        let receipt: Receipt =
+            serde_json::from_slice(&std::fs::read(&receipt_path).unwrap()).unwrap();
+        assert!(receipt.artifacts.is_empty());
+        assert_eq!(receipt.artifact_index.unwrap().count, 513);
+        for (source, target) in roots {
+            publish_path(&source, &target).unwrap();
+        }
+        store
+            .finish_error(&record.id, &JobError::new("TEST", "after rename"))
+            .unwrap();
+        store
+            .update(&record.id, |r| {
+                r.worker_pid = None;
+                Ok(())
+            })
+            .unwrap();
+        let recovered = store.resume(&record.id).unwrap();
+        assert_eq!(recovered.status, JobStatus::Succeeded);
+        assert_eq!(recovered.result.unwrap()["summary"], true);
+        let mut pruning = store.clone();
+        pruning.config.retention = Duration::ZERO;
+        pruning.prune().unwrap();
+        assert!(
+            store
+                .publication_result(&store.get(&record.id).unwrap())
+                .unwrap()
+                .is_some()
+        );
+    }
+    #[test]
+    fn indexed_bundle_rejects_partial_publication_and_changed_metadata() {
+        for partial in [true, false] {
+            let (temp, store, original) = fixture();
+            let queued = store.resume(&original.id).unwrap();
+            assert!(store.claim(&queued.id).unwrap());
+            let record = store.get(&queued.id).unwrap();
+            let stage = store.staging(&record).unwrap();
+            let primary = stage.output().with_extension("mov");
+            std::fs::write(&primary, b"movie").unwrap();
+            let metadata = stage.output().with_extension("frames");
+            std::fs::create_dir(&metadata).unwrap();
+            std::fs::write(metadata.join("header"), b"data").unwrap();
+            let target = temp.path().join("metadata.frames");
+            store
+                .prepare_publication_bundle(
+                    &record,
+                    &[
+                        (primary.clone(), record.destination.clone()),
+                        (metadata.clone(), target.clone()),
+                    ],
+                    serde_json::json!({}),
+                )
+                .unwrap();
+            publish_path(&primary, &record.destination).unwrap();
+            if !partial {
+                publish_path(&metadata, &target).unwrap();
+                std::fs::write(target.join("header"), b"changed").unwrap();
+            }
+            store
+                .finish_error(&record.id, &JobError::new("TEST", "after rename"))
+                .unwrap();
+            store
+                .update(&record.id, |r| {
+                    r.worker_pid = None;
+                    Ok(())
+                })
+                .unwrap();
+            assert_eq!(
+                store.resume(&record.id).unwrap_err().code(),
+                if partial {
+                    "OUTPUT_EXISTS"
+                } else {
+                    "OUTPUT_VALIDATION_FAILED"
+                }
+            );
+            assert_eq!(std::fs::read(&record.destination).unwrap(), b"movie");
+        }
+    }
+    #[test]
     fn resume_rejects_unowned_stage_and_changed_input_without_deleting_them() {
         let (_temp, store, record) = fixture();
         let stage = store.staging(&record).unwrap();
@@ -377,6 +484,8 @@ struct Receipt {
     #[serde(default)]
     destinations: Vec<PathBuf>,
     result: serde_json::Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    artifact_index: Option<crate::artifact_index::ArtifactIndex>,
 }
 fn digest_file(file: &mut std::fs::File) -> Result<(u64, String), JobError> {
     let mut digest = Sha256::new();
@@ -461,7 +570,11 @@ fn write_json(path: &Path, value: &impl Serialize) -> Result<(), JobError> {
         .write(true)
         .create_new(true)
         .open(path)?;
-    serde_json::to_writer(&mut file, value)?;
+    // Serialize in bounded blocks, not a filesystem write for every JSON token.
+    let mut buffered = std::io::BufWriter::with_capacity(65536, &mut file);
+    serde_json::to_writer(&mut buffered, value)?;
+    std::io::Write::flush(&mut buffered)?;
+    drop(buffered);
     if file.metadata()?.len() > 512 * 1024 * 1024 {
         return Err(JobError::new(
             "RESOURCE_LIMIT",
@@ -631,6 +744,7 @@ impl JobStore {
             artifacts: artifacts(output)?,
             destinations,
             result,
+            artifact_index: None,
         };
         let path = self.receipt_path(record)?;
         write_json(&path, &receipt)?;
@@ -658,6 +772,58 @@ impl JobStore {
             .state_root
             .join("job-results")
             .join(format!("{}-{}.json", record.id, record.attempt)))
+    }
+    /// Hash every bounded publication root, including metadata sidecars, into
+    /// a streaming index rather than retaining every file in the receipt.
+    pub fn prepare_publication_bundle(
+        &self,
+        record: &JobRecord,
+        roots: &[(PathBuf, PathBuf)],
+        result: serde_json::Value,
+    ) -> Result<(), JobError> {
+        self.input(record)?;
+        if roots.is_empty() || roots.len() > 9 || roots[0].1 != record.destination {
+            return Err(JobError::new("INVALID_REQUEST", "publication bundle roots"));
+        }
+        let destinations: Vec<_> = roots.iter().map(|(_, target)| target.clone()).collect();
+        if destinations
+            .iter()
+            .collect::<std::collections::BTreeSet<_>>()
+            .len()
+            != destinations.len()
+        {
+            return Err(JobError::new(
+                "INVALID_REQUEST",
+                "duplicate publication destination",
+            ));
+        }
+        let path = self.receipt_path(record)?;
+        let sources: Vec<_> = roots.iter().map(|(source, _)| source.clone()).collect();
+        let index =
+            crate::artifact_index::write(&path.with_extension("artifacts.jsonl"), &sources)?;
+        let receipt = Receipt {
+            identity: Identity::of(record),
+            artifacts: Vec::new(),
+            destinations,
+            result,
+            artifact_index: Some(index),
+        };
+        write_json(&path, &receipt)?;
+        let receipt_hash = digest_file(&mut std::fs::File::open(&path)?)?.1;
+        self.update(&record.id, |current| {
+            if current.status != JobStatus::Running
+                || current.worker_pid != Some(std::process::id())
+                || current.attempt != record.attempt
+            {
+                return Err(JobError::new("JOB_INTERRUPTED", "publication lease lost"));
+            }
+            if current.cancel_requested {
+                return Err(JobError::new("JOB_CANCELED", "cancel requested"));
+            }
+            current.publication_hash = Some(receipt_hash);
+            Ok(())
+        })?;
+        Ok(())
     }
     pub fn publication_result(
         &self,
@@ -762,7 +928,20 @@ impl JobStore {
         if stamps.len() != destinations.len() {
             return Ok(false);
         }
-        let verified = if receipt.destinations.is_empty() {
+        let verified = if let Some(index) = &receipt.artifact_index {
+            if !receipt.artifacts.is_empty() {
+                return Err(JobError::new(
+                    "OUTPUT_VALIDATION_FAILED",
+                    "mixed receipt artifact formats",
+                ));
+            }
+            crate::artifact_index::verify(
+                &path.with_extension("artifacts.jsonl"),
+                index,
+                &destinations,
+            )?;
+            true
+        } else if receipt.destinations.is_empty() {
             // Single-artifact publication: the destination tree mirrors the
             // staged tree (a file's relative path is empty either way).
             receipt.artifacts == artifacts(&record.destination)?

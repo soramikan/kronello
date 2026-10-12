@@ -21,6 +21,51 @@ struct Fixture {
     device_lost: bool,
     gate_after_frame: u64,
 }
+
+#[test]
+fn long_metadata_job_pages_survive_prune_and_reject_corrupted_payload() {
+    let f = Fixture::new();
+    let output = f.temp.path().join("paged.gif");
+    let mut render = f.render(&output);
+    render["range"]["end"] = json!({"num":"65","den":"100"});
+    render["frame_rate"] = json!({"num":"100","den":"1"});
+    render["input"]["region"]["pixels"] = json!([2, 2]);
+    let submitted = f.submit_request(
+        json!({"operation":"render.submit","render":render,
+        "output":{"format":"gif","profile_version":1,"background":[0,0,0]}}),
+        None,
+        false,
+    );
+    let finished = f.wait(&submitted.id, JobStatus::Succeeded);
+    let report = &finished.result.as_ref().unwrap()["report"];
+    assert_eq!(report["schema_version"], 2);
+    assert_eq!(report["frames"].as_array().unwrap().len(), 0);
+    assert_eq!(report["frame_metadata"]["identity"]["frame_count"], 65);
+    let page =
+        f.service(json!({"operation":"job.frames","job":submitted.id,"offset":63,"limit":2}));
+    assert_eq!(page["frames"].as_array().unwrap().len(), 2);
+    assert_eq!(page["frames"][0]["frame_index"], "63");
+    assert_eq!(page["frames"][1]["sequence_number"], 64);
+    assert!(page["next_offset"].is_null());
+    assert_eq!(
+        f.service_error(json!({"operation":"job.frames","job":submitted.id,"limit":65}))["code"],
+        "INVALID_REQUEST"
+    );
+    let root = kronello_media::metadata_directory(&output);
+    let header = std::fs::read(root.join("header.json")).unwrap();
+    std::fs::write(root.join("header.json"), b"{}").unwrap();
+    assert_eq!(
+        f.service_error(json!({"operation":"job.frames","job":submitted.id}))["code"],
+        "OUTPUT_VALIDATION_FAILED"
+    );
+    std::fs::write(root.join("header.json"), header).unwrap();
+    let mut config = JobConfig::at(&f.state);
+    config.retention = Duration::ZERO;
+    JobStore::open(config).unwrap().prune().unwrap();
+    let after =
+        f.service(json!({"operation":"job.frames","job":submitted.id,"offset":63,"limit":2}));
+    assert_eq!(after, page);
+}
 impl Fixture {
     fn new() -> Self {
         let temp = tempfile::tempdir().unwrap();

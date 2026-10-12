@@ -7,7 +7,7 @@ use kronello_media::{
 };
 use kronello_model::{AssetId, CaptionFormat, ChannelMask, DocumentObject, SequenceId};
 use kronello_render::{
-    RenderProfile, RenderSnapshot, RenderTarget, SequenceRequest, frame_samples,
+    RenderProfile, RenderSnapshot, RenderTarget, SequenceRequest, frame_sample_plan,
 };
 use kronello_time::{Time, TimeRange};
 use serde::{Deserialize, Serialize};
@@ -527,6 +527,28 @@ impl RenderSubmitRequest {
 pub struct JobRequest {
     pub job: String,
 }
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct JobFramesRequest {
+    pub job: String,
+    #[serde(default)]
+    pub offset: u64,
+    #[serde(default = "default_frame_page_limit")]
+    #[schemars(range(min = 1, max = 64))]
+    pub limit: usize,
+}
+fn default_frame_page_limit() -> usize {
+    64
+}
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct JobFramesResult {
+    pub job: String,
+    pub attempt: u64,
+    pub total_frames: u64,
+    pub offset: u64,
+    pub next_offset: Option<u64>,
+    pub frames: Vec<kronello_render::FrameMetadata>,
+}
 #[derive(Debug, Clone, Default, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct JobListRequest {}
@@ -793,6 +815,104 @@ fn same_publish_volume(a: &Path, b: &Path) -> bool {
     }
 }
 impl Service<'_> {
+    pub fn job_frames(&self, request: JobFramesRequest) -> Result<JobFramesResult, ServiceError> {
+        if !(1..=64).contains(&request.limit) {
+            return Err(ServiceError::invalid("frame page limit is 1..64"));
+        }
+        let record = self.jobs()?.get(&request.job)?;
+        if record.status != kronello_jobs::JobStatus::Succeeded {
+            return Err(ServiceError::new(
+                "JOB_NOT_READY",
+                "frame metadata requires a succeeded job",
+            ));
+        }
+        let report = record
+            .result
+            .as_ref()
+            .and_then(|r| r.get("report"))
+            .ok_or_else(|| ServiceError::invalid("job has no frame report"))?;
+        if let Some(value) = report.get("frame_metadata") {
+            let manifest: kronello_render::FrameMetadataManifest =
+                serde_json::from_value(value.clone())?;
+            let export: kronello_media::AvExportRequest =
+                serde_json::from_value(report["request"].clone())?;
+            let plan = frame_sample_plan(export.range, export.frame_rate)?;
+            if manifest.root != kronello_media::metadata_directory(&record.destination)
+                || manifest.identity.render_snapshot_hash != record.snapshot_hash
+                || manifest.identity.frame_count != record.total_frames
+                || manifest.identity.frame_count != plan.frame_count() as u64
+                || manifest.identity.frame_rate != export.frame_rate
+                || manifest.identity.start_frame != plan.start_frame()
+            {
+                return Err(ServiceError::new(
+                    "OUTPUT_VALIDATION_FAILED",
+                    "frame manifest job binding",
+                ));
+            }
+            if request.offset > manifest.identity.frame_count {
+                return Err(ServiceError::invalid("frame page offset"));
+            }
+            let page = manifest
+                .read_page(request.offset, request.limit)
+                .map_err(|error| {
+                    ServiceError::new(
+                        if error.code() == "RESOURCE_LIMIT" {
+                            "RESOURCE_LIMIT"
+                        } else {
+                            "OUTPUT_VALIDATION_FAILED"
+                        },
+                        error.to_string(),
+                    )
+                })?;
+            Ok(JobFramesResult {
+                job: record.id,
+                attempt: record.attempt,
+                total_frames: manifest.identity.frame_count,
+                offset: request.offset,
+                next_offset: page.next_offset,
+                frames: page.frames,
+            })
+        } else {
+            // Legacy inline receipts remain readable without converting their
+            // result format or writing a derivative manifest during a Query.
+            let inline = report
+                .get("frames")
+                .and_then(|v| v.as_array())
+                .ok_or_else(|| ServiceError::invalid("job has no inline frame metadata"))?;
+            if request.offset > inline.len() as u64 {
+                return Err(ServiceError::invalid("frame page offset"));
+            }
+            let mut frames = Vec::new();
+            let mut bytes = 0;
+            for value in inline
+                .iter()
+                .skip(request.offset as usize)
+                .take(request.limit)
+            {
+                let size = serde_json::to_vec(value)?.len();
+                if size > kronello_render::FRAME_METADATA_PAGE_BYTES {
+                    return Err(ServiceError::new(
+                        "RESOURCE_LIMIT",
+                        "single frame metadata page",
+                    ));
+                }
+                if bytes + size > kronello_render::FRAME_METADATA_PAGE_BYTES {
+                    break;
+                }
+                bytes += size;
+                frames.push(serde_json::from_value(value.clone())?);
+            }
+            let next = request.offset + frames.len() as u64;
+            Ok(JobFramesResult {
+                job: record.id,
+                attempt: record.attempt,
+                total_frames: inline.len() as u64,
+                offset: request.offset,
+                next_offset: (next < inline.len() as u64).then_some(next),
+                frames,
+            })
+        }
+    }
     /// Embedders supply the same-version executable implementing worker_entry.
     /// CLI and MCP use their own executable by default.
     pub fn with_worker_executable(mut self, executable: PathBuf) -> Self {
@@ -879,8 +999,8 @@ impl Service<'_> {
                 "media_proxies is a preview-only switch; jobs use originals",
             ));
         }
-        let total_frames =
-            frame_samples(request.render.range, request.render.frame_rate)?.len() as u64;
+        let total_frames = frame_sample_plan(request.render.range, request.render.frame_rate)?
+            .frame_count() as u64;
         if total_frames == 0 {
             return Err(ServiceError::invalid(
                 "job range must contain at least one frame",
@@ -945,8 +1065,8 @@ impl Service<'_> {
     ) -> Result<(Vec<u8>, Submission), ServiceError> {
         let stored = crate::session::read_snapshot(&request.render.input.project)?;
         let snapshot = self.freeze_submission(&request, &stored)?;
-        let total_frames =
-            frame_samples(request.render.range, request.render.frame_rate)?.len() as u64;
+        let total_frames = frame_sample_plan(request.render.range, request.render.frame_rate)?
+            .frame_count() as u64;
         let submission = Submission {
             engine_version: env!("CARGO_PKG_VERSION").into(),
             project_id: snapshot.project().id.to_string(),
@@ -1004,8 +1124,8 @@ impl Service<'_> {
             return Ok(kronello_jobs::KeyedSubmission::Replayed(record));
         }
         let snapshot = self.freeze_submission(&request, &stored)?;
-        let total_frames =
-            frame_samples(request.render.range, request.render.frame_rate)?.len() as u64;
+        let total_frames = frame_sample_plan(request.render.range, request.render.frame_rate)?
+            .frame_count() as u64;
         let submission = Submission {
             engine_version: env!("CARGO_PKG_VERSION").into(),
             project_id,
@@ -1343,6 +1463,25 @@ impl Service<'_> {
                     let (snapshot, _) = fixed.render_parts()?;
                     let report: kronello_media::AvExportReport =
                         serde_json::from_value(result["report"].clone())?;
+                    if let Some(manifest) = &report.frame_metadata {
+                        let plan =
+                            frame_sample_plan(request.render.range, request.render.frame_rate)?;
+                        if !report.frames.is_empty()
+                            || report.schema_version != 2
+                            || manifest.root
+                                != kronello_media::metadata_directory(&record.destination)
+                            || manifest.identity.render_snapshot_hash != record.snapshot_hash
+                            || manifest.identity.frame_rate != request.render.frame_rate
+                            || manifest.identity.start_frame != plan.start_frame()
+                            || manifest.identity.frame_count != record.total_frames
+                        {
+                            return Err(ServiceError::new(
+                                "OUTPUT_VALIDATION_FAILED",
+                                "published frame manifest binding",
+                            ));
+                        }
+                        manifest.verify()?;
+                    }
                     // MEDIA-004: re-validate every published leg against its
                     // own profile shape, destination and frozen snapshot hash.
                     let mut legs = vec![(
@@ -1402,7 +1541,10 @@ impl Service<'_> {
                         && (probe.render_snapshot_hash != record.snapshot_hash
                             || probe.export_snapshot_hash != expected.content_hash()?))
                         || !request.report_video_count_matches(
-                            report.frames.len() as u64,
+                            report
+                                .frame_metadata
+                                .as_ref()
+                                .map_or(report.frames.len() as u64, |m| m.identity.frame_count),
                             record.total_frames,
                             true,
                         )?
@@ -1544,7 +1686,8 @@ impl Service<'_> {
             || serde_json::to_value(request)? != record.output_profile
             || snapshot.project().id.to_string() != record.project_id
             || snapshot.revision().to_string() != record.revision
-            || frame_samples(request.render.range, request.render.frame_rate)?.len() as u64
+            || frame_sample_plan(request.render.range, request.render.frame_rate)?.frame_count()
+                as u64
                 != record.total_frames
         {
             return Err(ServiceError::new(
@@ -1842,7 +1985,10 @@ impl Service<'_> {
                                 }
                             }
                             if !request.report_video_count_matches(
-                                report.frames.len() as u64,
+                                report
+                                    .frame_metadata
+                                    .as_ref()
+                                    .map_or(report.frames.len() as u64, |m| m.identity.frame_count),
                                 record.total_frames,
                                 false,
                             )? {
@@ -1918,23 +2064,6 @@ impl Service<'_> {
         } else {
             stage_path.clone()
         };
-        let receipt = diagnostics.time("publication_receipt_hash_write");
-        if request.outputs.is_empty() {
-            store.prepare_publication(record, &artifact_root, result_json.clone())?;
-        } else {
-            // Per-leg destinations let recovery reconcile a renamed set or
-            // refuse a partially published one instead of trusting leg 0.
-            let leg_destinations: Vec<PathBuf> = std::iter::once(destination.clone())
-                .chain(request.outputs.iter().map(|s| s.destination.clone()))
-                .collect();
-            store.prepare_publication_destinations(
-                record,
-                &artifact_root,
-                leg_destinations,
-                result_json.clone(),
-            )?;
-        }
-        drop(receipt);
         // Staged leg paths -> publish destinations; computed before the lease
         // transaction so the closure performs only atomic renames.
         let mut publication = Vec::with_capacity(request.outputs.len() + 1);
@@ -1954,6 +2083,34 @@ impl Service<'_> {
                 ));
             }
         }
+        if let Some(value) = result_json["report"].get("frame_metadata") {
+            let manifest: kronello_render::FrameMetadataManifest =
+                serde_json::from_value(value.clone())?;
+            let source = kronello_media::metadata_directory(&publication[0].0);
+            let target = kronello_media::metadata_directory(destination);
+            if manifest.root != source
+                || manifest.identity.render_snapshot_hash != record.snapshot_hash
+                || manifest.identity.frame_count != record.total_frames
+            {
+                return Err(ServiceError::new(
+                    "OUTPUT_VALIDATION_FAILED",
+                    "frame manifest job identity",
+                ));
+            }
+            if std::fs::symlink_metadata(&target).is_ok() {
+                return Err(ServiceError::new(
+                    "OUTPUT_EXISTS",
+                    "frame metadata destination exists",
+                ));
+            }
+            manifest.verify()?;
+            result_json["report"]["frame_metadata"] =
+                serde_json::to_value(manifest.relocated(target.clone()))?;
+            publication.push((source, target));
+        }
+        let receipt = diagnostics.time("publication_receipt_hash_write");
+        store.prepare_publication_bundle(record, &publication, result_json.clone())?;
+        drop(receipt);
         let publication_timer = diagnostics.time("worker_publication_fence_commit");
         store.publish_attempt(&record.id, record.attempt, result_json, || {
             for (staged, target) in &publication {

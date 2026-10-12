@@ -1013,6 +1013,9 @@ pub struct AvExportReport {
     pub request: AvExportRequest,
     pub sample_range: std::ops::Range<i64>,
     pub frames: Vec<FrameMetadata>,
+    /// Bounded external metadata for long exports; inline frames are empty.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frame_metadata: Option<kronello_render::FrameMetadataManifest>,
     /// Primary leg transfer report; absent for audio-only deliveries.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub video: Option<MediaPathReport>,
@@ -1598,7 +1601,7 @@ impl MediaRuntime {
                 },
             })
             .collect();
-        let mut metadata = Vec::new();
+        let mut metadata = ExportMetadataOutput::empty();
         let conversion_owners = pipeline::conversion_owners(&video_legs);
         let pipeline::ResultData {
             files: video_files,
@@ -1621,7 +1624,15 @@ impl MediaRuntime {
                 diagnostics: diagnostics.clone(),
             };
             let (frames, result) = pipeline::run(config, checkpoint, |producer, checkpoint| {
-                let mut frames = Vec::with_capacity(frame_count);
+                let mut frames = ExportMetadataSink::new(
+                    metadata_directory(&request.output),
+                    kronello_render::FrameMetadataIdentity {
+                        render_snapshot_hash: render_hash.clone(),
+                        frame_rate: request.frame_rate,
+                        start_frame: times.start_frame(),
+                        frame_count: frame_count as u64,
+                    },
+                )?;
                 for (number, sample) in times.enumerate() {
                     let (index, time) = sample?;
                     checkpoint(number as u64)?;
@@ -1675,10 +1686,10 @@ impl MediaRuntime {
                     }
                     frame_metadata.frame_index = Some(index.to_string());
                     frame_metadata.sequence_number = Some(number as u64);
-                    frames.push(frame_metadata);
+                    frames.push(frame_metadata)?;
                     producer.frame(bundle, number as i64, 1)?;
                 }
-                Ok(frames)
+                frames.finish()
             })?;
             metadata = frames;
             result
@@ -1787,6 +1798,9 @@ impl MediaRuntime {
             }
         }
         checkpoint(frame_count as u64)?;
+        if let Some(manifest) = &metadata.manifest {
+            manifest.verify()?;
+        }
         // All legs verified; publish in request order. A failure here is still
         // atomic per destination and never reports partial success.
         let publication = diagnostics.time("media_publication");
@@ -1811,8 +1825,9 @@ impl MediaRuntime {
         }
         drop(publication);
         let primary = reports[0].clone();
+        let (frames, frame_metadata) = metadata.commit();
         Ok(AvExportReport {
-            schema_version: 1,
+            schema_version: if frame_metadata.is_some() { 2 } else { 1 },
             render_snapshot_hash: render_hash.clone(),
             export_snapshot_hash: export_hashes[0].clone(),
             audio_render_snapshot_hash: render_hash,
@@ -1821,7 +1836,8 @@ impl MediaRuntime {
             movie_profile: snapshot.movie_profile,
             request: request.clone(),
             sample_range: sample_range(request.range)?,
-            frames: metadata,
+            frames,
+            frame_metadata,
             video: primary.video.clone(),
             audio: primary.audio.clone(),
             probe: primary.probe.clone(),
@@ -1835,6 +1851,110 @@ impl MediaRuntime {
                 published_bytes: std::fs::metadata(&request.output).ok().map(|m| m.len()),
             }),
         })
+    }
+}
+/// Deterministic sidecar name; workers relocate this under their publication fence.
+pub fn metadata_directory(output: &Path) -> PathBuf {
+    let mut name = output.file_name().unwrap_or_default().to_os_string();
+    name.push(".frames");
+    output.with_file_name(name)
+}
+struct ExportMetadataSink {
+    root: PathBuf,
+    identity: kronello_render::FrameMetadataIdentity,
+    inline: Vec<FrameMetadata>,
+    inline_bytes: usize,
+    writer: Option<kronello_render::FrameMetadataWriter>,
+}
+impl ExportMetadataSink {
+    fn new(
+        root: PathBuf,
+        identity: kronello_render::FrameMetadataIdentity,
+    ) -> Result<Self, MediaError> {
+        let mut sink = Self {
+            root,
+            identity,
+            inline: Vec::new(),
+            inline_bytes: 0,
+            writer: None,
+        };
+        if sink.identity.frame_count > 64 {
+            sink.spill()?;
+        }
+        Ok(sink)
+    }
+    fn spill(&mut self) -> Result<(), MediaError> {
+        if self.root.exists() {
+            return Err(MediaError::OutputExists(self.root.clone()));
+        }
+        let mut writer =
+            kronello_render::FrameMetadataWriter::new(&self.root, self.identity.clone())?;
+        for frame in self.inline.drain(..) {
+            writer.push(frame)?;
+        }
+        self.writer = Some(writer);
+        self.inline_bytes = 0;
+        Ok(())
+    }
+    fn push(&mut self, frame: FrameMetadata) -> Result<(), MediaError> {
+        if self.writer.is_none() {
+            let bytes = serde_json::to_vec(&frame)?.len();
+            if self.inline.len() == 64 || self.inline_bytes.saturating_add(bytes) > 1024 * 1024 {
+                self.spill()?;
+            } else {
+                self.inline_bytes += bytes;
+                kronello_render::observe_execution_payload(
+                    "inline_frame_metadata_serialized",
+                    self.inline_bytes as u64,
+                );
+                self.inline.push(frame);
+                return Ok(());
+            }
+        }
+        self.writer
+            .as_mut()
+            .expect("spilled metadata writer")
+            .push(frame)?;
+        Ok(())
+    }
+    fn finish(self) -> Result<ExportMetadataOutput, MediaError> {
+        Ok(ExportMetadataOutput {
+            frames: self.inline,
+            manifest: self.writer.map(|writer| writer.finish()).transpose()?,
+            committed: false,
+        })
+    }
+}
+struct ExportMetadataOutput {
+    frames: Vec<FrameMetadata>,
+    manifest: Option<kronello_render::FrameMetadataManifest>,
+    committed: bool,
+}
+impl ExportMetadataOutput {
+    fn empty() -> Self {
+        Self {
+            frames: Vec::new(),
+            manifest: None,
+            committed: false,
+        }
+    }
+    fn commit(
+        mut self,
+    ) -> (
+        Vec<FrameMetadata>,
+        Option<kronello_render::FrameMetadataManifest>,
+    ) {
+        self.committed = true;
+        (std::mem::take(&mut self.frames), self.manifest.take())
+    }
+}
+impl Drop for ExportMetadataOutput {
+    fn drop(&mut self) {
+        if !self.committed
+            && let Some(manifest) = &self.manifest
+        {
+            let _ = std::fs::remove_dir_all(&manifest.root);
+        }
     }
 }
 /// One resolved delivery leg inside `export_delivery`: the primary output or

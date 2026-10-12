@@ -1,6 +1,6 @@
 # ADR-0165: 長尺frame metadataとpublication receiptの有界化
 
-- 状態: 提案（PERF-013の実装・検証前）
+- 状態: 採用（movie/GIFの接続を実装、PERF-013受け入れ進行中）
 - 日付: 2026-10-12
 - 対象: PERF-013
 - 後続: ADR-0079、ADR-0133
@@ -9,7 +9,7 @@
 
 movieの画素payloadは二組のbundleへ収まるが、`AvExportReport.frames`、frame時刻/PTSのVec、workerのJSON化/clone、receiptの`artifacts` Vecはframe数・file数に比例する。metadataだけを分割してもreceiptの一覧を全量hydrateすると受け入れを満たさない。
 
-## 提案する境界
+## 決定する境界
 
 - 短いreportは従来のinline metadataを維持する。inlineは件数とserialized byteの両方で上限を持ち、それを超えたreportは版付きmanifest descriptor（hash、byte数、frame range/count、chunk count、snapshot identity）と小さいsummaryを返す。全chunk参照をroot reportへVecで置かない。
 - 共通headerへsnapshot/hash/意味版/font locks/画像形式などを一回保存し、chunkにはframe時刻/index/sequence number/転送・cache・temporal情報などの差分を保存する。再構成した`FrameMetadata`を従来の型で検証し、共通部分の変化を黙って省略しない。
@@ -26,4 +26,4 @@ private stageの既取得probeを渡してRust側の重複open/検査を除く�
 
 ## 受け入れ前に必要な証拠
 
-短い旧reportとの全metadata復元比較、境界を跨ぐページと破損拒否、長尺の完走とwriter/reader/receipt/queryの保持量、旧receipt復旧、取消/kill/lease喪失/途中確定の回収、mux全packet/時刻/chaptersの一致を確認する。現時点では実装済み・受け入れ済みとは扱わず、ADR-0079/現在のarchitectureを置換しない。
+短い旧reportとの全metadata復元比較、境界を跨ぐページと破損拒否、長尺の完走とwriter/reader/receipt/queryの保持量、旧receipt復旧、取消/kill/lease喪失/途中確定の回収、mux全packet/時刻/chaptersの一致を確認する。movie/GIFの共通header/chunk、root receipt/index、page Queryは実装済みだが、image sequenceとmux/追加復旧検証が残る。全体の受け入れ済みとは扱わず、範囲ごとの証拠を[PERF-013](../testing/perf-013.md)で追跡する。

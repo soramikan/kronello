@@ -948,6 +948,17 @@
         "export_snapshot_hash": {
           "type": "string"
         },
+        "frame_metadata": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FrameMetadataManifest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Bounded external metadata for long exports; inline frames are empty."
+        },
         "frames": {
           "items": {
             "$ref": "#/$defs/FrameMetadata"
@@ -8160,6 +8171,65 @@
       ],
       "type": "object"
     },
+    "FrameMetadataIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "frame_count": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "frame_rate": {
+          "$ref": "#/$defs/FrameRate"
+        },
+        "render_snapshot_hash": {
+          "type": "string"
+        },
+        "start_frame": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "render_snapshot_hash",
+        "frame_rate",
+        "start_frame",
+        "frame_count"
+      ],
+      "type": "object"
+    },
+    "FrameMetadataManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "chunk_count": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "identity": {
+          "$ref": "#/$defs/FrameMetadataIdentity"
+        },
+        "root": {
+          "type": "string"
+        },
+        "root_sha256": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_version",
+        "root",
+        "root_sha256",
+        "identity",
+        "chunk_count"
+      ],
+      "type": "object"
+    },
     "FrameRate": {
       "additionalProperties": false,
       "description": "A positive exact number of frames per second.",
@@ -9171,6 +9241,75 @@
       "required": [
         "code",
         "message"
+      ],
+      "type": "object"
+    },
+    "JobFramesRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "job": {
+          "type": "string"
+        },
+        "limit": {
+          "default": 64,
+          "format": "uint",
+          "maximum": 64,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "offset": {
+          "default": 0,
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "job"
+      ],
+      "type": "object"
+    },
+    "JobFramesResult": {
+      "properties": {
+        "attempt": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "frames": {
+          "items": {
+            "$ref": "#/$defs/FrameMetadata"
+          },
+          "type": "array"
+        },
+        "job": {
+          "type": "string"
+        },
+        "next_offset": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "total_frames": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "job",
+        "attempt",
+        "total_frames",
+        "offset",
+        "frames"
       ],
       "type": "object"
     },
@@ -15130,6 +15269,36 @@
         {
           "additionalProperties": false,
           "properties": {
+            "job": {
+              "type": "string"
+            },
+            "limit": {
+              "default": 64,
+              "format": "uint",
+              "maximum": 64,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "offset": {
+              "default": 0,
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "operation": {
+              "const": "job.frames",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "job"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
             "operation": {
               "const": "job.list",
               "type": "string"
@@ -17492,6 +17661,23 @@
             },
             "value": {
               "$ref": "#/$defs/JobRecord"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "job_frames",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/JobFramesResult"
             }
           },
           "required": [

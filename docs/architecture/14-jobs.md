@@ -207,4 +207,10 @@ plugin のいずれか 1 つの payload を持ち、plugin ジョブは render s
 
 ## PERF-009: 制御確認と進捗保存の分離
 
+## PERF-013: 長尺movie/GIFのmetadataとpublication index
+
+[ADR-0165](../adr/0165-bounded-export-metadata-and-receipts.md)に従い、movie/GIF reportはinline64件/1MiBを超えると共通headerと64frames/4MiBのchunkへ移り、descriptorだけをstatus結果へ返す。`job.frames`はjob/attempt/snapshot/range/rate/countに結び付いた64件/16MiB以内のread-only Queryで、header/indexを認証し必要payloadだけを復元する。publication/recoveryの全体検証は全chunkを読む。旧inline receiptの読み出し・復旧は維持する。
+
+出力legとmetadata sidecarは同じ固定上限9rootのpublication bundleへ入れ、artifact entryを外部indexへ逐次書く。root receiptはそのhash/bytes/countを持つ。全rootの確定前fenceとNOREPLACE renameを維持し、partial set・破損・extra fileを拒否する。index/receiptはinput/logのprune後も結果とともに保持する。image sequenceのframe Vecとmux改善は未完了であり、[PERF-013](../testing/perf-013.md)で継続する。
+
 [ADR-0161](../adr/0161-time-based-worker-progress-and-control-gates.md)に従い、固定render/export workerはcallbackをblock/frameごとに受けつつ、取消/PID/attempt/leaseをread-onlyで50msごとに確認する。進捗は既定200msで同値/減少を保存しない。persist側のtransactionでも条件を再確認し、専用heartbeatと最終公開fenceを維持する。native処理がcallbackを返さない間の停止時間は確認間隔と別に観測する。比較用runtime policyは`KRONELLO_PROGRESS_INTERVAL_MS=100/200/250`、省略200。request/snapshot/作品状態やGUIへ追加しない。受け入れは[PERF-009](../testing/perf-009.md)で追跡する。

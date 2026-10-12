@@ -11,6 +11,7 @@ mod connection_gate;
 mod heartbeat;
 mod progress;
 pub use progress::{WorkerProgress, WorkerProgressStats};
+mod artifact_index;
 mod recovery;
 pub use heartbeat::WorkerHeartbeat;
 pub use recovery::JobStaging;
