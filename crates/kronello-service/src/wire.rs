@@ -360,6 +360,7 @@ impl<'de> Deserialize<'de> for ResultData {
             "timeline" => Self::Timeline(take(&mut fields, "value")?),
             "movie" => Self::Movie(take(&mut fields, "value")?),
             "job" => Self::Job(take(&mut fields, "value")?),
+            "job_frames" => Self::JobFrames(take(&mut fields, "value")?),
             "jobs" => Self::Jobs(take(&mut fields, "value")?),
             "pruned" => Self::Pruned(take(&mut fields, "value")?),
             "collected" => Self::Collected(take(&mut fields, "value")?),

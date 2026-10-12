@@ -674,6 +674,7 @@ fn every_request_payload_and_envelope_matches_schema_and_denies_execution_fields
         json!({"operation":"render.submit","render":{"input":input,"range":{"start":{"num":"0","den":"1"},"end":time},
             "frame_rate":{"num":"24","den":"1"},"output_directory":"frames"}}),
         json!({"operation":"job.get","job":uuid.to_string()}),
+        json!({"operation":"job.frames","job":uuid.to_string(),"offset":0,"limit":64}),
         json!({"operation":"job.cancel","job":uuid.to_string()}),
         json!({"operation":"job.resume","job":uuid.to_string()}),
         json!({"operation":"job.list"}),
@@ -1087,7 +1088,7 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
         json!({"operation":"node.explain", "project":path, "composition":composition,
         "key":{"instance_path":[],"node":node}, "time":{"num":"0", "den":"1"}}),
     );
-    execute(json!({"operation":"render.sequence", "input":input,
+    let sequence_report = execute(json!({"operation":"render.sequence", "input":input,
         "range":{"start":{"num":"0","den":"1"}, "end":{"num":"1","den":"1"}},
         "frame_rate":{"num":"1","den":"1"}, "output_directory":dir.path().join("frames")}));
     execute(json!({"operation":"render.export", "render":{"input":input,
@@ -1100,8 +1101,11 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
     // Save a real fixed input as a failed, unclaimed job, then exercise the
     // service's validation and detached-worker launch through job.resume.
     let original: kronello_jobs::JobRecord = serde_json::from_value(job.clone()).unwrap();
-    let jobs =
-        kronello_jobs::JobStore::open(kronello_jobs::JobConfig::at(job_state.path())).unwrap();
+    // Two earlier stub launches intentionally remain queued. Admit the
+    // synthetic publication behind them without bypassing FIFO or ownership.
+    let mut publication_config = kronello_jobs::JobConfig::at(job_state.path());
+    publication_config.slots = 3;
+    let jobs = kronello_jobs::JobStore::open(publication_config).unwrap();
     let retry = jobs
         .submit(
             &jobs.input(&original).unwrap(),
@@ -1125,6 +1129,37 @@ fn actual_results_for_every_command_match_envelope_and_registry_schemas() {
     assert_eq!(resumed["attempt"], 1);
     assert_eq!(resumed["input_hash"], retry.input_hash);
     assert_eq!(resumed["status"], "queued");
+    // Publish the real synchronous sequence through the job store: the stub
+    // launcher used by this registry test intentionally performs no rendering.
+    // This exercises the successful legacy page response, not a fabricated
+    // result object, alongside the detached-worker manifest tests in the CLI.
+    let paged = jobs
+        .submit(
+            &jobs.input(&original).unwrap(),
+            kronello_jobs::Submission {
+                engine_version: original.engine_version.clone(),
+                project_id: original.project_id.clone(),
+                revision: original.revision.clone(),
+                snapshot_hash: original.snapshot_hash.clone(),
+                output_profile: original.output_profile.clone(),
+                destination: original.destination.clone(),
+                total_frames: original.total_frames,
+            },
+        )
+        .unwrap();
+    assert!(jobs.claim(&paged.id).unwrap());
+    let sequence_path = dir.path().join("frames");
+    let result = json!({"destination":paged.destination,"validated":true,"report":sequence_report});
+    jobs.prepare_publication(&paged, &sequence_path, result.clone())
+        .unwrap();
+    jobs.publish_attempt(&paged.id, paged.attempt, result, || {
+        kronello_jobs::publish_path(&sequence_path, &paged.destination)
+    })
+    .unwrap();
+    let page = execute(json!({"operation":"job.frames","job":paged.id,"offset":0,"limit":64}));
+    assert_eq!(page["total_frames"], 1);
+    assert_eq!(page["frames"].as_array().unwrap().len(), 1);
+    assert_eq!(page["files"].as_array().unwrap().len(), 1);
     execute(json!({"operation":"job.get","job":job["id"]}));
     execute(json!({"operation":"job.cancel","job":job["id"]}));
     execute(json!({"operation":"job.list"}));

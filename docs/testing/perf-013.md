@@ -82,6 +82,10 @@ muxはprivate stageの既取得probe2件を受け渡し、Rust側の再probeを�
 
 最終workspace testは実行中。workspace/all-target Clippyとfmtは成功した。受け入れはまだ`in_progress`で、PERF-014の試作も残る。
 
+最初の全workspace実行はservice API網羅fixtureに`job.frames`がないため2件失敗し、exit101で停止した（`target/perf-013-workspace-tests.log`）。成功済みのCLI40件/2 ignored・delivery9件・render77件/1 ignoredなどと、workspace全体の失敗を区別する。request fixtureと実連番成果物を正規FIFO/receipt/publicationで確定したpage responseを網羅試験へ追加したところ、Rust `ResultData`の`job_frames`デシリアライズ分岐漏れも検出した。分岐を補完した後、service API全12件が成功した（`target/perf-013-api-roundtrip-fixed.log`、18.26秒）。登録名を追加するだけで網羅集合を緩めず、全request/result schemaとstrict JSON往復を実行している。
+
+上記固定測定binaryはwire修正前の実装である。Rustクライアント側Response読込の補完であり、測定したworkerのexport処理・JSON出力・manifest形式を変更していない。後続の修正後workspace必須検証は別ログで追跡する。途中のfixture用FIFO枠不足とwire往復失敗のログも成功扱いにしない。
+
 ## 10,000frame画像連番の完走
 
 [交互3pairsの全記録](perf-013-sequence-10000.json)は1,000frame比較と同じ固定before/after binary・document・region・rateでrangeだけを10倍にした。6workerすべて成功し、全10,000件のsemantic metadataと20,000個のnumeric/display payloadの名前・bytes・hashが各A/Bで一致した。frame metadataはmanifestページから順に復元し、comparisonのmovie packet欄はnullである。
