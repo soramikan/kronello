@@ -1,6 +1,6 @@
 # ADR-0159: 書き出し準備と有界sample SceneIR共有
 
-状態: 採用（PERF-007受け入れ進行中）
+状態: 採用（PERF-007受け入れ済み）
 日付: 2026-10-12
 部分置換: ADR-0144のprevalidated経路の不変hash計算、ADR-0150のMovie sample評価境界。linear専用出力・転送・float64積算の決定は維持する。
 

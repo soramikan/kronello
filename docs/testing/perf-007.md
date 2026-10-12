@@ -1,6 +1,6 @@
 # PERF-007: 書き出し準備とsample SceneIR共有
 
-2026-10-12着手、`in_progress`。[ADR-0159](../adr/0159-prepared-export-and-bounded-sample-scenes.md)に従い、共通media export入口へ`ExportRenderSession`を追加した。固定workerも同じ入口を使う。
+2026-10-12受け入れ済み、`done`。[ADR-0159](../adr/0159-prepared-export-and-bounded-sample-scenes.md)に従い、共通media export入口へ`ExportRenderSession`を追加した。固定workerも同じ入口を使う。
 
 受け入れには、通常/temporalの画素bit比較、3/8 samplesの評価回数、frame数に依存しない検証・hash・静的準備、font/LUTの不変identity、cut/ROI/halo、4096 samplesの容量上限と失敗伝播、実Metal workerの固定A/Bとworkspace検証が必要。実装しただけではdoneにしない。
 
@@ -26,3 +26,7 @@ hostは非静穏で、Clippy/workspaceテストを並行実行した。速度値
 `prepared_export`の5件は成功した（`/private/tmp/kronello-perf007-unit-final.log`）。日本語全画素bit、frame数によらない不変処理、3/8 samplesのタイル間共有、cut/halo、HDR/zero shutter、4096 samplesの件数/byte上限、巨大sceneの非保持fallback、font所有とmissing/hash mismatch、sink失敗を確認した。LUTの全画素bit・欠落/破損拒否の追加1件も成功した（`/private/tmp/kronello-perf007-lut.log`）。
 
 workspace Clippy（warnings denied）、fmt、生成Swift checkは成功した。全workspaceテストは`/private/tmp/kronello-perf007-workspace.log`で進行中。追加テストを含む最終検証と、受け入れ条件の最終照合までは`in_progress`を維持する。
+
+## 最終受け入れ
+
+PERF-007 runtimeの全workspaceテストは終了コード0。1,343 passed、0 failed、47 ignored、200 suites（`/private/tmp/kronello-perf007-workspace.log`）。後から加えたHDR/zero shutterとLUTの追加確認は前節の5件＋1件で成功しており、workspace集計とは別に記録する。最終Clippyは`/private/tmp/kronello-perf007-clippy-final.log`で終了コード0。固定worker72試行、CPU bit比較と不変処理回数、cut/halo、font/LUT、4096 samples・容量超過fallbackを三つの受け入れ条件へ対応付け、PERF-007をdoneにした。依頼全体のPERF-008〜014は引き続き未完了。

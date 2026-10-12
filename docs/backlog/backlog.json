@@ -2563,7 +2563,7 @@
       "priority": "P0",
       "area": "performance",
       "title": "書き出し準備済みコンテキストとsample SceneIR共有",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "PERF-006"
       ],
@@ -2579,7 +2579,7 @@
       "priority": "P0",
       "area": "performance",
       "title": "素材frame共有と変換cache・SwsContext保持",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "PERF-006"
       ],
