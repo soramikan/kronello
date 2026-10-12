@@ -475,6 +475,13 @@ fn negative_fractional_range_end_exclusion_empty_and_overflow() {
     let rate = FrameRate::new(30000, 1001).unwrap();
     let range = TimeRange::new(t(-1, 10), rate.frame_to_time(2).unwrap()).unwrap();
     let samples = frame_samples(range, rate).unwrap();
+    let mut plan = frame_sample_plan(range, rate).unwrap();
+    assert_eq!(plan.start_frame(), -2);
+    assert_eq!(plan.frame_count(), 4);
+    assert_eq!(plan.len(), 4);
+    assert_eq!(plan.next().unwrap().unwrap(), samples[0]);
+    assert_eq!(plan.len(), 3);
+    assert_eq!(plan.collect::<Result<Vec<_>, _>>().unwrap(), samples[1..]);
     assert_eq!(
         samples.iter().map(|p| p.0).collect::<Vec<_>>(),
         vec![-2, -1, 0, 1]
@@ -499,6 +506,13 @@ fn negative_fractional_range_end_exclusion_empty_and_overflow() {
         )
         .is_err()
     );
+    let large = frame_sample_plan(
+        TimeRange::new(t(0, 1), t(1_000_000, 1)).unwrap(),
+        FrameRate::new(1, 1).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(large.frame_count(), 1_000_000);
+    assert_eq!(large.size_hint(), (1_000_000, Some(1_000_000)));
 }
 
 #[test]

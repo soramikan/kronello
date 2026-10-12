@@ -546,6 +546,52 @@ pub struct SequenceMetadata {
 /// Exact time-zero frame grid, including negative indices. Bounds are ceil of
 /// rate * start/end, so every sample is in [start,end), without accumulated steps.
 pub fn frame_samples(range: TimeRange, rate: FrameRate) -> Result<Vec<(i64, Time)>, RenderError> {
+    frame_sample_plan(range, rate)?.collect()
+}
+
+/// Constant-size exact frame plan; preserves the existing one-million bound.
+#[derive(Clone)]
+pub struct FrameSamplePlan {
+    start: i64,
+    end: i64,
+    next: i64,
+    rate: FrameRate,
+}
+impl FrameSamplePlan {
+    pub fn start_frame(&self) -> i64 {
+        self.start
+    }
+    pub fn frame_count(&self) -> usize {
+        (i128::from(self.end) - i128::from(self.start)) as usize
+    }
+}
+impl Iterator for FrameSamplePlan {
+    type Item = Result<(i64, Time), RenderError>;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.next >= self.end {
+            return None;
+        }
+        let index = self.next;
+        self.next += 1;
+        Some(
+            self.rate
+                .frame_to_time(index)
+                .map(|time| (index, time))
+                .map_err(Into::into),
+        )
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let count = (i128::from(self.end) - i128::from(self.next)) as usize;
+        (count, Some(count))
+    }
+}
+impl ExactSizeIterator for FrameSamplePlan {}
+impl std::iter::FusedIterator for FrameSamplePlan {}
+
+pub fn frame_sample_plan(
+    range: TimeRange,
+    rate: FrameRate,
+) -> Result<FrameSamplePlan, RenderError> {
     let ceil = |t: Time| -> Result<i64, RenderError> {
         let t = rate.time_to_frame(t)?;
         t.floor()
@@ -560,9 +606,12 @@ pub fn frame_samples(range: TimeRange, rate: FrameRate) -> Result<Vec<(i64, Time
             "sequence exceeds one million frames".into(),
         ));
     }
-    (start..end)
-        .map(|i| Ok((i, rate.frame_to_time(i)?)))
-        .collect()
+    Ok(FrameSamplePlan {
+        start,
+        end,
+        next: start,
+        rate,
+    })
 }
 struct OutputGuard<'a> {
     path: &'a Path,

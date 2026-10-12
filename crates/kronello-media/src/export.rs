@@ -7,7 +7,7 @@ use kronello_audio::{
 use kronello_model::{ColorSpace, DocumentObject};
 use kronello_render::{
     ExportRenderSession, FrameMetadata, FrameRequest, OutputRegion, RenderBackend, RenderSnapshot,
-    frame_samples,
+    frame_sample_plan,
 };
 use kronello_text::FontData;
 use kronello_time::{FrameRate, Rational, TimeRange};
@@ -1373,8 +1373,9 @@ impl MediaRuntime {
                 ));
             }
         }
-        let times = frame_samples(request.range, request.frame_rate)?;
-        if times.is_empty() {
+        let times = frame_sample_plan(request.range, request.frame_rate)?;
+        let frame_count = times.frame_count();
+        if frame_count == 0 {
             return Err(MediaError::InvalidInput("empty export".into()));
         }
         let samples = sample_range(request.range)?;
@@ -1606,41 +1607,30 @@ impl MediaRuntime {
             mut probes,
         } = if video_legs.iter().any(|leg| leg.profile.has_video()) {
             let mut render_session = ExportRenderSession::new(snapshot.render.clone(), fonts)?;
-            let ticks: Vec<_> = times
-                .iter()
-                .map(|(_, time)| {
-                    let tick = time
-                        .checked_sub(request.range.start())?
-                        .checked_div(time_base)?;
-                    if tick.denominator() != 1 || tick.numerator() < 0 {
-                        return Err(MediaError::InvalidInput(
-                            "integral nonnegative frame PTS required".into(),
-                        ));
-                    }
-                    Ok(tick.numerator())
-                })
-                .collect::<Result<_, MediaError>>()?;
+            // Exact frame-boundary validation above makes relative PTS the
+            // ordinal and every span one tick. No full-export tick Vec needed.
             let config = pipeline::Config {
                 capabilities: self.capabilities.clone(),
                 stage: stage.path().into(),
                 pixels: request.region.pixels,
                 time_base,
-                frames: times.len(),
+                frames: frame_count,
                 bundles: self.video_pipeline_mode.bundles(),
                 duration: expected_video,
                 legs: video_legs.clone(),
                 diagnostics: diagnostics.clone(),
             };
             let (frames, result) = pipeline::run(config, checkpoint, |producer, checkpoint| {
-                let mut frames = Vec::with_capacity(times.len());
-                for (number, (index, time)) in times.iter().enumerate() {
+                let mut frames = Vec::with_capacity(frame_count);
+                for (number, sample) in times.enumerate() {
+                    let (index, time) = sample?;
                     checkpoint(number as u64)?;
                     let mut bundle = producer.acquire()?;
                     let render = diagnostics.time("render_tiles_and_conversion");
                     let mut frame_metadata = render_session.render_linear_tiles(
                         backend,
                         FrameRequest {
-                            time: *time,
+                            time,
                             region: request.region,
                         },
                         &mut |[x, y], tile, output| {
@@ -1686,14 +1676,7 @@ impl MediaRuntime {
                     frame_metadata.frame_index = Some(index.to_string());
                     frame_metadata.sequence_number = Some(number as u64);
                     frames.push(frame_metadata);
-                    let span = if let Some(next) = ticks.get(number + 1) {
-                        next - ticks[number]
-                    } else if number > 0 {
-                        ticks[number] - ticks[number - 1]
-                    } else {
-                        1
-                    };
-                    producer.frame(bundle, ticks[number], span)?;
+                    producer.frame(bundle, number as i64, 1)?;
                 }
                 Ok(frames)
             })?;
@@ -1803,7 +1786,7 @@ impl MediaRuntime {
                 DeliveryShape::VideoOnly => {}
             }
         }
-        checkpoint(times.len() as u64)?;
+        checkpoint(frame_count as u64)?;
         // All legs verified; publish in request order. A failure here is still
         // atomic per destination and never reports partial success.
         let publication = diagnostics.time("media_publication");

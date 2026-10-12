@@ -29,3 +29,15 @@
 | sampled worker RSS peak | 75,284,480bytes | 565,215,232bytes |
 
 各条件1試行で、workspace検証と並行した静穏でないhostの観測である。RSSをmetadataだけへ帰属させたり、一般的な改善率を算出する証拠にはしない。frame数に比例するserialized bytesと、それを全量保持/JSON化する現在の実装を変更後の保持上限・ページ復元と比較する。
+
+## metadata基盤の実装中
+
+render層へ共通header・最大64frames/4MiBの差分chunk・逐次indexのwriter/readerを実装した。headerは8MiB、pageは64frames/16MiBの上限で、manifest identityはrender hash・有理数frame rate・絶対開始frame・countに結び付ける。writerは順序/time/identityと共通部分を確認し、未完了directoryはindexを閉じてから回収する。
+
+全体検証は全chunkのhash/長さ/count/連続rangeと元の`FrameMetadata`を検証する。ページ取得はroot/header/index全体を認証し、必要chunkだけを復元・hash検証する。未参照chunkのpayload破損検査を全ページで繰り返さず、publication/recoveryの全体検証と区別する。file名はordinalから実装が生成し、indexへ任意pathを保存しない。
+
+単体3件で1,000framesの全復元、63件ページのchunk境界、可変transfer情報、最大保持件数/serialized bytes、未完了回収、欠落/破損/完全再hashした順序違いの拒否を確認した。旧receipt読み込みやworker publicationを確認した意味ではない。
+
+movieの全時刻・PTS Vecは定数サイズの有理数`FrameSamplePlan`とordinal PTSへ置換した。既存のnegative/NTSC/empty/overflow grid試験とmedia streaming比較（3 passed・4 ignored）が成功し、render/media全target Clippyも成功した。frame metadataのVec自体はexport/receiptへの接続が残るため、まだ全体の有界化や速度改善を主張しない。
+
+残件はinline上限/manifestのexport接続、publication root/indexと小さいreceipt、summary/page Query、旧receipt復旧、probe再利用・mux取消、長尺のbefore/after実worker比較と全必須検証である。PERF-014も未着手である。

@@ -1,0 +1,131 @@
+{
+  "backend": "cpu_reference_float32",
+  "composition": "f9266381-708a-4cba-95bb-6d1cba1bdab8",
+  "design_extent": [
+    3840.0,
+    2160.0
+  ],
+  "design_to_pixel": [
+    [
+      0.0005208333333333333,
+      0.0,
+      -0.0
+    ],
+    [
+      0.0,
+      0.000925925925925926,
+      -0.0
+    ]
+  ],
+  "display": {
+    "alpha": "straight",
+    "association_space": "srgb",
+    "byte_order": "big_endian",
+    "channel_order": "RGBA",
+    "clipping": "unit_interval_after_output_transform; no_tone_mapping",
+    "color_space": "srgb",
+    "pixel_format": "rgba16_unorm_png",
+    "row_order": "top_to_bottom",
+    "transfer_function": "srgb"
+  },
+  "flatten_tolerance_px": 0.02,
+  "font_locks": [],
+  "frame_index": "0",
+  "input_path": "semantic_scene",
+  "numeric": {
+    "alpha": "premultiplied",
+    "association_space": "linear_rec709",
+    "byte_order": "little_endian",
+    "channel_order": "RGBA",
+    "clipping": "none",
+    "color_space": "linear_rec709",
+    "pixel_format": "rgba16f",
+    "row_order": "top_to_bottom",
+    "transfer_function": "linear"
+  },
+  "project_schema_version": 1,
+  "region": {
+    "extent": [
+      3840.0,
+      2160.0
+    ],
+    "origin": [
+      0.0,
+      0.0
+    ],
+    "pixels": [
+      2,
+      2
+    ]
+  },
+  "revision": "1",
+  "schema_version": 1,
+  "semantic_versions": {
+    "adjustment_clip": 1,
+    "advanced_text": 2,
+    "blend": 1,
+    "bounds": 1,
+    "clip_mask": 1,
+    "color": "gpu002-color-v1",
+    "composition_media": 1,
+    "coverage": "vec003-grid4-v2",
+    "document": 1,
+    "document_matte": 1,
+    "effects": {
+      "kronello.channel_mixer": 1,
+      "kronello.color.curves": 1,
+      "kronello.color.exposure": 1,
+      "kronello.color.hsl": 1,
+      "kronello.color.levels": 1,
+      "kronello.color.lut": 1,
+      "kronello.corner_pin": 1,
+      "kronello.directional_blur": 1,
+      "kronello.displace": 1,
+      "kronello.drop_shadow": 2,
+      "kronello.gaussian_blur": 2,
+      "kronello.generate": 1,
+      "kronello.glow": 1,
+      "kronello.grain": 1,
+      "kronello.invert": 1,
+      "kronello.keying.chroma": 1,
+      "kronello.keying.luma": 1,
+      "kronello.mosaic": 1,
+      "kronello.radial_blur": 1,
+      "kronello.sharpen": 1,
+      "kronello.stabilize": 1,
+      "kronello.tint": 1,
+      "kronello.vignette": 1
+    },
+    "expression": 3,
+    "frame_interpolation": 1,
+    "generators": {
+      "kronello.solid": 1
+    },
+    "gradient_interpolation": "vec004-explicit-interpolation-v1",
+    "hdr": 1,
+    "interpolation": 1,
+    "layout": 1,
+    "path_operations": 1,
+    "repeater": 1,
+    "reverse_sampling": 1,
+    "simulation": 1,
+    "stroke_geometry": "vec005-local-stroke-v2",
+    "temporal": 1,
+    "time_map": 1,
+    "vector": "render001-kurbo-flatten-v1",
+    "video_input": "nle002-sdr-rgba8-nearest-v1",
+    "visibility": 2
+  },
+  "sequence_number": 0,
+  "snapshot_content_hash": "3d80a16b81e27c11390b0a3338d7b3c79a5e361cb3a7e4618ee519fb63c50b13",
+  "snapshot_schema_version": 1,
+  "target": {
+    "kind": "sequence",
+    "sequence": "f9266381-708a-4cba-95bb-6d1cba1bdab8"
+  },
+  "time": {
+    "den": "1",
+    "num": "0"
+  },
+  "working_space": "linear_rec709"
+}
