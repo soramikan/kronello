@@ -1,0 +1,1708 @@
+{
+  "schema_version": 1,
+  "status": "baseline_only",
+  "raw_path": "/Users/sora/Repositories/soramikan/kronello/target/perf-013/baseline-1000/evidence.json",
+  "raw_bytes": 4631021,
+  "raw_sha256": "5df50a5dcf1dae8fffa803ad0fee792f3fc2c8eb6c4669323056ec2348336b2c",
+  "evidence": {
+    "schema_version": 1,
+    "binary_sha256": "1f05c4382d8400f22b87883c50ab8104f9ab0c26ae0bcd22acb99b2213a034d4",
+    "case": {
+      "schema_version": 1,
+      "name": "metadata-gif-1000",
+      "document": {
+        "id": "cae2b435-38fa-43ac-ad1e-35bc0dd7a381",
+        "schema_version": 1,
+        "semantic_version": 1,
+        "name": "PERF-006 fixed real 4K video",
+        "compositions": [],
+        "curves": [],
+        "sequences": [
+          {
+            "id": "f9266381-708a-4cba-95bb-6d1cba1bdab8",
+            "extent": {
+              "width": 3840.0,
+              "height": 2160.0
+            },
+            "frame_rate": {
+              "num": "24",
+              "den": "1"
+            },
+            "audio_rate": 48000,
+            "working_space": "linear_rec709",
+            "tracks": [],
+            "transitions": [],
+            "markers": []
+          }
+        ],
+        "assets": []
+      },
+      "submit": {
+        "render": {
+          "input": {
+            "target": {
+              "kind": "sequence",
+              "sequence": "f9266381-708a-4cba-95bb-6d1cba1bdab8"
+            },
+            "region": {
+              "origin": [
+                0,
+                0
+              ],
+              "extent": [
+                3840,
+                2160
+              ],
+              "pixels": [
+                2,
+                2
+              ]
+            },
+            "profile": {
+              "working_space": "linear_rec709",
+              "flatten_tolerance_px": 0.02
+            },
+            "fonts": []
+          },
+          "range": {
+            "start": {
+              "num": "0",
+              "den": "1"
+            },
+            "end": {
+              "num": "10",
+              "den": "1"
+            }
+          },
+          "frame_rate": {
+            "num": "100",
+            "den": "1"
+          }
+        },
+        "output": {
+          "format": "gif",
+          "profile_version": 1,
+          "background": [
+            0,
+            0,
+            0
+          ]
+        },
+        "chapters": "omit"
+      },
+      "sources": [],
+      "fixture_generation": [
+        "ffmpeg",
+        "-v",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=3840x2160:rate=24:duration=2",
+        "-c:v",
+        "mpeg4",
+        "-q:v",
+        "4",
+        "-threads",
+        "1",
+        "-pix_fmt",
+        "yuv420p",
+        "-color_primaries",
+        "bt709",
+        "-color_trc",
+        "bt709",
+        "-colorspace",
+        "bt709",
+        "-color_range",
+        "tv",
+        "-fflags",
+        "+bitexact",
+        "-flags:v",
+        "+bitexact",
+        "-map_metadata",
+        "-1",
+        "/Users/sora/Repositories/soramikan/kronello/target/perf-006/fixed-cases-v3/source-4k.mov"
+      ],
+      "expected_frames": 1000,
+      "output_name": "movie.gif",
+      "recommended_backend": "cpu-reference"
+    },
+    "capabilities": {
+      "api_schema_version": 1,
+      "engine_version": "0.0.0",
+      "semantic_versions": {
+        "document": 1,
+        "visibility": 2,
+        "expression": 3,
+        "interpolation": 1,
+        "time_map": 1,
+        "layout": 1,
+        "advanced_text": 2,
+        "bounds": 1,
+        "vector": "render001-kurbo-flatten-v1",
+        "path_operations": 1,
+        "document_matte": 1,
+        "blend": 1,
+        "repeater": 1,
+        "simulation": 1,
+        "reverse_sampling": 1,
+        "color": "gpu002-color-v1",
+        "coverage": "vec003-grid4-v2",
+        "stroke_geometry": "vec005-local-stroke-v2",
+        "gradient_interpolation": "vec004-explicit-interpolation-v1",
+        "effects": {
+          "kronello.channel_mixer": 1,
+          "kronello.color.curves": 1,
+          "kronello.color.exposure": 1,
+          "kronello.color.hsl": 1,
+          "kronello.color.levels": 1,
+          "kronello.color.lut": 1,
+          "kronello.corner_pin": 1,
+          "kronello.directional_blur": 1,
+          "kronello.displace": 1,
+          "kronello.drop_shadow": 2,
+          "kronello.gaussian_blur": 2,
+          "kronello.generate": 1,
+          "kronello.glow": 1,
+          "kronello.grain": 1,
+          "kronello.invert": 1,
+          "kronello.keying.chroma": 1,
+          "kronello.keying.luma": 1,
+          "kronello.mosaic": 1,
+          "kronello.radial_blur": 1,
+          "kronello.sharpen": 1,
+          "kronello.stabilize": 1,
+          "kronello.tint": 1,
+          "kronello.vignette": 1
+        },
+        "generators": {
+          "kronello.solid": 1
+        },
+        "video_input": "nle002-sdr-rgba8-nearest-v1",
+        "temporal": 1,
+        "frame_interpolation": 1,
+        "composition_media": 1,
+        "hdr": 1,
+        "clip_mask": 1,
+        "adjustment_clip": 1
+      },
+      "backends": [
+        "wgpu_rgba16f",
+        "cpu_reference_float32"
+      ],
+      "media": {
+        "runtime_version": "9.0.2",
+        "decoders": {
+          "count": 527,
+          "canonical_bytes": 5094,
+          "canonical_sha256": "e10a328c11baa4633ae0b1efd577687eb857a799417f55b12877545b8d08aa3e",
+          "first": "012v",
+          "last": "zmbv"
+        },
+        "encoders": {
+          "count": 190,
+          "canonical_bytes": 1850,
+          "canonical_sha256": "97a8443e035a99ba896b437a114aae894945074ad2caac8d4e5cd80688414ebc",
+          "first": "a64multi",
+          "last": "zmbv"
+        },
+        "hwaccels": [
+          "videotoolbox"
+        ],
+        "schema_version": 1,
+        "ffmpeg_version": "9.0.2",
+        "library_directory": "/opt/homebrew/Cellar/ffmpeg/9.0.2/lib",
+        "substituted": false,
+        "libraries": [
+          {
+            "name": "avutil",
+            "version": 3998054,
+            "license": "GPL version 3 or later",
+            "configuration": "--prefix=/opt/homebrew/Cellar/ffmpeg/9.0.2 --enable-shared --enable-pthreads --enable-version3 --cc=clang --host-cflags= --host-ldflags= --enable-ffplay --enable-gpl --enable-libsvtav1 --enable-libopus --enable-libx264 --enable-libmp3lame --enable-libdav1d --enable-libvmaf --enable-libvpx --enable-libx265 --enable-openssl --enable-videotoolbox --enable-audiotoolbox --enable-neon"
+          },
+          {
+            "name": "avcodec",
+            "version": 4129126,
+            "license": "GPL version 3 or later",
+            "configuration": "--prefix=/opt/homebrew/Cellar/ffmpeg/9.0.2 --enable-shared --enable-pthreads --enable-version3 --cc=clang --host-cflags= --host-ldflags= --enable-ffplay --enable-gpl --enable-libsvtav1 --enable-libopus --enable-libx264 --enable-libmp3lame --enable-libdav1d --enable-libvmaf --enable-libvpx --enable-libx265 --enable-openssl --enable-videotoolbox --enable-audiotoolbox --enable-neon"
+          },
+          {
+            "name": "avformat",
+            "version": 4129126,
+            "license": "GPL version 3 or later",
+            "configuration": "--prefix=/opt/homebrew/Cellar/ffmpeg/9.0.2 --enable-shared --enable-pthreads --enable-version3 --cc=clang --host-cflags= --host-ldflags= --enable-ffplay --enable-gpl --enable-libsvtav1 --enable-libopus --enable-libx264 --enable-libmp3lame --enable-libdav1d --enable-libvmaf --enable-libvpx --enable-libx265 --enable-openssl --enable-videotoolbox --enable-audiotoolbox --enable-neon"
+          },
+          {
+            "name": "swscale",
+            "version": 655718,
+            "license": "GPL version 3 or later",
+            "configuration": "--prefix=/opt/homebrew/Cellar/ffmpeg/9.0.2 --enable-shared --enable-pthreads --enable-version3 --cc=clang --host-cflags= --host-ldflags= --enable-ffplay --enable-gpl --enable-libsvtav1 --enable-libopus --enable-libx264 --enable-libmp3lame --enable-libdav1d --enable-libvmaf --enable-libvpx --enable-libx265 --enable-openssl --enable-videotoolbox --enable-audiotoolbox --enable-neon"
+          },
+          {
+            "name": "swresample",
+            "version": 459110,
+            "license": "GPL version 3 or later",
+            "configuration": "--prefix=/opt/homebrew/Cellar/ffmpeg/9.0.2 --enable-shared --enable-pthreads --enable-version3 --cc=clang --host-cflags= --host-ldflags= --enable-ffplay --enable-gpl --enable-libsvtav1 --enable-libopus --enable-libx264 --enable-libmp3lame --enable-libdav1d --enable-libvmaf --enable-libvpx --enable-libx265 --enable-openssl --enable-videotoolbox --enable-audiotoolbox --enable-neon"
+          }
+        ],
+        "distribution_eligible": false,
+        "development_only": true,
+        "codecs": {
+          "count": 717,
+          "canonical_bytes": 47809,
+          "canonical_sha256": "6eeb80d9cc91b0fb3053c410bff4ba5447616ae3b3a92e9ebb130fd6ffe55b22",
+          "first": {
+            "name": "012v",
+            "encoder": false,
+            "decoder": true,
+            "hardware": false
+          },
+          "last": {
+            "name": "zmbv",
+            "encoder": false,
+            "decoder": true,
+            "hardware": false
+          }
+        }
+      },
+      "export_profiles": [
+        {
+          "format": "image_sequence",
+          "profile_versions": [
+            1
+          ],
+          "audio_modes": [],
+          "audio_codecs": [],
+          "container_extension": "",
+          "execution": "software",
+          "encoder_registered": true,
+          "device_availability": "available",
+          "reason": null
+        },
+        {
+          "format": "pro_res_mov",
+          "profile_versions": [
+            1,
+            2,
+            3
+          ],
+          "audio_modes": [
+            "explicit",
+            "document",
+            "silence"
+          ],
+          "audio_codecs": [
+            "pcm_s24le"
+          ],
+          "container_extension": "mov",
+          "execution": "software",
+          "encoder_registered": true,
+          "device_availability": "available",
+          "reason": null
+        },
+        {
+          "format": "pro_res_sdr_from_hdr_mov",
+          "profile_versions": [
+            1
+          ],
+          "audio_modes": [
+            "explicit",
+            "document",
+            "silence"
+          ],
+          "audio_codecs": [
+            "pcm_s24le"
+          ],
+          "container_extension": "mov",
+          "execution": "software",
+          "encoder_registered": true,
+          "device_availability": "available",
+          "reason": null
+        },
+        {
+          "format": "pro_res_hdr_mov",
+          "profile_versions": [
+            1
+          ],
+          "audio_modes": [
+            "explicit",
+            "document",
+            "silence"
+          ],
+          "audio_codecs": [
+            "pcm_s24le"
+          ],
+          "container_extension": "mov",
+          "execution": "software",
+          "encoder_registered": true,
+          "device_availability": "available",
+          "reason": null
+        },
+        {
+          "format": "av1_mp4",
+          "profile_versions": [
+            1
+          ],
+          "audio_modes": [
+            "explicit",
+            "document",
+            "silence"
+          ],
+          "audio_codecs": [
+            "alac",
+            "aac"
+          ],
+          "container_extension": "mp4",
+          "execution": "software",
+          "encoder_registered": true,
+          "device_availability": "available",
+          "reason": null
+        },
+        {
+          "format": "h264_mov",
+          "profile_versions": [
+            1
+          ],
+          "audio_modes": [
+            "explicit",
+            "document",
+            "silence"
+          ],
+          "audio_codecs": [
+            "alac",
+            "aac"
+          ],
+          "container_extension": "mov",
+          "execution": "hardware",
+          "encoder_registered": true,
+          "device_availability": "unverified",
+          "reason": null
+        },
+        {
+          "format": "hevc_mov",
+          "profile_versions": [
+            1
+          ],
+          "audio_modes": [
+            "explicit",
+            "document",
+            "silence"
+          ],
+          "audio_codecs": [
+            "alac",
+            "aac"
+          ],
+          "container_extension": "mov",
+          "execution": "hardware",
+          "encoder_registered": true,
+          "device_availability": "unverified",
+          "reason": null
+        },
+        {
+          "format": "av1_webm",
+          "profile_versions": [
+            1
+          ],
+          "audio_modes": [
+            "explicit",
+            "document",
+            "silence"
+          ],
+          "audio_codecs": [
+            "opus"
+          ],
+          "container_extension": "webm",
+          "execution": "software",
+          "encoder_registered": true,
+          "device_availability": "available",
+          "reason": null
+        },
+        {
+          "format": "dnx_mov",
+          "profile_versions": [
+            1
+          ],
+          "audio_modes": [
+            "explicit",
+            "document",
+            "silence"
+          ],
+          "audio_codecs": [
+            "pcm_s24le"
+          ],
+          "container_extension": "mov",
+          "execution": "software",
+          "encoder_registered": true,
+          "device_availability": "available",
+          "reason": null
+        },
+        {
+          "format": "dnx_mxf",
+          "profile_versions": [
+            1
+          ],
+          "audio_modes": [
+            "explicit",
+            "document",
+            "silence"
+          ],
+          "audio_codecs": [
+            "pcm_s24le"
+          ],
+          "container_extension": "mxf",
+          "execution": "software",
+          "encoder_registered": true,
+          "device_availability": "available",
+          "reason": null
+        },
+        {
+          "format": "gif",
+          "profile_versions": [
+            1
+          ],
+          "audio_modes": [],
+          "audio_codecs": [],
+          "container_extension": "gif",
+          "execution": "software",
+          "encoder_registered": true,
+          "device_availability": "available",
+          "reason": null
+        },
+        {
+          "format": "mp3",
+          "profile_versions": [
+            1
+          ],
+          "audio_modes": [
+            "explicit",
+            "document",
+            "silence"
+          ],
+          "audio_codecs": [
+            "mp3"
+          ],
+          "container_extension": "mp3",
+          "execution": "software",
+          "encoder_registered": true,
+          "device_availability": "available",
+          "reason": null
+        },
+        {
+          "format": "flac",
+          "profile_versions": [
+            1
+          ],
+          "audio_modes": [
+            "explicit",
+            "document",
+            "silence"
+          ],
+          "audio_codecs": [
+            "flac"
+          ],
+          "container_extension": "flac",
+          "execution": "software",
+          "encoder_registered": true,
+          "device_availability": "available",
+          "reason": null
+        },
+        {
+          "format": "caption_sidecar",
+          "profile_versions": [
+            1
+          ],
+          "audio_modes": [],
+          "audio_codecs": [],
+          "container_extension": "srt",
+          "execution": "software",
+          "encoder_registered": true,
+          "device_availability": "available",
+          "reason": null
+        }
+      ],
+      "complete_capabilities_sha256": "e73e24e129f92f8851ebd26f8260313604b69274e34a9515c7643c05147f8129"
+    },
+    "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+    "quiet_host": false,
+    "trial": {
+      "succeeded_ms": 1529.3743330112193,
+      "submit_to_worker_evidence_ms": 1529.5931250002468,
+      "worker_pid": 43147,
+      "job": "0f925dd7-5791-4cdd-93a2-65aa33548445",
+      "worker": {
+        "attempt": 0,
+        "job": "0f925dd7-5791-4cdd-93a2-65aa33548445",
+        "job_store": {
+          "committed_write_transactions": 6,
+          "completed_checkpoints": 2,
+          "completed_heartbeats": 1
+        },
+        "pid": 43147,
+        "schema_version": 1,
+        "succeeded": true,
+        "worker": {
+          "counts": {
+            "checkpoint_callbacks": 2002,
+            "output_direct_bytes": 16000,
+            "output_tile_conversions": 1000,
+            "rendered_frames": 1000,
+            "rendered_tiles": 1000,
+            "worker_checkpoint_calls": 2002,
+            "worker_control_checks": 3,
+            "worker_progress_writes": 2
+          },
+          "peak_payload_bytes": {
+            "export_prepared_snapshot": 2118,
+            "export_sample_scenes": 2789,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 64,
+            "video_bundles": 32
+          },
+          "schema_version": 1,
+          "stages": {
+            "backend_dag_lowering_host": {
+              "calls": 1000,
+              "elapsed_us": 317,
+              "first_samples_us": {
+                "count": 64,
+                "canonical_bytes": 131,
+                "canonical_sha256": "e44bcd3b513ec86b293cf588364f0b5a5363ed6979cbf78a0cc3d8cd66ed80be",
+                "first": 213,
+                "last": 0,
+                "p50_us": 0,
+                "p95_us": 0
+              }
+            },
+            "backend_linear_execution": {
+              "calls": 1000,
+              "elapsed_us": 2424,
+              "first_samples_us": {
+                "count": 64,
+                "canonical_bytes": 131,
+                "canonical_sha256": "ecb2fa09eab24223879e546ed20bd3ec5922f0f18e6a12aa9d6e5381b476cd03",
+                "first": 582,
+                "last": 1,
+                "p50_us": 1,
+                "p95_us": 3
+              }
+            },
+            "checkpoint_callback": {
+              "calls": 2002,
+              "elapsed_us": 2015,
+              "first_samples_us": {
+                "count": 64,
+                "canonical_bytes": 133,
+                "canonical_sha256": "e5124909c18f4961e0a54a91631f0f83a63e811660e37e49da426c5391fd8d7c",
+                "first": 498,
+                "last": 0,
+                "p50_us": 0,
+                "p95_us": 0
+              }
+            },
+            "dag_media_resolution": {
+              "calls": 1000,
+              "elapsed_us": 132,
+              "first_samples_us": {
+                "count": 64,
+                "canonical_bytes": 129,
+                "canonical_sha256": "4018a98a2526d4820e05d53625513bf1354306e028ec86e54e0d5bbad26a044e",
+                "first": 0,
+                "last": 0,
+                "p50_us": 0,
+                "p95_us": 0
+              }
+            },
+            "fixed_input_validation": {
+              "calls": 1,
+              "elapsed_us": 407,
+              "first_samples_us": [
+                407
+              ]
+            },
+            "gif_palette_spool": {
+              "calls": 1000,
+              "elapsed_us": 73,
+              "first_samples_us": {
+                "count": 64,
+                "canonical_bytes": 130,
+                "canonical_sha256": "ff68b5fe55bb7236d51d03afa296d30d771bdde37e5c698512567332a49093c0",
+                "first": 11,
+                "last": 0,
+                "p50_us": 0,
+                "p95_us": 0
+              }
+            },
+            "locked_fonts_staging_preparation": {
+              "calls": 1,
+              "elapsed_us": 6750,
+              "first_samples_us": [
+                6750
+              ]
+            },
+            "media_publication": {
+              "calls": 1,
+              "elapsed_us": 5315,
+              "first_samples_us": [
+                5315
+              ]
+            },
+            "output_color_conversion_copy": {
+              "calls": 1000,
+              "elapsed_us": 178,
+              "first_samples_us": {
+                "count": 64,
+                "canonical_bytes": 129,
+                "canonical_sha256": "ca0101ae4bf3b31bd300f93f576d862c57e98cb85d8ff6db4078eea404b88a9a",
+                "first": 0,
+                "last": 0,
+                "p50_us": 0,
+                "p95_us": 0
+              }
+            },
+            "pipeline_buffer_acquire": {
+              "calls": 1001,
+              "elapsed_us": 48,
+              "first_samples_us": {
+                "count": 64,
+                "canonical_bytes": 129,
+                "canonical_sha256": "ca0101ae4bf3b31bd300f93f576d862c57e98cb85d8ff6db4078eea404b88a9a",
+                "first": 0,
+                "last": 0,
+                "p50_us": 0,
+                "p95_us": 0
+              }
+            },
+            "pipeline_consumer_input_wait": {
+              "calls": 1001,
+              "elapsed_us": 67198,
+              "first_samples_us": {
+                "count": 64,
+                "canonical_bytes": 196,
+                "canonical_sha256": "6bd9dba5fd40a313f157cdc631b402a838a549f65a5f8077752bb020777a4562",
+                "first": 1661,
+                "last": 61,
+                "p50_us": 62,
+                "p95_us": 74
+              }
+            },
+            "pipeline_encoder_initialization_wait": {
+              "calls": 1,
+              "elapsed_us": 329,
+              "first_samples_us": [
+                329
+              ]
+            },
+            "pipeline_submit_wait": {
+              "calls": 2001,
+              "elapsed_us": 1339,
+              "first_samples_us": {
+                "count": 64,
+                "canonical_bytes": 129,
+                "canonical_sha256": "3bad5a55a1b87a8429b33c72a6205e5b18d205c2f8ca5657a038d693daa57422",
+                "first": 1,
+                "last": 0,
+                "p50_us": 0,
+                "p95_us": 1
+              }
+            },
+            "preparation": {
+              "calls": 1,
+              "elapsed_us": 2259,
+              "first_samples_us": [
+                2259
+              ]
+            },
+            "publication_receipt_hash_write": {
+              "calls": 1,
+              "elapsed_us": 1290524,
+              "first_samples_us": [
+                1290524
+              ]
+            },
+            "render_dag_build": {
+              "calls": 1000,
+              "elapsed_us": 266,
+              "first_samples_us": {
+                "count": 64,
+                "canonical_bytes": 130,
+                "canonical_sha256": "47d599c9495270283c144bbe92841ead4dafad80907907c00041ea1f6556a283",
+                "first": 20,
+                "last": 0,
+                "p50_us": 0,
+                "p95_us": 1
+              }
+            },
+            "render_tiles_and_conversion": {
+              "calls": 1000,
+              "elapsed_us": 64990,
+              "first_samples_us": {
+                "count": 64,
+                "canonical_bytes": 196,
+                "canonical_sha256": "82dbdc008de6226ba6d823833a810da0e978cacdd9922af1aac35c81d8f11a33",
+                "first": 1651,
+                "last": 60,
+                "p50_us": 60,
+                "p95_us": 73
+              }
+            },
+            "report_json_serialization": {
+              "calls": 1,
+              "elapsed_us": 6363,
+              "first_samples_us": [
+                6363
+              ]
+            },
+            "scene_ir_evaluation": {
+              "calls": 1000,
+              "elapsed_us": 59900,
+              "first_samples_us": {
+                "count": 64,
+                "canonical_bytes": 196,
+                "canonical_sha256": "b56c8890a9163fa083e83b274652dcb947148dad3dc95c68eba3f2c5062f970d",
+                "first": 1014,
+                "last": 56,
+                "p50_us": 56,
+                "p95_us": 65
+              }
+            },
+            "snapshot_canonical_hash": {
+              "calls": 4,
+              "elapsed_us": 106,
+              "first_samples_us": [
+                43,
+                27,
+                15,
+                19
+              ]
+            },
+            "snapshot_evaluation_hash": {
+              "calls": 1,
+              "elapsed_us": 24,
+              "first_samples_us": [
+                24
+              ]
+            },
+            "snapshot_validation": {
+              "calls": 5,
+              "elapsed_us": 184,
+              "first_samples_us": [
+                82,
+                17,
+                38,
+                25,
+                21
+              ]
+            },
+            "static_sequence_preparation": {
+              "calls": 1,
+              "elapsed_us": 4,
+              "first_samples_us": [
+                4
+              ]
+            },
+            "worker_checkpoint": {
+              "calls": 2002,
+              "elapsed_us": 1807,
+              "first_samples_us": {
+                "count": 64,
+                "canonical_bytes": 133,
+                "canonical_sha256": "6cf70baa0471abcea9a1082302e11b86a0983af00e86ba903af07eee48d62d32",
+                "first": 496,
+                "last": 0,
+                "p50_us": 0,
+                "p95_us": 0
+              }
+            },
+            "worker_control_max_gap": {
+              "calls": 1,
+              "elapsed_us": 50653,
+              "first_samples_us": [
+                50653
+              ]
+            },
+            "worker_execute_fixed": {
+              "calls": 1,
+              "elapsed_us": 1438107,
+              "first_samples_us": [
+                1438107
+              ]
+            },
+            "worker_fixed_input_read": {
+              "calls": 1,
+              "elapsed_us": 1755,
+              "first_samples_us": [
+                1755
+              ]
+            },
+            "worker_output_validation": {
+              "calls": 1,
+              "elapsed_us": 250,
+              "first_samples_us": [
+                250
+              ]
+            },
+            "worker_publication_fence_commit": {
+              "calls": 1,
+              "elapsed_us": 3347,
+              "first_samples_us": [
+                3347
+              ]
+            },
+            "worker_slot_wait": {
+              "calls": 1,
+              "elapsed_us": 760,
+              "first_samples_us": [
+                760
+              ]
+            }
+          },
+          "wall_us": 1441765
+        }
+      },
+      "report": {
+        "audio_profile_version": 3,
+        "audio_render_snapshot_hash": "3d80a16b81e27c11390b0a3338d7b3c79a5e361cb3a7e4618ee519fb63c50b13",
+        "audio_source": "silence",
+        "export_snapshot_hash": "2fb5abc72ef7fe2c38fae12476926456625c06bf33b06c1cb85102738bc81366",
+        "frames": {
+          "count": 1000,
+          "canonical_bytes": 2414729,
+          "canonical_sha256": "c2f001539e0b0e292ad1c0c6491238dd22992c5177623ea936b5fc5e583e6809",
+          "first": {
+            "backend": "cpu_reference_float32",
+            "composition": "f9266381-708a-4cba-95bb-6d1cba1bdab8",
+            "design_extent": [
+              3840.0,
+              2160.0
+            ],
+            "design_to_pixel": [
+              [
+                0.0005208333333333333,
+                0.0,
+                -0.0
+              ],
+              [
+                0.0,
+                0.000925925925925926,
+                -0.0
+              ]
+            ],
+            "display": {
+              "alpha": "straight",
+              "association_space": "srgb",
+              "byte_order": "big_endian",
+              "channel_order": "RGBA",
+              "clipping": "unit_interval_after_output_transform; no_tone_mapping",
+              "color_space": "srgb",
+              "pixel_format": "rgba16_unorm_png",
+              "row_order": "top_to_bottom",
+              "transfer_function": "srgb"
+            },
+            "flatten_tolerance_px": 0.02,
+            "font_locks": [],
+            "frame_index": "0",
+            "input_path": "semantic_scene",
+            "numeric": {
+              "alpha": "premultiplied",
+              "association_space": "linear_rec709",
+              "byte_order": "little_endian",
+              "channel_order": "RGBA",
+              "clipping": "none",
+              "color_space": "linear_rec709",
+              "pixel_format": "rgba16f",
+              "row_order": "top_to_bottom",
+              "transfer_function": "linear"
+            },
+            "project_schema_version": 1,
+            "region": {
+              "extent": [
+                3840.0,
+                2160.0
+              ],
+              "origin": [
+                0.0,
+                0.0
+              ],
+              "pixels": [
+                2,
+                2
+              ]
+            },
+            "revision": "1",
+            "schema_version": 1,
+            "semantic_versions": {
+              "adjustment_clip": 1,
+              "advanced_text": 2,
+              "blend": 1,
+              "bounds": 1,
+              "clip_mask": 1,
+              "color": "gpu002-color-v1",
+              "composition_media": 1,
+              "coverage": "vec003-grid4-v2",
+              "document": 1,
+              "document_matte": 1,
+              "effects": {
+                "kronello.channel_mixer": 1,
+                "kronello.color.curves": 1,
+                "kronello.color.exposure": 1,
+                "kronello.color.hsl": 1,
+                "kronello.color.levels": 1,
+                "kronello.color.lut": 1,
+                "kronello.corner_pin": 1,
+                "kronello.directional_blur": 1,
+                "kronello.displace": 1,
+                "kronello.drop_shadow": 2,
+                "kronello.gaussian_blur": 2,
+                "kronello.generate": 1,
+                "kronello.glow": 1,
+                "kronello.grain": 1,
+                "kronello.invert": 1,
+                "kronello.keying.chroma": 1,
+                "kronello.keying.luma": 1,
+                "kronello.mosaic": 1,
+                "kronello.radial_blur": 1,
+                "kronello.sharpen": 1,
+                "kronello.stabilize": 1,
+                "kronello.tint": 1,
+                "kronello.vignette": 1
+              },
+              "expression": 3,
+              "frame_interpolation": 1,
+              "generators": {
+                "kronello.solid": 1
+              },
+              "gradient_interpolation": "vec004-explicit-interpolation-v1",
+              "hdr": 1,
+              "interpolation": 1,
+              "layout": 1,
+              "path_operations": 1,
+              "repeater": 1,
+              "reverse_sampling": 1,
+              "simulation": 1,
+              "stroke_geometry": "vec005-local-stroke-v2",
+              "temporal": 1,
+              "time_map": 1,
+              "vector": "render001-kurbo-flatten-v1",
+              "video_input": "nle002-sdr-rgba8-nearest-v1",
+              "visibility": 2
+            },
+            "sequence_number": 0,
+            "snapshot_content_hash": "3d80a16b81e27c11390b0a3338d7b3c79a5e361cb3a7e4618ee519fb63c50b13",
+            "snapshot_schema_version": 1,
+            "target": {
+              "kind": "sequence",
+              "sequence": "f9266381-708a-4cba-95bb-6d1cba1bdab8"
+            },
+            "time": {
+              "den": "1",
+              "num": "0"
+            },
+            "working_space": "linear_rec709"
+          },
+          "last": {
+            "backend": "cpu_reference_float32",
+            "composition": "f9266381-708a-4cba-95bb-6d1cba1bdab8",
+            "design_extent": [
+              3840.0,
+              2160.0
+            ],
+            "design_to_pixel": [
+              [
+                0.0005208333333333333,
+                0.0,
+                -0.0
+              ],
+              [
+                0.0,
+                0.000925925925925926,
+                -0.0
+              ]
+            ],
+            "display": {
+              "alpha": "straight",
+              "association_space": "srgb",
+              "byte_order": "big_endian",
+              "channel_order": "RGBA",
+              "clipping": "unit_interval_after_output_transform; no_tone_mapping",
+              "color_space": "srgb",
+              "pixel_format": "rgba16_unorm_png",
+              "row_order": "top_to_bottom",
+              "transfer_function": "srgb"
+            },
+            "flatten_tolerance_px": 0.02,
+            "font_locks": [],
+            "frame_index": "999",
+            "input_path": "semantic_scene",
+            "numeric": {
+              "alpha": "premultiplied",
+              "association_space": "linear_rec709",
+              "byte_order": "little_endian",
+              "channel_order": "RGBA",
+              "clipping": "none",
+              "color_space": "linear_rec709",
+              "pixel_format": "rgba16f",
+              "row_order": "top_to_bottom",
+              "transfer_function": "linear"
+            },
+            "project_schema_version": 1,
+            "region": {
+              "extent": [
+                3840.0,
+                2160.0
+              ],
+              "origin": [
+                0.0,
+                0.0
+              ],
+              "pixels": [
+                2,
+                2
+              ]
+            },
+            "revision": "1",
+            "schema_version": 1,
+            "semantic_versions": {
+              "adjustment_clip": 1,
+              "advanced_text": 2,
+              "blend": 1,
+              "bounds": 1,
+              "clip_mask": 1,
+              "color": "gpu002-color-v1",
+              "composition_media": 1,
+              "coverage": "vec003-grid4-v2",
+              "document": 1,
+              "document_matte": 1,
+              "effects": {
+                "kronello.channel_mixer": 1,
+                "kronello.color.curves": 1,
+                "kronello.color.exposure": 1,
+                "kronello.color.hsl": 1,
+                "kronello.color.levels": 1,
+                "kronello.color.lut": 1,
+                "kronello.corner_pin": 1,
+                "kronello.directional_blur": 1,
+                "kronello.displace": 1,
+                "kronello.drop_shadow": 2,
+                "kronello.gaussian_blur": 2,
+                "kronello.generate": 1,
+                "kronello.glow": 1,
+                "kronello.grain": 1,
+                "kronello.invert": 1,
+                "kronello.keying.chroma": 1,
+                "kronello.keying.luma": 1,
+                "kronello.mosaic": 1,
+                "kronello.radial_blur": 1,
+                "kronello.sharpen": 1,
+                "kronello.stabilize": 1,
+                "kronello.tint": 1,
+                "kronello.vignette": 1
+              },
+              "expression": 3,
+              "frame_interpolation": 1,
+              "generators": {
+                "kronello.solid": 1
+              },
+              "gradient_interpolation": "vec004-explicit-interpolation-v1",
+              "hdr": 1,
+              "interpolation": 1,
+              "layout": 1,
+              "path_operations": 1,
+              "repeater": 1,
+              "reverse_sampling": 1,
+              "simulation": 1,
+              "stroke_geometry": "vec005-local-stroke-v2",
+              "temporal": 1,
+              "time_map": 1,
+              "vector": "render001-kurbo-flatten-v1",
+              "video_input": "nle002-sdr-rgba8-nearest-v1",
+              "visibility": 2
+            },
+            "sequence_number": 999,
+            "snapshot_content_hash": "3d80a16b81e27c11390b0a3338d7b3c79a5e361cb3a7e4618ee519fb63c50b13",
+            "snapshot_schema_version": 1,
+            "target": {
+              "kind": "sequence",
+              "sequence": "f9266381-708a-4cba-95bb-6d1cba1bdab8"
+            },
+            "time": {
+              "den": "100",
+              "num": "999"
+            },
+            "working_space": "linear_rec709"
+          }
+        },
+        "movie_profile": "gif_v1",
+        "outputs": [
+          {
+            "output": "/Users/sora/Repositories/soramikan/kronello/target/perf-013/baseline-1000/trial/movie.gif",
+            "probe": {
+              "duration": {
+                "den": "1",
+                "num": "10"
+              },
+              "export_snapshot_hash": "",
+              "render_snapshot_hash": "",
+              "streams": [
+                {
+                  "channels": null,
+                  "codec": "gif",
+                  "color_matrix": "unknown",
+                  "color_primaries": "unknown",
+                  "color_range": "unknown",
+                  "color_transfer": "unknown",
+                  "duration": {
+                    "den": "1",
+                    "num": "10"
+                  },
+                  "height": 2,
+                  "index": 0,
+                  "kind": "video",
+                  "pixel_format": "bgra",
+                  "sample_rate": null,
+                  "start": {
+                    "den": "1",
+                    "num": "0"
+                  },
+                  "time_base": {
+                    "den": "100",
+                    "num": "1"
+                  },
+                  "width": 2
+                }
+              ]
+            },
+            "profile": "gif_v1",
+            "video": {
+              "decoder": null,
+              "encoder": "gif",
+              "execution": "software",
+              "input_pixel_format": "rgba",
+              "output_pixel_format": "pal8",
+              "transfer_path": "cpu_rgba_to_indexed_gif",
+              "transfers": {
+                "cpu_conversion_input_bytes": 16000,
+                "cpu_conversion_output_bytes": 0,
+                "cpu_copy_bytes": 0,
+                "cpu_readback_bytes": 0,
+                "cpu_upload_bytes": 0,
+                "gpu_copy_bytes": 0
+              }
+            }
+          }
+        ],
+        "performance": {
+          "counts": {
+            "checkpoint_callbacks": 2002,
+            "output_direct_bytes": 16000,
+            "output_tile_conversions": 1000,
+            "rendered_frames": 1000,
+            "rendered_tiles": 1000,
+            "worker_checkpoint_calls": 2002
+          },
+          "peak_payload_bytes": {
+            "export_prepared_snapshot": 2118,
+            "export_sample_scenes": 2789,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 64,
+            "video_bundles": 32
+          },
+          "schema_version": 1,
+          "stages": {
+            "backend_dag_lowering_host": {
+              "calls": 1000,
+              "elapsed_us": 317,
+              "first_samples_us": {
+                "count": 64,
+                "canonical_bytes": 131,
+                "canonical_sha256": "e44bcd3b513ec86b293cf588364f0b5a5363ed6979cbf78a0cc3d8cd66ed80be",
+                "first": 213,
+                "last": 0,
+                "p50_us": 0,
+                "p95_us": 0
+              }
+            },
+            "backend_linear_execution": {
+              "calls": 1000,
+              "elapsed_us": 2424,
+              "first_samples_us": {
+                "count": 64,
+                "canonical_bytes": 131,
+                "canonical_sha256": "ecb2fa09eab24223879e546ed20bd3ec5922f0f18e6a12aa9d6e5381b476cd03",
+                "first": 582,
+                "last": 1,
+                "p50_us": 1,
+                "p95_us": 3
+              }
+            },
+            "checkpoint_callback": {
+              "calls": 2002,
+              "elapsed_us": 2015,
+              "first_samples_us": {
+                "count": 64,
+                "canonical_bytes": 133,
+                "canonical_sha256": "e5124909c18f4961e0a54a91631f0f83a63e811660e37e49da426c5391fd8d7c",
+                "first": 498,
+                "last": 0,
+                "p50_us": 0,
+                "p95_us": 0
+              }
+            },
+            "dag_media_resolution": {
+              "calls": 1000,
+              "elapsed_us": 132,
+              "first_samples_us": {
+                "count": 64,
+                "canonical_bytes": 129,
+                "canonical_sha256": "4018a98a2526d4820e05d53625513bf1354306e028ec86e54e0d5bbad26a044e",
+                "first": 0,
+                "last": 0,
+                "p50_us": 0,
+                "p95_us": 0
+              }
+            },
+            "fixed_input_validation": {
+              "calls": 1,
+              "elapsed_us": 407,
+              "first_samples_us": [
+                407
+              ]
+            },
+            "gif_palette_spool": {
+              "calls": 1000,
+              "elapsed_us": 73,
+              "first_samples_us": {
+                "count": 64,
+                "canonical_bytes": 130,
+                "canonical_sha256": "ff68b5fe55bb7236d51d03afa296d30d771bdde37e5c698512567332a49093c0",
+                "first": 11,
+                "last": 0,
+                "p50_us": 0,
+                "p95_us": 0
+              }
+            },
+            "locked_fonts_staging_preparation": {
+              "calls": 1,
+              "elapsed_us": 6750,
+              "first_samples_us": [
+                6750
+              ]
+            },
+            "media_publication": {
+              "calls": 1,
+              "elapsed_us": 5315,
+              "first_samples_us": [
+                5315
+              ]
+            },
+            "output_color_conversion_copy": {
+              "calls": 1000,
+              "elapsed_us": 178,
+              "first_samples_us": {
+                "count": 64,
+                "canonical_bytes": 129,
+                "canonical_sha256": "ca0101ae4bf3b31bd300f93f576d862c57e98cb85d8ff6db4078eea404b88a9a",
+                "first": 0,
+                "last": 0,
+                "p50_us": 0,
+                "p95_us": 0
+              }
+            },
+            "pipeline_buffer_acquire": {
+              "calls": 1001,
+              "elapsed_us": 48,
+              "first_samples_us": {
+                "count": 64,
+                "canonical_bytes": 129,
+                "canonical_sha256": "ca0101ae4bf3b31bd300f93f576d862c57e98cb85d8ff6db4078eea404b88a9a",
+                "first": 0,
+                "last": 0,
+                "p50_us": 0,
+                "p95_us": 0
+              }
+            },
+            "pipeline_consumer_input_wait": {
+              "calls": 1001,
+              "elapsed_us": 67198,
+              "first_samples_us": {
+                "count": 64,
+                "canonical_bytes": 196,
+                "canonical_sha256": "6bd9dba5fd40a313f157cdc631b402a838a549f65a5f8077752bb020777a4562",
+                "first": 1661,
+                "last": 61,
+                "p50_us": 62,
+                "p95_us": 74
+              }
+            },
+            "pipeline_encoder_initialization_wait": {
+              "calls": 1,
+              "elapsed_us": 329,
+              "first_samples_us": [
+                329
+              ]
+            },
+            "pipeline_submit_wait": {
+              "calls": 2001,
+              "elapsed_us": 1339,
+              "first_samples_us": {
+                "count": 64,
+                "canonical_bytes": 129,
+                "canonical_sha256": "3bad5a55a1b87a8429b33c72a6205e5b18d205c2f8ca5657a038d693daa57422",
+                "first": 1,
+                "last": 0,
+                "p50_us": 0,
+                "p95_us": 1
+              }
+            },
+            "preparation": {
+              "calls": 1,
+              "elapsed_us": 2259,
+              "first_samples_us": [
+                2259
+              ]
+            },
+            "render_dag_build": {
+              "calls": 1000,
+              "elapsed_us": 266,
+              "first_samples_us": {
+                "count": 64,
+                "canonical_bytes": 130,
+                "canonical_sha256": "47d599c9495270283c144bbe92841ead4dafad80907907c00041ea1f6556a283",
+                "first": 20,
+                "last": 0,
+                "p50_us": 0,
+                "p95_us": 1
+              }
+            },
+            "render_tiles_and_conversion": {
+              "calls": 1000,
+              "elapsed_us": 64990,
+              "first_samples_us": {
+                "count": 64,
+                "canonical_bytes": 196,
+                "canonical_sha256": "82dbdc008de6226ba6d823833a810da0e978cacdd9922af1aac35c81d8f11a33",
+                "first": 1651,
+                "last": 60,
+                "p50_us": 60,
+                "p95_us": 73
+              }
+            },
+            "scene_ir_evaluation": {
+              "calls": 1000,
+              "elapsed_us": 59900,
+              "first_samples_us": {
+                "count": 64,
+                "canonical_bytes": 196,
+                "canonical_sha256": "b56c8890a9163fa083e83b274652dcb947148dad3dc95c68eba3f2c5062f970d",
+                "first": 1014,
+                "last": 56,
+                "p50_us": 56,
+                "p95_us": 65
+              }
+            },
+            "snapshot_canonical_hash": {
+              "calls": 4,
+              "elapsed_us": 106,
+              "first_samples_us": [
+                43,
+                27,
+                15,
+                19
+              ]
+            },
+            "snapshot_evaluation_hash": {
+              "calls": 1,
+              "elapsed_us": 24,
+              "first_samples_us": [
+                24
+              ]
+            },
+            "snapshot_validation": {
+              "calls": 5,
+              "elapsed_us": 184,
+              "first_samples_us": [
+                82,
+                17,
+                38,
+                25,
+                21
+              ]
+            },
+            "static_sequence_preparation": {
+              "calls": 1,
+              "elapsed_us": 4,
+              "first_samples_us": [
+                4
+              ]
+            },
+            "worker_checkpoint": {
+              "calls": 2002,
+              "elapsed_us": 1807,
+              "first_samples_us": {
+                "count": 64,
+                "canonical_bytes": 133,
+                "canonical_sha256": "6cf70baa0471abcea9a1082302e11b86a0983af00e86ba903af07eee48d62d32",
+                "first": 496,
+                "last": 0,
+                "p50_us": 0,
+                "p95_us": 0
+              }
+            },
+            "worker_fixed_input_read": {
+              "calls": 1,
+              "elapsed_us": 1755,
+              "first_samples_us": [
+                1755
+              ]
+            },
+            "worker_slot_wait": {
+              "calls": 1,
+              "elapsed_us": 760,
+              "first_samples_us": [
+                760
+              ]
+            }
+          },
+          "wall_us": 125050
+        },
+        "probe": {
+          "duration": {
+            "den": "1",
+            "num": "10"
+          },
+          "export_snapshot_hash": "",
+          "render_snapshot_hash": "",
+          "streams": [
+            {
+              "channels": null,
+              "codec": "gif",
+              "color_matrix": "unknown",
+              "color_primaries": "unknown",
+              "color_range": "unknown",
+              "color_transfer": "unknown",
+              "duration": {
+                "den": "1",
+                "num": "10"
+              },
+              "height": 2,
+              "index": 0,
+              "kind": "video",
+              "pixel_format": "bgra",
+              "sample_rate": null,
+              "start": {
+                "den": "1",
+                "num": "0"
+              },
+              "time_base": {
+                "den": "100",
+                "num": "1"
+              },
+              "width": 2
+            }
+          ]
+        },
+        "render_snapshot_hash": "3d80a16b81e27c11390b0a3338d7b3c79a5e361cb3a7e4618ee519fb63c50b13",
+        "request": {
+          "background": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "chapters": "omit",
+          "clipping": "reject",
+          "frame_rate": {
+            "den": "1",
+            "num": "100"
+          },
+          "output": "/Users/sora/Repositories/soramikan/kronello/target/perf-013/baseline-1000/trial/movie.gif",
+          "range": {
+            "end": {
+              "den": "1",
+              "num": "10"
+            },
+            "start": {
+              "den": "1",
+              "num": "0"
+            }
+          },
+          "region": {
+            "extent": [
+              3840.0,
+              2160.0
+            ],
+            "origin": [
+              0.0,
+              0.0
+            ],
+            "pixels": [
+              2,
+              2
+            ]
+          }
+        },
+        "sample_range": {
+          "end": 480000,
+          "start": 0
+        },
+        "schema_version": 1,
+        "streaming": {
+          "audio_spool_write_bytes": 0,
+          "audio_stage_bytes": 0,
+          "audio_window_read_bytes": 0,
+          "published_bytes": 25803,
+          "video_stage_bytes": 0
+        },
+        "video": {
+          "decoder": null,
+          "encoder": "gif",
+          "execution": "software",
+          "input_pixel_format": "rgba",
+          "output_pixel_format": "pal8",
+          "transfer_path": "cpu_rgba_to_indexed_gif",
+          "transfers": {
+            "cpu_conversion_input_bytes": 16000,
+            "cpu_conversion_output_bytes": 0,
+            "cpu_copy_bytes": 0,
+            "cpu_readback_bytes": 0,
+            "cpu_upload_bytes": 0,
+            "gpu_copy_bytes": 0
+          }
+        }
+      },
+      "progress": [
+        {
+          "elapsed_ms": 81.97370800189674,
+          "completed": 1
+        },
+        {
+          "elapsed_ms": 185.5648330092663,
+          "completed": 1000
+        }
+      ],
+      "sampled_worker_peak_rss_bytes": 75284480,
+      "sampled_worker_rss_progress_windows": {
+        "0": {
+          "first": {
+            "elapsed_ms": 81.97370800189674,
+            "method": "proc_pid_rusage_v2",
+            "process_uuid": "39442383f71e3cdaab9da3a15705ef3d",
+            "process_start_ticks": 2972016996047,
+            "rss_bytes": 24412160,
+            "physical_footprint_bytes": 7160432,
+            "cpu_ns": 48028041,
+            "disk_read_bytes": 1933312,
+            "disk_write_bytes": 258048,
+            "bytes": 24412160,
+            "completed": 1
+          },
+          "last": {
+            "elapsed_ms": 81.97370800189674,
+            "method": "proc_pid_rusage_v2",
+            "process_uuid": "39442383f71e3cdaab9da3a15705ef3d",
+            "process_start_ticks": 2972016996047,
+            "rss_bytes": 24412160,
+            "physical_footprint_bytes": 7160432,
+            "cpu_ns": 48028041,
+            "disk_read_bytes": 1933312,
+            "disk_write_bytes": 258048,
+            "bytes": 24412160,
+            "completed": 1
+          },
+          "min_bytes": 24412160,
+          "max_bytes": 24412160,
+          "samples": 1
+        },
+        "32": {
+          "first": {
+            "elapsed_ms": 185.5648330092663,
+            "method": "proc_pid_rusage_v2",
+            "process_uuid": "39442383f71e3cdaab9da3a15705ef3d",
+            "process_start_ticks": 2972016996047,
+            "rss_bytes": 75251712,
+            "physical_footprint_bytes": 59785840,
+            "cpu_ns": 147848291,
+            "disk_read_bytes": 2035712,
+            "disk_write_bytes": 450560,
+            "bytes": 75251712,
+            "completed": 1000
+          },
+          "last": {
+            "elapsed_ms": 1401.1771250079619,
+            "method": "proc_pid_rusage_v2",
+            "process_uuid": "39442383f71e3cdaab9da3a15705ef3d",
+            "process_start_ticks": 2972016996047,
+            "rss_bytes": 75284480,
+            "physical_footprint_bytes": 59818608,
+            "cpu_ns": 1359733250,
+            "disk_read_bytes": 2039808,
+            "disk_write_bytes": 516096,
+            "bytes": 75284480,
+            "completed": 1000
+          },
+          "min_bytes": 75251712,
+          "max_bytes": 75284480,
+          "samples": 12
+        }
+      },
+      "sampled_worker_usage_last": {
+        "elapsed_ms": 1401.1771250079619,
+        "method": "proc_pid_rusage_v2",
+        "process_uuid": "39442383f71e3cdaab9da3a15705ef3d",
+        "process_start_ticks": 2972016996047,
+        "rss_bytes": 75284480,
+        "physical_footprint_bytes": 59818608,
+        "cpu_ns": 1359733250,
+        "disk_read_bytes": 2039808,
+        "disk_write_bytes": 516096
+      },
+      "output_paths": [
+        "/Users/sora/Repositories/soramikan/kronello/target/perf-013/baseline-1000/trial/movie.gif"
+      ],
+      "oracles": [
+        {
+          "encoded_sha256": "134e920890e32f3939508a3e1a6c204b7bbfccfca2b5a2dad897ea8bfc372a6c",
+          "encoded_bytes": 25803,
+          "streams": [
+            {
+              "codec_type": "video",
+              "codec": "gif",
+              "pixel_format": "bgra",
+              "sample_rate": null,
+              "channels": null,
+              "channel_layout": null,
+              "width": 2,
+              "height": 2,
+              "color_primaries": null,
+              "color_transfer": null,
+              "color_matrix": null,
+              "color_range": null,
+              "initial_padding": null,
+              "decoded_sha256": "48ce7192db7361eb8835fcc51c88657f7aad3e3811417ea8114a37025142181c",
+              "decoded_bytes": 16000,
+              "packets": {
+                "count": 1000,
+                "canonical_bytes": 136857,
+                "canonical_sha256": "24d52db4deccbff33bf5b3a9f86932e851e9871d9eb0455b24a249c3eee779b4",
+                "first": {
+                  "pts": "0",
+                  "dts": "0",
+                  "duration": "1/100",
+                  "data_hash": "SHA256:462c9d440270e961dbce436624d0c3f4c0f50d7cb7e8b990f91acfd128672e04"
+                },
+                "last": {
+                  "pts": "999/100",
+                  "dts": "999/100",
+                  "duration": "1/100",
+                  "data_hash": "SHA256:c1a32ca1d73bbf494cff07a4f57c69789c1a7322e63400a38a69fb738f2e13c5"
+                }
+              }
+            }
+          ],
+          "chapters": [],
+          "snapshot_tags": {}
+        }
+      ]
+    }
+  }
+}

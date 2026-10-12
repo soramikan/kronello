@@ -14,3 +14,18 @@
 - workerのsampled RSS peakは565,215,232bytes。source cache/native/driver等を含み、metadataだけの保持量やprocess maximum RSSと扱わない。
 
 この1試行から一般的な速度差を予測しない。変更後は新binaryの固定hashで交互比較し、全metadataの復元、frame range/count、全decoded bits/PTS/packet、reader/query/recoveryの保持量と破損拒否を別々に証明する。小さいheader/chunkへの移行に加え、root receipt自体のartifact一覧とserialization I/Oも検証対象にする。
+
+## 件数を変えた基準
+
+[1,000frame基準](perf-013-baseline-1000.json)は同じ固定binary・document・100fps・2×2 outputで、rangeだけを`[0, 10)`へ変えた別workerである。両documentのclip countは0で、unused source assetは同じidentityのまま保持する。source decodeの費用を長尺metadataの増加と混同しない。
+
+| 条件 | 1,000frames | 10,000frames |
+|---|---:|---:|
+| submit→terminal result | 1,529.4ms | 10,848.5ms |
+| render/色変換 | 65.0ms | 615.4ms |
+| receipt/hash保存 | 1,290.5ms | 9,485.1ms |
+| inline frame JSON | 2,414,729bytes | 24,177,209bytes |
+| receipt | 2,422,012bytes | 24,184,560bytes |
+| sampled worker RSS peak | 75,284,480bytes | 565,215,232bytes |
+
+各条件1試行で、workspace検証と並行した静穏でないhostの観測である。RSSをmetadataだけへ帰属させたり、一般的な改善率を算出する証拠にはしない。frame数に比例するserialized bytesと、それを全量保持/JSON化する現在の実装を変更後の保持上限・ページ復元と比較する。
