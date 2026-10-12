@@ -5,6 +5,42 @@
 #import <Foundation/Foundation.h>
 #import <Metal/Metal.h>
 #import <dlfcn.h>
+#import <limits.h>
+#import <mach-o/dyld.h>
+#import <string.h>
+
+// A CLI/test executable is not an application bundle. Asking NSBundle for
+// its main bundle can enumerate a very large build/artifact directory. The
+// supported layout has executables in .app/Contents/MacOS or Contents/Helpers.
+static NSString *kr_bundled_syphon_path(NSString *executable) {
+    NSString *macos = executable.stringByDeletingLastPathComponent;
+    NSString *contents = macos.stringByDeletingLastPathComponent;
+    NSString *application = contents.stringByDeletingLastPathComponent;
+    if ((![macos.lastPathComponent isEqualToString:@"MacOS"] &&
+         ![macos.lastPathComponent isEqualToString:@"Helpers"]) ||
+        ![contents.lastPathComponent isEqualToString:@"Contents"] ||
+        ![application.pathExtension isEqualToString:@"app"]) return nil;
+    return [contents stringByAppendingPathComponent:@"Frameworks/Syphon.framework/Syphon"];
+}
+
+// Private native test seam: resolve a layout without probing or loading files.
+int kr_output_test_bundled_syphon_path(const char *executable, char *output, size_t capacity) {
+    if (executable == NULL || output == NULL) return -1;
+    NSString *path = kr_bundled_syphon_path([NSString stringWithUTF8String:executable]);
+    if (path == nil) return 0;
+    const char *bytes = path.fileSystemRepresentation;
+    if (bytes == NULL || strlen(bytes) + 1 > capacity) return -1;
+    memcpy(output, bytes, strlen(bytes) + 1);
+    return 1;
+}
+
+static NSString *kr_executable_bundled_syphon_path(void) {
+    char executable[PATH_MAX];
+    uint32_t size = sizeof(executable);
+    if (_NSGetExecutablePath(executable, &size) != 0) return nil;
+    NSString *path = [NSString stringWithUTF8String:executable];
+    return kr_bundled_syphon_path(path.stringByResolvingSymlinksInPath);
+}
 
 // Syphon.framework is loaded at runtime (BSD-2-Clause; never linked), so its
 // headers are unavailable here. Declare the SyphonMetalServer selectors used
@@ -39,8 +75,7 @@ int kr_output_syphon_detected(void) {
             detected = 1;
             return;
         }
-        NSString *bundled = [NSBundle.mainBundle.privateFrameworksURL.path
-            stringByAppendingPathComponent:@"Syphon.framework/Syphon"];
+        NSString *bundled = kr_executable_bundled_syphon_path();
         NSString *paths[] = {
             bundled,
             @"/Library/Frameworks/Syphon.framework/Versions/A/Syphon",

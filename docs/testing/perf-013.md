@@ -132,3 +132,5 @@ python3 scripts/perf_export_worker.py \
 | wire/schemaと必須workspace gate | API全76operationのrequest/result schema・strict Response往復12件成功、生成Swift整合、修正後全target Clippy成功 | `target/perf-013-final-workspace-tests.log`の実行は継続中。workspace全体の成功はまだ主張しない |
 
 この表は条件と根拠の対応であり、最後の必須gateがterminal successになるまでは受け入れ状態を`in_progress`に維持する。PERF-014のGPU/encoder surfaceと直接packet muxは別の未実施項目である。
+
+wire修正後のworkspace実行は、FFI外部出力のnative bundle検出が約10〜14.5秒かかるため2件timeoutでexit101になった。native stackでCLI/build directoryのFoundation走査を確認し、deadlineを変更せず明示app配置からframework候補を生成する実装へ修正した。[原因・timing・修正記録](syphon-cli-bundle-probe.md)を参照する。PERF-013のrender/manifest成果物の比較と、この必須gateで見つかった遅延の修正を区別する。
