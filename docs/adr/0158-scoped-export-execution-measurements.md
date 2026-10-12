@@ -8,7 +8,7 @@
 
 `KRONELLO_EXPORT_DIAGNOSTICS=1`を実行時に指定した場合だけ、固定workerと同期deliveryの工程時間・回数・明示payloadを観測する。作品、要求、固定snapshot、意味版、codec設定、cache keyへ診断policyや時計を含めない。式・通常評価に時計を入力しない。既定は無効で、`AvExportReport.performance`も省略する。
 
-観測器は実行所有の`Arc`であり、固定名のstage/count/peakだけを保持する。frame別の無制限traceや全画素を保持しない。caller threadでは一時的なthread-local scopeを使用し、nested scopeのreturn/unwindで元の観測器を復元する。guardはthreadを越えて移動できない。専用encoder threadには観測器だけを渡し、自分のscopeを作る。native handleや評価状態は共有しない。
+観測器は実行所有の`Arc`であり、固定名のstage/count/peakだけを保持する。stageごとの時間sampleも最初の64個までとし、frame別の無制限traceや全画素を保持しない。caller threadでは一時的なthread-local scopeを使用し、nested scopeのreturn/unwindで元の観測器を復元する。guardはthreadを越えて移動できない。専用encoder threadには観測器だけを渡し、自分のscopeを作る。native handleや評価状態は共有しない。
 
 stageはhostのmonotonic elapsed timeであり、GPU timestampや排他的CPU時間ではない。producer/consumer・入れ子stageの時間は重なるため合計をwall timeと呼ばない。readback/waitは従来の実transfer statsを併記する。native変換とcodecの分離など、未計測の内訳を推定で埋めない。
 

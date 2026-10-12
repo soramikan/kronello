@@ -18,7 +18,7 @@ python3 scripts/perf_export_worker.py --before /absolute/path/to/before/kronello
   --output target/perf-006/comparison-0 --pairs 9
 ```
 
-0/3/8の各caseを別々に実行する。診断のstage時間は入れ子とthread間で重なり、合計時間やGPU timestampではない。native RGBA→YUVとcodec時間は現在一つのstageで、分離は残件。sourceの全RGBA8変換の回数/bytesはnative入口で数える。
+0/3/8の各caseを別々に実行する。診断のstage時間は入れ子とthread間で重なり、合計時間やGPU timestampではない。native RGBA→YUV、codec send/receive、packet write、trailer/closeは別stageで観測する。GPUはhostの準備/submit/完了待ちと実transfer statsを分離し、GPU timestamp時間と混同しない。sourceの全RGBA8変換の回数/bytesはnative入口で数える。
 
 ## 初回の再現性確認
 
@@ -61,7 +61,7 @@ python3 scripts/perf_export_worker.py --before /absolute/path/to/before/kronello
 ## 残る受け入れ
 
 - 全matrixの補正済み計測器と十分な反復数による再採取、異開始点/reverse/HDR/flowの対照、長尺完走・復旧と定常メモリ観測。
-- native RGBA→YUVとcodec、GPU実行と完了待ち、spool/window保持量、hash/metadata増加を含む工程内訳の補強。
+- 全matrixの詳細native/GPU host/wait、spool/window保持量、hash/metadata内訳を最終記録へ反映する。
 - codec A/Bをtrial単位で交互にする追加比較、同一process内cold/warmとfresh workerの分離、十分な反復数のp50/p95、長尺完走/定常RSSの観測。
 - 生成schema/Swift型、fmt、workspace Clippy/test、実Metal・worker取消/復旧・診断無効時の回帰確認。
 
@@ -70,3 +70,9 @@ python3 scripts/perf_export_worker.py --before /absolute/path/to/before/kronello
 ## 段階的な回帰検証
 
 初版の`cargo fmt --all --check`、workspace Clippy（warnings denied）、workspace testは成功した。通常/Doctest合計1,338 passed、47 ignored、200 suites。外部fixtureのrootを明示し、実Metalと実workerの通常テストも含む。生成schemaとSwift型を更新し、生成checkも通過した。時間精度補正後のdiagnostic unit4件は成功した。初版の全体成功を補正後や後続改善の全体成功と混同せず、受け入れ時に最終ソースで全体を再確認する。
+
+## 最終基準の再採取（進行中）
+
+時間精度補正、native工程分離、GPU host準備/submit/完了待ちとdisk cache保存、音声chunk/window・RGBA・bundleのpayloadを含む固定release binary `cd9ef76095725aa1cf38da854140dae00d9519d1bc1708e07afbe14b2b5dbcfc`で、全8ケースを各18試行で再採取中。stageごとの最初の64個だけを記録し、同一worker内のfirst frameとwarm frame p50/p95をfresh workerのwall p50/p95から分離する。少数sampleのfixture/長尺ケースと実Metal・CPU referenceを混同しない。
+
+capabilitiesの繰り返されるcommand registry全文はcanonical SHA-256と必要なruntime/backend/versionへ整理した。測定trialは変更せず、schemaとruntimeのidentityを残す。

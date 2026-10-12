@@ -178,6 +178,27 @@ def percentile(values, fraction):
     return sorted(values)[max(0, math.ceil(len(values) * fraction) - 1)]
 
 
+def capability_provenance(value):
+    # The command registry is inspectable from the API schema; avoid repeating
+    # it in every performance case while retaining its exact digest.
+    return {key: value[key] for key in ("api_schema_version", "engine_version", "semantic_versions", "backends", "media", "export_profiles") if key in value} | {
+        "complete_capabilities_sha256": hashlib.sha256(canonical(value)).hexdigest()
+    }
+
+
+def frame_stage_summary(report):
+    stage = report.get("performance", {}).get("stages", {}).get("render_tiles_and_conversion", {})
+    values = stage.get("first_samples_us", [])
+    if not values:
+        return None
+    result = {"first_frame_render_us": values[0], "sampled_frames": len(values),
+              "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders."}
+    if len(values) > 1:
+        result.update(warm_frame_render_p50_us=percentile(values[1:], 0.5),
+                      warm_frame_render_p95_us=percentile(values[1:], 0.95))
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--before", type=Path, required=True)
@@ -203,7 +224,7 @@ def main():
     args.output.mkdir(parents=True, exist_ok=False)
     project = args.output / "input.kronello"
     env = dict(os.environ, KRONELLO_STATE_ROOT=str(args.output / "prepare-state"))
-    capabilities = {key: call(binary, args.backend, env, "capabilities.get")
+    capabilities = {key: capability_provenance(call(binary, args.backend, env, "capabilities.get"))
                     for key, binary in binaries.items()}
     call(binaries["before"], args.backend, env, "project.create",
          project=str(project), document=case["document"])
@@ -217,7 +238,7 @@ def main():
                 "notes": ["Each trial launches a fresh real worker; first/subsequent trials are not a warm persistent GPU process.",
                           "Wall includes CLI freeze/submit, queue, worker and terminal result loading; independent oracle excluded.",
                           "RSS is sampled from the worker every 100ms, not kernel maximum RSS, payload or GPU memory.",
-                          "Stage times overlap; native_video_conversion_encode includes sws and codec until separate counters are added."]}
+                          "Stage times overlap; native conversion/send/receive/packet-write and GPU host preparation/submit/wait are separately observed when supported by this binary."]}
     receipt = args.output / "evidence.json"
     for pair in range(args.pairs):
         order = ["before", "after"] if pair % 2 == 0 else ["after", "before"]
@@ -239,6 +260,7 @@ def main():
         trials = [t for t in evidence["trials"] if t["mode"] == mode]
         warm = [t["succeeded_ms"] for t in trials[1:]]
         evidence["summary"][mode] = {"first_ms": trials[0]["succeeded_ms"],
+                                     "frame_stage": frame_stage_summary(trials[-1]["report"]),
                                      "subsequent_p50_ms": percentile(warm, 0.5),
                                      "subsequent_p95_ms": percentile(warm, 0.95)}
     pairs = [[t for t in evidence["trials"] if t["pair"] == pair]
