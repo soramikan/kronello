@@ -9,6 +9,9 @@ fn main() {
     println!("cargo:rerun-if-env-changed=KRONELLO_FFMPEG_PREFIX");
     println!("cargo:rerun-if-env-changed=KRONELLO_LIBRAW_PREFIX");
     let mut build = cc::Build::new();
+    if std::env::var_os("CARGO_FEATURE_EXPORT_PROTOTYPES").is_some() {
+        build.define("KRONELLO_EXPORT_PROTOTYPES", None);
+    }
     build.file("native/media.c").flag_if_supported("-std=gnu11");
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
         // Clang supports the audited shim's typeof declarations with the MSVC ABI.

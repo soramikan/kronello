@@ -504,7 +504,16 @@ typedef struct Encoder {
     /* conversion calls/us, send calls/us, receive calls/us, packet mux us,
      * trailer/close us. These are observations, not encode settings. */
     uint64_t measurements[8];
+#ifdef KRONELLO_EXPORT_PROTOTYPES
+    AVFormatContext *direct_audio;
+    AVPacket *direct_packet;
+    AVStream *direct_stream;
+    int direct_index, direct_ready;
+#endif
 } Encoder;
+#ifdef KRONELLO_EXPORT_PROTOTYPES
+static int direct_audio_until(Encoder *e,int64_t dts,AVRational base,int finish);
+#endif
 static int64_t encoder_clock(Encoder *e) { return e->measure ? e->k->av_gettime_relative() : 0; }
 static void encoder_elapsed(Encoder *e, int slot, int64_t start) {
     if(e->measure) {
@@ -518,6 +527,10 @@ void km_encoder_close(Encoder *e) {
     if(!e)return;
     Km *k=e->k;
     if(e->sws)k->sws_freeContext(e->sws);
+#ifdef KRONELLO_EXPORT_PROTOTYPES
+    k->av_packet_free(&e->direct_packet);
+    k->avformat_close_input(&e->direct_audio);
+#endif
     k->av_frame_free(&e->frame); k->av_packet_free(&e->packet); k->avcodec_free_context(&e->codec);
     if(e->format) { if(e->format->pb)k->avio_closep(&e->format->pb); k->avformat_free_context(e->format); }
     free(e);
@@ -675,6 +688,12 @@ static int write_packets(Encoder *e) {
                 (size_t)(e->span_count-span-1)*sizeof(e->spans[0]));
         --e->span_count;
         e->k->av_packet_rescale_ts(e->packet,e->codec->time_base,e->stream->time_base);e->packet->stream_index=e->stream->index;
+#ifdef KRONELLO_EXPORT_PROTOTYPES
+        if(e->direct_audio) {
+            int audio_ret=direct_audio_until(e,e->packet->dts,e->stream->time_base,0);
+            if(audio_ret<0){e->k->av_packet_unref(e->packet);return audio_ret;}
+        }
+#endif
         int64_t mux=encoder_clock(e);
         ret=e->k->av_interleaved_write_frame(e->format,e->packet);e->k->av_packet_unref(e->packet);
         encoder_elapsed(e,6,mux);
@@ -709,6 +728,9 @@ int km_encoder_finish(Encoder *e) {
     if(ret<0)return fail(e->k,ret,"flush encoder");
     ret=write_packets(e);if(ret<0)return ret;
     if(e->span_count)return fail(e->k,AVERROR(EINVAL),"encoder flush omitted submitted frames");
+#ifdef KRONELLO_EXPORT_PROTOTYPES
+    if(e->direct_audio){ret=direct_audio_until(e,0,e->stream->time_base,1);if(ret<0)return ret;}
+#endif
     int64_t trailer=encoder_clock(e);
     ret=e->k->av_write_trailer(e->format);if(ret<0)return fail(e->k,ret,"write trailer");
     ret=e->k->avio_closep(&e->format->pb);encoder_elapsed(e,7,trailer);if(ret<0)return fail(e->k,ret,"close output");return 0;
@@ -1164,6 +1186,65 @@ done:
     if(out){if(out->pb)k->avio_closep(&out->pb);k->avformat_free_context(out);}
     return ret;
 }
+
+#ifdef KRONELLO_EXPORT_PROTOTYPES
+/* Experimental ProRes/PCM24 MOV path. One audio demux packet is retained;
+ * delayed video packets keep the same checked span table as normal encoding.
+ * No video intermediate or video demux/packet reread is produced. */
+static int direct_audio_until(Encoder *e,int64_t dts,AVRational base,int finish) {
+    Km *k=e->k;
+    AVStream *input=e->direct_audio->streams[e->direct_index];
+    while(e->direct_ready && (finish || k->av_compare_ts(e->direct_packet->dts,input->time_base,dts,base)<=0)) {
+        k->av_packet_rescale_ts(e->direct_packet,input->time_base,e->direct_stream->time_base);
+        e->direct_packet->stream_index=e->direct_stream->index;e->direct_packet->pos=-1;
+        int ret=k->av_interleaved_write_frame(e->format,e->direct_packet);
+        k->av_packet_unref(e->direct_packet);
+        if(ret<0)return fail(k,ret,"direct PCM packet write");
+        e->direct_ready=read_mux_packet(k,e->direct_audio,e->direct_packet,e->direct_index);
+        if(e->direct_ready<0)return e->direct_ready;
+    }
+    return 0;
+}
+int km_encoder_direct_pcm_mux(Encoder *e,const char *audio,const char *render_hash,const char *export_hash) {
+    Km *k=e->k;AVFormatContext *out=NULL;
+    if(e->direct_audio || e->span_count || e->codec->codec_id!=AV_CODEC_ID_PRORES ||
+       e->codec->color_primaries!=AVCOL_PRI_BT709)
+        return fail(k,AVERROR(EINVAL),"direct mux requires a fresh SDR ProRes encoder");
+    e->direct_audio=km_probe_open(k,audio);if(!e->direct_audio)return -1;
+    e->direct_index=k->av_find_best_stream(e->direct_audio,AVMEDIA_TYPE_AUDIO,-1,-1,NULL,0);
+    if(e->direct_index<0)return fail(k,e->direct_index,"direct PCM stream missing");
+    AVStream *input=e->direct_audio->streams[e->direct_index];
+    if(input->codecpar->codec_id!=AV_CODEC_ID_PCM_S24LE || input->codecpar->sample_rate!=48000 ||
+       input->codecpar->ch_layout.nb_channels!=2 || input->start_time!=0 || input->duration<=0)
+        return fail(k,AVERROR_INVALIDDATA,"direct mux requires zero-origin stereo PCM24/48k");
+    e->direct_packet=k->av_packet_alloc();if(!e->direct_packet)return fail(k,AVERROR(ENOMEM),"direct PCM packet");
+    int ret=k->avformat_alloc_output_context2(&out,NULL,"mov",e->format->url);
+    if(ret<0 || !out)return fail(k,ret<0?ret:AVERROR(ENOMEM),"direct MOV context");
+    AVStream *video=k->avformat_new_stream(out,NULL),*sound=k->avformat_new_stream(out,NULL);
+    if(!video || !sound){ret=fail(k,AVERROR(ENOMEM),"direct MOV streams");goto failed;}
+    ret=k->avcodec_parameters_copy(video->codecpar,e->stream->codecpar);if(ret<0)goto failed;
+    ret=k->avcodec_parameters_copy(sound->codecpar,input->codecpar);if(ret<0)goto failed;
+    video->codecpar->codec_tag=0;sound->codecpar->codec_tag=0;
+    /* Packed full-frame RGBA input is progressive. The intermediate ProRes
+     * demuxer infers this; direct codec parameters must carry it explicitly. */
+    video->codecpar->field_order=AV_FIELD_PROGRESSIVE;
+    video->time_base=e->codec->time_base;sound->time_base=input->time_base;
+    k->av_dict_set(&out->metadata,"kronello_render_snapshot_hash",render_hash,0);
+    k->av_dict_set(&out->metadata,"kronello_export_snapshot_hash",export_hash,0);
+    ret=k->avio_closep(&e->format->pb);if(ret<0)goto failed;
+    ret=k->avio_open(&out->pb,out->url,AVIO_FLAG_WRITE);if(ret<0)goto failed;
+    AVDictionary *options=NULL;char timescale[32];snprintf(timescale,sizeof(timescale),"%d",video->time_base.den);
+    k->av_dict_set(&options,"video_track_timescale",timescale,0);
+    k->av_dict_set(&options,"movflags","use_metadata_tags",0);
+    ret=k->avformat_write_header(out,&options);k->av_dict_free(&options);if(ret<0)goto failed;
+    k->avformat_free_context(e->format);e->format=out;e->stream=video;e->direct_stream=sound;
+    e->direct_ready=read_mux_packet(k,e->direct_audio,e->direct_packet,e->direct_index);
+    return e->direct_ready<0?e->direct_ready:0;
+failed:
+    if(out){if(out->pb)k->avio_closep(&out->pb);k->avformat_free_context(out);}
+    return fail(k,ret,"direct MOV initialization");
+}
+#endif
 
 /* MEDIA-004 GIF delivery. Deterministic indexed-color pipeline kept inside
  * the audited shim instead of an avfilter dependency: phase 1 streams RGBA

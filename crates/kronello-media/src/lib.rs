@@ -15,6 +15,8 @@ pub use source_cache::{SourceFrameCacheLimits, SourceFrameCacheStats};
 mod assets;
 mod audio;
 mod audio_cache;
+#[cfg(feature = "export-prototypes")]
+pub mod delivery_prototypes;
 mod export;
 #[allow(unsafe_code)]
 mod ffi;

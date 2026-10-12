@@ -555,6 +555,15 @@ impl Drop for NativeDecoder {
         unsafe { km_decoder_close(self.ptr.as_ptr()) }
     }
 }
+#[cfg(feature = "export-prototypes")]
+unsafe extern "C" {
+    fn km_encoder_direct_pcm_mux(
+        encoder: *mut c_void,
+        audio: *const c_char,
+        render_hash: *const c_char,
+        export_hash: *const c_char,
+    ) -> c_int;
+}
 pub(crate) struct NativeEncoder<'a> {
     ptr: NonNull<c_void>,
     runtime: &'a NativeRuntime,
@@ -564,6 +573,33 @@ pub(crate) struct NativeEncoder<'a> {
     last_measurements: [u64; 8],
 }
 impl<'a> NativeEncoder<'a> {
+    #[cfg(feature = "export-prototypes")]
+    pub(crate) fn direct_pcm_mux(
+        &mut self,
+        audio: &Path,
+        render_hash: &str,
+        export_hash: &str,
+    ) -> Result<(), MediaError> {
+        let audio = path_string(audio)?;
+        let render_hash = CString::new(render_hash)
+            .map_err(|_| MediaError::InvalidInput("render hash".into()))?;
+        let export_hash = CString::new(export_hash)
+            .map_err(|_| MediaError::InvalidInput("export hash".into()))?;
+        // SAFETY: unique fresh encoder, live strings and runtime; the native
+        // state owns the single audio demux packet until encoder Drop.
+        if unsafe {
+            km_encoder_direct_pcm_mux(
+                self.ptr.as_ptr(),
+                audio.as_ptr(),
+                render_hash.as_ptr(),
+                export_hash.as_ptr(),
+            )
+        } < 0
+        {
+            return Err(MediaError::Encode(self.runtime.error()));
+        }
+        Ok(())
+    }
     pub(crate) fn open_color(
         runtime: &'a NativeRuntime,
         path: &Path,
