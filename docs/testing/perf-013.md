@@ -1,6 +1,6 @@
 # PERF-013: 長尺metadata・receipt・mux確定工程
 
-状態: `in_progress`。PERF-011/012の必須検証・受け入れを完了し、実装へ進む。[ADR-0165](../adr/0165-bounded-export-metadata-and-receipts.md)は提案であり、chunk writer/reader/query/recoveryの実装済みを意味しない。
+状態: `in_progress`。PERF-011/012の必須検証・受け入れを完了し、実装を進めている。[ADR-0165](../adr/0165-bounded-export-metadata-and-receipts.md)のmovie/GIF接続は実装済みだが、image sequenceとmux/追加復旧条件の完了を意味しない。
 
 ## 変更前の実worker基準
 
