@@ -1,6 +1,6 @@
 # ADR-0164: linear status/画像の待機統合と有界staging
 
-- 状態: 採用（PERF-012受け入れ進行中）
+- 状態: 採用（PERF-012受け入れ済み）
 - 日付: 2026-10-12
 - 対象: PERF-012
 - 部分置換: ADR-0150の画像とstatusをそれぞれ一回待つ条項。linear専用境界、graph/意味key/halo/crop、temporalの有理数sampleとf64加算順、sticky異常検出、cache公開順、通常frame/display、resident interopは維持する。

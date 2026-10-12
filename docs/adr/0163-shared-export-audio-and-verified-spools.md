@@ -1,6 +1,6 @@
 # ADR-0163: 書き出し音声mix共有と検証済みspoolの任意再利用
 
-- 状態: 採用（PERF-011受け入れ進行中）
+- 状態: 採用（PERF-011受け入れ済み）
 - 日付: 2026-10-12
 - 対象: PERF-011
 - 部分置換: ADR-0079のper-leg mix/量子化。全量source decode、source layout、sample格子、codec block/priming/padding、型付き失敗、private stage/publicationは維持する。

@@ -2629,7 +2629,7 @@
       "priority": "P1",
       "area": "performance",
       "title": "書き出し音声mix共有と長尺source準備",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "PERF-010"
       ],
@@ -2645,7 +2645,7 @@
       "priority": "P1",
       "area": "performance",
       "title": "GPU statusと画像待機統合・staging再利用",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "PERF-010"
       ],
@@ -2661,7 +2661,7 @@
       "priority": "P1",
       "area": "performance",
       "title": "有界metadata・receiptとmux確定工程",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "PERF-011",
         "PERF-012"

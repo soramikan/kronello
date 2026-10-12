@@ -18,6 +18,6 @@
 - 追加`sqlite_concurrency`試験: 2 passed・subprocess helper 1 ignored、0.13秒。runtimeの最低SQLite版を確認し、16threads/4databases/800 WAL transactionのopen/commit/close競合を検証する。子プロセスの30秒deadlineはテストを無限待機させないための境界で、直列化して競合を隠さない。
 - 更新後の全workspace/all-targets Clippyは成功（`target/perf-sqlite-final-clippy.log`）。fmt・生成Swift整合・backlog checkも成功した。
 - store/jobs全スイートは9 suites・67 passed・0 failed・2 ignoredで成功（`target/perf-sqlite-storage-jobs-fixed.log`）。
-- 全workspace testsは更新後の依存で実行中（`target/perf-sqlite-final-workspace-tests.log`）。終了確認を受け入れ残件とする。
+- 全workspace testsも更新後の依存で成功（`target/perf-sqlite-final-workspace-tests.log`、exit0）。
 
 版更新だけを完了証拠にせず、復旧・lease・receipt・idempotencyの検証を維持する。新しいperformance比較では更新後binaryを新しいhashとして固定し、以前のbinary/raw証拠を書き換えない。

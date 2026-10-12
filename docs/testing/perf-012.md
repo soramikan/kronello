@@ -1,6 +1,6 @@
 # PERF-012: status/画像待機統合と有界staging再利用
 
-状態: `in_progress`。全計画は[依頼計画](performance-export-plan.md)で追跡する。GPU色量子化・temporal加算は変更しない。
+状態: `done`。全計画は[依頼計画](performance-export-plan.md)で追跡する。GPU色量子化・temporal加算は変更しない。
 
 ## 実装と寿命
 
@@ -44,3 +44,7 @@ poolの最大managed payloadは各3,604,484bytes。全decoded画素/PCM、PTS/DT
 CPU/I/Oの観測方法は[PERF-011](perf-011.md)と同じ。最後のworker CPU観測はbefore約16.39〜16.41秒、after約16.22〜16.39秒、kernel disk write約57〜60MB。frame12以降のRSS観測範囲はbefore約800〜815MB、after約806〜819MB（初回afterは約808〜823MB）。これは限られた24frameの観測で、長尺のRSS保証とは区別する。pool上限は貸出/idleを含む実descriptorの試験で別に確認した。
 
 packingは約1.6秒であり削減対象が残るが、status検証後の同期tileを先に進めるasync queueは追加せず、数値契約を含むGPU packing/encoder inputの比較をPERF-014へ引き継ぐ。ここでの採用はwait統合と完了済みbufferの有界再利用である。全計画の後段を完了した意味ではない。
+
+## 最終受け入れ（2026-10-13）
+
+更新後のSQLiteを含む現ソースでfmt・全workspace/all-targets Clippy・全workspace testsが成功した。testsは201 suites・1368 passed・0 failed・50 ignored、ログは`target/perf-sqlite-final-workspace-tests.log`（exit0）。ignoredの全機能を受け入れた意味ではなく、本タスクの実Metal/codec/cancel/cache/lifetime条件は本文の明示実行と固定worker比較で別に確認した。全依頼計画のPERF-013/014は未完了である。

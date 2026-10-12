@@ -1,6 +1,6 @@
 # PERF-011: 音声mix共有と長尺source準備
 
-状態: `in_progress`。[全依頼計画](performance-export-plan.md)のPERF-011を実装・検証中であり、PERF-012〜014も残る。
+状態: `done`。[全依頼計画](performance-export-plan.md)のPERF-011を実装・検証中であり、PERF-012〜014も残る。
 
 ## 同一音声の共有
 
@@ -60,3 +60,7 @@ CPU/ディスクI/O/RSSは100msごととterminal観測時の`proc_pid_rusage_v2`
 [競合比較](perf-011-resource-contention.json)では、共有後の同一binaryで4K・24frame動画workerと601秒WAV→短区間FLAC workerを直列/並行に実行した（交互3pairs、計12 workers）。oracleは両worker終了後に実施し、全decoded bits/PTS/packet/file bytesが一致した。後続2試行の両worker完了p50は11,450.5→10,451.6ms、p95は11,462.3→15,641.2ms。通常の音声はCPU約0.75〜0.76秒・kernel write約227MBであり、並行側の最後の試行では動画約15.63秒・音声約1.03秒となった。静穏hostを保証しない探索値なので、p95差を並列化自体の因果と断定しない。
 
 この比較は独立worker間の競合で、同一job内の新しいaudio/video parallel pathの受け入れ証拠ではない。mix重複は共有で除き、反復する長尺圧縮sourceではwindow検証spoolを明示policyで採用する。cold費用と並行試行のばらつきを踏まえ、既定のdisk cacheや同一job内の音声/動画並列化は追加しない。range decodeは未導入であり、resampler/DSP/WSOLA prerollと全authored rangeの検証を原点decodeのまま維持する。
+
+## 最終受け入れ（2026-10-13）
+
+更新後のSQLiteを含む現ソースでfmt・全workspace/all-targets Clippy・全workspace testsが成功した。testsは201 suites・1368 passed・0 failed・50 ignored、ログは`target/perf-sqlite-final-workspace-tests.log`（exit0）。ignoredの全機能を受け入れた意味ではなく、本タスクの実Metal/codec/cancel/cache/lifetime条件は本文の明示実行と固定worker比較で別に確認した。全依頼計画のPERF-013/014は未完了である。

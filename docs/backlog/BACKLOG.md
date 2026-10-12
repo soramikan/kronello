@@ -19,7 +19,7 @@
 | M7 | 0 | 0 | 11 | 0 | 11 |
 | M8 | 0 | 0 | 16 | 0 | 16 |
 | M9 | 2 | 0 | 11 | 0 | 13 |
-| M10 | 3 | 2 | 20 | 0 | 25 |
+| M10 | 2 | 1 | 22 | 0 | 25 |
 | M11 | 14 | 0 | 0 | 0 | 14 |
 
 ## M0
@@ -1304,7 +1304,7 @@
 
 ### PERF-011 書き出し音声mix共有と長尺source準備
 
-- 優先度: P1 / 領域: performance / 状態: in_progress
+- 優先度: P1 / 領域: performance / 状態: done
 - 依存: PERF-010
 - 受け入れ条件:
   - 音声plan/意味版/source lock/範囲/layout/gain/effects/clippingを同一性に含め同一音声のmix/量子化を一回に共有する。codec block差を小さいbufferで吸収しDSP/WSOLA加算順と状態遷移を維持する
@@ -1313,7 +1313,7 @@
 
 ### PERF-012 GPU statusと画像待機統合・staging再利用
 
-- 優先度: P1 / 領域: performance / 状態: in_progress
+- 優先度: P1 / 領域: performance / 状態: done
 - 依存: PERF-010
 - 受け入れ条件:
   - status/画像copyと両map開始を同じ完了単位へまとめ4Kのwaitを80→40、3 samplesで240→120に減らす。readback回数/bytesとは区別する
@@ -1322,7 +1322,7 @@
 
 ### PERF-013 有界metadata・receiptとmux確定工程
 
-- 優先度: P1 / 領域: performance / 状態: planned
+- 優先度: P1 / 領域: performance / 状態: in_progress
 - 依存: PERF-011, PERF-012
 - 受け入れ条件:
   - 版付き共通headerと固定上限frame metadata chunk、小さいroot receiptのhash/frame range/count/identityをwriter/reader/結果API/復旧へ実装する。statusはsummary、詳細はページ単位で読む
