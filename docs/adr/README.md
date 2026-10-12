@@ -190,6 +190,8 @@
 
 | [0160](0160-shared-presentations-and-converted-source-cache.md) | 不変presentation共有と変換前source cache | 採用（PERF-008受け入れ済み） | 2026-10-12 |
 
+| [0161](0161-time-based-worker-progress-and-control-gates.md) | worker制御確認と時間駆動の進捗保存 | 採用（PERF-009受け入れ進行中） | 2026-10-12 |
+
 ## 追加と変更の規則
 
 - 新しい決定は次の番号で追加する。[0000-template.md](0000-template.md) を複製して使う。

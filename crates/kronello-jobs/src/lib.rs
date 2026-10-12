@@ -9,6 +9,8 @@ use sha2::{Digest, Sha256};
 
 mod connection_gate;
 mod heartbeat;
+mod progress;
+pub use progress::{WorkerProgress, WorkerProgressStats};
 mod recovery;
 pub use heartbeat::WorkerHeartbeat;
 pub use recovery::JobStaging;
@@ -781,6 +783,74 @@ impl JobStore {
                     );
                 }
                 Err(error) => return Err(error),
+            }
+        }
+    }
+    /// A running generation's cancellation/lease read. No recovery, receipt
+    /// hydration, heartbeat update or writer transaction occurs at this gate.
+    pub fn check_running_attempt(&self, id: &str, attempt: u64) -> Result<(), JobError> {
+        self.directory(id)?;
+        self.retry_worker_contention(|| {
+            let db = self.connect_with_timeout(self.worker_lock_budget())?;
+            db.execute_batch("PRAGMA query_only=ON;")?;
+            let record = read(&db, id)?;
+            Self::validate_running_attempt(&record, attempt)
+        })
+    }
+    fn validate_running_attempt(record: &JobRecord, attempt: u64) -> Result<(), JobError> {
+        if record.status != JobStatus::Running
+            || record.worker_pid != Some(std::process::id())
+            || record.attempt != attempt
+        {
+            return Err(JobError::new("JOB_INTERRUPTED", "execution lease lost"));
+        }
+        if record.cancel_requested {
+            return Err(JobError::new("JOB_CANCELED", "cancel requested"));
+        }
+        Ok(())
+    }
+    /// Progress persistence is fenced independently from the preceding read.
+    /// Repeated/regressing values do not write or impersonate a heartbeat.
+    pub fn persist_progress_attempt(
+        &self,
+        id: &str,
+        attempt: u64,
+        completed: u64,
+    ) -> Result<bool, JobError> {
+        self.directory(id)?;
+        self.retry_worker_contention(|| {
+            let mut db = self.connect_with_timeout(self.worker_lock_budget())?;
+            let tx = db.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let mut record = read(&tx, id)?;
+            Self::validate_running_attempt(&record, attempt)?;
+            if completed <= record.completed_frames {
+                tx.rollback()?;
+                return Ok(false);
+            }
+            record.completed_frames = completed;
+            save(&tx, &record)?;
+            self.commit_measured(tx)?;
+            if let Some(c) = &self.write_diagnostics {
+                c.checkpoints
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
+            Ok(true)
+        })
+    }
+    fn retry_worker_contention<T>(
+        &self,
+        mut operation: impl FnMut() -> Result<T, JobError>,
+    ) -> Result<T, JobError> {
+        loop {
+            match operation() {
+                Err(error) if error.is_retryable_contention() => {
+                    std::thread::sleep(
+                        self.config
+                            .heartbeat_interval
+                            .min(Duration::from_millis(50)),
+                    );
+                }
+                result => return result,
             }
         }
     }

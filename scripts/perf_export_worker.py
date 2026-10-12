@@ -97,7 +97,7 @@ def independent_oracle(path, ffmpeg, ffprobe):
                               if "snapshot" in k}}
 
 
-def run_trial(binary, case, project, directory, backend, timeout, ffmpeg, ffprobe, diagnostics=True):
+def run_trial(binary, case, project, directory, backend, timeout, ffmpeg, ffprobe, diagnostics=True, progress_ms=None):
     for source in case.get("sources", []):
         if digest(source["path"]) != source["sha256"]:
             raise RuntimeError(f"fixture hash mismatch: {source['path']}")
@@ -111,6 +111,9 @@ def run_trial(binary, case, project, directory, backend, timeout, ffmpeg, ffprob
     for key in tuple(env):
         if key.startswith("KRONELLO_TEST_") or key.startswith("KRONELLO_JOB_"):
             env.pop(key)
+    env.pop("KRONELLO_PROGRESS_INTERVAL_MS", None)
+    if progress_ms is not None:
+        env["KRONELLO_PROGRESS_INTERVAL_MS"] = str(progress_ms)
     request = json.loads(json.dumps(case["submit"]))
     request["render"]["input"]["project"] = str(project)
     paths = [directory / case.get("output_name", "movie.mov")]
@@ -225,6 +228,8 @@ def main():
     parser.add_argument("--timeout", type=float, default=1800)
     parser.add_argument("--before-diagnostics", choices=["enabled", "disabled"], default="enabled")
     parser.add_argument("--after-diagnostics", choices=["enabled", "disabled"], default="enabled")
+    parser.add_argument("--before-progress-ms", type=int, choices=[100, 200, 250])
+    parser.add_argument("--after-progress-ms", type=int, choices=[100, 200, 250])
     parser.add_argument("--ffmpeg", default="ffmpeg")
     parser.add_argument("--ffprobe", default="ffprobe")
     args = parser.parse_args()
@@ -249,6 +254,7 @@ def main():
                 "platform": platform.platform(), "machine": platform.machine(),
                 "capabilities": capabilities, "backend": args.backend,
                 "diagnostics_policy": {"before": args.before_diagnostics, "after": args.after_diagnostics},
+                "progress_policy_ms": {"before": args.before_progress_ms, "after": args.after_progress_ms},
                 "quiet_host": False, "case": case, "trials": [],
                 "notes": ["Each trial launches a fresh real worker; first/subsequent trials are not a warm persistent GPU process.",
                           "Wall includes CLI freeze/submit, queue, worker and terminal result loading; independent oracle excluded.",
@@ -265,7 +271,8 @@ def main():
                                args.output / f"{pair}-{mode}", args.backend,
                                args.timeout, args.ffmpeg, args.ffprobe,
                                diagnostics=(args.before_diagnostics if mode == "before"
-                                            else args.after_diagnostics) == "enabled")
+                                            else args.after_diagnostics) == "enabled",
+                               progress_ms=args.before_progress_ms if mode == "before" else args.after_progress_ms)
             if digest(binaries[mode]) != evidence["binary_sha256"][mode]:
                 raise RuntimeError("benchmark binary changed during measurement")
             evidence["trials"].append({"pair": pair, "mode": mode, **result})

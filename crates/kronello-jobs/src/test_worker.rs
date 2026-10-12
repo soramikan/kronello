@@ -59,25 +59,22 @@ fn run() -> Result<(), JobError> {
     let store = JobStore::open(JobConfig::from_env()?)?;
     let id = &args[2];
     let heartbeat = kronello_jobs::WorkerHeartbeat::start(store.clone(), id.clone());
+    let mut attempt = None;
     let result = (|| {
         store.wait_for_slot(id)?;
         let r = store.get(id)?;
+        attempt = Some(r.attempt);
+        let mut progress = kronello_jobs::WorkerProgress::new(store.clone(), &r);
         let input: serde_json::Value = serde_json::from_slice(&store.input(&r)?)?;
         let gate = PathBuf::from(input["gate"].as_str().unwrap());
         while !gate.exists() {
             // No frames advance while waiting for a test gate. Keep lease
             // heartbeat writes in the pulse thread, rather than flooding FULL
             // synchronous storage with redundant zero-frame checkpoints.
-            let record = store.get(id)?;
-            if record.status != kronello_jobs::JobStatus::Running {
-                return Err(JobError::new("JOB_INTERRUPTED", "execution lease lost"));
-            }
-            if record.cancel_requested {
-                return Err(JobError::new("JOB_CANCELED", "cancel requested"));
-            }
+            progress.checkpoint(0)?;
             std::thread::sleep(Duration::from_millis(20));
         }
-        store.checkpoint(id, 0)?;
+        progress.flush(0)?;
         let staged = r.destination.with_extension(format!("{id}.staged"));
         let directory = input["directory"].as_bool().unwrap_or(false);
         if directory {
@@ -95,9 +92,10 @@ fn run() -> Result<(), JobError> {
                 std::thread::sleep(Duration::from_millis(20));
             }
         }
-        let result = store.publish(id, serde_json::json!({"validated":true}), || {
-            kronello_jobs::publish_path(&staged, &r.destination)
-        });
+        let result =
+            store.publish_attempt(id, r.attempt, serde_json::json!({"validated":true}), || {
+                kronello_jobs::publish_path(&staged, &r.destination)
+            });
         if directory {
             let _ = std::fs::remove_dir_all(&staged);
         } else {
@@ -111,7 +109,11 @@ fn run() -> Result<(), JobError> {
     })();
     drop(heartbeat);
     if let Err(error) = &result {
-        store.finish_error(id, error)?;
+        if let Some(attempt) = attempt {
+            store.finish_error_attempt(id, attempt, error)?;
+        } else {
+            store.finish_error(id, error)?;
+        }
     }
     result
 }

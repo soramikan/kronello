@@ -1636,6 +1636,24 @@ impl Service<'_> {
         let stage_path = staging.output();
         drop(preparation);
         let mut failure = None;
+        let progress_interval_ms = match std::env::var("KRONELLO_PROGRESS_INTERVAL_MS") {
+            Err(std::env::VarError::NotPresent) => 200,
+            Ok(value) if matches!(value.as_str(), "100" | "200" | "250") => {
+                value.parse::<u64>().expect("closed interval set")
+            }
+            _ => {
+                return Err(ServiceError::new(
+                    "INVALID_REQUEST",
+                    "KRONELLO_PROGRESS_INTERVAL_MS must be 100, 200 or 250",
+                ));
+            }
+        };
+        let mut progress = kronello_jobs::WorkerProgress::with_intervals(
+            store.clone(),
+            record,
+            std::time::Duration::from_millis(50),
+            std::time::Duration::from_millis(progress_interval_ms),
+        );
         let mut checkpoint = |completed| {
             let _checkpoint = diagnostics.time("worker_checkpoint");
             diagnostics.count("worker_checkpoint_calls", 1);
@@ -1670,7 +1688,7 @@ impl Service<'_> {
                     .and_then(|value| value.parse::<u64>().ok())
                     .unwrap_or(0);
                 while completed >= after && !gate.exists() {
-                    if let Err(error) = store.checkpoint(&record.id, completed) {
+                    if let Err(error) = progress.checkpoint(completed) {
                         let message = error.to_string();
                         failure = Some(error);
                         return Err(message);
@@ -1678,7 +1696,7 @@ impl Service<'_> {
                     std::thread::sleep(std::time::Duration::from_millis(20));
                 }
             }
-            store.checkpoint(&record.id, completed).map_err(|e| {
+            progress.checkpoint(completed).map_err(|e| {
                 let message = e.to_string();
                 failure = Some(e);
                 message
@@ -1842,10 +1860,23 @@ impl Service<'_> {
                 },
             )
         };
+        let flushed = if failure.is_none() && rendered.is_ok() {
+            progress.flush(record.total_frames)
+        } else {
+            Ok(())
+        };
+        let progress_stats = progress.stats();
+        diagnostics.count("worker_control_checks", progress_stats.control_checks);
+        diagnostics.count("worker_progress_writes", progress_stats.progress_writes);
+        diagnostics.record_duration(
+            "worker_control_max_gap",
+            std::time::Duration::from_micros(progress_stats.max_control_gap_us),
+        );
         if let Some(error) = failure {
             return Err(error.into());
         }
         let mut result = rendered?;
+        flushed?;
         // Paths in the report describe the deliverable rather than staging.
         if let Some(request_json) = result.get_mut("request") {
             request_json["output"] = serde_json::to_value(destination)?;

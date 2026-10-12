@@ -204,3 +204,7 @@ plugin のいずれか 1 つの payload を持ち、plugin ジョブは render s
 ## 書き出し工程の任意観測（PERF-006）
 
 [ADR-0158](../adr/0158-scoped-export-execution-measurements.md)の実行policyである`KRONELLO_EXPORT_DIAGNOSTICS=1`を指定したworkerは、固定名の工程/counterを実行所有で集計し、job directoryの`performance-attempt-N.json`へ記録する。診断の失敗で確定済み成果物を失敗へ戻さない。JobStore clone間の成功した明示write transactionを計数し、heartbeat/checkpoint、別processのsubmit/cancel、read-only/rollbackを区別する。診断の有界性と製品report/receiptのframe数比例保持は別の問題で、後者はPERF-013の未受け入れ範囲。
+
+## PERF-009: 制御確認と進捗保存の分離
+
+[ADR-0161](../adr/0161-time-based-worker-progress-and-control-gates.md)に従い、固定render/export workerはcallbackをblock/frameごとに受けつつ、取消/PID/attempt/leaseをread-onlyで50msごとに確認する。進捗は既定200msで同値/減少を保存しない。persist側のtransactionでも条件を再確認し、専用heartbeatと最終公開fenceを維持する。native処理がcallbackを返さない間の停止時間は確認間隔と別に観測する。比較用runtime policyは`KRONELLO_PROGRESS_INTERVAL_MS=100/200/250`、省略200。request/snapshot/作品状態やGUIへ追加しない。受け入れは[PERF-009](../testing/perf-009.md)で追跡する。
