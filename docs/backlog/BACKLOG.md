@@ -3,7 +3,7 @@
 <!-- このファイルは scripts/backlog.py render が生成する。直接編集しない。正本は backlog.json。 -->
 
 - schema_version: 0.5
-- 更新日: 2026-10-12
+- 更新日: 2026-10-13
 - タスク数: 160
 
 ## 集計
@@ -19,7 +19,7 @@
 | M7 | 0 | 0 | 11 | 0 | 11 |
 | M8 | 0 | 0 | 16 | 0 | 16 |
 | M9 | 2 | 0 | 11 | 0 | 13 |
-| M10 | 1 | 1 | 23 | 0 | 25 |
+| M10 | 1 | 0 | 24 | 0 | 25 |
 | M11 | 14 | 0 | 0 | 0 | 14 |
 
 ## M0
@@ -1331,7 +1331,7 @@
 
 ### PERF-014 GPU色変換・encoder surface・直接mux試作
 
-- 優先度: P2 / 領域: performance / 状態: in_progress
+- 優先度: P2 / 領域: performance / 状態: done
 - 依存: PERF-013
 - 受け入れ条件:
   - 先行改善後の工程実測に基づき対象backend/formatを絞ってGPU出力→encoder入力surfaceとpacket直接muxを試作・比較する

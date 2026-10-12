@@ -1,7 +1,7 @@
 {
   "schema_version": "0.5",
   "created": "2026-10-01",
-  "updated": "2026-10-12",
+  "updated": "2026-10-13",
   "status": "implementation_started",
   "description": "設計と実装の計画・進捗。このファイルがバックログの正本であり、GitHub等へ登録したIssueではない。",
   "specification": "docs/architecture/",
@@ -2678,7 +2678,7 @@
       "priority": "P2",
       "area": "performance",
       "title": "GPU色変換・encoder surface・直接mux試作",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "PERF-013"
       ],

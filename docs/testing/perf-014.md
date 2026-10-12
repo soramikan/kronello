@@ -1,6 +1,6 @@
 # PERF-014: GPU/encoder surfaceと直接packet muxの試作
 
-状態: `in_progress`。依頼計画の最終タスクであり、試作だけで受け入れ済みとしない。対象fixtureの試作・比較・色/時刻/寿命/失敗回収と採用判断を完了し、最終workspace/CIを検証中である。
+状態: 対象backend/fixtureの試作・比較・色/時刻/寿命/失敗回収と採用判断を受け入れ済み。製品の標準exportへの統合は未採用。最終workspace/CIの確定結果はPRと最終検証記録へ残す。
 
 ## 先行改善後の対象
 
