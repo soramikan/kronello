@@ -4,6 +4,7 @@
 - 日付: 2026-10-12
 - 対象: PERF-013
 - 後続: ADR-0079、ADR-0133
+- 部分置換: ADR-0079のmovie/GIF全frame metadata保持、ADR-0050/0087のpublication artifact一覧・結果格納形式。通常の単一frame、legacy/image-sequence形式、codec/time/色、固定snapshot、lease/cancel/final fence、NOREPLACE、明示resumeの契約は維持する。
 
 ## 問題
 
