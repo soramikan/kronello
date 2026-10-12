@@ -33,6 +33,8 @@ poolの最大managed payloadは各3,604,484bytes。全decoded画素/PCM、PTS/DT
 - GPU/CPU色変換の重なりは現行の同期tile境界とnative encode consumerを区別して工程実測から判断する。新しいasync tile queueは未採用であり、poolだけでCPU packingとの重なりを保証しない。
 - ADRと現在の設計、全workspace Clippy/testsの結果を確認し、受け入れ前にdoneにしない。
 
+現ソースの全workspace testsで[SQLite VFS deadlock](sqlite-vfs-deadlock.md)を観測したため、成功扱いせず依存を更新した。GPU寿命/画素試験の証拠と区別し、更新後の必須検証を完了してから受け入れる。
+
 ## 持続処理・CPU・I/O・保持量
 
 同じ固定sourceの4K・24framesを交互3pairsで完走した（`target/perf-012/sustained-24/evidence.json`）。before=`284b2e17…`、after=`1f05c438…`、disk persistence無効、全decoded pixels/PCM・PTS/layout/chapters/packet/file bytes一致。24frames合計のreadback bytesは1,592,528,640、回数は1920で不変、waitは1920→960。各afterでstaging allocation97/reuse1823、最大managed payload3,604,484bytes。異なるrowサイズによるidle退避がframe間でも生じるので、短い1frameの5 allocationを長いexport全体の定数と主張しない。

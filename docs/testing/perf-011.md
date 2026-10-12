@@ -39,7 +39,7 @@ cache単体2件ではstage cleanup後の再利用、参照PCM破損の拒否/hea
 
 ## 残る受け入れ
 
-- GPU寿命修正後の全workspace testsの終了結果を確認する。fmt・全workspace Clippy・生成API整合は成功した。すべての受け入れ前にbacklogをdoneにしない。
+- GPU寿命修正後の全workspace testsで[SQLite VFS deadlock](sqlite-vfs-deadlock.md)を観測し、依存を修正版へ更新した。更新後のstorage/jobs/full workspace検証の終了結果を確認する。すべての受け入れ前にbacklogをdoneにしない。
 
 ## 追加境界検証
 

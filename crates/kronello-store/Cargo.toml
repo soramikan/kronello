@@ -10,7 +10,7 @@ publish.workspace = true
 [dependencies]
 schemars = { version = "1", features = ["uuid1"] }
 kronello-model = { path = "../kronello-model" }
-rusqlite = { version = "0.38", features = ["bundled"] }
+rusqlite = { version = "0.39", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip", "arbitrary_precision"] }
 thiserror = "2"
